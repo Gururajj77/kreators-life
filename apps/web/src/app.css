@@ -1,0 +1,143 @@
+@import 'tailwindcss';
+
+@theme {
+  /* The only spacing steps this app uses. */
+  --spacing-xs: 8px;
+  --spacing-sm: 12px;
+  --spacing-md: 16px;
+  --spacing-lg: 32px;
+  --spacing-xl: 64px;
+  --spacing-2xl: 120px;
+
+  --color-ink: #2b1d3a;
+  --color-ink-soft: #6b5f78;
+  --color-ink-mute: #74687f;
+  --color-paper: #fff8f0;
+  --color-card: #ffffff;
+  --color-line: #efe4da;
+
+  --color-r1: #ff4d5e;
+  --color-r2: #ff8a3d;
+  --color-r3: #ffc93c;
+  --color-r4: #3fcb7a;
+  --color-r5: #3da5ff;
+  --color-r6: #5b5be0;
+  --color-r7: #8f3bff;
+
+  --font-display: 'Bricolage Grotesque', 'Urbanist', system-ui, sans-serif;
+  --font-body: 'Urbanist', system-ui, sans-serif;
+
+  --radius-card: 32px;
+  --radius-tile: 16px;
+  --radius-pill: 999px;
+
+  --shadow-toy: 0 4px 0 0 var(--color-ink);
+  --shadow-toy-soft: 0 4px 0 0 var(--color-line);
+}
+
+@layer base {
+  html {
+    font-family: var(--font-body);
+    color: var(--color-ink);
+    background: var(--color-paper);
+    -webkit-tap-highlight-color: transparent;
+    font-size: 16px;
+  }
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    overscroll-behavior-y: none;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    font-weight: 800;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-ink);
+    outline-offset: 3px;
+    border-radius: 8px;
+  }
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Character idle motion. */
+@keyframes bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+@keyframes blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  96% {
+    transform: scaleY(0.1);
+  }
+}
+.avatar-bob {
+  animation: bob 3.2s ease-in-out infinite;
+}
+.avatar-eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: blink 5.5s infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .avatar-bob,
+  .avatar-eyes {
+    animation: none;
+  }
+}
+
+/* Pressable toy button: shadow collapses as it goes down. */
+.toy {
+  transition:
+    transform 80ms ease,
+    box-shadow 80ms ease;
+}
+.toy:active {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 0 transparent;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Collapsible rungs on the realm screen. */
+summary {
+  list-style: none;
+  cursor: pointer;
+}
+summary::-webkit-details-marker {
+  display: none;
+}
+details[open] .chev {
+  transform: rotate(180deg);
+}

@@ -1,0 +1,13 @@
+{
+  "name": "kreators-life",
+  "private": true,
+  "packageManager": "pnpm@11.28.3",
+  "scripts": {
+    "dev": "pnpm -r --parallel --stream dev",
+    "build": "pnpm --filter @kreators/web build",
+    "typecheck": "pnpm -r typecheck",
+    "db:migrate:local": "pnpm --filter @kreators/api db:migrate:local",
+    "db:migrate": "pnpm --filter @kreators/api db:migrate",
+    "deploy": "pnpm build && pnpm --filter @kreators/api deploy"
+  }
+}
