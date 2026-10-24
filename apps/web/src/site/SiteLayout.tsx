@@ -14,7 +14,7 @@ export function useAppEntry(): string {
 
 export function Logo() {
   return (
-    <Link to="/" className="inline-flex min-h-[44px] items-center gap-xs font-display text-[20px] font-extrabold tracking-tight">
+    <Link to="/" className="inline-flex min-h-[44px] shrink-0 items-center gap-xs whitespace-nowrap font-display text-[20px] font-extrabold tracking-tight">
       <span className="flex items-end gap-[2px]" aria-hidden="true">
         {RELATIONSHIPS.slice(0, 3).map((r, i) => (
           <Avatar key={r.key} relationship={r.key} size={18 + i * 4} decorative still />
@@ -30,7 +30,7 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
   const token = useSession((s) => s.token);
   const themeMode = useTheme((s) => s.mode);
   const setThemeMode = useTheme((s) => s.setMode);
-  const nav = 'inline-flex min-h-[44px] items-center rounded-pill px-sm text-[16px] font-bold text-ink-soft transition-colors hover:text-ink aria-[current=page]:text-ink';
+  const nav = 'inline-flex min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill px-sm text-[16px] font-bold text-ink-soft transition-colors hover:text-ink aria-[current=page]:text-ink';
   return (
     <div className="min-h-dvh bg-paper text-ink">
       <header className="safe-top sticky top-0 z-30 border-b border-line bg-paper/90 backdrop-blur">
@@ -40,18 +40,22 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
             <NavLink to="/explore" className={nav}>
               Explore
             </NavLink>
-            <a href="/#features" className={`${nav} hidden sm:inline-flex`}>
-              Features
-            </a>
-            <a href="/#brands" className={`${nav} hidden md:inline-flex`}>
-              For brands
-            </a>
+            {wide && (
+              <a href="/#features" className={`${nav} hidden sm:inline-flex`}>
+                Features
+              </a>
+            )}
+            {wide && (
+              <a href="/#brands" className={`${nav} hidden md:inline-flex`}>
+                For brands
+              </a>
+            )}
             {!token && (
               <Link to="/signin" className={`${nav} hidden sm:inline-flex`}>
                 Sign in
               </Link>
             )}
-            <Link to={entry} className="toy inline-flex min-h-[44px] items-center rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink">
+            <Link to={entry} className="toy inline-flex min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink">
               {token ? 'Open the app' : 'Start free'}
             </Link>
             <ThemeToggle />
@@ -83,6 +87,21 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
             </Link>
             <Link to="/signin" className="min-h-[32px] hover:text-ink">
               Sign in
+            </Link>
+            <Link to="/pricing" className="min-h-[32px] hover:text-ink">
+              Pricing
+            </Link>
+            <Link to="/terms" className="min-h-[32px] hover:text-ink">
+              Terms
+            </Link>
+            <Link to="/privacy" className="min-h-[32px] hover:text-ink">
+              Privacy
+            </Link>
+            <Link to="/refunds" className="min-h-[32px] hover:text-ink">
+              Refunds
+            </Link>
+            <Link to="/contact" className="min-h-[32px] hover:text-ink">
+              Contact
             </Link>
           </nav>
           <div className="flex gap-xs" role="group" aria-label="Theme">

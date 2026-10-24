@@ -1,4 +1,4 @@
-import { AVAILABILITY, CATEGORIES, EXPERIENCE_LEVELS, GOALS, INTERESTS, SKILLS, type PortfolioItem, type User } from '@kreators/shared';
+import { AVAILABILITY, CATEGORIES, EXPERIENCE_LEVELS, GOALS, INTERESTS, SKILLS, TIMEZONES, type PortfolioItem, type Socials, type User } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -82,9 +82,12 @@ function ProfileView({ user }: { user: User }) {
   const [area, setArea] = useState(user.area);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null | undefined>(undefined);
   const [locating, setLocating] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl);
+  const [socials, setSocials] = useState<Socials>(user.socials);
+  const [timezone, setTimezone] = useState(user.timezone || 'Asia/Kolkata');
   const [saved, setSaved] = useState(false);
   const save = useMutation({
-    mutationFn: () => api.updateMe({ handle: handle || null, bio, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, ...(coords === undefined ? {} : { lat: coords?.lat ?? null, lng: coords?.lng ?? null }) }),
+    mutationFn: () => api.updateMe({ handle: handle || null, bio, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, avatarUrl, socials, timezone, ...(coords === undefined ? {} : { lat: coords?.lat ?? null, lng: coords?.lng ?? null }) }),
     onSuccess: () => {
       refresh();
       setSaved(true);
@@ -134,6 +137,43 @@ function ProfileView({ user }: { user: User }) {
         <label className="block">
           <span className="block text-[14px] font-bold">Bio</span>
           <textarea value={bio} onChange={(e) => setBio(e.target.value)} maxLength={200} rows={3} className={field} />
+        </label>
+        <label className="block">
+          <span className="block text-[14px] font-bold">Photo link</span>
+          <div className="mt-xs flex items-center gap-sm">
+            {avatarUrl && <img src={avatarUrl} alt="" width={64} height={64} className="size-[64px] shrink-0 rounded-pill object-cover" />}
+            <input type="url" value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} maxLength={500} placeholder="https://… a square image" className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+          </div>
+          <span className="mt-xs block text-[12px] font-bold text-ink-soft">Shown on your page in place of the first letter of your name.</span>
+        </label>
+        <fieldset className="m-0 border-0 p-0">
+          <legend className="text-[14px] font-bold">Links</legend>
+          <div className="mt-xs grid grid-cols-2 gap-xs">
+            {(
+              [
+                ['instagram', 'Instagram'],
+                ['youtube', 'YouTube'],
+                ['x', 'X'],
+                ['website', 'Website'],
+              ] as [keyof Socials, string][]
+            ).map(([k, label]) => (
+              <label key={k} className="block">
+                <span className="block text-[12px] font-bold text-ink-soft">{label}</span>
+                <input type="url" value={socials[k]} onChange={(e) => setSocials({ ...socials, [k]: e.target.value })} maxLength={200} placeholder="https://" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <label className="block">
+          <span className="block text-[14px] font-bold">Time zone</span>
+          <select value={timezone} onChange={(e) => setTimezone(e.target.value)} className={field}>
+            {(TIMEZONES.includes(timezone as (typeof TIMEZONES)[number]) ? TIMEZONES : [timezone, ...TIMEZONES]).map((z) => (
+              <option key={z} value={z}>
+                {z.replace(/_/g, ' ')}
+              </option>
+            ))}
+          </select>
+          <span className="mt-xs block text-[12px] font-bold text-ink-soft">Your availability and bookings are written in this zone. Buyers see the same slots in their own.</span>
         </label>
         <Chips legend="Skills" options={SKILLS} value={skills} onChange={setSkills} max={12} hint="What you can be hired for." />
         <Chips legend="Categories" options={CATEGORIES} value={categories} onChange={setCategories} max={12} hint="What your work is about." />

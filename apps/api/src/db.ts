@@ -1,4 +1,4 @@
-import { BADGES, HONORS, isStaffFor, levelFromXp, PERMISSIONS, RELATIONSHIPS, roleRank, taskReadyAt, timeHonors, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type User } from '@kreators/shared';
+import { BADGES, EMPTY_SOCIALS, HONORS, isStaffFor, levelFromXp, PERMISSIONS, RELATIONSHIPS, roleRank, taskReadyAt, timeHonors, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
 import type { Context, Next } from 'hono';
 import type { AppEnv } from './env';
 import type { UserRow } from './env';
@@ -73,6 +73,9 @@ export function toUser(r: UserRow): User {
     city: r.city ?? '',
     area: r.area ?? '',
     hasLocation: r.lat !== null && r.lat !== undefined && r.lng !== null && r.lng !== undefined,
+    timezone: r.timezone || 'Asia/Kolkata',
+    avatarUrl: r.avatar_url ?? '',
+    socials: parseSocials(r.socials_json),
     streak: r.streak,
     bestStreak: r.best_streak,
     lastCheckin: r.last_checkin,
@@ -87,6 +90,16 @@ export function parseModules(raw: string): Record<string, boolean> {
     return v && typeof v === 'object' ? (v as Record<string, boolean>) : {};
   } catch {
     return {};
+  }
+}
+
+export function parseSocials(raw: string | null | undefined): Socials {
+  try {
+    const v = (JSON.parse(raw || '{}') ?? {}) as Record<string, unknown>;
+    const pick = (k: keyof Socials) => (typeof v[k] === 'string' ? (v[k] as string).slice(0, 200) : '');
+    return { instagram: pick('instagram'), youtube: pick('youtube'), x: pick('x'), website: pick('website') };
+  } catch {
+    return { ...EMPTY_SOCIALS };
   }
 }
 

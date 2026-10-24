@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { RELATIONSHIPS } from '@kreators/shared';
+import { track } from '../ops';
 import type { AppEnv, UserRow } from '../env';
 import { getUser, newId, nowIso, randomCode, sessionUser, toUser } from '../db';
 
@@ -86,6 +87,7 @@ auth.post('/signup', async (c) => {
     token = await newSession(db, id);
   }
   const fresh = user ? await getUser(db, user.id) : null;
+  if (user) await track(c.env.DB, user.id, 'creator_signed_up', { method: 'email' });
   return c.json({ token, user: fresh ? toUser(fresh) : null }, 201);
 });
 

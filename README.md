@@ -12,7 +12,8 @@ Seven relationships, one tower, a few boxes to tick every day. Around that daily
 
 ```bash
 pnpm install
-pnpm db:migrate:local      # creates or upgrades the local D1 database (migrations 0001 to 0011)
+pnpm db:migrate:local      # creates or upgrades the local D1 database (migrations 0001 to 0012)
+pnpm --filter @kreators/shared test   # unit tests for money, time, slots, matching and flags
 pnpm dev                   # web on http://localhost:5173, api on http://localhost:8787
 ```
 
@@ -28,6 +29,8 @@ Secrets go in `apps/api/.dev.vars` locally and `wrangler secret put` in producti
 | `YOUTUBE_API_KEY` | Reads view counts for YouTube links in Content and content rewards. Without it, numbers are typed and a reviewer confirms. |
 | `META_APP_SECRET`, `META_VERIFY_TOKEN`, `META_ACCESS_TOKEN` | Turn on the Instagram comment webhook and private replies for Auto-DM. Without them, matched comments queue for you to send by hand. |
 | `CLICK_SALT` | Salt for hashing click IPs on tracked links. |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | Money checkout goes live: orders are created at Razorpay, the browser opens Razorpay Checkout, and `/api/webhooks/razorpay` marks the order paid after the signature checks out. Without them money orders are recorded in test mode. |
+| `RESEND_API_KEY`, `EMAIL_FROM` | Transactional email (receipts, confirmations, KYC decisions, invoices). Every message is kept in the outbox under Admin, Ops, whether or not it was sent. |
 
 ## Deploy
 
@@ -85,9 +88,15 @@ Listings come from the admin console (Admin, Listings: create, publish, feature)
 
 A reward has a brand, a brief, a platform, a pool of points, a rate per thousand verified views, a cap per creator and a minimum view count. Creators submit a public link. YouTube numbers are read automatically when a key is set; everything else is typed by the creator and confirmed by a reviewer, with the full metric history kept. Payout is computed from confirmed views, never exceeds the pool, and is released by someone with the finance permission. Rejections can be disputed.
 
+## Bookings, done properly
+
+Availability is written in the creator's own zone (set under Profile), with weekly ranges, days off and special hours per date, a buffer around each session, a minimum notice and a booking horizon per product. Slots are computed by one pure function in shared and shown to buyers in their own time. A slot is checked again at booking time, the unique index stops two people taking it, and buyers can move a booking to another open slot up to two hours before. Payout details (legal name, PAN, bank, IFSC, address) are submitted from Customers, reviewed in Admin, KYC; only the last digits are stored.
+
 ## Shop and growth
 
 Product kinds: download, course (drip, quizzes, certificates), membership, session (availability, intake questions, race-safe slots), event (replays for sale afterwards), link, payment link (fixed or pay what you want), bundle, locked post and priority DM (a paid question answered within promised days). Free downloads can capture leads. Coupons, affiliates at twenty percent, a platform fee in basis points per creator, refunds, a customers list with CSV export and a payout breakdown.
+
+Sales has filters and a CSV. Courses can be drafted from pasted notes: a Workers AI binding writes lessons and quizzes, otherwise a plain outline is parsed (`#` headings, `?` questions, `-` options, `*` the right one). Memberships can carry a period in months and renew by buying again. Tracked links come with a QR code.
 
 Content: every post gets a tracked link at `/go/<code>`; clicks carry an id into checkout so the dashboard shows clicks, sales and revenue per post, with profile-direct sales shown honestly. Auto-DM: a keyword on a post sends a tracked link by private reply (queued for you when Meta is not connected; a simulator exercises the flow). Funnels chain posts, automations, links, leads, products and broadcasts with the count at each step. Sequences deliver a message to a buyer's inbox some days after purchase.
 
@@ -101,4 +110,4 @@ A branching vibe check derives your ladders. Every day: check in, do the spark, 
 
 ## Admin
 
-`/admin` works with the admin key or an admin's session. People (search, role, permissions, Pro, honors, points, and a preview of exactly what one person sees), Flags (switch, minimum role, rollout, overrides), Listings, Redemptions and the Audit log of every change.
+`/admin` works with the admin key or an admin's session. People (search, role, permissions, Pro, honors, points, and a preview of exactly what one person sees), Flags (switch, minimum role, rollout, overrides), Listings, Orders (search by order, payment, buyer or page, the full timeline, a refund), Webhooks (what came in, replay), KYC queue, Ops (funnels from our own analytics table, the email outbox), Redemptions and the Audit log of every change. Sign-in, sign-up, anonymous sessions, lead forms and checkout are rate limited. People can export everything as one JSON file or delete their account from You, Account. `/sitemap.xml` lists the site, every feature page and every published creator page; policy pages live at `/terms`, `/privacy`, `/refunds`, `/contact` and `/pricing`.

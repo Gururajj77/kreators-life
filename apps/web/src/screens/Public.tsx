@@ -38,9 +38,13 @@ export function Public() {
       {d && (
         <>
           <section className="mt-md rounded-card bg-ink p-md text-on-ink">
-            <span className="flex size-[64px] items-center justify-center rounded-pill bg-r2 font-display text-[30px] font-extrabold text-ink-fixed" aria-hidden="true">
-              {d.name.slice(0, 1).toUpperCase()}
-            </span>
+            {d.avatarUrl ? (
+              <img src={d.avatarUrl} alt="" width={64} height={64} className="size-[64px] rounded-pill object-cover" />
+            ) : (
+              <span className="flex size-[64px] items-center justify-center rounded-pill bg-r2 font-display text-[30px] font-extrabold text-ink-fixed" aria-hidden="true">
+                {d.name.slice(0, 1).toUpperCase()}
+              </span>
+            )}
             <div className="mt-sm flex items-center gap-xs">
               <h1 className="text-[30px]">{d.name}</h1>
               {d.isPro && <span className="rounded-pill bg-r7 px-sm py-xs text-[12px] font-extrabold text-white">Pro</span>}
@@ -49,6 +53,26 @@ export function Public() {
               @{d.handle}, {d.followers} {d.followers === 1 ? 'follower' : 'followers'}
             </p>
             {d.bio && <p className="mt-sm m-0 text-[16px] font-semibold leading-relaxed">{d.bio}</p>}
+            {(d.socials.instagram || d.socials.youtube || d.socials.x || d.socials.website) && (
+              <ul className="mt-sm flex list-none flex-wrap gap-xs p-0 m-0" aria-label="Links">
+                {(
+                  [
+                    ['instagram', 'Instagram'],
+                    ['youtube', 'YouTube'],
+                    ['x', 'X'],
+                    ['website', 'Website'],
+                  ] as [keyof typeof d.socials, string][]
+                )
+                  .filter(([k]) => d.socials[k])
+                  .map(([k, label]) => (
+                    <li key={k}>
+                      <a href={d.socials[k]} target="_blank" rel="noreferrer" className="toy inline-flex min-h-[40px] items-center rounded-pill bg-card px-sm text-[14px] font-bold text-ink">
+                        {label}
+                      </a>
+                    </li>
+                  ))}
+              </ul>
+            )}
             {token ? (
               <Button variant={d.following ? 'outline' : 'primary'} className={`mt-md ${d.following ? '' : 'bg-r2 text-ink-fixed'}`} onClick={() => follow.mutate()} disabled={follow.isPending}>
                 {d.following ? 'Following' : 'Follow'}

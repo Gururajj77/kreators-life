@@ -783,6 +783,10 @@ export interface User {
   area: string;
   /** True when the person shared their position for nearby matching. The coordinates never leave the server. */
   hasLocation: boolean;
+  /** IANA zone the person's availability is written in. */
+  timezone: string;
+  avatarUrl: string;
+  socials: Socials;
   streak: number;
   bestStreak: number;
   lastCheckin: string | null;
@@ -1417,6 +1421,21 @@ export interface ChatMessage {
 // Creator studio — products, orders, bookings, leads
 // ---------------------------------------------------------------------------
 
+export interface Socials {
+  instagram: string;
+  youtube: string;
+  x: string;
+  website: string;
+}
+export const EMPTY_SOCIALS: Socials = { instagram: '', youtube: '', x: '', website: '' };
+
+/** Zones people in the first markets live in, plus the big ones elsewhere. Any IANA name is accepted. */
+export const TIMEZONES = [
+  'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Asia/Jakarta', 'Asia/Manila', 'Asia/Tokyo', 'Asia/Seoul', 'Asia/Shanghai', 'Asia/Karachi', 'Asia/Dhaka', 'Asia/Kathmandu', 'Asia/Colombo',
+  'Australia/Sydney', 'Pacific/Auckland', 'Europe/London', 'Europe/Berlin', 'Europe/Paris', 'Europe/Madrid', 'Europe/Istanbul', 'Africa/Nairobi', 'Africa/Lagos', 'Africa/Johannesburg',
+  'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Toronto', 'America/Sao_Paulo', 'America/Mexico_City', 'UTC',
+] as const;
+
 export const PRODUCT_KINDS = ['digital', 'course', 'membership', 'session', 'event', 'link', 'payment', 'bundle', 'locked', 'dm'] as const;
 export type ProductKind = (typeof PRODUCT_KINDS)[number];
 
@@ -1481,6 +1500,12 @@ export interface Product {
   leadMagnet: boolean;
   /** Courses: issue a certificate on completion. */
   certificate: boolean;
+  /** Sessions: minutes kept free before and after, hours of notice needed, how far ahead people can book. */
+  bufferMin: number;
+  noticeHours: number;
+  maxDaysAhead: number;
+  /** Memberships: how many months one purchase lasts. Null means it never ends. */
+  periodMonths: number | null;
 }
 
 export interface Lesson {
@@ -1512,9 +1537,16 @@ export interface Order {
   points: number;
   cents: number;
   currency: string;
-  status: 'paid' | 'test' | 'refunded';
+  /** paid: settled in points or by the provider. test: recorded, nothing charged. pending: waiting for the provider. */
+  status: 'paid' | 'test' | 'refunded' | 'pending' | 'failed' | 'expired';
   couponCode: string | null;
   affiliateCode: string | null;
+  /** points, test or razorpay. */
+  provider: string;
+  providerOrderId: string | null;
+  paidAt: string | null;
+  /** Memberships: when this purchase stops counting. */
+  expiresAt: string | null;
   /** Attribution: the tracked link this sale came through, if any. */
   sourceLinkId: string | null;
   sourceLabel: string | null;
@@ -1596,6 +1628,9 @@ export interface PublicPage {
   following: boolean;
   products: Product[];
   testimonials: Testimonial[];
+  avatarUrl: string;
+  socials: Socials;
+  timezone: string;
 }
 
 export interface StudioAnalytics {
@@ -2091,6 +2126,166 @@ export interface LifeSummary {
   overall: number;
   label: string;
   areas: LifeArea[];
+}
+
+// ---------------------------------------------------------------------------
+// Bookings: availability maths in the creator's own zone
+// ---------------------------------------------------------------------------
+
+export interface AvailabilityOverride {
+  id: string;
+  /** YYYY-MM-DD in the creator's zone. */
+  date: string;
+  /** Empty means the whole day is blocked. */
+  ranges: { startMin: number; endMin: number }[];
+}
+
+/** Minutes the zone is ahead of UTC at a given instant, via the platform's own tables. */
+export function zoneOffsetMinutes(zone: string, at: Date): number {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(at);
+    const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+    const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
+    return Math.round((asUtc - at.getTime()) / 60_000);
+  } catch {
+    return 0;
+  }
+}
+
+/** The instant that a local date and minute-of-day in a zone refers to. */
+export function zonedToUtc(date: string, minutes: number, zone: string): Date {
+  const [y, m, d] = date.split('-').map(Number);
+  const guess = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1, Math.floor(minutes / 60), minutes % 60));
+  const offset = zoneOffsetMinutes(zone, guess);
+  const fixed = new Date(guess.getTime() - offset * 60_000);
+  // A second pass catches the rare case where the offset changes between guess and answer.
+  const offset2 = zoneOffsetMinutes(zone, fixed);
+  return offset2 === offset ? fixed : new Date(guess.getTime() - offset2 * 60_000);
+}
+
+export interface SlotInput {
+  /** YYYY-MM-DD in the creator's zone. */
+  date: string;
+  zone: string;
+  rules: { weekday: number; startMin: number; endMin: number }[];
+  overrides: AvailabilityOverride[];
+  /** Taken intervals as ISO strings. */
+  busy: { startsAt: string; endsAt: string }[];
+  durationMin: number;
+  bufferMin: number;
+  noticeHours: number;
+  maxDaysAhead: number;
+  now: Date;
+}
+
+/** Free slot starts, as ISO strings, for one day. Pure, so it is tested without a server. */
+export function slotsFor(input: SlotInput): string[] {
+  const { date, zone, durationMin, bufferMin } = input;
+  const step = Math.max(5, durationMin);
+  const dayStart = zonedToUtc(date, 0, zone);
+  const weekday = new Date(dayStart.getTime() + 12 * 3600_000).getUTCDay();
+  const localWeekday = (() => {
+    try {
+      const w = new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: 'short' }).format(new Date(dayStart.getTime() + 12 * 3600_000));
+      return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(w);
+    } catch {
+      return weekday;
+    }
+  })();
+  const override = input.overrides.find((o) => o.date === date);
+  const ranges = override ? override.ranges : input.rules.filter((r) => r.weekday === localWeekday).map((r) => ({ startMin: r.startMin, endMin: r.endMin }));
+  const earliest = input.now.getTime() + input.noticeHours * 3600_000;
+  const latest = input.now.getTime() + input.maxDaysAhead * 86_400_000;
+  const busy = input.busy.map((b) => ({ s: new Date(b.startsAt).getTime() - bufferMin * 60_000, e: new Date(b.endsAt).getTime() + bufferMin * 60_000 }));
+  const out: string[] = [];
+  for (const r of ranges) {
+    for (let m = r.startMin; m + durationMin <= r.endMin; m += step) {
+      const start = zonedToUtc(date, m, zone).getTime();
+      const end = start + durationMin * 60_000;
+      if (start < earliest || start > latest) continue;
+      if (busy.some((b) => start < b.e && end > b.s)) continue;
+      out.push(new Date(start).toISOString());
+    }
+  }
+  return out;
+}
+
+/** A fee in basis points with integer maths. */
+export function feeBps(amount: number, bps: number): number {
+  return Math.round((amount * bps) / 10_000);
+}
+
+// ---------------------------------------------------------------------------
+// Payments, KYC, email, events: the operator's side
+// ---------------------------------------------------------------------------
+
+export interface PaymentsConfig {
+  /** test: orders are recorded and nothing is charged. razorpay: the provider is live. */
+  mode: 'test' | 'razorpay';
+  keyId: string | null;
+  currency: string;
+}
+
+export interface KycProfile {
+  status: 'none' | 'pending' | 'approved' | 'rejected';
+  legalName: string;
+  panLast4: string;
+  bankLast4: string;
+  ifsc: string;
+  address: string;
+  note: string;
+  submittedAt: string | null;
+  decidedAt: string | null;
+}
+
+export interface AdminKyc extends KycProfile {
+  userId: string;
+  userName: string;
+  email: string | null;
+}
+
+export interface OutboxEmail {
+  id: string;
+  to: string;
+  subject: string;
+  status: 'queued' | 'sent' | 'failed' | 'skipped';
+  error: string;
+  createdAt: string;
+}
+
+export interface OrderEvent {
+  id: string;
+  type: string;
+  data: string;
+  createdAt: string;
+}
+
+export interface AdminOrder extends Order {
+  ownerName: string;
+  ownerHandle: string | null;
+  buyerEmail: string | null;
+}
+
+export interface WebhookEvent {
+  id: string;
+  provider: string;
+  type: string;
+  processedAt: string | null;
+  error: string | null;
+  receivedAt: string;
+}
+
+export interface AdminFunnel {
+  name: string;
+  steps: { label: string; count: number }[];
+}
+
+export const TRACKED_EVENTS = ['creator_signed_up', 'profile_published', 'product_created', 'profile_viewed', 'product_viewed', 'checkout_started', 'payment_succeeded', 'payment_failed', 'booking_confirmed', 'refund_issued', 'link_created', 'automation_created', 'content_dashboard_viewed', 'kyc_submitted', 'kyc_approved'] as const;
+export type TrackedEvent = (typeof TRACKED_EVENTS)[number];
+
+export interface CourseDraft {
+  lessons: { title: string; body: string; quiz: QuizQuestion[] }[];
+  source: 'ai' | 'outline';
 }
 
 export interface SearchResults {

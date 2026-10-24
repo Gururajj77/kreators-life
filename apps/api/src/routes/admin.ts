@@ -2,6 +2,15 @@ import { Hono } from 'hono';
 import { EVENT_TYPES, HONOR_BY_KEY, isRole, LISTING_TYPES, MODULE_BY_KEY, MODULES, OPPORTUNITY_TYPES, PERMISSIONS, TOOL_CATEGORIES, type AdminRedemption, type AdminUser, type AuditLog, type FlagOverride, type Listing, type ListingType, type ModuleSetting, type Permission } from '@kreators/shared';
 import { resolveAccess } from '../access';
 import { listingsFor } from './explore';
+import { ORDER_SELECT, toOrder, type OrderRow } from './studio';
+import { refundOrder } from './growth';
+import { handlePaymentEvent } from './go';
+import { handleComment } from './growth';
+import { providerFor } from '../payments';
+import { toKyc, type KycRow } from './kyc';
+import { logEvent, sendEmail, track } from '../ops';
+import { notify } from '../db';
+import type { AdminFunnel, AdminKyc, AdminOrder, OrderEvent, OutboxEmail, WebhookEvent } from '@kreators/shared';
 import type { Context } from 'hono';
 import type { AppEnv, UserRow } from '../env';
 import { audit, getUser, nameOf, newId, nowIso, num, oneOf, parseList, sessionUser, str } from '../db';
@@ -164,6 +173,165 @@ admin.get('/audit', async (c) => {
   const rows = await c.env.DB.prepare('SELECT a.*, u.display_name AS actor_name FROM audit_logs a LEFT JOIN users u ON u.id = a.actor_user_id ORDER BY a.created_at DESC LIMIT 200').all<{ id: string; actor_user_id: string | null; actor_name: string | null; action: string; resource_type: string; resource_id: string | null; before_summary: string; after_summary: string; created_at: string }>();
   const logs: AuditLog[] = rows.results.map((r) => ({ id: r.id, actorId: r.actor_user_id, actorName: r.actor_name ? nameOf({ display_name: r.actor_name }) : r.actor_user_id ? 'Someone' : 'Admin key', action: r.action, resourceType: r.resource_type, resourceId: r.resource_id, before: r.before_summary, after: r.after_summary, createdAt: r.created_at }));
   return c.json({ logs });
+});
+
+// ---- orders: search, the timeline, a refund
+interface AdminOrderRow extends OrderRow { owner_name: string; owner_handle: string | null; buyer_email: string | null; platform_fee_points: number; provider_payment_id: string | null }
+const ADMIN_ORDER_SELECT = `${ORDER_SELECT.replace('FROM orders o', ', ow.display_name AS owner_name, ow.handle AS owner_handle, b.email AS buyer_email FROM orders o JOIN users ow ON ow.id = o.owner_id')}`;
+const toAdminOrder = (r: AdminOrderRow): AdminOrder => ({ ...toOrder(r), ownerName: nameOf({ display_name: r.owner_name }), ownerHandle: r.owner_handle, buyerEmail: r.buyer_email });
+
+admin.get('/orders', async (c) => {
+  const q = (c.req.query('q') ?? '').trim();
+  const status = c.req.query('status') ?? '';
+  const where: string[] = [];
+  const binds: unknown[] = [];
+  if (q) {
+    where.push('(o.id LIKE ? OR o.provider_order_id LIKE ? OR o.provider_payment_id LIKE ? OR b.email LIKE ? OR b.display_name LIKE ? OR ow.handle LIKE ? OR p.title LIKE ?)');
+    binds.push(`${q}%`, `${q}%`, `${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+  }
+  if (status) {
+    where.push('o.status = ?');
+    binds.push(status);
+  }
+  const rows = await c.env.DB.prepare(`${ADMIN_ORDER_SELECT} ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY o.created_at DESC LIMIT 100`).bind(...binds).all<AdminOrderRow>();
+  return c.json({ orders: rows.results.map(toAdminOrder) });
+});
+
+admin.get('/orders/:id', async (c) => {
+  const db = c.env.DB;
+  const row = await db.prepare(`${ADMIN_ORDER_SELECT} WHERE o.id = ?`).bind(c.req.param('id')).first<AdminOrderRow>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  const [events, hooks] = await Promise.all([
+    db.prepare("SELECT * FROM timeline_events WHERE entity = 'order' AND entity_id = ? ORDER BY created_at").bind(row.id).all<{ id: string; type: string; data_json: string; created_at: string }>(),
+    row.provider_order_id ? db.prepare('SELECT id, provider, type, processed_at, error, received_at FROM webhook_events WHERE payload LIKE ? ORDER BY received_at').bind(`%${row.provider_order_id}%`).all<{ id: string; provider: string; type: string; processed_at: string | null; error: string | null; received_at: string }>() : Promise.resolve({ results: [] }),
+  ]);
+  const timeline: OrderEvent[] = events.results.map((e) => ({ id: e.id, type: e.type, data: e.data_json, createdAt: e.created_at }));
+  const webhooks: WebhookEvent[] = hooks.results.map((h) => ({ id: h.id, provider: h.provider, type: h.type, processedAt: h.processed_at, error: h.error, receivedAt: h.received_at }));
+  return c.json({ order: toAdminOrder(row), timeline, webhooks });
+});
+
+admin.post('/orders/:id/refund', async (c) => {
+  const db = c.env.DB;
+  const row = await db.prepare(`${ADMIN_ORDER_SELECT} WHERE o.id = ?`).bind(c.req.param('id')).first<AdminOrderRow>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  const body = await c.req.json<{ reason?: string }>().catch(() => ({}) as { reason?: string });
+  const problem = await refundOrder(db, c.env, row, actorOf(c) ?? 'admin-key', str(body.reason, 300) || 'refunded by admin');
+  if (problem) return c.json({ error: problem }, 400);
+  await audit(db, actorOf(c), 'order.refund', 'order', row.id, row.status, 'refunded');
+  const fresh = await db.prepare(`${ADMIN_ORDER_SELECT} WHERE o.id = ?`).bind(row.id).first<AdminOrderRow>();
+  return c.json({ order: fresh ? toAdminOrder(fresh) : null });
+});
+
+// ---- webhooks: what came in, and a replay
+admin.get('/webhooks', async (c) => {
+  const rows = await c.env.DB.prepare('SELECT id, provider, type, processed_at, error, received_at FROM webhook_events ORDER BY received_at DESC LIMIT 100').all<{ id: string; provider: string; type: string; processed_at: string | null; error: string | null; received_at: string }>();
+  const webhooks: WebhookEvent[] = rows.results.map((h) => ({ id: h.id, provider: h.provider, type: h.type, processedAt: h.processed_at, error: h.error, receivedAt: h.received_at }));
+  return c.json({ webhooks });
+});
+
+admin.post('/webhooks/:id/replay', async (c) => {
+  const db = c.env.DB;
+  const row = await db.prepare('SELECT * FROM webhook_events WHERE id = ?').bind(c.req.param('id')).first<{ id: string; provider: string; payload: string }>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  let outcome = '';
+  try {
+    const json = JSON.parse(row.payload) as unknown;
+    if (row.provider === 'razorpay') outcome = await handlePaymentEvent(db, c.env, providerFor(c.env).parseWebhook(json));
+    else {
+      const payload = json as { entry?: { changes?: { field?: string; value?: { id?: string; text?: string; media?: { id?: string }; from?: { id?: string; username?: string } } }[] }[] };
+      let matched = 0;
+      for (const entry of payload.entry ?? []) for (const ch of entry.changes ?? []) if (ch.field === 'comments' && ch.value?.id && ch.value.text) matched += (await handleComment(db, c.env, null, { id: ch.value.id, text: ch.value.text, mediaExternalId: ch.value.media?.id ?? null, fromId: ch.value.from?.id ?? 'unknown', fromHandle: ch.value.from?.username ?? '' })).matched;
+      outcome = `${matched} matched`;
+    }
+  } catch (e) {
+    outcome = e instanceof Error ? e.message : 'failed';
+  }
+  await db.prepare('UPDATE webhook_events SET processed_at = ?, error = ? WHERE id = ?').bind(nowIso(), null, row.id).run();
+  await audit(db, actorOf(c), 'webhook.replay', 'webhook', row.id, '', outcome);
+  return c.json({ outcome });
+});
+
+// ---- KYC queue
+admin.get('/kyc', async (c) => {
+  const status = c.req.query('status') ?? 'pending';
+  const rows = await c.env.DB.prepare('SELECT k.*, u.display_name, u.email FROM kyc_profiles k JOIN users u ON u.id = k.user_id WHERE k.status = ? ORDER BY k.submitted_at LIMIT 200').bind(status).all<KycRow & { display_name: string; email: string | null }>();
+  const kyc: AdminKyc[] = rows.results.map((r) => ({ ...toKyc(r), userId: r.user_id, userName: nameOf(r), email: r.email }));
+  return c.json({ kyc });
+});
+
+admin.post('/kyc/:userId', async (c) => {
+  const db = c.env.DB;
+  const body = await c.req.json<{ status?: string; note?: string }>().catch(() => ({}) as { status?: string; note?: string });
+  const status = oneOf(body.status, ['approved', 'rejected'] as const, 'rejected');
+  const res = await db.prepare("UPDATE kyc_profiles SET status = ?, note = ?, decided_at = ?, decided_by = ? WHERE user_id = ? AND status = 'pending'").bind(status, str(body.note, 300), nowIso(), actorOf(c), c.req.param('userId')).run();
+  if (res.meta.changes === 0) return c.json({ error: 'nothing pending for that person' }, 404);
+  await logEvent(db, 'kyc', c.req.param('userId'), `kyc.${status}`);
+  if (status === 'approved') await track(db, c.req.param('userId'), 'kyc_approved');
+  await audit(db, actorOf(c), 'kyc.decide', 'user', c.req.param('userId'), 'pending', status);
+  await notify(db, c.req.param('userId'), 'kyc', status === 'approved' ? 'Payout details approved' : 'Payout details need another look', str(body.note, 160), '/shop/customers');
+  const u = await db.prepare('SELECT email FROM users WHERE id = ?').bind(c.req.param('userId')).first<{ email: string | null }>();
+  await sendEmail(db, c.env, { userId: c.req.param('userId'), to: u?.email, subject: status === 'approved' ? 'Your payout details are approved' : 'Your payout details need another look', body: str(body.note, 500) || (status === 'approved' ? 'Payouts can now be sent to the account you gave.' : 'Please check the details and send them again.') });
+  return c.json({ ok: true });
+});
+
+// ---- email outbox
+admin.get('/outbox', async (c) => {
+  const rows = await c.env.DB.prepare('SELECT id, to_email, subject, status, error, created_at FROM email_outbox ORDER BY created_at DESC LIMIT 200').all<{ id: string; to_email: string; subject: string; status: OutboxEmail['status']; error: string; created_at: string }>();
+  const outbox: OutboxEmail[] = rows.results.map((r) => ({ id: r.id, to: r.to_email, subject: r.subject, status: r.status, error: r.error, createdAt: r.created_at }));
+  return c.json({ outbox });
+});
+
+// ---- funnels, from our own tables
+admin.get('/funnels', async (c) => {
+  const db = c.env.DB;
+  const one = async (sql: string) => (await db.prepare(sql).first<{ n: number }>())?.n ?? 0;
+  const funnels: AdminFunnel[] = [
+    {
+      name: 'Signup to first sale',
+      steps: [
+        { label: 'Finished the vibe check', count: await one('SELECT COUNT(*) AS n FROM users WHERE onboarded_at IS NOT NULL') },
+        { label: 'Added an email', count: await one('SELECT COUNT(*) AS n FROM users WHERE email IS NOT NULL') },
+        { label: 'Published a page', count: await one('SELECT COUNT(*) AS n FROM users WHERE handle IS NOT NULL') },
+        { label: 'Has a live product', count: await one("SELECT COUNT(DISTINCT owner_id) AS n FROM products WHERE status = 'live'") },
+        { label: 'Made a sale', count: await one("SELECT COUNT(DISTINCT owner_id) AS n FROM orders WHERE status IN ('paid','test')") },
+      ],
+    },
+    {
+      name: 'Checkout to paid',
+      steps: [
+        { label: 'Checkout started', count: await one("SELECT COUNT(*) AS n FROM analytics_events WHERE name = 'checkout_started'") },
+        { label: 'Paid', count: await one("SELECT COUNT(*) AS n FROM analytics_events WHERE name = 'payment_succeeded'") },
+        { label: 'Failed', count: await one("SELECT COUNT(*) AS n FROM analytics_events WHERE name = 'payment_failed'") },
+        { label: 'Refunded', count: await one("SELECT COUNT(*) AS n FROM analytics_events WHERE name = 'refund_issued'") },
+      ],
+    },
+    {
+      name: 'Attribution',
+      steps: [
+        { label: 'Creators with a post', count: await one('SELECT COUNT(DISTINCT owner_id) AS n FROM content_items') },
+        { label: 'Links created', count: await one('SELECT COUNT(*) AS n FROM tracked_links') },
+        { label: 'Clicks', count: await one('SELECT COUNT(*) AS n FROM link_clicks') },
+        { label: 'Attributed sales', count: await one("SELECT COUNT(*) AS n FROM orders WHERE source_link_id IS NOT NULL AND status IN ('paid','test')") },
+      ],
+    },
+    {
+      name: 'Circles',
+      steps: [
+        { label: 'Signed up', count: await one('SELECT COUNT(*) AS n FROM circle_signups') },
+        { label: 'Seated', count: await one('SELECT COUNT(*) AS n FROM circle_members') },
+        { label: 'Said something', count: await one('SELECT COUNT(DISTINCT user_id) AS n FROM circle_messages') },
+        { label: 'Revealed', count: await one('SELECT COUNT(*) AS n FROM circle_members WHERE revealed = 1') },
+      ],
+    },
+    {
+      name: 'Payout readiness',
+      steps: [
+        { label: 'KYC submitted', count: await one("SELECT COUNT(*) AS n FROM kyc_profiles WHERE status != 'none'") },
+        { label: 'KYC approved', count: await one("SELECT COUNT(*) AS n FROM kyc_profiles WHERE status = 'approved'") },
+      ],
+    },
+  ];
+  return c.json({ funnels });
 });
 
 // ---- listings: what the public site shows, created and published from here

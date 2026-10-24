@@ -14,6 +14,9 @@ import {
 import type { AppEnv } from '../env';
 import { computeBadges, getStats, getUser, honorKeys, newId, nowIso, parseModules, randomCode, str, toUser } from '../db';
 import { resolveAccess } from '../access';
+import { logEvent, track } from '../ops';
+import { parseSocials } from '../db';
+import { TRACKED_EVENTS, type TrackedEvent } from '@kreators/shared';
 import type { Organization, PortfolioItem } from '@kreators/shared';
 
 export const me = new Hono<AppEnv>();
@@ -120,10 +123,23 @@ me.patch('/', async (c) => {
   // Coordinates are optional and only used server-side to keep circles close by.
   const lat = body.lat === null ? null : typeof body.lat === 'number' && Math.abs(body.lat) <= 90 ? body.lat : user.lat;
   const lng = body.lng === null ? null : typeof body.lng === 'number' && Math.abs(body.lng) <= 180 ? body.lng : user.lng;
+  const timezone = (() => {
+    const z = str(body.timezone, 60);
+    if (!z) return user.timezone || 'Asia/Kolkata';
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: z });
+      return z;
+    } catch {
+      return user.timezone || 'Asia/Kolkata';
+    }
+  })();
+  const avatarUrl = 'avatarUrl' in body ? (/^https?:\/\//.test(str(body.avatarUrl, 500)) ? str(body.avatarUrl, 500) : '') : user.avatar_url;
+  const socials = body.socials && typeof body.socials === 'object' ? JSON.stringify(parseSocials(JSON.stringify(body.socials))) : user.socials_json;
   await db
-    .prepare('UPDATE users SET display_name = ?, creator_type = ?, leaderboard_opt_in = ?, bio = ?, reminder_time = ?, handle = ?, skills = ?, categories = ?, goals = ?, experience_level = ?, availability = ?, location = ?, open_to_intros = ?, interests = ?, city = ?, area = ?, lat = ?, lng = ? WHERE id = ?')
-    .bind(displayName, focus, optIn, bio, reminderTime, handle, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, lat, lng, user.id)
+    .prepare('UPDATE users SET display_name = ?, creator_type = ?, leaderboard_opt_in = ?, bio = ?, reminder_time = ?, handle = ?, skills = ?, categories = ?, goals = ?, experience_level = ?, availability = ?, location = ?, open_to_intros = ?, interests = ?, city = ?, area = ?, lat = ?, lng = ?, timezone = ?, avatar_url = ?, socials_json = ? WHERE id = ?')
+    .bind(displayName, focus, optIn, bio, reminderTime, handle, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, lat, lng, timezone, avatarUrl, socials, user.id)
     .run();
+  if (handle && !user.handle) await track(db, user.id, 'profile_published', { minutesSinceSignup: Math.round((Date.now() - new Date(user.created_at).getTime()) / 60_000) });
   const fresh = await getUser(db, user.id);
   return c.json({ user: fresh ? toUser(fresh) : null });
 });
@@ -151,6 +167,59 @@ me.post('/portfolio', async (c) => {
 
 me.delete('/portfolio/:id', async (c) => {
   await c.env.DB.prepare('DELETE FROM portfolio_items WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  return c.json({ ok: true });
+});
+
+// Everything we hold about you, as one JSON file.
+me.get('/export', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const tables: [string, string][] = [
+    ['nodes', 'SELECT * FROM nodes WHERE user_id = ?'],
+    ['wellbeing', 'SELECT * FROM wellbeing_logs WHERE user_id = ?'],
+    ['journal', 'SELECT * FROM journal_entries WHERE user_id = ?'],
+    ['orders', 'SELECT * FROM orders WHERE buyer_id = ? OR owner_id = ?'],
+    ['bookings', 'SELECT * FROM bookings WHERE buyer_id = ? OR owner_id = ?'],
+    ['finance', 'SELECT * FROM finance_transactions WHERE user_id = ?'],
+    ['invoices', 'SELECT * FROM invoices WHERE user_id = ?'],
+    ['points', 'SELECT * FROM points_ledger WHERE user_id = ?'],
+    ['notifications', 'SELECT * FROM notifications WHERE user_id = ?'],
+  ];
+  const out: Record<string, unknown> = { exportedAt: nowIso(), user: toUser(user) };
+  for (const [name, sql] of tables) {
+    const binds = (sql.match(/\?/g) ?? []).map(() => user.id);
+    out[name] = (await db.prepare(sql).bind(...binds).all()).results;
+  }
+  return c.json(out);
+});
+
+// Delete the account: personal details go, money records stay anonymised for the books.
+me.delete('/', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const body = await c.req.json<{ confirm?: string }>().catch(() => ({}) as { confirm?: string });
+  if (body.confirm !== 'DELETE') return c.json({ error: 'send confirm: DELETE' }, 400);
+  await db.batch([
+    db.prepare("UPDATE users SET display_name = 'Deleted member', email = NULL, password_hash = NULL, password_salt = NULL, handle = NULL, bio = '', avatar_url = '', socials_json = '{}', skills = '[]', categories = '[]', goals = '[]', interests = '[]', city = '', area = '', lat = NULL, lng = NULL, location = '', reminder_time = NULL, open_to_intros = 0 WHERE id = ?").bind(user.id),
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM nodes WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM wellbeing_logs WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM journal_entries WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM chat_messages WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM notifications WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM portfolio_items WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM kyc_profiles WHERE user_id = ?').bind(user.id),
+    db.prepare("UPDATE products SET status = 'archived' WHERE owner_id = ?").bind(user.id),
+  ]);
+  await logEvent(db, 'user', user.id, 'account.deleted');
+  return c.json({ ok: true });
+});
+
+// The web app reports a few product events of its own, for the funnels under Admin.
+me.post('/events', async (c) => {
+  const body = await c.req.json<{ name?: string; props?: Record<string, unknown> }>().catch(() => ({}) as Record<string, never>);
+  if (!(TRACKED_EVENTS as readonly string[]).includes(String(body.name))) return c.json({ error: 'unknown event' }, 400);
+  await track(c.env.DB, c.get('user').id, body.name as TrackedEvent, body.props && typeof body.props === 'object' ? body.props : {});
   return c.json({ ok: true });
 });
 

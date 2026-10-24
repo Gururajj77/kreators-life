@@ -11,6 +11,8 @@ export async function runScheduled(env: Env): Promise<{ sequences: number; recur
   const sequences = await runSequences(db);
   const recurring = await runRecurring(db);
   const circles = await matchDueCircles(db);
+  // Money orders nobody paid for within half an hour are closed so the product is buyable again.
+  await db.prepare("UPDATE orders SET status = 'expired' WHERE status = 'pending' AND created_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-30 minutes')").run();
   let content = 0;
   const stale = await db.prepare("SELECT id, url FROM content_items WHERE platform = 'youtube' AND (synced_at IS NULL OR synced_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-6 hours')) LIMIT 20").all<{ id: string; url: string }>();
   for (const item of stale.results) {

@@ -1,15 +1,51 @@
 import { PRODUCT_KIND_META } from '@kreators/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { Button } from '../components/Button';
 import { useCelebrate } from '../components/Celebration';
 import { Screen } from '../components/Screen';
-import { api } from '../lib/api';
+import { api, publicApi } from '../lib/api';
 import { useMe, useRefreshAll } from '../lib/queries';
 import { storedRef, useSession } from '../lib/store';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
+
+interface RazorpayOptions {
+  key: string;
+  amount: number;
+  currency: string;
+  order_id: string;
+  name: string;
+  description: string;
+  handler: () => void;
+  modal?: { ondismiss?: () => void };
+}
+declare global {
+  interface Window {
+    Razorpay?: new (options: RazorpayOptions) => { open: () => void };
+  }
+}
+
+/** Loads Razorpay Checkout once and resolves when it is ready. */
+function loadRazorpay(): Promise<void> {
+  if (window.Razorpay) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>('script[data-razorpay]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve());
+      existing.addEventListener('error', () => reject(new Error('Could not load the payment window.')));
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    s.async = true;
+    s.dataset.razorpay = '1';
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('Could not load the payment window.'));
+    document.head.appendChild(s);
+  });
+}
 
 export function ProductPage() {
   const { id = '' } = useParams();
@@ -20,10 +56,13 @@ export function ProductPage() {
   const refresh = useRefreshAll();
   const celebrate = useCelebrate();
   const q = useQuery({ queryKey: ['product', id, token], queryFn: () => api.publicProduct(id) });
+  const config = useQuery({ queryKey: ['payments-config'], queryFn: publicApi.config, staleTime: 60_000 });
   const [coupon, setCoupon] = useState('');
   const [offer, setOffer] = useState('');
   const [question, setQuestion] = useState('');
   const [intake, setIntake] = useState<string[]>([]);
+  const [pendingOrder, setPendingOrder] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const params = new URLSearchParams(loc.search);
   const src = params.get('src');
   const click = params.get('click');
@@ -35,9 +74,46 @@ export function ProductPage() {
   const replayForSale = Boolean(p && p.kind === 'event' && isPast && p.replayPoints > 0);
   const needsIntake = Boolean(p && p.kind !== 'session' && p.intake.length > 0);
   const price = p ? (p.pwyw ? Math.max(p.pricePoints, Number(offer) || 0) : p.pricePoints) : 0;
+  const live = config.data?.mode === 'razorpay';
+
+  const finish = async () => {
+    await refresh();
+    q.refetch();
+    celebrate({ title: 'It is yours', color: '#FACC15' });
+    nav(`/library/${id}`);
+  };
+
+  // While the provider confirms a money order, ask every three seconds for up to two minutes.
+  useEffect(() => {
+    if (!pendingOrder) return;
+    let ticks = 0;
+    const t = window.setInterval(async () => {
+      ticks += 1;
+      try {
+        const r = await api.order(pendingOrder);
+        if (r.order.status === 'paid') {
+          window.clearInterval(t);
+          setPendingOrder(null);
+          await finish();
+        } else if (r.order.status === 'failed' || r.order.status === 'expired') {
+          window.clearInterval(t);
+          setPendingOrder(null);
+          setMessage(r.order.status === 'failed' ? 'The payment did not go through. Nothing was charged; try again when you are ready.' : 'That payment window expired. Try again when you are ready.');
+        } else if (ticks >= 40) {
+          window.clearInterval(t);
+          setPendingOrder(null);
+          setMessage('Still waiting for the bank. If you paid, it will appear under My purchases within a few minutes.');
+        }
+      } catch {
+        // Keep polling; a blip is not a failure.
+      }
+    }, 3000);
+    return () => window.clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingOrder]);
 
   const buy = useMutation({
-    mutationFn: ({ pay, replay }: { pay: 'points' | 'test'; replay?: boolean }) =>
+    mutationFn: ({ pay, replay }: { pay: 'points' | 'money'; replay?: boolean }) =>
       api.checkout(id, {
         coupon: coupon || undefined,
         affiliate: storedRef(),
@@ -49,16 +125,39 @@ export function ProductPage() {
         click,
         src,
       }),
-    onSuccess: async () => {
-      await refresh();
-      q.refetch();
-      celebrate({ title: 'It is yours', color: '#FACC15' });
-      nav(`/library/${id}`);
+    onSuccess: async (r) => {
+      setMessage(null);
+      if (r.payment && r.payment.mode === 'razorpay' && r.payment.providerOrderId && r.payment.keyId) {
+        const orderId = r.order.id;
+        try {
+          await loadRazorpay();
+          if (!window.Razorpay) throw new Error('Could not load the payment window.');
+          new window.Razorpay({
+            key: r.payment.keyId,
+            amount: r.payment.amountCents,
+            currency: r.payment.currency,
+            order_id: r.payment.providerOrderId,
+            name: 'Kreators Life',
+            description: p?.title ?? 'Purchase',
+            handler: () => {
+              setMessage('Confirming your payment');
+              setPendingOrder(orderId);
+            },
+            modal: { ondismiss: () => setMessage('Payment window closed. If you paid, this page will update in a moment.') },
+          }).open();
+        } catch (e) {
+          setMessage(e instanceof Error ? e.message : 'Could not open the payment window.');
+        }
+        return;
+      }
+      await finish();
     },
   });
 
   const ready = (p?.kind !== 'dm' || question.trim().length > 0) && (!needsIntake || intake.filter((a) => a.trim()).length >= (p?.intake.length ?? 0)) && (!p?.pwyw || price >= (p?.pricePoints ?? 0));
   const buyLabel = (label: string) => (p?.pricePoints === 0 && !p?.pwyw ? `${label} for free` : `${label} for ${price} points`);
+  const busy = buy.isPending || pendingOrder !== null;
+  const moneyLabel = p ? `${(p.priceCents / 100).toFixed(2)} ${p.currency}` : '';
 
   return (
     <Screen tabs={false}>
@@ -92,7 +191,7 @@ export function ProductPage() {
                 </li>
               )}
               {p.kind === 'session' && <li>{p.durationMin} minutes, booked from the creator's availability after purchase</li>}
-              {p.kind === 'membership' && <li>Access to a members-only feed</li>}
+              {p.kind === 'membership' && <li>Access to a members-only feed{p.periodMonths ? `, for ${p.periodMonths} ${p.periodMonths === 1 ? 'month' : 'months'} per purchase` : ''}</li>}
               {p.kind === 'bundle' && <li>Includes {p.bundleIds.length} products</li>}
               {p.kind === 'locked' && <li>One post, shown to you after purchase</li>}
               {p.kind === 'dm' && <li>A written answer within {p.responseDays ?? 3} days</li>}
@@ -147,20 +246,29 @@ export function ProductPage() {
                   {buy.error instanceof Error ? buy.error.message : 'Could not complete that.'}
                 </p>
               )}
+              {message && (
+                <p role="status" className="mt-sm m-0 rounded-tile bg-paper p-sm text-[14px] font-bold">
+                  {message}
+                  {pendingOrder ? '…' : ''}
+                </p>
+              )}
               {replayForSale ? (
-                <Button full size="lg" className="mt-md" onClick={() => buy.mutate({ pay: 'points', replay: true })} disabled={buy.isPending}>
+                <Button full size="lg" className="mt-md" onClick={() => buy.mutate({ pay: 'points', replay: true })} disabled={busy}>
                   Buy the replay for {p.replayPoints} points
                 </Button>
               ) : (
-                <Button full size="lg" className="mt-md" onClick={() => buy.mutate({ pay: 'points' })} disabled={buy.isPending || !ready}>
+                <Button full size="lg" className="mt-md" onClick={() => buy.mutate({ pay: 'points' })} disabled={busy || !ready}>
                   {buyLabel(meta.buy)}
                 </Button>
               )}
               <p className="mt-xs m-0 text-center text-[12px] font-bold text-ink-soft">You have {points} points.</p>
               {p.priceCents > 0 && !replayForSale && (
-                <Button variant="outline" full className="mt-sm" onClick={() => buy.mutate({ pay: 'test' })} disabled={buy.isPending || !ready}>
-                  Pay {(p.priceCents / 100).toFixed(2)} {p.currency} (test mode)
-                </Button>
+                <>
+                  <Button variant="outline" full className="mt-sm" onClick={() => buy.mutate({ pay: 'money' })} disabled={busy || !ready}>
+                    {live ? `Pay ${moneyLabel}` : `Record a money order (test), ${moneyLabel}`}
+                  </Button>
+                  <p className="mt-xs m-0 text-center text-[12px] font-bold text-ink-soft">{live ? 'UPI, cards and netbanking through Razorpay. Your purchase unlocks once the bank confirms.' : 'Payments are in test mode here: the order is recorded and nothing is charged.'}</p>
+                </>
               )}
             </section>
           )}

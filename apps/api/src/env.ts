@@ -13,6 +13,13 @@ export interface Env {
   META_ACCESS_TOKEN?: string;
   /** Salt for hashing click IPs. Falls back to a fixed string locally. */
   CLICK_SALT?: string;
+  /** Optional Razorpay keys. With them, money checkout is live; without them it stays in test mode. */
+  RAZORPAY_KEY_ID?: string;
+  RAZORPAY_KEY_SECRET?: string;
+  RAZORPAY_WEBHOOK_SECRET?: string;
+  /** Optional Resend key for transactional email; the outbox keeps every message either way. */
+  RESEND_API_KEY?: string;
+  EMAIL_FROM?: string;
 }
 
 export interface UserRow {
@@ -46,6 +53,9 @@ export interface UserRow {
   area: string;
   lat: number | null;
   lng: number | null;
+  timezone: string;
+  avatar_url: string;
+  socials_json: string;
   fee_bps: number;
   streak: number;
   best_streak: number;

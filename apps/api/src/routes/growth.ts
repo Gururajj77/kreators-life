@@ -3,6 +3,8 @@ import { CONTENT_KINDS, LINK_SOURCES, detectPlatform, type ContentItem, type Cus
 import type { AppEnv, Env } from '../env';
 import { nameOf, newId, notify, nowIso, num, oneOf, parseList, randomCode, str } from '../db';
 import { fetchMetrics } from '../social';
+import { providerFor } from '../payments';
+import { logEvent, sendEmail, track } from '../ops';
 import { ORDER_SELECT, toOrder, type OrderRow } from './studio';
 
 /** The creator's growth tools: tracked links, content attribution, Auto-DM, funnels, sequences, customers, refunds and payouts. Mounted at /studio. */
@@ -47,6 +49,7 @@ growth.post('/links', async (c) => {
   const body = await c.req.json<Record<string, string | null>>().catch(() => ({}) as Record<string, string | null>);
   const row = await createLink(c.env.DB, c.get('user').id, body);
   if (!row) return c.json({ error: 'that product is not yours' }, 400);
+  await track(c.env.DB, c.get('user').id, 'link_created', { sourceType: row.source_type });
   return c.json({ link: toLink(row) }, 201);
 });
 
@@ -165,6 +168,7 @@ growth.post('/automations', async (c) => {
   if (!link) return c.json({ error: 'that product is not yours' }, 400);
   const replies = Array.isArray(body.publicReplies) ? body.publicReplies.filter((x): x is string => typeof x === 'string').map((x) => x.trim().slice(0, 200)).filter(Boolean).slice(0, 5) : [];
   await db.prepare('INSERT INTO dm_automations (id, owner_id, content_item_id, keywords_json, dm_message, public_replies_json, link_id, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)').bind(id, user.id, contentItemId, JSON.stringify(keywords), dmMessage, JSON.stringify(replies), link.id, nowIso()).run();
+  await track(db, user.id, 'automation_created');
   const row = await db.prepare(`${AUTO_SELECT} WHERE a.id = ?`).bind(id).first<AutoRow>();
   return c.json({ automation: row ? toAuto(row) : null }, 201);
 });
@@ -378,16 +382,20 @@ growth.get('/customers', async (c) => {
   return c.json({ customers });
 });
 
-// Full refund by the seller. Points go back to the buyer; the seller's and any affiliate's share come back out.
-growth.post('/orders/:id/refund', async (c) => {
-  const db = c.env.DB;
-  const user = c.get('user');
-  const o = await db.prepare(`${ORDER_SELECT} WHERE o.id = ? AND o.owner_id = ?`).bind(c.req.param('id'), user.id).first<OrderRow & { platform_fee_points: number }>();
-  if (!o) return c.json({ error: 'not found' }, 404);
-  if (o.status === 'refunded') return c.json({ error: 'already refunded' }, 400);
-  const body = await c.req.json<{ reason?: string }>().catch(() => ({}) as { reason?: string });
+/** Full refund. Points go back to the buyer and come out of the seller and any affiliate; money goes back through the provider. */
+export async function refundOrder(db: D1Database, env: Env, o: OrderRow & { platform_fee_points: number; provider_payment_id?: string | null }, actorId: string, reason: string): Promise<string | null> {
+  if (o.status === 'refunded') return 'already refunded';
+  if (o.status === 'pending' || o.status === 'failed' || o.status === 'expired') return 'nothing was paid on this order';
   const now = nowIso();
-  const stmts = [db.prepare("UPDATE orders SET status = 'refunded', refunded_at = ?, refund_reason = ? WHERE id = ? AND status != 'refunded'").bind(now, str(body.reason, 300), o.id)];
+  if (o.provider === 'razorpay' && o.cents > 0) {
+    if (!o.provider_payment_id) return 'no payment id on this order yet';
+    try {
+      await providerFor(env).refund(o.provider_payment_id, o.cents);
+    } catch (e) {
+      return e instanceof Error ? e.message : 'the provider refused the refund';
+    }
+  }
+  const stmts = [db.prepare("UPDATE orders SET status = 'refunded', refunded_at = ?, refund_reason = ? WHERE id = ? AND status != 'refunded'").bind(now, reason, o.id)];
   if (o.points > 0) {
     const affiliate = o.affiliate_code ? await db.prepare('SELECT id FROM users WHERE referral_code = ?').bind(o.affiliate_code).first<{ id: string }>() : null;
     const share = affiliate ? Math.round(o.points * 0.2) : 0;
@@ -395,8 +403,8 @@ growth.post('/orders/:id/refund', async (c) => {
     stmts.push(
       db.prepare('UPDATE users SET points = points + ? WHERE id = ?').bind(o.points, o.buyer_id),
       db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(o.buyer_id, o.points, 'refund', o.id, now),
-      db.prepare('UPDATE users SET points = MAX(0, points - ?) WHERE id = ?').bind(sellerGot, user.id),
-      db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(user.id, -sellerGot, 'refund_out', o.id, now),
+      db.prepare('UPDATE users SET points = MAX(0, points - ?) WHERE id = ?').bind(sellerGot, o.owner_id),
+      db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(o.owner_id, -sellerGot, 'refund_out', o.id, now),
     );
     if (affiliate && share > 0) {
       stmts.push(
@@ -408,7 +416,22 @@ growth.post('/orders/:id/refund', async (c) => {
   stmts.push(db.prepare("UPDATE bookings SET status = 'cancelled' WHERE order_id = ? OR (product_id = ? AND buyer_id = ? AND status IN ('requested','confirmed'))").bind(o.id, o.product_id, o.buyer_id));
   stmts.push(db.prepare("UPDATE dm_requests SET status = 'refunded' WHERE order_id = ?").bind(o.id));
   await db.batch(stmts);
-  await notify(db, o.buyer_id, 'refund', `Refunded: ${o.product_title}`, o.points > 0 ? `${o.points} points are back in your balance.` : 'Your test-mode order was reversed.', '/library');
+  await logEvent(db, 'order', o.id, 'order.refunded', { by: actorId, reason });
+  await track(db, actorId, 'refund_issued', { points: o.points, cents: o.cents, reason });
+  await notify(db, o.buyer_id, 'refund', `Refunded: ${o.product_title}`, o.points > 0 ? `${o.points} points are back in your balance.` : o.cents > 0 && o.provider === 'razorpay' ? 'The money is on its way back to the card or account you paid with.' : 'Your test-mode order was reversed.', '/library');
+  const buyer = await db.prepare('SELECT email FROM users WHERE id = ?').bind(o.buyer_id).first<{ email: string | null }>();
+  await sendEmail(db, env, { userId: o.buyer_id, to: buyer?.email, subject: `Refunded: ${o.product_title}`, body: reason ? `Reason: ${reason}` : 'Your order was refunded in full.' });
+  return null;
+}
+
+growth.post('/orders/:id/refund', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const o = await db.prepare(`${ORDER_SELECT} WHERE o.id = ? AND o.owner_id = ?`).bind(c.req.param('id'), user.id).first<OrderRow & { platform_fee_points: number; provider_payment_id: string | null; owner_id: string }>();
+  if (!o) return c.json({ error: 'not found' }, 404);
+  const body = await c.req.json<{ reason?: string }>().catch(() => ({}) as { reason?: string });
+  const problem = await refundOrder(db, c.env, o, user.id, str(body.reason, 300));
+  if (problem) return c.json({ error: problem }, 400);
   const fresh = await db.prepare(`${ORDER_SELECT} WHERE o.id = ?`).bind(o.id).first<OrderRow>();
   return c.json({ order: fresh ? toOrder(fresh) : null });
 });

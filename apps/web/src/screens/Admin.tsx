@@ -13,9 +13,15 @@ import {
   ROLE_META,
   ROLES,
   TOOL_CATEGORIES,
+  type AdminFunnel,
+  type AdminKyc,
+  type AdminOrder,
   type AdminRedemption,
   type AdminUser,
   type AuditLog,
+  type OrderEvent,
+  type OutboxEmail,
+  type WebhookEvent,
   type FlagOverride,
   type Listing,
   type ListingType,
@@ -37,7 +43,9 @@ import { useMe } from '../lib/queries';
 const ADMIN_HONORS = HONORS.filter((h) => h.source === 'admin' && h.key !== 'pro');
 const KEY_STORE = 'kreators.adminKey';
 const PERMISSION_NAMES: Record<Permission, string> = { talent: 'Talent', cohorts: 'Cohorts', events: 'Events', finance: 'Finance', moderation: 'Moderation', support: 'Support', review: 'Review', mentor: 'Mentor' };
-type Tab = 'people' | 'flags' | 'listings' | 'redemptions' | 'audit';
+type Tab = 'people' | 'flags' | 'listings' | 'orders' | 'webhooks' | 'kyc' | 'ops' | 'redemptions' | 'audit';
+const ORDER_STATUSES = ['', 'pending', 'paid', 'test', 'failed', 'refunded', 'expired'] as const;
+const statusTone = (s: string) => (s === 'paid' || s === 'test' ? 'bg-r4 text-ink-fixed' : s === 'pending' ? 'bg-r3 text-ink-fixed' : s === 'refunded' || s === 'failed' ? 'bg-r1 text-white' : 'bg-paper text-ink-soft');
 
 function readKey(): string {
   try {
@@ -89,6 +97,23 @@ export function Admin() {
   // redemptions, audit
   const [redemptions, setRedemptions] = useState<AdminRedemption[]>([]);
   const [logs, setLogs] = useState<AuditLog[]>([]);
+  // orders
+  const [orderQ, setOrderQ] = useState('');
+  const [orderStatus, setOrderStatus] = useState('');
+  const [orders, setOrders] = useState<AdminOrder[] | null>(null);
+  const [orderDetail, setOrderDetail] = useState<{ order: AdminOrder; timeline: OrderEvent[]; webhooks: WebhookEvent[] } | null>(null);
+  const [refundReason, setRefundReason] = useState('');
+  const [refundError, setRefundError] = useState<string | null>(null);
+  // webhooks
+  const [hooks, setHooks] = useState<WebhookEvent[] | null>(null);
+  const [replayOutcome, setReplayOutcome] = useState<Record<string, string>>({});
+  // kyc
+  const [kycStatus, setKycStatus] = useState<'pending' | 'approved' | 'rejected'>('pending');
+  const [kycList, setKycList] = useState<AdminKyc[] | null>(null);
+  const [kycNote, setKycNote] = useState<Record<string, string>>({});
+  // ops
+  const [funnels, setFunnels] = useState<AdminFunnel[] | null>(null);
+  const [outbox, setOutbox] = useState<OutboxEmail[] | null>(null);
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -138,11 +163,40 @@ export function Admin() {
     setListings(l.listings);
   };
   const refreshAudit = async () => setLogs((await adminApi.audit(key)).logs);
+  const searchOrders = (q = orderQ, status = orderStatus) =>
+    run(async () => {
+      setOrders((await adminApi.orders(key, q, status)).orders);
+    });
+  const openOrder = (id: string) =>
+    run(async () => {
+      setRefundError(null);
+      setOrderDetail(await adminApi.order(key, id));
+    });
+  const loadHooks = () => run(async () => setHooks((await adminApi.webhooks(key)).webhooks));
+  const loadKyc = (status = kycStatus) => run(async () => setKycList((await adminApi.kycQueue(key, status)).kyc));
+  const loadOps = () =>
+    run(async () => {
+      const [f, o] = await Promise.all([adminApi.funnels(key), adminApi.outbox(key)]);
+      setFunnels(f.funnels);
+      setOutbox(o.outbox);
+    });
+  // Each new tab fetches on first open, so the first load stays as quick as it was.
+  const openTab = (k: Tab) => {
+    setTab(k);
+    if (k === 'orders' && orders === null) void searchOrders();
+    if (k === 'webhooks' && hooks === null) void loadHooks();
+    if (k === 'kyc' && kycList === null) void loadKyc();
+    if (k === 'ops' && funnels === null) void loadOps();
+  };
 
   const tabs: [Tab, string][] = [
     ['people', 'People'],
     ['flags', 'Flags'],
     ['listings', 'Listings'],
+    ['orders', 'Orders'],
+    ['webhooks', 'Webhooks'],
+    ['kyc', 'KYC'],
+    ['ops', 'Ops'],
     ['redemptions', `Redemptions${redemptions.length ? ` (${redemptions.length})` : ''}`],
     ['audit', 'Audit'],
   ];
@@ -186,7 +240,7 @@ export function Admin() {
         <>
           <nav className="mt-md flex gap-xs overflow-x-auto pb-xs scrollbar-none" aria-label="Admin sections">
             {tabs.map(([k, label]) => (
-              <button key={k} type="button" aria-pressed={tab === k} onClick={() => setTab(k)} className={`toy shrink-0 rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+              <button key={k} type="button" aria-pressed={tab === k} onClick={() => openTab(k)} className={`toy shrink-0 rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                 {label}
               </button>
             ))}
@@ -705,6 +759,278 @@ export function Admin() {
                         Cancel and refund
                       </Button>
                     </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {tab === 'orders' && (
+            <section className="mt-md" aria-labelledby="orders-heading">
+              <h2 id="orders-heading" className="text-[24px]">
+                Orders
+              </h2>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Search by order id, provider id, buyer name or email, page name or product.</p>
+              <form
+                className="mt-sm flex flex-wrap gap-xs"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void searchOrders();
+                }}
+              >
+                <input value={orderQ} onChange={(e) => setOrderQ(e.target.value)} placeholder="Order, payment, buyer, page" aria-label="Search orders" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-[16px]" />
+                <select value={orderStatus} onChange={(e) => { setOrderStatus(e.target.value); void searchOrders(orderQ, e.target.value); }} aria-label="Status" className="rounded-pill border-2 border-line bg-card px-sm py-sm text-[14px] font-bold">
+                  {ORDER_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {s || 'all statuses'}
+                    </option>
+                  ))}
+                </select>
+                <Button type="submit" variant="outline" disabled={busy}>
+                  Search
+                </Button>
+              </form>
+              {orders && orders.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No orders match.</p>}
+              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+                {orders?.map((o) => (
+                  <li key={o.id}>
+                    <button type="button" onClick={() => openOrder(o.id)} aria-pressed={orderDetail?.order.id === o.id} className={`toy toy-soft flex w-full items-start gap-sm rounded-tile bg-card p-sm text-left ${orderDetail?.order.id === o.id ? 'outline outline-2 outline-ink' : ''}`}>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[16px] font-bold">
+                          {o.productTitle} <span className="font-semibold text-ink-soft">#{o.id.slice(0, 8)}</span>
+                        </span>
+                        <span className="block truncate text-[14px] font-semibold text-ink-soft">
+                          {o.buyerName}
+                          {o.buyerEmail ? ` (${o.buyerEmail})` : ''}
+                          {o.ownerHandle ? ` from @${o.ownerHandle}` : ` from ${o.ownerName}`}
+                        </span>
+                        <span className="block text-[12px] font-semibold text-ink-mute">
+                          {o.points > 0 ? `${o.points} points` : `${(o.cents / 100).toFixed(2)} ${o.currency}`}, {o.provider}, {new Date(o.createdAt).toLocaleString()}
+                        </span>
+                      </span>
+                      <span className={`shrink-0 rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${statusTone(o.status)}`}>{o.status}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {orderDetail && (
+                <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
+                  <h3 className="text-[22px]">
+                    {orderDetail.order.productTitle} <span className="text-[14px] font-bold text-ink-mute">#{orderDetail.order.id.slice(0, 8)}</span>
+                  </h3>
+                  <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+                    <span className={`rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${statusTone(orderDetail.order.status)}`}>{orderDetail.order.status}</span> {orderDetail.order.provider}
+                    {orderDetail.order.providerOrderId ? `, ${orderDetail.order.providerOrderId}` : ''}
+                    {orderDetail.order.paidAt ? `, paid ${new Date(orderDetail.order.paidAt).toLocaleString()}` : ''}
+                  </p>
+                  <p className="mt-md m-0 text-[14px] font-bold">Timeline</p>
+                  {orderDetail.timeline.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">Nothing logged for this order yet.</p>}
+                  <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+                    {orderDetail.timeline.map((t) => (
+                      <li key={t.id} className="rounded-tile bg-paper px-sm py-xs text-[12px] font-bold">
+                        <span>{t.type}</span>
+                        {t.data ? <span className="block break-words font-semibold text-ink-soft">{t.data}</span> : null}
+                        <span className="block font-semibold text-ink-mute">{new Date(t.createdAt).toLocaleString()}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {orderDetail.webhooks.length > 0 && (
+                    <>
+                      <p className="mt-md m-0 text-[14px] font-bold">Provider webhooks</p>
+                      <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+                        {orderDetail.webhooks.map((h) => (
+                          <li key={h.id} className="rounded-tile bg-paper px-sm py-xs text-[12px] font-bold">
+                            {h.type}
+                            <span className="block font-semibold text-ink-soft">{h.processedAt ? `processed ${new Date(h.processedAt).toLocaleString()}` : 'not processed yet'}</span>
+                            {h.error && <span className="block font-semibold text-r1">{h.error}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {orderDetail.order.status !== 'refunded' && (
+                    <div className="mt-md">
+                      <Label text="Refund reason">
+                        <input value={refundReason} onChange={(e) => setRefundReason(e.target.value)} className={field} />
+                      </Label>
+                      {refundError && (
+                        <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+                          {refundError}
+                        </p>
+                      )}
+                      <Button
+                        variant="outline"
+                        className="mt-xs"
+                        disabled={busy}
+                        onClick={() =>
+                          run(async () => {
+                            setRefundError(null);
+                            try {
+                              await adminApi.refundOrder(key, orderDetail.order.id, refundReason);
+                              setOrderDetail(await adminApi.order(key, orderDetail.order.id));
+                              setOrders((list) => (list ?? []).map((x) => (x.id === orderDetail.order.id ? { ...x, status: 'refunded' } : x)));
+                            } catch (e) {
+                              setRefundError(e instanceof Error ? e.message : 'The refund was refused.');
+                            }
+                          })
+                        }
+                      >
+                        Refund in full
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+
+          {tab === 'webhooks' && (
+            <section className="mt-md" aria-labelledby="hooks-heading">
+              <div className="flex items-center justify-between gap-sm">
+                <h2 id="hooks-heading" className="text-[24px]">
+                  Webhooks
+                </h2>
+                <Button variant="outline" disabled={busy} onClick={() => loadHooks()}>
+                  Refresh
+                </Button>
+              </div>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Every signed event from Meta and the payment provider, stored before it is processed. Replay runs one again.</p>
+              {hooks && hooks.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing has come in yet.</p>}
+              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+                {hooks?.map((h) => (
+                  <li key={h.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
+                    <p className="m-0 text-[16px] font-bold">
+                      {h.provider} <span className="font-semibold text-ink-soft">{h.type}</span>
+                    </p>
+                    <p className="m-0 text-[12px] font-semibold text-ink-mute">
+                      received {new Date(h.receivedAt).toLocaleString()}
+                      {h.processedAt ? `, processed ${new Date(h.processedAt).toLocaleString()}` : ', not processed'}
+                    </p>
+                    {h.error && <p className="m-0 text-[12px] font-bold text-r1">{h.error}</p>}
+                    <div className="mt-xs flex flex-wrap items-center gap-xs">
+                      <Button
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() =>
+                          run(async () => {
+                            const r = await adminApi.replayWebhook(key, h.id);
+                            setReplayOutcome((m) => ({ ...m, [h.id]: r.outcome }));
+                          })
+                        }
+                      >
+                        Replay
+                      </Button>
+                      {replayOutcome[h.id] && <span className="text-[12px] font-bold text-ink-soft">{replayOutcome[h.id]}</span>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {tab === 'kyc' && (
+            <section className="mt-md" aria-labelledby="kyc-heading">
+              <h2 id="kyc-heading" className="text-[24px]">
+                Payout details
+              </h2>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Only the last digits are stored here. Approve once the bank account and PAN match the legal name.</p>
+              <div className="mt-sm flex flex-wrap gap-xs" role="group" aria-label="Status">
+                {(['pending', 'approved', 'rejected'] as const).map((s) => (
+                  <button key={s} type="button" aria-pressed={kycStatus === s} onClick={() => { setKycStatus(s); void loadKyc(s); }} className={`toy min-h-[40px] rounded-pill border-2 px-sm text-[14px] font-bold ${kycStatus === s ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+              {kycList && kycList.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing {kycStatus} right now.</p>}
+              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+                {kycList?.map((k) => (
+                  <li key={k.userId} className="rounded-tile bg-card p-sm shadow-toy-soft">
+                    <p className="m-0 text-[16px] font-bold">
+                      {k.userName} <span className="font-semibold text-ink-soft">{k.email ?? 'no email'}</span>
+                    </p>
+                    <p className="m-0 text-[14px] font-semibold text-ink-soft">
+                      {k.legalName}, PAN ending {k.panLast4}, account ending {k.bankLast4}, {k.ifsc}
+                    </p>
+                    <p className="m-0 text-[14px] font-semibold text-ink-soft">{k.address}</p>
+                    <p className="m-0 text-[12px] font-semibold text-ink-mute">
+                      {k.submittedAt ? `submitted ${new Date(k.submittedAt).toLocaleString()}` : ''}
+                      {k.decidedAt ? `, decided ${new Date(k.decidedAt).toLocaleString()}` : ''}
+                      {k.note ? `, ${k.note}` : ''}
+                    </p>
+                    {k.status === 'pending' && (
+                      <div className="mt-xs">
+                        <input value={kycNote[k.userId] ?? ''} onChange={(e) => setKycNote((m) => ({ ...m, [k.userId]: e.target.value }))} placeholder="Note to the person (optional)" aria-label="Note" className={field} />
+                        <div className="mt-xs flex gap-xs">
+                          <Button disabled={busy} onClick={() => run(async () => { await adminApi.decideKyc(key, k.userId, { status: 'approved', note: kycNote[k.userId] ?? '' }); await loadKyc(); })}>
+                            Approve
+                          </Button>
+                          <Button variant="outline" disabled={busy} onClick={() => run(async () => { await adminApi.decideKyc(key, k.userId, { status: 'rejected', note: kycNote[k.userId] ?? '' }); await loadKyc(); })}>
+                            Reject
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {tab === 'ops' && (
+            <section className="mt-md" aria-labelledby="ops-heading">
+              <div className="flex items-center justify-between gap-sm">
+                <h2 id="ops-heading" className="text-[24px]">
+                  Funnels
+                </h2>
+                <Button variant="outline" disabled={busy} onClick={() => loadOps()}>
+                  Refresh
+                </Button>
+              </div>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Counted from our own tables, nothing leaves the server. Each bar is the share of the step before it.</p>
+              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+                {funnels?.map((f) => {
+                  const top = Math.max(1, f.steps[0]?.count ?? 0);
+                  return (
+                    <li key={f.name} className="rounded-tile bg-card p-sm shadow-toy-soft">
+                      <p className="m-0 text-[16px] font-bold">{f.name}</p>
+                      <ol className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
+                        {f.steps.map((s, i) => {
+                          const prev = i > 0 ? f.steps[i - 1]?.count ?? 0 : null;
+                          const drop = prev ? Math.round(100 - (s.count / Math.max(1, prev)) * 100) : null;
+                          return (
+                            <li key={s.label} className="text-[12px] font-bold">
+                              <div className="flex items-baseline justify-between gap-sm">
+                                <span>{s.label}</span>
+                                <span className="text-ink-soft">
+                                  {s.count}
+                                  {drop !== null && drop > 0 ? `, ${drop}% drop` : ''}
+                                </span>
+                              </div>
+                              <div className="mt-xs h-[10px] overflow-hidden rounded-pill bg-line" aria-hidden="true">
+                                <div className="h-full rounded-pill bg-r6" style={{ width: `${Math.max(2, Math.round((s.count / top) * 100))}%` }} />
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ol>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              <h2 className="mt-lg text-[24px]">Email outbox</h2>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Every message the app wanted to send. Skipped means no RESEND_API_KEY is set on the server, so nothing went out.</p>
+              {outbox && outbox.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing queued yet.</p>}
+              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+                {outbox?.map((m) => (
+                  <li key={m.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
+                    <p className="m-0 text-[14px] font-bold">
+                      {m.subject} <span className={`ml-xs rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${m.status === 'sent' ? 'bg-r4 text-ink-fixed' : m.status === 'failed' ? 'bg-r1 text-white' : 'bg-paper text-ink-soft'}`}>{m.status}</span>
+                    </p>
+                    <p className="m-0 text-[12px] font-semibold text-ink-soft">
+                      to {m.to}, {new Date(m.createdAt).toLocaleString()}
+                      {m.error ? `, ${m.error}` : ''}
+                    </p>
                   </li>
                 ))}
               </ul>

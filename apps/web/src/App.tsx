@@ -60,6 +60,7 @@ import { Reward, Win } from './screens/Win';
 import { You } from './screens/You';
 import { CertificatePage } from './site/CertificatePage';
 import { InvoicePage } from './site/InvoicePage';
+import { Policy } from './site/Policy';
 import { Explore } from './site/Explore';
 import { Feature } from './site/Feature';
 import { Home } from './site/Home';
@@ -134,6 +135,11 @@ const router = createBrowserRouter([
   { path: '/features/:key', element: <Feature /> },
   { path: '/c/:code', element: <CertificatePage /> },
   { path: '/i/:token', element: <InvoicePage /> },
+  { path: '/terms', element: <Policy kind="terms" /> },
+  { path: '/privacy', element: <Policy kind="privacy" /> },
+  { path: '/refunds', element: <Policy kind="refunds" /> },
+  { path: '/contact', element: <Policy kind="contact" /> },
+  { path: '/pricing', element: <Policy kind="pricing" /> },
   {
     element: <Standalone />,
     children: [

@@ -1,6 +1,7 @@
 import { CONTENT_KINDS, LINK_SOURCES, SOCIAL_PLATFORM_META, type ContentItem, type TrackedLink } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import QRCode from 'qrcode';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
@@ -219,8 +220,17 @@ function ContentCard({ item, onChange }: { item: ContentItem; onChange: () => vo
 
 function LinkCard({ link, goBase, onChange }: { link: TrackedLink; goBase: string; onChange: () => void }) {
   const [copied, setCopied] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
+  const [qr, setQr] = useState<string | null>(null);
+  const [qrError, setQrError] = useState<string | null>(null);
   const remove = useMutation({ mutationFn: () => api.deleteLink(link.id), onSuccess: onChange });
   const url = `${goBase}${link.code}`;
+  useEffect(() => {
+    if (!qrOpen || qr) return;
+    QRCode.toDataURL(url, { margin: 1, width: 160 })
+      .then(setQr)
+      .catch(() => setQrError('Could not draw the code.'));
+  }, [qrOpen, qr, url]);
   const copy = async () => {
     try {
       await navigator.clipboard?.writeText(url);
@@ -241,10 +251,23 @@ function LinkCard({ link, goBase, onChange }: { link: TrackedLink; goBase: strin
         <Button variant="outline" onClick={() => void copy()}>
           {copied ? 'Copied' : 'Copy'}
         </Button>
+        <Button variant="outline" onClick={() => setQrOpen(true)}>
+          QR
+        </Button>
         <Button variant="ghost" disabled={remove.isPending} onClick={() => window.confirm('Remove this link? Sales already credited stay.') && remove.mutate()}>
           Remove
         </Button>
       </div>
+      <Sheet open={qrOpen} onClose={() => setQrOpen(false)} title={link.label || `Link ${link.code}`}>
+        <div className="flex flex-col items-center gap-sm text-center">
+          {qr ? <img src={qr} width={160} height={160} alt={`QR code for ${url}`} className="rounded-tile bg-white p-xs" /> : qrError ? <p className="m-0 text-[14px] font-bold">{qrError}</p> : <p className="m-0 text-[14px] font-semibold text-ink-soft">Drawing the code</p>}
+          <p className="m-0 break-all text-[14px] font-semibold">{url}</p>
+          <p className="m-0 text-[12px] font-semibold text-ink-soft">Put it on a slide, a poster or a video end card. Every scan is credited to this link.</p>
+          <Button variant="outline" onClick={() => void copy()}>
+            {copied ? 'Copied' : 'Copy link'}
+          </Button>
+        </div>
+      </Sheet>
     </li>
   );
 }

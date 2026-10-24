@@ -82,7 +82,7 @@ community.post('/', async (c) => {
   let productId: string | null = null;
   if (typeof body.productId === 'string' && body.productId) {
     const ok = await db
-      .prepare(`SELECT 1 FROM products WHERE id = ? AND kind = 'membership' AND (owner_id = ? OR EXISTS (SELECT 1 FROM orders o WHERE o.product_id = products.id AND o.buyer_id = ? AND o.status IN ('paid','test')))`)
+      .prepare(`SELECT 1 FROM products WHERE id = ? AND kind = 'membership' AND (owner_id = ? OR EXISTS (SELECT 1 FROM orders o WHERE o.product_id = products.id AND o.buyer_id = ? AND o.status IN ('paid','test') AND (o.expires_at IS NULL OR o.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))))`)
       .bind(body.productId, user.id, user.id)
       .first();
     if (!ok) return c.json({ error: 'members only' }, 403);

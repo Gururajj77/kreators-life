@@ -35,6 +35,9 @@ import { growth } from './routes/growth';
 import { buyer, certificates } from './routes/buyer';
 import { go, webhooks } from './routes/go';
 import { runScheduled } from './cron';
+import { kyc } from './routes/kyc';
+import { builder } from './routes/builder';
+import { rateLimit } from './ops';
 import { finance, publicInvoices } from './routes/finance';
 import { circles } from './routes/circles';
 import { life } from './routes/life';
@@ -44,6 +47,11 @@ const app = new Hono<AppEnv>().basePath('/api');
 app.use('*', cors());
 
 app.get('/health', (c) => c.json({ ok: true, at: new Date().toISOString() }));
+// Abuse limits on the doors that take no session.
+app.use('/auth/signin', rateLimit('signin', 10, 60));
+app.use('/auth/signup', rateLimit('signup', 5, 3600));
+app.use('/auth/anon', rateLimit('anon', 60, 3600));
+app.use('/public/:handle/lead', rateLimit('lead', 5, 60));
 app.route('/auth', auth);
 // Admin uses its own key, or an admin's session. Public pages need no session.
 app.route('/admin', admin);
@@ -82,6 +90,7 @@ app.route('/companion', companion);
 app.route('/search', search);
 app.route('/studio', studio);
 app.route('/studio', growth);
+app.use('/store/:productId/checkout', rateLimit('checkout', 10, 60));
 app.route('/store', store);
 app.route('/store', buyer);
 app.route('/manage', manage);
@@ -101,6 +110,8 @@ app.route('/support', support);
 app.route('/finance', finance);
 app.route('/circles', circles);
 app.route('/life', life);
+app.route('/kyc', kyc);
+app.route('/studio', builder);
 
 app.notFound((c) => c.json({ error: 'not found' }, 404));
 app.onError((err, c) => {

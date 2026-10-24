@@ -12,6 +12,7 @@ import { useModules } from '../lib/modules';
 import { useSession } from '../lib/store';
 import { useTheme, type ThemeMode } from '../lib/theme';
 import { Screen } from '../components/Screen';
+import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useMe, useRefreshAll } from '../lib/queries';
 
@@ -46,6 +47,26 @@ function YouView({ data }: { data: MeResponse }) {
     onSuccess: () => {
       setToken(null);
       nav('/start', { replace: true });
+    },
+  });
+  const [deleting, setDeleting] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const exportData = useMutation({
+    mutationFn: () => api.exportMe(),
+    onSuccess: (data) => {
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'kreators-export.json';
+      a.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    },
+  });
+  const deleteAccount = useMutation({
+    mutationFn: () => api.deleteMe(),
+    onSuccess: () => {
+      setToken(null);
+      nav('/', { replace: true });
     },
   });
   const [name, setName] = useState(user.displayName);
@@ -153,6 +174,38 @@ function YouView({ data }: { data: MeResponse }) {
             </Link>
           </div>
         )}
+        <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
+          <p className="m-0 text-[16px] font-bold">Your data</p>
+          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Everything we hold about you as one file, or the whole account gone.</p>
+          <div className="mt-sm flex flex-wrap gap-xs">
+            <Button variant="outline" onClick={() => exportData.mutate()} disabled={exportData.isPending}>
+              {exportData.isPending ? 'Preparing' : 'Export my data'}
+            </Button>
+            <Button variant="ghost" onClick={() => setDeleting(true)}>
+              Delete my account
+            </Button>
+          </div>
+          {exportData.isError && (
+            <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+              Could not prepare the export. Try again.
+            </p>
+          )}
+        </div>
+        <Sheet open={deleting} onClose={() => setDeleting(false)} title="Delete your account">
+          <p className="m-0 text-[14px] font-semibold text-ink-soft">This removes your name, email, page, bio, tower, logs, journal, messages and notifications, and archives anything you sell. Money records stay, anonymised, because the books have to. It cannot be undone.</p>
+          <label className="mt-md block">
+            <span className="block text-[14px] font-bold">Type DELETE to confirm</span>
+            <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} autoComplete="off" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+          </label>
+          {deleteAccount.isError && (
+            <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+              {deleteAccount.error instanceof Error ? deleteAccount.error.message : 'Could not delete the account.'}
+            </p>
+          )}
+          <Button className="mt-md" full disabled={confirmText !== 'DELETE' || deleteAccount.isPending} onClick={() => deleteAccount.mutate()}>
+            Delete everything
+          </Button>
+        </Sheet>
       </section>
 
       <section className="mt-lg" aria-labelledby="evo-heading">

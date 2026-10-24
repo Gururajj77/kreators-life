@@ -1,6 +1,18 @@
 import type {
+  AdminFunnel,
+  AdminKyc,
+  AdminOrder,
   AdminRedemption,
   AdminUser,
+  AvailabilityOverride,
+  CourseDraft,
+  KycProfile,
+  OrderEvent,
+  OutboxEmail,
+  PaymentsConfig,
+  Socials,
+  TrackedEvent,
+  WebhookEvent,
   Application,
   AuditLog,
   Availability,
@@ -150,7 +162,13 @@ export const api = {
     area?: string;
     lat?: number | null;
     lng?: number | null;
+    timezone?: string;
+    avatarUrl?: string;
+    socials?: Socials;
   }) => patch<{ user: User }>('/me', body),
+  exportMe: () => request<Record<string, unknown>>('/me/export'),
+  deleteMe: () => request<{ ok: true }>('/me', { method: 'DELETE', body: JSON.stringify({ confirm: 'DELETE' }) }),
+  trackEvent: (name: TrackedEvent, props?: Record<string, unknown>) => post<{ ok: true }>('/me/events', { name, props }),
   portfolio: () => request<{ items: PortfolioItem[] }>('/me/portfolio'),
   addPortfolio: (body: { title: string; url: string; description?: string; visibility?: 'public' | 'private' }) => post<{ item: PortfolioItem }>('/me/portfolio', body),
   removePortfolio: (id: string) => del<{ ok: true }>(`/me/portfolio/${id}`),
@@ -213,8 +231,10 @@ export const api = {
   click: (handle: string, ref: string) => post<{ ok: true }>(`/public/${encodeURIComponent(handle)}/click`, { ref }),
   lead: (handle: string, body: { name: string; email: string; message: string }) => post<{ ok: true }>(`/public/${encodeURIComponent(handle)}/lead`, body),
   follow: (handle: string) => post<{ following: boolean }>(`/store/follow/${encodeURIComponent(handle)}`),
-  checkout: (productId: string, body: { coupon?: string; affiliate?: string | null; pay: 'points' | 'test'; points?: number; question?: string; intake?: string[]; replay?: boolean; click?: string | null; src?: string | null }) =>
-    post<{ order: Order }>(`/store/${productId}/checkout`, body),
+  checkout: (productId: string, body: { coupon?: string; affiliate?: string | null; pay: 'points' | 'test' | 'money'; points?: number; question?: string; intake?: string[]; replay?: boolean; click?: string | null; src?: string | null }) =>
+    post<{ order: Order; payment: { mode: 'razorpay'; keyId: string | null; providerOrderId: string | null; amountCents: number; currency: string } | null }>(`/store/${productId}/checkout`, body),
+  order: (id: string) => request<{ order: Order }>(`/store/orders/${id}`),
+  reschedule: (bookingId: string, startsAt: string) => post<{ booking: Booking }>(`/store/bookings/${bookingId}/reschedule`, { startsAt }),
   quiz: (lessonId: string, answers: number[]) => post<{ score: number; passed: boolean; right: number; total: number; correct: number[] }>(`/store/lessons/${lessonId}/quiz`, { answers }),
   claimCertificate: (productId: string) => post<{ code: string; url: string }>(`/store/products/${productId}/certificate`),
   certificates: () => request<{ certificates: Certificate[] }>('/store/certificates'),
@@ -223,7 +243,7 @@ export const api = {
   library: () => request<{ orders: Order[]; products: Product[]; bookings: Booking[] }>('/store/library'),
   owned: (id: string) => request<{ product: Product; lessons: Lesson[]; certificateCode: string | null }>(`/store/products/${id}`),
   completeLesson: (id: string) => post<{ ok: true }>(`/store/lessons/${id}/complete`),
-  slots: (productId: string, date: string) => request<{ slots: string[]; durationMin: number }>(`/store/${productId}/slots?date=${date}`),
+  slots: (productId: string, date: string) => request<{ slots: string[]; durationMin: number; zone: string }>(`/store/${productId}/slots?date=${date}`),
   book: (productId: string, body: { startsAt: string; note?: string; intake?: string[] }) => post<{ booking: Booking }>(`/store/${productId}/book`, body),
   cancelBooking: (id: string) => post<{ ok: true }>(`/store/bookings/${id}/cancel`),
   review: (productId: string, body: { rating: number; body: string }) => post<{ ok: true }>(`/store/${productId}/review`, body),
@@ -243,6 +263,15 @@ export const api = {
   availability: () => request<{ availability: Availability[] }>('/studio/availability'),
   addAvailability: (body: { weekday: number; startMin: number; endMin: number }) => post<{ availability: Availability }>('/studio/availability', body),
   removeAvailability: (id: string) => del<{ ok: true }>(`/studio/availability/${id}`),
+  overrides: () => request<{ overrides: AvailabilityOverride[] }>('/studio/availability/overrides'),
+  setOverride: (date: string, ranges: { startMin: number; endMin: number }[]) => request<{ override: AvailabilityOverride }>(`/studio/availability/overrides/${date}`, { method: 'PUT', body: JSON.stringify({ ranges }) }),
+  removeOverride: (date: string) => del<{ ok: true }>(`/studio/availability/overrides/${date}`),
+  sales: (opts: { status?: string; from?: string; to?: string } = {}) => request<{ orders: Order[] }>(`/studio/orders?${new URLSearchParams(Object.fromEntries(Object.entries(opts).filter(([, v]) => v)) as Record<string, string>)}`),
+  salesCsvUrl: '/api/studio/orders?format=csv',
+  draftCourse: (body: { source: string; title?: string }) => post<{ draft: CourseDraft; aiAvailable: boolean }>('/studio/draft', body),
+  saveDraft: (productId: string, lessons: CourseDraft['lessons']) => post<{ ok: true; added: number }>(`/studio/products/${productId}/draft`, { lessons }),
+  kyc: () => request<{ kyc: KycProfile }>('/kyc'),
+  submitKyc: (body: { legalName: string; pan: string; bankAccount: string; ifsc: string; address: string }) => post<{ kyc: KycProfile }>('/kyc', body),
   studioBookings: () => request<{ bookings: Booking[] }>('/studio/bookings'),
   setBooking: (id: string, body: { status?: Booking['status']; meetingUrl?: string }) => post<{ booking: Booking }>(`/studio/bookings/${id}`, body),
   leads: () => request<{ leads: Lead[] }>('/studio/leads'),
@@ -457,6 +486,15 @@ export const adminApi = {
   listings: (key: string, type?: ListingType, q = '') => adminRequest<{ listings: Listing[] }>(key, `/listings?${new URLSearchParams({ ...(type ? { type } : {}), q })}`),
   createListing: (key: string, body: Record<string, unknown> & { type: ListingType; title: string }) => adminRequest<{ listing: Listing | null }>(key, '/listings', { method: 'POST', body: JSON.stringify(body) }),
   setListing: (key: string, type: ListingType, id: string, body: { live?: boolean; featured?: boolean }) => adminRequest<{ listing: Listing }>(key, `/listings/${type}/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  orders: (key: string, q: string, status = '') => adminRequest<{ orders: AdminOrder[] }>(key, `/orders?${new URLSearchParams({ q, ...(status ? { status } : {}) })}`),
+  order: (key: string, id: string) => adminRequest<{ order: AdminOrder; timeline: OrderEvent[]; webhooks: WebhookEvent[] }>(key, `/orders/${id}`),
+  refundOrder: (key: string, id: string, reason: string) => adminRequest<{ order: AdminOrder | null }>(key, `/orders/${id}/refund`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  webhooks: (key: string) => adminRequest<{ webhooks: WebhookEvent[] }>(key, '/webhooks'),
+  replayWebhook: (key: string, id: string) => adminRequest<{ outcome: string }>(key, `/webhooks/${id}/replay`, { method: 'POST', body: '{}' }),
+  kycQueue: (key: string, status = 'pending') => adminRequest<{ kyc: AdminKyc[] }>(key, `/kyc?status=${status}`),
+  decideKyc: (key: string, userId: string, body: { status: 'approved' | 'rejected'; note?: string }) => adminRequest<{ ok: true }>(key, `/kyc/${userId}`, { method: 'POST', body: JSON.stringify(body) }),
+  outbox: (key: string) => adminRequest<{ outbox: OutboxEmail[] }>(key, '/outbox'),
+  funnels: (key: string) => adminRequest<{ funnels: AdminFunnel[] }>(key, '/funnels'),
 };
 
 /** The public site. No session needed, and none is sent. */
@@ -476,4 +514,5 @@ export const publicApi = {
   stats: () => publicRequest<PublicStats>('/explore/stats'),
   certificate: (code: string) => publicRequest<{ certificate: Certificate }>(`/certificates/${encodeURIComponent(code)}`),
   invoice: (token: string) => publicRequest<{ invoice: Invoice }>(`/invoices/${encodeURIComponent(token)}`),
+  config: () => publicRequest<PaymentsConfig>('/config'),
 };

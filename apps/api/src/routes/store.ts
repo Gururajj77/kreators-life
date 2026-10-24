@@ -1,7 +1,10 @@
 import { Hono } from 'hono';
 import { AFFILIATE_SHARE, type Lesson, type PublicPage } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { DATE_RE, nameOf, newId, notify, nowIso, parseList, sessionUser } from '../db';
+import { DATE_RE, nameOf, newId, notify, nowIso, parseList, parseSocials, sessionUser } from '../db';
+import { slotsFor, type AvailabilityOverride } from '@kreators/shared';
+import { paymentsConfig, providerFor } from '../payments';
+import { logEvent, sendEmail, track } from '../ops';
 import { BOOKING_SELECT, ORDER_SELECT, PRODUCT_SELECT, TESTIMONIAL_SELECT, toBooking, toLesson, toOrder, toProduct, toTestimonial, type BookingRow, type LessonRow, type OrderRow, type ProductRow } from './studio';
 
 /** Public: no session needed. */
@@ -10,6 +13,9 @@ export const publicPage = new Hono<AppEnv>();
 async function ownerByHandle(db: D1Database, handle: string): Promise<UserRow | null> {
   return db.prepare('SELECT * FROM users WHERE handle = ?').bind(handle.toLowerCase()).first<UserRow>();
 }
+
+/** What the browser needs to know before checkout: whether money is live and with which key. */
+publicPage.get('/config', (c) => c.json(paymentsConfig(c.env)));
 
 publicPage.get('/:handle', async (c) => {
   const db = c.env.DB;
@@ -36,6 +42,9 @@ publicPage.get('/:handle', async (c) => {
     availability: owner.availability,
     location: owner.location,
     portfolio: portfolio.results.map((p) => ({ id: p.id, title: p.title, description: p.description, url: p.url, visibility: p.visibility, createdAt: p.created_at })),
+    avatarUrl: owner.avatar_url ?? '',
+    socials: parseSocials(owner.socials_json),
+    timezone: owner.timezone || 'Asia/Kolkata',
     isPro: owner.is_pro === 1,
     followers: followers?.n ?? 0,
     following: Boolean(following),
@@ -88,7 +97,7 @@ export const store = new Hono<AppEnv>();
 export async function entitled(db: D1Database, userId: string, productId: string): Promise<boolean> {
   const own = await db.prepare('SELECT 1 FROM products WHERE id = ? AND owner_id = ?').bind(productId, userId).first();
   if (own) return true;
-  const direct = await db.prepare("SELECT 1 FROM orders WHERE buyer_id = ? AND product_id = ? AND status IN ('paid','test') AND variant = ''").bind(userId, productId).first();
+  const direct = await db.prepare("SELECT 1 FROM orders WHERE buyer_id = ? AND product_id = ? AND status IN ('paid','test') AND variant = '' AND (expires_at IS NULL OR expires_at > ?)").bind(userId, productId, nowIso()).first();
   if (direct) return true;
   return Boolean(await db.prepare("SELECT 1 FROM orders o JOIN products b ON b.id = o.product_id WHERE o.buyer_id = ? AND o.status IN ('paid','test') AND b.kind = 'bundle' AND b.bundle_json LIKE ?").bind(userId, `%"${productId}"%`).first());
 }
@@ -162,10 +171,13 @@ store.post('/:productId/checkout', async (c) => {
     couponCode = code;
     await db.prepare('UPDATE coupons SET uses = uses + 1 WHERE id = ?').bind(coupon.id).run();
   }
-  const pay = body.pay === 'test' ? 'test' : 'points';
-  // Money checkout stays in test mode until a payment provider is connected:
-  // the order is recorded, nothing is charged.
-  const status: 'paid' | 'test' = pay === 'test' ? 'test' : 'paid';
+  const wantsMoney = body.pay === 'test' || body.pay === 'money';
+  const provider = providerFor(c.env);
+  // With provider keys, money orders wait for the provider's webhook; without them the order is recorded and nothing is charged.
+  const live = wantsMoney && provider.name === 'razorpay' && cents > 0;
+  const pay = wantsMoney ? 'test' : 'points';
+  const status: 'paid' | 'test' | 'pending' = live ? 'pending' : pay === 'test' ? 'test' : 'paid';
+  await track(db, user.id, 'checkout_started', { productId: product.id, kind: product.kind, points, cents, live });
   if (pay === 'points' && user.points < points) return c.json({ error: `you need ${points - user.points} more points` }, 400);
   let affiliateCode: string | null = null;
   let affiliate: UserRow | null = null;
@@ -183,10 +195,19 @@ store.post('/:productId/checkout', async (c) => {
 
   const id = newId();
   const now = nowIso();
+  let providerOrderId: string | null = null;
+  if (live) {
+    try {
+      providerOrderId = (await provider.createOrder({ amountCents: cents, currency: product.currency, receipt: id, notes: { product: product.title.slice(0, 60) } })).providerOrderId;
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : 'the payment provider is not answering' }, 502);
+    }
+  }
+  const expiresAt = product.kind === 'membership' && product.period_months ? new Date(Date.now() + product.period_months * 30 * 86_400_000).toISOString() : null;
   const stmts = [
     db
-      .prepare('INSERT INTO orders (id, buyer_id, product_id, owner_id, points, cents, currency, status, coupon_code, affiliate_code, created_at, source_link_id, click_id, platform_fee_points, intake_json, variant) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, user.id, product.id, product.owner_id, paidPoints, pay === 'test' ? cents : 0, product.currency, status, couponCode, affiliateCode, now, src.linkId, src.clickId, fee, JSON.stringify(intake), replay ? 'replay' : ''),
+      .prepare('INSERT INTO orders (id, buyer_id, product_id, owner_id, points, cents, currency, status, coupon_code, affiliate_code, created_at, source_link_id, click_id, platform_fee_points, intake_json, variant, provider, provider_order_id, paid_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, user.id, product.id, product.owner_id, paidPoints, pay === 'test' ? cents : 0, product.currency, status, couponCode, affiliateCode, now, src.linkId, src.clickId, fee, JSON.stringify(product.kind === 'dm' && live ? [question] : intake), replay ? 'replay' : '', live ? 'razorpay' : pay === 'test' ? 'test' : 'points', providerOrderId, live ? null : now, expiresAt),
   ];
   if (paidPoints > 0) {
     stmts.push(
@@ -202,7 +223,7 @@ store.post('/:productId/checkout', async (c) => {
       );
     }
   }
-  if (product.kind === 'dm') {
+  if (product.kind === 'dm' && !live) {
     stmts.push(
       db
         .prepare("INSERT INTO dm_requests (id, product_id, order_id, owner_id, buyer_id, question, answer, status, due_at, answered_at, created_at) VALUES (?, ?, ?, ?, ?, ?, '', 'open', ?, NULL, ?)")
@@ -214,10 +235,22 @@ store.post('/:productId/checkout', async (c) => {
     stmts.push(db.prepare('INSERT INTO leads (id, owner_id, name, email, message, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(newId(), product.owner_id, nameOf(user), user.email ?? '', `Got ${product.title}`, 'lead_magnet', now));
   }
   await db.batch(stmts);
-  await notify(db, product.owner_id, 'order', `${nameOf(user)} got ${product.title}${replay ? ' (replay)' : ''}`, pay === 'points' ? `${points} points${src.linkId ? ', via a tracked link' : ''}` : `${(cents / 100).toFixed(2)} ${product.currency}, test mode`, product.kind === 'dm' ? '/shop/dm' : `/shop/products/${product.id}`);
-  if (affiliate) await notify(db, affiliate.id, 'affiliate', 'Your link made a sale', `${product.title}, ${share} points to you`, '/shop/audience');
+  await logEvent(db, 'order', id, live ? 'order.pending' : 'order.paid', { points: paidPoints, cents, provider: live ? 'razorpay' : pay });
+  if (!live) {
+    await track(db, user.id, 'payment_succeeded', { productId: product.id, method: pay });
+    await notify(db, product.owner_id, 'order', `${nameOf(user)} got ${product.title}${replay ? ' (replay)' : ''}`, pay === 'points' ? `${points} points${src.linkId ? ', via a tracked link' : ''}` : `${(cents / 100).toFixed(2)} ${product.currency}, test mode`, product.kind === 'dm' ? '/shop/dm' : `/shop/products/${product.id}`);
+    if (affiliate) await notify(db, affiliate.id, 'affiliate', 'Your link made a sale', `${product.title}, ${share} points to you`, '/shop/audience');
+    await sendEmail(db, c.env, { userId: user.id, to: user.email, subject: `Your receipt: ${product.title}`, body: `You got ${product.title}${pay === 'points' ? ` for ${points} points` : ''}. Find it under My purchases.` });
+  }
   const row = await db.prepare(`${ORDER_SELECT} WHERE o.id = ?`).bind(id).first<OrderRow>();
-  return c.json({ order: row ? toOrder(row) : null }, 201);
+  return c.json({ order: row ? toOrder(row) : null, payment: live ? { mode: 'razorpay' as const, keyId: paymentsConfig(c.env).keyId, providerOrderId, amountCents: cents, currency: product.currency } : null }, 201);
+});
+
+/** Poll an order while the provider confirms it. */
+store.get('/orders/:id', async (c) => {
+  const row = await c.env.DB.prepare(`${ORDER_SELECT} WHERE o.id = ? AND o.buyer_id = ?`).bind(c.req.param('id'), c.get('user').id).first<OrderRow>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  return c.json({ order: toOrder(row) });
 });
 
 store.get('/browse', async (c) => {
@@ -280,29 +313,61 @@ store.post('/lessons/:id/complete', async (c) => {
   return c.json({ ok: true });
 });
 
-/** Free slots on a date for a session product, from the owner's availability. */
+/** Everything the slot maths needs for one owner and product. */
+async function slotContext(db: D1Database, product: ProductRow, date: string) {
+  const owner = await db.prepare('SELECT timezone FROM users WHERE id = ?').bind(product.owner_id).first<{ timezone: string }>();
+  const zone = owner?.timezone || 'Asia/Kolkata';
+  const [rules, overrides, taken] = await Promise.all([
+    db.prepare('SELECT weekday, start_min AS startMin, end_min AS endMin FROM availability WHERE owner_id = ?').bind(product.owner_id).all<{ weekday: number; startMin: number; endMin: number }>(),
+    db.prepare('SELECT id, date, ranges_json FROM availability_overrides WHERE owner_id = ? AND date = ?').bind(product.owner_id, date).all<{ id: string; date: string; ranges_json: string }>(),
+    db.prepare("SELECT starts_at, ends_at FROM bookings WHERE owner_id = ? AND status IN ('requested','confirmed') AND starts_at >= ? AND starts_at <= ?").bind(product.owner_id, `${date}T00:00:00`, `${date}T23:59:59.999Z`).all<{ starts_at: string; ends_at: string }>(),
+  ]);
+  const ovs: AvailabilityOverride[] = overrides.results.map((o) => {
+    try {
+      const v = JSON.parse(o.ranges_json || '[]') as { startMin: number; endMin: number }[];
+      return { id: o.id, date: o.date, ranges: Array.isArray(v) ? v : [] };
+    } catch {
+      return { id: o.id, date: o.date, ranges: [] };
+    }
+  });
+  // Bookings that start the day before but spill over still block the morning; widen the busy window by a day either side.
+  const spill = await db.prepare("SELECT starts_at, ends_at FROM bookings WHERE owner_id = ? AND status IN ('requested','confirmed') AND starts_at >= ? AND starts_at < ?").bind(product.owner_id, `${new Date(new Date(`${date}T00:00:00Z`).getTime() - 86_400_000).toISOString().slice(0, 10)}T00:00:00`, `${date}T00:00:00`).all<{ starts_at: string; ends_at: string }>();
+  return {
+    zone,
+    slots: slotsFor({
+      date,
+      zone,
+      rules: rules.results,
+      overrides: ovs,
+      busy: [...taken.results, ...spill.results].map((t) => ({ startsAt: t.starts_at, endsAt: t.ends_at })),
+      durationMin: product.duration_min ?? 30,
+      bufferMin: product.buffer_min ?? 0,
+      noticeHours: product.notice_hours ?? 2,
+      maxDaysAhead: product.max_days_ahead ?? 30,
+      now: new Date(),
+    }),
+  };
+}
+
+/** Free slots on a date for a session product, in the owner's zone, honouring overrides, buffers, notice and how far ahead. */
 store.get('/:productId/slots', async (c) => {
   const db = c.env.DB;
   const product = await db.prepare(`${PRODUCT_SELECT} WHERE p.id = ? AND p.kind = 'session'`).bind(c.req.param('productId')).first<ProductRow>();
   if (!product) return c.json({ error: 'not found' }, 404);
   const date = c.req.query('date') ?? '';
   if (!DATE_RE.test(date)) return c.json({ error: 'date required' }, 400);
-  const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
-  const step = product.duration_min ?? 30;
-  const [avail, taken] = await Promise.all([
-    db.prepare('SELECT start_min, end_min FROM availability WHERE owner_id = ? AND weekday = ?').bind(product.owner_id, weekday).all<{ start_min: number; end_min: number }>(),
-    db.prepare("SELECT starts_at FROM bookings WHERE owner_id = ? AND status IN ('requested','confirmed') AND starts_at LIKE ?").bind(product.owner_id, `${date}%`).all<{ starts_at: string }>(),
-  ]);
-  const busy = new Set(taken.results.map((t) => t.starts_at));
-  const slots: string[] = [];
-  for (const a of avail.results) {
-    for (let m = a.start_min; m + step <= a.end_min; m += step) {
-      const iso = new Date(Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)), Math.floor(m / 60), m % 60)).toISOString();
-      if (!busy.has(iso) && new Date(iso).getTime() > Date.now()) slots.push(iso);
-    }
-  }
-  return c.json({ slots, durationMin: step });
+  const ctx = await slotContext(db, product, date);
+  return c.json({ slots: ctx.slots, durationMin: product.duration_min ?? 30, zone: ctx.zone });
 });
+
+const intakeOf = (product: ProductRow): string[] => {
+  try {
+    const v = JSON.parse(product.intake_json || '[]') as unknown;
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+};
 
 store.post('/:productId/book', async (c) => {
   const db = c.env.DB;
@@ -312,22 +377,18 @@ store.post('/:productId/book', async (c) => {
   if (!(await entitled(db, user.id, product.id))) return c.json({ error: 'get the session first, then book a time' }, 403);
   const body = await c.req.json<{ startsAt?: string; note?: string; intake?: unknown }>().catch(() => ({}) as Record<string, never>);
   const startsAt = typeof body.startsAt === 'string' ? body.startsAt : '';
-  const questions = (() => {
-    try {
-      const v = JSON.parse(product.intake_json || '[]') as unknown;
-      return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
-    } catch {
-      return [];
-    }
-  })();
-  const intake = Array.isArray(body.intake) ? body.intake.map((x) => String(x).trim().slice(0, 500)).slice(0, questions.length) : [];
-  if (questions.length > 0 && intake.filter(Boolean).length < questions.length) return c.json({ error: 'answer the questions first' }, 400);
   const start = new Date(startsAt);
   if (Number.isNaN(start.getTime()) || start.getTime() < Date.now()) return c.json({ error: 'pick a time in the future' }, 400);
+  const questions = intakeOf(product);
+  const intake = Array.isArray(body.intake) ? body.intake.map((x) => String(x).trim().slice(0, 500)).slice(0, questions.length) : [];
+  if (questions.length > 0 && intake.filter(Boolean).length < questions.length) return c.json({ error: 'answer the questions first' }, 400);
+  // The slot must still be one the owner offers right now.
+  const owner = await db.prepare('SELECT timezone FROM users WHERE id = ?').bind(product.owner_id).first<{ timezone: string }>();
+  const localDate = new Intl.DateTimeFormat('en-CA', { timeZone: owner?.timezone || 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(start);
+  const ctx = await slotContext(db, product, localDate);
+  if (!ctx.slots.includes(start.toISOString())) return c.json({ error: 'that time is not open any more; pick another' }, 409);
   const step = product.duration_min ?? 30;
   const end = new Date(start.getTime() + step * 60_000);
-  const clash = await db.prepare("SELECT 1 FROM bookings WHERE owner_id = ? AND status IN ('requested','confirmed') AND starts_at = ?").bind(product.owner_id, start.toISOString()).first();
-  if (clash) return c.json({ error: 'that time was just taken' }, 409);
   const id = newId();
   try {
     await db.prepare('INSERT INTO bookings (id, product_id, owner_id, buyer_id, order_id, starts_at, ends_at, status, meeting_url, note, intake_json, created_at) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)')
@@ -337,9 +398,38 @@ store.post('/:productId/book', async (c) => {
     // The unique index on live bookings caught a race for the same slot.
     return c.json({ error: 'that time was just taken' }, 409);
   }
+  await logEvent(db, 'booking', id, 'booking.requested', { startsAt: start.toISOString() });
   await notify(db, product.owner_id, 'booking', `${nameOf(user)} requested a session`, start.toUTCString(), '/shop/bookings');
   const row = await db.prepare(`${BOOKING_SELECT} WHERE k.id = ?`).bind(id).first<BookingRow>();
   return c.json({ booking: row ? toBooking(row) : null }, 201);
+});
+
+// Move a booking to another open slot. The old one frees up only once the new one is taken.
+store.post('/bookings/:id/reschedule', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const prev = await db.prepare(`${BOOKING_SELECT} WHERE k.id = ? AND k.buyer_id = ? AND k.status IN ('requested','confirmed')`).bind(c.req.param('id'), user.id).first<BookingRow>();
+  if (!prev) return c.json({ error: 'not found' }, 404);
+  if (new Date(prev.starts_at).getTime() - Date.now() < 2 * 3600_000) return c.json({ error: 'too close to the start to move it; ask the host instead' }, 400);
+  const product = await db.prepare(`${PRODUCT_SELECT} WHERE p.id = ?`).bind(prev.product_id).first<ProductRow>();
+  if (!product) return c.json({ error: 'not found' }, 404);
+  const body = await c.req.json<{ startsAt?: string }>().catch(() => ({}) as { startsAt?: string });
+  const start = new Date(typeof body.startsAt === 'string' ? body.startsAt : '');
+  if (Number.isNaN(start.getTime())) return c.json({ error: 'pick a time' }, 400);
+  const owner = await db.prepare('SELECT timezone FROM users WHERE id = ?').bind(product.owner_id).first<{ timezone: string }>();
+  const localDate = new Intl.DateTimeFormat('en-CA', { timeZone: owner?.timezone || 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(start);
+  const ctx = await slotContext(db, product, localDate);
+  if (!ctx.slots.includes(start.toISOString())) return c.json({ error: 'that time is not open; pick another' }, 409);
+  const end = new Date(start.getTime() + (product.duration_min ?? 30) * 60_000);
+  try {
+    await db.prepare("UPDATE bookings SET starts_at = ?, ends_at = ?, status = 'requested' WHERE id = ?").bind(start.toISOString(), end.toISOString(), prev.id).run();
+  } catch {
+    return c.json({ error: 'that time was just taken' }, 409);
+  }
+  await logEvent(db, 'booking', prev.id, 'booking.rescheduled', { from: prev.starts_at, to: start.toISOString() });
+  await notify(db, prev.owner_id, 'booking', `${nameOf(user)} moved a session`, `${new Date(prev.starts_at).toUTCString()} to ${start.toUTCString()}. Confirm it again.`, '/shop/bookings');
+  const row = await db.prepare(`${BOOKING_SELECT} WHERE k.id = ?`).bind(prev.id).first<BookingRow>();
+  return c.json({ booking: row ? toBooking(row) : null });
 });
 
 store.post('/bookings/:id/cancel', async (c) => {

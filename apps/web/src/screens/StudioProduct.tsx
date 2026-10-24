@@ -1,4 +1,4 @@
-import { PRODUCT_KIND_META, type Lesson, type QuizQuestion } from '@kreators/shared';
+import { PRODUCT_KIND_META, type CourseDraft, type Lesson, type QuizQuestion } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -38,6 +38,11 @@ export function StudioProduct() {
   const [responseDays, setResponseDays] = useState('3');
   const [leadMagnet, setLeadMagnet] = useState(false);
   const [certificate, setCertificate] = useState(false);
+  const [bufferMin, setBufferMin] = useState('0');
+  const [noticeHours, setNoticeHours] = useState('2');
+  const [maxDaysAhead, setMaxDaysAhead] = useState('30');
+  const [periodMonths, setPeriodMonths] = useState('');
+  const [drafting, setDrafting] = useState(false);
   const [lesson, setLesson] = useState<Lesson | 'new' | null>(null);
   const [couponCode, setCouponCode] = useState('');
   const [couponOff, setCouponOff] = useState('20');
@@ -63,6 +68,10 @@ export function StudioProduct() {
     setResponseDays(String(p.responseDays ?? 3));
     setLeadMagnet(p.leadMagnet);
     setCertificate(p.certificate);
+    setBufferMin(String(p.bufferMin));
+    setNoticeHours(String(p.noticeHours));
+    setMaxDaysAhead(String(p.maxDaysAhead));
+    setPeriodMonths(p.periodMonths ? String(p.periodMonths) : '');
   }, [p]);
 
   const save = useMutation({
@@ -87,6 +96,10 @@ export function StudioProduct() {
         responseDays: Number(responseDays) || 3,
         leadMagnet,
         certificate,
+        bufferMin: Number(bufferMin) || 0,
+        noticeHours: Number(noticeHours) || 0,
+        maxDaysAhead: Number(maxDaysAhead) || 30,
+        periodMonths: periodMonths ? Number(periodMonths) : null,
         ...(status ? { status } : {}),
       }),
     onSuccess: () => refresh(),
@@ -261,10 +274,34 @@ export function StudioProduct() {
           </label>
         )}
         {p.kind === 'session' && (
+          <>
+            <label className="block">
+              <span className="block text-[14px] font-bold">Length in minutes</span>
+              <input type="number" min={5} max={600} value={durationMin} onChange={(e) => setDurationMin(e.target.value)} className={field} />
+              <span className="mt-xs block text-[12px] font-bold text-ink-soft">Slots come from your availability under Shop, Bookings.</span>
+            </label>
+            <div className="grid grid-cols-3 gap-xs">
+              <label className="block">
+                <span className="block text-[14px] font-bold">Buffer, minutes</span>
+                <input type="number" min={0} max={120} step={5} value={bufferMin} onChange={(e) => setBufferMin(e.target.value)} className={field} />
+              </label>
+              <label className="block">
+                <span className="block text-[14px] font-bold">Notice, hours</span>
+                <input type="number" min={0} max={720} value={noticeHours} onChange={(e) => setNoticeHours(e.target.value)} className={field} />
+              </label>
+              <label className="block">
+                <span className="block text-[14px] font-bold">Book up to, days</span>
+                <input type="number" min={1} max={365} value={maxDaysAhead} onChange={(e) => setMaxDaysAhead(e.target.value)} className={field} />
+              </label>
+            </div>
+            <span className="block text-[12px] font-bold text-ink-soft">Buffer keeps minutes free before and after each session. Notice is how soon someone can book. The last is how far ahead the calendar opens.</span>
+          </>
+        )}
+        {p.kind === 'membership' && (
           <label className="block">
-            <span className="block text-[14px] font-bold">Length in minutes</span>
-            <input type="number" min={5} max={600} value={durationMin} onChange={(e) => setDurationMin(e.target.value)} className={field} />
-            <span className="mt-xs block text-[12px] font-bold text-ink-soft">Slots come from your availability under Shop, Bookings.</span>
+            <span className="block text-[14px] font-bold">Lasts this many months, blank for forever</span>
+            <input type="number" min={1} max={36} value={periodMonths} onChange={(e) => setPeriodMonths(e.target.value)} className={field} placeholder="Forever" />
+            <span className="mt-xs block text-[12px] font-bold text-ink-soft">When it runs out the member sees a Renew button and buys again.</span>
           </label>
         )}
         {(p.kind === 'session' || p.kind === 'dm') && (
@@ -312,7 +349,12 @@ export function StudioProduct() {
             <h2 id="lessons-heading" className="text-[24px]">
               Lessons
             </h2>
-            <Button onClick={() => setLesson('new')}>Add lesson</Button>
+            <div className="flex flex-wrap justify-end gap-xs">
+              <Button variant="outline" onClick={() => setDrafting(true)}>
+                Draft from notes
+              </Button>
+              <Button onClick={() => setLesson('new')}>Add lesson</Button>
+            </div>
           </div>
           <ol className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {d.lessons.map((l, i) => (
@@ -433,7 +475,72 @@ export function StudioProduct() {
       </Button>
 
       <LessonSheet productId={id} lesson={lesson} onClose={() => setLesson(null)} onSaved={() => q.refetch()} />
+      {p.kind === 'course' && <DraftSheet productId={id} title={p.title} open={drafting} onClose={() => setDrafting(false)} onSaved={() => q.refetch()} />}
     </Screen>
+  );
+}
+
+/** Turn pasted notes, a transcript or an outline into draft lessons. Nothing is published; lessons land on the course to edit. */
+function DraftSheet({ productId, title, open, onClose, onSaved }: { productId: string; title: string; open: boolean; onClose: () => void; onSaved: () => void }) {
+  const [source, setSource] = useState('');
+  const preview = useMutation({ mutationFn: () => api.draftCourse({ source, title }) });
+  const draft: CourseDraft | undefined = preview.data?.draft;
+  const save = useMutation({
+    mutationFn: () => api.saveDraft(productId, draft?.lessons ?? []),
+    onSuccess: () => {
+      preview.reset();
+      setSource('');
+      onSaved();
+      onClose();
+    },
+  });
+  return (
+    <Sheet open={open} onClose={onClose} title="Draft lessons from your notes">
+      <div className="flex flex-col gap-md">
+        <label className="block">
+          <span className="block text-[14px] font-bold">Your notes, a transcript, or an outline</span>
+          <textarea value={source} onChange={(e) => setSource(e.target.value)} rows={8} maxLength={20000} className={field} placeholder={'# Lesson one\nWhat it covers, in a few lines.\nWhich cut keeps the energy up?\n- Cut on action *\n- Cut at random'} />
+          <span className="mt-xs block text-[12px] font-bold text-ink-soft">With AI on the server, lessons and quizzes are written from the notes. Without it, an outline is parsed: a line starting with # is a lesson, a line ending with ? is a question, lines starting with - are its options, and * marks the right one.</span>
+        </label>
+        <Button variant="outline" onClick={() => preview.mutate()} disabled={preview.isPending || source.trim().length < 20}>
+          {preview.isPending ? 'Drafting' : 'Preview draft'}
+        </Button>
+        {preview.isError && (
+          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+            {preview.error instanceof Error ? preview.error.message : 'Could not draft that.'}
+          </p>
+        )}
+        {draft && (
+          <>
+            <p className="m-0 text-[14px] font-bold">
+              {draft.lessons.length} {draft.lessons.length === 1 ? 'lesson' : 'lessons'}, {draft.source === 'ai' ? 'written by AI from your notes' : 'parsed from your outline'}
+              {preview.data && !preview.data.aiAvailable && draft.source === 'outline' ? '. No AI on this server, so headings and questions came straight from the text.' : '.'}
+            </p>
+            <ol className="m-0 flex list-none flex-col gap-xs p-0">
+              {draft.lessons.map((l, i) => (
+                <li key={i} className="rounded-tile bg-paper p-sm">
+                  <p className="m-0 text-[16px] font-bold">
+                    {i + 1}. {l.title}
+                  </p>
+                  <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+                    {l.body ? `${l.body.slice(0, 140)}${l.body.length > 140 ? '…' : ''}` : 'No text yet.'}
+                    {l.quiz.length > 0 ? ` Quiz of ${l.quiz.length}.` : ''}
+                  </p>
+                </li>
+              ))}
+            </ol>
+            {save.isError && (
+              <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+                {save.error instanceof Error ? save.error.message : 'Could not add them.'}
+              </p>
+            )}
+            <Button size="lg" full onClick={() => save.mutate()} disabled={save.isPending || draft.lessons.length === 0}>
+              Add to course
+            </Button>
+          </>
+        )}
+      </div>
+    </Sheet>
   );
 }
 

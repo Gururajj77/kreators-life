@@ -1,16 +1,25 @@
-import { PRODUCT_KIND_META, type Lesson } from '@kreators/shared';
+import { PRODUCT_KIND_META, type Booking, type Lesson, type Order } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Button } from '../components/Button';
 import { CheckRow } from '../components/CheckRow';
 import { Screen } from '../components/Screen';
+import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { useAuthed, useLibrary, useRefreshAll } from '../lib/queries';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const err = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
+const clock = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+
+/** The newest purchase of a product; for memberships it carries the expiry. */
+function latestOrder(orders: Order[] | undefined, productId: string): Order | null {
+  return (orders ?? []).filter((o) => o.productId === productId && o.variant === '').sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0] ?? null;
+}
+const expired = (o: Order | null) => Boolean(o?.expiresAt && new Date(o.expiresAt).getTime() < Date.now());
 
 export function Library() {
   const { id } = useParams();
@@ -24,6 +33,7 @@ function Mine() {
   const dms = useAuthed(['my-dm'], api.myDmRequests);
   const refresh = useRefreshAll();
   const cancel = useMutation({ mutationFn: (id: string) => api.cancelBooking(id), onSuccess: () => refresh() });
+  const [moving, setMoving] = useState<Booking | null>(null);
   const d = q.data;
   return (
     <Screen>
@@ -55,8 +65,13 @@ function Mine() {
                 <span className="block truncate text-[16px] font-bold">{p.title}</span>
                 <span className="block text-[14px] font-semibold text-ink-soft">
                   {PRODUCT_KIND_META[p.kind].name} by {p.ownerName}
+                  {p.kind === 'membership' && (() => {
+                    const o = latestOrder(d.orders, p.id);
+                    return o?.expiresAt ? (expired(o) ? ', ended' : `, member until ${day(o.expiresAt)}`) : '';
+                  })()}
                 </span>
               </span>
+              {p.kind === 'membership' && expired(latestOrder(d.orders, p.id)) && <span className="shrink-0 rounded-pill bg-r3 px-xs text-[12px] font-extrabold leading-[20px] text-ink-fixed">Renew</span>}
             </Link>
           </li>
         ))}
@@ -73,7 +88,7 @@ function Mine() {
                   {b.productTitle} with {b.ownerName}
                 </p>
                 <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                  {new Date(b.startsAt).toLocaleString()} UTC, {b.status}
+                  {new Date(b.startsAt).toLocaleString()} in your zone, {b.status}
                 </p>
                 {b.meetingUrl && b.status === 'confirmed' && (
                   <a href={b.meetingUrl} target="_blank" rel="noreferrer" className="toy mt-sm inline-flex min-h-[44px] items-center rounded-pill bg-ink px-md text-[14px] font-bold text-on-ink">
@@ -81,13 +96,21 @@ function Mine() {
                   </a>
                 )}
                 {(b.status === 'requested' || b.status === 'confirmed') && (
-                  <Button variant="ghost" className="mt-xs" onClick={() => cancel.mutate(b.id)}>
-                    Cancel
-                  </Button>
+                  <div className="mt-xs flex flex-wrap gap-xs">
+                    {new Date(b.startsAt).getTime() > Date.now() && (
+                      <Button variant="outline" onClick={() => setMoving(b)}>
+                        Reschedule
+                      </Button>
+                    )}
+                    <Button variant="ghost" onClick={() => cancel.mutate(b.id)}>
+                      Cancel
+                    </Button>
+                  </div>
                 )}
               </li>
             ))}
           </ul>
+          <RescheduleSheet booking={moving} onClose={() => setMoving(null)} onDone={() => refresh()} />
         </section>
       )}
       {dms.data && dms.data.requests.length > 0 && (
@@ -132,9 +155,53 @@ function Mine() {
   );
 }
 
+/** Move a session to another open slot. The old slot frees up only once the new one is taken. */
+function RescheduleSheet({ booking, onClose, onDone }: { booking: Booking | null; onClose: () => void; onDone: () => void }) {
+  const [date, setDate] = useState(todayLocal());
+  const slots = useAuthed(['slots', booking?.productId ?? '', date], () => api.slots(booking?.productId ?? '', date), booking !== null);
+  const move = useMutation({
+    mutationFn: (startsAt: string) => api.reschedule(booking!.id, startsAt),
+    onSuccess: () => {
+      onDone();
+      onClose();
+    },
+  });
+  return (
+    <Sheet open={booking !== null} onClose={onClose} title="Pick a new time">
+      {booking && (
+        <div className="flex flex-col gap-md">
+          <p className="m-0 text-[14px] font-semibold text-ink-soft">
+            {booking.productTitle} with {booking.ownerName}, now {new Date(booking.startsAt).toLocaleString()}. Moving it asks {booking.ownerName} to confirm again. Not possible within two hours of the start.
+          </p>
+          <label className="block">
+            <span className="block text-[14px] font-bold">Day</span>
+            <input type="date" value={date} min={todayLocal()} onChange={(e) => setDate(e.target.value)} className={field} />
+          </label>
+          {slots.data && <p className="m-0 text-[12px] font-bold text-ink-soft">Times shown in your zone; the host is in {slots.data.zone}.</p>}
+          {slots.data && slots.data.slots.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">No free slots that day. Try another.</p>}
+          <div className="grid grid-cols-3 gap-xs">
+            {slots.data?.slots.map((s) => (
+              <Button key={s} variant="outline" onClick={() => move.mutate(s)} disabled={move.isPending}>
+                {clock(s)}
+              </Button>
+            ))}
+          </div>
+          {move.isError && (
+            <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+              {err(move.error, 'Could not move it.')}
+            </p>
+          )}
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
 function Owned({ id }: { id: string }) {
   const q = useAuthed(['owned', id], () => api.owned(id));
   const lib = useLibrary();
+  const myOrder = latestOrder(lib.data?.orders, id);
+  const lapsed = expired(myOrder);
   const dms = useAuthed(['my-dm'], api.myDmRequests, q.data?.product.kind === 'dm');
   const refresh = useRefreshAll();
   const done = useMutation({ mutationFn: (lid: string) => api.completeLesson(lid), onSuccess: () => q.refetch() });
@@ -171,7 +238,16 @@ function Owned({ id }: { id: string }) {
           </>
         )}
       </header>
-      {q.isError && <p className="mt-md font-bold">{err(q.error, 'Not available.')}</p>}
+      {q.isError && lapsed && myOrder && (
+        <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
+          <p className="m-0 text-[16px] font-bold">Your membership ended on {day(myOrder.expiresAt ?? myOrder.createdAt)}.</p>
+          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Renew to open the members feed again. Nothing you posted is lost.</p>
+          <Link to={`/p/${id}`} className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+            Renew
+          </Link>
+        </div>
+      )}
+      {q.isError && !(lapsed && myOrder) && <p className="mt-md font-bold">{err(q.error, 'Not available.')}</p>}
       {p && (
         <>
           {p.kind === 'digital' && p.url && (
@@ -249,9 +325,21 @@ function Owned({ id }: { id: string }) {
             </div>
           )}
           {p.kind === 'membership' && (
-            <Link to={`/community?product=${p.id}`} className="toy mt-md flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-[18px] font-bold text-on-ink">
-              Open the members feed
-            </Link>
+            <>
+              {lapsed ? (
+                <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
+                  <p className="m-0 text-[16px] font-bold">Your membership ended on {day(myOrder?.expiresAt ?? '')}.</p>
+                  <Link to={`/p/${p.id}`} className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+                    Renew
+                  </Link>
+                </div>
+              ) : (
+                <Link to={`/community?product=${p.id}`} className="toy mt-md flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-[18px] font-bold text-on-ink">
+                  Open the members feed
+                </Link>
+              )}
+              {myOrder?.expiresAt && !lapsed && <p className="mt-xs m-0 text-center text-[14px] font-bold text-ink-soft">Member until {day(myOrder.expiresAt)}.</p>}
+            </>
           )}
           {p.kind === 'course' && (
             <section className="mt-md" aria-labelledby="lessons-heading">
@@ -316,7 +404,10 @@ function Owned({ id }: { id: string }) {
               <h2 id="book-heading" className="text-[24px]">
                 Book a time
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{p.durationMin} minutes. Times are UTC. {p.ownerName} confirms it and adds the meeting link.</p>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+                {p.durationMin} minutes. {p.ownerName} confirms it and adds the meeting link.
+                {slots.data ? ` Times shown in your zone; the host is in ${slots.data.zone}.` : ''}
+              </p>
               {p.intake.map((qn, i) => (
                 <label key={i} className="mt-sm block">
                   <span className="block text-[14px] font-bold">{qn}</span>
@@ -332,7 +423,7 @@ function Owned({ id }: { id: string }) {
               <div className="mt-sm grid grid-cols-3 gap-xs">
                 {slots.data?.slots.map((s) => (
                   <Button key={s} variant="outline" onClick={() => book.mutate(s)} disabled={book.isPending || !intakeReady}>
-                    {new Date(s).toISOString().slice(11, 16)}
+                    {clock(s)}
                   </Button>
                 ))}
               </div>

@@ -1,4 +1,4 @@
-import { PRODUCT_KIND_META, PRODUCT_KINDS, type Booking, type Product, type ProductKind } from '@kreators/shared';
+import { PRODUCT_KIND_META, PRODUCT_KINDS, type Booking, type Order, type Product, type ProductKind } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -7,6 +7,17 @@ import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useAuthed, useMe, useRefreshAll, useStudio } from '../lib/queries';
+import { useSession } from '../lib/store';
+
+const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
+const STATUS_PILL: Record<Order['status'], string> = {
+  paid: 'bg-r4 text-ink-fixed',
+  test: 'bg-paper text-ink-soft',
+  pending: 'bg-r3 text-ink-fixed',
+  refunded: 'bg-line text-ink',
+  failed: 'bg-r1 text-white',
+  expired: 'bg-line text-ink',
+};
 
 export function Studio({ tab = 'home' }: { tab?: 'home' | 'page' | 'bookings' | 'reviews' | 'audience' | 'content' | 'automations' | 'customers' | 'dm' }) {
   const me = useMe();
@@ -110,27 +121,7 @@ export function Studio({ tab = 'home' }: { tab?: 'home' | 'page' | 'bookings' | 
             </ul>
           </section>
 
-          {d.orders.length > 0 && (
-            <section className="mt-lg" aria-labelledby="orders-heading">
-              <h2 id="orders-heading" className="text-[24px]">
-                Recent orders
-              </h2>
-              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-                {d.orders.map((o) => (
-                  <li key={o.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                    <p className="m-0 text-[16px] font-bold">
-                      {o.buyerName} got {o.productTitle}
-                    </p>
-                    <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                      {o.points > 0 ? `${o.points} points` : `${(o.cents / 100).toFixed(2)} ${o.currency}, ${o.status}`}
-                      {o.couponCode ? `, coupon ${o.couponCode}` : ''}
-                      {o.affiliateCode ? `, via affiliate` : ''}, {new Date(o.createdAt).toLocaleDateString()}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+          <SalesSection />
         </>
       )}
 
@@ -148,6 +139,92 @@ export function Studio({ tab = 'home' }: { tab?: 'home' | 'page' | 'bookings' | 
         }}
       />
     </Screen>
+  );
+}
+
+/** Every order, filtered, with a CSV for the accountant. */
+function SalesSection() {
+  const token = useSession((s) => s.token);
+  const [status, setStatus] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [csvError, setCsvError] = useState<string | null>(null);
+  const sales = useAuthed(['sales', status, from, to], () => api.sales({ status: status || undefined, from: from || undefined, to: to || undefined }));
+  const downloadCsv = async () => {
+    setCsvError(null);
+    try {
+      const qs = new URLSearchParams({ ...(status ? { status } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}) }).toString();
+      const res = await fetch(`${api.salesCsvUrl}${qs ? `&${qs}` : ''}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!res.ok) throw new Error('Could not build the file.');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'sales.csv';
+      a.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (e) {
+      setCsvError(e instanceof Error ? e.message : 'Could not download.');
+    }
+  };
+  const orders = sales.data?.orders ?? [];
+  return (
+    <section className="mt-lg" aria-labelledby="sales-heading">
+      <div className="flex items-center justify-between gap-sm">
+        <h2 id="sales-heading" className="text-[24px]">
+          Sales
+        </h2>
+        <Button variant="outline" onClick={() => void downloadCsv()} disabled={orders.length === 0}>
+          Download CSV
+        </Button>
+      </div>
+      <div className="mt-sm grid grid-cols-3 gap-xs">
+        <label className="block">
+          <span className="block text-[12px] font-bold">Status</span>
+          <select value={status} onChange={(e) => setStatus(e.target.value)} className={field}>
+            <option value="">All</option>
+            <option value="paid">Paid</option>
+            <option value="test">Test</option>
+            <option value="pending">Pending</option>
+            <option value="failed">Failed</option>
+            <option value="refunded">Refunded</option>
+          </select>
+        </label>
+        <label className="block">
+          <span className="block text-[12px] font-bold">From</span>
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={field} />
+        </label>
+        <label className="block">
+          <span className="block text-[12px] font-bold">To</span>
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={field} />
+        </label>
+      </div>
+      {csvError && (
+        <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          {csvError}
+        </p>
+      )}
+      {sales.data && orders.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No orders match.</p>}
+      <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+        {orders.map((o) => (
+          <li key={o.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
+            <div className="flex items-start justify-between gap-sm">
+              <p className="m-0 min-w-0 text-[16px] font-bold">
+                {o.buyerName} got {o.productTitle}
+              </p>
+              <span className={`shrink-0 rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${STATUS_PILL[o.status]}`}>{o.status}</span>
+            </div>
+            <p className="m-0 text-[14px] font-semibold text-ink-soft">
+              {new Date(o.createdAt).toLocaleDateString()}. {o.points > 0 ? `${o.points} points` : `${(o.cents / 100).toFixed(2)} ${o.currency}${o.provider === 'razorpay' ? '' : ', test'}`}
+              {o.couponCode ? `, coupon ${o.couponCode}` : ''}
+              {o.affiliateCode ? ', via affiliate' : ''}
+              {o.sourceLabel ? `, from ${o.sourceLabel}` : ', profile direct'}
+              {o.variant === 'replay' ? ', replay' : ''}.
+            </p>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -261,9 +338,11 @@ function PageTab() {
 }
 
 function BookingsTab() {
+  const me = useMe();
   const q = useAuthed(['studio-bookings'], api.studioBookings);
   const avail = useAuthed(['availability'], api.availability);
   const refresh = useRefreshAll();
+  const zone = me.data?.user.timezone ?? 'Asia/Kolkata';
   const set = useMutation({ mutationFn: ({ id, body }: { id: string; body: { status?: Booking['status']; meetingUrl?: string } }) => api.setBooking(id, body), onSuccess: () => refresh() });
   const [weekday, setWeekday] = useState(1);
   const [start, setStart] = useState('09:00');
@@ -279,7 +358,13 @@ function BookingsTab() {
         <h2 id="avail-heading" className="text-[24px]">
           Availability
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Times in UTC. Session products offer slots inside these windows.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+          Times in your zone, {zone} (change it under{' '}
+          <Link to="/profile" className="underline underline-offset-4">
+            Profile
+          </Link>
+          ). Session products offer slots inside these windows, shown to buyers in their own zone.
+        </p>
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {avail.data?.availability.map((a) => (
             <li key={a.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
@@ -322,6 +407,7 @@ function BookingsTab() {
           </Button>
         </form>
       </section>
+      <OverridesSection />
       <section className="mt-lg" aria-labelledby="bookings-heading">
         <h2 id="bookings-heading" className="text-[24px]">
           Bookings
@@ -334,7 +420,7 @@ function BookingsTab() {
                 {b.buyerName}, {b.productTitle}
               </p>
               <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                {new Date(b.startsAt).toLocaleString()} UTC, {b.status}
+                {new Date(b.startsAt).toLocaleString()}, {b.status}
                 {b.note ? `. ${b.note}` : ''}
               </p>
               {b.status === 'requested' && (
@@ -355,6 +441,65 @@ function BookingsTab() {
         </ul>
       </section>
     </>
+  );
+}
+
+/** Days off and days with their own hours. An empty set of hours blocks the whole day. */
+function OverridesSection() {
+  const overrides = useAuthed(['overrides'], api.overrides);
+  const [date, setDate] = useState('');
+  const [start, setStart] = useState('10:00');
+  const [end, setEnd] = useState('13:00');
+  const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  const set = useMutation({ mutationFn: (ranges: { startMin: number; endMin: number }[]) => api.setOverride(date, ranges), onSuccess: () => overrides.refetch() });
+  const remove = useMutation({ mutationFn: (d: string) => api.removeOverride(d), onSuccess: () => overrides.refetch() });
+  const ready = /^\d{4}-\d{2}-\d{2}$/.test(date);
+  return (
+    <section className="mt-lg" aria-labelledby="overrides-heading">
+      <h2 id="overrides-heading" className="text-[24px]">
+        Days off and special hours
+      </h2>
+      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Block a date, or give it hours of its own. These win over the weekly windows above.</p>
+      <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+        {overrides.data?.overrides.map((o) => (
+          <li key={o.date} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+            <span className="flex-1 text-[16px] font-bold">
+              {new Date(`${o.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
+              <span className="font-semibold text-ink-soft">{o.ranges.length === 0 ? ', day off' : `, ${o.ranges.map((r) => `${fmt(r.startMin)} to ${fmt(r.endMin)}`).join(', ')}`}</span>
+            </span>
+            <Button variant="ghost" onClick={() => remove.mutate(o.date)} disabled={remove.isPending}>
+              Remove
+            </Button>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-sm flex flex-wrap items-end gap-xs rounded-card bg-card p-md shadow-toy-soft">
+        <label className="block">
+          <span className="block text-[12px] font-bold">Date</span>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-xs rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+        </label>
+        <Button variant="outline" onClick={() => set.mutate([])} disabled={!ready || set.isPending}>
+          Block this day
+        </Button>
+        <label className="block">
+          <span className="block text-[12px] font-bold">Or custom hours from</span>
+          <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="mt-xs rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+        </label>
+        <label className="block">
+          <span className="block text-[12px] font-bold">to</span>
+          <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="mt-xs rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+        </label>
+        <Button onClick={() => set.mutate([{ startMin: toMin(start), endMin: toMin(end) }])} disabled={!ready || set.isPending || toMin(end) <= toMin(start)}>
+          Set hours
+        </Button>
+      </div>
+      {set.isError && (
+        <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          {set.error instanceof Error ? set.error.message : 'Could not save that day.'}
+        </p>
+      )}
+    </section>
   );
 }
 

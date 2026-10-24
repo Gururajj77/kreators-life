@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
-import { AFFILIATE_SHARE, PRODUCT_KIND_META, PRODUCT_KINDS, type Availability, type Booking, type Coupon, type Lead, type Lesson, type Order, type Product, type ProductKind, type QuizQuestion, type StudioAnalytics, type Testimonial } from '@kreators/shared';
+import { AFFILIATE_SHARE, PRODUCT_KIND_META, PRODUCT_KINDS, type Availability, type AvailabilityOverride, type Booking, type Coupon, type Lead, type Lesson, type Order, type Product, type ProductKind, type QuizQuestion, type StudioAnalytics, type Testimonial } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { nameOf, newId, notify, nowIso, parseList } from '../db';
+import { logEvent, sendEmail, track } from '../ops';
 import { parseQuiz } from './buyer';
 
 export const studio = new Hono<AppEnv>();
@@ -37,6 +38,10 @@ export interface ProductRow {
   response_days: number | null;
   lead_magnet: number;
   certificate: number;
+  buffer_min: number;
+  notice_hours: number;
+  max_days_ahead: number;
+  period_months: number | null;
 }
 
 export const PRODUCT_SELECT = `SELECT p.*, u.display_name AS owner_name, u.handle AS owner_handle,
@@ -55,6 +60,10 @@ export const toProduct = (r: ProductRow, reveal = false): Product => ({
   responseDays: r.response_days,
   leadMagnet: r.lead_magnet === 1,
   certificate: r.certificate === 1,
+  bufferMin: r.buffer_min ?? 0,
+  noticeHours: r.notice_hours ?? 2,
+  maxDaysAhead: r.max_days_ahead ?? 30,
+  periodMonths: r.period_months ?? null,
   id: r.id,
   ownerId: r.owner_id,
   ownerName: nameOf({ display_name: r.owner_name }),
@@ -93,6 +102,7 @@ export const toLesson = (r: LessonRow, reveal = true): Lesson => ({ id: r.id, pr
 
 export interface OrderRow {
   id: string;
+  owner_id: string;
   buyer_id: string;
   buyer_name: string;
   product_id: string;
@@ -101,9 +111,13 @@ export interface OrderRow {
   points: number;
   cents: number;
   currency: string;
-  status: 'paid' | 'test' | 'refunded';
+  status: Order['status'];
   coupon_code: string | null;
   affiliate_code: string | null;
+  provider: string;
+  provider_order_id: string | null;
+  paid_at: string | null;
+  expires_at: string | null;
   source_link_id: string | null;
   source_label: string | null;
   click_id: string | null;
@@ -116,6 +130,7 @@ export interface OrderRow {
 export const ORDER_SELECT = `SELECT o.*, b.display_name AS buyer_name, p.title AS product_title, p.kind AS product_kind, COALESCE(NULLIF(l.label, ''), l.code) AS source_label FROM orders o JOIN users b ON b.id = o.buyer_id JOIN products p ON p.id = o.product_id LEFT JOIN tracked_links l ON l.id = o.source_link_id`;
 export const toOrder = (r: OrderRow): Order => ({
   id: r.id, buyerId: r.buyer_id, buyerName: nameOf({ display_name: r.buyer_name }), productId: r.product_id, productTitle: r.product_title, productKind: r.product_kind, points: r.points, cents: r.cents, currency: r.currency, status: r.status, couponCode: r.coupon_code, affiliateCode: r.affiliate_code,
+  provider: r.provider ?? 'points', providerOrderId: r.provider_order_id ?? null, paidAt: r.paid_at ?? null, expiresAt: r.expires_at ?? null,
   sourceLinkId: r.source_link_id, sourceLabel: r.source_label, clickId: r.click_id, platformFeePoints: r.platform_fee_points ?? 0, intake: parseList(r.intake_json), variant: r.variant ?? '', refundedAt: r.refunded_at, createdAt: r.created_at,
 });
 
@@ -242,16 +257,18 @@ studio.post('/products', async (c) => {
   const now = nowIso();
   await db
     .prepare(
-      `INSERT INTO products (id, owner_id, kind, title, description, price_points, price_cents, currency, url, starts_at, duration_min, capacity, meeting_url, status, cover, sort_order, created_at, updated_at, pwyw, intake_json, replay_url, replay_points, bundle_json, locked_body, response_days, lead_magnet, certificate)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO products (id, owner_id, kind, title, description, price_points, price_cents, currency, url, starts_at, duration_min, capacity, meeting_url, status, cover, sort_order, created_at, updated_at, pwyw, intake_json, replay_url, replay_points, bundle_json, locked_body, response_days, lead_magnet, certificate, buffer_min, notice_hours, max_days_ahead, period_months)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       id, user.id, kind, title, str(body.description, 2000), int(body.pricePoints, 0) ?? 0, int(body.priceCents, 0) ?? 0, str(body.currency, 3, 'INR').toUpperCase() || 'INR',
       str(body.url, 500) || null, str(body.startsAt, 40) || null, int(body.durationMin, kind === 'session' ? 30 : null, 5, 600), int(body.capacity, null, 1),
       str(body.meetingUrl, 500) || null, body.status === 'live' ? 'live' : 'draft', str(body.cover, 8, PRODUCT_KIND_META[kind].emoji), 0, now, now,
       body.pwyw === true ? 1 : 0, JSON.stringify(list(body.intake, 8, 200)), str(body.replayUrl, 500) || null, int(body.replayPoints, 0) ?? 0, JSON.stringify(await ownedIds(db, user.id, body.bundleIds)), str(body.lockedBody, 20000), int(body.responseDays, kind === 'dm' ? 3 : null, 1, 30), body.leadMagnet === true ? 1 : 0, body.certificate === true ? 1 : 0,
+      int(body.bufferMin, 0, 0, 120) ?? 0, int(body.noticeHours, 2, 0, 720) ?? 2, int(body.maxDaysAhead, 30, 1, 365) ?? 30, kind === 'membership' ? int(body.periodMonths, null, 1, 36) : null,
     )
     .run();
+  await track(db, user.id, 'product_created', { kind, pricePoints: int(body.pricePoints, 0) ?? 0 });
   const row = await ownProduct(db, user.id, id);
   return c.json({ product: row ? toProduct(row) : null }, 201);
 });
@@ -280,7 +297,7 @@ studio.patch('/products/:id', async (c) => {
   await db
     .prepare(
       `UPDATE products SET title = ?, description = ?, price_points = ?, price_cents = ?, currency = ?, url = ?, starts_at = ?, duration_min = ?, capacity = ?, meeting_url = ?, status = ?, cover = ?, sort_order = ?, updated_at = ?,
-         pwyw = ?, intake_json = ?, replay_url = ?, replay_points = ?, bundle_json = ?, locked_body = ?, response_days = ?, lead_magnet = ?, certificate = ? WHERE id = ?`,
+         pwyw = ?, intake_json = ?, replay_url = ?, replay_points = ?, bundle_json = ?, locked_body = ?, response_days = ?, lead_magnet = ?, certificate = ?, buffer_min = ?, notice_hours = ?, max_days_ahead = ?, period_months = ? WHERE id = ?`,
     )
     .bind(
       str(body.title, 120, prev.title) || prev.title, str(body.description, 2000, prev.description), int(body.pricePoints, prev.price_points) ?? prev.price_points, int(body.priceCents, prev.price_cents) ?? prev.price_cents,
@@ -289,7 +306,8 @@ studio.patch('/products/:id', async (c) => {
       'meetingUrl' in body ? str(body.meetingUrl, 500) || null : prev.meeting_url, status, str(body.cover, 8, prev.cover) || prev.cover, int(body.sortOrder, prev.sort_order) ?? prev.sort_order, nowIso(),
       typeof body.pwyw === 'boolean' ? (body.pwyw ? 1 : 0) : prev.pwyw, 'intake' in body ? JSON.stringify(list(body.intake, 8, 200)) : prev.intake_json, 'replayUrl' in body ? str(body.replayUrl, 500) || null : prev.replay_url, int(body.replayPoints, prev.replay_points) ?? prev.replay_points,
       'bundleIds' in body ? JSON.stringify(await ownedIds(db, user.id, body.bundleIds)) : prev.bundle_json, 'lockedBody' in body ? str(body.lockedBody, 20000) : prev.locked_body, 'responseDays' in body ? int(body.responseDays, prev.response_days, 1, 30) : prev.response_days,
-      typeof body.leadMagnet === 'boolean' ? (body.leadMagnet ? 1 : 0) : prev.lead_magnet, typeof body.certificate === 'boolean' ? (body.certificate ? 1 : 0) : prev.certificate, prev.id,
+      typeof body.leadMagnet === 'boolean' ? (body.leadMagnet ? 1 : 0) : prev.lead_magnet, typeof body.certificate === 'boolean' ? (body.certificate ? 1 : 0) : prev.certificate,
+      int(body.bufferMin, prev.buffer_min, 0, 120) ?? prev.buffer_min, int(body.noticeHours, prev.notice_hours, 0, 720) ?? prev.notice_hours, int(body.maxDaysAhead, prev.max_days_ahead, 1, 365) ?? prev.max_days_ahead, 'periodMonths' in body ? int(body.periodMonths, prev.period_months, 1, 36) : prev.period_months, prev.id,
     )
     .run();
   const row = await ownProduct(db, user.id, prev.id);
@@ -392,6 +410,73 @@ studio.post('/availability', async (c) => {
   return c.json({ availability: { id, weekday, startMin, endMin } satisfies Availability }, 201);
 });
 
+// Date overrides: block a day, or give it its own hours. An empty list of ranges blocks the whole day.
+interface OverrideRow { id: string; date: string; ranges_json: string }
+const toOverride = (r: OverrideRow): AvailabilityOverride => {
+  let ranges: { startMin: number; endMin: number }[] = [];
+  try {
+    const v = JSON.parse(r.ranges_json || '[]') as unknown;
+    if (Array.isArray(v)) ranges = v.filter((x): x is { startMin: number; endMin: number } => Boolean(x && typeof x === 'object' && 'startMin' in x && 'endMin' in x));
+  } catch {
+    ranges = [];
+  }
+  return { id: r.id, date: r.date, ranges };
+};
+
+studio.get('/availability/overrides', async (c) => {
+  const rows = await c.env.DB.prepare('SELECT * FROM availability_overrides WHERE owner_id = ? AND date >= ? ORDER BY date').bind(c.get('user').id, new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)).all<OverrideRow>();
+  return c.json({ overrides: rows.results.map(toOverride) });
+});
+
+studio.put('/availability/overrides/:date', async (c) => {
+  const date = c.req.param('date');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return c.json({ error: 'date as YYYY-MM-DD' }, 400);
+  const body = await c.req.json<{ ranges?: unknown }>().catch(() => ({}) as { ranges?: unknown });
+  const ranges = (Array.isArray(body.ranges) ? body.ranges : [])
+    .map((x) => (x && typeof x === 'object' ? (x as Record<string, unknown>) : {}))
+    .map((x) => ({ startMin: int(x.startMin, 0, 0, 1439) ?? 0, endMin: int(x.endMin, 0, 1, 1440) ?? 0 }))
+    .filter((x) => x.endMin > x.startMin)
+    .slice(0, 6);
+  await c.env.DB.prepare('INSERT OR REPLACE INTO availability_overrides (id, owner_id, date, ranges_json) VALUES (COALESCE((SELECT id FROM availability_overrides WHERE owner_id = ?1 AND date = ?2), ?3), ?1, ?2, ?4)').bind(c.get('user').id, date, newId(), JSON.stringify(ranges)).run();
+  return c.json({ override: { id: date, date, ranges } satisfies AvailabilityOverride });
+});
+
+studio.delete('/availability/overrides/:date', async (c) => {
+  await c.env.DB.prepare('DELETE FROM availability_overrides WHERE owner_id = ? AND date = ?').bind(c.get('user').id, c.req.param('date')).run();
+  return c.json({ ok: true });
+});
+
+// Sales: every order, filterable, as JSON or a CSV file.
+studio.get('/orders', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const status = c.req.query('status') ?? '';
+  const from = c.req.query('from') ?? '';
+  const to = c.req.query('to') ?? '';
+  const where = [`o.owner_id = ?`];
+  const binds: unknown[] = [user.id];
+  if (status) {
+    where.push('o.status = ?');
+    binds.push(status);
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(from)) {
+    where.push('o.created_at >= ?');
+    binds.push(`${from}T00:00:00`);
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+    where.push('o.created_at <= ?');
+    binds.push(`${to}T23:59:59`);
+  }
+  const rows = await db.prepare(`${ORDER_SELECT} WHERE ${where.join(' AND ')} ORDER BY o.created_at DESC LIMIT 1000`).bind(...binds).all<OrderRow>();
+  const orders = rows.results.map(toOrder);
+  if (c.req.query('format') === 'csv') {
+    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const csv = ['order_id,date,product,kind,buyer,status,points,cents,currency,provider,coupon,affiliate,source,fee_points', ...orders.map((o) => [o.id, o.createdAt, o.productTitle, o.productKind, o.buyerName, o.status, o.points, o.cents, o.currency, o.provider, o.couponCode, o.affiliateCode, o.sourceLabel, o.platformFeePoints].map(esc).join(','))].join('\n');
+    return c.body(csv, 200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="sales.csv"' });
+  }
+  return c.json({ orders });
+});
+
 studio.delete('/availability/:id', async (c) => {
   await c.env.DB.prepare('DELETE FROM availability WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), c.get('user').id).run();
   return c.json({ ok: true });
@@ -415,6 +500,12 @@ studio.post('/bookings/:id', async (c) => {
   if (status !== prev.status) {
     const when = new Date(prev.starts_at).toUTCString();
     await notify(db, prev.buyer_id, 'booking', status === 'confirmed' ? `Your session with ${nameOf(user)} is confirmed` : status === 'cancelled' ? `Your session with ${nameOf(user)} was cancelled` : `Session marked done`, when, '/library');
+    await logEvent(db, 'booking', prev.id, `booking.${status}`);
+    if (status === 'confirmed') {
+      await track(db, user.id, 'booking_confirmed', { leadTimeHours: Math.round((new Date(prev.starts_at).getTime() - Date.now()) / 3600_000) });
+      const buyer = await db.prepare('SELECT email FROM users WHERE id = ?').bind(prev.buyer_id).first<{ email: string | null }>();
+      await sendEmail(db, c.env, { userId: prev.buyer_id, to: buyer?.email, subject: `Confirmed: ${prev.product_title} with ${nameOf(user)}`, body: `${when}${meetingUrl ? `\nJoin: ${meetingUrl}` : ''}\n\nManage it under My purchases.` });
+    }
   }
   const row = await db.prepare(`${BOOKING_SELECT} WHERE k.id = ?`).bind(prev.id).first<BookingRow>();
   return c.json({ booking: row ? toBooking(row) : null });
