@@ -1,12 +1,14 @@
 import { useMutation } from '@tanstack/react-query';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router';
 import { Button } from '../components/Button';
+import { AreaLine, Donut, Legend } from '../components/Charts';
+import { Hero, HeroNumber } from '../components/Hero';
 import { useCelebrate } from '../components/Celebration';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
-import { todayLocal } from '../lib/date';
+import { lastDays, shortDay, todayLocal } from '../lib/date';
 import { useLogs, useRefreshAll, useWellbeing } from '../lib/queries';
 
 const LENGTHS = [1, 3, 5, 10];
@@ -44,24 +46,32 @@ export function Mindful() {
 
   const running = left !== null;
   const total = wb.data?.parts.find((p) => p.kind === 'mindful')?.latest ?? 0;
+  const buckets = [
+    { label: 'One minute', color: 'var(--color-r3)', test: (m: number) => m <= 1 },
+    { label: 'Three', color: 'var(--color-r4)', test: (m: number) => m > 1 && m <= 3 },
+    { label: 'Five', color: 'var(--color-r2)', test: (m: number) => m > 3 && m <= 5 },
+    { label: 'Ten or more', color: 'var(--color-r6)', test: (m: number) => m > 5 },
+  ].map((b) => ({ ...b, value: (logs.data?.logs ?? []).filter((l) => b.test(l.value)).reduce((s, l) => s + l.value, 0) }));
+  const monthTotal = buckets.reduce((s, b) => s + b.value, 0);
 
   return (
     <Screen>
       <header className="pt-lg">
-        <Link to="/wellbeing" className="inline-flex min-h-[44px] items-center gap-xs font-bold text-ink-soft">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
-          Wellbeing
-        </Link>
+        <BackLink to="/wellbeing">Wellbeing</BackLink>
         <h1 className="text-[30px]">Mindful minutes</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{total} minutes this week. Breathe with the circle: in as it grows, out as it shrinks.</p>
       </header>
 
+      {wb.data && (
+        <Hero color="var(--color-r4)" deep="var(--deep-lover_partner)" className="mt-md" character="lover_partner" mood={total >= 30 ? "excited" : "happy"}>
+          <HeroNumber value={total} unit="min" label="mindful minutes this week" />
+        </Hero>
+      )}
+
       <section className="mt-md rounded-card p-md text-center" style={{ background: 'var(--tint-green)' }} aria-live="polite">
         <div className="mx-auto flex h-[200px] w-[200px] items-center justify-center">
           <motion.div
-            className="flex size-[120px] items-center justify-center rounded-pill bg-r4 font-display text-[30px] font-extrabold text-ink"
+            className="flex size-[120px] items-center justify-center rounded-pill bg-card font-display text-[30px] font-extrabold text-ink shadow-toy-soft"
             animate={running && !reduce ? { scale: [1, 1.5, 1.5, 1] } : { scale: 1 }}
             transition={running && !reduce ? { duration: 10, times: [0, 0.4, 0.5, 1], repeat: Number.POSITIVE_INFINITY, ease: 'easeInOut' } : { duration: 0.3 }}
           >
@@ -86,6 +96,41 @@ export function Mindful() {
             Stop without logging
           </Button>
         )}
+      </section>
+
+      <section className="mt-lg" aria-labelledby="thirty-heading">
+        <h2 id="thirty-heading" className="text-[24px]">
+          Last 30 days
+        </h2>
+        <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
+          {(() => {
+            const days = lastDays(30);
+            const byDay = new Map<string, number>();
+            for (const l of logs.data?.logs ?? []) byDay.set(l.date, (byDay.get(l.date) ?? 0) + l.value);
+            const vals = days.map((d) => byDay.get(d) ?? 0);
+            return <AreaLine values={vals} max={Math.max(15, ...vals)} color="var(--color-r4)" labels={days.map(shortDay)} height={140} label="Mindful minutes per day over the last thirty days" />;
+          })()}
+        </div>
+      </section>
+
+      <section className="mt-lg" aria-labelledby="how-heading">
+        <h2 id="how-heading" className="text-[24px]">
+          How you breathe
+        </h2>
+        <div className="mt-sm flex items-center gap-md rounded-card bg-card p-md shadow-toy-soft">
+          <Donut segments={buckets.map((b) => ({ value: b.value, color: b.color, label: b.label }))} size={132} stroke={20} label="Minutes by session length, last thirty days">
+            <span className="flex flex-col items-center leading-none">
+              <span className="font-display text-[24px] font-extrabold">{monthTotal}</span>
+              <span className="mt-xs text-[12px] font-bold text-ink-soft">min</span>
+            </span>
+          </Donut>
+          <div className="min-w-0 flex-1">
+            <p className="m-0 text-[14px] font-bold">By session length, last thirty days</p>
+            <div className="mt-xs">
+              <Legend items={buckets.map((b) => ({ color: b.color, label: b.label, text: `${b.value} min` }))} />
+            </div>
+          </div>
+        </div>
       </section>
 
       <section className="mt-lg" aria-labelledby="hist-heading">

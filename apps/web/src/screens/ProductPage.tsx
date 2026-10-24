@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { Button } from '../components/Button';
 import { useCelebrate } from '../components/Celebration';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api, publicApi } from '../lib/api';
 import { useMe, useRefreshAll } from '../lib/queries';
@@ -162,12 +163,7 @@ export function ProductPage() {
   return (
     <Screen tabs={false}>
       <header className="pt-lg">
-        <Link to={p?.ownerHandle ? `/u/${p.ownerHandle}` : token ? '/apps' : '/'} className="inline-flex min-h-[44px] items-center gap-xs font-bold text-ink-soft">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
-          {p?.ownerName ?? 'Back'}
-        </Link>
+        <BackLink to={p?.ownerHandle ? `/u/${p.ownerHandle}` : token ? '/apps' : '/'}>{p?.ownerName ?? 'Back'}</BackLink>
       </header>
       {q.isError && <p className="mt-md font-bold">That product is not available.</p>}
       {p && meta && (

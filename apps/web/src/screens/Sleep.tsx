@@ -1,11 +1,12 @@
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link } from 'react-router';
 import { Button } from '../components/Button';
-import { WeekBars } from '../components/Charts';
+import { AreaLine, Donut, PillBars } from '../components/Charts';
+import { Hero, HeroNumber } from '../components/Hero';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
-import { todayLocal } from '../lib/date';
+import { lastDays, shortDay, todayLocal } from '../lib/date';
 import { useLogs, useRefreshAll, useWellbeing } from '../lib/queries';
 
 const QUALITY = ['Rough', 'Light', 'Okay', 'Good', 'Deep'];
@@ -25,15 +26,21 @@ export function Sleep() {
   return (
     <Screen>
       <header className="pt-lg">
-        <Link to="/wellbeing" className="inline-flex min-h-[44px] items-center gap-xs font-bold text-ink-soft">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
-          Wellbeing
-        </Link>
+        <BackLink to="/wellbeing">Wellbeing</BackLink>
         <h1 className="text-[30px]">Sleep</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{avg === null ? 'Log a few nights and the average shows here.' : `Averaging ${avg.toFixed(1)} hours this week.`}</p>
       </header>
+
+      {wb.data && (
+        <Hero color="var(--color-r6)" deep="var(--deep-guru)" className="mt-md" character="guru" characterSize={64} mood={avg !== null && avg >= 7 ? "happy" : "sleepy"}>
+          <div className="flex items-center justify-between gap-md">
+            <HeroNumber value={avg === null ? '–' : avg.toFixed(1)} unit="h" label={avg === null ? 'No nights logged yet' : avg >= 7 ? 'You are sleeping well' : avg >= 6 ? 'A little short this week' : 'Running on empty'} />
+            <Donut segments={[{ value: avg ?? 0, color: 'var(--color-on-fill)', label: 'slept' }, { value: Math.max(0, 8 - (avg ?? 0)), color: 'rgba(255,255,255,0.3)', label: 'to eight' }]} size={112} stroke={14} track="rgba(255,255,255,0.3)" label="Hours a night against eight">
+              <span className="text-[12px] font-extrabold">of 8 h</span>
+            </Donut>
+          </div>
+        </Hero>
+      )}
 
       <section className="mt-md rounded-card p-md" style={{ background: 'var(--tint-purple)' }} aria-labelledby="log-heading">
         <h2 id="log-heading" className="text-[24px]">
@@ -68,7 +75,21 @@ export function Sleep() {
           This week
         </h2>
         <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
-          {wb.data && <WeekBars values={wb.data.week.map((w) => w.sleep)} max={10} color="#7F45E2" labels={wb.data.week.map((w) => DAY[new Date(`${w.date}T00:00:00`).getDay()] ?? '')} label="Hours of sleep by day" />}
+          {wb.data && <PillBars allLabels values={wb.data.week.map((w) => w.sleep)} max={10} color="var(--color-r6)" labels={wb.data.week.map((w) => DAY[new Date(`${w.date}T00:00:00`).getDay()] ?? '')} label="Hours of sleep by day" />}
+        </div>
+      </section>
+
+      <section className="mt-lg" aria-labelledby="thirty-heading">
+        <h2 id="thirty-heading" className="text-[24px]">
+          Last 30 nights
+        </h2>
+        <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
+          {(() => {
+            const days = lastDays(30);
+            const byDay = new Map((logs.data?.logs ?? []).map((l) => [l.date, l.value]));
+            return <AreaLine values={days.map((d) => byDay.get(d) ?? null)} max={10} color="var(--color-r6)" labels={days.map(shortDay)} height={140} label="Hours of sleep over the last thirty nights" />;
+          })()}
+          <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Seven to eight hours is the band that scores full marks.</p>
         </div>
       </section>
 

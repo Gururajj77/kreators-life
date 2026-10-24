@@ -1,9 +1,9 @@
 import { POINTS, REWARD_BY_KEY } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link } from 'react-router';
 import { Button } from '../components/Button';
 import { useCelebrate } from '../components/Celebration';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useRefreshAll, useRewards } from '../lib/queries';
@@ -37,12 +37,7 @@ export function Rewards() {
   return (
     <Screen>
       <header className="pt-lg">
-        <Link to="/you" className="inline-flex min-h-[44px] items-center gap-xs font-bold text-ink-soft">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
-          You
-        </Link>
+        <BackLink to="/you">You</BackLink>
         <h1 className="text-[30px]">Rewards</h1>
       </header>
 

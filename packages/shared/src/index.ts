@@ -49,7 +49,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     color: '#FB8728',
     soft: '#FFEDD5',
     deep: '#C2410C',
-    text: '#4F3422',
+    text: '#FFFFFF',
     greeting: "I'm Pip. Two lobes, one heart. Who's in your corner?",
     question: 'Who did you show up for?',
   },
@@ -73,7 +73,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     color: '#9BB068',
     soft: '#F0F2E8',
     deep: '#5A6B38',
-    text: '#4F3422',
+    text: '#FFFFFF',
     greeting: "I'm Clover. Love is a daily habit, not a yearly highlight.",
     question: 'Was there phone-free time?',
   },
@@ -1177,6 +1177,7 @@ export interface AppModule {
 }
 
 export const MODULES: readonly AppModule[] = [
+  { key: 'home', name: 'Home', blurb: 'Your numbers, your day, and a door into everything.', emoji: '🏠', group: 'core', path: '/home', defaultOn: true, locked: true, minRole: 'user' },
   { key: 'today', name: 'Today', blurb: 'Your daily three.', emoji: '☀️', group: 'core', path: '/today', defaultOn: true, locked: true, minRole: 'user' },
   { key: 'tower', name: 'Tower', blurb: 'Seven floors, one per relationship.', emoji: '🏰', group: 'core', path: '/tower', defaultOn: true, locked: true, minRole: 'user' },
   { key: 'search', name: 'Search', blurb: 'Find anything you wrote, bought, applied to or read.', emoji: '🔍', group: 'core', path: '/search', defaultOn: true, locked: true, minRole: 'user' },
@@ -1307,10 +1308,10 @@ export interface MoodOption {
 /** The kit's five moods and their colors, bottom to top. */
 export const MOODS: readonly MoodOption[] = [
   { value: 1, name: 'Low', emoji: '😞', color: '#7F45E2', text: '#FFFFFF' },
-  { value: 2, name: 'Sad', emoji: '😔', color: '#FB8728', text: '#4F3422' },
+  { value: 2, name: 'Sad', emoji: '😔', color: '#FB8728', text: '#FFFFFF' },
   { value: 3, name: 'Neutral', emoji: '😐', color: '#926247', text: '#FFFFFF' },
   { value: 4, name: 'Happy', emoji: '🙂', color: '#FACC15', text: '#4F3422' },
-  { value: 5, name: 'Overjoyed', emoji: '😄', color: '#9BB068', text: '#4F3422' },
+  { value: 5, name: 'Overjoyed', emoji: '😄', color: '#9BB068', text: '#FFFFFF' },
 ];
 
 export const STRESSORS = ['Work', 'Money', 'Family', 'Health', 'Loneliness', 'Relationship', 'Sleep', 'Something else'] as const;
@@ -1646,6 +1647,8 @@ export interface StudioAnalytics {
   /** Sales that came through a tracked link, versus straight from the page. */
   attributed: number;
   direct: number;
+  /** Orders per day for the last fourteen days, oldest first. */
+  days: { date: string; orders: number }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -2036,6 +2039,29 @@ export function matchCircles(candidates: MatchCandidate[], groupSize: number): {
 
 export const ALIAS_WORDS = ['Quiet', 'Bright', 'Curious', 'Steady', 'Wild', 'Gentle', 'Bold', 'Warm', 'Swift', 'Calm', 'Keen', 'Merry'] as const;
 
+/** How someone will show up, so the table knows what colour to look for. Red for single, white for committed. */
+export const CIRCLE_STATUSES = ['single', 'committed', 'private'] as const;
+export type CircleStatus = (typeof CIRCLE_STATUSES)[number];
+export const CIRCLE_STATUS_META: Record<CircleStatus, { name: string; wear: string; blurb: string }> = {
+  single: { name: 'Single', wear: 'something red', blurb: 'Red on the table means open to meeting someone.' },
+  committed: { name: 'Committed', wear: 'something white', blurb: 'White means here for friends and work.' },
+  private: { name: 'Rather not say', wear: 'whatever you like', blurb: 'No colour, no questions.' },
+};
+export function isCircleStatus(v: unknown): v is CircleStatus {
+  return typeof v === 'string' && (CIRCLE_STATUSES as readonly string[]).includes(v);
+}
+/** One line on what to wear, for the person's own pick. */
+export function dressCodeFor(status: CircleStatus | null): string {
+  if (!status) return 'Wear red if you are single, white if you are committed, or anything if you would rather not say.';
+  const m = CIRCLE_STATUS_META[status];
+  return status === 'private' ? `You chose not to say, so wear ${m.wear}. Red on others means single, white means committed.` : `You said ${m.name.toLowerCase()}, so wear ${m.wear}. ${status === 'single' ? 'White on others means committed.' : 'Red on others means single.'}`;
+}
+
+/** The same weekday and time, one week on. */
+export function nextWeek(iso: string): string {
+  return new Date(new Date(iso).getTime() + 7 * 86_400_000).toISOString();
+}
+
 export interface CircleEvent {
   id: string;
   title: string;
@@ -2045,8 +2071,13 @@ export interface CircleEvent {
   venueHint: string;
   groupSize: number;
   status: 'open' | 'matched' | 'done' | 'cancelled';
+  /** Weekly circles open the next occurrence on their own once this one's tables are set. */
+  repeat: 'none' | 'weekly';
+  seriesId: string | null;
   signups: number;
   joined: boolean;
+  /** The person's own pick when they joined. Never anyone else's. */
+  myStatus: CircleStatus | null;
   myGroupId: string | null;
   createdAt: string;
 }
@@ -2087,6 +2118,8 @@ export interface CircleGroup {
   members: CircleMember[];
   messages: CircleMessage[];
   myAlias: string;
+  myStatus: CircleStatus | null;
+  repeat: 'none' | 'weekly';
 }
 
 // ---------------------------------------------------------------------------
@@ -2843,3 +2876,166 @@ export const HELP_FAQ = [
   { q: 'Is the Companion a therapist?', a: 'No. It reflects and asks questions. If you are in danger, contact your local emergency number. In India, Tele-MANAS is 14416.' },
   { q: 'Who can see my journal?', a: 'Only you. Journal entries and wellbeing scores are never shown to brands, staff, the leaderboard or Club selection.' },
 ] as const;
+
+// ---------------------------------------------------------------------------
+// Home — one dashboard: results first, then what you did, then where to go.
+// ---------------------------------------------------------------------------
+
+export interface HomeDay {
+  date: string;
+  xp: number;
+  tasks: number;
+}
+
+export interface HomeFloor {
+  relationship: RelationshipKey;
+  level: number;
+  xp: number;
+  /** Progress through the current level, 0 to 1. */
+  pct: number;
+  built: boolean;
+}
+
+export interface HomeUpNext {
+  kind: 'event' | 'booking' | 'session' | 'circle';
+  title: string;
+  /** ISO instant. */
+  at: string;
+  path: string;
+  /** For a circle: when the chat opens. */
+  note?: string;
+}
+
+/** The line under the numbers. Result first, then what did it, then the one next action. */
+export interface HomeNudge {
+  lead: string;
+  body: string;
+  action: string;
+  path: string;
+}
+
+/** The trackers the kit's home lists under the score: each with today's value and a week to draw. */
+export interface HomeTrackers {
+  score: number;
+  label: string;
+  /** Mood 1 to 5 per day for the last seven days, oldest first; null when not logged. */
+  mood: { today: number | null; week: (number | null)[] };
+  sleep: { latest: number | null; avg7: number | null; week: (number | null)[] };
+  stress: { latest: number | null; week: (number | null)[] };
+  mindful: { minutesWeek: number; week: number[] };
+  journal: { entriesMonth: number; streakDays: number; week: boolean[]; /** The last fourteen days, oldest first. */ days14: boolean[] };
+}
+
+export interface HomeResponse {
+  date: string;
+  trackers: HomeTrackers;
+  /** The companion card: how many messages the person has sent. */
+  companion: { messages: number };
+  /** Two recent pieces from Knowledge for the resource cards. */
+  resources: { id: string; title: string; kind: string; tag: string }[];
+  today: {
+    checkedIn: boolean;
+    sparkDone: boolean;
+    sparkRelationship: RelationshipKey;
+    taskDone: boolean;
+    tasksWaiting: number;
+    streak: number;
+    doneCount: number;
+  };
+  xp: { total: number; today: number; week: number; level: number; into: number; span: number };
+  points: number;
+  /** The last fourteen days, oldest first. */
+  days: HomeDay[];
+  /** Where the last fourteen days of xp came from. */
+  xpBySource: { source: 'checkin' | 'spark' | 'task' | 'ripple' | 'other'; xp: number }[];
+  floors: HomeFloor[];
+  life: { overall: number; label: string; areas: { key: LifeAreaKey; score: number; trend: number }[] } | null;
+  money: { currency: string; incomeCents: number; expenseCents: number; owedToMeCents: number; iOweCents: number; overdueInvoices: number; dueSoon: number } | null;
+  shop: { products: number; ordersMonth: number; pointsMonth: number; centsMonth: number; currency: string; views: number; followers: number; days: { date: string; orders: number }[] } | null;
+  upNext: HomeUpNext[];
+  unread: number;
+  nudge: HomeNudge;
+}
+
+export interface NudgeInput {
+  checkedIn: boolean;
+  sparkDone: boolean;
+  taskDone: boolean;
+  tasksWaiting: number;
+  /** True when at least one floor has a pillar. */
+  hasFloor: boolean;
+  xpToday: number;
+  streak: number;
+  /** Local hour, 0 to 23. */
+  hour: number;
+}
+
+/**
+ * The line under the numbers follows one rule: show the result first, then what did it,
+ * then the one thing to do next, and say what it will not work without.
+ */
+export function nudgeFor(s: NudgeInput): HomeNudge {
+  const evening = s.hour >= 18;
+  if (s.checkedIn && s.sparkDone && s.taskDone) {
+    return {
+      lead: `All three done. +${s.xpToday} xp today.`,
+      body: 'Here is what that did: the task fed every rung above it, the spark lifted your weakest floor, and the check-in kept the streak. The one thing that makes tomorrow easier is a time on tomorrow’s task.',
+      action: 'Set a time on tomorrow’s task',
+      path: '/tower',
+    };
+  }
+  if (!s.checkedIn) {
+    if (evening) {
+      return {
+        lead: s.xpToday > 0 ? `+${s.xpToday} xp today, but no check-in yet.` : 'Nothing ticked yet today.',
+        body: 'Most people think a missed day is lost. It is not, until midnight. The streak does not need a good day, it needs one tick, and the check-in is the easiest box on the screen.',
+        action: 'Check in before midnight',
+        path: '/today',
+      };
+    }
+    return {
+      lead: s.streak > 0 ? `Day ${s.streak + 1} is waiting.` : 'Zero so far. That is the normal start.',
+      body: 'It is not the plan that builds the tower and it is not the points. It is the first tick. Check in, and the other two boxes get easier. But it will not count unless you tick it today.',
+      action: 'Check in',
+      path: '/today',
+    };
+  }
+  if (!s.sparkDone) {
+    return {
+      lead: `+${s.xpToday} xp banked from the check-in.`,
+      body: 'Here is the better way to spend the next two minutes: not the biggest task, the spark. It goes straight to your weakest floor, which is the one holding your level down.',
+      action: 'Do the spark',
+      path: '/today',
+    };
+  }
+  if (!s.hasFloor) {
+    return {
+      lead: `+${s.xpToday} xp today, two boxes down.`,
+      body: 'The third box cannot appear yet. Today only hands you tasks from a floor you have built, so this will not work until one floor exists. Build one and tomorrow’s task is already waiting.',
+      action: 'Build a floor',
+      path: '/tower',
+    };
+  }
+  if (s.tasksWaiting === 0) {
+    return {
+      lead: `+${s.xpToday} xp today, two boxes down.`,
+      body: 'No task is due today. That is not a rest day, it is a gap in the ladder. Add one task with a date and a time to any floor and the third box shows up on Today.',
+      action: 'Add a task',
+      path: '/tower',
+    };
+  }
+  return {
+    lead: `+${s.xpToday} xp today, two boxes down.`,
+    body: `Here is the better way to finish: not the biggest task, the one with a time on it. ${s.tasksWaiting === 1 ? 'One task is' : `${s.tasksWaiting} tasks are`} waiting, and the tower only moves when one is ticked.`,
+    action: 'Tick a task',
+    path: '/today',
+  };
+}
+
+/** "Good morning", by the local hour. */
+export function greetingFor(hour: number): string {
+  if (hour < 5) return 'Still up';
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}

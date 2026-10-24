@@ -3,6 +3,8 @@ export interface Env {
   ASSETS?: Fetcher;
   /** Secret. Admin endpoints are disabled when unset. */
   ADMIN_KEY?: string;
+  /** Local only. When set, a signed-in person can fill their own account with two weeks of demo data from You. */
+  DEMO_SEED?: string;
   /** Optional Workers AI binding for the companion. Without it the companion answers from your data alone. */
   AI?: Ai;
   /** Optional. With it, YouTube view counts are fetched automatically for content rewards. */

@@ -147,7 +147,7 @@
       cards: [
         { title: 'Stack', route: 'pnpm workspace', visual: 'blocks', items: [
           ['React 19 + Vite 7 PWA', 'ok', 'apps/web'], ['Hono Worker + D1', 'ok', 'apps/api'], ['Shared domain model', 'ok', 'packages/shared'],
-          ['One Worker serves API and app', 'ok'], ['Cron every 15 min', 'ok'], ['12 migrations', 'ok'],
+          ['One Worker serves API and app', 'ok'], ['Cron every 15 min', 'ok'], ['13 migrations', 'ok'],
         ]},
         { title: 'Design', route: 'app.css, figma-tokens.json', visual: 'blocks', items: [
           ['Figma kit tokens frozen', 'ok'], ['Dark mode, same hues reversed', 'ok'], ['Theme switch on every page', 'ok'],
@@ -164,11 +164,15 @@
       ],
     },
     {
-      id: 'game', name: 'The game', short: 'The game', floor: 1, blurb: 'Seven floors, six rungs, three boxes a day.',
+      id: 'game', name: 'The game', short: 'The game', floor: 1, blurb: 'Seven floors, six rungs, three boxes a day, one home that shows the results first.',
       cards: [
         { title: 'Tower and ladder', route: '/tower, /realm/:key', visual: 'ladder', items: [
           ['Pillar', 'ok'], ['Guiding principle', 'ok'], ['Value goal', 'ok'], ['Goal outcome', 'ok'], ['Project', 'ok'], ['Task, ticks ripple XP up', 'ok'],
         ], extra: [['Branching vibe check derives it', 'ok'], ['Evolution fills from the feet up', 'ok']] },
+        { title: 'Home dashboard', route: '/home', visual: 'blocks', items: [
+          ['Kit home: dark header, avatar, pills, search', 'ok'], ['Metric cards with characters and faces', 'ok'], ['White on colour everywhere; yellow takes brown', 'ok'], ['Lines with axes, pill bars, gauges, donuts, bubbles, month grids', 'ok'], ['Week chart: mood, sleep, calm on one scale', 'ok'], ['Local demo seed from You', 'ok', 'two weeks of everything'], ['Kit stat tiles + green Today card', 'ok'], ['Tracker rows with mini visuals', 'ok', 'mindful, sleep, journal, stress, mood'], ['Up next card, companion card, Knowledge cards', 'ok'], ['Four results first', 'ok', 'xp today, streak, points, level'], ['Three boxes + next step', 'ok', 'nudge names the box'], ['14-day xp bars', 'ok'],
+          ['Life rings, floor bars', 'ok'], ['Money + shop when on', 'ok'], ['Up next: events, sessions, circles', 'ok'], ['Shortcut grid into every app', 'ok'],
+        ]},
         { title: 'Daily loop', route: '/today', visual: 'boxes', items: [
           ['Check in', 'ok', '+10 xp, +10 points'], ['Spark', 'ok', 'from the weakest floor'], ['One task', 'ok', 'time + minutes optional'],
         ], extra: [['Time plan for the day', 'ok'], ['10 min wait, 6 paid ticks a day', 'ok'], ['Atomic ticks, row hints', 'ok']] },
@@ -239,7 +243,7 @@
       cards: [
         { title: 'Circles', route: '/circles', visual: 'pipe', items: [
           ['Interests + city at onboarding', 'ok'], ['Sign up', 'ok'], ['Tables set 2 days out', 'ok'], ['Chat opens 24 h before', 'ok'], ['Meet', 'ok'], ['Reveal, then Bond intro', 'ok'],
-        ], extra: [['Matcher: complementary interests, within 20 km', 'ok'], ['Aliases and characters', 'ok'], ['Live transport; chat polls every 8 s', 'off']] },
+        ], extra: [['Every week: next table opens on its own', 'ok'], ['How to show up: red single, white committed', 'ok'], ['Matcher: complementary interests, within 20 km', 'ok'], ['Aliases and characters', 'ok'], ['Live transport; chat polls every 8 s', 'off']] },
         { title: 'Finance', route: '/finance', visual: 'blocks', items: [
           ['Money in / out, who with', 'ok'], ['Splits owed to others', 'ok'], ['Dues, owe / owed, monthly', 'ok'], ['Recurring on a day', 'ok'],
           ['Budgets', 'ok'], ['Goals: save / earn', 'ok'], ['Invoices + public link', 'ok'], ['All-time totals', 'ok'],
@@ -268,7 +272,7 @@
           ['OTP / Google sign-in', 'off'], ['Instalments, multi-currency', 'off'], ['White-label app', 'off'], ['Marketplace', 'off'],
         ]},
         { title: 'Verified today', visual: 'blocks', items: [
-          ['Typecheck + build clean', 'ok'], ['Unit tests: money, time, slots, matching', 'ok'], ['Spacing + colour scans clean', 'ok'], ['133 smoke checks pass', 'ok'], ['Screenshots, phone + laptop, light + dark', 'ok'],
+          ['Typecheck + build clean', 'ok'], ['Unit tests: money, time, slots, matching', 'ok'], ['Spacing + colour scans clean', 'ok'], ['139 smoke checks pass', 'ok'], ['Screenshots, phone + laptop, light + dark', 'ok'],
           ['localhost:5173 live', 'ok'], ['localhost:8787 build', 'ok'], ['2 commits pushed, rest local', 'test'],
         ]},
       ],
@@ -279,7 +283,7 @@
 <b>apps/api/src/</b>index.ts · cron.ts · access.ts · db.ts · social.ts · wrangler.jsonc
 <b>apps/api/src/routes/</b>admin · me · auth · explore · army · orgs · school · work · party · club · win · bond
                      tools · proposals · support · circles · life · studio · store · growth · buyer · go · finance
-<b>apps/api/migrations/</b>0001_init … 0012_parity
+<b>apps/api/migrations/</b>0001_init … 0013_circles_weekly
 <b>apps/web/src/site/</b>Home · Explore · Feature · ScrollTroupe · ListingCard · CertificatePage · InvoicePage · content
 <b>apps/web/src/screens/</b>Today · Tower · Realm · Apps · You · Profile · Army · Work · School · Cohort · Party · Club · Win · Bond
                       Circles · Life · Tools · Proposals · Help · Studio · Content · Automations · Customers · DmInbox · Finance · Admin · Manage

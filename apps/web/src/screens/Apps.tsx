@@ -10,7 +10,7 @@ export function Apps() {
   const me = useMe();
   const { modules } = useModules();
   const unread = me.data?.unread ?? 0;
-  const on = modules.filter((m) => m.on && !['today', 'tower'].includes(m.key));
+  const on = modules.filter((m) => m.on && !['home', 'today', 'tower'].includes(m.key));
   const offCount = modules.filter((m) => m.available && !m.on).length;
 
   return (
@@ -34,15 +34,17 @@ export function Apps() {
             <h2 id={`g-${g}`} className="text-[18px]">
               {MODULE_GROUPS[g]}
             </h2>
-            <ul className="mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0">
+            <ul className="mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0 md:grid-cols-3">
               {list.map((m) => (
                 <li key={m.key}>
-                  <Link to={m.path} className="toy toy-soft relative flex min-h-[112px] flex-col justify-end rounded-tile bg-card p-sm">
-                    <span className="text-[28px]" aria-hidden="true">
-                      {m.emoji}
+                  <Link to={m.path} className="toy toy-soft relative flex min-h-[96px] flex-col justify-start rounded-tile bg-card p-sm text-ink">
+                    <span className="flex items-center gap-xs">
+                      <span className="text-[24px] leading-none" aria-hidden="true">
+                        {m.emoji}
+                      </span>
+                      <span className="min-w-0 truncate text-[16px] font-bold leading-tight">{m.name}</span>
                     </span>
-                    <span className="mt-xs block text-[16px] font-bold leading-tight">{m.name}</span>
-                    <span className="block text-[14px] font-semibold leading-snug text-ink-soft">{m.blurb}</span>
+                    <span className="clamp-2 mt-xs block text-[14px] font-semibold leading-snug text-ink-soft">{m.blurb}</span>
                     {m.key === 'notifications' && unread > 0 && (
                       <span className="absolute top-sm right-sm rounded-pill bg-r1 px-xs text-[12px] font-extrabold leading-[20px] text-white">{unread}</span>
                     )}

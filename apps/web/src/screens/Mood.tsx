@@ -1,12 +1,13 @@
 import { MOODS } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
 import { Button } from '../components/Button';
-import { WeekBars } from '../components/Charts';
+import { AreaLine, CalendarGrid, EmojiRow } from '../components/Charts';
+import { MoodFace } from '../components/MoodFace';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
-import { todayLocal } from '../lib/date';
+import { lastDays, shortDay, todayLocal } from '../lib/date';
 import { useLogs, useRefreshAll, useWellbeing } from '../lib/queries';
 
 const DAY = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -41,16 +42,13 @@ export function Mood() {
     <>
       <div className="transition-colors" style={{ background: mood.color, color: mood.text }}>
         <div className="safe-top mx-auto w-full max-w-[480px] px-md pb-lg pt-md">
-          <Link to="/wellbeing" className="inline-flex min-h-[44px] items-center gap-xs font-bold">
-            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M15 5l-7 7 7 7" />
-            </svg>
+          <BackLink to="/wellbeing" inherit>
             Wellbeing
-          </Link>
+          </BackLink>
           <h1 className="mt-sm text-center text-[30px]">How are you feeling today?</h1>
-          <p className="my-md text-center text-[96px] leading-none" aria-hidden="true">
-            {mood.emoji}
-          </p>
+          <div className="my-md flex justify-center">
+            <MoodFace value={mood.value} size={140} color="rgba(255,255,255,0.22)" face="var(--color-on-fill)" label={mood.name} />
+          </div>
           <p className="m-0 text-center text-[20px] font-extrabold">I am feeling {mood.name.toLowerCase()}</p>
           <div className="mt-md grid grid-cols-5 gap-xs" role="group" aria-label="Pick a mood">
             {MOODS.map((m) => (
@@ -62,18 +60,16 @@ export function Mood() {
                   setTouched(true);
                   setValue(m.value);
                 }}
-                className="toy flex min-h-[64px] flex-col items-center justify-center gap-xs rounded-tile bg-white/90 text-[12px] font-bold text-ink-fixed"
-                style={value === m.value ? { outline: '3px solid #4F3422', outlineOffset: 2 } : undefined}
+                className="toy flex min-h-[64px] flex-col items-center justify-center gap-xs rounded-tile bg-card text-[12px] font-bold text-ink"
+                style={value === m.value ? { outline: '3px solid var(--color-on-fill)', outlineOffset: 2 } : undefined}
               >
-                <span className="text-[24px]" aria-hidden="true">
-                  {m.emoji}
-                </span>
+                <MoodFace value={m.value} size={28} />
                 {m.name}
               </button>
             ))}
           </div>
           {!why && (
-            <Button full className="mt-md" onClick={() => setWhy(true)}>
+            <Button full variant="light" className="mt-md" onClick={() => setWhy(true)}>
               {current ? `Update today (${MOODS.find((m) => m.value === current.value)?.name})` : 'Set mood'}
             </Button>
           )}
@@ -123,8 +119,48 @@ export function Mood() {
           </h2>
           <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
             {wb.data && (
-              <WeekBars values={wb.data.week.map((w) => w.mood)} max={5} color="#FACC15" labels={wb.data.week.map((w) => DAY[new Date(`${w.date}T00:00:00`).getDay()] ?? '')} label="Mood by day this week" />
+              <>
+                <AreaLine values={wb.data.week.map((w) => w.mood)} max={5} min={1} color="var(--color-r3)" label="Mood by day this week" height={120} />
+                <div className="mt-sm">
+                  <EmojiRow
+                    items={wb.data.week.map((w) => {
+                      const m = w.mood === null ? null : (MOODS.find((x) => x.value === w.mood) ?? null);
+                      return { label: DAY[new Date(`${w.date}T00:00:00`).getDay()] ?? '', emoji: m?.emoji ?? null, color: m?.color ?? null, mood: m?.value ?? null };
+                    })}
+                  />
+                </div>
+              </>
             )}
+          </div>
+        </section>
+
+        <section className="mt-lg" aria-labelledby="thirty-heading">
+          <h2 id="thirty-heading" className="text-[24px]">
+            Last 30 days
+          </h2>
+          <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
+            {(() => {
+              const days = lastDays(30);
+              const byDay = new Map((logs.data?.logs ?? []).map((l) => [l.date, l.value]));
+              return <AreaLine values={days.map((d) => byDay.get(d) ?? null)} max={5} min={1} color="var(--color-r3)" labels={days.map(shortDay)} height={140} label="Mood over the last thirty days" />;
+            })()}
+          </div>
+        </section>
+
+        <section className="mt-lg" aria-labelledby="month-heading">
+          <h2 id="month-heading" className="text-[24px]">
+            This month
+          </h2>
+          <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
+            <CalendarGrid
+              month={today.slice(0, 7)}
+              today={today}
+              marks={Object.fromEntries((logs.data?.logs ?? []).map((l) => {
+                const m = MOODS.find((x) => x.value === Math.round(l.value)) ?? MOODS[2]!;
+                return [l.date, { color: m.color, mood: m.value }];
+              }))}
+              label="Mood by day this month"
+            />
           </div>
         </section>
 
@@ -138,9 +174,7 @@ export function Mood() {
               const m = MOODS.find((x) => x.value === Math.round(l.value)) ?? MOODS[2]!;
               return (
                 <li key={l.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-                  <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill text-[20px]" style={{ background: m.color }} aria-hidden="true">
-                    {m.emoji}
-                  </span>
+                  <MoodFace value={m.value} size={40} />
                   <span className="min-w-0 flex-1">
                     <span className="block text-[16px] font-bold">{m.name}</span>
                     <span className="block truncate text-[14px] font-semibold text-ink-soft">

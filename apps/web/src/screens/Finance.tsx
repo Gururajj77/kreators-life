@@ -3,6 +3,8 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
+import { Donut, Legend, MultiLine } from '../components/Charts';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { Toggle } from '../components/Toggle';
@@ -34,12 +36,7 @@ export function Finance() {
   return (
     <Screen>
       <header className="pt-lg">
-        <Link to="/apps" className="inline-flex min-h-[44px] items-center gap-xs font-bold text-ink-soft">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
-          Apps
-        </Link>
+        <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Finance</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Money in, money out, who with, what is owed, what repeats, and your goals. Only you can see this.</p>
         {d && (
@@ -97,6 +94,7 @@ export function Finance() {
               <Stat label="platform points" value={d.platformPoints.toLocaleString()} tone="var(--tint-purple)" />
             </div>
             <MonthBars months={d.months} currency={d.currency} />
+            <CategoryDonut byCategory={d.byCategory} currency={d.currency} />
           </section>
 
           <section className="mt-lg" aria-labelledby="owed-heading">
@@ -265,22 +263,27 @@ function Stat({ label, value, tone }: { label: string; value: string; tone: stri
 
 function MonthBars({ months, currency }: { months: FinanceSummary['months']; currency: string }) {
   const max = Math.max(1, ...months.flatMap((m) => [m.incomeCents, m.expenseCents]));
+  const last = months.at(-1);
   return (
     <div className="mt-sm rounded-tile bg-card p-sm shadow-toy-soft">
-      <ul className="m-0 flex h-[120px] list-none items-end gap-xs p-0" aria-label="Income and expenses by month">
-        {months.map((m) => (
-          <li key={m.month} className="flex h-full flex-1 flex-col items-center justify-end gap-[4px]">
-            <div className="flex h-full w-full items-end justify-center gap-[3px]">
-              <div className="w-[40%] rounded-t-[6px] bg-r4" style={{ height: `${Math.max(2, (m.incomeCents / max) * 100)}%` }} title={`In ${money(m.incomeCents, currency)}`} />
-              <div className="w-[40%] rounded-t-[6px] bg-r2" style={{ height: `${Math.max(2, (m.expenseCents / max) * 100)}%` }} title={`Out ${money(m.expenseCents, currency)}`} />
-            </div>
-            <span className="text-[12px] font-bold text-ink-soft">{shortMonth(m.month)}</span>
-          </li>
-        ))}
-      </ul>
-      <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
-        <span className="inline-block size-[10px] rounded-pill bg-r4" aria-hidden="true" /> in <span className="ml-xs inline-block size-[10px] rounded-pill bg-r2" aria-hidden="true" /> out
-      </p>
+      <MultiLine
+        series={[
+          { values: months.map((m) => m.incomeCents), color: 'var(--color-r4)', label: 'in' },
+          { values: months.map((m) => m.expenseCents), color: 'var(--color-r2)', label: 'out' },
+        ]}
+        max={max}
+        labels={months.map((m) => shortMonth(m.month))}
+        allLabels
+        height={160}
+        yFormat={(v) => money(Math.round(v / 100) * 100, currency)}
+        empty="No money logged in the last six months"
+        label="Income and expenses by month"
+      />
+      {last && (
+        <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+          {shortMonth(last.month)}: {money(last.incomeCents, currency)} in, {money(last.expenseCents, currency)} out.
+        </p>
+      )}
     </div>
   );
 }
@@ -295,7 +298,7 @@ function TxRow({ t, currency, onChange }: { t: FinanceTransaction; currency: str
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="flex items-center gap-sm">
-        <span className={`flex size-[40px] shrink-0 items-center justify-center rounded-pill text-[16px] font-extrabold ${t.kind === 'income' ? 'bg-r4 text-ink-fixed' : 'bg-r2 text-ink-fixed'}`} aria-hidden="true">
+        <span className={`flex size-[40px] shrink-0 items-center justify-center rounded-pill text-[16px] font-extrabold ${t.kind === 'income' ? 'bg-r4 text-on-fill' : 'bg-r2 text-on-fill'}`} aria-hidden="true">
           {sign}
         </span>
         <span className="min-w-0 flex-1">
@@ -317,13 +320,13 @@ function TxRow({ t, currency, onChange }: { t: FinanceTransaction; currency: str
         )}
       </div>
       {t.splits.length > 0 && (
-        <ul className="mt-xs flex list-none flex-col gap-[4px] p-0 m-0 pl-xl">
+        <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0 pl-xl">
           {t.splits.map((s, i) => (
             <li key={`${s.name}-${i}`} className="flex items-center justify-between gap-xs text-[14px] font-semibold text-ink-soft">
               <span>
                 {s.name}’s share {money(s.cents, t.currency || currency)}
               </span>
-              <button type="button" onClick={() => paySplit.mutate(i)} disabled={paySplit.isPending} className={`toy toy-soft min-h-[32px] rounded-pill px-sm text-[12px] font-extrabold ${s.status === 'paid' ? 'bg-r4 text-ink-fixed' : 'bg-paper'}`}>
+              <button type="button" onClick={() => paySplit.mutate(i)} disabled={paySplit.isPending} className={`toy toy-soft min-h-[32px] rounded-pill px-sm text-[12px] font-extrabold ${s.status === 'paid' ? 'bg-r4 text-on-fill' : 'bg-paper'}`}>
                 {s.status === 'paid' ? 'Paid' : 'Mark paid'}
               </button>
             </li>
@@ -443,7 +446,7 @@ function InvoiceRow({ inv, onChange }: { inv: Invoice; onChange: () => void }) {
   const del = useMutation({ mutationFn: () => api.deleteInvoice(inv.id), onSuccess: onChange });
   const [copied, setCopied] = useState(false);
   const link = `${window.location.origin}/i/${inv.token}`;
-  const tone = inv.status === 'paid' ? 'bg-r4 text-ink-fixed' : inv.status === 'sent' ? 'bg-r3 text-ink-fixed' : inv.status === 'void' ? 'bg-line text-ink' : 'bg-paper text-ink-soft';
+  const tone = inv.status === 'paid' ? 'bg-r4 text-on-fill' : inv.status === 'sent' ? 'bg-r3 text-ink-fixed' : inv.status === 'void' ? 'bg-line text-ink' : 'bg-paper text-ink-soft';
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="flex items-baseline justify-between gap-sm">
@@ -912,5 +915,32 @@ function BudgetSheet({ open, summary, onClose, onDone }: { open: boolean; summar
         </Button>
       </form>
     </Sheet>
+  );
+}
+
+const SLICE_COLORS = ['var(--color-r2)', 'var(--color-r6)', 'var(--color-r3)', 'var(--color-r4)', 'var(--color-r5)', 'var(--color-r1)', 'var(--color-r7)'];
+
+/** Where the month's money went, as the kit draws a share: a donut with a legend beside it. */
+function CategoryDonut({ byCategory, currency }: { byCategory: FinanceSummary['byCategory']; currency: string }) {
+  const expenses = byCategory.filter((c) => c.kind === 'expense' && c.cents > 0).sort((a, b) => b.cents - a.cents);
+  const rows = expenses.length > 0 ? expenses : byCategory.filter((c) => c.kind === 'income' && c.cents > 0).sort((a, b) => b.cents - a.cents);
+  const kind = expenses.length > 0 ? 'out' : 'in';
+  const top = rows.slice(0, 6);
+  const rest = rows.slice(6).reduce((s, c) => s + c.cents, 0);
+  const slices = [...top.map((c, i) => ({ value: c.cents, color: SLICE_COLORS[i % SLICE_COLORS.length] ?? 'var(--color-r2)', label: c.category })), ...(rest > 0 ? [{ value: rest, color: 'var(--color-line)', label: 'Everything else' }] : [])];
+  const total = slices.reduce((s, c) => s + c.value, 0);
+  return (
+    <div className="mt-sm flex items-center gap-md rounded-tile bg-card p-sm shadow-toy-soft">
+      <Donut segments={slices} size={132} stroke={20} label={`Money ${kind} by category this month`}>
+        <span className="flex flex-col items-center leading-none">
+          <span className="font-display text-[18px] font-extrabold">{money(total, currency)}</span>
+          <span className="mt-xs text-[12px] font-bold text-ink-soft">{kind}</span>
+        </span>
+      </Donut>
+      <div className="min-w-0 flex-1">
+        <p className="m-0 text-[14px] font-bold">{kind === 'out' ? 'Where it went' : 'Where it came from'}</p>
+        <div className="mt-xs">{slices.length > 0 ? <Legend items={slices.map((c) => ({ color: c.color, label: c.label, text: money(c.value, currency) }))} /> : <p className="m-0 text-[14px] font-semibold text-ink-soft">Nothing this month yet.</p>}</div>
+      </div>
+    </div>
   );
 }

@@ -14,11 +14,12 @@ import {
 import { useMutation } from '@tanstack/react-query';
 import { AnimatePresence } from 'motion/react';
 import { useEffect, useState } from 'react';
-import { Link, Navigate, useParams } from 'react-router';
+import { Navigate, useParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { useCelebrate } from '../components/Celebration';
 import { EvolutionReveal } from '../components/EvolutionReveal';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { TaskRow } from '../components/TaskRow';
@@ -87,12 +88,9 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
     <>
       <div style={{ background: rel.color, color: rel.text }}>
         <div className="safe-top mx-auto w-full max-w-[480px] px-md pb-lg pt-md">
-          <Link to="/tower" className="inline-flex min-h-[44px] items-center gap-xs rounded-pill font-bold">
-            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M15 5l-7 7 7 7" />
-            </svg>
+          <BackLink to="/tower" inherit>
             Tower
-          </Link>
+          </BackLink>
           <p className="mt-sm m-0 text-[14px] font-bold">
             Floor {rel.floor} of 7, {rel.character}
           </p>
@@ -255,7 +253,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                   <li>
                     <details className="rounded-tile bg-card shadow-toy-soft">
                       <summary className="flex items-center gap-sm p-sm">
-                        <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-r4 font-display text-[14px] font-extrabold text-ink" aria-hidden="true">
+                        <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-r4 font-display text-[14px] font-extrabold text-on-fill" aria-hidden="true">
                           ✓
                         </span>
                         <span className="min-w-0 flex-1 text-[16px] font-bold">Done tasks {doneTasks.length}</span>

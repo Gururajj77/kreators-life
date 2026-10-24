@@ -6,6 +6,17 @@ import { ThemeToggle } from './ThemeToggle';
 
 const TABS = [
   {
+    to: '/home',
+    label: 'Home',
+    icon: (
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 11.5 12 4l9 7.5" />
+        <path d="M5.5 10v10h13V10" />
+        <path d="M10 20v-6h4v6" fill="currentColor" stroke="none" />
+      </svg>
+    ),
+  },
+  {
     to: '/today',
     label: 'Today',
     icon: (
@@ -91,7 +102,7 @@ export function TabBar() {
       <ThemeToggle floating className="md:hidden" />
       {/* Laptop: a sidebar on the left. */}
       <nav aria-label="Main" className="safe-top fixed inset-y-0 left-0 z-30 hidden w-[240px] flex-col border-r border-line bg-card px-sm py-md md:flex">
-        <Link to="/today" className="flex min-h-[44px] items-center gap-xs px-xs font-display text-[18px] font-extrabold">
+        <Link to="/home" className="flex min-h-[44px] items-center gap-xs px-xs font-display text-[18px] font-extrabold">
           <span className="flex items-end gap-[2px]" aria-hidden="true">
             {RELATIONSHIPS.slice(0, 3).map((r, i) => (
               <Avatar key={r.key} relationship={r.key} size={16 + i * 4} decorative still />

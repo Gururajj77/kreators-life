@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Button } from '../components/Button';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { Toggle } from '../components/Toggle';
@@ -20,17 +21,6 @@ function Err({ error, fallback = 'That did not work.' }: { error: unknown; fallb
     <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
       {errText(error, fallback)}
     </p>
-  );
-}
-
-function BackLink({ to, label }: { to: string; label: string }) {
-  return (
-    <Link to={to} className="inline-flex min-h-[44px] items-center gap-xs font-bold text-ink-soft">
-      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M15 5l-7 7 7 7" />
-      </svg>
-      {label}
-    </Link>
   );
 }
 
@@ -414,7 +404,7 @@ export function Campaign() {
     return (
       <Screen>
         <header className="pt-lg">
-          <BackLink to="/army" label="Army" />
+          <BackLink to="/army">Army</BackLink>
         </header>
         <p className="mt-md font-bold">{errText(q.error, 'That campaign is not yours or does not exist.')}</p>
       </Screen>
@@ -428,7 +418,7 @@ export function Campaign() {
   return (
     <Screen>
       <header className="pt-lg">
-        <BackLink to="/army" label="Army" />
+        <BackLink to="/army">Army</BackLink>
         <p className="m-0 text-[14px] font-bold text-ink-soft">
           {c.organizationName}, owned by {c.ownerName}
         </p>
@@ -445,7 +435,7 @@ export function Campaign() {
             const done = i < idx && c.status !== 'cancelled';
             const current = s === c.status;
             return (
-              <li key={s} aria-current={current ? 'step' : undefined} className={`rounded-pill px-xs text-[12px] font-extrabold leading-[24px] ${current ? 'bg-ink text-on-ink' : done ? 'bg-r4 text-ink-fixed' : 'bg-card text-ink-soft shadow-toy-soft'}`}>
+              <li key={s} aria-current={current ? 'step' : undefined} className={`rounded-pill px-xs text-[12px] font-extrabold leading-[24px] ${current ? 'bg-ink text-on-ink' : done ? 'bg-r4 text-on-fill' : 'bg-card text-ink-soft shadow-toy-soft'}`}>
                 {CAMPAIGN_STATUS_META[s]}
               </li>
             );

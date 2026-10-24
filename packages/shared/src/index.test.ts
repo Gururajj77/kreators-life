@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bountyPayout, feeBps, matchCircles, matchScore, money, rolloutBucket, slotsFor, timeLabel, zonedToUtc } from './index';
+import { bountyPayout, dressCodeFor, feeBps, greetingFor, nextWeek, matchCircles, matchScore, money, nudgeFor, rolloutBucket, slotsFor, timeLabel, zonedToUtc } from './index';
 
 describe('money', () => {
   it('fees use integer maths in basis points', () => {
@@ -93,5 +93,37 @@ describe('flags', () => {
     expect(rolloutBucket('user-1', 'club')).toBe(rolloutBucket('user-1', 'club'));
     expect(rolloutBucket('user-1', 'club')).toBeGreaterThanOrEqual(0);
     expect(rolloutBucket('user-1', 'club')).toBeLessThan(100);
+  });
+});
+
+describe('home', () => {
+  const base = { checkedIn: false, sparkDone: false, taskDone: false, tasksWaiting: 2, hasFloor: true, xpToday: 0, streak: 3, hour: 9 };
+  it('leads with the result and points at the one next box', () => {
+    expect(nudgeFor(base)).toMatchObject({ action: 'Check in', path: '/today' });
+    expect(nudgeFor({ ...base, checkedIn: true, xpToday: 10 })).toMatchObject({ lead: '+10 xp banked from the check-in.', action: 'Do the spark' });
+    expect(nudgeFor({ ...base, checkedIn: true, sparkDone: true, xpToday: 25 })).toMatchObject({ action: 'Tick a task', path: '/today' });
+    expect(nudgeFor({ ...base, checkedIn: true, sparkDone: true, taskDone: true, xpToday: 45 }).lead).toBe('All three done. +45 xp today.');
+  });
+  it('says what it will not work without', () => {
+    expect(nudgeFor({ ...base, checkedIn: true, sparkDone: true, hasFloor: false, xpToday: 25 })).toMatchObject({ action: 'Build a floor', path: '/tower' });
+    expect(nudgeFor({ ...base, checkedIn: true, sparkDone: true, tasksWaiting: 0, xpToday: 25 })).toMatchObject({ action: 'Add a task', path: '/tower' });
+    expect(nudgeFor({ ...base, hour: 21 }).action).toBe('Check in before midnight');
+  });
+  it('greets by the hour', () => {
+    expect(greetingFor(8)).toBe('Good morning');
+    expect(greetingFor(15)).toBe('Good afternoon');
+    expect(greetingFor(21)).toBe('Good evening');
+  });
+});
+
+describe('circles', () => {
+  it('tells each person what to wear and what the colours mean', () => {
+    expect(dressCodeFor('single')).toContain('something red');
+    expect(dressCodeFor('committed')).toContain('something white');
+    expect(dressCodeFor('private')).toContain('whatever you like');
+    expect(dressCodeFor(null)).toContain('red if you are single');
+  });
+  it('rolls a weekly circle to the same time one week on', () => {
+    expect(nextWeek('2026-11-04T13:30:00.000Z')).toBe('2026-11-11T13:30:00.000Z');
   });
 });

@@ -30,7 +30,7 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
       <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">Ready in {wait} min</span>
     ) : due ? (
       <span
-        className={`rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${due.overdue ? 'bg-r1 text-ink' : due.text === 'Today' ? 'bg-ink text-on-ink' : 'bg-paper text-ink-soft'}`}
+        className={`rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${due.overdue ? 'bg-r1 text-on-fill' : due.text === 'Today' ? 'bg-ink text-on-ink' : 'bg-paper text-ink-soft'}`}
       >
         {due.text}
       </span>
@@ -57,7 +57,7 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
         lockedMessage={wait > 0 ? `Ready in ${wait} ${wait === 1 ? 'minute' : 'minutes'}. Do it first, then tick it.` : null}
         badge={
           badge || timeChip ? (
-            <span className="flex flex-wrap justify-end gap-[4px]">
+            <span className="flex flex-wrap justify-end gap-xs">
               {timeChip}
               {badge}
             </span>

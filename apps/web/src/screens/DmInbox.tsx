@@ -1,8 +1,8 @@
 import type { DmRequest } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link } from 'react-router';
 import { Button } from '../components/Button';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
@@ -14,12 +14,7 @@ export function DmInbox() {
   return (
     <Screen>
       <header className="pt-lg">
-        <Link to="/shop" className="inline-flex min-h-[44px] items-center gap-xs font-bold text-ink-soft">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
-          Shop
-        </Link>
+        <BackLink to="/shop">Shop</BackLink>
         <h1 className="text-[30px]">Priority DMs</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Paid questions. Each one has a promised answer date; the buyer sees your reply in their purchases.</p>
       </header>

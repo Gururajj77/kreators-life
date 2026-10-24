@@ -26,7 +26,7 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
     onSuccess: async (r) => {
       setToken(r.token);
       await refresh();
-      nav(r.user?.onboardedAt ? (next ?? '/today') : '/vibe-check', { replace: true });
+      nav(r.user?.onboardedAt ? (next ?? '/home') : '/vibe-check', { replace: true });
     },
   });
   const field = 'mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]';
@@ -92,7 +92,7 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
         )}
       </p>
       <p className="mt-sm m-0 text-center text-[14px] font-semibold">
-        <Link to={hasSession ? (next ?? '/today') : '/start'} className="underline underline-offset-4">
+        <Link to={hasSession ? (next ?? '/home') : '/start'} className="underline underline-offset-4">
           {hasSession ? 'Back to the app' : 'Continue without an account'}
         </Link>
       </p>

@@ -41,6 +41,8 @@ import { rateLimit } from './ops';
 import { finance, publicInvoices } from './routes/finance';
 import { circles } from './routes/circles';
 import { life } from './routes/life';
+import { home } from './routes/home';
+import { demo } from './routes/demo';
 
 const app = new Hono<AppEnv>().basePath('/api');
 
@@ -110,6 +112,8 @@ app.route('/support', support);
 app.route('/finance', finance);
 app.route('/circles', circles);
 app.route('/life', life);
+app.route('/home', home);
+app.route('/demo', demo);
 app.route('/kyc', kyc);
 app.route('/studio', builder);
 

@@ -1,4 +1,5 @@
 import type {
+  HomeResponse,
   AdminFunnel,
   AdminKyc,
   AdminOrder,
@@ -23,6 +24,7 @@ import type {
   Certificate,
   CircleEvent,
   CircleGroup,
+  CircleStatus,
   ContentItem,
   Customer,
   DmAutomation,
@@ -174,6 +176,7 @@ export const api = {
   removePortfolio: (id: string) => del<{ ok: true }>(`/me/portfolio/${id}`),
   setModule: (key: string, on: boolean) => patch<{ modules: Record<string, boolean> }>('/me/modules', { key, on }),
   reset: () => post<{ ok: true }>('/me/reset'),
+  demoSeed: (date: string) => post<{ ok: true; xp: number; rows: number }>('/demo/seed', { date }),
 
   // onboarding and the tower
   onboard: (body: { answers: OnboardingAnswer[]; displayName?: string; focus?: string }) => post<OnboardingResponse>('/onboarding', body),
@@ -188,6 +191,7 @@ export const api = {
 
   // daily
   today: (date: string) => request<TodayResponse>(`/today?date=${date}`),
+  home: (date: string, hour: number) => request<HomeResponse>(`/home?date=${date}&hour=${hour}`),
   checkin: (date: string) => post<CheckinResponse>('/today/checkin', { date }),
   spark: (date: string) => post<{ awarded: number; relationship: RelationshipKey; alreadyDone: boolean }>('/today/spark', { date }),
 
@@ -400,8 +404,8 @@ export const api = {
 
   // circles and life
   circles: () => request<{ events: CircleEvent[]; groups: CircleGroup[]; city: string; area: string; interests: string[]; hasLocation: boolean; canCreate: boolean }>('/circles'),
-  createCircle: (body: { title: string; city: string; area?: string; startsAt: string; venueHint?: string; groupSize?: number }) => post<{ event: CircleEvent }>('/circles/events', body),
-  joinCircle: (id: string, note?: string) => post<{ ok: true }>(`/circles/events/${id}/join`, { note }),
+  createCircle: (body: { title: string; city: string; area?: string; startsAt: string; venueHint?: string; groupSize?: number; repeat?: 'none' | 'weekly' }) => post<{ event: CircleEvent }>('/circles/events', body),
+  joinCircle: (id: string, status: CircleStatus, note?: string) => post<{ ok: true; status: CircleStatus }>(`/circles/events/${id}/join`, { status, note }),
   leaveCircle: (id: string) => del<{ ok: true }>(`/circles/events/${id}/join`),
   matchCircle: (id: string) => post<{ groups: number; unmatched: number }>(`/circles/events/${id}/match`),
   circleGroup: (id: string) => request<{ group: CircleGroup; opensInMinutes: number }>(`/circles/groups/${id}`),

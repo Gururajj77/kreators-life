@@ -2,15 +2,16 @@ import type { Env } from './env';
 import { nowIso } from './db';
 import { runSequences } from './routes/growth';
 import { runRecurring } from './routes/finance';
-import { matchDueCircles } from './routes/circles';
+import { matchDueCircles, rollWeeklyCircles } from './routes/circles';
 import { fetchMetrics } from './social';
 
 /** Every fifteen minutes: sequence messages, then fresh numbers for posts and reward submissions where a platform lets us read them. */
-export async function runScheduled(env: Env): Promise<{ sequences: number; recurring: number; circles: number; content: number; submissions: number }> {
+export async function runScheduled(env: Env): Promise<{ sequences: number; recurring: number; circles: number; weekly: number; content: number; submissions: number }> {
   const db = env.DB;
   const sequences = await runSequences(db);
   const recurring = await runRecurring(db);
   const circles = await matchDueCircles(db);
+  const weekly = await rollWeeklyCircles(db);
   // Money orders nobody paid for within half an hour are closed so the product is buyable again.
   await db.prepare("UPDATE orders SET status = 'expired' WHERE status = 'pending' AND created_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-30 minutes')").run();
   let content = 0;
@@ -35,5 +36,5 @@ export async function runScheduled(env: Env): Promise<{ sequences: number; recur
     ]);
     submissions += 1;
   }
-  return { sequences, recurring, circles, content, submissions };
+  return { sequences, recurring, circles, weekly, content, submissions };
 }

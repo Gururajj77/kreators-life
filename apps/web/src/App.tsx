@@ -26,6 +26,7 @@ import { Finance } from './screens/Finance';
 import { DmInbox } from './screens/DmInbox';
 import { EventPage, Party } from './screens/Party';
 import { Help } from './screens/Help';
+import { Home as Dashboard } from './screens/Home';
 import { Inbox } from './screens/Inbox';
 import { Journal } from './screens/Journal';
 import { Leaderboard } from './screens/Leaderboard';
@@ -159,6 +160,7 @@ const router = createBrowserRouter([
   {
     element: <Shell />,
     children: [
+      { path: '/home', element: <Dashboard /> },
       { path: '/today', element: <Today /> },
       { path: '/tower', element: <Tower /> },
       { path: '/realm/:key', element: <Realm /> },
@@ -221,7 +223,6 @@ const router = createBrowserRouter([
     ],
   },
   // Old addresses keep working.
-  { path: '/home', element: <Navigate to="/today" replace /> },
   { path: '/resources', element: <Navigate to="/knowledge" replace /> },
   { path: '/resources/:id', element: <OldPath from="/resources" to="/knowledge" /> },
   { path: '/studio', element: <Navigate to="/shop" replace /> },

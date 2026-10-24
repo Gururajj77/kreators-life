@@ -1,8 +1,9 @@
 import type { CohortSession, CourseAssignment, Enrollment, Submission } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { useParams } from 'react-router';
 import { Button } from '../components/Button';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
@@ -145,7 +146,7 @@ export function Cohort() {
                     {fmtWhen(s.startsAt)} to {new Date(s.endsAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
-                {s.attended && <span className="shrink-0 rounded-pill bg-r4 px-xs text-[12px] font-extrabold leading-[20px] text-ink-fixed">You were here</span>}
+                {s.attended && <span className="shrink-0 rounded-pill bg-r4 px-xs text-[12px] font-extrabold leading-[20px] text-on-fill">You were here</span>}
               </div>
               <div className="mt-sm flex flex-wrap gap-xs">
                 {s.onlineUrl && (
@@ -429,11 +430,6 @@ function ScheduleSheet({ cohortId, open, onClose, onDone }: { cohortId: string; 
 
 function Back() {
   return (
-    <Link to="/school" className="inline-flex min-h-[44px] items-center gap-xs font-bold text-ink-soft">
-      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M15 5l-7 7 7 7" />
-      </svg>
-      School
-    </Link>
+    <BackLink to="/school">School</BackLink>
   );
 }

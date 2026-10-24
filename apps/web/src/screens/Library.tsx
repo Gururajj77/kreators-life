@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Button } from '../components/Button';
 import { CheckRow } from '../components/CheckRow';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
@@ -223,12 +224,7 @@ function Owned({ id }: { id: string }) {
   return (
     <Screen>
       <header className="pt-lg">
-        <Link to="/library" className="inline-flex min-h-[44px] items-center gap-xs font-bold text-ink-soft">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
-          My purchases
-        </Link>
+        <BackLink to="/library">My purchases</BackLink>
         {p && (
           <>
             <p className="m-0 text-[14px] font-bold text-ink-soft">

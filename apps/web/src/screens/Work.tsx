@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Button } from '../components/Button';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
@@ -99,7 +100,7 @@ export function Work() {
                     <span className="block truncate text-[16px] font-bold">{o.title}</span>
                     <span className="block text-[14px] font-semibold text-ink-soft">{o.organizationName}</span>
                   </span>
-                  {o.myApplication && <span className="shrink-0 rounded-pill bg-r4 px-xs text-[12px] font-extrabold leading-[20px] text-ink-fixed">Applied</span>}
+                  {o.myApplication && <span className="shrink-0 rounded-pill bg-r4 px-xs text-[12px] font-extrabold leading-[20px] text-on-fill">Applied</span>}
                 </span>
                 <Facts o={o} />
                 <Chips items={o.skillsRequired} />
@@ -508,11 +509,6 @@ function ApplicantCard({ a, onDecide, busy }: { a: Application; onDecide: (statu
 
 function Back() {
   return (
-    <Link to="/work" className="inline-flex min-h-[44px] items-center gap-xs font-bold text-ink-soft">
-      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M15 5l-7 7 7 7" />
-      </svg>
-      Work
-    </Link>
+    <BackLink to="/work">Work</BackLink>
   );
 }

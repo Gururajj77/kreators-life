@@ -1,11 +1,15 @@
 import { MOODS, STRESSORS, type JournalEntry } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
 import { Button } from '../components/Button';
+import { CalendarGrid } from '../components/Charts';
+import { Hero } from '../components/Hero';
+import { MoodFace } from '../components/MoodFace';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
+import { todayLocal } from '../lib/date';
 import { useJournal, useRefreshAll } from '../lib/queries';
 
 export function Journal() {
@@ -18,24 +22,42 @@ export function Journal() {
   return (
     <Screen>
       <header className="pt-lg">
-        <Link to="/wellbeing" className="inline-flex min-h-[44px] items-center gap-xs font-bold text-ink-soft">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
-          Wellbeing
-        </Link>
+        <BackLink to="/wellbeing">Wellbeing</BackLink>
         <h1 className="text-[30px]">Journal</h1>
       </header>
 
       {stats && (
-        <div className="mt-md rounded-card bg-ink p-md text-on-ink">
+        <Hero color="var(--color-r5)" deep="var(--deep-self)" className="mt-md" character="self" mood={stats.thisMonth > 0 ? "happy" : "sleepy"}>
           <p className="m-0 font-display text-[60px] font-extrabold leading-none">{stats.total}</p>
           <p className="mt-xs m-0 text-[16px] font-bold">{stats.total === 1 ? 'entry' : 'entries'} so far, {stats.thisMonth} this month</p>
           <div className="mt-md flex gap-xs">
-            <span className="rounded-pill bg-r4 px-sm py-xs text-[14px] font-extrabold text-ink-fixed">{stats.positive} positive</span>
-            <span className="rounded-pill bg-r2 px-sm py-xs text-[14px] font-extrabold text-ink-fixed">{stats.negative} heavy</span>
+            <span className="inline-flex items-center gap-xs rounded-pill bg-card px-sm py-xs text-[14px] font-extrabold text-ink">
+              <span className="block size-[10px] rounded-pill bg-r4" aria-hidden="true" />
+              {stats.positive} positive
+            </span>
+            <span className="inline-flex items-center gap-xs rounded-pill bg-card px-sm py-xs text-[14px] font-extrabold text-ink">
+              <span className="block size-[10px] rounded-pill bg-r2" aria-hidden="true" />
+              {stats.negative} heavy
+            </span>
           </div>
-        </div>
+          <div className="mt-md rounded-tile bg-white/20 p-sm">
+            <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">This month</p>
+            <div className="mt-xs">
+              <CalendarGrid
+                onFill
+                month={todayLocal().slice(0, 7)}
+                today={todayLocal()}
+                marks={Object.fromEntries(
+                  entries.map((e) => {
+                    const m = e.emotion ? MOODS.find((x) => x.value === e.emotion) : null;
+                    return [e.createdAt.slice(0, 10), { color: m?.color ?? 'var(--color-r4)', mood: m?.value }];
+                  }),
+                )}
+                label="Days with an entry this month"
+              />
+            </div>
+          </div>
+        </Hero>
       )}
       <Button full size="lg" className="mt-md" onClick={() => setEditing('new')}>
         New entry
@@ -52,9 +74,13 @@ export function Journal() {
             return (
               <li key={e.id}>
                 <button type="button" onClick={() => setEditing(e)} className="toy toy-soft flex w-full items-start gap-sm rounded-tile bg-card p-sm text-left">
-                  <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill text-[20px]" style={{ background: m?.color ?? 'var(--color-line)' }} aria-hidden="true">
-                    {m?.emoji ?? '📝'}
-                  </span>
+                  {m ? (
+                    <MoodFace value={m.value} size={40} />
+                  ) : (
+                    <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-paper text-[20px]" aria-hidden="true">
+                      📝
+                    </span>
+                  )}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[16px] font-bold">{e.title}</span>
                     <span className="block text-[14px] font-semibold text-ink-soft">

@@ -4,46 +4,87 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
+import { Gauge, MultiLine, PillBars } from '../components/Charts';
+import { Hero } from '../components/Hero';
 import { Ring } from '../components/Ring';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
-import { useAuthed } from '../lib/queries';
+import { useAuthed, useWellbeing } from '../lib/queries';
 
 /** Five areas of a life on one screen, each part opening the place where you act on it. */
 export function Life() {
   const q = useAuthed(['life'], api.life);
   const d = q.data;
+  const wb = useWellbeing();
   const [minutes, setMinutes] = useState('30');
   const move = useMutation({ mutationFn: () => api.log('move', { value: Number(minutes) || 30 }), onSuccess: () => q.refetch() });
 
   return (
     <Screen>
       <header className="pt-lg">
-        <Link to="/apps" className="inline-flex min-h-[44px] items-center gap-xs font-bold text-ink-soft">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
-          Apps
-        </Link>
+        <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Life</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Physical, financial, emotional, mental and spiritual, scored from what you already log. Tap any part to go where you act on it. Only you see this.</p>
         {d && (
-          <div className="mt-md flex items-center gap-md rounded-card bg-card p-md shadow-toy-soft">
-            <Ring value={d.overall / 100} size={96} stroke={10} color="var(--color-ink)" track="color-mix(in oklab, var(--color-ink) 18%, transparent)" label={`Overall ${d.overall} of 100`}>
-              <span className="font-display text-[24px] font-extrabold">{d.overall}</span>
-            </Ring>
-            <div className="min-w-0">
-              <p className="m-0 text-[22px] font-extrabold leading-tight">{d.label}</p>
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">The average of the five areas. Parts with nothing logged do not count against you.</p>
+          <Hero color="var(--color-r4)" deep="var(--deep-lover_partner)" className="mt-md" character="lover_partner" mood={d.overall >= 60 ? "excited" : d.overall >= 40 ? "happy" : "sleepy"}>
+            <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">Life score</p>
+            <div className="mt-xs flex items-center gap-md">
+              <Gauge value={d.overall / 100} size={128} stroke={14} color="var(--color-on-fill)" track="rgba(255,255,255,0.3)" label={`Overall ${d.overall} of 100`}>
+                <span className="font-display text-[40px] font-extrabold">{d.overall}</span>
+              </Gauge>
+              <div className="min-w-0">
+                <p className="m-0 font-display text-[28px] font-extrabold leading-tight">{d.label}</p>
+                <p className="mt-xs m-0 text-[14px] font-semibold opacity-90">The average of the five areas. Parts with nothing logged do not count against you.</p>
+              </div>
             </div>
-          </div>
+          </Hero>
         )}
       </header>
+
+      {d && (
+        <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-label="The five areas this week">
+          <div className="flex items-baseline justify-between gap-sm">
+            <p className="m-0 text-[14px] font-bold">The five areas, this week</p>
+            <p className="m-0 text-[12px] font-bold text-ink-soft">
+              <span className="inline-block size-[10px] rounded-pill bg-r2" aria-hidden="true" /> down on last week
+            </p>
+          </div>
+          <div className="mt-sm">
+            <PillBars allLabels values={d.areas.map((a) => a.score)} max={100} labels={d.areas.map((a) => LIFE_AREAS[a.key].emoji)} colors={d.areas.map((a) => (Math.round(a.trend) < 0 ? 'var(--color-r2)' : RELATIONSHIP_BY_KEY[LIFE_AREAS[a.key].relationship].color))} color="var(--color-r4)" label="Score per area" height={120} />
+          </div>
+          <p className="mt-sm m-0 text-[12px] font-bold text-ink-soft">
+            {d.areas.filter((a) => Math.round(a.trend) !== 0).map((a) => `${LIFE_AREAS[a.key].name} ${Math.round(a.trend) > 0 ? 'up' : 'down'} ${Math.abs(Math.round(a.trend))}`).join(', ') || 'Same as last week so far.'}
+          </p>
+        </section>
+      )}
 
       {q.isError && (
         <p role="alert" className="span-all mt-md m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
           Could not load your dashboard. Try again in a moment.
         </p>
+      )}
+
+      {wb.data && (
+        <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-label="Mood, sleep and calm this week">
+          <p className="m-0 text-[14px] font-bold">This week, day by day</p>
+          <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Mood, sleep and calm as scores out of a hundred. The physical, emotional and mental areas are built from these.</p>
+          <div className="mt-sm">
+            <MultiLine
+              series={[
+                { values: wb.data.week.map((w) => (w.mood === null ? null : ((w.mood - 1) / 4) * 100)), color: 'var(--color-r3)', label: 'Mood' },
+                { values: wb.data.week.map((w) => (w.sleep === null ? null : (Math.max(4, Math.min(8, w.sleep)) - 4) * 25)), color: 'var(--color-r6)', label: 'Sleep' },
+                { values: wb.data.week.map((w) => (w.stress === null ? null : ((5 - w.stress) / 4) * 100)), color: 'var(--color-r2)', label: 'Calm' },
+              ]}
+              max={100}
+              labels={wb.data.week.map((w) => new Date(`${w.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' }))}
+              allLabels
+              height={160}
+              label="Mood, sleep and calm as scores out of a hundred for the last seven days"
+              empty="Log a mood, a night or a stress level and the lines appear."
+            />
+          </div>
+        </section>
       )}
 
       {d?.areas.map((a) => (
@@ -107,7 +148,7 @@ function AreaCard({ area }: { area: LifeArea }) {
                 </span>
                 <span className="w-[96px] shrink-0">
                   <span className="block text-right text-[12px] font-extrabold text-ink-soft">{p.score === null ? 'no data' : p.score}</span>
-                  <span className="mt-[4px] block h-[6px] overflow-hidden rounded-pill bg-line" aria-hidden="true">
+                  <span className="mt-xs block h-[6px] overflow-hidden rounded-pill bg-line" aria-hidden="true">
                     <span className="block h-full rounded-pill" style={{ width: `${p.score ?? 0}%`, background: rel.color }} />
                   </span>
                 </span>

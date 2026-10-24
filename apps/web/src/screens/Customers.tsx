@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api, publicApi } from '../lib/api';
@@ -24,7 +25,7 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 const KYC_PILL: Record<KycProfile['status'], { label: string; cls: string }> = {
   none: { label: 'not given', cls: 'bg-paper text-ink-soft' },
   pending: { label: 'waiting for review', cls: 'bg-r3 text-ink-fixed' },
-  approved: { label: 'approved', cls: 'bg-r4 text-ink-fixed' },
+  approved: { label: 'approved', cls: 'bg-r4 text-on-fill' },
   rejected: { label: 'needs another look', cls: 'bg-r1 text-white' },
 };
 
@@ -71,12 +72,7 @@ export function Customers() {
   return (
     <Screen>
       <header className="pt-lg">
-        <Link to="/shop" className="inline-flex min-h-[44px] items-center gap-xs font-bold text-ink-soft">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
-          Shop
-        </Link>
+        <BackLink to="/shop">Shop</BackLink>
         <h1 className="text-[30px]">Customers</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Everyone who bought from you, and what lands in your balance after fees.</p>
       </header>
@@ -122,7 +118,7 @@ export function Customers() {
           Payouts
         </h2>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          Payments: <span className={`rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${live ? 'bg-r4 text-ink-fixed' : 'bg-r3 text-ink-fixed'}`}>{live ? 'live' : 'test mode'}</span>. Points move the moment someone buys.{' '}
+          Payments: <span className={`rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${live ? 'bg-r4 text-on-fill' : 'bg-r3 text-ink-fixed'}`}>{live ? 'live' : 'test mode'}</span>. Points move the moment someone buys.{' '}
           {live ? 'Money is collected by the provider and paid out to the account below once it is approved.' : 'Money stays in test mode until a payment provider is connected.'} The platform keeps {p ? (p.feeBps / 100).toFixed(p.feeBps % 100 === 0 ? 0 : 2) : '…'}% of each sale.
         </p>
 

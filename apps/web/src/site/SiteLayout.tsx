@@ -9,7 +9,7 @@ import { ThemeToggle } from '../components/ThemeToggle';
 /** Where "Open the app" goes: into the tower for people with a session, to the start for everyone else. */
 export function useAppEntry(): string {
   const token = useSession((s) => s.token);
-  return token ? '/today' : '/start';
+  return token ? '/home' : '/start';
 }
 
 export function Logo() {

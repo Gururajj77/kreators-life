@@ -3,10 +3,12 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
-import { WeekBars } from '../components/Charts';
+import { AreaLine, Bubbles, PillBars } from '../components/Charts';
+import { Hero, HeroNumber } from '../components/Hero';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
-import { todayLocal } from '../lib/date';
+import { lastDays, shortDay, todayLocal } from '../lib/date';
 import { useLogs, useRefreshAll, useWellbeing } from '../lib/queries';
 
 const DAY = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -20,19 +22,24 @@ export function Stress() {
   const [level, setLevel] = useState(current?.value ?? 2);
   const [picked, setPicked] = useState<string[]>((current?.extra.stressors as string[] | undefined) ?? []);
   const save = useMutation({ mutationFn: () => api.log('stress', { date: today, value: level, extra: { stressors: picked } }), onSuccess: () => refresh() });
+  const latest = wb.data?.parts.find((p) => p.kind === 'stress')?.latest ?? null;
+  const counts = new Map<string, number>();
+  for (const l of logs.data?.logs ?? []) for (const s of (Array.isArray(l.extra.stressors) ? (l.extra.stressors as string[]) : [])) counts.set(s, (counts.get(s) ?? 0) + 1);
+  const BUBBLE_COLORS = ['var(--color-r2)', 'var(--color-r4)', 'var(--color-r6)', 'var(--color-r5)', 'var(--color-r1)', 'var(--color-r7)', 'var(--color-r3)', 'var(--color-ink)'];
 
   return (
     <Screen>
       <header className="pt-lg">
-        <Link to="/wellbeing" className="inline-flex min-h-[44px] items-center gap-xs font-bold text-ink-soft">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
-          Wellbeing
-        </Link>
+        <BackLink to="/wellbeing">Wellbeing</BackLink>
         <h1 className="text-[30px]">Stress</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Name the level and what is behind it. Naming it is half the work.</p>
       </header>
+
+      {wb.data && (
+        <Hero color="var(--color-r2)" deep="var(--deep-friendship)" className="mt-md" character="friendship" mood={latest !== null && latest >= 4 ? "sleepy" : "happy"}>
+          <HeroNumber value={latest === null ? '–' : Math.round(latest)} label={latest === null ? 'Nothing logged this week' : `${STRESS_LEVELS[Math.round(latest) - 1] ?? ''}, your latest`} />
+        </Hero>
+      )}
 
       <section className="mt-md rounded-card p-md" style={{ background: 'var(--tint-orange)' }} aria-labelledby="level-heading">
         <h2 id="level-heading" className="text-[24px]">
@@ -80,7 +87,31 @@ export function Stress() {
           This week
         </h2>
         <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
-          {wb.data && <WeekBars values={wb.data.week.map((w) => w.stress)} max={5} color="#FB8728" labels={wb.data.week.map((w) => DAY[new Date(`${w.date}T00:00:00`).getDay()] ?? '')} label="Stress by day" />}
+          {wb.data && <PillBars allLabels values={wb.data.week.map((w) => w.stress)} max={5} color="var(--color-r2)" labels={wb.data.week.map((w) => DAY[new Date(`${w.date}T00:00:00`).getDay()] ?? '')} label="Stress by day" />}
+        </div>
+      </section>
+
+      <section className="mt-lg" aria-labelledby="thirty-heading">
+        <h2 id="thirty-heading" className="text-[24px]">
+          Last 30 days
+        </h2>
+        <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
+          {(() => {
+            const days = lastDays(30);
+            const byDay = new Map((logs.data?.logs ?? []).map((l) => [l.date, l.value]));
+            return <AreaLine values={days.map((d) => byDay.get(d) ?? null)} max={5} min={1} color="var(--color-r2)" labels={days.map(shortDay)} height={140} label="Stress level over the last thirty days" />;
+          })()}
+          <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Lower is calmer. A line that climbs for a week is worth a word with someone.</p>
+        </div>
+      </section>
+
+      <section className="mt-lg" aria-labelledby="behind-heading">
+        <h2 id="behind-heading" className="text-[24px]">
+          What is behind it
+        </h2>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">How often each stressor came up in the last thirty days. The biggest bubble is the one to look at first.</p>
+        <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
+          <Bubbles items={[...counts.entries()].map(([label, value], i) => ({ label, value, color: BUBBLE_COLORS[i % BUBBLE_COLORS.length] ?? 'var(--color-r2)' }))} label="Stressors by how often they came up" />
         </div>
       </section>
 

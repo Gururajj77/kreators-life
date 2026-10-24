@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes, CSSProperties } from 'react';
 
-type Variant = 'primary' | 'outline' | 'ghost' | 'color';
+type Variant = 'primary' | 'outline' | 'ghost' | 'color' | 'light';
 
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
@@ -19,6 +19,8 @@ export function Button({ variant = 'primary', color, deep, size = 'md', full = f
     outline: 'toy toy-ink bg-card text-ink border-2 border-ink',
     ghost: 'bg-transparent text-ink-soft underline-offset-4 transition-colors hover:text-ink hover:underline',
     color: 'toy text-ink',
+    /* For buttons that sit on a coloured hero: a white pill with dark text, like the kit. */
+    light: 'toy bg-card text-ink',
   }[variant];
   const colorStyle = variant === 'color' ? ({ background: color, '--toy-color': deep ?? '#372315', ...style } as CSSProperties) : style;
 

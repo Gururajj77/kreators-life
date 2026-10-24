@@ -40,7 +40,7 @@ export function Welcome() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (token && me.data?.user.onboardedAt) return <Navigate to="/today" replace />;
+  if (token && me.data?.user.onboardedAt) return <Navigate to="/home" replace />;
   const resuming = Boolean(token && me.data && !me.data.user.onboardedAt);
 
   const start = async () => {

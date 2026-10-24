@@ -54,7 +54,7 @@ export function Community() {
         {posts.map((p) => (
           <li key={p.id} className={`rounded-card bg-card p-md shadow-toy-soft ${p.hidden ? 'opacity-60' : ''}`}>
             <div className="flex items-center gap-sm">
-              <span className="flex size-[40px] items-center justify-center rounded-pill bg-r2 font-display text-[16px] font-extrabold text-ink-fixed" aria-hidden="true">
+              <span className="flex size-[40px] items-center justify-center rounded-pill bg-r2 font-display text-[16px] font-extrabold text-on-fill" aria-hidden="true">
                 {p.authorName.slice(0, 1).toUpperCase()}
               </span>
               <span className="min-w-0 flex-1">

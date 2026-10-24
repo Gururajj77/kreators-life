@@ -384,8 +384,8 @@ admin.post('/listings', async (c) => {
     const city = str(body.city, 80);
     if (!city) return c.json({ error: 'which city?' }, 400);
     await db
-      .prepare('INSERT INTO circle_events (id, title, city, area, starts_at, venue_hint, group_size, status, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, title, city, str(body.area, 80), start.toISOString(), str(body.venueHint, 200), num(body.groupSize, 5, 3, 8) ?? 5, publish ? 'open' : 'cancelled', author, now)
+      .prepare('INSERT INTO circle_events (id, title, city, area, starts_at, venue_hint, group_size, status, repeat, series_id, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, title, city, str(body.area, 80), start.toISOString(), str(body.venueHint, 200), num(body.groupSize, 5, 3, 8) ?? 5, publish ? 'open' : 'cancelled', body.repeat === 'weekly' ? 'weekly' : 'none', id, author, now)
       .run();
   } else {
     return c.json({ error: 'campaigns are created by brands in Army, then made public from their page' }, 400);

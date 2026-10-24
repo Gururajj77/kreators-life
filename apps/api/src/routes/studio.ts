@@ -206,7 +206,9 @@ async function ownProduct(db: D1Database, ownerId: string, id: string): Promise<
 studio.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const [products, orders, counts, byProduct] = await Promise.all([
+  const days: string[] = [];
+  for (let i = 13; i >= 0; i -= 1) days.push(new Date(Date.now() - i * 86_400_000).toISOString().slice(0, 10));
+  const [products, orders, counts, byProduct, orderDays] = await Promise.all([
     db.prepare(`${PRODUCT_SELECT} WHERE p.owner_id = ? ORDER BY p.sort_order ASC, p.created_at DESC`).bind(user.id).all<ProductRow>(),
     db.prepare(`${ORDER_SELECT} WHERE o.owner_id = ? ORDER BY o.created_at DESC LIMIT 20`).bind(user.id).all<OrderRow>(),
     db
@@ -228,7 +230,9 @@ studio.get('/', async (c) => {
       .prepare(`SELECT p.id, p.title, COUNT(o.id) AS orders, COALESCE(SUM(o.points),0) AS points FROM products p LEFT JOIN orders o ON o.product_id = p.id AND o.status IN ('paid','test') WHERE p.owner_id = ? GROUP BY p.id ORDER BY orders DESC LIMIT 10`)
       .bind(user.id)
       .all<{ id: string; title: string; orders: number; points: number }>(),
+    db.prepare("SELECT substr(created_at, 1, 10) AS d, COUNT(*) AS n FROM orders WHERE owner_id = ? AND status IN ('paid','test') AND created_at >= ? GROUP BY d").bind(user.id, `${days[0]}T00:00:00`).all<{ d: string; n: number }>(),
   ]);
+  const ordersByDay = new Map(orderDays.results.map((r) => [r.d, r.n]));
   const analytics: StudioAnalytics = {
     views: counts?.views ?? 0,
     clicks: counts?.clicks ?? 0,
@@ -241,6 +245,7 @@ studio.get('/', async (c) => {
     attributed: counts?.attributed ?? 0,
     direct: (counts?.orders ?? 0) - (counts?.attributed ?? 0),
     byProduct: byProduct.results.map((r) => ({ productId: r.id, title: r.title, orders: r.orders, points: r.points })),
+    days: days.map((d) => ({ date: d, orders: ordersByDay.get(d) ?? 0 })),
   };
   return c.json({ products: products.results.map((r) => toProduct(r)), orders: orders.results.map(toOrder), analytics, handle: user.handle, referralCode: user.referral_code });
 });

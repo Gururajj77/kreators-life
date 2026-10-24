@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router';
 import { Button } from '../components/Button';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { captureRef, useSession } from '../lib/store';
@@ -23,12 +24,7 @@ export function Public() {
   return (
     <Screen tabs={false}>
       <header className="pt-lg">
-        <Link to={token ? '/apps' : '/'} className="inline-flex min-h-[44px] items-center gap-xs font-bold text-ink-soft">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
-          Kreators Life
-        </Link>
+        <BackLink to={token ? '/apps' : '/'}>Kreators Life</BackLink>
       </header>
       {q.isError && (
         <div className="mt-md rounded-card bg-card p-md text-center shadow-toy-soft">
@@ -41,7 +37,7 @@ export function Public() {
             {d.avatarUrl ? (
               <img src={d.avatarUrl} alt="" width={64} height={64} className="size-[64px] rounded-pill object-cover" />
             ) : (
-              <span className="flex size-[64px] items-center justify-center rounded-pill bg-r2 font-display text-[30px] font-extrabold text-ink-fixed" aria-hidden="true">
+              <span className="flex size-[64px] items-center justify-center rounded-pill bg-r2 font-display text-[30px] font-extrabold text-on-fill" aria-hidden="true">
                 {d.name.slice(0, 1).toUpperCase()}
               </span>
             )}
@@ -74,11 +70,11 @@ export function Public() {
               </ul>
             )}
             {token ? (
-              <Button variant={d.following ? 'outline' : 'primary'} className={`mt-md ${d.following ? '' : 'bg-r2 text-ink-fixed'}`} onClick={() => follow.mutate()} disabled={follow.isPending}>
+              <Button variant={d.following ? 'outline' : 'primary'} className={`mt-md ${d.following ? '' : 'bg-r2 text-on-fill'}`} onClick={() => follow.mutate()} disabled={follow.isPending}>
                 {d.following ? 'Following' : 'Follow'}
               </Button>
             ) : (
-              <Link to="/" className="toy mt-md inline-flex min-h-[48px] items-center rounded-pill bg-r2 px-md font-bold text-ink-fixed">
+              <Link to="/" className="toy mt-md inline-flex min-h-[48px] items-center rounded-pill bg-r2 px-md font-bold text-on-fill">
                 Join to follow
               </Link>
             )}

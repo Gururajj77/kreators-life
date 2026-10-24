@@ -16,6 +16,9 @@
   --color-ink-mute: var(--ink-mute);
   --color-ink-fixed: #4f3422; /* always brown, for text on colored fills */
   --color-on-ink: var(--on-ink);
+  /* On a solid colour fill the foreground is white, in both modes. Yellow is the one fill that takes brown. */
+  --color-on-fill: #ffffff;
+  --color-on-yellow: #4f3422;
   --color-paper: var(--paper);
   --color-card: var(--card);
   --color-line: var(--line);
@@ -36,9 +39,10 @@
   --radius-tile: 24px;
   --radius-pill: 999px;
 
-  /* The kit's soft shadow levels, used for resting cards. */
-  --shadow-toy: 0 8px 16px color-mix(in oklab, var(--color-shadow) 10%, transparent);
-  --shadow-toy-soft: 0 4px 8px color-mix(in oklab, var(--color-shadow) 5%, transparent), 0 1px 2px color-mix(in oklab, var(--color-shadow) 4%, transparent);
+  /* Resting cards: a hairline edge so the card reads on any paper, plus a soft drop.
+     The edge and the two shade stops live on :root so dark mode can turn them up. */
+  --shadow-toy: 0 0 0 1px var(--edge), 0 8px 16px var(--shade-2);
+  --shadow-toy-soft: 0 0 0 1px var(--edge), 0 2px 4px var(--shade-1), 0 10px 24px -8px var(--shade-2);
 }
 
 /* Light: the kit's light mode. */
@@ -52,6 +56,9 @@
   --card: #ffffff;
   --line: #e8ddd9; /* Mindful Brown 20 */
   --shadow: #161513;
+  --edge: rgba(79, 52, 34, 0.1);
+  --shade-1: rgba(22, 21, 19, 0.06);
+  --shade-2: rgba(22, 21, 19, 0.14);
   --tint-red: #ffe4e6;
   --tint-orange: #ffedd5;
   --tint-yellow: #fef9c3;
@@ -89,6 +96,9 @@
     --card: #372315; /* Mindful Brown 90 */
     --line: #4f3422; /* Mindful Brown 80 */
     --shadow: #000000;
+    --edge: rgba(255, 255, 255, 0.1);
+    --shade-1: rgba(0, 0, 0, 0.35);
+    --shade-2: rgba(0, 0, 0, 0.55);
     --tint-red: #4c0519;
     --tint-orange: #431407;
     --tint-yellow: #422006;
@@ -122,6 +132,9 @@
   --card: #372315;
   --line: #4f3422;
   --shadow: #000000;
+  --edge: rgba(255, 255, 255, 0.1);
+  --shade-1: rgba(0, 0, 0, 0.35);
+  --shade-2: rgba(0, 0, 0, 0.55);
   --tint-red: #4c0519;
   --tint-orange: #431407;
   --tint-yellow: #422006;
@@ -245,6 +258,7 @@
 .toy {
   --toy-color: var(--color-shadow);
   box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--toy-color) 14%, transparent),
     0 4px 8px color-mix(in oklab, var(--toy-color) 22%, transparent),
     0 1px 2px color-mix(in oklab, var(--toy-color) 12%, transparent);
   transition:
@@ -258,16 +272,16 @@
 }
 .toy-soft {
   --toy-color: var(--color-shadow);
-  box-shadow:
-    0 4px 8px color-mix(in oklab, var(--toy-color) 6%, transparent),
-    0 1px 2px color-mix(in oklab, var(--toy-color) 5%, transparent);
+  box-shadow: var(--shadow-toy-soft);
 }
 .toy-flat {
   box-shadow: none;
 }
 .toy:active:not(:disabled) {
   transform: translateY(2px);
-  box-shadow: 0 1px 2px color-mix(in oklab, var(--toy-color) 12%, transparent);
+  box-shadow:
+    0 0 0 1px var(--edge),
+    0 1px 2px color-mix(in oklab, var(--toy-color) 12%, transparent);
 }
 .toy-flat:active:not(:disabled) {
   transform: translateY(1px);
@@ -282,8 +296,9 @@
   }
   .toy-soft:hover:not(:disabled) {
     box-shadow:
-      0 8px 16px color-mix(in oklab, var(--toy-color) 10%, transparent),
-      0 2px 4px color-mix(in oklab, var(--toy-color) 6%, transparent);
+      0 0 0 1px var(--edge),
+      0 4px 8px var(--shade-1),
+      0 16px 32px -8px var(--shade-2);
   }
   .toy-flat:hover:not(:disabled) {
     transform: none;
@@ -370,4 +385,12 @@ details[open] .chev {
 }
 summary {
   transition: background-color 120ms ease;
+}
+
+/* Multi-line text that must stay short on a tile. */
+.clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }

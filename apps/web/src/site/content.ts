@@ -78,8 +78,8 @@ export const FEATURES: Record<string, FeatureCopy> = {
   },
   circles: {
     tagline: 'Meet five strangers who fit.',
-    pitch: 'Sign up for a circle in your city. Two days before, you are seated at a table of people nearby whose interests complement yours: the writer with the editor, the one on camera with the one behind it. Everyone has an alias. The group chat opens a day before you meet, and names only appear when someone chooses to reveal.',
-    steps: ['Pick your interests and your city.', 'Join a circle. Tables are set two days before.', 'Plan the meetup in the chat, meet, then reveal if you like.'],
+    pitch: 'Circles run every week in your city. Join this week\'s and, two days before, you are seated at a table of people nearby whose interests complement yours: the writer with the editor, the one on camera with the one behind it. Everyone has an alias. Show up in red if you are single, white if you are committed, so the table reads itself. The group chat opens a day before you meet, and names only appear when someone chooses to reveal.',
+    steps: ['Pick your interests and your city.', 'Join this week\'s circle. Tables are set two days before.', 'Wear red if single, white if committed. Plan in the chat, meet, then reveal if you like.'],
     relationships: ['friendship', 'servant_leader'],
     listing: 'circle',
   },

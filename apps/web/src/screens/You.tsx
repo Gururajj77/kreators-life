@@ -14,6 +14,7 @@ import { useTheme, type ThemeMode } from '../lib/theme';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
+import { todayLocal } from '../lib/date';
 import { useMe, useRefreshAll } from '../lib/queries';
 
 
@@ -80,6 +81,13 @@ function YouView({ data }: { data: MeResponse }) {
       refresh();
       setSaved(true);
       window.setTimeout(() => setSaved(false), 2000);
+    },
+  });
+  const seed = useMutation({
+    mutationFn: () => api.demoSeed(todayLocal()),
+    onSuccess: async () => {
+      await refresh();
+      nav('/home');
     },
   });
   const reset = useMutation({
@@ -408,11 +416,16 @@ function YouView({ data }: { data: MeResponse }) {
             variant="outline"
             onClick={() => {
               guide.reset();
-              nav('/today');
+              nav('/home');
             }}
           >
             Show how it works again
           </Button>
+          {import.meta.env.DEV || window.location.hostname === 'localhost' ? (
+            <Button variant="outline" disabled={seed.isPending} onClick={() => seed.mutate()}>
+              {seed.isPending ? 'Filling' : seed.isError ? 'Not available here' : 'Fill with demo data'}
+            </Button>
+          ) : null}
           <Button
             variant="ghost"
             disabled={reset.isPending}
@@ -423,6 +436,7 @@ function YouView({ data }: { data: MeResponse }) {
             Erase everything
           </Button>
         </div>
+        {(import.meta.env.DEV || window.location.hostname === 'localhost') && <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Demo data is two weeks of check-ins, tasks, moods, sleep, stress, journal, money and orders, on this account only, so every chart has something to draw. Local builds only.</p>}
       </section>
     </Screen>
   );

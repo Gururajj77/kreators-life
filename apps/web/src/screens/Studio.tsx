@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '../components/Button';
+import { AreaLine, Donut, Legend, StatTile } from '../components/Charts';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
@@ -11,7 +12,7 @@ import { useSession } from '../lib/store';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const STATUS_PILL: Record<Order['status'], string> = {
-  paid: 'bg-r4 text-ink-fixed',
+  paid: 'bg-r4 text-on-fill',
   test: 'bg-paper text-ink-soft',
   pending: 'bg-r3 text-ink-fixed',
   refunded: 'bg-line text-ink',
@@ -58,31 +59,39 @@ export function Studio({ tab = 'home' }: { tab?: 'home' | 'page' | 'bookings' | 
 
       {tab === 'home' && d && (
         <>
-          <section className="mt-md grid grid-cols-3 gap-xs" aria-label="Numbers">
-            {[
-              ['page views', d.analytics.views],
-              ['followers', d.analytics.followers],
-              ['leads', d.analytics.leads],
-              ['orders', d.analytics.orders],
-              ['points earned', d.analytics.pointsEarned],
-              ['affiliate points', d.analytics.affiliatePoints],
-              ['sales via links', d.analytics.attributed],
-              ['profile direct', d.analytics.direct],
-            ].map(([label, value]) => (
-              <div key={String(label)} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <p className="m-0 font-display text-[24px] font-extrabold leading-none">{value}</p>
-                <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{label}</p>
+          <section className="span-all mt-md" aria-label="Numbers">
+            <div className="grid grid-cols-2 gap-xs md:grid-cols-4">
+              <StatTile label="orders" value={d.analytics.orders} hint={`${d.analytics.attributed} via links, ${d.analytics.direct} from your page`} tone="var(--tint-purple)" to="/shop/content" />
+              <StatTile label="points earned" value={d.analytics.pointsEarned.toLocaleString()} hint={d.analytics.centsEarned > 0 ? `plus ${(d.analytics.centsEarned / 100).toFixed(2)} in money orders` : d.analytics.affiliatePoints > 0 ? `${d.analytics.affiliatePoints} from referrals` : 'from sales'} tone="var(--tint-green)" to="/shop/customers" />
+              <StatTile label="page views" value={d.analytics.views} hint={`${d.analytics.clicks} link clicks`} to="/shop/page" />
+              <StatTile label="followers" value={d.analytics.followers} hint={`${d.analytics.leads} ${d.analytics.leads === 1 ? 'lead' : 'leads'}`} to="/shop/audience" />
+            </div>
+            <div className="mt-xs rounded-card bg-card p-md shadow-toy-soft">
+              <div className="flex items-baseline justify-between gap-sm">
+                <p className="m-0 text-[14px] font-bold">Orders, last 14 days</p>
+                <Link to="/shop/content" className="text-[12px] font-bold text-ink-mute underline-offset-4 hover:underline">
+                  Which post made the sale
+                </Link>
               </div>
-            ))}
+              <div className="mt-sm">
+                <AreaLine values={d.analytics.days.map((x) => x.orders)} max={Math.max(3, ...d.analytics.days.map((x) => x.orders))} labels={d.analytics.days.map((x) => new Date(`${x.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' }))} color="var(--color-r6)" height={160} empty="No orders in the last two weeks" label="Orders per day for the last fourteen days" />
+              </div>
+            </div>
+            <div className="mt-xs flex items-center gap-md rounded-card bg-card p-md shadow-toy-soft">
+              <Donut segments={d.analytics.byProduct.filter((p) => p.orders > 0).slice(0, 6).map((p, i) => ({ value: p.orders, color: ['var(--color-r6)', 'var(--color-r2)', 'var(--color-r4)', 'var(--color-r3)', 'var(--color-r5)', 'var(--color-r1)'][i] ?? 'var(--color-r6)', label: p.title }))} size={132} stroke={20} label="Orders by product">
+                <span className="flex flex-col items-center leading-none">
+                  <span className="font-display text-[24px] font-extrabold">{d.analytics.orders}</span>
+                  <span className="mt-xs text-[12px] font-bold text-ink-soft">orders</span>
+                </span>
+              </Donut>
+              <div className="min-w-0 flex-1">
+                <p className="m-0 text-[14px] font-bold">What sells</p>
+                <div className="mt-xs">
+                  {d.analytics.byProduct.some((p) => p.orders > 0) ? <Legend items={d.analytics.byProduct.filter((p) => p.orders > 0).slice(0, 6).map((p, i) => ({ color: ['var(--color-r6)', 'var(--color-r2)', 'var(--color-r4)', 'var(--color-r3)', 'var(--color-r5)', 'var(--color-r1)'][i] ?? 'var(--color-r6)', label: p.title, text: `${p.orders}` }))} /> : <p className="m-0 text-[14px] font-semibold text-ink-soft">No orders yet. Share a product link.</p>}
+                </div>
+              </div>
+            </div>
           </section>
-          {d.analytics.centsEarned > 0 && <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Plus {(d.analytics.centsEarned / 100).toFixed(2)} in test-mode money orders.</p>}
-          <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
-            See which post each sale came from under{' '}
-            <Link to="/shop/content" className="underline underline-offset-4">
-              Content
-            </Link>
-            .
-          </p>
 
           <section className="mt-lg" aria-labelledby="products-heading">
             <div className="flex items-center justify-between gap-sm">

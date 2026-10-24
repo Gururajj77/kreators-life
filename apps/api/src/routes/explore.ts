@@ -124,15 +124,15 @@ export async function listingsFor(db: D1Database, o: Opts): Promise<Listing[]> {
   if (types.includes('circle')) {
     const rows = await db
       .prepare(`SELECT e.*, (SELECT COUNT(*) FROM circle_signups s WHERE s.event_id = e.id) AS signups FROM circle_events e WHERE 1=1 ${o.includeHidden ? '' : `AND e.status = 'open' AND e.starts_at >= '${now}'`}${idClause('e.id')} ORDER BY e.starts_at LIMIT 200`)
-      .all<{ id: string; title: string; city: string; area: string; starts_at: string; venue_hint: string; group_size: number; status: string; created_at: string; signups: number }>();
+      .all<{ id: string; title: string; city: string; area: string; starts_at: string; venue_hint: string; group_size: number; status: string; repeat: string; created_at: string; signups: number }>();
     for (const r of rows.results) {
       out.push({
         type: 'circle',
         id: r.id,
         title: r.title,
         by: [r.area, r.city].filter(Boolean).join(', '),
-        blurb: `Anonymous group of ${r.group_size}, matched by interests that fit. Names stay hidden; the chat opens a day before.${r.venue_hint ? ` ${r.venue_hint}` : ''}`,
-        facts: [new Date(r.starts_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), `${r.signups} signed up`, `tables of ${r.group_size}`],
+        blurb: `Anonymous group of ${r.group_size}, matched by interests that fit. Red if single, white if committed. Names stay hidden; the chat opens a day before.${r.venue_hint ? ` ${r.venue_hint}` : ''}`,
+        facts: [new Date(r.starts_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), ...(r.repeat === 'weekly' ? ['every week'] : []), `${r.signups} signed up`, `tables of ${r.group_size}`],
         path: '/circles',
         featured: false,
         live: r.status === 'open' && r.starts_at >= now,

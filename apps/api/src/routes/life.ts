@@ -14,9 +14,11 @@ const mean = (parts: LifePart[]) => {
 
 interface Log { kind: string; date: string; value: number; extra: string }
 
-life.get('/', async (c) => {
-  const db = c.env.DB;
-  const user = c.get('user');
+life.get('/', async (c) => c.json(await lifeSummary(c.env.DB, c.get('user').id)));
+
+/** The five-area picture for one person. Home shows the scores; Life shows the parts. */
+export async function lifeSummary(db: D1Database, userId: string): Promise<LifeSummary> {
+  const user = { id: userId };
   const today = new Date().toISOString().slice(0, 10);
   const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
   const since14 = daysAgo(14);
@@ -150,6 +152,5 @@ life.get('/', async (c) => {
     { key: 'spiritual', score: mean(spiritual), trend: mean(spiritual) - spiritualBefore, parts: spiritual },
   ];
   const overall = clamp(areas.reduce((a, x) => a + x.score, 0) / areas.length);
-  const summary: LifeSummary = { date: today, overall, label: wellbeingLabel(overall), areas };
-  return c.json(summary);
-});
+  return { date: today, overall, label: wellbeingLabel(overall), areas };
+}

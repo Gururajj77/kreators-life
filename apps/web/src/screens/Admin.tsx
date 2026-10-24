@@ -34,6 +34,7 @@ import {
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { Toggle } from '../components/Toggle';
@@ -45,7 +46,7 @@ const KEY_STORE = 'kreators.adminKey';
 const PERMISSION_NAMES: Record<Permission, string> = { talent: 'Talent', cohorts: 'Cohorts', events: 'Events', finance: 'Finance', moderation: 'Moderation', support: 'Support', review: 'Review', mentor: 'Mentor' };
 type Tab = 'people' | 'flags' | 'listings' | 'orders' | 'webhooks' | 'kyc' | 'ops' | 'redemptions' | 'audit';
 const ORDER_STATUSES = ['', 'pending', 'paid', 'test', 'failed', 'refunded', 'expired'] as const;
-const statusTone = (s: string) => (s === 'paid' || s === 'test' ? 'bg-r4 text-ink-fixed' : s === 'pending' ? 'bg-r3 text-ink-fixed' : s === 'refunded' || s === 'failed' ? 'bg-r1 text-white' : 'bg-paper text-ink-soft');
+const statusTone = (s: string) => (s === 'paid' || s === 'test' ? 'bg-r4 text-on-fill' : s === 'pending' ? 'bg-r3 text-ink-fixed' : s === 'refunded' || s === 'failed' ? 'bg-r1 text-white' : 'bg-paper text-ink-soft');
 
 function readKey(): string {
   try {
@@ -204,12 +205,7 @@ export function Admin() {
   return (
     <Screen tabs={false}>
       <header className="pt-lg">
-        <Link to="/apps" className="inline-flex min-h-[44px] items-center gap-xs font-bold text-ink-soft">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
-          Apps
-        </Link>
+        <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Admin</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
           {sessionAdmin ? 'You are signed in as an admin, so no key is needed.' : 'Paste the admin key, or sign in with an admin account. Every change here is written to the audit log.'}
@@ -501,7 +497,7 @@ export function Admin() {
                     <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-mute">
                       {LISTING_TYPE_META[l.type].name}
                       {l.featured && <span className="ml-xs rounded-pill bg-r3 px-xs text-[11px] leading-[18px] text-ink-fixed">Featured</span>}
-                      <span className={`ml-xs rounded-pill px-xs text-[11px] leading-[18px] ${l.live ? 'bg-r4 text-ink-fixed' : 'bg-line text-ink'}`}>{l.live ? 'Live' : 'Hidden'}</span>
+                      <span className={`ml-xs rounded-pill px-xs text-[11px] leading-[18px] ${l.live ? 'bg-r4 text-on-fill' : 'bg-line text-ink'}`}>{l.live ? 'Live' : 'Hidden'}</span>
                     </p>
                     <p className="m-0 text-[16px] font-bold">{l.title}</p>
                     <p className="m-0 text-[14px] font-semibold text-ink-soft">
@@ -703,6 +699,7 @@ export function Admin() {
                         <Label text="Venue hint">
                           <input value={String(form.venueHint ?? '')} onChange={(e) => setForm({ ...form, venueHint: e.target.value })} placeholder="A cafe near the metro; the table picks the exact one" className={field} />
                         </Label>
+                        <Toggle on={form.repeat === 'weekly'} onChange={(on) => setForm({ ...form, repeat: on ? 'weekly' : 'none' })} label="Every week at this time. The next one opens on its own once tables are set." />
                       </>
                     )}
                     {creating === 'tool' && (
@@ -1025,7 +1022,7 @@ export function Admin() {
                 {outbox?.map((m) => (
                   <li key={m.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
                     <p className="m-0 text-[14px] font-bold">
-                      {m.subject} <span className={`ml-xs rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${m.status === 'sent' ? 'bg-r4 text-ink-fixed' : m.status === 'failed' ? 'bg-r1 text-white' : 'bg-paper text-ink-soft'}`}>{m.status}</span>
+                      {m.subject} <span className={`ml-xs rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${m.status === 'sent' ? 'bg-r4 text-on-fill' : m.status === 'failed' ? 'bg-r1 text-white' : 'bg-paper text-ink-soft'}`}>{m.status}</span>
                     </p>
                     <p className="m-0 text-[12px] font-semibold text-ink-soft">
                       to {m.to}, {new Date(m.createdAt).toLocaleString()}
