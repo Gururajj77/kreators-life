@@ -9,30 +9,140 @@
   --spacing-xl: 64px;
   --spacing-2xl: 120px;
 
-  --color-ink: #2b1d3a;
-  --color-ink-soft: #6b5f78;
-  --color-ink-mute: #74687f;
-  --color-paper: #fff8f0;
-  --color-card: #ffffff;
-  --color-line: #efe4da;
+  /* Palette from the freud UI Kit v1.5 (design/figma-tokens.json). The
+     values live on :root below so dark mode can swap them. */
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-mute: var(--ink-mute);
+  --color-ink-fixed: #4f3422; /* always brown, for text on colored fills */
+  --color-on-ink: var(--on-ink);
+  --color-paper: var(--paper);
+  --color-card: var(--card);
+  --color-line: var(--line);
+  --color-shadow: var(--shadow);
 
-  --color-r1: #ff4d5e;
-  --color-r2: #ff8a3d;
-  --color-r3: #ffc93c;
-  --color-r4: #3fcb7a;
-  --color-r5: #3da5ff;
-  --color-r6: #5b5be0;
-  --color-r7: #8f3bff;
+  --color-r1: #e11d48; /* Present Red 60 */
+  --color-r2: #fb8728; /* Empathy Orange 40 */
+  --color-r3: #facc15; /* Zen Yellow 40 */
+  --color-r4: #9bb068; /* Serenity Green 50 */
+  --color-r5: #926247; /* Mindful Brown 60 */
+  --color-r6: #7f45e2; /* Kind Purple 60 */
+  --color-r7: #5d2aad; /* Kind Purple 80 */
 
-  --font-display: 'Bricolage Grotesque', 'Urbanist', system-ui, sans-serif;
+  --font-display: 'Urbanist', system-ui, sans-serif;
   --font-body: 'Urbanist', system-ui, sans-serif;
 
   --radius-card: 32px;
-  --radius-tile: 16px;
+  --radius-tile: 24px;
   --radius-pill: 999px;
 
-  --shadow-toy: 0 4px 0 0 var(--color-ink);
-  --shadow-toy-soft: 0 4px 0 0 var(--color-line);
+  /* The kit's soft shadow levels, used for resting cards. */
+  --shadow-toy: 0 8px 16px color-mix(in oklab, var(--color-shadow) 10%, transparent);
+  --shadow-toy-soft: 0 4px 8px color-mix(in oklab, var(--color-shadow) 5%, transparent), 0 1px 2px color-mix(in oklab, var(--color-shadow) 4%, transparent);
+}
+
+/* Light: the kit's light mode. */
+:root {
+  color-scheme: light;
+  --ink: #4f3422; /* Mindful Brown 80 */
+  --ink-soft: #736b66; /* Optimistic Gray 60 */
+  --ink-mute: #926247; /* Mindful Brown 60 */
+  --on-ink: #ffffff;
+  --paper: #f7f4f2; /* Mindful Brown 10 */
+  --card: #ffffff;
+  --line: #e8ddd9; /* Mindful Brown 20 */
+  --shadow: #161513;
+  --tint-red: #ffe4e6;
+  --tint-orange: #ffedd5;
+  --tint-yellow: #fef9c3;
+  --tint-green: #f0f2e8;
+  --tint-brown: #e8ddd9;
+  --tint-purple: #ede9fe;
+  --tint-purple-deep: #ddd6fe;
+  --soft-servant_leader: #ffe4e6;
+  --soft-friendship: #ffedd5;
+  --soft-parent_child: #fef9c3;
+  --soft-lover_partner: #f0f2e8;
+  --soft-self: #e8ddd9;
+  --soft-guru: #ede9fe;
+  --soft-divine: #ddd6fe;
+  --deep-servant_leader: #9f1239;
+  --deep-friendship: #c2410c;
+  --deep-parent_child: #a16207;
+  --deep-lover_partner: #5a6b38;
+  --deep-self: #4f3422;
+  --deep-guru: #5d2aad;
+  --deep-divine: #2e1065;
+}
+
+/* Dark: the same hues reversed. The cream page becomes Brown 100, cards
+   Brown 90, text cream, and every pale tint becomes the deep end of its
+   own family: pale purple turns into deep purple, not grey. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --ink: #f7f4f2;
+    --ink-soft: #c9c7c5; /* Optimistic Gray 30 */
+    --ink-mute: #c0a091; /* Mindful Brown 40 */
+    --on-ink: #251404;
+    --paper: #251404; /* Mindful Brown 100 */
+    --card: #372315; /* Mindful Brown 90 */
+    --line: #4f3422; /* Mindful Brown 80 */
+    --shadow: #000000;
+    --tint-red: #4c0519;
+    --tint-orange: #431407;
+    --tint-yellow: #422006;
+    --tint-green: #191e10;
+    --tint-brown: #372315;
+    --tint-purple: #2e1065;
+    --tint-purple-deep: #4e248e;
+    --soft-servant_leader: #4c0519;
+    --soft-friendship: #431407;
+    --soft-parent_child: #422006;
+    --soft-lover_partner: #191e10;
+    --soft-self: #372315;
+    --soft-guru: #2e1065;
+    --soft-divine: #4e248e;
+    --deep-servant_leader: #fda4af;
+    --deep-friendship: #fdba74;
+    --deep-parent_child: #fde047;
+    --deep-lover_partner: #cfd9b5;
+    --deep-self: #d6c2b8;
+    --deep-guru: #c4b5fd;
+    --deep-divine: #ddd6fe;
+  }
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --ink: #f7f4f2;
+  --ink-soft: #c9c7c5;
+  --ink-mute: #c0a091;
+  --on-ink: #251404;
+  --paper: #251404;
+  --card: #372315;
+  --line: #4f3422;
+  --shadow: #000000;
+  --tint-red: #4c0519;
+  --tint-orange: #431407;
+  --tint-yellow: #422006;
+  --tint-green: #191e10;
+  --tint-brown: #372315;
+  --tint-purple: #2e1065;
+  --tint-purple-deep: #4e248e;
+  --soft-servant_leader: #4c0519;
+  --soft-friendship: #431407;
+  --soft-parent_child: #422006;
+  --soft-lover_partner: #191e10;
+  --soft-self: #372315;
+  --soft-guru: #2e1065;
+  --soft-divine: #4e248e;
+  --deep-servant_leader: #fda4af;
+  --deep-friendship: #fdba74;
+  --deep-parent_child: #fde047;
+  --deep-lover_partner: #cfd9b5;
+  --deep-self: #d6c2b8;
+  --deep-guru: #c4b5fd;
+  --deep-divine: #ddd6fe;
 }
 
 @layer base {
@@ -53,7 +163,7 @@
   h3 {
     font-family: var(--font-display);
     letter-spacing: -0.02em;
-    line-height: 1.05;
+    line-height: 1.2;
     font-weight: 800;
   }
   button,
@@ -64,7 +174,7 @@
     color: inherit;
   }
   :focus-visible {
-    outline: 3px solid var(--color-ink);
+    outline: 3px solid var(--color-ink-mute);
     outline-offset: 3px;
     border-radius: 8px;
   }
@@ -72,6 +182,23 @@
 
 .safe-top {
   padding-top: env(safe-area-inset-top);
+}
+
+/* Laptop layout: the header spans the page, sections flow into two columns. */
+@media (min-width: 768px) {
+  .screen-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 32px;
+    align-items: start;
+  }
+  .screen-columns > header,
+  .screen-columns > .span-all {
+    grid-column: 1 / -1;
+  }
+  .screen-columns > * {
+    min-width: 0;
+  }
 }
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
@@ -112,12 +239,14 @@
   }
 }
 
-/* Anything tappable is a "toy": it sits on a hard shadow, lifts under a
-   mouse pointer, and presses down on tap. The shadow color comes from
-   --toy-color so colored floors and buttons can set their own. */
+/* Anything tappable is a "toy": it rests on a soft shadow, lifts under a
+   mouse pointer, and presses down on tap. The shadow is tinted by
+   --toy-color so colored floors and buttons cast their own. */
 .toy {
-  --toy-color: #15101f;
-  box-shadow: 0 4px 0 0 var(--toy-color);
+  --toy-color: var(--color-shadow);
+  box-shadow:
+    0 4px 8px color-mix(in oklab, var(--toy-color) 22%, transparent),
+    0 1px 2px color-mix(in oklab, var(--toy-color) 12%, transparent);
   transition:
     transform 120ms ease,
     box-shadow 120ms ease,
@@ -128,14 +257,17 @@
   --toy-color: var(--color-ink);
 }
 .toy-soft {
-  --toy-color: var(--color-line);
+  --toy-color: var(--color-shadow);
+  box-shadow:
+    0 4px 8px color-mix(in oklab, var(--toy-color) 6%, transparent),
+    0 1px 2px color-mix(in oklab, var(--toy-color) 5%, transparent);
 }
 .toy-flat {
   box-shadow: none;
 }
 .toy:active:not(:disabled) {
-  transform: translateY(4px);
-  box-shadow: 0 0 0 0 transparent;
+  transform: translateY(2px);
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--toy-color) 12%, transparent);
 }
 .toy-flat:active:not(:disabled) {
   transform: translateY(1px);
@@ -143,8 +275,15 @@
 @media (hover: hover) and (pointer: fine) {
   .toy:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 6px 0 0 var(--toy-color);
+    box-shadow:
+      0 8px 16px color-mix(in oklab, var(--toy-color) 26%, transparent),
+      0 2px 4px color-mix(in oklab, var(--toy-color) 12%, transparent);
     filter: brightness(1.03);
+  }
+  .toy-soft:hover:not(:disabled) {
+    box-shadow:
+      0 8px 16px color-mix(in oklab, var(--toy-color) 10%, transparent),
+      0 2px 4px color-mix(in oklab, var(--toy-color) 6%, transparent);
   }
   .toy-flat:hover:not(:disabled) {
     transform: none;

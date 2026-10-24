@@ -1,7 +1,7 @@
 import { RELATIONSHIPS } from '@kreators/shared';
 
-const INK = '#2B1D3A';
-const GOLD = '#FFD86B';
+const INK = '#4F3422';
+const GOLD = '#FDE047';
 const FACE = '#FFE9D6';
 
 interface Props {
@@ -57,9 +57,9 @@ export function Person({ stage = 1, size = 96, decorative = false, className = '
       {s === 2 && (
         <g>
           <path d="M79 86 L91 86 L89 98 L81 98 Z" fill="#C65A14" />
-          <path d="M85 86 C85 80 85 77 85 73" stroke="#1E8A4D" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-          <ellipse cx="81" cy="75" rx="4.5" ry="2.6" fill="#3FCB7A" transform="rotate(-30 81 75)" />
-          <ellipse cx="89" cy="73" rx="4.5" ry="2.6" fill="#3FCB7A" transform="rotate(30 89 73)" />
+          <path d="M85 86 C85 80 85 77 85 73" stroke="#5A6B38" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+          <ellipse cx="81" cy="75" rx="4.5" ry="2.6" fill="#9BB068" transform="rotate(-30 81 75)" />
+          <ellipse cx="89" cy="73" rx="4.5" ry="2.6" fill="#9BB068" transform="rotate(30 89 73)" />
         </g>
       )}
       {s >= 4 && (

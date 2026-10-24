@@ -93,10 +93,10 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
             </svg>
             Tower
           </Link>
-          <p className="mt-sm m-0 text-[13px] font-bold">
+          <p className="mt-sm m-0 text-[14px] font-bold">
             Floor {rel.floor} of 7, {rel.character}
           </p>
-          <h1 className="text-[32px]">{rel.name}</h1>
+          <h1 className="text-[30px]">{rel.name}</h1>
           <div className="mt-md">
             <EvolutionReveal
               now={<Avatar relationship={relationship} size={88} mood={built ? 'happy' : 'sleepy'} stage={evo.stage.stage} decorative />}
@@ -129,14 +129,14 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
 
         {!nodesQ.isPending && !built && (
           <section className="mt-lg" aria-labelledby="build-heading">
-            <h2 id="build-heading" className="text-[22px]">
+            <h2 id="build-heading" className="text-[24px]">
               Build this floor
             </h2>
-            <div className="mt-sm rounded-card p-md" style={{ background: rel.soft }}>
+            <div className="mt-sm rounded-card p-md" style={{ background: `var(--soft-${rel.key})` }}>
               <p className="m-0 text-[16px] font-semibold">
                 {rel.character} derived a ladder from your vibe check: the foundation you picked, plus a principle, value goal, outcome, project and three tasks. One tap and they show up on Today.
               </p>
-              <Button variant="color" color={rel.color} deep={rel.deep} full className="mt-md" style={{ color: rel.text }} onClick={() => acceptQuest.mutate()} disabled={acceptQuest.isPending}>
+              <Button variant="color" color={rel.color} deep={`var(--deep-${rel.key})`} full className="mt-md" style={{ color: rel.text }} onClick={() => acceptQuest.mutate()} disabled={acceptQuest.isPending}>
                 Build {rel.character}&rsquo;s ladder
               </Button>
               <Button variant="ghost" full className="mt-xs" onClick={() => setAdding('pillar')}>
@@ -149,7 +149,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
         {built && (
           <>
             <section className="mt-lg" aria-labelledby="do-heading">
-              <h2 id="do-heading" className="text-[22px]">
+              <h2 id="do-heading" className="text-[24px]">
                 Tasks to do
               </h2>
               <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Tick the box when you have done it. Every rung above it gets stronger.</p>
@@ -179,11 +179,11 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
               <Button full className="mt-sm" onClick={() => setAdding('task')} disabled={projects.length === 0}>
                 Add a task
               </Button>
-              {projects.length === 0 && <p className="mt-xs m-0 text-[13px] font-semibold text-ink-soft">Tasks need a project. Open the ladder below to add one.</p>}
+              {projects.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Tasks need a project. Open the ladder below to add one.</p>}
             </section>
 
             <section className="mt-lg" aria-labelledby="ladder-heading">
-              <h2 id="ladder-heading" className="text-[22px]">
+              <h2 id="ladder-heading" className="text-[24px]">
                 The ladder
               </h2>
               <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
@@ -203,7 +203,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                         <summary className="flex items-center gap-sm p-sm">
                           <span
                             className="flex size-[32px] shrink-0 items-center justify-center rounded-pill font-display text-[14px] font-extrabold"
-                            style={locked ? { background: '#EFE4DA', color: '#6B5F78' } : { background: rel.color, color: rel.text }}
+                            style={locked ? { background: 'var(--color-line)', color: 'var(--color-ink-soft)' } : { background: rel.color, color: rel.text }}
                             aria-hidden="true"
                           >
                             {meta.rung}
@@ -213,14 +213,14 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                               {meta.plural}
                               {items.length > 0 && <span className="text-ink-mute"> {items.length}</span>}
                             </span>
-                            <span className="block truncate text-[13px] font-semibold text-ink-soft">{summary}</span>
+                            <span className="block truncate text-[14px] font-semibold text-ink-soft">{summary}</span>
                           </span>
                           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" className="chev shrink-0 transition-transform" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M6 9l6 6 6-6" />
                           </svg>
                         </summary>
                         <div className="border-t border-line p-sm">
-                          <p className="m-0 text-[13px] font-semibold text-ink-soft">{meta.hint}</p>
+                          <p className="m-0 text-[14px] font-semibold text-ink-soft">{meta.hint}</p>
                           {items.length > 0 && (
                             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                               {items.map((n) => {
@@ -234,7 +234,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                                           {n.title}
                                           {n.status === 'done' && <span className="text-ink-mute"> (cleared)</span>}
                                         </span>
-                                        {parentNode && <span className="block truncate text-[13px] font-semibold text-ink-soft">Holds up: {parentNode.title}</span>}
+                                        {parentNode && <span className="block truncate text-[14px] font-semibold text-ink-soft">Holds up: {parentNode.title}</span>}
                                       </span>
                                       <span className="shrink-0 rounded-pill bg-card px-sm py-xs text-[12px] font-extrabold">{n.xp} xp</span>
                                     </button>
@@ -298,6 +298,8 @@ function AddSheet({ kind, relationship, nodes, today, onClose }: { kind: NodeKin
   const [title, setTitle] = useState('');
   const [parentId, setParentId] = useState('');
   const [due, setDue] = useState(today);
+  const [time, setTime] = useState('');
+  const [minutes, setMinutes] = useState('');
   const meta = kind ? KIND_META[kind] : null;
   const parent = kind ? parentKind(kind) : null;
   const parents = parent ? nodes.filter((n) => n.kind === parent && n.status === 'active') : [];
@@ -305,6 +307,8 @@ function AddSheet({ kind, relationship, nodes, today, onClose }: { kind: NodeKin
   useEffect(() => {
     setTitle('');
     setDue(today);
+    setTime('');
+    setMinutes('');
     setParentId(parents[0]?.id ?? '');
     // Reset the form each time a rung's add button opens the sheet.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -313,7 +317,7 @@ function AddSheet({ kind, relationship, nodes, today, onClose }: { kind: NodeKin
   const create = useMutation({
     mutationFn: () => {
       if (!kind) throw new Error('no kind');
-      return api.createNode({ kind, parentId: parent ? parentId : null, relationship, title: title.trim(), dueDate: kind === 'task' ? due || null : null });
+      return api.createNode({ kind, parentId: parent ? parentId : null, relationship, title: title.trim(), dueDate: kind === 'task' ? due || null : null, dueTime: kind === 'task' ? time || null : null, estimateMin: kind === 'task' && Number(minutes) > 0 ? Number(minutes) : null });
     },
     onSuccess: () => {
       refresh();
@@ -361,7 +365,17 @@ function AddSheet({ kind, relationship, nodes, today, onClose }: { kind: NodeKin
                 <span className="block text-[14px] font-bold">Due</span>
                 <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
               </label>
-              <p className="m-0 text-[13px] font-semibold text-ink-soft">A new task can be ticked ten minutes after you write it. Go do it first.</p>
+              <div className="grid grid-cols-2 gap-xs">
+                <label className="block">
+                  <span className="block text-[14px] font-bold">Time (optional)</span>
+                  <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+                </label>
+                <label className="block">
+                  <span className="block text-[14px] font-bold">Minutes (optional)</span>
+                  <input type="number" min={5} max={600} step={5} value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="20" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+                </label>
+              </div>
+              <p className="m-0 text-[14px] font-semibold text-ink-soft">A time and a length put the task on your day plan. A new task can be ticked ten minutes after you write it. Go do it first.</p>
             </>
           )}
           {create.isError && (
@@ -383,17 +397,21 @@ function EditSheet({ node, onClose }: { node: Node | null; onClose: () => void }
   const [title, setTitle] = useState('');
   const [note, setNote] = useState('');
   const [due, setDue] = useState('');
+  const [time, setTime] = useState('');
+  const [minutes, setMinutes] = useState('');
 
   useEffect(() => {
     setTitle(node?.title ?? '');
     setNote(node?.note ?? '');
     setDue(node?.dueDate ?? '');
+    setTime(node?.dueTime ?? '');
+    setMinutes(node?.estimateMin ? String(node.estimateMin) : '');
   }, [node]);
 
   const save = useMutation({
     mutationFn: () => {
       if (!node) throw new Error('no node');
-      return api.updateNode(node.id, { title: title.trim(), note, dueDate: node.kind === 'task' ? due || null : undefined });
+      return api.updateNode(node.id, { title: title.trim(), note, dueDate: node.kind === 'task' ? due || null : undefined, dueTime: node.kind === 'task' ? time || null : undefined, estimateMin: node.kind === 'task' ? (Number(minutes) > 0 ? Number(minutes) : null) : undefined });
     },
     onSuccess: () => {
       refresh();
@@ -431,12 +449,24 @@ function EditSheet({ node, onClose }: { node: Node | null; onClose: () => void }
             <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={3} placeholder="Why this matters, in your words" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
           </label>
           {node.kind === 'task' && (
-            <label className="block">
-              <span className="block text-[14px] font-bold">Due</span>
-              <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
-            </label>
+            <>
+              <label className="block">
+                <span className="block text-[14px] font-bold">Due</span>
+                <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+              </label>
+              <div className="grid grid-cols-2 gap-xs">
+                <label className="block">
+                  <span className="block text-[14px] font-bold">Time (optional)</span>
+                  <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+                </label>
+                <label className="block">
+                  <span className="block text-[14px] font-bold">Minutes (optional)</span>
+                  <input type="number" min={5} max={600} step={5} value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="20" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+                </label>
+              </div>
+            </>
           )}
-          <p className="m-0 text-[13px] font-semibold text-ink-soft">
+          <p className="m-0 text-[14px] font-semibold text-ink-soft">
             {node.xp} xp earned here. {node.kind === 'task' ? 'Changing the title makes it a new task, so the ten-minute wait starts again.' : 'Removing it also removes everything it holds up.'}
           </p>
           <Button type="submit" size="lg" full disabled={save.isPending || !title.trim()}>

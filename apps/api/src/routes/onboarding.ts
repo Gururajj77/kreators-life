@@ -73,6 +73,8 @@ function ladderRows(userId: string, ladder: DerivedLadder, date: string): NodeRo
   const mk = (kind: NodeRow['kind'], parent_id: string | null, title: string, due_date: string | null, sort: number): NodeRow => ({
     id: newId(),
     user_id: userId,
+    due_time: null,
+    estimate_min: null,
     kind,
     parent_id,
     relationship: ladder.relationship,

@@ -34,10 +34,10 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     floor: 1,
     name: 'Servant leader',
     character: 'Ember',
-    color: '#FF4D5E',
-    soft: '#FFE4E7',
-    deep: '#C42A3A',
-    text: '#2B1D3A',
+    color: '#E11D48',
+    soft: '#FFE4E6',
+    deep: '#9F1239',
+    text: '#FFFFFF',
     greeting: "I'm Ember. I look after the people who count on you.",
     question: 'Who did you serve today?',
   },
@@ -46,10 +46,10 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     floor: 2,
     name: 'Friendship',
     character: 'Pip',
-    color: '#FF8A3D',
-    soft: '#FFE8D6',
-    deep: '#C65A14',
-    text: '#2B1D3A',
+    color: '#FB8728',
+    soft: '#FFEDD5',
+    deep: '#C2410C',
+    text: '#4F3422',
     greeting: "I'm Pip. Two lobes, one heart. Who's in your corner?",
     question: 'Who did you show up for?',
   },
@@ -58,10 +58,10 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     floor: 3,
     name: 'Parent & child',
     character: 'Sunny',
-    color: '#FFC93C',
-    soft: '#FFF3C4',
-    deep: '#B88A00',
-    text: '#2B1D3A',
+    color: '#FACC15',
+    soft: '#FEF9C3',
+    deep: '#A16207',
+    text: '#4F3422',
     greeting: "I'm Sunny. I carry the little one on my shoulder. Family first, everything else second.",
     question: 'Did family hear from you?',
   },
@@ -70,10 +70,10 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     floor: 4,
     name: 'Lover & partner',
     character: 'Clover',
-    color: '#3FCB7A',
-    soft: '#D9F5E5',
-    deep: '#1E8A4D',
-    text: '#2B1D3A',
+    color: '#9BB068',
+    soft: '#F0F2E8',
+    deep: '#5A6B38',
+    text: '#4F3422',
     greeting: "I'm Clover. Love is a daily habit, not a yearly highlight.",
     question: 'Was there phone-free time?',
   },
@@ -82,10 +82,10 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     floor: 5,
     name: 'With yourself',
     character: 'Dew',
-    color: '#3DA5FF',
-    soft: '#D8ECFF',
-    deep: '#1766B8',
-    text: '#2B1D3A',
+    color: '#926247',
+    soft: '#E8DDD9',
+    deep: '#4F3422',
+    text: '#FFFFFF',
     greeting: "I'm Dew. One drop, very clear. How are you really?",
     question: 'Did you rest, move, breathe?',
   },
@@ -94,9 +94,9 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     floor: 6,
     name: 'With the guru',
     character: 'Sage',
-    color: '#5B5BE0',
-    soft: '#E0E0FB',
-    deep: '#3434A8',
+    color: '#7F45E2',
+    soft: '#EDE9FE',
+    deep: '#5D2AAD',
     text: '#FFFFFF',
     greeting: "I'm Sage. Everyone you admire had a teacher. Who's yours?",
     question: 'What did you learn on purpose?',
@@ -106,9 +106,9 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     floor: 7,
     name: 'With the divine',
     character: 'Lumen',
-    color: '#8F3BFF',
-    soft: '#ECDFFF',
-    deep: '#5E1FB8',
+    color: '#5D2AAD',
+    soft: '#DDD6FE',
+    deep: '#2E1065',
     text: '#FFFFFF',
     greeting: "I'm Lumen. Something bigger than the daily rush is watching over you.",
     question: 'Did you pause for awe?',
@@ -761,6 +761,28 @@ export interface User {
   points: number;
   isPro: boolean;
   leaderboardOptIn: boolean;
+  role: Role;
+  email: string | null;
+  handle: string | null;
+  bio: string;
+  reminderTime: string | null;
+  referralCode: string | null;
+  /** Per-person module toggles. Missing keys use the module default. */
+  modules: Record<string, boolean>;
+  permissions: Permission[];
+  skills: string[];
+  categories: string[];
+  goals: string[];
+  experienceLevel: string;
+  availability: string;
+  location: string;
+  openToIntros: boolean;
+  /** What they make and care about, for matching. */
+  interests: string[];
+  city: string;
+  area: string;
+  /** True when the person shared their position for nearby matching. The coordinates never leave the server. */
+  hasLocation: boolean;
   streak: number;
   bestStreak: number;
   lastCheckin: string | null;
@@ -791,6 +813,12 @@ export interface MeResponse {
   /** Awarded honors: given by an admin or unlocked with time. */
   honors: string[];
   identity: Evolution;
+  /** Global module settings set by an admin. */
+  moduleSettings: Record<string, ModuleSetting>;
+  /** Resolved server-side: flag, rollout, overrides, role, then the person's toggle. */
+  access: Record<string, ModuleAccess>;
+  unread: number;
+  organizations: Organization[];
   stats: { tasksDone: number; sparksDone: number; projectsCleared: number };
 }
 
@@ -804,6 +832,9 @@ export interface Node {
   status: 'active' | 'done' | 'archived';
   xp: number;
   dueDate: string | null;
+  /** Tasks only, optional: a time of day (HH:MM) and how long it should take, to plan the day. */
+  dueTime: string | null;
+  estimateMin: number | null;
   completedAt: string | null;
   /** Tasks only: when it can first be ticked. Writing it or renaming it starts the wait. */
   readyAt: string | null;
@@ -837,6 +868,19 @@ export interface TodayResponse {
   /** Tasks ticked in the last day, so Today can say the routine is done. */
   doneRecently: number;
   spark: { relationship: RelationshipKey; text: string; done: boolean };
+  /** Minutes planned for today across timed tasks, minutes already done, and how many tasks carry a time. */
+  timePlan: { plannedMin: number; doneMin: number; timed: number };
+}
+
+export const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** "09:30" to "9:30 am". */
+export function timeLabel(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  if (h === undefined || m === undefined || Number.isNaN(h)) return hhmm;
+  const suffix = h < 12 ? 'am' : 'pm';
+  const hour = h % 12 === 0 ? 12 : h % 12;
+  return `${hour}:${String(m).padStart(2, '0')} ${suffix}`;
 }
 
 export interface OnboardingAnswer {
@@ -1043,6 +1087,10 @@ export interface AdminUser {
   isPro: boolean;
   createdAt: string;
   honors: string[];
+  role: Role;
+  email: string | null;
+  handle: string | null;
+  permissions: Permission[];
 }
 
 export interface AdminRedemption extends Redemption {
@@ -1055,3 +1103,1548 @@ export function taskReadyAt(createdAt: string, readyAt: string | null): string {
   if (readyAt) return readyAt;
   return new Date(new Date(createdAt).getTime() + WAIT.taskMinAgeMinutes * 60_000).toISOString();
 }
+
+// ---------------------------------------------------------------------------
+// Roles and accounts
+// ---------------------------------------------------------------------------
+
+export const ROLES = ['user', 'sub_admin', 'admin'] as const;
+export type Role = (typeof ROLES)[number];
+
+export function roleRank(role: Role): number {
+  return ROLES.indexOf(role);
+}
+
+export function isRole(v: unknown): v is Role {
+  return typeof v === 'string' && (ROLES as readonly string[]).includes(v);
+}
+
+export const ROLE_META: Record<Role, { name: string; blurb: string }> = {
+  user: { name: 'Creator', blurb: 'Learns, works, connects and sells.' },
+  sub_admin: { name: 'Staff', blurb: 'Runs parts of Kreators, as far as their permissions go.' },
+  admin: { name: 'Admin', blurb: 'Everything, including roles, permissions and which features exist.' },
+};
+
+/** Staff permissions. A permission is a job someone is trusted with; admins hold all of them. */
+export const PERMISSIONS = ['talent', 'cohorts', 'events', 'finance', 'moderation', 'support', 'review', 'mentor'] as const;
+export type Permission = (typeof PERMISSIONS)[number];
+
+export const PERMISSION_META: Record<Permission, { name: string; blurb: string }> = {
+  talent: { name: 'Talent manager', blurb: 'Runs Army campaigns, shortlists and assigns creators.' },
+  cohorts: { name: 'Cohort manager', blurb: 'Publishes programs, runs cohorts, marks completion.' },
+  events: { name: 'Event host', blurb: 'Creates any kind of event and checks people in.' },
+  finance: { name: 'Finance', blurb: 'Approves bounty payouts and reviews money orders.' },
+  moderation: { name: 'Moderator', blurb: 'Hides posts and handles reports.' },
+  support: { name: 'Support', blurb: 'Answers help requests.' },
+  review: { name: 'Reviewer', blurb: 'Decides Club applications, bounties, TV and Fund proposals.' },
+  mentor: { name: 'Mentor', blurb: 'Gives feedback on assignments. Can be held by a creator.' },
+};
+
+export function hasPermission(user: { role: Role; permissions: readonly string[] }, perm: Permission): boolean {
+  return user.role === 'admin' || user.permissions.includes(perm);
+}
+
+/** Staff-level: admin or staff holding the permission. Mentor is the one permission a creator can hold. */
+export function isStaffFor(user: { role: Role; permissions: readonly string[] }, perm: Permission): boolean {
+  if (user.role === 'admin') return true;
+  if (perm === 'mentor') return user.permissions.includes('mentor');
+  return user.role === 'sub_admin' && user.permissions.includes(perm);
+}
+
+// ---------------------------------------------------------------------------
+// Modules — every feature is a module. People switch them on and off under
+// You; admins can disable one for everyone or limit it to a role.
+// ---------------------------------------------------------------------------
+
+export type ModuleGroup = 'core' | 'wellbeing' | 'earn' | 'community' | 'creator' | 'manage';
+
+export interface AppModule {
+  key: string;
+  name: string;
+  blurb: string;
+  emoji: string;
+  group: ModuleGroup;
+  path: string;
+  /** On for a new account. */
+  defaultOn: boolean;
+  /** Core modules cannot be switched off by the person. */
+  locked?: boolean;
+  minRole: Role;
+}
+
+export const MODULES: readonly AppModule[] = [
+  { key: 'today', name: 'Today', blurb: 'Your daily three.', emoji: '☀️', group: 'core', path: '/today', defaultOn: true, locked: true, minRole: 'user' },
+  { key: 'tower', name: 'Tower', blurb: 'Seven floors, one per relationship.', emoji: '🏰', group: 'core', path: '/tower', defaultOn: true, locked: true, minRole: 'user' },
+  { key: 'search', name: 'Search', blurb: 'Find anything you wrote, bought, applied to or read.', emoji: '🔍', group: 'core', path: '/search', defaultOn: true, locked: true, minRole: 'user' },
+  { key: 'notifications', name: 'Inbox', blurb: 'What happened while you were away, and daily reminders.', emoji: '🔔', group: 'core', path: '/inbox', defaultOn: true, minRole: 'user' },
+  { key: 'help', name: 'Help', blurb: 'Answers to common questions, and a line to the team.', emoji: '🛟', group: 'core', path: '/help', defaultOn: true, minRole: 'user' },
+  { key: 'leaderboard', name: 'Rank', blurb: 'The top twenty climbers.', emoji: '🏆', group: 'core', path: '/leaderboard', defaultOn: true, minRole: 'user' },
+  { key: 'rewards', name: 'Rewards', blurb: 'Trade points for real things.', emoji: '🎁', group: 'core', path: '/rewards', defaultOn: true, minRole: 'user' },
+
+  { key: 'school', name: 'School', blurb: 'Programs and cohorts: lessons, assignments, mentor feedback, completion.', emoji: '🎓', group: 'earn', path: '/school', defaultOn: true, minRole: 'user' },
+  { key: 'work', name: 'Work', blurb: 'Opportunities from brands and the team. Apply, track, get hired.', emoji: '💼', group: 'earn', path: '/work', defaultOn: true, minRole: 'user' },
+  { key: 'army', name: 'Army', blurb: 'Brand campaigns: briefs, shortlists, production, approvals, delivery.', emoji: '🎬', group: 'earn', path: '/army', defaultOn: true, minRole: 'user' },
+  { key: 'win', name: 'Win', blurb: 'Content rewards: make a video about a brand, get paid per verified view.', emoji: '🥇', group: 'earn', path: '/win', defaultOn: true, minRole: 'user' },
+
+  { key: 'party', name: 'Party', blurb: 'Meetups, workshops, camps and flagship days. RSVP, waitlist, check in.', emoji: '🎉', group: 'community', path: '/party', defaultOn: true, minRole: 'user' },
+  { key: 'community', name: 'Community', blurb: 'Posts, replies and likes, by category.', emoji: '🫶', group: 'community', path: '/community', defaultOn: true, minRole: 'user' },
+  { key: 'club', name: 'Club', blurb: 'A curated membership with benefits and exclusive opportunities.', emoji: '🪪', group: 'community', path: '/club', defaultOn: false, minRole: 'user' },
+  { key: 'bond', name: 'Bond', blurb: 'Opt-in introductions to people you met at events.', emoji: '🤝', group: 'community', path: '/bond', defaultOn: false, minRole: 'user' },
+  { key: 'circles', name: 'Circles', blurb: 'Small anonymous groups near you, matched by interests that fit together. The chat opens a day before you meet.', emoji: '🫧', group: 'community', path: '/circles', defaultOn: true, minRole: 'user' },
+
+  { key: 'life', name: 'Life', blurb: 'Physical, financial, emotional, mental and spiritual, on one dashboard that opens into each part of the app.', emoji: '🧭', group: 'wellbeing', path: '/life', defaultOn: true, minRole: 'user' },
+  { key: 'wellbeing', name: 'Wellbeing', blurb: 'One score from your mood, sleep, stress and mindful minutes.', emoji: '💚', group: 'wellbeing', path: '/wellbeing', defaultOn: true, minRole: 'user' },
+  { key: 'mood', name: 'Mood', blurb: 'How are you feeling today? Pick a face, see the week.', emoji: '🙂', group: 'wellbeing', path: '/mood', defaultOn: true, minRole: 'user' },
+  { key: 'sleep', name: 'Sleep', blurb: 'Hours and quality, night by night.', emoji: '🌙', group: 'wellbeing', path: '/sleep', defaultOn: true, minRole: 'user' },
+  { key: 'stress', name: 'Stress', blurb: 'Level and what is behind it.', emoji: '🌊', group: 'wellbeing', path: '/stress', defaultOn: true, minRole: 'user' },
+  { key: 'mindful', name: 'Mindful minutes', blurb: 'A breathing timer that logs your minutes.', emoji: '🧘', group: 'wellbeing', path: '/mindful', defaultOn: true, minRole: 'user' },
+  { key: 'journal', name: 'Journal', blurb: 'Write it down with an emotion and a stress level.', emoji: '📓', group: 'wellbeing', path: '/journal', defaultOn: true, minRole: 'user' },
+  { key: 'companion', name: 'Companion', blurb: 'A reflective chat that knows your tower. Not a therapist.', emoji: '💬', group: 'wellbeing', path: '/companion', defaultOn: true, minRole: 'user' },
+
+  { key: 'profile', name: 'Profile', blurb: 'Your public page: bio, skills, portfolio, links and what you sell.', emoji: '🔗', group: 'creator', path: '/profile', defaultOn: true, minRole: 'user' },
+  { key: 'shop', name: 'Shop', blurb: 'Sell downloads, courses, memberships, sessions and events.', emoji: '🛍️', group: 'creator', path: '/shop', defaultOn: true, minRole: 'user' },
+  { key: 'audience', name: 'Audience', blurb: 'Followers, leads, broadcasts and your affiliate link.', emoji: '📣', group: 'creator', path: '/shop/audience', defaultOn: true, minRole: 'user' },
+  { key: 'content', name: 'Content', blurb: 'Which post made money: tracked links, views and revenue per piece of content.', emoji: '📈', group: 'creator', path: '/shop/content', defaultOn: true, minRole: 'user' },
+  { key: 'automations', name: 'Auto-DM', blurb: 'Comment a keyword, get a link in DMs. Funnels show where people drop off.', emoji: '🤖', group: 'creator', path: '/shop/automations', defaultOn: true, minRole: 'user' },
+  { key: 'finance', name: 'Finance', blurb: 'Money in, money out, invoices, budgets and a monthly picture of your creator business.', emoji: '💰', group: 'creator', path: '/finance', defaultOn: true, minRole: 'user' },
+  { key: 'library', name: 'My purchases', blurb: 'Courses, downloads, memberships, tickets and sessions you own.', emoji: '🎒', group: 'creator', path: '/library', defaultOn: true, minRole: 'user' },
+  { key: 'knowledge', name: 'Knowledge', blurb: 'Curated articles and exercises with their sources.', emoji: '📚', group: 'creator', path: '/knowledge', defaultOn: true, minRole: 'user' },
+  { key: 'tools', name: 'Tools', blurb: 'A directory of creator tools, verified by the team.', emoji: '🧰', group: 'creator', path: '/tools', defaultOn: false, minRole: 'user' },
+  { key: 'tv', name: 'TV', blurb: 'Pitch a series. Track it from proposal to release.', emoji: '📺', group: 'creator', path: '/tv', defaultOn: false, minRole: 'user' },
+  { key: 'fund', name: 'Fund', blurb: 'Apply for a grant or backing for a project.', emoji: '🌱', group: 'creator', path: '/fund', defaultOn: false, minRole: 'user' },
+
+  { key: 'manage', name: 'Manage', blurb: 'Your staff tools, as far as your permissions go.', emoji: '🛡️', group: 'manage', path: '/manage', defaultOn: true, minRole: 'sub_admin' },
+  { key: 'admin', name: 'Admin', blurb: 'Roles, permissions, feature flags, audit log, honors, points.', emoji: '🔑', group: 'manage', path: '/admin', defaultOn: true, minRole: 'admin' },
+];
+
+export const MODULE_BY_KEY: Record<string, AppModule> = Object.fromEntries(MODULES.map((m) => [m.key, m]));
+
+export const MODULE_GROUPS: Record<ModuleGroup, string> = {
+  earn: 'Learn and earn',
+  community: 'People',
+  wellbeing: 'Wellbeing',
+  creator: 'Creator',
+  core: 'Core',
+  manage: 'Team',
+};
+
+export interface ModuleSetting {
+  key: string;
+  enabled: boolean;
+  minRole: Role;
+  /** Percentage of people the module is rolled out to, 0 to 100. */
+  rollout: number;
+}
+
+export interface FlagOverride {
+  id: string;
+  flagKey: string;
+  subjectType: 'user' | 'role' | 'organization';
+  subjectId: string;
+  enabled: boolean;
+  expiresAt: string | null;
+  reason: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface ModuleAccess {
+  available: boolean;
+  on: boolean;
+  /** Why it is unavailable, for the admin preview and the gate screen. */
+  reason: 'ok' | 'disabled' | 'role' | 'rollout' | 'override';
+}
+
+/** Deterministic 0 to 99 bucket for rollout percentages. */
+export function rolloutBucket(subject: string, key: string): number {
+  let h = 2166136261;
+  for (const ch of `${subject}:${key}`) {
+    h ^= ch.charCodeAt(0);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h % 100;
+}
+
+export interface AuditLog {
+  id: string;
+  actorId: string | null;
+  actorName: string;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  before: string;
+  after: string;
+  createdAt: string;
+}
+
+/** Resolve what a person can see: global switch, role, then their own toggle. */
+export function moduleState(m: AppModule, role: Role, globals: Record<string, ModuleSetting | undefined>, mine: Record<string, boolean>): { available: boolean; on: boolean } {
+  const g = globals[m.key];
+  const minRole = g?.minRole ?? m.minRole;
+  const available = (g?.enabled ?? true) && roleRank(role) >= roleRank(minRole);
+  const on = available && (m.locked ? true : (mine[m.key] ?? m.defaultOn));
+  return { available, on };
+}
+
+// ---------------------------------------------------------------------------
+// Wellbeing logs
+// ---------------------------------------------------------------------------
+
+export type LogKind = 'mood' | 'sleep' | 'stress' | 'mindful' | 'move';
+
+export interface MoodOption {
+  value: number;
+  name: string;
+  emoji: string;
+  color: string;
+  text: string;
+}
+
+/** The kit's five moods and their colors, bottom to top. */
+export const MOODS: readonly MoodOption[] = [
+  { value: 1, name: 'Low', emoji: '😞', color: '#7F45E2', text: '#FFFFFF' },
+  { value: 2, name: 'Sad', emoji: '😔', color: '#FB8728', text: '#4F3422' },
+  { value: 3, name: 'Neutral', emoji: '😐', color: '#926247', text: '#FFFFFF' },
+  { value: 4, name: 'Happy', emoji: '🙂', color: '#FACC15', text: '#4F3422' },
+  { value: 5, name: 'Overjoyed', emoji: '😄', color: '#9BB068', text: '#4F3422' },
+];
+
+export const STRESSORS = ['Work', 'Money', 'Family', 'Health', 'Loneliness', 'Relationship', 'Sleep', 'Something else'] as const;
+
+export const STRESS_LEVELS = ['Calm', 'Fine', 'Tense', 'Stressed', 'Overwhelmed'] as const;
+
+export interface WellbeingLog {
+  id: string;
+  kind: LogKind;
+  date: string;
+  value: number;
+  extra: Record<string, unknown>;
+  note: string;
+  createdAt: string;
+}
+
+export interface WellbeingSummary {
+  score: number;
+  label: string;
+  parts: { kind: LogKind; latest: number | null; avg7: number | null; count7: number }[];
+  week: { date: string; mood: number | null; sleep: number | null; stress: number | null; mindful: number }[];
+}
+
+export function wellbeingLabel(score: number): string {
+  if (score >= 80) return 'Thriving';
+  if (score >= 60) return 'Steady';
+  if (score >= 40) return 'Wobbly';
+  if (score >= 20) return 'Running low';
+  return 'Needs care';
+}
+
+// ---------------------------------------------------------------------------
+// Journal, community, resources, notifications, companion
+// ---------------------------------------------------------------------------
+
+export interface JournalEntry {
+  id: string;
+  title: string;
+  body: string;
+  emotion: number | null;
+  stress: number | null;
+  stressors: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const POST_CATEGORIES = ['Self care', 'Mindfulness', 'Stories', 'Support', 'Creative', 'Learning', 'Stress', 'Affirmation', 'Awareness'] as const;
+
+export interface CommunityPost {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorHandle: string | null;
+  authorPro: boolean;
+  category: string;
+  body: string;
+  /** Members-only posts belong to a membership product. */
+  productId: string | null;
+  likes: number;
+  liked: boolean;
+  replies: number;
+  hidden: boolean;
+  createdAt: string;
+}
+
+export interface CommunityReply {
+  id: string;
+  postId: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
+export type ResourceKind = 'article' | 'exercise' | 'video';
+
+export interface Resource {
+  id: string;
+  kind: ResourceKind;
+  title: string;
+  summary: string;
+  body: string;
+  url: string | null;
+  tags: string[];
+  published: boolean;
+  authorName: string;
+  createdAt: string;
+}
+
+export interface Notification {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  link: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  body: string;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Creator studio — products, orders, bookings, leads
+// ---------------------------------------------------------------------------
+
+export const PRODUCT_KINDS = ['digital', 'course', 'membership', 'session', 'event', 'link', 'payment', 'bundle', 'locked', 'dm'] as const;
+export type ProductKind = (typeof PRODUCT_KINDS)[number];
+
+export const PRODUCT_KIND_META: Record<ProductKind, { name: string; emoji: string; blurb: string; buy: string }> = {
+  digital: { name: 'Download', emoji: '📄', blurb: 'A file or link delivered after purchase.', buy: 'Get it' },
+  course: { name: 'Course', emoji: '🎓', blurb: 'Lessons, released on a schedule if you like.', buy: 'Enrol' },
+  membership: { name: 'Membership', emoji: '🪪', blurb: 'Access to members-only community posts.', buy: 'Join' },
+  session: { name: 'Session', emoji: '📅', blurb: 'One-to-one time, booked from your availability.', buy: 'Book' },
+  event: { name: 'Event', emoji: '🎟️', blurb: 'A live session on a date, with a joining link.', buy: 'Get a ticket' },
+  link: { name: 'Link', emoji: '🔗', blurb: 'A free link on your page.', buy: 'Open' },
+  payment: { name: 'Payment link', emoji: '💳', blurb: 'A fixed price, or pay what you want. Nothing to deliver.', buy: 'Pay' },
+  bundle: { name: 'Bundle', emoji: '🎁', blurb: 'Several of your products for one price.', buy: 'Get the bundle' },
+  locked: { name: 'Locked post', emoji: '🔒', blurb: 'One paid post: text, links or a video, shown after purchase.', buy: 'Unlock' },
+  dm: { name: 'Priority DM', emoji: '✉️', blurb: 'A paid question you promise to answer within a few days.', buy: 'Ask' },
+};
+
+export interface QuizQuestion {
+  q: string;
+  options: string[];
+  /** Index into options. */
+  answer: number;
+}
+
+export const AFFILIATE_SHARE = 0.2;
+
+export interface Product {
+  id: string;
+  ownerId: string;
+  ownerName: string;
+  ownerHandle: string | null;
+  kind: ProductKind;
+  title: string;
+  description: string;
+  pricePoints: number;
+  priceCents: number;
+  currency: string;
+  url: string | null;
+  startsAt: string | null;
+  durationMin: number | null;
+  capacity: number | null;
+  meetingUrl: string | null;
+  status: 'draft' | 'live' | 'archived';
+  cover: string;
+  sortOrder: number;
+  createdAt: string;
+  sold: number;
+  rating: number | null;
+  /** Pay what you want: the price is the floor. */
+  pwyw: boolean;
+  /** Questions a buyer answers when booking a session or at checkout. */
+  intake: string[];
+  /** Events: a recording buyers can watch afterwards, and a price for people who missed it. */
+  replayUrl: string | null;
+  replayPoints: number;
+  /** Bundles: the products inside. */
+  bundleIds: string[];
+  /** Locked posts: only sent to people who have it. */
+  lockedBody: string;
+  /** Priority DM: answer within this many days. */
+  responseDays: number | null;
+  /** A free download that captures a lead. */
+  leadMagnet: boolean;
+  /** Courses: issue a certificate on completion. */
+  certificate: boolean;
+}
+
+export interface Lesson {
+  id: string;
+  productId: string;
+  title: string;
+  body: string;
+  videoUrl: string | null;
+  sortOrder: number;
+  dripDays: number;
+  quiz: QuizQuestion[];
+  /** Percent needed to pass the quiz. 0 means no quiz gate. */
+  passScore: number;
+  /** Buyer-side: whether the drip has released it and whether it is done. */
+  unlocked?: boolean;
+  unlocksOn?: string | null;
+  completedAt?: string | null;
+  quizScore?: number | null;
+  quizPassed?: boolean;
+}
+
+export interface Order {
+  id: string;
+  buyerId: string;
+  buyerName: string;
+  productId: string;
+  productTitle: string;
+  productKind: ProductKind;
+  points: number;
+  cents: number;
+  currency: string;
+  status: 'paid' | 'test' | 'refunded';
+  couponCode: string | null;
+  affiliateCode: string | null;
+  /** Attribution: the tracked link this sale came through, if any. */
+  sourceLinkId: string | null;
+  sourceLabel: string | null;
+  clickId: string | null;
+  platformFeePoints: number;
+  intake: string[];
+  /** '' for the product itself, 'replay' for an event recording. */
+  variant: string;
+  refundedAt: string | null;
+  createdAt: string;
+}
+
+export interface Coupon {
+  id: string;
+  code: string;
+  percentOff: number;
+  productId: string | null;
+  maxUses: number | null;
+  uses: number;
+  expiresAt: string | null;
+}
+
+export interface Availability {
+  id: string;
+  weekday: number;
+  startMin: number;
+  endMin: number;
+}
+
+export interface Booking {
+  id: string;
+  productId: string;
+  productTitle: string;
+  ownerId: string;
+  ownerName: string;
+  buyerId: string;
+  buyerName: string;
+  startsAt: string;
+  endsAt: string;
+  status: 'requested' | 'confirmed' | 'cancelled' | 'done';
+  meetingUrl: string | null;
+  note: string;
+  createdAt: string;
+  intake: string[];
+}
+
+export interface Lead {
+  id: string;
+  name: string;
+  email: string;
+  message: string;
+  source: string;
+  createdAt: string;
+}
+
+export interface Testimonial {
+  id: string;
+  productId: string;
+  productTitle: string;
+  authorName: string;
+  rating: number;
+  body: string;
+  approved: boolean;
+  createdAt: string;
+}
+
+export interface PublicPage {
+  handle: string;
+  name: string;
+  bio: string;
+  skills: string[];
+  categories: string[];
+  experienceLevel: string;
+  availability: string;
+  location: string;
+  portfolio: PortfolioItem[];
+  isPro: boolean;
+  followers: number;
+  following: boolean;
+  products: Product[];
+  testimonials: Testimonial[];
+}
+
+export interface StudioAnalytics {
+  views: number;
+  clicks: number;
+  followers: number;
+  leads: number;
+  orders: number;
+  pointsEarned: number;
+  centsEarned: number;
+  affiliatePoints: number;
+  byProduct: { productId: string; title: string; orders: number; points: number }[];
+  /** Sales that came through a tracked link, versus straight from the page. */
+  attributed: number;
+  direct: number;
+}
+
+// ---------------------------------------------------------------------------
+// Growth: tracked links, content attribution, Auto-DM, funnels, sequences
+// ---------------------------------------------------------------------------
+
+export const LINK_SOURCES = ['content', 'automation', 'bio', 'youtube', 'newsletter', 'other'] as const;
+export type LinkSource = (typeof LINK_SOURCES)[number];
+
+export interface TrackedLink {
+  id: string;
+  code: string;
+  /** Null means the link opens your page. */
+  productId: string | null;
+  productTitle: string | null;
+  sourceType: LinkSource;
+  contentItemId: string | null;
+  automationId: string | null;
+  label: string;
+  clicks: number;
+  checkouts: number;
+  sales: number;
+  revenuePoints: number;
+  createdAt: string;
+}
+
+export const CONTENT_KINDS = ['reel', 'post', 'carousel', 'story', 'video', 'short', 'other'] as const;
+export type ContentKind = (typeof CONTENT_KINDS)[number];
+
+/** A post, Reel or video you made, with its numbers and what it sold. */
+export interface ContentItem {
+  id: string;
+  platform: SocialPlatform;
+  kind: ContentKind;
+  url: string;
+  caption: string;
+  postedAt: string | null;
+  views: number;
+  likes: number;
+  comments: number;
+  syncedAt: string | null;
+  links: number;
+  clicks: number;
+  sales: number;
+  revenuePoints: number;
+  /** Revenue per thousand views, when views are known. */
+  rpm: number | null;
+  createdAt: string;
+}
+
+export interface DmAutomation {
+  id: string;
+  contentItemId: string | null;
+  contentCaption: string | null;
+  keywords: string[];
+  dmMessage: string;
+  publicReplies: string[];
+  linkId: string;
+  linkCode: string;
+  productTitle: string | null;
+  active: boolean;
+  matched: number;
+  sent: number;
+  queued: number;
+  failed: number;
+  clicks: number;
+  sales: number;
+  revenuePoints: number;
+  createdAt: string;
+}
+
+export interface DmSend {
+  id: string;
+  automationId: string;
+  recipientHandle: string;
+  status: 'queued' | 'sent' | 'failed' | 'skipped';
+  error: string;
+  createdAt: string;
+}
+
+export type FunnelStepKind = 'content' | 'automation' | 'link' | 'lead' | 'product' | 'broadcast';
+export interface FunnelStep {
+  kind: FunnelStepKind;
+  ref: string;
+  label: string;
+  /** Filled by the server: people at this step. */
+  count?: number;
+}
+export interface Funnel {
+  id: string;
+  name: string;
+  steps: FunnelStep[];
+  createdAt: string;
+}
+
+/** A message sent to buyers some days after a purchase. */
+export interface Sequence {
+  id: string;
+  productId: string | null;
+  productTitle: string | null;
+  delayDays: number;
+  title: string;
+  body: string;
+  active: boolean;
+  sent: number;
+  createdAt: string;
+}
+
+export interface DmRequest {
+  id: string;
+  productId: string;
+  productTitle: string;
+  ownerName: string;
+  buyerName: string;
+  question: string;
+  answer: string;
+  status: 'open' | 'answered' | 'refunded';
+  dueAt: string;
+  answeredAt: string | null;
+  createdAt: string;
+}
+
+export interface Certificate {
+  code: string;
+  productTitle: string;
+  learnerName: string;
+  ownerName: string;
+  issuedAt: string;
+}
+
+export interface Customer {
+  userId: string;
+  name: string;
+  handle: string | null;
+  email: string | null;
+  orders: number;
+  points: number;
+  cents: number;
+  firstAt: string;
+  lastAt: string;
+  /** Where their first purchase came from. */
+  source: string;
+}
+
+export interface PayoutSummary {
+  feeBps: number;
+  grossPoints: number;
+  feePoints: number;
+  affiliatePoints: number;
+  netPoints: number;
+  refundedPoints: number;
+  testCents: number;
+  rows: { orderId: string; productTitle: string; buyerName: string; points: number; fee: number; affiliate: number; net: number; status: Order['status']; createdAt: string }[];
+}
+
+// ---------------------------------------------------------------------------
+// Finance: a creator's money, kept simple
+// ---------------------------------------------------------------------------
+
+export const INCOME_CATEGORIES = ['Brand deal', 'Content reward', 'Courses', 'Products', 'Sessions', 'Affiliate', 'Ad revenue', 'Other income'] as const;
+export const EXPENSE_CATEGORIES = ['Equipment', 'Software', 'Travel', 'Team', 'Marketing', 'Fees', 'Taxes', 'Other expense'] as const;
+
+/** A share of one transaction that belongs to someone else, for example an editor's cut of a brand deal. */
+export interface FinanceSplit {
+  name: string;
+  cents: number;
+  status: 'due' | 'paid';
+}
+
+export interface FinanceTransaction {
+  id: string;
+  kind: 'income' | 'expense';
+  amountCents: number;
+  currency: string;
+  category: string;
+  /** Who it came from or went to. */
+  counterparty: string;
+  note: string;
+  /** YYYY-MM-DD */
+  date: string;
+  /** manual: typed in. invoice: an invoice marked paid. due: a due settled. recurring: posted on schedule. */
+  source: 'manual' | 'invoice' | 'due' | 'recurring';
+  ref: string | null;
+  splits: FinanceSplit[];
+  createdAt: string;
+}
+
+/** Money someone owes you, or you owe someone. Settling it books the transaction. */
+export interface FinanceDue {
+  id: string;
+  direction: 'owe' | 'owed';
+  counterparty: string;
+  amountCents: number;
+  currency: string;
+  category: string;
+  note: string;
+  dueDate: string | null;
+  recurring: 'none' | 'monthly';
+  status: 'open' | 'settled';
+  settledAt: string | null;
+  createdAt: string;
+}
+
+/** Posted automatically every month on a day you pick. */
+export interface FinanceRecurring {
+  id: string;
+  kind: 'income' | 'expense';
+  amountCents: number;
+  currency: string;
+  category: string;
+  counterparty: string;
+  note: string;
+  dayOfMonth: number;
+  nextDate: string;
+  active: boolean;
+  createdAt: string;
+}
+
+/** save: you put money aside toward it. earn: income since the start counts toward it. */
+export interface FinanceGoal {
+  id: string;
+  title: string;
+  kind: 'save' | 'earn';
+  targetCents: number;
+  progressCents: number;
+  startDate: string;
+  deadline: string | null;
+  createdAt: string;
+}
+
+export interface InvoiceItem {
+  description: string;
+  quantity: number;
+  unitCents: number;
+}
+
+export const INVOICE_STATUSES = ['draft', 'sent', 'paid', 'void'] as const;
+
+export interface Invoice {
+  id: string;
+  number: string;
+  ownerName: string;
+  ownerHandle: string | null;
+  clientName: string;
+  clientEmail: string;
+  items: InvoiceItem[];
+  totalCents: number;
+  currency: string;
+  status: (typeof INVOICE_STATUSES)[number];
+  issueDate: string;
+  dueDate: string | null;
+  note: string;
+  /** The public link is /i/<token>. */
+  token: string;
+  paidAt: string | null;
+  createdAt: string;
+}
+
+export interface FinanceBudget {
+  category: string;
+  monthlyCents: number;
+  spentCents: number;
+}
+
+export interface FinanceSummary {
+  /** YYYY-MM */
+  month: string;
+  currency: string;
+  incomeCents: number;
+  expenseCents: number;
+  netCents: number;
+  /** Points earned on the platform this month: sales, affiliate shares, content rewards. */
+  platformPoints: number;
+  byCategory: { category: string; kind: 'income' | 'expense'; cents: number }[];
+  /** The last six months, oldest first. */
+  months: { month: string; incomeCents: number; expenseCents: number }[];
+  budgets: FinanceBudget[];
+  openInvoicesCents: number;
+  overdueInvoices: number;
+  transactions: FinanceTransaction[];
+  invoices: Invoice[];
+  /** Since the beginning. */
+  totals: { incomeCents: number; expenseCents: number; netCents: number; platformPoints: number };
+  dues: FinanceDue[];
+  owedToMeCents: number;
+  iOweCents: number;
+  recurring: FinanceRecurring[];
+  goals: FinanceGoal[];
+}
+
+/** Whole currency units with two decimals, e.g. 1234.50. */
+export function money(cents: number, currency = 'INR'): string {
+  const symbol = currency === 'INR' ? '₹' : currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : `${currency} `;
+  const abs = Math.abs(cents) / 100;
+  return `${cents < 0 ? '-' : ''}${symbol}${abs.toLocaleString(undefined, { minimumFractionDigits: abs % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 })}`;
+}
+
+// ---------------------------------------------------------------------------
+// Circles: anonymous small groups near you, matched by interests that fit
+// ---------------------------------------------------------------------------
+
+export const INTERESTS = [
+  'On camera', 'Behind camera', 'Editing', 'Writing', 'Short-form', 'Video', 'Photography', 'Podcasting', 'Music', 'Dance', 'Comedy', 'Film', 'Art & design', 'Fashion', 'Beauty', 'Food', 'Travel', 'Fitness', 'Gaming', 'Tech', 'Education', 'Finance', 'Business', 'Marketing', 'Parenting', 'Spirituality', 'Social causes',
+] as const;
+export type Interest = (typeof INTERESTS)[number];
+
+/** Pairs that gel: one side needs what the other makes. */
+export const COMPLEMENTS: readonly [Interest, Interest][] = [
+  ['On camera', 'Behind camera'], ['On camera', 'Editing'], ['Writing', 'Video'], ['Writing', 'Art & design'], ['Music', 'Video'], ['Music', 'Dance'], ['Photography', 'Fashion'], ['Photography', 'Travel'],
+  ['Food', 'Travel'], ['Tech', 'Education'], ['Business', 'Marketing'], ['Business', 'Art & design'], ['Finance', 'Education'], ['Fitness', 'Food'], ['Comedy', 'Short-form'], ['Podcasting', 'Writing'],
+  ['Film', 'Music'], ['Beauty', 'Fashion'], ['Gaming', 'Tech'], ['Spirituality', 'Fitness'], ['Parenting', 'Education'], ['Social causes', 'Film'], ['Marketing', 'Short-form'], ['Editing', 'Film'], ['Podcasting', 'On camera'],
+];
+
+/** How well two people's interests fit: a little overlap is good, complementary pairs are better, nothing in common is not. */
+export function matchScore(a: readonly string[], b: readonly string[]): number {
+  const shared = a.filter((x) => b.includes(x)).length;
+  let complementary = 0;
+  for (const [x, y] of COMPLEMENTS) if ((a.includes(x) && b.includes(y)) || (a.includes(y) && b.includes(x))) complementary += 1;
+  if (shared === 0 && complementary === 0) return -1;
+  return Math.min(3, shared) + Math.min(6, complementary * 2);
+}
+
+export interface MatchCandidate {
+  id: string;
+  interests: string[];
+  area: string;
+  lat: number | null;
+  lng: number | null;
+  joinedAt: string;
+}
+
+export function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(h));
+}
+
+/** Fit between one candidate and a whole group: interest score plus nearness. People more than twenty km apart never share a table. */
+function groupFit(c: MatchCandidate, group: MatchCandidate[]): number {
+  let total = 0;
+  for (const g of group) {
+    if (c.lat !== null && c.lng !== null && g.lat !== null && g.lng !== null && distanceKm({ lat: c.lat, lng: c.lng }, { lat: g.lat, lng: g.lng }) > 20) return -100;
+    total += matchScore(c.interests, g.interests) + (c.area && c.area === g.area ? 1 : 0);
+  }
+  return total;
+}
+
+/**
+ * Greedy tables: the earliest signup seeds a group, then the best-fitting person joins until the table is full.
+ * Groups smaller than three are not groups; their people are reported as unmatched.
+ */
+export function matchCircles(candidates: MatchCandidate[], groupSize: number): { groups: string[][]; unmatched: string[] } {
+  const size = Math.max(3, Math.min(8, groupSize));
+  const pool = [...candidates].sort((a, b) => (a.joinedAt < b.joinedAt ? -1 : 1));
+  const groups: MatchCandidate[][] = [];
+  const unmatched: string[] = [];
+  while (pool.length > 0) {
+    const seed = pool.shift();
+    if (!seed) break;
+    const group = [seed];
+    while (group.length < size && pool.length > 0) {
+      let bestIndex = -1;
+      let best = -Infinity;
+      pool.forEach((c, i) => {
+        const fit = groupFit(c, group);
+        if (fit > best) {
+          best = fit;
+          bestIndex = i;
+        }
+      });
+      if (bestIndex < 0 || best <= -50) break;
+      group.push(pool.splice(bestIndex, 1)[0] as MatchCandidate);
+    }
+    if (group.length >= 3) groups.push(group);
+    else {
+      // Try to seat the leftovers at a table with one spare chair.
+      for (const c of group) {
+        const home = groups.find((g) => g.length < size + 1 && groupFit(c, g) > -50);
+        if (home) home.push(c);
+        else unmatched.push(c.id);
+      }
+    }
+  }
+  return { groups: groups.map((g) => g.map((c) => c.id)), unmatched };
+}
+
+export const ALIAS_WORDS = ['Quiet', 'Bright', 'Curious', 'Steady', 'Wild', 'Gentle', 'Bold', 'Warm', 'Swift', 'Calm', 'Keen', 'Merry'] as const;
+
+export interface CircleEvent {
+  id: string;
+  title: string;
+  city: string;
+  area: string;
+  startsAt: string;
+  venueHint: string;
+  groupSize: number;
+  status: 'open' | 'matched' | 'done' | 'cancelled';
+  signups: number;
+  joined: boolean;
+  myGroupId: string | null;
+  createdAt: string;
+}
+
+export interface CircleMember {
+  alias: string;
+  character: RelationshipKey;
+  interests: string[];
+  revealed: boolean;
+  /** Only present once the person chose to reveal. */
+  name: string | null;
+  handle: string | null;
+  userId: string | null;
+  isMe: boolean;
+}
+
+export interface CircleMessage {
+  id: string;
+  alias: string;
+  body: string;
+  createdAt: string;
+  mine: boolean;
+}
+
+export interface CircleGroup {
+  id: string;
+  eventId: string;
+  eventTitle: string;
+  city: string;
+  area: string;
+  startsAt: string;
+  name: string;
+  venue: string;
+  plan: string;
+  chatOpensAt: string;
+  chatOpen: boolean;
+  chatClosesAt: string;
+  members: CircleMember[];
+  messages: CircleMessage[];
+  myAlias: string;
+}
+
+// ---------------------------------------------------------------------------
+// Life: five areas, one dashboard
+// ---------------------------------------------------------------------------
+
+export type LifeAreaKey = 'physical' | 'financial' | 'emotional' | 'mental' | 'spiritual';
+
+export const LIFE_AREAS: Record<LifeAreaKey, { name: string; emoji: string; blurb: string; path: string; relationship: RelationshipKey }> = {
+  physical: { name: 'Physical', emoji: '🏃', blurb: 'Sleep, movement and breath.', path: '/wellbeing', relationship: 'self' },
+  financial: { name: 'Financial', emoji: '💰', blurb: 'What comes in, what goes out, where you are heading.', path: '/finance', relationship: 'servant_leader' },
+  emotional: { name: 'Emotional', emoji: '💛', blurb: 'Mood, what you wrote, and the people floors.', path: '/mood', relationship: 'lover_partner' },
+  mental: { name: 'Mental', emoji: '🧠', blurb: 'Stress, focus, and what you are learning.', path: '/stress', relationship: 'guru' },
+  spiritual: { name: 'Spiritual', emoji: '✨', blurb: 'Stillness, awe, and the top floors.', path: '/mindful', relationship: 'divine' },
+};
+
+export interface LifePart {
+  label: string;
+  /** What to show, e.g. "7.2 h" or "3 of 5 days". */
+  value: string;
+  /** Null when there is nothing logged yet. */
+  score: number | null;
+  path: string;
+  hint: string;
+}
+
+export interface LifeArea {
+  key: LifeAreaKey;
+  score: number;
+  /** Change against the week before, in points. */
+  trend: number;
+  parts: LifePart[];
+}
+
+export interface LifeSummary {
+  date: string;
+  overall: number;
+  label: string;
+  areas: LifeArea[];
+}
+
+export interface SearchResults {
+  tasks: { id: string; title: string; relationship: RelationshipKey; status: string }[];
+  journal: { id: string; title: string; createdAt: string }[];
+  resources: { id: string; title: string; kind: ResourceKind }[];
+  products: { id: string; title: string; kind: ProductKind; ownerHandle: string | null }[];
+  people: { handle: string; name: string }[];
+}
+
+// ---------------------------------------------------------------------------
+// Profile and portfolio
+// ---------------------------------------------------------------------------
+
+export const SKILLS = ['Videography', 'Editing', 'On camera', 'Interviewing', 'Writing', 'Design', 'Photography', 'Sound', 'Sales and pitching', 'Community', 'Live streaming', 'Teaching'] as const;
+export const CATEGORIES = ['Education', 'Comedy', 'Lifestyle', 'Fitness', 'Food', 'Tech', 'Finance', 'Travel', 'Music', 'Gaming', 'Fashion', 'Wellbeing'] as const;
+export const EXPERIENCE_LEVELS = ['Just starting', 'Early', 'Working', 'Established'] as const;
+export const AVAILABILITY = ['Open to work', 'Open to collabs', 'Busy right now'] as const;
+export const GOALS = ['Learn skills', 'Find paid work', 'Collaborate', 'Attend events', 'Sell what I make', 'Get healthier habits'] as const;
+
+export interface PortfolioItem {
+  id: string;
+  title: string;
+  description: string;
+  url: string;
+  visibility: 'public' | 'private';
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Organizations (brands and agencies)
+// ---------------------------------------------------------------------------
+
+export interface Organization {
+  id: string;
+  name: string;
+  type: 'brand' | 'agency' | 'partner';
+  status: 'active' | 'suspended';
+  myRole: 'owner' | 'member' | null;
+  createdAt: string;
+}
+
+export interface OrganizationMember {
+  userId: string;
+  name: string;
+  email: string | null;
+  role: 'owner' | 'member';
+}
+
+// ---------------------------------------------------------------------------
+// Army — brand campaigns
+// ---------------------------------------------------------------------------
+
+export const CAMPAIGN_STATUSES = ['lead', 'brief', 'scoping', 'shortlist', 'approved', 'production', 'review', 'delivered', 'reported', 'cancelled'] as const;
+export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
+
+export const CAMPAIGN_STATUS_META: Record<CampaignStatus, string> = {
+  lead: 'New lead',
+  brief: 'Brief written',
+  scoping: 'Scope and budget',
+  shortlist: 'Creators shortlisted',
+  approved: 'Approved by brand',
+  production: 'In production',
+  review: 'In review',
+  delivered: 'Delivered',
+  reported: 'Reported and invoiced',
+  cancelled: 'Cancelled',
+};
+
+export interface Campaign {
+  id: string;
+  organizationId: string;
+  organizationName: string;
+  ownerId: string | null;
+  ownerName: string;
+  name: string;
+  brief: string;
+  budgetAmount: number;
+  currency: string;
+  startDate: string | null;
+  dueDate: string | null;
+  status: CampaignStatus;
+  usageRights: string;
+  exclusivityTerms: string;
+  brandRestrictions: string;
+  createdAt: string;
+  updatedAt: string;
+  deliverableCount: number;
+  assignmentCount: number;
+}
+
+export interface Deliverable {
+  id: string;
+  campaignId: string;
+  title: string;
+  format: string;
+  platform: string;
+  dueAt: string | null;
+  status: 'open' | 'submitted' | 'changes' | 'approved';
+  approvedAt: string | null;
+  finalUrl: string | null;
+  versions: DeliverableVersion[];
+}
+
+export interface DeliverableVersion {
+  id: string;
+  deliverableId: string;
+  versionNumber: number;
+  url: string;
+  note: string;
+  submittedBy: string;
+  submittedByName: string;
+  submittedAt: string;
+  reviewStatus: 'pending' | 'approved' | 'changes';
+  feedback: { id: string; authorName: string; comment: string; createdAt: string }[];
+}
+
+export interface CampaignAssignment {
+  id: string;
+  campaignId: string;
+  creatorId: string;
+  creatorName: string;
+  role: string;
+  feeAmount: number;
+  currency: string;
+  status: 'offered' | 'accepted' | 'declined' | 'done';
+  termsAcceptedAt: string | null;
+}
+
+export interface CampaignEvent {
+  id: string;
+  actorName: string;
+  eventType: string;
+  note: string;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// School — programs, cohorts, learning
+// ---------------------------------------------------------------------------
+
+export interface Program {
+  id: string;
+  name: string;
+  description: string;
+  pricePoints: number;
+  priceCents: number;
+  currency: string;
+  deliveryMode: 'online' | 'in_person' | 'hybrid';
+  published: boolean;
+  outcomes: string;
+  prerequisites: string;
+  createdAt: string;
+  cohorts: Cohort[];
+}
+
+export interface Cohort {
+  id: string;
+  programId: string;
+  programName: string;
+  name: string;
+  startAt: string;
+  endAt: string;
+  capacity: number;
+  enrolled: number;
+  status: 'upcoming' | 'running' | 'finished' | 'cancelled';
+  managerId: string | null;
+  managerName: string;
+}
+
+export interface Enrollment {
+  id: string;
+  cohortId: string;
+  learnerId: string;
+  learnerName: string;
+  status: 'enrolled' | 'completed' | 'withdrawn';
+  paymentStatus: 'free' | 'paid' | 'test' | 'pending';
+  enrolledAt: string;
+  completedAt: string | null;
+  progress: { assignmentsApproved: number; assignmentsTotal: number; sessionsAttended: number; sessionsTotal: number };
+}
+
+export interface LearningItem {
+  id: string;
+  programId: string;
+  moduleTitle: string;
+  contentType: 'lesson' | 'video' | 'reading';
+  contentRef: string | null;
+  body: string;
+  sequence: number;
+  published: boolean;
+}
+
+export interface CourseAssignment {
+  id: string;
+  programId: string;
+  title: string;
+  instructions: string;
+  rubric: string;
+  dueDays: number;
+  sequence: number;
+}
+
+export interface Submission {
+  id: string;
+  assignmentId: string;
+  cohortId: string;
+  learnerId: string;
+  learnerName: string;
+  url: string | null;
+  text: string;
+  status: 'submitted' | 'changes' | 'approved';
+  submittedAt: string;
+  feedback: { id: string; reviewerName: string; comment: string; grade: string | null; createdAt: string }[];
+}
+
+export interface CohortSession {
+  id: string;
+  cohortId: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  onlineUrl: string | null;
+  attended: boolean;
+  attendance?: { userId: string; name: string; status: string }[];
+}
+
+// ---------------------------------------------------------------------------
+// Work — opportunities and applications
+// ---------------------------------------------------------------------------
+
+export const OPPORTUNITY_TYPES = ['gig', 'campaign', 'full_time', 'part_time', 'internship', 'collab'] as const;
+export const APPLICATION_STATUSES = ['draft', 'submitted', 'reviewing', 'shortlisted', 'selected', 'rejected', 'withdrawn', 'completed'] as const;
+export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
+
+export interface Opportunity {
+  id: string;
+  organizationId: string | null;
+  organizationName: string;
+  createdBy: string;
+  title: string;
+  description: string;
+  opportunityType: (typeof OPPORTUNITY_TYPES)[number];
+  skillsRequired: string[];
+  locationMode: 'remote' | 'on_site' | 'hybrid';
+  locationText: string;
+  compensationMin: number | null;
+  compensationMax: number | null;
+  currency: string;
+  deliverables: string;
+  deadline: string | null;
+  status: 'draft' | 'published' | 'closed';
+  eligibility: string;
+  createdAt: string;
+  publishedAt: string | null;
+  applications: number;
+  myApplication: Application | null;
+}
+
+export interface Application {
+  id: string;
+  opportunityId: string;
+  opportunityTitle: string;
+  creatorId: string;
+  creatorName: string;
+  creatorHandle: string | null;
+  coverNote: string;
+  portfolioSnapshot: string;
+  status: ApplicationStatus;
+  submittedAt: string;
+  updatedAt: string;
+  events?: { eventType: string; actorName: string; note: string; createdAt: string }[];
+}
+
+// ---------------------------------------------------------------------------
+// Party — events
+// ---------------------------------------------------------------------------
+
+export const EVENT_TYPES = ['meetup', 'party', 'workshop', 'camp', 'day'] as const;
+export type EventType = (typeof EVENT_TYPES)[number];
+
+export const EVENT_TYPE_META: Record<EventType, { name: string; emoji: string; staffOnly: boolean }> = {
+  meetup: { name: 'Meetup', emoji: '☕', staffOnly: false },
+  party: { name: 'Party', emoji: '🎉', staffOnly: true },
+  workshop: { name: 'Workshop', emoji: '🛠️', staffOnly: true },
+  camp: { name: 'Camp', emoji: '⛺', staffOnly: true },
+  day: { name: 'Kreators Day', emoji: '🌞', staffOnly: true },
+};
+
+export interface PartyEvent {
+  id: string;
+  title: string;
+  description: string;
+  eventType: EventType;
+  hostId: string;
+  hostName: string;
+  venue: string;
+  onlineUrl: string | null;
+  timezone: string;
+  startsAt: string;
+  endsAt: string;
+  capacity: number | null;
+  pricePoints: number;
+  visibility: 'public' | 'private' | 'club';
+  status: 'published' | 'cancelled' | 'done';
+  registered: number;
+  waitlisted: number;
+  mine: EventRegistration | null;
+  createdAt: string;
+}
+
+export interface EventRegistration {
+  id: string;
+  eventId: string;
+  userId: string;
+  name: string;
+  status: 'registered' | 'waitlisted' | 'cancelled' | 'attended';
+  registeredAt: string;
+  checkedInAt: string | null;
+  networkingOptIn: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Club, Win, Bond, Tools, proposals, support
+// ---------------------------------------------------------------------------
+
+export const CLUB_BENEFITS = [
+  { key: 'events', name: 'Club-only events', blurb: 'Private parties and workshops.' },
+  { key: 'opportunities', name: 'First look at opportunities', blurb: 'Club-only Work listings.' },
+  { key: 'manager', name: 'A named manager', blurb: 'Someone on staff who knows your work.' },
+  { key: 'honor', name: 'The Club honor', blurb: 'Shown on your profile and the leaderboard.' },
+] as const;
+
+export interface Membership {
+  id: string;
+  userId: string;
+  userName: string;
+  membershipType: 'club';
+  status: 'applied' | 'approved' | 'active' | 'rejected' | 'suspended' | 'expired';
+  note: string;
+  decisionNote: string;
+  approvedBy: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  createdAt: string;
+}
+
+export interface Bounty {
+  id: string;
+  organizationName: string;
+  brandName: string;
+  title: string;
+  brief: string;
+  deliverable: string;
+  budgetPoints: number;
+  /** Points paid per thousand verified views. */
+  ratePerThousand: number;
+  /** Cap per creator. 0 means the only cap is the budget. */
+  maxPayoutPoints: number;
+  /** Views a post needs before anything is paid. */
+  minViews: number;
+  rewardRule: string;
+  eligibility: string;
+  platform: string;
+  startsAt: string;
+  endsAt: string;
+  status: 'open' | 'closed' | 'paid';
+  featured: boolean;
+  version: number;
+  submissions: number;
+  paidPoints: number;
+  mine: BountySubmission | null;
+  createdAt: string;
+}
+
+export type SocialPlatform = 'instagram' | 'youtube' | 'tiktok' | 'x' | 'facebook' | 'linkedin' | 'other';
+
+export const SOCIAL_PLATFORM_META: Record<SocialPlatform, { name: string; auto: boolean }> = {
+  instagram: { name: 'Instagram', auto: false },
+  youtube: { name: 'YouTube', auto: true },
+  tiktok: { name: 'TikTok', auto: false },
+  x: { name: 'X', auto: false },
+  facebook: { name: 'Facebook', auto: false },
+  linkedin: { name: 'LinkedIn', auto: false },
+  other: { name: 'Other', auto: false },
+};
+
+export function detectPlatform(url: string): SocialPlatform {
+  const u = url.toLowerCase();
+  if (u.includes('instagram.com')) return 'instagram';
+  if (u.includes('youtube.com') || u.includes('youtu.be')) return 'youtube';
+  if (u.includes('tiktok.com')) return 'tiktok';
+  if (u.includes('twitter.com') || u.includes('x.com/')) return 'x';
+  if (u.includes('facebook.com') || u.includes('fb.watch')) return 'facebook';
+  if (u.includes('linkedin.com')) return 'linkedin';
+  return 'other';
+}
+
+/** One reading of a post's numbers. Several accumulate over a reward's window. */
+export interface SocialMetric {
+  id: string;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  /** auto: fetched from the platform. manual: the creator typed it. staff: a reviewer confirmed it. */
+  source: 'auto' | 'manual' | 'staff';
+  note: string;
+  fetchedAt: string;
+}
+
+export interface BountySubmission {
+  id: string;
+  bountyId: string;
+  bountyTitle: string;
+  userId: string;
+  userName: string;
+  url: string;
+  platform: SocialPlatform;
+  status: 'submitted' | 'verified' | 'rejected' | 'paid' | 'disputed';
+  latestViews: number;
+  latestEngagement: number;
+  /** Views a reviewer confirmed, which the payout is computed from. */
+  evidenceViews: number | null;
+  evidenceNote: string;
+  payoutPoints: number;
+  estimatedPoints: number;
+  disputeNote: string;
+  metrics: SocialMetric[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** What a post earns at a given view count, before the budget is considered. */
+export function bountyPayout(views: number, b: Pick<Bounty, 'ratePerThousand' | 'maxPayoutPoints' | 'minViews'>): number {
+  if (views < b.minViews || b.ratePerThousand <= 0) return 0;
+  const raw = Math.floor(views / 1000) * b.ratePerThousand;
+  return b.maxPayoutPoints > 0 ? Math.min(raw, b.maxPayoutPoints) : raw;
+}
+
+/** Everything the public site can list. Each one opens a page in the app after sign-in. */
+export type ListingType = 'reward' | 'opportunity' | 'event' | 'program' | 'tool' | 'campaign' | 'circle';
+
+export interface ListingTypeMeta {
+  name: string;
+  plural: string;
+  moduleKey: string;
+  /** The verb on the sign-in button. */
+  verb: string;
+  emoji: string;
+}
+
+export const LISTING_TYPE_META: Record<ListingType, ListingTypeMeta> = {
+  reward: { name: 'Content reward', plural: 'Content rewards', moduleKey: 'win', verb: 'Submit a video', emoji: '🥇' },
+  opportunity: { name: 'Opportunity', plural: 'Opportunities', moduleKey: 'work', verb: 'Apply', emoji: '💼' },
+  event: { name: 'Event', plural: 'Events', moduleKey: 'party', verb: 'RSVP', emoji: '🎉' },
+  program: { name: 'Program', plural: 'Programs', moduleKey: 'school', verb: 'Enrol', emoji: '🎓' },
+  tool: { name: 'Tool', plural: 'Tools', moduleKey: 'tools', verb: 'Open', emoji: '🧰' },
+  campaign: { name: 'Campaign', plural: 'Campaigns', moduleKey: 'army', verb: 'See the brief', emoji: '🎬' },
+  circle: { name: 'Circle', plural: 'Circles', moduleKey: 'circles', verb: 'Join', emoji: '🫧' },
+};
+export const LISTING_TYPES = Object.keys(LISTING_TYPE_META) as ListingType[];
+
+export interface Listing {
+  type: ListingType;
+  id: string;
+  title: string;
+  /** Who it is from: a brand, a host, the team. */
+  by: string;
+  blurb: string;
+  /** Short facts shown as chips: pay, dates, place. */
+  facts: string[];
+  /** The page inside the app. */
+  path: string;
+  featured: boolean;
+  /** Draft or closed listings only appear to admins. */
+  live: boolean;
+  endsAt: string | null;
+  createdAt: string;
+}
+
+export interface PublicStats {
+  members: number;
+  rewardsOpen: number;
+  opportunitiesOpen: number;
+  eventsUpcoming: number;
+  programs: number;
+  pointsPaid: number;
+  campaigns: number;
+}
+
+export interface Introduction {
+  id: string;
+  requesterId: string;
+  requesterName: string;
+  recipientId: string;
+  recipientName: string;
+  context: string;
+  status: 'proposed' | 'accepted' | 'declined';
+  createdAt: string;
+}
+
+export interface Tool {
+  id: string;
+  name: string;
+  category: string;
+  url: string;
+  description: string;
+  affiliate: boolean;
+  verified: boolean;
+  suggestedByName: string;
+  createdAt: string;
+}
+
+export const TOOL_CATEGORIES = ['Capture', 'Editing', 'Audio', 'Design', 'Scheduling', 'Analytics', 'Monetization', 'Community', 'AI'] as const;
+
+export const PROPOSAL_STAGES = ['submitted', 'review', 'diligence', 'approved', 'rejected', 'in_progress', 'released'] as const;
+export type ProposalStage = (typeof PROPOSAL_STAGES)[number];
+
+export interface Proposal {
+  id: string;
+  kind: 'tv' | 'fund';
+  userId: string;
+  userName: string;
+  title: string;
+  pitch: string;
+  budgetAmount: number;
+  currency: string;
+  stage: ProposalStage;
+  createdAt: string;
+  updatedAt: string;
+  log: { actorName: string; fromStage: string; toStage: string; note: string; createdAt: string }[];
+}
+
+export interface SupportTicket {
+  id: string;
+  userId: string;
+  userName: string;
+  subject: string;
+  body: string;
+  status: 'open' | 'answered' | 'closed';
+  reply: string;
+  repliedByName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const HELP_FAQ = [
+  { q: 'What are the daily three?', a: 'Check in, do the spark, tick one task. They are on Today. Every one you tick pays xp, and the check-in pays points too.' },
+  { q: 'What is the tower?', a: 'Seven floors, one per relationship. Each floor is a ladder: a pillar holds up a principle, a value goal, an outcome, a project and tasks. Tick a task and every rung above it gets stronger.' },
+  { q: 'Why can I not tick a task yet?', a: 'A task needs ten minutes after being written or renamed before it can be ticked. Only six ticks a day pay xp; the rest still count as done.' },
+  { q: 'Points versus xp?', a: 'Xp levels you and your floors up. Points are earned by showing up and can be traded for rewards, products on creators’ pages, and events.' },
+  { q: 'How do I sell something?', a: 'Switch Shop on under You, Features. Make a product, publish it, and share your Profile page.' },
+  { q: 'How do I get work?', a: 'Work lists opportunities from brands and the team. Apply once per opportunity and follow its status in Work.' },
+  { q: 'Is the Companion a therapist?', a: 'No. It reflects and asks questions. If you are in danger, contact your local emergency number. In India, Tele-MANAS is 14416.' },
+  { q: 'Who can see my journal?', a: 'Only you. Journal entries and wellbeing scores are never shown to brands, staff, the leaderboard or Club selection.' },
+] as const;

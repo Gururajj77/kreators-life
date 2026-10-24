@@ -120,7 +120,7 @@ export function VibeCheck() {
                   type="button"
                   aria-pressed={focus === t}
                   onClick={() => setFocus(t)}
-                  className={`rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${focus === t ? 'border-ink bg-ink text-white' : 'border-line bg-card'}`}
+                  className={`rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${focus === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}
                 >
                   {t}
                 </button>
@@ -130,7 +130,7 @@ export function VibeCheck() {
           <Button type="submit" size="lg" full>
             Start
           </Button>
-          <p className="m-0 text-center text-[13px] font-semibold text-ink-mute">Both optional. You can change them later.</p>
+          <p className="m-0 text-center text-[14px] font-semibold text-ink-mute">Both optional. You can change them later.</p>
         </form>
       </Screen>
     );
@@ -179,7 +179,7 @@ function QuestionStage({
   const step = STEP_OF_ROLE[q.role];
   const asks = q.role === 'foundation' ? `${rel.character} needs a foundation` : `${rel.character} asks`;
   return (
-    <div className="min-h-dvh" style={{ background: rel.soft }}>
+    <div className="min-h-dvh" style={{ background: `var(--soft-${rel.key})` }}>
       <Screen tabs={false}>
         <div className="pt-md">
           <div className="flex items-center justify-between gap-sm">
@@ -194,7 +194,7 @@ function QuestionStage({
             {RELATIONSHIPS.map((r) => {
               const fill = r.floor < rel.floor ? 1 : r.floor === rel.floor ? step / STEPS_PER_FLOOR : 0;
               return (
-                <li key={r.key} className="h-[8px] flex-1 overflow-hidden rounded-pill" style={{ background: 'rgba(43,29,58,0.12)' }}>
+                <li key={r.key} className="h-[8px] flex-1 overflow-hidden rounded-pill" style={{ background: 'rgba(79,52,34,0.12)' }}>
                   <span className="block h-full rounded-pill" style={{ width: `${fill * 100}%`, background: r.color }} />
                 </li>
               );
@@ -213,10 +213,10 @@ function QuestionStage({
             <div className="mt-lg flex items-end gap-sm">
               <Avatar relationship={q.relationship} size={84} mood={value === undefined ? 'neutral' : 'excited'} decorative />
               <div className="flex-1 rounded-card rounded-bl-[8px] bg-card p-md shadow-toy-soft">
-                <p className="m-0 text-[13px] font-bold" style={{ color: rel.deep }}>
+                <p className="m-0 text-[14px] font-bold" style={{ color: `var(--deep-${rel.key})` }}>
                   {asks}
                 </p>
-                <h1 className="mt-xs text-[22px] leading-tight">{q.prompt}</h1>
+                <h1 className="mt-xs text-[24px] leading-tight">{q.prompt}</h1>
               </div>
             </div>
 
@@ -232,7 +232,7 @@ function QuestionStage({
                       className="toy toy-soft flex w-full items-center gap-sm rounded-card border-[3px] bg-card p-md text-left"
                       style={{ borderColor: value === i ? rel.color : 'transparent' }}
                     >
-                      <span className="text-[32px]" aria-hidden="true">
+                      <span className="text-[30px]" aria-hidden="true">
                         {o.emoji}
                       </span>
                       <span className="text-[18px] font-bold leading-tight">{o.label}</span>
@@ -265,7 +265,7 @@ function QuestionStage({
 
               {q.format === 'yesno' && (
                 <div className="grid grid-cols-2 gap-sm">
-                  <Button variant="color" color={rel.color} deep={rel.deep} size="lg" style={{ color: rel.text }} aria-pressed={value === 1} onClick={() => onAnswer(1)}>
+                  <Button variant="color" color={rel.color} deep={`var(--deep-${rel.key})`} size="lg" style={{ color: rel.text }} aria-pressed={value === 1} onClick={() => onAnswer(1)}>
                     Yes
                   </Button>
                   <Button variant="outline" size="lg" aria-pressed={value === 0} onClick={() => onAnswer(0)}>
@@ -275,7 +275,7 @@ function QuestionStage({
               )}
             </div>
             {q.role === 'foundation' && (
-              <p className="mt-md m-0 text-[13px] font-semibold text-ink-soft">
+              <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">
                 This becomes the pillar on {rel.character}&rsquo;s floor. The principle, value goal, outcome, project and first tasks are derived from it.
               </p>
             )}
@@ -303,7 +303,7 @@ function Reveal({ result, onNext }: { result: OnboardingResponse; onNext: () => 
   return (
     <Screen tabs={false}>
       <div className="pt-xl">
-        <h1 className="text-[40px]">Your rainbow</h1>
+        <h1 className="text-[36px]">Your rainbow</h1>
         <p className="mt-sm text-[16px] font-semibold text-ink-soft">
           How your seven relationships look today. A short bar is not bad news. It is where the easy wins are.
         </p>
@@ -375,20 +375,20 @@ function Ladders({ result, onDone }: { result: OnboardingResponse; onDone: () =>
             [KIND_META.project.label, l.project],
           ];
           return (
-            <li key={r.key} className="rounded-card p-md" style={{ background: r.soft }}>
+            <li key={r.key} className="rounded-card p-md" style={{ background: `var(--soft-${r.key})` }}>
               <div className="flex items-start gap-sm">
                 <Avatar relationship={r.key} size={56} mood={on ? 'excited' : 'neutral'} decorative />
                 <div className="min-w-0 flex-1">
-                  <p className="m-0 text-[13px] font-bold" style={{ color: r.deep }}>
+                  <p className="m-0 text-[14px] font-bold" style={{ color: `var(--deep-${r.key})` }}>
                     {r.character}, {result.scores[r.key]}%, {l.branch === 'low' ? 'gentle start' : 'stretch tasks'}
                   </p>
-                  <h2 className="mt-xs text-[22px]">{l.pillar}</h2>
+                  <h2 className="mt-xs text-[24px]">{l.pillar}</h2>
                 </div>
               </div>
               <dl className="mt-sm m-0 grid grid-cols-[auto_1fr] gap-x-sm gap-y-xs text-[14px]">
                 {rows.map(([k, v]) => (
                   <div key={k} className="contents">
-                    <dt className="font-bold" style={{ color: r.deep }}>
+                    <dt className="font-bold" style={{ color: `var(--deep-${r.key})` }}>
                       {k}
                     </dt>
                     <dd className="m-0 font-semibold">{v}</dd>
@@ -410,7 +410,7 @@ function Ladders({ result, onDone }: { result: OnboardingResponse; onDone: () =>
                   title={`Build ${r.character}’s floor`}
                   subtitle={on ? 'Ticked. It will be built.' : 'Tick to build it too.'}
                   color={r.color}
-                  deep={r.deep}
+                  deep={`var(--deep-${r.key})`}
                   text={r.text}
                 />
               </div>

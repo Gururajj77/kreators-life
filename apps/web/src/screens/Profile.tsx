@@ -1,0 +1,264 @@
+import { AVAILABILITY, CATEGORIES, EXPERIENCE_LEVELS, GOALS, SKILLS, type PortfolioItem, type User } from '@kreators/shared';
+import { useMutation } from '@tanstack/react-query';
+import { useState } from 'react';
+import { Link } from 'react-router';
+import { Button } from '../components/Button';
+import { Screen } from '../components/Screen';
+import { api } from '../lib/api';
+import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
+
+const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
+
+function Err({ e }: { e: unknown }) {
+  if (!e) return null;
+  return (
+    <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+      {e instanceof Error ? e.message : 'That did not work.'}
+    </p>
+  );
+}
+
+function Chips({ legend, options, value, onChange, max, hint }: { legend: string; options: readonly string[]; value: string[]; onChange: (next: string[]) => void; max?: number; hint?: string }) {
+  const toggle = (o: string) => {
+    if (value.includes(o)) onChange(value.filter((v) => v !== o));
+    else if (!max || value.length < max) onChange([...value, o]);
+  };
+  return (
+    <fieldset className="m-0 border-0 p-0">
+      <legend className="text-[14px] font-bold">
+        {legend}
+        {max ? <span className="font-semibold text-ink-soft"> (up to {max})</span> : ''}
+      </legend>
+      {hint && <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{hint}</p>}
+      <div className="mt-xs flex flex-wrap gap-xs">
+        {options.map((o) => {
+          const on = value.includes(o);
+          const full = Boolean(max && value.length >= max && !on);
+          return (
+            <button key={o} type="button" aria-pressed={on} disabled={full} onClick={() => toggle(o)} className={`toy rounded-pill border-2 px-sm py-xs text-[14px] font-bold disabled:opacity-50 ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+              {o}
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
+function OneOf({ legend, options, value, onChange }: { legend: string; options: readonly string[]; value: string; onChange: (next: string) => void }) {
+  return (
+    <fieldset className="m-0 border-0 p-0">
+      <legend className="text-[14px] font-bold">{legend}</legend>
+      <div className="mt-xs flex flex-wrap gap-xs">
+        {options.map((o) => (
+          <button key={o} type="button" aria-pressed={value === o} onClick={() => onChange(value === o ? '' : o)} className={`toy rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${value === o ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            {o}
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+export function Profile() {
+  const me = useMe();
+  if (!me.data) return null;
+  return <ProfileView key={me.data.user.id} user={me.data.user} />;
+}
+
+function ProfileView({ user }: { user: User }) {
+  const refresh = useRefreshAll();
+  const [handle, setHandle] = useState(user.handle ?? '');
+  const [bio, setBio] = useState(user.bio);
+  const [skills, setSkills] = useState<string[]>(user.skills);
+  const [categories, setCategories] = useState<string[]>(user.categories);
+  const [goals, setGoals] = useState<string[]>(user.goals);
+  const [experienceLevel, setExperience] = useState(user.experienceLevel);
+  const [availability, setAvailability] = useState(user.availability);
+  const [location, setLocation] = useState(user.location);
+  const [openToIntros, setOpenToIntros] = useState(user.openToIntros);
+  const [saved, setSaved] = useState(false);
+  const save = useMutation({
+    mutationFn: () => api.updateMe({ handle: handle || null, bio, skills, categories, goals, experienceLevel, availability, location, openToIntros }),
+    onSuccess: () => {
+      refresh();
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 2000);
+    },
+  });
+  const link = user.handle ? `${window.location.origin}/u/${user.handle}` : null;
+
+  return (
+    <Screen>
+      <header className="pt-lg">
+        <h1 className="text-[30px]">Profile</h1>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">What brands, hosts and other people see. Your journal and wellbeing never appear here.</p>
+        {link ? (
+          <div className="mt-sm rounded-tile bg-card p-sm shadow-toy-soft">
+            <p className="m-0 text-[14px] font-bold">Your public page</p>
+            <p className="m-0 break-all text-[16px] font-semibold">{link}</p>
+            <div className="mt-sm flex flex-wrap gap-xs">
+              <Button variant="outline" onClick={() => navigator.clipboard?.writeText(link)}>
+                Copy
+              </Button>
+              <Link to={`/u/${user.handle}`} className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+                Open
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-sm m-0 rounded-tile bg-r3 p-sm text-[14px] font-bold text-ink-fixed">Pick a page name below so people can find you.</p>
+        )}
+      </header>
+
+      <form
+        className="mt-lg flex flex-col gap-md rounded-card bg-card p-md shadow-toy-soft"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save.mutate();
+        }}
+      >
+        <label className="block">
+          <span className="block text-[14px] font-bold">Page name</span>
+          <div className="mt-xs flex items-center gap-xs">
+            <span className="text-[16px] font-bold text-ink-soft">/u/</span>
+            <input value={handle} onChange={(e) => setHandle(e.target.value.toLowerCase())} maxLength={20} pattern="[a-z0-9_]{3,20}" placeholder="yourname" className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+          </div>
+          <span className="mt-xs block text-[12px] font-bold text-ink-soft">Three to twenty characters: letters, numbers, underscore.</span>
+        </label>
+        <label className="block">
+          <span className="block text-[14px] font-bold">Bio</span>
+          <textarea value={bio} onChange={(e) => setBio(e.target.value)} maxLength={200} rows={3} className={field} />
+        </label>
+        <Chips legend="Skills" options={SKILLS} value={skills} onChange={setSkills} max={12} hint="What you can be hired for." />
+        <Chips legend="Categories" options={CATEGORIES} value={categories} onChange={setCategories} max={12} hint="What your work is about." />
+        <Chips legend="Goals" options={GOALS} value={goals} onChange={setGoals} max={12} hint="What you want from Kreators. It shapes what we suggest." />
+        <OneOf legend="Experience" options={EXPERIENCE_LEVELS} value={experienceLevel} onChange={setExperience} />
+        <OneOf legend="Availability" options={AVAILABILITY} value={availability} onChange={setAvailability} />
+        <label className="block">
+          <span className="block text-[14px] font-bold">Location</span>
+          <input value={location} onChange={(e) => setLocation(e.target.value)} maxLength={80} placeholder="City, country" className={field} />
+        </label>
+        <label className="flex items-center gap-sm text-[14px] font-bold">
+          <input type="checkbox" checked={openToIntros} onChange={(e) => setOpenToIntros(e.target.checked)} className="size-[20px] accent-ink" />
+          Open to introductions from people I meet at events
+        </label>
+        <Err e={save.isError ? save.error : null} />
+        <Button type="submit" size="lg" full disabled={save.isPending}>
+          {saved ? 'Saved' : 'Save profile'}
+        </Button>
+      </form>
+
+      <Portfolio />
+
+      <section className="mt-lg" aria-labelledby="more-heading">
+        <h2 id="more-heading" className="text-[24px]">
+          More of your page
+        </h2>
+        <ul className="mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0">
+          <li>
+            <Link to="/shop/page" className="toy toy-soft block min-h-[88px] rounded-tile bg-card p-sm">
+              <span className="block text-[22px]" aria-hidden="true">
+                🛍️
+              </span>
+              <span className="block text-[16px] font-bold">Products and your page</span>
+              <span className="block text-[14px] font-semibold text-ink-soft">What you sell, and the lead form.</span>
+            </Link>
+          </li>
+          <li>
+            <Link to="/you" className="toy toy-soft block min-h-[88px] rounded-tile bg-card p-sm">
+              <span className="block text-[22px]" aria-hidden="true">
+                🙂
+              </span>
+              <span className="block text-[16px] font-bold">You</span>
+              <span className="block text-[14px] font-semibold text-ink-soft">Name, focus, features, account.</span>
+            </Link>
+          </li>
+        </ul>
+      </section>
+    </Screen>
+  );
+}
+
+function Portfolio() {
+  const q = useAuthed(['portfolio'], api.portfolio);
+  const [title, setTitle] = useState('');
+  const [url, setUrl] = useState('');
+  const [description, setDescription] = useState('');
+  const [visibility, setVisibility] = useState<PortfolioItem['visibility']>('public');
+  const add = useMutation({
+    mutationFn: () => api.addPortfolio({ title, url, description, visibility }),
+    onSuccess: () => {
+      setTitle('');
+      setUrl('');
+      setDescription('');
+      q.refetch();
+    },
+  });
+  const remove = useMutation({ mutationFn: (id: string) => api.removePortfolio(id), onSuccess: () => q.refetch() });
+  const items = q.data?.items ?? [];
+  return (
+    <section className="mt-lg" aria-labelledby="portfolio-heading">
+      <h2 id="portfolio-heading" className="text-[24px]">
+        Portfolio
+      </h2>
+      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Your best work, as links. Public items show on your page and go with every application you send. Up to five travel with an application.</p>
+      {q.data && items.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing here yet. Add the piece you are proudest of.</p>}
+      <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+        {items.map((it) => (
+          <li key={it.id} className="flex items-start gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+            <span className="min-w-0 flex-1">
+              <a href={it.url} target="_blank" rel="noreferrer" className="block truncate text-[16px] font-bold underline-offset-4 hover:underline">
+                {it.title}
+              </a>
+              {it.description && <span className="block text-[14px] font-semibold text-ink-soft">{it.description}</span>}
+              <span className="block text-[12px] font-bold text-ink-mute">{it.visibility === 'public' ? 'Public' : 'Only you'}</span>
+            </span>
+            <Button variant="ghost" className="shrink-0" aria-label={`Remove ${it.title}`} onClick={() => remove.mutate(it.id)} disabled={remove.isPending}>
+              Remove
+            </Button>
+          </li>
+        ))}
+      </ul>
+      <form
+        className="mt-sm flex flex-col gap-md rounded-card bg-card p-md shadow-toy-soft"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (title.trim() && url.trim()) add.mutate();
+        }}
+      >
+        <label className="block">
+          <span className="block text-[14px] font-bold">Title</span>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={field} />
+        </label>
+        <label className="block">
+          <span className="block text-[14px] font-bold">Link</span>
+          <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} maxLength={500} required placeholder="https://" className={field} />
+        </label>
+        <label className="block">
+          <span className="block text-[14px] font-bold">One line about it</span>
+          <input value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} className={field} />
+        </label>
+        <fieldset className="m-0 border-0 p-0">
+          <legend className="text-[14px] font-bold">Who sees it</legend>
+          <div className="mt-xs flex flex-wrap gap-xs">
+            {(
+              [
+                ['public', 'Everyone'],
+                ['private', 'Only you'],
+              ] as [PortfolioItem['visibility'], string][]
+            ).map(([v, label]) => (
+              <button key={v} type="button" aria-pressed={visibility === v} onClick={() => setVisibility(v)} className={`toy rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${visibility === v ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        <Err e={add.isError ? add.error : null} />
+        <Button type="submit" full disabled={add.isPending || !title.trim() || !url.trim()}>
+          Add to portfolio
+        </Button>
+      </form>
+    </section>
+  );
+}

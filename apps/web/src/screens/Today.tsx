@@ -27,7 +27,7 @@ export function Today() {
     queue.run('checkin', async () => {
       const r = await api.checkin(date);
       if (!r.alreadyCheckedIn) {
-        celebrate({ title: r.streakBonus > 0 ? `Day ${r.streak}. Streak bonus!` : `Day ${r.streak} checked in`, totalXp: r.awarded, points: r.points, color: '#FFC93C' });
+        celebrate({ title: r.streakBonus > 0 ? `Day ${r.streak}. Streak bonus!` : `Day ${r.streak} checked in`, totalXp: r.awarded, points: r.points, color: '#FACC15' });
       }
     });
   const doSpark = () =>
@@ -59,7 +59,7 @@ export function Today() {
       <header className="pt-lg">
         <p className="m-0 text-[14px] font-bold text-ink-soft">{prettyDate(date)}</p>
         <div className="flex items-center justify-between gap-sm">
-          <h1 className="text-[32px]">Today</h1>
+          <h1 className="text-[30px]">Today</h1>
           {data && (
             <span className="shrink-0 rounded-pill bg-card px-sm py-xs text-[14px] font-extrabold shadow-toy-soft">
               <span aria-hidden="true">🔥 </span>
@@ -121,9 +121,9 @@ export function Today() {
                     '+10 xp and +10 points. Fifty bonus points every seventh day in a row.'
                   )
                 }
-                color="#3FCB7A"
-                deep="#1E8A4D"
-                text="#2B1D3A"
+                color="#9BB068"
+                deep="#5A6B38"
+                text="#4F3422"
                 busy={queue.isPending('checkin')}
                 hint={queue.hint('checkin')}
                 lockedMessage={data.checkedIn ? 'Already checked in today. Come back tomorrow.' : null}
@@ -146,7 +146,7 @@ export function Today() {
                 title={data.spark.text}
                 subtitle={data.spark.done ? `Done. ${rel.character} is glowing.` : `${rel.name}. +15 xp.`}
                 color={rel.color}
-                deep={rel.deep}
+                deep={`var(--deep-${rel.key})`}
                 text={rel.text}
                 busy={queue.isPending('spark')}
                 hint={queue.hint('spark')}
@@ -162,6 +162,19 @@ export function Today() {
               </h2>
               {tasks.length > 0 && <span className="text-[14px] font-bold text-ink-soft">{tasks.length} waiting</span>}
             </div>
+            {data.timePlan.plannedMin + data.timePlan.doneMin > 0 && (
+              <div className="mt-xs rounded-tile bg-card p-sm shadow-toy-soft" aria-label="Time plan">
+                <div className="flex items-baseline justify-between gap-sm">
+                  <p className="m-0 text-[14px] font-bold">
+                    {data.timePlan.doneMin > 0 ? `${data.timePlan.doneMin} of ${data.timePlan.doneMin + data.timePlan.plannedMin} min done` : `${data.timePlan.plannedMin} min planned`}
+                  </p>
+                  <p className="m-0 text-[12px] font-bold text-ink-soft">{data.timePlan.timed > 0 ? `${data.timePlan.timed} with a set time` : 'no set times yet'}</p>
+                </div>
+                <div className="mt-xs h-[8px] overflow-hidden rounded-pill bg-line" aria-hidden="true">
+                  <div className="h-full rounded-pill bg-r4" style={{ width: `${Math.round((data.timePlan.doneMin / Math.max(1, data.timePlan.doneMin + data.timePlan.plannedMin)) * 100)}%` }} />
+                </div>
+              </div>
+            )}
             {tasks.length > 0 ? (
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                 <AnimatePresence initial={false}>
@@ -183,7 +196,7 @@ export function Today() {
                 <p className="m-0 text-[14px] font-semibold text-ink-soft">
                   {taskDone ? 'Tasks done for today. Everything above them got stronger. More arrive as their dates come up.' : 'Tasks come from floors you build on the Tower.'}
                 </p>
-                <Link to="/tower" className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-white">
+                <Link to="/tower" className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
                   {taskDone ? 'Build another floor' : 'Build a floor'}
                 </Link>
               </div>
@@ -207,7 +220,7 @@ export function Today() {
               preparing={identity.preparing}
               readyInDays={identity.readyInDays}
             />
-            <p className="mt-sm m-0 text-center text-[13px] font-semibold text-ink-soft">
+            <p className="mt-sm m-0 text-center text-[14px] font-semibold text-ink-soft">
               {identity.preparing && identity.next
                 ? `Fully revealed. Evolves in ${identity.readyInDays} ${identity.readyInDays === 1 ? 'day' : 'days'}.`
                 : identity.next

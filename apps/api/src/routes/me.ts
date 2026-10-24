@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import {
   CHARACTER_STAGES,
+  MODULE_BY_KEY,
   daysSince,
   evolutionFor,
   IDENTITY_STAGES,
@@ -11,14 +12,20 @@ import {
   type RelationshipState,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { computeBadges, getStats, getUser, honorKeys, nowIso, toUser } from '../db';
+import { computeBadges, getStats, getUser, honorKeys, newId, nowIso, parseModules, randomCode, str, toUser } from '../db';
+import { resolveAccess } from '../access';
+import type { Organization, PortfolioItem } from '@kreators/shared';
 
 export const me = new Hono<AppEnv>();
 
 me.get('/', async (c) => {
   const db = c.env.DB;
-  const user = c.get('user');
-  const [scores, counts, stats, honors] = await Promise.all([
+  let user = c.get('user');
+  if (!user.referral_code) {
+    await db.prepare('UPDATE users SET referral_code = ? WHERE id = ? AND referral_code IS NULL').bind(randomCode(), user.id).run();
+    user = (await getUser(db, user.id)) ?? user;
+  }
+  const [scores, counts, stats, honors, resolved, unread, orgs] = await Promise.all([
     db
       .prepare('SELECT relationship, score, xp FROM relationship_scores WHERE user_id = ?')
       .bind(user.id)
@@ -36,6 +43,9 @@ me.get('/', async (c) => {
       .all<{ relationship: RelationshipKey; pillars: number; active_tasks: number; done_tasks: number; first_pillar: string | null }>(),
     getStats(db, user.id),
     honorKeys(db, user),
+    resolveAccess(db, user),
+    db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL').bind(user.id).first<{ n: number }>(),
+    db.prepare("SELECT o.*, m.role AS my_role FROM organizations o JOIN organization_members m ON m.organization_id = o.id WHERE m.user_id = ? AND m.status = 'active' ORDER BY o.name").bind(user.id).all<{ id: string; name: string; type: Organization['type']; status: Organization['status']; created_at: string; my_role: 'owner' | 'member' }>(),
   ]);
 
   const scoreBy = new Map(scores.results.map((s) => [s.relationship, s]));
@@ -65,6 +75,10 @@ me.get('/', async (c) => {
     badges: computeBadges(user, stats),
     honors,
     identity: evolutionFor(IDENTITY_STAGES, user.xp, daysSince(user.created_at)),
+    moduleSettings: resolved.settings,
+    access: resolved.access,
+    unread: unread?.n ?? 0,
+    organizations: orgs.results.map((o) => ({ id: o.id, name: o.name, type: o.type, status: o.status, myRole: o.my_role, createdAt: o.created_at })),
     stats: { tasksDone: stats.tasksDone, sparksDone: stats.sparksDone, projectsCleared: stats.projectsCleared },
   };
   return c.json(body);
@@ -74,17 +88,84 @@ me.patch('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const body = await c.req
-    .json<{ displayName?: string; focus?: string; leaderboardOptIn?: boolean }>()
-    .catch(() => ({}) as { displayName?: string; focus?: string; leaderboardOptIn?: boolean });
+    .json<Record<string, unknown>>()
+    .catch(() => ({}) as Record<string, unknown>);
   const displayName = typeof body.displayName === 'string' ? body.displayName.trim().slice(0, 40) : user.display_name;
   const focus = typeof body.focus === 'string' ? body.focus.trim().slice(0, 40) : user.creator_type;
   const optIn = typeof body.leaderboardOptIn === 'boolean' ? (body.leaderboardOptIn ? 1 : 0) : user.leaderboard_opt_in;
+  const bio = typeof body.bio === 'string' ? body.bio.trim().slice(0, 200) : user.bio;
+  const reminderTime = body.reminderTime === null ? null : typeof body.reminderTime === 'string' && /^\d{2}:\d{2}$/.test(body.reminderTime) ? body.reminderTime : user.reminder_time;
+  let handle = user.handle;
+  if (body.handle === null) handle = null;
+  else if (typeof body.handle === 'string') {
+    const h = body.handle.trim().toLowerCase();
+    if (h && !/^[a-z0-9_]{3,20}$/.test(h)) return c.json({ error: 'a page name is 3 to 20 letters, numbers or underscores' }, 400);
+    if (h && h !== user.handle) {
+      const taken = await db.prepare('SELECT id FROM users WHERE handle = ? AND id != ?').bind(h, user.id).first();
+      if (taken) return c.json({ error: 'that page name is taken' }, 409);
+    }
+    handle = h || null;
+  }
+  const list = (key: string, prev: string) => (Array.isArray(body[key]) ? JSON.stringify((body[key] as unknown[]).filter((x): x is string => typeof x === 'string').map((x) => x.trim().slice(0, 40)).filter(Boolean).slice(0, 12)) : prev);
+  const skills = list('skills', user.skills);
+  const categories = list('categories', user.categories);
+  const goals = list('goals', user.goals);
+  const experienceLevel = str(body.experienceLevel, 40, user.experience_level);
+  const availability = str(body.availability, 40, user.availability);
+  const location = str(body.location, 80, user.location);
+  const openToIntros = typeof body.openToIntros === 'boolean' ? (body.openToIntros ? 1 : 0) : user.open_to_intros;
+  const interests = list('interests', user.interests);
+  const city = str(body.city, 80, user.city);
+  const area = str(body.area, 80, user.area);
+  // Coordinates are optional and only used server-side to keep circles close by.
+  const lat = body.lat === null ? null : typeof body.lat === 'number' && Math.abs(body.lat) <= 90 ? body.lat : user.lat;
+  const lng = body.lng === null ? null : typeof body.lng === 'number' && Math.abs(body.lng) <= 180 ? body.lng : user.lng;
   await db
-    .prepare('UPDATE users SET display_name = ?, creator_type = ?, leaderboard_opt_in = ? WHERE id = ?')
-    .bind(displayName, focus, optIn, user.id)
+    .prepare('UPDATE users SET display_name = ?, creator_type = ?, leaderboard_opt_in = ?, bio = ?, reminder_time = ?, handle = ?, skills = ?, categories = ?, goals = ?, experience_level = ?, availability = ?, location = ?, open_to_intros = ?, interests = ?, city = ?, area = ?, lat = ?, lng = ? WHERE id = ?')
+    .bind(displayName, focus, optIn, bio, reminderTime, handle, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, lat, lng, user.id)
     .run();
   const fresh = await getUser(db, user.id);
   return c.json({ user: fresh ? toUser(fresh) : null });
+});
+
+interface PortfolioRow { id: string; title: string; description: string; url: string; visibility: 'public' | 'private'; created_at: string }
+const toPortfolio = (r: PortfolioRow): PortfolioItem => ({ id: r.id, title: r.title, description: r.description, url: r.url, visibility: r.visibility, createdAt: r.created_at });
+
+me.get('/portfolio', async (c) => {
+  const rows = await c.env.DB.prepare('SELECT * FROM portfolio_items WHERE user_id = ? ORDER BY created_at DESC').bind(c.get('user').id).all<PortfolioRow>();
+  return c.json({ items: rows.results.map(toPortfolio) });
+});
+
+me.post('/portfolio', async (c) => {
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const title = str(body.title, 120);
+  const url = str(body.url, 500);
+  if (!title || !url) return c.json({ error: 'a title and a link' }, 400);
+  const id = newId();
+  await c.env.DB.prepare('INSERT INTO portfolio_items (id, user_id, title, description, url, visibility, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, c.get('user').id, title, str(body.description, 500), url, body.visibility === 'private' ? 'private' : 'public', nowIso())
+    .run();
+  const row = await c.env.DB.prepare('SELECT * FROM portfolio_items WHERE id = ?').bind(id).first<PortfolioRow>();
+  return c.json({ item: row ? toPortfolio(row) : null }, 201);
+});
+
+me.delete('/portfolio/:id', async (c) => {
+  await c.env.DB.prepare('DELETE FROM portfolio_items WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  return c.json({ ok: true });
+});
+
+// Switch one of your own modules on or off.
+me.patch('/modules', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const body = await c.req.json<{ key?: string; on?: boolean }>().catch(() => ({}) as { key?: string; on?: boolean });
+  const m = body.key ? MODULE_BY_KEY[body.key] : undefined;
+  if (!m) return c.json({ error: 'no such module' }, 404);
+  if (m.locked) return c.json({ error: 'that one stays on' }, 400);
+  const mine = parseModules(user.modules);
+  mine[m.key] = body.on !== false;
+  await db.prepare('UPDATE users SET modules = ? WHERE id = ?').bind(JSON.stringify(mine), user.id).run();
+  return c.json({ modules: mine });
 });
 
 // Wipe progress but keep the device session, so the person can start over.

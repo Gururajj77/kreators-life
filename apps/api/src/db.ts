@@ -1,4 +1,6 @@
-import { BADGES, HONORS, levelFromXp, RELATIONSHIPS, taskReadyAt, timeHonors, WAIT, type Node, type NodeKind, type RelationshipKey, type User } from '@kreators/shared';
+import { BADGES, HONORS, isStaffFor, levelFromXp, PERMISSIONS, RELATIONSHIPS, roleRank, taskReadyAt, timeHonors, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type User } from '@kreators/shared';
+import type { Context, Next } from 'hono';
+import type { AppEnv } from './env';
 import type { UserRow } from './env';
 
 export interface NodeRow {
@@ -12,6 +14,8 @@ export interface NodeRow {
   status: 'active' | 'done' | 'archived';
   xp: number;
   due_date: string | null;
+  due_time: string | null;
+  estimate_min: number | null;
   completed_at: string | null;
   ready_at: string | null;
   sort_order: number;
@@ -50,12 +54,121 @@ export function toUser(r: UserRow): User {
     points: r.points,
     isPro: r.is_pro === 1,
     leaderboardOptIn: r.leaderboard_opt_in === 1,
+    role: r.role,
+    email: r.email,
+    handle: r.handle,
+    bio: r.bio,
+    reminderTime: r.reminder_time,
+    referralCode: r.referral_code,
+    modules: parseModules(r.modules),
+    permissions: parseList(r.permissions).filter((p): p is Permission => (PERMISSIONS as readonly string[]).includes(p)),
+    skills: parseList(r.skills),
+    categories: parseList(r.categories),
+    goals: parseList(r.goals),
+    experienceLevel: r.experience_level,
+    availability: r.availability,
+    location: r.location,
+    openToIntros: r.open_to_intros === 1,
+    interests: parseList(r.interests),
+    city: r.city ?? '',
+    area: r.area ?? '',
+    hasLocation: r.lat !== null && r.lat !== undefined && r.lng !== null && r.lng !== undefined,
     streak: r.streak,
     bestStreak: r.best_streak,
     lastCheckin: r.last_checkin,
     onboardedAt: r.onboarded_at,
     createdAt: r.created_at,
   };
+}
+
+export function parseModules(raw: string): Record<string, boolean> {
+  try {
+    const v = JSON.parse(raw || '{}') as unknown;
+    return v && typeof v === 'object' ? (v as Record<string, boolean>) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function parseList(raw: string | null | undefined): string[] {
+  try {
+    const v = JSON.parse(raw || '[]') as unknown;
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export const nameOf = (r: { display_name: string }) => r.display_name || 'Anonymous climber';
+
+/** Does this person hold a staff permission? Admins hold all of them. */
+export function can(user: UserRow, perm: Permission): boolean {
+  return isStaffFor({ role: user.role, permissions: parseList(user.permissions) }, perm);
+}
+
+/** Middleware: requires a staff permission. */
+export function requirePermission(perm: Permission) {
+  return async (c: Context<AppEnv>, next: Next) => {
+    const user = c.get('user');
+    if (!user || !can(user, perm)) return c.json({ error: 'you do not have access to that' }, 403);
+    await next();
+  };
+}
+
+export async function audit(db: D1Database, actorId: string | null, action: string, resourceType: string, resourceId: string | null, before: unknown = '', after: unknown = ''): Promise<void> {
+  const str = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v ?? '')).slice(0, 2000);
+  await db
+    .prepare('INSERT INTO audit_logs (id, actor_user_id, action, resource_type, resource_id, before_summary, after_summary, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(newId(), actorId, action, resourceType, resourceId, str(before), str(after), nowIso())
+    .run();
+}
+
+export async function orgRole(db: D1Database, orgId: string, userId: string): Promise<'owner' | 'member' | null> {
+  const row = await db.prepare("SELECT role FROM organization_members WHERE organization_id = ? AND user_id = ? AND status = 'active'").bind(orgId, userId).first<{ role: 'owner' | 'member' }>();
+  return row?.role ?? null;
+}
+
+export async function orgIdsOf(db: D1Database, userId: string): Promise<string[]> {
+  const rows = await db.prepare("SELECT organization_id FROM organization_members WHERE user_id = ? AND status = 'active'").bind(userId).all<{ organization_id: string }>();
+  return rows.results.map((r) => r.organization_id);
+}
+
+export const str = (v: unknown, max: number, fallback = '') => (typeof v === 'string' ? v.trim().slice(0, max) : fallback);
+export const num = (v: unknown, fallback: number | null, lo = -1e12, hi = 1e12): number | null => {
+  if (v === null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.max(lo, Math.min(hi, Math.round(n))) : fallback;
+};
+export const oneOf = <T extends string>(v: unknown, allowed: readonly T[], fallback: T): T => ((allowed as readonly string[]).includes(String(v)) ? (v as T) : fallback);
+
+/** Resolve the bearer session on a request, or null. */
+export async function sessionUser(c: Context<AppEnv>): Promise<UserRow | null> {
+  const header = c.req.header('Authorization') ?? '';
+  const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+  if (!token) return null;
+  return c.env.DB.prepare('SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ?').bind(token).first<UserRow>();
+}
+
+/** Middleware: the signed-in person must hold at least this role. */
+export function requireRole(min: Role) {
+  return async (c: Context<AppEnv>, next: Next) => {
+    const user = c.get('user');
+    if (!user || roleRank(user.role) < roleRank(min)) return c.json({ error: 'you do not have access to that' }, 403);
+    await next();
+  };
+}
+
+export async function notify(db: D1Database, userId: string, kind: string, title: string, body = '', link: string | null = null): Promise<void> {
+  await db
+    .prepare('INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)')
+    .bind(newId(), userId, kind, title, body, link, nowIso())
+    .run();
+}
+
+export function randomCode(len = 8): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = crypto.getRandomValues(new Uint8Array(len));
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
 }
 
 export function toNode(r: NodeRow): Node {
@@ -69,6 +182,8 @@ export function toNode(r: NodeRow): Node {
     status: r.status,
     xp: r.xp,
     dueDate: r.due_date,
+    dueTime: r.due_time ?? null,
+    estimateMin: r.estimate_min ?? null,
     completedAt: r.completed_at,
     readyAt: r.kind === 'task' ? taskReadyAt(r.created_at, r.ready_at) : null,
     sortOrder: r.sort_order,

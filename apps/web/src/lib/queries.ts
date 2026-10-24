@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { LeaderboardSort, RelationshipKey } from '@kreators/shared';
+import type { LeaderboardSort, LogKind, RelationshipKey } from '@kreators/shared';
 import { api } from './api';
 import { useSession } from './store';
 import { todayLocal } from './date';
@@ -12,31 +12,42 @@ export const keys = {
   rewards: ['rewards'] as const,
 };
 
-export function useMe() {
+/** A query that only runs once there is a session. */
+export function useAuthed<T>(key: readonly unknown[], fn: () => Promise<T>, enabled = true) {
   const token = useSession((s) => s.token);
-  return useQuery({ queryKey: keys.me, queryFn: api.me, enabled: Boolean(token) });
+  return useQuery({ queryKey: key, queryFn: fn, enabled: Boolean(token) && enabled });
+}
+
+export function useMe() {
+  return useAuthed(keys.me, api.me);
 }
 
 export function useNodes(relationship: RelationshipKey) {
-  const token = useSession((s) => s.token);
-  return useQuery({ queryKey: keys.nodes(relationship), queryFn: () => api.nodes(relationship), enabled: Boolean(token) });
+  return useAuthed(keys.nodes(relationship), () => api.nodes(relationship));
 }
 
 export function useToday() {
-  const token = useSession((s) => s.token);
   const date = todayLocal();
-  return { date, ...useQuery({ queryKey: keys.today(date), queryFn: () => api.today(date), enabled: Boolean(token) }) };
+  return { date, ...useAuthed(keys.today(date), () => api.today(date)) };
 }
 
 export function useLeaderboard(by: LeaderboardSort) {
-  const token = useSession((s) => s.token);
-  return useQuery({ queryKey: keys.leaderboard(by), queryFn: () => api.leaderboard(by), enabled: Boolean(token) });
+  return useAuthed(keys.leaderboard(by), () => api.leaderboard(by));
 }
 
 export function useRewards() {
-  const token = useSession((s) => s.token);
-  return useQuery({ queryKey: keys.rewards, queryFn: api.rewards, enabled: Boolean(token) });
+  return useAuthed(keys.rewards, api.rewards);
 }
+
+export const useWellbeing = () => useAuthed(['wellbeing'], api.wellbeing);
+export const useLogs = (kind: LogKind, days = 30) => useAuthed(['logs', kind, days], () => api.logs(kind, days));
+export const useJournal = () => useAuthed(['journal'], api.journal);
+export const useCompanion = () => useAuthed(['companion'], api.companion);
+export const useInbox = () => useAuthed(['inbox'], api.inbox);
+export const useResources = (tag?: string) => useAuthed(['resources', tag ?? ''], () => api.resources(tag));
+export const useCommunity = (category?: string, product?: string, all = false) => useAuthed(['community', category ?? '', product ?? '', all], () => api.community(category, product, all));
+export const useStudio = () => useAuthed(['studio'], api.studio);
+export const useLibrary = () => useAuthed(['library'], api.library);
 
 /** After anything that changes XP, refresh every screen's data. */
 export function useRefreshAll() {

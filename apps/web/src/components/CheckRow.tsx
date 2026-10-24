@@ -33,9 +33,9 @@ export function CheckRow({
   onToggle,
   title,
   subtitle,
-  color = '#2B1D3A',
-  deep = '#15101f',
-  text = '#FFFFFF',
+  color = 'var(--color-ink)',
+  deep = 'var(--color-shadow)',
+  text = 'var(--color-on-ink)',
   busy = false,
   lockedMessage = null,
   badge,
@@ -66,7 +66,7 @@ export function CheckRow({
       <div className="flex items-stretch gap-xs">
         <label
           className={`check-row toy toy-soft flex min-w-0 flex-1 cursor-pointer select-none items-center gap-sm rounded-tile bg-card p-sm has-[input:focus-visible]:outline-[3px] has-[input:focus-visible]:outline-offset-2 has-[input:focus-visible]:outline-ink ${large ? 'min-h-[64px]' : 'min-h-[56px]'}`}
-          style={{ '--check-color': locked && !checked ? '#A39AAE' : color } as CSSProperties}
+          style={{ '--check-color': locked && !checked ? 'var(--color-ink-mute)' : color } as CSSProperties}
         >
           <input
             type="checkbox"
@@ -80,9 +80,9 @@ export function CheckRow({
             aria-hidden="true"
             className={`check-box flex shrink-0 items-center justify-center rounded-[10px] border-[3px] ${large ? 'size-[40px]' : 'size-[32px]'} ${busy ? 'animate-pulse' : ''}`}
             style={{
-              borderColor: locked && !checked ? '#A39AAE' : color,
-              background: checked ? color : '#fff',
-              boxShadow: `0 3px 0 0 ${locked && !checked ? '#EFE4DA' : deep}`,
+              borderColor: locked && !checked ? 'var(--color-ink-mute)' : color,
+              background: checked ? color : 'var(--color-card)',
+              boxShadow: `0 3px 0 0 ${locked && !checked ? 'var(--color-line)' : deep}`,
             }}
           >
             {checked ? (
@@ -90,7 +90,7 @@ export function CheckRow({
                 <path d="M5 12.5l4.5 4.5L19 7.5" />
               </svg>
             ) : locked ? (
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#6B5F78" strokeWidth="2.6" strokeLinecap="round">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#736B66" strokeWidth="2.6" strokeLinecap="round">
                 <circle cx="12" cy="12" r="8.5" />
                 <path d="M12 7.5V12l3 2" />
               </svg>
@@ -104,7 +104,7 @@ export function CheckRow({
             <span className={`block text-[16px] font-bold leading-snug ${checked && strike ? 'text-ink-mute line-through' : ''}`}>{title}</span>
             {(subtitle || badge) && (
               <span className="flex flex-wrap items-center gap-x-xs">
-                {subtitle && <span className="text-[13px] font-semibold text-ink-soft">{subtitle}</span>}
+                {subtitle && <span className="text-[14px] font-semibold text-ink-soft">{subtitle}</span>}
                 {badge}
               </span>
             )}
@@ -113,7 +113,7 @@ export function CheckRow({
         {aside}
       </div>
       {note && (
-        <p id={`${id}-note`} role="status" className="mt-xs m-0 rounded-tile bg-paper px-sm py-xs text-[13px] font-bold">
+        <p id={`${id}-note`} role="status" className="mt-xs m-0 rounded-tile bg-paper px-sm py-xs text-[14px] font-bold">
           {note}
         </p>
       )}

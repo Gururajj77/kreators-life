@@ -71,8 +71,8 @@ const SHAPES: Record<RelationshipKey, Shape> = {
   },
 };
 
-const INK = '#2B1D3A';
-const GOLD = '#FFD86B';
+const INK = '#4F3422';
+const GOLD = '#FDE047';
 
 function Sparkle({ x, y, s }: { x: number; y: number; s: number }) {
   const k = s * 0.3;
@@ -137,7 +137,7 @@ export function Avatar({ relationship, size = 64, mood = 'happy', still = false,
       className={`${still ? '' : 'avatar-bob'} shrink-0 overflow-visible ${className}`}
     >
       {stage >= 2 && <circle cx="50" cy="54" r="54" fill={r.color} opacity="0.22" />}
-      {relationship === 'divine' && <ellipse cx="50" cy="7" rx="16" ry="4" fill="none" stroke="#FFD86B" strokeWidth="3" />}
+      {relationship === 'divine' && <ellipse cx="50" cy="7" rx="16" ry="4" fill="none" stroke="#FDE047" strokeWidth="3" />}
       <path d={s.body} fill={r.deep} transform="translate(0 5)" />
       <path d={s.body} fill={r.color} />
       <ellipse cx={x1 - 6} cy={y1 - 18} rx="8" ry="4.5" fill="#fff" opacity="0.32" transform={`rotate(-20 ${x1 - 6} ${y1 - 18})`} />

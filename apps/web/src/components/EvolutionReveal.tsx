@@ -50,7 +50,7 @@ export function EvolutionReveal({ now, nowName, next, nextName, charge, preparin
               {preparing && !reduce && (
                 <motion.div
                   className="pointer-events-none absolute inset-0 rounded-pill"
-                  animate={{ boxShadow: ['0 0 0 0 rgba(255,216,107,0)', '0 0 0 12px rgba(255,216,107,0.35)', '0 0 0 0 rgba(255,216,107,0)'] }}
+                  animate={{ boxShadow: ['0 0 0 0 rgba(253,224,71,0)', '0 0 0 12px rgba(253,224,71,0.35)', '0 0 0 0 rgba(253,224,71,0)'] }}
                   transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY }}
                 />
               )}

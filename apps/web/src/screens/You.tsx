@@ -1,4 +1,4 @@
-import { BADGES, FOCUS_OPTIONS, HONORS, IDENTITY_STAGES, levelFromXp, POINTS, RELATIONSHIPS, type MeResponse } from '@kreators/shared';
+import { BADGES, FOCUS_OPTIONS, HONORS, IDENTITY_STAGES, levelFromXp, MODULE_GROUPS, POINTS, RELATIONSHIPS, ROLE_META, type MeResponse, type ModuleGroup } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -7,6 +7,10 @@ import { Button } from '../components/Button';
 import { Person } from '../components/Person';
 import { EvolutionReveal } from '../components/EvolutionReveal';
 import { useGuide } from '../components/Guide';
+import { Toggle } from '../components/Toggle';
+import { useModules } from '../lib/modules';
+import { useSession } from '../lib/store';
+import { useTheme, type ThemeMode } from '../lib/theme';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useMe, useRefreshAll } from '../lib/queries';
@@ -32,6 +36,18 @@ function YouView({ data }: { data: MeResponse }) {
   const refresh = useRefreshAll();
   const nav = useNavigate();
   const guide = useGuide();
+  const setToken = useSession((s) => s.setToken);
+  const { modules } = useModules();
+  const themeMode = useTheme((s) => s.mode);
+  const setThemeMode = useTheme((s) => s.setMode);
+  const toggle = useMutation({ mutationFn: ({ key, on }: { key: string; on: boolean }) => api.setModule(key, on), onSuccess: () => refresh() });
+  const signout = useMutation({
+    mutationFn: api.signout,
+    onSuccess: () => {
+      setToken(null);
+      nav('/start', { replace: true });
+    },
+  });
   const [name, setName] = useState(user.displayName);
   const [type, setType] = useState(user.focus);
   const [optIn, setOptIn] = useState(user.leaderboardOptIn);
@@ -62,8 +78,9 @@ function YouView({ data }: { data: MeResponse }) {
     <Screen>
       <header className="pt-lg">
         <div className="flex items-center gap-sm">
-          <h1 className="min-w-0 truncate text-[32px]">{user.displayName ? user.displayName : 'You'}</h1>
-          {user.isPro && <span className="shrink-0 rounded-pill bg-r7 px-sm py-xs text-[13px] font-extrabold text-white">Pro</span>}
+          <h1 className="min-w-0 truncate text-[30px]">{user.displayName ? user.displayName : 'You'}</h1>
+          {user.isPro && <span className="shrink-0 rounded-pill bg-r7 px-sm py-xs text-[14px] font-extrabold text-white">Pro</span>}
+          {user.role !== 'user' && <span className="shrink-0 rounded-pill bg-r6 px-sm py-xs text-[14px] font-extrabold text-white">{ROLE_META[user.role].name}</span>}
         </div>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
           {(FOCUS_OPTIONS as readonly string[]).includes(user.focus) && user.focus !== 'Other' ? `Mostly ${user.focus.toLowerCase()}. ` : ''}Level{' '}
@@ -72,8 +89,74 @@ function YouView({ data }: { data: MeResponse }) {
         </p>
       </header>
 
+      <section className="mt-lg" aria-labelledby="look-heading">
+        <h2 id="look-heading" className="text-[24px]">
+          Appearance
+        </h2>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Dark mode keeps the same colors and turns them inside out: cream becomes deep brown, pale tints become deep tints.</p>
+        <div className="mt-sm grid grid-cols-3 gap-xs" role="group" aria-label="Theme">
+          {(
+            [
+              ['system', 'Match device'],
+              ['light', 'Light'],
+              ['dark', 'Dark'],
+            ] as [ThemeMode, string][]
+          ).map(([m, label]) => (
+            <button key={m} type="button" aria-pressed={themeMode === m} onClick={() => setThemeMode(m)} className={`toy min-h-[48px] rounded-pill border-2 text-[14px] font-bold ${themeMode === m ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="mt-lg" aria-labelledby="features-heading" id="features">
+        <h2 id="features-heading" className="text-[24px]">
+          Features
+        </h2>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Switch any part of the app on or off. Off means it leaves the Apps screen; nothing is deleted.</p>
+        {(['earn', 'community', 'wellbeing', 'creator', 'core', 'manage'] as ModuleGroup[]).map((g) => {
+          const list = modules.filter((m) => m.group === g && m.available && !m.locked);
+          if (list.length === 0) return null;
+          return (
+            <div key={g} className="mt-md">
+              <h3 className="text-[16px]">{MODULE_GROUPS[g]}</h3>
+              <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+                {list.map((m) => (
+                  <li key={m.key}>
+                    <Toggle on={m.on} onChange={(on) => toggle.mutate({ key: m.key, on })} label={`${m.emoji} ${m.name}`} hint={m.blurb} disabled={toggle.isPending} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </section>
+
+      <section className="mt-lg" aria-labelledby="account-heading">
+        <h2 id="account-heading" className="text-[24px]">
+          Account
+        </h2>
+        {user.email ? (
+          <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
+            <p className="m-0 text-[16px] font-bold">{user.email}</p>
+            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Your tower is saved to this account. Sign in on any phone to pick it up.</p>
+            <Button variant="outline" className="mt-sm" onClick={() => signout.mutate()} disabled={signout.isPending}>
+              Sign out
+            </Button>
+          </div>
+        ) : (
+          <div className="mt-sm rounded-card p-md" style={{ background: 'var(--tint-yellow)' }}>
+            <p className="m-0 text-[16px] font-bold">Only on this device so far.</p>
+            <p className="mt-xs m-0 text-[14px] font-semibold">Add an email and password and everything here comes with you to a new phone.</p>
+            <Link to="/signup" className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+              Create an account
+            </Link>
+          </div>
+        )}
+      </section>
+
       <section className="mt-lg" aria-labelledby="evo-heading">
-        <h2 id="evo-heading" className="text-[22px]">
+        <h2 id="evo-heading" className="text-[24px]">
           Who you are becoming
         </h2>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Xp fills in your next form from the feet up. Each form also needs time on the tower before it is ready.</p>
@@ -102,7 +185,7 @@ function YouView({ data }: { data: MeResponse }) {
                 <li key={st.stage} className={`flex items-center gap-sm text-[14px] ${reached ? '' : 'text-ink-soft'}`}>
                   <span
                     className="flex size-[24px] shrink-0 items-center justify-center rounded-pill text-[12px] font-extrabold"
-                    style={reached ? { background: color?.color, color: color?.text } : { background: '#EFE4DA', color: '#6B5F78' }}
+                    style={reached ? { background: color?.color, color: color?.text } : { background: 'var(--color-line)', color: 'var(--color-ink-soft)' }}
                     aria-hidden="true"
                   >
                     {st.stage}
@@ -122,17 +205,17 @@ function YouView({ data }: { data: MeResponse }) {
       </section>
 
       <section className="mt-lg" aria-labelledby="points-heading">
-        <h2 id="points-heading" className="text-[22px]">
+        <h2 id="points-heading" className="text-[24px]">
           Points
         </h2>
         <div className="mt-sm flex items-center gap-sm rounded-card bg-card p-md shadow-toy-soft">
           <div className="min-w-0 flex-1">
-            <p className="m-0 font-display text-[32px] font-extrabold leading-none">{user.points}</p>
-            <p className="mt-xs m-0 text-[13px] font-semibold text-ink-soft">
+            <p className="m-0 font-display text-[30px] font-extrabold leading-none">{user.points}</p>
+            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
               {POINTS.checkin} per check-in, {POINTS.streakBonus} bonus every {POINTS.streakBonusEvery}th day. Trade them for real things.
             </p>
           </div>
-          <Link to="/rewards" className="toy inline-flex min-h-[48px] shrink-0 items-center rounded-pill bg-ink px-md font-bold text-white">
+          <Link to="/rewards" className="toy inline-flex min-h-[48px] shrink-0 items-center rounded-pill bg-ink px-md font-bold text-on-ink">
             Rewards
           </Link>
         </div>
@@ -144,11 +227,11 @@ function YouView({ data }: { data: MeResponse }) {
       </section>
 
       <section className="mt-lg" aria-labelledby="badges-heading">
-        <h2 id="badges-heading" className="text-[22px]">
+        <h2 id="badges-heading" className="text-[24px]">
           Badges
         </h2>
         <h3 className="mt-sm text-[16px]">Earned</h3>
-        <p className="mt-xs m-0 text-[13px] font-semibold text-ink-soft">Yours the moment you do the thing.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Yours the moment you do the thing.</p>
         <ul className="mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0">
           {BADGES.map((b) => {
             const on = earned.has(b.key);
@@ -164,7 +247,7 @@ function YouView({ data }: { data: MeResponse }) {
           })}
         </ul>
         <h3 className="mt-md text-[16px]">Awarded</h3>
-        <p className="mt-xs m-0 text-[13px] font-semibold text-ink-soft">Given by the Kreators team, or unlocked by time on the tower. These count on the leaderboard too.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Given by the Kreators team, or unlocked by time on the tower. These count on the leaderboard too.</p>
         <ul className="mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0">
           {HONORS.map((h) => {
             const on = awarded.has(h.key);
@@ -182,7 +265,7 @@ function YouView({ data }: { data: MeResponse }) {
       </section>
 
       <section className="mt-lg" aria-labelledby="rainbow-heading">
-        <h2 id="rainbow-heading" className="text-[22px]">
+        <h2 id="rainbow-heading" className="text-[24px]">
           Your vibe check
         </h2>
         <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
@@ -212,7 +295,7 @@ function YouView({ data }: { data: MeResponse }) {
       </section>
 
       <section className="mt-lg" aria-labelledby="profile-heading">
-        <h2 id="profile-heading" className="text-[22px]">
+        <h2 id="profile-heading" className="text-[24px]">
           Profile
         </h2>
         <form
@@ -235,7 +318,7 @@ function YouView({ data }: { data: MeResponse }) {
                   type="button"
                   aria-pressed={type === t}
                   onClick={() => setType(t)}
-                  className={`rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${type === t ? 'border-ink bg-ink text-white' : 'border-line bg-card'}`}
+                  className={`rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${type === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}
                 >
                   {t}
                 </button>
@@ -246,6 +329,17 @@ function YouView({ data }: { data: MeResponse }) {
             <input type="checkbox" checked={optIn} onChange={(e) => setOptIn(e.target.checked)} className="size-[20px] accent-ink" />
             Show me on the leaderboard
           </label>
+          <p className="m-0 text-[14px] font-semibold text-ink-soft">
+            Your public page, skills, portfolio and introductions live under{' '}
+            <Link to="/profile" className="underline underline-offset-4">
+              Profile
+            </Link>
+            . Daily reminders are set in the{' '}
+            <Link to="/inbox" className="underline underline-offset-4">
+              Inbox
+            </Link>
+            .
+          </p>
           <Button type="submit" full disabled={save.isPending}>
             {saved ? 'Saved' : 'Save profile'}
           </Button>
@@ -253,7 +347,7 @@ function YouView({ data }: { data: MeResponse }) {
       </section>
 
       <section className="mt-lg" aria-labelledby="help-heading">
-        <h2 id="help-heading" className="text-[22px]">
+        <h2 id="help-heading" className="text-[24px]">
           Help
         </h2>
         <div className="mt-sm flex flex-wrap gap-xs">

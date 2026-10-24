@@ -12,7 +12,7 @@ interface Props {
   children?: ReactNode;
 }
 
-export function Ring({ value, size = 56, stroke = 6, color, track = 'rgba(43,29,58,0.12)', label, children }: Props) {
+export function Ring({ value, size = 56, stroke = 6, color, track = 'rgba(79,52,34,0.12)', label, children }: Props) {
   const reduce = useReducedMotion();
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;

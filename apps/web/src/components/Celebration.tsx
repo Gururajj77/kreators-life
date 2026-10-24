@@ -27,7 +27,7 @@ export function CelebrationProvider({ children }: { children: ReactNode }) {
       ripple: [],
       newBadges: [],
       projectCleared: null,
-      color: '#2B1D3A',
+      color: '#4F3422',
       ...c,
       seq: (prev?.seq ?? 0) + 1,
     }));
@@ -96,20 +96,20 @@ function Overlay({ c }: { c: Celebration }) {
       <Confetti />
       <div className="safe-bottom absolute inset-x-0 bottom-[96px] mx-auto w-full max-w-[480px] px-md" role="status" aria-live="polite">
         <motion.div
-          className="rounded-card bg-ink p-md text-white shadow-[0_8px_0_0_rgba(43,29,58,0.25)]"
+          className="rounded-card bg-ink p-md text-on-ink shadow-[0_8px_0_0_rgba(22,21,19,0.15)]"
           initial={{ y: reduce ? 0 : 24, scale: reduce ? 1 : 0.96 }}
           animate={{ y: 0, scale: 1 }}
           transition={{ type: 'spring', stiffness: 380, damping: 28 }}
         >
           <div className="flex items-baseline justify-between gap-sm">
-            <span className="font-display text-[22px] font-extrabold">{c.title}</span>
+            <span className="font-display text-[24px] font-extrabold">{c.title}</span>
             <span className="flex shrink-0 gap-xs">
               {c.totalXp > 0 && (
-                <span className="rounded-pill px-sm py-xs text-[14px] font-extrabold text-ink" style={{ background: c.color }}>
+                <span className="rounded-pill px-sm py-xs text-[14px] font-extrabold text-ink-fixed" style={{ background: c.color }}>
                   +{c.totalXp} xp
                 </span>
               )}
-              {c.points > 0 && <span className="rounded-pill bg-white px-sm py-xs text-[14px] font-extrabold text-ink">+{c.points} points</span>}
+              {c.points > 0 && <span className="rounded-pill bg-paper px-sm py-xs text-[14px] font-extrabold text-ink">+{c.points} points</span>}
             </span>
           </div>
           {climb.length > 0 && (
@@ -141,7 +141,7 @@ function Overlay({ c }: { c: Celebration }) {
               {c.newBadges.map((k) => {
                 const b = BADGES.find((x) => x.key === k);
                 return (
-                  <li key={k} className="rounded-pill bg-white px-sm py-xs text-[13px] font-bold text-ink">
+                  <li key={k} className="rounded-pill bg-white px-sm py-xs text-[14px] font-bold text-ink">
                     New badge {b?.emoji} {b?.name ?? k}
                   </li>
                 );

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { POINTS, sparkFor, XP, type CheckinResponse, type RelationshipKey, type TodayResponse } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { DATE_RE, dateNearToday, getUser, nowIso, shiftDate, toNode, type NodeRow } from '../db';
+import { DATE_RE, dateNearToday, getUser, notify, nowIso, shiftDate, toNode, type NodeRow } from '../db';
 
 export const today = new Hono<AppEnv>();
 
@@ -25,10 +25,20 @@ today.get('/', async (c) => {
   const due = await db
     .prepare(
       `SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND due_date IS NOT NULL AND due_date <= ?
-       ORDER BY due_date ASC, created_at ASC LIMIT 6`,
+       ORDER BY due_date ASC, CASE WHEN due_time IS NULL THEN 1 ELSE 0 END, due_time ASC, created_at ASC LIMIT 6`,
     )
     .bind(user.id, date)
     .all<NodeRow>();
+  // The day's time plan counts every timed task due today, not just the six shown.
+  const plan = await db
+    .prepare(
+      `SELECT
+        (SELECT COALESCE(SUM(estimate_min), 0) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND due_date <= ?2 AND estimate_min IS NOT NULL) AS planned,
+        (SELECT COALESCE(SUM(estimate_min), 0) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'done' AND completed_at LIKE ?3 AND estimate_min IS NOT NULL) AS done,
+        (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND due_date <= ?2 AND due_time IS NOT NULL) AS timed`,
+    )
+    .bind(user.id, date, `${date}%`)
+    .first<{ planned: number; done: number; timed: number }>();
   let tasks = due.results;
   if (tasks.length < 3) {
     const fill = await db
@@ -46,6 +56,13 @@ today.get('/', async (c) => {
     .bind(user.id, new Date(Date.now() - 86_400_000).toISOString())
     .first<{ n: number }>();
 
+  // A gentle nudge in the inbox, once a day, when a reminder time is set and
+  // the day's check-in has not happened yet.
+  if (user.reminder_time && user.last_checkin !== date) {
+    const already = await db.prepare("SELECT 1 FROM notifications WHERE user_id = ? AND kind = 'reminder' AND created_at >= ?").bind(user.id, `${date}T00:00:00`).first();
+    if (!already) await notify(db, user.id, 'reminder', 'Your daily three are waiting', 'Check in, do the spark, tick a task.', '/today');
+  }
+
   const relationship = await weakestRelationship(db, user.id);
   const sparkDone = await db
     .prepare('SELECT relationship FROM spark_completions WHERE user_id = ? AND date = ?')
@@ -58,6 +75,7 @@ today.get('/', async (c) => {
     streak: user.streak,
     tasks: tasks.map(toNode),
     doneRecently: recent?.n ?? 0,
+    timePlan: { plannedMin: plan?.planned ?? 0, doneMin: plan?.done ?? 0, timed: plan?.timed ?? 0 },
     spark: {
       relationship: sparkDone?.relationship ?? relationship,
       text: sparkFor(sparkDone?.relationship ?? relationship, date),

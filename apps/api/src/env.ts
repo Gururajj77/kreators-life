@@ -3,6 +3,16 @@ export interface Env {
   ASSETS?: Fetcher;
   /** Secret. Admin endpoints are disabled when unset. */
   ADMIN_KEY?: string;
+  /** Optional Workers AI binding for the companion. Without it the companion answers from your data alone. */
+  AI?: Ai;
+  /** Optional. With it, YouTube view counts are fetched automatically for content rewards. */
+  YOUTUBE_API_KEY?: string;
+  /** Optional Meta app credentials. Without them the Auto-DM webhook is off and automations only queue messages. */
+  META_APP_SECRET?: string;
+  META_VERIFY_TOKEN?: string;
+  META_ACCESS_TOKEN?: string;
+  /** Salt for hashing click IPs. Falls back to a fixed string locally. */
+  CLICK_SALT?: string;
 }
 
 export interface UserRow {
@@ -13,6 +23,30 @@ export interface UserRow {
   points: number;
   is_pro: number;
   leaderboard_opt_in: number;
+  role: 'user' | 'sub_admin' | 'admin';
+  email: string | null;
+  password_hash: string | null;
+  password_salt: string | null;
+  handle: string | null;
+  bio: string;
+  modules: string;
+  reminder_time: string | null;
+  referral_code: string | null;
+  referred_by: string | null;
+  permissions: string;
+  skills: string;
+  categories: string;
+  goals: string;
+  experience_level: string;
+  availability: string;
+  location: string;
+  open_to_intros: number;
+  interests: string;
+  city: string;
+  area: string;
+  lat: number | null;
+  lng: number | null;
+  fee_bps: number;
   streak: number;
   best_streak: number;
   last_checkin: string | null;

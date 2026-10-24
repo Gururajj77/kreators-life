@@ -15,7 +15,7 @@ function Entry({ e, stat }: { e: LeaderboardEntry; stat: string }) {
   const stage = IDENTITY_STAGES.find((s) => s.stage === e.stage);
   const medal = e.rank === 1 ? '🥇' : e.rank === 2 ? '🥈' : e.rank === 3 ? '🥉' : null;
   return (
-    <li className={`flex items-center gap-sm rounded-tile p-sm shadow-toy-soft ${e.isMe ? 'bg-ink text-white' : 'bg-card'}`}>
+    <li className={`flex items-center gap-sm rounded-tile p-sm shadow-toy-soft ${e.isMe ? 'bg-ink text-on-ink' : 'bg-card'}`}>
       <span
         className="flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-paper text-[14px] font-extrabold text-ink"
         role="img"
@@ -29,9 +29,9 @@ function Entry({ e, stat }: { e: LeaderboardEntry; stat: string }) {
             {e.name}
             {e.isMe ? ' (you)' : ''}
           </span>
-          {e.isPro && <span className="shrink-0 rounded-pill bg-r7 px-xs text-[11px] font-extrabold text-white">Pro</span>}
+          {e.isPro && <span className="shrink-0 rounded-pill bg-r7 px-xs text-[12px] font-extrabold text-white">Pro</span>}
         </span>
-        <span className={`block text-[13px] font-semibold ${e.isMe ? 'text-white/80' : 'text-ink-soft'}`}>
+        <span className={`block text-[14px] font-semibold ${e.isMe ? 'text-white/80' : 'text-ink-soft'}`}>
           {stage?.name ?? 'Seed'}, level {e.level}
         </span>
       </span>
@@ -48,7 +48,7 @@ export function Leaderboard() {
   return (
     <Screen>
       <header className="pt-lg">
-        <h1 className="text-[32px]">Leaderboard</h1>
+        <h1 className="text-[30px]">Leaderboard</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">The top twenty climbers. Badges count both the ones you earn and the ones you are awarded.</p>
       </header>
 
@@ -59,7 +59,7 @@ export function Leaderboard() {
             type="button"
             aria-pressed={by === s.key}
             onClick={() => setBy(s.key)}
-            className={`toy min-h-[44px] rounded-pill border-2 text-[14px] font-bold ${by === s.key ? 'border-ink bg-ink text-white' : 'toy-soft border-line bg-card'}`}
+            className={`toy min-h-[44px] rounded-pill border-2 text-[14px] font-bold ${by === s.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
           >
             {s.label}
           </button>
@@ -105,7 +105,7 @@ export function Leaderboard() {
           )}
           {q.data.me && q.data.me.rank > q.data.entries.length && (
             <div className="mt-md">
-              <p className="m-0 text-[13px] font-bold text-ink-soft">Your spot</p>
+              <p className="m-0 text-[14px] font-bold text-ink-soft">Your spot</p>
               <ol className="mt-xs list-none p-0 m-0">
                 <Entry e={q.data.me} stat={sort.stat(q.data.me)} />
               </ol>

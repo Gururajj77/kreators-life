@@ -1,13 +1,13 @@
 import { RELATIONSHIPS } from '@kreators/shared';
 import { motion, useReducedMotion } from 'motion/react';
 import { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useMe } from '../lib/queries';
-import { useSession } from '../lib/store';
+import { captureRef, storedRef, useSession } from '../lib/store';
 
 function Staircase() {
   const reduce = useReducedMotion();
@@ -35,6 +35,8 @@ export function Welcome() {
   const setToken = useSession((s) => s.setToken);
   const me = useMe();
   const nav = useNavigate();
+  const location = useLocation();
+  captureRef(location.search);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,7 +48,7 @@ export function Welcome() {
     setError(null);
     try {
       if (!token) {
-        const r = await api.anon();
+        const r = await api.anon(storedRef());
         setToken(r.token);
       }
       nav('/vibe-check');
@@ -61,7 +63,7 @@ export function Welcome() {
     <Screen tabs={false} className="flex min-h-dvh flex-col">
       <div className="flex flex-1 flex-col justify-center pt-xl">
         <Staircase />
-        <h1 className="mt-lg text-[clamp(36px,11vw,44px)]">
+        <h1 className="mt-lg text-[clamp(36px,11vw,48px)]">
           Seven relationships.
           <br />
           One tower.
@@ -79,8 +81,18 @@ export function Welcome() {
         <Button size="lg" full onClick={start} disabled={busy}>
           {busy ? 'Opening the gates' : resuming ? 'Continue the vibe check' : 'Start the vibe check'}
         </Button>
-        <p className="m-0 text-center text-[13px] font-semibold text-ink-mute">
+        <p className="m-0 text-center text-[14px] font-semibold text-ink-mute">
           Progress is saved on this device. Add this page to your home screen to keep it close.
+        </p>
+        <p className="m-0 text-center text-[14px] font-semibold">
+          Already have an account?{' '}
+          <Link to="/signin" className="underline underline-offset-4">
+            Sign in
+          </Link>
+          {' '}or{' '}
+          <Link to="/" className="underline underline-offset-4">
+            see what is inside first
+          </Link>
         </p>
       </div>
     </Screen>

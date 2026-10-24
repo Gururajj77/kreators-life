@@ -7,7 +7,7 @@ interface Props {
   compact?: boolean;
 }
 
-export function XpBar({ xp, color = '#2B1D3A', compact = false }: Props) {
+export function XpBar({ xp, color = '#4F3422', compact = false }: Props) {
   const reduce = useReducedMotion();
   const p = levelProgress(xp);
   const pct = Math.round(p.pct * 100);
@@ -16,7 +16,7 @@ export function XpBar({ xp, color = '#2B1D3A', compact = false }: Props) {
       <div className="flex items-baseline justify-between gap-sm">
         <span className="font-display text-[18px] font-extrabold">Level {p.level}</span>
         {!compact && (
-          <span className="text-[13px] font-semibold text-ink-soft">
+          <span className="text-[14px] font-semibold text-ink-soft">
             {p.into} of {p.span} xp to level {p.level + 1}
           </span>
         )}

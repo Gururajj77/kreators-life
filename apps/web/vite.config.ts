@@ -14,10 +14,10 @@ export default defineConfig({
         name: 'Kreators Life',
         short_name: 'Kreators',
         description: 'A daily game for the seven relationships that make a life. One tower, a few boxes to tick every day.',
-        theme_color: '#2B1D3A',
-        background_color: '#FFF8F0',
+        theme_color: '#4F3422',
+        background_color: '#F7F4F2',
         display: 'standalone',
-        start_url: '/',
+        start_url: '/today',
         scope: '/',
         icons: [
           { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
@@ -31,6 +31,6 @@ export default defineConfig({
     }),
   ],
   server: {
-    proxy: { '/api': 'http://localhost:8787' },
+    proxy: { '/api': 'http://localhost:8787', '/go': 'http://localhost:8787' },
   },
 });

@@ -1,22 +1,33 @@
 # Kreators Life
 
-A mobile-first web app for anyone. Seven relationships, one tower, a few boxes to tick every day.
+Seven relationships, one tower, a few boxes to tick every day. Around that daily game sits everything a creator needs: learning, paid work, brand campaigns, content rewards paid per verified view, events, a shop with attribution, a money tracker, and a public site that shows all of it before anyone signs in.
 
 ## Stack
 
-- `apps/web`: React 19 + Vite 7 + Tailwind 4, installable PWA.
-- `apps/api`: Cloudflare Worker (Hono) with a D1 database. It also serves the built web app as static assets, so one deploy ships everything.
-- `packages/shared`: the domain model both sides use (relationships, the ladder, XP rules, the question bank, starter quests, sparks, badges).
+- `apps/web`: React 19 + Vite 7 + Tailwind 4, installable PWA. The public site and the app are one bundle.
+- `apps/api`: Cloudflare Worker (Hono) with a D1 database. It serves the built web app as static assets, so one deploy ships everything. `/api/*`, `/go/*` and `/__scheduled` run in the Worker; everything else is a file or the SPA shell.
+- `packages/shared`: the domain model both sides use: relationships, the ladder, XP rules, questions, modules, listings, commerce, finance.
 
 ## Run it locally
 
 ```bash
 pnpm install
-pnpm db:migrate:local      # creates the local D1 database
+pnpm db:migrate:local      # creates or upgrades the local D1 database (migrations 0001 to 0010)
 pnpm dev                   # web on http://localhost:5173, api on http://localhost:8787
 ```
 
-Open the web URL on your phone (same Wi-Fi, use your machine's LAN IP) and add it to the home screen.
+- http://localhost:5173 is the live dev server with hot reload. It proxies `/api` and `/go` to the Worker.
+- http://localhost:8787 is the Worker serving the last `pnpm build`. Use it to check the production bundle and the PWA.
+- To test the cron locally, run the api with `wrangler dev --port 8787 --test-scheduled` and open `http://localhost:8787/__scheduled?cron=*+*+*+*+*`. The job posts post-purchase sequences and monthly finance entries and refreshes YouTube numbers.
+
+Secrets go in `apps/api/.dev.vars` locally and `wrangler secret put` in production:
+
+| Name | What it does |
+| --- | --- |
+| `ADMIN_KEY` | Opens `/admin` before the first admin account exists. |
+| `YOUTUBE_API_KEY` | Reads view counts for YouTube links in Content and content rewards. Without it, numbers are typed and a reviewer confirms. |
+| `META_APP_SECRET`, `META_VERIFY_TOKEN`, `META_ACCESS_TOKEN` | Turn on the Instagram comment webhook and private replies for Auto-DM. Without them, matched comments queue for you to send by hand. |
+| `CLICK_SALT` | Salt for hashing click IPs on tracked links. |
 
 ## Deploy
 
@@ -28,51 +39,58 @@ pnpm db:migrate
 pnpm deploy
 ```
 
-## Finding your way around
+## Design source
 
-Four tabs, each with one job:
+Colors, type, radii and shadows come from the freud UI Kit v1.5 in Figma. The values are frozen in `design/figma-tokens.json`, so builds never call Figma. To re-pull, put a read-only Figma token in `.env` as `FIGMA_TOKEN` and run `python3 -I scripts/figma-pull.py . <fileKey> <nodeId> <outDir>` followed by `scripts/figma-sections.py`, then update the theme block in `apps/web/src/app.css` and the floor colors in `packages/shared/src/index.ts`.
 
-- **Today**: the daily routine as three checkbox sections: show up, today's spark, tasks. A bar at the top counts how many of the three are done. Below it, who you are becoming: you next to your next form, which fills in from the feet up as xp arrives.
-- **Tower**: seven floors. Tap a floor to build it (one tap builds the ladder derived from your vibe check) or to add tasks. Built floors send their tasks to Today.
-- **Rank**: the leaderboard.
-- **You**: evolution, points and rewards, badges, your vibe check scores, profile, and help. A "how it works" card shows on Today the first time and can be brought back from here.
+Dark mode keeps the same hues and turns them inside out: the cream page becomes deep brown, cards become brown, pale tints become the deep end of their own family (pale purple turns deep purple, not grey). Everything is a CSS variable on `:root`; the theme switch (device, light, dark) sits on every page, including onboarding, and in the laptop sidebar.
 
-A floor's screen shows its character next to its next evolution, then the tasks to do, then the five rungs of the ladder collapsed under their summaries.
+On a phone the app is a single column with tabs along the bottom. On a laptop the tabs become a sidebar and each screen's sections flow into two columns. The public site is fully responsive on its own.
 
-Every action in the app is a checkbox row: checking in, the spark, every task, and choosing which floors to build. The whole row is the tap target. A task that is still in its ten-minute wait shows a clock and "Ready in N min" instead of failing silently.
+## Accounts and roles
 
-With a mouse, anything tappable lifts off its hard shadow on hover, a checkbox row previews a faint tick where it will land, and a floor's character hops. Touch screens get none of that, so nothing sticks after a tap, and reduced-motion settings turn the movement off and keep the color change.
+Everyone starts with an anonymous device session. Under You, Account, a person can add an email and password; the tower on the device becomes that account. Signing in from a public page brings you straight back to it.
+
+Three roles: Creator (`user`), Staff (`sub_admin`) and Admin. Staff hold permissions, each a job they are trusted with: talent (campaigns), cohorts (School), events (Party), finance (payouts), moderation, support, review (Club, rewards, tools, TV and Fund) and mentor (assignment feedback). Admins hold them all. Brands are organizations: whoever creates one owns it and adds teammates by email.
+
+## Modules and feature switches
+
+Every part of the app is a module in `MODULES` (`packages/shared`). People switch modules on and off under You, Features. Admins control each module with a global switch, a minimum role, a rollout percentage and overrides for one person, one role or one brand, with an optional expiry. The server resolves all of that into `access` on `/api/me`, so the client never guesses.
+
+Learn and earn: School (programs, cohorts, lessons, assignments, mentor feedback, sessions, completion), Work (opportunities, one application each with the portfolio attached, status tracking), Army (brand campaigns: brief, scope, shortlist, approval, production, versions and feedback, usage rights), Win (content rewards).
+
+People: Party (meetups anyone can host, staff events, RSVP, waitlist with promotion, check-in, feedback), Community, Club (curated membership with a reviewer queue), Bond (introductions that only share details after consent, with blocking).
+
+Wellbeing: score, Mood, Sleep, Stress, Mindful minutes, Journal, Companion. Journal and wellbeing data never reach brands, staff, the leaderboard or Club selection.
+
+Creator: Profile (handle, bio, skills, portfolio), Shop, Audience, Content, Auto-DM, Finance, My purchases, Knowledge, Tools, TV, Fund.
+
+Core: Today, Tower, Search, Inbox, Help (FAQ and support tickets), Rank, Rewards. Team: Manage (queues per permission), Admin.
+
+## The public site
+
+`/` is the site: no account needed. The seven characters walk along the bottom of the page as you scroll and whichever relationship is on screen takes the lead. Each floor lists the features that serve it. `/explore` searches every listing (content rewards, opportunities, events, programs, tools, public campaigns) with a sign-in button that returns you to the thing you picked. `/features/:key` is a page per module with the pitch, how it goes, which floors it serves and the live listings for it. `/c/:code` verifies a course certificate; `/i/:token` shows an invoice to a client.
+
+Listings come from the admin console (Admin, Listings: create, publish, feature) and from the modules themselves (a published opportunity, a verified tool, a brand making its campaign public).
+
+## Content rewards and view tracking
+
+A reward has a brand, a brief, a platform, a pool of points, a rate per thousand verified views, a cap per creator and a minimum view count. Creators submit a public link. YouTube numbers are read automatically when a key is set; everything else is typed by the creator and confirmed by a reviewer, with the full metric history kept. Payout is computed from confirmed views, never exceeds the pool, and is released by someone with the finance permission. Rejections can be disputed.
+
+## Shop and growth
+
+Product kinds: download, course (drip, quizzes, certificates), membership, session (availability, intake questions, race-safe slots), event (replays for sale afterwards), link, payment link (fixed or pay what you want), bundle, locked post and priority DM (a paid question answered within promised days). Free downloads can capture leads. Coupons, affiliates at twenty percent, a platform fee in basis points per creator, refunds, a customers list with CSV export and a payout breakdown.
+
+Content: every post gets a tracked link at `/go/<code>`; clicks carry an id into checkout so the dashboard shows clicks, sales and revenue per post, with profile-direct sales shown honestly. Auto-DM: a keyword on a post sends a tracked link by private reply (queued for you when Meta is not connected; a simulator exercises the flow). Funnels chain posts, automations, links, leads, products and broadcasts with the count at each step. Sequences deliver a message to a buyer's inbox some days after purchase.
+
+## Finance
+
+Money in and out with a category, who it was with, and optional splits (someone else's share of a payment, marked paid later). Dues track what people owe you and what you owe them, settle in one tap, and can repeat monthly. Recurring entries post on a day of the month. Budgets per expense category, goals (save up, or earn by a date), invoices with a public link that book the income when marked paid, and all-time totals next to the month. Points earned on the platform appear alongside.
 
 ## How the game works
 
-- **Vibe check**: an adaptive flow, about twenty taps. Each floor asks a gauge question, then a probe that depends on the answer (a low answer asks what is in the way, a high one asks what keeps it strong), then a foundation question whose options are pillars. Nothing is typed.
-- **Derived ladders**: the pillar you picked derives the rest of the floor (principle, value goal, outcome, project, three tasks). Low-scoring floors get gentle starter tasks, high-scoring ones get stretch tasks. The three lowest floors are built by default; any other can be switched on. Derivation happens server-side from stored answers, so the client cannot invent ladders.
-- **The ladder**: pillars hold up principles, which hold up value goals, outcomes, projects and tasks. A rung unlocks once the rung below it has at least one item.
-- **Ripple**: completing a task gives 20 xp and sends smaller amounts up every rung above it. Finishing the last task in a project clears the project for a bonus.
-- **Daily**: a check-in (streak + 10 xp) and a spark, a tiny challenge from the character whose floor needs you most (15 xp).
-- **Levels and badges**: level thresholds are `60 * n * (n - 1)` xp. Badges are computed from your stats, never stored.
-- **Evolution**: your identity evolves through five stages (Seed, Sprout, Climber, Steady hand, Luminary) as total xp grows, and each character evolves through four (Spark, Glow, Blaze, Beacon) on its floor's xp. The next form is drawn next to the current one and revealed from the feet up as xp fills it. Evolved characters gain an aura, then sparkles, then a crown; the person gains a seedling, then a backpack, then a lantern and cape, then a crown.
-- **Honors**: a second kind of badge. Admin-given (Pro, Founding member, Community star, Team player) or unlocked by time on the tower (7, 30, 90, 365 days). Both kinds count on the leaderboard.
-- **Points and rewards**: check-ins pay 10 points, every seventh day in a row pays 50 more. Points are separate from xp and can be reserved against real rewards (stickers, meetup ticket, tee, coaching call). A reservation refunds if cancelled. Admins fulfil them.
-- **Leaderboard**: top twenty by xp, streak or badges. Anyone can hide themselves under You.
-- **Wait times**: a task can be ticked ten minutes after it was written or renamed. Unticking it or editing its note or date does not restart the wait. Only six tasks per rolling day earn xp, counted once each however often they are ticked; later ones still count as done but pay nothing, and undoing them takes nothing back. A second tap on something already done is ignored. Check-ins and sparks only accept today's date (one day of timezone slack), never a future or earlier day. Every evolution stage also needs time: characters need 2, 10 and 30 days on their floor, identity needs 3, 14, 45 and 120 days on the tower. A fully revealed form that is still waiting shows as "being prepared" with a soft glow.
+A branching vibe check derives your ladders. Every day: check in, do the spark, tick a task. Tasks can carry a time and a length so Today shows the day's plan. Waits stop farming: ten minutes before a new task can be ticked, six rewarded ticks a day, server-checked dates, time-gated evolution. XP ripples up the ladder; points come from showing up and can be spent on rewards, products and tickets.
 
 ## Admin
 
-Admin endpoints live under `/api/admin/*` and need an `X-Admin-Key` header that matches the `ADMIN_KEY` secret. Locally it is read from `apps/api/.dev.vars` (`ADMIN_KEY=dev-admin-key`). In production set it once:
-
-```bash
-pnpm --filter @kreators/api exec wrangler secret put ADMIN_KEY
-```
-
-There is a small admin page at `/admin` in the web app: paste the key, find a person, make them pro, give honors, add points, and fulfil or cancel reservations. The same actions over curl:
-
-```bash
-K='X-Admin-Key: dev-admin-key'; B=http://localhost:8787/api/admin
-curl -H "$K" "$B/users?q=jay"
-curl -H "$K" -X POST "$B/users/<id>/pro" -d '{"pro":true}'
-curl -H "$K" -X POST "$B/users/<id>/honors" -d '{"key":"founder","note":"first hundred"}'
-curl -H "$K" -X POST "$B/users/<id>/points" -d '{"amount":500,"note":"launch gift"}'
-curl -H "$K" "$B/redemptions?status=reserved"
-curl -H "$K" -X POST "$B/redemptions/<id>" -d '{"status":"fulfilled"}'
-```
+`/admin` works with the admin key or an admin's session. People (search, role, permissions, Pro, honors, points, and a preview of exactly what one person sees), Flags (switch, minimum role, rollout, overrides), Listings, Redemptions and the Audit log of every change.

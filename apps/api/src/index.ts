@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import type { AppEnv, UserRow } from './env';
+import type { AppEnv, Env, UserRow } from './env';
 import { auth } from './routes/auth';
 import { me } from './routes/me';
 import { onboarding } from './routes/onboarding';
@@ -9,6 +9,35 @@ import { today } from './routes/today';
 import { leaderboard } from './routes/leaderboard';
 import { rewards } from './routes/rewards';
 import { admin } from './routes/admin';
+import { wellbeing } from './routes/wellbeing';
+import { journal } from './routes/journal';
+import { inbox } from './routes/inbox';
+import { manageResources, resources } from './routes/resources';
+import { community, moderate } from './routes/community';
+import { companion } from './routes/companion';
+import { search } from './routes/search';
+import { studio } from './routes/studio';
+import { publicPage, store } from './routes/store';
+import { explore } from './routes/explore';
+import { manage } from './routes/manage';
+import { orgs } from './routes/orgs';
+import { army } from './routes/army';
+import { school } from './routes/school';
+import { work } from './routes/work';
+import { party } from './routes/party';
+import { club } from './routes/club';
+import { win } from './routes/win';
+import { bond } from './routes/bond';
+import { tools } from './routes/tools';
+import { proposals } from './routes/proposals';
+import { support } from './routes/support';
+import { growth } from './routes/growth';
+import { buyer, certificates } from './routes/buyer';
+import { go, webhooks } from './routes/go';
+import { runScheduled } from './cron';
+import { finance, publicInvoices } from './routes/finance';
+import { circles } from './routes/circles';
+import { life } from './routes/life';
 
 const app = new Hono<AppEnv>().basePath('/api');
 
@@ -16,8 +45,14 @@ app.use('*', cors());
 
 app.get('/health', (c) => c.json({ ok: true, at: new Date().toISOString() }));
 app.route('/auth', auth);
-// Admin uses its own key, not a device session.
+// Admin uses its own key, or an admin's session. Public pages need no session.
 app.route('/admin', admin);
+app.route('/public/explore', explore);
+app.route('/public/certificates', certificates);
+app.route('/public/invoices', publicInvoices);
+app.route('/public', publicPage);
+// Webhooks verify their own signatures.
+app.route('/webhooks', webhooks);
 
 // Everything below needs a device session.
 app.use('*', async (c, next) => {
@@ -38,6 +73,34 @@ app.route('/nodes', nodes);
 app.route('/today', today);
 app.route('/leaderboard', leaderboard);
 app.route('/rewards', rewards);
+app.route('/wellbeing', wellbeing);
+app.route('/journal', journal);
+app.route('/inbox', inbox);
+app.route('/resources', resources);
+app.route('/community', community);
+app.route('/companion', companion);
+app.route('/search', search);
+app.route('/studio', studio);
+app.route('/studio', growth);
+app.route('/store', store);
+app.route('/store', buyer);
+app.route('/manage', manage);
+app.route('/manage/resources', manageResources);
+app.route('/manage/community', moderate);
+app.route('/orgs', orgs);
+app.route('/army', army);
+app.route('/school', school);
+app.route('/work', work);
+app.route('/party', party);
+app.route('/club', club);
+app.route('/win', win);
+app.route('/bond', bond);
+app.route('/tools', tools);
+app.route('/proposals', proposals);
+app.route('/support', support);
+app.route('/finance', finance);
+app.route('/circles', circles);
+app.route('/life', life);
 
 app.notFound((c) => c.json({ error: 'not found' }, 404));
 app.onError((err, c) => {
@@ -45,4 +108,14 @@ app.onError((err, c) => {
   return c.json({ error: 'something broke on our side' }, 500);
 });
 
-export default app;
+// /go/:code lives outside /api so links stay short. The Worker runs first for /api/* and /go/*.
+const root = new Hono<AppEnv>();
+root.route('/', go);
+root.route('/', app);
+
+export default {
+  fetch: root.fetch,
+  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(runScheduled(env).then((r) => console.log('scheduled', JSON.stringify(r))));
+  },
+};

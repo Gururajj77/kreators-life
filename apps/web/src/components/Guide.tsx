@@ -33,8 +33,8 @@ const STEPS = [
 
 export function GuideCard({ onDismiss }: { onDismiss: () => void }) {
   return (
-    <section className="mt-md rounded-card bg-ink p-md text-white shadow-[0_4px_0_0_#15101f]" aria-labelledby="guide-heading">
-      <h2 id="guide-heading" className="text-[22px]">
+    <section className="mt-md rounded-card bg-ink p-md text-on-ink shadow-[0_4px_0_0_#372315]" aria-labelledby="guide-heading">
+      <h2 id="guide-heading" className="text-[24px]">
         How this works
       </h2>
       <ol className="mt-sm flex list-none flex-col gap-sm p-0 m-0">

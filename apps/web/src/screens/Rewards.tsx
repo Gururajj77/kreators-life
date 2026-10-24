@@ -19,7 +19,7 @@ export function Rewards() {
     onSuccess: (r) => {
       refresh();
       setError(null);
-      celebrate({ title: `Reserved. ${r.points} points left`, color: '#FFC93C' });
+      celebrate({ title: `Reserved. ${r.points} points left`, color: '#FACC15' });
     },
     onError: (e) => setError(e instanceof Error ? e.message : 'Could not reserve that.'),
   });
@@ -43,7 +43,7 @@ export function Rewards() {
           </svg>
           You
         </Link>
-        <h1 className="text-[32px]">Rewards</h1>
+        <h1 className="text-[30px]">Rewards</h1>
       </header>
 
       {q.isPending && (
@@ -62,11 +62,11 @@ export function Rewards() {
 
       {data && (
         <>
-          <section className="mt-md rounded-card bg-ink p-md text-white shadow-[0_4px_0_0_#15101f]" aria-labelledby="balance-heading">
-            <h2 id="balance-heading" className="text-[13px] font-bold text-white/70" style={{ fontFamily: 'var(--font-body)' }}>
+          <section className="mt-md rounded-card bg-ink p-md text-on-ink shadow-toy" aria-labelledby="balance-heading">
+            <h2 id="balance-heading" className="text-[14px] font-bold text-white/70" style={{ fontFamily: 'var(--font-body)' }}>
               Your balance
             </h2>
-            <p className="m-0 font-display text-[40px] font-extrabold leading-none">
+            <p className="m-0 font-display text-[36px] font-extrabold leading-none">
               {data.points} <span className="text-[18px]">points</span>
             </p>
             <p className="mt-xs m-0 text-[14px] font-semibold text-white/80">
@@ -83,7 +83,7 @@ export function Rewards() {
           )}
 
           <section className="mt-lg" aria-labelledby="catalog-heading">
-            <h2 id="catalog-heading" className="text-[22px]">
+            <h2 id="catalog-heading" className="text-[24px]">
               Catalog
             </h2>
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -92,15 +92,15 @@ export function Rewards() {
                 return (
                   <li key={r.key} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                     <span
-                      className="flex size-[44px] shrink-0 items-center justify-center rounded-pill text-[22px]"
-                      style={{ background: r.kind === 'event' ? '#D8ECFF' : '#FFF3C4' }}
+                      className="flex size-[44px] shrink-0 items-center justify-center rounded-pill text-[24px]"
+                      style={{ background: r.kind === 'event' ? 'var(--tint-purple)' : 'var(--tint-yellow)' }}
                       aria-hidden="true"
                     >
                       {r.kind === 'event' ? '🎟️' : '👕'}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-[16px] font-bold">{r.name}</span>
-                      <span className="block text-[13px] font-semibold text-ink-soft">
+                      <span className="block text-[14px] font-semibold text-ink-soft">
                         {r.blurb} {can ? '' : `${r.cost - data.points} more points to go.`}
                       </span>
                     </span>
@@ -123,7 +123,7 @@ export function Rewards() {
 
           {data.redemptions.length > 0 && (
             <section className="mt-lg" aria-labelledby="mine-heading">
-              <h2 id="mine-heading" className="text-[22px]">
+              <h2 id="mine-heading" className="text-[24px]">
                 Your reservations
               </h2>
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -133,7 +133,7 @@ export function Rewards() {
                     <li key={x.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                       <span className="min-w-0 flex-1">
                         <span className="block text-[16px] font-bold">{r?.name ?? x.rewardKey}</span>
-                        <span className="block text-[13px] font-semibold text-ink-soft">
+                        <span className="block text-[14px] font-semibold text-ink-soft">
                           {x.points} points, {x.status}
                           {x.note ? `. ${x.note}` : ''}
                         </span>

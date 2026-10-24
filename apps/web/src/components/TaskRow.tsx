@@ -1,4 +1,4 @@
-import { RELATIONSHIP_BY_KEY, type Node } from '@kreators/shared';
+import { RELATIONSHIP_BY_KEY, timeLabel, type Node } from '@kreators/shared';
 import { motion, useReducedMotion } from 'motion/react';
 import { dueLabel } from '../lib/date';
 import { minutesUntil, useNow } from '../lib/useNow';
@@ -23,12 +23,14 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
   const wait = done ? 0 : minutesUntil(task.readyAt, now);
   const due = done ? null : dueLabel(task.dueDate, today);
 
+  const when = [task.dueTime ? timeLabel(task.dueTime) : null, task.estimateMin ? `${task.estimateMin} min` : null].filter(Boolean).join(' · ');
+  const timeChip = when && !done ? <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">{when}</span> : null;
   const badge =
     wait > 0 ? (
       <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">Ready in {wait} min</span>
     ) : due ? (
       <span
-        className={`rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${due.overdue ? 'bg-r1 text-ink' : due.text === 'Today' ? 'bg-ink text-white' : 'bg-paper text-ink-soft'}`}
+        className={`rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${due.overdue ? 'bg-r1 text-ink' : due.text === 'Today' ? 'bg-ink text-on-ink' : 'bg-paper text-ink-soft'}`}
       >
         {due.text}
       </span>
@@ -47,13 +49,20 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
         title={task.title}
         subtitle={subtitle}
         color={rel.color}
-        deep={rel.deep}
+        deep={`var(--deep-${rel.key})`}
         text={rel.text}
         busy={busy}
         strike
         hint={hint}
         lockedMessage={wait > 0 ? `Ready in ${wait} ${wait === 1 ? 'minute' : 'minutes'}. Do it first, then tick it.` : null}
-        badge={badge}
+        badge={
+          badge || timeChip ? (
+            <span className="flex flex-wrap justify-end gap-[4px]">
+              {timeChip}
+              {badge}
+            </span>
+          ) : null
+        }
         aside={
           onEdit ? (
             <button

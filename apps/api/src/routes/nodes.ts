@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { isNodeKind, isRelationshipKey, parentKind, taskReadyAt, WAIT, XP, type CompleteResponse, type RippleEvent } from '@kreators/shared';
 import type { AppEnv } from '../env';
+import { TIME_RE } from '@kreators/shared';
 import { ancestorsOf, badgesNow, DATE_RE, diffBadges, getNode, newId, nowIso, readyFromNow, toNode, type NodeRow } from '../db';
 
 export const nodes = new Hono<AppEnv>();
@@ -33,7 +34,7 @@ nodes.post('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const body = await c.req
-    .json<{ kind?: string; parentId?: string | null; relationship?: string; title?: string; note?: string; dueDate?: string | null }>()
+    .json<{ kind?: string; parentId?: string | null; relationship?: string; title?: string; note?: string; dueDate?: string | null; dueTime?: string | null; estimateMin?: number | null }>()
     .catch(() => ({}) as Record<string, never>);
 
   if (!isNodeKind(body.kind)) return c.json({ error: 'bad kind' }, 400);
@@ -42,6 +43,8 @@ nodes.post('/', async (c) => {
   if (!title) return c.json({ error: 'title required' }, 400);
   const note = typeof body.note === 'string' ? body.note.trim().slice(0, 500) : '';
   const dueDate = typeof body.dueDate === 'string' && DATE_RE.test(body.dueDate) ? body.dueDate : null;
+  const dueTime = body.kind === 'task' && typeof body.dueTime === 'string' && TIME_RE.test(body.dueTime) ? body.dueTime : null;
+  const estimateMin = body.kind === 'task' && Number.isFinite(Number(body.estimateMin)) && Number(body.estimateMin) > 0 ? Math.min(600, Math.round(Number(body.estimateMin))) : null;
 
   const expectedParent = parentKind(body.kind);
   let parentId: string | null = null;
@@ -62,10 +65,10 @@ nodes.post('/', async (c) => {
     .first<{ next: number }>();
   await db
     .prepare(
-      `INSERT INTO nodes (id, user_id, kind, parent_id, relationship, title, note, status, xp, due_date, completed_at, ready_at, sort_order, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 0, ?, NULL, ?, ?, ?, ?)`,
+      `INSERT INTO nodes (id, user_id, kind, parent_id, relationship, title, note, status, xp, due_date, completed_at, ready_at, sort_order, created_at, updated_at, due_time, estimate_min)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 0, ?, NULL, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(id, user.id, body.kind, parentId, body.relationship, title, note, dueDate, body.kind === 'task' ? readyFromNow() : null, sortRow?.next ?? 0, now, now)
+    .bind(id, user.id, body.kind, parentId, body.relationship, title, note, dueDate, body.kind === 'task' ? readyFromNow() : null, sortRow?.next ?? 0, now, now, dueTime, estimateMin)
     .run();
   const row = await getNode(db, user.id, id);
   return c.json({ node: row ? toNode(row) : null }, 201);
@@ -77,11 +80,14 @@ nodes.patch('/:id', async (c) => {
   const row = await getNode(db, user.id, c.req.param('id'));
   if (!row) return c.json({ error: 'not found' }, 404);
   const body = await c.req
-    .json<{ title?: string; note?: string; dueDate?: string | null; status?: string }>()
+    .json<{ title?: string; note?: string; dueDate?: string | null; status?: string; dueTime?: string | null; estimateMin?: number | null }>()
     .catch(() => ({}) as Record<string, never>);
   const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim().slice(0, 140) : row.title;
   const note = typeof body.note === 'string' ? body.note.trim().slice(0, 500) : row.note;
   const dueDate = body.dueDate === null ? null : typeof body.dueDate === 'string' && DATE_RE.test(body.dueDate) ? body.dueDate : row.due_date;
+  // Time and length are planning aids: changing them never restarts the wait.
+  const dueTime = body.dueTime === null ? null : typeof body.dueTime === 'string' && TIME_RE.test(body.dueTime) ? body.dueTime : row.due_time;
+  const estimateMin = body.estimateMin === null ? null : Number.isFinite(Number(body.estimateMin)) && Number(body.estimateMin) > 0 ? Math.min(600, Math.round(Number(body.estimateMin))) : row.estimate_min;
   // Done and active only change through complete and uncomplete, which move xp.
   // Here a node can only be archived, or brought back from the archive.
   const status =
@@ -89,8 +95,8 @@ nodes.patch('/:id', async (c) => {
   // Renaming a task makes it a different task, so its wait starts again.
   const readyAt = row.kind === 'task' && title !== row.title ? readyFromNow() : row.ready_at;
   await db
-    .prepare('UPDATE nodes SET title = ?, note = ?, due_date = ?, status = ?, ready_at = ?, updated_at = ? WHERE id = ?')
-    .bind(title, note, dueDate, status, readyAt, nowIso(), row.id)
+    .prepare('UPDATE nodes SET title = ?, note = ?, due_date = ?, status = ?, ready_at = ?, updated_at = ?, due_time = ?, estimate_min = ? WHERE id = ?')
+    .bind(title, note, dueDate, status, readyAt, nowIso(), dueTime, estimateMin, row.id)
     .run();
   const fresh = await getNode(db, user.id, row.id);
   return c.json({ node: fresh ? toNode(fresh) : null });
