@@ -76,6 +76,19 @@ export const FEATURES: Record<string, FeatureCopy> = {
     steps: ['Switch introductions on.', 'Ask to meet someone you crossed paths with.', 'They accept, and you are both introduced.'],
     relationships: ['friendship'],
   },
+  circles: {
+    tagline: 'Meet five strangers who fit.',
+    pitch: 'Sign up for a circle in your city. Two days before, you are seated at a table of people nearby whose interests complement yours: the writer with the editor, the one on camera with the one behind it. Everyone has an alias. The group chat opens a day before you meet, and names only appear when someone chooses to reveal.',
+    steps: ['Pick your interests and your city.', 'Join a circle. Tables are set two days before.', 'Plan the meetup in the chat, meet, then reveal if you like.'],
+    relationships: ['friendship', 'servant_leader'],
+    listing: 'circle',
+  },
+  life: {
+    tagline: 'Five areas, one picture.',
+    pitch: 'Physical, financial, emotional, mental and spiritual, each scored from what you already log, each part opening the screen where you act on it. Private to you.',
+    steps: ['Keep logging what you log.', 'See the five scores and the week-on-week trend.', 'Tap the weakest part and go there.'],
+    relationships: ['self', 'servant_leader', 'lover_partner', 'guru', 'divine'],
+  },
   wellbeing: {
     tagline: 'One score, four signals.',
     pitch: 'Mood, sleep, stress and mindful minutes roll into one number you can watch week by week. Private to you, always.',

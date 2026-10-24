@@ -12,13 +12,13 @@ Seven relationships, one tower, a few boxes to tick every day. Around that daily
 
 ```bash
 pnpm install
-pnpm db:migrate:local      # creates or upgrades the local D1 database (migrations 0001 to 0010)
+pnpm db:migrate:local      # creates or upgrades the local D1 database (migrations 0001 to 0011)
 pnpm dev                   # web on http://localhost:5173, api on http://localhost:8787
 ```
 
 - http://localhost:5173 is the live dev server with hot reload. It proxies `/api` and `/go` to the Worker.
 - http://localhost:8787 is the Worker serving the last `pnpm build`. Use it to check the production bundle and the PWA.
-- To test the cron locally, run the api with `wrangler dev --port 8787 --test-scheduled` and open `http://localhost:8787/__scheduled?cron=*+*+*+*+*`. The job posts post-purchase sequences and monthly finance entries and refreshes YouTube numbers.
+- To test the cron locally, run the api with `wrangler dev --port 8787 --test-scheduled` and open `http://localhost:8787/__scheduled?cron=*+*+*+*+*`. The job posts post-purchase sequences and monthly finance entries, sets circle tables two days out, and refreshes YouTube numbers.
 
 Secrets go in `apps/api/.dev.vars` locally and `wrangler secret put` in production:
 
@@ -59,13 +59,21 @@ Every part of the app is a module in `MODULES` (`packages/shared`). People switc
 
 Learn and earn: School (programs, cohorts, lessons, assignments, mentor feedback, sessions, completion), Work (opportunities, one application each with the portfolio attached, status tracking), Army (brand campaigns: brief, scope, shortlist, approval, production, versions and feedback, usage rights), Win (content rewards).
 
-People: Party (meetups anyone can host, staff events, RSVP, waitlist with promotion, check-in, feedback), Community, Club (curated membership with a reviewer queue), Bond (introductions that only share details after consent, with blocking).
+People: Party (meetups anyone can host, staff events, RSVP, waitlist with promotion, check-in, feedback), Community, Club (curated membership with a reviewer queue), Bond (introductions that only share details after consent, with blocking), Circles (anonymous nearby tables matched by interests).
 
-Wellbeing: score, Mood, Sleep, Stress, Mindful minutes, Journal, Companion. Journal and wellbeing data never reach brands, staff, the leaderboard or Club selection.
+Wellbeing: Life dashboard, score, Mood, Sleep, Stress, Mindful minutes, Journal, Companion. Journal and wellbeing data never reach brands, staff, the leaderboard or Club selection.
 
 Creator: Profile (handle, bio, skills, portfolio), Shop, Audience, Content, Auto-DM, Finance, My purchases, Knowledge, Tools, TV, Fund.
 
 Core: Today, Tower, Search, Inbox, Help (FAQ and support tickets), Rank, Rewards. Team: Manage (queues per permission), Admin.
+
+## Circles
+
+Small anonymous groups near you. Onboarding asks for interests and a city (and, optionally, a position that never leaves the server). Staff open a circle in a city; people sign up; two days before, tables are set by a matcher that favours complementary interests (writer with video, on camera with behind camera) and keeps people within twenty kilometres. Everyone gets an alias and a character. The group chat opens twenty-four hours before the meeting and closes two days after; the table writes its own plan; anyone can reveal who they are once the chat is open, and revealed members can ask for introductions under Bond.
+
+## Life dashboard
+
+Five areas, physical, financial, emotional, mental and spiritual, each scored from what the person already logs (sleep, movement, mindful minutes, mood, journal, stress, tasks, sparks, finance, learning, the tower floors) with a week-on-week trend. Every part is a link to the screen where you act on it. Movement minutes are logged from the dashboard itself.
 
 ## The public site
 

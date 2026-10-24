@@ -458,7 +458,7 @@ export function Admin() {
                       <Button variant="outline" disabled={busy} onClick={() => run(async () => { await adminApi.setListing(key, l.type, l.id, { live: !l.live }); await refreshListings(); })}>
                         {l.live ? 'Hide' : 'Publish'}
                       </Button>
-                      {l.type !== 'tool' && l.type !== 'campaign' && (
+                      {l.type !== 'tool' && l.type !== 'campaign' && l.type !== 'circle' && (
                         <Button variant="ghost" disabled={busy} onClick={() => run(async () => { await adminApi.setListing(key, l.type, l.id, { featured: !l.featured }); await refreshListings(); })}>
                           {l.featured ? 'Unfeature' : 'Feature'}
                         </Button>
@@ -481,7 +481,7 @@ export function Admin() {
                         for (const [k, v] of Object.entries(form)) {
                           if (k === 'publish' || k === 'featured') continue;
                           if (k === 'skillsRequired') body[k] = String(v).split(',').map((x) => x.trim()).filter(Boolean);
-                          else if (['budgetPoints', 'ratePerThousand', 'maxPayoutPoints', 'minViews', 'compensationMin', 'compensationMax', 'capacity', 'pricePoints', 'priceCents', 'minutes'].includes(k)) body[k] = v === '' ? null : Number(v);
+                          else if (['budgetPoints', 'ratePerThousand', 'maxPayoutPoints', 'minViews', 'compensationMin', 'compensationMax', 'capacity', 'pricePoints', 'priceCents', 'minutes', 'groupSize'].includes(k)) body[k] = v === '' ? null : Number(v);
                           else body[k] = v;
                         }
                         await adminApi.createListing(key, body as Record<string, unknown> & { type: ListingType; title: string });
@@ -630,6 +630,27 @@ export function Admin() {
                         </Label>
                       </>
                     )}
+                    {creating === 'circle' && (
+                      <>
+                        <div className="grid grid-cols-2 gap-xs">
+                          <Label text="City">
+                            <input required value={String(form.city ?? '')} onChange={(e) => setForm({ ...form, city: e.target.value })} className={field} />
+                          </Label>
+                          <Label text="Area (optional)">
+                            <input value={String(form.area ?? '')} onChange={(e) => setForm({ ...form, area: e.target.value })} className={field} />
+                          </Label>
+                          <Label text="Starts">
+                            <input type="datetime-local" required value={String(form.startsAtLocal ?? '')} onChange={(e) => setForm({ ...form, startsAtLocal: e.target.value, startsAt: e.target.value ? new Date(e.target.value).toISOString() : '' })} className={field} />
+                          </Label>
+                          <Label text="People per table">
+                            <input type="number" min={3} max={8} value={String(form.groupSize ?? '5')} onChange={(e) => setForm({ ...form, groupSize: e.target.value })} className={field} />
+                          </Label>
+                        </div>
+                        <Label text="Venue hint">
+                          <input value={String(form.venueHint ?? '')} onChange={(e) => setForm({ ...form, venueHint: e.target.value })} placeholder="A cafe near the metro; the table picks the exact one" className={field} />
+                        </Label>
+                      </>
+                    )}
                     {creating === 'tool' && (
                       <>
                         <Label text="Link">
@@ -651,7 +672,7 @@ export function Admin() {
                       </>
                     )}
                     <Toggle on={form.publish !== false} onChange={(on) => setForm({ ...form, publish: on })} label="Publish now" hint="Off saves it hidden; publish later from the list." />
-                    {creating !== 'tool' && <Toggle on={form.featured === true} onChange={(on) => setForm({ ...form, featured: on })} label="Feature on the home page" />}
+                    {creating !== 'tool' && creating !== 'circle' && <Toggle on={form.featured === true} onChange={(on) => setForm({ ...form, featured: on })} label="Feature on the home page" />}
                     <Button type="submit" full disabled={busy}>
                       Create
                     </Button>

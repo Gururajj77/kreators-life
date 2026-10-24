@@ -47,7 +47,8 @@ life.get('/', async (c) => {
   const thisWeek = (kind: string) => week(kind, since7, '9999');
   const lastWeek = (kind: string) => week(kind, since14, since7);
   const xpOf = (k: RelationshipKey) => floors.results.find((f) => f.relationship === k)?.xp ?? 0;
-  const floorScore = (keys: RelationshipKey[]) => clamp(avg(keys.map((k) => Math.min(100, (levelFromXp(xpOf(k)) - 1) * 12 + Math.min(40, xpOf(k) / 10))) ?? 0);
+  const floorOne = (k: RelationshipKey) => Math.min(100, (levelFromXp(xpOf(k)) - 1) * 12 + Math.min(40, xpOf(k) / 10));
+  const floorScore = (keys: RelationshipKey[]) => clamp(avg(keys.map(floorOne)) ?? 0);
 
   // Scores for one window, so the trend is the same arithmetic on the week before.
   const scoreSleep = (ls: Log[]) => {

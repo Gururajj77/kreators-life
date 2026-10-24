@@ -1,4 +1,4 @@
-import { AVAILABILITY, CATEGORIES, EXPERIENCE_LEVELS, GOALS, SKILLS, type PortfolioItem, type User } from '@kreators/shared';
+import { AVAILABILITY, CATEGORIES, EXPERIENCE_LEVELS, GOALS, INTERESTS, SKILLS, type PortfolioItem, type User } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -77,9 +77,14 @@ function ProfileView({ user }: { user: User }) {
   const [availability, setAvailability] = useState(user.availability);
   const [location, setLocation] = useState(user.location);
   const [openToIntros, setOpenToIntros] = useState(user.openToIntros);
+  const [interests, setInterests] = useState<string[]>(user.interests);
+  const [city, setCity] = useState(user.city);
+  const [area, setArea] = useState(user.area);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null | undefined>(undefined);
+  const [locating, setLocating] = useState(false);
   const [saved, setSaved] = useState(false);
   const save = useMutation({
-    mutationFn: () => api.updateMe({ handle: handle || null, bio, skills, categories, goals, experienceLevel, availability, location, openToIntros }),
+    mutationFn: () => api.updateMe({ handle: handle || null, bio, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, ...(coords === undefined ? {} : { lat: coords?.lat ?? null, lng: coords?.lng ?? null }) }),
     onSuccess: () => {
       refresh();
       setSaved(true);
@@ -135,8 +140,42 @@ function ProfileView({ user }: { user: User }) {
         <Chips legend="Goals" options={GOALS} value={goals} onChange={setGoals} max={12} hint="What you want from Kreators. It shapes what we suggest." />
         <OneOf legend="Experience" options={EXPERIENCE_LEVELS} value={experienceLevel} onChange={setExperience} />
         <OneOf legend="Availability" options={AVAILABILITY} value={availability} onChange={setAvailability} />
+        <Chips legend="Interests" options={INTERESTS} value={interests} onChange={setInterests} max={8} hint="What you make and care about. Circles seat you with people whose interests fit yours." />
+        <div className="grid grid-cols-2 gap-xs">
+          <label className="block">
+            <span className="block text-[14px] font-bold">City</span>
+            <input value={city} onChange={(e) => setCity(e.target.value)} maxLength={80} placeholder="Bengaluru" className={field} />
+          </label>
+          <label className="block">
+            <span className="block text-[14px] font-bold">Area</span>
+            <input value={area} onChange={(e) => setArea(e.target.value)} maxLength={80} placeholder="Indiranagar" className={field} />
+          </label>
+        </div>
+        <button
+          type="button"
+          disabled={locating}
+          onClick={() => {
+            if (coords || user.hasLocation) {
+              setCoords(null);
+              return;
+            }
+            if (!navigator.geolocation) return;
+            setLocating(true);
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                setCoords({ lat: Math.round(pos.coords.latitude * 1000) / 1000, lng: Math.round(pos.coords.longitude * 1000) / 1000 });
+                setLocating(false);
+              },
+              () => setLocating(false),
+              { timeout: 8000 },
+            );
+          }}
+          className="toy toy-soft inline-flex min-h-[48px] items-center justify-center rounded-pill bg-card px-md text-[14px] font-bold disabled:opacity-60"
+        >
+          {locating ? 'Finding you' : coords ? 'Position ready to save; tap to clear' : coords === null ? 'Position will be removed on save' : user.hasLocation ? 'Position saved; tap to remove' : 'Use my position for nearby matching'}
+        </button>
         <label className="block">
-          <span className="block text-[14px] font-bold">Location</span>
+          <span className="block text-[14px] font-bold">Location on your page</span>
           <input value={location} onChange={(e) => setLocation(e.target.value)} maxLength={80} placeholder="City, country" className={field} />
         </label>
         <label className="flex items-center gap-sm text-[14px] font-bold">

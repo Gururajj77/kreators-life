@@ -15,6 +15,7 @@ import {
 import { useMutation } from '@tanstack/react-query';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useRef, useState } from 'react';
+import { INTERESTS } from '@kreators/shared';
 import { useNavigate } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
@@ -31,6 +32,7 @@ type Stage =
   | { kind: 'intro' }
   | { kind: 'question'; id: string; history: string[] }
   | { kind: 'reveal'; result: OnboardingResponse }
+  | { kind: 'about'; result: OnboardingResponse }
   | { kind: 'ladders'; result: OnboardingResponse };
 
 export function VibeCheck() {
@@ -153,7 +155,11 @@ export function VibeCheck() {
   }
 
   if (stage.kind === 'reveal') {
-    return <Reveal result={stage.result} onNext={() => setStage({ kind: 'ladders', result: stage.result })} />;
+    return <Reveal result={stage.result} onNext={() => setStage({ kind: 'about', result: stage.result })} />;
+  }
+
+  if (stage.kind === 'about') {
+    return <AboutYou onNext={() => setStage({ kind: 'ladders', result: stage.result })} />;
   }
 
   return <Ladders result={stage.result} onDone={() => nav('/tower', { replace: true })} />;
@@ -429,6 +435,88 @@ function Ladders({ result, onDone }: { result: OnboardingResponse; onDone: () =>
       <Button variant="ghost" full className="mt-xs" onClick={onDone} disabled={build.isPending}>
         Start with an empty tower
       </Button>
+    </Screen>
+  );
+}
+
+
+/** Interests and place, so circles can seat you with people nearby whose work fits yours. */
+function AboutYou({ onNext }: { onNext: () => void }) {
+  const refresh = useRefreshAll();
+  const [interests, setInterests] = useState<string[]>([]);
+  const [city, setCity] = useState('');
+  const [area, setArea] = useState('');
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState(false);
+  const save = useMutation({
+    mutationFn: () => api.updateMe({ interests, city, area, lat: coords?.lat ?? null, lng: coords?.lng ?? null }),
+    onSuccess: async () => {
+      await refresh();
+      onNext();
+    },
+  });
+  const locate = () => {
+    if (!navigator.geolocation) return;
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCoords({ lat: Math.round(pos.coords.latitude * 1000) / 1000, lng: Math.round(pos.coords.longitude * 1000) / 1000 });
+        setLocating(false);
+      },
+      () => setLocating(false),
+      { timeout: 8000 },
+    );
+  };
+  return (
+    <Screen tabs={false}>
+      <div className="pt-xl">
+        <Avatar relationship="friendship" size={88} />
+        <h1 className="mt-md text-[36px]">What do you make?</h1>
+        <p className="mt-sm text-[16px] font-semibold text-ink-soft">Pick a few interests and your city. Circles seat you with people nearby whose interests fit yours: the writer with the editor, the one on camera with the one behind it.</p>
+      </div>
+      <form
+        className="mt-lg flex flex-col gap-md"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save.mutate();
+        }}
+      >
+        <fieldset className="m-0 border-0 p-0">
+          <legend className="text-[14px] font-bold">Interests, pick two or more</legend>
+          <div className="mt-xs flex flex-wrap gap-xs">
+            {INTERESTS.map((t) => {
+              const on = interests.includes(t);
+              return (
+                <button key={t} type="button" aria-pressed={on} onClick={() => setInterests(on ? interests.filter((x) => x !== t) : interests.length < 8 ? [...interests, t] : interests)} className={`rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+                  {t}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+        <div className="grid grid-cols-2 gap-xs">
+          <label className="block">
+            <span className="block text-[14px] font-bold">City</span>
+            <input value={city} onChange={(e) => setCity(e.target.value)} maxLength={80} placeholder="Bengaluru" autoComplete="address-level2" className="mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]" />
+          </label>
+          <label className="block">
+            <span className="block text-[14px] font-bold">Area (optional)</span>
+            <input value={area} onChange={(e) => setArea(e.target.value)} maxLength={80} placeholder="Indiranagar" className="mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]" />
+          </label>
+        </div>
+        <button type="button" onClick={locate} disabled={locating || coords !== null} className="toy toy-soft inline-flex min-h-[48px] items-center justify-center rounded-pill bg-card px-md text-[14px] font-bold disabled:opacity-60">
+          {coords ? 'Position saved for nearby matching' : locating ? 'Finding you' : 'Use my position for nearby matching (optional)'}
+        </button>
+        <p className="m-0 text-[12px] font-semibold text-ink-mute">Your position stays on the server and is only used to keep tables within twenty kilometres. Nobody sees it.</p>
+        {save.isError && (
+          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+            Could not save. Try again.
+          </p>
+        )}
+        <Button type="submit" size="lg" full disabled={save.isPending}>
+          {interests.length >= 2 && city.trim() ? 'Save and build my tower' : 'Skip for now'}
+        </Button>
+      </form>
     </Screen>
   );
 }

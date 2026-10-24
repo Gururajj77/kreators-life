@@ -35,7 +35,7 @@ export function Wellbeing() {
           <ul className="mt-md flex list-none flex-col gap-xs p-0 m-0">
             {ROWS.map((r) => {
               const part = d.parts.find((p) => p.kind === r.kind);
-              const series = d.week.map((w) => (r.kind === 'mindful' ? w.mindful : w[r.kind]));
+              const series = d.week.map((w) => (r.kind === 'mindful' ? w.mindful : r.kind === 'move' ? null : w[r.kind]));
               return (
                 <li key={r.kind}>
                   <Link to={r.path} className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm">

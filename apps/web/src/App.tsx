@@ -15,6 +15,7 @@ import { Army, Campaign } from './screens/Army';
 import { Auth } from './screens/Auth';
 import { Automations } from './screens/Automations';
 import { Bond } from './screens/Bond';
+import { CircleGroup, Circles } from './screens/Circles';
 import { Club } from './screens/Club';
 import { Cohort } from './screens/Cohort';
 import { Community } from './screens/Community';
@@ -29,6 +30,7 @@ import { Inbox } from './screens/Inbox';
 import { Journal } from './screens/Journal';
 import { Leaderboard } from './screens/Leaderboard';
 import { Library } from './screens/Library';
+import { Life } from './screens/Life';
 import { Manage } from './screens/Manage';
 import { Mindful } from './screens/Mindful';
 import { Mood } from './screens/Mood';
@@ -177,7 +179,10 @@ const router = createBrowserRouter([
       { path: '/community', element: gated('community', <Community />) },
       { path: '/club', element: gated('club', <Club />) },
       { path: '/bond', element: gated('bond', <Bond />) },
+      { path: '/circles', element: gated('circles', <Circles />) },
+      { path: '/circles/:id', element: gated('circles', <CircleGroup />) },
       // wellbeing
+      { path: '/life', element: gated('life', <Life />) },
       { path: '/wellbeing', element: gated('wellbeing', <Wellbeing />) },
       { path: '/mood', element: gated('mood', <Mood />) },
       { path: '/sleep', element: gated('sleep', <Sleep />) },

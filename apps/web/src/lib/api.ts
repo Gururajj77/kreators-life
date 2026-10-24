@@ -9,6 +9,8 @@ import type {
   BountySubmission,
   Campaign,
   Certificate,
+  CircleEvent,
+  CircleGroup,
   ContentItem,
   Customer,
   DmAutomation,
@@ -38,6 +40,7 @@ import type {
   FlagOverride,
   Introduction,
   LearningItem,
+  LifeSummary,
   Listing,
   ListingType,
   Membership,
@@ -142,6 +145,11 @@ export const api = {
     availability?: string;
     location?: string;
     openToIntros?: boolean;
+    interests?: string[];
+    city?: string;
+    area?: string;
+    lat?: number | null;
+    lng?: number | null;
   }) => patch<{ user: User }>('/me', body),
   portfolio: () => request<{ items: PortfolioItem[] }>('/me/portfolio'),
   addPortfolio: (body: { title: string; url: string; description?: string; visibility?: 'public' | 'private' }) => post<{ item: PortfolioItem }>('/me/portfolio', body),
@@ -360,6 +368,18 @@ export const api = {
   payouts: () => request<PayoutSummary>('/studio/payouts'),
   dmRequests: () => request<{ requests: DmRequest[] }>('/studio/dm'),
   answerDm: (id: string, answer: string) => post<{ ok: true }>(`/studio/dm/${id}/answer`, { answer }),
+
+  // circles and life
+  circles: () => request<{ events: CircleEvent[]; groups: CircleGroup[]; city: string; area: string; interests: string[]; hasLocation: boolean; canCreate: boolean }>('/circles'),
+  createCircle: (body: { title: string; city: string; area?: string; startsAt: string; venueHint?: string; groupSize?: number }) => post<{ event: CircleEvent }>('/circles/events', body),
+  joinCircle: (id: string, note?: string) => post<{ ok: true }>(`/circles/events/${id}/join`, { note }),
+  leaveCircle: (id: string) => del<{ ok: true }>(`/circles/events/${id}/join`),
+  matchCircle: (id: string) => post<{ groups: number; unmatched: number }>(`/circles/events/${id}/match`),
+  circleGroup: (id: string) => request<{ group: CircleGroup; opensInMinutes: number }>(`/circles/groups/${id}`),
+  circleSay: (id: string, body: string) => post<{ ok: true; id: string }>(`/circles/groups/${id}/messages`, { body }),
+  circlePlan: (id: string, body: { venue?: string; plan?: string }) => post<{ ok: true }>(`/circles/groups/${id}/plan`, body),
+  circleReveal: (id: string) => post<{ ok: true }>(`/circles/groups/${id}/reveal`),
+  life: () => request<LifeSummary>('/life'),
 
   // finance
   finance: (month?: string) => request<FinanceSummary>(`/finance${month ? `?month=${month}` : ''}`),
