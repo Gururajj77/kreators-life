@@ -56,12 +56,12 @@ export function TabBar() {
             <NavLink
               to={t.to}
               className={({ isActive }) =>
-                `flex min-h-[64px] flex-col items-center justify-center gap-xs text-[12px] font-bold ${isActive ? 'text-ink' : 'text-ink-mute'}`
+                `tab flex min-h-[64px] flex-col items-center justify-center gap-xs text-[12px] font-bold transition-colors ${isActive ? 'text-ink' : 'text-ink-mute hover:text-ink'}`
               }
             >
               {({ isActive }) => (
                 <>
-                  <span className={`flex size-[36px] items-center justify-center rounded-pill ${isActive ? 'bg-ink text-white' : ''}`}>{t.icon}</span>
+                  <span className={`tab-icon flex size-[36px] items-center justify-center rounded-pill transition-colors ${isActive ? 'bg-ink text-white' : ''}`}>{t.icon}</span>
                   {t.label}
                 </>
               )}

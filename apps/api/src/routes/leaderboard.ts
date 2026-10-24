@@ -55,7 +55,7 @@ leaderboard.get('/', async (c) => {
     return {
       rank: 0,
       userId: r.id,
-      name: r.display_name || 'Anonymous creator',
+      name: r.display_name || 'Anonymous climber',
       xp: r.xp,
       level: levelFromXp(r.xp),
       streak: r.streak,

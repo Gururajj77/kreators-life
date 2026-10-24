@@ -79,7 +79,7 @@ export function Admin() {
           <input type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" className={field} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Find a creator</span>
+          <span className="block text-[14px] font-bold">Find a person</span>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name or id, empty for newest" className={field} />
         </label>
         <Button type="submit" disabled={!key || busy}>
@@ -94,12 +94,12 @@ export function Admin() {
       )}
 
       {loaded && (
-        <section className="mt-lg" aria-labelledby="creators-heading">
-          <h2 id="creators-heading" className="text-[22px]">
-            Creators
+        <section className="mt-lg" aria-labelledby="people-heading">
+          <h2 id="people-heading" className="text-[22px]">
+            People
           </h2>
           {users.length === 0 ? (
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">No creators match.</p>
+            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">No one matches.</p>
           ) : (
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
               {users.map((u) => (
@@ -108,10 +108,10 @@ export function Admin() {
                     type="button"
                     onClick={() => setSelected(u)}
                     aria-pressed={selected?.id === u.id}
-                    className={`toy w-full rounded-tile p-sm text-left shadow-toy-soft ${selected?.id === u.id ? 'bg-ink text-white' : 'bg-card'}`}
+                    className={`toy w-full rounded-tile p-sm text-left ${selected?.id === u.id ? 'bg-ink text-white' : 'toy-soft bg-card'}`}
                   >
                     <span className="block truncate text-[16px] font-bold">
-                      {u.displayName || 'Anonymous creator'}
+                      {u.displayName || 'Anonymous climber'}
                       {u.isPro ? ', pro' : ''}
                     </span>
                     <span className={`block text-[13px] font-semibold ${selected?.id === u.id ? 'text-white/80' : 'text-ink-soft'}`}>
@@ -128,7 +128,7 @@ export function Admin() {
       {selected && (
         <section className="mt-lg rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="selected-heading">
           <h2 id="selected-heading" className="text-[22px]">
-            {selected.displayName || 'Anonymous creator'}
+            {selected.displayName || 'Anonymous climber'}
           </h2>
           <p className="mt-xs m-0 break-all text-[13px] font-semibold text-ink-soft">
             {selected.id}, joined {new Date(selected.createdAt).toLocaleDateString()}

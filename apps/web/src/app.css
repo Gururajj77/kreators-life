@@ -112,15 +112,103 @@
   }
 }
 
-/* Pressable toy button: shadow collapses as it goes down. */
+/* Anything tappable is a "toy": it sits on a hard shadow, lifts under a
+   mouse pointer, and presses down on tap. The shadow color comes from
+   --toy-color so colored floors and buttons can set their own. */
 .toy {
+  --toy-color: #15101f;
+  box-shadow: 0 4px 0 0 var(--toy-color);
   transition:
-    transform 80ms ease,
-    box-shadow 80ms ease;
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease,
+    filter 120ms ease;
 }
-.toy:active {
+.toy-ink {
+  --toy-color: var(--color-ink);
+}
+.toy-soft {
+  --toy-color: var(--color-line);
+}
+.toy-flat {
+  box-shadow: none;
+}
+.toy:active:not(:disabled) {
   transform: translateY(4px);
   box-shadow: 0 0 0 0 transparent;
+}
+.toy-flat:active:not(:disabled) {
+  transform: translateY(1px);
+}
+@media (hover: hover) and (pointer: fine) {
+  .toy:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 0 0 var(--toy-color);
+    filter: brightness(1.03);
+  }
+  .toy-flat:hover:not(:disabled) {
+    transform: none;
+    box-shadow: none;
+    background-color: var(--color-line);
+  }
+  /* Hovering a checkbox row shows a faint tick where it will land. */
+  .check-row:hover:not(:disabled) .check-box {
+    background-color: color-mix(in oklab, var(--check-color) 14%, white);
+  }
+  .check-row:hover:not(:disabled) .check-preview {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  /* A character hops when its floor is hovered. */
+  .toy:hover .avatar-hop {
+    animation: hop 420ms ease-out;
+  }
+  summary:hover {
+    background-color: var(--color-paper);
+  }
+  summary:hover .chev {
+    transform: translateY(2px);
+  }
+  details[open] summary:hover .chev {
+    transform: rotate(180deg) translateY(2px);
+  }
+  .tab:hover > .tab-icon {
+    background-color: var(--color-line);
+  }
+}
+.check-box {
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+.check-preview {
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+.chev {
+  transition: transform 160ms ease;
+}
+@keyframes hop {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toy,
+  .toy:hover:not(:disabled),
+  .toy:active:not(:disabled) {
+    transform: none;
+  }
+  .toy:hover .avatar-hop {
+    animation: none;
+  }
 }
 
 .scrollbar-none {
@@ -140,4 +228,7 @@ summary::-webkit-details-marker {
 }
 details[open] .chev {
   transform: rotate(180deg);
+}
+summary {
+  transition: background-color 120ms ease;
 }

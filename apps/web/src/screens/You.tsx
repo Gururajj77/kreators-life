@@ -1,17 +1,16 @@
-import { BADGES, HONORS, IDENTITY_STAGES, levelFromXp, POINTS, RELATIONSHIPS, type MeResponse } from '@kreators/shared';
+import { BADGES, FOCUS_OPTIONS, HONORS, IDENTITY_STAGES, levelFromXp, POINTS, RELATIONSHIPS, type MeResponse } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
-import { Creator } from '../components/Creator';
+import { Person } from '../components/Person';
 import { EvolutionReveal } from '../components/EvolutionReveal';
 import { useGuide } from '../components/Guide';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useMe, useRefreshAll } from '../lib/queries';
 
-const CREATOR_TYPES = ['YouTube', 'TikTok', 'Instagram', 'Podcast', 'Newsletter', 'Streaming', 'Other'];
 
 export function You() {
   const me = useMe();
@@ -34,12 +33,12 @@ function YouView({ data }: { data: MeResponse }) {
   const nav = useNavigate();
   const guide = useGuide();
   const [name, setName] = useState(user.displayName);
-  const [type, setType] = useState(user.creatorType);
+  const [type, setType] = useState(user.focus);
   const [optIn, setOptIn] = useState(user.leaderboardOptIn);
   const [saved, setSaved] = useState(false);
 
   const save = useMutation({
-    mutationFn: () => api.updateMe({ displayName: name, creatorType: type, leaderboardOptIn: optIn }),
+    mutationFn: () => api.updateMe({ displayName: name, focus: type, leaderboardOptIn: optIn }),
     onSuccess: () => {
       refresh();
       setSaved(true);
@@ -67,7 +66,8 @@ function YouView({ data }: { data: MeResponse }) {
           {user.isPro && <span className="shrink-0 rounded-pill bg-r7 px-sm py-xs text-[13px] font-extrabold text-white">Pro</span>}
         </div>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          {user.creatorType ? `${user.creatorType} creator, ` : ''}level {levelFromXp(user.xp)}, climbing since{' '}
+          {(FOCUS_OPTIONS as readonly string[]).includes(user.focus) && user.focus !== 'Other' ? `Mostly ${user.focus.toLowerCase()}. ` : ''}Level{' '}
+          {levelFromXp(user.xp)}, climbing since{' '}
           {new Date(user.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}.
         </p>
       </header>
@@ -79,9 +79,9 @@ function YouView({ data }: { data: MeResponse }) {
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Xp fills in your next form from the feet up. Each form also needs time on the tower before it is ready.</p>
         <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
           <EvolutionReveal
-            now={<Creator stage={identity.stage.stage} size={104} decorative />}
+            now={<Person stage={identity.stage.stage} size={104} decorative />}
             nowName={identity.stage.name}
-            next={identity.next ? <Creator stage={identity.next.stage} size={104} decorative /> : null}
+            next={identity.next ? <Person stage={identity.next.stage} size={104} decorative /> : null}
             nextName={identity.next?.name ?? null}
             charge={identity.charge}
             preparing={identity.preparing}
@@ -132,7 +132,7 @@ function YouView({ data }: { data: MeResponse }) {
               {POINTS.checkin} per check-in, {POINTS.streakBonus} bonus every {POINTS.streakBonusEvery}th day. Trade them for real things.
             </p>
           </div>
-          <Link to="/rewards" className="toy inline-flex min-h-[48px] shrink-0 items-center rounded-pill bg-ink px-md font-bold text-white shadow-[0_4px_0_0_#15101f]">
+          <Link to="/rewards" className="toy inline-flex min-h-[48px] shrink-0 items-center rounded-pill bg-ink px-md font-bold text-white">
             Rewards
           </Link>
         </div>
@@ -227,9 +227,9 @@ function YouView({ data }: { data: MeResponse }) {
             <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoComplete="nickname" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
           </label>
           <fieldset className="m-0 border-0 p-0">
-            <legend className="text-[14px] font-bold">Where you create</legend>
+            <legend className="text-[14px] font-bold">What fills most of your days</legend>
             <div className="mt-xs flex flex-wrap gap-xs">
-              {CREATOR_TYPES.map((t) => (
+              {FOCUS_OPTIONS.map((t) => (
                 <button
                   key={t}
                   type="button"

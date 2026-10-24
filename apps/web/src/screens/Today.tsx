@@ -1,40 +1,19 @@
-import { IDENTITY_STAGES, RELATIONSHIP_BY_KEY } from '@kreators/shared';
-import { useMutation } from '@tanstack/react-query';
+import { RELATIONSHIP_BY_KEY } from '@kreators/shared';
 import { AnimatePresence } from 'motion/react';
-import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { useCelebrate } from '../components/Celebration';
-import { Creator } from '../components/Creator';
+import { CheckRow } from '../components/CheckRow';
 import { EvolutionReveal } from '../components/EvolutionReveal';
 import { GuideCard, useGuide } from '../components/Guide';
+import { Person } from '../components/Person';
 import { Screen } from '../components/Screen';
 import { TaskRow } from '../components/TaskRow';
 import { api } from '../lib/api';
 import { prettyDate } from '../lib/date';
 import { useMe, useRefreshAll, useToday } from '../lib/queries';
-
-function Step({ n, done, title, color, children }: { n: number; done: boolean; title: string; color?: string; children: ReactNode }) {
-  return (
-    <li className="rounded-card bg-card p-md shadow-toy-soft">
-      <div className="flex items-center gap-sm">
-        <span
-          className="flex size-[32px] shrink-0 items-center justify-center rounded-pill font-display text-[14px] font-extrabold"
-          style={done ? { background: '#3FCB7A', color: '#2B1D3A' } : { background: color ?? '#2B1D3A', color: color ? '#2B1D3A' : '#fff' }}
-          aria-hidden="true"
-        >
-          {done ? '✓' : n}
-        </span>
-        <h2 className="min-w-0 flex-1 text-[18px]">
-          <span className="sr-only">{done ? 'Done: ' : `Step ${n}: `}</span>
-          {title}
-        </h2>
-      </div>
-      <div className="mt-sm">{children}</div>
-    </li>
-  );
-}
+import { useActionQueue } from '../lib/useActionQueue';
 
 export function Today() {
   const { date, data, isPending, isError, refetch } = useToday();
@@ -42,49 +21,37 @@ export function Today() {
   const refresh = useRefreshAll();
   const celebrate = useCelebrate();
   const guide = useGuide();
-  const [notice, setNotice] = useState<string | null>(null);
-  const fail = (e: unknown) => setNotice(e instanceof Error ? e.message : 'That did not work. Try again.');
+  const queue = useActionQueue(refresh);
 
-  const checkin = useMutation({
-    mutationFn: () => api.checkin(date),
-    onError: fail,
-    onSuccess: (r) => {
-      refresh();
-      setNotice(null);
+  const checkIn = () =>
+    queue.run('checkin', async () => {
+      const r = await api.checkin(date);
       if (!r.alreadyCheckedIn) {
         celebrate({ title: r.streakBonus > 0 ? `Day ${r.streak}. Streak bonus!` : `Day ${r.streak} checked in`, totalXp: r.awarded, points: r.points, color: '#FFC93C' });
       }
-    },
-  });
-  const spark = useMutation({
-    mutationFn: () => api.spark(date),
-    onError: fail,
-    onSuccess: (r) => {
-      refresh();
-      setNotice(null);
+    });
+  const doSpark = () =>
+    queue.run('spark', async () => {
+      const r = await api.spark(date);
       if (!r.alreadyDone) celebrate({ title: 'Spark done', totalXp: r.awarded, color: RELATIONSHIP_BY_KEY[r.relationship].color });
-    },
-  });
-  const complete = useMutation({
-    mutationFn: (id: string) => api.complete(id),
-    onError: fail,
-    onSuccess: (r) => {
-      refresh();
-      setNotice(null);
+    });
+  const tick = (id: string) =>
+    queue.run(id, async () => {
+      const r = await api.complete(id);
       celebrate({
-        title: r.capped ? 'Done. Daily xp cap reached, rest is part of the work' : 'Ripple',
+        title: r.capped ? 'Done. Daily xp limit reached, so this one was for you' : 'Ripple',
         totalXp: r.totalXp,
         ripple: r.ripple,
         newBadges: r.newBadges,
         projectCleared: r.projectCleared,
         color: RELATIONSHIP_BY_KEY[r.node.relationship].color,
       });
-    },
-  });
+    });
 
   const rel = data ? RELATIONSHIP_BY_KEY[data.spark.relationship] : null;
   const tasks = data?.tasks ?? [];
-  const questsDone = Boolean(data && tasks.length === 0 && data.doneRecently > 0);
+  const taskDone = Boolean(data && data.doneRecently > 0);
+  const doneCount = data ? Number(data.checkedIn) + Number(data.spark.done) + Number(taskDone) : 0;
   const identity = me.data?.identity ?? null;
 
   return (
@@ -100,7 +67,18 @@ export function Today() {
             </span>
           )}
         </div>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Three things, every day. That is the whole game.</p>
+        {data && (
+          <div className="mt-sm">
+            <p className="m-0 text-[14px] font-bold">
+              {doneCount === 3 ? 'All three done. See you tomorrow.' : `${doneCount} of 3 done. Tick a box when you have done the thing.`}
+            </p>
+            <div className="mt-xs flex gap-xs" aria-hidden="true">
+              {[0, 1, 2].map((i) => (
+                <span key={i} className={`h-[8px] flex-1 rounded-pill ${i < doneCount ? 'bg-r4' : 'bg-line'}`} />
+              ))}
+            </div>
+          </div>
+        )}
       </header>
 
       {!guide.seen && <GuideCard onDismiss={guide.dismiss} />}
@@ -118,49 +96,74 @@ export function Today() {
           </Button>
         </div>
       )}
-      {notice && (
-        <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-          {notice}
-        </p>
-      )}
 
       {data && rel && (
-        <ol className="mt-md flex list-none flex-col gap-sm p-0 m-0" aria-label="Your daily three">
-          <Step n={1} done={data.checkedIn} title={data.checkedIn ? `Checked in, day ${data.streak}` : 'Check in'}>
-            {data.checkedIn ? (
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                Points banked.{' '}
-                <Link to="/rewards" className="underline underline-offset-4">
-                  See rewards
-                </Link>
-              </p>
-            ) : (
-              <>
-                <p className="m-0 text-[14px] font-semibold text-ink-soft">Ten xp and ten points for showing up. Fifty bonus points every seventh day in a row.</p>
-                <Button full className="mt-sm" onClick={() => checkin.mutate()} disabled={checkin.isPending}>
-                  Check in
-                </Button>
-              </>
-            )}
-          </Step>
-
-          <Step n={2} done={data.spark.done} title={`Spark from ${rel.character}`} color={rel.color}>
-            <div className="flex items-start gap-sm">
-              <Avatar relationship={rel.key} size={48} mood={data.spark.done ? 'excited' : 'happy'} decorative />
-              <p className="m-0 min-w-0 flex-1 text-[16px] font-extrabold leading-snug">{data.spark.text}</p>
+        <>
+          <section className="mt-lg" aria-labelledby="show-heading">
+            <h2 id="show-heading" className="text-[18px]">
+              Show up
+            </h2>
+            <div className="mt-sm">
+              <CheckRow
+                large
+                checked={data.checkedIn}
+                onToggle={checkIn}
+                title={data.checkedIn ? `Checked in, day ${data.streak}` : 'I showed up today'}
+                subtitle={
+                  data.checkedIn ? (
+                    <>
+                      Points banked.{' '}
+                      <Link to="/rewards" className="underline underline-offset-4">
+                        See rewards
+                      </Link>
+                    </>
+                  ) : (
+                    '+10 xp and +10 points. Fifty bonus points every seventh day in a row.'
+                  )
+                }
+                color="#3FCB7A"
+                deep="#1E8A4D"
+                text="#2B1D3A"
+                busy={queue.isPending('checkin')}
+                hint={queue.hint('checkin')}
+                lockedMessage={data.checkedIn ? 'Already checked in today. Come back tomorrow.' : null}
+              />
             </div>
-            {data.spark.done ? (
-              <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Done. {rel.character} is glowing.</p>
-            ) : (
-              <Button variant="color" color={rel.color} deep={rel.deep} full className="mt-sm" style={{ color: rel.text }} onClick={() => spark.mutate()} disabled={spark.isPending}>
-                I did it
-              </Button>
-            )}
-          </Step>
+          </section>
 
-          <Step n={3} done={questsDone} title={tasks.length > 0 ? `Tick a task, ${tasks.length} waiting` : questsDone ? 'Tasks done for today' : 'No tasks yet'}>
+          <section className="mt-lg" aria-labelledby="spark-heading">
+            <div className="flex items-center gap-sm">
+              <Avatar relationship={rel.key} size={36} still decorative mood={data.spark.done ? 'excited' : 'happy'} />
+              <h2 id="spark-heading" className="text-[18px]">
+                Today&rsquo;s spark from {rel.character}
+              </h2>
+            </div>
+            <div className="mt-sm">
+              <CheckRow
+                large
+                checked={data.spark.done}
+                onToggle={doSpark}
+                title={data.spark.text}
+                subtitle={data.spark.done ? `Done. ${rel.character} is glowing.` : `${rel.name}. +15 xp.`}
+                color={rel.color}
+                deep={rel.deep}
+                text={rel.text}
+                busy={queue.isPending('spark')}
+                hint={queue.hint('spark')}
+                lockedMessage={data.spark.done ? 'Done for today. A new spark comes tomorrow.' : null}
+              />
+            </div>
+          </section>
+
+          <section className="mt-lg" aria-labelledby="tasks-heading">
+            <div className="flex items-baseline justify-between gap-sm">
+              <h2 id="tasks-heading" className="text-[18px]">
+                Tasks
+              </h2>
+              {tasks.length > 0 && <span className="text-[14px] font-bold text-ink-soft">{tasks.length} waiting</span>}
+            </div>
             {tasks.length > 0 ? (
-              <ul className="flex list-none flex-col gap-xs p-0 m-0">
+              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                 <AnimatePresence initial={false}>
                   {tasks.map((t) => (
                     <TaskRow
@@ -168,36 +171,37 @@ export function Today() {
                       task={t}
                       today={date}
                       subtitle={RELATIONSHIP_BY_KEY[t.relationship].name}
-                      busy={complete.isPending && complete.variables === t.id}
-                      onToggle={() => complete.mutate(t.id)}
+                      busy={queue.isPending(t.id)}
+                      hint={queue.hint(t.id)}
+                      onToggle={() => tick(t.id)}
                     />
                   ))}
                 </AnimatePresence>
               </ul>
             ) : (
-              <>
+              <div className="mt-sm rounded-card border-2 border-dashed border-line p-md">
                 <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                  {questsDone ? 'Everything above those tasks got stronger. More arrive as their dates come up.' : 'Tasks come from floors you build on the Tower.'}
+                  {taskDone ? 'Tasks done for today. Everything above them got stronger. More arrive as their dates come up.' : 'Tasks come from floors you build on the Tower.'}
                 </p>
-                <Link to="/tower" className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-white shadow-[0_4px_0_0_#15101f]">
-                  {questsDone ? 'Build another floor' : 'Build a floor'}
+                <Link to="/tower" className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-white">
+                  {taskDone ? 'Build another floor' : 'Build a floor'}
                 </Link>
-              </>
+              </div>
             )}
-          </Step>
-        </ol>
+          </section>
+        </>
       )}
 
       {identity && (
         <section className="mt-lg" aria-labelledby="evo-heading">
-          <h2 id="evo-heading" className="text-[22px]">
+          <h2 id="evo-heading" className="text-[18px]">
             Who you are becoming
           </h2>
-          <Link to="/you" className="mt-sm block rounded-card bg-card p-md text-ink shadow-toy-soft">
+          <Link to="/you" className="toy toy-soft mt-sm block rounded-card bg-card p-md text-ink">
             <EvolutionReveal
-              now={<Creator stage={identity.stage.stage} size={72} decorative />}
+              now={<Person stage={identity.stage.stage} size={72} decorative />}
               nowName={identity.stage.name}
-              next={identity.next ? <Creator stage={identity.next.stage} size={72} decorative /> : null}
+              next={identity.next ? <Person stage={identity.next.stage} size={72} decorative /> : null}
               nextName={identity.next?.name ?? null}
               charge={identity.charge}
               preparing={identity.preparing}
@@ -208,7 +212,7 @@ export function Today() {
                 ? `Fully revealed. Evolves in ${identity.readyInDays} ${identity.readyInDays === 1 ? 'day' : 'days'}.`
                 : identity.next
                   ? `${identity.xpToNext} xp until ${identity.next.name} is fully revealed.`
-                  : `${IDENTITY_STAGES[IDENTITY_STAGES.length - 1]?.name}. Final form.`}
+                  : `${identity.stage.name}. Final form.`}
             </p>
           </Link>
         </section>

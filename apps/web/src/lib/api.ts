@@ -47,11 +47,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 export const api = {
   anon: () => request<{ token: string; user: User }>('/auth/anon', { method: 'POST' }),
   me: () => request<MeResponse>('/me'),
-  updateMe: (body: { displayName?: string; creatorType?: string; leaderboardOptIn?: boolean }) =>
+  updateMe: (body: { displayName?: string; focus?: string; leaderboardOptIn?: boolean }) =>
     request<{ user: User }>('/me', { method: 'PATCH', body: JSON.stringify(body) }),
   reset: () => request<{ ok: true }>('/me/reset', { method: 'POST' }),
 
-  onboard: (body: { answers: OnboardingAnswer[]; displayName?: string; creatorType?: string }) =>
+  onboard: (body: { answers: OnboardingAnswer[]; displayName?: string; focus?: string }) =>
     request<OnboardingResponse>('/onboarding', { method: 'POST', body: JSON.stringify(body) }),
   build: (relationships: RelationshipKey[], date: string) =>
     request<{ nodes: Node[]; skipped: RelationshipKey[] }>('/onboarding/build', { method: 'POST', body: JSON.stringify({ relationships, date }) }),

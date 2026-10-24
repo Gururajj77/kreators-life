@@ -1,5 +1,6 @@
 import { levelProgress, RELATIONSHIPS, type Relationship, type RelationshipState } from '@kreators/shared';
 import { motion, useReducedMotion } from 'motion/react';
+import type { CSSProperties } from 'react';
 import { Link } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Ring } from '../components/Ring';
@@ -24,9 +25,9 @@ function Floor({ r, state, delay }: { r: Relationship; state: RelationshipState 
       <Link
         to={`/realm/${r.key}`}
         className="toy flex items-center gap-sm rounded-tile p-sm"
-        style={{ background: r.color, color: r.text, boxShadow: `0 4px 0 0 ${r.deep}` }}
+        style={{ background: r.color, color: r.text, '--toy-color': r.deep } as CSSProperties}
       >
-        <Avatar relationship={r.key} size={52} mood={built ? 'happy' : 'sleepy'} stage={state?.stage ?? 1} still decorative />
+        <Avatar relationship={r.key} size={52} mood={built ? 'happy' : 'sleepy'} stage={state?.stage ?? 1} still decorative className="avatar-hop" />
         <span className="min-w-0 flex-1">
           <span className="block font-display text-[18px] font-extrabold leading-tight">{r.name}</span>
           <span className="block text-[13px] font-bold">{line}</span>

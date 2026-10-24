@@ -67,7 +67,7 @@ export function Welcome() {
           One tower.
         </h1>
         <p className="mt-md text-[18px] font-semibold leading-snug text-ink-soft">
-          A daily game for creators who want a life bigger than the feed. Answer a few quick questions, build your tower, climb a little every day.
+          A daily game for the seven relationships that make a life. Answer a few quick questions, build your tower, then tick a few boxes every day.
         </p>
       </div>
       <div className="flex flex-col gap-sm pb-lg">

@@ -26,7 +26,7 @@ export function useGuide(): { seen: boolean; dismiss: () => void; reset: () => v
 }
 
 const STEPS = [
-  { title: 'Today is your routine', body: 'Three things, every day: check in, do the spark, tick a task. Done means done.' },
+  { title: 'Today is your routine', body: 'Three boxes, every day: show up, do the spark, do a task. Tick a box once you have actually done it.' },
   { title: 'Tower is where you build', body: 'Seven floors, one per relationship. A floor you build gives Today its tasks.' },
   { title: 'Everything evolves', body: 'Tasks feed the rungs above them. Xp fills up who you are becoming, next to who you are now.' },
 ];

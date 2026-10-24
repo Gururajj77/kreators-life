@@ -1,6 +1,8 @@
 import { RELATIONSHIP_BY_KEY, type Node } from '@kreators/shared';
 import { motion, useReducedMotion } from 'motion/react';
 import { dueLabel } from '../lib/date';
+import { minutesUntil, useNow } from '../lib/useNow';
+import { CheckRow } from './CheckRow';
 
 interface Props {
   task: Node;
@@ -8,15 +10,29 @@ interface Props {
   /** Small line under the title, e.g. the relationship or the project. */
   subtitle?: string;
   busy?: boolean;
+  hint?: string | null;
   onToggle: () => void;
-  onOpen?: () => void;
+  onEdit?: () => void;
 }
 
-export function TaskRow({ task, today, subtitle, busy = false, onToggle, onOpen }: Props) {
+export function TaskRow({ task, today, subtitle, busy = false, hint = null, onToggle, onEdit }: Props) {
   const reduce = useReducedMotion();
+  const now = useNow();
   const rel = RELATIONSHIP_BY_KEY[task.relationship];
-  const due = task.status === 'done' ? null : dueLabel(task.dueDate, today);
   const done = task.status === 'done';
+  const wait = done ? 0 : minutesUntil(task.readyAt, now);
+  const due = done ? null : dueLabel(task.dueDate, today);
+
+  const badge =
+    wait > 0 ? (
+      <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">Ready in {wait} min</span>
+    ) : due ? (
+      <span
+        className={`rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${due.overdue ? 'bg-r1 text-ink' : due.text === 'Today' ? 'bg-ink text-white' : 'bg-paper text-ink-soft'}`}
+      >
+        {due.text}
+      </span>
+    ) : null;
 
   return (
     <motion.li
@@ -24,50 +40,36 @@ export function TaskRow({ task, today, subtitle, busy = false, onToggle, onOpen 
       initial={{ opacity: 0, y: reduce ? 0 : 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: reduce ? 0 : 48 }}
-      className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft"
     >
-      <button
-        type="button"
-        aria-pressed={done}
-        aria-label={done ? `Mark "${task.title}" as not done` : `Complete "${task.title}"`}
-        onClick={onToggle}
-        disabled={busy}
-        className="toy flex size-[44px] shrink-0 items-center justify-center rounded-pill border-[3px] disabled:opacity-60"
-        style={{ borderColor: rel.color, background: done ? rel.color : '#fff', boxShadow: `0 4px 0 0 ${rel.deep}` }}
-      >
-        {done && (
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke={rel.text} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M5 12.5l4.5 4.5L19 7.5" />
-          </svg>
-        )}
-      </button>
-
-      {onOpen ? (
-        <button type="button" onClick={onOpen} className="min-w-0 flex-1 rounded-tile text-left" aria-label={`Edit "${task.title}"`}>
-          <TaskText title={task.title} done={done} subtitle={subtitle} />
-        </button>
-      ) : (
-        <div className="min-w-0 flex-1">
-          <TaskText title={task.title} done={done} subtitle={subtitle} />
-        </div>
-      )}
-
-      {due && (
-        <span
-          className={`shrink-0 rounded-pill px-sm py-xs text-[12px] font-extrabold ${due.overdue ? 'bg-r1 text-ink' : due.text === 'Today' ? 'bg-ink text-white' : 'bg-paper text-ink-soft'}`}
-        >
-          {due.text}
-        </span>
-      )}
+      <CheckRow
+        checked={done}
+        onToggle={onToggle}
+        title={task.title}
+        subtitle={subtitle}
+        color={rel.color}
+        deep={rel.deep}
+        text={rel.text}
+        busy={busy}
+        strike
+        hint={hint}
+        lockedMessage={wait > 0 ? `Ready in ${wait} ${wait === 1 ? 'minute' : 'minutes'}. Do it first, then tick it.` : null}
+        badge={badge}
+        aside={
+          onEdit ? (
+            <button
+              type="button"
+              onClick={onEdit}
+              aria-label={`Edit "${task.title}"`}
+              className="toy toy-soft flex w-[48px] shrink-0 items-center justify-center rounded-tile bg-card text-ink-soft hover:text-ink"
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 20h4L19 9l-4-4L4 16v4z" />
+                <path d="M13.5 6.5l4 4" />
+              </svg>
+            </button>
+          ) : undefined
+        }
+      />
     </motion.li>
-  );
-}
-
-function TaskText({ title, done, subtitle }: { title: string; done: boolean; subtitle?: string }) {
-  return (
-    <>
-      <p className={`m-0 truncate text-[16px] font-bold ${done ? 'text-ink-mute line-through' : ''}`}>{title}</p>
-      {subtitle && <p className="m-0 truncate text-[13px] font-semibold text-ink-soft">{subtitle}</p>}
-    </>
   );
 }

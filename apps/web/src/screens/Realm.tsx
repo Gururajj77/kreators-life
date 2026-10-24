@@ -25,6 +25,7 @@ import { TaskRow } from '../components/TaskRow';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { useMe, useNodes, useRefreshAll } from '../lib/queries';
+import { useActionQueue } from '../lib/useActionQueue';
 
 const RUNGS = KINDS.filter((k) => k !== 'task');
 
@@ -56,23 +57,23 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
   const doneTasks = byKind('task').filter((n) => n.status === 'done');
   const projects = byKind('project').filter((n) => n.status === 'active');
 
-  const complete = useMutation({
-    mutationFn: (id: string) => api.complete(id),
-    onError: fail,
-    onSuccess: (r) => {
-      refresh();
-      setNotice(null);
+  const queue = useActionQueue(refresh);
+  const toggle = (n: Node) =>
+    queue.run(n.id, async () => {
+      if (n.status === 'done') {
+        await api.uncomplete(n.id);
+        return;
+      }
+      const r = await api.complete(n.id);
       celebrate({
-        title: r.capped ? 'Done. Daily xp cap reached, rest is part of the work' : 'Ripple',
+        title: r.capped ? 'Done. Daily xp limit reached, so this one was for you' : 'Ripple',
         totalXp: r.totalXp,
         ripple: r.ripple,
         newBadges: r.newBadges,
         projectCleared: r.projectCleared,
         color: rel.color,
       });
-    },
-  });
-  const uncomplete = useMutation({ mutationFn: (id: string) => api.uncomplete(id), onError: fail, onSuccess: () => refresh() });
+    });
   const acceptQuest = useMutation({
     mutationFn: () => api.acceptQuest(relationship, today),
     onError: fail,
@@ -151,7 +152,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
               <h2 id="do-heading" className="text-[22px]">
                 Tasks to do
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Tick one and every rung above it gets stronger.</p>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Tick the box when you have done it. Every rung above it gets stronger.</p>
               {activeTasks.length > 0 ? (
                 <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                   <AnimatePresence initial={false}>
@@ -163,9 +164,10 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                           task={n}
                           today={today}
                           subtitle={project ? `Project: ${project.title}` : undefined}
-                          busy={complete.isPending && complete.variables === n.id}
-                          onToggle={() => complete.mutate(n.id)}
-                          onOpen={() => setEditing(n)}
+                          busy={queue.isPending(n.id)}
+                          hint={queue.hint(n.id)}
+                          onToggle={() => toggle(n)}
+                          onEdit={() => setEditing(n)}
                         />
                       );
                     })}
@@ -225,7 +227,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                                 const parentNode = nodes.find((p) => p.id === n.parentId);
                                 return (
                                   <li key={n.id}>
-                                    <button type="button" onClick={() => setEditing(n)} className="toy flex w-full items-center gap-sm rounded-tile bg-paper p-sm text-left">
+                                    <button type="button" onClick={() => setEditing(n)} className="toy toy-flat flex w-full items-center gap-sm rounded-tile bg-paper p-sm text-left">
                                       <span className="w-[6px] self-stretch rounded-pill" style={{ background: n.status === 'done' ? rel.deep : rel.color }} aria-hidden="true" />
                                       <span className="min-w-0 flex-1">
                                         <span className="block truncate text-[16px] font-bold">
@@ -268,9 +270,10 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                               key={n.id}
                               task={n}
                               today={today}
-                              busy={uncomplete.isPending && uncomplete.variables === n.id}
-                              onToggle={() => uncomplete.mutate(n.id)}
-                              onOpen={() => setEditing(n)}
+                              busy={queue.isPending(n.id)}
+                              hint={queue.hint(n.id)}
+                              onToggle={() => toggle(n)}
+                              onEdit={() => setEditing(n)}
                             />
                           ))}
                         </AnimatePresence>
@@ -358,7 +361,7 @@ function AddSheet({ kind, relationship, nodes, today, onClose }: { kind: NodeKin
                 <span className="block text-[14px] font-bold">Due</span>
                 <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
               </label>
-              <p className="m-0 text-[13px] font-semibold text-ink-soft">A task can be ticked ten minutes after you write it. Go do it first.</p>
+              <p className="m-0 text-[13px] font-semibold text-ink-soft">A new task can be ticked ten minutes after you write it. Go do it first.</p>
             </>
           )}
           {create.isError && (
@@ -434,7 +437,7 @@ function EditSheet({ node, onClose }: { node: Node | null; onClose: () => void }
             </label>
           )}
           <p className="m-0 text-[13px] font-semibold text-ink-soft">
-            {node.xp} xp earned here. {node.kind === 'task' ? 'Editing restarts the ten-minute wait before it can be ticked.' : 'Removing it also removes everything it holds up.'}
+            {node.xp} xp earned here. {node.kind === 'task' ? 'Changing the title makes it a new task, so the ten-minute wait starts again.' : 'Removing it also removes everything it holds up.'}
           </p>
           <Button type="submit" size="lg" full disabled={save.isPending || !title.trim()}>
             Save changes

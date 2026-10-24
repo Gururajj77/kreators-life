@@ -59,7 +59,7 @@ export function Leaderboard() {
             type="button"
             aria-pressed={by === s.key}
             onClick={() => setBy(s.key)}
-            className={`toy min-h-[44px] rounded-pill border-2 text-[14px] font-bold ${by === s.key ? 'border-ink bg-ink text-white shadow-[0_4px_0_0_#15101f]' : 'border-line bg-card shadow-toy-soft'}`}
+            className={`toy min-h-[44px] rounded-pill border-2 text-[14px] font-bold ${by === s.key ? 'border-ink bg-ink text-white' : 'toy-soft border-line bg-card'}`}
           >
             {s.label}
           </button>

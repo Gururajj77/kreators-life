@@ -13,7 +13,7 @@ export default defineConfig({
       manifest: {
         name: 'Kreators Life',
         short_name: 'Kreators',
-        description: 'Seven relationships. One tower. Climb a little every day.',
+        description: 'A daily game for the seven relationships that make a life. One tower, a few boxes to tick every day.',
         theme_color: '#2B1D3A',
         background_color: '#FFF8F0',
         display: 'standalone',

@@ -1,5 +1,6 @@
 import {
   firstQuestionId,
+  FOCUS_OPTIONS,
   KIND_META,
   nextQuestionId,
   nextRelationship,
@@ -13,16 +14,16 @@ import {
 } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
+import { CheckRow } from '../components/CheckRow';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { useMe, useRefreshAll } from '../lib/queries';
 
-const CREATOR_TYPES = ['YouTube', 'TikTok', 'Instagram', 'Podcast', 'Newsletter', 'Streaming', 'Other'];
 const STEPS_PER_FLOOR = 3;
 const STEP_OF_ROLE = { gauge: 1, probe: 2, foundation: 3 } as const;
 
@@ -38,24 +39,32 @@ export function VibeCheck() {
   const refresh = useRefreshAll();
   const [stage, setStage] = useState<Stage>({ kind: 'intro' });
   const [name, setName] = useState('');
-  const [creatorType, setCreatorType] = useState('');
+  const [focus, setFocus] = useState('');
   const [answers, setAnswers] = useState<Answers>({});
+  // One answer per question. Taps that land while the next question slides in are ignored.
+  const advancing = useRef(false);
 
   const onboard = useMutation({
     mutationFn: (final: Answers) =>
       api.onboard({
         answers: Object.entries(final).map(([questionId, value]) => ({ questionId, value })),
         displayName: name || me.data?.user.displayName,
-        creatorType: creatorType || me.data?.user.creatorType,
+        focus: focus || me.data?.user.focus,
       }),
     onSuccess: (result) => {
       refresh();
+      advancing.current = false;
       setStage({ kind: 'reveal', result });
+    },
+    onError: () => {
+      advancing.current = false;
     },
   });
 
   // The flow branches: where we go depends on what was just answered.
   const answer = (q: Question, value: number, history: string[]) => {
+    if (advancing.current) return;
+    advancing.current = true;
     const next = { ...answers, [q.id]: value };
     setAnswers(next);
     window.setTimeout(() => {
@@ -63,8 +72,14 @@ export function VibeCheck() {
         const floor = nextRelationship(q.relationship);
         return floor ? firstQuestionId(floor) : null;
       })();
-      if (nextId) setStage({ kind: 'question', id: nextId, history: [...history, q.id] });
-      else onboard.mutate(next);
+      if (nextId) {
+        setStage({ kind: 'question', id: nextId, history: [...history, q.id] });
+        window.setTimeout(() => {
+          advancing.current = false;
+        }, 320);
+      } else {
+        onboard.mutate(next);
+      }
     }, 260);
   };
 
@@ -97,15 +112,15 @@ export function VibeCheck() {
             />
           </label>
           <fieldset className="m-0 border-0 p-0">
-            <legend className="text-[14px] font-bold">Where do you mostly create?</legend>
+            <legend className="text-[14px] font-bold">What fills most of your days?</legend>
             <div className="mt-xs flex flex-wrap gap-xs">
-              {CREATOR_TYPES.map((t) => (
+              {FOCUS_OPTIONS.map((t) => (
                 <button
                   key={t}
                   type="button"
-                  aria-pressed={creatorType === t}
-                  onClick={() => setCreatorType(t)}
-                  className={`rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${creatorType === t ? 'border-ink bg-ink text-white' : 'border-line bg-card'}`}
+                  aria-pressed={focus === t}
+                  onClick={() => setFocus(t)}
+                  className={`rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${focus === t ? 'border-ink bg-ink text-white' : 'border-line bg-card'}`}
                 >
                   {t}
                 </button>
@@ -214,7 +229,7 @@ function QuestionStage({
                       type="button"
                       aria-pressed={value === i}
                       onClick={() => onAnswer(i)}
-                      className="toy flex w-full items-center gap-sm rounded-card border-[3px] bg-card p-md text-left shadow-toy-soft"
+                      className="toy toy-soft flex w-full items-center gap-sm rounded-card border-[3px] bg-card p-md text-left"
                       style={{ borderColor: value === i ? rel.color : 'transparent' }}
                     >
                       <span className="text-[32px]" aria-hidden="true">
@@ -234,7 +249,7 @@ function QuestionStage({
                       type="button"
                       aria-pressed={value === i}
                       onClick={() => onAnswer(i)}
-                      className="toy flex min-h-[88px] flex-col items-center justify-end gap-xs rounded-tile bg-card p-xs text-center text-[12px] font-bold leading-tight shadow-toy-soft"
+                      className="toy toy-soft flex min-h-[88px] flex-col items-center justify-end gap-xs rounded-tile bg-card p-xs text-center text-[12px] font-bold leading-tight"
                       style={value === i ? { background: rel.color, color: rel.text } : undefined}
                     >
                       <span
@@ -346,7 +361,7 @@ function Ladders({ result, onDone }: { result: OnboardingResponse; onDone: () =>
       <div className="pt-xl">
         <h1 className="text-[36px]">Derived from your answers</h1>
         <p className="mt-sm text-[16px] font-semibold text-ink-soft">
-          Each floor took the foundation you picked and worked out the rest: one principle, one value goal, one outcome, one project and three tasks sized to where you are. Your three lowest floors are on. Switch on any other.
+          Each floor took the foundation you picked and worked out the rest: one principle, one value goal, one outcome, one project and three tasks sized to where you are. Your three lowest floors are ticked. Tick any other you want built.
         </p>
       </div>
       <ol className="mt-lg flex list-none flex-col gap-md p-0 m-0">
@@ -388,18 +403,17 @@ function Ladders({ result, onDone }: { result: OnboardingResponse; onDone: () =>
                   </li>
                 ))}
               </ul>
-              <Button
-                variant={on ? 'color' : 'outline'}
-                color={r.color}
-                deep={r.deep}
-                full
-                className="mt-md"
-                style={on ? { color: r.text } : undefined}
-                aria-pressed={on}
-                onClick={() => setChosen((a) => (on ? a.filter((k) => k !== r.key) : [...a, r.key]))}
-              >
-                {on ? 'Building this floor' : 'Build this floor too'}
-              </Button>
+              <div className="mt-md">
+                <CheckRow
+                  checked={on}
+                  onToggle={() => setChosen((a) => (on ? a.filter((k) => k !== r.key) : [...a, r.key]))}
+                  title={`Build ${r.character}’s floor`}
+                  subtitle={on ? 'Ticked. It will be built.' : 'Tick to build it too.'}
+                  color={r.color}
+                  deep={r.deep}
+                  text={r.text}
+                />
+              </div>
             </li>
           );
         })}

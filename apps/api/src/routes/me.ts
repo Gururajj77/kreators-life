@@ -74,14 +74,14 @@ me.patch('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const body = await c.req
-    .json<{ displayName?: string; creatorType?: string; leaderboardOptIn?: boolean }>()
-    .catch(() => ({}) as { displayName?: string; creatorType?: string; leaderboardOptIn?: boolean });
+    .json<{ displayName?: string; focus?: string; leaderboardOptIn?: boolean }>()
+    .catch(() => ({}) as { displayName?: string; focus?: string; leaderboardOptIn?: boolean });
   const displayName = typeof body.displayName === 'string' ? body.displayName.trim().slice(0, 40) : user.display_name;
-  const creatorType = typeof body.creatorType === 'string' ? body.creatorType.trim().slice(0, 40) : user.creator_type;
+  const focus = typeof body.focus === 'string' ? body.focus.trim().slice(0, 40) : user.creator_type;
   const optIn = typeof body.leaderboardOptIn === 'boolean' ? (body.leaderboardOptIn ? 1 : 0) : user.leaderboard_opt_in;
   await db
     .prepare('UPDATE users SET display_name = ?, creator_type = ?, leaderboard_opt_in = ? WHERE id = ?')
-    .bind(displayName, creatorType, optIn, user.id)
+    .bind(displayName, focus, optIn, user.id)
     .run();
   const fresh = await getUser(db, user.id);
   return c.json({ user: fresh ? toUser(fresh) : null });

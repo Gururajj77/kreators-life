@@ -14,7 +14,7 @@ import {
   type RelationshipKey,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { DATE_RE, newId, nowIso, shiftDate, toNode, type NodeRow } from '../db';
+import { DATE_RE, newId, nowIso, readyFromNow, shiftDate, toNode, type NodeRow } from '../db';
 
 export const onboarding = new Hono<AppEnv>();
 
@@ -31,8 +31,8 @@ onboarding.post('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const body = await c.req
-    .json<{ answers?: OnboardingAnswer[]; displayName?: string; creatorType?: string }>()
-    .catch(() => ({}) as { answers?: OnboardingAnswer[]; displayName?: string; creatorType?: string });
+    .json<{ answers?: OnboardingAnswer[]; displayName?: string; focus?: string }>()
+    .catch(() => ({}) as { answers?: OnboardingAnswer[]; displayName?: string; focus?: string });
 
   const answers: Answers = {};
   for (const a of Array.isArray(body.answers) ? body.answers : []) {
@@ -45,7 +45,7 @@ onboarding.post('/', async (c) => {
   const scores = scoreAnswers(answers);
   const now = nowIso();
   const displayName = typeof body.displayName === 'string' ? body.displayName.trim().slice(0, 40) : user.display_name;
-  const creatorType = typeof body.creatorType === 'string' ? body.creatorType.trim().slice(0, 40) : user.creator_type;
+  const focus = typeof body.focus === 'string' ? body.focus.trim().slice(0, 40) : user.creator_type;
 
   await db.batch([
     db.prepare('DELETE FROM onboarding_answers WHERE user_id = ?').bind(user.id),
@@ -60,7 +60,7 @@ onboarding.post('/', async (c) => {
     ),
     db
       .prepare('UPDATE users SET onboarded_at = ?, display_name = ?, creator_type = ? WHERE id = ?')
-      .bind(now, displayName, creatorType, user.id),
+      .bind(now, displayName, focus, user.id),
   ]);
 
   const weakest = [...RELATIONSHIPS].sort((a, b) => scores[a.key] - scores[b.key]).slice(0, 2).map((r) => r.key);
@@ -82,6 +82,7 @@ function ladderRows(userId: string, ladder: DerivedLadder, date: string): NodeRo
     xp: 0,
     due_date,
     completed_at: null,
+    ready_at: kind === 'task' ? readyFromNow() : null,
     sort_order: sort,
     created_at: now,
     updated_at: now,
@@ -107,12 +108,12 @@ async function buildLadder(db: D1Database, userId: string, ladder: DerivedLadder
     rows.map((r) =>
       db
         .prepare(
-          `INSERT INTO nodes (id, user_id, kind, parent_id, relationship, title, note, status, xp, due_date, completed_at, sort_order, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO nodes (id, user_id, kind, parent_id, relationship, title, note, status, xp, due_date, completed_at, ready_at, sort_order, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           r.id, r.user_id, r.kind, r.parent_id, r.relationship, r.title, r.note, r.status, r.xp,
-          r.due_date, r.completed_at, r.sort_order, r.created_at, r.updated_at,
+          r.due_date, r.completed_at, r.ready_at, r.sort_order, r.created_at, r.updated_at,
         ),
     ),
   );

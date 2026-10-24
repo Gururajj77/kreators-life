@@ -30,7 +30,7 @@ function toAdminUser(r: UserListRow): AdminUser {
   return {
     id: r.id,
     displayName: r.display_name,
-    creatorType: r.creator_type,
+    focus: r.creator_type,
     xp: r.xp,
     points: r.points,
     streak: r.streak,
@@ -126,7 +126,7 @@ admin.get('/redemptions', async (c) => {
     `SELECT r.*, u.display_name AS user_name FROM redemptions r JOIN users u ON u.id = r.user_id ${where} ORDER BY r.created_at DESC LIMIT 100`,
   );
   const rows = await (status ? stmt.bind(status) : stmt).all<AdminRedemptionRow>();
-  const list: AdminRedemption[] = rows.results.map((r) => ({ ...toRedemption(r), userId: r.user_id, userName: r.user_name || 'Anonymous creator' }));
+  const list: AdminRedemption[] = rows.results.map((r) => ({ ...toRedemption(r), userId: r.user_id, userName: r.user_name || 'Anonymous climber' }));
   return c.json({ redemptions: list });
 });
 

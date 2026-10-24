@@ -1,4 +1,4 @@
-import { BADGES, HONORS, levelFromXp, RELATIONSHIPS, timeHonors, WAIT, type Node, type NodeKind, type RelationshipKey, type User } from '@kreators/shared';
+import { BADGES, HONORS, levelFromXp, RELATIONSHIPS, taskReadyAt, timeHonors, WAIT, type Node, type NodeKind, type RelationshipKey, type User } from '@kreators/shared';
 import type { UserRow } from './env';
 
 export interface NodeRow {
@@ -13,6 +13,7 @@ export interface NodeRow {
   xp: number;
   due_date: string | null;
   completed_at: string | null;
+  ready_at: string | null;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -20,6 +21,9 @@ export interface NodeRow {
 
 export const newId = () => crypto.randomUUID();
 export const nowIso = () => new Date().toISOString();
+
+/** When a task written now can first be ticked. */
+export const readyFromNow = () => new Date(Date.now() + WAIT.taskMinAgeMinutes * 60_000).toISOString();
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -41,7 +45,7 @@ export function toUser(r: UserRow): User {
   return {
     id: r.id,
     displayName: r.display_name,
-    creatorType: r.creator_type,
+    focus: r.creator_type,
     xp: r.xp,
     points: r.points,
     isPro: r.is_pro === 1,
@@ -66,6 +70,7 @@ export function toNode(r: NodeRow): Node {
     xp: r.xp,
     dueDate: r.due_date,
     completedAt: r.completed_at,
+    readyAt: r.kind === 'task' ? taskReadyAt(r.created_at, r.ready_at) : null,
     sortOrder: r.sort_order,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
