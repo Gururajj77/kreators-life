@@ -40,6 +40,7 @@ pnpm workspace. apps/web: React 19, Vite 7, Tailwind 4, PWA. apps/api: Hono on C
 - pnpm --filter @kreators/shared test
 - pnpm build
 - pnpm db:migrate:local
+- Cloudflare from the root: pnpm cf:login, pnpm cf:whoami, pnpm db:create, pnpm db:migrate, pnpm cf:secret <NAME>, pnpm deploy, pnpm cf:logs (the cf: prefix dodges pnpm's own login, whoami and logout commands)
 - bash <scratchpad>/blueprint.sh for the end-to-end smoke test. It runs against a second API on port 8788 whose database lives in the scratchpad (`wrangler dev --port 8788 --persist-to <scratchpad>/smoke-state --test-scheduled`, migrated with `wrangler d1 migrations apply kreators-life --local --persist-to <that dir>`), so the dev database on 8787 never fills with test accounts. Screenshots (`shoot.mjs`) use the same server unless SHOOT_ORIGIN says otherwise.
 
 ## Done means

@@ -35,13 +35,20 @@ Sign-in is email and password, built in (no auth package): sign-up asks for the 
 
 ## Deploy
 
+Everything runs from the repo root.
+
 ```bash
-pnpm --filter @kreators/api exec wrangler login
-pnpm --filter @kreators/api exec wrangler d1 create kreators-life
-# paste the printed database_id into apps/api/wrangler.jsonc
-pnpm db:migrate
-pnpm deploy
+pnpm cf:login              # opens the browser once; pnpm cf:whoami shows the account, pnpm cf:logout switches it
+pnpm db:create             # makes the D1 database; paste the printed database_id into apps/api/wrangler.jsonc
+pnpm db:migrate            # applies every migration to the live database
+pnpm cf:secret CLICK_SALT  # asks for the value; repeat for RESEND_API_KEY, EMAIL_FROM and any other key you use
+pnpm deploy                # builds the web app and ships it with the Worker
+pnpm cf:logs               # live request and cron logs from the deployed Worker
 ```
+
+The `cf:` prefix is there because `pnpm login`, `pnpm whoami` and `pnpm logout` are pnpm's own npm-registry commands and would never reach wrangler.
+
+After the first deploy, sign up with the founder addresses before sharing the link.
 
 ## Design source
 

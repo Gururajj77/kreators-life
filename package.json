@@ -4,10 +4,16 @@
   "packageManager": "pnpm@11.28.3",
   "scripts": {
     "dev": "pnpm -r --parallel --stream dev",
-    "build": "pnpm --filter @kreators/web build",
     "typecheck": "pnpm -r typecheck",
+    "build": "pnpm --filter @kreators/web build",
     "db:migrate:local": "pnpm --filter @kreators/api db:migrate:local",
+    "cf:login": "pnpm --filter @kreators/api exec wrangler login",
+    "cf:logout": "pnpm --filter @kreators/api exec wrangler logout",
+    "cf:whoami": "pnpm --filter @kreators/api exec wrangler whoami",
+    "db:create": "pnpm --filter @kreators/api exec wrangler d1 create kreators-life",
     "db:migrate": "pnpm --filter @kreators/api db:migrate",
-    "deploy": "pnpm build && pnpm --filter @kreators/api deploy"
+    "cf:secret": "pnpm --filter @kreators/api exec wrangler secret put",
+    "deploy": "pnpm build && pnpm --filter @kreators/api deploy",
+    "cf:logs": "pnpm --filter @kreators/api exec wrangler tail"
   }
 }
