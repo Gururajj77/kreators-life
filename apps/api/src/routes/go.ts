@@ -45,6 +45,21 @@ go.get('/sitemap.xml', async (c) => {
   return c.body(xml, 200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
 });
 
+/** The site home. Link previews need an absolute share-image URL, and the origin is only known here. */
+go.get('/', async (c) => {
+  if (!c.env.ASSETS) return c.text('not found', 404);
+  const page = await c.env.ASSETS.fetch(c.req.raw);
+  if (!page.ok || !(page.headers.get('Content-Type') ?? '').includes('text/html')) return page;
+  const origin = new URL(c.req.url).origin;
+  const absolute = {
+    element(el: Element) {
+      const value = el.getAttribute('content') ?? '';
+      if (value.startsWith('/')) el.setAttribute('content', origin + value);
+    },
+  };
+  return new HTMLRewriter().on('meta[property="og:image"]', absolute).on('meta[property="og:url"]', absolute).transform(page);
+});
+
 /** Meta and payment webhooks. Mounted at /api/webhooks. */
 export const webhooks = new Hono<AppEnv>();
 

@@ -9,11 +9,12 @@
   "triggers": { "crons": ["*/15 * * * *"] },
   // The built web app is served as static assets by the same Worker.
   // Any /api/* request runs the Worker; everything else is a file or the SPA shell.
+  // The site home ("/") also runs the Worker, which fills in the absolute share-image URL for link previews.
   "assets": {
     "directory": "../web/dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/go/*", "/__scheduled", "/sitemap.xml"]
+    "run_worker_first": ["/", "/api/*", "/go/*", "/__scheduled", "/sitemap.xml"]
   },
   "d1_databases": [
     {

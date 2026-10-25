@@ -5,7 +5,7 @@ Seven relationships, one tower, a few boxes to tick every day. Around that daily
 ## Stack
 
 - `apps/web`: React 19 + Vite 7 + Tailwind 4, installable PWA. The public site and the app are one bundle.
-- `apps/api`: Cloudflare Worker (Hono) with a D1 database. It serves the built web app as static assets, so one deploy ships everything. `/api/*`, `/go/*` and `/__scheduled` run in the Worker; everything else is a file or the SPA shell.
+- `apps/api`: Cloudflare Worker (Hono) with a D1 database. It serves the built web app as static assets, so one deploy ships everything. `/api/*`, `/go/*`, `/sitemap.xml`, `/__scheduled` and the site home `/` run in the Worker (the home only to make the share-image URL absolute for link previews); everything else is a file or the SPA shell. The PNG icons and the share card in `apps/web/public` are rendered from `scripts/icons/*.html` by `scripts/icons.sh`; `icon.svg` stays the favicon and the source of the shape.
 - `packages/shared`: the domain model both sides use: relationships, the ladder, XP rules, questions, modules, listings, commerce, finance.
 
 ## Run it locally
