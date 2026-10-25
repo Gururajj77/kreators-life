@@ -7,6 +7,7 @@ import { useCelebrate } from '../components/Celebration';
 import { CheckRow } from '../components/CheckRow';
 import { EvolutionReveal } from '../components/EvolutionReveal';
 import { GuideCard, useGuide } from '../components/Guide';
+import { NotToDoList } from '../components/NotToDoList';
 import { Person } from '../components/Person';
 import { Screen } from '../components/Screen';
 import { TaskRow } from '../components/TaskRow';
@@ -202,6 +203,8 @@ export function Today() {
               </div>
             )}
           </section>
+
+          <NotToDoList items={data.notToDo} date={date} queue={queue} />
         </>
       )}
 

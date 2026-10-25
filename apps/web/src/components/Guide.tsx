@@ -40,12 +40,12 @@ export function GuideCard({ onDismiss }: { onDismiss: () => void }) {
       <ol className="mt-sm flex list-none flex-col gap-sm p-0 m-0">
         {STEPS.map((s, i) => (
           <li key={s.title} className="flex gap-sm">
-            <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-white font-display text-[14px] font-extrabold text-ink" aria-hidden="true">
+            <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-on-ink font-display text-[14px] font-extrabold text-ink" aria-hidden="true">
               {i + 1}
             </span>
             <span className="min-w-0">
               <span className="block text-[16px] font-extrabold">{s.title}</span>
-              <span className="block text-[14px] font-semibold text-white/80">{s.body}</span>
+              <span className="block text-[14px] font-semibold text-on-ink/80">{s.body}</span>
             </span>
           </li>
         ))}

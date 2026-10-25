@@ -123,7 +123,7 @@ export function Home() {
             The Seven Relationships
           </h1>
           <p className="mt-md m-0 max-w-[520px] text-[18px] font-semibold leading-snug text-ink-soft">
-            A daily game that keeps the seven relationships of your life in balance, with everything a creator needs stacked on top: learning, paid work, brand campaigns, content rewards, events, a shop, and tools for staying well.
+            A daily game that keeps the seven relationships of your life in balance, with everything a creator needs stacked on top: learning, paid work, brand campaigns, content rewards, events, a shop, a store for gear, reviews by week and month, and tools for staying well.
           </p>
           <div className="mt-lg flex flex-wrap gap-sm">
             <Link to={token ? entry : '/signup'} className="toy inline-flex min-h-[56px] items-center rounded-pill bg-ink px-lg text-[18px] font-bold text-on-ink">

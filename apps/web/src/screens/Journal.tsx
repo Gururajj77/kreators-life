@@ -1,6 +1,7 @@
 import { MOODS, STRESSORS, type JournalEntry } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { PeriodPanel } from '../components/PeriodPanel';
 import { Button } from '../components/Button';
 import { CalendarGrid } from '../components/Charts';
 import { Hero } from '../components/Hero';
@@ -63,6 +64,7 @@ export function Journal() {
         New entry
       </Button>
 
+      <PeriodPanel id="journal-period" parts={['journal', 'wellbeing']} />
       <section className="mt-lg" aria-labelledby="entries-heading">
         <h2 id="entries-heading" className="text-[24px]">
           My journals

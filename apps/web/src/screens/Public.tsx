@@ -86,13 +86,13 @@ export function Public() {
               <h1 className="text-[30px]">{d.name}</h1>
               {d.isPro && <span className="rounded-pill bg-r7 px-sm py-xs text-[12px] font-extrabold text-white">Pro</span>}
             </div>
-            <p className="m-0 text-[14px] font-bold text-white/70">
+            <p className="m-0 text-[14px] font-bold text-on-ink/70">
               {d.handle ? `@${d.handle}, ` : ''}
               {d.followers} {d.followers === 1 ? 'follower' : 'followers'}
             </p>
-            {d.isPrivate && <p className="mt-sm m-0 rounded-tile bg-white/15 p-sm text-[14px] font-bold">This page is private. {d.name} has switched it off.</p>}
+            {d.isPrivate && <p className="mt-sm m-0 rounded-tile bg-on-ink/15 p-sm text-[14px] font-bold">This page is private. {d.name} has switched it off.</p>}
             {d.mine && (
-              <p className="mt-sm m-0 text-[12px] font-bold text-white/80">
+              <p className="mt-sm m-0 text-[12px] font-bold text-on-ink/80">
                 This is how others see you. Change what shows under{' '}
                 <Link to="/profile" className="underline underline-offset-4">
                   Public page
@@ -107,7 +107,7 @@ export function Public() {
                     Add friend
                   </Button>
                 )}
-                {d.friend === 'sent' && <span className="inline-flex min-h-[48px] items-center rounded-pill bg-white/15 px-md text-[14px] font-bold">Friend request sent</span>}
+                {d.friend === 'sent' && <span className="inline-flex min-h-[48px] items-center rounded-pill bg-on-ink/15 px-md text-[14px] font-bold">Friend request sent</span>}
                 {d.friend === 'pending' && (
                   <Button variant="light" disabled={accept.isPending} onClick={() => accept.mutate()}>
                     Accept friend request
@@ -115,7 +115,7 @@ export function Public() {
                 )}
                 {d.friend === 'friends' && (
                   <>
-                    <span className="inline-flex min-h-[48px] items-center rounded-pill bg-white/15 px-md text-[14px] font-bold">Friends</span>
+                    <span className="inline-flex min-h-[48px] items-center rounded-pill bg-on-ink/15 px-md text-[14px] font-bold">Friends</span>
                     {d.allowChats && (
                       <Button variant="light" disabled={chat.isPending} onClick={() => chat.mutate()}>
                         Chat anonymously
@@ -123,8 +123,8 @@ export function Public() {
                     )}
                   </>
                 )}
-                {d.friend === 'none' && !d.allowFriendRequests && <span className="inline-flex min-h-[48px] items-center text-[14px] font-bold text-white/80">Not taking friend requests.</span>}
-                {(befriend.isError || chat.isError) && <span className="text-[12px] font-bold text-white/80">That did not work. Try again.</span>}
+                {d.friend === 'none' && !d.allowFriendRequests && <span className="inline-flex min-h-[48px] items-center text-[14px] font-bold text-on-ink/80">Not taking friend requests.</span>}
+                {(befriend.isError || chat.isError) && <span className="text-[12px] font-bold text-on-ink/80">That did not work. Try again.</span>}
               </div>
             )}
             {d.bio && <p className="mt-sm m-0 text-[16px] font-semibold leading-relaxed">{d.bio}</p>}

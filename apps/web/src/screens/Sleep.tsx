@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
+import { PeriodPanel } from '../components/PeriodPanel';
 import { Button } from '../components/Button';
 import { AreaLine, Donut, PillBars } from '../components/Charts';
 import { Hero, HeroNumber } from '../components/Hero';
@@ -79,6 +80,7 @@ export function Sleep() {
         </div>
       </section>
 
+      <PeriodPanel id="sleep-period" parts={['wellbeing']} />
       <section className="mt-lg" aria-labelledby="thirty-heading">
         <h2 id="thirty-heading" className="text-[24px]">
           Last 30 nights

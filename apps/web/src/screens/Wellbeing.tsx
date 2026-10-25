@@ -1,5 +1,6 @@
 import { MOODS, STRESS_LEVELS, type LogKind } from '@kreators/shared';
 import { Link } from 'react-router';
+import { PeriodPanel } from '../components/PeriodPanel';
 import { Donut, EmojiRow, Legend, Sparkline } from '../components/Charts';
 import { Hero } from '../components/Hero';
 import { MoodFace } from '../components/MoodFace';
@@ -44,6 +45,7 @@ export function Wellbeing() {
         <h1 className="text-[30px]">Wellbeing</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">One score from your mood, sleep, stress, mindful minutes and streak. Tap a row to log today.</p>
       </header>
+      <PeriodPanel id="wellbeing-period" parts={['wellbeing', 'journal']} />
       {d && (
         <>
           <Hero color="var(--color-r4)" deep="var(--deep-lover_partner)" className="mt-md" character="lover_partner" mood={d.score >= 60 ? "excited" : d.score >= 40 ? "happy" : "sleepy"}>

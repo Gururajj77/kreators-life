@@ -32,6 +32,8 @@ import { Journal } from './screens/Journal';
 import { Leaderboard } from './screens/Leaderboard';
 import { Library } from './screens/Library';
 import { Life } from './screens/Life';
+import { Reviews } from './screens/Reviews';
+import { Store } from './screens/Store';
 import { Manage } from './screens/Manage';
 import { Mindful } from './screens/Mindful';
 import { Mood } from './screens/Mood';
@@ -216,6 +218,7 @@ const router = createBrowserRouter([
       { path: '/circles/:id', element: gated('circles', <CircleGroup />) },
       // wellbeing
       { path: '/life', element: gated('life', <Life />) },
+      { path: '/reviews', element: gated('reviews', <Reviews />) },
       { path: '/wellbeing', element: gated('wellbeing', <Wellbeing />) },
       { path: '/mood', element: gated('mood', <Mood />) },
       { path: '/sleep', element: gated('sleep', <Sleep />) },
@@ -233,6 +236,7 @@ const router = createBrowserRouter([
       { path: '/library', element: gated('library', <Library />) },
       { path: '/library/:id', element: gated('library', <Library />) },
       { path: '/shop', element: gated('shop', <Studio />) },
+      { path: '/store', element: gated('store', <Store />) },
       { path: '/shop/products/:id', element: gated('shop', <StudioProduct />) },
       { path: '/shop/page', element: gated('profile', <Studio tab="page" />) },
       { path: '/shop/bookings', element: gated('shop', <Studio tab="bookings" />) },

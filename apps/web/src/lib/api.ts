@@ -1,3 +1,6 @@
+import type { ListingDetail, MarketResponse, PreownedListing, PreownedMessage, PreownedOffer, StoreItem, StoreKit } from '@kreators/shared';
+import type { PeriodKind, Review, ReviewSummary, ReviewTemplate, ReviewsResponse } from '@kreators/shared';
+import type { NotToDo, NotToDoStatus } from '@kreators/shared';
 import type { LinkBlock } from '@kreators/shared';
 import type { ObservabilityResponse } from '@kreators/shared';
 import type {
@@ -211,6 +214,16 @@ export const api = {
   today: (date: string) => request<TodayResponse>(`/today?date=${date}`),
   home: (date: string, hour: number) => request<HomeResponse>(`/home?date=${date}&hour=${hour}`),
   checkin: (date: string) => post<CheckinResponse>('/today/checkin', { date }),
+  notToDoAdd: (title: string, relationship: RelationshipKey | null) => post<{ item: NotToDo }>('/today/not-to-do', { title, relationship }),
+  notToDoDay: (id: string, date: string, today: string, status: NotToDoStatus | null) => post<{ item: NotToDo; awarded: number }>(`/today/not-to-do/${id}/day`, { date, today, status }),
+  notToDoRemove: (id: string) => del<{ ok: true }>(`/today/not-to-do/${id}`),
+  reviews: (kind: PeriodKind, date: string) => request<ReviewsResponse>(`/reviews?kind=${kind}&date=${date}`),
+  reviewSummary: (kind: PeriodKind, date: string) => request<ReviewSummary>(`/reviews/summary?kind=${kind}&date=${date}`),
+  saveReview: (body: { kind: PeriodKind; date: string; templateId: string | null; answers: string[]; rating: number | null; highlight: string }) => request<{ review: Review }>('/reviews', { method: 'PUT', body: JSON.stringify(body) }),
+  deleteReview: (id: string) => del<{ ok: true }>(`/reviews/${id}`),
+  reviewTemplateAdd: (body: { kind: PeriodKind; name: string; prompts: string[] }) => post<{ template: ReviewTemplate }>('/reviews/templates', body),
+  reviewTemplateUpdate: (id: string, body: { name: string; prompts: string[] }) => patch<{ template: ReviewTemplate }>(`/reviews/templates/${id}`, body),
+  reviewTemplateRemove: (id: string) => del<{ ok: true }>(`/reviews/templates/${id}`),
   spark: (date: string) => post<{ awarded: number; relationship: RelationshipKey; alreadyDone: boolean }>('/today/spark', { date }),
 
   // rank and rewards
@@ -389,7 +402,24 @@ export const api = {
   // tools
   tools: () => request<{ tools: Tool[]; categories: readonly string[]; reviewer: boolean }>('/tools'),
   suggestTool: (body: { name: string; url: string; category?: string; description?: string; affiliate?: boolean }) => post<{ ok: true; id: string; verified: boolean }>('/tools', body),
-  setTool: (id: string, body: { verified?: boolean; affiliate?: boolean }) => post<{ ok: true }>(`/tools/${id}`, body),
+  setTool: (id: string, body: { verified?: boolean; affiliate?: boolean; featured?: boolean }) => post<{ ok: true }>(`/tools/${id}`, body),
+  market: () => request<MarketResponse>('/market'),
+  marketListing: (id: string) => request<ListingDetail>(`/market/listings/${id}`),
+  marketSell: (body: Record<string, unknown>) => post<{ listing: PreownedListing }>('/market/listings', body),
+  marketUpdateListing: (id: string, body: Record<string, unknown>) => patch<{ listing: PreownedListing }>(`/market/listings/${id}`, body),
+  marketSold: (id: string, cents: number | null) => post<{ listing: PreownedListing }>(`/market/listings/${id}/sold`, { cents }),
+  marketRemoveListing: (id: string) => del<{ ok: true }>(`/market/listings/${id}`),
+  marketOffer: (id: string, cents: number, note: string) => post<{ offer: PreownedOffer }>(`/market/listings/${id}/offers`, { cents, note }),
+  marketDecide: (offerId: string, action: 'accept' | 'decline' | 'withdraw') => post<{ offer: PreownedOffer; listing: PreownedListing }>(`/market/offers/${offerId}`, { action }),
+  marketMessages: (id: string, buyerId?: string) => request<{ messages: PreownedMessage[] }>(`/market/listings/${id}/messages${buyerId ? `?buyerId=${encodeURIComponent(buyerId)}` : ''}`),
+  marketSend: (id: string, body: string, buyerId?: string) => post<{ message: PreownedMessage }>(`/market/listings/${id}/messages`, { body, buyerId }),
+  marketAddItem: (body: Record<string, unknown>) => post<{ item: StoreItem }>('/market/items', body),
+  marketUpdateItem: (id: string, body: Record<string, unknown>) => patch<{ item: StoreItem }>(`/market/items/${id}`, body),
+  marketRemoveItem: (id: string) => del<{ ok: true }>(`/market/items/${id}`),
+  marketAddKit: (body: Record<string, unknown>) => post<{ kit: StoreKit }>('/market/kits', body),
+  marketUpdateKit: (id: string, body: Record<string, unknown>) => patch<{ kit: StoreKit }>(`/market/kits/${id}`, body),
+  marketRemoveKit: (id: string) => del<{ ok: true }>(`/market/kits/${id}`),
+  marketFeature: (type: 'item' | 'kit' | 'listing' | 'tool', id: string) => post<{ featuredUntil: string; paid: number }>('/market/feature', { type, id }),
   removeTool: (id: string) => del<{ ok: true }>(`/tools/${id}`),
 
   // tv and fund proposals

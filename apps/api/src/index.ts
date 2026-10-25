@@ -44,6 +44,8 @@ import { internal } from './routes/internal';
 import { circles } from './routes/circles';
 import { life } from './routes/life';
 import { home } from './routes/home';
+import { reviews } from './routes/reviews';
+import { market } from './routes/market';
 
 const app = new Hono<AppEnv>().basePath('/api');
 
@@ -118,6 +120,8 @@ app.route('/internal', internal);
 app.route('/circles', circles);
 app.route('/life', life);
 app.route('/home', home);
+app.route('/reviews', reviews);
+app.route('/market', market);
 app.route('/kyc', kyc);
 app.route('/studio', builder);
 

@@ -58,13 +58,13 @@ export function Rewards() {
       {data && (
         <>
           <section className="mt-md rounded-card bg-ink p-md text-on-ink shadow-toy" aria-labelledby="balance-heading">
-            <h2 id="balance-heading" className="text-[14px] font-bold text-white/70" style={{ fontFamily: 'var(--font-body)' }}>
+            <h2 id="balance-heading" className="text-[14px] font-bold text-on-ink/70" style={{ fontFamily: 'var(--font-body)' }}>
               Your balance
             </h2>
             <p className="m-0 font-display text-[36px] font-extrabold leading-none">
               {data.points} <span className="text-[18px]">points</span>
             </p>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-white/80">
+            <p className="mt-xs m-0 text-[14px] font-semibold text-on-ink/80">
               Check in daily for {POINTS.checkin}. Every {POINTS.streakBonusEvery}th day in a row pays {POINTS.streakBonus} extra.
             </p>
           </section>

@@ -1,9 +1,11 @@
 import { MODULE_GROUPS, RELATIONSHIPS, ROLE_META, type ModuleGroup } from '@kreators/shared';
+import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router';
 import { useModules } from '../lib/modules';
 import { useMe } from '../lib/queries';
 import { Avatar } from './Avatar';
 import { RoleBadge } from './RoleBadge';
+import { Sheet } from './Sheet';
 import { SignOut } from './SignOut';
 import { ThemeToggle } from './ThemeToggle';
 
@@ -74,6 +76,9 @@ export function TabBar() {
   const { modules } = useModules();
   const loc = useLocation();
   const sidebarApps = modules.filter((m) => m.on && !m.locked);
+  // Phone: the sidebar's app groups live behind a menu button at the top right.
+  const [menu, setMenu] = useState(false);
+  useEffect(() => setMenu(false), [loc.pathname]);
   const badge = (to: string) =>
     to === '/apps' && unread > 0 ? (
       <span className="absolute -top-[2px] -right-[2px] flex min-w-[18px] items-center justify-center rounded-pill bg-r1 px-[4px] text-[11px] font-extrabold leading-[18px] text-white" aria-label={`${unread} unread`}>
@@ -107,7 +112,60 @@ export function TabBar() {
           ))}
         </ul>
       </nav>
-      <ThemeToggle floating className="md:hidden" />
+      {/* Phone: theme on the left, the apps menu on the right, both in the top-right corner. */}
+      <div className="safe-top fixed top-sm right-md z-30 flex items-center gap-xs md:hidden">
+        <ThemeToggle />
+        <button
+          type="button"
+          onClick={() => setMenu(true)}
+          aria-label="Apps menu"
+          aria-expanded={menu}
+          className="toy toy-soft flex size-[44px] items-center justify-center rounded-pill bg-card text-ink-soft hover:text-ink"
+        >
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+            <path d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
+        </button>
+      </div>
+      <Sheet open={menu} onClose={() => setMenu(false)} title="Your apps">
+        {me.data && (
+          <p className="m-0 flex items-center gap-xs text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
+            <RoleBadge role={me.data.user.role} size={20} />
+            {ROLE_META[me.data.user.role].name}
+          </p>
+        )}
+        {sidebarApps.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing switched on yet. Pick apps under Apps.</p>}
+        {SIDEBAR_GROUPS.map((g) => {
+          const list = sidebarApps.filter((m) => m.group === g);
+          if (list.length === 0) return null;
+          return (
+            <section key={g} className="mt-md" aria-label={MODULE_GROUPS[g]}>
+              <h3 className="m-0 px-xs text-[12px] font-extrabold uppercase tracking-wide text-ink-soft" style={{ fontFamily: 'var(--font-body)' }}>
+                {MODULE_GROUPS[g]}
+              </h3>
+              <ul className="mt-xs flex list-none flex-col p-0 m-0">
+                {list.map((m) => (
+                  <li key={m.key}>
+                    <NavLink to={m.path} className={({ isActive }) => `toy flex min-h-[48px] items-center gap-sm rounded-pill px-sm text-[16px] font-bold transition-colors ${isActive ? 'bg-ink text-on-ink' : 'text-ink hover:bg-paper'}`}>
+                      <span className="text-[20px] leading-none" aria-hidden="true">
+                        {m.emoji}
+                      </span>
+                      <span className="truncate">{m.name}</span>
+                      {m.key === 'notifications' && unread > 0 && <span className="ml-auto rounded-pill bg-r1 px-xs text-[11px] font-extrabold leading-[18px] text-on-fill">{unread > 9 ? '9+' : unread}</span>}
+                    </NavLink>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          );
+        })}
+        <div className="mt-lg flex items-center justify-between gap-sm">
+          <Link to="/" className="text-[12px] font-bold text-ink-soft hover:text-ink">
+            About Kreators Life
+          </Link>
+          <SignOut variant="outline" />
+        </div>
+      </Sheet>
       {/* Laptop: a sidebar on the left. */}
       <nav aria-label="Main" className="safe-top fixed inset-y-0 left-0 z-30 hidden w-[240px] flex-col overflow-y-auto border-r border-line bg-card px-sm py-md md:flex">
         <Link to="/home" className="flex min-h-[44px] items-center gap-xs px-xs font-display text-[18px] font-extrabold">

@@ -1,6 +1,7 @@
 import { greetingFor, LIFE_AREAS, MODULE_GROUPS, money, MOODS, RELATIONSHIP_BY_KEY, STRESS_LEVELS, type HomeResponse, type ModuleGroup } from '@kreators/shared';
 import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router';
+import { PeriodPanel } from '../components/PeriodPanel';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { AreaLine, Donut, Gauge, HBars, Legend, MultiLine, PillBars, Segments, Sparkline } from '../components/Charts';
@@ -60,20 +61,20 @@ export function Home() {
     <Screen columns>
       <header className="relative -mx-md overflow-hidden rounded-b-card bg-ink px-md pt-lg pb-md text-on-ink md:mx-0 md:mt-md md:rounded-card">
         <HeroBlobs opacity={0.06} />
-        <div className="relative flex items-center justify-between gap-sm">
-          <p className="m-0 text-[14px] font-bold opacity-80">
+        <div className="relative flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
+          <p className="order-2 m-0 text-[14px] font-bold opacity-80 md:order-1">
             <span aria-hidden="true">📅 </span>
             {prettyDate(date)}, {greetingFor(hour).toLowerCase()}
           </p>
-          <div className="mr-xl flex shrink-0 items-center gap-xs md:mr-0">
-            <Link to={myPage} className="toy inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-white/15 px-sm text-[14px] font-bold text-on-ink">
+          <div className="order-1 mr-2xl flex shrink-0 items-center justify-end gap-xs md:order-2 md:mr-0">
+            <Link to={myPage} className="toy inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-on-ink/15 px-sm text-[14px] font-bold text-on-ink">
               <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="8" r="4" />
                 <path d="M4 21a8 8 0 0 1 16 0" />
               </svg>
               My page
             </Link>
-          <Link to="/inbox" aria-label={d && d.unread > 0 ? `Inbox, ${d.unread} unread` : 'Inbox'} className="toy relative flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-white/15 text-on-ink">
+          <Link to="/inbox" aria-label={d && d.unread > 0 ? `Inbox, ${d.unread} unread` : 'Inbox'} className="toy relative flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-on-ink/15 text-on-ink">
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
               <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16Z" />
               <path d="M10 20a2 2 0 0 0 4 0" />
@@ -174,13 +175,14 @@ export function Home() {
               <KitTile to="/today" tone="bg-r2" icon="✨" value={`+${d.xp.today}`} label="xp today" hint={`${d.xp.week} this week`} />
               <KitTile to="/rewards" tone="bg-r3" yellow icon="🪙" value={d.points.toLocaleString()} label="points" hint="trade for rewards" />
               <KitTile to="/tower" tone="bg-ink" icon="⭐" value={`Level ${d.xp.level}`} label={`${d.xp.into} of ${d.xp.span} xp`} hint={`${d.xp.span - d.xp.into} to level ${d.xp.level + 1}`}>
-                <span className="mt-xs block h-[6px] overflow-hidden rounded-pill bg-white/20" aria-hidden="true">
-                  <span className="block h-full rounded-pill bg-white" style={{ width: `${Math.round((d.xp.into / Math.max(1, d.xp.span)) * 100)}%` }} />
+                <span className="mt-xs block h-[6px] overflow-hidden rounded-pill bg-on-ink/20" aria-hidden="true">
+                  <span className="block h-full rounded-pill bg-on-ink" style={{ width: `${Math.round((d.xp.into / Math.max(1, d.xp.span)) * 100)}%` }} />
                 </span>
               </KitTile>
             </div>
           </Section>
 
+          <PeriodPanel id="home-period" parts={['daily', 'wellbeing', 'finance', 'shop']} span />
           <Section id="home-trends" title="This week" lede="Mood, sleep and calm as scores out of a hundred, day by day. Where the lines dip is where to look." action={<SeeAll to="/wellbeing">Wellbeing</SeeAll>} span>
             <div className="rounded-card bg-card p-md shadow-toy-soft">
               <MultiLine

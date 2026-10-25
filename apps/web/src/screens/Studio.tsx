@@ -2,6 +2,7 @@ import { PRODUCT_KIND_META, PRODUCT_KINDS, type Booking, type Order, type Produc
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { PeriodPanel } from '../components/PeriodPanel';
 import { Button } from '../components/Button';
 import { AreaLine, Donut, Legend, StatTile } from '../components/Charts';
 import { BackLink } from '../components/PageHeader';
@@ -95,6 +96,7 @@ export function Studio({ tab = 'home' }: { tab?: 'home' | 'page' | 'bookings' | 
             </div>
           </section>
 
+          <PeriodPanel id="shop-period" parts={['shop', 'finance']} />
           <section className="mt-lg" aria-labelledby="products-heading">
             <div className="flex items-center justify-between gap-sm">
               <h2 id="products-heading" className="text-[24px]">

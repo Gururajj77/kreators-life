@@ -2,6 +2,7 @@ import { STRESS_LEVELS, STRESSORS } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
+import { PeriodPanel } from '../components/PeriodPanel';
 import { Button } from '../components/Button';
 import { AreaLine, Bubbles, PillBars } from '../components/Charts';
 import { Hero, HeroNumber } from '../components/Hero';
@@ -91,6 +92,7 @@ export function Stress() {
         </div>
       </section>
 
+      <PeriodPanel id="stress-period" parts={['wellbeing']} />
       <section className="mt-lg" aria-labelledby="thirty-heading">
         <h2 id="thirty-heading" className="text-[24px]">
           Last 30 days

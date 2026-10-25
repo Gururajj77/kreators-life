@@ -1,5 +1,10 @@
 @import 'tailwindcss';
 
+/* md and lg need height as well as width: a phone on its side is wide but short,
+   and keeps the phone layout (bottom tabs, one column). Tablets and laptops pass both. */
+@custom-variant md (@media (width >= 48rem) and (height >= 30rem));
+@custom-variant lg (@media (width >= 64rem) and (height >= 30rem));
+
 @theme {
   /* The only spacing steps this app uses. */
   --spacing-xs: 8px;
@@ -213,9 +218,16 @@
 .safe-top {
   padding-top: env(safe-area-inset-top);
 }
+/* Phones (and any screen too narrow or too short for the sidebar): the theme and menu buttons
+   float in the top-right 56px, so the first header of a screen starts below them. */
+@media (max-width: 767.98px), (max-height: 479.98px) {
+  .screen > header:first-child {
+    padding-top: 64px;
+  }
+}
 
 /* Laptop layout: the header spans the page, sections flow into two columns. */
-@media (min-width: 768px) {
+@media (min-width: 768px) and (min-height: 480px) {
   .screen-columns {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

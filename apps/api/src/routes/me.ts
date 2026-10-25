@@ -221,6 +221,12 @@ me.get('/export', async (c) => {
     ['invoices', 'SELECT * FROM invoices WHERE user_id = ?'],
     ['points', 'SELECT * FROM points_ledger WHERE user_id = ?'],
     ['notifications', 'SELECT * FROM notifications WHERE user_id = ?'],
+    ['notToDo', 'SELECT * FROM not_to_do WHERE user_id = ?'],
+    ['notToDoDays', 'SELECT * FROM not_to_do_days WHERE user_id = ?'],
+    ['reviews', 'SELECT * FROM reviews WHERE user_id = ?'],
+    ['reviewTemplates', 'SELECT * FROM review_templates WHERE user_id = ?'],
+    ['listings', 'SELECT * FROM preowned_listings WHERE seller_id = ?'],
+    ['offers', 'SELECT * FROM preowned_offers WHERE buyer_id = ?'],
   ];
   const out: Record<string, unknown> = { exportedAt: nowIso(), user: toUser(user) };
   for (const [name, sql] of tables) {
@@ -240,6 +246,11 @@ me.delete('/', async (c) => {
     db.prepare("UPDATE users SET display_name = 'Deleted member', email = NULL, password_hash = NULL, password_salt = NULL, handle = NULL, bio = '', avatar_url = '', socials_json = '{}', skills = '[]', categories = '[]', goals = '[]', interests = '[]', city = '', area = '', lat = NULL, lng = NULL, location = '', reminder_time = NULL, open_to_intros = 0 WHERE id = ?").bind(user.id),
     db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM nodes WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM not_to_do WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM reviews WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM review_templates WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM preowned_listings WHERE seller_id = ?').bind(user.id),
+    db.prepare('DELETE FROM preowned_offers WHERE buyer_id = ?').bind(user.id),
     db.prepare('DELETE FROM wellbeing_logs WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM journal_entries WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM chat_messages WHERE user_id = ?').bind(user.id),
@@ -280,6 +291,8 @@ me.post('/reset', async (c) => {
   const user = c.get('user');
   await db.batch([
     db.prepare('DELETE FROM nodes WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM not_to_do WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM reviews WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM xp_events WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM spark_completions WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM onboarding_answers WHERE user_id = ?').bind(user.id),

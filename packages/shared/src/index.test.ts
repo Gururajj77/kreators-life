@@ -1,3 +1,6 @@
+import { FEATURE_FEE_POINTS, isFeatured, parseImageUrls, STORE_STAGE_META, PREOWNED_CONDITION_META } from './index';
+import { builtInTemplate, parseReviewPrompts, periodDays, periodFor, periodLabel, periodShift } from './index';
+import { MAX_NOT_TO_DO, notToDoStreak, notToDoWeek, shiftDay } from './index';
 import { describe, expect, it } from 'vitest';
 import { bountyPayout, COMPLEMENTS, dressCodeFor, feeBps, greetingFor, INTEREST_GROUPS, INTERESTS, ladderOptions, MAX_INTERESTS, MODULE_GROUPS, MODULES, moduleState, nextWeek, passwordProblem, matchCircles, matchScore, money, nudgeFor, rolloutBucket, slotsFor, timeLabel, zonedToUtc } from './index';
 
@@ -169,5 +172,63 @@ describe('passwords', () => {
     expect(passwordProblem('aaaaaaaaaa')).toMatch(/over and over/);
     expect(passwordProblem('mira.sharma2026', 'mira.sharma@example.com')).toMatch(/your email/);
     expect(passwordProblem('correct horse battery', 'mira@example.com')).toBeNull();
+  });
+});
+
+describe('not to do', () => {
+  it('counts kept days in a row, lets today stay open, and ends on a slip or a gap', () => {
+    const t = '2026-10-25';
+    expect(notToDoStreak({}, t)).toBe(0);
+    expect(notToDoStreak({ [t]: 'kept' }, t)).toBe(1);
+    expect(notToDoStreak({ '2026-10-24': 'kept' }, t)).toBe(1);
+    expect(notToDoStreak({ '2026-10-22': 'kept', '2026-10-23': 'kept', '2026-10-24': 'kept', [t]: 'kept' }, t)).toBe(4);
+    expect(notToDoStreak({ '2026-10-24': 'kept', [t]: 'slipped' }, t)).toBe(0);
+    expect(notToDoStreak({ '2026-10-21': 'kept', '2026-10-22': 'kept', '2026-10-24': 'kept', [t]: 'kept' }, t)).toBe(2);
+    expect(notToDoStreak({ '2026-10-24': 'slipped', [t]: 'kept' }, t)).toBe(1);
+    expect(notToDoWeek({ '2026-10-19': 'kept', [t]: 'slipped' }, t)).toEqual(['kept', null, null, null, null, null, 'slipped']);
+    expect(shiftDay('2026-03-01', -1)).toBe('2026-02-28');
+    expect(MAX_NOT_TO_DO).toBe(7);
+  });
+});
+
+describe('periods', () => {
+  it('finds the week, month, quarter and half year around a date', () => {
+    expect(periodFor('week', '2026-10-25')).toEqual({ kind: 'week', start: '2026-10-19', end: '2026-10-25' });
+    expect(periodFor('week', '2026-11-02')).toEqual({ kind: 'week', start: '2026-11-02', end: '2026-11-08' });
+    expect(periodFor('month', '2028-02-10')).toEqual({ kind: 'month', start: '2028-02-01', end: '2028-02-29' });
+    expect(periodFor('quarter', '2026-10-25')).toEqual({ kind: 'quarter', start: '2026-10-01', end: '2026-12-31' });
+    expect(periodFor('half', '2026-05-01')).toEqual({ kind: 'half', start: '2026-01-01', end: '2026-06-30' });
+    expect(periodFor('half', '2026-10-25').start).toBe('2026-07-01');
+  });
+  it('steps to the period before or after, and labels them in plain words', () => {
+    expect(periodShift(periodFor('week', '2026-10-25'), -1).start).toBe('2026-10-12');
+    expect(periodShift(periodFor('month', '2026-01-31'), 1)).toEqual({ kind: 'month', start: '2026-02-01', end: '2026-02-28' });
+    expect(periodShift(periodFor('quarter', '2026-11-01'), 1).start).toBe('2027-01-01');
+    expect(periodShift(periodFor('half', '2026-03-01'), -1)).toEqual({ kind: 'half', start: '2025-07-01', end: '2025-12-31' });
+    expect(periodLabel(periodFor('week', '2026-10-25'))).toBe('19 to 25 Oct 2026');
+    expect(periodLabel(periodFor('week', '2026-10-31'))).toBe('26 Oct to 1 Nov 2026');
+    expect(periodLabel(periodFor('month', '2026-10-25'))).toBe('October 2026');
+    expect(periodLabel(periodFor('quarter', '2026-10-25'))).toBe('Oct to Dec 2026');
+    expect(periodLabel(periodFor('half', '2026-10-25'))).toBe('Jul to Dec 2026');
+    expect(periodDays(periodFor('week', '2026-10-25'))).toHaveLength(7);
+    expect(periodDays(periodFor('quarter', '2026-10-25'))).toHaveLength(92);
+  });
+  it('gives every kind a built-in template and keeps prompts tidy', () => {
+    expect(builtInTemplate('half').prompts.length).toBeGreaterThanOrEqual(3);
+    expect(parseReviewPrompts(['  What went well? ', '', 7, 'Next?'])).toEqual(['What went well?', 'Next?']);
+    expect(parseReviewPrompts('nope')).toEqual([]);
+  });
+});
+
+describe('store', () => {
+  it('keeps picture links to https and a handful, and knows a featured spot by its end', () => {
+    expect(parseImageUrls(['https://a.test/1.jpg', 'http://a.test/2.jpg', ' https://a.test/3.jpg ', 5])).toEqual(['https://a.test/1.jpg', 'https://a.test/3.jpg']);
+    expect(parseImageUrls(Array(10).fill('https://a.test/x.jpg'))).toHaveLength(6);
+    expect(isFeatured('2026-10-26T00:00:00.000Z', '2026-10-25T00:00:00.000Z')).toBe(true);
+    expect(isFeatured('2026-10-24T00:00:00.000Z', '2026-10-25T00:00:00.000Z')).toBe(false);
+    expect(isFeatured(null)).toBe(false);
+    expect(FEATURE_FEE_POINTS).toBeGreaterThan(0);
+    expect(Object.keys(STORE_STAGE_META)).toHaveLength(4);
+    expect(PREOWNED_CONDITION_META.lightly_used.name).toBe('Lightly used');
   });
 });

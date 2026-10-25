@@ -2,6 +2,7 @@ import { LIFE_AREAS, RELATIONSHIP_BY_KEY, type LifeArea } from '@kreators/shared
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
+import { PeriodPanel } from '../components/PeriodPanel';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { Gauge, MultiLine, PillBars } from '../components/Charts';
@@ -87,6 +88,7 @@ export function Life() {
         </section>
       )}
 
+      <PeriodPanel id="life-period" parts={['daily', 'notToDo', 'wellbeing', 'journal', 'finance', 'school']} />
       {d?.areas.map((a) => (
         <AreaCard key={a.key} area={a} />
       ))}

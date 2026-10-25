@@ -36,6 +36,30 @@ go.get('/go/:code', async (c) => {
   return c.redirect(`${target}?src=${encodeURIComponent(c.req.param('code'))}&click=${clickId}`, 302);
 });
 
+/** Partner links from the Store and Tools. The tap is counted after the redirect is sent. */
+go.get('/out/:kind/:id', async (c) => {
+  const db = c.env.DB;
+  const kind = c.req.param('kind');
+  const id = c.req.param('id');
+  const row =
+    kind === 'item'
+      ? await db.prepare("SELECT url FROM store_items WHERE id = ? AND status = 'live'").bind(id).first<{ url: string }>()
+      : kind === 'tool'
+        ? await db.prepare('SELECT url FROM tools WHERE id = ? AND verified = 1').bind(id).first<{ url: string }>()
+        : null;
+  if (!row || !/^https?:\/\//.test(row.url)) return c.redirect('/store', 302);
+  const ip = c.req.header('CF-Connecting-IP') ?? c.req.header('X-Forwarded-For') ?? '';
+  const salt = c.env.CLICK_SALT ?? 'kreators-local';
+  const write = (async () => {
+    await db
+      .prepare('INSERT INTO outbound_clicks (id, kind, target_id, ip_hash, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(newId(), kind, id, ip ? await sha(`${salt}:${ip}`) : null, (c.req.header('User-Agent') ?? '').slice(0, 200), nowIso())
+      .run();
+  })().catch((e: unknown) => console.error('outbound click not written', e));
+  c.executionCtx.waitUntil(write);
+  return c.redirect(row.url, 302);
+});
+
 /** The public sitemap: site pages, feature pages and every published creator page. */
 go.get('/sitemap.xml', async (c) => {
   const origin = new URL(c.req.url).origin;

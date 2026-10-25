@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import { POINTS, sparkFor, XP, type CheckinResponse, type RelationshipKey, type TodayResponse } from '@kreators/shared';
+import { MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, notToDoStreak, notToDoWeek, POINTS, RELATIONSHIPS, sparkFor, XP, type CheckinResponse, type NotToDo, type NotToDoStatus, type RelationshipKey, type TodayResponse } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { DATE_RE, dateNearToday, getUser, notify, nowIso, shiftDate, toNode, type NodeRow, taskGate } from '../db';
+import { DATE_RE, dateNearToday, getUser, newId, notify, nowIso, shiftDate, toNode, type NodeRow, taskGate } from '../db';
 
 export const today = new Hono<AppEnv>();
 
@@ -15,6 +15,49 @@ async function weakestRelationship(db: D1Database, userId: string): Promise<Rela
     .bind(userId)
     .first<{ relationship: RelationshipKey }>();
   return row?.relationship ?? 'self';
+}
+
+interface NotToDoRow {
+  id: string;
+  user_id: string;
+  title: string;
+  relationship: string | null;
+  streak: number;
+  best_streak: number;
+  created_at: string;
+}
+type DayMap = Record<string, NotToDoStatus | undefined>;
+
+function toNotToDo(row: NotToDoRow, days: DayMap, date: string): NotToDo {
+  const streak = notToDoStreak(days, date);
+  return {
+    id: row.id,
+    title: row.title,
+    relationship: (row.relationship as RelationshipKey | null) ?? null,
+    streak,
+    bestStreak: Math.max(row.best_streak, streak),
+    today: days[date] ?? null,
+    week: notToDoWeek(days, date),
+    createdAt: row.created_at,
+  };
+}
+
+/** Every item with its streak counted live for `date`, from enough days back to re-count the longest stored run. */
+async function notToDoList(db: D1Database, userId: string, date: string): Promise<NotToDo[]> {
+  const rows = await db.prepare('SELECT * FROM not_to_do WHERE user_id = ? ORDER BY created_at ASC').bind(userId).all<NotToDoRow>();
+  if (rows.results.length === 0) return [];
+  const reach = Math.max(8, ...rows.results.map((r) => r.streak + 2));
+  const days = await db
+    .prepare('SELECT item_id, day, status FROM not_to_do_days WHERE user_id = ? AND day >= ? AND day <= ?')
+    .bind(userId, shiftDate(date, -reach), date)
+    .all<{ item_id: string; day: string; status: NotToDoStatus }>();
+  const byItem = new Map<string, DayMap>();
+  for (const d of days.results) {
+    const m = byItem.get(d.item_id) ?? {};
+    m[d.day] = d.status;
+    byItem.set(d.item_id, m);
+  }
+  return rows.results.map((r) => toNotToDo(r, byItem.get(r.id) ?? {}, date));
 }
 
 today.get('/', async (c) => {
@@ -82,6 +125,7 @@ today.get('/', async (c) => {
       text: sparkFor(sparkDone?.relationship ?? relationship, date),
       done: Boolean(sparkDone),
     },
+    notToDo: await notToDoList(db, user.id, date),
   };
   return c.json(res);
 });
@@ -150,4 +194,71 @@ today.post('/spark', async (c) => {
   ]);
   const fresh = await getUser(db, user.id);
   return c.json({ awarded: XP.spark, relationship, alreadyDone: false, xp: fresh?.xp ?? user.xp });
+});
+
+// The not-to-do list: things to stay away from. Each item keeps its own streak of kept days.
+today.post('/not-to-do', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const body = await c.req.json<{ title?: unknown; relationship?: unknown }>().catch(() => ({}) as { title?: unknown; relationship?: unknown });
+  const title = typeof body.title === 'string' ? body.title.trim().slice(0, NOT_TO_DO_TITLE_MAX) : '';
+  if (!title) return c.json({ error: 'Say what you are staying away from.' }, 400);
+  const relationship = typeof body.relationship === 'string' && RELATIONSHIPS.some((r) => r.key === body.relationship) ? (body.relationship as RelationshipKey) : null;
+  const count = await db.prepare('SELECT COUNT(*) AS n FROM not_to_do WHERE user_id = ?').bind(user.id).first<{ n: number }>();
+  if ((count?.n ?? 0) >= MAX_NOT_TO_DO) return c.json({ error: `${MAX_NOT_TO_DO} is plenty. Remove one to add another.` }, 400);
+  const id = newId();
+  const now = nowIso();
+  await db.prepare('INSERT INTO not_to_do (id, user_id, title, relationship, streak, best_streak, created_at) VALUES (?, ?, ?, ?, 0, 0, ?)').bind(id, user.id, title, relationship, now).run();
+  const item: NotToDo = { id, title, relationship, streak: 0, bestStreak: 0, today: null, week: [null, null, null, null, null, null, null], createdAt: now };
+  return c.json({ item }, 201);
+});
+
+// Mark a day: kept, slipped, or nothing (an unticked box). Today or yesterday only.
+today.post('/not-to-do/:id/day', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await db.prepare('SELECT * FROM not_to_do WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).first<NotToDoRow>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  const body = await c.req.json<{ date?: string; today?: string; status?: unknown }>().catch(() => ({}) as { date?: string; today?: string; status?: unknown });
+  const date = dateParam(body.date);
+  if (!dateNearToday(date)) return c.json({ error: 'Only today or yesterday can be marked.' }, 400);
+  // The streak is counted as of the person's today, which is the marked day or the day after it.
+  const today = body.today && DATE_RE.test(body.today) && body.today >= date && dateNearToday(body.today) ? body.today : date;
+  const status: NotToDoStatus | null | undefined = body.status === 'kept' || body.status === 'slipped' ? body.status : body.status === null || body.status === undefined ? null : undefined;
+  if (status === undefined) return c.json({ error: 'status must be kept, slipped or null' }, 400);
+  const now = nowIso();
+  const stmts = status
+    ? [db.prepare('INSERT INTO not_to_do_days (item_id, user_id, day, status, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(item_id, day) DO UPDATE SET status = excluded.status').bind(row.id, user.id, date, status, now)]
+    : [db.prepare('DELETE FROM not_to_do_days WHERE item_id = ? AND day = ?').bind(row.id, date)];
+  // A kept day pays once, however many times the box is ticked and unticked, and is never clawed back.
+  let awarded = 0;
+  if (status === 'kept') {
+    const paid = await db.prepare("SELECT 1 FROM xp_events WHERE user_id = ? AND source = 'not_to_do' AND source_id = ?").bind(user.id, `${row.id}:${date}`).first();
+    if (!paid) {
+      awarded = XP.notToDo;
+      stmts.push(db.prepare('UPDATE users SET xp = xp + ? WHERE id = ?').bind(awarded, user.id));
+      if (row.relationship) stmts.push(db.prepare('UPDATE relationship_scores SET xp = xp + ? WHERE user_id = ? AND relationship = ?').bind(awarded, user.id, row.relationship));
+      stmts.push(
+        db
+          .prepare('INSERT INTO xp_events (user_id, relationship, source, source_id, amount, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+          .bind(user.id, row.relationship, 'not_to_do', `${row.id}:${date}`, awarded, now),
+      );
+    }
+  }
+  await db.batch(stmts);
+  const all = await db.prepare('SELECT day, status FROM not_to_do_days WHERE item_id = ? ORDER BY day DESC LIMIT 2000').bind(row.id).all<{ day: string; status: NotToDoStatus }>();
+  const days: DayMap = {};
+  for (const d of all.results) days[d.day] = d.status;
+  const streak = notToDoStreak(days, today);
+  const best = Math.max(row.best_streak, streak);
+  await db.prepare('UPDATE not_to_do SET streak = ?, best_streak = ? WHERE id = ?').bind(streak, best, row.id).run();
+  return c.json({ item: toNotToDo({ ...row, streak, best_streak: best }, days, today), awarded });
+});
+
+today.delete('/not-to-do/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const r = await db.prepare('DELETE FROM not_to_do WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).run();
+  if (!r.meta.changes) return c.json({ error: 'not found' }, 404);
+  return c.json({ ok: true });
 });

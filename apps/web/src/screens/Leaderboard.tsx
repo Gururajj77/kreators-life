@@ -32,7 +32,7 @@ function Entry({ e, stat }: { e: LeaderboardEntry; stat: string }) {
           </span>
           {e.isPro && <span className="shrink-0 rounded-pill bg-r7 px-xs text-[12px] font-extrabold text-white">Pro</span>}
         </span>
-        <span className={`block text-[14px] font-semibold ${e.isMe ? 'text-white/80' : 'text-ink-soft'}`}>
+        <span className={`block text-[14px] font-semibold ${e.isMe ? 'text-on-ink/80' : 'text-ink-soft'}`}>
           {stage?.name ?? 'Seed'}, level {e.level}
         </span>
       </span>

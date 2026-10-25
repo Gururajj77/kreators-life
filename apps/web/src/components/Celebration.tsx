@@ -124,7 +124,7 @@ function Overlay({ c }: { c: Celebration }) {
                 >
                   <span className="truncate">
                     <span className="font-bold">{KIND_META[e.kind].label}</span>
-                    <span className="text-white/70"> {e.title}</span>
+                    <span className="text-on-ink/70"> {e.title}</span>
                   </span>
                   <span className="shrink-0 font-extrabold" style={{ color: c.color }}>
                     +{e.amount}
@@ -134,14 +134,14 @@ function Overlay({ c }: { c: Celebration }) {
             </ul>
           )}
           {c.projectCleared && (
-            <p className="mt-sm rounded-tile bg-white/10 px-sm py-xs text-[14px] font-bold m-0">Project cleared: {c.projectCleared.title}</p>
+            <p className="mt-sm rounded-tile bg-on-ink/10 px-sm py-xs text-[14px] font-bold m-0">Project cleared: {c.projectCleared.title}</p>
           )}
           {c.newBadges.length > 0 && (
             <ul className="mt-sm flex list-none flex-wrap gap-xs p-0 m-0">
               {c.newBadges.map((k) => {
                 const b = BADGES.find((x) => x.key === k);
                 return (
-                  <li key={k} className="rounded-pill bg-white px-sm py-xs text-[14px] font-bold text-ink">
+                  <li key={k} className="rounded-pill bg-on-ink px-sm py-xs text-[14px] font-bold text-ink">
                     New badge {b?.emoji} {b?.name ?? k}
                   </li>
                 );

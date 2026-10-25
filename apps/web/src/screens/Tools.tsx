@@ -1,4 +1,4 @@
-import { TOOL_CATEGORIES, type Tool } from '@kreators/shared';
+import { isFeatured, TOOL_CATEGORIES, type Tool } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button } from '../components/Button';
@@ -6,6 +6,7 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
+import { FeaturedTag } from './Store';
 import { useAuthed } from '../lib/queries';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
@@ -20,22 +21,35 @@ function Err({ e }: { e: unknown }) {
 }
 
 function ToolRow({ t, reviewer, onChange }: { t: Tool; reviewer: boolean; onChange: () => void }) {
-  const set = useMutation({ mutationFn: (body: { verified?: boolean; affiliate?: boolean }) => api.setTool(t.id, body), onSuccess: onChange });
+  const set = useMutation({ mutationFn: (body: { verified?: boolean; affiliate?: boolean; featured?: boolean }) => api.setTool(t.id, body), onSuccess: onChange });
   const remove = useMutation({ mutationFn: () => api.removeTool(t.id), onSuccess: onChange });
+  const featured = isFeatured(t.featuredUntil);
   return (
-    <li className="rounded-tile bg-card p-sm shadow-toy-soft">
+    <li className={`rounded-tile bg-card p-sm ${featured ? 'border-2 border-r3 shadow-toy' : 'border-2 border-transparent shadow-toy-soft'}`}>
       <div className="flex items-start gap-sm">
         <span className="min-w-0 flex-1">
+          {featured && (
+            <span className="mb-xs block">
+              <FeaturedTag />
+            </span>
+          )}
           <span className="block text-[16px] font-bold">{t.name}</span>
           {t.description && <span className="block text-[14px] font-semibold text-ink-soft">{t.description}</span>}
           <span className="block text-[12px] font-bold text-ink-mute">
             {t.verified ? 'Verified by the team' : `Suggested by ${t.suggestedByName}, waiting for review`}
             {t.affiliate ? '. Partner link: Kreators may earn a share.' : ''}
+            {t.clicks > 0 ? ` · ${t.clicks} ${t.clicks === 1 ? 'tap' : 'taps'}` : ''}
           </span>
         </span>
-        <a href={t.url} target="_blank" rel="noreferrer" className="toy toy-ink inline-flex min-h-[44px] shrink-0 items-center rounded-pill border-2 border-ink bg-card px-sm text-[14px] font-bold">
-          Open
-        </a>
+        {t.affiliate && t.verified ? (
+          <a href={`/out/tool/${t.id}`} target="_blank" rel="noreferrer" className="toy inline-flex min-h-[44px] shrink-0 items-center rounded-pill bg-ink px-md text-[14px] font-bold text-on-ink">
+            Get it
+          </a>
+        ) : (
+          <a href={t.url} target="_blank" rel="noreferrer" className="toy toy-ink inline-flex min-h-[44px] shrink-0 items-center rounded-pill border-2 border-ink bg-card px-sm text-[14px] font-bold">
+            Open
+          </a>
+        )}
       </div>
       {reviewer && (
         <div className="mt-sm flex flex-wrap gap-xs">
@@ -46,6 +60,9 @@ function ToolRow({ t, reviewer, onChange }: { t: Tool; reviewer: boolean; onChan
           )}
           <Button variant="outline" onClick={() => set.mutate({ affiliate: !t.affiliate })} disabled={set.isPending}>
             {t.affiliate ? 'Not a partner link' : 'Mark as partner link'}
+          </Button>
+          <Button variant="outline" onClick={() => set.mutate({ featured: !featured })} disabled={set.isPending}>
+            {featured ? 'Take off the top' : 'Feature for a week'}
           </Button>
           <Button
             variant="ghost"
@@ -92,6 +109,19 @@ export function Tools() {
       )}
 
       {d && verified.length === 0 && <p className="mt-lg m-0 text-[14px] font-semibold text-ink-soft">The shelf is empty. Suggest the first tool.</p>}
+
+      {verified.some((t) => isFeatured(t.featuredUntil)) && (
+        <section className="mt-lg" aria-labelledby="featured-tools">
+          <h2 id="featured-tools" className="text-[24px]">
+            Featured this week
+          </h2>
+          <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+            {verified.filter((t) => isFeatured(t.featuredUntil)).map((t) => (
+              <ToolRow key={t.id} t={t} reviewer={d?.reviewer ?? false} onChange={() => q.refetch()} />
+            ))}
+          </ul>
+        </section>
+      )}
 
       {categories.map((cat) => {
         const list = verified.filter((t) => t.category === cat);

@@ -230,6 +230,8 @@ export const XP = {
   task: 20,
   checkin: 10,
   spark: 15,
+  /** A day kept on the not-to-do list. Small on purpose: the streak is the prize. */
+  notToDo: 5,
   projectClear: 30,
   /** XP that ripples up to each ancestor when a task is completed. */
   ripple: {
@@ -944,6 +946,240 @@ export interface TodayResponse {
   spark: { relationship: RelationshipKey; text: string; done: boolean };
   /** Minutes planned for today across timed tasks, minutes already done, and how many tasks carry a time. */
   timePlan: { plannedMin: number; doneMin: number; timed: number };
+  /** Things to stay away from, each with its streak. Extra to the three boxes. */
+  notToDo: NotToDo[];
+}
+
+/** The not-to-do list on Daily: things to stay away from, each with its own streak. */
+export const MAX_NOT_TO_DO = 7;
+export const NOT_TO_DO_TITLE_MAX = 60;
+export type NotToDoStatus = 'kept' | 'slipped';
+export interface NotToDo {
+  id: string;
+  title: string;
+  relationship: RelationshipKey | null;
+  /** Days in a row kept. Today counts once it is ticked; until then the run ends at yesterday. */
+  streak: number;
+  bestStreak: number;
+  today: NotToDoStatus | null;
+  /** The last seven days ending today, oldest first. */
+  week: (NotToDoStatus | null)[];
+  createdAt: string;
+}
+
+/** A YYYY-MM-DD day moved by whole days. */
+export function shiftDay(day: string, by: number): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + by);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * The one streak rule for a not-to-do: count kept days back from today if today is kept,
+ * or back from yesterday while today is still open. A slip today, or a day with nothing
+ * recorded, ends the run.
+ */
+export function notToDoStreak(days: Record<string, NotToDoStatus | undefined>, today: string): number {
+  if (days[today] === 'slipped') return 0;
+  let day = days[today] === 'kept' ? today : shiftDay(today, -1);
+  let n = 0;
+  while (days[day] === 'kept') {
+    n += 1;
+    day = shiftDay(day, -1);
+  }
+  return n;
+}
+
+// ---------------------------------------------------------------------------
+// Periods and reviews: a week, a month, a quarter or half a year, and what you make of it
+// ---------------------------------------------------------------------------
+
+export type PeriodKind = 'week' | 'month' | 'quarter' | 'half';
+export const PERIOD_KINDS: readonly PeriodKind[] = ['week', 'month', 'quarter', 'half'];
+export const PERIOD_META: Record<PeriodKind, { name: string; short: string; blurb: string; previous: string }> = {
+  week: { name: 'Weekly review', short: 'Week', blurb: 'Seven days: what moved, what slipped, one thing for next week.', previous: 'the week before' },
+  month: { name: 'Monthly review', short: 'Month', blurb: 'A month: the numbers, the habits that held, what to change.', previous: 'the month before' },
+  quarter: { name: 'Quarterly review', short: 'Quarter', blurb: 'Three months: progress on the big things, and the next quarter\'s focus.', previous: 'the quarter before' },
+  half: { name: 'Mid-year check-in', short: 'Half year', blurb: 'Six months: where the year is going, and what the second half is for.', previous: 'the half before' },
+};
+/** A period is inclusive on both ends, in YYYY-MM-DD. Weeks start on Monday. */
+export interface Period {
+  kind: PeriodKind;
+  start: string;
+  end: string;
+}
+
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const ymd = (y: number, m: number, d: number) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+const lastDayOfMonth = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+
+/** The period of that kind containing the date. */
+export function periodFor(kind: PeriodKind, date: string): Period {
+  const y = Number(date.slice(0, 4));
+  const m = Number(date.slice(5, 7));
+  if (kind === 'week') {
+    const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
+    const start = shiftDay(date, -((dow + 6) % 7));
+    return { kind, start, end: shiftDay(start, 6) };
+  }
+  if (kind === 'month') return { kind, start: ymd(y, m, 1), end: ymd(y, m, lastDayOfMonth(y, m)) };
+  const first = kind === 'quarter' ? Math.floor((m - 1) / 3) * 3 + 1 : m <= 6 ? 1 : 7;
+  const last = first + (kind === 'quarter' ? 2 : 5);
+  return { kind, start: ymd(y, first, 1), end: ymd(y, last, lastDayOfMonth(y, last)) };
+}
+
+/** The same kind of period, `by` steps later (or earlier when negative). */
+export function periodShift(p: Period, by: number): Period {
+  if (p.kind === 'week') return periodFor('week', shiftDay(p.start, 7 * by));
+  const months = p.kind === 'month' ? 1 : p.kind === 'quarter' ? 3 : 6;
+  const total = Number(p.start.slice(0, 4)) * 12 + (Number(p.start.slice(5, 7)) - 1) + months * by;
+  return periodFor(p.kind, ymd(Math.floor(total / 12), (total % 12) + 1, 1));
+}
+
+/** "20 to 26 Oct 2026", "October 2026", "Oct to Dec 2026". */
+export function periodLabel(p: Period): string {
+  const y = p.start.slice(0, 4);
+  const m1 = Number(p.start.slice(5, 7));
+  const m2 = Number(p.end.slice(5, 7));
+  if (p.kind === 'week') {
+    const d1 = Number(p.start.slice(8, 10));
+    const d2 = Number(p.end.slice(8, 10));
+    return p.start.slice(0, 7) === p.end.slice(0, 7) ? `${d1} to ${d2} ${MONTHS_SHORT[m1 - 1]} ${y}` : `${d1} ${MONTHS_SHORT[m1 - 1]} to ${d2} ${MONTHS_SHORT[m2 - 1]} ${p.end.slice(0, 4)}`;
+  }
+  if (p.kind === 'month') return `${MONTHS_LONG[m1 - 1]} ${y}`;
+  return `${MONTHS_SHORT[m1 - 1]} to ${MONTHS_SHORT[m2 - 1]} ${y}`;
+}
+
+/** Every day of the period, oldest first. */
+export function periodDays(p: Period): string[] {
+  const out: string[] = [];
+  for (let d = p.start; d <= p.end; d = shiftDay(d, 1)) out.push(d);
+  return out;
+}
+
+export const periodKey = (p: Period) => `${p.kind}:${p.start}`;
+
+/** The prompts every review starts from. A person can add templates of their own on top. */
+export const REVIEW_PROMPTS: Record<PeriodKind, string[]> = {
+  week: ['What went well this week?', 'What got in the way?', 'Which area needs you most next week?', 'One thing to do differently next week.'],
+  month: ['What are you proud of this month?', 'What did you let slide?', 'Which habits held, and which did not?', 'What will you change next month?'],
+  quarter: ['What moved forward in the last three months?', 'What did you learn about how you work?', 'What should stop, and what should start?', 'The one focus for the next quarter.'],
+  half: ['Where is the year going so far?', 'Which of the seven areas grew the most, and which the least?', 'What do you want the second half to be about?', 'What would make December feel like a good year?'],
+};
+export const MAX_REVIEW_TEMPLATES = 12;
+export const MAX_REVIEW_PROMPTS = 10;
+export const REVIEW_NAME_MAX = 60;
+export const REVIEW_PROMPT_MAX = 200;
+export const REVIEW_ANSWER_MAX = 2000;
+export const REVIEW_HIGHLIGHT_MAX = 200;
+
+export interface ReviewTemplate {
+  id: string;
+  kind: PeriodKind;
+  name: string;
+  prompts: string[];
+  /** Comes with the app; cannot be edited or removed. */
+  builtIn: boolean;
+  createdAt: string | null;
+}
+
+export function builtInTemplate(kind: PeriodKind): ReviewTemplate {
+  return { id: `builtin:${kind}`, kind, name: PERIOD_META[kind].name, prompts: REVIEW_PROMPTS[kind], builtIn: true, createdAt: null };
+}
+
+/** Trimmed, non-empty, bounded prompts. */
+export function parseReviewPrompts(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((x): x is string => typeof x === 'string')
+    .map((x) => x.trim().slice(0, REVIEW_PROMPT_MAX))
+    .filter(Boolean)
+    .slice(0, MAX_REVIEW_PROMPTS);
+}
+
+/** What happened in one period, pulled from every app. Averages are null when nothing was logged. */
+export interface PeriodNumbers {
+  days: number;
+  checkins: number;
+  tasksDone: number;
+  smallActs: number;
+  xp: number;
+  activeDays: number;
+  notToDoKept: number;
+  notToDoSlipped: number;
+  moodAvg: number | null;
+  sleepAvg: number | null;
+  stressAvg: number | null;
+  mindfulMin: number;
+  moveMin: number;
+  journalEntries: number;
+  journalMoodAvg: number | null;
+  incomeCents: number;
+  expenseCents: number;
+  orders: number;
+  salesCents: number;
+  salesPoints: number;
+  lessonsDone: number;
+  programsDone: number;
+  applications: number;
+  decisions: number;
+  events: number;
+  posts: number;
+  circles: number;
+}
+
+export interface ReviewSummary {
+  period: Period;
+  previous: Period;
+  now: PeriodNumbers;
+  before: PeriodNumbers;
+  /** Xp and ticked tasks per day of the period. */
+  series: { date: string; xp: number; tasks: number }[];
+  xpByArea: Partial<Record<RelationshipKey, number>>;
+  currency: string;
+}
+
+export interface Review {
+  id: string;
+  kind: PeriodKind;
+  start: string;
+  end: string;
+  templateId: string | null;
+  templateName: string;
+  /** The prompts as they were when the review was written, so a changed template never rewrites history. */
+  prompts: string[];
+  answers: string[];
+  /** One to five. */
+  rating: number | null;
+  highlight: string;
+  /** The numbers as they were when the review was saved. */
+  snapshot: ReviewSummary | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReviewListItem {
+  id: string;
+  kind: PeriodKind;
+  start: string;
+  end: string;
+  rating: number | null;
+  highlight: string;
+  updatedAt: string;
+}
+
+export interface ReviewsResponse {
+  period: Period;
+  summary: ReviewSummary;
+  review: Review | null;
+  templates: ReviewTemplate[];
+  recent: ReviewListItem[];
+}
+
+/** The last seven days ending today, oldest first. */
+export function notToDoWeek(days: Record<string, NotToDoStatus | undefined>, today: string): (NotToDoStatus | null)[] {
+  return [6, 5, 4, 3, 2, 1, 0].map((back) => days[shiftDay(today, -back)] ?? null);
 }
 
 export const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -1277,10 +1513,12 @@ export const MODULES: readonly AppModule[] = [
   { key: 'stress', name: 'Stress', blurb: 'Level and what is behind it.', emoji: '🌊', group: 'wellbeing', path: '/stress', defaultOn: false, minRole: 'user', accent: 'friendship' },
   { key: 'mindful', name: 'Mindful minutes', blurb: 'A breathing timer that logs your minutes.', emoji: '🧘', group: 'wellbeing', path: '/mindful', defaultOn: false, minRole: 'user', accent: 'divine' },
   { key: 'journal', name: 'Journal', blurb: 'Write it down with an emotion and a stress level.', emoji: '📓', group: 'wellbeing', path: '/journal', defaultOn: true, minRole: 'user', accent: 'self' },
+  { key: 'reviews', name: 'Reviews', blurb: 'Weekly, monthly, quarterly and mid-year reviews: the numbers from every app, and what you make of them.', emoji: '📝', group: 'wellbeing', path: '/reviews', defaultOn: false, minRole: 'user', accent: 'self' },
   { key: 'companion', name: 'Companion', blurb: 'A chat that knows how you are doing. Not a therapist.', emoji: '💬', group: 'wellbeing', path: '/companion', defaultOn: false, minRole: 'user', accent: 'guru' },
 
   { key: 'profile', name: 'Public page', blurb: 'What people see: bio, skills, portfolio, links and what you sell.', emoji: '🔗', group: 'creator', path: '/profile', defaultOn: true, minRole: 'user', accent: 'self' },
   { key: 'shop', name: 'Shop', blurb: 'Sell downloads, courses, memberships, sessions and events.', emoji: '🛍️', group: 'creator', path: '/shop', defaultOn: true, minRole: 'user', accent: 'servant_leader' },
+  { key: 'store', name: 'Store', blurb: 'Gear and software for creators: new through partner links, pre-owned from other creators with offers and chat, and kits by budget.', emoji: '🛒', group: 'creator', path: '/store', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
   { key: 'audience', name: 'Audience', blurb: 'Followers, leads, broadcasts and your affiliate link.', emoji: '📣', group: 'creator', path: '/shop/audience', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
   { key: 'content', name: 'Content', blurb: 'Which post made money: tracked links, views and revenue per piece of content.', emoji: '📈', group: 'creator', path: '/shop/content', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
   { key: 'automations', name: 'Auto-DM', blurb: 'Comment a keyword, get a link in DMs. Funnels show where people drop off.', emoji: '🤖', group: 'creator', path: '/shop/automations', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
@@ -3166,6 +3404,162 @@ export interface Tool {
   verified: boolean;
   suggestedByName: string;
   createdAt: string;
+  /** A paid or staff-given spot at the top, until this time. */
+  featuredUntil: string | null;
+  /** Taps on the partner link so far. */
+  clicks: number;
+}
+
+
+// ---------------------------------------------------------------------------
+// Store: new gear through partner links, pre-owned gear from other creators, kits by budget, featured spots
+// ---------------------------------------------------------------------------
+
+export const STORE_CATEGORIES = ['Camera', 'Audio', 'Lighting', 'Computer', 'Phone', 'Software', 'Desk', 'Other'] as const;
+export type StoreCategory = (typeof STORE_CATEGORIES)[number];
+export const STORE_STAGES = ['starting', 'growing', 'pro', 'any'] as const;
+export type StoreStage = (typeof STORE_STAGES)[number];
+export const STORE_STAGE_META: Record<StoreStage, { name: string; blurb: string }> = {
+  starting: { name: 'Starting out', blurb: 'First videos, one mic, a phone that already works.' },
+  growing: { name: 'Growing', blurb: 'Posting every week and ready for a real camera and light.' },
+  pro: { name: 'Full time', blurb: 'This pays the rent, so the gear has to.' },
+  any: { name: 'Any stage', blurb: 'Good at every step.' },
+};
+export const PREOWNED_CONDITIONS = ['new', 'lightly_used', 'regularly_used', 'well_used'] as const;
+export type PreownedCondition = (typeof PREOWNED_CONDITIONS)[number];
+export const PREOWNED_CONDITION_META: Record<PreownedCondition, { name: string; blurb: string }> = {
+  new: { name: 'Brand new', blurb: 'Sealed, or never used.' },
+  lightly_used: { name: 'Lightly used', blurb: 'Looks new, works like new.' },
+  regularly_used: { name: 'Regularly used', blurb: 'Marks of use, fully working.' },
+  well_used: { name: 'Well used', blurb: 'Worn, still working. Say what is wrong.' },
+};
+export const LISTING_STATUSES = ['live', 'agreed', 'sold', 'withdrawn'] as const;
+export type ListingStatus = (typeof LISTING_STATUSES)[number];
+export const OFFER_STATUSES = ['open', 'accepted', 'declined', 'withdrawn'] as const;
+export type OfferStatus = (typeof OFFER_STATUSES)[number];
+/** A featured spot: a week at the top, paid in points by a seller, free when staff give it. */
+export const FEATURE_FEE_POINTS = 200;
+export const FEATURE_DAYS = 7;
+export const MAX_LISTING_IMAGES = 6;
+export const MAX_KIT_ITEMS = 12;
+export const MAX_OPEN_LISTINGS = 20;
+export const isFeatured = (until: string | null | undefined, now = new Date().toISOString()): boolean => Boolean(until && until > now);
+/** Picture links: https only, a handful at most. */
+export function parseImageUrls(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((x): x is string => typeof x === 'string')
+    .map((x) => x.trim().slice(0, 500))
+    .filter((x) => /^https:\/\//.test(x))
+    .slice(0, MAX_LISTING_IMAGES);
+}
+
+/** The direct store: a new product that staff added, bought through a partner link. */
+export interface StoreItem {
+  id: string;
+  title: string;
+  category: string;
+  description: string;
+  priceCents: number;
+  currency: string;
+  /** The partner link. The app sends people through /out so the tap is counted. */
+  url: string;
+  imageUrl: string;
+  stage: StoreStage;
+  featuredUntil: string | null;
+  status: 'live' | 'hidden';
+  clicks: number;
+  createdAt: string;
+}
+export interface StoreKitItem {
+  type: 'item' | 'listing';
+  id: string;
+  title: string;
+  priceCents: number;
+  /** For a pre-owned piece: whether it is still for sale. */
+  status: string | null;
+}
+/** A kit: what to buy at a stage, within a budget. Items are store products and pre-owned pieces. */
+export interface StoreKit {
+  id: string;
+  title: string;
+  description: string;
+  stage: StoreStage;
+  budgetCents: number;
+  currency: string;
+  items: StoreKitItem[];
+  totalCents: number;
+  featuredUntil: string | null;
+  status: 'live' | 'hidden';
+  createdAt: string;
+}
+export interface PreownedListing {
+  id: string;
+  sellerId: string;
+  sellerName: string;
+  sellerHandle: string | null;
+  title: string;
+  category: string;
+  description: string;
+  condition: PreownedCondition;
+  priceCents: number;
+  originalCents: number | null;
+  currency: string;
+  purchaseYear: number | null;
+  /** What comes with it: box, charger, cables. */
+  includes: string;
+  images: string[];
+  /** A whole setup sold together. */
+  isKit: boolean;
+  city: string;
+  status: ListingStatus;
+  soldCents: number | null;
+  /** Open offers so far. */
+  offers: number;
+  featuredUntil: string | null;
+  createdAt: string;
+  mine: boolean;
+}
+export interface PreownedOffer {
+  id: string;
+  listingId: string;
+  listingTitle: string;
+  buyerId: string;
+  buyerName: string;
+  cents: number;
+  note: string;
+  status: OfferStatus;
+  createdAt: string;
+  decidedAt: string | null;
+}
+export interface PreownedMessage {
+  id: string;
+  listingId: string;
+  buyerId: string;
+  senderName: string;
+  mine: boolean;
+  body: string;
+  createdAt: string;
+}
+export type MarketCard = { type: 'item'; item: StoreItem } | { type: 'kit'; kit: StoreKit } | { type: 'listing'; listing: PreownedListing };
+export interface MarketResponse {
+  featured: MarketCard[];
+  kits: StoreKit[];
+  items: StoreItem[];
+  listings: PreownedListing[];
+  mine: { listings: PreownedListing[]; offers: PreownedOffer[] };
+  admin: boolean;
+  feature: { feePoints: number; days: number; points: number };
+}
+export interface ListingDetail {
+  listing: PreownedListing;
+  /** The seller sees every offer; a buyer sees their own. */
+  offers: PreownedOffer[];
+  myOffer: PreownedOffer | null;
+  /** The buyer's own thread with the seller. */
+  messages: PreownedMessage[];
+  /** For the seller: one thread per buyer who wrote. */
+  threads: { buyerId: string; buyerName: string; count: number; last: string }[];
 }
 
 export const TOOL_CATEGORIES = ['Capture', 'Editing', 'Audio', 'Design', 'Scheduling', 'Analytics', 'Monetization', 'Community', 'AI'] as const;

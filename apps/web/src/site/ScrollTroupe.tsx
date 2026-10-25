@@ -3,6 +3,8 @@ import { motion, useMotionTemplate, useReducedMotion, useScroll, useTransform } 
 import { Avatar } from '../components/Avatar';
 
 const STEP = 46;
+// Seven characters at STEP apart, the lead a third bigger: the row must never start further right than this.
+const ROW = 340;
 
 /**
  * The seven characters walk along the bottom of the page as you scroll.
@@ -12,9 +14,10 @@ const STEP = 46;
 export function ScrollTroupe({ active }: { active: RelationshipKey | null }) {
   const reduce = useReducedMotion();
   const { scrollYProgress } = useScroll();
-  // Left edge of the troupe: from near the left to past the middle over the whole page.
+  // Left edge of the troupe: from near the left to past the middle over the whole page,
+  // but never so far right that the last character leaves a phone screen.
   const lead = useTransform(scrollYProgress, [0, 1], [12, 68]);
-  const left = useMotionTemplate`${lead}%`;
+  const left = useMotionTemplate`clamp(0px, ${lead}%, calc(100% - ${ROW}px))`;
   const bob = useTransform(scrollYProgress, (v) => Math.sin(v * 48) * 4);
 
   // The lead goes first; the rest keep their tower order behind it.
@@ -28,7 +31,7 @@ export function ScrollTroupe({ active }: { active: RelationshipKey | null }) {
           const isLead = active === r.key;
           if (reduce) {
             return (
-              <div key={r.key} className="absolute bottom-sm" style={{ left: `calc(12% + ${RELATIONSHIPS.indexOf(r) * STEP}px)` }}>
+              <div key={r.key} className="absolute bottom-sm" style={{ left: `calc(max(0px, min(12%, 100% - ${ROW}px)) + ${RELATIONSHIPS.indexOf(r) * STEP}px)` }}>
                 <Avatar relationship={r.key} size={isLead ? 56 : 40} decorative still mood={isLead ? 'excited' : 'happy'} />
               </div>
             );

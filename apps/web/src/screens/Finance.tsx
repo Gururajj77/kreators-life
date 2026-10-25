@@ -2,6 +2,7 @@ import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, money, type FinanceDue, type Fin
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
+import { PeriodPanel } from '../components/PeriodPanel';
 import { Button } from '../components/Button';
 import { Donut, Legend, MultiLine } from '../components/Charts';
 import { BackLink } from '../components/PageHeader';
@@ -77,6 +78,7 @@ export function Finance() {
 
       {d && (
         <>
+          <PeriodPanel id="finance-period" parts={['finance', 'shop']} />
           <section className="mt-lg" aria-labelledby="month-heading">
             <div className="flex items-center justify-between gap-xs">
               <button type="button" onClick={() => setMonth(shiftMonth(month, -1))} aria-label="Previous month" className="toy toy-soft flex size-[44px] items-center justify-center rounded-pill bg-card text-[18px] font-extrabold">

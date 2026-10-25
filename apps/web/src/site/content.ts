@@ -13,7 +13,7 @@ export interface FeatureCopy {
 export const FEATURES: Record<string, FeatureCopy> = {
   today: {
     tagline: 'Three boxes a day.',
-    pitch: 'Check in, do one small act, tick one task. That is the whole daily ask. Every tick pays xp, and the check-in pays points you can spend.',
+    pitch: 'Check in, do one small act, tick one task. That is the whole daily ask. Every tick pays xp, and the check-in pays points you can spend. Under the tasks, a not-to-do list keeps a streak for each thing you are staying away from.',
     steps: ['Open the app and check in.', 'Do the small act for your weakest area.', 'Tick one task. Watch the pyramid light up.'],
     relationships: ['servant_leader', 'friendship', 'parent_child', 'lover_partner', 'self', 'guru', 'divine'],
   },
@@ -105,6 +105,12 @@ export const FEATURES: Record<string, FeatureCopy> = {
     steps: ['Write a few lines.', 'Tag how you felt.', 'Look back a month later.'],
     relationships: ['self', 'divine', 'lover_partner'],
   },
+  reviews: {
+    tagline: 'Look back, by week, month, quarter or half year.',
+    pitch: 'The numbers from every app for the period you pick, next to the one before: check-ins, tasks, xp by area, kept days, mood, sleep, money, sales, lessons, people. Then a few questions, a face for how it went, and one line to remember. Saved with the numbers as they were.',
+    steps: ['Pick a week, a month, a quarter or half a year.', 'Read the numbers, each next to the period before.', 'Answer the questions, rate it, keep one line.'],
+    relationships: ['self', 'guru'],
+  },
   companion: {
     tagline: 'A chat that knows how you are doing.',
     pitch: 'Ask it anything about your week. It reflects and asks questions back. It is not a therapist and never pretends to be one.',
@@ -122,6 +128,12 @@ export const FEATURES: Record<string, FeatureCopy> = {
     pitch: 'Downloads, courses with drip and quizzes, memberships, sessions with booking, events with replays, payment links, bundles, locked posts and paid questions. Coupons, affiliates and refunds included.',
     steps: ['Make a product in a minute.', 'Share the link.', 'Points move instantly; money follows when payments are connected.'],
     relationships: ['servant_leader', 'self'],
+  },
+  store: {
+    tagline: 'Gear for creators, new and pre-owned.',
+    pitch: 'New gear and software picked by the team, bought through partner links. Pre-owned gear from other creators, graded by condition, with offers and a chat built in. Kits that say what to buy at your stage, within your budget. Featured spots at the top for a week.',
+    steps: ['Pick a category, a stage and a budget.', 'Tap Get it on new gear, or make an offer on pre-owned gear.', 'List your own gear when you move up.'],
+    relationships: ['self', 'servant_leader'],
   },
   audience: {
     tagline: 'Followers, leads, broadcasts.',
