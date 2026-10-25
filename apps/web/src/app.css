@@ -12,6 +12,8 @@
   /* Palette from the freud UI Kit v1.5 (design/figma-tokens.json). The
      values live on :root below so dark mode can swap them. */
   --color-ink: var(--ink);
+  /* The arrow every select draws for itself; it follows the ink colour below. */
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234f3422' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   --color-ink-soft: var(--ink-soft);
   --color-ink-mute: var(--ink-mute);
   --color-ink-fixed: #4f3422; /* always brown, for text on colored fills */
@@ -89,6 +91,7 @@
   :root:not([data-theme='light']) {
     color-scheme: dark;
     --ink: #f7f4f2;
+    --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f7f4f2' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
     --ink-soft: #c9c7c5; /* Optimistic Gray 30 */
     --ink-mute: #c0a091; /* Mindful Brown 40 */
     --on-ink: #251404;
@@ -123,6 +126,7 @@
   }
 }
 :root[data-theme='dark'] {
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f7f4f2' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   color-scheme: dark;
   --ink: #f7f4f2;
   --ink-soft: #c9c7c5;
@@ -159,6 +163,19 @@
 }
 
 @layer base {
+  /* Every select draws its own chevron, 12px in from the edge, with 32px kept clear so the text never runs under it. */
+  select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: var(--chevron);
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 14px 14px;
+    padding-right: 32px;
+  }
+  select:disabled {
+    opacity: 0.5;
+  }
   html {
     font-family: var(--font-body);
     color: var(--color-ink);
@@ -394,3 +411,104 @@ summary {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* Dark mode wears each app's colour: the paper, cards and lines take a deep shade of that hue, not plain brown. */
+:root[data-theme='dark'][data-accent='servant_leader'] {
+  --paper: color-mix(in oklab, var(--soft-servant_leader) 55%, #1a0f06);
+  --card: color-mix(in oklab, var(--soft-servant_leader) 70%, #2a1a0d);
+  --line: color-mix(in oklab, var(--deep-servant_leader) 22%, var(--card));
+  --tint-brown: var(--card);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light'])[data-accent='servant_leader'] {
+    --paper: color-mix(in oklab, var(--soft-servant_leader) 55%, #1a0f06);
+    --card: color-mix(in oklab, var(--soft-servant_leader) 70%, #2a1a0d);
+    --line: color-mix(in oklab, var(--deep-servant_leader) 22%, var(--card));
+    --tint-brown: var(--card);
+  }
+}
+:root[data-theme='dark'][data-accent='friendship'] {
+  --paper: color-mix(in oklab, var(--soft-friendship) 55%, #1a0f06);
+  --card: color-mix(in oklab, var(--soft-friendship) 70%, #2a1a0d);
+  --line: color-mix(in oklab, var(--deep-friendship) 22%, var(--card));
+  --tint-brown: var(--card);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light'])[data-accent='friendship'] {
+    --paper: color-mix(in oklab, var(--soft-friendship) 55%, #1a0f06);
+    --card: color-mix(in oklab, var(--soft-friendship) 70%, #2a1a0d);
+    --line: color-mix(in oklab, var(--deep-friendship) 22%, var(--card));
+    --tint-brown: var(--card);
+  }
+}
+:root[data-theme='dark'][data-accent='parent_child'] {
+  --paper: color-mix(in oklab, var(--soft-parent_child) 55%, #1a0f06);
+  --card: color-mix(in oklab, var(--soft-parent_child) 70%, #2a1a0d);
+  --line: color-mix(in oklab, var(--deep-parent_child) 22%, var(--card));
+  --tint-brown: var(--card);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light'])[data-accent='parent_child'] {
+    --paper: color-mix(in oklab, var(--soft-parent_child) 55%, #1a0f06);
+    --card: color-mix(in oklab, var(--soft-parent_child) 70%, #2a1a0d);
+    --line: color-mix(in oklab, var(--deep-parent_child) 22%, var(--card));
+    --tint-brown: var(--card);
+  }
+}
+:root[data-theme='dark'][data-accent='lover_partner'] {
+  --paper: color-mix(in oklab, var(--soft-lover_partner) 55%, #1a0f06);
+  --card: color-mix(in oklab, var(--soft-lover_partner) 70%, #2a1a0d);
+  --line: color-mix(in oklab, var(--deep-lover_partner) 22%, var(--card));
+  --tint-brown: var(--card);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light'])[data-accent='lover_partner'] {
+    --paper: color-mix(in oklab, var(--soft-lover_partner) 55%, #1a0f06);
+    --card: color-mix(in oklab, var(--soft-lover_partner) 70%, #2a1a0d);
+    --line: color-mix(in oklab, var(--deep-lover_partner) 22%, var(--card));
+    --tint-brown: var(--card);
+  }
+}
+:root[data-theme='dark'][data-accent='self'] {
+  --paper: color-mix(in oklab, var(--soft-self) 55%, #1a0f06);
+  --card: color-mix(in oklab, var(--soft-self) 70%, #2a1a0d);
+  --line: color-mix(in oklab, var(--deep-self) 22%, var(--card));
+  --tint-brown: var(--card);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light'])[data-accent='self'] {
+    --paper: color-mix(in oklab, var(--soft-self) 55%, #1a0f06);
+    --card: color-mix(in oklab, var(--soft-self) 70%, #2a1a0d);
+    --line: color-mix(in oklab, var(--deep-self) 22%, var(--card));
+    --tint-brown: var(--card);
+  }
+}
+:root[data-theme='dark'][data-accent='guru'] {
+  --paper: color-mix(in oklab, var(--soft-guru) 55%, #1a0f06);
+  --card: color-mix(in oklab, var(--soft-guru) 70%, #2a1a0d);
+  --line: color-mix(in oklab, var(--deep-guru) 22%, var(--card));
+  --tint-brown: var(--card);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light'])[data-accent='guru'] {
+    --paper: color-mix(in oklab, var(--soft-guru) 55%, #1a0f06);
+    --card: color-mix(in oklab, var(--soft-guru) 70%, #2a1a0d);
+    --line: color-mix(in oklab, var(--deep-guru) 22%, var(--card));
+    --tint-brown: var(--card);
+  }
+}
+:root[data-theme='dark'][data-accent='divine'] {
+  --paper: color-mix(in oklab, var(--soft-divine) 55%, #1a0f06);
+  --card: color-mix(in oklab, var(--soft-divine) 70%, #2a1a0d);
+  --line: color-mix(in oklab, var(--deep-divine) 22%, var(--card));
+  --tint-brown: var(--card);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light'])[data-accent='divine'] {
+    --paper: color-mix(in oklab, var(--soft-divine) 55%, #1a0f06);
+    --card: color-mix(in oklab, var(--soft-divine) 70%, #2a1a0d);
+    --line: color-mix(in oklab, var(--deep-divine) 22%, var(--card));
+    --tint-brown: var(--card);
+  }
+}
+

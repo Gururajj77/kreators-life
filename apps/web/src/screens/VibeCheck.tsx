@@ -1,25 +1,32 @@
 import {
   firstQuestionId,
   FOCUS_OPTIONS,
+  isRelationshipKey,
   KIND_META,
+  ladderOptions,
   nextQuestionId,
-  nextRelationship,
   QUESTION_BY_ID,
   RELATIONSHIPS,
   RELATIONSHIP_BY_KEY,
   type Answers,
+  KINDS,
+  type LadderPicks,
+  type NodeKind,
   type OnboardingResponse,
   type Question,
   type RelationshipKey,
 } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useRef, useState } from 'react';
-import { INTERESTS } from '@kreators/shared';
-import { useNavigate } from 'react-router';
+import gsap from 'gsap';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { InterestPicker } from '../components/InterestPicker';
+import { useNavigate, useSearchParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { CheckRow } from '../components/CheckRow';
+import { OnboardingTroupe } from '../components/OnboardingTroupe';
+import { Pyramid } from '../components/Pyramid';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
@@ -30,16 +37,25 @@ const STEP_OF_ROLE = { gauge: 1, probe: 2, foundation: 3 } as const;
 
 type Stage =
   | { kind: 'intro' }
+  | { kind: 'floors' }
   | { kind: 'question'; id: string; history: string[] }
   | { kind: 'reveal'; result: OnboardingResponse }
+  | { kind: 'learn'; result: OnboardingResponse }
   | { kind: 'about'; result: OnboardingResponse }
   | { kind: 'ladders'; result: OnboardingResponse };
+
+/** The floors in tower order. */
+const ordered = (keys: RelationshipKey[]) => RELATIONSHIPS.filter((r) => keys.includes(r.key)).map((r) => r.key);
 
 export function VibeCheck() {
   const me = useMe();
   const nav = useNavigate();
   const refresh = useRefreshAll();
-  const [stage, setStage] = useState<Stage>({ kind: 'intro' });
+  const [params] = useSearchParams();
+  // One floor at a time, from the Tower: skip the intro and only ask that floor.
+  const single = isRelationshipKey(params.get('floor')) ? (params.get('floor') as RelationshipKey) : null;
+  const [floors, setFloors] = useState<RelationshipKey[]>(single ? [single] : []);
+  const [stage, setStage] = useState<Stage>(single ? { kind: 'question', id: firstQuestionId(single), history: [] } : { kind: 'intro' });
   const [name, setName] = useState('');
   const [focus, setFocus] = useState('');
   const [answers, setAnswers] = useState<Answers>({});
@@ -56,7 +72,7 @@ export function VibeCheck() {
     onSuccess: (result) => {
       refresh();
       advancing.current = false;
-      setStage({ kind: 'reveal', result });
+      setStage(single ? { kind: 'ladders', result } : { kind: 'reveal', result });
     },
     onError: () => {
       advancing.current = false;
@@ -71,7 +87,8 @@ export function VibeCheck() {
     setAnswers(next);
     window.setTimeout(() => {
       const nextId = nextQuestionId(q, value) ?? (() => {
-        const floor = nextRelationship(q.relationship);
+        // Only the floors the person chose are asked about.
+        const floor = floors[floors.indexOf(q.relationship) + 1];
         return floor ? firstQuestionId(floor) : null;
       })();
       if (nextId) {
@@ -92,14 +109,14 @@ export function VibeCheck() {
           <Avatar relationship="self" size={88} />
           <h1 className="mt-md text-[36px]">Quick vibe check</h1>
           <p className="mt-sm text-[16px] font-semibold text-ink-soft">
-            About twenty taps, no typing. Each character asks what it needs to, then asks you to pick the foundation that must never crack on its floor. The rest of your tower is derived from that.
+            A few taps, no typing. Each character asks three things, then asks you to pick one thing you will not let break. The rest is built from that.
           </p>
         </div>
         <form
           className="mt-lg flex flex-col gap-md"
           onSubmit={(e) => {
             e.preventDefault();
-            setStage({ kind: 'question', id: firstQuestionId(RELATIONSHIPS[0]!.key), history: [] });
+            setStage({ kind: 'floors' });
           }}
         >
           <label className="block">
@@ -138,6 +155,21 @@ export function VibeCheck() {
     );
   }
 
+  if (stage.kind === 'floors') {
+    return (
+      <PickFloors
+        chosen={floors}
+        onChange={setFloors}
+        onBack={() => setStage({ kind: 'intro' })}
+        onNext={() => {
+          const list = ordered(floors);
+          setFloors(list);
+          setStage({ kind: 'question', id: firstQuestionId(list[0]!), history: [] });
+        }}
+      />
+    );
+  }
+
   if (stage.kind === 'question') {
     const q = QUESTION_BY_ID[stage.id];
     if (!q) return null;
@@ -145,28 +177,75 @@ export function VibeCheck() {
     return (
       <QuestionStage
         q={q}
+        floors={floors}
         value={answers[q.id]}
         saving={onboard.isPending}
         error={onboard.isError ? 'Could not save your answers. Try the last one again.' : null}
         onAnswer={(v) => answer(q, v, stage.history)}
-        onBack={() => setStage(prev ? { kind: 'question', id: prev, history: stage.history.slice(0, -1) } : { kind: 'intro' })}
+        onBack={() => setStage(prev ? { kind: 'question', id: prev, history: stage.history.slice(0, -1) } : single ? { kind: 'question', id: stage.id, history: [] } : { kind: 'floors' })}
       />
     );
   }
 
   if (stage.kind === 'reveal') {
-    return <Reveal result={stage.result} onNext={() => setStage({ kind: 'about', result: stage.result })} />;
+    return <Reveal result={stage.result} onNext={() => setStage({ kind: 'learn', result: stage.result })} />;
+  }
+
+  if (stage.kind === 'learn') {
+    return <Learn result={stage.result} floors={floors} onNext={() => setStage({ kind: 'about', result: stage.result })} />;
   }
 
   if (stage.kind === 'about') {
     return <AboutYou onNext={() => setStage({ kind: 'ladders', result: stage.result })} />;
   }
 
-  return <Ladders result={stage.result} onDone={() => nav('/tower', { replace: true })} />;
+  return <Ladders result={stage.result} floors={floors} onDone={() => nav(single ? `/realm/${single}` : '/tower', { replace: true })} />;
+}
+
+/** Which floors to work on now. The rest can be answered later from the Tower. */
+function PickFloors({ chosen, onChange, onBack, onNext }: { chosen: RelationshipKey[]; onChange: (k: RelationshipKey[]) => void; onBack: () => void; onNext: () => void }) {
+  return (
+    <Screen tabs={false}>
+      <div className="pt-md">
+        <button type="button" onClick={onBack} className="rounded-pill px-sm py-xs text-[14px] font-bold text-ink-soft">
+          Back
+        </button>
+        <h1 className="mt-md text-[36px]">Which relationships need work right now?</h1>
+        <p className="mt-sm text-[16px] font-semibold text-ink-soft">Pick the areas you want to start with. Each one asks three questions. The others wait under Areas until you are ready for them.</p>
+      </div>
+      <ul className="mt-lg flex list-none flex-col gap-xs p-0 m-0 pb-2xl">
+        {RELATIONSHIPS.map((r) => {
+          const on = chosen.includes(r.key);
+          return (
+            <li key={r.key}>
+              <CheckRow
+                checked={on}
+                onToggle={() => onChange(on ? chosen.filter((k) => k !== r.key) : [...chosen, r.key])}
+                title={r.name}
+                subtitle={`${r.character} asks three questions.`}
+                color={r.color}
+                deep={`var(--deep-${r.key})`}
+                text={r.text}
+                aside={<Avatar relationship={r.key} size={44} mood={on ? 'excited' : 'sleepy'} decorative className="self-center" />}
+              />
+            </li>
+          );
+        })}
+      </ul>
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-card p-md">
+        <div className="mx-auto max-w-[480px]">
+          <Button size="lg" full disabled={chosen.length === 0} onClick={onNext}>
+            {chosen.length === 0 ? 'Pick at least one floor' : `Ask me about ${chosen.length} ${chosen.length === 1 ? 'floor' : 'floors'}`}
+          </Button>
+        </div>
+      </div>
+    </Screen>
+  );
 }
 
 function QuestionStage({
   q,
+  floors,
   value,
   saving,
   error,
@@ -174,6 +253,7 @@ function QuestionStage({
   onBack,
 }: {
   q: Question;
+  floors: RelationshipKey[];
   value: number | undefined;
   saving: boolean;
   error: string | null;
@@ -183,24 +263,26 @@ function QuestionStage({
   const reduce = useReducedMotion();
   const rel = RELATIONSHIP_BY_KEY[q.relationship];
   const step = STEP_OF_ROLE[q.role];
+  const at = floors.indexOf(q.relationship);
   const asks = q.role === 'foundation' ? `${rel.character} needs a foundation` : `${rel.character} asks`;
   return (
-    <div className="min-h-dvh" style={{ background: `var(--soft-${rel.key})` }}>
+    <div className="min-h-dvh pb-2xl" style={{ background: `var(--soft-${rel.key})` }}>
       <Screen tabs={false}>
         <div className="pt-md">
-          <div className="flex items-center justify-between gap-sm">
+          <div className="flex items-center justify-between gap-sm pr-xl">
             <button type="button" onClick={onBack} className="rounded-pill px-sm py-xs text-[14px] font-bold text-ink-soft">
               Back
             </button>
             <span className="text-[14px] font-bold text-ink-soft">
-              Floor {rel.floor} of {RELATIONSHIPS.length}, step {step} of {STEPS_PER_FLOOR}
+              Area {at + 1} of {floors.length}, step {step} of {STEPS_PER_FLOOR}
             </span>
           </div>
           <ol className="mt-sm flex list-none gap-xs p-0 m-0" aria-hidden="true">
-            {RELATIONSHIPS.map((r) => {
-              const fill = r.floor < rel.floor ? 1 : r.floor === rel.floor ? step / STEPS_PER_FLOOR : 0;
+            {floors.map((k, i) => {
+              const r = RELATIONSHIP_BY_KEY[k];
+              const fill = i < at ? 1 : i === at ? step / STEPS_PER_FLOOR : 0;
               return (
-                <li key={r.key} className="h-[8px] flex-1 overflow-hidden rounded-pill" style={{ background: 'rgba(79,52,34,0.12)' }}>
+                <li key={k} className="h-[8px] flex-1 overflow-hidden rounded-pill" style={{ background: 'color-mix(in oklab, var(--color-ink) 12%, transparent)' }}>
                   <span className="block h-full rounded-pill" style={{ width: `${fill * 100}%`, background: r.color }} />
                 </li>
               );
@@ -282,7 +364,7 @@ function QuestionStage({
             </div>
             {q.role === 'foundation' && (
               <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">
-                This becomes the pillar on {rel.character}&rsquo;s floor. The principle, value goal, outcome, project and first tasks are derived from it.
+                This becomes the base of {rel.character}&rsquo;s pyramid. The rule, the feeling, the proof, the project and the first tasks come from it.
               </p>
             )}
           </motion.div>
@@ -299,6 +381,7 @@ function QuestionStage({
           </p>
         )}
       </Screen>
+      <OnboardingTroupe floors={floors} current={q.relationship} step={step} steps={STEPS_PER_FLOOR} />
     </div>
   );
 }
@@ -306,17 +389,32 @@ function QuestionStage({
 function Reveal({ result, onNext }: { result: OnboardingResponse; onNext: () => void }) {
   const reduce = useReducedMotion();
   const floors = [...RELATIONSHIPS].sort((a, b) => b.floor - a.floor);
+  const asked = new Set(result.answered);
   return (
     <Screen tabs={false}>
       <div className="pt-xl">
         <h1 className="text-[36px]">Your rainbow</h1>
         <p className="mt-sm text-[16px] font-semibold text-ink-soft">
-          How your seven relationships look today. A short bar is not bad news. It is where the easy wins are.
+          How your relationships look today. A short bar is not bad news. It is where the easy wins are.
         </p>
       </div>
       <ol className="mt-lg flex list-none flex-col gap-sm p-0 m-0">
         {floors.map((r, i) => {
           const score = result.scores[r.key];
+          if (!asked.has(r.key)) {
+            return (
+              <li key={r.key} className="flex items-center gap-sm opacity-60">
+                <Avatar relationship={r.key} size={40} still decorative mood="sleepy" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex justify-between text-[14px] font-bold">
+                    <span>{r.name}</span>
+                    <span className="text-ink-soft">not asked yet</span>
+                  </div>
+                  <div className="mt-xs h-[16px] w-full rounded-pill border-2 border-dashed border-line" aria-hidden="true" />
+                </div>
+              </li>
+            );
+          }
           return (
             <li key={r.key} className="flex items-center gap-sm">
               <Avatar relationship={r.key} size={40} still decorative />
@@ -340,34 +438,35 @@ function Reveal({ result, onNext }: { result: OnboardingResponse; onNext: () => 
         })}
       </ol>
       <Button size="lg" full className="mt-lg" onClick={onNext}>
-        See the tower we derived
+        What this builds
       </Button>
     </Screen>
   );
 }
 
-function Ladders({ result, onDone }: { result: OnboardingResponse; onDone: () => void }) {
+function Ladders({ result, floors: asked, onDone }: { result: OnboardingResponse; floors: RelationshipKey[]; onDone: () => void }) {
   const refresh = useRefreshAll();
-  const weakestThree = [...RELATIONSHIPS].sort((a, b) => result.scores[a.key] - result.scores[b.key]).slice(0, 3).map((r) => r.key);
-  const [chosen, setChosen] = useState<RelationshipKey[]>(weakestThree);
+  const [chosen, setChosen] = useState<RelationshipKey[]>(asked);
+  const [picks, setPicks] = useState<LadderPicks>({});
   const [error, setError] = useState<string | null>(null);
-  const floors = [...RELATIONSHIPS].sort((a, b) => b.floor - a.floor);
+  const floors = [...RELATIONSHIPS].filter((r) => asked.includes(r.key)).sort((a, b) => b.floor - a.floor);
+  const pick = (key: RelationshipKey, field: 'valueGoal' | 'project', v: string) => setPicks((p) => ({ ...p, [key]: { ...p[key], [field]: v } }));
 
   const build = useMutation({
-    mutationFn: () => api.build(chosen, todayLocal()),
+    mutationFn: () => api.build(chosen, todayLocal(), picks),
     onSuccess: async () => {
       await refresh();
       onDone();
     },
-    onError: () => setError('Could not build the tower. Try again.'),
+    onError: () => setError('Could not set up your areas. Try again.'),
   });
 
   return (
     <Screen tabs={false}>
       <div className="pt-xl">
-        <h1 className="text-[36px]">Derived from your answers</h1>
+        <h1 className="text-[36px]">Built from your answers</h1>
         <p className="mt-sm text-[16px] font-semibold text-ink-soft">
-          Each floor took the foundation you picked and worked out the rest: one principle, one value goal, one outcome, one project and three tasks sized to where you are. Your three lowest floors are ticked. Tick any other you want built.
+          Each area took the foundation you picked and worked out the rest. Before you tick an area, choose the feeling and the project you want it to start with, or write your own.
         </p>
       </div>
       <ol className="mt-lg flex list-none flex-col gap-md p-0 m-0">
@@ -376,10 +475,10 @@ function Ladders({ result, onDone }: { result: OnboardingResponse; onDone: () =>
           const on = chosen.includes(r.key);
           const rows: [string, string][] = [
             [KIND_META.principle.label, l.principle],
-            [KIND_META.value_goal.label, l.valueGoal],
             [KIND_META.outcome.label, l.outcome],
-            [KIND_META.project.label, l.project],
           ];
+          const opts = ladderOptions(r.key);
+          const mine = picks[r.key] ?? {};
           return (
             <li key={r.key} className="rounded-card p-md" style={{ background: `var(--soft-${r.key})` }}>
               <div className="flex items-start gap-sm">
@@ -401,6 +500,8 @@ function Ladders({ result, onDone }: { result: OnboardingResponse; onDone: () =>
                   </div>
                 ))}
               </dl>
+              <Picker label={KIND_META.value_goal.label} options={opts.valueGoals} chosen={mine.valueGoal ?? l.valueGoal} color={r.color} deep={`var(--deep-${r.key})`} onPick={(v) => pick(r.key, 'valueGoal', v)} />
+              <Picker label={KIND_META.project.label} options={opts.projects} chosen={mine.project ?? l.project} color={r.color} deep={`var(--deep-${r.key})`} onPick={(v) => pick(r.key, 'project', v)} />
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0 text-[14px] font-semibold">
                 {l.tasks.map((t) => (
                   <li key={t} className="flex gap-xs">
@@ -413,8 +514,8 @@ function Ladders({ result, onDone }: { result: OnboardingResponse; onDone: () =>
                 <CheckRow
                   checked={on}
                   onToggle={() => setChosen((a) => (on ? a.filter((k) => k !== r.key) : [...a, r.key]))}
-                  title={`Build ${r.character}’s floor`}
-                  subtitle={on ? 'Ticked. It will be built.' : 'Tick to build it too.'}
+                  title={`Set up ${r.character}’s area`}
+                  subtitle={on ? 'Ticked. It will be set up.' : 'Tick to set it up too.'}
                   color={r.color}
                   deep={`var(--deep-${r.key})`}
                   text={r.text}
@@ -430,10 +531,10 @@ function Ladders({ result, onDone }: { result: OnboardingResponse; onDone: () =>
         </p>
       )}
       <Button size="lg" full className="mt-lg" onClick={() => build.mutate()} disabled={build.isPending || chosen.length === 0}>
-        {build.isPending ? 'Stacking the floors' : `Build ${chosen.length} ${chosen.length === 1 ? 'floor' : 'floors'}`}
+        {build.isPending ? 'Setting up' : `Set up ${chosen.length} ${chosen.length === 1 ? 'area' : 'areas'}`}
       </Button>
       <Button variant="ghost" full className="mt-xs" onClick={onDone} disabled={build.isPending}>
-        Start with an empty tower
+        Start with nothing set up
       </Button>
     </Screen>
   );
@@ -471,8 +572,8 @@ function AboutYou({ onNext }: { onNext: () => void }) {
     <Screen tabs={false}>
       <div className="pt-xl">
         <Avatar relationship="friendship" size={88} />
-        <h1 className="mt-md text-[36px]">What do you make?</h1>
-        <p className="mt-sm text-[16px] font-semibold text-ink-soft">Pick a few interests and your city. Circles seat you with people nearby whose interests fit yours: the writer with the editor, the one on camera with the one behind it.</p>
+        <h1 className="mt-md text-[36px]">What are you into?</h1>
+        <p className="mt-sm text-[16px] font-semibold text-ink-soft">Pick up to ten and add your city. Circles seat you with people nearby whose interests fit yours: the same ones, or pairs that gel, like the writer with the film maker.</p>
       </div>
       <form
         className="mt-lg flex flex-col gap-md"
@@ -481,19 +582,7 @@ function AboutYou({ onNext }: { onNext: () => void }) {
           save.mutate();
         }}
       >
-        <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[14px] font-bold">Interests, pick two or more</legend>
-          <div className="mt-xs flex flex-wrap gap-xs">
-            {INTERESTS.map((t) => {
-              const on = interests.includes(t);
-              return (
-                <button key={t} type="button" aria-pressed={on} onClick={() => setInterests(on ? interests.filter((x) => x !== t) : interests.length < 8 ? [...interests, t] : interests)} className={`rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
-                  {t}
-                </button>
-              );
-            })}
-          </div>
-        </fieldset>
+        <InterestPicker legend="Interests, pick two or more" value={interests} onChange={setInterests} />
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">City</span>
@@ -514,9 +603,162 @@ function AboutYou({ onNext }: { onNext: () => void }) {
           </p>
         )}
         <Button type="submit" size="lg" full disabled={save.isPending}>
-          {interests.length >= 2 && city.trim() ? 'Save and build my tower' : 'Skip for now'}
+          {interests.length >= 2 && city.trim() ? 'Save and set up my areas' : 'Skip for now'}
         </Button>
       </form>
+    </Screen>
+  );
+}
+
+
+/** A few options as chips, plus a line to write your own. The chosen one is filled in the floor's colour. */
+function Picker({ label, options, chosen, color, deep, onPick }: { label: string; options: string[]; chosen: string; color: string; deep: string; onPick: (v: string) => void }) {
+  const custom = !options.includes(chosen);
+  const [own, setOwn] = useState(custom ? chosen : '');
+  return (
+    <div className="mt-sm">
+      <p className="m-0 text-[14px] font-bold" style={{ color: deep }}>
+        {label}
+      </p>
+      <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label={label}>
+        {options.map((o) => (
+          <button key={o} type="button" aria-pressed={chosen === o} onClick={() => onPick(o)} className="toy toy-soft rounded-pill border-2 px-sm py-xs text-left text-[14px] font-bold" style={chosen === o ? { background: color, borderColor: color, color: 'var(--color-on-fill)' } : { background: 'var(--color-card)', borderColor: 'transparent' }}>
+            {o}
+          </button>
+        ))}
+      </div>
+      <input
+        value={own}
+        onChange={(e) => {
+          setOwn(e.target.value);
+          if (e.target.value.trim()) onPick(e.target.value.trim());
+          else onPick(options[0] ?? '');
+        }}
+        maxLength={120}
+        placeholder="Or write your own"
+        aria-label={`Your own ${label.toLowerCase()}`}
+        className="mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-xs text-[14px] font-semibold"
+      />
+    </div>
+  );
+}
+
+
+/**
+ * After the answers, before the build. The pyramid sits on top and can be tapped; one card at a time
+ * sits under it, so nothing lands on the reader all at once. Results first, then what each layer is,
+ * then the one rule it will not work without, then what to expect.
+ */
+function Learn({ result, floors, onNext }: { result: OnboardingResponse; floors: RelationshipKey[]; onNext: () => void }) {
+  const weakest = [...floors].sort((a, b) => result.scores[a] - result.scores[b])[0] ?? floors[0] ?? 'self';
+  const rel = RELATIONSHIP_BY_KEY[weakest];
+  const l = result.ladders[weakest];
+  const words: Partial<Record<NodeKind, string>> = { pillar: l.pillar, principle: l.principle, value_goal: l.valueGoal, outcome: l.outcome, project: l.project, task: l.tasks[0] ?? 'Your first task' };
+  const slides: { key: string; layer?: NodeKind; eyebrow: string; title: string; body: ReactNode }[] = [
+    ...KINDS.map((k) => ({
+      key: k,
+      layer: k,
+      eyebrow: `Layer ${KIND_META[k].rung} of 6`,
+      title: KIND_META[k].label,
+      body: (
+        <>
+          <p className="m-0 text-[16px] font-semibold text-ink-soft">{KIND_META[k].explain}</p>
+          <p className="mt-sm m-0 rounded-tile p-sm text-[16px] font-bold" style={{ background: `var(--soft-${rel.key})` }}>
+            Yours: {words[k]}
+          </p>
+        </>
+      ),
+    })),
+    {
+      key: 'not',
+      eyebrow: 'What this is',
+      title: 'Not a to-do list',
+      body: <p className="m-0 text-[16px] font-semibold text-ink-soft">Most apps start with tasks. Tasks fade in a week. It is not a to-do list and it is not a mood app. It is a pyramid for each area of your life, and every task has a base under it.</p>,
+    },
+    {
+      key: 'rule',
+      eyebrow: 'The one rule',
+      title: 'It will not work unless',
+      body: <p className="m-0 text-[16px] font-semibold text-ink-soft">You tick one task a day. Tick the tip, and the whole pyramid gets stronger. Miss a week, and nothing moves. That is the only rule.</p>,
+    },
+    {
+      key: 'expect',
+      eyebrow: 'What to expect',
+      title: 'Four places',
+      body: (
+        <ul className="m-0 flex list-none flex-col gap-xs p-0">
+          {[
+            ['☀️', 'Daily', 'Three boxes a day: check in, one small act, one task.'],
+            ['🏰', 'Areas', 'One pyramid per relationship. Tap an area to see it or change it.'],
+            ['🏠', 'Home', 'Your numbers first, then where to go next.'],
+            ['🧩', 'Apps', 'Switch on only what you need.'],
+          ].map(([emoji, name, line]) => (
+            <li key={name} className="flex items-center gap-sm">
+              <span className="flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-paper text-[18px]" aria-hidden="true">
+                {emoji}
+              </span>
+              <span className="min-w-0 text-[14px] font-semibold text-ink-soft">
+                <span className="font-bold text-ink">{name}. </span>
+                {line}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ),
+    },
+  ];
+  const [at, setAt] = useState(0);
+  const slide = slides[at]!;
+  const card = useRef<HTMLDivElement>(null);
+  const reduce = useReducedMotion();
+  useEffect(() => {
+    const el = card.current;
+    if (!el || reduce) return;
+    gsap.fromTo(el, { opacity: 0, x: 24 }, { opacity: 1, x: 0, duration: 0.3, ease: 'power2.out' });
+  }, [at, reduce]);
+  const last = at === slides.length - 1;
+
+  return (
+    <Screen tabs={false}>
+      <div className="pt-xl">
+        <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide" style={{ color: `var(--deep-${rel.key})` }}>
+          Result
+        </p>
+        <h1 className="mt-xs text-[36px]">{rel.name} needs you most.</h1>
+        <p className="mt-sm text-[16px] font-semibold text-ink-soft">You scored {result.scores[weakest]}% there. Tap a layer of the pyramid, or swipe through the cards.</p>
+      </div>
+
+      <section className="mt-lg rounded-card p-md" style={{ background: `var(--soft-${rel.key})` }} aria-label="Your first pyramid">
+        <Pyramid relationship={weakest} autoplay compact words={words} selected={slide.layer ?? null} onSelect={(k) => setAt(KINDS.indexOf(k))} />
+      </section>
+
+      <section className="mt-md" aria-live="polite">
+        <div ref={card} className="rounded-card bg-card p-md shadow-toy-soft">
+          <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{slide.eyebrow}</p>
+          <h2 className="mt-xs text-[24px]">{slide.title}</h2>
+          <div className="mt-sm">{slide.body}</div>
+        </div>
+        <div className="mt-sm flex items-center justify-between gap-sm">
+          <Button variant="outline" onClick={() => setAt((i) => Math.max(0, i - 1))} disabled={at === 0} aria-label="Previous card">
+            Back
+          </Button>
+          <ol className="m-0 flex list-none gap-xs p-0" aria-label={`Card ${at + 1} of ${slides.length}`}>
+            {slides.map((sl, i) => (
+              <li key={sl.key}>
+                <button type="button" onClick={() => setAt(i)} aria-label={`Card ${i + 1}, ${sl.title}`} aria-current={i === at ? 'step' : undefined} className="block size-[12px] rounded-pill" style={{ background: i === at ? rel.color : 'var(--color-line)' }} />
+              </li>
+            ))}
+          </ol>
+          {last ? (
+            <Button onClick={onNext}>Next</Button>
+          ) : (
+            <Button onClick={() => setAt((i) => Math.min(slides.length - 1, i + 1))} aria-label="Next card">
+              Next
+            </Button>
+          )}
+        </div>
+        {last && <p className="mt-sm m-0 text-center text-[14px] font-semibold text-ink-soft">Next: pick what each area starts with.</p>}
+      </section>
     </Screen>
   );
 }

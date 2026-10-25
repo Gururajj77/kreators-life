@@ -37,21 +37,25 @@ import { go, webhooks } from './routes/go';
 import { runScheduled } from './cron';
 import { kyc } from './routes/kyc';
 import { builder } from './routes/builder';
+import { secureHeaders } from 'hono/secure-headers';
 import { rateLimit } from './ops';
 import { finance, publicInvoices } from './routes/finance';
+import { internal } from './routes/internal';
 import { circles } from './routes/circles';
 import { life } from './routes/life';
 import { home } from './routes/home';
-import { demo } from './routes/demo';
 
 const app = new Hono<AppEnv>().basePath('/api');
 
 app.use('*', cors());
+app.use('*', secureHeaders());
 
 app.get('/health', (c) => c.json({ ok: true, at: new Date().toISOString() }));
 // Abuse limits on the doors that take no session.
 app.use('/auth/signin', rateLimit('signin', 10, 60));
-app.use('/auth/signup', rateLimit('signup', 5, 3600));
+app.use('/auth/signup', rateLimit('signup', 10, 3600));
+app.use('/auth/forgot', rateLimit('forgot', 10, 3600));
+app.use('/auth/reset', rateLimit('reset', 20, 3600));
 app.use('/auth/anon', rateLimit('anon', 60, 3600));
 app.use('/public/:handle/lead', rateLimit('lead', 5, 60));
 app.route('/auth', auth);
@@ -110,10 +114,10 @@ app.route('/tools', tools);
 app.route('/proposals', proposals);
 app.route('/support', support);
 app.route('/finance', finance);
+app.route('/internal', internal);
 app.route('/circles', circles);
 app.route('/life', life);
 app.route('/home', home);
-app.route('/demo', demo);
 app.route('/kyc', kyc);
 app.route('/studio', builder);
 

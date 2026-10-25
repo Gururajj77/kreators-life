@@ -3,8 +3,6 @@ export interface Env {
   ASSETS?: Fetcher;
   /** Secret. Admin endpoints are disabled when unset. */
   ADMIN_KEY?: string;
-  /** Local only. When set, a signed-in person can fill their own account with two weeks of demo data from You. */
-  DEMO_SEED?: string;
   /** Optional Workers AI binding for the companion. Without it the companion answers from your data alone. */
   AI?: Ai;
   /** Optional. With it, YouTube view counts are fetched automatically for content rewards. */
@@ -22,6 +20,8 @@ export interface Env {
   /** Optional Resend key for transactional email; the outbox keeps every message either way. */
   RESEND_API_KEY?: string;
   EMAIL_FROM?: string;
+  /** Extra founder addresses that become admins on sign-up or sign-in, comma separated. */
+  ADMIN_EMAILS?: string;
 }
 
 export interface UserRow {
@@ -58,6 +58,8 @@ export interface UserRow {
   timezone: string;
   avatar_url: string;
   socials_json: string;
+  public_json: string;
+  links_json: string;
   fee_bps: number;
   streak: number;
   best_streak: number;

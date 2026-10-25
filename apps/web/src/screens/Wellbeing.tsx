@@ -4,6 +4,7 @@ import { Donut, EmojiRow, Legend, Sparkline } from '../components/Charts';
 import { Hero } from '../components/Hero';
 import { MoodFace } from '../components/MoodFace';
 import { Ring } from '../components/Ring';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { useMe, useWellbeing } from '../lib/queries';
 
@@ -39,6 +40,7 @@ export function Wellbeing() {
   return (
     <Screen>
       <header className="pt-lg">
+        <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Wellbeing</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">One score from your mood, sleep, stress, mindful minutes and streak. Tap a row to log today.</p>
       </header>

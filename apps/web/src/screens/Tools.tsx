@@ -2,6 +2,7 @@ import { TOOL_CATEGORIES, type Tool } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button } from '../components/Button';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
@@ -73,6 +74,7 @@ export function Tools() {
   return (
     <Screen>
       <header className="pt-lg">
+        <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Tools</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Tools for making and selling, checked by the team. Suggest one you swear by.</p>
         <Button className="mt-md" onClick={() => setSuggesting(true)}>

@@ -53,7 +53,7 @@ export function Welcome() {
       }
       nav('/vibe-check');
     } catch {
-      setError("Couldn't reach the tower. Check your connection and try again.");
+      setError("Couldn't reach the server. Check your connection and try again.");
     } finally {
       setBusy(false);
     }
@@ -66,10 +66,10 @@ export function Welcome() {
         <h1 className="mt-lg text-[clamp(36px,11vw,48px)]">
           Seven relationships.
           <br />
-          One tower.
+          One you.
         </h1>
         <p className="mt-md text-[18px] font-semibold leading-snug text-ink-soft">
-          A daily game for the seven relationships that make a life. Answer a few quick questions, build your tower, then tick a few boxes every day.
+          A daily game for the seven relationships that make a life. Answer a few quick questions, set up your areas, then tick a few boxes every day.
         </p>
       </div>
       <div className="flex flex-col gap-sm pb-lg">

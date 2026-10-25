@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useParams } from 'react-router';
 import { Button } from '../components/Button';
 import { BackLink } from '../components/PageHeader';
+import { Markdown } from '../components/Markdown';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
@@ -102,10 +103,10 @@ export function Cohort() {
                   <div className="mt-sm">
                     {item.contentRef && (
                       <a href={item.contentRef} target="_blank" rel="noreferrer" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
-                        {item.contentType === 'video' ? 'Watch' : 'Open'}
+                        {item.contentType === 'video' ? 'Watch' : item.contentRef.startsWith('/resources/') ? 'Open the full skill file' : 'Open'}
                       </a>
                     )}
-                    {item.body ? <p className="mt-sm m-0 whitespace-pre-wrap rounded-tile bg-paper p-sm text-[14px] font-semibold">{item.body}</p> : !item.contentRef && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing written here yet.</p>}
+                    {item.body ? <Markdown text={item.body} className="mt-sm rounded-tile bg-paper p-sm" /> : !item.contentRef && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing written here yet.</p>}
                   </div>
                 )}
               </li>

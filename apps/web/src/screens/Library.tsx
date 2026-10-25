@@ -39,6 +39,7 @@ function Mine() {
   return (
     <Screen>
       <header className="pt-lg">
+        <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">My purchases</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Courses, downloads, memberships, tickets, sessions, bundles, posts and answers you own.</p>
       </header>

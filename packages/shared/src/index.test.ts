@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bountyPayout, dressCodeFor, feeBps, greetingFor, nextWeek, matchCircles, matchScore, money, nudgeFor, rolloutBucket, slotsFor, timeLabel, zonedToUtc } from './index';
+import { bountyPayout, COMPLEMENTS, dressCodeFor, feeBps, greetingFor, INTEREST_GROUPS, INTERESTS, ladderOptions, MAX_INTERESTS, MODULE_GROUPS, MODULES, moduleState, nextWeek, passwordProblem, matchCircles, matchScore, money, nudgeFor, rolloutBucket, slotsFor, timeLabel, zonedToUtc } from './index';
 
 describe('money', () => {
   it('fees use integer maths in basis points', () => {
@@ -70,20 +70,30 @@ describe('slots', () => {
 
 describe('matching', () => {
   it('scores complementary interests above plain overlap and nothing in common below zero', () => {
-    expect(matchScore(['On camera'], ['Behind camera'])).toBe(2);
-    expect(matchScore(['Food', 'Gaming'], ['Food'])).toBe(1);
+    expect(matchScore(['Photography'], ['Fashion'])).toBe(2);
+    expect(matchScore(['Coffee', 'Gaming'], ['Coffee'])).toBe(1);
     expect(matchScore(['Writing', 'Video'], ['Writing'])).toBe(3);
     expect(matchScore(['Fashion'], ['Gaming'])).toBe(-1);
   });
+  it('groups interests for everyone, with no repeats, every pair that gels listed, and ten on at once', () => {
+    expect(INTEREST_GROUPS.length).toBeGreaterThanOrEqual(8);
+    expect(new Set(INTERESTS).size).toBe(INTERESTS.length);
+    for (const [a, b] of COMPLEMENTS) {
+      expect(INTERESTS).toContain(a);
+      expect(INTERESTS).toContain(b);
+      expect(a).not.toBe(b);
+    }
+    expect(MAX_INTERESTS).toBe(10);
+  });
   it('seats people at tables of the asked size and never more than twenty km apart', () => {
     const near = (id: string, interests: string[], lat = 12.97, lng = 77.6, joinedAt = '2026-10-01') => ({ id, interests, area: '', lat, lng, joinedAt });
-    const r = matchCircles([near('a', ['On camera']), near('b', ['Behind camera']), near('c', ['Writing']), near('d', ['Video']), near('far', ['Editing'], 13.5, 78.5)], 4);
+    const r = matchCircles([near('a', ['Photography']), near('b', ['Fashion']), near('c', ['Writing']), near('d', ['Video']), near('far', ['Gaming'], 13.5, 78.5)], 4);
     expect(r.groups).toHaveLength(1);
     expect(r.groups[0]).toHaveLength(4);
     expect(r.unmatched).toEqual(['far']);
   });
   it('reports fewer than three people as unmatched rather than a table', () => {
-    const c = (id: string) => ({ id, interests: ['Music'], area: '', lat: null, lng: null, joinedAt: '2026-10-01' });
+    const c = (id: string) => ({ id, interests: ['Coffee'], area: '', lat: null, lng: null, joinedAt: '2026-10-01' });
     expect(matchCircles([c('a'), c('b')], 5)).toEqual({ groups: [], unmatched: ['a', 'b'] });
   });
 });
@@ -100,12 +110,12 @@ describe('home', () => {
   const base = { checkedIn: false, sparkDone: false, taskDone: false, tasksWaiting: 2, hasFloor: true, xpToday: 0, streak: 3, hour: 9 };
   it('leads with the result and points at the one next box', () => {
     expect(nudgeFor(base)).toMatchObject({ action: 'Check in', path: '/today' });
-    expect(nudgeFor({ ...base, checkedIn: true, xpToday: 10 })).toMatchObject({ lead: '+10 xp banked from the check-in.', action: 'Do the spark' });
+    expect(nudgeFor({ ...base, checkedIn: true, xpToday: 10 })).toMatchObject({ lead: '+10 xp banked from the check-in.', action: 'Do the small act' });
     expect(nudgeFor({ ...base, checkedIn: true, sparkDone: true, xpToday: 25 })).toMatchObject({ action: 'Tick a task', path: '/today' });
     expect(nudgeFor({ ...base, checkedIn: true, sparkDone: true, taskDone: true, xpToday: 45 }).lead).toBe('All three done. +45 xp today.');
   });
   it('says what it will not work without', () => {
-    expect(nudgeFor({ ...base, checkedIn: true, sparkDone: true, hasFloor: false, xpToday: 25 })).toMatchObject({ action: 'Build a floor', path: '/tower' });
+    expect(nudgeFor({ ...base, checkedIn: true, sparkDone: true, hasFloor: false, xpToday: 25 })).toMatchObject({ action: 'Set up an area', path: '/tower' });
     expect(nudgeFor({ ...base, checkedIn: true, sparkDone: true, tasksWaiting: 0, xpToday: 25 })).toMatchObject({ action: 'Add a task', path: '/tower' });
     expect(nudgeFor({ ...base, hour: 21 }).action).toBe('Check in before midnight');
   });
@@ -125,5 +135,39 @@ describe('circles', () => {
   });
   it('rolls a weekly circle to the same time one week on', () => {
     expect(nextWeek('2026-11-04T13:30:00.000Z')).toBe('2026-11-11T13:30:00.000Z');
+  });
+});
+
+describe('apps', () => {
+  it('starts with only the core apps on', () => {
+    const on = MODULES.filter((m) => m.defaultOn && !m.locked && m.minRole === 'user').map((m) => m.key).sort();
+    expect(on).toEqual(['help', 'journal', 'life', 'notifications', 'profile', 'school', 'shop', 'work', 'army'].sort());
+  });
+  it('does not list rank or rewards as apps', () => {
+    expect(MODULES.some((m) => m.key === 'leaderboard' || m.key === 'rewards')).toBe(false);
+  });
+  it('keeps internal tools behind a team role, and gives every group a name', () => {
+    const obs = MODULES.find((m) => m.key === 'observability')!;
+    expect(obs.group).toBe('internal');
+    expect(moduleState(obs, 'user', {}, {}).available).toBe(false);
+    expect(moduleState(obs, 'sub_admin', {}, {}).on).toBe(true);
+    expect(moduleState(obs, 'admin', {}, {}).on).toBe(true);
+    for (const m of MODULES) expect(MODULE_GROUPS[m.group]).toBeTruthy();
+  });
+  it('offers a few value goals and projects per floor', () => {
+    const o = ladderOptions('friendship');
+    expect(o.valueGoals.length).toBeGreaterThanOrEqual(3);
+    expect(o.projects).toContain('Real hangs');
+  });
+});
+
+describe('passwords', () => {
+  it('turns away short, common, repeated and email-based passwords, and takes a real one', () => {
+    expect(passwordProblem('short')).toMatch(/at least 8/);
+    expect(passwordProblem('x'.repeat(129))).toMatch(/under 128/);
+    expect(passwordProblem('Password123')).toMatch(/guess list/);
+    expect(passwordProblem('aaaaaaaaaa')).toMatch(/over and over/);
+    expect(passwordProblem('mira.sharma2026', 'mira.sharma@example.com')).toMatch(/your email/);
+    expect(passwordProblem('correct horse battery', 'mira@example.com')).toBeNull();
   });
 });

@@ -1,6 +1,7 @@
 import { ROLE_META, type Permission } from '@kreators/shared';
 import { useState } from 'react';
 import { Link } from 'react-router';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
@@ -27,6 +28,7 @@ export function Manage() {
   return (
     <Screen>
       <header className="pt-lg">
+        <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Manage</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
           You are {role === 'admin' ? 'an' : 'a'} {ROLE_META[role].name.toLowerCase()}. {ROLE_META[role].blurb}

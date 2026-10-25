@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
@@ -100,6 +101,7 @@ export function Help() {
   return (
     <Screen>
       <header className="pt-lg">
+        <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Help</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
           Answers to the usual questions, and a line to the team. If you are in danger, call your local emergency number. In India, Tele-MANAS is 14416.
@@ -128,7 +130,7 @@ export function Help() {
         <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">
           Switch parts of the app on or off under{' '}
           <Link to="/you#features" className="underline underline-offset-4">
-            You, Features
+            Profile, Features
           </Link>
           .
         </p>

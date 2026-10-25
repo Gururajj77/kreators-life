@@ -8,22 +8,25 @@ import { HeroBlobs } from '../components/Hero';
 import { MoodFace } from '../components/MoodFace';
 import { Person } from '../components/Person';
 import { Ring } from '../components/Ring';
+import { RoleBadge } from '../components/RoleBadge';
 import { Screen } from '../components/Screen';
+import { SearchBox } from '../components/SearchBox';
 import { Section, SeeAll } from '../components/Section';
 import { api } from '../lib/api';
 import { prettyDate, todayLocal } from '../lib/date';
 import { useModules } from '../lib/modules';
-import { useAuthed, useMe } from '../lib/queries';
+import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
+import { useMutation } from '@tanstack/react-query';
 
-const SHORTCUT_ORDER: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'manage'];
+const SHORTCUT_ORDER: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'manage', 'internal'];
 const weekday = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' });
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 const KIND_EMOJI: Record<string, string> = { article: '📄', exercise: '🧘', video: '🎥', audio: '🎧', link: '🔗' };
 const SOURCE_META = {
   checkin: { label: 'Check-ins', color: 'var(--color-r3)' },
-  spark: { label: 'Sparks', color: 'var(--color-r6)' },
+  spark: { label: 'Small acts', color: 'var(--color-r6)' },
   task: { label: 'Tasks', color: 'var(--color-r4)' },
-  ripple: { label: 'Ripples up the ladder', color: 'var(--color-r2)' },
+  ripple: { label: 'Pyramids getting stronger', color: 'var(--color-r2)' },
   other: { label: 'Other', color: 'var(--color-r5)' },
 } as const;
 /** On a solid colour fill everything is white; a translucent white is the track. */
@@ -44,15 +47,17 @@ export function Home() {
   const hour = new Date().getHours();
   const q = useAuthed(['home', date], () => api.home(date, hour));
   const { modules } = useModules();
+  const refreshAll = useRefreshAll();
   const d = q.data;
   const user = me.data?.user;
   const firstName = user?.displayName?.split(' ')[0] ?? '';
   const identity = me.data?.identity ?? null;
+  const myPage = user ? (user.handle ? `/u/${user.handle}` : `/people/${user.id}`) : '/profile';
   const moodToday = d ? (MOODS.find((m) => m.value === d.trackers.mood.today) ?? null) : null;
   const recentMoods = d ? d.trackers.mood.week.filter((m): m is number => m !== null).slice(-3) : [];
 
   return (
-    <Screen>
+    <Screen columns>
       <header className="relative -mx-md overflow-hidden rounded-b-card bg-ink px-md pt-lg pb-md text-on-ink md:mx-0 md:mt-md md:rounded-card">
         <HeroBlobs opacity={0.06} />
         <div className="relative flex items-center justify-between gap-sm">
@@ -60,17 +65,29 @@ export function Home() {
             <span aria-hidden="true">📅 </span>
             {prettyDate(date)}, {greetingFor(hour).toLowerCase()}
           </p>
-          <Link to="/inbox" aria-label={d && d.unread > 0 ? `Inbox, ${d.unread} unread` : 'Inbox'} className="toy relative mr-xl flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-white/15 text-on-ink md:mr-0">
+          <div className="mr-xl flex shrink-0 items-center gap-xs md:mr-0">
+            <Link to={myPage} className="toy inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-white/15 px-sm text-[14px] font-bold text-on-ink">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M4 21a8 8 0 0 1 16 0" />
+              </svg>
+              My page
+            </Link>
+          <Link to="/inbox" aria-label={d && d.unread > 0 ? `Inbox, ${d.unread} unread` : 'Inbox'} className="toy relative flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-white/15 text-on-ink">
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
               <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16Z" />
               <path d="M10 20a2 2 0 0 0 4 0" />
             </svg>
             {d && d.unread > 0 && <span className="absolute -top-[2px] -right-[2px] flex min-w-[18px] items-center justify-center rounded-pill bg-r2 px-xs text-[11px] font-extrabold leading-[18px] text-on-fill">{d.unread > 9 ? '9+' : d.unread}</span>}
           </Link>
+          </div>
         </div>
         <div className="relative mt-sm flex items-center gap-sm">
-          <Link to="/you" aria-label="You" className="flex size-[64px] shrink-0 items-center justify-center overflow-hidden rounded-pill bg-paper">
-            {identity ? <Person stage={identity.stage.stage} size={52} decorative /> : <Avatar relationship="self" size={44} decorative still />}
+          <Link to="/you" aria-label="Profile" className="relative shrink-0">
+            <span className="flex size-[64px] items-center justify-center overflow-hidden rounded-pill bg-paper">
+              {identity ? <Person stage={identity.stage.stage} size={52} decorative /> : <Avatar relationship="self" size={44} decorative still />}
+            </span>
+            {user && <RoleBadge role={user.role} className="absolute right-0 bottom-0" />}
           </Link>
           <div className="min-w-0">
             <h1 className="truncate text-[30px] text-on-ink">{firstName ? `Hi, ${firstName}!` : 'Hi there!'}</h1>
@@ -93,13 +110,9 @@ export function Home() {
             )}
           </div>
         </div>
-        <Link to="/search" className="toy toy-soft relative mt-md flex min-h-[48px] items-center justify-between gap-sm rounded-pill bg-paper px-md text-[16px] font-semibold text-ink-soft">
-          Search anything
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" className="text-ink">
-            <circle cx="11" cy="11" r="7" />
-            <path d="M20 20l-3.5-3.5" />
-          </svg>
-        </Link>
+        <div className="relative mt-md">
+          <SearchBox placeholder="Search anything" onDark />
+        </div>
       </header>
 
       {q.isPending && (
@@ -186,7 +199,7 @@ export function Home() {
             </div>
           </Section>
 
-          <Section id="home-today" title="Today" action={<SeeAll to="/today">Open</SeeAll>}>
+          <Section id="home-today" title="Daily" action={<SeeAll to="/today">Open</SeeAll>}>
             <div className="relative overflow-hidden rounded-card bg-r4 p-md text-on-fill">
               <HeroBlobs />
               <div className="relative">
@@ -197,7 +210,7 @@ export function Home() {
                     </Ring>
                     <p className="m-0">
                       <span className="block font-display text-[24px] font-extrabold leading-none">{d.today.doneCount === 3 ? 'All three done' : `${3 - d.today.doneCount} to go`}</span>
-                      <span className="mt-xs block text-[14px] font-bold opacity-90">Check in, spark, one task.</span>
+                      <span className="mt-xs block text-[14px] font-bold opacity-90">Check in, small act, one task.</span>
                     </p>
                   </div>
                   <span className="shrink-0" aria-hidden="true">
@@ -207,7 +220,7 @@ export function Home() {
                 <ul className="mt-sm flex list-none flex-wrap gap-xs p-0 m-0" aria-label="The three boxes">
                   {[
                     ['Check in', d.today.checkedIn],
-                    [`Spark from ${RELATIONSHIP_BY_KEY[d.today.sparkRelationship].character}`, d.today.sparkDone],
+                    [`${RELATIONSHIP_BY_KEY[d.today.sparkRelationship].character}'s small act`, d.today.sparkDone],
                     [d.today.taskDone ? 'A task' : d.today.tasksWaiting > 0 ? `${d.today.tasksWaiting} ${d.today.tasksWaiting === 1 ? 'task' : 'tasks'} waiting` : 'No task due', d.today.taskDone],
                   ].map(([text, done]) => (
                     <li key={String(text)} className={`inline-flex min-h-[32px] items-center gap-xs rounded-pill px-sm text-[12px] font-extrabold ${done ? 'bg-card text-ink' : 'bg-white/25 text-on-fill'}`}>
@@ -376,7 +389,7 @@ export function Home() {
             </div>
           </Section>
 
-          <Section id="home-companion" title="Companion" lede="A reflective chat that knows your tower. Not a therapist.">
+          <Section id="home-companion" title="Companion" lede="A chat that knows how you are doing. Not a therapist.">
             <div className="relative overflow-hidden rounded-card bg-ink p-md text-on-ink">
               <HeroBlobs opacity={0.06} />
               <div className="relative z-10 max-w-[60%]">
@@ -428,7 +441,7 @@ export function Home() {
             </Section>
           )}
 
-          <Section id="home-trend" title="Last 14 days" lede="Xp per day. A green dot under a day means a task was ticked." action={<SeeAll to="/today">Today</SeeAll>}>
+          <Section id="home-trend" title="Last 14 days" lede="Xp per day. A green dot under a day means a task was ticked." action={<SeeAll to="/today">Daily</SeeAll>}>
             <div className="rounded-card bg-card p-md shadow-toy-soft">
               <AreaLine values={d.days.map((x) => x.xp)} max={Math.max(60, ...d.days.map((x) => x.xp))} labels={d.days.map((x) => weekday(x.date))} color="var(--color-r4)" height={160} empty="No xp in the last two weeks" label={`Xp per day for the last fourteen days, ${d.xp.week} this week`} />
               <div className="mt-xs flex gap-xs" role="img" aria-label="Days with a task ticked">
@@ -438,7 +451,7 @@ export function Home() {
                   </span>
                 ))}
               </div>
-              {d.days.every((x) => x.xp === 0) && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Every box ticked on Today lands here.</p>}
+              {d.days.every((x) => x.xp === 0) && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Every box ticked on Daily lands here.</p>}
             </div>
           </Section>
 
@@ -483,17 +496,17 @@ export function Home() {
             </Section>
           )}
 
-          <Section id="home-tower" title="Tower" lede="Seven floors, one per relationship. The bar is progress through the floor's level." action={<SeeAll to="/tower">Open</SeeAll>}>
+          <Section id="home-tower" title="Your areas" lede="Seven areas of your life. The bar shows how far each one has come." action={<SeeAll to="/tower">Open</SeeAll>}>
             <Link to="/tower" className="toy toy-soft block rounded-card bg-card p-md text-ink">
               <HBars
-                label="Floor levels"
+                label="Area levels"
                 rows={[...d.floors].reverse().map((f) => {
                   const r = RELATIONSHIP_BY_KEY[f.relationship];
                   return {
                     key: f.relationship,
                     label: r.name,
                     value: f.built ? Math.max(0.04, f.pct) : 0,
-                    text: f.built ? `lvl ${f.level}` : 'not built',
+                    text: f.built ? `lvl ${f.level}` : 'not set up',
                     color: r.color,
                     lead: <Avatar relationship={f.relationship} size={28} decorative still mood={f.built ? 'happy' : 'sleepy'} />,
                   };
@@ -514,7 +527,7 @@ export function Home() {
           )}
 
           {d.shop && (
-            <Section id="home-shop" title="Shop this month" lede={`${d.shop.products} ${d.shop.products === 1 ? 'product' : 'products'} live or in draft.`} action={<SeeAll to="/shop">Open</SeeAll>}>
+            <Section id="home-shop" title="Shop this month" lede={`${d.shop.products} ${d.shop.products === 1 ? 'product' : 'products'} live or in draft.`} action={<SeeAll to="/shop">Open</SeeAll>} span>
               <div className="rounded-card bg-card p-md shadow-toy-soft">
                 <div className="grid grid-cols-3 gap-xs">
                   <KitTile tone="bg-paper" plain icon="🧾" value={String(d.shop.ordersMonth)} label="orders" />

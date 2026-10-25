@@ -50,6 +50,7 @@ leaderboard.get('/', async (c) => {
       tasksDone: r.tasks_done,
       projectsCleared: r.projects_cleared,
       relationshipsWithPillars: r.rels_with_pillars,
+      clubMember: false, // the board does not look up Club rows; the badge shows on the person's own page
       sparksDone: r.sparks_done,
     }).length;
     return {

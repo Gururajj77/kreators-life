@@ -121,8 +121,10 @@ export function Stress() {
         </h2>
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {logs.data?.logs.map((l) => (
-            <li key={l.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <p className="m-0 text-[16px] font-bold">{STRESS_LEVELS[Math.round(l.value) - 1]}</p>
+            <li key={l.id} className={`rounded-tile bg-card p-sm shadow-toy-soft`}>
+              <p className="m-0 text-[16px] font-bold">
+                {STRESS_LEVELS[Math.round(l.value) - 1]}
+              </p>
               <p className="m-0 text-[14px] font-semibold text-ink-soft">
                 {new Date(`${l.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
                 {Array.isArray(l.extra.stressors) && l.extra.stressors.length > 0 ? `. ${(l.extra.stressors as string[]).join(', ')}` : ''}

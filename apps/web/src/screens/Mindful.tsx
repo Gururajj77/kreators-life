@@ -140,7 +140,7 @@ export function Mindful() {
         {logs.data && logs.data.logs.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">No sessions yet. Even one minute counts.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {logs.data?.logs.map((l) => (
-            <li key={l.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+            <li key={l.id} className={`flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft`}>
               <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-r4 text-[18px]" aria-hidden="true">
                 🧘
               </span>

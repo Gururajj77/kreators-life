@@ -2,6 +2,7 @@ import { PROPOSAL_STAGES, type Proposal, type ProposalStage } from '@kreators/sh
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button } from '../components/Button';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
@@ -152,6 +153,7 @@ export function Proposals({ kind }: { kind: 'tv' | 'fund' }) {
   return (
     <Screen>
       <header className="pt-lg">
+        <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">{copy.title}</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{copy.blurb}</p>
         <Button className="mt-md" onClick={() => setWriting(true)}>

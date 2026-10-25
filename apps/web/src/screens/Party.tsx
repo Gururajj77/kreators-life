@@ -77,6 +77,7 @@ export function Party() {
   return (
     <Screen>
       <header className="pt-lg">
+        <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Party</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Meetups, workshops, camps and flagship days. RSVP, join a waitlist, check in at the door.</p>
         <Button className="mt-md" onClick={() => setHosting(true)}>

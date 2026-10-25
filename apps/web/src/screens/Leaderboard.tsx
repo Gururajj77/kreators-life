@@ -2,6 +2,7 @@ import { IDENTITY_STAGES, type LeaderboardEntry, type LeaderboardSort } from '@k
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { useLeaderboard } from '../lib/queries';
 
@@ -48,6 +49,7 @@ export function Leaderboard() {
   return (
     <Screen>
       <header className="pt-lg">
+        <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Leaderboard</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">The top twenty climbers. Badges count both the ones you earn and the ones you are awarded.</p>
       </header>
@@ -68,7 +70,7 @@ export function Leaderboard() {
 
       {q.isPending && (
         <p className="mt-md text-[14px] font-bold text-ink-soft" role="status">
-          Counting the floors
+          Counting the areas
         </p>
       )}
       {q.isError && (
@@ -94,7 +96,7 @@ export function Leaderboard() {
           {q.data.entries.length === 0 ? (
             <div className="mt-md rounded-card border-2 border-dashed border-line p-md text-center">
               <p className="m-0 font-bold">Nobody on the board yet.</p>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Build a floor on the Tower and tick a task. You will be first.</p>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Set up an area and tick a task. You will be first.</p>
             </div>
           ) : (
             <ol className="mt-md flex list-none flex-col gap-xs p-0 m-0">

@@ -1,5 +1,5 @@
 import { RELATIONSHIPS } from '@kreators/shared';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { createBrowserRouter, Navigate, Outlet, RouterProvider, useLocation } from 'react-router';
 import { Avatar } from './components/Avatar';
 import { Button } from './components/Button';
@@ -12,9 +12,9 @@ import { useSession } from './lib/store';
 import { Admin } from './screens/Admin';
 import { Apps } from './screens/Apps';
 import { Army, Campaign } from './screens/Army';
-import { Auth } from './screens/Auth';
+import { Auth, Forgot, ResetPassword } from './screens/Auth';
 import { Automations } from './screens/Automations';
-import { Bond } from './screens/Bond';
+import { Bond, BondChatScreen } from './screens/Bond';
 import { CircleGroup, Circles } from './screens/Circles';
 import { Club } from './screens/Club';
 import { Cohort } from './screens/Cohort';
@@ -35,6 +35,7 @@ import { Life } from './screens/Life';
 import { Manage } from './screens/Manage';
 import { Mindful } from './screens/Mindful';
 import { Mood } from './screens/Mood';
+import { Observability } from './screens/Observability';
 import { Opportunity, Work } from './screens/Work';
 import { ProductPage } from './screens/ProductPage';
 import { Profile } from './screens/Profile';
@@ -74,7 +75,7 @@ function Loading() {
           <Avatar key={r.key} relationship={r.key} size={36} />
         ))}
       </div>
-      <p className="m-0 text-[14px] font-bold text-ink-soft">Stacking your tower</p>
+      <p className="m-0 text-[14px] font-bold text-ink-soft">Setting things up</p>
     </div>
   );
 }
@@ -102,7 +103,7 @@ function Shell() {
     return (
       <div className="mx-auto flex min-h-dvh max-w-[480px] flex-col items-center justify-center gap-md px-md text-center" role="alert">
         <Avatar relationship="self" size={72} mood="sleepy" />
-        <p className="m-0 text-[18px] font-extrabold">Could not reach the tower.</p>
+        <p className="m-0 text-[18px] font-extrabold">Could not reach the server.</p>
         <p className="m-0 text-[14px] font-semibold text-ink-soft">Check your connection, then try again.</p>
         <Button onClick={() => me.refetch()}>Try again</Button>
       </div>
@@ -119,6 +120,22 @@ function Shell() {
 
 const gated = (key: string, el: ReactNode) => <Gate moduleKey={key}>{el}</Gate>;
 
+/** Every new page starts at the top. A link with a hash still lands on its element. */
+function Root() {
+  const { pathname, hash } = useLocation();
+  useEffect(() => {
+    if (hash) {
+      const el = document.getElementById(hash.slice(1));
+      if (el) {
+        el.scrollIntoView({ block: 'start' });
+        return;
+      }
+    }
+    window.scrollTo({ top: 0, left: 0 });
+  }, [pathname, hash]);
+  return <Outlet />;
+}
+
 /** Pages outside the app shell and the public site still get the theme switch. */
 function Standalone() {
   return (
@@ -130,6 +147,9 @@ function Standalone() {
 }
 
 const router = createBrowserRouter([
+  {
+    element: <Root />,
+    children: [
   // The public site: no account needed.
   { path: '/', element: <Home /> },
   { path: '/explore', element: <Explore /> },
@@ -146,8 +166,11 @@ const router = createBrowserRouter([
     children: [
       { path: '/start', element: <Welcome /> },
       { path: '/signin', element: <Auth mode="signin" /> },
+      { path: '/forgot', element: <Forgot /> },
+      { path: '/signin/reset', element: <ResetPassword /> },
       { path: '/signup', element: <Auth mode="signup" /> },
       { path: '/u/:handle', element: <Public /> },
+      { path: '/people/:id', element: <Public /> },
       { path: '/p/:id', element: <ProductPage /> },
       { path: '/admin', element: <Admin /> },
       {
@@ -170,8 +193,9 @@ const router = createBrowserRouter([
       { path: '/profile', element: gated('profile', <Profile />) },
       { path: '/help', element: gated('help', <Help />) },
       { path: '/inbox', element: gated('notifications', <Inbox />) },
-      { path: '/leaderboard', element: gated('leaderboard', <Leaderboard />) },
-      { path: '/rewards', element: gated('rewards', <Rewards />) },
+      // Rank and rewards are part of the game, not apps: always on.
+      { path: '/leaderboard', element: <Leaderboard /> },
+      { path: '/rewards', element: <Rewards /> },
       // learn and earn
       { path: '/school', element: gated('school', <School />) },
       { path: '/school/:id', element: gated('school', <Cohort />) },
@@ -187,6 +211,7 @@ const router = createBrowserRouter([
       { path: '/community', element: gated('community', <Community />) },
       { path: '/club', element: gated('club', <Club />) },
       { path: '/bond', element: gated('bond', <Bond />) },
+      { path: '/bond/chats/:id', element: gated('bond', <BondChatScreen />) },
       { path: '/circles', element: gated('circles', <Circles />) },
       { path: '/circles/:id', element: gated('circles', <CircleGroup />) },
       // wellbeing
@@ -218,6 +243,8 @@ const router = createBrowserRouter([
       { path: '/shop/customers', element: gated('shop', <Customers />) },
       { path: '/shop/dm', element: gated('shop', <DmInbox />) },
       { path: '/finance', element: gated('finance', <Finance />) },
+      // internal: tracking for the team, shown only to staff and admins
+      { path: '/internal/observability', element: gated('observability', <Observability />) },
       // team
       { path: '/manage', element: gated('manage', <Manage />) },
     ],
@@ -228,6 +255,8 @@ const router = createBrowserRouter([
   { path: '/studio', element: <Navigate to="/shop" replace /> },
   { path: '/studio/*', element: <OldPath from="/studio" to="/shop" /> },
   { path: '*', element: <Navigate to="/" replace /> },
+    ],
+  },
 ]);
 
 function OldPath({ from, to }: { from: string; to: string }) {

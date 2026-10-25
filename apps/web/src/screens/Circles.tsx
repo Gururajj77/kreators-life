@@ -1,7 +1,7 @@
 import { CIRCLE_STATUS_META, CIRCLE_STATUSES, dressCodeFor, INTERESTS, type CircleEvent, type CircleStatus } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { BackLink } from '../components/PageHeader';
@@ -49,7 +49,7 @@ export function Circles() {
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Circles</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Small anonymous groups near you, every week, seated by interests that fit together. Everyone has an alias. Red if you are single, white if you are committed. The chat opens a day before you meet; names only appear when someone chooses to reveal.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Small anonymous groups near you, every week, seated by interests that fit together. Everyone has an alias and keeps it. Red if you are single, white if you are committed. The chat opens a day before you meet.</p>
         {d && !ready && (
           <p className="mt-sm m-0 rounded-tile bg-r3 p-sm text-[14px] font-bold text-ink-fixed">
             To join a circle, pick at least two interests and your city under{' '}
@@ -82,7 +82,7 @@ export function Circles() {
             {d.groups.map((g) => (
               <li key={g.id}>
                 <Link to={`/circles/${g.id}`} className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm">
-                  <span className="flex shrink-0 -space-x-[10px]" aria-hidden="true">
+                  <span className="flex shrink-0 -space-x-[12px]" aria-hidden="true">
                     {g.members.slice(0, 4).map((m) => (
                       <Avatar key={m.alias} relationship={m.character} size={32} decorative still />
                     ))}
@@ -129,7 +129,7 @@ export function Circles() {
             'Two days before, tables are set: people nearby whose interests complement yours, under aliases.',
             'The chat opens a day before. Agree on the exact place and time together.',
             'Show up in the colour that says where you stand: red if you are single, white if you are committed. Rather not say? Wear what you like.',
-            'Meet. Afterwards, reveal who you are if you want to keep in touch, and ask for introductions under Bond.',
+            'Meet. Afterwards, open an anonymous chat with anyone from your table under Bond. Nobody is ever revealed.',
           ].map((t, i) => (
             <li key={t} className="flex gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
               <span className="flex size-[28px] shrink-0 items-center justify-center rounded-pill bg-ink text-[14px] font-extrabold text-on-ink" aria-hidden="true">
@@ -140,7 +140,7 @@ export function Circles() {
           ))}
         </ol>
         <p className="mt-sm m-0 text-[12px] font-semibold text-ink-mute">
-          Your interests: {me.data?.user.interests.length ? me.data.user.interests.join(', ') : 'none yet'}. Pairs that gel include {INTERESTS[0]} with {INTERESTS[1]}, Writing with Video, Music with Dance.
+          Your interests: {me.data?.user.interests.length ? me.data.user.interests.join(', ') : 'none yet'}. Pairs that gel include {INTERESTS[0]} with {INTERESTS[9]}, Writing with Video, Yoga with Meditation.
         </p>
       </section>
 
@@ -334,8 +334,8 @@ export function CircleGroup() {
       void q.refetch();
     },
   });
-  const reveal = useMutation({ mutationFn: () => api.circleReveal(id), onSuccess: () => q.refetch() });
-  const intro = useMutation({ mutationFn: (userId: string) => api.proposeIntro(userId, `We met at ${g?.eventTitle ?? 'a circle'}`) });
+  const nav = useNavigate();
+  const chat = useMutation({ mutationFn: (alias: string) => api.openChat({ groupId: id, alias }), onSuccess: (r) => nav(`/bond/chats/${r.chat.id}`) });
 
   // The chat refreshes itself while it is open.
   useEffect(() => {
@@ -391,7 +391,7 @@ export function CircleGroup() {
           <dt className="font-extrabold">Wear</dt>
           <dd className="m-0 font-semibold">{dressCodeFor(g.myStatus)}</dd>
           <dt className="font-extrabold">Say</dt>
-          <dd className="m-0 font-semibold">Ask for the table under your alias, {g.myAlias}. First names only until someone reveals.</dd>
+          <dd className="m-0 font-semibold">Ask for the table under your alias, {g.myAlias}. Aliases only, before and after.</dd>
         </dl>
       </section>
 
@@ -407,27 +407,21 @@ export function CircleGroup() {
                 <span className="block text-[16px] font-bold">
                   {m.alias}
                   {m.isMe ? ' (you)' : ''}
-                  {m.revealed && m.name ? <span className="font-semibold text-ink-soft"> is {m.name}</span> : ''}
                 </span>
                 <span className="block truncate text-[14px] font-semibold text-ink-soft">{m.interests.join(', ') || 'interests hidden'}</span>
               </span>
-              {m.revealed && m.handle && (
-                <Link to={`/u/${m.handle}`} className="shrink-0 text-[14px] font-bold underline-offset-4 hover:underline">
-                  Page
-                </Link>
-              )}
-              {m.revealed && !m.isMe && m.userId && (
-                <button type="button" onClick={() => intro.mutate(m.userId as string)} disabled={intro.isPending} className="toy toy-soft shrink-0 rounded-pill bg-paper px-sm text-[12px] font-extrabold leading-[32px]">
-                  Introduce
+              {!m.isMe && (
+                <button type="button" onClick={() => chat.mutate(m.alias)} disabled={chat.isPending} className="toy toy-soft shrink-0 rounded-pill bg-paper px-sm text-[12px] font-extrabold leading-[32px]">
+                  Chat
                 </button>
               )}
             </li>
           ))}
         </ul>
-        {intro.isSuccess && <p className="mt-xs m-0 text-[14px] font-bold text-ink-soft">Introduction asked for. If they accept you both hear under Bond.</p>}
-        {intro.isError && (
+        <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Chat opens an anonymous one-to-one under Bond. Both of you keep an alias there too.</p>
+        {chat.isError && (
           <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-            {intro.error instanceof Error ? intro.error.message : 'Could not ask.'}
+            {chat.error instanceof Error ? chat.error.message : 'Could not open a chat.'}
           </p>
         )}
       </section>
@@ -484,15 +478,7 @@ export function CircleGroup() {
                 {say.error instanceof Error ? say.error.message : 'Could not send.'}
               </p>
             )}
-            {me && !me.revealed && (
-              <div className="mt-md rounded-tile bg-card p-sm shadow-toy-soft">
-                <p className="m-0 text-[14px] font-bold">Ready to be yourself?</p>
-                <p className="m-0 text-[14px] font-semibold text-ink-soft">Revealing posts your name and page to this table only. It cannot be undone.</p>
-                <Button variant="outline" className="mt-xs" onClick={() => reveal.mutate()} disabled={reveal.isPending}>
-                  Reveal who I am
-                </Button>
-              </div>
-            )}
+            <p className="mt-md m-0 text-[12px] font-bold text-ink-soft">Everyone here stays {me ? `an alias, like ${me.alias}` : 'an alias'}. There is no reveal.</p>
           </>
         )}
       </section>

@@ -7,13 +7,14 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** For variant "color": the fill and the hard shadow under it. */
   color?: string;
   deep?: string;
-  size?: 'md' | 'lg';
+  /** sm is for a row of equal actions on a list row; md is the default; lg is the one big action on a screen. */
+  size?: 'sm' | 'md' | 'lg';
   full?: boolean;
 }
 
 export function Button({ variant = 'primary', color, deep, size = 'md', full = false, className = '', style, children, ...rest }: Props) {
   const base = 'inline-flex items-center justify-center gap-xs rounded-pill font-bold select-none disabled:opacity-50 disabled:pointer-events-none';
-  const sizing = size === 'lg' ? 'min-h-[56px] px-lg text-[18px]' : 'min-h-[48px] px-md text-[16px]';
+  const sizing = size === 'lg' ? 'min-h-[56px] px-lg text-[18px]' : size === 'sm' ? 'min-h-[40px] px-sm text-[14px]' : 'min-h-[48px] px-md text-[16px]';
   const look = {
     primary: 'toy bg-ink text-on-ink',
     outline: 'toy toy-ink bg-card text-ink border-2 border-ink',

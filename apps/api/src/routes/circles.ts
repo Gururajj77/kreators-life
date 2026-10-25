@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { ALIAS_WORDS, isCircleStatus, matchCircles, nextWeek, RELATIONSHIPS, type CircleEvent, type CircleGroup, type CircleMember, type CircleMessage, type CircleStatus, type MatchCandidate, type RelationshipKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { can, nameOf, newId, notify, nowIso, num, parseList, str } from '../db';
+import { can, newId, notify, nowIso, num, parseList, str } from '../db';
 
 /**
  * Circles: small anonymous groups near you. Staff open an event in a city; people sign up;
@@ -32,14 +32,15 @@ async function groupFor(db: D1Database, row: GroupRow, userId: string, withMessa
   const closes = new Date(row.starts_at).getTime() + 48 * HOUR;
   const now = Date.now();
   const chatOpen = now >= opens && now <= closes;
+  // Everyone stays under their alias for good. Names, handles and ids never leave the server.
   const list: CircleMember[] = members.results.map((m) => ({
     alias: m.alias,
     character: m.character,
     interests: parseList(m.interests).slice(0, 4),
-    revealed: m.revealed === 1,
-    name: m.revealed === 1 ? nameOf(m) : null,
-    handle: m.revealed === 1 ? m.handle : null,
-    userId: m.revealed === 1 ? m.user_id : null,
+    revealed: false,
+    name: null,
+    handle: null,
+    userId: null,
     isMe: m.user_id === userId,
   }));
   let messages: CircleMessage[] = [];
@@ -249,15 +250,10 @@ circles.post('/groups/:id/plan', async (c) => {
   return c.json({ ok: true });
 });
 
-// Revealing is one-way and only possible once the chat is open, so nobody is exposed before the table is real.
-circles.post('/groups/:id/reveal', async (c) => {
-  const db = c.env.DB;
-  const user = c.get('user');
-  const row = await myGroup(db, c.req.param('id'), user.id);
-  if (!row) return c.json({ error: 'not your table' }, 404);
-  if (Date.now() < new Date(row.chat_opens_at).getTime()) return c.json({ error: 'you can reveal once the chat opens' }, 403);
-  await db.prepare('UPDATE circle_members SET revealed = 1 WHERE group_id = ? AND user_id = ?').bind(row.id, user.id).run();
-  const alias = await db.prepare('SELECT alias FROM circle_members WHERE group_id = ? AND user_id = ?').bind(row.id, user.id).first<{ alias: string }>();
-  await db.prepare('INSERT INTO circle_messages (id, group_id, user_id, body, created_at) VALUES (?, ?, ?, ?, ?)').bind(newId(), row.id, user.id, `${alias?.alias ?? 'Someone'} is ${nameOf(user)}${user.handle ? ` (/u/${user.handle})` : ''}. Say hi properly.`, nowIso()).run();
-  return c.json({ ok: true });
-});
+/** Who sits behind an alias at one of this person's tables. Used by Bond to open an anonymous chat; the id stays on the server. */
+export async function memberBehindAlias(db: D1Database, groupId: string, viewerId: string, alias: string): Promise<string | null> {
+  const row = await myGroup(db, groupId, viewerId);
+  if (!row) return null;
+  const m = await db.prepare('SELECT user_id FROM circle_members WHERE group_id = ? AND alias = ?').bind(row.id, alias).first<{ user_id: string }>();
+  return m?.user_id ?? null;
+}

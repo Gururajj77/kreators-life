@@ -16,9 +16,13 @@ interface OverrideRow {
   expires_at: string | null;
 }
 
-/** Flag, then override, then rollout, then role, then the person's own toggle. */
-export async function resolveAccess(db: D1Database, user: UserRow): Promise<{ settings: Record<string, ModuleSetting>; access: Record<string, ModuleAccess>; orgIds: string[] }> {
-  const orgIds = await orgIdsOf(db, user.id);
+export interface AccessContext {
+  settings: Record<string, ModuleSetting>;
+  overrides: OverrideRow[];
+}
+
+/** The global flags and live overrides, read once. The same context scores one person or every account. */
+export async function loadAccessContext(db: D1Database): Promise<AccessContext> {
   const [rows, ovs] = await Promise.all([
     db.prepare('SELECT * FROM module_settings').all<SettingRow>(),
     db.prepare('SELECT flag_key, subject_type, subject_id, enabled, expires_at FROM flag_overrides WHERE expires_at IS NULL OR expires_at > ?').bind(new Date().toISOString()).all<OverrideRow>(),
@@ -28,6 +32,18 @@ export async function resolveAccess(db: D1Database, user: UserRow): Promise<{ se
     const minRole = (['user', 'sub_admin', 'admin'] as const).includes(r.min_role as Role) ? (r.min_role as Role) : 'user';
     settings[r.key] = { key: r.key, enabled: r.enabled === 1, minRole, rollout: r.rollout ?? 100 };
   }
+  return { settings, overrides: ovs.results };
+}
+
+/** Flag, then override, then rollout, then role, then the person's own toggle. */
+export async function resolveAccess(db: D1Database, user: UserRow): Promise<{ settings: Record<string, ModuleSetting>; access: Record<string, ModuleAccess>; orgIds: string[] }> {
+  const [orgIds, ctx] = await Promise.all([orgIdsOf(db, user.id), loadAccessContext(db)]);
+  return { settings: ctx.settings, access: accessFor(user, ctx, orgIds), orgIds };
+}
+
+/** Pure: which modules one person can see and has on, given the loaded context. */
+export function accessFor(user: Pick<UserRow, 'id' | 'role' | 'modules'>, ctx: AccessContext, orgIds: string[]): Record<string, ModuleAccess> {
+  const { settings, overrides: ovs } = ctx;
   const mine = parseModules(user.modules);
   const access: Record<string, ModuleAccess> = {};
   for (const m of MODULES) {
@@ -38,9 +54,9 @@ export async function resolveAccess(db: D1Database, user: UserRow): Promise<{ se
     const rollout = g?.rollout ?? 100;
     // The most specific override wins: person, then their organizations, then their role.
     const ov =
-      ovs.results.find((o) => o.flag_key === m.key && o.subject_type === 'user' && o.subject_id === user.id) ??
-      ovs.results.find((o) => o.flag_key === m.key && o.subject_type === 'organization' && orgIds.includes(o.subject_id)) ??
-      ovs.results.find((o) => o.flag_key === m.key && o.subject_type === 'role' && o.subject_id === user.role);
+      ovs.find((o) => o.flag_key === m.key && o.subject_type === 'user' && o.subject_id === user.id) ??
+      ovs.find((o) => o.flag_key === m.key && o.subject_type === 'organization' && orgIds.includes(o.subject_id)) ??
+      ovs.find((o) => o.flag_key === m.key && o.subject_type === 'role' && o.subject_id === user.role);
     if (ov) {
       enabled = ov.enabled === 1;
       if (!enabled) reason = 'override';
@@ -56,5 +72,5 @@ export async function resolveAccess(db: D1Database, user: UserRow): Promise<{ se
     const on = enabled && (m.locked ? true : (mine[m.key] ?? m.defaultOn));
     access[m.key] = { available: enabled, on, reason };
   }
-  return { settings, access, orgIds };
+  return access;
 }

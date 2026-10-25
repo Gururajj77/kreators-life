@@ -53,7 +53,7 @@ export function Policy({ kind }: { kind: Kind }) {
       {kind === 'privacy' && (
         <section>
           <H>What we keep</H>
-          <P>Your profile (name, page name, bio, skills, interests, city), your tower and daily logs, wellbeing and journal entries, orders, bookings, finance entries, messages in circles, and the events your device sends while you use the app.</P>
+          <P>Your profile (name, page name, bio, skills, interests, city), your areas and daily logs, wellbeing and journal entries, orders, bookings, finance entries, messages in circles, and the events your device sends while you use the app.</P>
           <H>Who sees what</H>
           <P>Your journal and wellbeing numbers are never shown to brands, staff, the leaderboard or Club selection. Your public page shows only what you put on it. Staff see what their permission covers. A circle sees your alias until you choose to reveal.</P>
           <H>Position</H>

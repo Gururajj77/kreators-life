@@ -2,6 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useInbox, useMe, useRefreshAll } from '../lib/queries';
@@ -21,6 +22,7 @@ export function Inbox() {
   return (
     <Screen>
       <header className="pt-lg">
+        <BackLink to="/apps">Apps</BackLink>
         <div className="flex items-center justify-between gap-sm">
           <h1 className="text-[30px]">Inbox</h1>
           {list.some((n) => !n.readAt) && (

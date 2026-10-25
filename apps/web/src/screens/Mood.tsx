@@ -41,7 +41,7 @@ export function Mood() {
   return (
     <>
       <div className="transition-colors" style={{ background: mood.color, color: mood.text }}>
-        <div className="safe-top mx-auto w-full max-w-[480px] px-md pb-lg pt-md">
+        <div className="safe-top mx-auto w-full max-w-[480px] px-md pb-lg pt-md md:ml-[240px] md:max-w-[1040px] md:px-lg lg:mx-auto lg:pl-[240px]">
           <BackLink to="/wellbeing" inherit>
             Wellbeing
           </BackLink>
@@ -173,7 +173,7 @@ export function Mood() {
             {logs.data?.logs.map((l) => {
               const m = MOODS.find((x) => x.value === Math.round(l.value)) ?? MOODS[2]!;
               return (
-                <li key={l.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+                <li key={l.id} className={`flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft`}>
                   <MoodFace value={m.value} size={40} />
                   <span className="min-w-0 flex-1">
                     <span className="block text-[16px] font-bold">{m.name}</span>

@@ -1,0 +1,9 @@
+# Copy to apps/api/.dev.vars (gitignored). Every key is optional locally.
+# Admin console before the first admin account.
+ADMIN_KEY=dev-admin-key
+# Extra founder addresses that become admins on sign-up or sign-in (the three built in are in apps/api/src/admins.ts).
+ADMIN_EMAILS=
+# Mail (receipts, confirmations, invoices). Without a key, every mail lands in email_outbox (Admin can read it) and nothing is sent.
+# Resend: an API key with "Sending access", and a From on a domain you verified there.
+RESEND_API_KEY=
+EMAIL_FROM=Kreators Life <hello@yourdomain.com>

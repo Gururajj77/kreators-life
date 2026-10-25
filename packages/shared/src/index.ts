@@ -137,50 +137,64 @@ export interface KindMeta {
   plural: string;
   /** Shown as the placeholder when adding one. */
   prompt: string;
-  /** One-line explanation shown under the rung title. */
+  /** One-line explanation shown under the layer title. */
   hint: string;
+  /** The plain-words line the pyramid uses to teach this layer. */
+  explain: string;
+  /** One example, so the layer is never abstract. */
+  example: string;
 }
 
 export const KIND_META: Record<NodeKind, KindMeta> = {
   pillar: {
     kind: 'pillar',
     rung: 1,
-    label: 'Pillar',
-    plural: 'Pillars',
-    prompt: 'A foundation you refuse to let crack',
-    hint: 'The foundations. What must stay standing no matter what.',
+    label: 'Foundation',
+    plural: 'Foundations',
+    prompt: 'One thing you will not let break',
+    hint: 'The base. What must stay standing no matter what.',
+    explain: 'The base of the pyramid. One thing you will not let break, ever.',
+    example: 'Family gets the first call',
   },
   principle: {
     kind: 'principle',
     rung: 2,
-    label: 'Guiding principle',
-    plural: 'Guiding principles',
-    prompt: 'A rule you live by so the pillar holds',
-    hint: 'Rules you live by so the pillars stay strong.',
+    label: 'Rule',
+    plural: 'Rules',
+    prompt: 'A rule you live by so the base holds',
+    hint: 'A rule you live by so the base holds.',
+    explain: 'A rule you live by, so the base holds.',
+    example: 'Everything else can wait ten minutes',
   },
   value_goal: {
     kind: 'value_goal',
     rung: 3,
-    label: 'Value goal',
-    plural: 'Value goals',
-    prompt: 'A feeling you want more of',
-    hint: 'Emotional goals. No numbers needed, just how you want to feel.',
+    label: 'Feeling',
+    plural: 'Feelings',
+    prompt: 'How you want to feel more often',
+    hint: 'How you want to feel. No numbers, just the feeling.',
+    explain: 'How you want to feel more often. No numbers, just the feeling.',
+    example: 'Close to home',
   },
   outcome: {
     kind: 'outcome',
     rung: 4,
-    label: 'Goal outcome',
-    plural: 'Goal outcomes',
-    prompt: 'What the world looks like when the feeling is real',
-    hint: 'What becomes true when the value goal is met.',
+    label: 'Proof',
+    plural: 'Proofs',
+    prompt: 'What shows it is working',
+    hint: 'What you would see when the feeling is real.',
+    explain: 'What you would see when it is working. The proof.',
+    example: 'Family knows what my week was like',
   },
   project: {
     kind: 'project',
     rung: 5,
     label: 'Project',
     plural: 'Projects',
-    prompt: 'A bundle of work with a finish line',
-    hint: 'Grouped work that moves an outcome.',
+    prompt: 'A bunch of tasks with a finish line',
+    hint: 'A bunch of tasks with a finish line.',
+    explain: 'A bunch of tasks with a finish line.',
+    example: 'The ten-minute call',
   },
   task: {
     kind: 'task',
@@ -188,7 +202,9 @@ export const KIND_META: Record<NodeKind, KindMeta> = {
     label: 'Task',
     plural: 'Tasks',
     prompt: 'One thing you can tick off today',
-    hint: 'Small moves. Tick one and the whole ladder feels it.',
+    hint: 'Small moves. Tick one and the whole pyramid feels it.',
+    explain: 'One small thing you can tick off today. The tip of the pyramid.',
+    example: 'Call a parent for ten minutes',
   },
 };
 
@@ -642,6 +658,15 @@ export function deriveLadder(relationship: RelationshipKey, answers: Answers): D
   };
 }
 
+/** Every value goal and project a floor's ladders know, so the person can pick one before the floor is built. */
+export function ladderOptions(relationship: RelationshipKey): { valueGoals: string[]; projects: string[] } {
+  const ts = Object.values(LADDERS[relationship]);
+  return { valueGoals: [...new Set(ts.map((t) => t.valueGoal))], projects: [...new Set(ts.map((t) => t.project))] };
+}
+
+/** What the person chose on the "derived from your answers" screen, by floor. Free text is allowed. */
+export type LadderPicks = Partial<Record<RelationshipKey, { valueGoal?: string; project?: string }>>;
+
 export function deriveAllLadders(answers: Answers): Record<RelationshipKey, DerivedLadder> {
   return Object.fromEntries(RELATIONSHIPS.map((r) => [r.key, deriveLadder(r.key, answers)])) as Record<RelationshipKey, DerivedLadder>;
 }
@@ -651,8 +676,12 @@ export function deriveAllLadders(answers: Answers): Record<RelationshipKey, Deri
 // ---------------------------------------------------------------------------
 
 export const WAIT = {
-  /** A task must sit this long after being written (or renamed) before it can be ticked. */
+  /** A person's first few task ticks have no wait at all, so the first day feels like something. */
+  freeFirstTasks: 3,
+  /** After that, a task must sit this long after being written (or renamed) before it can be ticked. */
   taskMinAgeMinutes: 10,
+  /** And this long after the previous tick, so ticks are never back to back. */
+  gapMinutes: 10,
   /** Only this many task completions per rolling day earn xp. The rest still count as done. */
   dailyRewardedTasks: 6,
   /** A client date may differ from the server's UTC date by at most this many days. */
@@ -738,11 +767,12 @@ export const BADGES: readonly Badge[] = [
   { key: 'first_task', name: 'First tick', emoji: '✅', how: 'Complete your first task' },
   { key: 'streak_3', name: 'Three in a row', emoji: '🔥', how: 'Check in three days running' },
   { key: 'streak_7', name: 'Full week', emoji: '🌈', how: 'Check in seven days running' },
-  { key: 'all_seven', name: 'Seven floors', emoji: '🏰', how: 'Add a pillar in every relationship' },
+  { key: 'all_seven', name: 'All seven', emoji: '🏰', how: 'Set up every one of the seven areas' },
   { key: 'ten_tasks', name: 'Ripple maker', emoji: '🌊', how: 'Complete ten tasks' },
   { key: 'project_clear', name: 'Project cleared', emoji: '🏁', how: 'Finish every task in a project' },
   { key: 'level_5', name: 'Level five', emoji: '⭐', how: 'Reach level five' },
-  { key: 'spark_5', name: 'Spark plug', emoji: '⚡', how: 'Do five sparks' },
+  { key: 'spark_5', name: 'Good hands', emoji: '⚡', how: 'Do five small acts' },
+  { key: 'club_member', name: 'Club member', emoji: '🪪', how: 'Be accepted into the Club' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -787,6 +817,9 @@ export interface User {
   timezone: string;
   avatarUrl: string;
   socials: Socials;
+  publicSettings: PublicSettings;
+  /** The blocks on the public page, in order. */
+  links: LinkBlock[];
   streak: number;
   bestStreak: number;
   lastCheckin: string | null;
@@ -807,6 +840,43 @@ export interface RelationshipState {
   stage: number;
   /** Days since this floor's first pillar. Null when nothing is built. */
   floorAgeDays: number | null;
+  /** True once the vibe check for this floor has been answered. */
+  answered: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Internal observability: who is here and which apps they use. Team only; journal and wellbeing never appear.
+// ---------------------------------------------------------------------------
+
+export interface ObservedUser {
+  id: string;
+  name: string;
+  handle: string | null;
+  role: Role;
+  createdAt: string;
+  onboarded: boolean;
+  /** Keys of the apps this person has on. */
+  apps: string[];
+}
+
+export interface AppUsage {
+  key: string;
+  name: string;
+  emoji: string;
+  group: ModuleGroup;
+  /** How many people have it on. */
+  on: number;
+}
+
+export interface ObservabilityResponse {
+  totals: { users: number; onboarded: number; staff: number; admins: number; newThisWeek: number };
+  roles: Record<Role, number>;
+  apps: AppUsage[];
+  users: ObservedUser[];
+  /** How many people match the search, before paging. */
+  total: number;
+  offset: number;
+  limit: number;
 }
 
 export interface MeResponse {
@@ -895,6 +965,8 @@ export interface OnboardingAnswer {
 export interface OnboardingResponse {
   scores: Record<RelationshipKey, number>;
   weakest: RelationshipKey[];
+  /** Floors with answers on file. The others were skipped for now and can be answered from the Tower later. */
+  answered: RelationshipKey[];
   /** One derived ladder per floor, ready to build. */
   ladders: Record<RelationshipKey, DerivedLadder>;
 }
@@ -933,8 +1005,8 @@ export const CHARACTER_STAGES: readonly EvolutionStage[] = [
 export const IDENTITY_STAGES: readonly EvolutionStage[] = [
   { stage: 1, name: 'Seed', minXp: 0, minDays: 0, blurb: 'Everything is still underground.' },
   { stage: 2, name: 'Sprout', minXp: 300, minDays: 3, blurb: 'First habits breaking the surface.' },
-  { stage: 3, name: 'Climber', minXp: 900, minDays: 14, blurb: 'The ladder is holding weight.' },
-  { stage: 4, name: 'Steady hand', minXp: 2000, minDays: 45, blurb: 'Seven floors, all lit.' },
+  { stage: 3, name: 'Climber', minXp: 900, minDays: 14, blurb: 'Your pyramids are holding weight.' },
+  { stage: 4, name: 'Steady hand', minXp: 2000, minDays: 45, blurb: 'All seven areas lit up.' },
   { stage: 5, name: 'Luminary', minXp: 4000, minDays: 120, blurb: 'People climb because you did.' },
 ];
 
@@ -1027,8 +1099,8 @@ export interface Reward {
 export const REWARDS: readonly Reward[] = [
   { key: 'stickers', name: 'Sticker pack', kind: 'merch', cost: 600, blurb: 'All seven characters, die-cut.' },
   { key: 'meetup', name: 'Meetup ticket', kind: 'event', cost: 1500, blurb: 'A seat at the next city meetup.' },
-  { key: 'tee', name: 'Kreators tee', kind: 'merch', cost: 2500, blurb: 'The tower, printed big.' },
-  { key: 'coaching', name: 'One-to-one call', kind: 'event', cost: 4000, blurb: 'Forty minutes with a mentor from the guru floor.' },
+  { key: 'tee', name: 'Kreators tee', kind: 'merch', cost: 2500, blurb: 'The seven characters, printed big.' },
+  { key: 'coaching', name: 'One-to-one call', kind: 'event', cost: 4000, blurb: 'Forty minutes with a mentor.' },
 ];
 
 export const REWARD_BY_KEY: Record<string, Reward> = Object.fromEntries(REWARDS.map((r) => [r.key, r]));
@@ -1123,10 +1195,11 @@ export function isRole(v: unknown): v is Role {
   return typeof v === 'string' && (ROLES as readonly string[]).includes(v);
 }
 
-export const ROLE_META: Record<Role, { name: string; blurb: string }> = {
-  user: { name: 'Creator', blurb: 'Learns, works, connects and sells.' },
-  sub_admin: { name: 'Staff', blurb: 'Runs parts of Kreators, as far as their permissions go.' },
-  admin: { name: 'Admin', blurb: 'Everything, including roles, permissions and which features exist.' },
+/** Each role has a small badge: it sits on the profile picture and under the logo. It is not an earned badge. */
+export const ROLE_META: Record<Role, { name: string; blurb: string; emoji: string; accent: RelationshipKey }> = {
+  user: { name: 'Creator', blurb: 'Learns, works, connects and sells.', emoji: '✨', accent: 'self' },
+  sub_admin: { name: 'Staff', blurb: 'Runs parts of Kreators, as far as their permissions go.', emoji: '🛡️', accent: 'guru' },
+  admin: { name: 'Admin', blurb: 'Everything, including roles, permissions and which features exist.', emoji: '🔑', accent: 'divine' },
 };
 
 /** Staff permissions. A permission is a job someone is trusted with; admins hold all of them. */
@@ -1160,7 +1233,7 @@ export function isStaffFor(user: { role: Role; permissions: readonly string[] },
 // You; admins can disable one for everyone or limit it to a role.
 // ---------------------------------------------------------------------------
 
-export type ModuleGroup = 'core' | 'wellbeing' | 'earn' | 'community' | 'creator' | 'manage';
+export type ModuleGroup = 'core' | 'wellbeing' | 'earn' | 'community' | 'creator' | 'manage' | 'internal';
 
 export interface AppModule {
   key: string;
@@ -1169,6 +1242,8 @@ export interface AppModule {
   emoji: string;
   group: ModuleGroup;
   path: string;
+  /** The relationship whose colours this app wears; dark mode tints its pages with that hue. */
+  accent?: RelationshipKey;
   /** On for a new account. */
   defaultOn: boolean;
   /** Core modules cannot be switched off by the person. */
@@ -1178,59 +1253,82 @@ export interface AppModule {
 
 export const MODULES: readonly AppModule[] = [
   { key: 'home', name: 'Home', blurb: 'Your numbers, your day, and a door into everything.', emoji: '🏠', group: 'core', path: '/home', defaultOn: true, locked: true, minRole: 'user' },
-  { key: 'today', name: 'Today', blurb: 'Your daily three.', emoji: '☀️', group: 'core', path: '/today', defaultOn: true, locked: true, minRole: 'user' },
-  { key: 'tower', name: 'Tower', blurb: 'Seven floors, one per relationship.', emoji: '🏰', group: 'core', path: '/tower', defaultOn: true, locked: true, minRole: 'user' },
+  { key: 'today', name: 'Daily', blurb: 'Your three boxes a day.', emoji: '☀️', group: 'core', path: '/today', defaultOn: true, locked: true, minRole: 'user' },
+  { key: 'tower', name: 'Areas', blurb: 'The seven areas of your life, one per relationship.', emoji: '🏰', group: 'core', path: '/tower', defaultOn: true, locked: true, minRole: 'user' },
   { key: 'search', name: 'Search', blurb: 'Find anything you wrote, bought, applied to or read.', emoji: '🔍', group: 'core', path: '/search', defaultOn: true, locked: true, minRole: 'user' },
   { key: 'notifications', name: 'Inbox', blurb: 'What happened while you were away, and daily reminders.', emoji: '🔔', group: 'core', path: '/inbox', defaultOn: true, minRole: 'user' },
   { key: 'help', name: 'Help', blurb: 'Answers to common questions, and a line to the team.', emoji: '🛟', group: 'core', path: '/help', defaultOn: true, minRole: 'user' },
-  { key: 'leaderboard', name: 'Rank', blurb: 'The top twenty climbers.', emoji: '🏆', group: 'core', path: '/leaderboard', defaultOn: true, minRole: 'user' },
-  { key: 'rewards', name: 'Rewards', blurb: 'Trade points for real things.', emoji: '🎁', group: 'core', path: '/rewards', defaultOn: true, minRole: 'user' },
 
-  { key: 'school', name: 'School', blurb: 'Programs and cohorts: lessons, assignments, mentor feedback, completion.', emoji: '🎓', group: 'earn', path: '/school', defaultOn: true, minRole: 'user' },
-  { key: 'work', name: 'Work', blurb: 'Opportunities from brands and the team. Apply, track, get hired.', emoji: '💼', group: 'earn', path: '/work', defaultOn: true, minRole: 'user' },
-  { key: 'army', name: 'Army', blurb: 'Brand campaigns: briefs, shortlists, production, approvals, delivery.', emoji: '🎬', group: 'earn', path: '/army', defaultOn: true, minRole: 'user' },
-  { key: 'win', name: 'Win', blurb: 'Content rewards: make a video about a brand, get paid per verified view.', emoji: '🥇', group: 'earn', path: '/win', defaultOn: true, minRole: 'user' },
+  { key: 'school', name: 'School', blurb: 'Programs and cohorts: lessons, assignments, mentor feedback, completion.', emoji: '🎓', group: 'earn', path: '/school', defaultOn: true, minRole: 'user', accent: 'guru' },
+  { key: 'work', name: 'Work', blurb: 'Opportunities from brands and the team. Apply, track, get hired.', emoji: '💼', group: 'earn', path: '/work', defaultOn: true, minRole: 'user', accent: 'servant_leader' },
+  { key: 'army', name: 'Army', blurb: 'Brand campaigns: briefs, shortlists, production, approvals, delivery.', emoji: '🎬', group: 'earn', path: '/army', defaultOn: true, minRole: 'user', accent: 'servant_leader' },
+  { key: 'win', name: 'Win', blurb: 'Content rewards: make a video about a brand, get paid per verified view.', emoji: '🥇', group: 'earn', path: '/win', defaultOn: false, minRole: 'user', accent: 'parent_child' },
 
-  { key: 'party', name: 'Party', blurb: 'Meetups, workshops, camps and flagship days. RSVP, waitlist, check in.', emoji: '🎉', group: 'community', path: '/party', defaultOn: true, minRole: 'user' },
-  { key: 'community', name: 'Community', blurb: 'Posts, replies and likes, by category.', emoji: '🫶', group: 'community', path: '/community', defaultOn: true, minRole: 'user' },
-  { key: 'club', name: 'Club', blurb: 'A curated membership with benefits and exclusive opportunities.', emoji: '🪪', group: 'community', path: '/club', defaultOn: false, minRole: 'user' },
-  { key: 'bond', name: 'Bond', blurb: 'Opt-in introductions to people you met at events.', emoji: '🤝', group: 'community', path: '/bond', defaultOn: false, minRole: 'user' },
-  { key: 'circles', name: 'Circles', blurb: 'Small anonymous groups near you, matched by interests that fit together. The chat opens a day before you meet.', emoji: '🫧', group: 'community', path: '/circles', defaultOn: true, minRole: 'user' },
+  { key: 'party', name: 'Party', blurb: 'Meetups, workshops, camps and flagship days. RSVP, waitlist, check in.', emoji: '🎉', group: 'community', path: '/party', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  { key: 'community', name: 'Community', blurb: 'Posts, replies and likes, by category.', emoji: '🫶', group: 'community', path: '/community', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  { key: 'club', name: 'Club', blurb: 'A curated membership with benefits and exclusive opportunities.', emoji: '🪪', group: 'community', path: '/club', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  { key: 'bond', name: 'Bond', blurb: 'Friends, introductions, and anonymous chats with people you met.', emoji: '🤝', group: 'community', path: '/bond', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  { key: 'circles', name: 'Circles', blurb: 'Small anonymous groups near you every week, matched by interests that fit together. The chat opens a day before you meet.', emoji: '🫧', group: 'community', path: '/circles', defaultOn: false, minRole: 'user', accent: 'friendship' },
 
-  { key: 'life', name: 'Life', blurb: 'Physical, financial, emotional, mental and spiritual, on one dashboard that opens into each part of the app.', emoji: '🧭', group: 'wellbeing', path: '/life', defaultOn: true, minRole: 'user' },
-  { key: 'wellbeing', name: 'Wellbeing', blurb: 'One score from your mood, sleep, stress and mindful minutes.', emoji: '💚', group: 'wellbeing', path: '/wellbeing', defaultOn: true, minRole: 'user' },
-  { key: 'mood', name: 'Mood', blurb: 'How are you feeling today? Pick a face, see the week.', emoji: '🙂', group: 'wellbeing', path: '/mood', defaultOn: true, minRole: 'user' },
-  { key: 'sleep', name: 'Sleep', blurb: 'Hours and quality, night by night.', emoji: '🌙', group: 'wellbeing', path: '/sleep', defaultOn: true, minRole: 'user' },
-  { key: 'stress', name: 'Stress', blurb: 'Level and what is behind it.', emoji: '🌊', group: 'wellbeing', path: '/stress', defaultOn: true, minRole: 'user' },
-  { key: 'mindful', name: 'Mindful minutes', blurb: 'A breathing timer that logs your minutes.', emoji: '🧘', group: 'wellbeing', path: '/mindful', defaultOn: true, minRole: 'user' },
-  { key: 'journal', name: 'Journal', blurb: 'Write it down with an emotion and a stress level.', emoji: '📓', group: 'wellbeing', path: '/journal', defaultOn: true, minRole: 'user' },
-  { key: 'companion', name: 'Companion', blurb: 'A reflective chat that knows your tower. Not a therapist.', emoji: '💬', group: 'wellbeing', path: '/companion', defaultOn: true, minRole: 'user' },
+  { key: 'life', name: 'Life', blurb: 'Physical, financial, emotional, mental and spiritual, on one dashboard that opens into each part of the app.', emoji: '🧭', group: 'wellbeing', path: '/life', defaultOn: true, minRole: 'user', accent: 'lover_partner' },
+  { key: 'wellbeing', name: 'Wellbeing', blurb: 'One score from your mood, sleep, stress and mindful minutes.', emoji: '💚', group: 'wellbeing', path: '/wellbeing', defaultOn: false, minRole: 'user', accent: 'lover_partner' },
+  { key: 'mood', name: 'Mood', blurb: 'How are you feeling today? Pick a face, see the week.', emoji: '🙂', group: 'wellbeing', path: '/mood', defaultOn: false, minRole: 'user', accent: 'parent_child' },
+  { key: 'sleep', name: 'Sleep', blurb: 'Hours and quality, night by night.', emoji: '🌙', group: 'wellbeing', path: '/sleep', defaultOn: false, minRole: 'user', accent: 'guru' },
+  { key: 'stress', name: 'Stress', blurb: 'Level and what is behind it.', emoji: '🌊', group: 'wellbeing', path: '/stress', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  { key: 'mindful', name: 'Mindful minutes', blurb: 'A breathing timer that logs your minutes.', emoji: '🧘', group: 'wellbeing', path: '/mindful', defaultOn: false, minRole: 'user', accent: 'divine' },
+  { key: 'journal', name: 'Journal', blurb: 'Write it down with an emotion and a stress level.', emoji: '📓', group: 'wellbeing', path: '/journal', defaultOn: true, minRole: 'user', accent: 'self' },
+  { key: 'companion', name: 'Companion', blurb: 'A chat that knows how you are doing. Not a therapist.', emoji: '💬', group: 'wellbeing', path: '/companion', defaultOn: false, minRole: 'user', accent: 'guru' },
 
-  { key: 'profile', name: 'Profile', blurb: 'Your public page: bio, skills, portfolio, links and what you sell.', emoji: '🔗', group: 'creator', path: '/profile', defaultOn: true, minRole: 'user' },
-  { key: 'shop', name: 'Shop', blurb: 'Sell downloads, courses, memberships, sessions and events.', emoji: '🛍️', group: 'creator', path: '/shop', defaultOn: true, minRole: 'user' },
-  { key: 'audience', name: 'Audience', blurb: 'Followers, leads, broadcasts and your affiliate link.', emoji: '📣', group: 'creator', path: '/shop/audience', defaultOn: true, minRole: 'user' },
-  { key: 'content', name: 'Content', blurb: 'Which post made money: tracked links, views and revenue per piece of content.', emoji: '📈', group: 'creator', path: '/shop/content', defaultOn: true, minRole: 'user' },
-  { key: 'automations', name: 'Auto-DM', blurb: 'Comment a keyword, get a link in DMs. Funnels show where people drop off.', emoji: '🤖', group: 'creator', path: '/shop/automations', defaultOn: true, minRole: 'user' },
-  { key: 'finance', name: 'Finance', blurb: 'Money in, money out, invoices, budgets and a monthly picture of your creator business.', emoji: '💰', group: 'creator', path: '/finance', defaultOn: true, minRole: 'user' },
-  { key: 'library', name: 'My purchases', blurb: 'Courses, downloads, memberships, tickets and sessions you own.', emoji: '🎒', group: 'creator', path: '/library', defaultOn: true, minRole: 'user' },
-  { key: 'knowledge', name: 'Knowledge', blurb: 'Curated articles and exercises with their sources.', emoji: '📚', group: 'creator', path: '/knowledge', defaultOn: true, minRole: 'user' },
-  { key: 'tools', name: 'Tools', blurb: 'A directory of creator tools, verified by the team.', emoji: '🧰', group: 'creator', path: '/tools', defaultOn: false, minRole: 'user' },
-  { key: 'tv', name: 'TV', blurb: 'Pitch a series. Track it from proposal to release.', emoji: '📺', group: 'creator', path: '/tv', defaultOn: false, minRole: 'user' },
-  { key: 'fund', name: 'Fund', blurb: 'Apply for a grant or backing for a project.', emoji: '🌱', group: 'creator', path: '/fund', defaultOn: false, minRole: 'user' },
+  { key: 'profile', name: 'Public page', blurb: 'What people see: bio, skills, portfolio, links and what you sell.', emoji: '🔗', group: 'creator', path: '/profile', defaultOn: true, minRole: 'user', accent: 'self' },
+  { key: 'shop', name: 'Shop', blurb: 'Sell downloads, courses, memberships, sessions and events.', emoji: '🛍️', group: 'creator', path: '/shop', defaultOn: true, minRole: 'user', accent: 'servant_leader' },
+  { key: 'audience', name: 'Audience', blurb: 'Followers, leads, broadcasts and your affiliate link.', emoji: '📣', group: 'creator', path: '/shop/audience', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
+  { key: 'content', name: 'Content', blurb: 'Which post made money: tracked links, views and revenue per piece of content.', emoji: '📈', group: 'creator', path: '/shop/content', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
+  { key: 'automations', name: 'Auto-DM', blurb: 'Comment a keyword, get a link in DMs. Funnels show where people drop off.', emoji: '🤖', group: 'creator', path: '/shop/automations', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
+  { key: 'finance', name: 'Finance', blurb: 'Money in, money out, invoices, budgets and a monthly picture of your creator business.', emoji: '💰', group: 'creator', path: '/finance', defaultOn: false, minRole: 'user', accent: 'parent_child' },
+  { key: 'library', name: 'My purchases', blurb: 'Courses, downloads, memberships, tickets and sessions you own.', emoji: '🎒', group: 'creator', path: '/library', defaultOn: false, minRole: 'user', accent: 'guru' },
+  { key: 'knowledge', name: 'Knowledge', blurb: 'Curated articles and exercises with their sources.', emoji: '📚', group: 'creator', path: '/knowledge', defaultOn: false, minRole: 'user', accent: 'guru' },
+  { key: 'tools', name: 'Tools', blurb: 'A directory of creator tools, verified by the team.', emoji: '🧰', group: 'creator', path: '/tools', defaultOn: false, minRole: 'user', accent: 'guru' },
+  { key: 'tv', name: 'TV', blurb: 'Pitch a series. Track it from proposal to release.', emoji: '📺', group: 'creator', path: '/tv', defaultOn: false, minRole: 'user', accent: 'divine' },
+  { key: 'fund', name: 'Fund', blurb: 'Apply for a grant or backing for a project.', emoji: '🌱', group: 'creator', path: '/fund', defaultOn: false, minRole: 'user', accent: 'divine' },
 
   { key: 'manage', name: 'Manage', blurb: 'Your staff tools, as far as your permissions go.', emoji: '🛡️', group: 'manage', path: '/manage', defaultOn: true, minRole: 'sub_admin' },
   { key: 'admin', name: 'Admin', blurb: 'Roles, permissions, feature flags, audit log, honors, points.', emoji: '🔑', group: 'manage', path: '/admin', defaultOn: true, minRole: 'admin' },
+  // internal: tracking for the team. Only staff and admins see this group at all.
+  { key: 'observability', name: 'Observability', blurb: 'Who is here, which apps they have on, who holds which role, and the build map.', emoji: '📡', group: 'internal', path: '/internal/observability', defaultOn: true, minRole: 'sub_admin' },
 ];
 
 export const MODULE_BY_KEY: Record<string, AppModule> = Object.fromEntries(MODULES.map((m) => [m.key, m]));
 
 export const MODULE_GROUPS: Record<ModuleGroup, string> = {
-  earn: 'Learn and earn',
-  community: 'People',
-  wellbeing: 'Wellbeing',
-  creator: 'Creator',
-  core: 'Core',
-  manage: 'Team',
+  earn: 'Contribution',
+  creator: 'Creation',
+  community: 'Connection',
+  wellbeing: 'Reflection',
+  core: 'Essentials',
+  manage: 'Operations',
+  internal: 'Internal',
+};
+
+/** The relationship whose colour each app group wears on the Apps page and under You, Features. */
+export const MODULE_GROUP_ACCENT: Record<ModuleGroup, RelationshipKey> = {
+  earn: 'servant_leader',
+  creator: 'parent_child',
+  community: 'friendship',
+  wellbeing: 'lover_partner',
+  core: 'self',
+  manage: 'guru',
+  internal: 'divine',
+};
+
+/** One line on what each group is for. */
+export const MODULE_GROUP_BLURB: Record<ModuleGroup, string> = {
+  earn: 'Learn a craft, do the work, get paid.',
+  creator: 'Make things: your page, your shop, your numbers.',
+  community: 'Meet people, on your terms.',
+  wellbeing: 'How you are doing, day by day.',
+  core: 'The basics that are always around.',
+  manage: 'Tools for the team.',
+  internal: 'Tracking for the team. Only the roles that need it see this.',
 };
 
 export interface ModuleSetting {
@@ -1430,6 +1528,174 @@ export interface Socials {
 }
 export const EMPTY_SOCIALS: Socials = { instagram: '', youtube: '', x: '', website: '' };
 
+/**
+ * What a person shows on their public page. One switch for the whole page, then one per part.
+ * Everything here is the person's choice; nothing on the page is shown unless its switch is on.
+ */
+export interface PublicSettings {
+  /** The whole page. Off means only you can open it. */
+  pagePublic: boolean;
+  showSocials: boolean;
+  /** The link blocks: buttons, headers, text, images, videos, carousels. */
+  showBlocks: boolean;
+  showPortfolio: boolean;
+  showProducts: boolean;
+  /** Your community posts, on your page. */
+  showPosts: boolean;
+  /** Level, streak, areas set up. Never the journal or wellbeing. */
+  showActivity: boolean;
+  /** The badges you earned and the honors you were awarded. */
+  showBadges: boolean;
+  allowFriendRequests: boolean;
+  /** Friends can open an anonymous chat with you from your page. */
+  allowChats: boolean;
+}
+export const DEFAULT_PUBLIC: PublicSettings = { pagePublic: true, showSocials: true, showBlocks: true, showPortfolio: true, showProducts: true, showPosts: true, showActivity: false, showBadges: true, allowFriendRequests: true, allowChats: true };
+export const PUBLIC_SETTING_META: { key: keyof PublicSettings; name: string; blurb: string }[] = [
+  { key: 'pagePublic', name: 'My page is public', blurb: 'Off hides the whole page from everyone but you. Every switch below needs this on.' },
+  { key: 'showSocials', name: 'Show my social icons', blurb: 'Instagram, YouTube, X and your website.' },
+  { key: 'showBlocks', name: 'Show my links', blurb: 'Your link buttons, headers, text, images, videos and carousels.' },
+  { key: 'showPortfolio', name: 'Show my portfolio', blurb: 'Your public portfolio items.' },
+  { key: 'showProducts', name: 'Show what I sell', blurb: 'Products from your shop.' },
+  { key: 'showPosts', name: 'Show my posts', blurb: 'Your posts in the community feed, on your page too.' },
+  { key: 'showActivity', name: 'Show my activity', blurb: 'Level, streak and how many areas are set up. Never your journal or wellbeing.' },
+  { key: 'showBadges', name: 'Show my badges', blurb: 'The badges you earned and any honors the team awarded you.' },
+  { key: 'allowFriendRequests', name: 'Let people add me as a friend', blurb: 'Off hides the Add friend button.' },
+  { key: 'allowChats', name: 'Let friends start a chat', blurb: 'Anonymous, under aliases. Off means nobody can open one with you.' },
+];
+// ---------------------------------------------------------------------------
+// Links on the public page: the Linktree part. Blocks the creator stacks in order, shown to everyone.
+// ---------------------------------------------------------------------------
+
+export const LINK_BLOCK_TYPES = ['link', 'header', 'text', 'image', 'video', 'carousel'] as const;
+export type LinkBlockType = (typeof LINK_BLOCK_TYPES)[number];
+
+export interface LinkBlockItem {
+  id: string;
+  title: string;
+  url: string;
+  image: string;
+}
+
+export interface LinkBlock {
+  id: string;
+  type: LinkBlockType;
+  /** The button label, header text, caption or video title. */
+  title: string;
+  /** Where it goes. A video block takes a YouTube link. */
+  url: string;
+  /** An https picture, for image blocks. */
+  image: string;
+  /** The paragraph of a text block. */
+  text: string;
+  /** A link drawn big and in colour. */
+  featured: boolean;
+  /** Off hides it from the page without deleting it. */
+  on: boolean;
+  /** The cards of a carousel. */
+  items: LinkBlockItem[];
+}
+
+export const MAX_LINK_BLOCKS = 30;
+export const MAX_CAROUSEL_ITEMS = 10;
+
+export const LINK_BLOCK_META: Record<LinkBlockType, { name: string; emoji: string; blurb: string }> = {
+  link: { name: 'Link', emoji: '🔗', blurb: 'A button that opens any page.' },
+  header: { name: 'Header', emoji: '🏷️', blurb: 'A title that groups the links under it.' },
+  text: { name: 'Text', emoji: '✍️', blurb: 'A short paragraph in your words.' },
+  image: { name: 'Image', emoji: '🖼️', blurb: 'One picture, with a link if you want.' },
+  video: { name: 'Video', emoji: '▶️', blurb: 'A YouTube video that plays on your page.' },
+  carousel: { name: 'Carousel', emoji: '🎠', blurb: 'Cards people swipe through, each with a link.' },
+};
+
+const httpsUrl = (v: unknown): string => (typeof v === 'string' && /^https:\/\/\S{1,500}$/.test(v.trim()) ? v.trim() : '');
+const shortText = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+
+/** Keeps only what a block may hold: https links, short text, a bounded carousel. Empty or unknown blocks are dropped. */
+export function parseLinkBlocks(raw: unknown): LinkBlock[] {
+  if (!Array.isArray(raw)) return [];
+  const out: LinkBlock[] = [];
+  for (const b of raw.slice(0, MAX_LINK_BLOCKS)) {
+    if (!b || typeof b !== 'object') continue;
+    const r = b as Record<string, unknown>;
+    if (!(LINK_BLOCK_TYPES as readonly string[]).includes(String(r.type))) continue;
+    const type = r.type as LinkBlockType;
+    const items: LinkBlockItem[] = Array.isArray(r.items)
+      ? r.items
+          .slice(0, MAX_CAROUSEL_ITEMS)
+          .map((it, i) => {
+            const x = (it && typeof it === 'object' ? it : {}) as Record<string, unknown>;
+            return { id: shortText(x.id, 40) || `c${i + 1}`, title: shortText(x.title, 80), url: httpsUrl(x.url), image: httpsUrl(x.image) };
+          })
+          .filter((it) => it.title || it.image)
+      : [];
+    const block: LinkBlock = { id: shortText(r.id, 40), type, title: shortText(r.title, 120), url: httpsUrl(r.url), image: httpsUrl(r.image), text: shortText(r.text, 600), featured: r.featured === true, on: r.on !== false, items: type === 'carousel' ? items : [] };
+    if (type === 'link' && !block.url) continue;
+    if (type === 'header' && !block.title) continue;
+    if (type === 'text' && !block.text) continue;
+    if (type === 'image' && !block.image) continue;
+    if (type === 'video' && !block.url) continue;
+    if (type === 'carousel' && block.items.length === 0) continue;
+    out.push(block);
+  }
+  return out;
+}
+
+/** The id inside a YouTube link, or null for anything else. */
+export function youtubeId(url: string): string | null {
+  const m = url.match(/^https:\/\/(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  return m ? (m[1] ?? null) : null;
+}
+
+// ---------------------------------------------------------------------------
+// Passwords: the same rule on the sign-up form and on the server.
+// ---------------------------------------------------------------------------
+
+export const PASSWORD_MIN = 8;
+export const PASSWORD_MAX = 128;
+/** The passwords that get tried first. One of these is not a password. */
+export const COMMON_PASSWORDS = ['password', 'password1', 'password123', '12345678', '123456789', '1234567890', 'qwerty123', 'qwertyuiop', 'iloveyou', 'letmein1', 'welcome1', 'admin123', 'abc12345', '11111111', '00000000', 'sunshine', 'princess', 'football', 'baseball', 'kreators', 'kreators1', 'kreatorslife'] as const;
+
+/** Why a password will not do, in plain words, or null when it is fine. */
+export function passwordProblem(password: string, email = ''): string | null {
+  if (password.length < PASSWORD_MIN) return `Use at least ${PASSWORD_MIN} characters.`;
+  if (password.length > PASSWORD_MAX) return `Keep it under ${PASSWORD_MAX} characters.`;
+  const lower = password.toLowerCase();
+  if ((COMMON_PASSWORDS as readonly string[]).includes(lower)) return 'That one is on every guess list. Pick another.';
+  if (/^(.)\1+$/.test(password)) return 'Not one character over and over.';
+  const local = (email.toLowerCase().split('@')[0] ?? '').trim();
+  if (local.length >= 4 && lower.includes(local)) return 'Not your email, or a part of it.';
+  return null;
+}
+
+export function parsePublicSettings(raw: unknown): PublicSettings {
+  const out = { ...DEFAULT_PUBLIC };
+  if (raw && typeof raw === 'object') {
+    for (const k of Object.keys(DEFAULT_PUBLIC) as (keyof PublicSettings)[]) {
+      const v = (raw as Record<string, unknown>)[k];
+      if (typeof v === 'boolean') out[k] = v;
+    }
+  }
+  return out;
+}
+
+/** A post as it appears on a person's page. */
+export interface PublicPost {
+  id: string;
+  category: string;
+  body: string;
+  likes: number;
+  replies: number;
+  createdAt: string;
+}
+
+export interface PublicActivity {
+  level: number;
+  streak: number;
+  areasSetUp: number;
+  memberSince: string;
+}
+
 /** Zones people in the first markets live in, plus the big ones elsewhere. Any IANA name is accepted. */
 export const TIMEZONES = [
   'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Asia/Jakarta', 'Asia/Manila', 'Asia/Tokyo', 'Asia/Seoul', 'Asia/Shanghai', 'Asia/Karachi', 'Asia/Dhaka', 'Asia/Kathmandu', 'Asia/Colombo',
@@ -1615,8 +1881,27 @@ export interface Testimonial {
 }
 
 export interface PublicPage {
+  id: string;
   handle: string;
   name: string;
+  /** Where the viewer stands with this person. */
+  friend: 'none' | 'friends' | 'pending' | 'sent';
+  friendRequestId: string | null;
+  /** True when this is the owner looking at their own page. */
+  mine: boolean;
+  /** The owner switched the whole page off; only the name comes back. */
+  isPrivate: boolean;
+  /** What the owner chose to show. Parts that are off come back empty. */
+  shows: { socials: boolean; blocks: boolean; portfolio: boolean; products: boolean; posts: boolean; activity: boolean; badges: boolean };
+  allowFriendRequests: boolean;
+  allowChats: boolean;
+  posts: PublicPost[];
+  activity: PublicActivity | null;
+  /** Earned badge keys and awarded honor keys, only when the badges switch is on. */
+  badges: string[];
+  honors: string[];
+  /** The link blocks that are on, in order, when the links switch is on. */
+  links: LinkBlock[];
   bio: string;
   skills: string[];
   categories: string[];
@@ -1950,16 +2235,36 @@ export function money(cents: number, currency = 'INR'): string {
 // Circles: anonymous small groups near you, matched by interests that fit
 // ---------------------------------------------------------------------------
 
-export const INTERESTS = [
-  'On camera', 'Behind camera', 'Editing', 'Writing', 'Short-form', 'Video', 'Photography', 'Podcasting', 'Music', 'Dance', 'Comedy', 'Film', 'Art & design', 'Fashion', 'Beauty', 'Food', 'Travel', 'Fitness', 'Gaming', 'Tech', 'Education', 'Finance', 'Business', 'Marketing', 'Parenting', 'Spirituality', 'Social causes',
+/**
+ * Interests, grouped the way a dating app groups them, so everyone finds themselves here, not only people
+ * who make content. Up to ten can be on at once. Circles seat people whose interests fit: the same ones, or pairs that gel.
+ */
+export const INTEREST_GROUPS = [
+  { key: 'creative', name: 'Creative', emoji: '🎨', options: ['Photography', 'Video', 'Writing', 'Art & design', 'Music making', 'Dance', 'Comedy', 'Film making', 'Podcasting', 'Fashion'] },
+  { key: 'sport', name: 'Sport & fitness', emoji: '🏃', options: ['Gym', 'Running', 'Yoga', 'Football', 'Cricket', 'Basketball', 'Badminton', 'Cycling', 'Swimming', 'Hiking'] },
+  { key: 'food', name: 'Food & drink', emoji: '🍜', options: ['Cooking', 'Baking', 'Coffee', 'Tea', 'Street food', 'Trying new places'] },
+  { key: 'music', name: 'Music & nights out', emoji: '🎧', options: ['Live music', 'Hip hop', 'Indie', 'Pop', 'Bollywood', 'Karaoke', 'Open mics', 'Festivals'] },
+  { key: 'screens', name: 'Screens & pages', emoji: '🎮', options: ['Gaming', 'Anime', 'Movies', 'Series', 'Books', 'Comics', 'Board games'] },
+  { key: 'outdoors', name: 'Travel & outdoors', emoji: '🏕️', options: ['Travel', 'Road trips', 'Beaches', 'Camping', 'Nature', 'Stargazing'] },
+  { key: 'learning', name: 'Learning & tech', emoji: '💡', options: ['Tech', 'Coding', 'Science', 'Finance', 'Business', 'Languages', 'History'] },
+  { key: 'wellness', name: 'Wellness & mind', emoji: '🌿', options: ['Meditation', 'Journaling', 'Spirituality', 'Sleep', 'Mental health', 'Skincare'] },
+  { key: 'causes', name: 'Causes & community', emoji: '🤝', options: ['Volunteering', 'Climate', 'Animals', 'Education', 'Social causes', 'Mentoring'] },
+  { key: 'home', name: 'Home & life', emoji: '🏠', options: ['Plants', 'Pets', 'Parenting', 'DIY', 'Thrifting', 'Cars & bikes'] },
 ] as const;
-export type Interest = (typeof INTERESTS)[number];
+export type InterestGroup = (typeof INTEREST_GROUPS)[number];
+export type Interest = InterestGroup['options'][number];
+/** Every interest, flat, for validation and matching. */
+export const INTERESTS: readonly Interest[] = INTEREST_GROUPS.flatMap((g) => g.options);
+/** How many interests one person can have on at once. */
+export const MAX_INTERESTS = 10;
 
 /** Pairs that gel: one side needs what the other makes. */
 export const COMPLEMENTS: readonly [Interest, Interest][] = [
-  ['On camera', 'Behind camera'], ['On camera', 'Editing'], ['Writing', 'Video'], ['Writing', 'Art & design'], ['Music', 'Video'], ['Music', 'Dance'], ['Photography', 'Fashion'], ['Photography', 'Travel'],
-  ['Food', 'Travel'], ['Tech', 'Education'], ['Business', 'Marketing'], ['Business', 'Art & design'], ['Finance', 'Education'], ['Fitness', 'Food'], ['Comedy', 'Short-form'], ['Podcasting', 'Writing'],
-  ['Film', 'Music'], ['Beauty', 'Fashion'], ['Gaming', 'Tech'], ['Spirituality', 'Fitness'], ['Parenting', 'Education'], ['Social causes', 'Film'], ['Marketing', 'Short-form'], ['Editing', 'Film'], ['Podcasting', 'On camera'],
+  ['Photography', 'Fashion'], ['Photography', 'Travel'], ['Writing', 'Video'], ['Writing', 'Books'], ['Writing', 'Podcasting'], ['Video', 'Film making'], ['Music making', 'Dance'], ['Music making', 'Film making'],
+  ['Comedy', 'Open mics'], ['Art & design', 'Business'], ['Cooking', 'Trying new places'], ['Baking', 'Coffee'], ['Street food', 'Travel'], ['Road trips', 'Camping'], ['Hiking', 'Nature'], ['Camping', 'Stargazing'],
+  ['Gym', 'Running'], ['Yoga', 'Meditation'], ['Cycling', 'Hiking'], ['Tech', 'Coding'], ['Coding', 'Gaming'], ['Business', 'Finance'], ['Science', 'Books'], ['Languages', 'Travel'], ['Live music', 'Festivals'],
+  ['Movies', 'Series'], ['Gaming', 'Anime'], ['Board games', 'Comics'], ['Volunteering', 'Mentoring'], ['Education', 'Mentoring'], ['Climate', 'Nature'], ['Animals', 'Pets'], ['Plants', 'Nature'], ['Journaling', 'Mental health'],
+  ['Fashion', 'Thrifting'], ['Skincare', 'Fashion'], ['Parenting', 'Education'], ['Spirituality', 'Meditation'], ['DIY', 'Cars & bikes'], ['Hip hop', 'Dance'], ['Bollywood', 'Dance'], ['Karaoke', 'Pop'],
 ];
 
 /** How well two people's interests fit: a little overlap is good, complementary pairs are better, nothing in common is not. */
@@ -2131,9 +2436,9 @@ export type LifeAreaKey = 'physical' | 'financial' | 'emotional' | 'mental' | 's
 export const LIFE_AREAS: Record<LifeAreaKey, { name: string; emoji: string; blurb: string; path: string; relationship: RelationshipKey }> = {
   physical: { name: 'Physical', emoji: '🏃', blurb: 'Sleep, movement and breath.', path: '/wellbeing', relationship: 'self' },
   financial: { name: 'Financial', emoji: '💰', blurb: 'What comes in, what goes out, where you are heading.', path: '/finance', relationship: 'servant_leader' },
-  emotional: { name: 'Emotional', emoji: '💛', blurb: 'Mood, what you wrote, and the people floors.', path: '/mood', relationship: 'lover_partner' },
+  emotional: { name: 'Emotional', emoji: '💛', blurb: 'Mood, what you wrote, and the people areas.', path: '/mood', relationship: 'lover_partner' },
   mental: { name: 'Mental', emoji: '🧠', blurb: 'Stress, focus, and what you are learning.', path: '/stress', relationship: 'guru' },
-  spiritual: { name: 'Spiritual', emoji: '✨', blurb: 'Stillness, awe, and the top floors.', path: '/mindful', relationship: 'divine' },
+  spiritual: { name: 'Spiritual', emoji: '✨', blurb: 'Stillness, awe, and the top two areas.', path: '/mindful', relationship: 'divine' },
 };
 
 export interface LifePart {
@@ -2810,6 +3115,36 @@ export interface PublicStats {
   campaigns: number;
 }
 
+export interface Friend {
+  userId: string;
+  name: string;
+  handle: string | null;
+  avatarUrl: string;
+  /** Pending means they asked you; sent means you asked them. */
+  status: 'friends' | 'pending' | 'sent';
+  requestId: string;
+  createdAt: string;
+}
+
+/** A one-to-one chat where both people appear under an alias. Started from Bond; names never move through it. */
+export interface BondChat {
+  id: string;
+  myAlias: string;
+  theirAlias: string;
+  source: string;
+  lastMessageAt: string | null;
+  lastBody: string;
+  createdAt: string;
+}
+
+export interface BondMessage {
+  id: string;
+  alias: string;
+  body: string;
+  mine: boolean;
+  createdAt: string;
+}
+
 export interface Introduction {
   id: string;
   requesterId: string;
@@ -2867,11 +3202,12 @@ export interface SupportTicket {
 }
 
 export const HELP_FAQ = [
-  { q: 'What are the daily three?', a: 'Check in, do the spark, tick one task. They are on Today. Every one you tick pays xp, and the check-in pays points too.' },
-  { q: 'What is the tower?', a: 'Seven floors, one per relationship. Each floor is a ladder: a pillar holds up a principle, a value goal, an outcome, a project and tasks. Tick a task and every rung above it gets stronger.' },
+  { q: 'What are the daily three?', a: 'Check in, do the small act, tick one task. They are on Daily. Each one you tick pays xp. The check-in pays points too.' },
+  { q: 'What are the seven areas?', a: 'The seven relationships that make a life, one area each. Each area has a pyramid: a foundation at the base, then a rule, a feeling, a proof, a project, and tasks at the tip. Tick a task and the whole pyramid gets stronger.' },
+  { q: 'What is a small act?', a: 'One quick thing for your weakest area, picked for you each day. It takes two minutes and pays fifteen xp.' },
   { q: 'Why can I not tick a task yet?', a: 'A task needs ten minutes after being written or renamed before it can be ticked. Only six ticks a day pay xp; the rest still count as done.' },
-  { q: 'Points versus xp?', a: 'Xp levels you and your floors up. Points are earned by showing up and can be traded for rewards, products on creators’ pages, and events.' },
-  { q: 'How do I sell something?', a: 'Switch Shop on under You, Features. Make a product, publish it, and share your Profile page.' },
+  { q: 'Points versus xp?', a: 'Xp levels you and your areas up. Points come from showing up. You can trade points for rewards, for things people sell, and for events.' },
+  { q: 'How do I sell something?', a: 'Switch Shop on from Apps. Make a product, publish it, and share your Profile page.' },
   { q: 'How do I get work?', a: 'Work lists opportunities from brands and the team. Apply once per opportunity and follow its status in Work.' },
   { q: 'Is the Companion a therapist?', a: 'No. It reflects and asks questions. If you are in danger, contact your local emergency number. In India, Tele-MANAS is 14416.' },
   { q: 'Who can see my journal?', a: 'Only you. Journal entries and wellbeing scores are never shown to brands, staff, the leaderboard or Club selection.' },
@@ -2979,7 +3315,7 @@ export function nudgeFor(s: NudgeInput): HomeNudge {
   if (s.checkedIn && s.sparkDone && s.taskDone) {
     return {
       lead: `All three done. +${s.xpToday} xp today.`,
-      body: 'Here is what that did: the task fed every rung above it, the spark lifted your weakest floor, and the check-in kept the streak. The one thing that makes tomorrow easier is a time on tomorrow’s task.',
+      body: 'Here is what that did. The task made its whole pyramid stronger. The small act lifted your weakest area. The check-in kept your streak. One thing makes tomorrow easier: put a time on tomorrow’s task.',
       action: 'Set a time on tomorrow’s task',
       path: '/tower',
     };
@@ -2995,7 +3331,7 @@ export function nudgeFor(s: NudgeInput): HomeNudge {
     }
     return {
       lead: s.streak > 0 ? `Day ${s.streak + 1} is waiting.` : 'Zero so far. That is the normal start.',
-      body: 'It is not the plan that builds the tower and it is not the points. It is the first tick. Check in, and the other two boxes get easier. But it will not count unless you tick it today.',
+      body: 'It is not the plan and it is not the points. It is the first tick. Check in, and the other two boxes get easier. But it only counts if you tick it today.',
       action: 'Check in',
       path: '/today',
     };
@@ -3003,30 +3339,30 @@ export function nudgeFor(s: NudgeInput): HomeNudge {
   if (!s.sparkDone) {
     return {
       lead: `+${s.xpToday} xp banked from the check-in.`,
-      body: 'Here is the better way to spend the next two minutes: not the biggest task, the spark. It goes straight to your weakest floor, which is the one holding your level down.',
-      action: 'Do the spark',
+      body: 'Here is the better way to spend the next two minutes. Not the biggest task. The small act. It goes straight to your weakest area, the one holding your level down.',
+      action: 'Do the small act',
       path: '/today',
     };
   }
   if (!s.hasFloor) {
     return {
       lead: `+${s.xpToday} xp today, two boxes down.`,
-      body: 'The third box cannot appear yet. Today only hands you tasks from a floor you have built, so this will not work until one floor exists. Build one and tomorrow’s task is already waiting.',
-      action: 'Build a floor',
+      body: 'The third box cannot show up yet. Daily only gives you tasks from an area you have set up. So this will not work until one area exists. Set one up and tomorrow’s task is already waiting.',
+      action: 'Set up an area',
       path: '/tower',
     };
   }
   if (s.tasksWaiting === 0) {
     return {
       lead: `+${s.xpToday} xp today, two boxes down.`,
-      body: 'No task is due today. That is not a rest day, it is a gap in the ladder. Add one task with a date and a time to any floor and the third box shows up on Today.',
+      body: 'No task is due today. That is not a rest day. It is a gap. Add one task with a date and a time to any area and the third box shows up on Daily.',
       action: 'Add a task',
       path: '/tower',
     };
   }
   return {
     lead: `+${s.xpToday} xp today, two boxes down.`,
-    body: `Here is the better way to finish: not the biggest task, the one with a time on it. ${s.tasksWaiting === 1 ? 'One task is' : `${s.tasksWaiting} tasks are`} waiting, and the tower only moves when one is ticked.`,
+    body: `Here is the better way to finish: not the biggest task, the one with a time on it. ${s.tasksWaiting === 1 ? 'One task is' : `${s.tasksWaiting} tasks are`} waiting. Nothing moves until one is ticked.`,
     action: 'Tick a task',
     path: '/today',
   };

@@ -62,6 +62,7 @@ export function Army() {
   return (
     <Screen>
       <header className="pt-lg">
+        <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Army</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Brand campaigns from brief to delivery. Creators see a brief once the team assigns them to it.</p>
       </header>

@@ -1,5 +1,6 @@
 import { PRODUCT_KIND_META, type Product } from '@kreators/shared';
 import { Link } from 'react-router';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed, useLibrary } from '../lib/queries';
@@ -37,6 +38,7 @@ export function Sessions() {
   return (
     <Screen>
       <header className="pt-lg">
+        <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Sessions</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">One-to-one time with guides and creators, and live events with a date.</p>
       </header>

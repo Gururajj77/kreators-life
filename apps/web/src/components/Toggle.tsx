@@ -7,15 +7,17 @@ interface Props {
   hint?: ReactNode;
   disabled?: boolean;
   color?: string;
+  /** Just the switch and its label, no card around it. For a switch that sits inside another card. */
+  compact?: boolean;
 }
 
 /** A switch row. The whole row is the tap target. */
-export function Toggle({ on, onChange, label, hint, disabled = false, color = '#9BB068' }: Props) {
+export function Toggle({ on, onChange, label, hint, disabled = false, color = 'var(--color-r4)', compact = false }: Props) {
   const id = useId();
   return (
-    <label className={`flex min-h-[56px] cursor-pointer select-none items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft ${disabled ? 'opacity-60' : ''}`}>
+    <label className={`flex cursor-pointer select-none items-center gap-sm ${compact ? 'min-h-[40px]' : 'min-h-[56px] rounded-tile bg-card p-sm shadow-toy-soft'} ${disabled ? 'opacity-60' : ''}`}>
       <span className="min-w-0 flex-1">
-        <span className="block text-[16px] font-bold leading-snug" id={`${id}-l`}>
+        <span className={`block font-bold leading-snug ${compact ? 'text-[14px] text-ink-soft' : 'text-[16px]'}`} id={`${id}-l`}>
           {label}
         </span>
         {hint && <span className="block text-[14px] font-semibold text-ink-soft">{hint}</span>}

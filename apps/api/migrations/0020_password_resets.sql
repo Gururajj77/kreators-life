@@ -1,0 +1,10 @@
+-- Password reset: a one-time token per request, stored hashed, good for thirty minutes.
+CREATE TABLE password_resets (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT
+);
+CREATE INDEX idx_password_resets_user ON password_resets(user_id, created_at);

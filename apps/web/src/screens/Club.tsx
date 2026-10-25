@@ -2,6 +2,7 @@ import { CLUB_BENEFITS, type Membership } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button } from '../components/Button';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed, useRefreshAll } from '../lib/queries';
@@ -45,6 +46,7 @@ export function Club() {
   return (
     <Screen>
       <header className="pt-lg">
+        <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Club</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
           A curated membership. People get in on the quality of their work and how they show up, never on follower counts.

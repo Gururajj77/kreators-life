@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Button } from '../components/Button';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
@@ -27,6 +28,7 @@ export function Community() {
   return (
     <Screen>
       <header className="pt-lg">
+        <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">{product ? 'Members' : 'Community'}</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{product ? 'A members-only feed for this membership.' : 'A place of warmth. Everyone is heard, and guides keep it kind.'}</p>
         <Button full className="mt-md" onClick={() => setWriting(true)}>
@@ -59,13 +61,9 @@ export function Community() {
               </span>
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-xs">
-                  {p.authorHandle ? (
-                    <Link to={`/u/${p.authorHandle}`} className="truncate text-[16px] font-bold">
-                      {p.authorName}
-                    </Link>
-                  ) : (
-                    <span className="truncate text-[16px] font-bold">{p.authorName}</span>
-                  )}
+                  <Link to={p.authorHandle ? `/u/${p.authorHandle}` : `/people/${p.authorId}`} className="truncate text-[16px] font-bold">
+                    {p.authorName}
+                  </Link>
                   {p.authorPro && <span className="rounded-pill bg-r7 px-xs text-[11px] font-extrabold leading-[18px] text-white">Pro</span>}
                 </span>
                 <span className="block text-[12px] font-bold text-ink-soft">

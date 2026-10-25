@@ -26,7 +26,6 @@ import {
   type Listing,
   type ListingType,
   type ModuleAccess,
-  type ModuleGroup,
   type ModuleSetting,
   type Permission,
   type Role,
@@ -34,6 +33,7 @@ import {
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
+import { DataTable, Select } from '../components/DataTable';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
@@ -47,6 +47,10 @@ const PERMISSION_NAMES: Record<Permission, string> = { talent: 'Talent', cohorts
 type Tab = 'people' | 'flags' | 'listings' | 'orders' | 'webhooks' | 'kyc' | 'ops' | 'redemptions' | 'audit';
 const ORDER_STATUSES = ['', 'pending', 'paid', 'test', 'failed', 'refunded', 'expired'] as const;
 const statusTone = (s: string) => (s === 'paid' || s === 'test' ? 'bg-r4 text-on-fill' : s === 'pending' ? 'bg-r3 text-ink-fixed' : s === 'refunded' || s === 'failed' ? 'bg-r1 text-white' : 'bg-paper text-ink-soft');
+const ROLE_OPTIONS = ROLES.map((r) => ({ value: ROLE_META[r].name, label: ROLE_META[r].name }));
+const roleByName = (name: string): Role => ROLES.find((r) => ROLE_META[r].name === name) ?? 'user';
+const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '');
+const day = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 
 function readKey(): string {
   try {
@@ -63,7 +67,13 @@ const Label = ({ children, text }: { children: ReactNode; text: string }) => (
     {children}
   </label>
 );
+const Pill = ({ children, tone = 'bg-paper text-ink-soft' }: { children: ReactNode; tone?: string }) => <span className={`inline-flex rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${tone}`}>{children}</span>;
 
+/**
+ * The admin console. Every list is a table: sort by any column, search, filter by a column's values,
+ * tick rows and act on them together, and change a cell where it sits. Each change is written to the
+ * audit log on the server.
+ */
 export function Admin() {
   const me = useMe();
   const sessionAdmin = me.data?.user.role === 'admin';
@@ -92,7 +102,6 @@ export function Admin() {
   const [ovReason, setOvReason] = useState('');
   // listings
   const [listings, setListings] = useState<Listing[]>([]);
-  const [listingType, setListingType] = useState<ListingType | ''>('');
   const [creating, setCreating] = useState<ListingType | null>(null);
   const [form, setForm] = useState<Record<string, string | boolean>>({});
   // redemptions, audit
@@ -135,7 +144,7 @@ export function Admin() {
       } catch {
         // Private mode: the key just will not be remembered.
       }
-      const [u, r, f, l, a] = await Promise.all([adminApi.users(key, q), adminApi.redemptions(key, 'reserved'), adminApi.flags(key), adminApi.listings(key, listingType || undefined), adminApi.audit(key)]);
+      const [u, r, f, l, a] = await Promise.all([adminApi.users(key, q), adminApi.redemptions(key, 'reserved'), adminApi.flags(key), adminApi.listings(key), adminApi.audit(key)]);
       setUsers(u.users);
       setRedemptions(r.redemptions);
       setSettings(f.settings);
@@ -151,7 +160,7 @@ export function Admin() {
   }, [sessionAdmin]);
 
   const applyUser = (u: AdminUser) => {
-    setSelected(u);
+    setSelected((s) => (s?.id === u.id ? u : s));
     setUsers((list) => list.map((x) => (x.id === u.id ? u : x)));
   };
   const refreshFlags = async () => {
@@ -159,8 +168,8 @@ export function Admin() {
     setSettings(f.settings);
     setOverrides(f.overrides);
   };
-  const refreshListings = async (type = listingType) => {
-    const l = await adminApi.listings(key, type || undefined);
+  const refreshListings = async () => {
+    const l = await adminApi.listings(key);
     setListings(l.listings);
   };
   const refreshAudit = async () => setLogs((await adminApi.audit(key)).logs);
@@ -189,6 +198,10 @@ export function Admin() {
     if (k === 'kyc' && kycList === null) void loadKyc();
     if (k === 'ops' && funnels === null) void loadOps();
   };
+  /** The same change on every ticked row, one after the other, then one refresh. */
+  const each = async <T,>(rows: T[], fn: (row: T) => Promise<void>) => {
+    for (const r of rows) await fn(r);
+  };
 
   const tabs: [Tab, string][] = [
     ['people', 'People'],
@@ -203,7 +216,7 @@ export function Admin() {
   ];
 
   return (
-    <Screen tabs={false}>
+    <Screen tabs={false} wide>
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Admin</h1>
@@ -234,7 +247,7 @@ export function Admin() {
 
       {loaded && (
         <>
-          <nav className="mt-md flex gap-xs overflow-x-auto pb-xs scrollbar-none" aria-label="Admin sections">
+          <nav className="-mx-xs -my-sm mt-md flex gap-xs overflow-x-auto px-xs py-sm scrollbar-none md:flex-wrap md:overflow-visible" aria-label="Admin sections">
             {tabs.map(([k, label]) => (
               <button key={k} type="button" aria-pressed={tab === k} onClick={() => openTab(k)} className={`toy shrink-0 rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                 {label}
@@ -247,6 +260,7 @@ export function Admin() {
               <h2 id="people-heading" className="text-[24px]">
                 People
               </h2>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Search the whole list on the server, then sort, filter and edit the rows here. Role and Pro change in the row; tick rows to change several at once. Tap a row for honors, points and what that person sees.</p>
               <form
                 className="mt-sm flex gap-xs"
                 onSubmit={(e) => {
@@ -254,43 +268,62 @@ export function Admin() {
                   void run(async () => setUsers((await adminApi.users(key, q)).users));
                 }}
               >
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, email, page or id" aria-label="Search people" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-[16px]" />
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, email, page or id" aria-label="Search people on the server" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-[16px]" />
                 <Button type="submit" variant="outline" disabled={busy}>
                   Search
                 </Button>
               </form>
-              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-                {users.map((u) => (
-                  <li key={u.id}>
-                    <button type="button" onClick={() => setSelected(u)} aria-pressed={selected?.id === u.id} className={`toy toy-soft flex w-full items-center gap-sm rounded-tile bg-card p-sm text-left ${selected?.id === u.id ? 'outline outline-2 outline-ink' : ''}`}>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[16px] font-bold">
-                          {u.displayName || 'Anonymous climber'}
-                          {u.handle ? <span className="font-semibold text-ink-soft"> @{u.handle}</span> : ''}
-                        </span>
-                        <span className="block text-[14px] font-semibold text-ink-soft">
-                          {ROLE_META[u.role].name}
-                          {u.permissions.length ? `, ${u.permissions.map((p) => PERMISSION_NAMES[p]).join(', ')}` : ''}, {u.xp} xp, {u.points} pts{u.isPro ? ', Pro' : ''}
-                          {u.email ? `, ${u.email}` : ''}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <div className="mt-sm">
+                <DataTable<AdminUser>
+                  rows={users}
+                  rowKey={(u) => u.id}
+                  label="People"
+                  selectable
+                  busy={busy}
+                  activeKey={selected?.id ?? null}
+                  onRowClick={(u) => setSelected(u)}
+                  empty="Nobody matches on the server. Search above."
+                  columns={[
+                    {
+                      key: 'name',
+                      label: 'Name',
+                      get: (u) => u.displayName || 'Anonymous climber',
+                      render: (u) => (
+                        <>
+                          <span className="block font-bold">{u.displayName || 'Anonymous climber'}</span>
+                          {u.handle && <span className="block text-[12px] font-bold text-ink-soft">@{u.handle}</span>}
+                        </>
+                      ),
+                    },
+                    { key: 'email', label: 'Email', get: (u) => u.email ?? '', wide: true },
+                    { key: 'role', label: 'Role', get: (u) => ROLE_META[u.role].name, filter: true, edit: { kind: 'select', options: ROLE_OPTIONS, onEdit: (u, v) => run(async () => applyUser((await adminApi.setRole(key, u.id, roleByName(String(v)))).user)) } },
+                    { key: 'pro', label: 'Pro', get: (u) => u.isPro, filter: true, edit: { kind: 'toggle', onEdit: (u, v) => run(async () => applyUser((await adminApi.setPro(key, u.id, Boolean(v))).user)) } },
+                    { key: 'perms', label: 'Permissions', get: (u) => (u.role === 'admin' ? 'all' : u.permissions.map((p) => PERMISSION_NAMES[p]).join(', ')), wide: true, wrap: true },
+                    { key: 'xp', label: 'XP', get: (u) => u.xp, align: 'right' },
+                    { key: 'points', label: 'Points', get: (u) => u.points, align: 'right' },
+                    { key: 'honors', label: 'Honors', get: (u) => u.honors.map((h) => HONOR_BY_KEY[h]?.name ?? h).join(', '), render: (u) => <span aria-label={u.honors.map((h) => HONOR_BY_KEY[h]?.name ?? h).join(', ')}>{u.honors.map((h) => HONOR_BY_KEY[h]?.emoji ?? '').join(' ')}</span>, wide: true },
+                    { key: 'joined', label: 'Joined', get: (u) => u.createdAt.slice(0, 10), render: (u) => day(u.createdAt), wide: true },
+                  ]}
+                  bulk={[
+                    { label: 'Make creator', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setRole(key, u.id, 'user')).user))) },
+                    { label: 'Make staff', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setRole(key, u.id, 'sub_admin')).user))) },
+                    { label: 'Make admin', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setRole(key, u.id, 'admin')).user))) },
+                    { label: 'Pro on', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setPro(key, u.id, true)).user))) },
+                    { label: 'Pro off', variant: 'ghost', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setPro(key, u.id, false)).user))) },
+                  ]}
+                />
+              </div>
 
               {selected && (
                 <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-                  <h3 className="text-[22px]">{selected.displayName || 'Anonymous climber'}</h3>
-                  <p className="mt-xs m-0 text-[12px] font-bold text-ink-mute">{selected.id}</p>
-
-                  <p className="mt-md m-0 text-[14px] font-bold">Role</p>
-                  <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label="Role">
-                    {ROLES.map((r) => (
-                      <button key={r} type="button" aria-pressed={selected.role === r} disabled={busy} onClick={() => run(async () => applyUser((await adminApi.setRole(key, selected.id, r as Role)).user))} className={`toy rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${selected.role === r ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-                        {ROLE_META[r as Role].name}
-                      </button>
-                    ))}
+                  <div className="flex items-start justify-between gap-sm">
+                    <div className="min-w-0">
+                      <h3 className="text-[22px]">{selected.displayName || 'Anonymous climber'}</h3>
+                      <p className="mt-xs m-0 text-[12px] font-bold text-ink-mute">{selected.id}</p>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => setSelected(null)}>
+                      Close
+                    </Button>
                   </div>
 
                   <p className="mt-md m-0 text-[14px] font-bold">Permissions</p>
@@ -313,12 +346,9 @@ export function Admin() {
                     })}
                   </div>
 
-                  <div className="mt-md">
-                    <Toggle on={selected.isPro} onChange={(on) => run(async () => applyUser((await adminApi.setPro(key, selected.id, on)).user))} label="Pro" hint="Grants the Pro honor and badge." disabled={busy} />
-                  </div>
-
                   <p className="mt-md m-0 text-[14px] font-bold">Honors</p>
                   <div className="mt-xs flex flex-wrap gap-xs">
+                    {selected.honors.length === 0 && <span className="text-[14px] font-semibold text-ink-soft">None yet.</span>}
                     {selected.honors.map((h) => (
                       <button key={h} type="button" disabled={busy} onClick={() => run(async () => applyUser((await adminApi.revokeHonor(key, selected.id, h)).user))} className="toy toy-soft rounded-pill bg-paper px-sm py-xs text-[14px] font-bold" aria-label={`Remove ${HONOR_BY_KEY[h]?.name ?? h}`}>
                         {HONOR_BY_KEY[h]?.emoji} {HONOR_BY_KEY[h]?.name ?? h} ×
@@ -351,7 +381,7 @@ export function Admin() {
                     What does this person see?
                   </Button>
                   {preview && (
-                    <ul className="mt-xs grid list-none grid-cols-2 gap-xs p-0 m-0">
+                    <ul className="mt-xs grid list-none grid-cols-2 gap-xs p-0 m-0 md:grid-cols-4">
                       {MODULES.map((m) => {
                         const a = preview.access[m.key];
                         return (
@@ -373,62 +403,53 @@ export function Admin() {
               <h2 id="flags-heading" className="text-[24px]">
                 Feature flags
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Off hides a module for everyone. Rollout shows it to a steady percentage of people. Overrides force it on or off for one person, one role or one brand, and can expire.</p>
-              {(['core', 'earn', 'community', 'wellbeing', 'creator', 'manage'] as ModuleGroup[]).map((g) => {
-                const list = settings.filter((s) => MODULE_BY_KEY[s.key]?.group === g);
-                if (!list.length) return null;
-                return (
-                  <div key={g} className="mt-md">
-                    <h3 className="text-[18px]">{MODULE_GROUPS[g]}</h3>
-                    <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
-                      {list.map((s) => {
-                        const m = MODULE_BY_KEY[s.key];
-                        const ovs = overrides.filter((o) => o.flagKey === s.key);
-                        return (
-                          <li key={s.key} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                            <Toggle on={s.enabled} onChange={(on) => run(async () => { await adminApi.setModuleSetting(key, s.key, { enabled: on }); await refreshFlags(); })} label={`${m?.emoji ?? ''} ${m?.name ?? s.key}`} hint={m?.blurb} disabled={busy} />
-                            <div className="mt-xs grid grid-cols-2 gap-xs">
-                              <label className="block">
-                                <span className="block text-[12px] font-bold text-ink-soft">Minimum role</span>
-                                <select value={s.minRole} disabled={busy} onChange={(e) => run(async () => { await adminApi.setModuleSetting(key, s.key, { minRole: e.target.value as Role }); await refreshFlags(); })} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-xs text-[14px] font-bold">
-                                  {ROLES.map((r) => (
-                                    <option key={r} value={r}>
-                                      {ROLE_META[r as Role].name}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-                              <label className="block">
-                                <span className="block text-[12px] font-bold text-ink-soft">Rollout {s.rollout}%</span>
-                                <input type="range" min={0} max={100} step={5} value={s.rollout} disabled={busy} onChange={(e) => setSettings((all) => all.map((x) => (x.key === s.key ? { ...x, rollout: Number(e.target.value) } : x)))} onMouseUp={() => run(async () => { await adminApi.setModuleSetting(key, s.key, { rollout: s.rollout }); await refreshFlags(); })} onTouchEnd={() => run(async () => { await adminApi.setModuleSetting(key, s.key, { rollout: s.rollout }); await refreshFlags(); })} className="mt-xs w-full accent-ink" />
-                              </label>
-                            </div>
-                            {ovs.length > 0 && (
-                              <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
-                                {ovs.map((o) => (
-                                  <li key={o.id} className="flex items-center gap-xs rounded-tile bg-paper px-sm py-xs text-[12px] font-bold">
-                                    <span className="min-w-0 flex-1">
-                                      {o.enabled ? 'On' : 'Off'} for {o.subjectType} {o.subjectId}
-                                      {o.expiresAt ? `, until ${new Date(o.expiresAt).toLocaleDateString()}` : ''}
-                                      {o.reason ? `: ${o.reason}` : ''}
-                                    </span>
-                                    <button type="button" disabled={busy} onClick={() => run(async () => { await adminApi.removeOverride(key, o.id); await refreshFlags(); })} className="toy toy-soft min-h-[32px] rounded-pill bg-card px-xs" aria-label="Remove override">
-                                      ×
-                                    </button>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                            <Button variant="ghost" className="mt-xs" onClick={() => { setOverrideFor(s.key); setOvSubjectId(''); setOvReason(''); setOvDays(''); }}>
-                              Add an override
-                            </Button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                );
-              })}
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Off hides a module for everyone. Rollout shows it to a steady percentage of people. Overrides force it on or off for one person, one role or one brand, and can expire. Change any cell in place.</p>
+              <div className="mt-sm">
+                <DataTable<ModuleSetting>
+                  rows={settings}
+                  rowKey={(s) => s.key}
+                  label="Feature flags"
+                  busy={busy}
+                  columns={[
+                    { key: 'module', label: 'Module', get: (s) => MODULE_BY_KEY[s.key]?.name ?? s.key, render: (s) => <span className="font-bold">{MODULE_BY_KEY[s.key]?.emoji} {MODULE_BY_KEY[s.key]?.name ?? s.key}</span> },
+                    { key: 'group', label: 'Group', get: (s) => MODULE_GROUPS[MODULE_BY_KEY[s.key]?.group ?? 'core'], filter: true, wide: true },
+                    { key: 'enabled', label: 'On', get: (s) => s.enabled, filter: true, edit: { kind: 'toggle', onEdit: (s, v) => run(async () => { await adminApi.setModuleSetting(key, s.key, { enabled: Boolean(v) }); await refreshFlags(); }) } },
+                    { key: 'minRole', label: 'Minimum role', get: (s) => ROLE_META[s.minRole].name, filter: true, edit: { kind: 'select', options: ROLE_OPTIONS, onEdit: (s, v) => run(async () => { await adminApi.setModuleSetting(key, s.key, { minRole: roleByName(String(v)) }); await refreshFlags(); }) } },
+                    { key: 'rollout', label: 'Rollout %', get: (s) => s.rollout, align: 'right', edit: { kind: 'number', min: 0, max: 100, step: 5, onEdit: (s, v) => run(async () => { await adminApi.setModuleSetting(key, s.key, { rollout: Math.max(0, Math.min(100, Number(v))) }); await refreshFlags(); }) } },
+                    { key: 'overrides', label: 'Overrides', get: (s) => overrides.filter((o) => o.flagKey === s.key).length, align: 'right' },
+                  ]}
+                  actions={(s) => (
+                    <Button variant="outline" size="sm" onClick={() => { setOverrideFor(s.key); setOvSubjectId(''); setOvReason(''); setOvDays(''); }}>
+                      Add override
+                    </Button>
+                  )}
+                />
+              </div>
+              <h3 className="mt-md text-[18px]">Overrides</h3>
+              <div className="mt-xs">
+                <DataTable<FlagOverride>
+                  rows={overrides}
+                  rowKey={(o) => o.id}
+                  label="Overrides"
+                  busy={busy}
+                  selectable
+                  empty="No overrides. Add one from the table above."
+                  columns={[
+                    { key: 'module', label: 'Module', get: (o) => MODULE_BY_KEY[o.flagKey]?.name ?? o.flagKey, filter: true },
+                    { key: 'for', label: 'For', get: (o) => o.subjectType, filter: true },
+                    { key: 'id', label: 'Id', get: (o) => o.subjectId },
+                    { key: 'state', label: 'Forced', get: (o) => (o.enabled ? 'on' : 'off'), filter: true, render: (o) => <Pill tone={o.enabled ? 'bg-r4 text-on-fill' : 'bg-r1 text-white'}>{o.enabled ? 'on' : 'off'}</Pill> },
+                    { key: 'expires', label: 'Expires', get: (o) => o.expiresAt ?? '', render: (o) => (o.expiresAt ? day(o.expiresAt) : 'never'), wide: true },
+                    { key: 'reason', label: 'Reason', get: (o) => o.reason, wide: true, wrap: true },
+                  ]}
+                  actions={(o) => (
+                    <Button variant="ghost" size="sm" disabled={busy} onClick={() => run(async () => { await adminApi.removeOverride(key, o.id); await refreshFlags(); })}>
+                      Remove
+                    </Button>
+                  )}
+                  bulk={[{ label: 'Remove', variant: 'ghost', onClick: (rows) => run(async () => { await each(rows, (o) => adminApi.removeOverride(key, o.id).then(() => undefined)); await refreshFlags(); }) }]}
+                />
+              </div>
               <Sheet open={overrideFor !== null} onClose={() => setOverrideFor(null)} title={`Override: ${MODULE_BY_KEY[overrideFor ?? '']?.name ?? ''}`}>
                 <form
                   className="flex flex-col gap-md"
@@ -472,54 +493,44 @@ export function Admin() {
               <h2 id="listings-heading" className="text-[24px]">
                 Listings
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">What the public site shows on Explore and on each feature page. Create here, then publish or feature. Brands make their own campaigns public from Army.</p>
-              <div className="mt-sm flex flex-wrap gap-xs" role="group" aria-label="Type">
-                <button type="button" aria-pressed={!listingType} onClick={() => { setListingType(''); void run(() => refreshListings('')); }} className={`toy min-h-[40px] rounded-pill border-2 px-sm text-[14px] font-bold ${!listingType ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-                  All
-                </button>
-                {LISTING_TYPES.map((t) => (
-                  <button key={t} type="button" aria-pressed={listingType === t} onClick={() => { setListingType(t); void run(() => refreshListings(t)); }} className={`toy min-h-[40px] rounded-pill border-2 px-sm text-[14px] font-bold ${listingType === t ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-                    {LISTING_TYPE_META[t].emoji} {LISTING_TYPE_META[t].plural}
-                  </button>
-                ))}
-              </div>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">What the public site shows on Explore and on each feature page. Create here, then publish or feature in the row, or tick several and do it at once. Brands make their own campaigns public from Army.</p>
               <div className="mt-sm flex flex-wrap gap-xs">
                 {LISTING_TYPES.filter((t) => t !== 'campaign').map((t) => (
-                  <Button key={t} variant="outline" onClick={() => { setCreating(t); setForm({}); }}>
+                  <Button key={t} variant="outline" size="sm" onClick={() => { setCreating(t); setForm({}); }}>
                     New {LISTING_TYPE_META[t].name.toLowerCase()}
                   </Button>
                 ))}
               </div>
-              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-                {listings.length === 0 && <li className="text-[14px] font-semibold text-ink-soft">Nothing yet. Create the first listing above.</li>}
-                {listings.map((l) => (
-                  <li key={`${l.type}-${l.id}`} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                    <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-mute">
-                      {LISTING_TYPE_META[l.type].name}
-                      {l.featured && <span className="ml-xs rounded-pill bg-r3 px-xs text-[11px] leading-[18px] text-ink-fixed">Featured</span>}
-                      <span className={`ml-xs rounded-pill px-xs text-[11px] leading-[18px] ${l.live ? 'bg-r4 text-on-fill' : 'bg-line text-ink'}`}>{l.live ? 'Live' : 'Hidden'}</span>
-                    </p>
-                    <p className="m-0 text-[16px] font-bold">{l.title}</p>
-                    <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                      {l.by}
-                      {l.facts.length ? `, ${l.facts.join(', ')}` : ''}
-                    </p>
-                    <div className="mt-xs flex flex-wrap gap-xs">
-                      <Button variant="outline" disabled={busy} onClick={() => run(async () => { await adminApi.setListing(key, l.type, l.id, { live: !l.live }); await refreshListings(); })}>
-                        {l.live ? 'Hide' : 'Publish'}
-                      </Button>
-                      {l.type !== 'tool' && l.type !== 'campaign' && l.type !== 'circle' && (
-                        <Button variant="ghost" disabled={busy} onClick={() => run(async () => { await adminApi.setListing(key, l.type, l.id, { featured: !l.featured }); await refreshListings(); })}>
-                          {l.featured ? 'Unfeature' : 'Feature'}
-                        </Button>
-                      )}
-                      <Link to={l.path} className="inline-flex min-h-[48px] items-center text-[14px] font-bold text-ink-soft underline-offset-4 hover:underline">
-                        Open in app
-                      </Link>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <div className="mt-sm">
+                <DataTable<Listing>
+                  rows={listings}
+                  rowKey={(l) => `${l.type}-${l.id}`}
+                  label="Listings"
+                  selectable
+                  busy={busy}
+                  empty="Nothing yet. Create the first listing above."
+                  columns={[
+                    { key: 'type', label: 'Type', get: (l) => LISTING_TYPE_META[l.type].name, filter: true, render: (l) => <span>{LISTING_TYPE_META[l.type].emoji} {LISTING_TYPE_META[l.type].name}</span> },
+                    { key: 'title', label: 'Title', get: (l) => l.title, wrap: true, render: (l) => <span className="font-bold">{l.title}</span> },
+                    { key: 'by', label: 'By', get: (l) => l.by, filter: true, wide: true },
+                    { key: 'facts', label: 'Facts', get: (l) => l.facts.join(', '), wide: true, wrap: true },
+                    { key: 'live', label: 'Live', get: (l) => l.live, filter: true, edit: { kind: 'toggle', onEdit: (l, v) => run(async () => { await adminApi.setListing(key, l.type, l.id, { live: Boolean(v) }); await refreshListings(); }) } },
+                    { key: 'featured', label: 'Featured', get: (l) => l.featured, filter: true, edit: { kind: 'toggle', disabled: (l) => l.type === 'tool' || l.type === 'campaign' || l.type === 'circle', onEdit: (l, v) => run(async () => { await adminApi.setListing(key, l.type, l.id, { featured: Boolean(v) }); await refreshListings(); }) } },
+                    { key: 'created', label: 'Created', get: (l) => l.createdAt.slice(0, 10), render: (l) => day(l.createdAt), wide: true },
+                  ]}
+                  actions={(l) => (
+                    <Link to={l.path} className="inline-flex min-h-[40px] items-center text-[14px] font-bold text-ink-soft underline-offset-4 hover:underline">
+                      Open
+                    </Link>
+                  )}
+                  bulk={[
+                    { label: 'Publish', onClick: (rows) => run(async () => { await each(rows, (l) => adminApi.setListing(key, l.type, l.id, { live: true }).then(() => undefined)); await refreshListings(); }) },
+                    { label: 'Hide', onClick: (rows) => run(async () => { await each(rows, (l) => adminApi.setListing(key, l.type, l.id, { live: false }).then(() => undefined)); await refreshListings(); }) },
+                    { label: 'Feature', onClick: (rows) => run(async () => { await each(rows.filter((l) => l.type !== 'tool' && l.type !== 'campaign' && l.type !== 'circle'), (l) => adminApi.setListing(key, l.type, l.id, { featured: true }).then(() => undefined)); await refreshListings(); }) },
+                    { label: 'Unfeature', variant: 'ghost', onClick: (rows) => run(async () => { await each(rows.filter((l) => l.type !== 'tool' && l.type !== 'campaign' && l.type !== 'circle'), (l) => adminApi.setListing(key, l.type, l.id, { featured: false }).then(() => undefined)); await refreshListings(); }) },
+                  ]}
+                />
+              </div>
               <Sheet open={creating !== null} onClose={() => setCreating(null)} title={creating ? `New ${LISTING_TYPE_META[creating].name.toLowerCase()}` : ''}>
                 {creating && (
                   <form
@@ -738,27 +749,37 @@ export function Admin() {
               <h2 id="redemptions-heading" className="text-[24px]">
                 Reserved rewards
               </h2>
-              {redemptions.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Nothing waiting.</p>}
-              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-                {redemptions.map((r) => (
-                  <li key={r.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                    <p className="m-0 text-[16px] font-bold">
-                      {r.userName}: {REWARD_BY_KEY[r.rewardKey]?.name ?? r.rewardKey}
-                    </p>
-                    <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                      {r.points} points, {new Date(r.createdAt).toLocaleDateString()}
-                    </p>
-                    <div className="mt-xs flex gap-xs">
-                      <Button disabled={busy} onClick={() => run(async () => { await adminApi.setRedemption(key, r.id, 'fulfilled'); setRedemptions((all) => all.filter((x) => x.id !== r.id)); })}>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Points are held until you mark a reward fulfilled or cancel it, which gives the points back.</p>
+              <div className="mt-sm">
+                <DataTable<AdminRedemption>
+                  rows={redemptions}
+                  rowKey={(r) => r.id}
+                  label="Reserved rewards"
+                  selectable
+                  busy={busy}
+                  empty="Nothing waiting."
+                  columns={[
+                    { key: 'person', label: 'Person', get: (r) => r.userName, render: (r) => <span className="font-bold">{r.userName}</span> },
+                    { key: 'reward', label: 'Reward', get: (r) => REWARD_BY_KEY[r.rewardKey]?.name ?? r.rewardKey, filter: true },
+                    { key: 'points', label: 'Points', get: (r) => r.points, align: 'right' },
+                    { key: 'reserved', label: 'Reserved', get: (r) => r.createdAt, render: (r) => when(r.createdAt) },
+                  ]}
+                  actions={(r) => (
+                    <>
+                      <Button size="sm" disabled={busy} onClick={() => run(async () => { await adminApi.setRedemption(key, r.id, 'fulfilled'); setRedemptions((all) => all.filter((x) => x.id !== r.id)); })}>
                         Fulfilled
                       </Button>
-                      <Button variant="outline" disabled={busy} onClick={() => run(async () => { await adminApi.setRedemption(key, r.id, 'cancelled'); setRedemptions((all) => all.filter((x) => x.id !== r.id)); })}>
+                      <Button size="sm" variant="outline" disabled={busy} onClick={() => run(async () => { await adminApi.setRedemption(key, r.id, 'cancelled'); setRedemptions((all) => all.filter((x) => x.id !== r.id)); })}>
                         Cancel and refund
                       </Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+                    </>
+                  )}
+                  bulk={[
+                    { label: 'Mark fulfilled', onClick: (rows) => run(async () => { await each(rows, (r) => adminApi.setRedemption(key, r.id, 'fulfilled').then(() => undefined)); setRedemptions((all) => all.filter((x) => !rows.some((r) => r.id === x.id))); }) },
+                    { label: 'Cancel and refund', variant: 'ghost', onClick: (rows) => run(async () => { await each(rows, (r) => adminApi.setRedemption(key, r.id, 'cancelled').then(() => undefined)); setRedemptions((all) => all.filter((x) => !rows.some((r) => r.id === x.id))); }) },
+                  ]}
+                />
+              </div>
             </section>
           )}
 
@@ -767,7 +788,7 @@ export function Admin() {
               <h2 id="orders-heading" className="text-[24px]">
                 Orders
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Search by order id, provider id, buyer name or email, page name or product.</p>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Search the server by order id, provider id, buyer name or email, page name or product. Sort and filter the results below; tap a row for its timeline and a refund.</p>
               <form
                 className="mt-sm flex flex-wrap gap-xs"
                 onSubmit={(e) => {
@@ -775,48 +796,50 @@ export function Admin() {
                   void searchOrders();
                 }}
               >
-                <input value={orderQ} onChange={(e) => setOrderQ(e.target.value)} placeholder="Order, payment, buyer, page" aria-label="Search orders" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-[16px]" />
-                <select value={orderStatus} onChange={(e) => { setOrderStatus(e.target.value); void searchOrders(orderQ, e.target.value); }} aria-label="Status" className="rounded-pill border-2 border-line bg-card px-sm py-sm text-[14px] font-bold">
+                <input value={orderQ} onChange={(e) => setOrderQ(e.target.value)} placeholder="Order, payment, buyer, page" aria-label="Search orders on the server" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-[16px]" />
+                <Select value={orderStatus} onChange={(e) => { setOrderStatus(e.target.value); void searchOrders(orderQ, e.target.value); }} aria-label="Status on the server" className="min-w-[160px]" selectClass="rounded-pill bg-card">
                   {ORDER_STATUSES.map((s) => (
                     <option key={s} value={s}>
                       {s || 'all statuses'}
                     </option>
                   ))}
-                </select>
+                </Select>
                 <Button type="submit" variant="outline" disabled={busy}>
                   Search
                 </Button>
               </form>
-              {orders && orders.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No orders match.</p>}
-              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-                {orders?.map((o) => (
-                  <li key={o.id}>
-                    <button type="button" onClick={() => openOrder(o.id)} aria-pressed={orderDetail?.order.id === o.id} className={`toy toy-soft flex w-full items-start gap-sm rounded-tile bg-card p-sm text-left ${orderDetail?.order.id === o.id ? 'outline outline-2 outline-ink' : ''}`}>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[16px] font-bold">
-                          {o.productTitle} <span className="font-semibold text-ink-soft">#{o.id.slice(0, 8)}</span>
-                        </span>
-                        <span className="block truncate text-[14px] font-semibold text-ink-soft">
-                          {o.buyerName}
-                          {o.buyerEmail ? ` (${o.buyerEmail})` : ''}
-                          {o.ownerHandle ? ` from @${o.ownerHandle}` : ` from ${o.ownerName}`}
-                        </span>
-                        <span className="block text-[12px] font-semibold text-ink-mute">
-                          {o.points > 0 ? `${o.points} points` : `${(o.cents / 100).toFixed(2)} ${o.currency}`}, {o.provider}, {new Date(o.createdAt).toLocaleString()}
-                        </span>
-                      </span>
-                      <span className={`shrink-0 rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${statusTone(o.status)}`}>{o.status}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <div className="mt-sm">
+                <DataTable<AdminOrder>
+                  rows={orders ?? []}
+                  rowKey={(o) => o.id}
+                  label="Orders"
+                  busy={busy}
+                  activeKey={orderDetail?.order.id ?? null}
+                  onRowClick={(o) => void openOrder(o.id)}
+                  empty="No orders match."
+                  columns={[
+                    { key: 'product', label: 'Product', get: (o) => o.productTitle, wrap: true, render: (o) => <><span className="block font-bold">{o.productTitle}</span><span className="block text-[12px] font-bold text-ink-mute">#{o.id.slice(0, 8)}</span></> },
+                    { key: 'buyer', label: 'Buyer', get: (o) => `${o.buyerName} ${o.buyerEmail ?? ''}`.trim(), render: (o) => <><span className="block">{o.buyerName}</span>{o.buyerEmail && <span className="block text-[12px] font-bold text-ink-soft">{o.buyerEmail}</span>}</> },
+                    { key: 'from', label: 'From', get: (o) => (o.ownerHandle ? `@${o.ownerHandle}` : o.ownerName), filter: true, wide: true },
+                    { key: 'amount', label: 'Amount', get: (o) => (o.points > 0 ? o.points : o.cents / 100), align: 'right', render: (o) => (o.points > 0 ? `${o.points} pts` : `${(o.cents / 100).toFixed(2)} ${o.currency}`) },
+                    { key: 'provider', label: 'Provider', get: (o) => o.provider, filter: true, wide: true },
+                    { key: 'status', label: 'Status', get: (o) => o.status, filter: true, render: (o) => <Pill tone={statusTone(o.status)}>{o.status}</Pill> },
+                    { key: 'created', label: 'Created', get: (o) => o.createdAt, render: (o) => when(o.createdAt) },
+                  ]}
+                />
+              </div>
               {orderDetail && (
                 <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-                  <h3 className="text-[22px]">
-                    {orderDetail.order.productTitle} <span className="text-[14px] font-bold text-ink-mute">#{orderDetail.order.id.slice(0, 8)}</span>
-                  </h3>
+                  <div className="flex items-start justify-between gap-sm">
+                    <h3 className="text-[22px]">
+                      {orderDetail.order.productTitle} <span className="text-[14px] font-bold text-ink-mute">#{orderDetail.order.id.slice(0, 8)}</span>
+                    </h3>
+                    <Button variant="ghost" size="sm" onClick={() => setOrderDetail(null)}>
+                      Close
+                    </Button>
+                  </div>
                   <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-                    <span className={`rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${statusTone(orderDetail.order.status)}`}>{orderDetail.order.status}</span> {orderDetail.order.provider}
+                    <Pill tone={statusTone(orderDetail.order.status)}>{orderDetail.order.status}</Pill> {orderDetail.order.provider}
                     {orderDetail.order.providerOrderId ? `, ${orderDetail.order.providerOrderId}` : ''}
                     {orderDetail.order.paidAt ? `, paid ${new Date(orderDetail.order.paidAt).toLocaleString()}` : ''}
                   </p>
@@ -887,41 +910,35 @@ export function Admin() {
                 <h2 id="hooks-heading" className="text-[24px]">
                   Webhooks
                 </h2>
-                <Button variant="outline" disabled={busy} onClick={() => loadHooks()}>
+                <Button variant="outline" size="sm" disabled={busy} onClick={() => loadHooks()}>
                   Refresh
                 </Button>
               </div>
               <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Every signed event from Meta and the payment provider, stored before it is processed. Replay runs one again.</p>
-              {hooks && hooks.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing has come in yet.</p>}
-              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-                {hooks?.map((h) => (
-                  <li key={h.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                    <p className="m-0 text-[16px] font-bold">
-                      {h.provider} <span className="font-semibold text-ink-soft">{h.type}</span>
-                    </p>
-                    <p className="m-0 text-[12px] font-semibold text-ink-mute">
-                      received {new Date(h.receivedAt).toLocaleString()}
-                      {h.processedAt ? `, processed ${new Date(h.processedAt).toLocaleString()}` : ', not processed'}
-                    </p>
-                    {h.error && <p className="m-0 text-[12px] font-bold text-r1">{h.error}</p>}
-                    <div className="mt-xs flex flex-wrap items-center gap-xs">
-                      <Button
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() =>
-                          run(async () => {
-                            const r = await adminApi.replayWebhook(key, h.id);
-                            setReplayOutcome((m) => ({ ...m, [h.id]: r.outcome }));
-                          })
-                        }
-                      >
+              <div className="mt-sm">
+                <DataTable<WebhookEvent>
+                  rows={hooks ?? []}
+                  rowKey={(h) => h.id}
+                  label="Webhooks"
+                  busy={busy}
+                  empty="Nothing has come in yet."
+                  columns={[
+                    { key: 'provider', label: 'Provider', get: (h) => h.provider, filter: true },
+                    { key: 'type', label: 'Event', get: (h) => h.type, filter: true },
+                    { key: 'received', label: 'Received', get: (h) => h.receivedAt, render: (h) => when(h.receivedAt) },
+                    { key: 'processed', label: 'Processed', get: (h) => (h.processedAt ? 'yes' : 'no'), filter: true, render: (h) => (h.processedAt ? when(h.processedAt) : <Pill tone="bg-r3 text-ink-fixed">not yet</Pill>) },
+                    { key: 'error', label: 'Error', get: (h) => h.error ?? '', render: (h) => (h.error ? <span className="text-r1">{h.error}</span> : ''), wide: true, wrap: true },
+                  ]}
+                  actions={(h) => (
+                    <>
+                      <Button variant="outline" size="sm" disabled={busy} onClick={() => run(async () => { const r = await adminApi.replayWebhook(key, h.id); setReplayOutcome((m) => ({ ...m, [h.id]: r.outcome })); })}>
                         Replay
                       </Button>
                       {replayOutcome[h.id] && <span className="text-[12px] font-bold text-ink-soft">{replayOutcome[h.id]}</span>}
-                    </div>
-                  </li>
-                ))}
-              </ul>
+                    </>
+                  )}
+                />
+              </div>
             </section>
           )}
 
@@ -930,7 +947,7 @@ export function Admin() {
               <h2 id="kyc-heading" className="text-[24px]">
                 Payout details
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Only the last digits are stored here. Approve once the bank account and PAN match the legal name.</p>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Only the last digits are stored here. Approve once the bank account and PAN match the legal name. Type a note in the row before deciding, if the person should hear why.</p>
               <div className="mt-sm flex flex-wrap gap-xs" role="group" aria-label="Status">
                 {(['pending', 'approved', 'rejected'] as const).map((s) => (
                   <button key={s} type="button" aria-pressed={kycStatus === s} onClick={() => { setKycStatus(s); void loadKyc(s); }} className={`toy min-h-[40px] rounded-pill border-2 px-sm text-[14px] font-bold ${kycStatus === s ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
@@ -938,38 +955,38 @@ export function Admin() {
                   </button>
                 ))}
               </div>
-              {kycList && kycList.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing {kycStatus} right now.</p>}
-              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-                {kycList?.map((k) => (
-                  <li key={k.userId} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                    <p className="m-0 text-[16px] font-bold">
-                      {k.userName} <span className="font-semibold text-ink-soft">{k.email ?? 'no email'}</span>
-                    </p>
-                    <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                      {k.legalName}, PAN ending {k.panLast4}, account ending {k.bankLast4}, {k.ifsc}
-                    </p>
-                    <p className="m-0 text-[14px] font-semibold text-ink-soft">{k.address}</p>
-                    <p className="m-0 text-[12px] font-semibold text-ink-mute">
-                      {k.submittedAt ? `submitted ${new Date(k.submittedAt).toLocaleString()}` : ''}
-                      {k.decidedAt ? `, decided ${new Date(k.decidedAt).toLocaleString()}` : ''}
-                      {k.note ? `, ${k.note}` : ''}
-                    </p>
-                    {k.status === 'pending' && (
-                      <div className="mt-xs">
-                        <input value={kycNote[k.userId] ?? ''} onChange={(e) => setKycNote((m) => ({ ...m, [k.userId]: e.target.value }))} placeholder="Note to the person (optional)" aria-label="Note" className={field} />
-                        <div className="mt-xs flex gap-xs">
-                          <Button disabled={busy} onClick={() => run(async () => { await adminApi.decideKyc(key, k.userId, { status: 'approved', note: kycNote[k.userId] ?? '' }); await loadKyc(); })}>
-                            Approve
-                          </Button>
-                          <Button variant="outline" disabled={busy} onClick={() => run(async () => { await adminApi.decideKyc(key, k.userId, { status: 'rejected', note: kycNote[k.userId] ?? '' }); await loadKyc(); })}>
-                            Reject
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
+              <div className="mt-sm">
+                <DataTable<AdminKyc>
+                  rows={kycList ?? []}
+                  rowKey={(k) => k.userId}
+                  label="Payout details"
+                  busy={busy}
+                  empty={`Nothing ${kycStatus} right now.`}
+                  columns={[
+                    { key: 'person', label: 'Person', get: (k) => `${k.userName} ${k.email ?? ''}`.trim(), render: (k) => <><span className="block font-bold">{k.userName}</span><span className="block text-[12px] font-bold text-ink-soft">{k.email ?? 'no email'}</span></> },
+                    { key: 'legal', label: 'Legal name', get: (k) => k.legalName },
+                    { key: 'pan', label: 'PAN', get: (k) => `…${k.panLast4}`, wide: true },
+                    { key: 'account', label: 'Account', get: (k) => `…${k.bankLast4} ${k.ifsc}`, wide: true },
+                    { key: 'address', label: 'Address', get: (k) => k.address, wide: true, wrap: true },
+                    { key: 'submitted', label: 'Submitted', get: (k) => k.submittedAt ?? '', render: (k) => when(k.submittedAt) },
+                    ...(kycStatus === 'pending'
+                      ? [{ key: 'note', label: 'Note to them', get: (k: AdminKyc) => kycNote[k.userId] ?? '', edit: { kind: 'text' as const, onEdit: (k: AdminKyc, v: string | number | boolean) => setKycNote((m) => ({ ...m, [k.userId]: String(v) })) } }]
+                      : [{ key: 'decided', label: 'Decided', get: (k: AdminKyc) => `${when(k.decidedAt)}${k.note ? `, ${k.note}` : ''}` }]),
+                  ]}
+                  actions={(k) =>
+                    k.status === 'pending' ? (
+                      <>
+                        <Button size="sm" disabled={busy} onClick={() => run(async () => { await adminApi.decideKyc(key, k.userId, { status: 'approved', note: kycNote[k.userId] ?? '' }); await loadKyc(); })}>
+                          Approve
+                        </Button>
+                        <Button size="sm" variant="outline" disabled={busy} onClick={() => run(async () => { await adminApi.decideKyc(key, k.userId, { status: 'rejected', note: kycNote[k.userId] ?? '' }); await loadKyc(); })}>
+                          Reject
+                        </Button>
+                      </>
+                    ) : null
+                  }
+                />
+              </div>
             </section>
           )}
 
@@ -979,12 +996,12 @@ export function Admin() {
                 <h2 id="ops-heading" className="text-[24px]">
                   Funnels
                 </h2>
-                <Button variant="outline" disabled={busy} onClick={() => loadOps()}>
+                <Button variant="outline" size="sm" disabled={busy} onClick={() => loadOps()}>
                   Refresh
                 </Button>
               </div>
               <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Counted from our own tables, nothing leaves the server. Each bar is the share of the step before it.</p>
-              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+              <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
                 {funnels?.map((f) => {
                   const top = Math.max(1, f.steps[0]?.count ?? 0);
                   return (
@@ -992,7 +1009,7 @@ export function Admin() {
                       <p className="m-0 text-[16px] font-bold">{f.name}</p>
                       <ol className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
                         {f.steps.map((s, i) => {
-                          const prev = i > 0 ? f.steps[i - 1]?.count ?? 0 : null;
+                          const prev = i > 0 ? (f.steps[i - 1]?.count ?? 0) : null;
                           const drop = prev ? Math.round(100 - (s.count / Math.max(1, prev)) * 100) : null;
                           return (
                             <li key={s.label} className="text-[12px] font-bold">
@@ -1017,20 +1034,22 @@ export function Admin() {
 
               <h2 className="mt-lg text-[24px]">Email outbox</h2>
               <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Every message the app wanted to send. Skipped means no RESEND_API_KEY is set on the server, so nothing went out.</p>
-              {outbox && outbox.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing queued yet.</p>}
-              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-                {outbox?.map((m) => (
-                  <li key={m.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                    <p className="m-0 text-[14px] font-bold">
-                      {m.subject} <span className={`ml-xs rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${m.status === 'sent' ? 'bg-r4 text-on-fill' : m.status === 'failed' ? 'bg-r1 text-white' : 'bg-paper text-ink-soft'}`}>{m.status}</span>
-                    </p>
-                    <p className="m-0 text-[12px] font-semibold text-ink-soft">
-                      to {m.to}, {new Date(m.createdAt).toLocaleString()}
-                      {m.error ? `, ${m.error}` : ''}
-                    </p>
-                  </li>
-                ))}
-              </ul>
+              <div className="mt-sm">
+                <DataTable<OutboxEmail>
+                  rows={outbox ?? []}
+                  rowKey={(m) => m.id}
+                  label="Email outbox"
+                  busy={busy}
+                  empty="Nothing queued yet."
+                  columns={[
+                    { key: 'to', label: 'To', get: (m) => m.to },
+                    { key: 'subject', label: 'Subject', get: (m) => m.subject, wrap: true, render: (m) => <span className="font-bold">{m.subject}</span> },
+                    { key: 'status', label: 'Status', get: (m) => m.status, filter: true, render: (m) => <Pill tone={m.status === 'sent' ? 'bg-r4 text-on-fill' : m.status === 'failed' ? 'bg-r1 text-white' : 'bg-paper text-ink-soft'}>{m.status}</Pill> },
+                    { key: 'created', label: 'Created', get: (m) => m.createdAt, render: (m) => when(m.createdAt) },
+                    { key: 'error', label: 'Error', get: (m) => m.error, wide: true, wrap: true },
+                  ]}
+                />
+              </div>
             </section>
           )}
 
@@ -1040,26 +1059,28 @@ export function Admin() {
                 <h2 id="audit-heading" className="text-[24px]">
                   Audit log
                 </h2>
-                <Button variant="outline" disabled={busy} onClick={() => run(refreshAudit)}>
+                <Button variant="outline" size="sm" disabled={busy} onClick={() => run(refreshAudit)}>
                   Refresh
                 </Button>
               </div>
               <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Who changed what, with the before and after. The last two hundred entries.</p>
-              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-                {logs.map((l) => (
-                  <li key={l.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                    <p className="m-0 text-[14px] font-bold">
-                      {l.actorName} <span className="text-ink-soft">{l.action}</span> {l.resourceType}
-                      {l.resourceId ? <span className="text-ink-mute"> {l.resourceId.slice(0, 8)}</span> : ''}
-                    </p>
-                    <p className="m-0 break-words text-[12px] font-semibold text-ink-soft">
-                      {l.before ? `${l.before} → ` : ''}
-                      {l.after}
-                    </p>
-                    <p className="m-0 text-[12px] font-semibold text-ink-mute">{new Date(l.createdAt).toLocaleString()}</p>
-                  </li>
-                ))}
-              </ul>
+              <div className="mt-sm">
+                <DataTable<AuditLog>
+                  rows={logs}
+                  rowKey={(l) => l.id}
+                  label="Audit log"
+                  busy={busy}
+                  pageSize={50}
+                  columns={[
+                    { key: 'when', label: 'When', get: (l) => l.createdAt, render: (l) => when(l.createdAt) },
+                    { key: 'actor', label: 'Actor', get: (l) => l.actorName, filter: true },
+                    { key: 'action', label: 'Action', get: (l) => l.action, filter: true, render: (l) => <span className="font-bold">{l.action}</span> },
+                    { key: 'resource', label: 'Resource', get: (l) => `${l.resourceType} ${l.resourceId?.slice(0, 8) ?? ''}`.trim(), filter: false },
+                    { key: 'before', label: 'Before', get: (l) => l.before, wide: true, wrap: true },
+                    { key: 'after', label: 'After', get: (l) => l.after, wrap: true },
+                  ]}
+                />
+              </div>
             </section>
           )}
         </>

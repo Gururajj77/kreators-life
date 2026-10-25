@@ -1,4 +1,5 @@
-import { BADGES, EMPTY_SOCIALS, HONORS, isStaffFor, levelFromXp, PERMISSIONS, RELATIONSHIPS, roleRank, taskReadyAt, timeHonors, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
+import { parseLinkBlocks, type LinkBlock } from '@kreators/shared';
+import { BADGES, EMPTY_SOCIALS, parsePublicSettings, HONORS, isStaffFor, levelFromXp, PERMISSIONS, RELATIONSHIPS, roleRank, taskReadyAt, timeHonors, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
 import type { Context, Next } from 'hono';
 import type { AppEnv } from './env';
 import type { UserRow } from './env';
@@ -76,6 +77,8 @@ export function toUser(r: UserRow): User {
     timezone: r.timezone || 'Asia/Kolkata',
     avatarUrl: r.avatar_url ?? '',
     socials: parseSocials(r.socials_json),
+    links: linksOf(r),
+    publicSettings: publicOf(r),
     streak: r.streak,
     bestStreak: r.best_streak,
     lastCheckin: r.last_checkin,
@@ -184,7 +187,7 @@ export function randomCode(len = 8): string {
   return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
 }
 
-export function toNode(r: NodeRow): Node {
+export function toNode(r: NodeRow, gate?: TaskGate): Node {
   return {
     id: r.id,
     kind: r.kind,
@@ -198,7 +201,7 @@ export function toNode(r: NodeRow): Node {
     dueTime: r.due_time ?? null,
     estimateMin: r.estimate_min ?? null,
     completedAt: r.completed_at,
-    readyAt: r.kind === 'task' ? taskReadyAt(r.created_at, r.ready_at) : null,
+    readyAt: r.kind === 'task' ? (gate ? readyAtFor(r, gate) : taskReadyAt(r.created_at, r.ready_at)) : null,
     sortOrder: r.sort_order,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -231,6 +234,32 @@ export interface Stats {
   sparksDone: number;
   projectsCleared: number;
   relationshipsWithPillars: number;
+  clubMember: boolean;
+}
+
+/** What a task tick is gated on: how many the person has ever ticked, and when the last one was. */
+export interface TaskGate {
+  doneCount: number;
+  lastDoneAt: string | null;
+}
+
+export async function taskGate(db: D1Database, userId: string): Promise<TaskGate> {
+  const row = await db
+    .prepare("SELECT COUNT(*) AS n, MAX(completed_at) AS last FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done'")
+    .bind(userId)
+    .first<{ n: number; last: string | null }>();
+  return { doneCount: row?.n ?? 0, lastDoneAt: row?.last ?? null };
+}
+
+/**
+ * When a task can be ticked. The first few ticks ever are free; after that a task needs its minimum age
+ * and a gap since the previous tick, so ticks are never back to back.
+ */
+export function readyAtFor(r: { created_at: string; ready_at: string | null }, gate: TaskGate): string {
+  if (gate.doneCount < WAIT.freeFirstTasks) return r.created_at;
+  const age = new Date(taskReadyAt(r.created_at, r.ready_at)).getTime();
+  const gap = gate.lastDoneAt ? new Date(gate.lastDoneAt).getTime() + WAIT.gapMinutes * 60_000 : 0;
+  return new Date(Math.max(age, gap)).toISOString();
 }
 
 export async function getStats(db: D1Database, userId: string): Promise<Stats> {
@@ -240,15 +269,17 @@ export async function getStats(db: D1Database, userId: string): Promise<Stats> {
         (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'done') AS tasks_done,
         (SELECT COUNT(*) FROM spark_completions WHERE user_id = ?1) AS sparks_done,
         (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'project' AND status = 'done') AS projects_cleared,
-        (SELECT COUNT(DISTINCT relationship) FROM nodes WHERE user_id = ?1 AND kind = 'pillar' AND status != 'archived') AS rels_with_pillars`,
+        (SELECT COUNT(DISTINCT relationship) FROM nodes WHERE user_id = ?1 AND kind = 'pillar' AND status != 'archived') AS rels_with_pillars,
+        (SELECT COUNT(*) FROM memberships WHERE user_id = ?1 AND status IN ('accepted', 'member', 'active')) AS club`,
     )
     .bind(userId)
-    .first<{ tasks_done: number; sparks_done: number; projects_cleared: number; rels_with_pillars: number }>();
+    .first<{ tasks_done: number; sparks_done: number; projects_cleared: number; rels_with_pillars: number; club: number }>();
   return {
     tasksDone: row?.tasks_done ?? 0,
     sparksDone: row?.sparks_done ?? 0,
     projectsCleared: row?.projects_cleared ?? 0,
     relationshipsWithPillars: row?.rels_with_pillars ?? 0,
+    clubMember: (row?.club ?? 0) > 0,
   };
 }
 
@@ -262,6 +293,7 @@ export function computeBadges(user: { xp: number; best_streak: number }, stats: 
   if (stats.projectsCleared >= 1) earned.add('project_clear');
   if (levelFromXp(user.xp) >= 5) earned.add('level_5');
   if (stats.sparksDone >= 5) earned.add('spark_5');
+  if (stats.clubMember) earned.add('club_member');
   return BADGES.map((b) => b.key).filter((k) => earned.has(k));
 }
 
@@ -281,4 +313,22 @@ export async function honorKeys(db: D1Database, user: UserRow): Promise<string[]
 export function diffBadges(before: string[], after: string[]): string[] {
   const prev = new Set(before);
   return after.filter((k) => !prev.has(k));
+}
+
+/** The person's public-page switches, with defaults for anything unset. */
+/** The link blocks stored on a user row, already cleaned. */
+export function linksOf(r: { links_json?: string | null }): LinkBlock[] {
+  try {
+    return parseLinkBlocks(JSON.parse(r.links_json || '[]'));
+  } catch {
+    return [];
+  }
+}
+
+export function publicOf(r: { public_json?: string | null }): ReturnType<typeof parsePublicSettings> {
+  try {
+    return parsePublicSettings(JSON.parse(r.public_json || '{}'));
+  } catch {
+    return parsePublicSettings({});
+  }
 }

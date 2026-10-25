@@ -79,6 +79,7 @@ export function Work() {
   return (
     <Screen>
       <header className="pt-lg">
+        <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Work</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Opportunities from brands and the team. Apply once, then follow it here.</p>
       </header>

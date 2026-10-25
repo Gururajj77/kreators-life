@@ -1,9 +1,13 @@
-import { AVAILABILITY, CATEGORIES, EXPERIENCE_LEVELS, GOALS, INTERESTS, SKILLS, TIMEZONES, type PortfolioItem, type Socials, type User } from '@kreators/shared';
+import { AVAILABILITY, CATEGORIES, EXPERIENCE_LEVELS, GOALS, SKILLS, TIMEZONES, type PortfolioItem, type Socials, type User, DEFAULT_PUBLIC, PUBLIC_SETTING_META, type PublicSettings } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
+import { InterestPicker } from '../components/InterestPicker';
+import { LinksEditor } from '../components/LinksEditor';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
+import { Toggle } from '../components/Toggle';
 import { api } from '../lib/api';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
 
@@ -77,6 +81,7 @@ function ProfileView({ user }: { user: User }) {
   const [availability, setAvailability] = useState(user.availability);
   const [location, setLocation] = useState(user.location);
   const [openToIntros, setOpenToIntros] = useState(user.openToIntros);
+  const [pub, setPub] = useState<PublicSettings>({ ...DEFAULT_PUBLIC, ...user.publicSettings });
   const [interests, setInterests] = useState<string[]>(user.interests);
   const [city, setCity] = useState(user.city);
   const [area, setArea] = useState(user.area);
@@ -87,7 +92,7 @@ function ProfileView({ user }: { user: User }) {
   const [timezone, setTimezone] = useState(user.timezone || 'Asia/Kolkata');
   const [saved, setSaved] = useState(false);
   const save = useMutation({
-    mutationFn: () => api.updateMe({ handle: handle || null, bio, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, avatarUrl, socials, timezone, ...(coords === undefined ? {} : { lat: coords?.lat ?? null, lng: coords?.lng ?? null }) }),
+    mutationFn: () => api.updateMe({ handle: handle || null, bio, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, avatarUrl, socials, timezone, publicSettings: pub, ...(coords === undefined ? {} : { lat: coords?.lat ?? null, lng: coords?.lng ?? null }) }),
     onSuccess: () => {
       refresh();
       setSaved(true);
@@ -99,6 +104,7 @@ function ProfileView({ user }: { user: User }) {
   return (
     <Screen>
       <header className="pt-lg">
+        <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Profile</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">What brands, hosts and other people see. Your journal and wellbeing never appear here.</p>
         {link ? (
@@ -120,7 +126,7 @@ function ProfileView({ user }: { user: User }) {
       </header>
 
       <form
-        className="mt-lg flex flex-col gap-md rounded-card bg-card p-md shadow-toy-soft"
+        className="mt-lg grid grid-cols-1 gap-md rounded-card bg-card p-md shadow-toy-soft"
         onSubmit={(e) => {
           e.preventDefault();
           save.mutate();
@@ -148,7 +154,7 @@ function ProfileView({ user }: { user: User }) {
         </label>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-[14px] font-bold">Links</legend>
-          <div className="mt-xs grid grid-cols-2 gap-xs">
+          <div className="mt-xs grid grid-cols-2 gap-xs md:grid-cols-4">
             {(
               [
                 ['instagram', 'Instagram'],
@@ -175,12 +181,18 @@ function ProfileView({ user }: { user: User }) {
           </select>
           <span className="mt-xs block text-[12px] font-bold text-ink-soft">Your availability and bookings are written in this zone. Buyers see the same slots in their own.</span>
         </label>
-        <Chips legend="Skills" options={SKILLS} value={skills} onChange={setSkills} max={12} hint="What you can be hired for." />
-        <Chips legend="Categories" options={CATEGORIES} value={categories} onChange={setCategories} max={12} hint="What your work is about." />
-        <Chips legend="Goals" options={GOALS} value={goals} onChange={setGoals} max={12} hint="What you want from Kreators. It shapes what we suggest." />
+        <div>
+          <Chips legend="Skills" options={SKILLS} value={skills} onChange={setSkills} max={12} hint="What you can be hired for." />
+        </div>
+        <div>
+          <Chips legend="Categories" options={CATEGORIES} value={categories} onChange={setCategories} max={12} hint="What your work is about." />
+        </div>
+        <div>
+          <Chips legend="Goals" options={GOALS} value={goals} onChange={setGoals} max={12} hint="What you want from Kreators. It shapes what we suggest." />
+        </div>
         <OneOf legend="Experience" options={EXPERIENCE_LEVELS} value={experienceLevel} onChange={setExperience} />
         <OneOf legend="Availability" options={AVAILABILITY} value={availability} onChange={setAvailability} />
-        <Chips legend="Interests" options={INTERESTS} value={interests} onChange={setInterests} max={8} hint="What you make and care about. Circles seat you with people whose interests fit yours." />
+        <InterestPicker value={interests} onChange={setInterests} hint="What you are into. Circles seat you with people whose interests fit yours." />
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">City</span>
@@ -222,37 +234,65 @@ function ProfileView({ user }: { user: User }) {
           <input type="checkbox" checked={openToIntros} onChange={(e) => setOpenToIntros(e.target.checked)} className="size-[20px] accent-ink" />
           Open to introductions from people I meet at events
         </label>
-        <Err e={save.isError ? save.error : null} />
-        <Button type="submit" size="lg" full disabled={save.isPending}>
-          {saved ? 'Saved' : 'Save profile'}
-        </Button>
+        <fieldset className="m-0 border-0 p-0">
+          <legend className="text-[16px] font-bold">What is public</legend>
+          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Each part of your page has a switch. Off means it is not shown to anyone but you. Your journal and wellbeing are never on your page.</p>
+          <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+            {PUBLIC_SETTING_META.map((m) => (
+              <li key={m.key} className={m.key !== 'pagePublic' && !pub.pagePublic ? 'opacity-60' : ''}>
+                <Toggle on={pub[m.key]} onChange={(on) => setPub((p) => ({ ...p, [m.key]: on }))} label={m.name} hint={m.blurb} disabled={m.key !== 'pagePublic' && !pub.pagePublic} />
+              </li>
+            ))}
+          </ul>
+        </fieldset>
+        <div>
+          <Err e={save.isError ? save.error : null} />
+        </div>
+        <div>
+          <Button type="submit" size="lg" full disabled={save.isPending}>
+            {saved ? 'Saved' : 'Save profile'}
+          </Button>
+        </div>
       </form>
 
       <Portfolio />
+
+      <section className="mt-lg" aria-labelledby="links-heading">
+        <h2 id="links-heading" className="text-[24px]">
+          Links
+        </h2>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Your page is the door to everything you make. Stack buttons, headers, text, pictures, videos and carousels; the best thing goes first. Each change saves on its own.</p>
+        <div className="mt-sm">
+          <LinksEditor key={user.id} initial={user.links} />
+        </div>
+      </section>
 
       <section className="mt-lg" aria-labelledby="more-heading">
         <h2 id="more-heading" className="text-[24px]">
           More of your page
         </h2>
-        <ul className="mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0">
-          <li>
-            <Link to="/shop/page" className="toy toy-soft block min-h-[88px] rounded-tile bg-card p-sm">
-              <span className="block text-[22px]" aria-hidden="true">
-                🛍️
-              </span>
-              <span className="block text-[16px] font-bold">Products and your page</span>
-              <span className="block text-[14px] font-semibold text-ink-soft">What you sell, and the lead form.</span>
-            </Link>
-          </li>
-          <li>
-            <Link to="/you" className="toy toy-soft block min-h-[88px] rounded-tile bg-card p-sm">
-              <span className="block text-[22px]" aria-hidden="true">
-                🙂
-              </span>
-              <span className="block text-[16px] font-bold">You</span>
-              <span className="block text-[14px] font-semibold text-ink-soft">Name, focus, features, account.</span>
-            </Link>
-          </li>
+        <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+          {(
+            [
+              ['/shop/page', '🛍️', 'Products and your page', 'What you sell, and the lead form.'],
+              ['/you', '🙂', 'Profile', 'Name, focus, features, account.'],
+            ] as [string, string, string, string][]
+          ).map(([to, emoji, title, blurb]) => (
+            <li key={to}>
+              <Link to={to} className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm text-ink">
+                <span className="flex size-[48px] shrink-0 items-center justify-center rounded-pill bg-paper text-[24px]" aria-hidden="true">
+                  {emoji}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[16px] font-bold leading-tight">{title}</span>
+                  <span className="mt-xs block text-[14px] font-semibold leading-snug text-ink-soft">{blurb}</span>
+                </span>
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-ink-mute">
+                  <path d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
+            </li>
+          ))}
         </ul>
       </section>
     </Screen>

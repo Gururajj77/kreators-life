@@ -1,5 +1,12 @@
+import type { LinkBlock } from '@kreators/shared';
+import type { ObservabilityResponse } from '@kreators/shared';
 import type {
   HomeResponse,
+  PublicSettings,
+  BondChat,
+  BondMessage,
+  Friend,
+  LadderPicks,
   AdminFunnel,
   AdminKyc,
   AdminOrder,
@@ -144,6 +151,12 @@ export const api = {
   signup: (body: { email: string; password: string; displayName?: string }) => post<{ token: string; user: User }>('/auth/signup', body),
   signin: (body: { email: string; password: string }) => post<{ token: string; user: User }>('/auth/signin', body),
   signout: () => post<{ ok: true }>('/auth/signout'),
+  /** Forgot the password: the answer is the same for any email. */
+  forgot: (email: string) => post<{ ok: true; minutes: number }>('/auth/forgot', { email }),
+  /** The reset link's token plus the new password. Signs every device out and this one in. */
+  resetPassword: (token: string, password: string) => post<{ token: string; user: User }>('/auth/reset', { token, password }),
+  /** Change the password: the current one, then the new one. Other sessions are signed out. */
+  setPassword: (body: { current: string; password: string }) => post<{ ok: true }>('/me/password', body),
   me: () => request<MeResponse>('/me'),
   updateMe: (body: {
     displayName?: string;
@@ -167,6 +180,8 @@ export const api = {
     timezone?: string;
     avatarUrl?: string;
     socials?: Socials;
+      publicSettings?: Partial<PublicSettings>;
+      links?: LinkBlock[];
   }) => patch<{ user: User }>('/me', body),
   exportMe: () => request<Record<string, unknown>>('/me/export'),
   deleteMe: () => request<{ ok: true }>('/me', { method: 'DELETE', body: JSON.stringify({ confirm: 'DELETE' }) }),
@@ -176,12 +191,15 @@ export const api = {
   removePortfolio: (id: string) => del<{ ok: true }>(`/me/portfolio/${id}`),
   setModule: (key: string, on: boolean) => patch<{ modules: Record<string, boolean> }>('/me/modules', { key, on }),
   reset: () => post<{ ok: true }>('/me/reset'),
-  demoSeed: (date: string) => post<{ ok: true; xp: number; rows: number }>('/demo/seed', { date }),
+  linkClicks: () => request<{ clicks: Record<string, number> }>('/me/link-clicks'),
+  // internal, team only
+  observability: (q: string, offset = 0) => request<ObservabilityResponse>(`/internal/observability?q=${encodeURIComponent(q)}&offset=${offset}`),
+  setRole: (id: string, role: Role) => post<{ user: { id: string; name: string; handle: string | null; role: Role } }>(`/internal/users/${id}/role`, { role }),
 
   // onboarding and the tower
   onboard: (body: { answers: OnboardingAnswer[]; displayName?: string; focus?: string }) => post<OnboardingResponse>('/onboarding', body),
-  build: (relationships: RelationshipKey[], date: string) => post<{ nodes: Node[]; skipped: RelationshipKey[] }>('/onboarding/build', { relationships, date }),
-  acceptQuest: (relationship: RelationshipKey, date: string) => post<{ nodes: Node[] }>('/onboarding/accept-quest', { relationship, date }),
+  build: (relationships: RelationshipKey[], date: string, picks?: LadderPicks) => post<{ nodes: Node[]; skipped: RelationshipKey[] }>('/onboarding/build', { relationships, date, picks }),
+  acceptQuest: (relationship: RelationshipKey, date: string, picks?: LadderPicks) => post<{ nodes: Node[] }>('/onboarding/accept-quest', { relationship, date, picks }),
   nodes: (relationship?: RelationshipKey) => request<{ nodes: Node[] }>(`/nodes${relationship ? `?relationship=${relationship}` : ''}`),
   createNode: (body: { kind: NodeKind; parentId: string | null; relationship: RelationshipKey; title: string; note?: string; dueDate?: string | null; dueTime?: string | null; estimateMin?: number | null }) => post<{ node: Node }>('/nodes', body),
   updateNode: (id: string, body: { title?: string; note?: string; dueDate?: string | null; status?: 'active' | 'archived'; dueTime?: string | null; estimateMin?: number | null }) => patch<{ node: Node }>(`/nodes/${id}`, body),
@@ -231,6 +249,7 @@ export const api = {
 
   // storefront, buyer side
   publicPage: (handle: string) => request<PublicPage>(`/public/${encodeURIComponent(handle)}`),
+  personPage: (id: string) => request<PublicPage>(`/public/people/${encodeURIComponent(id)}`),
   publicProduct: (id: string) => request<{ product: Product; lessonCount: number; testimonials: Testimonial[]; owned: boolean }>(`/public/products/${id}`),
   click: (handle: string, ref: string) => post<{ ok: true }>(`/public/${encodeURIComponent(handle)}/click`, { ref }),
   lead: (handle: string, body: { name: string; email: string; message: string }) => post<{ ok: true }>(`/public/${encodeURIComponent(handle)}/lead`, body),
@@ -357,6 +376,14 @@ export const api = {
   bond: () => request<{ optedIn: boolean; intros: Introduction[]; suggestions: { userId: string; name: string; handle: string | null; skills: string[]; context: string }[] }>('/bond'),
   proposeIntro: (recipientId: string, context: string) => post<{ ok: true }>('/bond/intros', { recipientId, context }),
   answerIntro: (id: string, status: 'accepted' | 'declined') => post<{ ok: true }>(`/bond/intros/${id}`, { status }),
+  friends: () => request<{ friends: Friend[] }>('/bond/friends'),
+  addFriend: (userId: string) => post<{ ok: true; status: 'sent' | 'friends' }>('/bond/friends', { userId }),
+  answerFriend: (id: string, status: 'accepted' | 'declined') => post<{ ok: true }>(`/bond/friends/${id}`, { status }),
+  unfriend: (userId: string) => del<{ ok: true }>(`/bond/friends/${userId}`),
+  chats: () => request<{ chats: BondChat[] }>('/bond/chats'),
+  openChat: (body: { userId?: string; groupId?: string; alias?: string }) => post<{ chat: BondChat }>('/bond/chats', body),
+  chat: (id: string) => request<{ chat: BondChat; messages: BondMessage[] }>(`/bond/chats/${id}`),
+  chatSay: (id: string, body: string) => post<{ ok: true; id: string }>(`/bond/chats/${id}/messages`, { body }),
   block: (userId: string, reason?: string) => post<{ ok: true }>('/bond/block', { userId, reason }),
 
   // tools
@@ -411,7 +438,6 @@ export const api = {
   circleGroup: (id: string) => request<{ group: CircleGroup; opensInMinutes: number }>(`/circles/groups/${id}`),
   circleSay: (id: string, body: string) => post<{ ok: true; id: string }>(`/circles/groups/${id}/messages`, { body }),
   circlePlan: (id: string, body: { venue?: string; plan?: string }) => post<{ ok: true }>(`/circles/groups/${id}/plan`, body),
-  circleReveal: (id: string) => post<{ ok: true }>(`/circles/groups/${id}/reveal`),
   life: () => request<LifeSummary>('/life'),
 
   // finance

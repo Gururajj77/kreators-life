@@ -33,7 +33,7 @@ export function Today() {
   const doSpark = () =>
     queue.run('spark', async () => {
       const r = await api.spark(date);
-      if (!r.alreadyDone) celebrate({ title: 'Spark done', totalXp: r.awarded, color: RELATIONSHIP_BY_KEY[r.relationship].color });
+      if (!r.alreadyDone) celebrate({ title: 'Small act done', totalXp: r.awarded, color: RELATIONSHIP_BY_KEY[r.relationship].color });
     });
   const tick = (id: string) =>
     queue.run(id, async () => {
@@ -55,11 +55,11 @@ export function Today() {
   const identity = me.data?.identity ?? null;
 
   return (
-    <Screen>
+    <Screen columns={false}>
       <header className="pt-lg">
         <p className="m-0 text-[14px] font-bold text-ink-soft">{prettyDate(date)}</p>
         <div className="flex items-center justify-between gap-sm">
-          <h1 className="text-[30px]">Today</h1>
+          <h1 className="text-[30px]">Daily</h1>
           {data && (
             <span className="shrink-0 rounded-pill bg-card px-sm py-xs text-[14px] font-extrabold shadow-toy-soft">
               <span aria-hidden="true">🔥 </span>
@@ -135,7 +135,7 @@ export function Today() {
             <div className="flex items-center gap-sm">
               <Avatar relationship={rel.key} size={36} still decorative mood={data.spark.done ? 'excited' : 'happy'} />
               <h2 id="spark-heading" className="text-[18px]">
-                Today&rsquo;s spark from {rel.character}
+                {rel.character}&rsquo;s small act for today
               </h2>
             </div>
             <div className="mt-sm">
@@ -144,13 +144,13 @@ export function Today() {
                 checked={data.spark.done}
                 onToggle={doSpark}
                 title={data.spark.text}
-                subtitle={data.spark.done ? `Done. ${rel.character} is glowing.` : `${rel.name}. +15 xp.`}
+                subtitle={data.spark.done ? `Done. ${rel.character} is glowing.` : `${rel.character}’s area. Two minutes, +15 xp.`}
                 color={rel.color}
                 deep={`var(--deep-${rel.key})`}
                 text={rel.text}
                 busy={queue.isPending('spark')}
                 hint={queue.hint('spark')}
-                lockedMessage={data.spark.done ? 'Done for today. A new spark comes tomorrow.' : null}
+                lockedMessage={data.spark.done ? 'Done for today. A new small act comes tomorrow.' : null}
               />
             </div>
           </section>
@@ -194,10 +194,10 @@ export function Today() {
             ) : (
               <div className="mt-sm rounded-card border-2 border-dashed border-line p-md">
                 <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                  {taskDone ? 'Tasks done for today. Everything above them got stronger. More arrive as their dates come up.' : 'Tasks come from floors you build on the Tower.'}
+                  {taskDone ? 'Tasks done for today. Their pyramids got stronger. More arrive as their dates come up.' : 'Tasks come from areas you set up.'}
                 </p>
                 <Link to="/tower" className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
-                  {taskDone ? 'Build another floor' : 'Build a floor'}
+                  {taskDone ? 'Set up another area' : 'Set up an area'}
                 </Link>
               </div>
             )}

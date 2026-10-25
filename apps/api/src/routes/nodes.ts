@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { isNodeKind, isRelationshipKey, parentKind, taskReadyAt, WAIT, XP, type CompleteResponse, type RippleEvent } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { TIME_RE } from '@kreators/shared';
-import { ancestorsOf, badgesNow, DATE_RE, diffBadges, getNode, newId, nowIso, readyFromNow, toNode, type NodeRow } from '../db';
+import { ancestorsOf, badgesNow, DATE_RE, diffBadges, getNode, newId, nowIso, readyFromNow, toNode, type NodeRow, taskGate, readyAtFor } from '../db';
 
 export const nodes = new Hono<AppEnv>();
 
@@ -11,6 +11,7 @@ nodes.get('/', async (c) => {
   const user = c.get('user');
   const relationship = c.req.query('relationship');
   const kind = c.req.query('kind');
+  const gate = await taskGate(db, user.id);
   const clauses = ['user_id = ?', "status != 'archived'"];
   const binds: unknown[] = [user.id];
   if (relationship) {
@@ -27,7 +28,7 @@ nodes.get('/', async (c) => {
     .prepare(`SELECT * FROM nodes WHERE ${clauses.join(' AND ')} ORDER BY sort_order ASC, created_at ASC`)
     .bind(...binds)
     .all<NodeRow>();
-  return c.json({ nodes: rows.results.map(toNode) });
+  return c.json({ nodes: rows.results.map((r) => toNode(r, gate)) });
 });
 
 nodes.post('/', async (c) => {
@@ -133,15 +134,14 @@ nodes.post('/:id/complete', async (c) => {
   if (row.status === 'done') return c.json({ error: 'already done', node: toNode(row) }, 409);
   if (row.status !== 'active') return c.json({ error: 'task is not active' }, 400);
 
-  // Wait time: a task has to exist for a while before it can be ticked, so
-  // writing something down and ticking it in the same breath earns nothing.
-  const leftMs = new Date(taskReadyAt(row.created_at, row.ready_at)).getTime() - Date.now();
+  // Wait time: the first few ticks are free; after that a task has to exist for a while and sit a
+  // gap after the previous tick, so writing and ticking in the same breath, or ticking back to back, earns nothing.
+  const gate = await taskGate(db, user.id);
+  const leftMs = new Date(readyAtFor(row, gate)).getTime() - Date.now();
   if (leftMs > 0) {
     const wait = Math.max(1, Math.ceil(leftMs / 60_000));
-    return c.json(
-      { error: `Ready in ${wait} ${wait === 1 ? 'minute' : 'minutes'}. Do it first, then tick it.`, readyInMinutes: wait },
-      429,
-    );
+    const why = gate.lastDoneAt && new Date(gate.lastDoneAt).getTime() + WAIT.gapMinutes * 60_000 > new Date(taskReadyAt(row.created_at, row.ready_at)).getTime() ? 'One at a time: give it a breath after the last tick.' : 'Do it first, then tick it.';
+    return c.json({ error: `Ready in ${wait} ${wait === 1 ? 'minute' : 'minutes'}. ${why}`, readyInMinutes: wait }, 429);
   }
 
   // Daily cap: only a handful of tasks per rolling day pay xp. A task counts

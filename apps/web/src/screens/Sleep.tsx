@@ -99,7 +99,7 @@ export function Sleep() {
         </h2>
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {logs.data?.logs.map((l) => (
-            <li key={l.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+            <li key={l.id} className={`flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft`}>
               <span className="min-w-0 flex-1">
                 <span className="block text-[16px] font-bold">
                   {l.value} hours, {QUALITY[Number(l.extra.quality ?? 3) - 1]?.toLowerCase()}

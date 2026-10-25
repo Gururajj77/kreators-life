@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { POINTS, sparkFor, XP, type CheckinResponse, type RelationshipKey, type TodayResponse } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { DATE_RE, dateNearToday, getUser, notify, nowIso, shiftDate, toNode, type NodeRow } from '../db';
+import { DATE_RE, dateNearToday, getUser, notify, nowIso, shiftDate, toNode, type NodeRow, taskGate } from '../db';
 
 export const today = new Hono<AppEnv>();
 
@@ -63,6 +63,7 @@ today.get('/', async (c) => {
     if (!already) await notify(db, user.id, 'reminder', 'Your daily three are waiting', 'Check in, do the spark, tick a task.', '/today');
   }
 
+  const gate = await taskGate(db, user.id);
   const relationship = await weakestRelationship(db, user.id);
   const sparkDone = await db
     .prepare('SELECT relationship FROM spark_completions WHERE user_id = ? AND date = ?')
@@ -73,7 +74,7 @@ today.get('/', async (c) => {
     date,
     checkedIn: user.last_checkin === date,
     streak: user.streak,
-    tasks: tasks.map(toNode),
+    tasks: tasks.map((t) => toNode(t, gate)),
     doneRecently: recent?.n ?? 0,
     timePlan: { plannedMin: plan?.planned ?? 0, doneMin: plan?.done ?? 0, timed: plan?.timed ?? 0 },
     spark: {

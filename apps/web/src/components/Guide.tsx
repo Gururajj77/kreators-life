@@ -26,9 +26,9 @@ export function useGuide(): { seen: boolean; dismiss: () => void; reset: () => v
 }
 
 const STEPS = [
-  { title: 'Today is your routine', body: 'Three boxes, every day: show up, do the spark, do a task. Tick a box once you have actually done it.' },
-  { title: 'Tower is where you build', body: 'Seven floors, one per relationship. A floor you build gives Today its tasks.' },
-  { title: 'Everything evolves', body: 'Tasks feed the rungs above them. Xp fills up who you are becoming, next to who you are now.' },
+  { title: 'Daily is your routine', body: 'Three boxes, every day. Check in, do the small act, tick one task. Tick a box once you have really done it.' },
+  { title: 'Areas are where you set things up', body: 'Seven areas, one for each relationship in your life. An area you set up gives Today its tasks.' },
+  { title: 'Everything grows', body: 'Each task makes its pyramid stronger. Xp fills up who you are becoming, next to who you are now.' },
 ];
 
 export function GuideCard({ onDismiss }: { onDismiss: () => void }) {

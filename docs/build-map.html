@@ -147,16 +147,16 @@
       cards: [
         { title: 'Stack', route: 'pnpm workspace', visual: 'blocks', items: [
           ['React 19 + Vite 7 PWA', 'ok', 'apps/web'], ['Hono Worker + D1', 'ok', 'apps/api'], ['Shared domain model', 'ok', 'packages/shared'],
-          ['One Worker serves API and app', 'ok'], ['Cron every 15 min', 'ok'], ['13 migrations', 'ok'],
+          ['One Worker serves API and app', 'ok'], ['Cron every 15 min', 'ok'], ['20 migrations', 'ok'],
         ]},
         { title: 'Design', route: 'app.css, figma-tokens.json', visual: 'blocks', items: [
           ['Figma kit tokens frozen', 'ok'], ['Dark mode, same hues reversed', 'ok'], ['Theme switch on every page', 'ok'],
           ['Laptop sidebar + two columns', 'ok'], ['Spacing scale of six', 'ok'], ['Checkbox rows, hover lift', 'ok'],
         ]},
         { title: 'Accounts and roles', route: '/signin, /admin', visual: 'blocks', items: [
-          ['Device session first', 'ok'], ['Email + password', 'ok'], ['Creator / Staff / Admin', 'ok'],
+          ['Device session first', 'ok'], ['Email + password, confirmed twice', 'ok'], ['Same answer for unknown email and wrong password', 'ok'], ['Change needs the current one, signs out other devices', 'ok'], ['Forgot: one-time hashed reset link', 'ok'], ['Founder emails are admins on sign-in', 'ok'], ['Creator / Staff / Admin', 'ok'],
           ['8 staff permissions', 'ok'], ['Brands as organizations', 'ok'], ['Flags: switch, role, rollout, overrides', 'ok'], ['Audit log', 'ok'],
-          ['Rate limits on the doors', 'ok'], ['Export my data', 'ok'], ['Delete my account', 'ok'],
+          ['Rate limits on the doors', 'ok'], ['Export my data', 'ok'], ['Delete my account', 'ok'], ['Admin: tables with sort, filter, bulk edit', 'ok'],
         ]},
         { title: 'Operator', route: '/admin', visual: 'blocks', items: [
           ['Order search + timeline', 'ok'], ['Webhook log + replay', 'ok'], ['KYC queue', 'ok'], ['Email outbox', 'ok'], ['Funnels from own events', 'ok'], ['Policy pages + pricing', 'ok'], ['Sitemap', 'ok'], ['Decisions log + CLAUDE.md', 'ok'],
@@ -170,7 +170,7 @@
           ['Pillar', 'ok'], ['Guiding principle', 'ok'], ['Value goal', 'ok'], ['Goal outcome', 'ok'], ['Project', 'ok'], ['Task, ticks ripple XP up', 'ok'],
         ], extra: [['Branching vibe check derives it', 'ok'], ['Evolution fills from the feet up', 'ok']] },
         { title: 'Home dashboard', route: '/home', visual: 'blocks', items: [
-          ['Kit home: dark header, avatar, pills, search', 'ok'], ['Metric cards with characters and faces', 'ok'], ['White on colour everywhere; yellow takes brown', 'ok'], ['Lines with axes, pill bars, gauges, donuts, bubbles, month grids', 'ok'], ['Week chart: mood, sleep, calm on one scale', 'ok'], ['Local demo seed from You', 'ok', 'two weeks of everything'], ['Kit stat tiles + green Today card', 'ok'], ['Tracker rows with mini visuals', 'ok', 'mindful, sleep, journal, stress, mood'], ['Up next card, companion card, Knowledge cards', 'ok'], ['Four results first', 'ok', 'xp today, streak, points, level'], ['Three boxes + next step', 'ok', 'nudge names the box'], ['14-day xp bars', 'ok'],
+          ['Kit home: dark header, avatar, pills, search', 'ok'], ['Metric cards with characters and faces', 'ok'], ['White on colour everywhere; yellow takes brown', 'ok'], ['Lines with axes, pill bars, gauges, donuts, bubbles, month grids', 'ok'], ['Week chart: mood, sleep, calm on one scale', 'ok'], ['Onboarding: pick floors, walk the characters (GSAP)', 'ok'], ['Pick value goal + project before build', 'ok'], ['First 3 ticks free, then age + gap', 'ok'], ['Apps: grouped colour list, confirm sheet to switch on, off only under You', 'ok'], ['Plain words: areas, pyramid layers, small act', 'ok'], ['Tabs: Home, Daily, Areas, Apps, Profile', 'ok'], ['Groups: Contribution, Creation, Connection, Reflection', 'ok'], ['Inline search with live results', 'ok'], ['Onboarding: tappable pyramid + one card at a time', 'ok'], ['Public page switches: whole page + each part, server-enforced', 'ok'], ['Animated pyramid in onboarding, Areas, area page', 'ok'], ['Full-width Areas, Profile, Apps on laptop', 'ok'], ['Sidebar groups, back buttons', 'ok'], ['Bond: friends + anonymous chats, no reveal', 'ok'], ['Dark mode wears each app hue', 'ok'], ['Kit stat tiles + green Today card', 'ok'], ['Tracker rows with mini visuals', 'ok', 'mindful, sleep, journal, stress, mood'], ['Up next card, companion card, Knowledge cards', 'ok'], ['Four results first', 'ok', 'xp today, streak, points, level'], ['Three boxes + next step', 'ok', 'nudge names the box'], ['14-day xp bars', 'ok'],
           ['Life rings, floor bars', 'ok'], ['Money + shop when on', 'ok'], ['Up next: events, sessions, circles', 'ok'], ['Shortcut grid into every app', 'ok'],
         ]},
         { title: 'Daily loop', route: '/today', visual: 'boxes', items: [
@@ -197,7 +197,7 @@
       id: 'modules', name: 'Modules', short: 'Modules', floor: 3, blurb: 'Every one is a switch under You, Features, and a flag in Admin.',
       cards: [
         { title: 'Learn and earn', visual: 'tiles', items: [
-          ['🎓 School', 'ok', '/school'], ['💼 Work', 'ok', '/work'], ['🎬 Army', 'ok', '/army'], ['🥇 Win', 'key', '/win'],
+          ['🎓 School: two real programs', 'ok', '/school'], ['💼 Work', 'ok', '/work'], ['🎬 Army', 'ok', '/army'], ['🥇 Win', 'key', '/win'],
         ], extra: [['Win: YouTube reads itself with a key; other platforms are typed then confirmed', 'key']] },
         { title: 'People', visual: 'tiles', items: [
           ['🎉 Party', 'ok', '/party'], ['🫶 Community', 'ok', '/community'], ['🪪 Club', 'ok', '/club'], ['🤝 Bond', 'ok', '/bond'], ['🫧 Circles', 'ok', '/circles'],
@@ -207,13 +207,13 @@
           ['🧘 Mindful', 'ok', '/mindful'], ['📓 Journal', 'ok', '/journal'], ['💬 Companion', 'key', '/companion'],
         ], extra: [['Companion thinks with Workers AI once a binding is added', 'key']] },
         { title: 'Creator', visual: 'tiles', items: [
-          ['🔗 Profile', 'ok', '/profile'], ['🛍️ Shop', 'test', '/shop'], ['📣 Audience', 'ok', '/shop/audience'], ['📈 Content', 'ok', '/shop/content'],
+          ['🔗 Public page: links like a Linktree', 'ok', '/profile'], ['🛍️ Shop', 'test', '/shop'], ['📣 Audience', 'ok', '/shop/audience'], ['📈 Content', 'ok', '/shop/content'],
           ['🤖 Auto-DM', 'key', '/shop/automations'], ['💰 Finance', 'ok', '/finance'], ['🎒 Purchases', 'ok', '/library'], ['📚 Knowledge', 'ok', '/knowledge'],
           ['🧰 Tools', 'ok', '/tools'], ['📺 TV', 'ok', '/tv'], ['🌱 Fund', 'ok', '/fund'],
         ]},
-        { title: 'Core and team', visual: 'tiles', items: [
+        { title: 'Core, team and internal', visual: 'tiles', items: [
           ['☀️ Today', 'ok', '/today'], ['🏰 Tower', 'ok', '/tower'], ['🔍 Search', 'ok', '/search'], ['🔔 Inbox', 'ok', '/inbox'], ['🛟 Help', 'ok', '/help'],
-          ['🏆 Rank', 'ok', '/leaderboard'], ['🎁 Rewards', 'ok', '/rewards'], ['🛡️ Manage', 'ok', '/manage'], ['🔑 Admin', 'ok', '/admin'],
+          ['🏆 Rank', 'ok', '/leaderboard'], ['🎁 Rewards', 'ok', '/rewards'], ['🛡️ Manage', 'ok', '/manage'], ['🔑 Admin', 'ok', '/admin'], ['📡 Observability', 'ok', '/internal/observability'],
         ]},
       ],
     },
@@ -272,7 +272,7 @@
           ['OTP / Google sign-in', 'off'], ['Instalments, multi-currency', 'off'], ['White-label app', 'off'], ['Marketplace', 'off'],
         ]},
         { title: 'Verified today', visual: 'blocks', items: [
-          ['Typecheck + build clean', 'ok'], ['Unit tests: money, time, slots, matching', 'ok'], ['Spacing + colour scans clean', 'ok'], ['139 smoke checks pass', 'ok'], ['Screenshots, phone + laptop, light + dark', 'ok'],
+          ['Typecheck + build clean', 'ok'], ['Unit tests: money, time, slots, matching', 'ok'], ['Spacing + colour scans clean', 'ok'], ['185 smoke checks pass', 'ok'], ['Screenshots, phone + laptop, light + dark', 'ok'],
           ['localhost:5173 live', 'ok'], ['localhost:8787 build', 'ok'], ['2 commits pushed, rest local', 'test'],
         ]},
       ],
@@ -283,7 +283,7 @@
 <b>apps/api/src/</b>index.ts · cron.ts · access.ts · db.ts · social.ts · wrangler.jsonc
 <b>apps/api/src/routes/</b>admin · me · auth · explore · army · orgs · school · work · party · club · win · bond
                      tools · proposals · support · circles · life · studio · store · growth · buyer · go · finance
-<b>apps/api/migrations/</b>0001_init … 0013_circles_weekly
+<b>apps/api/migrations/</b>0001_init … 0020_password_resets
 <b>apps/web/src/site/</b>Home · Explore · Feature · ScrollTroupe · ListingCard · CertificatePage · InvoicePage · content
 <b>apps/web/src/screens/</b>Today · Tower · Realm · Apps · You · Profile · Army · Work · School · Cohort · Party · Club · Win · Bond
                       Circles · Life · Tools · Proposals · Help · Studio · Content · Automations · Customers · DmInbox · Finance · Admin · Manage

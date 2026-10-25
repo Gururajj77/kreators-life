@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import {
+  parsePublicSettings,
   CHARACTER_STAGES,
   MODULE_BY_KEY,
   daysSince,
@@ -12,11 +13,12 @@ import {
   type RelationshipState,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { computeBadges, getStats, getUser, honorKeys, newId, nowIso, parseModules, randomCode, str, toUser } from '../db';
+import { computeBadges, getStats, getUser, honorKeys, newId, nowIso, parseModules, randomCode, str, toUser, publicOf } from '../db';
 import { resolveAccess } from '../access';
+import { hashPassword, randomHex } from './auth';
 import { logEvent, track } from '../ops';
 import { parseSocials } from '../db';
-import { TRACKED_EVENTS, type TrackedEvent } from '@kreators/shared';
+import { MAX_INTERESTS, parseLinkBlocks, passwordProblem, TRACKED_EVENTS, type TrackedEvent } from '@kreators/shared';
 import type { Organization, PortfolioItem } from '@kreators/shared';
 
 export const me = new Hono<AppEnv>();
@@ -53,6 +55,8 @@ me.get('/', async (c) => {
 
   const scoreBy = new Map(scores.results.map((s) => [s.relationship, s]));
   const countBy = new Map(counts.results.map((s) => [s.relationship, s]));
+  const answeredRows = await db.prepare('SELECT DISTINCT relationship FROM onboarding_answers WHERE user_id = ?').bind(user.id).all<{ relationship: string }>();
+  const answered = new Set(answeredRows.results.map((r) => r.relationship));
 
   const relationships: RelationshipState[] = RELATIONSHIPS.map((r) => {
     const s = scoreBy.get(r.key);
@@ -69,6 +73,7 @@ me.get('/', async (c) => {
       doneTasks: n?.done_tasks ?? 0,
       stage: evolutionFor(CHARACTER_STAGES, xp, floorAgeDays ?? 0).stage.stage,
       floorAgeDays,
+      answered: answered.has(r.key),
     };
   });
 
@@ -85,6 +90,35 @@ me.get('/', async (c) => {
     stats: { tasksDone: stats.tasksDone, sparksDone: stats.sparksDone, projectsCleared: stats.projectsCleared },
   };
   return c.json(body);
+});
+
+// How many times each link block on your page was tapped. Only you see this.
+me.get('/link-clicks', async (c) => {
+  const user = c.get('user');
+  const rows = await c.env.DB.prepare("SELECT ref, COUNT(*) AS n FROM page_events WHERE owner_id = ? AND kind = 'click' AND ref LIKE 'block:%' GROUP BY ref").bind(user.id).all<{ ref: string; n: number }>();
+  const clicks: Record<string, number> = {};
+  for (const r of rows.results) clicks[r.ref.slice(6)] = r.n;
+  return c.json({ clicks });
+});
+
+// Change the password: the current one first, then the new one. Every other session is signed out.
+me.post('/password', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const body = await c.req.json<{ current?: string; password?: string }>().catch(() => ({}) as { current?: string; password?: string });
+  const current = typeof body.current === 'string' ? body.current : '';
+  const password = typeof body.password === 'string' ? body.password : '';
+  if (!user.email || !user.password_hash || !user.password_salt) return c.json({ error: 'create an account first' }, 400);
+  if (!current || (await hashPassword(current, user.password_salt)) !== user.password_hash) return c.json({ error: 'the current password is not right' }, 400);
+  const weak = passwordProblem(password, user.email);
+  if (weak) return c.json({ error: weak.charAt(0).toLowerCase() + weak.slice(1) }, 400);
+  const salt = randomHex(16);
+  const token = (c.req.header('Authorization') ?? '').slice(7).trim();
+  await db.batch([
+    db.prepare('UPDATE users SET password_hash = ?, password_salt = ? WHERE id = ?').bind(await hashPassword(password, salt), salt, user.id),
+    db.prepare('DELETE FROM sessions WHERE user_id = ? AND token != ?').bind(user.id, token),
+  ]);
+  return c.json({ ok: true });
 });
 
 me.patch('/', async (c) => {
@@ -109,7 +143,7 @@ me.patch('/', async (c) => {
     }
     handle = h || null;
   }
-  const list = (key: string, prev: string) => (Array.isArray(body[key]) ? JSON.stringify((body[key] as unknown[]).filter((x): x is string => typeof x === 'string').map((x) => x.trim().slice(0, 40)).filter(Boolean).slice(0, 12)) : prev);
+  const list = (key: string, prev: string, max = 12) => (Array.isArray(body[key]) ? JSON.stringify((body[key] as unknown[]).filter((x): x is string => typeof x === 'string').map((x) => x.trim().slice(0, 40)).filter(Boolean).slice(0, max)) : prev);
   const skills = list('skills', user.skills);
   const categories = list('categories', user.categories);
   const goals = list('goals', user.goals);
@@ -117,7 +151,7 @@ me.patch('/', async (c) => {
   const availability = str(body.availability, 40, user.availability);
   const location = str(body.location, 80, user.location);
   const openToIntros = typeof body.openToIntros === 'boolean' ? (body.openToIntros ? 1 : 0) : user.open_to_intros;
-  const interests = list('interests', user.interests);
+  const interests = list('interests', user.interests, MAX_INTERESTS);
   const city = str(body.city, 80, user.city);
   const area = str(body.area, 80, user.area);
   // Coordinates are optional and only used server-side to keep circles close by.
@@ -135,9 +169,12 @@ me.patch('/', async (c) => {
   })();
   const avatarUrl = 'avatarUrl' in body ? (/^https?:\/\//.test(str(body.avatarUrl, 500)) ? str(body.avatarUrl, 500) : '') : user.avatar_url;
   const socials = body.socials && typeof body.socials === 'object' ? JSON.stringify(parseSocials(JSON.stringify(body.socials))) : user.socials_json;
+  const publicJson = body.publicSettings && typeof body.publicSettings === 'object' ? JSON.stringify(parsePublicSettings({ ...publicOf(user), ...(body.publicSettings as Record<string, unknown>) })) : user.public_json;
+  // Link blocks: cleaned in shared, every block gets an id here so clicks can be counted.
+  const links = Array.isArray(body.links) ? JSON.stringify(parseLinkBlocks(body.links).map((b) => ({ ...b, id: b.id || newId().slice(0, 12) }))) : user.links_json;
   await db
-    .prepare('UPDATE users SET display_name = ?, creator_type = ?, leaderboard_opt_in = ?, bio = ?, reminder_time = ?, handle = ?, skills = ?, categories = ?, goals = ?, experience_level = ?, availability = ?, location = ?, open_to_intros = ?, interests = ?, city = ?, area = ?, lat = ?, lng = ?, timezone = ?, avatar_url = ?, socials_json = ? WHERE id = ?')
-    .bind(displayName, focus, optIn, bio, reminderTime, handle, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, lat, lng, timezone, avatarUrl, socials, user.id)
+    .prepare('UPDATE users SET display_name = ?, creator_type = ?, leaderboard_opt_in = ?, bio = ?, reminder_time = ?, handle = ?, skills = ?, categories = ?, goals = ?, experience_level = ?, availability = ?, location = ?, open_to_intros = ?, interests = ?, city = ?, area = ?, lat = ?, lng = ?, timezone = ?, avatar_url = ?, socials_json = ?, public_json = ?, links_json = ? WHERE id = ?')
+    .bind(displayName, focus, optIn, bio, reminderTime, handle, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, lat, lng, timezone, avatarUrl, socials, publicJson, links, user.id)
     .run();
   if (handle && !user.handle) await track(db, user.id, 'profile_published', { minutesSinceSignup: Math.round((Date.now() - new Date(user.created_at).getTime()) / 60_000) });
   const fresh = await getUser(db, user.id);

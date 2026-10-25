@@ -20,6 +20,7 @@ import { Button } from '../components/Button';
 import { useCelebrate } from '../components/Celebration';
 import { EvolutionReveal } from '../components/EvolutionReveal';
 import { BackLink } from '../components/PageHeader';
+import { Pyramid } from '../components/Pyramid';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { TaskRow } from '../components/TaskRow';
@@ -87,12 +88,12 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
   return (
     <>
       <div style={{ background: rel.color, color: rel.text }}>
-        <div className="safe-top mx-auto w-full max-w-[480px] px-md pb-lg pt-md">
+        <div className="safe-top mx-auto w-full max-w-[480px] px-md pb-lg pt-md md:ml-[240px] md:max-w-[1040px] md:px-lg lg:mx-auto lg:pl-[240px]">
           <BackLink to="/tower" inherit>
-            Tower
+            Areas
           </BackLink>
           <p className="mt-sm m-0 text-[14px] font-bold">
-            Floor {rel.floor} of 7, {rel.character}
+            Area {rel.floor} of 7, {rel.character}
           </p>
           <h1 className="text-[30px]">{rel.name}</h1>
           <div className="mt-md">
@@ -128,17 +129,17 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
         {!nodesQ.isPending && !built && (
           <section className="mt-lg" aria-labelledby="build-heading">
             <h2 id="build-heading" className="text-[24px]">
-              Build this floor
+              Set up this area
             </h2>
             <div className="mt-sm rounded-card p-md" style={{ background: `var(--soft-${rel.key})` }}>
               <p className="m-0 text-[16px] font-semibold">
-                {rel.character} derived a ladder from your vibe check: the foundation you picked, plus a principle, value goal, outcome, project and three tasks. One tap and they show up on Today.
+                {rel.character} built a pyramid from your answers: the foundation you picked, then a rule, a feeling, a proof, a project and three tasks. One tap and they show up on Daily.
               </p>
               <Button variant="color" color={rel.color} deep={`var(--deep-${rel.key})`} full className="mt-md" style={{ color: rel.text }} onClick={() => acceptQuest.mutate()} disabled={acceptQuest.isPending}>
-                Build {rel.character}&rsquo;s ladder
+                Set up {rel.character}&rsquo;s pyramid
               </Button>
               <Button variant="ghost" full className="mt-xs" onClick={() => setAdding('pillar')}>
-                Or start by hand with a pillar
+                Or start by hand with a foundation
               </Button>
             </div>
           </section>
@@ -150,7 +151,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
               <h2 id="do-heading" className="text-[24px]">
                 Tasks to do
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Tick the box when you have done it. Every rung above it gets stronger.</p>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Tick the box when you have done it. The whole pyramid gets stronger.</p>
               {activeTasks.length > 0 ? (
                 <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                   <AnimatePresence initial={false}>
@@ -177,16 +178,23 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
               <Button full className="mt-sm" onClick={() => setAdding('task')} disabled={projects.length === 0}>
                 Add a task
               </Button>
-              {projects.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Tasks need a project. Open the ladder below to add one.</p>}
+              {projects.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Tasks need a project. Open the pyramid below to add one.</p>}
             </section>
 
             <section className="mt-lg" aria-labelledby="ladder-heading">
               <h2 id="ladder-heading" className="text-[24px]">
-                The ladder
+                The pyramid
               </h2>
               <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-                Five rungs hold up the tasks. Open a rung to see what is there, change it, or add to it.
+                Five layers hold up the tasks. Open a layer to see what is there, change it, or add to it.
               </p>
+              <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
+                <Pyramid
+                  relationship={relationship}
+                  compact
+                  words={Object.fromEntries(KINDS.map((k) => [k, byKind(k).find((n) => n.status === 'active')?.title ?? (k === 'task' ? 'Your next task' : 'Nothing here yet')]))}
+                />
+              </div>
               <ol className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                 {RUNGS.map((kind) => {
                   const meta = KIND_META[kind];

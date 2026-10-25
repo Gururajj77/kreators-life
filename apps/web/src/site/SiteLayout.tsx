@@ -6,10 +6,10 @@ import { useSession } from '../lib/store';
 import { useTheme, type ThemeMode } from '../lib/theme';
 import { ThemeToggle } from '../components/ThemeToggle';
 
-/** Where "Open the app" goes: into the tower for people with a session, to the start for everyone else. */
+/** Where "Go to app" goes: straight in for people with a session, to sign in for everyone else. */
 export function useAppEntry(): string {
   const token = useSession((s) => s.token);
-  return token ? '/home' : '/start';
+  return token ? '/home' : '/signin';
 }
 
 export function Logo() {
@@ -56,7 +56,7 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
               </Link>
             )}
             <Link to={entry} className="toy inline-flex min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink">
-              {token ? 'Open the app' : 'Start free'}
+              Go to app
             </Link>
             <ThemeToggle />
           </nav>
@@ -74,7 +74,7 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
               Explore listings
             </Link>
             <a href="/#floors" className="min-h-[32px] hover:text-ink">
-              Seven floors
+              Seven areas
             </a>
             <a href="/#features" className="min-h-[32px] hover:text-ink">
               Features

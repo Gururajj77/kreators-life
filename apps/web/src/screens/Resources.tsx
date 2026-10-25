@@ -29,7 +29,8 @@ function List() {
   return (
     <Screen>
       <header className="pt-lg">
-        <h1 className="text-[30px]">Library</h1>
+        <BackLink to="/apps">Apps</BackLink>
+        <h1 className="text-[30px]">Knowledge</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Short reads and exercises from the guides. Each one takes a few minutes.</p>
         {canAuthor && (
           <Button variant="outline" className="mt-sm" onClick={() => setEditing('new')}>
@@ -78,7 +79,7 @@ function Detail({ id }: { id: string }) {
   return (
     <Screen>
       <header className="pt-lg">
-        <BackLink to="/knowledge">Library</BackLink>
+        <BackLink to="/knowledge">Knowledge</BackLink>
         {r && (
           <>
             <p className="m-0 text-[14px] font-bold text-ink-soft">

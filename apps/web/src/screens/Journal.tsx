@@ -73,7 +73,7 @@ export function Journal() {
             const m = e.emotion ? MOODS.find((x) => x.value === e.emotion) : null;
             return (
               <li key={e.id}>
-                <button type="button" onClick={() => setEditing(e)} className="toy toy-soft flex w-full items-start gap-sm rounded-tile bg-card p-sm text-left">
+                <button type="button" onClick={() => setEditing(e)} className={`toy toy-soft flex w-full items-start gap-sm rounded-tile bg-card p-sm text-left`}>
                   {m ? (
                     <MoodFace value={m.value} size={40} />
                   ) : (
@@ -82,7 +82,9 @@ export function Journal() {
                     </span>
                   )}
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[16px] font-bold">{e.title}</span>
+                    <span className="block truncate text-[16px] font-bold">
+                      {e.title}
+                    </span>
                     <span className="block text-[14px] font-semibold text-ink-soft">
                       {new Date(e.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                       {e.stressors.length ? `. ${e.stressors.join(', ')}` : ''}

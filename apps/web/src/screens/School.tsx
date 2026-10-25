@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
@@ -32,6 +33,7 @@ export function School() {
   return (
     <Screen>
       <header className="pt-lg">
+        <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">School</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Programs run as cohorts: lessons, assignments, live sessions and feedback from a mentor. Finish one and Work has places for what you learned.</p>
       </header>

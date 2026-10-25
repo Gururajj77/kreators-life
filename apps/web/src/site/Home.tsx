@@ -9,6 +9,7 @@ import { publicApi } from '../lib/api';
 import { BRAND_PITCH, FEATURES, featuresForRelationship, SITE_FEATURES } from './content';
 import { ListingCard } from './ListingCard';
 import { ScrollTroupe } from './ScrollTroupe';
+import { useSession } from '../lib/store';
 import { SiteLayout, useAppEntry } from './SiteLayout';
 
 /** Tells the troupe which relationship is on screen. Null means none, so everyone walks as equals. */
@@ -94,13 +95,14 @@ function FloorSection({ r, onActive }: { r: Relationship; onActive: (k: Relation
 
 const DAILY = [
   { label: 'Check in', hint: '+10 points', color: 'var(--color-r4)', text: 'var(--color-ink-fixed)' },
-  { label: 'Today’s spark: text a friend you have not seen this month', hint: 'Pip’s floor', color: 'var(--color-r2)', text: 'var(--color-ink-fixed)' },
+  { label: 'Pip’s small act: text a friend you have not seen this month', hint: 'Friendship', color: 'var(--color-r2)', text: 'var(--color-ink-fixed)' },
   { label: 'Draft the first minute of the video', hint: 'ready in 7 min', color: 'var(--color-r1)', text: '#fff' },
 ];
 
 export function Home() {
   const [active, setActive] = useState<RelationshipKey | null>(null);
   const entry = useAppEntry();
+  const token = useSession((s) => s.token);
   const stats = useQuery({ queryKey: ['site', 'stats'], queryFn: publicApi.stats });
   const featured = useQuery({ queryKey: ['site', 'featured'], queryFn: () => publicApi.explore({ featured: true, limit: 6 }) });
   const latest = useQuery({ queryKey: ['site', 'latest'], queryFn: () => publicApi.explore({ limit: 6 }) });
@@ -117,7 +119,7 @@ export function Home() {
           <h1 className="mt-xs text-[clamp(40px,7vw,68px)] leading-[1.02]">
             Seven relationships.
             <br />
-            One tower.
+            One you.
             <br />
             A whole creator life.
           </h1>
@@ -125,14 +127,14 @@ export function Home() {
             A daily game that keeps the seven relationships of your life in balance, with everything a creator needs stacked on top: learning, paid work, brand campaigns, content rewards, events, a shop, and tools for staying well.
           </p>
           <div className="mt-lg flex flex-wrap gap-sm">
-            <Link to={entry} className="toy inline-flex min-h-[56px] items-center rounded-pill bg-ink px-lg text-[18px] font-bold text-on-ink">
-              Start free
+            <Link to={token ? entry : '/signup'} className="toy inline-flex min-h-[56px] items-center rounded-pill bg-ink px-lg text-[18px] font-bold text-on-ink">
+              {token ? 'Go to app' : 'Start free'}
             </Link>
             <Link to="/explore" className="toy toy-ink inline-flex min-h-[56px] items-center rounded-pill border-2 border-ink bg-card px-lg text-[18px] font-bold">
               Explore what is open
             </Link>
           </div>
-          <p className="mt-sm m-0 text-[14px] font-semibold text-ink-mute">No account needed to start. Your progress lives on this device until you add an email.</p>
+          <p className="mt-sm m-0 text-[14px] font-semibold text-ink-mute">Free to start: an email and a password, nothing else. Already have an account? Go to app signs you in.</p>
         </div>
         <div className="pt-lg md:pt-0">
           <Tower />
@@ -142,13 +144,13 @@ export function Home() {
       <Zone value={null} onActive={setActive} id="how" className="mt-2xl">
         <motion.div {...rise}>
           <h2 className="text-[32px] md:text-[40px]">How it works</h2>
-          <p className="mt-xs m-0 max-w-[640px] text-[16px] font-semibold text-ink-soft">Nothing to fill in. Answer a few branching questions, we build your tower, and you tick a few boxes a day.</p>
+          <p className="mt-xs m-0 max-w-[640px] text-[16px] font-semibold text-ink-soft">Nothing to fill in. Answer a few questions, we build your areas, and you tick a few boxes a day.</p>
         </motion.div>
         <div className="mt-md grid gap-sm md:grid-cols-3">
           <motion.div {...rise} className="rounded-card bg-card p-md shadow-toy-soft">
             <p className="m-0 text-[14px] font-extrabold text-ink-mute">1. Vibe check</p>
             <h3 className="mt-xs m-0 text-[22px]">Questions that branch</h3>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Each answer picks the next question. Three minutes, and we know which floors need you most.</p>
+            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Each answer picks the next question. Three minutes, and we know which areas need you most.</p>
             <div className="mt-md flex flex-col gap-xs" aria-hidden="true">
               {['Who did you serve this week?', 'Mostly people I lead', 'A few close friends'].map((t, i) => (
                 <span key={t} className={`rounded-pill px-sm text-[14px] font-bold leading-[40px] ${i === 0 ? 'bg-ink text-on-ink' : 'bg-paper text-ink-soft'}`}>
@@ -158,11 +160,11 @@ export function Home() {
             </div>
           </motion.div>
           <motion.div {...rise} className="rounded-card bg-card p-md shadow-toy-soft">
-            <p className="m-0 text-[14px] font-extrabold text-ink-mute">2. Your tower</p>
-            <h3 className="mt-xs m-0 text-[22px]">A ladder on every floor</h3>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Pillar, principle, value goal, outcome, project, task. Tick a task and the whole ladder brightens.</p>
+            <p className="m-0 text-[14px] font-extrabold text-ink-mute">2. Your areas</p>
+            <h3 className="mt-xs m-0 text-[22px]">A pyramid in every area</h3>
+            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Foundation, rule, feeling, proof, project, task. Tick a task and the whole pyramid brightens.</p>
             <ol className="mt-md m-0 flex list-none flex-col gap-[6px] p-0" aria-hidden="true">
-              {['Pillar', 'Principle', 'Value goal', 'Outcome', 'Project', 'Task'].map((k, i) => (
+              {['Foundation', 'Rule', 'Feeling', 'Proof', 'Project', 'Task'].map((k, i) => (
                 <li key={k} className="rounded-pill text-[12px] font-extrabold leading-[26px]" style={{ background: RELATIONSHIPS[i]?.color ?? '#ccc', color: RELATIONSHIPS[i]?.text, width: `${100 - i * 10}%`, paddingLeft: 12 }}>
                   {k}
                 </li>
@@ -200,8 +202,8 @@ export function Home() {
 
       <div id="floors" className="mt-2xl scroll-mt-lg">
         <motion.div {...rise}>
-          <h2 className="text-[32px] md:text-[40px]">Seven floors</h2>
-          <p className="mt-xs m-0 max-w-[640px] text-[16px] font-semibold text-ink-soft">Red at the bottom, violet at the top. Each floor has its own character, and each part of the app serves at least one floor.</p>
+          <h2 className="text-[32px] md:text-[40px]">Seven areas</h2>
+          <p className="mt-xs m-0 max-w-[640px] text-[16px] font-semibold text-ink-soft">Red at the bottom, violet at the top. Each area has its own character, and each part of the app serves at least one area.</p>
         </motion.div>
         <div className="mt-md flex flex-col gap-md">
           {RELATIONSHIPS.map((r) => (
@@ -327,7 +329,7 @@ export function Home() {
             ))}
           </div>
           <h2 className="mt-md text-[32px] text-on-ink md:text-[40px]">Three boxes a day. Start today.</h2>
-          <p className="mt-xs m-0 text-[16px] font-semibold opacity-80">Free to play. Nothing to install. Add an email when you want your tower to follow you.</p>
+          <p className="mt-xs m-0 text-[16px] font-semibold opacity-80">Free to play. Nothing to install. Add an email when you want your progress to follow you.</p>
           <Link to={entry} className="toy mt-md inline-flex min-h-[56px] items-center rounded-pill bg-card px-lg text-[18px] font-bold text-ink">
             Start the vibe check
           </Link>

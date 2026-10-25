@@ -12,6 +12,7 @@
   "dependencies": {
     "@kreators/shared": "workspace:*",
     "@tanstack/react-query": "^5.90.0",
+    "gsap": "3.13.0",
     "motion": "^12.23.0",
     "qrcode": "1.5.4",
     "react": "^19.2.0",

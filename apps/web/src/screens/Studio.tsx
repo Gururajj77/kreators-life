@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '../components/Button';
 import { AreaLine, Donut, Legend, StatTile } from '../components/Charts';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
@@ -32,6 +33,7 @@ export function Studio({ tab = 'home' }: { tab?: 'home' | 'page' | 'bookings' | 
   return (
     <Screen>
       <header className="pt-lg">
+        <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Shop</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
           Sell downloads, courses, memberships, sessions, events, payment links, bundles, locked posts and priority DMs. Points work today; money checkout is in test mode until a payment provider is connected.

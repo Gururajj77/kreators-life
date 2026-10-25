@@ -1,6 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '../components/Button';
+import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useCompanion } from '../lib/queries';
@@ -28,6 +29,7 @@ export function Companion() {
   return (
     <Screen>
       <header className="pt-lg">
+        <BackLink to="/apps">Apps</BackLink>
         <div className="flex items-center justify-between gap-sm">
           <h1 className="text-[30px]">Companion</h1>
           {messages.length > 0 && (
@@ -37,7 +39,7 @@ export function Companion() {
           )}
         </div>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          It knows your tower, your streak and what you logged today. {q.data?.model === 'local' ? 'Running without a language model, so it reflects and asks rather than chats.' : 'Not a therapist. In a crisis, call your local emergency number.'}
+          It knows your areas, your streak and what you logged today. {q.data?.model === 'local' ? 'Running without a language model, so it reflects and asks rather than chats.' : 'Not a therapist. In a crisis, call your local emergency number.'}
         </p>
       </header>
 

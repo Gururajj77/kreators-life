@@ -1,7 +1,10 @@
-import { RELATIONSHIPS } from '@kreators/shared';
-import { Link, NavLink } from 'react-router';
+import { MODULE_GROUPS, RELATIONSHIPS, ROLE_META, type ModuleGroup } from '@kreators/shared';
+import { Link, NavLink, useLocation } from 'react-router';
+import { useModules } from '../lib/modules';
 import { useMe } from '../lib/queries';
 import { Avatar } from './Avatar';
+import { RoleBadge } from './RoleBadge';
+import { SignOut } from './SignOut';
 import { ThemeToggle } from './ThemeToggle';
 
 const TABS = [
@@ -18,7 +21,7 @@ const TABS = [
   },
   {
     to: '/today',
-    label: 'Today',
+    label: 'Daily',
     icon: (
       <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
         <circle cx="12" cy="12" r="4.5" fill="currentColor" stroke="none" />
@@ -28,7 +31,7 @@ const TABS = [
   },
   {
     to: '/tower',
-    label: 'Tower',
+    label: 'Areas',
     icon: (
       <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="currentColor">
         <rect x="3" y="17" width="18" height="4" rx="2" />
@@ -51,7 +54,7 @@ const TABS = [
   },
   {
     to: '/you',
-    label: 'You',
+    label: 'Profile',
     icon: (
       <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
         <circle cx="12" cy="12" r="9.5" />
@@ -63,9 +66,14 @@ const TABS = [
   },
 ];
 
+const SIDEBAR_GROUPS: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'core', 'manage', 'internal'];
+
 export function TabBar() {
   const me = useMe();
   const unread = me.data?.unread ?? 0;
+  const { modules } = useModules();
+  const loc = useLocation();
+  const sidebarApps = modules.filter((m) => m.on && !m.locked);
   const badge = (to: string) =>
     to === '/apps' && unread > 0 ? (
       <span className="absolute -top-[2px] -right-[2px] flex min-w-[18px] items-center justify-center rounded-pill bg-r1 px-[4px] text-[11px] font-extrabold leading-[18px] text-white" aria-label={`${unread} unread`}>
@@ -101,7 +109,7 @@ export function TabBar() {
       </nav>
       <ThemeToggle floating className="md:hidden" />
       {/* Laptop: a sidebar on the left. */}
-      <nav aria-label="Main" className="safe-top fixed inset-y-0 left-0 z-30 hidden w-[240px] flex-col border-r border-line bg-card px-sm py-md md:flex">
+      <nav aria-label="Main" className="safe-top fixed inset-y-0 left-0 z-30 hidden w-[240px] flex-col overflow-y-auto border-r border-line bg-card px-sm py-md md:flex">
         <Link to="/home" className="flex min-h-[44px] items-center gap-xs px-xs font-display text-[18px] font-extrabold">
           <span className="flex items-end gap-[2px]" aria-hidden="true">
             {RELATIONSHIPS.slice(0, 3).map((r, i) => (
@@ -110,6 +118,13 @@ export function TabBar() {
           </span>
           Kreators Life
         </Link>
+        {/* Your role, right under the logo: creator, staff or admin. */}
+        {me.data && (
+          <p className="mt-xs m-0 flex items-center gap-xs px-xs text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
+            <RoleBadge role={me.data.user.role} size={20} />
+            {ROLE_META[me.data.user.role].name}
+          </p>
+        )}
         <ul className="mt-md flex list-none flex-col gap-xs p-0 m-0">
           {TABS.map((t) => (
             <li key={t.to}>
@@ -123,11 +138,44 @@ export function TabBar() {
             </li>
           ))}
         </ul>
-        <div className="mt-auto flex items-center justify-between gap-xs px-xs">
-          <Link to="/" className="text-[12px] font-bold text-ink-soft hover:text-ink">
-            About Kreators Life
-          </Link>
-          <ThemeToggle />
+        {/* The apps that are on, under their category, folded away until you open one or step inside it. Switch more on from Apps. */}
+        <div className="mt-md flex flex-col gap-xs">
+          {SIDEBAR_GROUPS.map((g) => {
+            const list = sidebarApps.filter((m) => m.group === g);
+            if (list.length === 0) return null;
+            return (
+              <details key={g} open={list.some((m) => loc.pathname === m.path || loc.pathname.startsWith(`${m.path}/`))} className="group">
+                <summary className="flex min-h-[40px] cursor-pointer items-center justify-between rounded-pill px-xs text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
+                  {MODULE_GROUPS[g]}
+                  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="chev">
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </summary>
+                <ul className="flex list-none flex-col p-0 m-0">
+                  {list.map((m) => (
+                    <li key={m.key}>
+                      <NavLink to={m.path} className={({ isActive }) => `tab flex min-h-[40px] items-center gap-xs rounded-pill px-sm text-[14px] font-bold transition-colors ${isActive ? 'bg-paper text-ink' : 'text-ink-soft hover:bg-paper hover:text-ink'}`}>
+                        <span className="text-[16px] leading-none" aria-hidden="true">
+                          {m.emoji}
+                        </span>
+                        <span className="truncate">{m.name}</span>
+                        {m.key === 'notifications' && unread > 0 && <span className="ml-auto rounded-pill bg-r1 px-xs text-[11px] font-extrabold leading-[18px] text-on-fill">{unread > 9 ? '9+' : unread}</span>}
+                      </NavLink>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            );
+          })}
+        </div>
+        <div className="mt-auto flex flex-col gap-xs px-xs pt-md">
+          <SignOut variant="outline" className="w-full" />
+          <div className="flex items-center justify-between gap-xs">
+            <Link to="/" className="text-[12px] font-bold text-ink-soft hover:text-ink">
+              About Kreators Life
+            </Link>
+            <ThemeToggle />
+          </div>
         </div>
       </nav>
     </>

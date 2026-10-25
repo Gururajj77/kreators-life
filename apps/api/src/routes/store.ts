@@ -1,7 +1,7 @@
-import { Hono } from 'hono';
-import { AFFILIATE_SHARE, type Lesson, type PublicPage } from '@kreators/shared';
+import { Hono, type Context } from 'hono';
+import { AFFILIATE_SHARE, levelFromXp, type Lesson, type PublicPage } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { DATE_RE, nameOf, newId, notify, nowIso, parseList, parseSocials, sessionUser } from '../db';
+import { DATE_RE, nameOf, newId, notify, nowIso, parseList, parseSocials, sessionUser, publicOf, getStats, computeBadges, honorKeys, linksOf } from '../db';
 import { slotsFor, type AvailabilityOverride } from '@kreators/shared';
 import { paymentsConfig, providerFor } from '../payments';
 import { logEvent, sendEmail, track } from '../ops';
@@ -14,14 +14,42 @@ async function ownerByHandle(db: D1Database, handle: string): Promise<UserRow | 
   return db.prepare('SELECT * FROM users WHERE handle = ?').bind(handle.toLowerCase()).first<UserRow>();
 }
 
+/** A page for someone without a page name, reached from the community feed. Same shape, same privacy. */
+async function ownerById(db: D1Database, id: string): Promise<UserRow | null> {
+  return db.prepare("SELECT * FROM users WHERE id = ? AND display_name != ''").bind(id).first<UserRow>();
+}
+
 /** What the browser needs to know before checkout: whether money is live and with which key. */
 publicPage.get('/config', (c) => c.json(paymentsConfig(c.env)));
 
+publicPage.get('/people/:id', async (c) => {
+  const owner = await ownerById(c.env.DB, c.req.param('id'));
+  if (!owner) return c.json({ error: 'no such person' }, 404);
+  return c.json(await pageFor(c, owner));
+});
+
 publicPage.get('/:handle', async (c) => {
-  const db = c.env.DB;
-  const owner = await ownerByHandle(db, c.req.param('handle'));
+  const owner = await ownerByHandle(c.env.DB, c.req.param('handle'));
   if (!owner) return c.json({ error: 'no page with that name' }, 404);
+  return c.json(await pageFor(c, owner));
+});
+
+async function pageFor(c: Context<AppEnv>, owner: UserRow): Promise<PublicPage> {
+  const db = c.env.DB;
   const viewer = await sessionUser(c);
+  const mine = Boolean(viewer && viewer.id === owner.id);
+  const ps = publicOf(owner);
+  // A page that is switched off shows nothing to anyone but its owner.
+  const open = mine || ps.pagePublic;
+  const shows = {
+    socials: open && ps.showSocials,
+    blocks: open && ps.showBlocks,
+    portfolio: open && ps.showPortfolio,
+    products: open && ps.showProducts,
+    posts: open && ps.showPosts,
+    activity: open && ps.showActivity,
+    badges: open && ps.showBadges,
+  };
   const [products, testimonials, followers, following, portfolio] = await Promise.all([
     db.prepare(`${PRODUCT_SELECT} WHERE p.owner_id = ? AND p.status = 'live' ORDER BY p.sort_order ASC, p.created_at DESC`).bind(owner.id).all<ProductRow>(),
     db.prepare(`${TESTIMONIAL_SELECT} WHERE t.owner_id = ? AND t.approved = 1 ORDER BY t.created_at DESC LIMIT 20`).bind(owner.id).all<Parameters<typeof toTestimonial>[0]>(),
@@ -29,30 +57,58 @@ publicPage.get('/:handle', async (c) => {
     viewer ? db.prepare('SELECT 1 FROM follows WHERE owner_id = ? AND follower_id = ?').bind(owner.id, viewer.id).first() : Promise.resolve(null),
     db.prepare("SELECT * FROM portfolio_items WHERE user_id = ? AND visibility = 'public' ORDER BY created_at DESC LIMIT 30").bind(owner.id).all<{ id: string; title: string; description: string; url: string; visibility: 'public' | 'private'; created_at: string }>(),
   ]);
-  if (!viewer || viewer.id !== owner.id) {
+  if (!mine && open) {
     await db.prepare("INSERT INTO page_events (owner_id, kind, ref, created_at) VALUES (?, 'view', NULL, ?)").bind(owner.id, nowIso()).run();
   }
+  const [posts, stats] = await Promise.all([
+    shows.posts
+      ? db
+          .prepare('SELECT p.id, p.category, p.body, p.created_at, (SELECT COUNT(*) FROM community_likes l WHERE l.post_id = p.id) AS likes, (SELECT COUNT(*) FROM community_replies r WHERE r.post_id = p.id AND r.hidden_at IS NULL) AS replies FROM community_posts p WHERE p.user_id = ? AND p.hidden_at IS NULL AND p.product_id IS NULL ORDER BY p.created_at DESC LIMIT 10')
+          .bind(owner.id)
+          .all<{ id: string; category: string; body: string; created_at: string; likes: number; replies: number }>()
+      : Promise.resolve({ results: [] }),
+    shows.activity || shows.badges ? getStats(db, owner.id) : Promise.resolve(null),
+  ]);
+  const honors = shows.badges ? await honorKeys(db, owner) : [];
+  const friend = viewer && viewer.id !== owner.id ? await db.prepare('SELECT id, requester_id, status FROM friendships WHERE (requester_id = ?1 AND recipient_id = ?2) OR (requester_id = ?2 AND recipient_id = ?1)').bind(viewer.id, owner.id).first<{ id: string; requester_id: string; status: string }>() : null;
   const page: PublicPage = {
+    id: owner.id,
     handle: owner.handle ?? '',
     name: nameOf(owner),
+    friend: !friend ? 'none' : friend.status === 'accepted' ? 'friends' : friend.requester_id === viewer?.id ? 'sent' : 'pending',
+    friendRequestId: friend?.id ?? null,
     bio: owner.bio,
     skills: parseList(owner.skills),
     categories: parseList(owner.categories),
     experienceLevel: owner.experience_level,
     availability: owner.availability,
     location: owner.location,
-    portfolio: portfolio.results.map((p) => ({ id: p.id, title: p.title, description: p.description, url: p.url, visibility: p.visibility, createdAt: p.created_at })),
-    avatarUrl: owner.avatar_url ?? '',
-    socials: parseSocials(owner.socials_json),
+    portfolio: shows.portfolio ? portfolio.results.map((p) => ({ id: p.id, title: p.title, description: p.description, url: p.url, visibility: p.visibility, createdAt: p.created_at })) : [],
+    avatarUrl: open ? (owner.avatar_url ?? '') : '',
+    socials: shows.socials ? parseSocials(owner.socials_json) : { instagram: '', youtube: '', x: '', website: '' },
     timezone: owner.timezone || 'Asia/Kolkata',
     isPro: owner.is_pro === 1,
     followers: followers?.n ?? 0,
     following: Boolean(following),
-    products: products.results.map((r) => toProduct(r)),
-    testimonials: testimonials.results.map(toTestimonial),
+    products: shows.products ? products.results.map((r) => toProduct(r)) : [],
+    testimonials: open ? testimonials.results.map(toTestimonial) : [],
+    mine,
+    isPrivate: !open,
+    shows,
+    allowFriendRequests: open && ps.allowFriendRequests,
+    allowChats: open && ps.allowChats,
+    posts: posts.results.map((p) => ({ id: p.id, category: p.category, body: p.body, likes: p.likes, replies: p.replies, createdAt: p.created_at })),
+    activity: stats && shows.activity ? { level: levelFromXp(owner.xp), streak: owner.streak, areasSetUp: stats.relationshipsWithPillars, memberSince: owner.created_at } : null,
+    badges: stats && shows.badges ? computeBadges(owner, stats) : [],
+    honors,
+    links: shows.blocks ? linksOf(owner).filter((b) => b.on) : [],
   };
-  return c.json(page);
-});
+  if (!open) {
+    // Only the name and the fact that the page is private.
+    return { ...page, bio: '', skills: [], categories: [], experienceLevel: '', availability: '', location: '', portfolio: [], followers: 0 };
+  }
+  return page;
+}
 
 publicPage.post('/:handle/click', async (c) => {
   const db = c.env.DB;

@@ -209,6 +209,7 @@ export function Win() {
   return (
     <Screen>
       <header className="pt-lg">
+        <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Win</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Content rewards. A brand funds a pool, you post a video about them, verified views turn into points.</p>
         {d && (

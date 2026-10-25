@@ -1,10 +1,12 @@
-import { BADGES, FOCUS_OPTIONS, HONORS, IDENTITY_STAGES, levelFromXp, MODULE_GROUPS, POINTS, RELATIONSHIPS, ROLE_META, type MeResponse, type ModuleGroup } from '@kreators/shared';
+import { BADGES, FOCUS_OPTIONS, HONORS, IDENTITY_STAGES, levelFromXp, passwordProblem, MODULE_GROUP_ACCENT, MODULE_GROUP_BLURB, MODULE_GROUPS, POINTS, RELATIONSHIP_BY_KEY, RELATIONSHIPS, ROLE_META, type MeResponse, type ModuleGroup } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { Person } from '../components/Person';
+import { RoleBadge } from '../components/RoleBadge';
+import { SignOut } from '../components/SignOut';
 import { EvolutionReveal } from '../components/EvolutionReveal';
 import { useGuide } from '../components/Guide';
 import { Toggle } from '../components/Toggle';
@@ -43,14 +45,21 @@ function YouView({ data }: { data: MeResponse }) {
   const themeMode = useTheme((s) => s.mode);
   const setThemeMode = useTheme((s) => s.setMode);
   const toggle = useMutation({ mutationFn: ({ key, on }: { key: string; on: boolean }) => api.setModule(key, on), onSuccess: () => refresh() });
-  const signout = useMutation({
-    mutationFn: api.signout,
-    onSuccess: () => {
-      setToken(null);
-      nav('/start', { replace: true });
+  const [deleting, setDeleting] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwCurrent, setPwCurrent] = useState('');
+  const [pwNew, setPwNew] = useState('');
+  const [pwAgain, setPwAgain] = useState('');
+  const setPassword = useMutation({
+    mutationFn: () => api.setPassword({ current: pwCurrent, password: pwNew }),
+    onSuccess: async () => {
+      await refresh();
+      setPwOpen(false);
+      setPwCurrent('');
+      setPwNew('');
+      setPwAgain('');
     },
   });
-  const [deleting, setDeleting] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const exportData = useMutation({
     mutationFn: () => api.exportMe(),
@@ -83,13 +92,6 @@ function YouView({ data }: { data: MeResponse }) {
       window.setTimeout(() => setSaved(false), 2000);
     },
   });
-  const seed = useMutation({
-    mutationFn: () => api.demoSeed(todayLocal()),
-    onSuccess: async () => {
-      await refresh();
-      nav('/home');
-    },
-  });
   const reset = useMutation({
     mutationFn: () => api.reset(),
     onSuccess: async () => {
@@ -104,9 +106,17 @@ function YouView({ data }: { data: MeResponse }) {
   const awarded = new Set(honors);
 
   return (
-    <Screen>
+    <Screen columns={false}>
       <header className="pt-lg">
+        <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-mute">Profile</p>
         <div className="flex items-center gap-sm">
+          {/* The profile picture with the role badge on it: creator, staff or admin. Earned badges live further down. */}
+          <span className="relative shrink-0">
+            <span className="flex size-[64px] items-center justify-center overflow-hidden rounded-pill bg-card shadow-toy-soft">
+              {identity ? <Person stage={identity.stage.stage} size={52} decorative /> : <Avatar relationship="self" size={44} decorative still />}
+            </span>
+            <RoleBadge role={user.role} className="absolute right-0 bottom-0" />
+          </span>
           <h1 className="min-w-0 truncate text-[30px]">{user.displayName ? user.displayName : 'You'}</h1>
           {user.isPro && <span className="shrink-0 rounded-pill bg-r7 px-sm py-xs text-[14px] font-extrabold text-white">Pro</span>}
           {user.role !== 'user' && <span className="shrink-0 rounded-pill bg-r6 px-sm py-xs text-[14px] font-extrabold text-white">{ROLE_META[user.role].name}</span>}
@@ -116,6 +126,16 @@ function YouView({ data }: { data: MeResponse }) {
           {levelFromXp(user.xp)}, climbing since{' '}
           {new Date(user.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}.
         </p>
+        <div className="mt-sm flex flex-wrap items-center gap-xs">
+          <Link to={user.handle ? `/u/${user.handle}` : `/people/${user.id}`} className="toy toy-soft inline-flex min-h-[48px] items-center gap-xs rounded-pill bg-card px-md text-[14px] font-bold text-ink">
+            <span aria-hidden="true">👤</span>
+            See my public page
+          </Link>
+          <Link to="/profile" className="inline-flex min-h-[48px] items-center px-sm text-[14px] font-bold text-ink-mute underline-offset-4 hover:text-ink hover:underline">
+            Edit page
+          </Link>
+          <SignOut variant="ghost" className="ml-auto" />
+        </div>
       </header>
 
       <section className="mt-lg" aria-labelledby="look-heading">
@@ -142,17 +162,30 @@ function YouView({ data }: { data: MeResponse }) {
         <h2 id="features-heading" className="text-[24px]">
           Features
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Switch any part of the app on or off. Off means it leaves the Apps screen; nothing is deleted.</p>
-        {(['earn', 'community', 'wellbeing', 'creator', 'core', 'manage'] as ModuleGroup[]).map((g) => {
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">This is the one place an app can be switched off. Off means it goes grey on the Apps screen; nothing is deleted.</p>
+        {(['earn', 'creator', 'community', 'wellbeing', 'core', 'manage', 'internal'] as ModuleGroup[]).map((g) => {
           const list = modules.filter((m) => m.group === g && m.available && !m.locked);
           if (list.length === 0) return null;
+          const rel = RELATIONSHIP_BY_KEY[MODULE_GROUP_ACCENT[g]];
+          const on = list.filter((m) => m.on).length;
           return (
-            <div key={g} className="mt-md">
-              <h3 className="text-[16px]">{MODULE_GROUPS[g]}</h3>
-              <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+            <div key={g} className="mt-md rounded-card p-sm" style={{ background: `var(--soft-${rel.key})` }}>
+              <div className="flex items-center gap-sm">
+                <Avatar relationship={rel.key} size={36} decorative still mood={on > 0 ? 'happy' : 'sleepy'} />
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-[16px]">{MODULE_GROUPS[g]}</h3>
+                  <p className="m-0 text-[12px] font-bold" style={{ color: `var(--deep-${rel.key})` }}>
+                    {MODULE_GROUP_BLURB[g]}
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-pill bg-card px-xs text-[12px] font-extrabold leading-[24px]" style={{ color: `var(--deep-${rel.key})` }}>
+                  {on} of {list.length} on
+                </span>
+              </div>
+              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                 {list.map((m) => (
                   <li key={m.key}>
-                    <Toggle on={m.on} onChange={(on) => toggle.mutate({ key: m.key, on })} label={`${m.emoji} ${m.name}`} hint={m.blurb} disabled={toggle.isPending} />
+                    <Toggle on={m.on} onChange={(on) => toggle.mutate({ key: m.key, on })} label={`${m.emoji} ${m.name}`} hint={m.blurb} disabled={toggle.isPending} color={rel.color} />
                   </li>
                 ))}
               </ul>
@@ -168,10 +201,15 @@ function YouView({ data }: { data: MeResponse }) {
         {user.email ? (
           <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
             <p className="m-0 text-[16px] font-bold">{user.email}</p>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Your tower is saved to this account. Sign in on any phone to pick it up.</p>
-            <Button variant="outline" className="mt-sm" onClick={() => signout.mutate()} disabled={signout.isPending}>
-              Sign out
-            </Button>
+            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+              Your areas are saved to this account. Sign in on any phone to pick them up.
+            </p>
+            <div className="mt-sm flex flex-wrap gap-xs">
+              <Button variant="outline" onClick={() => setPwOpen(true)}>
+                Change password
+              </Button>
+              <SignOut />
+            </div>
           </div>
         ) : (
           <div className="mt-sm rounded-card p-md" style={{ background: 'var(--tint-yellow)' }}>
@@ -199,8 +237,41 @@ function YouView({ data }: { data: MeResponse }) {
             </p>
           )}
         </div>
-        <Sheet open={deleting} onClose={() => setDeleting(false)} title="Delete your account">
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">This removes your name, email, page, bio, tower, logs, journal, messages and notifications, and archives anything you sell. Money records stay, anonymised, because the books have to. It cannot be undone.</p>
+        <Sheet open={pwOpen} onClose={() => setPwOpen(false)} title="Change your password">
+        <form
+          className="flex flex-col gap-sm"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (pwCurrent && !passwordProblem(pwNew, user.email ?? '') && pwNew === pwAgain) setPassword.mutate();
+          }}
+        >
+          <p className="m-0 text-[14px] font-semibold text-ink-soft">Type the one you have, then the new one twice. Every other device is signed out.</p>
+          <label className="block">
+            <span className="block text-[14px] font-bold">Current password</span>
+            <input type="password" required value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} autoComplete="current-password" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+          </label>
+          <label className="block">
+            <span className="block text-[14px] font-bold">New password</span>
+            <input type="password" required minLength={8} value={pwNew} onChange={(e) => setPwNew(e.target.value)} autoComplete="new-password" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+          </label>
+          <label className="block">
+            <span className="block text-[14px] font-bold">Once more</span>
+            <input type="password" required minLength={8} value={pwAgain} onChange={(e) => setPwAgain(e.target.value)} autoComplete="new-password" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+          </label>
+          {pwNew && passwordProblem(pwNew, user.email ?? '') && <p className="m-0 text-[14px] font-bold text-ink-soft">{passwordProblem(pwNew, user.email ?? '')}</p>}
+          {pwAgain && pwNew !== pwAgain && <p className="m-0 text-[14px] font-bold text-ink-soft">The two do not match yet.</p>}
+          {setPassword.isError && (
+            <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+              {setPassword.error instanceof Error ? setPassword.error.message : 'Could not save it.'}
+            </p>
+          )}
+          <Button type="submit" size="lg" full disabled={setPassword.isPending || !pwCurrent || Boolean(passwordProblem(pwNew, user.email ?? '')) || pwNew !== pwAgain}>
+            {setPassword.isPending ? 'Saving' : 'Change password'}
+          </Button>
+        </form>
+      </Sheet>
+      <Sheet open={deleting} onClose={() => setDeleting(false)} title="Delete your account">
+          <p className="m-0 text-[14px] font-semibold text-ink-soft">This removes your name, email, page, bio, areas, logs, journal, messages and notifications, and archives anything you sell. Money records stay, anonymised, because the books have to. It cannot be undone.</p>
           <label className="mt-md block">
             <span className="block text-[14px] font-bold">Type DELETE to confirm</span>
             <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} autoComplete="off" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
@@ -220,7 +291,7 @@ function YouView({ data }: { data: MeResponse }) {
         <h2 id="evo-heading" className="text-[24px]">
           Who you are becoming
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Xp fills in your next form from the feet up. Each form also needs time on the tower before it is ready.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Xp fills in your next form from the feet up. Each form also needs time in the app before it is ready.</p>
         <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
           <EvolutionReveal
             now={<Person stage={identity.stage.stage} size={104} decorative />}
@@ -276,9 +347,14 @@ function YouView({ data }: { data: MeResponse }) {
               {POINTS.checkin} per check-in, {POINTS.streakBonus} bonus every {POINTS.streakBonusEvery}th day. Trade them for real things.
             </p>
           </div>
-          <Link to="/rewards" className="toy inline-flex min-h-[48px] shrink-0 items-center rounded-pill bg-ink px-md font-bold text-on-ink">
-            Rewards
-          </Link>
+          <div className="flex shrink-0 flex-col gap-xs">
+            <Link to="/rewards" className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-ink px-md font-bold text-on-ink">
+              Rewards
+            </Link>
+            <Link to="/leaderboard" className="toy toy-ink inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-ink bg-card px-md font-bold text-ink">
+              Rank
+            </Link>
+          </div>
         </div>
         <div className="mt-sm grid grid-cols-3 gap-xs">
           <Stat label="xp" value={user.xp} />
@@ -308,7 +384,7 @@ function YouView({ data }: { data: MeResponse }) {
           })}
         </ul>
         <h3 className="mt-md text-[16px]">Awarded</h3>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Given by the Kreators team, or unlocked by time on the tower. These count on the leaderboard too.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Given by the Kreators team, or unlocked by time in the app. These count on the leaderboard too.</p>
         <ul className="mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0">
           {HONORS.map((h) => {
             const on = awarded.has(h.key);
@@ -421,22 +497,16 @@ function YouView({ data }: { data: MeResponse }) {
           >
             Show how it works again
           </Button>
-          {import.meta.env.DEV || window.location.hostname === 'localhost' ? (
-            <Button variant="outline" disabled={seed.isPending} onClick={() => seed.mutate()}>
-              {seed.isPending ? 'Filling' : seed.isError ? 'Not available here' : 'Fill with demo data'}
-            </Button>
-          ) : null}
           <Button
             variant="ghost"
             disabled={reset.isPending}
             onClick={() => {
-              if (window.confirm('Erase your tower, xp, streak and badges on this device and start over? There is no undo.')) reset.mutate();
+              if (window.confirm('Erase your areas, xp, streak and badges on this device and start over? There is no undo.')) reset.mutate();
             }}
           >
             Erase everything
           </Button>
         </div>
-        {(import.meta.env.DEV || window.location.hostname === 'localhost') && <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Demo data is two weeks of check-ins, tasks, moods, sleep, stress, journal, money and orders, on this account only, so every chart has something to draw. Local builds only.</p>}
       </section>
     </Screen>
   );

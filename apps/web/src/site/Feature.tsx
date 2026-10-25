@@ -45,7 +45,7 @@ export function Feature() {
               {token ? `Open ${module.name}` : `Sign in to open ${module.name}`}
             </Link>
             {!token && (
-              <Link to="/start" className="toy toy-ink inline-flex min-h-[56px] items-center rounded-pill border-2 border-ink bg-card px-lg text-[18px] font-bold">
+              <Link to="/signup" className="toy toy-ink inline-flex min-h-[56px] items-center rounded-pill border-2 border-ink bg-card px-lg text-[18px] font-bold">
                 Start free
               </Link>
             )}
@@ -69,7 +69,7 @@ export function Feature() {
 
       <section className="mt-lg" aria-labelledby="serves">
         <h2 id="serves" className="text-[24px]">
-          Which floors it serves
+          Which areas it serves
         </h2>
         <ul className="mt-sm flex list-none flex-wrap gap-xs p-0 m-0">
           {copy.relationships.map((k) => {

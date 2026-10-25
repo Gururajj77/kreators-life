@@ -48,7 +48,9 @@ export function Finance() {
           </div>
         )}
         <div className="mt-md flex flex-wrap gap-xs">
-          <Button onClick={() => setSheet('income')}>Money in</Button>
+          <Button variant="outline" onClick={() => setSheet('income')}>
+            Money in
+          </Button>
           <Button variant="outline" onClick={() => setSheet('expense')}>
             Money out
           </Button>
@@ -296,14 +298,13 @@ function TxRow({ t, currency, onChange }: { t: FinanceTransaction; currency: str
   });
   const sign = t.kind === 'income' ? '+' : '−';
   return (
-    <li className="rounded-tile bg-card p-sm shadow-toy-soft">
+    <li className={`rounded-tile bg-card p-sm shadow-toy-soft`}>
       <div className="flex items-center gap-sm">
         <span className={`flex size-[40px] shrink-0 items-center justify-center rounded-pill text-[16px] font-extrabold ${t.kind === 'income' ? 'bg-r4 text-on-fill' : 'bg-r2 text-on-fill'}`} aria-hidden="true">
           {sign}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[16px] font-bold">
-            {t.category}
+          <span className="block truncate text-[16px] font-bold"> {t.category}
             {t.counterparty ? <span className="font-semibold text-ink-soft"> {t.kind === 'income' ? 'from' : 'to'} {t.counterparty}</span> : ''}
           </span>
           <span className="block truncate text-[14px] font-semibold text-ink-soft">

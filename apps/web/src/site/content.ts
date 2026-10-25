@@ -13,14 +13,14 @@ export interface FeatureCopy {
 export const FEATURES: Record<string, FeatureCopy> = {
   today: {
     tagline: 'Three boxes a day.',
-    pitch: 'Check in, do a small spark, tick one task. That is the whole daily ask. Every tick pays experience, and the check-in pays points you can spend.',
-    steps: ['Open the app and check in.', 'Do the spark from your weakest floor.', 'Tick one task. Watch the ladder light up.'],
+    pitch: 'Check in, do one small act, tick one task. That is the whole daily ask. Every tick pays xp, and the check-in pays points you can spend.',
+    steps: ['Open the app and check in.', 'Do the small act for your weakest area.', 'Tick one task. Watch the pyramid light up.'],
     relationships: ['servant_leader', 'friendship', 'parent_child', 'lover_partner', 'self', 'guru', 'divine'],
   },
   tower: {
-    tagline: 'Seven floors, one life.',
-    pitch: 'Each relationship is a floor of a rainbow tower. Each floor is a ladder: a pillar holds up a principle, a value goal, an outcome, a project and tasks. Tick a task and every rung above it grows.',
-    steps: ['Answer a short, branching vibe check.', 'We derive your ladders. You never fill in a form.', 'Climb a little every day and watch your characters evolve.'],
+    tagline: 'Seven areas, one life.',
+    pitch: 'Each relationship is an area of your life. Each area is a pyramid: a foundation at the base, then a rule, a feeling, a proof, a project, and tasks at the tip. Tick a task and the whole pyramid grows.',
+    steps: ['Answer a short vibe check. Each answer picks the next question.', 'We build your pyramids. You never fill in a form.', 'Tick a little every day and watch your characters grow.'],
     relationships: ['servant_leader', 'friendship', 'parent_child', 'lover_partner', 'self', 'guru', 'divine'],
   },
   school: {
@@ -106,7 +106,7 @@ export const FEATURES: Record<string, FeatureCopy> = {
     relationships: ['self', 'divine', 'lover_partner'],
   },
   companion: {
-    tagline: 'A reflective chat that knows your tower.',
+    tagline: 'A chat that knows how you are doing.',
     pitch: 'Ask it anything about your week. It reflects and asks questions back. It is not a therapist and never pretends to be one.',
     steps: ['Say what is on your mind.', 'It asks a better question.', 'You decide what to do with it.'],
     relationships: ['self', 'guru'],
@@ -181,7 +181,7 @@ export const FEATURES: Record<string, FeatureCopy> = {
   leaderboard: {
     tagline: 'The top twenty climbers.',
     pitch: 'Opt in and see where you stand on experience, streaks and honors. Never on follower counts.',
-    steps: ['Opt in under You.', 'Climb.', 'See the top twenty.'],
+    steps: ['Opt in under Profile.', 'Climb.', 'See the top twenty.'],
     relationships: ['friendship'],
   },
   rewards: {
