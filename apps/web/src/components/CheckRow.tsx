@@ -90,7 +90,7 @@ export function CheckRow({
                 <path d="M5 12.5l4.5 4.5L19 7.5" />
               </svg>
             ) : locked ? (
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#736B66" strokeWidth="2.6" strokeLinecap="round">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--color-ink-soft)" strokeWidth="2.6" strokeLinecap="round">
                 <circle cx="12" cy="12" r="8.5" />
                 <path d="M12 7.5V12l3 2" />
               </svg>

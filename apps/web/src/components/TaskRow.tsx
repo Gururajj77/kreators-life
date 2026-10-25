@@ -22,6 +22,7 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
   const done = task.status === 'done';
   const wait = done ? 0 : minutesUntil(task.readyAt, now);
   const due = done ? null : dueLabel(task.dueDate, today);
+  const early = !done && Boolean(task.dueDate && task.dueDate > today);
 
   const when = [task.dueTime ? timeLabel(task.dueTime) : null, task.estimateMin ? `${task.estimateMin} min` : null].filter(Boolean).join(' · ');
   const timeChip = when && !done ? <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">{when}</span> : null;
@@ -54,7 +55,7 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
         busy={busy}
         strike
         hint={hint}
-        lockedMessage={wait > 0 ? `Ready in ${wait} ${wait === 1 ? 'minute' : 'minutes'}. Do it first, then tick it.` : null}
+        lockedMessage={early ? `For ${dueLabel(task.dueDate, today)?.text.toLowerCase() ?? task.dueDate}. Tick it on the day.` : wait > 0 ? `Ready in ${wait} ${wait === 1 ? 'minute' : 'minutes'}. Do it first, then tick it.` : null}
         badge={
           badge || timeChip ? (
             <span className="flex flex-wrap justify-end gap-xs">

@@ -18,14 +18,14 @@
      values live on :root below so dark mode can swap them. */
   --color-ink: var(--ink);
   /* The arrow every select draws for itself; it follows the ink colour below. */
-  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234f3422' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23262626' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   --color-ink-soft: var(--ink-soft);
   --color-ink-mute: var(--ink-mute);
-  --color-ink-fixed: #4f3422; /* always brown, for text on colored fills */
+  --color-ink-fixed: #262626; /* always the dark grey ink, for text on colored fills */
   --color-on-ink: var(--on-ink);
-  /* On a solid colour fill the foreground is white, in both modes. Yellow is the one fill that takes brown. */
+  /* On a solid colour fill the foreground is white, in both modes. Yellow is the one fill that takes the dark ink. */
   --color-on-fill: #ffffff;
-  --color-on-yellow: #4f3422;
+  --color-on-yellow: #262626;
   --color-paper: var(--paper);
   --color-card: var(--card);
   --color-line: var(--line);
@@ -55,17 +55,17 @@
 /* Light: the kit's light mode. */
 :root {
   color-scheme: light;
-  --ink: #4f3422; /* Mindful Brown 80 */
-  --ink-soft: #736b66; /* Optimistic Gray 60 */
-  --ink-mute: #926247; /* Mindful Brown 60 */
+  --ink: #262626; /* 85% black: the darkest grey, where the kit had brown */
+  --ink-soft: #5c5c5c;
+  --ink-mute: #858585;
   --on-ink: #ffffff;
-  --paper: #f7f4f2; /* Mindful Brown 10 */
+  --paper: #f4f4f4;
   --card: #ffffff;
-  --line: #e8ddd9; /* Mindful Brown 20 */
-  --shadow: #161513;
-  --edge: rgba(79, 52, 34, 0.1);
-  --shade-1: rgba(22, 21, 19, 0.06);
-  --shade-2: rgba(22, 21, 19, 0.14);
+  --line: #e2e2e2;
+  --shadow: #111111;
+  --edge: rgba(38, 38, 38, 0.1);
+  --shade-1: rgba(17, 17, 17, 0.06);
+  --shade-2: rgba(17, 17, 17, 0.14);
   --tint-red: #ffe4e6;
   --tint-orange: #ffedd5;
   --tint-yellow: #fef9c3;
@@ -95,14 +95,14 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --ink: #f7f4f2;
-    --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f7f4f2' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-    --ink-soft: #c9c7c5; /* Optimistic Gray 30 */
-    --ink-mute: #c0a091; /* Mindful Brown 40 */
-    --on-ink: #251404;
-    --paper: #251404; /* Mindful Brown 100 */
-    --card: #372315; /* Mindful Brown 90 */
-    --line: #4f3422; /* Mindful Brown 80 */
+    --ink: #f2f2f2;
+    --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f2f2f2' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    --ink-soft: #c2c2c2;
+    --ink-mute: #9a9a9a;
+    --on-ink: #121212;
+    --paper: #121212; /* near black, where the kit had deep brown */
+    --card: #1e1e1e;
+    --line: #333333;
     --shadow: #000000;
     --edge: rgba(255, 255, 255, 0.1);
     --shade-1: rgba(0, 0, 0, 0.35);
@@ -131,15 +131,15 @@
   }
 }
 :root[data-theme='dark'] {
-  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f7f4f2' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f2f2f2' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   color-scheme: dark;
-  --ink: #f7f4f2;
-  --ink-soft: #c9c7c5;
-  --ink-mute: #c0a091;
-  --on-ink: #251404;
-  --paper: #251404;
-  --card: #372315;
-  --line: #4f3422;
+  --ink: #f2f2f2;
+  --ink-soft: #c2c2c2;
+  --ink-mute: #9a9a9a;
+  --on-ink: #121212;
+  --paper: #121212;
+  --card: #1e1e1e;
+  --line: #333333;
   --shadow: #000000;
   --edge: rgba(255, 255, 255, 0.1);
   --shade-1: rgba(0, 0, 0, 0.35);
@@ -401,6 +401,23 @@
   display: none;
 }
 
+/* A row of pills or cards that scrolls sideways. A scroll box clips on both axes, so the box
+   bleeds 16px into the gutters and pads the same inside: a toy that lifts, and its shadow,
+   stay whole. Put any top margin on a wrapper, never on the row itself. */
+@layer components {
+  .scroll-row {
+    display: flex;
+    gap: var(--spacing-xs);
+    overflow-x: auto;
+    margin: calc(var(--spacing-md) * -1);
+    padding: var(--spacing-md);
+    scrollbar-width: none;
+  }
+  .scroll-row::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* Collapsible rungs on the realm screen. */
 summary {
   list-style: none;
@@ -414,6 +431,17 @@ details[open] .chev {
 }
 summary {
   transition: background-color 120ms ease;
+}
+/* A click leaves no box behind; only the keyboard draws the ring. An open row stays tinted. */
+summary:focus {
+  outline: none;
+}
+summary:focus-visible {
+  outline: 3px solid var(--color-ink);
+  outline-offset: 2px;
+}
+details[open] > summary {
+  background-color: var(--color-paper);
 }
 
 /* Multi-line text that must stay short on a tile. */

@@ -27,13 +27,13 @@ export function useGuide(): { seen: boolean; dismiss: () => void; reset: () => v
 
 const STEPS = [
   { title: 'Daily is your routine', body: 'Three boxes, every day. Check in, do the small act, tick one task. Tick a box once you have really done it.' },
-  { title: 'Areas are where you set things up', body: 'Seven areas, one for each relationship in your life. An area you set up gives Today its tasks.' },
+  { title: 'Pillars are where you set things up', body: 'Seven pillars, one for each relationship in your life. A pillar you set up gives Daily its tasks.' },
   { title: 'Everything grows', body: 'Each task makes its pyramid stronger. Xp fills up who you are becoming, next to who you are now.' },
 ];
 
 export function GuideCard({ onDismiss }: { onDismiss: () => void }) {
   return (
-    <section className="mt-md rounded-card bg-ink p-md text-on-ink shadow-[0_4px_0_0_#372315]" aria-labelledby="guide-heading">
+    <section className="mt-md rounded-card bg-ink p-md text-on-ink shadow-toy-soft" aria-labelledby="guide-heading">
       <h2 id="guide-heading" className="text-[24px]">
         How this works
       </h2>

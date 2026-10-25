@@ -247,13 +247,15 @@ export function Admin() {
 
       {loaded && (
         <>
-          <nav className="-mx-xs -my-sm mt-md flex gap-xs overflow-x-auto px-xs py-sm scrollbar-none md:flex-wrap md:overflow-visible" aria-label="Admin sections">
+          <div className="mt-md">
+          <nav className="scroll-row md:flex-wrap md:overflow-visible" aria-label="Admin sections">
             {tabs.map(([k, label]) => (
               <button key={k} type="button" aria-pressed={tab === k} onClick={() => openTab(k)} className={`toy shrink-0 rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                 {label}
               </button>
             ))}
           </nav>
+          </div>
 
           {tab === 'people' && (
             <section className="mt-md" aria-labelledby="people-heading">

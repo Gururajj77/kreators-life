@@ -1,10 +1,11 @@
 import { RELATIONSHIPS } from '@kreators/shared';
-import { useEffect, type ReactNode } from 'react';
-import { createBrowserRouter, Navigate, Outlet, RouterProvider, useLocation } from 'react-router';
+import type { ReactNode } from 'react';
+import { createBrowserRouter, Navigate, Outlet, RouterProvider, ScrollRestoration, useLocation } from 'react-router';
 import { Avatar } from './components/Avatar';
 import { Button } from './components/Button';
 import { ThemeToggle } from './components/ThemeToggle';
 import { Gate } from './components/Gate';
+import { HowTo } from './components/HowTo';
 import { TabBar } from './components/TabBar';
 import { useMe } from './lib/queries';
 import { useApplyTheme } from './lib/theme';
@@ -33,6 +34,7 @@ import { Leaderboard } from './screens/Leaderboard';
 import { Library } from './screens/Library';
 import { Life } from './screens/Life';
 import { Reviews } from './screens/Reviews';
+import { Run, RunClubPage } from './screens/Run';
 import { Store } from './screens/Store';
 import { Manage } from './screens/Manage';
 import { Mindful } from './screens/Mindful';
@@ -121,21 +123,22 @@ function Shell() {
 }
 
 const gated = (key: string, el: ReactNode) => <Gate moduleKey={key}>{el}</Gate>;
+/** The core tabs are never gated, but they get the same how-it-works pill. */
+const explained = (key: string, el: ReactNode) => (
+  <HowTo moduleKey={key}>
+    {el}
+  </HowTo>
+);
 
 /** Every new page starts at the top. A link with a hash still lands on its element. */
+/** A new page starts at the top and a hash lands on its element; Back and Forward return to where you were. */
 function Root() {
-  const { pathname, hash } = useLocation();
-  useEffect(() => {
-    if (hash) {
-      const el = document.getElementById(hash.slice(1));
-      if (el) {
-        el.scrollIntoView({ block: 'start' });
-        return;
-      }
-    }
-    window.scrollTo({ top: 0, left: 0 });
-  }, [pathname, hash]);
-  return <Outlet />;
+  return (
+    <>
+      <ScrollRestoration />
+      <Outlet />
+    </>
+  );
 }
 
 /** Pages outside the app shell and the public site still get the theme switch. */
@@ -185,12 +188,12 @@ const router = createBrowserRouter([
   {
     element: <Shell />,
     children: [
-      { path: '/home', element: <Dashboard /> },
-      { path: '/today', element: <Today /> },
-      { path: '/tower', element: <Tower /> },
+      { path: '/home', element: explained('home', <Dashboard />) },
+      { path: '/today', element: explained('today', <Today />) },
+      { path: '/tower', element: explained('tower', <Tower />) },
       { path: '/realm/:key', element: <Realm /> },
-      { path: '/apps', element: <Apps /> },
-      { path: '/you', element: <You /> },
+      { path: '/apps', element: explained('apps', <Apps />) },
+      { path: '/you', element: explained('you', <You />) },
       { path: '/search', element: <Search /> },
       { path: '/profile', element: gated('profile', <Profile />) },
       { path: '/help', element: gated('help', <Help />) },
@@ -210,6 +213,8 @@ const router = createBrowserRouter([
       // people
       { path: '/party', element: gated('party', <Party />) },
       { path: '/party/:id', element: gated('party', <EventPage />) },
+      { path: '/run', element: gated('run', <Run />) },
+      { path: '/run/clubs/:id', element: gated('run', <RunClubPage />) },
       { path: '/community', element: gated('community', <Community />) },
       { path: '/club', element: gated('club', <Club />) },
       { path: '/bond', element: gated('bond', <Bond />) },

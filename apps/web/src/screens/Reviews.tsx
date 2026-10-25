@@ -123,7 +123,7 @@ export function Reviews() {
             </div>
             {areaSegments.length > 0 && (
               <div className="mt-sm flex items-center gap-md rounded-card bg-card p-md shadow-toy-soft">
-                <Donut segments={areaSegments} size={120} stroke={18} label="Xp by area">
+                <Donut segments={areaSegments} size={120} stroke={18} label="Xp by pillar">
                   <span className="font-display text-[20px] font-extrabold">{s.now.xp}</span>
                 </Donut>
                 <div className="min-w-0 flex-1">

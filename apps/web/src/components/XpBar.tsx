@@ -7,7 +7,7 @@ interface Props {
   compact?: boolean;
 }
 
-export function XpBar({ xp, color = '#4F3422', compact = false }: Props) {
+export function XpBar({ xp, color = 'var(--color-ink)', compact = false }: Props) {
   const reduce = useReducedMotion();
   const p = levelProgress(xp);
   const pct = Math.round(p.pct * 100);

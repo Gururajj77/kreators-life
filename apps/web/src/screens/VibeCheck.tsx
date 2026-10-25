@@ -44,6 +44,28 @@ type Stage =
   | { kind: 'about'; result: OnboardingResponse }
   | { kind: 'ladders'; result: OnboardingResponse };
 
+/** Leaves the vibe check: back to Pillars when it was opened for one pillar, else where you came from, else the start. */
+function CloseVibe({ inline = false }: { inline?: boolean }) {
+  const nav = useNavigate();
+  const me = useMe();
+  const [params] = useSearchParams();
+  const single = Boolean(params.get('floor'));
+  const onboarded = Boolean(me.data?.user.onboardedAt);
+  const leave = () => {
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (single) nav('/tower');
+    else if (onboarded && idx > 0) nav(-1);
+    else nav(onboarded ? '/home' : '/start');
+  };
+  return (
+    <button type="button" aria-label="Close" onClick={leave} className={`toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-card text-ink-soft hover:text-ink ${inline ? '' : 'safe-top fixed top-sm left-md z-30'}`}>
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 6l12 12M18 6L6 18" />
+      </svg>
+    </button>
+  );
+}
+
 /** The floors in tower order. */
 const ordered = (keys: RelationshipKey[]) => RELATIONSHIPS.filter((r) => keys.includes(r.key)).map((r) => r.key);
 
@@ -105,6 +127,7 @@ export function VibeCheck() {
   if (stage.kind === 'intro') {
     return (
       <Screen tabs={false}>
+      <CloseVibe />
         <div className="pt-xl">
           <Avatar relationship="self" size={88} />
           <h1 className="mt-md text-[36px]">Quick vibe check</h1>
@@ -207,11 +230,14 @@ function PickFloors({ chosen, onChange, onBack, onNext }: { chosen: Relationship
   return (
     <Screen tabs={false}>
       <div className="pt-md">
-        <button type="button" onClick={onBack} className="rounded-pill px-sm py-xs text-[14px] font-bold text-ink-soft">
-          Back
-        </button>
+        <div className="flex items-center gap-xs">
+          <CloseVibe inline />
+          <button type="button" onClick={onBack} className="rounded-pill px-sm py-xs text-[14px] font-bold text-ink-soft">
+            Back
+          </button>
+        </div>
         <h1 className="mt-md text-[36px]">Which relationships need work right now?</h1>
-        <p className="mt-sm text-[16px] font-semibold text-ink-soft">Pick the areas you want to start with. Each one asks three questions. The others wait under Areas until you are ready for them.</p>
+        <p className="mt-sm text-[16px] font-semibold text-ink-soft">Pick the pillars you want to start with. Each one asks three questions. The others wait under Pillars until you are ready for them.</p>
       </div>
       <ul className="mt-lg flex list-none flex-col gap-xs p-0 m-0 pb-2xl">
         {RELATIONSHIPS.map((r) => {
@@ -268,13 +294,16 @@ function QuestionStage({
   return (
     <div className="min-h-dvh pb-2xl" style={{ background: `var(--soft-${rel.key})` }}>
       <Screen tabs={false}>
-        <div className="pt-md">
+      <div className="pt-md">
           <div className="flex items-center justify-between gap-sm pr-xl">
-            <button type="button" onClick={onBack} className="rounded-pill px-sm py-xs text-[14px] font-bold text-ink-soft">
-              Back
-            </button>
+            <span className="flex items-center gap-xs">
+              <CloseVibe inline />
+              <button type="button" onClick={onBack} className="rounded-pill px-sm py-xs text-[14px] font-bold text-ink-soft">
+                Back
+              </button>
+            </span>
             <span className="text-[14px] font-bold text-ink-soft">
-              Area {at + 1} of {floors.length}, step {step} of {STEPS_PER_FLOOR}
+              Pillar {at + 1} of {floors.length}, step {step} of {STEPS_PER_FLOOR}
             </span>
           </div>
           <ol className="mt-sm flex list-none gap-xs p-0 m-0" aria-hidden="true">
@@ -364,7 +393,7 @@ function QuestionStage({
             </div>
             {q.role === 'foundation' && (
               <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">
-                This becomes the base of {rel.character}&rsquo;s pyramid. The rule, the feeling, the proof, the project and the first tasks come from it.
+                This becomes the base of {rel.character}&rsquo;s pyramid. The guiding principle, the value goal, the goal outcome, the project and the first tasks come from it.
               </p>
             )}
           </motion.div>
@@ -392,6 +421,7 @@ function Reveal({ result, onNext }: { result: OnboardingResponse; onNext: () => 
   const asked = new Set(result.answered);
   return (
     <Screen tabs={false}>
+      <CloseVibe />
       <div className="pt-xl">
         <h1 className="text-[36px]">Your rainbow</h1>
         <p className="mt-sm text-[16px] font-semibold text-ink-soft">
@@ -458,15 +488,16 @@ function Ladders({ result, floors: asked, onDone }: { result: OnboardingResponse
       await refresh();
       onDone();
     },
-    onError: () => setError('Could not set up your areas. Try again.'),
+    onError: () => setError('Could not set up your pillars. Try again.'),
   });
 
   return (
     <Screen tabs={false}>
+      <CloseVibe />
       <div className="pt-xl">
         <h1 className="text-[36px]">Built from your answers</h1>
         <p className="mt-sm text-[16px] font-semibold text-ink-soft">
-          Each area took the foundation you picked and worked out the rest. Before you tick an area, choose the feeling and the project you want it to start with, or write your own.
+          Each pillar took the foundation you picked and worked out the rest. Before you tick a pillar, choose the value goal and the project you want it to start with, or write your own.
         </p>
       </div>
       <ol className="mt-lg flex list-none flex-col gap-md p-0 m-0">
@@ -514,7 +545,7 @@ function Ladders({ result, floors: asked, onDone }: { result: OnboardingResponse
                 <CheckRow
                   checked={on}
                   onToggle={() => setChosen((a) => (on ? a.filter((k) => k !== r.key) : [...a, r.key]))}
-                  title={`Set up ${r.character}’s area`}
+                  title={`Set up ${r.character}’s pillar`}
                   subtitle={on ? 'Ticked. It will be set up.' : 'Tick to set it up too.'}
                   color={r.color}
                   deep={`var(--deep-${r.key})`}
@@ -531,7 +562,7 @@ function Ladders({ result, floors: asked, onDone }: { result: OnboardingResponse
         </p>
       )}
       <Button size="lg" full className="mt-lg" onClick={() => build.mutate()} disabled={build.isPending || chosen.length === 0}>
-        {build.isPending ? 'Setting up' : `Set up ${chosen.length} ${chosen.length === 1 ? 'area' : 'areas'}`}
+        {build.isPending ? 'Setting up' : `Set up ${chosen.length} ${chosen.length === 1 ? 'pillar' : 'pillars'}`}
       </Button>
       <Button variant="ghost" full className="mt-xs" onClick={onDone} disabled={build.isPending}>
         Start with nothing set up
@@ -570,6 +601,7 @@ function AboutYou({ onNext }: { onNext: () => void }) {
   };
   return (
     <Screen tabs={false}>
+      <CloseVibe />
       <div className="pt-xl">
         <Avatar relationship="friendship" size={88} />
         <h1 className="mt-md text-[36px]">What are you into?</h1>
@@ -603,7 +635,7 @@ function AboutYou({ onNext }: { onNext: () => void }) {
           </p>
         )}
         <Button type="submit" size="lg" full disabled={save.isPending}>
-          {interests.length >= 2 && city.trim() ? 'Save and set up my areas' : 'Skip for now'}
+          {interests.length >= 2 && city.trim() ? 'Save and set up my pillars' : 'Skip for now'}
         </Button>
       </form>
     </Screen>
@@ -673,7 +705,7 @@ function Learn({ result, floors, onNext }: { result: OnboardingResponse; floors:
       key: 'not',
       eyebrow: 'What this is',
       title: 'Not a to-do list',
-      body: <p className="m-0 text-[16px] font-semibold text-ink-soft">Most apps start with tasks. Tasks fade in a week. It is not a to-do list and it is not a mood app. It is a pyramid for each area of your life, and every task has a base under it.</p>,
+      body: <p className="m-0 text-[16px] font-semibold text-ink-soft">Most apps start with tasks. Tasks fade in a week. It is not a to-do list and it is not a mood app. It is a pyramid for each pillar of your life, and every task has a base under it.</p>,
     },
     {
       key: 'rule',
@@ -689,7 +721,7 @@ function Learn({ result, floors, onNext }: { result: OnboardingResponse; floors:
         <ul className="m-0 flex list-none flex-col gap-xs p-0">
           {[
             ['☀️', 'Daily', 'Three boxes a day: check in, one small act, one task.'],
-            ['🏰', 'Areas', 'One pyramid per relationship. Tap an area to see it or change it.'],
+            ['🏰', 'Pillars', 'One pyramid per relationship. Tap a pillar to see it or change it.'],
             ['🏠', 'Home', 'Your numbers first, then where to go next.'],
             ['🧩', 'Apps', 'Switch on only what you need.'],
           ].map(([emoji, name, line]) => (
@@ -720,6 +752,7 @@ function Learn({ result, floors, onNext }: { result: OnboardingResponse; floors:
 
   return (
     <Screen tabs={false}>
+      <CloseVibe />
       <div className="pt-xl">
         <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide" style={{ color: `var(--deep-${rel.key})` }}>
           Result
@@ -757,7 +790,7 @@ function Learn({ result, floors, onNext }: { result: OnboardingResponse; floors:
             </Button>
           )}
         </div>
-        {last && <p className="mt-sm m-0 text-center text-[14px] font-semibold text-ink-soft">Next: pick what each area starts with.</p>}
+        {last && <p className="mt-sm m-0 text-center text-[14px] font-semibold text-ink-soft">Next: pick what each pillar starts with.</p>}
       </section>
     </Screen>
   );

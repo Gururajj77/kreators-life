@@ -7,9 +7,9 @@ import { Avatar } from './Avatar';
 const LAYERS: NodeKind[] = [...KINDS].reverse();
 
 interface Props {
-  /** Which area's colour to draw in. */
+  /** Which pillar's colour to draw in. */
   relationship: RelationshipKey;
-  /** Real words for each layer, when an area is already set up. Falls back to the built-in examples. */
+  /** Real words for each layer, when a pillar is already set up. Falls back to the built-in examples. */
   words?: Partial<Record<NodeKind, string>>;
   /** Play the tick ripple on mount. */
   autoplay?: boolean;
@@ -22,7 +22,7 @@ interface Props {
 }
 
 /**
- * The pyramid that explains an area. Six layers stack up from the base (a foundation) to the tip (a task).
+ * The pyramid that explains a pillar. Six layers stack up from the base (a foundation) to the tip (a task).
  * A check lands on the tip, then a glow runs down layer by layer, so it is plain that one small tick makes
  * the whole pyramid stronger. Tap the stack to see it again. Drawn with GSAP; honours reduced motion.
  */
@@ -98,7 +98,7 @@ export function Pyramid({ relationship, words = {}, autoplay = false, compact = 
         </span>
         {LAYERS.map((k, i) => {
           const meta = KIND_META[k];
-          const width = 44 + i * 11; // tip 44%, base 99%
+          const width = 52 + i * 9.6; // tip 52%, base 100%
           const strength = 1 - i * 0.1;
           const on = active === k || selected === k;
           const Tag = onSelect ? 'button' : 'div';
@@ -109,7 +109,7 @@ export function Pyramid({ relationship, words = {}, autoplay = false, compact = 
               onClick={onSelect ? () => onSelect(k) : undefined}
               aria-pressed={onSelect ? selected === k : undefined}
               data-layer={k}
-              className={`relative flex min-h-[44px] items-center justify-center rounded-pill text-center will-change-transform ${onSelect ? 'toy cursor-pointer' : ''}`}
+              className={`relative flex min-h-[48px] items-center justify-center rounded-pill text-center will-change-transform ${onSelect ? 'toy cursor-pointer' : ''}`}
               style={
                 {
                   width: `${width}%`,
@@ -122,9 +122,9 @@ export function Pyramid({ relationship, words = {}, autoplay = false, compact = 
               }
             >
               <span data-glow className="pointer-events-none absolute inset-0 rounded-pill bg-white" style={{ opacity: 0 }} aria-hidden="true" />
-              <span className="relative px-sm text-[14px] font-extrabold leading-tight">
+              <span className="relative px-sm text-[14px] font-extrabold leading-tight text-balance">
                 {meta.label}
-                <span className="block text-[12px] font-bold opacity-90">{text(k)}</span>
+                <span className="block text-[12px] font-bold opacity-90 text-balance">{text(k)}</span>
               </span>
             </Tag>
           );

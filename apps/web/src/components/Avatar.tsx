@@ -71,7 +71,7 @@ const SHAPES: Record<RelationshipKey, Shape> = {
   },
 };
 
-const INK = '#4F3422';
+const INK = '#262626';
 const GOLD = '#FDE047';
 
 function Sparkle({ x, y, s }: { x: number; y: number; s: number }) {

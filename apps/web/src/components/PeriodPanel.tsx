@@ -94,6 +94,7 @@ export function SummaryTiles({ summary, parts }: { summary: ReviewSummary; parts
         { label: 'Events', value: now.events, hint: delta(now.events, before.events, prev), to: '/party' },
         { label: 'Posts', value: now.posts, hint: delta(now.posts, before.posts, prev), to: '/community' },
         { label: 'Circles', value: now.circles, hint: delta(now.circles, before.circles, prev), to: '/circles' },
+        { label: 'Runs', value: now.runs, hint: delta(now.runs, before.runs, prev), to: '/run' },
       );
     }
   }

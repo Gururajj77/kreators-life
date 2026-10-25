@@ -1,5 +1,5 @@
 import { parseLinkBlocks, type LinkBlock } from '@kreators/shared';
-import { BADGES, EMPTY_SOCIALS, parsePublicSettings, HONORS, isStaffFor, levelFromXp, PERMISSIONS, RELATIONSHIPS, roleRank, taskReadyAt, timeHonors, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
+import { BADGES, EMPTY_SOCIALS, parsePublicSettings, HONORS, isStaffFor, levelFromXp, PERMISSIONS, RELATIONSHIPS, roleRank, RUN_BADGES, taskReadyAt, timeHonors, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
 import type { Context, Next } from 'hono';
 import type { AppEnv } from './env';
 import type { UserRow } from './env';
@@ -235,6 +235,9 @@ export interface Stats {
   projectsCleared: number;
   relationshipsWithPillars: number;
   clubMember: boolean;
+  /** Runs logged with a start code, and their metres, for the run badges. */
+  runsLogged: number;
+  runMetres: number;
 }
 
 /** What a task tick is gated on: how many the person has ever ticked, and when the last one was. */
@@ -270,16 +273,20 @@ export async function getStats(db: D1Database, userId: string): Promise<Stats> {
         (SELECT COUNT(*) FROM spark_completions WHERE user_id = ?1) AS sparks_done,
         (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'project' AND status = 'done') AS projects_cleared,
         (SELECT COUNT(DISTINCT relationship) FROM nodes WHERE user_id = ?1 AND kind = 'pillar' AND status != 'archived') AS rels_with_pillars,
-        (SELECT COUNT(*) FROM memberships WHERE user_id = ?1 AND status IN ('accepted', 'member', 'active')) AS club`,
+        (SELECT COUNT(*) FROM memberships WHERE user_id = ?1 AND status IN ('accepted', 'member', 'active')) AS club,
+        (SELECT COUNT(*) FROM run_entries WHERE user_id = ?1 AND status = 'logged') AS runs_logged,
+        (SELECT COALESCE(SUM(metres), 0) FROM run_entries WHERE user_id = ?1 AND status = 'logged') AS run_metres`,
     )
     .bind(userId)
-    .first<{ tasks_done: number; sparks_done: number; projects_cleared: number; rels_with_pillars: number; club: number }>();
+    .first<{ tasks_done: number; sparks_done: number; projects_cleared: number; rels_with_pillars: number; club: number; runs_logged: number; run_metres: number }>();
   return {
     tasksDone: row?.tasks_done ?? 0,
     sparksDone: row?.sparks_done ?? 0,
     projectsCleared: row?.projects_cleared ?? 0,
     relationshipsWithPillars: row?.rels_with_pillars ?? 0,
     clubMember: (row?.club ?? 0) > 0,
+    runsLogged: row?.runs_logged ?? 0,
+    runMetres: row?.run_metres ?? 0,
   };
 }
 
@@ -294,6 +301,9 @@ export function computeBadges(user: { xp: number; best_streak: number }, stats: 
   if (levelFromXp(user.xp) >= 5) earned.add('level_5');
   if (stats.sparksDone >= 5) earned.add('spark_5');
   if (stats.clubMember) earned.add('club_member');
+  if (stats.runsLogged >= RUN_BADGES.run_1.runs) earned.add('run_1');
+  if (stats.runsLogged >= RUN_BADGES.run_10.runs) earned.add('run_10');
+  if (stats.runMetres >= RUN_BADGES.run_100k.metres) earned.add('run_100k');
   return BADGES.map((b) => b.key).filter((k) => earned.has(k));
 }
 

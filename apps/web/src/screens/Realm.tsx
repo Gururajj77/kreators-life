@@ -66,7 +66,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
         await api.uncomplete(n.id);
         return;
       }
-      const r = await api.complete(n.id);
+      const r = await api.complete(n.id, todayLocal());
       celebrate({
         title: r.capped ? 'Done. Daily xp limit reached, so this one was for you' : 'Ripple',
         totalXp: r.totalXp,
@@ -90,10 +90,10 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
       <div style={{ background: rel.color, color: rel.text }}>
         <div className="safe-top mx-auto w-full max-w-[480px] px-md pb-lg pt-md md:ml-[240px] md:max-w-[1040px] md:px-lg lg:mx-auto lg:pl-[240px]">
           <BackLink to="/tower" inherit>
-            Areas
+            Pillars
           </BackLink>
           <p className="mt-sm m-0 text-[14px] font-bold">
-            Area {rel.floor} of 7, {rel.character}
+            Pillar {rel.floor} of 7, {rel.character}
           </p>
           <h1 className="text-[30px]">{rel.name}</h1>
           <div className="mt-md">
@@ -129,11 +129,11 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
         {!nodesQ.isPending && !built && (
           <section className="mt-lg" aria-labelledby="build-heading">
             <h2 id="build-heading" className="text-[24px]">
-              Set up this area
+              Set up this pillar
             </h2>
             <div className="mt-sm rounded-card p-md" style={{ background: `var(--soft-${rel.key})` }}>
               <p className="m-0 text-[16px] font-semibold">
-                {rel.character} built a pyramid from your answers: the foundation you picked, then a rule, a feeling, a proof, a project and three tasks. One tap and they show up on Daily.
+                {rel.character} built a pyramid from your answers: the foundation you picked, then a guiding principle, a value goal, a goal outcome, a project and three tasks. One tap and they show up on Daily.
               </p>
               <Button variant="color" color={rel.color} deep={`var(--deep-${rel.key})`} full className="mt-md" style={{ color: rel.text }} onClick={() => acceptQuest.mutate()} disabled={acceptQuest.isPending}>
                 Set up {rel.character}&rsquo;s pyramid

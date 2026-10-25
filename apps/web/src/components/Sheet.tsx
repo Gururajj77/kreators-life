@@ -42,7 +42,7 @@ export function Sheet({ open, onClose, title, children }: Props) {
             role="dialog"
             aria-modal="true"
             aria-labelledby={id}
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[90dvh] w-full max-w-[480px] overflow-y-auto rounded-t-card bg-card px-md pt-md md:bottom-auto md:top-1/2 md:max-w-[600px] md:-translate-y-1/2 md:rounded-card md:p-lg"
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[90dvh] w-full max-w-[480px] overflow-y-auto rounded-t-card bg-card px-md pt-md text-ink md:bottom-auto md:top-1/2 md:max-w-[600px] md:-translate-y-1/2 md:rounded-card md:p-lg"
             style={{ paddingBottom: 'calc(64px + env(safe-area-inset-bottom))' }}
             initial={{ y: '100%' }}
             animate={{ y: 0 }}

@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
-import { POST_CATEGORIES, roleRank, type CommunityPost, type CommunityReply } from '@kreators/shared';
+import { FEED_FILTERS, FEED_SORTS, POST_CATEGORIES, roleRank, type CommunityPost, type CommunityReply, type FeedFilter, type FeedSort } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { nameOf, newId, notify, nowIso, requireRole } from '../db';
+import { nameOf, newId, notify, nowIso, oneOf, requireRole } from '../db';
+import { rewardSocial } from '../rewards';
 
 export const community = new Hono<AppEnv>();
 
@@ -19,12 +20,16 @@ interface PostRow {
   likes: number;
   liked: number;
   replies: number;
+  author_following: number;
+  author_followers: number;
 }
 
 const POST_SELECT = `SELECT p.*, u.display_name AS author_name, u.handle AS author_handle, u.is_pro AS author_pro,
   (SELECT COUNT(*) FROM community_likes l WHERE l.post_id = p.id) AS likes,
   (SELECT COUNT(*) FROM community_likes l WHERE l.post_id = p.id AND l.user_id = ?1) AS liked,
-  (SELECT COUNT(*) FROM community_replies r WHERE r.post_id = p.id AND r.hidden_at IS NULL) AS replies
+  (SELECT COUNT(*) FROM community_replies r WHERE r.post_id = p.id AND r.hidden_at IS NULL) AS replies,
+  (SELECT COUNT(*) FROM follows f WHERE f.owner_id = p.user_id AND f.follower_id = ?1) AS author_following,
+  (SELECT COUNT(*) FROM follows f WHERE f.owner_id = p.user_id) AS author_followers
   FROM community_posts p JOIN users u ON u.id = p.user_id`;
 
 const toPost = (r: PostRow): CommunityPost => ({
@@ -33,6 +38,8 @@ const toPost = (r: PostRow): CommunityPost => ({
   authorName: nameOf({ display_name: r.author_name }),
   authorHandle: r.author_handle,
   authorPro: r.author_pro === 1,
+  authorFollowing: r.author_following > 0,
+  authorFollowers: r.author_followers,
   category: r.category,
   body: r.body,
   productId: r.product_id,
@@ -49,9 +56,13 @@ community.get('/', async (c) => {
   const category = (c.req.query('category') ?? '').trim();
   const productId = (c.req.query('product') ?? '').trim();
   const showHidden = c.req.query('all') === '1' && roleRank(user.role) >= roleRank('sub_admin');
+  const sort: FeedSort = oneOf(c.req.query('sort'), FEED_SORTS, 'recent');
+  const filter: FeedFilter = oneOf(c.req.query('filter'), FEED_FILTERS, 'all');
   const clauses: string[] = [];
   const binds: unknown[] = [user.id];
   if (!showHidden) clauses.push('p.hidden_at IS NULL');
+  if (filter === 'following') clauses.push('p.user_id IN (SELECT owner_id FROM follows WHERE follower_id = ?1)');
+  if (filter === 'mine') clauses.push('p.user_id = ?1');
   if (category) {
     clauses.push('p.category = ?');
     binds.push(category);
@@ -68,8 +79,9 @@ community.get('/', async (c) => {
   } else {
     clauses.push('p.product_id IS NULL');
   }
-  const rows = await db.prepare(`${POST_SELECT} WHERE ${clauses.join(' AND ')} ORDER BY p.created_at DESC LIMIT 60`).bind(...binds).all<PostRow>();
-  return c.json({ posts: rows.results.map(toPost), categories: POST_CATEGORIES });
+  const order = sort === 'popular' ? 'likes DESC, replies DESC, p.created_at DESC' : sort === 'talked' ? 'replies DESC, likes DESC, p.created_at DESC' : 'p.created_at DESC';
+  const rows = await db.prepare(`${POST_SELECT} WHERE ${clauses.join(' AND ')} ORDER BY ${order} LIMIT 60`).bind(...binds).all<PostRow>();
+  return c.json({ posts: rows.results.map(toPost), categories: POST_CATEGORIES, sort, filter });
 });
 
 community.post('/', async (c) => {
@@ -90,19 +102,28 @@ community.post('/', async (c) => {
   }
   const id = newId();
   await db.prepare('INSERT INTO community_posts (id, user_id, category, body, product_id, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(id, user.id, category, text, productId, nowIso()).run();
+  const awarded = await rewardSocial(db, user.id, 'post', id);
   const row = await db.prepare(`${POST_SELECT} WHERE p.id = ?2`).bind(user.id, id).first<PostRow>();
-  return c.json({ post: row ? toPost(row) : null }, 201);
+  return c.json({ post: row ? toPost(row) : null, awarded }, 201);
 });
 
 community.post('/:id/like', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const id = c.req.param('id');
+  const post = await db.prepare('SELECT id, user_id FROM community_posts WHERE id = ? AND hidden_at IS NULL').bind(id).first<{ id: string; user_id: string }>();
+  if (!post) return c.json({ error: 'not found' }, 404);
   const had = await db.prepare('SELECT 1 FROM community_likes WHERE post_id = ? AND user_id = ?').bind(id, user.id).first();
+  let awarded = { xp: 0, points: 0 };
   if (had) await db.prepare('DELETE FROM community_likes WHERE post_id = ? AND user_id = ?').bind(id, user.id).run();
-  else await db.prepare('INSERT INTO community_likes (post_id, user_id, created_at) VALUES (?, ?, ?)').bind(id, user.id, nowIso()).run();
+  else {
+    await db.prepare('INSERT INTO community_likes (post_id, user_id, created_at) VALUES (?, ?, ?)').bind(id, user.id, nowIso()).run();
+    // The liker earns a little xp; the author earns a point. Each once per post, each capped by the day.
+    awarded = await rewardSocial(db, user.id, 'like', id);
+    if (post.user_id !== user.id) await rewardSocial(db, post.user_id, 'liked', `${id}:${user.id}`);
+  }
   const row = await db.prepare(`${POST_SELECT} WHERE p.id = ?2`).bind(user.id, id).first<PostRow>();
-  return c.json({ post: row ? toPost(row) : null });
+  return c.json({ post: row ? toPost(row) : null, awarded });
 });
 
 interface ReplyRow {
@@ -133,8 +154,9 @@ community.post('/:id/replies', async (c) => {
   const id = newId();
   await db.prepare('INSERT INTO community_replies (id, post_id, user_id, body, created_at) VALUES (?, ?, ?, ?, ?)').bind(id, post.id, user.id, text, nowIso()).run();
   if (post.user_id !== user.id) await notify(db, post.user_id, 'reply', `${nameOf(user)} replied to your post`, text.slice(0, 120), `/community?post=${post.id}`);
+  const awarded = await rewardSocial(db, user.id, 'reply', id);
   const row = await db.prepare('SELECT r.*, u.display_name AS author_name FROM community_replies r JOIN users u ON u.id = r.user_id WHERE r.id = ?').bind(id).first<ReplyRow>();
-  return c.json({ reply: row ? toReply(row) : null }, 201);
+  return c.json({ reply: row ? toReply(row) : null, awarded }, 201);
 });
 
 community.delete('/:id', async (c) => {
@@ -142,6 +164,25 @@ community.delete('/:id', async (c) => {
   const res = await c.env.DB.prepare('DELETE FROM community_posts WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).run();
   if (res.meta.changes === 0) return c.json({ error: 'not found' }, 404);
   return c.json({ ok: true });
+});
+
+// Follow a person from their post. The same follows table as the public page; a new follower pays the followed person two points.
+community.post('/follow/:userId', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const other = await db.prepare('SELECT id FROM users WHERE id = ?').bind(c.req.param('userId')).first<{ id: string }>();
+  if (!other) return c.json({ error: 'not found' }, 404);
+  if (other.id === user.id) return c.json({ error: 'that is you' }, 400);
+  const had = await db.prepare('SELECT 1 FROM follows WHERE follower_id = ? AND owner_id = ?').bind(user.id, other.id).first();
+  let awarded = { xp: 0, points: 0 };
+  if (had) await db.prepare('DELETE FROM follows WHERE follower_id = ? AND owner_id = ?').bind(user.id, other.id).run();
+  else {
+    await db.prepare('INSERT INTO follows (follower_id, owner_id, created_at) VALUES (?, ?, ?)').bind(user.id, other.id, nowIso()).run();
+    awarded = await rewardSocial(db, other.id, 'follower', user.id);
+    await notify(db, other.id, 'follow', `${nameOf(user)} followed you`, '', '/community');
+  }
+  const n = await db.prepare('SELECT COUNT(*) AS n FROM follows WHERE owner_id = ?').bind(other.id).first<{ n: number }>();
+  return c.json({ following: !had, followers: n?.n ?? 0, awarded });
 });
 
 // Moderation, for guides and admins.

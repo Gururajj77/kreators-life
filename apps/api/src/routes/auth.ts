@@ -151,7 +151,7 @@ auth.post('/forgot', async (c) => {
     await sendEmail(db, c.env, {
       userId: user.id,
       to: email,
-      subject: 'Reset your Kreators Life password',
+      subject: 'Reset your kreators.app password',
       body: `Tap this link to choose a new password. It works once, for ${RESET_MINUTES} minutes.\n\n${link}\n\nIf you did not ask for it, ignore this mail. Your password stays as it is.`,
     });
   }

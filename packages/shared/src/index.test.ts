@@ -1,3 +1,6 @@
+import { BADGES as ALL_BADGES, HOW_TO, kmLabel, MODULES as MODS, paceLabel, RUN_BADGES, runEntryState, TERMS, weekStart, weekStreak } from './index';
+import { earningGuide, nextBadge, unlockFor } from './index';
+import { SOCIAL_REWARDS, trustScore } from './index';
 import { FEATURE_FEE_POINTS, isFeatured, parseImageUrls, STORE_STAGE_META, PREOWNED_CONDITION_META } from './index';
 import { builtInTemplate, parseReviewPrompts, periodDays, periodFor, periodLabel, periodShift } from './index';
 import { MAX_NOT_TO_DO, notToDoStreak, notToDoWeek, shiftDay } from './index';
@@ -118,7 +121,7 @@ describe('home', () => {
     expect(nudgeFor({ ...base, checkedIn: true, sparkDone: true, taskDone: true, xpToday: 45 }).lead).toBe('All three done. +45 xp today.');
   });
   it('says what it will not work without', () => {
-    expect(nudgeFor({ ...base, checkedIn: true, sparkDone: true, hasFloor: false, xpToday: 25 })).toMatchObject({ action: 'Set up an area', path: '/tower' });
+    expect(nudgeFor({ ...base, checkedIn: true, sparkDone: true, hasFloor: false, xpToday: 25 })).toMatchObject({ action: 'Set up a pillar', path: '/tower' });
     expect(nudgeFor({ ...base, checkedIn: true, sparkDone: true, tasksWaiting: 0, xpToday: 25 })).toMatchObject({ action: 'Add a task', path: '/tower' });
     expect(nudgeFor({ ...base, hour: 21 }).action).toBe('Check in before midnight');
   });
@@ -230,5 +233,86 @@ describe('store', () => {
     expect(FEATURE_FEE_POINTS).toBeGreaterThan(0);
     expect(Object.keys(STORE_STAGE_META)).toHaveLength(4);
     expect(PREOWNED_CONDITION_META.lightly_used.name).toBe('Lightly used');
+  });
+});
+
+describe('trust and social rewards', () => {
+  it('scores only what was earned, and names it', () => {
+    const none = trustScore({ xp: 0, pointsEarned: 0, bestStreak: 0, daysHere: 0, sold: 0, rating: null, honors: 0 });
+    expect(none.score).toBe(0);
+    expect(none.label).toBe('New here');
+    expect(none.parts).toHaveLength(6);
+    const some = trustScore({ xp: 600, pointsEarned: 150, bestStreak: 8, daysHere: 60, sold: 2, rating: 4.5, honors: 0 });
+    expect(some.score).toBeGreaterThan(none.score);
+    expect(some.score).toBeLessThan(75);
+    const lots = trustScore({ xp: 4000, pointsEarned: 1000, bestStreak: 30, daysHere: 400, sold: 20, rating: 5, honors: 3 });
+    expect(lots.score).toBeGreaterThanOrEqual(90);
+    expect(lots.label).toBe('Well trusted');
+    expect(trustScore({ xp: 10_000_000, pointsEarned: 0, bestStreak: 0, daysHere: 0, sold: 0, rating: null, honors: 0 }).score).toBeLessThanOrEqual(100);
+  });
+  it('keeps every social reward small and capped by the day', () => {
+    for (const r of Object.values(SOCIAL_REWARDS)) {
+      expect(r.xp + r.points).toBeGreaterThan(0);
+      expect(r.xp + r.points).toBeLessThanOrEqual(5);
+      expect(r.perDay).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('unlocks and the earning guide', () => {
+  it('opens for anyone when nothing is asked, and says plainly what is missing', () => {
+    expect(unlockFor({ minPoints: 0, badge: '' }, null).ok).toBe(true);
+    expect(unlockFor({ minPoints: 200, badge: '' }, null)).toMatchObject({ ok: false });
+    expect(unlockFor({ minPoints: 200, badge: '' }, { points: 40, badges: [] }).why).toBe('Needs 200 points, you have 40.');
+    expect(unlockFor({ minPoints: 200, badge: 'first_task' }, { points: 250, badges: [] }).why).toBe('Needs the First tick badge.');
+    expect(unlockFor({ minPoints: 200, badge: 'first_task' }, { points: 250, badges: ['first_task'] }).ok).toBe(true);
+    expect(nextBadge([])?.key).toBe('first_task');
+    expect(nextBadge(['first_task'])?.key).toBe('streak_3');
+    expect(earningGuide().length).toBeGreaterThanOrEqual(4);
+    expect(earningGuide()[0]!.lines[0]!.pays).toContain('xp');
+  });
+});
+
+describe('how-tos and terms', () => {
+  it('gives every app three steps and only uses words the glossary defines', () => {
+    for (const m of MODS) expect(HOW_TO[m.key]?.steps.length ?? 0, m.key).toBeGreaterThanOrEqual(3);
+    for (const h of Object.values(HOW_TO)) expect(h.steps.length).toBeLessThanOrEqual(5);
+    for (const h of Object.values(HOW_TO)) for (const term of h.terms) expect(TERMS[term], term).toBeTruthy();
+    expect(Object.keys(TERMS).length).toBeGreaterThanOrEqual(30);
+  });
+});
+
+describe('Kreators Run', () => {
+  it('opens the start code thirty minutes before and closes three hours after', () => {
+    const start = '2026-10-25T06:00:00.000Z';
+    const end = '2026-10-25T07:00:00.000Z';
+    expect(runEntryState(start, end, new Date('2026-10-25T05:29:00Z'))).toBe('early');
+    expect(runEntryState(start, end, new Date('2026-10-25T05:31:00Z'))).toBe('open');
+    expect(runEntryState(start, end, new Date('2026-10-25T09:59:00Z'))).toBe('open');
+    expect(runEntryState(start, end, new Date('2026-10-25T10:01:00Z'))).toBe('closed');
+  });
+  it('labels distance and pace in plain words', () => {
+    expect(kmLabel(5000)).toBe('5 km');
+    expect(kmLabel(7550)).toBe('7.6 km');
+    expect(paceLabel(5000, 30)).toBe('6:00 /km');
+    expect(paceLabel(10000, 55)).toBe('5:30 /km');
+    expect(paceLabel(0, 30)).toBeNull();
+  });
+  it('counts weeks in a row with a run, letting last week hold this one open', () => {
+    expect(weekStart('2026-10-25')).toBe('2026-10-19');
+    expect(weekStart('2026-10-19')).toBe('2026-10-19');
+    expect(weekStreak([], '2026-10-25')).toBe(0);
+    expect(weekStreak(['2026-10-25'], '2026-10-25')).toBe(1);
+    expect(weekStreak(['2026-10-05', '2026-10-14', '2026-10-25'], '2026-10-25')).toBe(3);
+    expect(weekStreak(['2026-10-05', '2026-10-14'], '2026-10-25')).toBe(2);
+    expect(weekStreak(['2026-09-28', '2026-10-14'], '2026-10-25')).toBe(1);
+    expect(weekStreak(['2026-10-05'], '2026-10-25')).toBe(0);
+  });
+  it('has a badge for every run milestone and a how-to under Connection', () => {
+    for (const key of Object.keys(RUN_BADGES)) expect(ALL_BADGES.some((b) => b.key === key), key).toBe(true);
+    const run = MODS.find((m) => m.key === 'run');
+    expect(run?.group).toBe('community');
+    expect(run?.defaultOn).toBe(false);
+    expect(HOW_TO.run?.terms).toContain('start code');
   });
 });

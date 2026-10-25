@@ -39,7 +39,8 @@ export function Studio({ tab = 'home' }: { tab?: 'home' | 'page' | 'bookings' | 
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
           Sell downloads, courses, memberships, sessions, events, payment links, bundles, locked posts and priority DMs. Points work today; money checkout is in test mode until a payment provider is connected.
         </p>
-        <nav className="mt-md flex gap-xs overflow-x-auto pb-xs scrollbar-none" aria-label="Shop sections">
+        <div className="mt-md">
+        <nav className="scroll-row" aria-label="Shop sections">
           {(
             [
               ['home', 'Overview', '/shop'],
@@ -58,6 +59,7 @@ export function Studio({ tab = 'home' }: { tab?: 'home' | 'page' | 'bookings' | 
             </Link>
           ))}
         </nav>
+        </div>
       </header>
 
       {tab === 'home' && d && (

@@ -9,7 +9,7 @@ import { useAuthed, useMe } from '../lib/queries';
 const PERMISSION_META: Record<Permission, { name: string; blurb: string; to: string; emoji: string; queue?: (q: Queues) => number }> = {
   talent: { name: 'Talent', blurb: 'Campaign briefs, shortlists, assignments', to: '/army', emoji: '🎬', queue: (q) => q.campaigns },
   cohorts: { name: 'Cohorts', blurb: 'Programs, cohorts, completion', to: '/school', emoji: '🎓', queue: (q) => q.assignments },
-  events: { name: 'Events', blurb: 'Parties, workshops, camps, days', to: '/party', emoji: '🎉' },
+  events: { name: 'Events', blurb: 'Parties, workshops, camps, days, run collabs', to: '/party', emoji: '🎉' },
   finance: { name: 'Finance', blurb: 'Payouts for verified content rewards', to: '/win', emoji: '💸', queue: (q) => q.bountyQueue },
   moderation: { name: 'Moderation', blurb: 'Hide or restore community posts', to: '/community', emoji: '🛡️' },
   support: { name: 'Support', blurb: 'Answer tickets from Help', to: '/help', emoji: '🛟', queue: (q) => q.tickets },

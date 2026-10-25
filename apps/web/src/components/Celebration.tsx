@@ -27,7 +27,7 @@ export function CelebrationProvider({ children }: { children: ReactNode }) {
       ripple: [],
       newBadges: [],
       projectCleared: null,
-      color: '#4F3422',
+      color: '#262626',
       ...c,
       seq: (prev?.seq ?? 0) + 1,
     }));

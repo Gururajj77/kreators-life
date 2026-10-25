@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
+import { TrustBadge } from '../components/TrustBadge';
 import { LinkBlocks } from '../components/LinkBlocks';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
@@ -65,7 +66,7 @@ export function Public() {
   return (
     <Screen tabs={false}>
       <header className="pt-lg">
-        <BackLink to={token ? '/apps' : '/'}>Kreators Life</BackLink>
+        <BackLink to={token ? '/apps' : '/'}>kreators.app</BackLink>
       </header>
       {q.isError && (
         <div className="mt-md rounded-card bg-card p-md text-center shadow-toy-soft">
@@ -90,6 +91,11 @@ export function Public() {
               {d.handle ? `@${d.handle}, ` : ''}
               {d.followers} {d.followers === 1 ? 'follower' : 'followers'}
             </p>
+            {!d.isPrivate && (
+              <div className="mt-sm">
+                <TrustBadge trust={d.trust} onInk />
+              </div>
+            )}
             {d.isPrivate && <p className="mt-sm m-0 rounded-tile bg-on-ink/15 p-sm text-[14px] font-bold">This page is private. {d.name} has switched it off.</p>}
             {d.mine && (
               <p className="mt-sm m-0 text-[12px] font-bold text-on-ink/80">
@@ -163,7 +169,7 @@ export function Public() {
                 {[
                   ['Level', String(d.activity.level)],
                   ['Streak', `${d.activity.streak} ${d.activity.streak === 1 ? 'day' : 'days'}`],
-                  ['Areas', `${d.activity.areasSetUp} of 7`],
+                  ['Pillars', `${d.activity.areasSetUp} of 7`],
                 ].map(([k, v]) => (
                   <li key={k} className="rounded-tile bg-paper p-sm">
                     <span className="block text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{k}</span>
@@ -179,7 +185,7 @@ export function Public() {
               <h2 id="badges-heading" className="text-[24px]">
                 Badges
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Earned by doing the thing, or awarded by the Kreators team.</p>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Earned by doing the thing, or awarded by the kreators.app team.</p>
               <ul className="mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0 md:grid-cols-3">
                 {[...d.badges.map((k) => BADGES.find((b) => b.key === k)).filter((b) => b !== undefined), ...d.honors.map((k) => HONORS.find((h) => h.key === k)).filter((h) => h !== undefined)].map((b) => (
                   <li key={b.key} className="rounded-tile bg-paper p-sm">
@@ -328,7 +334,7 @@ export function Public() {
               <Avatar key={r.key} relationship={r.key} size={16 + i * 4} decorative still />
             ))}
           </span>
-          Made with Kreators Life
+          Made with kreators.app
         </Link>
         <p className="m-0 text-[12px] font-semibold text-ink-soft">One page for everything you make. Start yours free.</p>
       </footer>

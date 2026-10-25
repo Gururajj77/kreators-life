@@ -20,7 +20,7 @@ export async function sendEmail(db: D1Database, env: Env, msg: { userId?: string
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.RESEND_API_KEY}` },
-        body: JSON.stringify({ from: env.EMAIL_FROM ?? 'Kreators Life <hello@kreators.life>', to: [msg.to], subject: msg.subject, text: msg.body }),
+        body: JSON.stringify({ from: env.EMAIL_FROM ?? 'kreators.app <hello@kreators.life>', to: [msg.to], subject: msg.subject, text: msg.body }),
       });
       if (res.ok) status = 'sent';
       else {

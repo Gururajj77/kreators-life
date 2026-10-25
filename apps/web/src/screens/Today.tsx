@@ -8,6 +8,7 @@ import { CheckRow } from '../components/CheckRow';
 import { EvolutionReveal } from '../components/EvolutionReveal';
 import { GuideCard, useGuide } from '../components/Guide';
 import { NotToDoList } from '../components/NotToDoList';
+import { Nudge } from '../components/Nudge';
 import { Person } from '../components/Person';
 import { Screen } from '../components/Screen';
 import { TaskRow } from '../components/TaskRow';
@@ -38,7 +39,7 @@ export function Today() {
     });
   const tick = (id: string) =>
     queue.run(id, async () => {
-      const r = await api.complete(id);
+      const r = await api.complete(id, date);
       celebrate({
         title: r.capped ? 'Done. Daily xp limit reached, so this one was for you' : 'Ripple',
         totalXp: r.totalXp,
@@ -78,6 +79,7 @@ export function Today() {
                 <span key={i} className={`h-[8px] flex-1 rounded-pill ${i < doneCount ? 'bg-r4' : 'bg-line'}`} />
               ))}
             </div>
+            <Nudge className="mt-xs" text={!data.checkedIn ? 'Checking in is 10 xp and 10 points.' : !data.spark.done ? 'The small act is 15 xp for two minutes.' : !taskDone ? 'One ticked task is 20 xp.' : 'All three paid. A kept day on the not-to-do list is 5 more.'} />
           </div>
         )}
       </header>
@@ -124,7 +126,7 @@ export function Today() {
                 }
                 color="#9BB068"
                 deep="#5A6B38"
-                text="#4F3422"
+                text="#262626"
                 busy={queue.isPending('checkin')}
                 hint={queue.hint('checkin')}
                 lockedMessage={data.checkedIn ? 'Already checked in today. Come back tomorrow.' : null}
@@ -145,7 +147,7 @@ export function Today() {
                 checked={data.spark.done}
                 onToggle={doSpark}
                 title={data.spark.text}
-                subtitle={data.spark.done ? `Done. ${rel.character} is glowing.` : `${rel.character}’s area. Two minutes, +15 xp.`}
+                subtitle={data.spark.done ? `Done. ${rel.character} is glowing.` : `${rel.character}’s pillar. Two minutes, +15 xp.`}
                 color={rel.color}
                 deep={`var(--deep-${rel.key})`}
                 text={rel.text}
@@ -195,10 +197,10 @@ export function Today() {
             ) : (
               <div className="mt-sm rounded-card border-2 border-dashed border-line p-md">
                 <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                  {taskDone ? 'Tasks done for today. Their pyramids got stronger. More arrive as their dates come up.' : 'Tasks come from areas you set up.'}
+                  {taskDone ? 'Tasks done for today. Their pyramids got stronger. More arrive as their dates come up.' : 'Tasks come from pillars you set up.'}
                 </p>
                 <Link to="/tower" className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
-                  {taskDone ? 'Set up another area' : 'Set up an area'}
+                  {taskDone ? 'Set up another pillar' : 'Set up a pillar'}
                 </Link>
               </div>
             )}

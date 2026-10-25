@@ -1,9 +1,10 @@
-import { BADGES, FOCUS_OPTIONS, HONORS, IDENTITY_STAGES, levelFromXp, passwordProblem, MODULE_GROUP_ACCENT, MODULE_GROUP_BLURB, MODULE_GROUPS, POINTS, RELATIONSHIP_BY_KEY, RELATIONSHIPS, ROLE_META, type MeResponse, type ModuleGroup } from '@kreators/shared';
+import { BADGES, FOCUS_OPTIONS, HONORS, IDENTITY_STAGES, levelFromXp, passwordProblem, MODULE_GROUP_ACCENT, MODULE_GROUP_BLURB, MODULE_GROUPS, POINTS, RELATIONSHIP_BY_KEY, RELATIONSHIPS, ROLE_META, type MeResponse, type ModuleGroup , nextBadge } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
+import { Nudge } from '../components/Nudge';
 import { Person } from '../components/Person';
 import { RoleBadge } from '../components/RoleBadge';
 import { SignOut } from '../components/SignOut';
@@ -202,7 +203,7 @@ function YouView({ data }: { data: MeResponse }) {
           <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
             <p className="m-0 text-[16px] font-bold">{user.email}</p>
             <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-              Your areas are saved to this account. Sign in on any phone to pick them up.
+              Your pillars are saved to this account. Sign in on any phone to pick them up.
             </p>
             <div className="mt-sm flex flex-wrap gap-xs">
               <Button variant="outline" onClick={() => setPwOpen(true)}>
@@ -271,7 +272,7 @@ function YouView({ data }: { data: MeResponse }) {
         </form>
       </Sheet>
       <Sheet open={deleting} onClose={() => setDeleting(false)} title="Delete your account">
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">This removes your name, email, page, bio, areas, logs, journal, messages and notifications, and archives anything you sell. Money records stay, anonymised, because the books have to. It cannot be undone.</p>
+          <p className="m-0 text-[14px] font-semibold text-ink-soft">This removes your name, email, page, bio, pillars, logs, journal, messages and notifications, and archives anything you sell. Money records stay, anonymised, because the books have to. It cannot be undone.</p>
           <label className="mt-md block">
             <span className="block text-[14px] font-bold">Type DELETE to confirm</span>
             <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} autoComplete="off" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
@@ -367,6 +368,7 @@ function YouView({ data }: { data: MeResponse }) {
         <h2 id="badges-heading" className="text-[24px]">
           Badges
         </h2>
+        {nextBadge(badges) && <Nudge className="mt-xs" text={`Next up: ${nextBadge(badges)!.name}. ${nextBadge(badges)!.how}.`} />}
         <h3 className="mt-sm text-[16px]">Earned</h3>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Yours the moment you do the thing.</p>
         <ul className="mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0">
@@ -384,7 +386,7 @@ function YouView({ data }: { data: MeResponse }) {
           })}
         </ul>
         <h3 className="mt-md text-[16px]">Awarded</h3>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Given by the Kreators team, or unlocked by time in the app. These count on the leaderboard too.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Given by the kreators.app team, or unlocked by time in the app. These count on the leaderboard too.</p>
         <ul className="mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0">
           {HONORS.map((h) => {
             const on = awarded.has(h.key);
@@ -501,7 +503,7 @@ function YouView({ data }: { data: MeResponse }) {
             variant="ghost"
             disabled={reset.isPending}
             onClick={() => {
-              if (window.confirm('Erase your areas, xp, streak and badges on this device and start over? There is no undo.')) reset.mutate();
+              if (window.confirm('Erase your pillars, xp, streak and badges on this device and start over? There is no undo.')) reset.mutate();
             }}
           >
             Erase everything

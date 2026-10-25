@@ -1,26 +1,36 @@
-import { POST_CATEGORIES, type CommunityPost } from '@kreators/shared';
+import { FEED_FILTER_META, FEED_FILTERS, FEED_SORT_META, FEED_SORTS, POST_CATEGORIES, SOCIAL_REWARDS, type CommunityPost, type FeedFilter, type FeedSort } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Button } from '../components/Button';
+import { useCelebrate } from '../components/Celebration';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
+import { useParamState } from '../lib/useParamState';
 import { useAuthed, useCommunity, useMe, useRefreshAll } from '../lib/queries';
 
 export function Community() {
   const me = useMe();
   const [params] = useSearchParams();
   const product = params.get('product') ?? undefined;
-  const [category, setCategory] = useState('');
+  const [category, setCategory] = useParamState('category', '');
+  const [sortRaw, setSortRaw] = useParamState('sort', 'recent');
+  const [filterRaw, setFilterRaw] = useParamState('filter', 'all');
+  const sort: FeedSort = (FEED_SORTS as readonly string[]).includes(sortRaw) ? (sortRaw as FeedSort) : 'recent';
+  const filter: FeedFilter = (FEED_FILTERS as readonly string[]).includes(filterRaw) ? (filterRaw as FeedFilter) : 'all';
+  const setSort = (s: FeedSort) => setSortRaw(s);
+  const setFilter = (f: FeedFilter) => setFilterRaw(f);
   const [showHidden, setShowHidden] = useState(false);
   const isMod = Boolean(me.data && me.data.user.role !== 'user');
-  const q = useCommunity(category || undefined, product, isMod && showHidden);
+  const q = useCommunity(category || undefined, product, isMod && showHidden, sort, filter);
+  const celebrate = useCelebrate();
   const refresh = useRefreshAll();
   const [writing, setWriting] = useState(false);
   const [open, setOpen] = useState<CommunityPost | null>(null);
   const like = useMutation({ mutationFn: (id: string) => api.likePost(id), onSuccess: () => refresh() });
+  const follow = useMutation({ mutationFn: (id: string) => api.followUser(id), onSuccess: () => refresh() });
   const remove = useMutation({ mutationFn: (id: string) => api.deletePost(id), onSuccess: () => refresh() });
   const hide = useMutation({ mutationFn: ({ id, hidden }: { id: string; hidden: boolean }) => api.hidePost(id, hidden), onSuccess: () => refresh() });
   const posts = q.data?.posts ?? [];
@@ -34,14 +44,34 @@ export function Community() {
         <Button full className="mt-md" onClick={() => setWriting(true)}>
           Write a post
         </Button>
+        <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+          A post pays {SOCIAL_REWARDS.post.xp} xp, up to {SOCIAL_REWARDS.post.perDay} a day. A reply pays {SOCIAL_REWARDS.reply.xp}, a like you give pays {SOCIAL_REWARDS.like.xp}. A like on your post pays you a point, a new follower {SOCIAL_REWARDS.follower.points}.
+        </p>
       </header>
+      <div className="mt-md">
+      <div className="scroll-row" role="group" aria-label="Show">
+        {FEED_FILTERS.map((f) => (
+          <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)} className={`toy shrink-0 rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${filter === f ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            {FEED_FILTER_META[f]}
+          </button>
+        ))}
+        <span className="w-[1px] shrink-0 bg-line" aria-hidden="true" />
+        {FEED_SORTS.map((s) => (
+          <button key={s} type="button" aria-pressed={sort === s} onClick={() => setSort(s)} className={`toy shrink-0 rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${sort === s ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            {FEED_SORT_META[s]}
+          </button>
+        ))}
+      </div>
+      </div>
       {!product && (
-        <div className="mt-md flex gap-xs overflow-x-auto pb-xs scrollbar-none" role="group" aria-label="Browse by">
+        <div className="mt-xs">
+        <div className="scroll-row" role="group" aria-label="Browse by">
           {['', ...POST_CATEGORIES].map((c) => (
-            <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)} className={`shrink-0 rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${category === c ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+            <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)} className={`toy shrink-0 rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${category === c ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {c || 'Everything'}
             </button>
           ))}
+        </div>
         </div>
       )}
       {isMod && (
@@ -51,7 +81,7 @@ export function Community() {
         </label>
       )}
       {q.isError && <p className="mt-md font-bold">{q.error instanceof Error ? q.error.message : 'Could not load.'}</p>}
-      {posts.length === 0 && q.data && <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">No posts here yet. Start the conversation.</p>}
+      {posts.length === 0 && q.data && <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">{filter === 'following' ? 'Nobody you follow has posted yet. Follow people from their posts.' : filter === 'mine' ? 'You have not posted yet.' : 'No posts here yet. Start the conversation.'}</p>}
       <ul className="mt-md flex list-none flex-col gap-sm p-0 m-0">
         {posts.map((p) => (
           <li key={p.id} className={`rounded-card bg-card p-md shadow-toy-soft ${p.hidden ? 'opacity-60' : ''}`}>
@@ -68,9 +98,15 @@ export function Community() {
                 </span>
                 <span className="block text-[12px] font-bold text-ink-soft">
                   {p.category}, {new Date(p.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  {p.authorFollowers > 0 ? ` · ${p.authorFollowers} ${p.authorFollowers === 1 ? 'follower' : 'followers'}` : ''}
                   {p.hidden ? ', hidden' : ''}
                 </span>
               </span>
+              {me.data?.user.id !== p.authorId && (
+                <button type="button" aria-pressed={p.authorFollowing} onClick={() => follow.mutate(p.authorId)} disabled={follow.isPending} className={`toy shrink-0 rounded-pill border-2 px-sm py-xs text-[12px] font-extrabold ${p.authorFollowing ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                  {p.authorFollowing ? 'Following' : 'Follow'}
+                </button>
+              )}
             </div>
             <p className="mt-sm m-0 whitespace-pre-wrap text-[16px] font-semibold leading-relaxed">{p.body}</p>
             <div className="mt-sm flex items-center gap-xs">
@@ -95,20 +131,20 @@ export function Community() {
           </li>
         ))}
       </ul>
-      <PostSheet open={writing} product={product} onClose={() => setWriting(false)} onSaved={refresh} />
-      <RepliesSheet post={open} onClose={() => setOpen(null)} onSaved={refresh} />
+      <PostSheet open={writing} product={product} onClose={() => setWriting(false)} onSaved={(xp) => { refresh(); if (xp > 0) celebrate({ title: 'Posted', totalXp: xp, color: 'var(--color-r2)' }); }} />
+      <RepliesSheet post={open} onClose={() => setOpen(null)} onSaved={(xp) => { refresh(); if (xp > 0) celebrate({ title: 'Replied', totalXp: xp, color: 'var(--color-r2)' }); }} />
     </Screen>
   );
 }
 
-function PostSheet({ open, product, onClose, onSaved }: { open: boolean; product?: string; onClose: () => void; onSaved: () => void }) {
+function PostSheet({ open, product, onClose, onSaved }: { open: boolean; product?: string; onClose: () => void; onSaved: (xp: number) => void }) {
   const [category, setCategory] = useState<string>('Stories');
   const [body, setBody] = useState('');
   const save = useMutation({
     mutationFn: () => api.createPost({ category, body, productId: product ?? null }),
-    onSuccess: () => {
+    onSuccess: (r) => {
       setBody('');
-      onSaved();
+      onSaved(r.awarded.xp);
       onClose();
     },
   });
@@ -148,15 +184,15 @@ function PostSheet({ open, product, onClose, onSaved }: { open: boolean; product
   );
 }
 
-function RepliesSheet({ post, onClose, onSaved }: { post: CommunityPost | null; onClose: () => void; onSaved: () => void }) {
+function RepliesSheet({ post, onClose, onSaved }: { post: CommunityPost | null; onClose: () => void; onSaved: (xp: number) => void }) {
   const q = useAuthed(['replies', post?.id ?? ''], () => api.replies(post!.id), Boolean(post));
   const [text, setText] = useState('');
   const send = useMutation({
     mutationFn: () => api.reply(post!.id, text),
-    onSuccess: () => {
+    onSuccess: (r) => {
       setText('');
       q.refetch();
-      onSaved();
+      onSaved(r.awarded.xp);
     },
   });
   return (

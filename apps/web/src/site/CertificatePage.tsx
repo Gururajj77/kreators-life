@@ -17,7 +17,7 @@ export function CertificatePage() {
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
             <path d="M15 5l-7 7 7 7" />
           </svg>
-          Kreators Life
+          kreators.app
         </Link>
         {q.isPending && <p className="m-0 text-[16px] font-semibold text-ink-soft">Checking…</p>}
         {q.isError && (
@@ -41,7 +41,7 @@ export function CertificatePage() {
               taught by {c.ownerName}, issued {new Date(c.issuedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}
             </p>
             <p className="mt-md m-0 rounded-pill bg-paper px-md py-xs font-mono text-[14px] font-bold tracking-widest">{c.code}</p>
-            <p className="mt-xs m-0 text-[12px] font-semibold text-ink-mute">Verified against Kreators Life records at the time of viewing.</p>
+            <p className="mt-xs m-0 text-[12px] font-semibold text-ink-mute">Verified against kreators.app records at the time of viewing.</p>
           </article>
         )}
       </div>

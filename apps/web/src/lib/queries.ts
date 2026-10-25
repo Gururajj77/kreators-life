@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { LeaderboardSort, LogKind, RelationshipKey } from '@kreators/shared';
+import type { FeedFilter, FeedSort, LeaderboardSort, LogKind, RelationshipKey } from '@kreators/shared';
 import { api } from './api';
 import { useSession } from './store';
 import { todayLocal } from './date';
@@ -45,7 +45,7 @@ export const useJournal = () => useAuthed(['journal'], api.journal);
 export const useCompanion = () => useAuthed(['companion'], api.companion);
 export const useInbox = () => useAuthed(['inbox'], api.inbox);
 export const useResources = (tag?: string) => useAuthed(['resources', tag ?? ''], () => api.resources(tag));
-export const useCommunity = (category?: string, product?: string, all = false) => useAuthed(['community', category ?? '', product ?? '', all], () => api.community(category, product, all));
+export const useCommunity = (category?: string, product?: string, all = false, sort: FeedSort = 'recent', filter: FeedFilter = 'all') => useAuthed(['community', category ?? '', product ?? '', all, sort, filter], () => api.community(category, product, all, sort, filter));
 export const useStudio = () => useAuthed(['studio'], api.studio);
 export const useLibrary = () => useAuthed(['library'], api.library);
 

@@ -1,4 +1,4 @@
-import { PRODUCT_KIND_META, type CourseDraft, type Lesson, type QuizQuestion } from '@kreators/shared';
+import { PRODUCT_KIND_META, type CourseDraft, type Lesson, type QuizQuestion , BADGES, HONORS} from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -43,6 +43,8 @@ export function StudioProduct() {
   const [noticeHours, setNoticeHours] = useState('2');
   const [maxDaysAhead, setMaxDaysAhead] = useState('30');
   const [periodMonths, setPeriodMonths] = useState('');
+  const [minPoints, setMinPoints] = useState('0');
+  const [badge, setBadge] = useState('');
   const [drafting, setDrafting] = useState(false);
   const [lesson, setLesson] = useState<Lesson | 'new' | null>(null);
   const [couponCode, setCouponCode] = useState('');
@@ -73,6 +75,8 @@ export function StudioProduct() {
     setNoticeHours(String(p.noticeHours));
     setMaxDaysAhead(String(p.maxDaysAhead));
     setPeriodMonths(p.periodMonths ? String(p.periodMonths) : '');
+    setMinPoints(String(p.minPoints));
+    setBadge(p.badge);
   }, [p]);
 
   const save = useMutation({
@@ -101,6 +105,8 @@ export function StudioProduct() {
         noticeHours: Number(noticeHours) || 0,
         maxDaysAhead: Number(maxDaysAhead) || 30,
         periodMonths: periodMonths ? Number(periodMonths) : null,
+        minPoints: Number(minPoints) || 0,
+        badge,
         ...(status ? { status } : {}),
       }),
     onSuccess: () => refresh(),
@@ -188,6 +194,32 @@ export function StudioProduct() {
             <input type="number" min={0} value={priceCents} onChange={(e) => setPriceCents(e.target.value)} className={field} />
           </label>
         )}
+        <fieldset className="m-0 rounded-tile border-2 border-line p-sm">
+          <legend className="px-xs text-[14px] font-bold">Who can buy</legend>
+          <p className="m-0 text-[12px] font-bold text-ink-soft">Leave both empty and anyone can. Set a points floor, a badge, or both, and only people who earned them can.</p>
+          <div className="mt-xs grid grid-cols-2 gap-xs">
+            <label className="block">
+              <span className="block text-[14px] font-bold">Points balance of at least</span>
+              <input type="number" min={0} value={minPoints} onChange={(e) => setMinPoints(e.target.value)} className={field} />
+            </label>
+            <label className="block">
+              <span className="block text-[14px] font-bold">Holds the badge</span>
+              <select value={badge} onChange={(e) => setBadge(e.target.value)} className={field}>
+                <option value="">Any badge or none</option>
+                {BADGES.map((b) => (
+                  <option key={b.key} value={b.key}>
+                    {b.emoji} {b.name}
+                  </option>
+                ))}
+                {HONORS.map((h) => (
+                  <option key={h.key} value={h.key}>
+                    {h.emoji} {h.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </fieldset>
         {(p.kind === 'payment' || p.kind === 'digital' || p.kind === 'locked') && (
           <label className="flex min-h-[44px] items-center gap-sm text-[14px] font-bold">
             <input type="checkbox" checked={pwyw} onChange={(e) => setPwyw(e.target.checked)} className="size-[20px] accent-ink" />

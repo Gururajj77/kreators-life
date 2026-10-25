@@ -2,6 +2,7 @@ import { MODULE_BY_KEY } from '@kreators/shared';
 import { useEffect, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useModule } from '../lib/modules';
+import { HowTo } from './HowTo';
 import { Screen } from './Screen';
 
 /** Shows a module's screen only when it is on for this person. */
@@ -18,7 +19,7 @@ export function Gate({ moduleKey, children }: { moduleKey: string; children: Rea
     };
   }, [meta?.accent]);
   if (!m) return null;
-  if (m.on) return <>{children}</>;
+  if (m.on) return <HowTo moduleKey={moduleKey}>{children}</HowTo>;
   return (
     <Screen>
       <div className="pt-xl text-center">

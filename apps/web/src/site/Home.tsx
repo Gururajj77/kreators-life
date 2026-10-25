@@ -1,4 +1,4 @@
-import { HELP_FAQ, MODULE_GROUPS, RELATIONSHIPS, type ModuleGroup, type Relationship, type RelationshipKey } from '@kreators/shared';
+import { HELP_FAQ, MODULE_GROUPS, RELATIONSHIPS, type ModuleGroup, type Relationship, type RelationshipKey , LIFE_AREAS, RELATIONSHIP_BY_KEY, type LifeAreaKey} from '@kreators/shared';
 import { useQuery } from '@tanstack/react-query';
 import { motion, useInView, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -6,7 +6,7 @@ import { Link } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Person } from '../components/Person';
 import { publicApi } from '../lib/api';
-import { BRAND_PITCH, FEATURES, featuresForRelationship, SITE_FEATURES } from './content';
+import { BRAND_PITCH, FEATURES, featuresForLifeArea, featuresForRelationship, SITE_FEATURES } from './content';
 import { ListingCard } from './ListingCard';
 import { ScrollTroupe } from './ScrollTroupe';
 import { useSession } from '../lib/store';
@@ -93,6 +93,38 @@ function FloorSection({ r, onActive }: { r: Relationship; onActive: (k: Relation
   );
 }
 
+/** One of the five areas of life, with the apps that serve it, in its relationship's colour. */
+function LifeAreaSection({ k }: { k: LifeAreaKey }) {
+  const meta = LIFE_AREAS[k];
+  const r = RELATIONSHIP_BY_KEY[meta.relationship];
+  const features = featuresForLifeArea(k);
+  const dark = r.text === '#FFFFFF';
+  return (
+    <motion.div {...rise} className="grid gap-md rounded-card p-md md:grid-cols-[1fr_2fr] md:items-center md:gap-lg md:p-lg" style={{ background: `var(--soft-${r.key})` }}>
+      <div className="flex flex-col items-center gap-sm">
+        <Avatar relationship={r.key} size={120} mood="happy" />
+        <p className="m-0 text-[36px]" aria-hidden="true">
+          {meta.emoji}
+        </p>
+      </div>
+      <div>
+        <h3 className="m-0 text-[32px] leading-tight md:text-[40px]">{meta.name}</h3>
+        <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">{meta.blurb}</p>
+        <ul className="mt-md flex list-none flex-wrap gap-xs p-0 m-0">
+          {features.map((m) => (
+            <li key={m.key}>
+              <Link to={`/features/${m.key}`} className={`toy inline-flex min-h-[40px] items-center gap-xs rounded-pill px-sm text-[14px] font-bold ${dark ? 'text-white' : 'text-ink-fixed'}`} style={{ background: r.color, ['--toy-color' as string]: r.deep }}>
+                <span aria-hidden="true">{m.emoji}</span>
+                {m.name}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </motion.div>
+  );
+}
+
 const DAILY = [
   { label: 'Check in', hint: '+10 points', color: 'var(--color-r4)', text: 'var(--color-ink-fixed)' },
   { label: 'Pip’s small act: text a friend you have not seen this month', hint: 'Friendship', color: 'var(--color-r2)', text: 'var(--color-ink-fixed)' },
@@ -101,6 +133,7 @@ const DAILY = [
 
 export function Home() {
   const [active, setActive] = useState<RelationshipKey | null>(null);
+  const [view, setView] = useState<'seven' | 'five'>('seven');
   const entry = useAppEntry();
   const token = useSession((s) => s.token);
   const stats = useQuery({ queryKey: ['site', 'stats'], queryFn: publicApi.stats });
@@ -123,7 +156,7 @@ export function Home() {
             The Seven Relationships
           </h1>
           <p className="mt-md m-0 max-w-[520px] text-[18px] font-semibold leading-snug text-ink-soft">
-            A daily game that keeps the seven relationships of your life in balance, with everything a creator needs stacked on top: learning, paid work, brand campaigns, content rewards, events, a shop, a store for gear, reviews by week and month, and tools for staying well.
+            A daily game that keeps the seven relationships of your life in balance, with everything a creator needs stacked on top: learning, paid work, brand campaigns, content rewards, events, run clubs, a shop, a store for gear, reviews by week and month, and tools for staying well.
           </p>
           <div className="mt-lg flex flex-wrap gap-sm">
             <Link to={token ? entry : '/signup'} className="toy inline-flex min-h-[56px] items-center rounded-pill bg-ink px-lg text-[18px] font-bold text-on-ink">
@@ -143,13 +176,13 @@ export function Home() {
       <Zone value={null} onActive={setActive} id="how" className="mt-2xl">
         <motion.div {...rise}>
           <h2 className="text-[32px] md:text-[40px]">How it works</h2>
-          <p className="mt-xs m-0 max-w-[640px] text-[16px] font-semibold text-ink-soft">Nothing to fill in. Answer a few questions, we build your areas, and you tick a few boxes a day.</p>
+          <p className="mt-xs m-0 max-w-[640px] text-[16px] font-semibold text-ink-soft">Nothing to fill in. Answer a few questions, we build your pillars, and you tick a few boxes a day.</p>
         </motion.div>
         <div className="mt-md grid gap-sm md:grid-cols-3">
           <motion.div {...rise} className="rounded-card bg-card p-md shadow-toy-soft">
             <p className="m-0 text-[14px] font-extrabold text-ink-mute">1. Vibe check</p>
             <h3 className="mt-xs m-0 text-[22px]">Questions that branch</h3>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Each answer picks the next question. Three minutes, and we know which areas need you most.</p>
+            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Each answer picks the next question. Three minutes, and we know which pillars need you most.</p>
             <div className="mt-md flex flex-col gap-xs" aria-hidden="true">
               {['Who did you serve this week?', 'Mostly people I lead', 'A few close friends'].map((t, i) => (
                 <span key={t} className={`rounded-pill px-sm text-[14px] font-bold leading-[40px] ${i === 0 ? 'bg-ink text-on-ink' : 'bg-paper text-ink-soft'}`}>
@@ -159,11 +192,11 @@ export function Home() {
             </div>
           </motion.div>
           <motion.div {...rise} className="rounded-card bg-card p-md shadow-toy-soft">
-            <p className="m-0 text-[14px] font-extrabold text-ink-mute">2. Your areas</p>
-            <h3 className="mt-xs m-0 text-[22px]">A pyramid in every area</h3>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Foundation, rule, feeling, proof, project, task. Tick a task and the whole pyramid brightens.</p>
+            <p className="m-0 text-[14px] font-extrabold text-ink-mute">2. Your pillars</p>
+            <h3 className="mt-xs m-0 text-[22px]">A pyramid in every pillar</h3>
+            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Foundation, guiding principle, value goal, goal outcome, project, task. Tick a task and the whole pyramid brightens.</p>
             <ol className="mt-md m-0 flex list-none flex-col gap-[6px] p-0" aria-hidden="true">
-              {['Foundation', 'Rule', 'Feeling', 'Proof', 'Project', 'Task'].map((k, i) => (
+              {['Foundation', 'Guiding principle', 'Value goal', 'Goal outcome', 'Project', 'Task'].map((k, i) => (
                 <li key={k} className="rounded-pill text-[12px] font-extrabold leading-[26px]" style={{ background: RELATIONSHIPS[i]?.color ?? '#ccc', color: RELATIONSHIPS[i]?.text, width: `${100 - i * 10}%`, paddingLeft: 12 }}>
                   {k}
                 </li>
@@ -201,13 +234,22 @@ export function Home() {
 
       <div id="floors" className="mt-2xl scroll-mt-lg">
         <motion.div {...rise}>
-          <h2 className="text-[32px] md:text-[40px]">Seven areas</h2>
-          <p className="mt-xs m-0 max-w-[640px] text-[16px] font-semibold text-ink-soft">Red at the bottom, violet at the top. Each area has its own character, and each part of the app serves at least one area.</p>
+          <h2 className="text-[32px] md:text-[40px]">{view === 'seven' ? 'Seven areas' : 'Five areas of life'}</h2>
+          <p className="mt-xs m-0 max-w-[640px] text-[16px] font-semibold text-ink-soft">
+            {view === 'seven' ? 'Red at the bottom, violet at the top. Each pillar has its own character, and each part of the app serves at least one pillar.' : 'Physical, financial, emotional, mental and spiritual: the same seven relationships, read the way a life is usually read. Each one lists the apps that serve it.'}
+          </p>
+          <div role="group" aria-label="View" className="mt-sm flex flex-wrap gap-xs">
+            {(['seven', 'five'] as const).map((v) => (
+              <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)} className={`toy min-h-[44px] rounded-pill border-2 px-md text-[14px] font-bold ${view === v ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card text-ink'}`}>
+                {v === 'seven' ? 'Seven relationships' : 'Five areas of life'}
+              </button>
+            ))}
+          </div>
         </motion.div>
         <div className="mt-md flex flex-col gap-md">
-          {RELATIONSHIPS.map((r) => (
-            <FloorSection key={r.key} r={r} onActive={setActive} />
-          ))}
+          {view === 'seven'
+            ? RELATIONSHIPS.map((r) => <FloorSection key={r.key} r={r} onActive={setActive} />)
+            : (Object.keys(LIFE_AREAS) as LifeAreaKey[]).map((k) => <LifeAreaSection key={k} k={k} />)}
         </div>
       </div>
 
@@ -312,9 +354,16 @@ export function Home() {
         </motion.div>
         <div className="mt-md grid gap-xs md:grid-cols-2">
           {HELP_FAQ.map((f) => (
-            <details key={f.q} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <summary className="cursor-pointer text-[16px] font-extrabold">{f.q}</summary>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{f.a}</p>
+            <details key={f.q} className="rounded-tile bg-card shadow-toy-soft">
+              <summary className="flex min-h-[56px] items-center gap-sm rounded-tile p-sm text-[16px] font-extrabold">
+                <span className="min-w-0 flex-1">{f.q}</span>
+                <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-paper" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20" className="chev transition-transform" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </span>
+              </summary>
+              <p className="m-0 px-sm pb-sm text-[14px] font-semibold text-ink-soft">{f.a}</p>
             </details>
           ))}
         </div>

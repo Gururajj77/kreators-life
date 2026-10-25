@@ -30,7 +30,7 @@ export function SignOut({ variant = 'outline', className = '' }: { variant?: 'ou
         {signout.isPending ? 'Signing out' : 'Sign out'}
       </Button>
       <Sheet open={asking} onClose={() => setAsking(false)} title="Only on this device so far">
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">This account has no email yet. Sign out now and nothing can get back to your areas, xp and streak. Add an email first and they come with you anywhere.</p>
+        <p className="m-0 text-[14px] font-semibold text-ink-soft">This account has no email yet. Sign out now and nothing can get back to your pillars, xp and streak. Add an email first and they come with you anywhere.</p>
         <div className="mt-md flex flex-col gap-xs">
           <Link to="/signup" className="toy inline-flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink" onClick={() => setAsking(false)}>
             Add an email first

@@ -6,4 +6,4 @@ ADMIN_EMAILS=
 # Mail (receipts, confirmations, invoices). Without a key, every mail lands in email_outbox (Admin can read it) and nothing is sent.
 # Resend: an API key with "Sending access", and a From on a domain you verified there.
 RESEND_API_KEY=
-EMAIL_FROM=Kreators Life <hello@yourdomain.com>
+EMAIL_FROM=kreators.app <hello@yourdomain.com>

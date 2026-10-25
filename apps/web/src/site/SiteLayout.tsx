@@ -20,7 +20,7 @@ export function Logo() {
           <Avatar key={r.key} relationship={r.key} size={18 + i * 4} decorative still />
         ))}
       </span>
-      Kreators Life
+      kreators.app
     </Link>
   );
 }
@@ -74,7 +74,7 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
               Explore listings
             </Link>
             <a href="/#floors" className="min-h-[32px] hover:text-ink">
-              Seven areas
+              Seven pillars
             </a>
             <a href="/#features" className="min-h-[32px] hover:text-ink">
               Features

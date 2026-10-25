@@ -39,7 +39,7 @@ export function Companion() {
           )}
         </div>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          It knows your areas, your streak and what you logged today. {q.data?.model === 'local' ? 'Running without a language model, so it reflects and asks rather than chats.' : 'Not a therapist. In a crisis, call your local emergency number.'}
+          It knows your pillars, your streak and what you logged today. {q.data?.model === 'local' ? 'Running without a language model, so it reflects and asks rather than chats.' : 'Not a therapist. In a crisis, call your local emergency number.'}
         </p>
       </header>
 

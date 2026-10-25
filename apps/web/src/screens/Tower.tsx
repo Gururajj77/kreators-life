@@ -54,18 +54,18 @@ export function Tower() {
   return (
     <Screen columns={false}>
       <header className="pt-lg">
-        <h1 className="text-[30px]">Your seven areas</h1>
+        <h1 className="text-[30px]">Your seven pillars</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          One area for each relationship in your life. Tap an area to set it up. An area that is set up sends its tasks to Daily.
+          One pillar for each relationship in your life. Tap a pillar to set it up. A pillar that is set up sends its tasks to Daily.
         </p>
         <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
           <XpBar xp={user.xp} />
           <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">
-            {builtCount} of {RELATIONSHIPS.length} areas set up.
+            {builtCount} of {RELATIONSHIPS.length} pillars set up.{builtCount < RELATIONSHIPS.length ? ' Setting up all seven earns the All seven badge.' : ' That earned the All seven badge.'}
           </p>
         </div>
       </header>
-      <ol className="mt-md flex list-none flex-col gap-xs p-0 m-0" aria-label="Areas, top to bottom">
+      <ol className="mt-md flex list-none flex-col gap-xs p-0 m-0" aria-label="Pillars, top to bottom">
         {floors.map((r, i) => (
           <Floor key={r.key} r={r} state={byKey.get(r.key)} delay={(floors.length - 1 - i) * 0.07} />
         ))}
@@ -74,10 +74,10 @@ export function Tower() {
         <div>
           <div>
             <h2 id="how-heading" className="text-[24px]">
-              How an area works
+              How a pillar works
             </h2>
             <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-              Every area is a pyramid. The base is one thing you will not let break. The tip is one small task for today. Tick the task and the whole pyramid gets stronger. That is the whole game.
+              Every pillar is a pyramid. The base is one thing you will not let break. The tip is one small task for today. Tick the task and the whole pyramid gets stronger. That is the whole game.
             </p>
             <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">
               Most apps start with tasks, and tasks fade in a week. This starts at the base, so each task has a reason to exist.

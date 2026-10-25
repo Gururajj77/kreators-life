@@ -25,7 +25,7 @@ function toR(r: Row): Resource {
   } catch {
     tags = [];
   }
-  return { id: r.id, kind: r.kind, title: r.title, summary: r.summary, body: r.body, url: r.url, tags, published: r.published === 1, authorName: r.author_name ? nameOf({ display_name: r.author_name }) : 'Kreators guides', createdAt: r.created_at };
+  return { id: r.id, kind: r.kind, title: r.title, summary: r.summary, body: r.body, url: r.url, tags, published: r.published === 1, authorName: r.author_name ? nameOf({ display_name: r.author_name }) : 'kreators.app guides', createdAt: r.created_at };
 }
 
 resources.get('/', async (c) => {

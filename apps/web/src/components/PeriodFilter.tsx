@@ -13,7 +13,7 @@ export function PeriodFilter({ period, onChange, today }: Props) {
   const canNext = next.start <= today;
   return (
     <div className="flex flex-col gap-xs">
-      <div role="group" aria-label="Period" className="-mx-xs flex gap-xs overflow-x-auto px-xs py-xs scrollbar-none">
+      <div role="group" aria-label="Period" className="scroll-row">
         {PERIOD_KINDS.map((k) => {
           const on = k === period.kind;
           return (

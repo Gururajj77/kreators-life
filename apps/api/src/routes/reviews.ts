@@ -101,10 +101,12 @@ async function numbersFor(db: D1Database, userId: string, p: Period): Promise<Pe
       .prepare(
         `SELECT (SELECT COUNT(*) FROM event_registrations WHERE user_id = ?1 AND registered_at >= ?2 AND registered_at < ?3) AS events,
                 (SELECT COUNT(*) FROM community_posts WHERE user_id = ?1 AND created_at >= ?2 AND created_at < ?3) AS posts,
-                (SELECT COUNT(*) FROM circle_signups WHERE user_id = ?1 AND created_at >= ?2 AND created_at < ?3) AS circles`,
+                (SELECT COUNT(*) FROM circle_signups WHERE user_id = ?1 AND created_at >= ?2 AND created_at < ?3) AS circles,
+                (SELECT COUNT(*) FROM run_entries WHERE user_id = ?1 AND status = 'logged' AND logged_at >= ?2 AND logged_at < ?3) AS runs,
+                (SELECT COALESCE(SUM(metres), 0) FROM run_entries WHERE user_id = ?1 AND status = 'logged' AND logged_at >= ?2 AND logged_at < ?3) AS run_metres`,
       )
       .bind(userId, fromTs, toTs)
-      .first<{ events: number; posts: number; circles: number }>(),
+      .first<{ events: number; posts: number; circles: number; runs: number; run_metres: number }>(),
   ]);
   const log = (kind: string) => wb.results.find((w) => w.kind === kind);
   const avgOf = (kind: string) => {
@@ -140,6 +142,8 @@ async function numbersFor(db: D1Database, userId: string, p: Period): Promise<Pe
     events: n(people?.events),
     posts: n(people?.posts),
     circles: n(people?.circles),
+    runs: n(people?.runs),
+    runMetres: n(people?.run_metres),
   };
 }
 

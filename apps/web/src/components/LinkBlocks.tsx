@@ -55,7 +55,8 @@ export function LinkBlocks({ blocks, onOpen }: { blocks: LinkBlock[]; onOpen?: (
             {b.type === 'carousel' && (
               <div>
                 {b.title && <h2 className="mt-sm text-center text-[18px]">{b.title}</h2>}
-                <ul className="-mx-md mt-xs flex snap-x list-none gap-xs overflow-x-auto px-md pb-xs scrollbar-none m-0" aria-label={b.title || 'Carousel'}>
+                <div className="mt-xs">
+                <ul className="scroll-row snap-x list-none" aria-label={b.title || 'Carousel'}>
                   {b.items.map((it) => {
                     const card = (
                       <>
@@ -64,18 +65,19 @@ export function LinkBlocks({ blocks, onOpen }: { blocks: LinkBlock[]; onOpen?: (
                       </>
                     );
                     return (
-                      <li key={it.id} className="w-[240px] shrink-0 snap-start overflow-hidden rounded-card bg-card shadow-toy-soft">
+                      <li key={it.id} className="w-[240px] shrink-0 snap-start">
                         {it.url ? (
-                          <a href={it.url} target="_blank" rel="noreferrer" onClick={open(b.id)} className="toy block text-ink">
+                          <a href={it.url} target="_blank" rel="noreferrer" onClick={open(b.id)} className="toy toy-soft block overflow-hidden rounded-card bg-card text-ink">
                             {card}
                           </a>
                         ) : (
-                          card
+                          <div className="overflow-hidden rounded-card bg-card shadow-toy-soft">{card}</div>
                         )}
                       </li>
                     );
                   })}
                 </ul>
+                </div>
               </div>
             )}
           </li>

@@ -1,4 +1,4 @@
-import { isFeatured, PREOWNED_CONDITION_META, PREOWNED_CONDITIONS, STORE_CATEGORIES, STORE_STAGE_META, STORE_STAGES, type MarketCard, type PreownedListing, type StoreItem, type StoreKit, type StoreStage } from '@kreators/shared';
+import { BADGES, isFeatured, PREOWNED_CONDITION_META, PREOWNED_CONDITIONS, STORE_CATEGORIES, STORE_STAGE_META, STORE_STAGES, type MarketCard, type PreownedListing, type StoreItem, type StoreKit, type StoreStage } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { Button } from '../components/Button';
@@ -8,6 +8,7 @@ import { money } from '../components/PeriodPanel';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
+import { useParamState } from '../lib/useParamState';
 import { useAuthed, useMe } from '../lib/queries';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
@@ -34,9 +35,13 @@ export function Store() {
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ['market'] });
   };
-  const [cat, setCat] = useState<string>('all');
-  const [stage, setStage] = useState<StoreStage | 'all'>('all');
-  const [budget, setBudget] = useState<number | null>(null);
+  const [cat, setCat] = useParamState('cat', 'all');
+  const [stageRaw, setStageRaw] = useParamState('stage', 'all');
+  const stage: StoreStage | 'all' = (STORE_STAGES as readonly string[]).includes(stageRaw) ? (stageRaw as StoreStage) : 'all';
+  const setStage = (s: StoreStage | 'all') => setStageRaw(s);
+  const [budgetRaw, setBudgetRaw] = useParamState('budget', '');
+  const budget: number | null = budgetRaw ? Number(budgetRaw) : null;
+  const setBudget = (c: number | null) => setBudgetRaw(c === null ? '' : String(c));
   const [open, setOpen] = useState<string | null>(null);
   const [selling, setSelling] = useState(false);
   const [adding, setAdding] = useState<'item' | 'kit' | null>(null);
@@ -66,7 +71,7 @@ export function Store() {
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Store</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Gear and software for creators. New things come through partner links, so Kreators may earn a share. Pre-owned things come from other creators: make an offer, talk it over, meet up. Kits say what to buy at your stage, within a budget.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Gear and software for creators. New things come through partner links, so kreators.app may earn a share. Pre-owned things come from other creators: make an offer, talk it over, meet up. Kits say what to buy at your stage, within a budget.</p>
         <div className="mt-md flex flex-wrap gap-xs">
           <Button onClick={() => setSelling(true)}>Sell something</Button>
           {admin && (
@@ -83,7 +88,7 @@ export function Store() {
       </header>
 
       <section className="mt-md" aria-label="Filters">
-        <div className="-mx-xs flex gap-xs overflow-x-auto px-xs py-xs scrollbar-none" role="group" aria-label="Category">
+        <div className="scroll-row" role="group" aria-label="Category">
           <button type="button" aria-pressed={cat === 'all'} onClick={() => setCat('all')} className={pill(cat === 'all')}>
             Everything
           </button>
@@ -93,7 +98,7 @@ export function Store() {
             </button>
           ))}
         </div>
-        <div className="-mx-xs flex gap-xs overflow-x-auto px-xs py-xs scrollbar-none" role="group" aria-label="Stage">
+        <div className="scroll-row" role="group" aria-label="Stage">
           <button type="button" aria-pressed={stage === 'all'} onClick={() => setStage('all')} className={pill(stage === 'all')}>
             Any stage
           </button>
@@ -103,7 +108,7 @@ export function Store() {
             </button>
           ))}
         </div>
-        <div className="-mx-xs flex gap-xs overflow-x-auto px-xs py-xs scrollbar-none" role="group" aria-label="Budget">
+        <div className="scroll-row" role="group" aria-label="Budget">
           {BUDGETS.map((b) => (
             <button key={b.label} type="button" aria-pressed={budget === b.cents} onClick={() => setBudget(b.cents)} className={pill(budget === b.cents)}>
               {b.label}
@@ -123,13 +128,15 @@ export function Store() {
           <h2 id="featured-heading" className="text-[24px]">
             Featured this week
           </h2>
-          <ul className="-mx-md mt-sm flex list-none gap-sm overflow-x-auto px-md py-xs scrollbar-none p-0 m-0">
+          <div className="mt-sm">
+          <ul className="scroll-row list-none gap-sm">
             {d.featured.map((f) => (
               <li key={`${f.type}-${f.type === 'item' ? f.item.id : f.type === 'kit' ? f.kit.id : f.listing.id}`} className="w-[260px] shrink-0">
                 <FeaturedCard card={f} onOpen={setOpen} />
               </li>
             ))}
           </ul>
+          </div>
         </section>
       )}
 
@@ -153,7 +160,7 @@ export function Store() {
         <h2 id="new-heading" className="text-[24px]">
           New
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Picked by the team. The link takes you to the seller's site; Kreators may earn a share of what you buy.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Picked by the team. The link takes you to the seller's site; kreators.app may earn a share of what you buy.</p>
         {items.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{d?.items.length ? 'Nothing here for these filters.' : 'Nothing on the shelf yet.'}</p>}
         <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
           {items.map((i) => (
@@ -242,11 +249,19 @@ function ItemBody({ item }: { item: StoreItem }) {
       {item.description && <span className="block text-[14px] font-semibold text-ink-soft">{item.description}</span>}
       <div className="flex items-center justify-between gap-sm">
         <Price cents={item.priceCents} currency={item.currency} />
-        <a href={`/out/item/${item.id}`} target="_blank" rel="noreferrer" className="toy inline-flex min-h-[44px] shrink-0 items-center rounded-pill bg-ink px-md text-[14px] font-bold text-on-ink">
-          Get it
-        </a>
+        {item.unlock.ok ? (
+          <a href={`/out/item/${item.id}`} target="_blank" rel="noreferrer" className="toy inline-flex min-h-[44px] shrink-0 items-center rounded-pill bg-ink px-md text-[14px] font-bold text-on-ink">
+            Get it
+          </a>
+        ) : (
+          <span className="rounded-pill bg-paper px-sm text-[12px] font-extrabold leading-[32px] text-ink-soft">Locked</span>
+        )}
       </div>
-      <span className="block text-[12px] font-bold text-ink-mute">Partner link. Kreators may earn a share.</span>
+      {item.unlock.ok ? (
+        <span className="block text-[12px] font-bold text-ink-mute">Partner link. kreators.app may earn a share.{item.minPoints > 0 || item.badge ? ' Earned: it asks for what you already have.' : ''}</span>
+      ) : (
+        <span className="block text-[12px] font-bold text-ink-soft">{item.unlock.why}</span>
+      )}
     </div>
   );
 }
@@ -291,6 +306,9 @@ function ListingButton({ l, onOpen }: { l: PreownedListing; onOpen: (id: string)
             {isFeatured(l.featuredUntil) && l.status === 'live' && <FeaturedTag />}
             <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">{PREOWNED_CONDITION_META[l.condition].name}</span>
             {l.isKit && <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">Whole setup</span>}
+            <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft" title={l.sellerTrust.label}>
+              Trust {l.sellerTrust.score}
+            </span>
             {l.status === 'sold' && <span className="rounded-pill bg-ink px-xs text-[12px] font-extrabold leading-[20px] text-on-ink">Sold{l.soldCents ? ` for ${money(l.soldCents, l.currency)}` : ''}</span>}
             {l.status === 'agreed' && <span className="rounded-pill bg-ink px-xs text-[12px] font-extrabold leading-[20px] text-on-ink">Offer accepted</span>}
             {l.status === 'withdrawn' && <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">Taken down</span>}
@@ -453,8 +471,10 @@ function ItemSheet({ open, onClose, onSaved }: { open: boolean; onClose: () => v
   const [url, setUrl] = useState('');
   const [image, setImage] = useState('');
   const [description, setDescription] = useState('');
+  const [minPoints, setMinPoints] = useState('0');
+  const [badge, setBadge] = useState('');
   const save = useMutation({
-    mutationFn: () => api.marketAddItem({ title, category, stage, priceCents: Math.round(Number(price) * 100), url, imageUrl: image, description }),
+    mutationFn: () => api.marketAddItem({ title, category, stage, priceCents: Math.round(Number(price) * 100), url, imageUrl: image, description, minPoints: Number(minPoints) || 0, badge }),
     onSuccess: () => {
       setTitle('');
       setPrice('');
@@ -511,6 +531,21 @@ function ItemSheet({ open, onClose, onSaved }: { open: boolean; onClose: () => v
         <Field label="Why it is on the shelf">
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={2000} className={field} />
         </Field>
+        <div className="grid grid-cols-2 gap-xs">
+          <Field label="Points balance of at least">
+            <input type="number" min={0} value={minPoints} onChange={(e) => setMinPoints(e.target.value)} className={field} />
+          </Field>
+          <Field label="Holds the badge">
+            <select value={badge} onChange={(e) => setBadge(e.target.value)} className={field}>
+              <option value="">Any badge or none</option>
+              {BADGES.map((b) => (
+                <option key={b.key} value={b.key}>
+                  {b.emoji} {b.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
         <Err m={save} />
         <Button type="submit" size="lg" full disabled={save.isPending || !title.trim() || !url.trim()}>
           Put it in the store

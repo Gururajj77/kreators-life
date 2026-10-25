@@ -1,4 +1,7 @@
 import { Hono, type Context } from 'hono';
+import { rewardSocial, trustFor } from '../rewards';
+import { unlockFor } from '@kreators/shared';
+import { badgesNow } from '../db';
 import { AFFILIATE_SHARE, levelFromXp, type Lesson, type PublicPage } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
 import { DATE_RE, nameOf, newId, notify, nowIso, parseList, parseSocials, sessionUser, publicOf, getStats, computeBadges, honorKeys, linksOf } from '../db';
@@ -89,6 +92,7 @@ async function pageFor(c: Context<AppEnv>, owner: UserRow): Promise<PublicPage> 
     timezone: owner.timezone || 'Asia/Kolkata',
     isPro: owner.is_pro === 1,
     followers: followers?.n ?? 0,
+    trust: await trustFor(db, owner.id),
     following: Boolean(following),
     products: shows.products ? products.results.map((r) => toProduct(r)) : [],
     testimonials: open ? testimonials.results.map(toTestimonial) : [],
@@ -143,7 +147,8 @@ publicPage.get('/products/:id', async (c) => {
   ]);
   const viewer = await sessionUser(c);
   const owned = viewer ? await db.prepare("SELECT 1 FROM orders WHERE buyer_id = ? AND product_id = ? AND status IN ('paid','test')").bind(viewer.id, row.id).first() : null;
-  return c.json({ product: toProduct(row), lessonCount: lessons?.n ?? 0, testimonials: testimonials.results.map(toTestimonial), owned: Boolean(owned) || viewer?.id === row.owner_id });
+  const have = viewer ? { points: viewer.points, badges: [...(await badgesNow(db, viewer.id)), ...(await honorKeys(db, viewer))] } : null;
+  return c.json({ product: toProduct(row), lessonCount: lessons?.n ?? 0, testimonials: testimonials.results.map(toTestimonial), owned: Boolean(owned) || viewer?.id === row.owner_id, seller: { trust: await trustFor(db, row.owner_id) }, unlock: unlockFor({ minPoints: row.min_points, badge: row.badge }, have) });
 });
 
 /** Buyer side: needs a session. */
@@ -180,6 +185,11 @@ store.post('/:productId/checkout', async (c) => {
   const product = await db.prepare(`${PRODUCT_SELECT} WHERE p.id = ? AND p.status = 'live'`).bind(c.req.param('productId')).first<ProductRow>();
   if (!product) return c.json({ error: 'not found' }, 404);
   if (product.owner_id === user.id) return c.json({ error: 'that is your own product' }, 400);
+  // Some things are for people who have earned their way: a points balance, a badge, or both.
+  if (product.min_points > 0 || product.badge) {
+    const gate = unlockFor({ minPoints: product.min_points, badge: product.badge }, { points: user.points, badges: [...(await badgesNow(db, user.id)), ...(await honorKeys(db, user))] });
+    if (!gate.ok) return c.json({ error: gate.why, unlock: gate }, 403);
+  }
   const body = await c.req.json<{ coupon?: string; affiliate?: string; pay?: string; points?: number; question?: string; intake?: unknown; replay?: boolean; click?: string; src?: string }>().catch(() => ({}) as Record<string, never>);
 
   // Replays: an event recording sold to people who missed the event.
@@ -523,6 +533,7 @@ store.post('/follow/:handle', async (c) => {
   if (had) await db.prepare('DELETE FROM follows WHERE follower_id = ? AND owner_id = ?').bind(user.id, owner.id).run();
   else {
     await db.prepare('INSERT INTO follows (follower_id, owner_id, created_at) VALUES (?, ?, ?)').bind(user.id, owner.id, nowIso()).run();
+    await rewardSocial(db, owner.id, 'follower', user.id);
     await notify(db, owner.id, 'follow', `${nameOf(user)} followed you`, '', '/shop/audience');
   }
   return c.json({ following: !had });

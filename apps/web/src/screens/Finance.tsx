@@ -1,7 +1,6 @@
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, money, type FinanceDue, type FinanceGoal, type FinanceRecurring, type FinanceSplit, type FinanceSummary, type FinanceTransaction, type Invoice, type InvoiceItem } from '@kreators/shared';
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, money, type FinanceDue, type FinanceGoal, type FinanceRecurring, type FinanceSplit, type FinanceSummary, type FinanceTransaction } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link } from 'react-router';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { Button } from '../components/Button';
 import { Donut, Legend, MultiLine } from '../components/Charts';
@@ -23,7 +22,7 @@ function shiftMonth(month: string, by: number): string {
 const toCents = (v: string) => Math.round(Number(v.replace(/[^0-9.]/g, '')) * 100);
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
-type SheetKind = 'income' | 'expense' | 'invoice' | 'budgets' | 'due' | 'recurring' | 'goal' | null;
+type SheetKind = 'income' | 'expense' | 'budgets' | 'due' | 'recurring' | 'goal' | null;
 
 /** Money in, money out, who it was with, what is owed, what repeats, and where you are heading. Private to the person. */
 export function Finance() {
@@ -48,24 +47,24 @@ export function Finance() {
             <Stat label="platform points, all time" value={d.totals.platformPoints.toLocaleString()} tone="var(--tint-purple)" />
           </div>
         )}
-        <div className="mt-md flex flex-wrap gap-xs">
-          <Button variant="outline" onClick={() => setSheet('income')}>
+        <div className="mt-md grid grid-cols-2 gap-xs">
+          <Button variant="outline" full onClick={() => setSheet('income')}>
             Money in
           </Button>
-          <Button variant="outline" onClick={() => setSheet('expense')}>
+          <Button variant="outline" full onClick={() => setSheet('expense')}>
             Money out
           </Button>
-          <Button variant="outline" onClick={() => setSheet('due')}>
-            Someone owes
+          <Button variant="outline" full onClick={() => setSheet('due')}>
+            Owed
           </Button>
-          <Button variant="outline" onClick={() => setSheet('recurring')}>
-            Repeats monthly
+          <Button variant="outline" full onClick={() => setSheet('recurring')}>
+            Monthly
           </Button>
-          <Button variant="outline" onClick={() => setSheet('invoice')}>
-            New invoice
+          <Button variant="outline" full onClick={() => setSheet('goal')}>
+            Goal
           </Button>
-          <Button variant="outline" onClick={() => setSheet('goal')}>
-            New goal
+          <Button variant="outline" full onClick={() => setSheet('budgets')}>
+            Budgets
           </Button>
         </div>
       </header>
@@ -215,23 +214,6 @@ export function Finance() {
             </ul>
           </section>
 
-          <section className="mt-lg" aria-labelledby="invoices-heading">
-            <h2 id="invoices-heading" className="text-[24px]">
-              Invoices
-            </h2>
-            {(d.openInvoicesCents > 0 || d.overdueInvoices > 0) && (
-              <p className="mt-xs m-0 text-[14px] font-bold text-ink-soft">
-                {money(d.openInvoicesCents, d.currency)} invoiced and waiting{d.overdueInvoices > 0 ? `, ${d.overdueInvoices} overdue` : ''}.
-              </p>
-            )}
-            {d.invoices.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Send a link, get paid, mark it paid. The income books itself.</p>}
-            <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-              {d.invoices.map((inv) => (
-                <InvoiceRow key={inv.id} inv={inv} onChange={refetch} />
-              ))}
-            </ul>
-          </section>
-
           <section className="mt-lg" aria-labelledby="tx-heading">
             <h2 id="tx-heading" className="text-[24px]">
               Entries, {monthName(month)}
@@ -248,7 +230,6 @@ export function Finance() {
           <DueSheet open={sheet === 'due'} onClose={() => setSheet(null)} onDone={refetch} />
           <RecurringSheet open={sheet === 'recurring'} onClose={() => setSheet(null)} onDone={refetch} />
           <GoalSheet open={sheet === 'goal'} onClose={() => setSheet(null)} onDone={refetch} />
-          <InvoiceSheet open={sheet === 'invoice'} currency={d.currency} onClose={() => setSheet(null)} onDone={refetch} />
           <BudgetSheet open={sheet === 'budgets'} summary={d} onClose={() => setSheet(null)} onDone={refetch} />
         </>
       )}
@@ -439,70 +420,6 @@ function GoalRow({ goal, currency, onChange }: { goal: FinanceGoal; currency: st
         <Button variant="ghost" onClick={() => del.mutate()} disabled={del.isPending}>
           Remove
         </Button>
-      </div>
-    </li>
-  );
-}
-
-function InvoiceRow({ inv, onChange }: { inv: Invoice; onChange: () => void }) {
-  const set = useMutation({ mutationFn: (status: Invoice['status']) => api.setInvoice(inv.id, status), onSuccess: onChange });
-  const del = useMutation({ mutationFn: () => api.deleteInvoice(inv.id), onSuccess: onChange });
-  const [copied, setCopied] = useState(false);
-  const link = `${window.location.origin}/i/${inv.token}`;
-  const tone = inv.status === 'paid' ? 'bg-r4 text-on-fill' : inv.status === 'sent' ? 'bg-r3 text-ink-fixed' : inv.status === 'void' ? 'bg-line text-ink' : 'bg-paper text-ink-soft';
-  return (
-    <li className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <div className="flex items-baseline justify-between gap-sm">
-        <p className="m-0 text-[16px] font-bold">
-          {inv.number} <span className="font-semibold text-ink-soft">{inv.clientName}</span>
-        </p>
-        <p className="m-0 text-[16px] font-extrabold">{money(inv.totalCents, inv.currency)}</p>
-      </div>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-        <span className={`rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${tone}`}>{inv.status}</span>
-        {inv.dueDate ? ` due ${day(inv.dueDate)}` : ''}
-        {inv.paidAt ? `, paid ${new Date(inv.paidAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}` : ''}
-      </p>
-      <div className="mt-xs flex flex-wrap gap-xs">
-        {inv.status === 'draft' && (
-          <Button onClick={() => set.mutate('sent')} disabled={set.isPending}>
-            Mark sent
-          </Button>
-        )}
-        {inv.status === 'sent' && (
-          <Button onClick={() => set.mutate('paid')} disabled={set.isPending}>
-            Mark paid
-          </Button>
-        )}
-        {inv.status !== 'void' && inv.status !== 'draft' && (
-          <Button variant="ghost" onClick={() => set.mutate('void')} disabled={set.isPending}>
-            Void
-          </Button>
-        )}
-        {inv.status === 'draft' && (
-          <Button variant="ghost" onClick={() => del.mutate()} disabled={del.isPending}>
-            Delete
-          </Button>
-        )}
-        {inv.status !== 'draft' && (
-          <button
-            type="button"
-            onClick={() => {
-              void navigator.clipboard?.writeText(link).then(() => {
-                setCopied(true);
-                window.setTimeout(() => setCopied(false), 1500);
-              });
-            }}
-            className="toy toy-soft inline-flex min-h-[48px] items-center rounded-pill bg-paper px-sm text-[14px] font-bold"
-          >
-            {copied ? 'Copied' : 'Copy link'}
-          </button>
-        )}
-        {inv.status !== 'draft' && (
-          <Link to={`/i/${inv.token}`} className="inline-flex min-h-[48px] items-center text-[14px] font-bold text-ink-soft underline-offset-4 hover:underline">
-            Open
-          </Link>
-        )}
       </div>
     </li>
   );
@@ -809,80 +726,6 @@ function GoalSheet({ open, onClose, onDone }: { open: boolean; onClose: () => vo
         </div>
         <Button type="submit" size="lg" full disabled={add.isPending || !title.trim() || toCents(target) <= 0}>
           Save goal
-        </Button>
-      </form>
-    </Sheet>
-  );
-}
-
-function InvoiceSheet({ open, currency, onClose, onDone }: { open: boolean; currency: string; onClose: () => void; onDone: () => void }) {
-  const [clientName, setClientName] = useState('');
-  const [clientEmail, setClientEmail] = useState('');
-  const [dueDate, setDueDate] = useState('');
-  const [note, setNote] = useState('');
-  const [items, setItems] = useState<{ description: string; quantity: string; unit: string }[]>([{ description: '', quantity: '1', unit: '' }]);
-  const lines: InvoiceItem[] = items.filter((i) => i.description.trim()).map((i) => ({ description: i.description.trim(), quantity: Math.max(1, Number(i.quantity) || 1), unitCents: toCents(i.unit) }));
-  const total = lines.reduce((a, l) => a + l.quantity * l.unitCents, 0);
-  const create = useMutation({
-    mutationFn: () => api.createInvoice({ clientName, clientEmail, items: lines, dueDate: dueDate || null, note, currency }),
-    onSuccess: () => {
-      setClientName('');
-      setClientEmail('');
-      setItems([{ description: '', quantity: '1', unit: '' }]);
-      onDone();
-      onClose();
-    },
-  });
-  return (
-    <Sheet open={open} onClose={onClose} title="New invoice">
-      <form
-        className="flex flex-col gap-md"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (clientName.trim() && lines.length) create.mutate();
-        }}
-      >
-        <label className="block">
-          <span className="block text-[14px] font-bold">Client</span>
-          <input value={clientName} onChange={(e) => setClientName(e.target.value)} required maxLength={120} className={field} />
-        </label>
-        <label className="block">
-          <span className="block text-[14px] font-bold">Client email (optional)</span>
-          <input type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} className={field} />
-        </label>
-        <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[14px] font-bold">Lines</legend>
-          <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
-            {items.map((it, i) => (
-              <li key={i} className="grid grid-cols-[1fr_64px_96px] gap-xs">
-                <input aria-label="Description" value={it.description} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))} placeholder="Reel, 60 seconds" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
-                <input aria-label="Quantity" inputMode="numeric" value={it.quantity} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)))} className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
-                <input aria-label="Unit price" inputMode="decimal" value={it.unit} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, unit: e.target.value } : x)))} placeholder="0.00" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
-              </li>
-            ))}
-          </ul>
-          <Button variant="ghost" className="mt-xs" onClick={() => setItems([...items, { description: '', quantity: '1', unit: '' }])}>
-            Add a line
-          </Button>
-        </fieldset>
-        <div className="grid grid-cols-2 gap-xs">
-          <label className="block">
-            <span className="block text-[14px] font-bold">Due</span>
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={field} />
-          </label>
-          <label className="block">
-            <span className="block text-[14px] font-bold">Note</span>
-            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Bank details, terms" className={field} />
-          </label>
-        </div>
-        <p className="m-0 text-[18px] font-extrabold">Total {money(total, currency)}</p>
-        {create.isError && (
-          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-            {create.error instanceof Error ? create.error.message : 'Could not create it.'}
-          </p>
-        )}
-        <Button type="submit" size="lg" full disabled={create.isPending || !clientName.trim() || lines.length === 0}>
-          Create draft
         </Button>
       </form>
     </Sheet>

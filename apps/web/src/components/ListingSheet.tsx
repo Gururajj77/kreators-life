@@ -7,6 +7,7 @@ import { useSession } from '../lib/store';
 import { Button } from './Button';
 import { money } from './PeriodPanel';
 import { Sheet } from './Sheet';
+import { TrustBadge } from './TrustBadge';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const offerWord: Record<PreownedOffer['status'], string> = { open: 'waiting', accepted: 'accepted', declined: 'declined', withdrawn: 'withdrawn' };
@@ -89,9 +90,12 @@ export function ListingSheet({ id, onClose, feature }: Props) {
               {l.includes}
             </p>
           )}
+          <div>
+            <TrustBadge trust={l.sellerTrust} size="sm" />
+          </div>
           <p className="m-0 text-[14px] font-semibold text-ink-soft">
             Sold by {l.sellerName}
-            {l.sellerHandle ? ` (@${l.sellerHandle})` : ''}. Listed {prettyDate(l.createdAt.slice(0, 10))}. Settle the payment and the handover between you; Kreators takes nothing from it.
+            {l.sellerHandle ? ` (@${l.sellerHandle})` : ''}. Listed {prettyDate(l.createdAt.slice(0, 10))}. Settle the payment and the handover between you; kreators.app takes nothing from it.
           </p>
 
           {!l.mine && (

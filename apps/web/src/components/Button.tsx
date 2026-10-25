@@ -23,7 +23,7 @@ export function Button({ variant = 'primary', color, deep, size = 'md', full = f
     /* For buttons that sit on a coloured hero: a white pill with dark text, like the kit. */
     light: 'toy bg-card text-ink',
   }[variant];
-  const colorStyle = variant === 'color' ? ({ background: color, '--toy-color': deep ?? '#372315', ...style } as CSSProperties) : style;
+  const colorStyle = variant === 'color' ? ({ background: color, '--toy-color': deep ?? '#1a1a1a', ...style } as CSSProperties) : style;
 
   return (
     <button type="button" className={`${base} ${sizing} ${look} ${full ? 'w-full' : ''} ${className}`} style={colorStyle} {...rest}>

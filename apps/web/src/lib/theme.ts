@@ -11,8 +11,8 @@ interface ThemeState {
 
 export const useTheme = create<ThemeState>()(persist((set) => ({ mode: 'system', setMode: (mode) => set({ mode }) }), { name: 'kreators.theme' }));
 
-const LIGHT = '#4F3422';
-const DARK = '#251404';
+const LIGHT = '#262626';
+const DARK = '#121212';
 
 /** Writes the chosen mode onto <html> and keeps the browser chrome color in step. */
 export function useApplyTheme(): void {

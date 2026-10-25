@@ -128,10 +128,10 @@ export function NotToDoList({ items, date, queue }: Props) {
           </label>
           <input id="ntd-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={NOT_TO_DO_TITLE_MAX} placeholder="No phone in bed" autoFocus className={field} />
           <label className="mt-sm block text-[14px] font-bold" htmlFor="ntd-area">
-            Area
+            Pillar
           </label>
           <select id="ntd-area" value={area} onChange={(e) => setArea(e.target.value as RelationshipKey | '')} className={field}>
-            <option value="">Any area</option>
+            <option value="">Any pillar</option>
             {RELATIONSHIPS.map((r) => (
               <option key={r.key} value={r.key}>
                 {r.name}

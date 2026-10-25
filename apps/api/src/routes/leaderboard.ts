@@ -52,6 +52,8 @@ leaderboard.get('/', async (c) => {
       relationshipsWithPillars: r.rels_with_pillars,
       clubMember: false, // the board does not look up Club rows; the badge shows on the person's own page
       sparksDone: r.sparks_done,
+      runsLogged: 0, // run badges likewise show on the person's own page, not the board
+      runMetres: 0,
     }).length;
     return {
       rank: 0,

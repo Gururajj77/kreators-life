@@ -2,6 +2,7 @@ import { greetingFor, LIFE_AREAS, MODULE_GROUPS, money, MOODS, RELATIONSHIP_BY_K
 import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router';
 import { PeriodPanel } from '../components/PeriodPanel';
+import { Nudge } from '../components/Nudge';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { AreaLine, Donut, Gauge, HBars, Legend, MultiLine, PillBars, Segments, Sparkline } from '../components/Charts';
@@ -180,6 +181,7 @@ export function Home() {
                 </span>
               </KitTile>
             </div>
+                      <Nudge className="mt-sm" text={`${d.xp.span - d.xp.into} xp to level ${d.xp.level + 1}. A ticked task is 20, a check-in 10.`} />
           </Section>
 
           <PeriodPanel id="home-period" parts={['daily', 'wellbeing', 'finance', 'shop']} span />
@@ -344,17 +346,17 @@ export function Home() {
                 </Link>
               </div>
               <p className="mt-xs m-0 flex flex-wrap gap-sm text-[12px] font-bold text-ink-soft">
-                {(['event', 'session', 'booking', 'circle'] as const).map((k) => {
+                {(['event', 'run', 'session', 'booking', 'circle'] as const).map((k) => {
                   const n = d.upNext.filter((u) => u.kind === k).length;
                   if (n === 0) return null;
                   return (
                     <span key={k}>
-                      <span aria-hidden="true">{k === 'event' ? '🎉' : k === 'circle' ? '🫧' : '📅'} </span>
+                      <span aria-hidden="true">{k === 'event' ? '🎉' : k === 'run' ? '🏃' : k === 'circle' ? '🫧' : '📅'} </span>
                       {n} {k === 'booking' ? (n === 1 ? 'booking you host' : 'bookings you host') : n === 1 ? k : `${k}s`}
                     </span>
                   );
                 })}
-                {d.upNext.length === 0 && <span>Nothing booked. Meetups are under Party, small groups near you under Circles.</span>}
+                {d.upNext.length === 0 && <span>Nothing booked. Meetups are under Party, run clubs under Kreators Run, small groups near you under Circles.</span>}
               </p>
               {d.upNext.length > 0 && (
                 <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -362,7 +364,7 @@ export function Home() {
                     <li key={`${u.kind}-${u.path}-${u.at}`}>
                       <Link to={u.path} className="toy toy-flat flex items-center gap-sm rounded-tile bg-paper p-sm text-ink">
                         <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-card text-[20px] shadow-toy-soft" aria-hidden="true">
-                          {u.kind === 'event' ? '🎉' : u.kind === 'circle' ? '🫧' : '📅'}
+                          {u.kind === 'event' ? '🎉' : u.kind === 'run' ? '🏃' : u.kind === 'circle' ? '🫧' : '📅'}
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[16px] font-bold">{u.title}</span>
@@ -498,10 +500,10 @@ export function Home() {
             </Section>
           )}
 
-          <Section id="home-tower" title="Your areas" lede="Seven areas of your life. The bar shows how far each one has come." action={<SeeAll to="/tower">Open</SeeAll>}>
+          <Section id="home-tower" title="Your pillars" lede="Seven pillars of your life. The bar shows how far each one has come." action={<SeeAll to="/tower">Open</SeeAll>}>
             <Link to="/tower" className="toy toy-soft block rounded-card bg-card p-md text-ink">
               <HBars
-                label="Area levels"
+                label="Pillar levels"
                 rows={[...d.floors].reverse().map((f) => {
                   const r = RELATIONSHIP_BY_KEY[f.relationship];
                   return {

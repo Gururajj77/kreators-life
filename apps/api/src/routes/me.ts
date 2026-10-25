@@ -227,6 +227,8 @@ me.get('/export', async (c) => {
     ['reviewTemplates', 'SELECT * FROM review_templates WHERE user_id = ?'],
     ['listings', 'SELECT * FROM preowned_listings WHERE seller_id = ?'],
     ['offers', 'SELECT * FROM preowned_offers WHERE buyer_id = ?'],
+    ['runEntries', 'SELECT * FROM run_entries WHERE user_id = ?'],
+    ['runClubs', 'SELECT * FROM run_members WHERE user_id = ?'],
   ];
   const out: Record<string, unknown> = { exportedAt: nowIso(), user: toUser(user) };
   for (const [name, sql] of tables) {
@@ -251,6 +253,9 @@ me.delete('/', async (c) => {
     db.prepare('DELETE FROM review_templates WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM preowned_listings WHERE seller_id = ?').bind(user.id),
     db.prepare('DELETE FROM preowned_offers WHERE buyer_id = ?').bind(user.id),
+    db.prepare('DELETE FROM run_entries WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM run_members WHERE user_id = ?').bind(user.id),
+    db.prepare("UPDATE run_clubs SET status = 'closed' WHERE host_user_id = ?").bind(user.id),
     db.prepare('DELETE FROM wellbeing_logs WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM journal_entries WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM chat_messages WHERE user_id = ?').bind(user.id),
@@ -293,6 +298,7 @@ me.post('/reset', async (c) => {
     db.prepare('DELETE FROM nodes WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM not_to_do WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM reviews WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM run_entries WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM xp_events WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM spark_completions WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM onboarding_answers WHERE user_id = ?').bind(user.id),

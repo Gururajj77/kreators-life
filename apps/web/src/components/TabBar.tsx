@@ -33,7 +33,7 @@ const TABS = [
   },
   {
     to: '/tower',
-    label: 'Areas',
+    label: 'Pillars',
     icon: (
       <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="currentColor">
         <rect x="3" y="17" width="18" height="4" rx="2" />
@@ -161,7 +161,7 @@ export function TabBar() {
         })}
         <div className="mt-lg flex items-center justify-between gap-sm">
           <Link to="/" className="text-[12px] font-bold text-ink-soft hover:text-ink">
-            About Kreators Life
+            About kreators.app
           </Link>
           <SignOut variant="outline" />
         </div>
@@ -174,15 +174,20 @@ export function TabBar() {
               <Avatar key={r.key} relationship={r.key} size={16 + i * 4} decorative still />
             ))}
           </span>
-          Kreators Life
+          kreators.app
         </Link>
-        {/* Your role, right under the logo: creator, staff or admin. */}
-        {me.data && (
-          <p className="mt-xs m-0 flex items-center gap-xs px-xs text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
-            <RoleBadge role={me.data.user.role} size={20} />
-            {ROLE_META[me.data.user.role].name}
-          </p>
-        )}
+        {/* Your role, right under the logo: creator, staff or admin. The theme button sits beside it. */}
+        <div className="mt-xs flex min-h-[44px] items-center justify-between gap-xs px-xs">
+          {me.data ? (
+            <p className="m-0 flex items-center gap-xs text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
+              <RoleBadge role={me.data.user.role} size={20} />
+              {ROLE_META[me.data.user.role].name}
+            </p>
+          ) : (
+            <span />
+          )}
+          <ThemeToggle />
+        </div>
         <ul className="mt-md flex list-none flex-col gap-xs p-0 m-0">
           {TABS.map((t) => (
             <li key={t.to}>
@@ -228,12 +233,9 @@ export function TabBar() {
         </div>
         <div className="mt-auto flex flex-col gap-xs px-xs pt-md">
           <SignOut variant="outline" className="w-full" />
-          <div className="flex items-center justify-between gap-xs">
-            <Link to="/" className="text-[12px] font-bold text-ink-soft hover:text-ink">
-              About Kreators Life
-            </Link>
-            <ThemeToggle />
-          </div>
+          <Link to="/" className="inline-flex min-h-[44px] items-center text-[12px] font-bold text-ink-soft hover:text-ink">
+            About kreators.app
+          </Link>
         </div>
       </nav>
     </>

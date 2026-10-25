@@ -1,3 +1,5 @@
+import type { Unlock } from '@kreators/shared';
+import type { FeedFilter, FeedSort, SocialAward, TrustScore } from '@kreators/shared';
 import type { ListingDetail, MarketResponse, PreownedListing, PreownedMessage, PreownedOffer, StoreItem, StoreKit } from '@kreators/shared';
 import type { PeriodKind, Review, ReviewSummary, ReviewTemplate, ReviewsResponse } from '@kreators/shared';
 import type { NotToDo, NotToDoStatus } from '@kreators/shared';
@@ -73,6 +75,14 @@ import type {
   Organization,
   OrganizationMember,
   PartyEvent,
+  Run,
+  RunClub,
+  RunClubDetail,
+  RunCollab,
+  RunCollabsResponse,
+  RunEntry,
+  RunPace,
+  RunResponse,
   Permission,
   PortfolioItem,
   Program,
@@ -207,7 +217,7 @@ export const api = {
   createNode: (body: { kind: NodeKind; parentId: string | null; relationship: RelationshipKey; title: string; note?: string; dueDate?: string | null; dueTime?: string | null; estimateMin?: number | null }) => post<{ node: Node }>('/nodes', body),
   updateNode: (id: string, body: { title?: string; note?: string; dueDate?: string | null; status?: 'active' | 'archived'; dueTime?: string | null; estimateMin?: number | null }) => patch<{ node: Node }>(`/nodes/${id}`, body),
   deleteNode: (id: string) => del<{ ok: true }>(`/nodes/${id}`),
-  complete: (id: string) => post<CompleteResponse>(`/nodes/${id}/complete`),
+  complete: (id: string, date?: string) => post<CompleteResponse>(`/nodes/${id}/complete`, date ? { date } : undefined),
   uncomplete: (id: string) => post<{ node: Node }>(`/nodes/${id}/uncomplete`),
 
   // daily
@@ -251,19 +261,20 @@ export const api = {
   readOne: (id: string) => post<{ ok: true }>(`/inbox/${id}/read`),
   resources: (tag?: string) => request<{ resources: Resource[] }>(`/resources${tag ? `?tag=${encodeURIComponent(tag)}` : ''}`),
   resource: (id: string) => request<{ resource: Resource }>(`/resources/${id}`),
-  community: (category?: string, product?: string, all = false) =>
-    request<{ posts: CommunityPost[]; categories: readonly string[] }>(`/community?${new URLSearchParams({ ...(category ? { category } : {}), ...(product ? { product } : {}), ...(all ? { all: '1' } : {}) })}`),
-  createPost: (body: { category: string; body: string; productId?: string | null }) => post<{ post: CommunityPost }>('/community', body),
-  likePost: (id: string) => post<{ post: CommunityPost }>(`/community/${id}/like`),
+  community: (category?: string, product?: string, all = false, sort: FeedSort = 'recent', filter: FeedFilter = 'all') =>
+    request<{ posts: CommunityPost[]; categories: readonly string[]; sort: FeedSort; filter: FeedFilter }>(`/community?${new URLSearchParams({ ...(category ? { category } : {}), ...(product ? { product } : {}), ...(all ? { all: '1' } : {}), sort, filter })}`),
+  createPost: (body: { category: string; body: string; productId?: string | null }) => post<{ post: CommunityPost; awarded: SocialAward }>('/community', body),
+  likePost: (id: string) => post<{ post: CommunityPost; awarded: SocialAward }>(`/community/${id}/like`),
   replies: (id: string) => request<{ replies: CommunityReply[] }>(`/community/${id}/replies`),
-  reply: (id: string, body: string) => post<{ reply: CommunityReply }>(`/community/${id}/replies`, { body }),
+  reply: (id: string, body: string) => post<{ reply: CommunityReply; awarded: SocialAward }>(`/community/${id}/replies`, { body }),
+  followUser: (id: string) => post<{ following: boolean; followers: number; awarded: SocialAward }>(`/community/follow/${id}`),
   deletePost: (id: string) => del<{ ok: true }>(`/community/${id}`),
   search: (q: string) => request<SearchResults>(`/search?q=${encodeURIComponent(q)}`),
 
   // storefront, buyer side
   publicPage: (handle: string) => request<PublicPage>(`/public/${encodeURIComponent(handle)}`),
   personPage: (id: string) => request<PublicPage>(`/public/people/${encodeURIComponent(id)}`),
-  publicProduct: (id: string) => request<{ product: Product; lessonCount: number; testimonials: Testimonial[]; owned: boolean }>(`/public/products/${id}`),
+  publicProduct: (id: string) => request<{ product: Product; lessonCount: number; testimonials: Testimonial[]; owned: boolean; seller: { trust: TrustScore }; unlock: Unlock }>(`/public/products/${id}`),
   click: (handle: string, ref: string) => post<{ ok: true }>(`/public/${encodeURIComponent(handle)}/click`, { ref }),
   lead: (handle: string, body: { name: string; email: string; message: string }) => post<{ ok: true }>(`/public/${encodeURIComponent(handle)}/lead`, body),
   follow: (handle: string) => post<{ following: boolean }>(`/store/follow/${encodeURIComponent(handle)}`),
@@ -370,6 +381,23 @@ export const api = {
   checkinGuest: (id: string, userId: string) => post<{ ok: true }>(`/party/events/${id}/checkin`, { userId }),
   eventFeedback: (id: string, body: { rating: number; comment?: string; networking?: boolean }) => post<{ ok: true }>(`/party/events/${id}/feedback`, body),
   setEvent: (id: string, status: 'published' | 'cancelled' | 'done') => patch<{ ok: true }>(`/party/events/${id}`, { status }),
+  // kreators run
+  run: () => request<RunResponse>('/run'),
+  createRunClub: (body: { name: string; city: string; description?: string; pace?: RunPace; meets?: string; visibility?: 'public' | 'private' }) => post<{ club: RunClub | null }>('/run/clubs', body),
+  runClub: (id: string) => request<RunClubDetail>(`/run/clubs/${id}`),
+  setRunClub: (id: string, body: { status?: 'active' | 'closed'; description?: string; meets?: string; pace?: RunPace; visibility?: 'public' | 'private' }) => patch<{ ok: true }>(`/run/clubs/${id}`, body),
+  joinRunClub: (id: string) => post<{ ok: true }>(`/run/clubs/${id}/join`),
+  leaveRunClub: (id: string) => post<{ ok: true }>(`/run/clubs/${id}/leave`),
+  addRun: (clubId: string, body: { title: string; startsAt: string; minutes: number; meetingPoint?: string; metres?: number; collabId?: string | null }) => post<{ run: Run | null }>(`/run/clubs/${clubId}/runs`, body),
+  recodeRun: (id: string) => post<{ code: string }>(`/run/runs/${id}/recode`),
+  setRun: (id: string, status: 'published' | 'cancelled' | 'done') => patch<{ ok: true }>(`/run/runs/${id}`, { status }),
+  logRun: (id: string, body: { code: string; metres: number; minutes: number }) => post<{ entry: RunEntry | null; xp: number; points: number; capped: boolean; newBadges: string[] }>(`/run/runs/${id}/entry`, body),
+  voidRunEntry: (id: string) => post<{ ok: true }>(`/run/entries/${id}/void`),
+  runCollabs: () => request<RunCollabsResponse>('/run/collabs'),
+  postRunCollab: (body: { title: string; brandName?: string; organizationId?: string | null; brief?: string; asks?: string; giveaway: string; giveawayCount?: number; city?: string; startsAt: string; endsAt: string }) => post<{ collab: RunCollab | null }>('/run/collabs', body),
+  setRunCollab: (id: string, status: 'open' | 'closed') => patch<{ ok: true }>(`/run/collabs/${id}`, { status }),
+  applyRunCollab: (id: string, body: { clubId: string; note?: string }) => post<{ application: { id: string; status: string } }>(`/run/collabs/${id}/apply`, body),
+  decideRunCollab: (id: string, appId: string, status: 'accepted' | 'declined') => post<{ ok: true }>(`/run/collabs/${id}/applications/${appId}`, { status }),
 
   // club
   club: () => request<{ benefits: typeof import('@kreators/shared').CLUB_BENEFITS; mine: Membership | null; queue: Membership[]; members: number; reviewer: boolean }>('/club'),
@@ -401,8 +429,8 @@ export const api = {
 
   // tools
   tools: () => request<{ tools: Tool[]; categories: readonly string[]; reviewer: boolean }>('/tools'),
-  suggestTool: (body: { name: string; url: string; category?: string; description?: string; affiliate?: boolean }) => post<{ ok: true; id: string; verified: boolean }>('/tools', body),
-  setTool: (id: string, body: { verified?: boolean; affiliate?: boolean; featured?: boolean }) => post<{ ok: true }>(`/tools/${id}`, body),
+  suggestTool: (body: { name: string; url: string; category?: string; description?: string; affiliate?: boolean; minPoints?: number; badge?: string }) => post<{ ok: true; id: string; verified: boolean }>('/tools', body),
+  setTool: (id: string, body: { verified?: boolean; affiliate?: boolean; featured?: boolean; minPoints?: number; badge?: string }) => post<{ ok: true }>(`/tools/${id}`, body),
   market: () => request<MarketResponse>('/market'),
   marketListing: (id: string) => request<ListingDetail>(`/market/listings/${id}`),
   marketSell: (body: Record<string, unknown>) => post<{ listing: PreownedListing }>('/market/listings', body),

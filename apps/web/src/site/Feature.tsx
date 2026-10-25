@@ -69,7 +69,7 @@ export function Feature() {
 
       <section className="mt-lg" aria-labelledby="serves">
         <h2 id="serves" className="text-[24px]">
-          Which areas it serves
+          Which pillars it serves
         </h2>
         <ul className="mt-sm flex list-none flex-wrap gap-xs p-0 m-0">
           {copy.relationships.map((k) => {

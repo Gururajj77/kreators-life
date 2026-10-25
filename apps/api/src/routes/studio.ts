@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { AFFILIATE_SHARE, PRODUCT_KIND_META, PRODUCT_KINDS, type Availability, type AvailabilityOverride, type Booking, type Coupon, type Lead, type Lesson, type Order, type Product, type ProductKind, type QuizQuestion, type StudioAnalytics, type Testimonial } from '@kreators/shared';
+import { isBadgeKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { nameOf, newId, notify, nowIso, parseList } from '../db';
 import { logEvent, sendEmail, track } from '../ops';
@@ -37,6 +38,8 @@ export interface ProductRow {
   locked_body: string;
   response_days: number | null;
   lead_magnet: number;
+  min_points: number;
+  badge: string;
   certificate: number;
   buffer_min: number;
   notice_hours: number;
@@ -59,6 +62,8 @@ export const toProduct = (r: ProductRow, reveal = false): Product => ({
   lockedBody: reveal ? r.locked_body : '',
   responseDays: r.response_days,
   leadMagnet: r.lead_magnet === 1,
+  minPoints: r.min_points,
+  badge: r.badge,
   certificate: r.certificate === 1,
   bufferMin: r.buffer_min ?? 0,
   noticeHours: r.notice_hours ?? 2,
@@ -262,8 +267,8 @@ studio.post('/products', async (c) => {
   const now = nowIso();
   await db
     .prepare(
-      `INSERT INTO products (id, owner_id, kind, title, description, price_points, price_cents, currency, url, starts_at, duration_min, capacity, meeting_url, status, cover, sort_order, created_at, updated_at, pwyw, intake_json, replay_url, replay_points, bundle_json, locked_body, response_days, lead_magnet, certificate, buffer_min, notice_hours, max_days_ahead, period_months)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO products (id, owner_id, kind, title, description, price_points, price_cents, currency, url, starts_at, duration_min, capacity, meeting_url, status, cover, sort_order, created_at, updated_at, pwyw, intake_json, replay_url, replay_points, bundle_json, locked_body, response_days, lead_magnet, certificate, buffer_min, notice_hours, max_days_ahead, period_months, min_points, badge)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       id, user.id, kind, title, str(body.description, 2000), int(body.pricePoints, 0) ?? 0, int(body.priceCents, 0) ?? 0, str(body.currency, 3, 'INR').toUpperCase() || 'INR',
@@ -271,6 +276,7 @@ studio.post('/products', async (c) => {
       str(body.meetingUrl, 500) || null, body.status === 'live' ? 'live' : 'draft', str(body.cover, 8, PRODUCT_KIND_META[kind].emoji), 0, now, now,
       body.pwyw === true ? 1 : 0, JSON.stringify(list(body.intake, 8, 200)), str(body.replayUrl, 500) || null, int(body.replayPoints, 0) ?? 0, JSON.stringify(await ownedIds(db, user.id, body.bundleIds)), str(body.lockedBody, 20000), int(body.responseDays, kind === 'dm' ? 3 : null, 1, 30), body.leadMagnet === true ? 1 : 0, body.certificate === true ? 1 : 0,
       int(body.bufferMin, 0, 0, 120) ?? 0, int(body.noticeHours, 2, 0, 720) ?? 2, int(body.maxDaysAhead, 30, 1, 365) ?? 30, kind === 'membership' ? int(body.periodMonths, null, 1, 36) : null,
+      int(body.minPoints, 0, 0) ?? 0, isBadgeKey(str(body.badge, 40)) ? str(body.badge, 40) : '',
     )
     .run();
   await track(db, user.id, 'product_created', { kind, pricePoints: int(body.pricePoints, 0) ?? 0 });
@@ -302,7 +308,7 @@ studio.patch('/products/:id', async (c) => {
   await db
     .prepare(
       `UPDATE products SET title = ?, description = ?, price_points = ?, price_cents = ?, currency = ?, url = ?, starts_at = ?, duration_min = ?, capacity = ?, meeting_url = ?, status = ?, cover = ?, sort_order = ?, updated_at = ?,
-         pwyw = ?, intake_json = ?, replay_url = ?, replay_points = ?, bundle_json = ?, locked_body = ?, response_days = ?, lead_magnet = ?, certificate = ?, buffer_min = ?, notice_hours = ?, max_days_ahead = ?, period_months = ? WHERE id = ?`,
+         pwyw = ?, intake_json = ?, replay_url = ?, replay_points = ?, bundle_json = ?, locked_body = ?, response_days = ?, lead_magnet = ?, certificate = ?, buffer_min = ?, notice_hours = ?, max_days_ahead = ?, period_months = ?, min_points = ?, badge = ? WHERE id = ?`,
     )
     .bind(
       str(body.title, 120, prev.title) || prev.title, str(body.description, 2000, prev.description), int(body.pricePoints, prev.price_points) ?? prev.price_points, int(body.priceCents, prev.price_cents) ?? prev.price_cents,
@@ -312,7 +318,8 @@ studio.patch('/products/:id', async (c) => {
       typeof body.pwyw === 'boolean' ? (body.pwyw ? 1 : 0) : prev.pwyw, 'intake' in body ? JSON.stringify(list(body.intake, 8, 200)) : prev.intake_json, 'replayUrl' in body ? str(body.replayUrl, 500) || null : prev.replay_url, int(body.replayPoints, prev.replay_points) ?? prev.replay_points,
       'bundleIds' in body ? JSON.stringify(await ownedIds(db, user.id, body.bundleIds)) : prev.bundle_json, 'lockedBody' in body ? str(body.lockedBody, 20000) : prev.locked_body, 'responseDays' in body ? int(body.responseDays, prev.response_days, 1, 30) : prev.response_days,
       typeof body.leadMagnet === 'boolean' ? (body.leadMagnet ? 1 : 0) : prev.lead_magnet, typeof body.certificate === 'boolean' ? (body.certificate ? 1 : 0) : prev.certificate,
-      int(body.bufferMin, prev.buffer_min, 0, 120) ?? prev.buffer_min, int(body.noticeHours, prev.notice_hours, 0, 720) ?? prev.notice_hours, int(body.maxDaysAhead, prev.max_days_ahead, 1, 365) ?? prev.max_days_ahead, 'periodMonths' in body ? int(body.periodMonths, prev.period_months, 1, 36) : prev.period_months, prev.id,
+      int(body.bufferMin, prev.buffer_min, 0, 120) ?? prev.buffer_min, int(body.noticeHours, prev.notice_hours, 0, 720) ?? prev.notice_hours, int(body.maxDaysAhead, prev.max_days_ahead, 1, 365) ?? prev.max_days_ahead, 'periodMonths' in body ? int(body.periodMonths, prev.period_months, 1, 36) : prev.period_months,
+      'minPoints' in body ? (int(body.minPoints, prev.min_points, 0) ?? prev.min_points) : prev.min_points, 'badge' in body ? (isBadgeKey(str(body.badge, 40)) ? str(body.badge, 40) : '') : prev.badge, prev.id,
     )
     .run();
   const row = await ownProduct(db, user.id, prev.id);

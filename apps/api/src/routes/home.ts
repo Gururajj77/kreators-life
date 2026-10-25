@@ -26,7 +26,7 @@ home.get('/', async (c) => {
   for (let i = 13; i >= 0; i -= 1) days.push(new Date(new Date(`${date}T00:00:00Z`).getTime() - i * 86_400_000).toISOString().slice(0, 10));
   const since = `${days[0]}T00:00:00`;
 
-  const [xpRows, taskRows, floors, pillars, sparkDone, waiting, doneRecently, unread, fin, dues, overdue, dueSoon, shopCounts, orderDays, events, bookings, circles, life, wb, journalDays, chat, srcRows, reads] = await Promise.all([
+  const [xpRows, taskRows, floors, pillars, sparkDone, waiting, doneRecently, unread, fin, dues, overdue, dueSoon, shopCounts, orderDays, events, bookings, circles, life, wb, journalDays, chat, srcRows, reads, runs] = await Promise.all([
     db.prepare('SELECT substr(created_at, 1, 10) AS d, SUM(amount) AS xp FROM xp_events WHERE user_id = ? AND created_at >= ? GROUP BY d').bind(user.id, since).all<{ d: string; xp: number }>(),
     db.prepare("SELECT substr(completed_at, 1, 10) AS d, COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? GROUP BY d").bind(user.id, since).all<{ d: string; n: number }>(),
     db.prepare('SELECT relationship, xp FROM relationship_scores WHERE user_id = ?').bind(user.id).all<{ relationship: RelationshipKey; xp: number }>(),
@@ -71,6 +71,7 @@ home.get('/', async (c) => {
     db.prepare("SELECT COUNT(*) AS n FROM chat_messages WHERE user_id = ? AND role = 'user'").bind(user.id).first<{ n: number }>(),
     db.prepare('SELECT source, SUM(amount) AS xp FROM xp_events WHERE user_id = ? AND created_at >= ? GROUP BY source').bind(user.id, since).all<{ source: string; xp: number }>(),
     db.prepare('SELECT id, title, kind, tags FROM resources WHERE published = 1 ORDER BY created_at DESC LIMIT 2').all<{ id: string; title: string; kind: string; tags: string }>(),
+    db.prepare("SELECT r.id, r.title, r.starts_at, r.club_id FROM runs r JOIN run_members m ON m.club_id = r.club_id AND m.user_id = ? AND m.status = 'member' WHERE r.status = 'published' AND r.starts_at >= ? ORDER BY r.starts_at ASC LIMIT 3").bind(user.id, new Date().toISOString()).all<{ id: string; title: string; starts_at: string; club_id: string }>(),
   ]);
 
   const xpByDay = new Map(xpRows.results.map((r) => [r.d, r.xp]));
@@ -128,6 +129,7 @@ home.get('/', async (c) => {
 
   const upNext: HomeUpNext[] = [
     ...events.results.map((e) => ({ kind: 'event' as const, title: e.title, at: e.starts_at, path: `/party/${e.id}` })),
+    ...runs.results.map((r) => ({ kind: 'run' as const, title: r.title, at: r.starts_at, path: `/run/clubs/${r.club_id}` })),
     ...bookings.results.map((b) => ({ kind: (b.buyer_id === user.id ? 'session' : 'booking') as 'session' | 'booking', title: b.title, at: b.starts_at, path: b.buyer_id === user.id ? '/library' : '/shop/bookings' })),
     ...circles.results.map((g) => ({
       kind: 'circle' as const,

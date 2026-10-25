@@ -6,7 +6,7 @@ import { SiteLayout } from './SiteLayout';
 type Kind = 'terms' | 'privacy' | 'refunds' | 'contact' | 'pricing';
 
 const TITLES: Record<Kind, { title: string; lede: string }> = {
-  terms: { title: 'Terms of use', lede: 'The plain-language rules for using Kreators Life. A draft for your lawyer to finish, dated 24 October 2026.' },
+  terms: { title: 'Terms of use', lede: 'The plain-language rules for using kreators.app. A draft for your lawyer to finish, dated 24 October 2026.' },
   privacy: { title: 'Privacy', lede: 'What we keep, why, who sees it, and how to take it with you or delete it.' },
   refunds: { title: 'Refunds and cancellations', lede: 'How money and points move back when something does not work out.' },
   contact: { title: 'Contact', lede: 'A person answers. Support tickets inside the app are fastest.' },
@@ -26,25 +26,25 @@ export function Policy({ kind }: { kind: Kind }) {
   return (
     <SiteLayout wide={false}>
       <header className="pt-lg">
-        <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-mute">Kreators Life</p>
+        <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-mute">kreators.app</p>
         <h1 className="mt-xs text-[clamp(32px,6vw,48px)]">{t.title}</h1>
         <P>{t.lede}</P>
       </header>
 
       {kind === 'terms' && (
         <section>
-          <H>What Kreators Life is</H>
-          <P>A daily game for the seven relationships of a life, with tools for people who make things: learning, paid work, brand campaigns, content rewards, events, a shop, finance and meetups. You need to be sixteen or older, or have a guardian's say-so.</P>
+          <H>What kreators.app is</H>
+          <P>A daily game for the seven relationships of a life, with tools for people who make things: learning, paid work, brand campaigns, content rewards, events, run clubs, a shop, finance and meetups. You need to be sixteen or older, or have a guardian's say-so.</P>
           <H>Your account</H>
           <P>You start with a session on your device and may add an email. Keep your password private. You are responsible for what happens under your account, and one person has one account.</P>
           <H>Points, rewards and money</H>
-          <P>Points are earned by showing up and can be spent inside Kreators Life. They are not money, cannot be cashed out, and have no value outside the app. Content rewards are paid in points after a reviewer confirms views; the pool and the rules on each reward are the whole deal. Money paid to creators through the shop goes through a payment provider under its own terms.</P>
+          <P>Points are earned by showing up and can be spent inside kreators.app. They are not money, cannot be cashed out, and have no value outside the app. Content rewards are paid in points after a reviewer confirms views; the pool and the rules on each reward are the whole deal. Money paid to creators through the shop goes through a payment provider under its own terms.</P>
           <H>What you make and sell</H>
           <P>You keep the rights to what you make. By selling through the shop you promise it is yours to sell, is not unlawful or hateful, and does not promise financial returns. Brands and creators agree usage rights on each campaign in writing before anything is produced.</P>
           <H>Fair play</H>
           <P>No farming points, no fake views, no scraping, no impersonation. We may remove content, hold payouts for review, or close accounts that break these rules, and we tell you why.</P>
           <H>Liability</H>
-          <P>Kreators Life is provided as it is. We are not liable for indirect loss, for what other members do, or for a provider's outage. Where the law does not allow this, our liability is limited to what you paid us in the last three months.</P>
+          <P>kreators.app is provided as it is. We are not liable for indirect loss, for what other members do, or for a provider's outage. Where the law does not allow this, our liability is limited to what you paid us in the last three months.</P>
           <H>Changes</H>
           <P>We will post changes here and in the app a week before they apply. Carrying on means you accept them.</P>
         </section>
@@ -53,7 +53,7 @@ export function Policy({ kind }: { kind: Kind }) {
       {kind === 'privacy' && (
         <section>
           <H>What we keep</H>
-          <P>Your profile (name, page name, bio, skills, interests, city), your areas and daily logs, wellbeing and journal entries, orders, bookings, finance entries, messages in circles, and the events your device sends while you use the app.</P>
+          <P>Your profile (name, page name, bio, skills, interests, city), your pillars and daily logs, wellbeing and journal entries, orders, bookings, finance entries, messages in circles, and the events your device sends while you use the app.</P>
           <H>Who sees what</H>
           <P>Your journal and wellbeing numbers are never shown to brands, staff, the leaderboard or Club selection. Your public page shows only what you put on it. Staff see what their permission covers. A circle sees your alias until you choose to reveal.</P>
           <H>Position</H>
@@ -101,7 +101,7 @@ export function Policy({ kind }: { kind: Kind }) {
             Create your organization from Army after signing in, or email <span className="select-all font-extrabold text-ink">brands@kreators.life</span>.
           </P>
           <H>Business address</H>
-          <P>Kreators Life, registered address to be added once the entity is set up.</P>
+          <P>kreators.app, registered address to be added once the entity is set up.</P>
         </section>
       )}
 

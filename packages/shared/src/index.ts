@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Kreators Life — shared domain model (used by both the web app and the API)
+// kreators.app — shared domain model (used by both the web app and the API)
 // ---------------------------------------------------------------------------
 
 export type RelationshipKey =
@@ -61,7 +61,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     color: '#FACC15',
     soft: '#FEF9C3',
     deep: '#A16207',
-    text: '#4F3422',
+    text: '#262626',
     greeting: "I'm Sunny. I carry the little one on my shoulder. Family first, everything else second.",
     question: 'Did family hear from you?',
   },
@@ -159,31 +159,31 @@ export const KIND_META: Record<NodeKind, KindMeta> = {
   principle: {
     kind: 'principle',
     rung: 2,
-    label: 'Rule',
-    plural: 'Rules',
-    prompt: 'A rule you live by so the base holds',
-    hint: 'A rule you live by so the base holds.',
-    explain: 'A rule you live by, so the base holds.',
+    label: 'Guiding principle',
+    plural: 'Guiding principles',
+    prompt: 'A line you live by so the foundation holds',
+    hint: 'A line you live by so the foundation holds.',
+    explain: 'Your guiding principle: a line you live by, so the foundation holds.',
     example: 'Everything else can wait ten minutes',
   },
   value_goal: {
     kind: 'value_goal',
     rung: 3,
-    label: 'Feeling',
-    plural: 'Feelings',
+    label: 'Value goal',
+    plural: 'Value goals',
     prompt: 'How you want to feel more often',
-    hint: 'How you want to feel. No numbers, just the feeling.',
-    explain: 'How you want to feel more often. No numbers, just the feeling.',
+    hint: 'How you want to feel more often. No numbers, just the feeling.',
+    explain: 'Your value goal: how you want to feel more often. No numbers, just the feeling.',
     example: 'Close to home',
   },
   outcome: {
     kind: 'outcome',
     rung: 4,
-    label: 'Proof',
-    plural: 'Proofs',
+    label: 'Goal outcome',
+    plural: 'Goal outcomes',
     prompt: 'What shows it is working',
-    hint: 'What you would see when the feeling is real.',
-    explain: 'What you would see when it is working. The proof.',
+    hint: 'What you would see when the value goal is real.',
+    explain: 'Your goal outcome: what you would see when it is working.',
     example: 'Family knows what my week was like',
   },
   project: {
@@ -769,12 +769,15 @@ export const BADGES: readonly Badge[] = [
   { key: 'first_task', name: 'First tick', emoji: '✅', how: 'Complete your first task' },
   { key: 'streak_3', name: 'Three in a row', emoji: '🔥', how: 'Check in three days running' },
   { key: 'streak_7', name: 'Full week', emoji: '🌈', how: 'Check in seven days running' },
-  { key: 'all_seven', name: 'All seven', emoji: '🏰', how: 'Set up every one of the seven areas' },
+  { key: 'all_seven', name: 'All seven', emoji: '🏰', how: 'Set up every one of the seven pillars' },
   { key: 'ten_tasks', name: 'Ripple maker', emoji: '🌊', how: 'Complete ten tasks' },
   { key: 'project_clear', name: 'Project cleared', emoji: '🏁', how: 'Finish every task in a project' },
   { key: 'level_5', name: 'Level five', emoji: '⭐', how: 'Reach level five' },
   { key: 'spark_5', name: 'Good hands', emoji: '⚡', how: 'Do five small acts' },
   { key: 'club_member', name: 'Club member', emoji: '🪪', how: 'Be accepted into the Club' },
+  { key: 'run_1', name: 'First run', emoji: '🏃', how: 'Log a run with a start code' },
+  { key: 'run_10', name: 'Ten runs', emoji: '👟', how: 'Log ten runs with your clubs' },
+  { key: 'run_100k', name: 'Hundred k', emoji: '🏅', how: 'Run a hundred kilometres with your clubs' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -1062,10 +1065,10 @@ export const periodKey = (p: Period) => `${p.kind}:${p.start}`;
 
 /** The prompts every review starts from. A person can add templates of their own on top. */
 export const REVIEW_PROMPTS: Record<PeriodKind, string[]> = {
-  week: ['What went well this week?', 'What got in the way?', 'Which area needs you most next week?', 'One thing to do differently next week.'],
+  week: ['What went well this week?', 'What got in the way?', 'Which pillar needs you most next week?', 'One thing to do differently next week.'],
   month: ['What are you proud of this month?', 'What did you let slide?', 'Which habits held, and which did not?', 'What will you change next month?'],
   quarter: ['What moved forward in the last three months?', 'What did you learn about how you work?', 'What should stop, and what should start?', 'The one focus for the next quarter.'],
-  half: ['Where is the year going so far?', 'Which of the seven areas grew the most, and which the least?', 'What do you want the second half to be about?', 'What would make December feel like a good year?'],
+  half: ['Where is the year going so far?', 'Which of the seven pillars grew the most, and which the least?', 'What do you want the second half to be about?', 'What would make December feel like a good year?'],
 };
 export const MAX_REVIEW_TEMPLATES = 12;
 export const MAX_REVIEW_PROMPTS = 10;
@@ -1127,6 +1130,9 @@ export interface PeriodNumbers {
   events: number;
   posts: number;
   circles: number;
+  /** Runs logged with a start code, and the metres they added up to. */
+  runs: number;
+  runMetres: number;
 }
 
 export interface ReviewSummary {
@@ -1242,7 +1248,7 @@ export const IDENTITY_STAGES: readonly EvolutionStage[] = [
   { stage: 1, name: 'Seed', minXp: 0, minDays: 0, blurb: 'Everything is still underground.' },
   { stage: 2, name: 'Sprout', minXp: 300, minDays: 3, blurb: 'First habits breaking the surface.' },
   { stage: 3, name: 'Climber', minXp: 900, minDays: 14, blurb: 'Your pyramids are holding weight.' },
-  { stage: 4, name: 'Steady hand', minXp: 2000, minDays: 45, blurb: 'All seven areas lit up.' },
+  { stage: 4, name: 'Steady hand', minXp: 2000, minDays: 45, blurb: 'All seven pillars lit up.' },
   { stage: 5, name: 'Luminary', minXp: 4000, minDays: 120, blurb: 'People climb because you did.' },
 ];
 
@@ -1293,7 +1299,7 @@ export interface Honor {
 }
 
 export const HONORS: readonly Honor[] = [
-  { key: 'pro', name: 'Pro', emoji: '💎', source: 'admin', how: 'Given by the Kreators team to pro members' },
+  { key: 'pro', name: 'Pro', emoji: '💎', source: 'admin', how: 'Given by the kreators.app team to pro members' },
   { key: 'founder', name: 'Founding member', emoji: '🏗️', source: 'admin', how: 'For the first hundred climbers' },
   { key: 'community_star', name: 'Community star', emoji: '🌟', source: 'admin', how: 'For lifting other people up' },
   { key: 'collab', name: 'Team player', emoji: '🤝', source: 'admin', how: 'For working with others in a way that moved people' },
@@ -1335,7 +1341,7 @@ export interface Reward {
 export const REWARDS: readonly Reward[] = [
   { key: 'stickers', name: 'Sticker pack', kind: 'merch', cost: 600, blurb: 'All seven characters, die-cut.' },
   { key: 'meetup', name: 'Meetup ticket', kind: 'event', cost: 1500, blurb: 'A seat at the next city meetup.' },
-  { key: 'tee', name: 'Kreators tee', kind: 'merch', cost: 2500, blurb: 'The seven characters, printed big.' },
+  { key: 'tee', name: 'kreators.app tee', kind: 'merch', cost: 2500, blurb: 'The seven characters, printed big.' },
   { key: 'coaching', name: 'One-to-one call', kind: 'event', cost: 4000, blurb: 'Forty minutes with a mentor.' },
 ];
 
@@ -1490,7 +1496,7 @@ export interface AppModule {
 export const MODULES: readonly AppModule[] = [
   { key: 'home', name: 'Home', blurb: 'Your numbers, your day, and a door into everything.', emoji: '🏠', group: 'core', path: '/home', defaultOn: true, locked: true, minRole: 'user' },
   { key: 'today', name: 'Daily', blurb: 'Your three boxes a day.', emoji: '☀️', group: 'core', path: '/today', defaultOn: true, locked: true, minRole: 'user' },
-  { key: 'tower', name: 'Areas', blurb: 'The seven areas of your life, one per relationship.', emoji: '🏰', group: 'core', path: '/tower', defaultOn: true, locked: true, minRole: 'user' },
+  { key: 'tower', name: 'Pillars', blurb: 'The seven pillars of your life, one per relationship.', emoji: '🏰', group: 'core', path: '/tower', defaultOn: true, locked: true, minRole: 'user' },
   { key: 'search', name: 'Search', blurb: 'Find anything you wrote, bought, applied to or read.', emoji: '🔍', group: 'core', path: '/search', defaultOn: true, locked: true, minRole: 'user' },
   { key: 'notifications', name: 'Inbox', blurb: 'What happened while you were away, and daily reminders.', emoji: '🔔', group: 'core', path: '/inbox', defaultOn: true, minRole: 'user' },
   { key: 'help', name: 'Help', blurb: 'Answers to common questions, and a line to the team.', emoji: '🛟', group: 'core', path: '/help', defaultOn: true, minRole: 'user' },
@@ -1501,6 +1507,7 @@ export const MODULES: readonly AppModule[] = [
   { key: 'win', name: 'Win', blurb: 'Content rewards: make a video about a brand, get paid per verified view.', emoji: '🥇', group: 'earn', path: '/win', defaultOn: false, minRole: 'user', accent: 'parent_child' },
 
   { key: 'party', name: 'Party', blurb: 'Meetups, workshops, camps and flagship days. RSVP, waitlist, check in.', emoji: '🎉', group: 'community', path: '/party', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  { key: 'run', name: 'Kreators Run', blurb: 'Run clubs near you. A start code at the line logs your run and pays points. Kilometres, badges, and brand collabs with giveaways.', emoji: '🏃', group: 'community', path: '/run', defaultOn: false, minRole: 'user', accent: 'friendship' },
   { key: 'community', name: 'Community', blurb: 'Posts, replies and likes, by category.', emoji: '🫶', group: 'community', path: '/community', defaultOn: false, minRole: 'user', accent: 'friendship' },
   { key: 'club', name: 'Club', blurb: 'A curated membership with benefits and exclusive opportunities.', emoji: '🪪', group: 'community', path: '/club', defaultOn: false, minRole: 'user', accent: 'friendship' },
   { key: 'bond', name: 'Bond', blurb: 'Friends, introductions, and anonymous chats with people you met.', emoji: '🤝', group: 'community', path: '/bond', defaultOn: false, minRole: 'user', accent: 'friendship' },
@@ -1522,7 +1529,7 @@ export const MODULES: readonly AppModule[] = [
   { key: 'audience', name: 'Audience', blurb: 'Followers, leads, broadcasts and your affiliate link.', emoji: '📣', group: 'creator', path: '/shop/audience', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
   { key: 'content', name: 'Content', blurb: 'Which post made money: tracked links, views and revenue per piece of content.', emoji: '📈', group: 'creator', path: '/shop/content', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
   { key: 'automations', name: 'Auto-DM', blurb: 'Comment a keyword, get a link in DMs. Funnels show where people drop off.', emoji: '🤖', group: 'creator', path: '/shop/automations', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
-  { key: 'finance', name: 'Finance', blurb: 'Money in, money out, invoices, budgets and a monthly picture of your creator business.', emoji: '💰', group: 'creator', path: '/finance', defaultOn: false, minRole: 'user', accent: 'parent_child' },
+  { key: 'finance', name: 'Finance', blurb: 'Money in, money out, dues, budgets, goals and a monthly picture of your creator business.', emoji: '💰', group: 'creator', path: '/finance', defaultOn: false, minRole: 'user', accent: 'parent_child' },
   { key: 'library', name: 'My purchases', blurb: 'Courses, downloads, memberships, tickets and sessions you own.', emoji: '🎒', group: 'creator', path: '/library', defaultOn: false, minRole: 'user', accent: 'guru' },
   { key: 'knowledge', name: 'Knowledge', blurb: 'Curated articles and exercises with their sources.', emoji: '📚', group: 'creator', path: '/knowledge', defaultOn: false, minRole: 'user', accent: 'guru' },
   { key: 'tools', name: 'Tools', blurb: 'A directory of creator tools, verified by the team.', emoji: '🧰', group: 'creator', path: '/tools', defaultOn: false, minRole: 'user', accent: 'guru' },
@@ -1646,7 +1653,7 @@ export const MOODS: readonly MoodOption[] = [
   { value: 1, name: 'Low', emoji: '😞', color: '#7F45E2', text: '#FFFFFF' },
   { value: 2, name: 'Sad', emoji: '😔', color: '#FB8728', text: '#FFFFFF' },
   { value: 3, name: 'Neutral', emoji: '😐', color: '#926247', text: '#FFFFFF' },
-  { value: 4, name: 'Happy', emoji: '🙂', color: '#FACC15', text: '#4F3422' },
+  { value: 4, name: 'Happy', emoji: '🙂', color: '#FACC15', text: '#262626' },
   { value: 5, name: 'Overjoyed', emoji: '😄', color: '#9BB068', text: '#FFFFFF' },
 ];
 
@@ -1702,6 +1709,9 @@ export interface CommunityPost {
   authorName: string;
   authorHandle: string | null;
   authorPro: boolean;
+  /** Whether the viewer follows the author, and how many people do. */
+  authorFollowing: boolean;
+  authorFollowers: number;
   category: string;
   body: string;
   /** Members-only posts belong to a membership product. */
@@ -1780,7 +1790,7 @@ export interface PublicSettings {
   showProducts: boolean;
   /** Your community posts, on your page. */
   showPosts: boolean;
-  /** Level, streak, areas set up. Never the journal or wellbeing. */
+  /** Level, streak, pillars set up. Never the journal or wellbeing. */
   showActivity: boolean;
   /** The badges you earned and the honors you were awarded. */
   showBadges: boolean;
@@ -1796,7 +1806,7 @@ export const PUBLIC_SETTING_META: { key: keyof PublicSettings; name: string; blu
   { key: 'showPortfolio', name: 'Show my portfolio', blurb: 'Your public portfolio items.' },
   { key: 'showProducts', name: 'Show what I sell', blurb: 'Products from your shop.' },
   { key: 'showPosts', name: 'Show my posts', blurb: 'Your posts in the community feed, on your page too.' },
-  { key: 'showActivity', name: 'Show my activity', blurb: 'Level, streak and how many areas are set up. Never your journal or wellbeing.' },
+  { key: 'showActivity', name: 'Show my activity', blurb: 'Level, streak and how many pillars are set up. Never your journal or wellbeing.' },
   { key: 'showBadges', name: 'Show my badges', blurb: 'The badges you earned and any honors the team awarded you.' },
   { key: 'allowFriendRequests', name: 'Let people add me as a friend', blurb: 'Off hides the Add friend button.' },
   { key: 'allowChats', name: 'Let friends start a chat', blurb: 'Anonymous, under aliases. Off means nobody can open one with you.' },
@@ -2011,6 +2021,9 @@ export interface Product {
   maxDaysAhead: number;
   /** Memberships: how many months one purchase lasts. Null means it never ends. */
   periodMonths: number | null;
+  /** Who can buy: a points balance to reach, a badge to hold, or both. Zero and empty mean anyone. */
+  minPoints: number;
+  badge: string;
 }
 
 export interface Lesson {
@@ -2149,6 +2162,8 @@ export interface PublicPage {
   portfolio: PortfolioItem[];
   isPro: boolean;
   followers: number;
+  /** How much this person has proved, from what they earned. */
+  trust: TrustScore;
   following: boolean;
   products: Product[];
   testimonials: Testimonial[];
@@ -2674,9 +2689,9 @@ export type LifeAreaKey = 'physical' | 'financial' | 'emotional' | 'mental' | 's
 export const LIFE_AREAS: Record<LifeAreaKey, { name: string; emoji: string; blurb: string; path: string; relationship: RelationshipKey }> = {
   physical: { name: 'Physical', emoji: '🏃', blurb: 'Sleep, movement and breath.', path: '/wellbeing', relationship: 'self' },
   financial: { name: 'Financial', emoji: '💰', blurb: 'What comes in, what goes out, where you are heading.', path: '/finance', relationship: 'servant_leader' },
-  emotional: { name: 'Emotional', emoji: '💛', blurb: 'Mood, what you wrote, and the people areas.', path: '/mood', relationship: 'lover_partner' },
+  emotional: { name: 'Emotional', emoji: '💛', blurb: 'Mood, what you wrote, and the people pillars.', path: '/mood', relationship: 'lover_partner' },
   mental: { name: 'Mental', emoji: '🧠', blurb: 'Stress, focus, and what you are learning.', path: '/stress', relationship: 'guru' },
-  spiritual: { name: 'Spiritual', emoji: '✨', blurb: 'Stillness, awe, and the top two areas.', path: '/mindful', relationship: 'divine' },
+  spiritual: { name: 'Spiritual', emoji: '✨', blurb: 'Stillness, awe, and the top two pillars.', path: '/mindful', relationship: 'divine' },
 };
 
 export interface LifePart {
@@ -2870,6 +2885,11 @@ export interface SearchResults {
   resources: { id: string; title: string; kind: ResourceKind }[];
   products: { id: string; title: string; kind: ProductKind; ownerHandle: string | null }[];
   people: { handle: string; name: string }[];
+  items: { id: string; title: string; category: string }[];
+  listings: { id: string; title: string; condition: string }[];
+  tools: { id: string; title: string; category: string }[];
+  posts: { id: string; body: string; authorName: string }[];
+  clubs: { id: string; title: string; city: string }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -3185,6 +3205,197 @@ export interface EventRegistration {
 }
 
 // ---------------------------------------------------------------------------
+// Kreators Run — run clubs, start codes, tracking, brand collabs with giveaways
+// ---------------------------------------------------------------------------
+
+export const RUN_PACES = ['easy', 'steady', 'fast', 'all'] as const;
+export type RunPace = (typeof RUN_PACES)[number];
+export const RUN_PACE_META: Record<RunPace, { name: string; blurb: string }> = {
+  easy: { name: 'Easy', blurb: 'Talk the whole way. Walk breaks welcome.' },
+  steady: { name: 'Steady', blurb: 'A pace you can hold for an hour.' },
+  fast: { name: 'Fast', blurb: 'Tempo runs and intervals.' },
+  all: { name: 'All paces', blurb: 'Groups split at the start.' },
+};
+/** What one logged run pays. Paid by the start code, once per run, at most twice a day. */
+export const RUN_REWARD = { xp: 20, points: 10, perDay: 2 } as const;
+/** How long before the start and after the end a start code still works, in minutes. */
+export const RUN_CODE_WINDOW = { before: 30, after: 180 } as const;
+export const RUN_CODE_LENGTH = 6;
+export const MAX_RUN_METRES = 100_000;
+export const MAX_RUN_MINUTES = 600;
+/** Run badges: logged runs or metres each one needs. */
+export const RUN_BADGES = { run_1: { runs: 1, metres: 0 }, run_10: { runs: 10, metres: 0 }, run_100k: { runs: 0, metres: 100_000 } } as const;
+
+export type RunEntryState = 'early' | 'open' | 'closed';
+/** Whether a start code can be entered now: early before the window opens, closed once it has passed. */
+export function runEntryState(startsAt: string, endsAt: string, now: Date = new Date()): RunEntryState {
+  const t = now.getTime();
+  if (t < new Date(startsAt).getTime() - RUN_CODE_WINDOW.before * 60_000) return 'early';
+  if (t > new Date(endsAt).getTime() + RUN_CODE_WINDOW.after * 60_000) return 'closed';
+  return 'open';
+}
+/** Metres as a short kilometre label: 5000 is "5 km", 7500 is "7.5 km". */
+export function kmLabel(metres: number): string {
+  const km = Math.round(metres / 100) / 10;
+  return `${Number.isInteger(km) ? km : km.toFixed(1)} km`;
+}
+/** Minutes per kilometre as "5:30 /km". Null when either number is missing. */
+export function paceLabel(metres: number, minutes: number): string | null {
+  if (metres <= 0 || minutes <= 0) return null;
+  const secPerKm = Math.round((minutes * 60) / (metres / 1000));
+  return `${Math.floor(secPerKm / 60)}:${String(secPerKm % 60).padStart(2, '0')} /km`;
+}
+/** The Monday that starts the week a date falls in. */
+export function weekStart(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  const back = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - back);
+  return d.toISOString().slice(0, 10);
+}
+/** Weeks in a row with at least one run, counting back from this week; last week keeps the run alive until this one has a run. */
+export function weekStreak(dates: readonly string[], today: string): number {
+  const weeks = new Set(dates.map(weekStart));
+  let w = weekStart(today);
+  if (!weeks.has(w)) w = shiftDay(w, -7);
+  let n = 0;
+  while (weeks.has(w)) {
+    n += 1;
+    w = shiftDay(w, -7);
+  }
+  return n;
+}
+
+export interface RunClub {
+  id: string;
+  name: string;
+  city: string;
+  description: string;
+  pace: RunPace;
+  /** When and where the club usually meets, in the host's words. */
+  meets: string;
+  hostId: string;
+  hostName: string;
+  visibility: 'public' | 'private';
+  status: 'active' | 'closed';
+  members: number;
+  nextRunAt: string | null;
+  /** You are a member (hosts are members too). */
+  mine: boolean;
+  host: boolean;
+  createdAt: string;
+}
+
+export interface RunEntry {
+  id: string;
+  runId: string;
+  userId: string;
+  name: string;
+  metres: number;
+  minutes: number;
+  status: 'logged' | 'void';
+  loggedAt: string;
+}
+
+export interface Run {
+  id: string;
+  clubId: string;
+  title: string;
+  meetingPoint: string;
+  startsAt: string;
+  endsAt: string;
+  /** The planned distance. */
+  metres: number;
+  /** The start code. Only the host sees it; everyone else gets null. */
+  code: string | null;
+  entryState: RunEntryState;
+  collab: { id: string; title: string; brand: string; giveaway: string } | null;
+  status: 'published' | 'cancelled' | 'done';
+  entries: number;
+  mine: RunEntry | null;
+  createdAt: string;
+}
+
+export interface RunCollab {
+  id: string;
+  title: string;
+  brand: string;
+  organizationId: string | null;
+  posterId: string;
+  brief: string;
+  /** What the brand asks of the club: a post, a tag, a photo at the line. */
+  asks: string;
+  /** What runners can win, in plain words. */
+  giveaway: string;
+  /** How many of the giveaway there are. 0 when it is not counted. */
+  giveawayCount: number;
+  city: string;
+  startsAt: string;
+  endsAt: string;
+  status: 'open' | 'closed';
+  applications: number;
+  accepted: number;
+  /** Your clubs' applications to this collab. */
+  mine: RunCollabApplication[];
+  /** You posted it, or you hold the events permission. */
+  poster: boolean;
+  createdAt: string;
+}
+
+export interface RunCollabApplication {
+  id: string;
+  collabId: string;
+  clubId: string;
+  clubName: string;
+  hostName: string;
+  note: string;
+  status: 'applied' | 'accepted' | 'declined';
+  createdAt: string;
+}
+
+export interface RunTracking {
+  runs: number;
+  metres: number;
+  minutes: number;
+  monthRuns: number;
+  monthMetres: number;
+  weekStreak: number;
+  /** Metres per day over the last thirty days, oldest first. */
+  days: { date: string; metres: number }[];
+  badges: string[];
+}
+
+export interface RunResponse {
+  clubs: RunClub[];
+  mine: RunClub[];
+  /** Runs coming up in your clubs. */
+  upcoming: Run[];
+  tracking: RunTracking;
+  collabsOpen: number;
+  canPostCollab: boolean;
+}
+
+export interface RunClubDetail {
+  club: RunClub;
+  runs: Run[];
+  past: Run[];
+  /** Kilometres this month per member, most first. */
+  board: { userId: string; name: string; metres: number; runs: number }[];
+  /** Collabs the club was accepted into. */
+  collabs: RunCollab[];
+  /** For the host: every entry on the club's runs, newest first. */
+  entries: RunEntry[];
+}
+
+export interface RunCollabsResponse {
+  collabs: RunCollab[];
+  /** Clubs you host, to apply with. */
+  myClubs: RunClub[];
+  canPost: boolean;
+  /** For posters: applications to your collabs, newest first. */
+  applications: (RunCollabApplication & { collabTitle: string })[];
+}
+
+// ---------------------------------------------------------------------------
 // Club, Win, Bond, Tools, proposals, support
 // ---------------------------------------------------------------------------
 
@@ -3408,8 +3619,622 @@ export interface Tool {
   featuredUntil: string | null;
   /** Taps on the partner link so far. */
   clicks: number;
+  minPoints: number;
+  badge: string;
+  unlock: Unlock;
 }
 
+
+// ---------------------------------------------------------------------------
+// Social: what the feed can sort and filter by, what each action pays, and the trust score a seller carries
+// ---------------------------------------------------------------------------
+
+export const FEED_SORTS = ['recent', 'popular', 'talked'] as const;
+export type FeedSort = (typeof FEED_SORTS)[number];
+export const FEED_SORT_META: Record<FeedSort, string> = { recent: 'Recent', popular: 'Popular', talked: 'Most replies' };
+export const FEED_FILTERS = ['all', 'following', 'mine'] as const;
+export type FeedFilter = (typeof FEED_FILTERS)[number];
+export const FEED_FILTER_META: Record<FeedFilter, string> = { all: 'Everyone', following: 'Following', mine: 'Mine' };
+
+/** What a social action pays, and how many times a day it can. Small on purpose: the point is to show up, not to farm. */
+export const SOCIAL_REWARDS = {
+  post: { xp: 5, points: 0, perDay: 3, label: 'a post' },
+  reply: { xp: 2, points: 0, perDay: 5, label: 'a reply' },
+  like: { xp: 1, points: 0, perDay: 10, label: 'a like you give' },
+  liked: { xp: 0, points: 1, perDay: 20, label: 'a like on your post' },
+  follower: { xp: 0, points: 2, perDay: 20, label: 'a new follower' },
+} as const;
+export type SocialRewardKind = keyof typeof SOCIAL_REWARDS;
+export interface SocialAward {
+  xp: number;
+  points: number;
+}
+
+/** What a trust score is made of: things that take time and work to earn, never a claim. */
+export interface TrustInput {
+  xp: number;
+  pointsEarned: number;
+  bestStreak: number;
+  daysHere: number;
+  sold: number;
+  rating: number | null;
+  honors: number;
+}
+export interface TrustPart {
+  label: string;
+  value: string;
+  score: number;
+}
+export interface TrustScore {
+  score: number;
+  label: string;
+  parts: TrustPart[];
+}
+const TRUST_LABELS: [number, string][] = [
+  [75, 'Well trusted'],
+  [50, 'Trusted'],
+  [25, 'Getting known'],
+  [0, 'New here'],
+];
+const cap100 = (v: number) => Math.max(0, Math.min(100, Math.round(v)));
+
+/**
+ * One number out of a hundred for how much a seller has proved, built only from what they earned:
+ * xp, points, a best streak, time here, sales and their rating, and honors from the team.
+ * Nothing here can be typed in; it all comes from showing up.
+ */
+export function trustScore(i: TrustInput): TrustScore {
+  const parts: (TrustPart & { weight: number })[] = [
+    { label: 'Xp earned', value: `${i.xp.toLocaleString()} xp`, score: cap100(i.xp / 20), weight: 30 },
+    { label: 'Points earned', value: `${i.pointsEarned.toLocaleString()} points`, score: cap100(i.pointsEarned / 5), weight: 20 },
+    { label: 'Best streak', value: `${i.bestStreak} ${i.bestStreak === 1 ? 'day' : 'days'} in a row`, score: cap100(i.bestStreak * 5), weight: 15 },
+    { label: 'Time here', value: i.daysHere < 1 ? 'joined today' : `${i.daysHere} ${i.daysHere === 1 ? 'day' : 'days'}`, score: cap100(i.daysHere / 1.8), weight: 15 },
+    { label: 'Sales', value: i.sold === 0 ? 'none yet' : `${i.sold} sold${i.rating ? `, rated ${i.rating.toFixed(1)}` : ''}`, score: i.sold === 0 ? 0 : cap100((cap100(i.sold * 10) + (i.rating ? (i.rating / 5) * 100 : 70)) / 2), weight: 10 },
+    { label: 'Honors', value: i.honors === 0 ? 'none yet' : `${i.honors} from the team`, score: cap100(i.honors * 34), weight: 10 },
+  ];
+  const score = cap100(parts.reduce((s, p) => s + p.score * p.weight, 0) / 100);
+  const label = TRUST_LABELS.find(([at]) => score >= at)?.[1] ?? 'New here';
+  return { score, label, parts: parts.map(({ label, value, score }) => ({ label, value, score })) };
+}
+
+// ---------------------------------------------------------------------------
+// Unlocks and the earning guide: what a thing asks for before you can have it, and how everything pays
+// ---------------------------------------------------------------------------
+
+/** What a product, store item or tool asks for, and whether this viewer meets it. */
+export interface Unlock {
+  minPoints: number;
+  badge: string;
+  ok: boolean;
+  /** Plain words for the lock, empty when open. */
+  why: string;
+}
+export function badgeName(key: string): string {
+  return BADGES.find((b) => b.key === key)?.name ?? HONORS.find((h) => h.key === key)?.name ?? key;
+}
+export const isBadgeKey = (key: string): boolean => BADGES.some((b) => b.key === key) || HONORS.some((h) => h.key === key);
+/** The one unlock rule: the points balance has to reach the floor, and the badge has to be held. */
+export function unlockFor(ask: { minPoints: number; badge: string }, have: { points: number; badges: readonly string[] } | null): Unlock {
+  const needsPoints = ask.minPoints > 0;
+  const needsBadge = Boolean(ask.badge);
+  if (!needsPoints && !needsBadge) return { minPoints: 0, badge: '', ok: true, why: '' };
+  if (!have) return { minPoints: ask.minPoints, badge: ask.badge, ok: false, why: `Sign in to open this. It asks for ${[needsPoints ? `${ask.minPoints} points` : '', needsBadge ? `the ${badgeName(ask.badge)} badge` : ''].filter(Boolean).join(' and ')}.` };
+  const short: string[] = [];
+  if (needsPoints && have.points < ask.minPoints) short.push(`${ask.minPoints} points, you have ${have.points}`);
+  if (needsBadge && !have.badges.includes(ask.badge)) short.push(`the ${badgeName(ask.badge)} badge`);
+  return { minPoints: ask.minPoints, badge: ask.badge, ok: short.length === 0, why: short.length ? `Needs ${short.join(' and ')}.` : '' };
+}
+
+/** The next badge to go for, by the order they are listed. */
+export function nextBadge(earned: readonly string[]): Badge | null {
+  return BADGES.find((b) => !earned.includes(b.key)) ?? null;
+}
+
+export interface EarningLine {
+  what: string;
+  pays: string;
+  how: string;
+}
+/** How everything pays, in one place. Nudges around the app point here and quote single lines. A function, so it can quote constants declared further down. */
+export function earningGuide(): { title: string; lines: EarningLine[] }[] {
+  return [
+  {
+    title: 'Every day',
+    lines: [
+      { what: 'Check in', pays: `${XP.checkin} xp and ${POINTS.checkin} points`, how: 'The first box on Daily.' },
+      { what: 'A week in a row', pays: `${POINTS.streakBonus} points more`, how: `Every ${POINTS.streakBonusEvery}th day of a check-in streak.` },
+      { what: 'The small act', pays: `${XP.spark} xp`, how: 'Two minutes for your weakest pillar.' },
+      { what: 'A task', pays: `${XP.task} xp`, how: 'Six a day pay. The rest still count as done.' },
+      { what: 'A kept day on the not-to-do list', pays: `${XP.notToDo} xp`, how: 'Tick what you stayed away from.' },
+      { what: 'Clearing a project', pays: `${XP.projectClear} xp`, how: 'Every task in it done.' },
+    ],
+  },
+  {
+    title: 'With people',
+    lines: [
+      { what: 'A post', pays: `${SOCIAL_REWARDS.post.xp} xp`, how: `Up to ${SOCIAL_REWARDS.post.perDay} a day.` },
+      { what: 'A reply', pays: `${SOCIAL_REWARDS.reply.xp} xp`, how: `Up to ${SOCIAL_REWARDS.reply.perDay} a day.` },
+      { what: 'A like you give', pays: `${SOCIAL_REWARDS.like.xp} xp`, how: `Up to ${SOCIAL_REWARDS.like.perDay} a day.` },
+      { what: 'A like on your post', pays: `${SOCIAL_REWARDS.liked.points} point`, how: 'Paid to you, once per person per post.' },
+      { what: 'A new follower', pays: `${SOCIAL_REWARDS.follower.points} points`, how: 'Paid to you, once per person.' },
+      { what: 'A run with a club', pays: `${RUN_REWARD.xp} xp and ${RUN_REWARD.points} points`, how: `Enter the start code during the run. Once per run, ${RUN_REWARD.perDay} runs a day.` },
+    ],
+  },
+  {
+    title: 'Making and selling',
+    lines: [
+      { what: 'A sale in your Shop', pays: 'the price in points, minus the fee', how: 'Downloads, courses, sessions, events and more.' },
+      { what: 'Campaigns and bounties', pays: 'points per verified view', how: 'Under Win and Army.' },
+      { what: 'A featured week in the Store', pays: `costs ${FEATURE_FEE_POINTS} points`, how: 'Your pre-owned listing at the top for seven days.' },
+    ],
+  },
+  {
+    title: 'Badges',
+    lines: BADGES.map((b) => ({ what: `${b.emoji} ${b.name}`, pays: 'a badge on your page', how: b.how })),
+  },
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// How each app works, in three steps, and the words we made up, in plain ones
+// ---------------------------------------------------------------------------
+
+/** Every term the app coined, with its meaning. Shown under "Words we use" and in each app's how-to. */
+export const TERMS: Record<string, string> = {
+  pillar: 'One of the seven relationships in your life, as a place in the app. Each pillar is a pyramid.',
+  pyramid: 'How a pillar is built: a foundation at the base, then a guiding principle, a value goal, a goal outcome, a project, and tasks at the tip.',
+  foundation: 'The base of a pillar: one thing you will not let break, ever.',
+  'guiding principle': 'The second layer: a line you live by, so the foundation holds.',
+  'value goal': 'The third layer: how you want to feel more often. No numbers, just the feeling.',
+  'goal outcome': 'The fourth layer: what you would see when the value goal is real.',
+  project: 'The fifth layer: a bunch of tasks with a finish line.',
+  task: 'The tip of the pyramid: one small thing you can tick off today. Each one pays xp and sends a ripple down.',
+  'small act': 'One two-minute thing a day for your weakest pillar, picked for you.',
+  'check-in': 'The first box on Daily. Ten xp, ten points, and it keeps your streak.',
+  streak: 'Days in a row. A check-in streak pays extra every seventh day.',
+  xp: 'Progress. It fills your level and your pillars. It is never spent.',
+  points: 'Spendable. Earned by showing up and selling, spent on rewards and featured spots.',
+  level: 'Where your xp has got you. Each level needs more than the last.',
+  badge: 'Proof you did something, earned by the app\'s own count. It sits on your public page.',
+  honor: 'A badge the team gives, or time unlocks.',
+  ripple: 'Xp that runs down from a ticked task to every layer under it.',
+  'daily three': 'Check in, the small act, one task.',
+  'not-to-do': 'Things you stay away from, each with its own streak of kept days.',
+  'kept day': 'A day you ticked a not-to-do: you stayed away from it.',
+  'who you are becoming': 'The character on Daily that changes as your xp grows.',
+  'life score': 'One number for the five areas of life, from what you log.',
+  'five areas of life': 'Physical, financial, emotional, mental and spiritual: another way to read the seven relationships.',
+  period: 'A week, a month, a quarter or half a year, for a review or a dashboard filter.',
+  review: 'Your own look back at a period: the numbers from every app, then your answers.',
+  trust: 'A score out of 100 from what a seller earned here: xp, points, streaks, time, sales and honors.',
+  featured: 'A week at the top of the Store or Tools. Staff give it; a seller pays 200 points.',
+  'partner link': 'A link to another shop. kreators.app may earn a share if you buy.',
+  'pre-owned': 'Gear another creator is selling. You make an offer; the two of you settle the rest.',
+  kit: 'What to buy at a stage, within a budget: new and pre-owned pieces added up.',
+  offer: 'Your price for a pre-owned piece. The seller accepts or declines.',
+  unlock: 'Some things ask for a points balance, a badge, or both before you can buy them.',
+  Pro: 'A paid membership with more room and the Pro mark.',
+  Club: 'A curated membership the team reviews you into.',
+  cohort: 'A group that goes through a program together, with dates.',
+  campaign: 'A brand brief that pays points per verified view.',
+  bounty: 'A smaller brief with a fixed prize for the best entries.',
+  'public page': 'Your page at kreators.app/u/you: links, products, posts and badges you choose to show.',
+  circle: 'A small anonymous table near you, matched by interests, that meets once.',
+  alias: 'The made-up name you carry in circles and Bond chats. Nobody sees the real one.',
+  guide: 'A team member who keeps the community kind.',
+  'run club': 'A group that runs together. Anyone can start one; members log runs with the start code.',
+  'start code': 'Six letters the host shows at the start line. Enter it during the run and your entry is logged, once. That is how a run pays points without anyone cheating.',
+  collab: 'A brand offer to run clubs: what the brand gives, what it asks, and a giveaway for the runners. A host applies with the club.',
+  giveaway: 'What a brand gives runners at a collab run: shoes, a kit, a voucher. Listed on the collab before anyone applies.',
+};
+
+export interface HowTo {
+  /** Three to five concrete steps, each a sentence or two: what happens, what it pays, where it goes. */
+  steps: string[];
+  terms: string[];
+}
+/** How every app works, by module key, shown at the bottom of its main screen, plus the terms it leans on. */
+export const HOW_TO: Record<string, HowTo> = {
+  home: {
+    steps: [
+      'Home opens after sign-in and answers “how am I doing” before “what do I do”. The top tiles are your streak, xp today, points and level.',
+      'Under them sits what moves those numbers: the three boxes on Daily, your trackers, and your money and shop when those apps are on.',
+      'Up next lists the events, runs, sessions and circles you are booked into, soonest first.',
+      'Pick a period at the bottom to see the same numbers by week, month, quarter or half year, next to the period before.',
+      'The search box at the top finds apps, tasks, people, products and more as you type.',
+    ],
+    terms: ['xp', 'points', 'level', 'streak', 'period'],
+  },
+  today: {
+    steps: [
+      'Daily is three boxes a day: check in, do the small act, tick one task. Checking in pays 10 xp and 10 points and keeps your streak; every seventh day in a row pays 50 points more.',
+      'The small act is a two-minute thing for your weakest pillar, picked for you each day. It pays 15 xp.',
+      'Tasks come from the pillars you set up. Each pays 20 xp and sends a ripple down its pyramid. A task with a date waits for that day, and a new task waits ten minutes before it can be ticked.',
+      'Under the tasks, the not-to-do list holds up to seven things you are staying away from. Tick one to say you kept it today: a kept day pays 5 xp and grows that item’s streak. A slip or a missed day starts the streak over.',
+      'At the bottom, who you are becoming shows the figure your xp is filling in, and how far away the next form is.',
+    ],
+    terms: ['daily three', 'check-in', 'small act', 'task', 'not-to-do', 'kept day', 'who you are becoming'],
+  },
+  tower: {
+    steps: [
+      'Seven pillars, one for each relationship in your life. Tap one that is not set up and answer a short vibe check, three taps per pillar. You never fill in a form.',
+      'Each pillar is a pyramid with six layers. The foundation is the one thing you will not let break. The guiding principle is a line you live by so it holds. The value goal is how you want to feel more often. The goal outcome is what you would see when that is real. Then a project, and tasks at the tip.',
+      'Your answers build the lower four layers; you pick or write the project and its tasks. Tick a task on Daily and the glow runs down to the base: 20 xp for the task, then a smaller ripple to each layer under it. Clear every task in a project for 30 xp more.',
+      'Every pillar has a level and a character that grows with it. The weakest pillar is the one that sends your small act.',
+      'Open a pillar to see its pyramid, add tasks, give them dates and times, and archive what no longer fits.',
+    ],
+    terms: ['pillar', 'pyramid', 'foundation', 'guiding principle', 'value goal', 'goal outcome', 'project', 'task', 'ripple'],
+  },
+  apps: {
+    steps: [
+      'Every part of the app is a switch here. Apps sit in groups by what they are for: Contribution, Creation, Connection, Reflection, Essentials and Operations.',
+      'An app that is on opens when you tap it. A grey one is off: tap it and a sheet explains it and asks before switching it on.',
+      'An app you switch on joins the laptop sidebar under its group, and the phone menu under the top-right button.',
+      'Switching off happens under Profile, Features, where the same groups and switches live.',
+      'Only a few apps start on: School, Work, Army, Journal, Life, Shop and Public page. The rest wait until you want them.',
+    ],
+    terms: [],
+  },
+  you: {
+    steps: [
+      'Your account, your badges and honors, and the figure you are becoming all live here.',
+      'Badges are earned by the app’s own count: your first task, streaks, ten tasks, a cleared project, level five, small acts, the Club, and runs. Honors are given by the team or unlocked by time here.',
+      'Under Account, add an email and password so your progress survives this device, change the password, export your data, or delete the account.',
+      'Under Features, switch apps on or off, in the same groups and colours as the Apps page. Appearance picks light, dark or auto.',
+      'See my public page shows exactly what other people see at your address.',
+    ],
+    terms: ['badge', 'honor', 'who you are becoming', 'public page'],
+  },
+  profile: {
+    steps: [
+      'Your public page is your door into the app, at kreators.app/u/your-handle. Pick a handle first.',
+      'Choose what shows: one switch for the whole page, then social icons, links, portfolio, products, posts, activity, badges, friend requests and chats. Each part has its own switch.',
+      'Add link blocks like a link-in-bio: plain or featured links, headers, text, pictures, YouTube videos and carousels, stacked in any order. Taps on them are counted for you alone.',
+      'Your trust score sits in the page header, built only from what you earned here: xp, points, streaks, time, sales and honors.',
+      'Journal and wellbeing never appear on a page, whatever the switches say.',
+    ],
+    terms: ['public page', 'trust'],
+  },
+  school: {
+    steps: [
+      'School is programs with lessons, assignments and a mentor who reads your work. Two real programs are in: Editing fundamentals, and Skills using ChatCut and AI.',
+      'Pick a program and a cohort date. Open cohorts run at your own pace.',
+      'Do the lessons in order, send each assignment, and join the live sessions. Every lesson links the file it was written from.',
+      'A mentor leaves feedback and approves or returns an assignment. Completion is their decision against the criteria, never a timer running out.',
+      'A finished program gives a certificate under My purchases.',
+    ],
+    terms: ['cohort'],
+  },
+  work: {
+    steps: [
+      'Brands and the team post gigs, roles, campaigns and collabs. The list shows who each one is for, what it pays and when it closes.',
+      'Apply once with a short note. Your portfolio from Public page comes with it.',
+      'Follow every step in one place: submitted, shortlisted, selected or declined, completed. Each change lands in your inbox.',
+      'Club members get the first look at club-only openings.',
+    ],
+    terms: [],
+  },
+  army: {
+    steps: [
+      'Army is brand campaigns run properly. A brand writes a brief and a budget; the team scopes it and shortlists creators who fit.',
+      'If you are shortlisted, the brand approves, then you produce. Versions, feedback and approvals live in one thread on the campaign.',
+      'Usage rights and exclusivity are written down before anyone shoots.',
+      'Points for verified views arrive after a reviewer confirms the numbers and finance pays. Nothing pays on a claim.',
+    ],
+    terms: ['campaign', 'points'],
+  },
+  win: {
+    steps: [
+      'Win is content rewards: a brand funds a pool and sets a rate per thousand verified views, with a cap per creator and a minimum view count.',
+      'Read the brief, post your video on the platform it asks for, then submit the public link.',
+      'YouTube views are read by the app. Other platforms are typed in and confirmed with a screenshot, one report every six hours.',
+      'A reviewer verifies the views and finance pays points from the pool. A pool that runs dry pays nobody more.',
+    ],
+    terms: ['bounty'],
+  },
+  party: {
+    steps: [
+      'Meetups anyone can host. Parties, workshops, camps and Kreators Days are run by the team.',
+      'RSVP to take a seat. A full room puts you on the waitlist, first in line: if a seat opens, the first person waiting gets it and a note in their inbox.',
+      'Some events cost points for a ticket. Cancelling a seat refunds them.',
+      'The host checks people in at the door. Afterwards, rate it and say if you are happy to be introduced; Bond uses that to suggest people you met.',
+      'Club members see Club-only events. Private events only show to people with the link.',
+    ],
+    terms: [],
+  },
+  run: {
+    steps: [
+      'Join a run club near you, or start one: a name, a city, a pace and where it usually meets. The host is its first member.',
+      'The host adds runs. Each run gets a six-letter start code that only the host sees, to show at the start line.',
+      'Enter the code during the run to log it: from thirty minutes before the start to three hours after the end, once per run. A logged run pays 20 xp and 10 points, up to two paid runs a day, and its minutes count as movement in Life.',
+      'My runs tracks your kilometres over thirty days, your weekly streak, and three badges: First run, Ten runs and Hundred k.',
+      'Brand collabs have their own tab: what a brand gives, what it asks, and the giveaway. A host applies with the club; an accepted collab shows its giveaway on the club and on the runs tied to it.',
+    ],
+    terms: ['run club', 'start code', 'collab', 'giveaway', 'badge', 'xp', 'points'],
+  },
+  community: {
+    steps: [
+      'Community is posts, replies and likes by category, kept kind by guides on the team.',
+      'Sort the feed by recent, popular or most replies. Filter it to everyone, people you follow, or your own posts.',
+      'Follow anyone from their post. The Following filter shows you their posts first.',
+      'A post pays 5 xp (up to three a day), a reply 2 xp (up to five), a like you give 1 xp (up to ten). A like on your post pays you a point and a new follower two, up to twenty a day. Each pays once, so nothing can be farmed.',
+      'Members-only spaces come with memberships you buy from a creator’s shop.',
+    ],
+    terms: ['xp', 'points', 'guide'],
+  },
+  club: {
+    steps: [
+      'Club is a curated membership. Apply once with a note about your work.',
+      'A reviewer on the team reads it and decides. The answer lands in your inbox.',
+      'Members get club-only events, the first look at club-only openings in Work, a named manager, and the Club honor on their page.',
+      'Membership runs for a year, then you renew.',
+    ],
+    terms: ['Club', 'honor'],
+  },
+  bond: {
+    steps: [
+      'Bond is introductions with consent. Switch introductions on, and the app suggests people you crossed paths with at events.',
+      'Ask to meet someone. Nothing moves until they say yes; then you are both introduced.',
+      'Add friends from their public page and chat under aliases. Nobody is ever revealed.',
+      'Block anyone, any time. A blocked person cannot ask again.',
+    ],
+    terms: ['alias'],
+  },
+  circles: {
+    steps: [
+      'Circles run every week. Join this week’s; signups close thirty-six hours before.',
+      'Two days before, tables are set: people nearby whose interests complement yours, under aliases.',
+      'The chat opens a day before. Agree on the exact place and time together.',
+      'Show up in the colour that says where you stand: red if you are single, white if you are committed. Rather not say? Wear what you like.',
+      'Meet. Afterwards, open an anonymous chat with anyone from your table under Bond. Nobody is ever revealed.',
+    ],
+    terms: ['circle', 'alias'],
+  },
+  life: {
+    steps: [
+      'Life reads your seven relationships the way a life is usually read: physical, financial, emotional, mental and spiritual, each scored from what you already log.',
+      'Physical is sleep, movement and breath. Financial is this month’s money, budgets, invoices and goals. Emotional is mood, journal and the people pillars. Mental is stress, tasks done and learning. Spiritual is stillness, small acts and the top two pillars.',
+      'A part with nothing logged does not count against you. Tap any part to go where you act on it.',
+      'The score is private to you. Pick a period to compare it with the one before.',
+    ],
+    terms: ['five areas of life', 'life score', 'period'],
+  },
+  wellbeing: {
+    steps: [
+      'One score from four signals: mood, sleep, stress and mindful minutes.',
+      'Log each in its own tracker, two taps at most. The score updates as you go.',
+      'The line shows thirty days; the row of faces shows the week.',
+      'Nothing here reaches brands, staff, the leaderboard or Club selection.',
+    ],
+    terms: ['life score'],
+  },
+  mood: {
+    steps: [
+      'Pick a face for today. That is the whole ask.',
+      'Say why, if you like. Nobody else sees it.',
+      'The month shows as a grid of faces, so patterns are easy to spot.',
+      'Mood feeds your wellbeing score and the emotional part of Life.',
+    ],
+    terms: [],
+  },
+  sleep: {
+    steps: [
+      'Log last night in a few seconds: hours on the slider, quality in a tap.',
+      'Seven to eight hours scores full marks; the donut shows how close you got.',
+      'Watch the thirty-day line and the week of bars.',
+      'Sleep feeds your wellbeing score and the physical part of Life.',
+    ],
+    terms: [],
+  },
+  stress: {
+    steps: [
+      'Pick a level from one to five and name what is behind it.',
+      'Lower stress scores higher.',
+      'What comes up most shows as bubbles: the biggest circle is the cause to look at first.',
+      'Stress feeds your wellbeing score and the mental part of Life.',
+    ],
+    terms: [],
+  },
+  mindful: {
+    steps: [
+      'Pick a length and breathe with the circle.',
+      'The minutes log themselves when the timer ends.',
+      'Sixty minutes a week scores full marks. The minutes count in Life twice: as breath under physical and as stillness under spiritual.',
+      'The line shows thirty days.',
+    ],
+    terms: [],
+  },
+  journal: {
+    steps: [
+      'Write it down, with a feeling and a stress level tagged on the entry.',
+      'Only you ever see an entry: not brands, not staff, not the leaderboard, never your public page.',
+      'Entries this month show on the calendar. Search finds them by title or text.',
+      'The feeling you tag feeds the emotional part of Life.',
+    ],
+    terms: [],
+  },
+  companion: {
+    steps: [
+      'A chat that knows your numbers: streak, mood, sleep, stress and what you wrote this week.',
+      'Say what is on your mind. It reflects and asks a better question back.',
+      'It is not a therapist and never pretends to be one. In danger, call your local emergency number.',
+      'The chat stays with you alone.',
+    ],
+    terms: [],
+  },
+  reviews: {
+    steps: [
+      'Pick a week, a month, a quarter or half a year. The mid-year check-in is the half.',
+      'The numbers from every app for that period sit next to the period before: check-ins, tasks, small acts, xp by area, kept days, mood, sleep, money, sales, lessons, people and runs.',
+      'Answer the questions for that cadence, rate how it went with a face, and keep one line to remember.',
+      'A review is saved with the numbers as they were, so it never rewrites itself. One review per period.',
+      'Add recurring templates of your own. The built-in ones stay as they are.',
+    ],
+    terms: ['period', 'review'],
+  },
+  shop: {
+    steps: [
+      'Sell what you make: downloads, courses with drip and quizzes, memberships, sessions with booking, events with replays, payment links, bundles, locked posts and paid questions.',
+      'Make a product in a minute and share its link. It also sits on your public page.',
+      'Set who can buy: anyone, or people with a points balance, a badge, or both.',
+      'Points move instantly. Money checkout is in test mode until a payment provider is connected, and a money order is only paid once the provider confirms it.',
+      'Coupons, availability, orders, customers and testimonials live under the Shop sections.',
+    ],
+    terms: ['unlock', 'points'],
+  },
+  store: {
+    steps: [
+      'Three shelves. New gear and software picked by the team, bought through partner links: the tap goes out through kreators.app, which may earn a share and never holds the goods or the money.',
+      'Pre-owned gear from other creators, graded by condition, with pictures. Make an offer; the seller accepts or declines, and a chat opens for the two of you to settle the handover.',
+      'Kits say what to buy at your stage, within a budget, mixing new and pre-owned pieces, and add up live.',
+      'A featured spot is a week at the top: free from the team, 200 points for your own listing.',
+      'Some items ask for a points balance or a badge before they open. The card says so in plain words.',
+    ],
+    terms: ['partner link', 'pre-owned', 'offer', 'kit', 'featured', 'trust', 'unlock'],
+  },
+  audience: {
+    steps: [
+      'Followers, leads and broadcasts in one place.',
+      'People follow your public page; leads come from the form on it.',
+      'Send a broadcast to everyone who said yes to hearing from you.',
+      'Your affiliate link pays a share on the sales it brings in.',
+    ],
+    terms: [],
+  },
+  content: {
+    steps: [
+      'Add a post by its link and get a tracked link back.',
+      'Share the tracked link instead of the plain one.',
+      'The dashboard shows clicks, sales and revenue per piece of content, so you make more of what sells.',
+    ],
+    terms: [],
+  },
+  automations: {
+    steps: [
+      'Pick a post and a keyword. Anyone who comments the word gets a message with a tracked link.',
+      'Without the Meta keys connected, replies queue here for you to send.',
+      'Funnels show where people drop off between the post, the message, the page and the sale.',
+      'Every send is logged.',
+    ],
+    terms: [],
+  },
+  finance: {
+    steps: [
+      'Money in, money out, by category and by month. Log what came in and what went out, who it was from or to, and any splits owed to others.',
+      'Dues track what you owe and what you are owed, with a date. Recurring entries post themselves each month.',
+      'Settling a due with a tap books the money in or out for you.',
+      'Budgets and goals show how the month is going. Pick a period to compare with the one before.',
+      'Yours alone to see.',
+    ],
+    terms: ['period'],
+  },
+  library: {
+    steps: [
+      'Everything you bought from a creator lands here: courses, downloads, memberships, tickets and sessions.',
+      'Courses track lessons and quizzes. Pick up where you left off.',
+      'Certificates and answers to paid questions live here when earned.',
+    ],
+    terms: [],
+  },
+  knowledge: {
+    steps: [
+      'Guides and articles from the team, on the seven relationships and on making things, always with their sources.',
+      'Browse by tag or search by title.',
+      'Read for ten minutes, then try the exercise.',
+      'Lessons in School link back here.',
+    ],
+    terms: [],
+  },
+  tools: {
+    steps: [
+      'A directory of creator tools for capture, editing, audio, design, scheduling, analytics and more, checked by the team.',
+      'Get it goes through a partner link. Open goes straight to the tool.',
+      'Suggest one you swear by. A reviewer checks it before it shows to everyone; you see it straight away.',
+      'Featured tools sit at the top for a week. Some ask for a points balance or a badge first.',
+    ],
+    terms: ['partner link', 'featured', 'unlock'],
+  },
+  tv: {
+    steps: [
+      'Pitch a series: the idea, the plan and a budget.',
+      'A reviewer reads it. Follow it from review to diligence to a decision, with every step logged.',
+      'Approved shows are released in steps.',
+    ],
+    terms: [],
+  },
+  fund: {
+    steps: [
+      'Apply for a grant or backing for a project: what it is and what it needs.',
+      'Same pipeline as TV: submitted, review, diligence, then a decision with a reason.',
+      'Approved projects get released in steps.',
+    ],
+    terms: [],
+  },
+  leaderboard: {
+    steps: [
+      'The top twenty climbers by xp, streak or badges. Never by follower counts.',
+      'Opt in from Profile to appear. Otherwise you are never listed.',
+      'Journal and wellbeing never count here.',
+    ],
+    terms: ['xp', 'streak', 'badge'],
+  },
+  rewards: {
+    steps: [
+      'Points buy rewards from the catalog: stickers, a meetup ticket, a tee, a call with a mentor.',
+      'A reward is a reservation until it ships. Cancel any time and the points come back.',
+      'Points also buy creators’ products, event tickets and featured spots.',
+    ],
+    terms: ['points'],
+  },
+  help: {
+    steps: [
+      'How you earn, the words we use, and answers to common questions.',
+      'Write to the team from here. The reply lands in your inbox.',
+      'In danger, call your local emergency number.',
+    ],
+    terms: [],
+  },
+  notifications: {
+    steps: [
+      'What happened while you were away: seats, replies, decisions, payouts and reminders.',
+      'Daily reminders land here at the time you set under Profile.',
+      'Tap one to go where it came from.',
+    ],
+    terms: [],
+  },
+  search: {
+    steps: [
+      'Type two letters and results appear under the box.',
+      'Apps, help, tasks, journal, knowledge, products, people, store items, pre-owned gear, tools, run clubs and posts, in groups.',
+      'Nothing leaves the page. Tap a result to go there.',
+    ],
+    terms: [],
+  },
+  manage: {
+    steps: [
+      'Queues for staff: campaigns, cohorts, events, review, moderation, support, finance and mentoring.',
+      'Each power comes from a permission an admin gives.',
+      'Everything you do here is audited.',
+    ],
+    terms: ['guide'],
+  },
+  admin: {
+    steps: [
+      'Tables for people, flags, listings, orders, webhooks, KYC, mail and audit.',
+      'Sort by any column, search, filter, tick rows for bulk actions, and edit a cell in place.',
+      'Only an admin changes a role, never their own.',
+    ],
+    terms: [],
+  },
+  observability: {
+    steps: [
+      'Who is here, which apps they use, which roles they hold.',
+      'The build map, embedded.',
+      'Edit a role from the list. Every change is audited.',
+    ],
+    terms: [],
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Store: new gear through partner links, pre-owned gear from other creators, kits by budget, featured spots
@@ -3470,6 +4295,10 @@ export interface StoreItem {
   status: 'live' | 'hidden';
   clicks: number;
   createdAt: string;
+  minPoints: number;
+  badge: string;
+  /** Whether the viewer can open it, and why not. The link is blank while locked. */
+  unlock: Unlock;
 }
 export interface StoreKitItem {
   type: 'item' | 'listing';
@@ -3519,6 +4348,7 @@ export interface PreownedListing {
   featuredUntil: string | null;
   createdAt: string;
   mine: boolean;
+  sellerTrust: TrustScore;
 }
 export interface PreownedOffer {
   id: string;
@@ -3597,10 +4427,10 @@ export interface SupportTicket {
 
 export const HELP_FAQ = [
   { q: 'What are the daily three?', a: 'Check in, do the small act, tick one task. They are on Daily. Each one you tick pays xp. The check-in pays points too.' },
-  { q: 'What are the seven areas?', a: 'The seven relationships that make a life, one area each. Each area has a pyramid: a foundation at the base, then a rule, a feeling, a proof, a project, and tasks at the tip. Tick a task and the whole pyramid gets stronger.' },
-  { q: 'What is a small act?', a: 'One quick thing for your weakest area, picked for you each day. It takes two minutes and pays fifteen xp.' },
+  { q: 'What are the seven pillars?', a: 'The seven relationships that make a life, one pillar each. Each pillar has a pyramid: a foundation at the base, then a guiding principle, a value goal, a goal outcome, a project, and tasks at the tip. Tick a task and the whole pyramid gets stronger.' },
+  { q: 'What is a small act?', a: 'One quick thing for your weakest pillar, picked for you each day. It takes two minutes and pays fifteen xp.' },
   { q: 'Why can I not tick a task yet?', a: 'A task needs ten minutes after being written or renamed before it can be ticked. Only six ticks a day pay xp; the rest still count as done.' },
-  { q: 'Points versus xp?', a: 'Xp levels you and your areas up. Points come from showing up. You can trade points for rewards, for things people sell, and for events.' },
+  { q: 'Points versus xp?', a: 'Xp levels you and your pillars up. Points come from showing up. You can trade points for rewards, for things people sell, and for events.' },
   { q: 'How do I sell something?', a: 'Switch Shop on from Apps. Make a product, publish it, and share your Profile page.' },
   { q: 'How do I get work?', a: 'Work lists opportunities from brands and the team. Apply once per opportunity and follow its status in Work.' },
   { q: 'Is the Companion a therapist?', a: 'No. It reflects and asks questions. If you are in danger, contact your local emergency number. In India, Tele-MANAS is 14416.' },
@@ -3627,7 +4457,7 @@ export interface HomeFloor {
 }
 
 export interface HomeUpNext {
-  kind: 'event' | 'booking' | 'session' | 'circle';
+  kind: 'event' | 'booking' | 'session' | 'circle' | 'run';
   title: string;
   /** ISO instant. */
   at: string;
@@ -3709,7 +4539,7 @@ export function nudgeFor(s: NudgeInput): HomeNudge {
   if (s.checkedIn && s.sparkDone && s.taskDone) {
     return {
       lead: `All three done. +${s.xpToday} xp today.`,
-      body: 'Here is what that did. The task made its whole pyramid stronger. The small act lifted your weakest area. The check-in kept your streak. One thing makes tomorrow easier: put a time on tomorrow’s task.',
+      body: 'Here is what that did. The task made its whole pyramid stronger. The small act lifted your weakest pillar. The check-in kept your streak. One thing makes tomorrow easier: put a time on tomorrow’s task.',
       action: 'Set a time on tomorrow’s task',
       path: '/tower',
     };
@@ -3741,15 +4571,15 @@ export function nudgeFor(s: NudgeInput): HomeNudge {
   if (!s.hasFloor) {
     return {
       lead: `+${s.xpToday} xp today, two boxes down.`,
-      body: 'The third box cannot show up yet. Daily only gives you tasks from an area you have set up. So this will not work until one area exists. Set one up and tomorrow’s task is already waiting.',
-      action: 'Set up an area',
+      body: 'The third box cannot show up yet. Daily only gives you tasks from a pillar you have set up. So this will not work until one pillar exists. Set one up and tomorrow’s task is already waiting.',
+      action: 'Set up a pillar',
       path: '/tower',
     };
   }
   if (s.tasksWaiting === 0) {
     return {
       lead: `+${s.xpToday} xp today, two boxes down.`,
-      body: 'No task is due today. That is not a rest day. It is a gap. Add one task with a date and a time to any area and the third box shows up on Daily.',
+      body: 'No task is due today. That is not a rest day. It is a gap. Add one task with a date and a time to any pillar and the third box shows up on Daily.',
       action: 'Add a task',
       path: '/tower',
     };

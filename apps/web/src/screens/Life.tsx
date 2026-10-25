@@ -52,7 +52,7 @@ export function Life() {
             </p>
           </div>
           <div className="mt-sm">
-            <PillBars allLabels values={d.areas.map((a) => a.score)} max={100} labels={d.areas.map((a) => LIFE_AREAS[a.key].emoji)} colors={d.areas.map((a) => (Math.round(a.trend) < 0 ? 'var(--color-r2)' : RELATIONSHIP_BY_KEY[LIFE_AREAS[a.key].relationship].color))} color="var(--color-r4)" label="Score per area" height={120} />
+            <PillBars allLabels values={d.areas.map((a) => a.score)} max={100} labels={d.areas.map((a) => LIFE_AREAS[a.key].name)} colors={d.areas.map((a) => (Math.round(a.trend) < 0 ? 'var(--color-r2)' : RELATIONSHIP_BY_KEY[LIFE_AREAS[a.key].relationship].color))} color="var(--color-r4)" label="Score per area" height={120} />
           </div>
           <p className="mt-sm m-0 text-[12px] font-bold text-ink-soft">
             {d.areas.filter((a) => Math.round(a.trend) !== 0).map((a) => `${LIFE_AREAS[a.key].name} ${Math.round(a.trend) > 0 ? 'up' : 'down'} ${Math.abs(Math.round(a.trend))}`).join(', ') || 'Same as last week so far.'}

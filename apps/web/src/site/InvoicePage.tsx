@@ -85,7 +85,7 @@ export function InvoicePage() {
               </tfoot>
             </table>
             {inv.note && <p className="mt-md m-0 whitespace-pre-wrap rounded-tile bg-paper p-sm text-[14px] font-semibold text-ink-soft">{inv.note}</p>}
-            <p className="mt-md m-0 text-[12px] font-semibold text-ink-mute">Sent with Kreators Life. Payment details are in the note above or in the message that came with this link.</p>
+            <p className="mt-md m-0 text-[12px] font-semibold text-ink-mute">Sent with kreators.app. Payment details are in the note above or in the message that came with this link.</p>
           </article>
         )}
       </div>

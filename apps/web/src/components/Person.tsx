@@ -1,6 +1,6 @@
 import { RELATIONSHIPS } from '@kreators/shared';
 
-const INK = '#4F3422';
+const INK = '#262626';
 const GOLD = '#FDE047';
 const FACE = '#FFE9D6';
 

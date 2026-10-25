@@ -1,4 +1,4 @@
-import { isFeatured, TOOL_CATEGORIES, type Tool } from '@kreators/shared';
+import { BADGES, isFeatured, TOOL_CATEGORIES, type Tool } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button } from '../components/Button';
@@ -37,11 +37,16 @@ function ToolRow({ t, reviewer, onChange }: { t: Tool; reviewer: boolean; onChan
           {t.description && <span className="block text-[14px] font-semibold text-ink-soft">{t.description}</span>}
           <span className="block text-[12px] font-bold text-ink-mute">
             {t.verified ? 'Verified by the team' : `Suggested by ${t.suggestedByName}, waiting for review`}
-            {t.affiliate ? '. Partner link: Kreators may earn a share.' : ''}
+            {t.affiliate ? '. Partner link: kreators.app may earn a share.' : ''}
             {t.clicks > 0 ? ` · ${t.clicks} ${t.clicks === 1 ? 'tap' : 'taps'}` : ''}
+            {!t.unlock.ok ? ` · ${t.unlock.why}` : t.minPoints > 0 || t.badge ? ' · Earned: it asks for what you already have.' : ''}
           </span>
         </span>
-        {t.affiliate && t.verified ? (
+        {!t.unlock.ok ? (
+          <span className="shrink-0 rounded-pill bg-paper px-sm text-[12px] font-extrabold leading-[32px] text-ink-soft" title={t.unlock.why}>
+            Locked
+          </span>
+        ) : t.affiliate && t.verified ? (
           <a href={`/out/tool/${t.id}`} target="_blank" rel="noreferrer" className="toy inline-flex min-h-[44px] shrink-0 items-center rounded-pill bg-ink px-md text-[14px] font-bold text-on-ink">
             Get it
           </a>
@@ -153,18 +158,20 @@ export function Tools() {
         </section>
       )}
 
-      <SuggestSheet open={suggesting} onClose={() => setSuggesting(false)} onDone={() => q.refetch()} categories={categories} />
+      <SuggestSheet open={suggesting} onClose={() => setSuggesting(false)} onDone={() => q.refetch()} categories={categories} reviewer={d?.reviewer ?? false} />
     </Screen>
   );
 }
 
-function SuggestSheet({ open, onClose, onDone, categories }: { open: boolean; onClose: () => void; onDone: () => void; categories: readonly string[] }) {
+function SuggestSheet({ open, onClose, onDone, categories, reviewer }: { open: boolean; onClose: () => void; onDone: () => void; categories: readonly string[]; reviewer: boolean }) {
+  const [minPoints, setMinPoints] = useState('0');
+  const [badge, setBadge] = useState('');
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [category, setCategory] = useState<string>(categories[0] ?? 'Editing');
   const [description, setDescription] = useState('');
   const suggest = useMutation({
-    mutationFn: () => api.suggestTool({ name, url, category, description }),
+    mutationFn: () => api.suggestTool({ name, url, category, description, ...(reviewer ? { minPoints: Number(minPoints) || 0, badge } : {}) }),
     onSuccess: () => {
       setName('');
       setUrl('');
@@ -204,6 +211,25 @@ function SuggestSheet({ open, onClose, onDone, categories }: { open: boolean; on
           <span className="block text-[14px] font-bold">What it is good for</span>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} rows={3} className={field} />
         </label>
+        {reviewer && (
+          <div className="grid grid-cols-2 gap-xs">
+            <label className="block">
+              <span className="block text-[14px] font-bold">Points balance of at least</span>
+              <input type="number" min={0} value={minPoints} onChange={(e) => setMinPoints(e.target.value)} className={field} />
+            </label>
+            <label className="block">
+              <span className="block text-[14px] font-bold">Holds the badge</span>
+              <select value={badge} onChange={(e) => setBadge(e.target.value)} className={field}>
+                <option value="">Any badge or none</option>
+                {BADGES.map((b) => (
+                  <option key={b.key} value={b.key}>
+                    {b.emoji} {b.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
         <p className="m-0 text-[12px] font-bold text-ink-soft">A reviewer checks it before it shows to everyone. You see it straight away.</p>
         <Err e={suggest.isError ? suggest.error : null} />
         <Button type="submit" size="lg" full disabled={suggest.isPending || !name.trim() || !url.trim()}>

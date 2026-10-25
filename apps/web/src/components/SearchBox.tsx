@@ -1,4 +1,4 @@
-import { KIND_META, PRODUCT_KIND_META, RELATIONSHIP_BY_KEY } from '@kreators/shared';
+import { KIND_META, PRODUCT_KIND_META, RELATIONSHIP_BY_KEY , HELP_FAQ, MODULES, PREOWNED_CONDITION_META, type PreownedCondition} from '@kreators/shared';
 import { useEffect, useId, useState } from 'react';
 import { Link } from 'react-router';
 import { api } from '../lib/api';
@@ -19,7 +19,10 @@ export function SearchBox({ placeholder = 'Search anything', autoFocus = false, 
   const live = query.length >= 2;
   const res = useAuthed(['search', query], () => api.search(query), live);
   const d = res.data;
-  const total = d ? d.tasks.length + d.journal.length + d.resources.length + d.products.length + d.people.length : 0;
+  const needle = query.toLowerCase();
+  const apps = live ? MODULES.filter((m) => !m.locked && (m.name.toLowerCase().includes(needle) || m.blurb.toLowerCase().includes(needle))).slice(0, 5) : [];
+  const help = live ? HELP_FAQ.filter((f) => f.q.toLowerCase().includes(needle) || f.a.toLowerCase().includes(needle)).slice(0, 3) : [];
+  const total = (d ? d.tasks.length + d.journal.length + d.resources.length + d.products.length + d.people.length + d.items.length + d.listings.length + d.tools.length + d.posts.length + d.clubs.length : 0) + apps.length + help.length;
 
   return (
     <div className="relative">
@@ -53,7 +56,14 @@ export function SearchBox({ placeholder = 'Search anything', autoFocus = false, 
       </div>
       {live && (
         <div id={`${id}-results`} role="region" aria-live="polite" aria-label="Search results" className="mt-xs rounded-card bg-card p-sm shadow-toy-soft">
-          {res.isPending && <p className="m-0 px-xs py-xs text-[14px] font-semibold text-ink-soft">Looking</p>}
+          {apps.length > 0 && (
+            <Group title="Apps">
+              {apps.map((m) => (
+                <Row key={m.key} to={m.path} title={m.name} sub={m.blurb} emoji={m.emoji} />
+              ))}
+            </Group>
+          )}
+          {res.isPending && apps.length === 0 && <p className="m-0 px-xs py-xs text-[14px] font-semibold text-ink-soft">Looking</p>}
           {d && total === 0 && <p className="m-0 px-xs py-xs text-[14px] font-semibold text-ink-soft">Nothing matches "{query}".</p>}
           {d && d.tasks.length > 0 && (
             <Group title={KIND_META.task.plural}>
@@ -87,6 +97,48 @@ export function SearchBox({ placeholder = 'Search anything', autoFocus = false, 
             <Group title="People">
               {d.people.slice(0, 5).map((p) => (
                 <Row key={p.handle} to={`/u/${p.handle}`} title={p.name || p.handle} sub={`@${p.handle}`} emoji="🧑" />
+              ))}
+            </Group>
+          )}
+          {d && d.items.length > 0 && (
+            <Group title="Store">
+              {d.items.slice(0, 5).map((i) => (
+                <Row key={i.id} to="/store" title={i.title} sub={`${i.category}, new`} emoji="🛒" />
+              ))}
+            </Group>
+          )}
+          {d && d.listings.length > 0 && (
+            <Group title="Pre-owned">
+              {d.listings.slice(0, 5).map((l) => (
+                <Row key={l.id} to="/store" title={l.title} sub={PREOWNED_CONDITION_META[l.condition as PreownedCondition]?.name ?? l.condition} emoji="♻️" />
+              ))}
+            </Group>
+          )}
+          {d && d.tools.length > 0 && (
+            <Group title="Tools">
+              {d.tools.slice(0, 5).map((t) => (
+                <Row key={t.id} to="/tools" title={t.title} sub={t.category} emoji="🧰" />
+              ))}
+            </Group>
+          )}
+          {d && d.clubs.length > 0 && (
+            <Group title="Run clubs">
+              {d.clubs.slice(0, 5).map((k) => (
+                <Row key={k.id} to={`/run/clubs/${k.id}`} title={k.title} sub={k.city} emoji="🏃" />
+              ))}
+            </Group>
+          )}
+          {d && d.posts.length > 0 && (
+            <Group title="Community">
+              {d.posts.slice(0, 5).map((p) => (
+                <Row key={p.id} to={`/community?post=${p.id}`} title={p.body} sub={p.authorName} emoji="💬" />
+              ))}
+            </Group>
+          )}
+          {help.length > 0 && (
+            <Group title="Help">
+              {help.map((f) => (
+                <Row key={f.q} to="/help" title={f.q} sub={f.a.slice(0, 80)} emoji="🛟" />
               ))}
             </Group>
           )}

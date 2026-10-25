@@ -69,7 +69,7 @@ export function Welcome() {
           One you.
         </h1>
         <p className="mt-md text-[18px] font-semibold leading-snug text-ink-soft">
-          A daily game for the seven relationships that make a life. Answer a few quick questions, set up your areas, then tick a few boxes every day.
+          A daily game for the seven relationships that make a life. Answer a few quick questions, set up your pillars, then tick a few boxes every day.
         </p>
       </div>
       <div className="flex flex-col gap-sm pb-lg">

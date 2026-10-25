@@ -3,6 +3,7 @@ import { isNodeKind, isRelationshipKey, parentKind, taskReadyAt, WAIT, XP, type 
 import type { AppEnv } from '../env';
 import { TIME_RE } from '@kreators/shared';
 import { ancestorsOf, badgesNow, DATE_RE, diffBadges, getNode, newId, nowIso, readyFromNow, toNode, type NodeRow, taskGate, readyAtFor } from '../db';
+import { dateNearToday, shiftDate } from '../db';
 
 export const nodes = new Hono<AppEnv>();
 
@@ -133,6 +134,12 @@ nodes.post('/:id/complete', async (c) => {
   // A second tap on a task that is already done is not an error worth showing.
   if (row.status === 'done') return c.json({ error: 'already done', node: toNode(row) }, 409);
   if (row.status !== 'active') return c.json({ error: 'task is not active' }, 400);
+  // A task with a date is for that day: it cannot be ticked before it arrives.
+  const body = await c.req.json<{ date?: string }>().catch(() => ({}) as { date?: string });
+  // The app sends the person's own date. Without one, the server's UTC day gets a day of slack, since a person east of UTC is already on tomorrow.
+  const sent = Boolean(body.date && dateNearToday(body.date));
+  const today = sent ? body.date! : shiftDate(new Date().toISOString().slice(0, 10), 1);
+  if (row.due_date && row.due_date > today) return c.json({ error: `Due ${row.due_date}. Tick it on the day.`, dueDate: row.due_date }, 400);
 
   // Wait time: the first few ticks are free; after that a task has to exist for a while and sit a
   // gap after the previous tick, so writing and ticking in the same breath, or ticking back to back, earns nothing.

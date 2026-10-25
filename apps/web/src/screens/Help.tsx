@@ -1,4 +1,4 @@
-import { HELP_FAQ, type SupportTicket } from '@kreators/shared';
+import { earningGuide, HELP_FAQ, TERMS, type SupportTicket } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -108,6 +108,44 @@ export function Help() {
         </p>
       </header>
 
+      <section className="mt-lg" id="earning" aria-labelledby="earning-heading">
+        <h2 id="earning-heading" className="text-[24px]">
+          How you earn
+        </h2>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Xp is progress: it fills your level and your pillars. Points are spendable: rewards, featured spots. Badges are proof. Nothing here is big on purpose; showing up is the whole trick.</p>
+        {earningGuide().map((g) => (
+          <div key={g.title} className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
+            <h3 className="m-0 text-[18px]">{g.title}</h3>
+            <ul className="mt-xs flex list-none flex-col p-0 m-0">
+              {g.lines.map((l) => (
+                <li key={l.what} className="flex items-baseline justify-between gap-sm border-t border-line py-xs text-[14px]">
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-bold">{l.what}</span>
+                    <span className="block font-semibold text-ink-soft">{l.how}</span>
+                  </span>
+                  <span className="shrink-0 font-extrabold">{l.pays}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </section>
+
+      <section className="mt-lg" id="words" aria-labelledby="words-heading">
+        <h2 id="words-heading" className="text-[24px]">
+          Words we use
+        </h2>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Every word the app made up, in plain ones. The "How it works" section at the bottom of each app shows the ones it leans on.</p>
+        <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+          {Object.entries(TERMS).map(([term, meaning]) => (
+            <li key={term} className="rounded-tile bg-card p-sm text-[14px] shadow-toy-soft">
+              <span className="font-bold">{term}</span>
+              <span className="font-semibold text-ink-soft"> {meaning}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       <section className="mt-lg" aria-labelledby="faq-heading">
         <h2 id="faq-heading" className="text-[24px]">
           Common questions
@@ -118,9 +156,11 @@ export function Help() {
               <details className="rounded-tile bg-card shadow-toy-soft">
                 <summary className="flex min-h-[56px] items-center gap-sm rounded-tile p-sm">
                   <span className="min-w-0 flex-1 text-[16px] font-bold">{f.q}</span>
-                  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" className="chev shrink-0 transition-transform" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M6 9l6 6 6-6" />
-                  </svg>
+                  <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-paper" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" className="chev transition-transform" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </span>
                 </summary>
                 <p className="m-0 px-sm pb-sm text-[16px] font-semibold leading-relaxed text-ink-soft">{f.a}</p>
               </details>

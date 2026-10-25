@@ -117,28 +117,6 @@ export function Circles() {
             {join.error instanceof Error ? join.error.message : 'Could not join.'}
           </p>
         )}
-      </section>
-
-      <section className="mt-lg" aria-labelledby="how-heading">
-        <h2 id="how-heading" className="text-[24px]">
-          How it works
-        </h2>
-        <ol className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
-          {[
-            'Circles run every week. Join this week\u2019s; signups close thirty-six hours before.',
-            'Two days before, tables are set: people nearby whose interests complement yours, under aliases.',
-            'The chat opens a day before. Agree on the exact place and time together.',
-            'Show up in the colour that says where you stand: red if you are single, white if you are committed. Rather not say? Wear what you like.',
-            'Meet. Afterwards, open an anonymous chat with anyone from your table under Bond. Nobody is ever revealed.',
-          ].map((t, i) => (
-            <li key={t} className="flex gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-              <span className="flex size-[28px] shrink-0 items-center justify-center rounded-pill bg-ink text-[14px] font-extrabold text-on-ink" aria-hidden="true">
-                {i + 1}
-              </span>
-              <span className="text-[14px] font-semibold">{t}</span>
-            </li>
-          ))}
-        </ol>
         <p className="mt-sm m-0 text-[12px] font-semibold text-ink-mute">
           Your interests: {me.data?.user.interests.length ? me.data.user.interests.join(', ') : 'none yet'}. Pairs that gel include {INTERESTS[0]} with {INTERESTS[9]}, Writing with Video, Yoga with Meditation.
         </p>
