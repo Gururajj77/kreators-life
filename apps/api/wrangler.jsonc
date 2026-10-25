@@ -21,7 +21,7 @@
       "binding": "DB",
       "database_name": "kreators-life",
       // Replace with the id printed by: pnpm --filter @kreators/api exec wrangler d1 create kreators-life
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "f51fe3e1-1807-4bf7-8b6d-385e17df535f",
       "migrations_dir": "migrations"
     }
   ]
