@@ -114,14 +114,13 @@ export function Home() {
       <ScrollTroupe active={active} />
 
       <Zone value={null} onActive={setActive} className="grid gap-lg pt-lg md:grid-cols-2 md:items-center md:pt-xl">
-        <div>
+        <div className="@container">
           <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-mute">The one stop for creators</p>
-          <h1 className="mt-xs text-[clamp(40px,7vw,68px)] leading-[1.02]">
-            Seven relationships.
+          {/* Sized from the column width so each line stays whole: the longer line is 11.1em wide in Urbanist 900. */}
+          <h1 className="mt-xs text-[clamp(24px,8.7cqw,60px)] leading-[1.05]">
+            Better Creator life with
             <br />
-            One you.
-            <br />
-            A whole creator life.
+            The Seven Relationships
           </h1>
           <p className="mt-md m-0 max-w-[520px] text-[18px] font-semibold leading-snug text-ink-soft">
             A daily game that keeps the seven relationships of your life in balance, with everything a creator needs stacked on top: learning, paid work, brand campaigns, content rewards, events, a shop, and tools for staying well.
