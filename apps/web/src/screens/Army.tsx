@@ -9,6 +9,7 @@ import { Sheet } from '../components/Sheet';
 import { Toggle } from '../components/Toggle';
 import { api } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
+import { Pager, usePage } from '../components/Pager';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const fmtDate = (d: string | null) => (d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'no date');
@@ -50,7 +51,8 @@ function StatusPill({ status }: { status: CampaignStatus }) {
 // ---------------------------------------------------------------------------
 
 export function Army() {
-  const q = useAuthed(['army'], api.army);
+  const pg = usePage();
+  const q = useAuthed(['army', pg.query], () => api.army(pg.query));
   const orgs = useAuthed(['orgs'], () => api.orgs());
   const [creatingOrg, setCreatingOrg] = useState(false);
   const [creatingCampaign, setCreatingCampaign] = useState(false);
@@ -125,6 +127,7 @@ export function Army() {
             </li>
           ))}
         </ul>
+        <Pager page={d?.page} label="campaigns" />
       </section>
 
       <section className="mt-lg" aria-labelledby="brands-heading">

@@ -7,6 +7,7 @@ import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
+import { Pager, usePage } from '../components/Pager';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 
@@ -145,7 +146,8 @@ function ProposalCard({ p, reviewer, onChange }: { p: Proposal; reviewer: boolea
 
 export function Proposals({ kind }: { kind: 'tv' | 'fund' }) {
   const copy = COPY[kind];
-  const q = useAuthed(['proposals', kind], () => api.proposals(kind));
+  const pg = usePage();
+  const q = useAuthed(['proposals', kind, pg.query], () => api.proposals(kind, pg.query));
   const [writing, setWriting] = useState(false);
   const d = q.data;
   const mine = d?.proposals ?? [];
@@ -181,6 +183,7 @@ export function Proposals({ kind }: { kind: 'tv' | 'fund' }) {
               <ProposalCard key={p.id} p={p} reviewer={d.reviewer} onChange={() => q.refetch()} />
             ))}
           </ul>
+          <Pager page={d.page} label="proposals" />
         </section>
       )}
 

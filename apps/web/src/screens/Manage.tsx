@@ -5,6 +5,7 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
+import { Pager, usePage } from '../components/Pager';
 
 const PERMISSION_META: Record<Permission, { name: string; blurb: string; to: string; emoji: string; queue?: (q: Queues) => number }> = {
   talent: { name: 'Talent', blurb: 'Campaign briefs, shortlists, assignments', to: '/army', emoji: '🎬', queue: (q) => q.campaigns },
@@ -22,7 +23,8 @@ export function Manage() {
   const me = useMe();
   const overview = useAuthed(['manage-overview'], api.manageOverview);
   const [q, setQ] = useState('');
-  const members = useAuthed(['members', q], () => api.members(q));
+  const pg = usePage();
+  const members = useAuthed(['members', q, pg.query], () => api.members(q, pg.query));
   const o = overview.data;
   const role = me.data?.user.role ?? 'user';
   return (
@@ -120,6 +122,7 @@ export function Manage() {
             </li>
           ))}
         </ul>
+        <Pager page={members.data?.page} label="members" />
       </section>
     </Screen>
   );

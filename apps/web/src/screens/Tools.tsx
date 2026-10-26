@@ -8,6 +8,7 @@ import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { FeaturedTag } from './Store';
 import { useAuthed } from '../lib/queries';
+import { Pager, usePage } from '../components/Pager';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 
@@ -86,7 +87,8 @@ function ToolRow({ t, reviewer, onChange }: { t: Tool; reviewer: boolean; onChan
 }
 
 export function Tools() {
-  const q = useAuthed(['tools'], api.tools);
+  const pg = usePage();
+  const q = useAuthed(['tools', pg.query], () => api.tools(pg.query));
   const [suggesting, setSuggesting] = useState(false);
   const d = q.data;
   const verified = (d?.tools ?? []).filter((t) => t.verified);
@@ -144,6 +146,7 @@ export function Tools() {
           </section>
         );
       })}
+      <Pager page={d?.page} label="tools" />
 
       {pending.length > 0 && (
         <section className="mt-lg" aria-labelledby="pending-heading">

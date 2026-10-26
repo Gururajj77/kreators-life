@@ -1,7 +1,7 @@
 # 09 — Testing, deployment and the coding playbook
 
 **Product:** kreators.app
-**Version:** 0.2, reconciled with the app on 26 October 2026
+**Version:** 0.3, reconciled with the app on 26 October 2026
 **Source of truth:** the "Commands" and "Done means" sections of `CLAUDE.md`; `packages/shared/src/index.test.ts`; `scripts/smoke/`; `scripts/scan.sh`; `scripts/flesch.py`; the root `package.json`.
 
 ## 1. The core rule
@@ -21,7 +21,7 @@ design/figma-tokens.json  the kit's values, frozen
 apps/web/src              App.tsx, app.css, components/, screens/, site/, lib/
 apps/web/public           icons, the share card, resources/ (the skill files School links)
 apps/api/src              index.ts, access.ts, db.ts, ops.ts, payments.ts, rewards.ts, cron.ts, routes/
-apps/api/migrations       0001 to 0025, plain SQL
+apps/api/migrations       0001 to 0027, plain SQL
 packages/shared/src       index.ts (the domain model), index.test.ts
 scripts/                  scan.sh, flesch.py, icons.sh, figma-pull.py, smoke/
 scripts/smoke             blueprint.sh, smoke.mjs, shoot.mjs, contrast-probe.js, state/ and shots/ (ignored)
@@ -33,8 +33,8 @@ From `CLAUDE.md`: typecheck and build pass, shared tests pass, the smoke test pa
 
 ## 4. Test layers as built
 
-- **Unit (Vitest, shared):** 38 cases in 16 groups: money and fees in basis points; content reward payouts; time zones across daylight saving; booking slots, buffers, overrides, notice and horizon; the circle matcher and interest groups; rollout buckets; Home's guidance line; circles' colours and weekly roll; the app defaults and groups; passwords; not-to-do streaks; periods and templates; store pictures and featured spots; trust and social reward caps; unlocks and the earning guide; how-tos against the glossary; Kreators Run windows, labels, streaks and badges.
-- **End to end (the smoke test):** `bash scripts/smoke/blueprint.sh` builds the web app if needed, migrates and starts a second Worker on port 8788 with its own database under `scripts/smoke/state` (`--keep` leaves it up, `--fresh` wipes it), then runs `scripts/smoke/smoke.mjs`, which imports the shared model straight from TypeScript and makes about two hundred checks over the API: headers, auth, onboarding, the game, not-to-do, wellbeing, journal, life, home, finance, shop, community, the public page, reviews, the store, Kreators Run, school, staff and admin, flags, observability, search, export and delete. Every run sends its own `CF-Connecting-IP` so limits never block a rerun; the founder is `founder@smoke.test`.
+- **Unit (Vitest, shared):** 40 cases in 17 groups: money and fees in basis points; content reward payouts; time zones across daylight saving; booking slots, buffers, overrides, notice and horizon; the circle matcher and interest groups; rollout buckets; Home's guidance line; circles' colours and weekly roll; the app defaults and groups; passwords; not-to-do streaks; periods and templates; store pictures and featured spots; trust and social reward caps; unlocks and the earning guide; how-tos against the glossary; Kreators Run windows, labels, streaks and badges; the sign-up age and phone rules.
+- **End to end (the smoke test):** `bash scripts/smoke/blueprint.sh` builds the web app if needed, migrates and starts a second Worker on port 8788 with its own database under `scripts/smoke/state` (`--keep` leaves it up, `--fresh` wipes it), then runs `scripts/smoke/smoke.mjs`, which imports the shared model straight from TypeScript and makes 257 checks over the API: headers, auth (including the age and phone rules), onboarding, the game, not-to-do, wellbeing, journal, life, home, finance, shop, community, the public page, reviews, the store, Kreators Run, school, staff and admin, the Club's benefits, reward changes, pages, flags (a switched-off module answers 403), observability, search, export and delete, and the limits. Every run sends its own `CF-Connecting-IP` so limits never block a rerun; the founder is `founder@smoke.test`.
 - **Design scans:** `bash scripts/scan.sh` (spacing tokens, arbitrary pixels, hex colours, white on ink, the old name); `python3 -I scripts/flesch.py`; `scripts/smoke/contrast-probe.js` as the `SHOOT_PROBE` step of `node scripts/smoke/shoot.mjs`.
 - **Screenshots:** `node scripts/smoke/shoot.mjs [routes]` with puppeteer-core driving the installed Chrome, against the smoke server (or `SHOOT_ORIGIN`), in light, dark or both (`SHOOT_THEME`), phone, laptop and a phone on its side, with the service worker cleared first.
 - **Typecheck and build:** `pnpm typecheck`, `pnpm build`.
@@ -45,8 +45,8 @@ From `CLAUDE.md`: typecheck and build pass, shared tests pass, the smoke test pa
 1. Anonymous visitor cannot access private pages: proven ("no session means 401").
 2. A creator cannot view another's private data: proven for journal, finance and not-to-do; applications by code review only.
 3. Brand A cannot view Brand B's campaigns: code review only (`orgRole`).
-4. A disabled module rejects direct URL and API access: **the UI yes, the API no.** The smoke check accepts a 200. Gap.
-5. Club is inaccessible to unapproved or expired members: code review (club events check `ends_at`); not in the smoke test.
+4. A disabled module rejects direct URL and API access: proven ("a switched-off app refuses its API" demands 403, "an override refuses the API too").
+5. Club is inaccessible to unapproved or expired members: proven for club-only Work listings ("a non-member does not see a club-only listing", "nor open it", "nor apply"); club events by code review.
 6. A closed opportunity rejects applications: code review (published only, deadline checked); not in the smoke test.
 7. Capacity under simultaneous RSVPs: a conditional insert; not load-tested.
 8. A duplicate webhook does nothing: code review (`INSERT OR IGNORE` on the event id); not in the smoke test because no provider runs locally.
@@ -87,9 +87,9 @@ From `CLAUDE.md`: typecheck and build pass, shared tests pass, the smoke test pa
 
 ## 9. Release history
 
-What v0.1 planned as releases 0 to 7 shipped between 23 and 25 October 2026 in this order: the stack and the game; the super app's modules and listings; commerce, time and finance; circles and life; bond and the public page; school's real programs; links; sign-in rework; the not-to-do list; reviews; the store; unlocks, search and the glossary; Kreators Run; the move of the test tooling into the repo. The next slices are the gaps these docs list.
+What v0.1 planned as releases 0 to 7 shipped between 23 and 25 October 2026 in this order: the stack and the game; the super app's modules and listings; commerce, time and finance; circles and life; bond and the public page; school's real programs; links; sign-in rework; the not-to-do list; reviews; the store; unlocks, search and the glossary; Kreators Run; the move of the test tooling into the repo; then, on 26 October, the server-side module gate, the one limits file, the sign-up age and phone, the Club benefits, reward versions and paging everywhere. The next slices are the gaps these docs list.
 
 ## Known gaps
 
-- Scenarios 2 to 8 need smoke coverage; scenario 4 needs the enforcement first.
+- Scenarios 2, 3, 6, 7 and 8 need smoke coverage.
 - No staging, no backup step, no alerting, no load test.

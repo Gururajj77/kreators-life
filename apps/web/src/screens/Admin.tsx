@@ -1,3 +1,4 @@
+import { DEFAULT_PAGE_SIZE, pageQuery, type Page, type PageSize } from '@kreators/shared';
 import {
   EVENT_TYPES,
   HONORS,
@@ -82,6 +83,21 @@ export function Admin() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  // Every table is served a page at a time. `asks` is what we asked for, `pages` what came back.
+  type Ask = { page: number; size: PageSize };
+  const FIRST: Ask = { page: 1, size: DEFAULT_PAGE_SIZE };
+  const [asks, setAsks] = useState<Record<string, Ask>>({});
+  const [pages, setPages] = useState<Record<string, Page>>({});
+  const pq = (name: string, ask?: Ask) => {
+    const a = ask ?? asks[name] ?? FIRST;
+    return pageQuery(a.page, a.size);
+  };
+  const gotPage = (name: string, page: Page) => setPages((p) => ({ ...p, [name]: page }));
+  const turn = (name: string, fetch: (ask: Ask) => Promise<void>) => (page: number, size: PageSize) => {
+    const ask = { page, size };
+    setAsks((a) => ({ ...a, [name]: ask }));
+    void run(() => fetch(ask));
+  };
 
   // people
   const [q, setQ] = useState('');
@@ -144,13 +160,17 @@ export function Admin() {
       } catch {
         // Private mode: the key just will not be remembered.
       }
-      const [u, r, f, l, a] = await Promise.all([adminApi.users(key, q), adminApi.redemptions(key, 'reserved'), adminApi.flags(key), adminApi.listings(key), adminApi.audit(key)]);
+      const [u, r, f, l, a] = await Promise.all([adminApi.users(key, q, pq('users')), adminApi.redemptions(key, 'reserved', pq('redemptions')), adminApi.flags(key), adminApi.listings(key, undefined, '', pq('listings')), adminApi.audit(key, pq('audit'))]);
       setUsers(u.users);
+      gotPage('users', u.page);
       setRedemptions(r.redemptions);
+      gotPage('redemptions', r.page);
       setSettings(f.settings);
       setOverrides(f.overrides);
       setListings(l.listings);
+      gotPage('listings', l.page);
       setLogs(a.logs);
+      gotPage('audit', a.page);
       setLoaded(true);
     });
 
@@ -168,27 +188,55 @@ export function Admin() {
     setSettings(f.settings);
     setOverrides(f.overrides);
   };
-  const refreshListings = async () => {
-    const l = await adminApi.listings(key);
+  const refreshListings = async (ask?: Ask) => {
+    const l = await adminApi.listings(key, undefined, '', pq('listings', ask));
     setListings(l.listings);
+    gotPage('listings', l.page);
   };
-  const refreshAudit = async () => setLogs((await adminApi.audit(key)).logs);
-  const searchOrders = (q = orderQ, status = orderStatus) =>
+  const refreshAudit = async (ask?: Ask) => {
+    const a = await adminApi.audit(key, pq('audit', ask));
+    setLogs(a.logs);
+    gotPage('audit', a.page);
+  };
+  const refreshUsers = async (ask?: Ask) => {
+    const u = await adminApi.users(key, q, pq('users', ask));
+    setUsers(u.users);
+    gotPage('users', u.page);
+  };
+  const refreshRedemptions = async (ask?: Ask) => {
+    const r = await adminApi.redemptions(key, 'reserved', pq('redemptions', ask));
+    setRedemptions(r.redemptions);
+    gotPage('redemptions', r.page);
+  };
+  const searchOrders = (q = orderQ, status = orderStatus, ask?: Ask) =>
     run(async () => {
-      setOrders((await adminApi.orders(key, q, status)).orders);
+      const o = await adminApi.orders(key, q, status, pq('orders', ask));
+      setOrders(o.orders);
+      gotPage('orders', o.page);
     });
   const openOrder = (id: string) =>
     run(async () => {
       setRefundError(null);
       setOrderDetail(await adminApi.order(key, id));
     });
-  const loadHooks = () => run(async () => setHooks((await adminApi.webhooks(key)).webhooks));
-  const loadKyc = (status = kycStatus) => run(async () => setKycList((await adminApi.kycQueue(key, status)).kyc));
-  const loadOps = () =>
+  const loadHooks = (ask?: Ask) =>
     run(async () => {
-      const [f, o] = await Promise.all([adminApi.funnels(key), adminApi.outbox(key)]);
+      const h = await adminApi.webhooks(key, pq('webhooks', ask));
+      setHooks(h.webhooks);
+      gotPage('webhooks', h.page);
+    });
+  const loadKyc = (status = kycStatus, ask?: Ask) =>
+    run(async () => {
+      const k = await adminApi.kycQueue(key, status, pq('kyc', ask));
+      setKycList(k.kyc);
+      gotPage('kyc', k.page);
+    });
+  const loadOps = (ask?: Ask) =>
+    run(async () => {
+      const [f, o] = await Promise.all([adminApi.funnels(key), adminApi.outbox(key, pq('outbox', ask))]);
       setFunnels(f.funnels);
       setOutbox(o.outbox);
+      gotPage('outbox', o.page);
     });
   // Each new tab fetches on first open, so the first load stays as quick as it was.
   const openTab = (k: Tab) => {
@@ -267,7 +315,7 @@ export function Admin() {
                 className="mt-sm flex gap-xs"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  void run(async () => setUsers((await adminApi.users(key, q)).users));
+                  void run(() => refreshUsers({ page: 1, size: asks.users?.size ?? DEFAULT_PAGE_SIZE }));
                 }}
               >
                 <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, email, page or id" aria-label="Search people on the server" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-[16px]" />
@@ -278,6 +326,8 @@ export function Admin() {
               <div className="mt-sm">
                 <DataTable<AdminUser>
                   rows={users}
+                  page={pages.users}
+                  onPage={turn('users', refreshUsers)}
                   rowKey={(u) => u.id}
                   label="People"
                   selectable
@@ -506,6 +556,8 @@ export function Admin() {
               <div className="mt-sm">
                 <DataTable<Listing>
                   rows={listings}
+                  page={pages.listings}
+                  onPage={turn('listings', refreshListings)}
                   rowKey={(l) => `${l.type}-${l.id}`}
                   label="Listings"
                   selectable
@@ -755,6 +807,8 @@ export function Admin() {
               <div className="mt-sm">
                 <DataTable<AdminRedemption>
                   rows={redemptions}
+                  page={pages.redemptions}
+                  onPage={turn('redemptions', refreshRedemptions)}
                   rowKey={(r) => r.id}
                   label="Reserved rewards"
                   selectable
@@ -813,6 +867,8 @@ export function Admin() {
               <div className="mt-sm">
                 <DataTable<AdminOrder>
                   rows={orders ?? []}
+                  page={pages.orders}
+                  onPage={(page, size) => { setAsks((a) => ({ ...a, orders: { page, size } })); void searchOrders(orderQ, orderStatus, { page, size }); }}
                   rowKey={(o) => o.id}
                   label="Orders"
                   busy={busy}
@@ -920,6 +976,8 @@ export function Admin() {
               <div className="mt-sm">
                 <DataTable<WebhookEvent>
                   rows={hooks ?? []}
+                  page={pages.webhooks}
+                  onPage={(page, size) => { setAsks((a) => ({ ...a, webhooks: { page, size } })); void loadHooks({ page, size }); }}
                   rowKey={(h) => h.id}
                   label="Webhooks"
                   busy={busy}
@@ -960,6 +1018,8 @@ export function Admin() {
               <div className="mt-sm">
                 <DataTable<AdminKyc>
                   rows={kycList ?? []}
+                  page={pages.kyc}
+                  onPage={(page, size) => { setAsks((a) => ({ ...a, kyc: { page, size } })); void loadKyc(kycStatus, { page, size }); }}
                   rowKey={(k) => k.userId}
                   label="Payout details"
                   busy={busy}
@@ -1039,6 +1099,8 @@ export function Admin() {
               <div className="mt-sm">
                 <DataTable<OutboxEmail>
                   rows={outbox ?? []}
+                  page={pages.outbox}
+                  onPage={(page, size) => { setAsks((a) => ({ ...a, outbox: { page, size } })); void loadOps({ page, size }); }}
                   rowKey={(m) => m.id}
                   label="Email outbox"
                   busy={busy}
@@ -1069,6 +1131,8 @@ export function Admin() {
               <div className="mt-sm">
                 <DataTable<AuditLog>
                   rows={logs}
+                  page={pages.audit}
+                  onPage={turn('audit', refreshAudit)}
                   rowKey={(l) => l.id}
                   label="Audit log"
                   busy={busy}

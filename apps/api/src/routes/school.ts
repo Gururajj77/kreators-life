@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Cohort, CohortSession, CourseAssignment, Enrollment, LearningItem, Program, Submission } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { audit, can, nameOf, newId, notify, nowIso, num, oneOf, str } from '../db';
+import { audit, can, nameOf, newId, notify, nowIso, num, oneOf, str, pageOf, paged } from '../db';
 
 export const school = new Hono<AppEnv>();
 
@@ -18,14 +18,17 @@ school.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const staff = can(user, 'cohorts');
-  const [progs, cohorts, mine, managed] = await Promise.all([
-    db.prepare(staff ? 'SELECT * FROM programs ORDER BY created_at DESC' : 'SELECT * FROM programs WHERE published = 1 ORDER BY created_at DESC').all<ProgramRow>(),
+  const ask = pageOf(c);
+  const [progsAll, cohorts, mine, managed] = await Promise.all([
+    db.prepare(staff ? 'SELECT * FROM programs ORDER BY created_at DESC LIMIT ? OFFSET ?' : 'SELECT * FROM programs WHERE published = 1 ORDER BY created_at DESC LIMIT ? OFFSET ?').bind(ask.limit, ask.offset).all<ProgramRow>(),
     db.prepare(`${COHORT_SELECT} WHERE k.status != 'cancelled' ORDER BY k.start_at`).all<CohortRow>(),
     db.prepare(`${COHORT_SELECT} WHERE k.id IN (SELECT cohort_id FROM enrollments WHERE learner_user_id = ? AND status != 'withdrawn')`).bind(user.id).all<CohortRow>(),
     db.prepare(`${COHORT_SELECT} WHERE k.manager_user_id = ?`).bind(user.id).all<CohortRow>(),
   ]);
+  const pg = paged(progsAll.results, ask);
+  const progs = { results: pg.items };
   const programs: Program[] = progs.results.map((p) => ({ id: p.id, name: p.name, description: p.description, pricePoints: p.price_points, priceCents: p.price_cents, currency: p.currency, deliveryMode: p.delivery_mode, published: p.published === 1, outcomes: p.outcomes, prerequisites: p.prerequisites, createdAt: p.created_at, cohorts: cohorts.results.filter((k) => k.program_id === p.id).map(toCohort) }));
-  return c.json({ programs, myCohorts: mine.results.map(toCohort), managed: managed.results.map(toCohort), staff, mentor: can(user, 'mentor') });
+  return c.json({ page: pg.page, programs, myCohorts: mine.results.map(toCohort), managed: managed.results.map(toCohort), staff, mentor: can(user, 'mentor') });
 });
 
 school.post('/programs', async (c) => {

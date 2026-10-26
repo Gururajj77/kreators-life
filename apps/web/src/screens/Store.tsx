@@ -10,6 +10,7 @@ import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useParamState } from '../lib/useParamState';
 import { useAuthed, useMe } from '../lib/queries';
+import { Pager, usePage } from '../components/Pager';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const pill = (on: boolean) => `toy min-h-[40px] shrink-0 rounded-pill border-2 px-sm text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card text-ink'}`;
@@ -30,7 +31,9 @@ export const cardClass = (featured: boolean) => `rounded-card bg-card p-sm ${fea
 export function Store() {
   const me = useMe();
   const qc = useQueryClient();
-  const q = useAuthed(['market'], api.market);
+  const ip = usePage('i');
+  const lp = usePage('l');
+  const q = useAuthed(['market', ip.query, lp.query], () => api.market(`${ip.query}&${lp.query}`));
   const d = q.data;
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ['market'] });
@@ -170,6 +173,7 @@ export function Store() {
             </li>
           ))}
         </ul>
+        <Pager page={d?.itemsPage} prefix="i" label="new gear" />
       </section>
 
       <section className="mt-lg" aria-labelledby="preowned-heading">
@@ -185,6 +189,7 @@ export function Store() {
             </li>
           ))}
         </ul>
+        <Pager page={d?.listingsPage} prefix="l" label="pre-owned gear" />
       </section>
 
       {d && (d.mine.listings.length > 0 || d.mine.offers.length > 0) && (

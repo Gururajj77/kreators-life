@@ -22,7 +22,7 @@ import {
   type StoreStage,
 } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { nameOf, newId, notify, nowIso, num, oneOf, str } from '../db';
+import { nameOf, newId, notify, nowIso, num, oneOf, str, pageOf, paged } from '../db';
 import { trustForMany } from '../rewards';
 import { badgesNow, honorKeys } from '../db';
 import { isBadgeKey, unlockFor } from '@kreators/shared';
@@ -112,24 +112,30 @@ market.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const now = nowIso();
+  const askItems = pageOf(c, 'i');
+  const askListings = pageOf(c, 'l');
   const [items, kits, listings, mineListings, mineOffers] = await Promise.all([
-    db.prepare(`${ITEM_SELECT} WHERE i.status = 'live' ORDER BY CASE WHEN i.featured_until > ? THEN 0 ELSE 1 END, i.created_at DESC LIMIT 200`).bind(now).all<ItemRow>(),
+    db.prepare(`${ITEM_SELECT} WHERE i.status = 'live' ORDER BY CASE WHEN i.featured_until > ? THEN 0 ELSE 1 END, i.created_at DESC LIMIT ? OFFSET ?`).bind(now, askItems.limit, askItems.offset).all<ItemRow>(),
     db.prepare("SELECT * FROM store_kits WHERE status = 'live' ORDER BY CASE WHEN featured_until > ? THEN 0 ELSE 1 END, budget_cents ASC LIMIT 50").bind(now).all<KitRow>(),
-    db.prepare(`${LISTING_SELECT} WHERE l.status IN ('live', 'agreed') OR (l.status = 'sold' AND l.updated_at >= ?) ORDER BY CASE WHEN l.featured_until > ? THEN 0 ELSE 1 END, CASE l.status WHEN 'live' THEN 0 WHEN 'agreed' THEN 1 ELSE 2 END, l.created_at DESC LIMIT 200`).bind(new Date(Date.now() - 14 * 86_400_000).toISOString(), now).all<ListingRow>(),
+    db.prepare(`${LISTING_SELECT} WHERE l.status IN ('live', 'agreed') OR (l.status = 'sold' AND l.updated_at >= ?) ORDER BY CASE WHEN l.featured_until > ? THEN 0 ELSE 1 END, CASE l.status WHEN 'live' THEN 0 WHEN 'agreed' THEN 1 ELSE 2 END, l.created_at DESC LIMIT ? OFFSET ?`).bind(new Date(Date.now() - 14 * 86_400_000).toISOString(), now, askListings.limit, askListings.offset).all<ListingRow>(),
     db.prepare(`${LISTING_SELECT} WHERE l.seller_id = ? ORDER BY l.created_at DESC LIMIT 50`).bind(user.id).all<ListingRow>(),
     db.prepare(`${OFFER_SELECT} WHERE o.buyer_id = ? ORDER BY o.created_at DESC LIMIT 50`).bind(user.id).all<OfferRow>(),
   ]);
   const kitList = await Promise.all(kits.results.map((k) => toKit(db, k)));
   const have = await haveFor(db, user);
-  const itemList = items.results.map((i) => toItem(i, have));
-  const trust = await trustForMany(db, [...listings.results, ...mineListings.results].map((l) => l.seller_id));
-  const listingList = listings.results.map((l) => toListing(l, user.id, trust));
+  const itemsPg = paged(items.results, askItems);
+  const listingsPg = paged(listings.results, askListings);
+  const itemList = itemsPg.items.map((i) => toItem(i, have));
+  const trust = await trustForMany(db, [...listingsPg.items, ...mineListings.results].map((l) => l.seller_id));
+  const listingList = listingsPg.items.map((l) => toListing(l, user.id, trust));
   const featured: MarketCard[] = [
     ...itemList.filter((i) => isFeatured(i.featuredUntil, now)).map((item): MarketCard => ({ type: 'item', item })),
     ...kitList.filter((k) => isFeatured(k.featuredUntil, now)).map((kit): MarketCard => ({ type: 'kit', kit })),
     ...listingList.filter((l) => l.status === 'live' && isFeatured(l.featuredUntil, now)).map((listing): MarketCard => ({ type: 'listing', listing })),
   ];
   const res: MarketResponse = {
+    itemsPage: itemsPg.page,
+    listingsPage: listingsPg.page,
     featured,
     kits: kitList,
     items: itemList,

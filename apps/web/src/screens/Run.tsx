@@ -13,6 +13,7 @@ import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { shortDay } from '../lib/date';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
+import { Pager, usePage } from '../components/Pager';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -122,7 +123,8 @@ function UpcomingRow({ r }: { r: RunItem }) {
 }
 
 export function Run() {
-  const q = useAuthed(['run'], api.run);
+  const pg = usePage();
+  const q = useAuthed(['run', pg.query], () => api.run(pg.query));
   const [params, setParams] = useSearchParams();
   const asked = params.get('tab');
   const tab: Tab = TABS.some((t) => t.key === asked) ? (asked as Tab) : 'clubs';
@@ -213,6 +215,7 @@ function ClubsTab({ d, onStart }: { d: RunResponse; onStart: () => void }) {
             <ClubCard key={k.id} k={k} />
           ))}
         </ul>
+        <Pager page={d.page} label="clubs" />
       </section>
     </>
   );
@@ -361,7 +364,8 @@ function ApplicationRow({ a, onChange }: { a: RunCollabApplication & { collabTit
 }
 
 function CollabsTab() {
-  const q = useAuthed(['run-collabs'], api.runCollabs);
+  const pg = usePage('c');
+  const q = useAuthed(['run-collabs', pg.query], () => api.runCollabs(pg.query));
   const [posting, setPosting] = useState(false);
   const [applying, setApplying] = useState<RunCollab | null>(null);
   const d = q.data;
@@ -384,6 +388,7 @@ function CollabsTab() {
           <CollabCard key={k.id} k={k} myClubs={d.myClubs} onApply={() => setApplying(k)} onChange={() => q.refetch()} />
         ))}
       </ul>
+      <Pager page={d?.page} prefix="c" label="collabs" />
       {d && d.applications.length > 0 && (
         <section className="mt-lg" aria-labelledby="run-apps">
           <h2 id="run-apps" className="text-[24px]">

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { CONTENT_KINDS, LINK_SOURCES, detectPlatform, type ContentItem, type Customer, type DmAutomation, type DmRequest, type DmSend, type Funnel, type FunnelStep, type PayoutSummary, type Sequence, type TrackedLink } from '@kreators/shared';
 import type { AppEnv, Env } from '../env';
-import { nameOf, newId, notify, nowIso, num, oneOf, parseList, randomCode, str } from '../db';
+import { nameOf, newId, notify, nowIso, num, oneOf, parseList, randomCode, str, pageOf, paged } from '../db';
 import { fetchMetrics } from '../social';
 import { providerFor } from '../payments';
 import { logEvent, sendEmail, track } from '../ops';
@@ -21,8 +21,10 @@ const LINK_SELECT = `SELECT l.*, p.title AS product_title,
 const toLink = (r: LinkRow): TrackedLink => ({ id: r.id, code: r.code, productId: r.product_id, productTitle: r.product_title, sourceType: r.source_type, contentItemId: r.content_item_id, automationId: r.automation_id, label: r.label, clicks: r.clicks, checkouts: r.checkouts, sales: r.sales, revenuePoints: r.revenue, createdAt: r.created_at });
 
 growth.get('/links', async (c) => {
-  const rows = await c.env.DB.prepare(`${LINK_SELECT} WHERE l.owner_id = ? ORDER BY l.created_at DESC LIMIT 300`).bind(c.get('user').id).all<LinkRow>();
-  return c.json({ links: rows.results.map(toLink) });
+  const ask = pageOf(c);
+  const rows = await c.env.DB.prepare(`${LINK_SELECT} WHERE l.owner_id = ? ORDER BY l.created_at DESC LIMIT ? OFFSET ?`).bind(c.get('user').id, ask.limit, ask.offset).all<LinkRow>();
+  const pg = paged(rows.results, ask);
+  return c.json({ page: pg.page, links: pg.items.map(toLink) });
 });
 
 async function createLink(db: D1Database, ownerId: string, body: { productId?: string | null; sourceType?: string; contentItemId?: string | null; automationId?: string | null; label?: string }): Promise<LinkRow | null> {
@@ -72,9 +74,11 @@ growth.get('/content', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const sort = c.req.query('sort') === 'views' ? 'ci.views DESC' : c.req.query('sort') === 'recent' ? 'ci.created_at DESC' : 'revenue DESC, clicks DESC';
-  const rows = await db.prepare(`${CONTENT_SELECT} WHERE ci.owner_id = ? ORDER BY ${sort} LIMIT 300`).bind(user.id).all<ContentRow>();
+  const ask = pageOf(c);
+  const rows = await db.prepare(`${CONTENT_SELECT} WHERE ci.owner_id = ? ORDER BY ${sort} LIMIT ? OFFSET ?`).bind(user.id, ask.limit, ask.offset).all<ContentRow>();
+  const pg = paged(rows.results, ask);
   const direct = await db.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(points),0) AS points FROM orders WHERE owner_id = ? AND status IN ('paid','test') AND source_link_id IS NULL").bind(user.id).first<{ n: number; points: number }>();
-  return c.json({ items: rows.results.map(toContent), direct: { sales: direct?.n ?? 0, revenuePoints: direct?.points ?? 0 } });
+  return c.json({ page: pg.page, items: pg.items.map(toContent), direct: { sales: direct?.n ?? 0, revenuePoints: direct?.points ?? 0 } });
 });
 
 growth.post('/content', async (c) => {

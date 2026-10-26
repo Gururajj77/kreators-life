@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Notification } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { nowIso } from '../db';
+import { nowIso, pageOf, paged } from '../db';
 
 export const inbox = new Hono<AppEnv>();
 
@@ -19,9 +19,11 @@ const toN = (r: Row): Notification => ({ id: r.id, kind: r.kind, title: r.title,
 inbox.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const rows = await db.prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 60').bind(user.id).all<Row>();
+  const ask = pageOf(c);
+  const rows = await db.prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?').bind(user.id, ask.limit, ask.offset).all<Row>();
   const unread = await db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL').bind(user.id).first<{ n: number }>();
-  return c.json({ notifications: rows.results.map(toN), unread: unread?.n ?? 0 });
+  const pg = paged(rows.results, ask);
+  return c.json({ page: pg.page, notifications: pg.items.map(toN), unread: unread?.n ?? 0 });
 });
 
 inbox.post('/read-all', async (c) => {

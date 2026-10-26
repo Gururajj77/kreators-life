@@ -10,6 +10,7 @@ import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useAuthed, useMe, useRefreshAll, useStudio } from '../lib/queries';
+import { Pager, usePage } from '../components/Pager';
 import { useSession } from '../lib/store';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
@@ -164,7 +165,8 @@ function SalesSection() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [csvError, setCsvError] = useState<string | null>(null);
-  const sales = useAuthed(['sales', status, from, to], () => api.sales({ status: status || undefined, from: from || undefined, to: to || undefined }));
+  const sp = usePage('s');
+  const sales = useAuthed(['sales', status, from, to, sp.query], () => api.sales({ status: status || undefined, from: from || undefined, to: to || undefined }, sp.query));
   const downloadCsv = async () => {
     setCsvError(null);
     try {
@@ -239,6 +241,7 @@ function SalesSection() {
           </li>
         ))}
       </ul>
+      <Pager page={sales.data?.page} prefix="s" label="sales" />
     </section>
   );
 }
@@ -354,7 +357,8 @@ function PageTab() {
 
 function BookingsTab() {
   const me = useMe();
-  const q = useAuthed(['studio-bookings'], api.studioBookings);
+  const bp = usePage('b');
+  const q = useAuthed(['studio-bookings', bp.query], () => api.studioBookings(bp.query));
   const avail = useAuthed(['availability'], api.availability);
   const refresh = useRefreshAll();
   const zone = me.data?.user.timezone ?? 'Asia/Kolkata';
@@ -454,6 +458,7 @@ function BookingsTab() {
             </li>
           ))}
         </ul>
+        <Pager page={q.data?.page} prefix="b" label="bookings" />
       </section>
     </>
   );
@@ -519,7 +524,8 @@ function OverridesSection() {
 }
 
 function ReviewsTab() {
-  const q = useAuthed(['studio-testimonials'], api.testimonials);
+  const rp = usePage('r');
+  const q = useAuthed(['studio-testimonials', rp.query], () => api.testimonials(rp.query));
   const refresh = useRefreshAll();
   const approve = useMutation({ mutationFn: ({ id, approved }: { id: string; approved: boolean }) => api.approveTestimonial(id, approved), onSuccess: () => refresh() });
   return (
@@ -542,6 +548,7 @@ function ReviewsTab() {
           </li>
         ))}
       </ul>
+      <Pager page={q.data?.page} prefix="r" label="reviews" />
     </section>
   );
 }

@@ -1,6 +1,7 @@
 // The smoke checks. Run through blueprint.sh, which starts the server this talks to.
 // Node imports the shared model straight from TypeScript (--experimental-strip-types).
 import { QUESTIONS, XP, POINTS, WAIT, RUN_REWARD, SOCIAL_REWARDS, MAX_NOT_TO_DO, MODULES, FEATURE_FEE_POINTS } from '../../packages/shared/src/index.ts';
+import { LIMITS } from '../../apps/api/src/limits.ts';
 
 const ORIGIN = process.env.SMOKE_ORIGIN ?? 'http://127.0.0.1:8788';
 const ADMIN_KEY = process.env.SMOKE_ADMIN_KEY ?? 'smoke-admin-key';
@@ -48,8 +49,10 @@ const userOf = (r) => r.json?.user ?? r.json;
 async function me(token) {
   return userOf(await api('GET', '/me', undefined, token));
 }
+const GROWN = '1990-05-20';
+const PHONE = '+91 98765 43210';
 async function signup(email, password, displayName) {
-  const r = await api('POST', '/auth/signup', { email, password, displayName });
+  const r = await api('POST', '/auth/signup', { email, password, displayName, phone: PHONE, birthDate: GROWN });
   if (r.status !== 201) throw new Error(`signup ${email} failed: ${r.status} ${JSON.stringify(r.json)}`);
   return { token: r.json.token, user: r.json.user };
 }
@@ -80,20 +83,26 @@ let A; // founder, becomes admin
 let B; // a buyer and runner
 let C; // a seller and a run host
 {
-  const weak = await api('POST', '/auth/signup', { email: `weak-${stamp}@smoke.test`, password: 'password' }, null, { 'CF-Connecting-IP': SPARE_ADDRESS });
+  const weak = await api('POST', '/auth/signup', { email: `weak-${stamp}@smoke.test`, password: 'password', phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': SPARE_ADDRESS });
   check('a common password is refused', weak.status === 400, weak.json);
-  const repeat = await api('POST', '/auth/signup', { email: `rep-${stamp}@smoke.test`, password: 'aaaaaaaaaa' }, null, { 'CF-Connecting-IP': SPARE_ADDRESS });
+  const repeat = await api('POST', '/auth/signup', { email: `rep-${stamp}@smoke.test`, password: 'aaaaaaaaaa', phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': SPARE_ADDRESS });
   check('one character repeated is refused', repeat.status === 400, repeat.json);
-  const own = await api('POST', '/auth/signup', { email: `gururaj-${stamp}@smoke.test`, password: `gururaj-${stamp}xyz` }, null, { 'CF-Connecting-IP': SPARE_ADDRESS });
+  const own = await api('POST', '/auth/signup', { email: `gururaj-${stamp}@smoke.test`, password: `gururaj-${stamp}xyz`, phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': SPARE_ADDRESS });
   check('the email inside the password is refused', own.status === 400, own.json);
-  const badEmail = await api('POST', '/auth/signup', { email: 'nope', password: `Fine-${stamp}-pass` }, null, { 'CF-Connecting-IP': SPARE_ADDRESS });
+  const badEmail = await api('POST', '/auth/signup', { email: 'nope', password: `Fine-${stamp}-pass`, phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': SPARE_ADDRESS });
   check('a bad email is refused', badEmail.status === 400, badEmail.json);
+  const young = await api('POST', '/auth/signup', { email: `young-${stamp}@smoke.test`, password: `Fine-${stamp}-pass`, phone: PHONE, birthDate: new Date(Date.now() - 17 * 365.25 * 86_400_000).toISOString().slice(0, 10) }, null, { 'CF-Connecting-IP': SPARE_ADDRESS });
+  check('anyone under eighteen is refused', young.status === 400 && /18/.test(young.json.error ?? ''), young.json);
+  const noBirthday = await api('POST', '/auth/signup', { email: `nobday-${stamp}@smoke.test`, password: `Fine-${stamp}-pass`, phone: PHONE }, null, { 'CF-Connecting-IP': SPARE_ADDRESS });
+  check('a date of birth is required', noBirthday.status === 400, noBirthday.json);
+  const badPhone = await api('POST', '/auth/signup', { email: `phone-${stamp}@smoke.test`, password: `Fine-${stamp}-pass`, phone: '12', birthDate: GROWN }, null, { 'CF-Connecting-IP': SPARE_ADDRESS });
+  check('a phone number is required and checked', badPhone.status === 400, badPhone.json);
 
   // The founder address may already exist from an earlier run on the same database: sign in then.
-  const first = await api('POST', '/auth/signup', { email: founderEmail, password: founderPass, displayName: 'Smoke founder' });
+  const first = await api('POST', '/auth/signup', { email: founderEmail, password: founderPass, displayName: 'Smoke founder', phone: PHONE, birthDate: GROWN });
   if (first.status === 201) A = { token: first.json.token, user: first.json.user };
   else {
-    const prev = await api('POST', '/auth/signin', { email: founderEmail, password: founderPass });
+    const prev = await api('POST', '/auth/signin', { email: founderEmail, password: founderPass, phone: PHONE, birthDate: GROWN });
     if (prev.status !== 200) {
       // The old password is unknown: make the smoke database fresh (blueprint.sh --fresh) or pass SMOKE_FOUNDER_PASS.
       console.log(`  founder sign-up answered ${first.status} ${JSON.stringify(first.json)} and sign-in ${prev.status}; run blueprint.sh --fresh or pass SMOKE_FOUNDER_PASS`);
@@ -102,12 +111,13 @@ let C; // a seller and a run host
     A = { token: prev.json.token, user: prev.json.user };
   }
   check('founder email becomes admin on sign-up', A.user.role === 'admin', A.user.role);
-  const dup = await api('POST', '/auth/signup', { email: founderEmail, password: founderPass });
+  const dup = await api('POST', '/auth/signup', { email: founderEmail, password: founderPass, phone: PHONE, birthDate: GROWN });
   check('a second sign-up with the same email is refused', dup.status === 409, dup.json);
 
   B = await signup(`buyer-${stamp}@smoke.test`, `Lantern-${stamp}-pass`, 'Smoke buyer');
   C = await signup(`seller-${stamp}@smoke.test`, `Harbour-${stamp}-pass`, 'Smoke seller');
   check('a plain sign-up is a user', B.user.role === 'user', B.user.role);
+  check('the phone is kept in digits and the birthday as given', B.user.phone === '+919876543210' && B.user.birthDate === GROWN, { phone: B.user.phone, birthDate: B.user.birthDate });
   check('sign-up creates nothing but the account', B.user.xp === 0 && B.user.points === 0 && B.user.streak === 0, { xp: B.user.xp, points: B.user.points });
 
   const wrong = await api('POST', '/auth/signin', { email: `buyer-${stamp}@smoke.test`, password: 'not-the-password-1' });
@@ -140,7 +150,7 @@ let C; // a seller and a run host
   const anonMe = await me(anon.json.token);
   const on = Object.entries(anonMe.modules ?? {}).filter(([, v]) => v).map(([k]) => k);
   check('only the default apps start on', defaults.every((k) => anonMe.modules?.[k] !== false) && on.every((k) => defaults.includes(k)), { on, defaults });
-  const attach = await api('POST', '/auth/signup', { email: `device-${stamp}@smoke.test`, password: `Compass-${stamp}-pass` }, anon.json.token);
+  const attach = await api('POST', '/auth/signup', { email: `device-${stamp}@smoke.test`, password: `Compass-${stamp}-pass`, phone: PHONE, birthDate: GROWN }, anon.json.token);
   check('a device session keeps its progress when an email is added', attach.status === 201 && attach.json.user.id === anon.json.user.id, attach.json?.user?.id);
   const signout = await api('POST', '/auth/signout', {}, attach.json.token);
   const after = await api('GET', '/me', undefined, attach.json.token);
@@ -562,6 +572,90 @@ section('School and staff');
   await admin('POST', `/admin/users/${C.user.id}/role`, { role: 'user' });
 }
 
+// ---------------------------------------------------------------- club benefits and reward changes
+section('Club and Work');
+{
+  await admin('POST', `/admin/users/${C.user.id}/role`, { role: 'sub_admin' });
+  await admin('POST', `/admin/users/${C.user.id}/permissions`, { permissions: ['talent', 'review'] });
+  const opp = await api('POST', '/work/opportunities', { title: `Club gig ${stamp}`, clubOnly: true }, C.token);
+  check('staff can post a club-only listing', opp.status === 201 && opp.json.id, opp.json);
+  const pub = await api('PATCH', `/work/opportunities/${opp.json.id}`, { status: 'published' }, C.token);
+  check('and publish it', pub.status === 200, pub.json);
+  const listOut = await api('GET', '/work', undefined, B.token);
+  check('a non-member does not see a club-only listing', listOut.status === 200 && !JSON.stringify(listOut.json.opportunities).includes(`Club gig ${stamp}`), '');
+  const detailOut = await api('GET', `/work/opportunities/${opp.json.id}`, undefined, B.token);
+  check('nor open it', detailOut.status === 403, detailOut.status);
+  const applyOut = await api('POST', `/work/opportunities/${opp.json.id}/apply`, { coverNote: 'me' }, B.token);
+  check('nor apply', applyOut.status === 403, applyOut.status);
+  const site = await api('GET', '/public/explore?type=opportunity');
+  check('the public site never lists it', site.status === 200 && !JSON.stringify(site.json).includes(`Club gig ${stamp}`), site.status);
+  const applyClub = await api('POST', '/club/apply', { note: 'smoke' }, B.token);
+  check('a member applies to the Club', applyClub.status === 201, applyClub.json);
+  const clubC = await api('GET', '/club', undefined, C.token);
+  const m = clubC.json.queue?.find((x) => x.userId === B.user.id);
+  check('a reviewer sees the application and the staff list', clubC.status === 200 && Boolean(m) && Array.isArray(clubC.json.staff) && clubC.json.staff.some((x) => x.id === C.user.id), clubC.json?.staff);
+  const approve = await api('POST', `/club/memberships/${m?.id}`, { status: 'approved', months: 12 }, C.token);
+  check('a reviewer approves', approve.status === 200, approve.json);
+  const listIn = await api('GET', '/work', undefined, B.token);
+  check('a Club member gets the first look', JSON.stringify(listIn.json.opportunities).includes(`Club gig ${stamp}`), '');
+  const applyIn = await api('POST', `/work/opportunities/${opp.json.id}/apply`, { coverNote: 'me' }, B.token);
+  check('and can apply', applyIn.status === 201, applyIn.json);
+  const byMember = await api('POST', `/club/memberships/${m?.id}/manager`, { managerId: C.user.id }, B.token);
+  check('only reviewers name a manager', byMember.status === 403, byMember.status);
+  const notStaff = await api('POST', `/club/memberships/${m?.id}/manager`, { managerId: B.user.id }, C.token);
+  check('a manager must be on staff', notStaff.status === 400, notStaff.json);
+  const named = await api('POST', `/club/memberships/${m?.id}/manager`, { managerId: C.user.id }, C.token);
+  check('a reviewer names a manager', named.status === 200, named.json);
+  const mineClub = await api('GET', '/club', undefined, B.token);
+  check('the member sees their manager by name', mineClub.json.mine?.managerName === 'Smoke seller', mineClub.json?.mine);
+  const inboxB = await api('GET', '/inbox', undefined, B.token);
+  check('and hears about it in the inbox', JSON.stringify(inboxB.json).includes('Your Club manager is'), '');
+}
+
+section('Reward changes');
+{
+  const reward = await api('POST', '/win', { title: `Smoke reward ${stamp}`, brandName: 'Smoke brand', budgetPoints: 1000, ratePerThousand: 10, minViews: 100 }, C.token);
+  check('staff launch a reward', reward.status === 201 && reward.json.id, reward.json);
+  const entry = await api('POST', `/win/${reward.json.id}/submit`, { url: 'https://www.youtube.com/watch?v=smoke' }, B.token);
+  check('a person enters with a link', entry.status === 201, entry.json);
+  const byMember = await api('PATCH', `/win/${reward.json.id}`, { brief: 'nope' }, B.token);
+  check('only staff change a reward', byMember.status === 403, byMember.status);
+  const same = await api('PATCH', `/win/${reward.json.id}`, {}, C.token);
+  check('saving nothing new keeps the version', same.status === 200 && same.json.version === 1, same.json);
+  const changed = await api('PATCH', `/win/${reward.json.id}`, { brief: 'New brief', minViews: 500 }, C.token);
+  check('a change bumps the version and says what changed', changed.status === 200 && changed.json.version === 2 && changed.json.changed?.includes('brief') && changed.json.changed?.includes('minimum views'), changed.json);
+  const detail = await api('GET', `/win/${reward.json.id}`, undefined, B.token);
+  check('the reward carries its version', detail.json.bounty?.version === 2 && detail.json.bounty?.minViews === 500, detail.json?.bounty);
+  const inboxB = await api('GET', '/inbox', undefined, B.token);
+  check('everyone who entered is told', JSON.stringify(inboxB.json).includes('changed (version 2)'), '');
+  const badTime = await api('PATCH', `/win/${reward.json.id}`, { endsAt: 'soon' }, C.token);
+  check('a bad closing time is refused', badTime.status === 400, badTime.json);
+  await admin('POST', `/admin/users/${C.user.id}/permissions`, { permissions: [] });
+  await admin('POST', `/admin/users/${C.user.id}/role`, { role: 'user' });
+}
+
+section('Pages');
+{
+  const ten = await api('GET', '/work?page=1&size=10', undefined, B.token);
+  check('a list answers with its page', ten.status === 200 && ten.json.page?.page === 1 && ten.json.page?.size === 10 && typeof ten.json.page?.more === 'boolean', ten.json?.page);
+  const odd = await api('GET', '/work?page=0&size=33', undefined, B.token);
+  check('a size off the list falls back to 25 and page floors at 1', odd.json.page?.size === 25 && odd.json.page?.page === 1, odd.json?.page);
+  const far = await api('GET', '/work?page=50&size=100', undefined, B.token);
+  check('a page past the end is empty with no next page', far.status === 200 && far.json.opportunities.length === 0 && far.json.page?.more === false, far.json?.page);
+  // Spread across accounts so nobody trips the posts-per-hour limit.
+  for (let i = 0; i < 11; i += 1) await api('POST', '/community', { category: 'Stories', body: `Page filler ${stamp} ${i}` }, [A, B, C][i % 3].token);
+  const first = await api('GET', '/community?page=1&size=10', undefined, B.token);
+  const second = await api('GET', '/community?page=2&size=10', undefined, B.token);
+  check('ten rows a page and a next page when there are more', first.json.posts?.length === 10 && first.json.page?.more === true, first.json?.page);
+  check('the second page carries on from the first', second.status === 200 && second.json.posts?.length >= 1 && !second.json.posts.some((p) => first.json.posts.some((f) => f.id === p.id)), second.json?.page);
+  const inbox = await api('GET', '/inbox?size=10', undefined, B.token);
+  check('the inbox pages too', inbox.json.page?.size === 10, inbox.json?.page);
+  const users = await admin('GET', '/admin/users?page=1&size=10');
+  check('admin tables page from the same helper', users.status === 200 && users.json.page?.size === 10, users.json?.page);
+  const obs = await api('GET', '/internal/observability?page=1&size=10', undefined, A.token);
+  check('observability pages by the same rule', obs.status === 200 && obs.json.page?.size === 10 && typeof obs.json.total === 'number', obs.json?.page);
+}
+
 // ---------------------------------------------------------------- admin, flags, internal
 section('Admin');
 {
@@ -578,16 +672,30 @@ section('Admin');
   const meOff = await api('GET', '/me', undefined, B.token);
   check('access resolves on the server', meOff.status === 200 && meOff.json.access?.store?.available === false && meOff.json.access?.store?.reason === 'disabled', meOff.json?.access?.store);
   const storeGone = await api('GET', '/market', undefined, B.token);
-  check('a switched-off app refuses its API', storeGone.status === 403 || storeGone.status === 404 || storeGone.status === 200, storeGone.status);
+  check('a switched-off app refuses its API', storeGone.status === 403 && /not available/.test(storeGone.json.error ?? ''), storeGone.json);
+  const coreStillOpen = await api('GET', '/today', undefined, B.token);
+  check('the core stays open while an app is off', coreStillOpen.status === 200, coreStillOpen.status);
   const flagOn = await admin('POST', '/admin/flags/store', { enabled: true });
   check('a flag can be switched back on', flagOn.json.setting?.enabled === true, flagOn.json);
   const override = await admin('POST', '/admin/flags/reviews/overrides', { subjectType: 'user', subjectId: B.user.id, enabled: false, reason: 'smoke' });
   check('an override for one person can be set', override.status === 201 && override.json.override?.id, override.json);
   const meOverridden = await api('GET', '/me', undefined, B.token);
   check('the override reaches that person', meOverridden.json.access?.reviews?.available === false && meOverridden.json.access?.reviews?.reason === 'override', meOverridden.json?.access?.reviews);
+  const reviewsGone = await api('GET', '/reviews', undefined, B.token);
+  check('an override refuses the API too', reviewsGone.status === 403, reviewsGone.status);
   await admin('DELETE', `/admin/flags/overrides/${override.json.override.id}`);
-  const audit = await admin('GET', '/admin/audit');
-  check('every change is audited', audit.status === 200 && JSON.stringify(audit.json).includes('flag.set') && JSON.stringify(audit.json).includes('founder email'), audit.status);
+  const reviewsBack = await api('GET', '/reviews', undefined, B.token);
+  check('and the door opens again when it is removed', reviewsBack.status === 200, reviewsBack.status);
+  // The audit log is paged now, so walk the pages: the flag change is recent, the founder promotion may be far back.
+  let auditText = '';
+  let auditStatus = 0;
+  for (let page = 1; page <= 20; page += 1) {
+    const r = await admin('GET', `/admin/audit?page=${page}&size=100`);
+    auditStatus = r.status;
+    auditText += JSON.stringify(r.json);
+    if (r.status !== 200 || !r.json.page?.more || (auditText.includes('flag.set') && auditText.includes('founder email'))) break;
+  }
+  check('every change is audited', auditStatus === 200 && auditText.includes('flag.set') && auditText.includes('founder email'), auditStatus);
   const obs = await api('GET', '/internal/observability', undefined, A.token);
   check('observability opens for an admin', obs.status === 200, obs.status);
   check('observability never carries journal entries or wellbeing logs', !/Smoke entry|"value":7\.5|journal_entries|wellbeing_logs/.test(JSON.stringify(obs.json)), '');
@@ -637,6 +745,12 @@ section('Limits');
     last = r.status;
   }
   check('sign-in is limited to ten a minute per address', last === 429, last);
+  let ticket = 0;
+  for (let i = 0; i < LIMITS.ticket.max + 1; i += 1) {
+    const r = await api('POST', '/support', { subject: `Smoke ticket ${i}`, body: 'Testing the limit.' }, C.token);
+    ticket = r.status;
+  }
+  check('support tickets are limited per person from the one limits file', ticket === 429, ticket);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

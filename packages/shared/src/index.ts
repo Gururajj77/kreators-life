@@ -798,6 +798,10 @@ export interface User {
   leaderboardOptIn: boolean;
   role: Role;
   email: string | null;
+  /** Asked at sign-up. Digits with a leading plus. */
+  phone: string;
+  /** Asked at sign-up, YYYY-MM-DD. Never shown to anyone else. */
+  birthDate: string;
   handle: string | null;
   bio: string;
   reminderTime: string | null;
@@ -880,8 +884,7 @@ export interface ObservabilityResponse {
   users: ObservedUser[];
   /** How many people match the search, before paging. */
   total: number;
-  offset: number;
-  limit: number;
+  page: Page;
 }
 
 export interface MeResponse {
@@ -1913,6 +1916,71 @@ export function passwordProblem(password: string, email = ''): string | null {
   if (/^(.)\1+$/.test(password)) return 'Not one character over and over.';
   const local = (email.toLowerCase().split('@')[0] ?? '').trim();
   if (local.length >= 4 && lower.includes(local)) return 'Not your email, or a part of it.';
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Pages: every long list is served a page at a time, 10, 25, 50 or 100 rows, with a next page.
+// ---------------------------------------------------------------------------
+
+export const PAGE_SIZES = [10, 25, 50, 100] as const;
+export type PageSize = (typeof PAGE_SIZES)[number];
+export const DEFAULT_PAGE_SIZE: PageSize = 25;
+
+/** Where a list is: which page, how many rows a page holds, and whether a next page exists. */
+export interface Page {
+  page: number;
+  size: PageSize;
+  more: boolean;
+}
+
+/** A page size from a query string or a select, or the default. */
+export function pageSizeOf(v: unknown): PageSize {
+  const n = Number(v);
+  return (PAGE_SIZES as readonly number[]).includes(n) ? (n as PageSize) : DEFAULT_PAGE_SIZE;
+}
+
+/** The query string for a page, with an optional prefix for a second list on the same screen: "lpage=2&lsize=50". */
+export function pageQuery(page: number, size: number, prefix = ''): string {
+  return `${prefix}page=${Math.max(1, Math.floor(page))}&${prefix}size=${pageSizeOf(size)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Sign-up: a phone number and a date of birth, and the one age rule.
+// ---------------------------------------------------------------------------
+
+/** Nobody under this age can sign up. The terms page says the same. */
+export const MIN_AGE = 18;
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Whole years between a birth date and a day, both YYYY-MM-DD. */
+export function ageOn(birthDate: string, day: string): number {
+  const by = Number(birthDate.slice(0, 4));
+  const dy = Number(day.slice(0, 4));
+  const before = day.slice(5) < birthDate.slice(5) ? 1 : 0;
+  return dy - by - before;
+}
+
+/** Why a date of birth will not do, in plain words, or null when it is fine. */
+export function birthDateProblem(birthDate: string, today = new Date().toISOString().slice(0, 10)): string | null {
+  if (!DAY_RE.test(birthDate) || Number.isNaN(Date.parse(`${birthDate}T00:00:00Z`))) return 'Enter your date of birth.';
+  if (birthDate > today) return 'That day has not happened yet.';
+  const age = ageOn(birthDate, today);
+  if (age < MIN_AGE) return `You need to be ${MIN_AGE} or older to join.`;
+  if (age > 120) return 'That date does not look right.';
+  return null;
+}
+
+/** Digits only, with a leading plus kept: "+91 98765-43210" becomes "+919876543210". */
+export function normalizePhone(raw: string): string {
+  const t = raw.trim();
+  return (t.startsWith('+') ? '+' : '') + t.replace(/\D/g, '');
+}
+
+/** Why a phone number will not do, or null when it is fine: 8 to 15 digits, a country code is welcome. */
+export function phoneProblem(raw: string): string | null {
+  const p = normalizePhone(raw);
+  if (!/^\+?\d{8,15}$/.test(p)) return 'Enter a phone number with the country code, like +91 98765 43210.';
   return null;
 }
 
@@ -3135,6 +3203,8 @@ export interface Opportunity {
   deadline: string | null;
   status: 'draft' | 'published' | 'closed';
   eligibility: string;
+  /** Only Club members see it and can apply. */
+  clubOnly: boolean;
   createdAt: string;
   publishedAt: string | null;
   applications: number;
@@ -3365,6 +3435,7 @@ export interface RunTracking {
 }
 
 export interface RunResponse {
+  page: Page;
   clubs: RunClub[];
   mine: RunClub[];
   /** Runs coming up in your clubs. */
@@ -3387,6 +3458,7 @@ export interface RunClubDetail {
 }
 
 export interface RunCollabsResponse {
+  page: Page;
   collabs: RunCollab[];
   /** Clubs you host, to apply with. */
   myClubs: RunClub[];
@@ -3415,6 +3487,9 @@ export interface Membership {
   note: string;
   decisionNote: string;
   approvedBy: string | null;
+  /** The staff member named as this person's manager, once a reviewer picks one. */
+  managerId: string | null;
+  managerName: string | null;
   startsAt: string | null;
   endsAt: string | null;
   createdAt: string;
@@ -3929,6 +4004,7 @@ export const HOW_TO: Record<string, HowTo> = {
       'Read the brief, post your video on the platform it asks for, then submit the public link.',
       'YouTube views are read by the app. Other platforms are typed in and confirmed with a screenshot, one report every six hours.',
       'A reviewer verifies the views and finance pays points from the pool. A pool that runs dry pays nobody more.',
+      'If a reward changes after launch, its version goes up and everyone who entered gets a note saying what changed.',
     ],
     terms: ['bounty'],
   },
@@ -4373,6 +4449,8 @@ export interface PreownedMessage {
 }
 export type MarketCard = { type: 'item'; item: StoreItem } | { type: 'kit'; kit: StoreKit } | { type: 'listing'; listing: PreownedListing };
 export interface MarketResponse {
+  itemsPage: Page;
+  listingsPage: Page;
   featured: MarketCard[];
   kits: StoreKit[];
   items: StoreItem[];

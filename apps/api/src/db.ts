@@ -1,4 +1,4 @@
-import { parseLinkBlocks, type LinkBlock } from '@kreators/shared';
+import { pageSizeOf, parseLinkBlocks, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
 import { BADGES, EMPTY_SOCIALS, parsePublicSettings, HONORS, isStaffFor, levelFromXp, PERMISSIONS, RELATIONSHIPS, roleRank, RUN_BADGES, taskReadyAt, timeHonors, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
 import type { Context, Next } from 'hono';
 import type { AppEnv } from './env';
@@ -30,7 +30,30 @@ export const nowIso = () => new Date().toISOString();
 /** When a task written now can first be ticked. */
 export const readyFromNow = () => new Date(Date.now() + WAIT.taskMinAgeMinutes * 60_000).toISOString();
 
+/** The page a list was asked for: ?page=N&size=S, with a prefix when one screen pages two lists. */
+export interface PageAsk {
+  page: number;
+  size: PageSize;
+  /** One more than the size, so the extra row says whether there is a next page. */
+  limit: number;
+  offset: number;
+}
+export function pageOf(c: Context<AppEnv>, prefix = ''): PageAsk {
+  const size = pageSizeOf(c.req.query(`${prefix}size`) ?? c.req.query('size'));
+  const page = Math.max(1, Math.min(100_000, Math.floor(Number(c.req.query(`${prefix}page`)) || 1)));
+  return { page, size, limit: size + 1, offset: (page - 1) * size };
+}
+/** Trim the extra row off and say where the list is. */
+export function paged<T>(rows: readonly T[], ask: PageAsk): { items: T[]; page: Page } {
+  return { items: rows.slice(0, ask.size), page: { page: ask.page, size: ask.size, more: rows.length > ask.size } };
+}
+
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** An approved Club membership that has not run out. */
+export async function isClubMember(db: D1Database, userId: string): Promise<boolean> {
+  return Boolean(await db.prepare("SELECT 1 FROM memberships WHERE user_id = ? AND status IN ('approved','active') AND (ends_at IS NULL OR ends_at > ?)").bind(userId, nowIso()).first());
+}
 
 export function shiftDate(date: string, days: number): string {
   const d = new Date(`${date}T00:00:00Z`);
@@ -57,6 +80,8 @@ export function toUser(r: UserRow): User {
     leaderboardOptIn: r.leaderboard_opt_in === 1,
     role: r.role,
     email: r.email,
+    phone: r.phone ?? '',
+    birthDate: r.birth_date ?? '',
     handle: r.handle,
     bio: r.bio,
     reminderTime: r.reminder_time,

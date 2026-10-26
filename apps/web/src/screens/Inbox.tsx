@@ -6,11 +6,13 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useInbox, useMe, useRefreshAll } from '../lib/queries';
+import { Pager, usePage } from '../components/Pager';
 
 const ICON: Record<string, string> = { reply: '💬', order: '🛍️', lead: '📨', booking: '📅', follow: '🫶', broadcast: '📣', reminder: '⏰', review: '⭐', affiliate: '🤝', moderation: '🛡️' };
 
 export function Inbox() {
-  const q = useInbox();
+  const pg = usePage();
+  const q = useInbox(pg.query);
   const me = useMe();
   const refresh = useRefreshAll();
   const readAll = useMutation({ mutationFn: api.readAll, onSuccess: () => refresh() });
@@ -82,6 +84,7 @@ export function Inbox() {
             );
           })}
         </ul>
+        <Pager page={q.data?.page} label="notifications" />
       </section>
     </Screen>
   );

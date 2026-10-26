@@ -1,4 +1,4 @@
-import { FEED_FILTER_META, FEED_FILTERS, FEED_SORT_META, FEED_SORTS, POST_CATEGORIES, SOCIAL_REWARDS, type CommunityPost, type FeedFilter, type FeedSort } from '@kreators/shared';
+import { FEED_FILTER_META, FEED_FILTERS, FEED_SORT_META, FEED_SORTS, POST_CATEGORIES, SOCIAL_REWARDS, type CommunityPost, type FeedFilter, type FeedSort, DEFAULT_PAGE_SIZE, pageQuery, type PageSize } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
@@ -10,6 +10,7 @@ import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useParamState } from '../lib/useParamState';
 import { useAuthed, useCommunity, useMe, useRefreshAll } from '../lib/queries';
+import { Pager, PagerBar, usePage } from '../components/Pager';
 
 export function Community() {
   const me = useMe();
@@ -24,7 +25,8 @@ export function Community() {
   const setFilter = (f: FeedFilter) => setFilterRaw(f);
   const [showHidden, setShowHidden] = useState(false);
   const isMod = Boolean(me.data && me.data.user.role !== 'user');
-  const q = useCommunity(category || undefined, product, isMod && showHidden, sort, filter);
+  const pg = usePage();
+  const q = useCommunity(category || undefined, product, isMod && showHidden, sort, filter, pg.query);
   const celebrate = useCelebrate();
   const refresh = useRefreshAll();
   const [writing, setWriting] = useState(false);
@@ -131,6 +133,7 @@ export function Community() {
           </li>
         ))}
       </ul>
+      <Pager page={q.data?.page} label="posts" />
       <PostSheet open={writing} product={product} onClose={() => setWriting(false)} onSaved={(xp) => { refresh(); if (xp > 0) celebrate({ title: 'Posted', totalXp: xp, color: 'var(--color-r2)' }); }} />
       <RepliesSheet post={open} onClose={() => setOpen(null)} onSaved={(xp) => { refresh(); if (xp > 0) celebrate({ title: 'Replied', totalXp: xp, color: 'var(--color-r2)' }); }} />
     </Screen>
@@ -185,7 +188,8 @@ function PostSheet({ open, product, onClose, onSaved }: { open: boolean; product
 }
 
 function RepliesSheet({ post, onClose, onSaved }: { post: CommunityPost | null; onClose: () => void; onSaved: (xp: number) => void }) {
-  const q = useAuthed(['replies', post?.id ?? ''], () => api.replies(post!.id), Boolean(post));
+  const [rp, setRp] = useState<{ page: number; size: PageSize }>({ page: 1, size: DEFAULT_PAGE_SIZE });
+  const q = useAuthed(['replies', post?.id ?? '', rp.page, rp.size], () => api.replies(post!.id, pageQuery(rp.page, rp.size)), Boolean(post));
   const [text, setText] = useState('');
   const send = useMutation({
     mutationFn: () => api.reply(post!.id, text),
@@ -210,6 +214,7 @@ function RepliesSheet({ post, onClose, onSaved }: { post: CommunityPost | null; 
               </li>
             ))}
           </ul>
+          <PagerBar page={q.data?.page} onPage={(page, size) => setRp({ page, size })} label="replies" />
           <form
             className="mt-md flex gap-xs"
             onSubmit={(e) => {

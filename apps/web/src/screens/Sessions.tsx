@@ -1,16 +1,19 @@
-import { PRODUCT_KIND_META, type Product } from '@kreators/shared';
+import { PRODUCT_KIND_META, type Page, type Product } from '@kreators/shared';
 import { Link } from 'react-router';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed, useLibrary } from '../lib/queries';
+import { Pager, usePage } from '../components/Pager';
 
 export function Sessions() {
-  const sessions = useAuthed(['browse', 'session'], () => api.browse('session'));
-  const events = useAuthed(['browse', 'event'], () => api.browse('event'));
+  const sp = usePage('s');
+  const ep = usePage('e');
+  const sessions = useAuthed(['browse', 'session', sp.query], () => api.browse('session', sp.query));
+  const events = useAuthed(['browse', 'event', ep.query], () => api.browse('event', ep.query));
   const lib = useLibrary();
   const upcoming = (lib.data?.bookings ?? []).filter((b) => b.status === 'requested' || b.status === 'confirmed');
-  const list = (title: string, items: Product[] | undefined) => (
+  const list = (title: string, items: Product[] | undefined, page: Page | undefined, prefix: string) => (
     <section className="mt-lg">
       <h2 className="text-[24px]">{title}</h2>
       {items && items.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">None listed yet.</p>}
@@ -33,6 +36,7 @@ export function Sessions() {
           </li>
         ))}
       </ul>
+      <Pager page={page} prefix={prefix} label={title.toLowerCase()} />
     </section>
   );
   return (
@@ -57,8 +61,8 @@ export function Sessions() {
           </Link>
         </section>
       )}
-      {list('One-to-one sessions', sessions.data?.products)}
-      {list('Events', events.data?.products)}
+      {list('One-to-one sessions', sessions.data?.products, sessions.data?.page, 's')}
+      {list('Events', events.data?.products, events.data?.page, 'e')}
     </Screen>
   );
 }

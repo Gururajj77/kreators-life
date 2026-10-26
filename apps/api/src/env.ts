@@ -34,6 +34,8 @@ export interface UserRow {
   leaderboard_opt_in: number;
   role: 'user' | 'sub_admin' | 'admin';
   email: string | null;
+  phone: string;
+  birth_date: string;
   password_hash: string | null;
   password_salt: string | null;
   handle: string | null;

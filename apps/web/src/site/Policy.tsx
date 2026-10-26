@@ -34,7 +34,7 @@ export function Policy({ kind }: { kind: Kind }) {
       {kind === 'terms' && (
         <section>
           <H>What kreators.app is</H>
-          <P>A daily game for the seven relationships of a life, with tools for people who make things: learning, paid work, brand campaigns, content rewards, events, run clubs, a shop, finance and meetups. You need to be sixteen or older, or have a guardian's say-so.</P>
+          <P>A daily game for the seven relationships of a life, with tools for people who make things: learning, paid work, brand campaigns, content rewards, events, run clubs, a shop, finance and meetups. You need to be eighteen or older. Sign-up asks for your date of birth and a phone number, and an account for anyone younger is refused.</P>
           <H>Your account</H>
           <P>You start with a session on your device and may add an email. Keep your password private. You are responsible for what happens under your account, and one person has one account.</P>
           <H>Points, rewards and money</H>

@@ -2,6 +2,54 @@ import { MODULES, roleRank, rolloutBucket, type ModuleAccess, type ModuleSetting
 import type { UserRow } from './env';
 import { orgIdsOf, parseModules } from './db';
 
+/**
+ * Which module each API prefix belongs to, so a switched-off module is refused on the server and not
+ * only hidden by the client. A prefix that is not here is the core and always open. A two-segment
+ * prefix (studio/links) wins over its one-segment parent (studio). A route opens when any of the
+ * listed modules is available to the person: the wellbeing route serves every tracker, and the
+ * proposals route serves TV and Fund.
+ */
+export const MODULE_FOR_PREFIX: Record<string, readonly string[]> = {
+  school: ['school'],
+  work: ['work'],
+  army: ['army'],
+  win: ['win'],
+  party: ['party'],
+  run: ['run'],
+  community: ['community'],
+  club: ['club'],
+  bond: ['bond'],
+  circles: ['circles'],
+  life: ['life'],
+  wellbeing: ['wellbeing', 'mood', 'sleep', 'stress', 'mindful', 'life'],
+  journal: ['journal'],
+  reviews: ['reviews'],
+  companion: ['companion'],
+  studio: ['shop'],
+  'studio/links': ['content', 'automations'],
+  'studio/content': ['content', 'automations'],
+  'studio/automations': ['automations'],
+  'studio/funnels': ['automations'],
+  'studio/sequences': ['automations'],
+  'studio/leads': ['audience'],
+  'studio/broadcasts': ['audience'],
+  kyc: ['shop'],
+  market: ['store'],
+  finance: ['finance'],
+  resources: ['knowledge'],
+  tools: ['tools'],
+  proposals: ['tv', 'fund'],
+  manage: ['manage'],
+  internal: ['observability'],
+};
+
+/** The modules an API path under /api belongs to, or null for the core. */
+export function modulesForPath(path: string): readonly string[] | null {
+  const parts = path.replace(/^\/api\//, '').split('/').filter(Boolean);
+  const two = parts.length > 1 ? `${parts[0]}/${parts[1]}` : '';
+  return MODULE_FOR_PREFIX[two] ?? MODULE_FOR_PREFIX[parts[0] ?? ''] ?? null;
+}
+
 interface SettingRow {
   key: string;
   enabled: number;

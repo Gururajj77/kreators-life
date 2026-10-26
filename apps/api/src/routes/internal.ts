@@ -1,7 +1,7 @@
 import { isRole, MODULES, roleRank, ROLES, type ObservabilityResponse, type ObservedUser, type Role } from '@kreators/shared';
 import { Hono } from 'hono';
 import { accessFor, loadAccessContext } from '../access';
-import { audit, getUser } from '../db';
+import { audit, getUser, pageOf, paged } from '../db';
 import type { AppEnv, UserRow } from '../env';
 
 /**
@@ -24,8 +24,7 @@ type LightRow = Pick<UserRow, 'id' | 'display_name' | 'handle' | 'role' | 'modul
 internal.get('/observability', async (c) => {
   const db = c.env.DB;
   const q = (c.req.query('q') ?? '').trim().toLowerCase().slice(0, 60);
-  const offset = Math.max(0, Number(c.req.query('offset')) || 0);
-  const limit = Math.min(100, Math.max(1, Number(c.req.query('limit')) || 40));
+  const ask = pageOf(c);
   const [rows, members, ctx] = await Promise.all([
     db.prepare('SELECT id, display_name, handle, role, modules, created_at, onboarded_at FROM users WHERE display_name != ? ORDER BY created_at DESC').bind(DELETED).all<LightRow>(),
     db.prepare("SELECT user_id, organization_id FROM organization_members WHERE status = 'active'").all<{ user_id: string; organization_id: string }>(),
@@ -56,10 +55,9 @@ internal.get('/observability', async (c) => {
     totals,
     roles,
     apps: MODULES.map((m) => ({ key: m.key, name: m.name, emoji: m.emoji, group: m.group, on: on.get(m.key) ?? 0 })),
-    users: matched.slice(offset, offset + limit),
+    users: matched.slice(ask.offset, ask.offset + ask.size),
     total: matched.length,
-    offset,
-    limit,
+    page: { page: ask.page, size: ask.size, more: matched.length > ask.offset + ask.size },
   };
   return c.json(res);
 });

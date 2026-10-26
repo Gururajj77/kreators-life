@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { MAX_RUN_METRES, MAX_RUN_MINUTES, RUN_CODE_LENGTH, RUN_PACES, RUN_REWARD, runEntryState, weekStreak, type Run, type RunClub, type RunClubDetail, type RunCollab, type RunCollabApplication, type RunCollabsResponse, type RunEntry, type RunResponse, type RunTracking } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { audit, badgesNow, can, diffBadges, nameOf, newId, notify, nowIso, num, oneOf, orgIdsOf, orgRole, randomCode, str } from '../db';
+import { audit, badgesNow, can, diffBadges, nameOf, newId, notify, nowIso, num, oneOf, orgIdsOf, orgRole, randomCode, str, pageOf, paged } from '../db';
 
 /**
  * Kreators Run: run clubs like meetups, with one difference that makes the points honest. Every run has a start code
@@ -97,8 +97,9 @@ run.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const now = nowIso();
+  const ask = pageOf(c);
   const [clubs, upcoming, mine, collabs, track] = await Promise.all([
-    db.prepare(`${CLUB} WHERE k.status = 'active' AND (k.visibility = 'public' OR k.host_user_id = ?1 OR k.id IN (SELECT club_id FROM run_members WHERE user_id = ?1 AND status = 'member')) ORDER BY (next_run_at IS NULL), next_run_at, members DESC, k.created_at DESC LIMIT 100`).bind(user.id, now).all<ClubRow>(),
+    db.prepare(`${CLUB} WHERE k.status = 'active' AND (k.visibility = 'public' OR k.host_user_id = ?1 OR k.id IN (SELECT club_id FROM run_members WHERE user_id = ?1 AND status = 'member')) ORDER BY (next_run_at IS NULL), next_run_at, members DESC, k.created_at DESC LIMIT ? OFFSET ?`).bind(user.id, now, ask.limit, ask.offset).all<ClubRow>(),
     db.prepare(`${RUN} WHERE r.status = 'published' AND r.ends_at >= ?2 AND r.club_id IN (SELECT club_id FROM run_members WHERE user_id = ?1 AND status = 'member') ORDER BY r.starts_at LIMIT 20`).bind(user.id, now).all<RunRow>(),
     db.prepare(`${ENTRY} WHERE e.user_id = ? AND e.status = 'logged'`).bind(user.id).all<EntryRow>(),
     db.prepare("SELECT COUNT(*) AS n FROM run_collabs WHERE status = 'open' AND ends_at >= ?").bind(now).first<{ n: number }>(),
@@ -106,8 +107,10 @@ run.get('/', async (c) => {
   ]);
   const myEntries = new Map(mine.results.map((e) => [e.run_id, toEntry(e)]));
   const hosted = new Set(clubs.results.filter((k) => k.host_user_id === user.id).map((k) => k.id));
+  const pg = paged(clubs.results, ask);
   const res: RunResponse = {
-    clubs: clubs.results.map((k) => toClub(k, user.id)),
+    page: pg.page,
+    clubs: pg.items.map((k) => toClub(k, user.id)),
     mine: clubs.results.filter((k) => k.mine > 0 || k.host_user_id === user.id).map((k) => toClub(k, user.id)),
     upcoming: upcoming.results.map((r) => toRun(r, myEntries.get(r.id) ?? null, hosted.has(r.club_id) || can(user, 'events'))),
     tracking: track,
@@ -346,15 +349,18 @@ run.get('/collabs', async (c) => {
   const user = c.get('user');
   const now = nowIso();
   const staff = can(user, 'events');
+  const ask = pageOf(c);
   const [collabs, myClubs, mineApps, posterApps] = await Promise.all([
-    db.prepare(`${COLLAB} WHERE (c.status = 'open' AND c.ends_at >= ?) OR c.created_by = ? ORDER BY c.status = 'open' DESC, c.ends_at LIMIT 100`).bind(now, user.id).all<CollabRow>(),
+    db.prepare(`${COLLAB} WHERE (c.status = 'open' AND c.ends_at >= ?) OR c.created_by = ? ORDER BY c.status = 'open' DESC, c.ends_at LIMIT ? OFFSET ?`).bind(now, user.id, ask.limit, ask.offset).all<CollabRow>(),
     db.prepare(`${CLUB} WHERE k.status = 'active' AND k.host_user_id = ?1 ORDER BY k.created_at`).bind(user.id, now).all<ClubRow>(),
     db.prepare(`${APP} WHERE k.host_user_id = ? ORDER BY a.created_at DESC LIMIT 100`).bind(user.id).all<AppRow>(),
     db.prepare(`${APP} JOIN run_collabs c ON c.id = a.collab_id WHERE c.created_by = ? ${staff ? 'OR 1 = 1' : ''} ORDER BY a.created_at DESC LIMIT 100`).bind(user.id).all<AppRow>(),
   ]);
   const titles = new Map(collabs.results.map((k) => [k.id, k.title]));
+  const pg = paged(collabs.results, ask);
   const res: RunCollabsResponse = {
-    collabs: collabs.results.map((k) => toCollab(k, mineApps.results.filter((a) => a.collab_id === k.id).map(toApp), k.created_by === user.id || staff)),
+    page: pg.page,
+    collabs: pg.items.map((k) => toCollab(k, mineApps.results.filter((a) => a.collab_id === k.id).map(toApp), k.created_by === user.id || staff)),
     myClubs: myClubs.results.map((k) => toClub(k, user.id)),
     canPost: await canPostCollab(db, user),
     applications: posterApps.results.map((a) => ({ ...toApp(a), collabTitle: titles.get(a.collab_id) ?? '' })),

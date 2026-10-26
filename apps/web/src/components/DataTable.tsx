@@ -1,5 +1,7 @@
+import type { Page, PageSize } from '@kreators/shared';
 import { useMemo, useState, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { Button } from './Button';
+import { PagerBar } from './Pager';
 
 export type CellValue = string | number | boolean | null | undefined;
 
@@ -50,6 +52,9 @@ interface Props<T> {
   /** Buttons at the end of each row. */
   actions?: (row: T) => ReactNode;
   pageSize?: number;
+  /** Where the server's page is. With it, the table shows the pager bar and never slices rows itself. */
+  page?: Page;
+  onPage?: (page: number, size: PageSize) => void;
   empty?: string;
   busy?: boolean;
   onRowClick?: (row: T) => void;
@@ -93,7 +98,7 @@ function Switch({ on, onChange, disabled, label }: { on: boolean; onChange: (on:
  * its values, tick rows and act on them together, and edit a cell where it sits. Scrolls sideways on
  * a phone instead of squeezing. Nothing here talks to the server; the columns say what each edit does.
  */
-export function DataTable<T>({ rows, columns, rowKey, label, search = true, selectable = false, bulk = [], actions, pageSize = 25, empty = 'Nothing here.', busy = false, onRowClick, activeKey = null }: Props<T>) {
+export function DataTable<T>({ rows, columns, rowKey, label, search = true, selectable = false, bulk = [], actions, pageSize = 25, page: serverPage, onPage, empty = 'Nothing here.', busy = false, onRowClick, activeKey = null }: Props<T>) {
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
   const [q, setQ] = useState('');
   const [filters, setFilters] = useState<Record<string, string>>({});
@@ -130,7 +135,7 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
     return list;
   }, [rows, columns, filters, q, sort]);
 
-  const page = visible.slice(0, shown);
+  const page = serverPage ? visible : visible.slice(0, shown);
   const pickedRows = rows.filter((r) => picked.has(rowKey(r)));
   const allOnPagePicked = page.length > 0 && page.every((r) => picked.has(rowKey(r)));
   const togglePage = () => {
@@ -309,7 +314,8 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
           </tbody>
         </table>
       </div>
-      {visible.length > shown && (
+      {serverPage && onPage && <PagerBar page={serverPage} onPage={onPage} label={label} />}
+      {!serverPage && visible.length > shown && (
         <div className="mt-sm flex items-center justify-between gap-sm">
           <span className="text-[12px] font-bold text-ink-soft">
             Showing {page.length} of {visible.length}

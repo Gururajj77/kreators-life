@@ -1,14 +1,16 @@
 # 02 — Module specifications
 
 **Product:** kreators.app
-**Version:** 0.2, reconciled with the app on 26 October 2026
+**Version:** 0.3, reconciled with the app on 26 October 2026
 **Source of truth:** `MODULES`, `HOW_TO` and `TERMS` in `packages/shared/src/index.ts`; one route file per module in `apps/api/src/routes`; the smoke test in `scripts/smoke/smoke.mjs`.
 
 ## How a module is specified here
 
 Every module is one entry in `MODULES` with a key, a name, a group, a path, a default (on or off for a new person), a minimum role, and an accent colour. Its rules are written once in `HOW_TO` (three to five steps with the numbers) and shown at the bottom of its main screen; the words it uses are defined in `TERMS` and listed under Help. The shared test insists every module has a `HOW_TO` entry and only uses defined words.
 
-The flag for a module is its key, in `module_settings`. There are no `module.*`, `feature.*` or `ops.*` flags.
+The flag for a module is its key, in `module_settings`. There are no `module.*`, `feature.*` or `ops.*` flags. Every API prefix maps to its module in `access.ts`, and a module that is not available to the person answers 403 on every route. Every long list a module serves is a page at a time (`page` and `size`, 10 to 100 rows, `Page` in the answer); a module with two lists on one screen prefixes them.
+
+Rate limits are in `apps/api/src/limits.ts`, one line per limit with the route it guards.
 
 Each block below gives: purpose, path and default, who can do what, tables, the rules, the smoke checks that prove them, and gaps.
 
@@ -68,7 +70,7 @@ Not modules, but screens: Apps (the grouped list with the switches), the Profile
 **Tables:** `users`, `sessions`, `relationship_scores`, `onboarding_answers`, `nodes`, `xp_events`, `spark_completions`, `honors`, `points_ledger`, `redemptions`, `notifications`, `support_tickets`, `not_to_do`, `not_to_do_days`, `password_resets`, `rate_limits`.
 
 **Rules**
-- Sign-up creates the user and seven zero scores and nothing else. A device session can come first; adding an email keeps its progress.
+- Sign-up asks for an email, a password, a phone number and a date of birth; anyone under 18 is refused (`MIN_AGE`, `birthDateProblem`, `phoneProblem` in shared). It creates the user and seven zero scores and nothing else. A device session can come first; adding an email keeps its progress and asks the same questions.
 - The password rule `passwordProblem` is the one rule for the form and both endpoints (8 to 128 characters, not common, not one character repeated, not your email).
 - The game: check in 10 xp and 10 points, every seventh day in a row 50 points more; the small act 15 xp; a task 20 xp with a ripple (project 10, outcome 8, value goal 6, principle 4, pillar 2); clearing a project 30 xp; a kept not-to-do day 5 xp. Six rewarded ticks a day. The first three ticks are free; then ten minutes of age and a ten-minute gap. A task with a date waits for the day. Level n starts at 60·n·(n−1) xp.
 - Not to do: at most 7 items, titles up to 60 characters, one row per item per day, only today or yesterday markable, the streak rule in `notToDoStreak`.
@@ -78,7 +80,7 @@ Not modules, but screens: Apps (the grouped list with the switches), the Profile
 
 **Proof (smoke):** "no session means 401", "security headers on every answer", the password checks, "founder email becomes admin on sign-up", "sign-up creates nothing but the account", "unknown email answers the same as a wrong password", "password change signs out every other device", "forgot answers the same for any email", "a device session keeps its progress when an email is added", "only the default apps start on", the onboarding and pyramid checks, "a task with a date waits for the day", "the fourth tick waits", "a second check-in pays nothing", the not-to-do checks, "export is one JSON file", "an account can be deleted", "money rows stay for the books", "sign-in is limited to ten a minute per address".
 
-**Gaps:** no email verification; an unknown flag fails open (see 05).
+**Gaps:** no email or phone verification; a module with no flag row is enabled by default (see 05).
 
 ## B. Army (`army`)
 
@@ -114,11 +116,9 @@ Not modules, but screens: Apps (the grouped list with the switches), the Profile
 
 **Tables:** `opportunities` (compensation range, currency, location mode, deliverables, deadline, status draft/published/closed, eligibility, featured), `applications` (unique per opportunity and creator, status from `APPLICATION_STATUSES`), `application_events`.
 
-**Rules:** the public list shows published listings whose deadline has not passed; applying to an unpublished listing is 404 and past the deadline is "the deadline has passed"; the portfolio snapshot travels with the application; status changes are audited and land in Inbox.
+**Rules:** the public list shows published listings whose deadline has not passed; a `club_only` listing is listed, opened and applied to only by an approved, unexpired Club member, and never shown on the public site; applying to an unpublished listing is 404 and past the deadline is "the deadline has passed"; the portfolio snapshot travels with the application; status changes are audited and land in Inbox; the list is paged.
 
-**Proof:** code review of `work.ts`. Not in the smoke test.
-
-**Gaps:** "Club members get the first look at club-only openings" is in the how-to and not enforced; no smoke coverage.
+**Proof:** "staff can post a club-only listing", "a non-member does not see a club-only listing", "nor open it", "nor apply", "the public site never lists it", "a Club member gets the first look", "and can apply".
 
 ## E. Party (`party`)
 
@@ -138,13 +138,13 @@ Not modules, but screens: Apps (the grouped list with the switches), the Profile
 
 **Tables:** `memberships` (unique per person and type), the `community_star` honor on approval.
 
-**Benefits as written in `CLUB_BENEFITS`:** club-only events (enforced in Party), the first look at club-only Work listings (not enforced), a named manager (not modelled), the Club honor (given on approval). The `club_member` badge exists.
+**Benefits as written in `CLUB_BENEFITS`, all built:** club-only events (enforced in Party), the first look at club-only Work listings (enforced in Work), a named manager (`memberships.manager_user_id`, a staff member a reviewer picks from the staff list, told to the member by inbox), the Club honor (given on approval). The `club_member` badge exists.
 
 **Rules:** no fee; re-applying is allowed only after a rejection or expiry; every decision is audited and lands in Inbox.
 
-**Proof:** code review of `club.ts` and the club check in `party.ts`.
+**Proof:** "a member applies to the Club", "a reviewer sees the application and the staff list", "a reviewer approves", "only reviewers name a manager", "a manager must be on staff", "the member sees their manager by name", "and hears about it in the inbox".
 
-**Gaps:** two of four benefits are words only; no appeal state.
+**Gaps:** no appeal state.
 
 ## G. Win (`win`)
 
@@ -154,11 +154,9 @@ Not modules, but screens: Apps (the grouped list with the switches), the Profile
 
 **Tables:** `bounties` (pool, rate, cap, minimum, rule text, eligibility, platform, window, status, version, featured), `bounty_submissions` (unique per reward and person; submitted, verified, rejected, paid, disputed; evidence, dispute note), `social_metrics` (every reading with source and recorder).
 
-**Rules:** `bountyPayout` is floor(views ÷ 1000) × rate, 0 below the minimum, capped by the per-creator cap; a payout never exceeds what is left in the pool; verify first, then pay; the pay goes through `points_ledger` and is audited; the reward's leaderboard shows names and views, never payouts; a rejection can be disputed.
+**Rules:** `bountyPayout` is floor(views ÷ 1000) × rate, 0 below the minimum, capped by the per-creator cap; a payout never exceeds what is left in the pool; verify first, then pay; the pay goes through `points_ledger` and is audited; the reward's leaderboard shows names and views, never payouts; a rejection can be disputed. A reward changes after launch only through `PATCH /win/:id` (its creator, or review or talent staff): the version goes up, the audit row names the fields that changed, every entrant gets an inbox note, and the pool cannot drop under what was paid.
 
-**Proof:** the shared test "content rewards pay per thousand verified views, never past the cap or below the floor"; code review of `win.ts`.
-
-**Gaps:** `bounties.version` is never incremented, so a change after launch is not versioned.
+**Proof:** the shared test "content rewards pay per thousand verified views, never past the cap or below the floor"; "only staff change a reward", "saving nothing new keeps the version", "a change bumps the version and says what changed", "the reward carries its version", "everyone who entered is told".
 
 ## H. TV (`tv`) and I. Fund (`fund`)
 
@@ -188,7 +186,7 @@ Not modules, but screens: Apps (the grouped list with the switches), the Profile
 
 **Proof:** "unliking and liking again pays nothing", "the author is not paid twice for one liker", "a person can be followed from a post", "you cannot follow yourself", the feed filter and sort checks, "a plain member cannot moderate".
 
-**Gaps:** no report button for members; posts and replies have no rate limit.
+**Gaps:** no report button for members.
 
 ## L. Bond (`bond`) and Circles (`circles`)
 
@@ -198,7 +196,7 @@ Not modules, but screens: Apps (the grouped list with the switches), the Profile
 
 **Proof:** the shared matching and circles tests; code review of `bond.ts` and `circles.ts`.
 
-**Gaps:** chat messages have no rate limit; no report on a message.
+**Gaps:** no report on a message.
 
 ## M. Wellbeing, Life, Journal, Reviews, Companion
 
@@ -239,7 +237,7 @@ Money in and out in integer cents with a category, counterparty and splits; dues
 ## Q. Manage (`manage`), Admin (`admin`), Observability (`observability`)
 
 - **Manage:** queues per permission (campaigns, cohorts, events, review, moderation, support, finance, mentoring), resources, moderation. Everything audited.
-- **Admin:** with `ADMIN_KEY` before the first admin exists, or an admin's session. People (role, permissions, Pro, honors, points, a preview of exactly what one person sees), Modules and Flags (switch, minimum role, rollout, overrides), Listings (create, publish, feature), Orders (timeline, refund), Webhooks (replay), KYC, Ops (funnels, the email outbox), Redemptions, Audit. Every list is a `DataTable`.
+- **Admin:** with `ADMIN_KEY` before the first admin exists, or an admin's session. People (role, permissions, Pro, honors, points, a preview of exactly what one person sees), Modules and Flags (switch, minimum role, rollout, overrides), Listings (create, publish, feature), Orders (timeline, refund), Webhooks (replay), KYC, Ops (funnels, the email outbox), Redemptions, Audit. Every list is a `DataTable` served a page at a time.
 - **Observability:** people in numbers, people per app, every account with its apps on, roles (an admin may change one, never their own, audited), the build map embedded from `docs/build-map.html`. Never journal or wellbeing. Only staff and admins by `minRole`.
 
 **Proof:** "a permission alone is not enough: the role must be staff", "a wrong admin key is refused", "a plain member is not an admin", "an admin session works too", "every change is audited", "observability is closed to members", "an admin cannot change their own role".
@@ -250,9 +248,5 @@ Random video chat, celebrity messages, a trending-audio or meme library, a stand
 
 ## Known gaps
 
-- No route refuses a switched-off module; the smoke check for it accepts a 200 (05).
-- Club-only Work listings and a named manager are promised in words only.
 - No member-facing report button in Community, Circles or Store chats.
-- No rate limit on posts, replies, chats, offers or support tickets.
-- `bounties.version` never increments.
-- Army, Work, Party and Club have no smoke coverage of their access rules.
+- Army and Party have no smoke coverage of their access rules.

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { EVENT_TYPE_META, EVENT_TYPES, type EventRegistration, type PartyEvent } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { audit, can, nameOf, newId, notify, nowIso, num, oneOf, str } from '../db';
+import { audit, can, nameOf, newId, notify, nowIso, num, oneOf, str, isClubMember, pageOf, paged } from '../db';
 
 export const party = new Hono<AppEnv>();
 
@@ -14,19 +14,19 @@ interface RegRow { id: string; event_id: string; user_id: string; name: string; 
 const toReg = (r: RegRow): EventRegistration => ({ id: r.id, eventId: r.event_id, userId: r.user_id, name: nameOf({ display_name: r.name }), status: r.status, registeredAt: r.registered_at, checkedInAt: r.checked_in_at, networkingOptIn: r.networking_opt_in === 1 });
 const toEvent = (r: EventRow, mine: EventRegistration | null): PartyEvent => ({ id: r.id, title: r.title, description: r.description, eventType: r.event_type, hostId: r.host_user_id, hostName: nameOf({ display_name: r.host_name }), venue: r.venue, onlineUrl: r.online_url, timezone: r.timezone, startsAt: r.starts_at, endsAt: r.ends_at, capacity: r.capacity, pricePoints: r.price_points, visibility: r.visibility, status: r.status, registered: r.registered, waitlisted: r.waitlisted, mine, createdAt: r.created_at });
 
-async function clubMember(db: D1Database, userId: string): Promise<boolean> {
-  return Boolean(await db.prepare("SELECT 1 FROM memberships WHERE user_id = ? AND status IN ('approved','active') AND (ends_at IS NULL OR ends_at > ?)").bind(userId, nowIso()).first());
-}
+const clubMember = isClubMember;
 
 party.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const club = await clubMember(db, user.id);
-  const rows = await db.prepare(`${SELECT} WHERE e.status = 'published' AND e.ends_at >= ? AND (e.visibility = 'public' OR (e.visibility = 'club' AND ?) OR e.host_user_id = ? OR e.id IN (SELECT event_id FROM event_registrations WHERE user_id = ?)) ORDER BY e.starts_at LIMIT 100`).bind(nowIso(), club ? 1 : 0, user.id, user.id).all<EventRow>();
+  const ask = pageOf(c);
+  const rows = await db.prepare(`${SELECT} WHERE e.status = 'published' AND e.ends_at >= ? AND (e.visibility = 'public' OR (e.visibility = 'club' AND ?) OR e.host_user_id = ? OR e.id IN (SELECT event_id FROM event_registrations WHERE user_id = ?)) ORDER BY e.starts_at LIMIT ? OFFSET ?`).bind(nowIso(), club ? 1 : 0, user.id, user.id, ask.limit, ask.offset).all<EventRow>();
   const regs = await db.prepare('SELECT r.*, u.display_name AS name FROM event_registrations r JOIN users u ON u.id = r.user_id WHERE r.user_id = ?').bind(user.id).all<RegRow>();
   const mine = new Map(regs.results.map((r) => [r.event_id, toReg(r)]));
   const hosting = await db.prepare(`${SELECT} WHERE e.host_user_id = ? ORDER BY e.starts_at DESC LIMIT 50`).bind(user.id).all<EventRow>();
-  return c.json({ events: rows.results.map((e) => toEvent(e, mine.get(e.id) ?? null)), hosting: hosting.results.map((e) => toEvent(e, null)), canHostAll: can(user, 'events'), club });
+  const pg = paged(rows.results, ask);
+  return c.json({ page: pg.page, events: pg.items.map((e) => toEvent(e, mine.get(e.id) ?? null)), hosting: hosting.results.map((e) => toEvent(e, null)), canHostAll: can(user, 'events'), club });
 });
 
 // Anyone can host a meetup; parties, workshops, camps and days are staff events.

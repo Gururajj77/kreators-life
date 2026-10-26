@@ -41,13 +41,13 @@ export function useRewards() {
 
 export const useWellbeing = () => useAuthed(['wellbeing'], api.wellbeing);
 export const useLogs = (kind: LogKind, days = 30) => useAuthed(['logs', kind, days], () => api.logs(kind, days));
-export const useJournal = () => useAuthed(['journal'], api.journal);
+export const useJournal = (pq = '') => useAuthed(['journal', pq], () => api.journal(pq));
 export const useCompanion = () => useAuthed(['companion'], api.companion);
-export const useInbox = () => useAuthed(['inbox'], api.inbox);
-export const useResources = (tag?: string) => useAuthed(['resources', tag ?? ''], () => api.resources(tag));
-export const useCommunity = (category?: string, product?: string, all = false, sort: FeedSort = 'recent', filter: FeedFilter = 'all') => useAuthed(['community', category ?? '', product ?? '', all, sort, filter], () => api.community(category, product, all, sort, filter));
+export const useInbox = (pq = '') => useAuthed(['inbox', pq], () => api.inbox(pq));
+export const useResources = (tag?: string, pq = '') => useAuthed(['resources', tag ?? '', pq], () => api.resources(tag, pq));
+export const useCommunity = (category?: string, product?: string, all = false, sort: FeedSort = 'recent', filter: FeedFilter = 'all', pq = '') => useAuthed(['community', category ?? '', product ?? '', all, sort, filter, pq], () => api.community(category, product, all, sort, filter, pq));
 export const useStudio = () => useAuthed(['studio'], api.studio);
-export const useLibrary = () => useAuthed(['library'], api.library);
+export const useLibrary = (pq = '') => useAuthed(['library', pq], () => api.library(pq));
 
 /** After anything that changes XP, refresh every screen's data. */
 export function useRefreshAll() {

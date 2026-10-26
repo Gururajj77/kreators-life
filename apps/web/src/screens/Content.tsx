@@ -9,6 +9,7 @@ import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useAuthed, useStudio } from '../lib/queries';
+import { Pager, usePage } from '../components/Pager';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const chip = (on: boolean) => `min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`;
@@ -32,8 +33,10 @@ const err = (e: unknown, fallback: string) => (e instanceof Error ? e.message : 
 
 export function Content() {
   const [sort, setSort] = useState<'revenue' | 'views' | 'recent'>('revenue');
-  const content = useAuthed(['content', sort], () => api.content(sort));
-  const links = useAuthed(['links'], api.links);
+  const pg = usePage();
+  const kp = usePage('k');
+  const content = useAuthed(['content', sort, pg.query], () => api.content(sort, pg.query));
+  const links = useAuthed(['links', kp.query], () => api.links(kp.query));
   const studio = useStudio();
   const [adding, setAdding] = useState(false);
   const [linking, setLinking] = useState(false);
@@ -82,6 +85,7 @@ export function Content() {
             <ContentCard key={item.id} item={item} onChange={() => void Promise.all([content.refetch(), links.refetch()])} />
           ))}
         </ul>
+        <Pager page={d?.page} label="posts" />
       </section>
 
       <section className="mt-lg" aria-labelledby="links-heading">
@@ -97,6 +101,7 @@ export function Content() {
             <LinkCard key={l.id} link={l} goBase={goBase} onChange={() => void links.refetch()} />
           ))}
         </ul>
+        <Pager page={links.data?.page} prefix="k" label="links" />
       </section>
 
       <AddPostSheet

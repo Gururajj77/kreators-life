@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
-import { passwordProblem, RELATIONSHIPS } from '@kreators/shared';
+import { birthDateProblem, normalizePhone, passwordProblem, phoneProblem, RELATIONSHIPS } from '@kreators/shared';
 import { limited, sendEmail, track } from '../ops';
 import { promoteBootstrapAdmin } from '../admins';
+import { LIMITS } from '../limits';
 import type { AppEnv, UserRow } from '../env';
 import { getUser, newId, nowIso, randomCode, sessionUser, toUser } from '../db';
 
@@ -60,12 +61,19 @@ auth.post('/anon', async (c) => {
 // survives a new phone. Without a session, it creates a fresh account.
 auth.post('/signup', async (c) => {
   const db = c.env.DB;
-  const body = await c.req.json<{ email?: string; password?: string; displayName?: string }>().catch(() => ({}) as Record<string, never>);
+  const body = await c.req.json<{ email?: string; password?: string; displayName?: string; phone?: string; birthDate?: string }>().catch(() => ({}) as Record<string, never>);
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   const password = typeof body.password === 'string' ? body.password : '';
   if (!EMAIL_RE.test(email) || email.length > EMAIL_MAX) return c.json({ error: 'that email does not look right' }, 400);
   const weak = passwordProblem(password, email);
   if (weak) return c.json({ error: weak.charAt(0).toLowerCase() + weak.slice(1) }, 400);
+  // A phone number and a date of birth, both required; nobody under MIN_AGE gets an account.
+  const phoneBad = phoneProblem(typeof body.phone === 'string' ? body.phone : '');
+  if (phoneBad) return c.json({ error: phoneBad.charAt(0).toLowerCase() + phoneBad.slice(1) }, 400);
+  const phone = normalizePhone(body.phone as string);
+  const birthDate = typeof body.birthDate === 'string' ? body.birthDate.trim() : '';
+  const ageBad = birthDateProblem(birthDate);
+  if (ageBad) return c.json({ error: ageBad.charAt(0).toLowerCase() + ageBad.slice(1) }, 400);
   const taken = await db.prepare('SELECT id FROM users WHERE email = ?').bind(email).first<{ id: string }>();
   if (taken) return c.json({ error: 'that email already has an account. Sign in instead.' }, 409);
 
@@ -78,8 +86,8 @@ auth.post('/signup', async (c) => {
   let token: string;
   if (user) {
     await db
-      .prepare('UPDATE users SET email = ?, password_hash = ?, password_salt = ?, display_name = CASE WHEN display_name = \'\' THEN ? ELSE display_name END WHERE id = ?')
-      .bind(email, hash, salt, displayName, user.id)
+      .prepare('UPDATE users SET email = ?, password_hash = ?, password_salt = ?, phone = ?, birth_date = ?, display_name = CASE WHEN display_name = \'\' THEN ? ELSE display_name END WHERE id = ?')
+      .bind(email, hash, salt, phone, birthDate, displayName, user.id)
       .run();
     token = (c.req.header('Authorization') ?? '').slice(7).trim();
   } else {
@@ -87,8 +95,8 @@ auth.post('/signup', async (c) => {
     const now = nowIso();
     await db.batch([
       db
-        .prepare('INSERT INTO users (id, created_at, email, password_hash, password_salt, display_name, referral_code) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .bind(id, now, email, hash, salt, displayName, randomCode()),
+        .prepare('INSERT INTO users (id, created_at, email, password_hash, password_salt, display_name, referral_code, phone, birth_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(id, now, email, hash, salt, displayName, randomCode(), phone, birthDate),
       ...RELATIONSHIPS.map((r) =>
         db.prepare('INSERT INTO relationship_scores (user_id, relationship, score, xp) VALUES (?, ?, 0, 0)').bind(id, r.key),
       ),
@@ -110,7 +118,7 @@ auth.post('/signin', async (c) => {
   const wrong = { error: 'no account with that email and password' };
   if (!EMAIL_RE.test(email) || email.length > EMAIL_MAX || !password || password.length > 1024) return c.json(wrong, 401);
   // One account can only be tried so often, whatever the address it is tried from.
-  if (await limited(db, `signin-email:${email}`, 20, 900)) return c.json({ error: 'too many tries, wait a minute' }, 429);
+  if (await limited(db, `signin-email:${email}`, LIMITS.signinEmail.max, LIMITS.signinEmail.windowSec)) return c.json({ error: 'too many tries, wait a minute' }, 429);
   const user = await db.prepare('SELECT * FROM users WHERE email = ?').bind(email).first<UserRow>();
   if (!user || !user.password_hash || !user.password_salt) {
     await hashPassword(password, DECOY_SALT);
@@ -138,7 +146,7 @@ auth.post('/forgot', async (c) => {
   const body = await c.req.json<{ email?: string }>().catch(() => ({}) as { email?: string });
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   if (!EMAIL_RE.test(email) || email.length > EMAIL_MAX) return c.json({ error: 'that email does not look right' }, 400);
-  if (await limited(db, `forgot-email:${email}`, 3, 3600)) return c.json({ ok: true, minutes: RESET_MINUTES });
+  if (await limited(db, `forgot-email:${email}`, LIMITS.forgotEmail.max, LIMITS.forgotEmail.windowSec)) return c.json({ ok: true, minutes: RESET_MINUTES });
   const user = await db.prepare('SELECT * FROM users WHERE email = ?').bind(email).first<UserRow>();
   if (user && user.password_hash) {
     const now = new Date();

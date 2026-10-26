@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { JournalEntry } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { newId, nowIso } from '../db';
+import { newId, nowIso, pageOf, paged } from '../db';
 
 export const journal = new Hono<AppEnv>();
 
@@ -38,7 +38,9 @@ function parse(body: Record<string, unknown>, prev?: Row) {
 journal.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const rows = await db.prepare('SELECT * FROM journal_entries WHERE user_id = ? ORDER BY created_at DESC LIMIT 100').bind(user.id).all<Row>();
+  const ask = pageOf(c);
+  const rows = await db.prepare('SELECT * FROM journal_entries WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?').bind(user.id, ask.limit, ask.offset).all<Row>();
+  const pg = paged(rows.results, ask);
   const stats = await db
     .prepare(
       `SELECT COUNT(*) AS total,
@@ -49,7 +51,7 @@ journal.get('/', async (c) => {
     )
     .bind(new Date().toISOString().slice(0, 7) + '-01', user.id)
     .first<{ total: number; this_month: number; positive: number; negative: number }>();
-  return c.json({ entries: rows.results.map(toEntry), stats: { total: stats?.total ?? 0, thisMonth: stats?.this_month ?? 0, positive: stats?.positive ?? 0, negative: stats?.negative ?? 0 } });
+  return c.json({ page: pg.page, entries: pg.items.map(toEntry), stats: { total: stats?.total ?? 0, thisMonth: stats?.this_month ?? 0, positive: stats?.positive ?? 0, negative: stats?.negative ?? 0 } });
 });
 
 journal.post('/', async (c) => {

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { PROPOSAL_STAGES, type Proposal } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { audit, can, nameOf, newId, notify, nowIso, num, oneOf, str } from '../db';
+import { audit, can, nameOf, newId, notify, nowIso, num, oneOf, str, pageOf, paged } from '../db';
 
 /** TV series pitches and Fund applications share one review pipeline. */
 export const proposals = new Hono<AppEnv>();
@@ -15,13 +15,16 @@ proposals.get('/', async (c) => {
   const user = c.get('user');
   const kind = c.req.query('kind') === 'fund' ? 'fund' : 'tv';
   const reviewer = can(user, 'review');
-  const rows = reviewer
-    ? await db.prepare(`${SELECT} WHERE p.kind = ? ORDER BY p.updated_at DESC LIMIT 200`).bind(kind).all<Row>()
-    : await db.prepare(`${SELECT} WHERE p.kind = ? AND p.user_id = ? ORDER BY p.updated_at DESC`).bind(kind, user.id).all<Row>();
+  const ask = pageOf(c);
+  const all = reviewer
+    ? await db.prepare(`${SELECT} WHERE p.kind = ? ORDER BY p.updated_at DESC LIMIT ? OFFSET ?`).bind(kind, ask.limit, ask.offset).all<Row>()
+    : await db.prepare(`${SELECT} WHERE p.kind = ? AND p.user_id = ? ORDER BY p.updated_at DESC LIMIT ? OFFSET ?`).bind(kind, user.id, ask.limit, ask.offset).all<Row>();
+  const pg = paged(all.results, ask);
+  const rows = { results: pg.items };
   const ids = rows.results.map((r) => r.id);
   const logs = ids.length ? await db.prepare(`SELECT l.*, u.display_name AS actor_name FROM decision_log l LEFT JOIN users u ON u.id = l.actor_user_id WHERE l.proposal_id IN (${ids.map(() => '?').join(',')}) ORDER BY l.created_at`).bind(...ids).all<LogRow>() : { results: [] as LogRow[] };
   const list: Proposal[] = rows.results.map((r) => ({ id: r.id, kind: r.kind, userId: r.user_id, userName: nameOf({ display_name: r.user_name }), title: r.title, pitch: r.pitch, budgetAmount: r.budget_amount, currency: r.currency, stage: r.stage, createdAt: r.created_at, updatedAt: r.updated_at, log: logs.results.filter((l) => l.proposal_id === r.id).map((l) => ({ actorName: l.actor_name ? nameOf({ display_name: l.actor_name }) : 'Staff', fromStage: l.from_stage, toStage: l.to_stage, note: l.note, createdAt: l.created_at })) }));
-  return c.json({ proposals: list, reviewer });
+  return c.json({ page: pg.page, proposals: list, reviewer });
 });
 
 proposals.post('/', async (c) => {

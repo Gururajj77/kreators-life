@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { AFFILIATE_SHARE, PRODUCT_KIND_META, PRODUCT_KINDS, type Availability, type AvailabilityOverride, type Booking, type Coupon, type Lead, type Lesson, type Order, type Product, type ProductKind, type QuizQuestion, type StudioAnalytics, type Testimonial } from '@kreators/shared';
 import { isBadgeKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { nameOf, newId, notify, nowIso, parseList } from '../db';
+import { nameOf, newId, notify, nowIso, parseList, pageOf, paged } from '../db';
 import { logEvent, sendEmail, track } from '../ops';
 import { parseQuiz } from './buyer';
 
@@ -479,8 +479,14 @@ studio.get('/orders', async (c) => {
     where.push('o.created_at <= ?');
     binds.push(`${to}T23:59:59`);
   }
-  const rows = await db.prepare(`${ORDER_SELECT} WHERE ${where.join(' AND ')} ORDER BY o.created_at DESC LIMIT 1000`).bind(...binds).all<OrderRow>();
-  const orders = rows.results.map(toOrder);
+  const csv = c.req.query('format') === 'csv';
+  const ask = pageOf(c);
+  // The CSV takes the whole run (up to a thousand rows); the screen takes a page.
+  const rows = csv
+    ? await db.prepare(`${ORDER_SELECT} WHERE ${where.join(' AND ')} ORDER BY o.created_at DESC LIMIT 1000`).bind(...binds).all<OrderRow>()
+    : await db.prepare(`${ORDER_SELECT} WHERE ${where.join(' AND ')} ORDER BY o.created_at DESC LIMIT ? OFFSET ?`).bind(...binds, ask.limit, ask.offset).all<OrderRow>();
+  const pg = paged(rows.results, ask);
+  const orders = (csv ? rows.results : pg.items).map(toOrder);
   if (c.req.query('format') === 'csv') {
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const csv = ['order_id,date,product,kind,buyer,status,points,cents,currency,provider,coupon,affiliate,source,fee_points', ...orders.map((o) => [o.id, o.createdAt, o.productTitle, o.productKind, o.buyerName, o.status, o.points, o.cents, o.currency, o.provider, o.couponCode, o.affiliateCode, o.sourceLabel, o.platformFeePoints].map(esc).join(','))].join('\n');
@@ -496,8 +502,10 @@ studio.delete('/availability/:id', async (c) => {
 
 // ---- bookings (owner side)
 studio.get('/bookings', async (c) => {
-  const rows = await c.env.DB.prepare(`${BOOKING_SELECT} WHERE k.owner_id = ? ORDER BY k.starts_at DESC LIMIT 200`).bind(c.get('user').id).all<BookingRow>();
-  return c.json({ bookings: rows.results.map(toBooking) });
+  const ask = pageOf(c);
+  const rows = await c.env.DB.prepare(`${BOOKING_SELECT} WHERE k.owner_id = ? ORDER BY k.starts_at DESC LIMIT ? OFFSET ?`).bind(c.get('user').id, ask.limit, ask.offset).all<BookingRow>();
+  const pg = paged(rows.results, ask);
+  return c.json({ page: pg.page, bookings: pg.items.map(toBooking) });
 });
 
 studio.post('/bookings/:id', async (c) => {
@@ -526,14 +534,19 @@ studio.post('/bookings/:id', async (c) => {
 // ---- leads, testimonials, broadcasts, audience
 interface LeadRow { id: string; name: string; email: string; message: string; source: string; created_at: string }
 studio.get('/leads', async (c) => {
-  const rows = await c.env.DB.prepare('SELECT * FROM leads WHERE owner_id = ? ORDER BY created_at DESC LIMIT 300').bind(c.get('user').id).all<LeadRow>();
+  const ask = pageOf(c);
+  const all = await c.env.DB.prepare('SELECT * FROM leads WHERE owner_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?').bind(c.get('user').id, ask.limit, ask.offset).all<LeadRow>();
+  const pg = paged(all.results, ask);
+  const rows = { results: pg.items };
   const leads: Lead[] = rows.results.map((r) => ({ id: r.id, name: r.name, email: r.email, message: r.message, source: r.source, createdAt: r.created_at }));
-  return c.json({ leads });
+  return c.json({ page: pg.page, leads });
 });
 
 studio.get('/testimonials', async (c) => {
-  const rows = await c.env.DB.prepare(`${TESTIMONIAL_SELECT} WHERE t.owner_id = ? ORDER BY t.created_at DESC LIMIT 200`).bind(c.get('user').id).all<TestimonialRow>();
-  return c.json({ testimonials: rows.results.map(toTestimonial) });
+  const ask = pageOf(c);
+  const rows = await c.env.DB.prepare(`${TESTIMONIAL_SELECT} WHERE t.owner_id = ? ORDER BY t.created_at DESC LIMIT ? OFFSET ?`).bind(c.get('user').id, ask.limit, ask.offset).all<TestimonialRow>();
+  const pg = paged(rows.results, ask);
+  return c.json({ page: pg.page, testimonials: pg.items.map(toTestimonial) });
 });
 
 studio.post('/testimonials/:id', async (c) => {
@@ -568,13 +581,16 @@ studio.post('/broadcasts', async (c) => {
 studio.get('/audience', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const [followers, broadcasts, affiliates] = await Promise.all([
-    db.prepare('SELECT u.display_name AS name, u.handle, f.created_at FROM follows f JOIN users u ON u.id = f.follower_id WHERE f.owner_id = ? ORDER BY f.created_at DESC LIMIT 200').bind(user.id).all<{ name: string; handle: string | null; created_at: string }>(),
+  const ask = pageOf(c);
+  const [followersAll, broadcasts, affiliates] = await Promise.all([
+    db.prepare('SELECT u.display_name AS name, u.handle, f.created_at FROM follows f JOIN users u ON u.id = f.follower_id WHERE f.owner_id = ? ORDER BY f.created_at DESC LIMIT ? OFFSET ?').bind(user.id, ask.limit, ask.offset).all<{ name: string; handle: string | null; created_at: string }>(),
     db.prepare('SELECT id, title, body, audience, sent, created_at FROM broadcasts WHERE owner_id = ? ORDER BY created_at DESC LIMIT 50').bind(user.id).all<{ id: string; title: string; body: string; audience: string; sent: number; created_at: string }>(),
     db.prepare("SELECT COUNT(*) AS referred FROM users WHERE referred_by = ?").bind(user.referral_code ?? '').first<{ referred: number }>(),
   ]);
+  const followers = paged(followersAll.results, ask);
   return c.json({
-    followers: followers.results.map((f) => ({ name: nameOf({ display_name: f.name }), handle: f.handle, since: f.created_at })),
+    page: followers.page,
+    followers: followers.items.map((f) => ({ name: nameOf({ display_name: f.name }), handle: f.handle, since: f.created_at })),
     broadcasts: broadcasts.results.map((b) => ({ id: b.id, title: b.title, body: b.body, audience: b.audience, sent: b.sent, createdAt: b.created_at })),
     referralCode: user.referral_code,
     referred: affiliates?.referred ?? 0,

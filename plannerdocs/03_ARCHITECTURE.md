@@ -1,7 +1,7 @@
 # 03 — System architecture
 
 **Product:** kreators.app
-**Version:** 0.2, reconciled with the app on 26 October 2026
+**Version:** 0.3, reconciled with the app on 26 October 2026
 **Source of truth:** the code under `apps/` and `packages/`, `CLAUDE.md` for the rules.
 
 ## 1. What was chosen
@@ -20,11 +20,14 @@ Public site + app (React, one bundle, PWA)
           |
           v
 Hono Worker, basePath /api
-  cors, secureHeaders, rate limits on the doors without a session
+  cors, secureHeaders, limits on the doors without a session (per address)
   Bearer session -> c.get('user')
+  module gate: 403 when the path's module is not available to the person
+  the rest of the limits, per person
           |
           +---- one route file per module (apps/api/src/routes/*.ts)
-          +---- access.ts   flags, overrides, rollout, role -> access per module
+          +---- access.ts   flags, overrides, rollout, role -> access per module; the prefix map the gate uses
+  +---- limits.ts   every rate limit, with the route it guards
           +---- db.ts       can(), orgRole(), audit(), notify(), validators, badges
           +---- ops.ts      rate limits, email outbox, timeline, analytics
           +---- rewards.ts  social rewards, capped and paid once
@@ -61,10 +64,10 @@ Adapters: Razorpay, Resend (through the outbox), YouTube Data API, Meta webhooks
 
 - Every answer is JSON. Errors are a flat `{ "error": "<plain words>" }` with the status: 400 for a bad request, 401 without a session, 403 for a role or ownership refusal, 404 for not found (also used instead of 403 where existence should not leak, for example another person's not-to-do item), 409 for a duplicate, 429 for a limit, 500 for "something broke on our side". The v0.1 `{ error: { code, message } }` envelope was not adopted.
 - Inputs are coerced and bounded by `str(value, max, fallback)`, `num(value, fallback, min, max)` and `oneOf(value, list, fallback)` on every route. No validation library.
-- Lists are capped rather than paginated: `LIMIT 100` or `LIMIT 200`, newest first. Only Observability takes `offset` and `limit`. Gap for large accounts.
+- Every list a person scrolls is a page at a time: `?page=N&size=S` with S in 10, 25, 50 or 100 (`pageOf` and `paged` in db.ts fetch one row more than the size, so `page.more` says whether a next page exists); the answer carries `page`. A screen with two lists prefixes the second (`lpage`, `lsize`). Short side lists on a detail page keep a cap.
 - Idempotency: webhooks insert their event id with `INSERT OR IGNORE` into `webhook_events` and stop on a duplicate; a checkout refuses a second order for the same product; there is no client-supplied idempotency key.
-- Rate limits are a `rate_limits` row per key and window, keyed by `CF-Connecting-IP` or the session user: sign-in 10 a minute, sign-up 10 an hour, forgot 10 an hour, reset 20 an hour, anonymous start 60 an hour, lead form 5 a minute, checkout 10 a minute, plus 20 sign-in tries per email per quarter hour.
-- Owner-scoped queries filter by the session user id. Staff powers come from `can(user, permission)`. Brand access comes from `orgRole`.
+- Rate limits are a `rate_limits` row per key and window, keyed by the address on the doors without a session and by the person after it. Every number and the route it guards is one line in `apps/api/src/limits.ts`; index.ts wires them. Today: sign-in 10 a minute, sign-up, forgot and anonymous start per hour, reset, the lead form, checkout, posts 10 an hour, replies 30, likes 120, follows 60, chat messages 120, introductions 20, offers 20, things put up 30, tickets 5, applications 10, run entries 10, plus 20 sign-in tries per email per quarter hour.
+- Owner-scoped queries filter by the session user id. Staff powers come from `can(user, permission)`. Brand access comes from `orgRole`. A module that is not available to the person is refused before its route runs: `modulesForPath` maps the first one or two path segments to the module keys that own them.
 - The `/go/:code` and `/out/:kind/:id` redirects answer first and write the click in `waitUntil`, with a salted hash of the address and never the address.
 - Time is stored as UTC ISO; zone conversion happens only through `zonedToUtc` and `slotsFor` in shared. Money is integer cents or integer points through `money()` and `feeBps()`.
 
@@ -78,13 +81,13 @@ Adapters: Razorpay, Resend (through the outbox), YouTube Data API, Meta webhooks
 - Smoke: a second Worker on 8788 with its own database under `scripts/smoke/state`, started by `scripts/smoke/blueprint.sh`. Test accounts live only there.
 - Production: `pnpm deploy` builds the web app and runs `wrangler deploy`. Secrets with `pnpm cf:secret <NAME>`. Migrations with `pnpm db:migrate`. Logs with `pnpm cf:logs`. Wrangler observability is enabled.
 - There is no staging environment, no written backup and restore step, and no alerting. D1's own point-in-time recovery is relied on but not documented or rehearsed.
-- Feature flags can switch any module off in production without a deploy (Admin, Flags), subject to the enforcement gap in 05.
+- Feature flags switch any module off in production without a deploy (Admin, Flags), and the API refuses it at once.
 
 ## 8. Anti-patterns, checked
 
 - One mega-prompt: avoided; DECISIONS shows the slices.
 - One giant component or table: avoided; 25 migrations, one route file per module, screens built from `Screen`, `Section`, `StatTile` and the charts.
-- Frontend-only authorization: avoided for roles and ownership; present for module flags (gap).
+- Frontend-only authorization: avoided; roles, ownership and module flags are all server checks.
 - Hard-coded access in components: avoided; `Gate` reads `access` from `/api/me`.
 - Payment state in a mutable user field: avoided; `orders` plus `webhook_events`.
 - Keys in client code: avoided; secrets are Worker bindings.
@@ -94,7 +97,5 @@ Adapters: Razorpay, Resend (through the outbox), YouTube Data API, Meta webhooks
 
 ## Known gaps
 
-- Module flags are not enforced by the API routes (05).
-- Lists are capped at 100 or 200 rows with no pagination except Observability.
 - No staging environment, backup procedure or alerting.
 - No idempotency key on checkout beyond the one-order-per-product rule.

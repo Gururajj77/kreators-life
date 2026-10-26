@@ -1,14 +1,14 @@
 # 05 — Feature flags, entitlements and access control
 
 **Product:** kreators.app
-**Version:** 0.2, reconciled with the app on 26 October 2026
+**Version:** 0.3, reconciled with the app on 26 October 2026
 **Source of truth:** `apps/api/src/access.ts`, `apps/api/src/db.ts` (`can`, `orgRole`), `MODULES` and `moduleState` in shared, the Flags page under Admin.
 
 ## 1. Purpose
 
 Flags let an admin switch any module off without a deploy. A flag can also limit a module to a role, roll it out to a share of people, or override it for one person, one role or one brand. Authorization is a separate layer. Roles, permissions and ownership decide what a person may do inside a module.
 
-**Rule from v0.1, kept:** a frontend toggle is never the only security control. **Status:** true for roles, permissions and ownership. Not yet true for module flags. See §9.
+**Rule from v0.1, kept:** a frontend toggle is never the only security control. **Status:** holds for roles, permissions, ownership and module flags. See §3 and §9.
 
 ## 2. The flag model as built
 
@@ -30,6 +30,8 @@ One flag per module, keyed by the module key: `army`, `store`, `companion`. Ther
 5. A module is `on` when it is available and either locked, switched on by the person, or on by default.
 
 The result is one record per module: available, on, and the reason. `GET /me` returns it and `Gate` uses it on the client. The same pure function scores every account for Observability.
+
+The API enforces it too. `MODULE_FOR_PREFIX` in `access.ts` maps every API prefix to the module or modules that own it (`work` to work, `studio/automations` to automations, `wellbeing` to every tracker and Life, `proposals` to TV and Fund). A middleware in `index.ts` runs after the session check: it resolves access for the person and answers 403 ("<Name> is not available on your account.") unless at least one of the path's modules is available. Only `available` counts, not the person's own on/off: switching an app off for yourself is a preference, and other screens may still read its data. A prefix not in the map is the core and always open; a new route file must be added to the map.
 
 ## 4. Access model as built
 
@@ -69,7 +71,7 @@ Module flags are long-lived product configuration, one per module. A module has 
 ## 9. Required tests, with status
 
 - A disabled module cannot be reached through the UI: holds (`Gate`).
-- A disabled module cannot be reached through the API: **does not hold.** No route calls `resolveAccess` or reads the access record. Only `/me`, the admin preview and Observability do. The smoke check "a switched-off app refuses its API" accepts 200, 403 or 404, so it passes without enforcement. Rollout and overrides can be bypassed the same way. The role and permission layer is separate and holds. So the exposure is a person reaching a consumer module an admin switched off, not a privilege escalation.
+- A disabled module cannot be reached through the API: holds ("a switched-off app refuses its API" demands a 403 and "the core stays open while an app is off"). An override is refused the same way ("an override refuses the API too", "and the door opens again when it is removed"), and so is a rollout the person falls outside.
 - A person cannot read another brand's data: holds in code (`orgRole`). Not in the smoke test.
 - An expired membership loses access: holds (`ends_at` is checked in Party).
 - An override expires as set: holds (`expires_at` is filtered on read).
@@ -81,6 +83,5 @@ Module flags are long-lived product configuration, one per module. A module has 
 
 ## Known gaps
 
-- The routes do not enforce module flags, and the smoke check should demand a 403.
-- An unknown or missing flag fails open.
+- A module with no flag row is enabled by default. That is the design (the defaults live in `MODULES`), but an unknown key is not refused.
 - No confirmation step before switching a module off in production.

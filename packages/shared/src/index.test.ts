@@ -1,5 +1,6 @@
 import { BADGES as ALL_BADGES, HOW_TO, kmLabel, MODULES as MODS, paceLabel, RUN_BADGES, runEntryState, TERMS, weekStart, weekStreak } from './index';
 import { earningGuide, nextBadge, unlockFor } from './index';
+import { ageOn, birthDateProblem, MIN_AGE, normalizePhone, phoneProblem } from './index';
 import { SOCIAL_REWARDS, trustScore } from './index';
 import { FEATURE_FEE_POINTS, isFeatured, parseImageUrls, STORE_STAGE_META, PREOWNED_CONDITION_META } from './index';
 import { builtInTemplate, parseReviewPrompts, periodDays, periodFor, periodLabel, periodShift } from './index';
@@ -314,5 +315,27 @@ describe('Kreators Run', () => {
     expect(run?.group).toBe('community');
     expect(run?.defaultOn).toBe(false);
     expect(HOW_TO.run?.terms).toContain('start code');
+  });
+});
+
+describe('sign-up', () => {
+  it('counts whole years and turns away anyone under eighteen', () => {
+    expect(MIN_AGE).toBe(18);
+    expect(ageOn('2008-10-26', '2026-10-26')).toBe(18);
+    expect(ageOn('2008-10-27', '2026-10-26')).toBe(17);
+    expect(birthDateProblem('2008-10-27', '2026-10-26')).toMatch(/18/);
+    expect(birthDateProblem('2008-10-26', '2026-10-26')).toBeNull();
+    expect(birthDateProblem('1990-05-20', '2026-10-26')).toBeNull();
+    expect(birthDateProblem('', '2026-10-26')).toBeTruthy();
+    expect(birthDateProblem('2027-01-01', '2026-10-26')).toMatch(/not happened/);
+    expect(birthDateProblem('1890-01-01', '2026-10-26')).toMatch(/not look right/);
+  });
+  it('keeps a phone as digits with its plus and refuses anything too short or too long', () => {
+    expect(normalizePhone('+91 98765-43210')).toBe('+919876543210');
+    expect(phoneProblem('+91 98765 43210')).toBeNull();
+    expect(phoneProblem('9876543210')).toBeNull();
+    expect(phoneProblem('12')).toBeTruthy();
+    expect(phoneProblem('+1 234 567 890 123 456')).toBeTruthy();
+    expect(phoneProblem('call me')).toBeTruthy();
   });
 });

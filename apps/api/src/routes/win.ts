@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { bountyPayout, detectPlatform, type Bounty, type BountySubmission, type SocialMetric } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { audit, can, nameOf, newId, notify, nowIso, num, oneOf, str } from '../db';
+import { audit, can, nameOf, newId, notify, nowIso, num, oneOf, str, pageOf, paged } from '../db';
 import { fetchMetrics } from '../social';
 
 /** Win: content rewards. A brand funds a pool; creators post videos; verified views turn into points. */
@@ -39,15 +39,17 @@ win.get('/', async (c) => {
   const user = c.get('user');
   const reviewer = can(user, 'review');
   const finance = can(user, 'finance');
+  const ask = pageOf(c);
   const [bs, mine, queue] = await Promise.all([
-    db.prepare(`${SELECT} WHERE b.status = 'open' OR b.id IN (SELECT bounty_id FROM bounty_submissions WHERE user_id = ?) ORDER BY b.featured DESC, b.ends_at LIMIT 100`).bind(user.id).all<BRow>(),
+    db.prepare(`${SELECT} WHERE b.status = 'open' OR b.id IN (SELECT bounty_id FROM bounty_submissions WHERE user_id = ?) ORDER BY b.featured DESC, b.ends_at LIMIT ? OFFSET ?`).bind(user.id, ask.limit, ask.offset).all<BRow>(),
     db.prepare(`${S_SELECT} WHERE s.user_id = ? ORDER BY s.created_at DESC`).bind(user.id).all<SRow>(),
     reviewer || finance ? db.prepare(`${S_SELECT} WHERE s.status IN ('submitted','verified','disputed') ORDER BY s.created_at`).all<SRow>() : Promise.resolve({ results: [] as SRow[] }),
   ]);
   const metrics = await metricsFor(db, [...mine.results, ...queue.results].map((s) => s.id));
   const byB = new Map(mine.results.map((s) => [s.bounty_id, toS(s, metrics)]));
   const earned = mine.results.filter((s) => s.status === 'paid').reduce((a, s) => a + s.payout_points, 0);
-  return c.json({ bounties: bs.results.map((b) => toB(b, byB.get(b.id) ?? null)), mine: mine.results.map((s) => toS(s, metrics)), queue: queue.results.map((s) => toS(s, metrics)), earned, reviewer, finance, canCreate: reviewer || can(user, 'talent') });
+  const pg = paged(bs.results, ask);
+  return c.json({ page: pg.page, bounties: pg.items.map((b) => toB(b, byB.get(b.id) ?? null)), mine: mine.results.map((s) => toS(s, metrics)), queue: queue.results.map((s) => toS(s, metrics)), earned, reviewer, finance, canCreate: reviewer || can(user, 'talent') });
 });
 
 win.get('/:id', async (c) => {
@@ -81,6 +83,48 @@ win.post('/', async (c) => {
     .run();
   await audit(db, user.id, 'bounty.create', 'bounty', id, '', title);
   return c.json({ ok: true, id }, 201);
+});
+
+// Change a reward after launch. Every change bumps the version and tells everyone who already entered,
+// so nobody posts against rules that moved. The pool can never drop under what was already paid.
+win.patch('/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const b = await db.prepare(`${SELECT} WHERE b.id = ?`).bind(c.req.param('id')).first<BRow & { created_by: string }>();
+  if (!b) return c.json({ error: 'not found' }, 404);
+  if (b.created_by !== user.id && !can(user, 'review') && !can(user, 'talent')) return c.json({ error: 'staff change rewards' }, 403);
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const next = {
+    title: str(body.title, 120, b.title) || b.title,
+    brief: str(body.brief, 5000, b.brief),
+    deliverable: str(body.deliverable, 80, b.deliverable) || b.deliverable,
+    platform: str(body.platform, 60, b.platform),
+    brand_name: str(body.brandName, 80, b.brand_name),
+    eligibility: str(body.eligibility, 1000, b.eligibility),
+    reward_rule: str(body.rewardRule, 1000, b.reward_rule),
+    ends_at: str(body.endsAt, 40, b.ends_at) || b.ends_at,
+    budget_points: num(body.budgetPoints, b.budget_points, 0) ?? b.budget_points,
+    rate_per_thousand: num(body.ratePerThousand, b.rate_per_thousand, 0) ?? b.rate_per_thousand,
+    max_payout_points: num(body.maxPayoutPoints, b.max_payout_points, 0) ?? b.max_payout_points,
+    min_views: num(body.minViews, b.min_views, 0) ?? b.min_views,
+    status: oneOf(body.status, ['open', 'closed'] as const, b.status === 'paid' ? 'closed' : b.status),
+  };
+  if (Number.isNaN(Date.parse(next.ends_at))) return c.json({ error: 'that closing time does not look right' }, 400);
+  if (next.budget_points > 0 && next.budget_points < b.paid_points) return c.json({ error: `the pool cannot drop under the ${b.paid_points} points already paid` }, 400);
+  const labels: Record<keyof typeof next, string> = { title: 'title', brief: 'brief', deliverable: 'deliverable', platform: 'platform', brand_name: 'brand', eligibility: 'who can enter', reward_rule: 'rules', ends_at: 'closing time', budget_points: 'pool', rate_per_thousand: 'rate per thousand views', max_payout_points: 'cap per creator', min_views: 'minimum views', status: 'status' };
+  const changed = (Object.keys(next) as (keyof typeof next)[]).filter((k) => String(next[k]) !== String(b[k as keyof BRow]));
+  if (changed.length === 0) return c.json({ ok: true, version: b.version, changed: [] });
+  const version = b.version + 1;
+  await db
+    .prepare('UPDATE bounties SET title = ?, brief = ?, deliverable = ?, platform = ?, brand_name = ?, eligibility = ?, reward_rule = ?, ends_at = ?, budget_points = ?, rate_per_thousand = ?, max_payout_points = ?, min_views = ?, status = ?, version = ? WHERE id = ?')
+    .bind(next.title, next.brief, next.deliverable, next.platform, next.brand_name, next.eligibility, next.reward_rule, next.ends_at, next.budget_points, next.rate_per_thousand, next.max_payout_points, next.min_views, next.status, version, b.id)
+    .run();
+  const what = changed.map((k) => labels[k]).join(', ');
+  await audit(db, user.id, 'bounty.edit', 'bounty', b.id, `v${b.version}`, `v${version}: ${what}`);
+  // Everyone who entered hears about it, once per change.
+  const entrants = await db.prepare('SELECT DISTINCT user_id FROM bounty_submissions WHERE bounty_id = ?').bind(b.id).all<{ user_id: string }>();
+  for (const e of entrants.results) await notify(db, e.user_id, 'win', `${next.title} changed (version ${version})`, `Changed: ${what}. Read the reward again before you post.`, `/win/${b.id}`);
+  return c.json({ ok: true, version, changed: changed.map((k) => labels[k]) });
 });
 
 // Submit the public link to your video. One per person per reward; resubmitting replaces the link.

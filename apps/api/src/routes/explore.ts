@@ -48,7 +48,7 @@ export async function listingsFor(db: D1Database, o: Opts): Promise<Listing[]> {
   }
   if (types.includes('opportunity')) {
     const rows = await db
-      .prepare(`SELECT o.*, org.name AS organization_name FROM opportunities o LEFT JOIN organizations org ON org.id = o.organization_id WHERE 1=1 ${o.includeHidden ? '' : `AND o.status = 'published' AND (o.deadline IS NULL OR o.deadline >= '${today}')`}${idClause('o.id')} ORDER BY o.featured DESC, o.published_at DESC LIMIT 200`)
+      .prepare(`SELECT o.*, org.name AS organization_name FROM opportunities o LEFT JOIN organizations org ON org.id = o.organization_id WHERE 1=1 ${o.includeHidden ? '' : `AND o.status = 'published' AND o.club_only = 0 AND (o.deadline IS NULL OR o.deadline >= '${today}')`}${idClause('o.id')} ORDER BY o.featured DESC, o.published_at DESC LIMIT 200`)
       .all<{ id: string; title: string; description: string; organization_name: string | null; opportunity_type: string; location_mode: string; location_text: string; compensation_min: number | null; compensation_max: number | null; currency: string; deadline: string | null; status: string; featured: number; created_at: string }>();
     for (const r of rows.results) {
       const pay = money(r.compensation_min, r.compensation_max, r.currency);

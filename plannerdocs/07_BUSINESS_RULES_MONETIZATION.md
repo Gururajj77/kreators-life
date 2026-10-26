@@ -1,7 +1,7 @@
 # 07 — Business rules and monetization
 
 **Product:** kreators.app
-**Version:** 0.2, reconciled with the app on 26 October 2026
+**Version:** 0.3, reconciled with the app on 26 October 2026
 **Source of truth:** the constants in `packages/shared/src/index.ts` (`XP`, `POINTS`, `WAIT`, `REWARDS`, `SOCIAL_REWARDS`, `RUN_REWARD`, `FEATURE_FEE_POINTS`, `AFFILIATE_SHARE`, `trustScore`, `bountyPayout`, `unlockFor`, `earningGuide`), `apps/api/src/payments.ts`, `apps/api/src/rewards.ts`, the policy pages at `/terms`, `/privacy`, `/refunds`, `/pricing`.
 
 ## 1. Purpose
@@ -69,7 +69,7 @@ Each pays once per thing (`source_id` or `ref`), so unliking and liking again ne
 
 ## 7. Content rewards (Win)
 
-A reward states its brand, brief, platform, pool of points, rate per thousand verified views, cap per creator, minimum view count, the rule in words, eligibility and a window, all visible before anyone submits. `bountyPayout` is floor(views ÷ 1000) × rate, zero below the minimum, capped per creator. YouTube numbers are read by the app; other platforms are typed by the creator and confirmed by a reviewer, with every reading kept. Verify first; then finance pays from the pool and never past what is left; the pay is audited. A rejection can be disputed. The reward's own leaderboard shows names and views, never payouts.
+A reward states its brand, brief, platform, pool of points, rate per thousand verified views, cap per creator, minimum view count, the rule in words, eligibility and a window, all visible before anyone submits. If any of that changes after launch, the version goes up, the change is audited, every entrant gets an inbox note saying what changed, and the pool can never drop under what was paid. `bountyPayout` is floor(views ÷ 1000) × rate, zero below the minimum, capped per creator. YouTube numbers are read by the app; other platforms are typed by the creator and confirmed by a reviewer, with every reading kept. Verify first; then finance pays from the pool and never past what is left; the pay is audited. A rejection can be disputed. The reward's own leaderboard shows names and views, never payouts.
 
 ## 8. Store and Tools
 
@@ -81,7 +81,7 @@ A reward states its brand, brief, platform, pool of points, rate per thousand ve
 ## 9. School, Club, Party
 
 - Programs carry a price in points or cents and a currency; both seeded programs are free, online and self-paced in cohorts that are always open. Completion is a manager's decision; a certificate is issued on completion and verified at `/c/<code>`.
-- Club has no fee. A reviewer decides; membership runs twelve months by default (1 to 24); the Club honor and badge follow. Benefits as written: club-only events (enforced), club-only Work listings (not enforced), a named manager (not modelled), the honor.
+- Club has no fee. A reviewer decides; membership runs twelve months by default (1 to 24); the Club honor and badge follow. Benefits as written, all built: club-only events, club-only Work listings that only members see and can apply to, a named manager on staff picked by a reviewer, the honor.
 - Events can cost points for a ticket; cancelling a seat refunds the points; capacity and the waitlist are enforced; private events are link-only; club events need membership. One event engine serves meetups, parties, workshops, camps and days.
 
 ## 10. Trust
@@ -101,6 +101,5 @@ A campaign records usage rights, exclusivity terms, brand restrictions and the a
 
 ## Known gaps
 
-- Club-only Work listings and a named manager are promised and not built.
 - Rights and consent beyond the campaign fields are legal text, not product.
 - No reconciliation of provider settlements against orders exists beyond the webhook log and replay.

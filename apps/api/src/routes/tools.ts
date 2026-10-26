@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { isBadgeKey, TOOL_CATEGORIES, unlockFor, type Tool } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { badgesNow, can, honorKeys, nameOf, newId, nowIso, num, oneOf, str } from '../db';
+import { badgesNow, can, honorKeys, nameOf, newId, nowIso, num, oneOf, str, pageOf, paged } from '../db';
 import type { UserRow } from '../env';
 import { featureUntil } from './market';
 
@@ -21,9 +21,11 @@ tools.get('/', async (c) => {
   const staff = can(user, 'review');
   const now = nowIso();
   const order = `ORDER BY CASE WHEN t.featured_until > '${now}' THEN 0 ELSE 1 END, t.verified DESC, t.name`;
-  const rows = await c.env.DB.prepare(staff ? `${SELECT} ${order}` : `${SELECT} WHERE t.verified = 1 OR t.suggested_by = ? ${order}`).bind(...(staff ? [] : [user.id])).all<Row>();
+  const ask = pageOf(c);
+  const rows = await c.env.DB.prepare(staff ? `${SELECT} ${order} LIMIT ? OFFSET ?` : `${SELECT} WHERE t.verified = 1 OR t.suggested_by = ? ${order} LIMIT ? OFFSET ?`).bind(...(staff ? [] : [user.id]), ask.limit, ask.offset).all<Row>();
   const have = await haveFor(c.env.DB, user);
-  return c.json({ tools: rows.results.map((r) => toT(r, have)), categories: TOOL_CATEGORIES, reviewer: staff });
+  const pg = paged(rows.results, ask);
+  return c.json({ page: pg.page, tools: pg.items.map((r) => toT(r, have)), categories: TOOL_CATEGORIES, reviewer: staff });
 });
 
 tools.post('/', async (c) => {

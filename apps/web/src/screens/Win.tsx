@@ -8,6 +8,7 @@ import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useAuthed, useRefreshAll } from '../lib/queries';
+import { Pager, usePage } from '../components/Pager';
 
 type Rule = Pick<Bounty, 'ratePerThousand' | 'maxPayoutPoints' | 'minViews'>;
 
@@ -200,7 +201,8 @@ function SubmissionRow({ s, rule, reviewer, finance, onDone, showPerson }: { s: 
 }
 
 export function Win() {
-  const q = useAuthed(['win'], api.win);
+  const pg = usePage();
+  const q = useAuthed(['win', pg.query], () => api.win(pg.query));
   const [launching, setLaunching] = useState(false);
   const d = q.data;
   const ruleFor = (bountyId: string): Rule | null => d?.bounties.find((b) => b.id === bountyId) ?? null;
@@ -248,6 +250,7 @@ export function Win() {
                 <BountyCard key={b.id} b={b} />
               ))}
             </ul>
+            <Pager page={d.page} label="rewards" />
           </section>
 
           {d.mine.length > 0 && (
@@ -404,6 +407,131 @@ function LaunchSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
   );
 }
 
+/** Change a reward after launch. Every save bumps the version and tells everyone who already entered. */
+function EditSheet({ b, open, onClose, onSaved }: { b: Bounty; open: boolean; onClose: () => void; onSaved: () => void }) {
+  const local = (iso: string) => {
+    const d = new Date(iso);
+    const pad = (v: number) => String(v).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  const [brandName, setBrandName] = useState(b.brandName);
+  const [title, setTitle] = useState(b.title);
+  const [brief, setBrief] = useState(b.brief);
+  const [deliverable, setDeliverable] = useState(b.deliverable);
+  const [platform, setPlatform] = useState(b.platform);
+  const [budgetPoints, setBudgetPoints] = useState(String(b.budgetPoints));
+  const [ratePerThousand, setRate] = useState(String(b.ratePerThousand));
+  const [maxPayoutPoints, setMax] = useState(String(b.maxPayoutPoints));
+  const [minViews, setMinViews] = useState(String(b.minViews));
+  const [endsAt, setEndsAt] = useState(local(b.endsAt));
+  const [eligibility, setEligibility] = useState(b.eligibility);
+  const [rewardRule, setRewardRule] = useState(b.rewardRule);
+  const [status, setStatus] = useState<'open' | 'closed'>(b.status === 'open' ? 'open' : 'closed');
+  const save = useMutation({
+    mutationFn: () =>
+      api.editBounty(b.id, {
+        brandName,
+        title,
+        brief,
+        deliverable,
+        platform,
+        budgetPoints: Number(budgetPoints) || 0,
+        ratePerThousand: Number(ratePerThousand) || 0,
+        maxPayoutPoints: Number(maxPayoutPoints) || 0,
+        minViews: Number(minViews) || 0,
+        endsAt: endsAt ? new Date(endsAt).toISOString() : b.endsAt,
+        eligibility,
+        rewardRule,
+        status,
+      }),
+    onSuccess: () => {
+      onSaved();
+      onClose();
+    },
+  });
+  return (
+    <Sheet open={open} onClose={onClose} title={`Change this reward (version ${b.version})`}>
+      <form
+        className="flex flex-col gap-md"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (title.trim()) save.mutate();
+        }}
+      >
+        <p className="m-0 text-[14px] font-semibold text-ink-soft">
+          Saving bumps the version and sends a note to the {b.submissions} {b.submissions === 1 ? 'person' : 'people'} who entered. The pool cannot drop under what was paid.
+        </p>
+        <label className="block">
+          <span className="block text-[14px] font-bold">Brand</span>
+          <input value={brandName} onChange={(e) => setBrandName(e.target.value)} maxLength={80} className={field} />
+        </label>
+        <label className="block">
+          <span className="block text-[14px] font-bold">Title</span>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={field} />
+        </label>
+        <label className="block">
+          <span className="block text-[14px] font-bold">Brief</span>
+          <textarea value={brief} onChange={(e) => setBrief(e.target.value)} maxLength={5000} rows={4} className={field} />
+        </label>
+        <div className="grid grid-cols-2 gap-xs">
+          <label className="block">
+            <span className="block text-[14px] font-bold">Deliverable</span>
+            <input value={deliverable} onChange={(e) => setDeliverable(e.target.value)} maxLength={80} className={field} />
+          </label>
+          <label className="block">
+            <span className="block text-[14px] font-bold">Platform</span>
+            <input value={platform} onChange={(e) => setPlatform(e.target.value)} maxLength={60} placeholder="Any" className={field} />
+          </label>
+        </div>
+        <div className="grid grid-cols-2 gap-xs">
+          <label className="block">
+            <span className="block text-[14px] font-bold">Pool in points</span>
+            <input type="number" min={0} value={budgetPoints} onChange={(e) => setBudgetPoints(e.target.value)} className={field} />
+          </label>
+          <label className="block">
+            <span className="block text-[14px] font-bold">Points per 1k views</span>
+            <input type="number" min={0} value={ratePerThousand} onChange={(e) => setRate(e.target.value)} className={field} />
+          </label>
+          <label className="block">
+            <span className="block text-[14px] font-bold">Cap per creator</span>
+            <input type="number" min={0} value={maxPayoutPoints} onChange={(e) => setMax(e.target.value)} className={field} />
+          </label>
+          <label className="block">
+            <span className="block text-[14px] font-bold">Views before paying</span>
+            <input type="number" min={0} value={minViews} onChange={(e) => setMinViews(e.target.value)} className={field} />
+          </label>
+        </div>
+        <label className="block">
+          <span className="block text-[14px] font-bold">Closes</span>
+          <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className={field} />
+        </label>
+        <label className="block">
+          <span className="block text-[14px] font-bold">Who can enter</span>
+          <input value={eligibility} onChange={(e) => setEligibility(e.target.value)} maxLength={1000} className={field} />
+        </label>
+        <label className="block">
+          <span className="block text-[14px] font-bold">Rules and brand do-nots</span>
+          <textarea value={rewardRule} onChange={(e) => setRewardRule(e.target.value)} maxLength={1000} rows={3} className={field} />
+        </label>
+        <fieldset className="m-0 border-0 p-0">
+          <legend className="text-[14px] font-bold">Status</legend>
+          <div className="mt-xs flex flex-wrap gap-xs">
+            {(['open', 'closed'] as const).map((v) => (
+              <button key={v} type="button" aria-pressed={status === v} onClick={() => setStatus(v)} className={`min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${status === v ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+                {v}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        <Err e={save.isError ? save.error : null} />
+        <Button type="submit" size="lg" full disabled={save.isPending || !title.trim()}>
+          Save as version {b.version + 1}
+        </Button>
+      </form>
+    </Sheet>
+  );
+}
+
 function MySubmission({ s, onDone }: { s: BountySubmission; onDone: () => void }) {
   const [reporting, setReporting] = useState(false);
   const [views, setViews] = useState(String(s.latestViews));
@@ -534,6 +662,7 @@ export function Reward() {
   const win = useAuthed(['win'], api.win);
   const refreshAll = useRefreshAll();
   const [url, setUrl] = useState('');
+  const [editing, setEditing] = useState(false);
   const submit = useMutation({
     mutationFn: () => api.submitBounty(id, url),
     onSuccess: () => {
@@ -575,8 +704,14 @@ export function Reward() {
           {b.brandName}
           {b.featured ? ', featured' : ''}
           {!open ? `, ${b.status === 'paid' ? 'pool paid out' : 'closed'}` : `, closes ${day(b.endsAt)}`}
+          {b.version > 1 ? `, version ${b.version}` : ''}
         </p>
         <h1 className="text-[30px]">{b.title}</h1>
+        {(reviewer || win.data?.canCreate) && b.status !== 'paid' && (
+          <Button variant="outline" className="mt-sm" onClick={() => setEditing(true)}>
+            Change this reward
+          </Button>
+        )}
       </header>
 
       <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-label="The brief">
@@ -675,6 +810,18 @@ export function Reward() {
             ))}
           </ol>
         </section>
+      )}
+
+      {editing && (
+        <EditSheet
+          b={b}
+          open={editing}
+          onClose={() => setEditing(false)}
+          onSaved={() => {
+            refreshAll();
+            reload();
+          }}
+        />
       )}
 
       {(reviewer || finance) && d.submissions.length > 0 && (

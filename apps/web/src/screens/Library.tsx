@@ -10,6 +10,7 @@ import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { useAuthed, useLibrary, useRefreshAll } from '../lib/queries';
+import { Pager, usePage } from '../components/Pager';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const err = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
@@ -29,7 +30,8 @@ export function Library() {
 }
 
 function Mine() {
-  const q = useLibrary();
+  const pg = usePage();
+  const q = useLibrary(pg.query);
   const certs = useAuthed(['certificates'], api.certificates);
   const dms = useAuthed(['my-dm'], api.myDmRequests);
   const refresh = useRefreshAll();
@@ -78,6 +80,7 @@ function Mine() {
           </li>
         ))}
       </ul>
+      <Pager page={d?.page} label="purchases" />
       {d && d.bookings.length > 0 && (
         <section className="mt-lg" aria-labelledby="bk-heading">
           <h2 id="bk-heading" className="text-[24px]">

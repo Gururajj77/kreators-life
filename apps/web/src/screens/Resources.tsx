@@ -8,6 +8,7 @@ import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useAuthed, useMe, useRefreshAll, useResources } from '../lib/queries';
+import { Pager, usePage } from '../components/Pager';
 
 const KIND_EMOJI = { article: '📖', exercise: '🧩', video: '🎬' } as const;
 
@@ -20,7 +21,8 @@ export function Resources() {
 function List() {
   const me = useMe();
   const [tag, setTag] = useState('');
-  const q = useResources(tag || undefined);
+  const pg = usePage();
+  const q = useResources(tag || undefined, pg.query);
   const refresh = useRefreshAll();
   const canAuthor = me.data && me.data.user.role !== 'user';
   const [editing, setEditing] = useState<Resource | 'new' | null>(null);
@@ -65,6 +67,7 @@ function List() {
           </li>
         ))}
       </ul>
+      <Pager page={q.data?.page} label="guides" />
       {canAuthor && <ResourceSheet resource={editing} onClose={() => setEditing(null)} onSaved={refresh} />}
     </Screen>
   );

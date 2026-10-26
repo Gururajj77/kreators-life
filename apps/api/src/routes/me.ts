@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import {
   parsePublicSettings,
+  normalizePhone,
+  phoneProblem,
   CHARACTER_STAGES,
   MODULE_BY_KEY,
   daysSince,
@@ -131,6 +133,13 @@ me.patch('/', async (c) => {
   const focus = typeof body.focus === 'string' ? body.focus.trim().slice(0, 40) : user.creator_type;
   const optIn = typeof body.leaderboardOptIn === 'boolean' ? (body.leaderboardOptIn ? 1 : 0) : user.leaderboard_opt_in;
   const bio = typeof body.bio === 'string' ? body.bio.trim().slice(0, 200) : user.bio;
+  // The phone can be changed; the date of birth is set once at sign-up.
+  let phone = user.phone ?? '';
+  if (typeof body.phone === 'string') {
+    const bad = phoneProblem(body.phone);
+    if (bad) return c.json({ error: bad.charAt(0).toLowerCase() + bad.slice(1) }, 400);
+    phone = normalizePhone(body.phone);
+  }
   const reminderTime = body.reminderTime === null ? null : typeof body.reminderTime === 'string' && /^\d{2}:\d{2}$/.test(body.reminderTime) ? body.reminderTime : user.reminder_time;
   let handle = user.handle;
   if (body.handle === null) handle = null;
@@ -173,8 +182,8 @@ me.patch('/', async (c) => {
   // Link blocks: cleaned in shared, every block gets an id here so clicks can be counted.
   const links = Array.isArray(body.links) ? JSON.stringify(parseLinkBlocks(body.links).map((b) => ({ ...b, id: b.id || newId().slice(0, 12) }))) : user.links_json;
   await db
-    .prepare('UPDATE users SET display_name = ?, creator_type = ?, leaderboard_opt_in = ?, bio = ?, reminder_time = ?, handle = ?, skills = ?, categories = ?, goals = ?, experience_level = ?, availability = ?, location = ?, open_to_intros = ?, interests = ?, city = ?, area = ?, lat = ?, lng = ?, timezone = ?, avatar_url = ?, socials_json = ?, public_json = ?, links_json = ? WHERE id = ?')
-    .bind(displayName, focus, optIn, bio, reminderTime, handle, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, lat, lng, timezone, avatarUrl, socials, publicJson, links, user.id)
+    .prepare('UPDATE users SET display_name = ?, creator_type = ?, leaderboard_opt_in = ?, bio = ?, reminder_time = ?, handle = ?, skills = ?, categories = ?, goals = ?, experience_level = ?, availability = ?, location = ?, open_to_intros = ?, interests = ?, city = ?, area = ?, lat = ?, lng = ?, timezone = ?, avatar_url = ?, socials_json = ?, public_json = ?, links_json = ?, phone = ? WHERE id = ?')
+    .bind(displayName, focus, optIn, bio, reminderTime, handle, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, lat, lng, timezone, avatarUrl, socials, publicJson, links, phone, user.id)
     .run();
   if (handle && !user.handle) await track(db, user.id, 'profile_published', { minutesSinceSignup: Math.round((Date.now() - new Date(user.created_at).getTime()) / 60_000) });
   const fresh = await getUser(db, user.id);
@@ -245,7 +254,7 @@ me.delete('/', async (c) => {
   const body = await c.req.json<{ confirm?: string }>().catch(() => ({}) as { confirm?: string });
   if (body.confirm !== 'DELETE') return c.json({ error: 'send confirm: DELETE' }, 400);
   await db.batch([
-    db.prepare("UPDATE users SET display_name = 'Deleted member', email = NULL, password_hash = NULL, password_salt = NULL, handle = NULL, bio = '', avatar_url = '', socials_json = '{}', skills = '[]', categories = '[]', goals = '[]', interests = '[]', city = '', area = '', lat = NULL, lng = NULL, location = '', reminder_time = NULL, open_to_intros = 0 WHERE id = ?").bind(user.id),
+    db.prepare("UPDATE users SET display_name = 'Deleted member', email = NULL, phone = '', birth_date = '', password_hash = NULL, password_salt = NULL, handle = NULL, bio = '', avatar_url = '', socials_json = '{}', skills = '[]', categories = '[]', goals = '[]', interests = '[]', city = '', area = '', lat = NULL, lng = NULL, location = '', reminder_time = NULL, open_to_intros = 0 WHERE id = ?").bind(user.id),
     db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM nodes WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM not_to_do WHERE user_id = ?').bind(user.id),

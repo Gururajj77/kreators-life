@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { rewardSocial, trustFor } from '../rewards';
 import { unlockFor } from '@kreators/shared';
-import { badgesNow } from '../db';
+import { badgesNow, pageOf, paged } from '../db';
 import { AFFILIATE_SHARE, levelFromXp, type Lesson, type PublicPage } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
 import { DATE_RE, nameOf, newId, notify, nowIso, parseList, parseSocials, sessionUser, publicOf, getStats, computeBadges, honorKeys, linksOf } from '../db';
@@ -321,23 +321,28 @@ store.get('/orders/:id', async (c) => {
 
 store.get('/browse', async (c) => {
   const kind = c.req.query('kind');
+  const ask = pageOf(c);
   const rows =
     kind === 'session' || kind === 'event'
-      ? await c.env.DB.prepare(`${PRODUCT_SELECT} WHERE p.status = 'live' AND p.kind = ? ORDER BY p.starts_at ASC, p.created_at DESC LIMIT 100`).bind(kind).all<ProductRow>()
-      : await c.env.DB.prepare(`${PRODUCT_SELECT} WHERE p.status = 'live' ORDER BY p.created_at DESC LIMIT 100`).all<ProductRow>();
-  return c.json({ products: rows.results.map((r) => toProduct(r)) });
+      ? await c.env.DB.prepare(`${PRODUCT_SELECT} WHERE p.status = 'live' AND p.kind = ? ORDER BY p.starts_at ASC, p.created_at DESC LIMIT ? OFFSET ?`).bind(kind, ask.limit, ask.offset).all<ProductRow>()
+      : await c.env.DB.prepare(`${PRODUCT_SELECT} WHERE p.status = 'live' ORDER BY p.created_at DESC LIMIT ? OFFSET ?`).bind(ask.limit, ask.offset).all<ProductRow>();
+  const pg = paged(rows.results, ask);
+  return c.json({ page: pg.page, products: pg.items.map((r) => toProduct(r)) });
 });
 
 store.get('/library', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const [orders, bookings] = await Promise.all([
-    db.prepare(`${ORDER_SELECT} WHERE o.buyer_id = ? AND o.status IN ('paid','test') ORDER BY o.created_at DESC LIMIT 200`).bind(user.id).all<OrderRow>(),
+  const ask = pageOf(c);
+  const [ordersAll, bookings] = await Promise.all([
+    db.prepare(`${ORDER_SELECT} WHERE o.buyer_id = ? AND o.status IN ('paid','test') ORDER BY o.created_at DESC LIMIT ? OFFSET ?`).bind(user.id, ask.limit, ask.offset).all<OrderRow>(),
     db.prepare(`${BOOKING_SELECT} WHERE k.buyer_id = ? ORDER BY k.starts_at DESC LIMIT 100`).bind(user.id).all<BookingRow>(),
   ]);
+  const pg = paged(ordersAll.results, ask);
+  const orders = { results: pg.items };
   const ids = orders.results.map((o) => o.product_id);
   const products = ids.length ? await db.prepare(`${PRODUCT_SELECT} WHERE p.id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all<ProductRow>() : { results: [] as ProductRow[] };
-  return c.json({ orders: orders.results.map(toOrder), products: products.results.map((r) => toProduct(r)), bookings: bookings.results.map(toBooking) });
+  return c.json({ page: pg.page, orders: orders.results.map(toOrder), products: products.results.map((r) => toProduct(r)), bookings: bookings.results.map(toBooking) });
 });
 
 store.get('/products/:id', async (c) => {

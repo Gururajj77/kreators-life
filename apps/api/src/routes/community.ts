@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { FEED_FILTERS, FEED_SORTS, POST_CATEGORIES, roleRank, type CommunityPost, type CommunityReply, type FeedFilter, type FeedSort } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { nameOf, newId, notify, nowIso, oneOf, requireRole } from '../db';
+import { nameOf, newId, notify, nowIso, oneOf, requireRole, pageOf, paged } from '../db';
 import { rewardSocial } from '../rewards';
 
 export const community = new Hono<AppEnv>();
@@ -80,8 +80,10 @@ community.get('/', async (c) => {
     clauses.push('p.product_id IS NULL');
   }
   const order = sort === 'popular' ? 'likes DESC, replies DESC, p.created_at DESC' : sort === 'talked' ? 'replies DESC, likes DESC, p.created_at DESC' : 'p.created_at DESC';
-  const rows = await db.prepare(`${POST_SELECT} WHERE ${clauses.join(' AND ')} ORDER BY ${order} LIMIT 60`).bind(...binds).all<PostRow>();
-  return c.json({ posts: rows.results.map(toPost), categories: POST_CATEGORIES, sort, filter });
+  const ask = pageOf(c);
+  const rows = await db.prepare(`${POST_SELECT} WHERE ${clauses.join(' AND ')} ORDER BY ${order} LIMIT ? OFFSET ?`).bind(...binds, ask.limit, ask.offset).all<PostRow>();
+  const pg = paged(rows.results, ask);
+  return c.json({ page: pg.page, posts: pg.items.map(toPost), categories: POST_CATEGORIES, sort, filter });
 });
 
 community.post('/', async (c) => {
@@ -137,10 +139,12 @@ interface ReplyRow {
 const toReply = (r: ReplyRow): CommunityReply => ({ id: r.id, postId: r.post_id, authorId: r.user_id, authorName: nameOf({ display_name: r.author_name }), body: r.body, createdAt: r.created_at });
 
 community.get('/:id/replies', async (c) => {
-  const rows = await c.env.DB.prepare('SELECT r.*, u.display_name AS author_name FROM community_replies r JOIN users u ON u.id = r.user_id WHERE r.post_id = ? AND r.hidden_at IS NULL ORDER BY r.created_at ASC LIMIT 200')
-    .bind(c.req.param('id'))
+  const ask = pageOf(c);
+  const rows = await c.env.DB.prepare('SELECT r.*, u.display_name AS author_name FROM community_replies r JOIN users u ON u.id = r.user_id WHERE r.post_id = ? AND r.hidden_at IS NULL ORDER BY r.created_at ASC LIMIT ? OFFSET ?')
+    .bind(c.req.param('id'), ask.limit, ask.offset)
     .all<ReplyRow>();
-  return c.json({ replies: rows.results.map(toReply) });
+  const pg = paged(rows.results, ask);
+  return c.json({ page: pg.page, replies: pg.items.map(toReply) });
 });
 
 community.post('/:id/replies', async (c) => {

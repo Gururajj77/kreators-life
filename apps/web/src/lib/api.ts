@@ -1,4 +1,4 @@
-import type { Unlock } from '@kreators/shared';
+import type { Page, Unlock } from '@kreators/shared';
 import type { FeedFilter, FeedSort, SocialAward, TrustScore } from '@kreators/shared';
 import type { ListingDetail, MarketResponse, PreownedListing, PreownedMessage, PreownedOffer, StoreItem, StoreKit } from '@kreators/shared';
 import type { PeriodKind, Review, ReviewSummary, ReviewTemplate, ReviewsResponse } from '@kreators/shared';
@@ -136,6 +136,9 @@ export class ApiError extends Error {
   }
 }
 
+/** Add a page query ("page=2&size=25") to a path that may already carry a query string. */
+const withQ = (path: string, q: string) => (q ? `${path}${path.includes('?') ? '&' : '?'}${q}` : path);
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = useSession.getState().token;
   const res = await fetch(`/api${path}`, {
@@ -161,7 +164,7 @@ const del = <T>(path: string) => request<T>(path, { method: 'DELETE' });
 export const api = {
   // accounts
   anon: (ref?: string | null) => post<{ token: string; user: User }>('/auth/anon', { ref }),
-  signup: (body: { email: string; password: string; displayName?: string }) => post<{ token: string; user: User }>('/auth/signup', body),
+  signup: (body: { email: string; password: string; displayName?: string; phone: string; birthDate: string }) => post<{ token: string; user: User }>('/auth/signup', body),
   signin: (body: { email: string; password: string }) => post<{ token: string; user: User }>('/auth/signin', body),
   signout: () => post<{ ok: true }>('/auth/signout'),
   /** Forgot the password: the answer is the same for any email. */
@@ -206,7 +209,7 @@ export const api = {
   reset: () => post<{ ok: true }>('/me/reset'),
   linkClicks: () => request<{ clicks: Record<string, number> }>('/me/link-clicks'),
   // internal, team only
-  observability: (q: string, offset = 0) => request<ObservabilityResponse>(`/internal/observability?q=${encodeURIComponent(q)}&offset=${offset}`),
+  observability: (q: string, pq = '') => request<ObservabilityResponse>(withQ(`/internal/observability?q=${encodeURIComponent(q)}`, pq)),
   setRole: (id: string, role: Role) => post<{ user: { id: string; name: string; handle: string | null; role: Role } }>(`/internal/users/${id}/role`, { role }),
 
   // onboarding and the tower
@@ -247,7 +250,7 @@ export const api = {
   logs: (kind: LogKind, days = 30) => request<{ logs: WellbeingLog[] }>(`/wellbeing/${kind}?days=${days}`),
   log: (kind: LogKind, body: { date?: string; value: number; extra?: Record<string, unknown>; note?: string }) => post<{ log: WellbeingLog; summary: WellbeingSummary }>(`/wellbeing/${kind}`, body),
   deleteLog: (kind: LogKind, id: string) => del<{ ok: true }>(`/wellbeing/${kind}/${id}`),
-  journal: () => request<{ entries: JournalEntry[]; stats: { total: number; thisMonth: number; positive: number; negative: number } }>('/journal'),
+  journal: (pq = '') => request<{ page: Page; entries: JournalEntry[]; stats: { total: number; thisMonth: number; positive: number; negative: number } }>(withQ('/journal', pq)),
   createEntry: (body: Partial<JournalEntry>) => post<{ entry: JournalEntry }>('/journal', body),
   updateEntry: (id: string, body: Partial<JournalEntry>) => patch<{ entry: JournalEntry }>(`/journal/${id}`, body),
   deleteEntry: (id: string) => del<{ ok: true }>(`/journal/${id}`),
@@ -256,16 +259,16 @@ export const api = {
   clearCompanion: () => del<{ ok: true }>('/companion'),
 
   // inbox, library, community, search
-  inbox: () => request<{ notifications: Notification[]; unread: number }>('/inbox'),
+  inbox: (pq = '') => request<{ page: Page; notifications: Notification[]; unread: number }>(withQ('/inbox', pq)),
   readAll: () => post<{ ok: true }>('/inbox/read-all'),
   readOne: (id: string) => post<{ ok: true }>(`/inbox/${id}/read`),
-  resources: (tag?: string) => request<{ resources: Resource[] }>(`/resources${tag ? `?tag=${encodeURIComponent(tag)}` : ''}`),
+  resources: (tag?: string, pq = '') => request<{ page: Page; resources: Resource[] }>(withQ(`/resources${tag ? `?tag=${encodeURIComponent(tag)}` : ''}`, pq)),
   resource: (id: string) => request<{ resource: Resource }>(`/resources/${id}`),
-  community: (category?: string, product?: string, all = false, sort: FeedSort = 'recent', filter: FeedFilter = 'all') =>
-    request<{ posts: CommunityPost[]; categories: readonly string[]; sort: FeedSort; filter: FeedFilter }>(`/community?${new URLSearchParams({ ...(category ? { category } : {}), ...(product ? { product } : {}), ...(all ? { all: '1' } : {}), sort, filter })}`),
+  community: (category?: string, product?: string, all = false, sort: FeedSort = 'recent', filter: FeedFilter = 'all', pq = '') =>
+    request<{ page: Page; posts: CommunityPost[]; categories: readonly string[]; sort: FeedSort; filter: FeedFilter }>(withQ(`/community?${new URLSearchParams({ ...(category ? { category } : {}), ...(product ? { product } : {}), ...(all ? { all: '1' } : {}), sort, filter })}`, pq)),
   createPost: (body: { category: string; body: string; productId?: string | null }) => post<{ post: CommunityPost; awarded: SocialAward }>('/community', body),
   likePost: (id: string) => post<{ post: CommunityPost; awarded: SocialAward }>(`/community/${id}/like`),
-  replies: (id: string) => request<{ replies: CommunityReply[] }>(`/community/${id}/replies`),
+  replies: (id: string, pq = '') => request<{ page: Page; replies: CommunityReply[] }>(withQ(`/community/${id}/replies`, pq)),
   reply: (id: string, body: string) => post<{ reply: CommunityReply; awarded: SocialAward }>(`/community/${id}/replies`, { body }),
   followUser: (id: string) => post<{ following: boolean; followers: number; awarded: SocialAward }>(`/community/follow/${id}`),
   deletePost: (id: string) => del<{ ok: true }>(`/community/${id}`),
@@ -286,8 +289,8 @@ export const api = {
   claimCertificate: (productId: string) => post<{ code: string; url: string }>(`/store/products/${productId}/certificate`),
   certificates: () => request<{ certificates: Certificate[] }>('/store/certificates'),
   myDmRequests: () => request<{ requests: DmRequest[] }>('/store/dm'),
-  browse: (kind?: 'session' | 'event') => request<{ products: Product[] }>(`/store/browse${kind ? `?kind=${kind}` : ''}`),
-  library: () => request<{ orders: Order[]; products: Product[]; bookings: Booking[] }>('/store/library'),
+  browse: (kind?: 'session' | 'event', pq = '') => request<{ page: Page; products: Product[] }>(withQ(`/store/browse${kind ? `?kind=${kind}` : ''}`, pq)),
+  library: (pq = '') => request<{ page: Page; orders: Order[]; products: Product[]; bookings: Booking[] }>(withQ('/store/library', pq)),
   owned: (id: string) => request<{ product: Product; lessons: Lesson[]; certificateCode: string | null }>(`/store/products/${id}`),
   completeLesson: (id: string) => post<{ ok: true }>(`/store/lessons/${id}/complete`),
   slots: (productId: string, date: string) => request<{ slots: string[]; durationMin: number; zone: string }>(`/store/${productId}/slots?date=${date}`),
@@ -313,20 +316,20 @@ export const api = {
   overrides: () => request<{ overrides: AvailabilityOverride[] }>('/studio/availability/overrides'),
   setOverride: (date: string, ranges: { startMin: number; endMin: number }[]) => request<{ override: AvailabilityOverride }>(`/studio/availability/overrides/${date}`, { method: 'PUT', body: JSON.stringify({ ranges }) }),
   removeOverride: (date: string) => del<{ ok: true }>(`/studio/availability/overrides/${date}`),
-  sales: (opts: { status?: string; from?: string; to?: string } = {}) => request<{ orders: Order[] }>(`/studio/orders?${new URLSearchParams(Object.fromEntries(Object.entries(opts).filter(([, v]) => v)) as Record<string, string>)}`),
+  sales: (opts: { status?: string; from?: string; to?: string } = {}, pq = '') => request<{ page: Page; orders: Order[] }>(withQ(`/studio/orders?${new URLSearchParams(Object.fromEntries(Object.entries(opts).filter(([, v]) => v)) as Record<string, string>)}`, pq)),
   salesCsvUrl: '/api/studio/orders?format=csv',
   draftCourse: (body: { source: string; title?: string }) => post<{ draft: CourseDraft; aiAvailable: boolean }>('/studio/draft', body),
   saveDraft: (productId: string, lessons: CourseDraft['lessons']) => post<{ ok: true; added: number }>(`/studio/products/${productId}/draft`, { lessons }),
   kyc: () => request<{ kyc: KycProfile }>('/kyc'),
   submitKyc: (body: { legalName: string; pan: string; bankAccount: string; ifsc: string; address: string }) => post<{ kyc: KycProfile }>('/kyc', body),
-  studioBookings: () => request<{ bookings: Booking[] }>('/studio/bookings'),
+  studioBookings: (pq = '') => request<{ page: Page; bookings: Booking[] }>(withQ('/studio/bookings', pq)),
   setBooking: (id: string, body: { status?: Booking['status']; meetingUrl?: string }) => post<{ booking: Booking }>(`/studio/bookings/${id}`, body),
-  leads: () => request<{ leads: Lead[] }>('/studio/leads'),
-  testimonials: () => request<{ testimonials: Testimonial[] }>('/studio/testimonials'),
+  leads: (pq = '') => request<{ page: Page; leads: Lead[] }>(withQ('/studio/leads', pq)),
+  testimonials: (pq = '') => request<{ page: Page; testimonials: Testimonial[] }>(withQ('/studio/testimonials', pq)),
   approveTestimonial: (id: string, approved: boolean) => post<{ ok: true }>(`/studio/testimonials/${id}`, { approved }),
   broadcast: (body: { title: string; body: string; audience: 'followers' | 'buyers' }) => post<{ sent: number }>('/studio/broadcasts', body),
-  audience: () =>
-    request<{ followers: { name: string; handle: string | null; since: string }[]; broadcasts: { id: string; title: string; body: string; audience: string; sent: number; createdAt: string }[]; referralCode: string | null; referred: number; affiliateShare: number }>('/studio/audience'),
+  audience: (pq = '') =>
+    request<{ page: Page; followers: { name: string; handle: string | null; since: string }[]; broadcasts: { id: string; title: string; body: string; audience: string; sent: number; createdAt: string }[]; referralCode: string | null; referred: number; affiliateShare: number }>(withQ('/studio/audience', pq)),
 
 
   // organizations (brands)
@@ -337,7 +340,7 @@ export const api = {
   removeOrgMember: (id: string, userId: string) => del<{ ok: true }>(`/orgs/${id}/members/${userId}`),
 
   // army: brand campaigns
-  army: () => request<{ campaigns: Campaign[]; assignments: CampaignAssignment[]; staff: boolean }>('/army'),
+  army: (pq = '') => request<{ page: Page; campaigns: Campaign[]; assignments: CampaignAssignment[]; staff: boolean }>(withQ('/army', pq)),
   createCampaign: (body: Partial<Campaign> & { organizationId: string; name: string }) => post<{ campaign: Campaign }>('/army/campaigns', body),
   campaign: (id: string) => request<{ campaign: Campaign; deliverables: Deliverable[]; assignments: CampaignAssignment[]; events: CampaignEvent[]; who: 'staff' | 'brand' | 'creator' }>(`/army/campaigns/${id}`),
   updateCampaign: (id: string, body: Partial<Campaign> & { ownerId?: string }) => patch<{ campaign: Campaign }>(`/army/campaigns/${id}`, body),
@@ -349,7 +352,7 @@ export const api = {
   setCampaignPublic: (id: string, isPublic: boolean) => post<{ ok: true }>(`/win/campaigns/${id}/public`, { public: isPublic }),
 
   // school
-  school: () => request<{ programs: Program[]; myCohorts: Cohort[]; managed: Cohort[]; staff: boolean; mentor: boolean }>('/school'),
+  school: (pq = '') => request<{ page: Page; programs: Program[]; myCohorts: Cohort[]; managed: Cohort[]; staff: boolean; mentor: boolean }>(withQ('/school', pq)),
   createProgram: (body: Partial<Program> & { name: string }) => post<{ ok: true; id: string }>('/school/programs', body),
   updateProgram: (id: string, body: Partial<Program>) => patch<{ ok: true }>(`/school/programs/${id}`, body),
   addLearningItem: (programId: string, body: { moduleTitle: string; contentType?: LearningItem['contentType']; contentRef?: string; body?: string }) => post<{ ok: true }>(`/school/programs/${programId}/items`, body),
@@ -365,15 +368,15 @@ export const api = {
   completeEnrollment: (id: string) => post<{ ok: true }>(`/school/enrollments/${id}/complete`),
 
   // work
-  work: () => request<{ opportunities: Opportunity[]; applications: Application[]; drafts: Opportunity[]; canPost: boolean }>('/work'),
+  work: (pq = '') => request<{ page: Page; opportunities: Opportunity[]; applications: Application[]; drafts: Opportunity[]; canPost: boolean }>(withQ('/work', pq)),
   createOpportunity: (body: Partial<Opportunity> & { title: string }) => post<{ ok: true; id: string }>('/work/opportunities', body),
   opportunity: (id: string) => request<{ opportunity: Opportunity; applications: Application[]; owner: boolean }>(`/work/opportunities/${id}`),
-  setOpportunity: (id: string, status: Opportunity['status']) => patch<{ ok: true }>(`/work/opportunities/${id}`, { status }),
+  setOpportunity: (id: string, status: Opportunity['status'], clubOnly?: boolean) => patch<{ ok: true }>(`/work/opportunities/${id}`, clubOnly === undefined ? { status } : { status, clubOnly }),
   apply: (id: string, coverNote: string) => post<{ application: Application }>(`/work/opportunities/${id}/apply`, { coverNote }),
   setApplication: (id: string, body: { status: Application['status']; note?: string }) => post<{ ok: true }>(`/work/applications/${id}`, body),
 
   // party
-  party: () => request<{ events: PartyEvent[]; hosting: PartyEvent[]; canHostAll: boolean; club: boolean }>('/party'),
+  party: (pq = '') => request<{ page: Page; events: PartyEvent[]; hosting: PartyEvent[]; canHostAll: boolean; club: boolean }>(withQ('/party', pq)),
   createEvent: (body: Partial<PartyEvent> & { title: string; startsAt: string; minutes?: number }) => post<{ event: PartyEvent }>('/party/events', body),
   event: (id: string) => request<{ event: PartyEvent; registrations: EventRegistration[]; host: boolean; feedback: { average: number | null; count: number } }>(`/party/events/${id}`),
   rsvp: (id: string, networking: boolean) => post<{ status: EventRegistration['status'] }>(`/party/events/${id}/rsvp`, { networking }),
@@ -382,7 +385,7 @@ export const api = {
   eventFeedback: (id: string, body: { rating: number; comment?: string; networking?: boolean }) => post<{ ok: true }>(`/party/events/${id}/feedback`, body),
   setEvent: (id: string, status: 'published' | 'cancelled' | 'done') => patch<{ ok: true }>(`/party/events/${id}`, { status }),
   // kreators run
-  run: () => request<RunResponse>('/run'),
+  run: (pq = '') => request<RunResponse>(withQ('/run', pq)),
   createRunClub: (body: { name: string; city: string; description?: string; pace?: RunPace; meets?: string; visibility?: 'public' | 'private' }) => post<{ club: RunClub | null }>('/run/clubs', body),
   runClub: (id: string) => request<RunClubDetail>(`/run/clubs/${id}`),
   setRunClub: (id: string, body: { status?: 'active' | 'closed'; description?: string; meets?: string; pace?: RunPace; visibility?: 'public' | 'private' }) => patch<{ ok: true }>(`/run/clubs/${id}`, body),
@@ -393,21 +396,23 @@ export const api = {
   setRun: (id: string, status: 'published' | 'cancelled' | 'done') => patch<{ ok: true }>(`/run/runs/${id}`, { status }),
   logRun: (id: string, body: { code: string; metres: number; minutes: number }) => post<{ entry: RunEntry | null; xp: number; points: number; capped: boolean; newBadges: string[] }>(`/run/runs/${id}/entry`, body),
   voidRunEntry: (id: string) => post<{ ok: true }>(`/run/entries/${id}/void`),
-  runCollabs: () => request<RunCollabsResponse>('/run/collabs'),
+  runCollabs: (pq = '') => request<RunCollabsResponse>(withQ('/run/collabs', pq)),
   postRunCollab: (body: { title: string; brandName?: string; organizationId?: string | null; brief?: string; asks?: string; giveaway: string; giveawayCount?: number; city?: string; startsAt: string; endsAt: string }) => post<{ collab: RunCollab | null }>('/run/collabs', body),
   setRunCollab: (id: string, status: 'open' | 'closed') => patch<{ ok: true }>(`/run/collabs/${id}`, { status }),
   applyRunCollab: (id: string, body: { clubId: string; note?: string }) => post<{ application: { id: string; status: string } }>(`/run/collabs/${id}/apply`, body),
   decideRunCollab: (id: string, appId: string, status: 'accepted' | 'declined') => post<{ ok: true }>(`/run/collabs/${id}/applications/${appId}`, { status }),
 
   // club
-  club: () => request<{ benefits: typeof import('@kreators/shared').CLUB_BENEFITS; mine: Membership | null; queue: Membership[]; members: number; reviewer: boolean }>('/club'),
+  club: (pq = '') => request<{ page: Page; benefits: typeof import('@kreators/shared').CLUB_BENEFITS; mine: Membership | null; queue: Membership[]; members: number; reviewer: boolean; staff: { id: string; name: string }[] }>(withQ('/club', pq)),
+  setClubManager: (id: string, managerId: string | null) => post<{ ok: true }>(`/club/memberships/${id}/manager`, { managerId }),
   applyClub: (note: string) => post<{ ok: true }>('/club/apply', { note }),
   decideMembership: (id: string, body: { status: Membership['status']; note?: string; months?: number }) => post<{ ok: true }>(`/club/memberships/${id}`, body),
 
   // win: content rewards
-  win: () => request<{ bounties: Bounty[]; mine: BountySubmission[]; queue: BountySubmission[]; earned: number; reviewer: boolean; finance: boolean; canCreate: boolean }>('/win'),
+  win: (pq = '') => request<{ page: Page; bounties: Bounty[]; mine: BountySubmission[]; queue: BountySubmission[]; earned: number; reviewer: boolean; finance: boolean; canCreate: boolean }>(withQ('/win', pq)),
   bounty: (id: string) => request<{ bounty: Bounty; submissions: BountySubmission[]; board: { name: string; views: number; status: string }[] }>(`/win/${id}`),
   createBounty: (body: Partial<Bounty> & { title: string; organizationId?: string }) => post<{ ok: true; id: string }>('/win', body),
+  editBounty: (id: string, body: Partial<Bounty>) => patch<{ ok: true; version: number; changed: string[] }>(`/win/${id}`, body),
   submitBounty: (id: string, url: string) => post<{ submission: BountySubmission | null }>(`/win/${id}/submit`, { url }),
   reportMetrics: (submissionId: string, body?: { views: number; likes?: number; comments?: number; shares?: number; note?: string }) => post<{ submission: BountySubmission | null; why: string }>(`/win/submissions/${submissionId}/metrics`, body ?? {}),
   reviewBounty: (submissionId: string, body: { status: 'verified' | 'rejected' | 'paid'; evidenceViews?: number; evidenceNote?: string; payoutPoints?: number }) => post<{ ok: true; points?: number }>(`/win/submissions/${submissionId}/review`, body),
@@ -428,10 +433,10 @@ export const api = {
   block: (userId: string, reason?: string) => post<{ ok: true }>('/bond/block', { userId, reason }),
 
   // tools
-  tools: () => request<{ tools: Tool[]; categories: readonly string[]; reviewer: boolean }>('/tools'),
+  tools: (pq = '') => request<{ page: Page; tools: Tool[]; categories: readonly string[]; reviewer: boolean }>(withQ('/tools', pq)),
   suggestTool: (body: { name: string; url: string; category?: string; description?: string; affiliate?: boolean; minPoints?: number; badge?: string }) => post<{ ok: true; id: string; verified: boolean }>('/tools', body),
   setTool: (id: string, body: { verified?: boolean; affiliate?: boolean; featured?: boolean; minPoints?: number; badge?: string }) => post<{ ok: true }>(`/tools/${id}`, body),
-  market: () => request<MarketResponse>('/market'),
+  market: (pq = '') => request<MarketResponse>(withQ('/market', pq)),
   marketListing: (id: string) => request<ListingDetail>(`/market/listings/${id}`),
   marketSell: (body: Record<string, unknown>) => post<{ listing: PreownedListing }>('/market/listings', body),
   marketUpdateListing: (id: string, body: Record<string, unknown>) => patch<{ listing: PreownedListing }>(`/market/listings/${id}`, body),
@@ -451,7 +456,7 @@ export const api = {
   removeTool: (id: string) => del<{ ok: true }>(`/tools/${id}`),
 
   // tv and fund proposals
-  proposals: (kind: 'tv' | 'fund') => request<{ proposals: Proposal[]; reviewer: boolean }>(`/proposals?kind=${kind}`),
+  proposals: (kind: 'tv' | 'fund', pq = '') => request<{ page: Page; proposals: Proposal[]; reviewer: boolean }>(withQ(`/proposals?kind=${kind}`, pq)),
   propose: (body: { kind: 'tv' | 'fund'; title: string; pitch: string; budgetAmount?: number; currency?: string }) => post<{ ok: true; id: string }>('/proposals', body),
   moveProposal: (id: string, body: { stage: Proposal['stage']; note?: string }) => post<{ ok: true }>(`/proposals/${id}/stage`, body),
 
@@ -461,10 +466,10 @@ export const api = {
   replyTicket: (id: string, body: { reply: string; status?: SupportTicket['status'] }) => post<{ ok: true }>(`/support/${id}/reply`, body),
 
   // growth: links, content, Auto-DM, funnels, sequences
-  links: () => request<{ links: TrackedLink[] }>('/studio/links'),
+  links: (pq = '') => request<{ page: Page; links: TrackedLink[] }>(withQ('/studio/links', pq)),
   createLink: (body: { productId?: string | null; sourceType?: TrackedLink['sourceType']; contentItemId?: string | null; label?: string }) => post<{ link: TrackedLink }>('/studio/links', body),
   deleteLink: (id: string) => del<{ ok: true }>(`/studio/links/${id}`),
-  content: (sort: 'revenue' | 'views' | 'recent' = 'revenue') => request<{ items: ContentItem[]; direct: { sales: number; revenuePoints: number } }>(`/studio/content?sort=${sort}`),
+  content: (sort: 'revenue' | 'views' | 'recent' = 'revenue', pq = '') => request<{ page: Page; items: ContentItem[]; direct: { sales: number; revenuePoints: number } }>(withQ(`/studio/content?sort=${sort}`, pq)),
   addContent: (body: { url: string; kind?: ContentItem['kind']; caption?: string; views?: number; productId?: string | null; withLink?: boolean }) => post<{ item: ContentItem | null; why: string }>('/studio/content', body),
   refreshContent: (id: string, body?: { views: number; likes?: number; comments?: number }) => post<{ item: ContentItem | null; why: string }>(`/studio/content/${id}/refresh`, body ?? {}),
   deleteContent: (id: string) => del<{ ok: true }>(`/studio/content/${id}`),
@@ -480,7 +485,7 @@ export const api = {
   createSequence: (body: { productId?: string | null; delayDays: number; title: string; body: string }) => post<{ sequence: Sequence | null }>('/studio/sequences', body),
   setSequence: (id: string, active: boolean) => patch<{ ok: true }>(`/studio/sequences/${id}`, { active }),
   deleteSequence: (id: string) => del<{ ok: true }>(`/studio/sequences/${id}`),
-  customers: () => request<{ customers: Customer[] }>('/studio/customers'),
+  customers: (pq = '') => request<{ page: Page; customers: Customer[] }>(withQ('/studio/customers', pq)),
   customersCsvUrl: '/api/studio/customers?format=csv',
   refund: (orderId: string, reason: string) => post<{ order: Order | null }>(`/studio/orders/${orderId}/refund`, { reason }),
   payouts: () => request<PayoutSummary>('/studio/payouts'),
@@ -531,8 +536,8 @@ export const api = {
       drafts: number;
       activeToday: number;
     }>('/manage/overview'),
-  members: (q: string) => request<{ members: { id: string; name: string; handle: string | null; role: Role; xp: number; streak: number; isPro: boolean; createdAt: string; lastCheckin: string | null }[] }>(`/manage/members?q=${encodeURIComponent(q)}`),
-  manageResources: () => request<{ resources: Resource[] }>('/manage/resources'),
+  members: (q: string, pq = '') => request<{ page: Page; members: { id: string; name: string; handle: string | null; role: Role; xp: number; streak: number; isPro: boolean; createdAt: string; lastCheckin: string | null }[] }>(withQ(`/manage/members?q=${encodeURIComponent(q)}`, pq)),
+  manageResources: (pq = '') => request<{ page: Page; resources: Resource[] }>(withQ('/manage/resources', pq)),
   createResource: (body: Partial<Resource>) => post<{ resource: Resource }>('/manage/resources', body),
   updateResource: (id: string, body: Partial<Resource>) => patch<{ resource: Resource }>(`/manage/resources/${id}`, body),
   deleteResource: (id: string) => del<{ ok: true }>(`/manage/resources/${id}`),
@@ -554,13 +559,13 @@ async function adminRequest<T>(key: string, path: string, init: RequestInit = {}
 }
 
 export const adminApi = {
-  users: (key: string, q: string) => adminRequest<{ users: AdminUser[] }>(key, `/users?q=${encodeURIComponent(q)}`),
+  users: (key: string, q: string, pq = '') => adminRequest<{ page: Page; users: AdminUser[] }>(key, withQ(`/users?q=${encodeURIComponent(q)}`, pq)),
   setPro: (key: string, id: string, pro: boolean) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/pro`, { method: 'POST', body: JSON.stringify({ pro }) }),
   setRole: (key: string, id: string, role: Role) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/role`, { method: 'POST', body: JSON.stringify({ role }) }),
   grantHonor: (key: string, id: string, honor: string, note: string) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/honors`, { method: 'POST', body: JSON.stringify({ key: honor, note }) }),
   revokeHonor: (key: string, id: string, honor: string) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/honors/${honor}`, { method: 'DELETE' }),
   addPoints: (key: string, id: string, amount: number, note: string) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/points`, { method: 'POST', body: JSON.stringify({ amount, note }) }),
-  redemptions: (key: string, status?: string) => adminRequest<{ redemptions: AdminRedemption[] }>(key, `/redemptions${status ? `?status=${status}` : ''}`),
+  redemptions: (key: string, status?: string, pq = '') => adminRequest<{ page: Page; redemptions: AdminRedemption[] }>(key, withQ(`/redemptions${status ? `?status=${status}` : ''}`, pq)),
   setRedemption: (key: string, id: string, status: 'fulfilled' | 'cancelled') => adminRequest<{ redemption: Redemption }>(key, `/redemptions/${id}`, { method: 'POST', body: JSON.stringify({ status }) }),
   modules: (key: string) => adminRequest<{ settings: ModuleSetting[] }>(key, '/modules'),
   setModuleSetting: (key: string, moduleKey: string, body: { enabled?: boolean; minRole?: Role; rollout?: number }) => adminRequest<{ setting: ModuleSetting }>(key, `/modules/${moduleKey}`, { method: 'POST', body: JSON.stringify(body) }),
@@ -570,18 +575,18 @@ export const adminApi = {
     adminRequest<{ override: FlagOverride }>(key, `/flags/${moduleKey}/overrides`, { method: 'POST', body: JSON.stringify(body) }),
   removeOverride: (key: string, id: string) => adminRequest<{ ok: true }>(key, `/flags/overrides/${id}`, { method: 'DELETE' }),
   previewAccess: (key: string, userId: string) => adminRequest<{ name: string; role: Role; access: Record<string, ModuleAccess> }>(key, `/flags/preview/${userId}`),
-  audit: (key: string) => adminRequest<{ logs: AuditLog[] }>(key, '/audit'),
-  listings: (key: string, type?: ListingType, q = '') => adminRequest<{ listings: Listing[] }>(key, `/listings?${new URLSearchParams({ ...(type ? { type } : {}), q })}`),
+  audit: (key: string, pq = '') => adminRequest<{ page: Page; logs: AuditLog[] }>(key, withQ('/audit', pq)),
+  listings: (key: string, type?: ListingType, q = '', pq = '') => adminRequest<{ page: Page; listings: Listing[] }>(key, withQ(`/listings?${new URLSearchParams({ ...(type ? { type } : {}), q })}`, pq)),
   createListing: (key: string, body: Record<string, unknown> & { type: ListingType; title: string }) => adminRequest<{ listing: Listing | null }>(key, '/listings', { method: 'POST', body: JSON.stringify(body) }),
   setListing: (key: string, type: ListingType, id: string, body: { live?: boolean; featured?: boolean }) => adminRequest<{ listing: Listing }>(key, `/listings/${type}/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-  orders: (key: string, q: string, status = '') => adminRequest<{ orders: AdminOrder[] }>(key, `/orders?${new URLSearchParams({ q, ...(status ? { status } : {}) })}`),
+  orders: (key: string, q: string, status = '', pq = '') => adminRequest<{ page: Page; orders: AdminOrder[] }>(key, withQ(`/orders?${new URLSearchParams({ q, ...(status ? { status } : {}) })}`, pq)),
   order: (key: string, id: string) => adminRequest<{ order: AdminOrder; timeline: OrderEvent[]; webhooks: WebhookEvent[] }>(key, `/orders/${id}`),
   refundOrder: (key: string, id: string, reason: string) => adminRequest<{ order: AdminOrder | null }>(key, `/orders/${id}/refund`, { method: 'POST', body: JSON.stringify({ reason }) }),
-  webhooks: (key: string) => adminRequest<{ webhooks: WebhookEvent[] }>(key, '/webhooks'),
+  webhooks: (key: string, pq = '') => adminRequest<{ page: Page; webhooks: WebhookEvent[] }>(key, withQ('/webhooks', pq)),
   replayWebhook: (key: string, id: string) => adminRequest<{ outcome: string }>(key, `/webhooks/${id}/replay`, { method: 'POST', body: '{}' }),
-  kycQueue: (key: string, status = 'pending') => adminRequest<{ kyc: AdminKyc[] }>(key, `/kyc?status=${status}`),
+  kycQueue: (key: string, status = 'pending', pq = '') => adminRequest<{ page: Page; kyc: AdminKyc[] }>(key, withQ(`/kyc?status=${status}`, pq)),
   decideKyc: (key: string, userId: string, body: { status: 'approved' | 'rejected'; note?: string }) => adminRequest<{ ok: true }>(key, `/kyc/${userId}`, { method: 'POST', body: JSON.stringify(body) }),
-  outbox: (key: string) => adminRequest<{ outbox: OutboxEmail[] }>(key, '/outbox'),
+  outbox: (key: string, pq = '') => adminRequest<{ page: Page; outbox: OutboxEmail[] }>(key, withQ('/outbox', pq)),
   funnels: (key: string) => adminRequest<{ funnels: AdminFunnel[] }>(key, '/funnels'),
 };
 

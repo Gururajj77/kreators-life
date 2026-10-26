@@ -1,7 +1,7 @@
 # kreators.app planner docs: start here
 
 **Product:** kreators.app. The identifiers keep their old name: the Worker and database `kreators-life`, the `@kreators/*` packages, storage keys and the repo.
-**Version:** 0.2, reconciled with the app on 26 October 2026 (v0.1 was the pre-build blueprint).
+**Version:** 0.3, reconciled with the app on 26 October 2026 (v0.1 was the pre-build blueprint; 0.2 the audit; 0.3 after the gaps it found were closed).
 **Status:** these docs describe the app as built. When a doc and the code disagree, the doc is wrong unless it records a rule the app broke; those are listed under "Known gaps" at the end of each doc.
 
 Where the truth lives:
@@ -42,8 +42,8 @@ Seven relationships as a daily game, with a creator super app around it.
 ## The v0.1 constraints and where they stand
 
 - **One app, not one giant file.** Holds. One route file per module, each module's own tables, one shared domain model.
-- **Modules independently enabled, hidden and permission-checked.** Enabled and hidden: yes. Permission-checked: yes for staff and admin tools. The API does not refuse a consumer module that is switched off. Gap, see 05.
-- **Hiding a feature is not authorization.** Role and permission checks run on the server. Flag checks run only for the client. Same gap.
+- **Modules independently enabled, hidden and permission-checked.** Holds. The server refuses the API of a module that is not available to the person (05).
+- **Hiding a feature is not authorization.** Holds. Roles, permissions, ownership and module flags are all checked on the server.
 - **The 10 TB collection and 25,000 books.** Nothing is ingested. Knowledge is curated resources seeded by migration 0005. The books idea in `shubham.md` must pass the rights review in 08 §6 first.
 - **The Companion is not a therapist.** Holds in the module blurb, the screen, the system prompt and Help.
 - **No stored-value "Kreators Cash".** Holds. The terms page says points are not money and cannot be cashed out.
@@ -56,3 +56,4 @@ Seven relationships as a daily game, with a creator super app around it.
 - School wedge: the two seeded programs teach editing and AI-assisted editing with ChatCut. The vox-pop program from v0.1 is not built.
 - India first: INR is the default currency, Razorpay the provider, Tele-MANAS the crisis line, PAN and IFSC in KYC.
 - A responsive web app installed as a PWA. No native app.
+- Sign-up asks for a phone number and a date of birth. The minimum age is 18 and the server refuses anyone younger.

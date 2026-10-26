@@ -8,6 +8,7 @@ import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api, publicApi } from '../lib/api';
 import { useAuthed, useRefreshAll } from '../lib/queries';
+import { Pager, usePage } from '../components/Pager';
 import { useSession } from '../lib/store';
 
 const err = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
@@ -30,7 +31,8 @@ const KYC_PILL: Record<KycProfile['status'], { label: string; cls: string }> = {
 };
 
 export function Customers() {
-  const customers = useAuthed(['customers'], api.customers);
+  const pg = usePage();
+  const customers = useAuthed(['customers', pg.query], () => api.customers(pg.query));
   const payouts = useAuthed(['payouts'], api.payouts);
   const kyc = useAuthed(['kyc'], api.kyc);
   const config = useQuery({ queryKey: ['payments-config'], queryFn: publicApi.config, staleTime: 60_000 });
@@ -111,6 +113,7 @@ export function Customers() {
             </li>
           ))}
         </ul>
+        <Pager page={customers.data?.page} label="customers" />
       </section>
 
       <section className="mt-lg" aria-labelledby="pay-heading">

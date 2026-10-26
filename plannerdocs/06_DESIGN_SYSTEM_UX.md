@@ -1,7 +1,7 @@
 # 06 — Design system and UX
 
 **Product:** kreators.app
-**Version:** 0.2, reconciled with the app on 26 October 2026
+**Version:** 0.3, reconciled with the app on 26 October 2026
 **Source of truth:** the design rules in `CLAUDE.md`; `design/figma-tokens.json` (the freud UI Kit v1.5 values, frozen); the `@theme` block in `apps/web/src/app.css`; `apps/web/src/components`; `bash scripts/scan.sh`; `python3 -I scripts/flesch.py`.
 
 ## 1. Experience goal
@@ -53,7 +53,7 @@ On a solid colour fill (`bg-r1` to `bg-r7`, a `Hero`) every foreground element i
 - Rows and actions: `CheckRow` and `TaskRow` (every action is a checkbox row with the `toy` hover affordance; a dated task is locked with "Tick it on the day"), `Toggle`, `Button` (solid ink pills for primary, outlined for secondary, `light` on fills), `.scroll-row` for pills that scroll sideways (bleeds 16px into the gutters so a lifted `toy` and its shadow are never clipped; any top margin goes on a wrapper).
 - Numbers: `StatTile`, the chart vocabulary in `Charts.tsx`: `AreaLine` and `MultiLine` for trends (the frame always on: y labels, baseline, gridlines), `PillBars` and `WeekBars` for days, `Gauge` and `Ring` for scores, `Donut` with `Legend` for shares, `Bubbles` for what comes up most, `CalendarGrid` for a month, `EmojiRow` for moods, and `Sparkline`, `Segments`, `PillChain`, `WeekDots` on rows. Every tracker screen shows a thirty-day line. `MoodFace` draws moods; never system emoji. `Avatar` and `Person` draw the characters; `EvolutionReveal` and `Celebration` animate a stage.
 - Teaching: `Pyramid` (the one explainer, GSAP: a tick lands on the tip and a glow runs to the base; onboarding shows it after the answers, one card at a time under a tappable pyramid), `HowTo` and `HowItWorks` (the "How it works" card every app's main screen ends with: one `toy toy-soft` button, closed by default, with the steps and the words as two `toy-flat` toggles inside; `span-all` on Home; never a floating button or a sheet), `Nudge` (one quiet 12px line under the thing it talks about, linking to Help), `Guide`, `Markdown` (lesson bodies: `##`, `###`, `-`, `1.`, `>`, `**bold**`; no HTML, no links).
-- Lists and admin: `DataTable` (sort by any column, search, filter by a column's values, tick rows for bulk actions, edit a cell in place), `ListingSheet`, `SearchBox`, `InterestPicker` (`INTEREST_GROUPS`, at most 10 on), `PeriodFilter` and `PeriodPanel`, `TrustBadge`, `NotToDoList`, `LinksEditor` and `LinkBlocks`, `XpBar`, `OnboardingTroupe` (the characters walking along the bottom as questions progress).
+- Lists and admin: `Pager` and `usePage` (the bar under every long list: rows per page 10, 25, 50 or 100, previous and next, the page kept in the URL; it hides on a short list), `DataTable` (sort by any column, search, filter by a column's values, tick rows for bulk actions, edit a cell in place, and the same pager fed by the server), `ListingSheet`, `SearchBox`, `InterestPicker` (`INTEREST_GROUPS`, at most 10 on), `PeriodFilter` and `PeriodPanel`, `TrustBadge`, `NotToDoList`, `LinksEditor` and `LinkBlocks`, `XpBar`, `OnboardingTroupe` (the characters walking along the bottom as questions progress).
 
 ## 7. States
 

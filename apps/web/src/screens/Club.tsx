@@ -1,4 +1,4 @@
-import { CLUB_BENEFITS, type Membership } from '@kreators/shared';
+import { CLUB_BENEFITS, type Membership, type Page } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button } from '../components/Button';
@@ -6,6 +6,7 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed, useRefreshAll } from '../lib/queries';
+import { Pager, usePage } from '../components/Pager';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 
@@ -28,7 +29,8 @@ const STATUS_COPY: Record<Membership['status'], { title: string; blurb: string; 
 };
 
 export function Club() {
-  const q = useAuthed(['club'], api.club);
+  const pg = usePage();
+  const q = useAuthed(['club', pg.query], () => api.club(pg.query));
   const refresh = useRefreshAll();
   const [note, setNote] = useState('');
   const apply = useMutation({
@@ -88,6 +90,9 @@ export function Club() {
               <p className="mt-xs m-0 text-[14px] font-semibold">{STATUS_COPY[mine.status].blurb}</p>
               {mine.decisionNote && <p className="mt-xs m-0 text-[14px] font-semibold">Note from the reviewer: {mine.decisionNote}</p>}
               {mine.endsAt && (mine.status === 'approved' || mine.status === 'active') && <p className="mt-xs m-0 text-[14px] font-semibold">Runs until {new Date(mine.endsAt).toLocaleDateString()}.</p>}
+              {(mine.status === 'approved' || mine.status === 'active') && (
+                <p className="mt-xs m-0 text-[14px] font-semibold">{mine.managerName ? `Your manager: ${mine.managerName}. Write to the team under Help to reach them.` : 'A manager on staff will be named for you soon.'}</p>
+              )}
             </div>
           )}
           {canApply && (
@@ -112,13 +117,14 @@ export function Club() {
         </section>
       )}
 
-      {d?.reviewer && <ReviewQueue queue={d.queue} onChange={() => q.refetch()} />}
+      {d?.reviewer && <ReviewQueue queue={d.queue} staff={d.staff} page={d.page} onChange={() => q.refetch()} />}
     </Screen>
   );
 }
 
-function ReviewQueue({ queue, onChange }: { queue: Membership[]; onChange: () => void }) {
+function ReviewQueue({ queue, staff, page, onChange }: { queue: Membership[]; staff: { id: string; name: string }[]; page: Page; onChange: () => void }) {
   const [months, setMonths] = useState('12');
+  const setManager = useMutation({ mutationFn: ({ id, managerId }: { id: string; managerId: string | null }) => api.setClubManager(id, managerId), onSuccess: onChange });
   const [notes, setNotes] = useState<Record<string, string>>({});
   const decide = useMutation({
     mutationFn: ({ id, status }: { id: string; status: Membership['status'] }) => api.decideMembership(id, { status, note: notes[id] ?? '', months: Number(months) || 12 }),
@@ -162,6 +168,19 @@ function ReviewQueue({ queue, onChange }: { queue: Membership[]; onChange: () =>
           </Button>
         )}
       </div>
+      {(m.status === 'approved' || m.status === 'active') && (
+        <label className="mt-sm block">
+          <span className="block text-[12px] font-bold">Named manager</span>
+          <select value={m.managerId ?? ''} onChange={(e) => setManager.mutate({ id: m.id, managerId: e.target.value || null })} disabled={setManager.isPending} className={field}>
+            <option value="">Nobody yet</option>
+            {staff.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
     </li>
   );
   return (
@@ -180,6 +199,7 @@ function ReviewQueue({ queue, onChange }: { queue: Membership[]; onChange: () =>
         </select>
       </label>
       <Err e={decide.isError ? decide.error : null} />
+      <Err e={setManager.isError ? setManager.error : null} />
       {applied.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No new applications.</p>}
       <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">{applied.map(row)}</ul>
       {others.length > 0 && (
@@ -188,6 +208,7 @@ function ReviewQueue({ queue, onChange }: { queue: Membership[]; onChange: () =>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">{others.map(row)}</ul>
         </>
       )}
+      <Pager page={page} label="memberships" />
     </section>
   );
 }

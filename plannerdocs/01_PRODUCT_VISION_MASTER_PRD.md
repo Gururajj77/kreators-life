@@ -1,7 +1,7 @@
 # 01 — Product vision and master PRD
 
 **Product:** kreators.app
-**Version:** 0.2, reconciled with the app on 26 October 2026
+**Version:** 0.3, reconciled with the app on 26 October 2026
 **Owner:** Product founder
 **Source of truth:** `CLAUDE.md` for rules, `README.md` for the description, `docs/DECISIONS.md` for why.
 
@@ -44,7 +44,7 @@ Unchanged from v0.1, plus the one the game answers: people do not show up every 
 2. **Phone-first.** One column with bottom tabs on a phone; a PWA; a phone on its side keeps the phone layout. Holds.
 3. **Human in the loop.** Views are confirmed by a reviewer, payouts need the finance permission, completion is a manager's decision, Club is reviewed, moderation is by guides. Holds.
 4. **One identity, modular experiences.** One account, forty modules, each with a person's own switch and an admin's flag. Holds.
-5. **Explicit permissions.** Roles and permissions are checked on the server. Module flags are resolved on the server but not enforced by the routes. Partial; see 05.
+5. **Explicit permissions.** Roles, permissions, ownership and module flags are all checked on the server. Holds.
 6. **Portable data.** Plain SQL migrations, one JSON export, no vendor lock beyond Cloudflare. Holds.
 7. **Measurable outcomes.** Fifteen product events in our own table, Observability counts, period numbers in Reviews. Holds for product metrics; business metrics need queries, see §10.
 8. **Trust and safety.** Signed webhooks, salted click hashes, journal and wellbeing kept private, consented introductions, aliases in chats. Holds; moderation is thin, see 08.
@@ -94,7 +94,7 @@ Founder addresses in `apps/api/src/admins.ts` and `ADMIN_EMAILS` become admins o
 
 ### Anyone joins
 1. The site at `/`. "Start free" goes to sign-up; "Go to app" goes to sign-in, or to Home with a session.
-2. An anonymous device session can start first; an email and password can be added later and the device's progress comes with it. Sign-up creates the user and seven zero scores and nothing else.
+2. An anonymous device session can start first; an email and password can be added later and the device's progress comes with it. Sign-up asks for an email, a password, a phone number and a date of birth, and refuses anyone under eighteen. It creates the user and seven zero scores and nothing else.
 3. The vibe check asks which pillars need work now and asks only those, three taps each. The rest wait on Pillars.
 4. On the derived screen the person picks or writes the value goal and project per pillar. Then the pyramid is built and explained one card at a time.
 5. Daily shows the three boxes. The first three task ticks are free; after that a task needs ten minutes of age and a ten-minute gap.
@@ -132,8 +132,8 @@ Total registered users and follower counts are never a success metric.
 - Responsive, phone-first, installable PWA. Holds.
 - Accessibility: aria labels and roles throughout, reduced motion respected, a contrast probe over every route in dark mode. No WCAG level stated and no screen-reader pass yet. Partial.
 - Secure authentication and sessions. Holds; see 08.
-- Server-side authorization. Roles and ownership yes; module flags no. Partial.
-- Input validation and rate limits. Validation on every route through `str`, `num`, `oneOf`; limits on the doors without a session, the lead form and checkout only. Partial.
+- Server-side authorization. Roles, ownership and module flags. Holds.
+- Input validation and rate limits. Validation on every route through `str`, `num`, `oneOf`; every limit in one file (`apps/api/src/limits.ts`) covering the auth doors, posts, replies, likes, follows, chats, offers, listings, tickets, applications and run entries. Holds.
 - Audit logs for privileged and financial changes. Holds (`audit_logs`, read under Admin).
 - Backups and tested restore. Nothing written down; D1 is relied on. Gap.
 - Error monitoring and logs. Wrangler observability is on; `pnpm cf:logs` tails. No alerting. Partial.
@@ -152,25 +152,24 @@ Total registered users and follower counts are never a success metric.
 - Content rewards pay per thousand verified views; YouTube read with a key, the rest typed and confirmed; finance pays (2026-10-24).
 - Brands can submit leads themselves; staff turn a lead into a brief.
 - School is online and self-paced in open cohorts, with the two seeded programs (2026-10-25).
-- Club has no fee; a reviewer decides; a year by default.
+- Club has no fee; a reviewer decides; a year by default. Its benefits are built: club-only Work listings and a named manager (2026-10-26).
+- Minimum age 18, asked at sign-up with a phone number (2026-10-26).
+- Every long list is served a page at a time, 10 to 100 rows (2026-10-26).
 - Design tokens frozen from the freud UI Kit; dark mode keeps hues; ink is grey (2026-10-24, 2026-10-25).
 - Analytics in our own table, not a third party (2026-10-24).
 - The no-marketplace line partly reversed for the Store, within limits: no money moves through kreators.app (2026-10-25).
 
 ### Still open
-- Email or phone verification. None today; founder admin promotion relies on signing up first.
+- Email or phone verification. The phone is collected but neither is verified; founder admin promotion relies on signing up first.
 - Geography and currencies beyond INR.
 - A staging environment and a written backup and restore step.
 - Refund and cancellation terms for paid programs, if any are ever priced.
 - Creator contracts, rights and exclusivity as legal text (the fields exist on a campaign).
 - Rights for the book collection before any AI use.
-- Minimum age and handling of minors.
 - Hosting and data residency beyond Cloudflare's defaults.
 
 ## Known gaps
 
-- The API does not refuse a switched-off module (05).
-- The Club promises "the first look at club-only Work listings" and Work has no membership check (02 F, 07 §5).
-- No email verification (§9).
+- No email or phone verification (§9).
 - No staging, no written backup and restore, no alerting (§11).
 - Business metrics are not computed (§10).

@@ -1,4 +1,4 @@
-import { passwordProblem } from '@kreators/shared';
+import { birthDateProblem, MIN_AGE, passwordProblem, phoneProblem } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
@@ -46,8 +46,10 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [birthDate, setBirthDate] = useState('');
   const go = useMutation({
-    mutationFn: () => (mode === 'signup' ? api.signup({ email, password, displayName: name }) : api.signin({ email, password })),
+    mutationFn: () => (mode === 'signup' ? api.signup({ email, password, displayName: name, phone, birthDate }) : api.signin({ email, password })),
     onSuccess: async (r) => {
       setToken(r.token);
       await refresh();
@@ -57,14 +59,16 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
   // What the server will say, said here first. Only on sign-up: a sign-in password is whatever it is.
   const weak = mode === 'signup' && password ? passwordProblem(password, email) : null;
   const mismatch = mode === 'signup' && confirm.length > 0 && confirm !== password;
-  const ready = mode === 'signin' ? email.length > 0 && password.length > 0 : email.length > 0 && password.length > 0 && !weak && confirm === password;
+  const phoneBad = mode === 'signup' && phone ? phoneProblem(phone) : null;
+  const ageBad = mode === 'signup' && birthDate ? birthDateProblem(birthDate) : null;
+  const ready = mode === 'signin' ? email.length > 0 && password.length > 0 : email.length > 0 && password.length > 0 && !weak && confirm === password && phone.length > 0 && !phoneBad && birthDate.length > 0 && !ageBad;
   return (
     <Screen tabs={false}>
       <div className="pt-xl">
         <Avatar relationship="friendship" size={72} />
         <h1 className="mt-md text-[30px]">{mode === 'signup' ? 'Create your account' : 'Welcome back'}</h1>
         <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">
-          {mode === 'signup' ? (hasSession ? 'Everything on this phone comes with you. Add an email so it survives a new one.' : 'An email and a password. Nothing else.') : 'Sign in to pick up where you left off.'}
+          {mode === 'signup' ? (hasSession ? 'Everything on this phone comes with you. Add an email so it survives a new one.' : `An email, a password, a phone number and your date of birth. You need to be ${MIN_AGE} or older.`) : 'Sign in to pick up where you left off.'}
         </p>
       </div>
       <form
@@ -86,6 +90,20 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
         </label>
         <PasswordField label="Password" value={password} onChange={setPassword} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} hint={mode === 'signup' ? (weak ?? 'Eight characters or more. Not your email, not one from the usual guess lists.') : undefined} />
         {mode === 'signup' && <PasswordField label="Password, once more" value={confirm} onChange={setConfirm} autoComplete="new-password" hint={mismatch ? 'The two do not match yet.' : undefined} />}
+        {mode === 'signup' && (
+          <label className="block">
+            <span className="block text-[14px] font-bold">Phone</span>
+            <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" maxLength={24} placeholder="+91 98765 43210" className={field} />
+            <span className="mt-xs block text-[12px] font-bold text-ink-soft">{phoneBad ?? 'With the country code. Never shown on your page.'}</span>
+          </label>
+        )}
+        {mode === 'signup' && (
+          <label className="block">
+            <span className="block text-[14px] font-bold">Date of birth</span>
+            <input type="date" required value={birthDate} onChange={(e) => setBirthDate(e.target.value)} autoComplete="bday" max={new Date().toISOString().slice(0, 10)} className={field} />
+            <span className="mt-xs block text-[12px] font-bold text-ink-soft">{ageBad ?? `You need to be ${MIN_AGE} or older. Nobody else sees it.`}</span>
+          </label>
+        )}
         {go.isError && (
           <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
             {go.error instanceof Error ? go.error.message : 'That did not work.'}

@@ -6,11 +6,14 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
+import { Pager, usePage } from '../components/Pager';
 
 export function StudioAudience() {
   const me = useMe();
-  const q = useAuthed(['audience'], api.audience);
-  const leads = useAuthed(['leads'], api.leads);
+  const fp = usePage('f');
+  const lp = usePage('l');
+  const q = useAuthed(['audience', fp.query], () => api.audience(fp.query));
+  const leads = useAuthed(['leads', lp.query], () => api.leads(lp.query));
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [audience, setAudience] = useState<'followers' | 'buyers'>('followers');
@@ -116,6 +119,7 @@ export function StudioAudience() {
             </li>
           ))}
         </ul>
+        <Pager page={leads.data?.page} prefix="l" label="leads" />
       </section>
 
       <section className="mt-lg" aria-labelledby="fol-heading">
@@ -136,6 +140,7 @@ export function StudioAudience() {
             </li>
           ))}
         </ul>
+        <Pager page={d?.page} prefix="f" label="followers" />
       </section>
 
       {d && d.broadcasts.length > 0 && (

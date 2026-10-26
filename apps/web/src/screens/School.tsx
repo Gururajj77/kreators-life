@@ -8,6 +8,7 @@ import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
+import { Pager, usePage } from '../components/Pager';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const fmtDate = (d: string) => new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -25,7 +26,8 @@ function Err({ error, fallback = 'That did not work.' }: { error: unknown; fallb
 }
 
 export function School() {
-  const q = useAuthed(['school'], api.school);
+  const pg = usePage();
+  const q = useAuthed(['school', pg.query], () => api.school(pg.query));
   const [creating, setCreating] = useState(false);
   const d = q.data;
   const myIds = new Set(d?.myCohorts.map((k) => k.id) ?? []);
@@ -76,6 +78,7 @@ export function School() {
             </li>
           ))}
         </ul>
+        <Pager page={d?.page} label="programs" />
       </section>
 
       <NewProgramSheet

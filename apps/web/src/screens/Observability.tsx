@@ -10,6 +10,7 @@ import { Section } from '../components/Section';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
+import { Pager, usePage } from '../components/Pager';
 import buildMap from '../../../../docs/build-map.html?raw';
 
 const field = 'w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px] font-semibold';
@@ -25,16 +26,16 @@ export function Observability() {
   const isAdmin = me.data?.user.role === 'admin';
   const [q, setQ] = useState('');
   const [query, setQuery] = useState('');
-  const [offset, setOffset] = useState(0);
+  const pg = usePage();
   const [asking, setAsking] = useState<{ user: ObservedUser; role: Role } | null>(null);
   useEffect(() => {
     const t = window.setTimeout(() => {
       setQuery(q.trim());
-      setOffset(0);
+      pg.reset();
     }, 250);
     return () => window.clearTimeout(t);
   }, [q]);
-  const d = useAuthed(['observability', query, offset], () => api.observability(query, offset));
+  const d = useAuthed(['observability', query, pg.query], () => api.observability(query, pg.query));
   const setRole = useMutation({
     mutationFn: ({ id, role }: { id: string; role: Role }) => api.setRole(id, role),
     onSuccess: async () => {
@@ -150,19 +151,7 @@ export function Observability() {
               ))}
             </ul>
             {data.users.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nobody matches "{query}".</p>}
-            {(offset > 0 || offset + data.limit < data.total) && (
-              <div className="mt-sm flex items-center justify-between gap-xs">
-                <Button variant="outline" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - data.limit))}>
-                  Newer
-                </Button>
-                <span className="text-[12px] font-bold text-ink-soft">
-                  {offset + 1} to {Math.min(data.total, offset + data.limit)} of {data.total}
-                </span>
-                <Button variant="outline" disabled={offset + data.limit >= data.total} onClick={() => setOffset(offset + data.limit)}>
-                  Older
-                </Button>
-              </div>
-            )}
+            <Pager page={data.page} label="accounts" />
           </Section>
 
           <Section

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Resource, ResourceKind } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { nameOf, newId, nowIso, requireRole } from '../db';
+import { nameOf, newId, nowIso, requireRole, pageOf, paged } from '../db';
 
 export const resources = new Hono<AppEnv>();
 
@@ -30,10 +30,12 @@ function toR(r: Row): Resource {
 
 resources.get('/', async (c) => {
   const tag = (c.req.query('tag') ?? '').trim();
+  const ask = pageOf(c);
   const rows = tag
-    ? await c.env.DB.prepare(`${SELECT} WHERE r.published = 1 AND r.tags LIKE ? ORDER BY r.created_at DESC LIMIT 100`).bind(`%"${tag}"%`).all<Row>()
-    : await c.env.DB.prepare(`${SELECT} WHERE r.published = 1 ORDER BY r.created_at DESC LIMIT 100`).all<Row>();
-  return c.json({ resources: rows.results.map(toR) });
+    ? await c.env.DB.prepare(`${SELECT} WHERE r.published = 1 AND r.tags LIKE ? ORDER BY r.created_at DESC LIMIT ? OFFSET ?`).bind(`%"${tag}"%`, ask.limit, ask.offset).all<Row>()
+    : await c.env.DB.prepare(`${SELECT} WHERE r.published = 1 ORDER BY r.created_at DESC LIMIT ? OFFSET ?`).bind(ask.limit, ask.offset).all<Row>();
+  const pg = paged(rows.results, ask);
+  return c.json({ page: pg.page, resources: pg.items.map(toR) });
 });
 
 resources.get('/:id', async (c) => {
@@ -58,8 +60,10 @@ function parse(body: Record<string, unknown>, prev?: Row) {
 }
 
 manageResources.get('/', async (c) => {
-  const rows = await c.env.DB.prepare(`${SELECT} ORDER BY r.updated_at DESC LIMIT 200`).all<Row>();
-  return c.json({ resources: rows.results.map(toR) });
+  const ask = pageOf(c);
+  const rows = await c.env.DB.prepare(`${SELECT} ORDER BY r.updated_at DESC LIMIT ? OFFSET ?`).bind(ask.limit, ask.offset).all<Row>();
+  const pg = paged(rows.results, ask);
+  return c.json({ page: pg.page, resources: pg.items.map(toR) });
 });
 
 manageResources.post('/', async (c) => {

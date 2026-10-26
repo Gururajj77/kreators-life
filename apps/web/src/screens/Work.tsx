@@ -8,6 +8,7 @@ import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
+import { Pager, usePage } from '../components/Pager';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const fmtDate = (d: string | null) => (d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : null);
@@ -71,7 +72,8 @@ function Chips({ items }: { items: string[] }) {
 // ---------------------------------------------------------------------------
 
 export function Work() {
-  const q = useAuthed(['work'], api.work);
+  const pg = usePage();
+  const q = useAuthed(['work', pg.query], () => api.work(pg.query));
   const [posting, setPosting] = useState(false);
   const setStatus = useMutation({ mutationFn: ({ id, status }: { id: string; status: OpportunityT['status'] }) => api.setOpportunity(id, status), onSuccess: () => q.refetch() });
   const d = q.data;
@@ -101,7 +103,10 @@ export function Work() {
                     <span className="block truncate text-[16px] font-bold">{o.title}</span>
                     <span className="block text-[14px] font-semibold text-ink-soft">{o.organizationName}</span>
                   </span>
-                  {o.myApplication && <span className="shrink-0 rounded-pill bg-r4 px-xs text-[12px] font-extrabold leading-[20px] text-on-fill">Applied</span>}
+                  <span className="flex shrink-0 gap-xs">
+                    {o.clubOnly && <span className="rounded-pill bg-r2 px-xs text-[12px] font-extrabold leading-[20px] text-on-fill">Club only</span>}
+                    {o.myApplication && <span className="rounded-pill bg-r4 px-xs text-[12px] font-extrabold leading-[20px] text-on-fill">Applied</span>}
+                  </span>
                 </span>
                 <Facts o={o} />
                 <Chips items={o.skillsRequired} />
@@ -109,6 +114,7 @@ export function Work() {
             </li>
           ))}
         </ul>
+        <Pager page={d?.page} label="opportunities" />
       </section>
 
       {d && d.applications.length > 0 && (
@@ -146,6 +152,7 @@ export function Work() {
                 </Link>
                 <p className="m-0 text-[14px] font-semibold text-ink-soft">
                   {o.status}, {o.applications} application{o.applications === 1 ? '' : 's'}
+                  {o.clubOnly ? ', Club only' : ''}
                 </p>
                 <div className="mt-sm flex gap-xs">
                   {o.status !== 'published' && (
@@ -195,6 +202,7 @@ function PostSheet({ open, onClose, onPosted }: { open: boolean; onClose: () => 
   const [deliverables, setDeliverables] = useState('');
   const [deadline, setDeadline] = useState('');
   const [eligibility, setEligibility] = useState('');
+  const [clubOnly, setClubOnly] = useState(false);
   const create = useMutation({
     mutationFn: () =>
       api.createOpportunity({
@@ -211,6 +219,7 @@ function PostSheet({ open, onClose, onPosted }: { open: boolean; onClose: () => 
         deliverables,
         deadline: deadline || null,
         eligibility,
+        clubOnly,
       }),
     onSuccess: () => {
       setTitle('');
@@ -305,6 +314,13 @@ function PostSheet({ open, onClose, onPosted }: { open: boolean; onClose: () => 
           <span className="block text-[14px] font-bold">Who can apply</span>
           <textarea value={eligibility} onChange={(e) => setEligibility(e.target.value)} rows={2} maxLength={1000} className={field} />
         </label>
+        <label className="toy flex min-h-[48px] cursor-pointer items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+          <input type="checkbox" checked={clubOnly} onChange={(e) => setClubOnly(e.target.checked)} className="size-[20px] accent-ink" />
+          <span>
+            <span className="block text-[16px] font-bold">Club only</span>
+            <span className="block text-[14px] font-semibold text-ink-soft">Only Club members see it and can apply. Their first look.</span>
+          </span>
+        </label>
         <Err error={create.error} fallback="Could not post it." />
         <Button type="submit" size="lg" full disabled={create.isPending || !title.trim()}>
           Save as draft
@@ -327,6 +343,7 @@ export function Opportunity() {
   const apply = useMutation({ mutationFn: () => api.apply(id, coverNote), onSuccess: () => q.refetch() });
   const setApp = useMutation({ mutationFn: ({ aid, status }: { aid: string; status: ApplicationStatus }) => api.setApplication(aid, { status, note }), onSuccess: () => q.refetch() });
   const setStatus = useMutation({ mutationFn: (status: OpportunityT['status']) => api.setOpportunity(id, status), onSuccess: () => q.refetch() });
+  const setClubFlag = useMutation({ mutationFn: (clubOnly: boolean) => api.setOpportunity(id, q.data?.opportunity.status ?? 'draft', clubOnly), onSuccess: () => q.refetch() });
 
   if (q.isError) {
     return (
@@ -350,6 +367,7 @@ export function Opportunity() {
         <Back />
         <p className="m-0 text-[14px] font-bold text-ink-soft">
           {o.organizationName}, {typeName(o.opportunityType)}
+          {o.clubOnly ? ', Club only' : ''}
         </p>
         <h1 className="text-[30px]">{o.title}</h1>
         <Facts o={o} />
@@ -441,6 +459,13 @@ export function Opportunity() {
                 </Button>
               )}
             </div>
+            <label className="toy mt-sm flex min-h-[48px] cursor-pointer items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+              <input type="checkbox" checked={o.clubOnly} onChange={(e) => setClubFlag.mutate(e.target.checked)} disabled={setClubFlag.isPending} className="size-[20px] accent-ink" />
+              <span>
+                <span className="block text-[16px] font-bold">Club only</span>
+                <span className="block text-[14px] font-semibold text-ink-soft">Only Club members see it and can apply.</span>
+              </span>
+            </label>
             <Err error={setStatus.error} />
           </section>
           <section className="mt-lg" aria-labelledby="applicants-heading">

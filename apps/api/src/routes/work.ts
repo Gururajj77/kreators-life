@@ -1,13 +1,13 @@
 import { Hono } from 'hono';
 import { APPLICATION_STATUSES, OPPORTUNITY_TYPES, type Application, type Opportunity } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { audit, can, nameOf, newId, notify, nowIso, num, oneOf, orgIdsOf, orgRole, parseList, str } from '../db';
+import { audit, can, isClubMember, nameOf, newId, notify, nowIso, num, oneOf, orgIdsOf, orgRole, parseList, str, pageOf, paged } from '../db';
 
 export const work = new Hono<AppEnv>();
 
 interface OppRow {
   id: string; organization_id: string | null; organization_name: string | null; created_by: string; title: string; description: string; opportunity_type: Opportunity['opportunityType']; skills_required: string; location_mode: Opportunity['locationMode']; location_text: string;
-  compensation_min: number | null; compensation_max: number | null; currency: string; deliverables: string; deadline: string | null; status: Opportunity['status']; eligibility: string; created_at: string; published_at: string | null; applications: number;
+  compensation_min: number | null; compensation_max: number | null; currency: string; deliverables: string; deadline: string | null; status: Opportunity['status']; eligibility: string; club_only: number; created_at: string; published_at: string | null; applications: number;
 }
 const SELECT = `SELECT o.*, org.name AS organization_name, (SELECT COUNT(*) FROM applications a WHERE a.opportunity_id = o.id AND a.status != 'withdrawn') AS applications FROM opportunities o LEFT JOIN organizations org ON org.id = o.organization_id`;
 interface AppRow { id: string; opportunity_id: string; opportunity_title: string; creator_user_id: string; creator_name: string; creator_handle: string | null; cover_note: string; portfolio_snapshot: string; status: Application['status']; submitted_at: string; updated_at: string }
@@ -15,7 +15,7 @@ const APP_SELECT = `SELECT a.*, u.display_name AS creator_name, u.handle AS crea
 const toApp = (r: AppRow): Application => ({ id: r.id, opportunityId: r.opportunity_id, opportunityTitle: r.opportunity_title, creatorId: r.creator_user_id, creatorName: nameOf({ display_name: r.creator_name }), creatorHandle: r.creator_handle, coverNote: r.cover_note, portfolioSnapshot: r.portfolio_snapshot, status: r.status, submittedAt: r.submitted_at, updatedAt: r.updated_at });
 const toOpp = (r: OppRow, mine: Application | null): Opportunity => ({
   id: r.id, organizationId: r.organization_id, organizationName: r.organization_name ?? 'Kreators', createdBy: r.created_by, title: r.title, description: r.description, opportunityType: r.opportunity_type, skillsRequired: parseList(r.skills_required), locationMode: r.location_mode, locationText: r.location_text,
-  compensationMin: r.compensation_min, compensationMax: r.compensation_max, currency: r.currency, deliverables: r.deliverables, deadline: r.deadline, status: r.status, eligibility: r.eligibility, createdAt: r.created_at, publishedAt: r.published_at, applications: r.applications, myApplication: mine,
+  compensationMin: r.compensation_min, compensationMax: r.compensation_max, currency: r.currency, deliverables: r.deliverables, deadline: r.deadline, status: r.status, eligibility: r.eligibility, clubOnly: r.club_only === 1, createdAt: r.created_at, publishedAt: r.published_at, applications: r.applications, myApplication: mine,
 });
 
 async function owns(db: D1Database, user: UserRow, o: OppRow): Promise<boolean> {
@@ -26,16 +26,19 @@ async function owns(db: D1Database, user: UserRow, o: OppRow): Promise<boolean> 
 work.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const orgIds = await orgIdsOf(db, user.id);
+  const ask = pageOf(c);
+  const [orgIds, member] = await Promise.all([orgIdsOf(db, user.id), isClubMember(db, user.id)]);
   const [published, mine, drafts] = await Promise.all([
-    db.prepare(`${SELECT} WHERE o.status = 'published' AND (o.deadline IS NULL OR o.deadline >= ?) ORDER BY o.published_at DESC LIMIT 100`).bind(new Date().toISOString().slice(0, 10)).all<OppRow>(),
+    // Club-only listings are the Club's first look: only members see them.
+    db.prepare(`${SELECT} WHERE o.status = 'published' AND (o.deadline IS NULL OR o.deadline >= ?) AND (o.club_only = 0 OR ? = 1) ORDER BY o.published_at DESC LIMIT ? OFFSET ?`).bind(new Date().toISOString().slice(0, 10), member ? 1 : 0, ask.limit, ask.offset).all<OppRow>(),
     db.prepare(`${APP_SELECT} WHERE a.creator_user_id = ? ORDER BY a.updated_at DESC`).bind(user.id).all<AppRow>(),
     can(user, 'talent')
       ? db.prepare(`${SELECT} WHERE o.status != 'published' ORDER BY o.created_at DESC LIMIT 100`).all<OppRow>()
       : db.prepare(`${SELECT} WHERE o.status != 'published' AND (o.created_by = ? OR o.organization_id IN (${orgIds.length ? orgIds.map(() => '?').join(',') : "''"})) ORDER BY o.created_at DESC`).bind(user.id, ...orgIds).all<OppRow>(),
   ]);
   const byOpp = new Map(mine.results.map((a) => [a.opportunity_id, toApp(a)]));
-  return c.json({ opportunities: published.results.map((o) => toOpp(o, byOpp.get(o.id) ?? null)), applications: mine.results.map(toApp), drafts: drafts.results.map((o) => toOpp(o, null)), canPost: can(user, 'talent') || orgIds.length > 0 });
+  const pg = paged(published.results, ask);
+  return c.json({ page: pg.page, opportunities: pg.items.map((o) => toOpp(o, byOpp.get(o.id) ?? null)), applications: mine.results.map(toApp), drafts: drafts.results.map((o) => toOpp(o, null)), canPost: can(user, 'talent') || orgIds.length > 0 });
 });
 
 work.post('/opportunities', async (c) => {
@@ -50,8 +53,8 @@ work.post('/opportunities', async (c) => {
   const id = newId();
   const skills = Array.isArray(body.skillsRequired) ? body.skillsRequired.filter((x): x is string => typeof x === 'string').slice(0, 10) : [];
   await db
-    .prepare('INSERT INTO opportunities (id, organization_id, created_by, title, description, opportunity_type, skills_required, location_mode, location_text, compensation_min, compensation_max, currency, deliverables, deadline, status, eligibility, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(id, organizationId, user.id, title, str(body.description, 5000), oneOf(body.opportunityType, OPPORTUNITY_TYPES, 'gig'), JSON.stringify(skills), oneOf(body.locationMode, ['remote', 'on_site', 'hybrid'] as const, 'remote'), str(body.locationText, 120), num(body.compensationMin, null, 0), num(body.compensationMax, null, 0), str(body.currency, 3, 'INR').toUpperCase(), str(body.deliverables, 2000), str(body.deadline, 10) || null, 'draft', str(body.eligibility, 1000), nowIso())
+    .prepare('INSERT INTO opportunities (id, organization_id, created_by, title, description, opportunity_type, skills_required, location_mode, location_text, compensation_min, compensation_max, currency, deliverables, deadline, status, eligibility, club_only, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, organizationId, user.id, title, str(body.description, 5000), oneOf(body.opportunityType, OPPORTUNITY_TYPES, 'gig'), JSON.stringify(skills), oneOf(body.locationMode, ['remote', 'on_site', 'hybrid'] as const, 'remote'), str(body.locationText, 120), num(body.compensationMin, null, 0), num(body.compensationMax, null, 0), str(body.currency, 3, 'INR').toUpperCase(), str(body.deliverables, 2000), str(body.deadline, 10) || null, 'draft', str(body.eligibility, 1000), body.clubOnly === true ? 1 : 0, nowIso())
     .run();
   return c.json({ ok: true, id }, 201);
 });
@@ -63,6 +66,7 @@ work.get('/opportunities/:id', async (c) => {
   if (!row) return c.json({ error: 'not found' }, 404);
   const owner = await owns(db, user, row);
   if (row.status !== 'published' && !owner) return c.json({ error: 'not found' }, 404);
+  if (row.club_only === 1 && !owner && !(await isClubMember(db, user.id))) return c.json({ error: 'Club members only. Apply under Club for the first look.' }, 403);
   const mine = await db.prepare(`${APP_SELECT} WHERE a.opportunity_id = ? AND a.creator_user_id = ?`).bind(row.id, user.id).first<AppRow>();
   const apps = owner ? await db.prepare(`${APP_SELECT} WHERE a.opportunity_id = ? ORDER BY a.submitted_at DESC`).bind(row.id).all<AppRow>() : { results: [] as AppRow[] };
   return c.json({ opportunity: toOpp(row, mine ? toApp(mine) : null), applications: apps.results.map(toApp), owner });
@@ -73,10 +77,11 @@ work.patch('/opportunities/:id', async (c) => {
   const user = c.get('user');
   const prev = await db.prepare(`${SELECT} WHERE o.id = ?`).bind(c.req.param('id')).first<OppRow>();
   if (!prev || !(await owns(db, user, prev))) return c.json({ error: 'not found' }, 404);
-  const body = await c.req.json<{ status?: string }>().catch(() => ({}) as { status?: string });
+  const body = await c.req.json<{ status?: string; clubOnly?: boolean }>().catch(() => ({}) as { status?: string; clubOnly?: boolean });
   const status = oneOf(body.status, ['draft', 'published', 'closed'] as const, prev.status);
+  const clubOnly = typeof body.clubOnly === 'boolean' ? (body.clubOnly ? 1 : 0) : prev.club_only;
   const now = nowIso();
-  await db.prepare('UPDATE opportunities SET status = ?, published_at = CASE WHEN ? = \'published\' THEN COALESCE(published_at, ?) ELSE published_at END, closed_at = CASE WHEN ? = \'closed\' THEN ? ELSE NULL END WHERE id = ?').bind(status, status, now, status, now, prev.id).run();
+  await db.prepare('UPDATE opportunities SET status = ?, club_only = ?, published_at = CASE WHEN ? = \'published\' THEN COALESCE(published_at, ?) ELSE published_at END, closed_at = CASE WHEN ? = \'closed\' THEN ? ELSE NULL END WHERE id = ?').bind(status, clubOnly, status, now, status, now, prev.id).run();
   await audit(db, user.id, 'opportunity.status', 'opportunity', prev.id, prev.status, status);
   return c.json({ ok: true });
 });
@@ -89,6 +94,7 @@ work.post('/opportunities/:id/apply', async (c) => {
   if (!row) return c.json({ error: 'this opportunity is not open' }, 404);
   if (row.deadline && row.deadline < new Date().toISOString().slice(0, 10)) return c.json({ error: 'the deadline has passed' }, 400);
   if (row.created_by === user.id) return c.json({ error: 'that is your own listing' }, 400);
+  if (row.club_only === 1 && !(await isClubMember(db, user.id))) return c.json({ error: 'Club members only. Apply under Club for the first look.' }, 403);
   const body = await c.req.json<{ coverNote?: string }>().catch(() => ({}) as { coverNote?: string });
   const portfolio = await db.prepare("SELECT title, url FROM portfolio_items WHERE user_id = ? AND visibility = 'public' ORDER BY created_at DESC LIMIT 5").bind(user.id).all<{ title: string; url: string }>();
   const snapshot = [...parseList(user.skills), ...portfolio.results.map((p) => `${p.title}: ${p.url}`)].join('\n');

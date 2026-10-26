@@ -1,7 +1,7 @@
 # 08 — Security, privacy and AI safety
 
 **Product:** kreators.app
-**Version:** 0.2, reconciled with the app on 26 October 2026
+**Version:** 0.3, reconciled with the app on 26 October 2026
 **Source of truth:** the auth rules in `CLAUDE.md`; `apps/api/src/routes/auth.ts`, `me.ts`, `ops.ts`, `index.ts`, `go.ts`, `companion.ts`; the policy pages in `apps/web/src/site/Policy.tsx`.
 
 ## 1. Security baseline as built
@@ -15,13 +15,14 @@
 - Changing a password needs the current one and signs out every other device.
 - A reset link is 32 random bytes, stored as a SHA-256 hash, good for thirty minutes, one open per account. Any email gets the same answer. Using the link signs every device out.
 - Founder addresses in `admins.ts` and `ADMIN_EMAILS` become admins on sign-up or sign-in, audited. Until mail verifies addresses, whoever signs up with one first gets it. Sign up with them right after a deploy.
+- Sign-up also asks for a phone number and a date of birth. The server refuses anyone under 18 (`MIN_AGE`), normalises the phone to digits, and never shows either to anyone else. The date of birth cannot be changed afterwards.
 
 The rest of the baseline:
 
-- Roles, permissions and ownership are checked on the server on every route. Module flags are resolved on the server but enforced only by the client. See 05.
+- Roles, permissions, ownership and module flags are checked on the server on every route. See 05.
 - Secrets are Worker bindings set with `pnpm cf:secret`. Locally they sit in `.dev.vars`, which git ignores. No key is in the repo or the bundle.
 - Every input passes through `str`, `num` or `oneOf` with bounds. Every money amount is an integer. Picture and link blocks are https only. The Markdown renderer emits no HTML and no links. Nothing uses `dangerouslySetInnerHTML`.
-- Rate limits, per address or per person once signed in: sign-in 10 a minute, sign-up 10 an hour, forgot 10 an hour, reset 20 an hour, anonymous start 60 an hour, the lead form 5 a minute, checkout 10 a minute. On top, 20 sign-in tries per email per quarter hour. Nothing else is limited.
+- Rate limits live in one file, `apps/api/src/limits.ts`, one line each with the route it guards. Per address on the doors without a session: sign-in 10 a minute, sign-up 10 an hour, forgot 10 an hour, reset 20 an hour, anonymous start 60 an hour, the lead form 5 a minute. Per person after sign-in: checkout 10 a minute, posts 10 an hour, replies 30, likes 120, follows 60, chat messages 120 (Bond, circles, pre-owned), introductions 20, offers 20, things put up 30 (listings, products, events, clubs, opportunities, proposals, rewards), tickets 5, applications 10 (Work, Win, Club, collabs), run entries 10. On top, 20 sign-in tries per email per quarter hour and 3 reset mails per email per hour.
 - `secureHeaders()` runs on every API answer. CORS is open, since one Worker serves the bundle.
 - CSRF does not apply: sessions are Bearer tokens, never cookies.
 - There are no uploads. Every picture, deliverable and portfolio item is a link. So there is no file storage and no upload abuse surface.
@@ -55,7 +56,7 @@ The rest of the baseline:
 - Circles and Bond chats use aliases only. There is no reveal.
 - Support tickets reach staff with the support permission.
 - Random video chat is parked, as v0.1 required.
-- Not built: a report button on posts, circle messages, Bond chats or Store chats; a queue of reports; a code of conduct page; rate limits on posts, replies and chat messages; appeals.
+- Not built: a report button on posts, circle messages, Bond chats or Store chats; a queue of reports; a code of conduct page; appeals.
 
 ## 5. The Companion's limits as built
 
@@ -80,7 +81,7 @@ Nothing from the 10 TB collection or the 25,000 books is in the app. Knowledge i
 
 ## 8. Minors
 
-Nothing is built or written. There is no minimum age, no guardian flow, and no age-aware limit on events, chats, circles or payments. Decide a minimum age and put it in the terms before any school or college push.
+The minimum age is 18. Sign-up asks for a date of birth and the server refuses anyone younger; the terms say the same. There is no guardian flow and no age verification beyond the date typed, so the rule keeps honest people out and relies on the terms for the rest.
 
 ## 9. Incident response
 
@@ -88,8 +89,7 @@ Nothing is written. The pieces that exist: `pnpm cf:logs` for live logs, Wrangle
 
 ## Known gaps
 
-- Module flags are enforced only on the client.
-- No report button, no report queue, no code of conduct, no rate limits on posts and chats.
-- No email verification.
-- No minors policy, no incident response document, no written backup and restore.
+- No report button, no report queue, no code of conduct.
+- No email or phone verification, and no age verification beyond the date typed.
+- No incident response document, no written backup and restore.
 - The privacy page does not mention Workers AI.

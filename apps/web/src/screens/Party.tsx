@@ -8,6 +8,7 @@ import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useAuthed, useRefreshAll } from '../lib/queries';
+import { Pager, usePage } from '../components/Pager';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -71,7 +72,8 @@ function EventCard({ e }: { e: PartyEvent }) {
 }
 
 export function Party() {
-  const q = useAuthed(['party'], api.party);
+  const pg = usePage();
+  const q = useAuthed(['party', pg.query], () => api.party(pg.query));
   const [hosting, setHosting] = useState(false);
   const d = q.data;
   return (
@@ -112,6 +114,7 @@ export function Party() {
                 <EventCard key={e.id} e={e} />
               ))}
             </ul>
+            <Pager page={d.page} label="events" />
           </section>
 
           {d.hosting.length > 0 && (

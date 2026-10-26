@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { CAMPAIGN_STATUSES, type Campaign, type CampaignAssignment, type CampaignEvent, type Deliverable, type DeliverableVersion } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { audit, can, nameOf, newId, notify, nowIso, num, oneOf, orgIdsOf, orgRole, str } from '../db';
+import { audit, can, nameOf, newId, notify, nowIso, num, oneOf, orgIdsOf, orgRole, str, pageOf, paged } from '../db';
 
 export const army = new Hono<AppEnv>();
 
@@ -35,14 +35,16 @@ army.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const orgIds = await orgIdsOf(db, user.id);
+  const ask = pageOf(c);
   const rows = can(user, 'talent')
-    ? await db.prepare(`${SELECT} ORDER BY c.updated_at DESC LIMIT 200`).all<CampaignRow>()
+    ? await db.prepare(`${SELECT} ORDER BY c.updated_at DESC LIMIT ? OFFSET ?`).bind(ask.limit, ask.offset).all<CampaignRow>()
     : await db
-        .prepare(`${SELECT} WHERE c.organization_id IN (${orgIds.length ? orgIds.map(() => '?').join(',') : "''"}) OR c.id IN (SELECT campaign_id FROM campaign_assignments WHERE creator_user_id = ?) ORDER BY c.updated_at DESC LIMIT 200`)
-        .bind(...orgIds, user.id)
+        .prepare(`${SELECT} WHERE c.organization_id IN (${orgIds.length ? orgIds.map(() => '?').join(',') : "''"}) OR c.id IN (SELECT campaign_id FROM campaign_assignments WHERE creator_user_id = ?) ORDER BY c.updated_at DESC LIMIT ? OFFSET ?`)
+        .bind(...orgIds, user.id, ask.limit, ask.offset)
         .all<CampaignRow>();
   const mine = await db.prepare('SELECT a.*, u.display_name AS creator_name FROM campaign_assignments a JOIN users u ON u.id = a.creator_user_id WHERE a.creator_user_id = ? ORDER BY a.created_at DESC').bind(user.id).all<AssignmentRow>();
-  return c.json({ campaigns: rows.results.map(toCampaign), assignments: mine.results.map(toAssignment), staff: can(user, 'talent') });
+  const pg = paged(rows.results, ask);
+  return c.json({ page: pg.page, campaigns: pg.items.map(toCampaign), assignments: mine.results.map(toAssignment), staff: can(user, 'talent') });
 });
 
 army.post('/campaigns', async (c) => {

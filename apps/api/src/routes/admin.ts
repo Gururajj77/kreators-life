@@ -9,7 +9,7 @@ import { handleComment } from './growth';
 import { providerFor } from '../payments';
 import { toKyc, type KycRow } from './kyc';
 import { logEvent, sendEmail, track } from '../ops';
-import { notify } from '../db';
+import { notify, pageOf, paged } from '../db';
 import type { AdminFunnel, AdminKyc, AdminOrder, OrderEvent, OutboxEmail, WebhookEvent } from '@kreators/shared';
 import type { Context } from 'hono';
 import type { AppEnv, UserRow } from '../env';
@@ -170,9 +170,11 @@ admin.get('/flags/preview/:userId', async (c) => {
 });
 
 admin.get('/audit', async (c) => {
-  const rows = await c.env.DB.prepare('SELECT a.*, u.display_name AS actor_name FROM audit_logs a LEFT JOIN users u ON u.id = a.actor_user_id ORDER BY a.created_at DESC LIMIT 200').all<{ id: string; actor_user_id: string | null; actor_name: string | null; action: string; resource_type: string; resource_id: string | null; before_summary: string; after_summary: string; created_at: string }>();
-  const logs: AuditLog[] = rows.results.map((r) => ({ id: r.id, actorId: r.actor_user_id, actorName: r.actor_name ? nameOf({ display_name: r.actor_name }) : r.actor_user_id ? 'Someone' : 'Admin key', action: r.action, resourceType: r.resource_type, resourceId: r.resource_id, before: r.before_summary, after: r.after_summary, createdAt: r.created_at }));
-  return c.json({ logs });
+  const ask = pageOf(c);
+  const rows = await c.env.DB.prepare('SELECT a.*, u.display_name AS actor_name FROM audit_logs a LEFT JOIN users u ON u.id = a.actor_user_id ORDER BY a.created_at DESC LIMIT ? OFFSET ?').bind(ask.limit, ask.offset).all<{ id: string; actor_user_id: string | null; actor_name: string | null; action: string; resource_type: string; resource_id: string | null; before_summary: string; after_summary: string; created_at: string }>();
+  const pg = paged(rows.results, ask);
+  const logs: AuditLog[] = pg.items.map((r) => ({ id: r.id, actorId: r.actor_user_id, actorName: r.actor_name ? nameOf({ display_name: r.actor_name }) : r.actor_user_id ? 'Someone' : 'Admin key', action: r.action, resourceType: r.resource_type, resourceId: r.resource_id, before: r.before_summary, after: r.after_summary, createdAt: r.created_at }));
+  return c.json({ page: pg.page, logs });
 });
 
 // ---- orders: search, the timeline, a refund
@@ -193,8 +195,10 @@ admin.get('/orders', async (c) => {
     where.push('o.status = ?');
     binds.push(status);
   }
-  const rows = await c.env.DB.prepare(`${ADMIN_ORDER_SELECT} ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY o.created_at DESC LIMIT 100`).bind(...binds).all<AdminOrderRow>();
-  return c.json({ orders: rows.results.map(toAdminOrder) });
+  const ask = pageOf(c);
+  const rows = await c.env.DB.prepare(`${ADMIN_ORDER_SELECT} ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY o.created_at DESC LIMIT ? OFFSET ?`).bind(...binds, ask.limit, ask.offset).all<AdminOrderRow>();
+  const pg = paged(rows.results, ask);
+  return c.json({ page: pg.page, orders: pg.items.map(toAdminOrder) });
 });
 
 admin.get('/orders/:id', async (c) => {
@@ -224,9 +228,11 @@ admin.post('/orders/:id/refund', async (c) => {
 
 // ---- webhooks: what came in, and a replay
 admin.get('/webhooks', async (c) => {
-  const rows = await c.env.DB.prepare('SELECT id, provider, type, processed_at, error, received_at FROM webhook_events ORDER BY received_at DESC LIMIT 100').all<{ id: string; provider: string; type: string; processed_at: string | null; error: string | null; received_at: string }>();
-  const webhooks: WebhookEvent[] = rows.results.map((h) => ({ id: h.id, provider: h.provider, type: h.type, processedAt: h.processed_at, error: h.error, receivedAt: h.received_at }));
-  return c.json({ webhooks });
+  const ask = pageOf(c);
+  const rows = await c.env.DB.prepare('SELECT id, provider, type, processed_at, error, received_at FROM webhook_events ORDER BY received_at DESC LIMIT ? OFFSET ?').bind(ask.limit, ask.offset).all<{ id: string; provider: string; type: string; processed_at: string | null; error: string | null; received_at: string }>();
+  const pg = paged(rows.results, ask);
+  const webhooks: WebhookEvent[] = pg.items.map((h) => ({ id: h.id, provider: h.provider, type: h.type, processedAt: h.processed_at, error: h.error, receivedAt: h.received_at }));
+  return c.json({ page: pg.page, webhooks });
 });
 
 admin.post('/webhooks/:id/replay', async (c) => {
@@ -254,9 +260,11 @@ admin.post('/webhooks/:id/replay', async (c) => {
 // ---- KYC queue
 admin.get('/kyc', async (c) => {
   const status = c.req.query('status') ?? 'pending';
-  const rows = await c.env.DB.prepare('SELECT k.*, u.display_name, u.email FROM kyc_profiles k JOIN users u ON u.id = k.user_id WHERE k.status = ? ORDER BY k.submitted_at LIMIT 200').bind(status).all<KycRow & { display_name: string; email: string | null }>();
-  const kyc: AdminKyc[] = rows.results.map((r) => ({ ...toKyc(r), userId: r.user_id, userName: nameOf(r), email: r.email }));
-  return c.json({ kyc });
+  const ask = pageOf(c);
+  const rows = await c.env.DB.prepare('SELECT k.*, u.display_name, u.email FROM kyc_profiles k JOIN users u ON u.id = k.user_id WHERE k.status = ? ORDER BY k.submitted_at LIMIT ? OFFSET ?').bind(status, ask.limit, ask.offset).all<KycRow & { display_name: string; email: string | null }>();
+  const pg = paged(rows.results, ask);
+  const kyc: AdminKyc[] = pg.items.map((r) => ({ ...toKyc(r), userId: r.user_id, userName: nameOf(r), email: r.email }));
+  return c.json({ page: pg.page, kyc });
 });
 
 admin.post('/kyc/:userId', async (c) => {
@@ -276,9 +284,11 @@ admin.post('/kyc/:userId', async (c) => {
 
 // ---- email outbox
 admin.get('/outbox', async (c) => {
-  const rows = await c.env.DB.prepare('SELECT id, to_email, subject, status, error, created_at FROM email_outbox ORDER BY created_at DESC LIMIT 200').all<{ id: string; to_email: string; subject: string; status: OutboxEmail['status']; error: string; created_at: string }>();
-  const outbox: OutboxEmail[] = rows.results.map((r) => ({ id: r.id, to: r.to_email, subject: r.subject, status: r.status, error: r.error, createdAt: r.created_at }));
-  return c.json({ outbox });
+  const ask = pageOf(c);
+  const rows = await c.env.DB.prepare('SELECT id, to_email, subject, status, error, created_at FROM email_outbox ORDER BY created_at DESC LIMIT ? OFFSET ?').bind(ask.limit, ask.offset).all<{ id: string; to_email: string; subject: string; status: OutboxEmail['status']; error: string; created_at: string }>();
+  const pg = paged(rows.results, ask);
+  const outbox: OutboxEmail[] = pg.items.map((r) => ({ id: r.id, to: r.to_email, subject: r.subject, status: r.status, error: r.error, createdAt: r.created_at }));
+  return c.json({ page: pg.page, outbox });
 });
 
 // ---- funnels, from our own tables
@@ -337,8 +347,10 @@ admin.get('/funnels', async (c) => {
 // ---- listings: what the public site shows, created and published from here
 admin.get('/listings', async (c) => {
   const type = c.req.query('type');
-  const listings = await listingsFor(c.env.DB, { q: c.req.query('q') ?? '', type: (LISTING_TYPES as readonly string[]).includes(type ?? '') ? (type as ListingType) : undefined, includeHidden: true, limit: 200 });
-  return c.json({ listings });
+  const ask = pageOf(c);
+  const all = await listingsFor(c.env.DB, { q: c.req.query('q') ?? '', type: (LISTING_TYPES as readonly string[]).includes(type ?? '') ? (type as ListingType) : undefined, includeHidden: true, limit: ask.offset + ask.limit });
+  const pg = paged(all.slice(ask.offset), ask);
+  return c.json({ page: pg.page, listings: pg.items });
 });
 
 admin.post('/listings', async (c) => {
@@ -428,12 +440,14 @@ const USER_SELECT = `SELECT u.*, (SELECT GROUP_CONCAT(honor_key) FROM honors h W
 
 admin.get('/users', async (c) => {
   const q = (c.req.query('q') ?? '').trim();
+  const ask = pageOf(c);
   const rows = q
-    ? await c.env.DB.prepare(`${USER_SELECT} WHERE u.display_name LIKE ? OR u.id LIKE ? OR u.email LIKE ? OR u.handle LIKE ? ORDER BY u.xp DESC LIMIT 50`)
-        .bind(`%${q}%`, `${q}%`, `%${q}%`, `%${q}%`)
+    ? await c.env.DB.prepare(`${USER_SELECT} WHERE u.display_name LIKE ? OR u.id LIKE ? OR u.email LIKE ? OR u.handle LIKE ? ORDER BY u.xp DESC LIMIT ? OFFSET ?`)
+        .bind(`%${q}%`, `${q}%`, `%${q}%`, `%${q}%`, ask.limit, ask.offset)
         .all<UserListRow>()
-    : await c.env.DB.prepare(`${USER_SELECT} ORDER BY u.created_at DESC LIMIT 50`).all<UserListRow>();
-  return c.json({ users: rows.results.map(toAdminUser) });
+    : await c.env.DB.prepare(`${USER_SELECT} ORDER BY u.created_at DESC LIMIT ? OFFSET ?`).bind(ask.limit, ask.offset).all<UserListRow>();
+  const pg = paged(rows.results, ask);
+  return c.json({ page: pg.page, users: pg.items.map(toAdminUser) });
 });
 
 async function loadUser(db: D1Database, id: string): Promise<UserListRow | null> {
@@ -509,12 +523,14 @@ interface AdminRedemptionRow extends RedemptionRow {
 admin.get('/redemptions', async (c) => {
   const status = c.req.query('status');
   const where = status ? 'WHERE r.status = ?' : '';
+  const ask = pageOf(c);
   const stmt = c.env.DB.prepare(
-    `SELECT r.*, u.display_name AS user_name FROM redemptions r JOIN users u ON u.id = r.user_id ${where} ORDER BY r.created_at DESC LIMIT 100`,
+    `SELECT r.*, u.display_name AS user_name FROM redemptions r JOIN users u ON u.id = r.user_id ${where} ORDER BY r.created_at DESC LIMIT ? OFFSET ?`,
   );
-  const rows = await (status ? stmt.bind(status) : stmt).all<AdminRedemptionRow>();
-  const list: AdminRedemption[] = rows.results.map((r) => ({ ...toRedemption(r), userId: r.user_id, userName: r.user_name || 'Anonymous climber' }));
-  return c.json({ redemptions: list });
+  const rows = await (status ? stmt.bind(status, ask.limit, ask.offset) : stmt.bind(ask.limit, ask.offset)).all<AdminRedemptionRow>();
+  const pg = paged(rows.results, ask);
+  const list: AdminRedemption[] = pg.items.map((r) => ({ ...toRedemption(r), userId: r.user_id, userName: r.user_name || 'Anonymous climber' }));
+  return c.json({ page: pg.page, redemptions: list });
 });
 
 admin.post('/redemptions/:id', async (c) => {

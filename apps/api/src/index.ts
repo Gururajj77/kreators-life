@@ -39,6 +39,9 @@ import { kyc } from './routes/kyc';
 import { builder } from './routes/builder';
 import { secureHeaders } from 'hono/secure-headers';
 import { rateLimit } from './ops';
+import { isOpenDoor, ROUTE_LIMITS } from './limits';
+import { modulesForPath, resolveAccess } from './access';
+import { MODULE_BY_KEY } from '@kreators/shared';
 import { finance, publicInvoices } from './routes/finance';
 import { internal } from './routes/internal';
 import { circles } from './routes/circles';
@@ -54,13 +57,8 @@ app.use('*', cors());
 app.use('*', secureHeaders());
 
 app.get('/health', (c) => c.json({ ok: true, at: new Date().toISOString() }));
-// Abuse limits on the doors that take no session.
-app.use('/auth/signin', rateLimit('signin', 10, 60));
-app.use('/auth/signup', rateLimit('signup', 10, 3600));
-app.use('/auth/forgot', rateLimit('forgot', 10, 3600));
-app.use('/auth/reset', rateLimit('reset', 20, 3600));
-app.use('/auth/anon', rateLimit('anon', 60, 3600));
-app.use('/public/:handle/lead', rateLimit('lead', 5, 60));
+// Abuse limits on the doors that take no session, per address. The numbers live in limits.ts.
+for (const r of ROUTE_LIMITS) if (isOpenDoor(r.path)) app.on(r.method, r.path, rateLimit(r.limit));
 app.route('/auth', auth);
 // Admin uses its own key, or an admin's session. Public pages need no session.
 app.route('/admin', admin);
@@ -84,6 +82,20 @@ app.use('*', async (c, next) => {
   await next();
 });
 
+// A switched-off module is refused here, not only hidden by the client: the global flag, an override,
+// the rollout and the minimum role all count. The person's own on/off is a preference the client keeps.
+app.use('*', async (c, next) => {
+  const keys = modulesForPath(new URL(c.req.url).pathname);
+  if (!keys) return next();
+  const { access } = await resolveAccess(c.env.DB, c.get('user'));
+  if (keys.some((k) => access[k]?.available)) return next();
+  const name = MODULE_BY_KEY[keys[0] ?? '']?.name ?? 'That app';
+  return c.json({ error: `${name} is not available on your account.`, module: keys[0] }, 403);
+});
+
+// The rest of the limits, per person. Same file.
+for (const r of ROUTE_LIMITS) if (!isOpenDoor(r.path)) app.on(r.method, r.path, rateLimit(r.limit));
+
 app.route('/me', me);
 app.route('/onboarding', onboarding);
 app.route('/nodes', nodes);
@@ -99,7 +111,6 @@ app.route('/companion', companion);
 app.route('/search', search);
 app.route('/studio', studio);
 app.route('/studio', growth);
-app.use('/store/:productId/checkout', rateLimit('checkout', 10, 60));
 app.route('/store', store);
 app.route('/store', buyer);
 app.route('/manage', manage);

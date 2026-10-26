@@ -1,5 +1,6 @@
 import { TRACKED_EVENTS, type TrackedEvent } from '@kreators/shared';
 import type { Context, Next } from 'hono';
+import { LIMITS, type LimitName } from './limits';
 import type { AppEnv, Env } from './env';
 import { newId, nowIso } from './db';
 
@@ -63,8 +64,9 @@ export async function limited(db: D1Database, key: string, max: number, windowSe
 
 const ipOf = (c: Context<AppEnv>) => c.req.header('CF-Connecting-IP') ?? c.req.header('X-Forwarded-For') ?? 'local';
 
-/** Middleware: `max` requests per `windowSec` per IP (or per person when there is a session). */
-export function rateLimit(name: string, max: number, windowSec: number) {
+/** Middleware: the named limit from limits.ts, per address, or per person once there is a session. */
+export function rateLimit(name: LimitName) {
+  const { max, windowSec } = LIMITS[name];
   return async (c: Context<AppEnv>, next: Next) => {
     const who = c.get('user')?.id ?? ipOf(c);
     if (await limited(c.env.DB, `${name}:${who}`, max, windowSec)) return c.json({ error: 'too many tries, wait a minute' }, 429);

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../env';
-import { can, nameOf, parseList, requireRole } from '../db';
+import { can, nameOf, parseList, requireRole, pageOf, paged } from '../db';
 
 /** Guides and admins: a light view over members and the community. */
 export const manage = new Hono<AppEnv>();
@@ -51,9 +51,11 @@ manage.get('/overview', async (c) => {
 
 manage.get('/members', async (c) => {
   const q = (c.req.query('q') ?? '').trim();
+  const ask = pageOf(c);
   const rows = q
-    ? await c.env.DB.prepare('SELECT id, display_name, handle, role, xp, streak, is_pro, created_at, last_checkin FROM users WHERE display_name LIKE ? OR handle LIKE ? OR email LIKE ? ORDER BY xp DESC LIMIT 50').bind(`%${q}%`, `%${q}%`, `%${q}%`).all<{ id: string; display_name: string; handle: string | null; role: string; xp: number; streak: number; is_pro: number; created_at: string; last_checkin: string | null }>()
-    : await c.env.DB.prepare('SELECT id, display_name, handle, role, xp, streak, is_pro, created_at, last_checkin FROM users ORDER BY created_at DESC LIMIT 50').all<{ id: string; display_name: string; handle: string | null; role: string; xp: number; streak: number; is_pro: number; created_at: string; last_checkin: string | null }>();
-  return c.json({ members: rows.results.map((r) => ({ id: r.id, name: nameOf(r), handle: r.handle, role: r.role, xp: r.xp, streak: r.streak, isPro: r.is_pro === 1, createdAt: r.created_at, lastCheckin: r.last_checkin })) });
+    ? await c.env.DB.prepare('SELECT id, display_name, handle, role, xp, streak, is_pro, created_at, last_checkin FROM users WHERE display_name LIKE ? OR handle LIKE ? OR email LIKE ? ORDER BY xp DESC LIMIT ? OFFSET ?').bind(`%${q}%`, `%${q}%`, `%${q}%`, ask.limit, ask.offset).all<{ id: string; display_name: string; handle: string | null; role: string; xp: number; streak: number; is_pro: number; created_at: string; last_checkin: string | null }>()
+    : await c.env.DB.prepare('SELECT id, display_name, handle, role, xp, streak, is_pro, created_at, last_checkin FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?').bind(ask.limit, ask.offset).all<{ id: string; display_name: string; handle: string | null; role: string; xp: number; streak: number; is_pro: number; created_at: string; last_checkin: string | null }>();
+  const pg = paged(rows.results, ask);
+  return c.json({ page: pg.page, members: pg.items.map((r) => ({ id: r.id, name: nameOf(r), handle: r.handle, role: r.role, xp: r.xp, streak: r.streak, isPro: r.is_pro === 1, createdAt: r.created_at, lastCheckin: r.last_checkin })) });
   void parseList;
 });

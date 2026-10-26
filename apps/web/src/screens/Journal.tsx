@@ -12,9 +12,11 @@ import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { useJournal, useRefreshAll } from '../lib/queries';
+import { Pager, usePage } from '../components/Pager';
 
 export function Journal() {
-  const q = useJournal();
+  const pg = usePage();
+  const q = useJournal(pg.query);
   const refresh = useRefreshAll();
   const [editing, setEditing] = useState<JournalEntry | null | 'new'>(null);
   const entries = q.data?.entries ?? [];
@@ -98,6 +100,7 @@ export function Journal() {
             );
           })}
         </ol>
+        <Pager page={q.data?.page} label="entries" />
       </section>
 
       <EntrySheet entry={editing} onClose={() => setEditing(null)} onSaved={refresh} />

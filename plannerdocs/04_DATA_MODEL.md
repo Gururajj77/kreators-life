@@ -1,8 +1,8 @@
 # 04 — Database and data dictionary
 
 **Product:** kreators.app
-**Version:** 0.2, reconciled with the app on 26 October 2026
-**Source of truth:** the 25 migrations in `apps/api/migrations`, applied in order with `pnpm db:migrate:local` or `pnpm db:migrate`. This doc lists every table and its columns as they stand after migration 0025. Types are omitted; `_at` columns are UTC ISO strings, `_cents` are integer cents, `_points` are integer points, `_json` is a JSON string.
+**Version:** 0.3, reconciled with the app on 26 October 2026
+**Source of truth:** the 27 migrations in `apps/api/migrations`, applied in order with `pnpm db:migrate:local` or `pnpm db:migrate`. This doc lists every table and its columns as they stand after migration 0027. Types are omitted; `_at` columns are UTC ISO strings, `_cents` are integer cents, `_points` are integer points, `_json` is a JSON string.
 
 ## 1. Principles as built
 
@@ -16,7 +16,7 @@
 
 ## 2. Core and the game
 
-- `users`: id, display_name, creator_type, xp, points, is_pro, leaderboard_opt_in, role, email (unique), password_hash, password_salt, handle (unique), bio, modules (JSON of the person's own switches), reminder_time, referral_code (unique), referred_by, permissions (JSON list), skills, categories, goals, experience_level, availability, location, open_to_intros, interests, city, area, lat, lng, timezone, avatar_url, socials_json, public_json, links_json, fee_bps, streak, best_streak, last_checkin, onboarded_at, created_at. Migration 0019 dropped `email_verified_at` with the magic links. There is no separate profile or creator-profile table; the columns live here.
+- `users`: id, display_name, creator_type, xp, points, is_pro, leaderboard_opt_in, role, email (unique), phone, birth_date (both asked at sign-up, migration 0026; never shown to anyone else), password_hash, password_salt, handle (unique), bio, modules (JSON of the person's own switches), reminder_time, referral_code (unique), referred_by, permissions (JSON list), skills, categories, goals, experience_level, availability, location, open_to_intros, interests, city, area, lat, lng, timezone, avatar_url, socials_json, public_json, links_json, fee_bps, streak, best_streak, last_checkin, onboarded_at, created_at. Migration 0019 dropped `email_verified_at` with the magic links. There is no separate profile or creator-profile table; the columns live here.
 - `sessions`: token, user_id, created_at.
 - `relationship_scores`: user_id, relationship, score, xp. Seven rows per person, created at sign-up.
 - `onboarding_answers`: id, user_id, question_id, relationship, value, points, created_at.
@@ -47,7 +47,7 @@
 - `deliverable_versions`: id, deliverable_id, version_number, url, note, submitted_by, submitted_at, review_status.
 - `feedback_items`: id, deliverable_version_id, author_user_id, comment, status, created_at.
 - `campaign_events`: id, campaign_id, actor_user_id, event_type, note, created_at.
-- `opportunities`: id, organization_id, created_by, title, description, opportunity_type, skills_required, location_mode, location_text, compensation_min, compensation_max, currency, deliverables, deadline, status, eligibility, featured, created_at, published_at, closed_at.
+- `opportunities`: id, organization_id, created_by, title, description, opportunity_type, skills_required, location_mode, location_text, compensation_min, compensation_max, currency, deliverables, deadline, status, eligibility, club_only (migration 0027), featured, created_at, published_at, closed_at.
 - `applications`: id, opportunity_id, creator_user_id, cover_note, portfolio_snapshot, status, submitted_at, updated_at, decision_at. Unique (opportunity_id, creator_user_id).
 - `application_events`: id, application_id, actor_user_id, event_type, note, created_at.
 - `portfolio_items`: id, user_id, title, description, url, visibility, created_at.
@@ -70,7 +70,7 @@
 - `run_clubs`: id, name, city, description, pace, meets, host_user_id, visibility, status, created_at. `run_members`: club_id, user_id, status, joined_at.
 - `runs`: id, club_id, title, meeting_point, starts_at, ends_at, metres, code, collab_id, status, created_at. `run_entries`: id, run_id, club_id, user_id, metres, minutes, xp, points, status, logged_at. Unique (run_id, user_id).
 - `run_collabs`: id, title, brand_name, organization_id, created_by, brief, asks, giveaway, giveaway_count, city, starts_at, ends_at, status, created_at. `run_collab_applications`: id, collab_id, club_id, user_id, note, status, created_at, decided_at. Unique (collab_id, club_id).
-- `memberships`: id, user_id, membership_type, status, note, decision_note, approved_by, starts_at, ends_at, created_at. Unique (user_id, membership_type).
+- `memberships`: id, user_id, membership_type, status, note, decision_note, approved_by, manager_user_id (a staff member, migration 0027), starts_at, ends_at, created_at. Unique (user_id, membership_type).
 - `bounties`: id, created_by, organization_id, brand_name, title, brief, deliverable, budget_points, rate_per_thousand, max_payout_points, min_views, reward_rule, eligibility, platform, starts_at, ends_at, status, version, featured, created_at.
 - `bounty_submissions`: id, bounty_id, user_id, url, platform, status, latest_views, latest_engagement, evidence_views, evidence_note, payout_points, reviewer_id, dispute_note, created_at, updated_at. Unique (bounty_id, user_id).
 - `social_metrics`: id, submission_id, views, likes, comments, shares, source, note, recorded_by, fetched_at.
@@ -121,7 +121,7 @@
 
 ## 10. Retention and deletion
 
-- Delete (needs the word DELETE): `users` is anonymised (name becomes "Deleted member"; email, password, handle, bio, avatar, socials, skills, categories, goals, interests, city, area, position, location, reminder and intro opt-in cleared); sessions, nodes, not-to-do, reviews and templates, pre-owned listings and offers, run entries and memberships, wellbeing logs, journal entries, companion messages, notifications, portfolio and KYC are deleted; hosted run clubs are closed. Orders, finance rows, ledger rows and audit rows stay for the books.
+- Delete (needs the word DELETE): `users` is anonymised (name becomes "Deleted member"; email, phone, date of birth, password, handle, bio, avatar, socials, skills, categories, goals, interests, city, area, position, location, reminder and intro opt-in cleared); sessions, nodes, not-to-do, reviews and templates, pre-owned listings and offers, run entries and memberships, wellbeing logs, journal entries, companion messages, notifications, portfolio and KYC are deleted; hosted run clubs are closed. Orders, finance rows, ledger rows and audit rows stay for the books.
 - Export: one JSON file with everything the person wrote, including the journal and the not-to-do list.
 - Rate-limit rows reset by window. Webhook payloads and the outbox keep everything; no purge exists.
 - Anything a brand, staff member, the leaderboard or Club selection can read never includes journal or wellbeing rows.
