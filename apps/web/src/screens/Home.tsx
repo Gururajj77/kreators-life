@@ -67,7 +67,7 @@ export function Home() {
             <span aria-hidden="true">📅 </span>
             {prettyDate(date)}, {greetingFor(hour).toLowerCase()}
           </p>
-          <div className="order-1 mr-2xl flex shrink-0 items-center justify-end gap-xs md:order-2 md:mr-0">
+          <div className="order-1 flex items-center justify-between gap-xs md:order-2 md:shrink-0 md:justify-end">
             <Link to={myPage} className="toy inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-on-ink/15 px-sm text-[14px] font-bold text-on-ink">
               <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="8" r="4" />

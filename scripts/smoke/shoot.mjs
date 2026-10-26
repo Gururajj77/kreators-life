@@ -11,7 +11,7 @@
 //   SHOOT_LIST=shots.json                a JSON array of shots instead of the default list
 //   SHOOT_CHROME=/path/to/chrome         the browser binary
 //
-// A shot is { path, name?, desktop?, width?, height?, theme?, needsSession?, before? }:
+// A shot is { path, name?, desktop?, width?, height?, theme?, needsSession?, before?, viewport? }: `viewport: true` shoots only the first screen, not the whole page.
 // a phone is 390 by 844, a laptop 1440 by 900, a phone on its side `desktop: true, width: 844, height: 390`.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -50,7 +50,7 @@ const DEFAULT_SHOTS = [
 const stamp = Date.now().toString(36);
 async function session() {
   // A fresh account on the server, so the app screens have something to show.
-  const res = await fetch(`${ORIGIN}/api/auth/signup`, { method: 'POST', headers: { 'content-type': 'application/json', 'CF-Connecting-IP': `10.99.${Date.now() % 255}.${(Date.now() >> 8) % 255}` }, body: JSON.stringify({ email: `shoot-${stamp}@smoke.test`, password: `Camera-${stamp}-pass`, displayName: 'Screenshot' }) });
+  const res = await fetch(`${ORIGIN}/api/auth/signup`, { method: 'POST', headers: { 'content-type': 'application/json', 'CF-Connecting-IP': `10.99.${Date.now() % 255}.${(Date.now() >> 8) % 255}` }, body: JSON.stringify({ email: `shoot-${stamp}@smoke.test`, password: `Camera-${stamp}-pass`, displayName: 'Screenshot', phone: '+91 98765 43210', birthDate: '1990-05-20' }) });
   if (!res.ok) throw new Error(`could not sign up on ${ORIGIN}: ${res.status}`);
   const { token } = await res.json();
   const h = { 'content-type': 'application/json', authorization: `Bearer ${token}` };
@@ -111,7 +111,7 @@ try {
       if (shot.before) await page.evaluate(shot.before);
       const name = shot.name ?? (shot.path.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'site');
       const file = path.join(OUT, `${name}-${shot.desktop ? `${width}x${height}` : 'phone'}-${theme}.png`);
-      await page.screenshot({ path: file, fullPage: true });
+      await page.screenshot({ path: file, fullPage: !shot.viewport });
       console.log(`shot ${file}`);
       if (PROBE) {
         const hits = await page.evaluate(PROBE);
