@@ -15,5 +15,8 @@
     "cf:secret": "pnpm --filter @kreators/api exec wrangler secret put",
     "deploy": "pnpm build && pnpm --filter @kreators/api deploy",
     "cf:logs": "pnpm --filter @kreators/api exec wrangler tail"
+  },
+  "devDependencies": {
+    "puppeteer-core": "25.16.0"
   }
 }

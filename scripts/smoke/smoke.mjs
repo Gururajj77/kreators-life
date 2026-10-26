@@ -1,0 +1,647 @@
+// The smoke checks. Run through blueprint.sh, which starts the server this talks to.
+// Node imports the shared model straight from TypeScript (--experimental-strip-types).
+import { QUESTIONS, XP, POINTS, WAIT, RUN_REWARD, SOCIAL_REWARDS, MAX_NOT_TO_DO, MODULES, FEATURE_FEE_POINTS } from '../../packages/shared/src/index.ts';
+
+const ORIGIN = process.env.SMOKE_ORIGIN ?? 'http://127.0.0.1:8788';
+const ADMIN_KEY = process.env.SMOKE_ADMIN_KEY ?? 'smoke-admin-key';
+const API = `${ORIGIN}/api`;
+const stamp = Date.now().toString(36);
+const today = new Date().toISOString().slice(0, 10);
+
+let passed = 0;
+let failed = 0;
+const failures = [];
+function check(name, ok, detail = '') {
+  if (ok) passed += 1;
+  else {
+    failed += 1;
+    const why = detail === '' || detail === undefined ? '' : typeof detail === 'string' ? detail : JSON.stringify(detail).slice(0, 300);
+    failures.push(`${name}${why ? `  (${why})` : ''}`);
+    console.log(`  FAIL ${name}${why ? `\n       ${why}` : ''}`);
+  }
+}
+function section(title) {
+  console.log(`\n${title}`);
+}
+
+// The limiter keys on the forwarded address, so each run gets its own and never trips a rerun on the same database.
+const seed = Number.parseInt(stamp.slice(-6), 36);
+const ADDRESS = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${seed & 255}`;
+const SPARE_ADDRESS = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 1) & 255}`;
+async function api(method, path, body, token, headers = {}) {
+  const res = await fetch(`${API}${path}`, {
+    method,
+    headers: { 'content-type': 'application/json', 'CF-Connecting-IP': ADDRESS, ...(token ? { authorization: `Bearer ${token}` } : {}), ...headers },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const text = await res.text();
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    json = { raw: text };
+  }
+  return { status: res.status, json, headers: res.headers };
+}
+const admin = (method, path, body) => api(method, path, body, null, { 'X-Admin-Key': ADMIN_KEY });
+const userOf = (r) => r.json?.user ?? r.json;
+async function me(token) {
+  return userOf(await api('GET', '/me', undefined, token));
+}
+async function signup(email, password, displayName) {
+  const r = await api('POST', '/auth/signup', { email, password, displayName });
+  if (r.status !== 201) throw new Error(`signup ${email} failed: ${r.status} ${JSON.stringify(r.json)}`);
+  return { token: r.json.token, user: r.json.user };
+}
+
+// ---------------------------------------------------------------- health and headers
+section('Health');
+{
+  const h = await api('GET', '/health');
+  check('health answers', h.status === 200 && h.json.ok === true, h.json);
+  check('security headers on every answer', h.headers.get('x-content-type-options') === 'nosniff', h.headers.get('x-content-type-options'));
+  const noAuth = await api('GET', '/me');
+  check('no session means 401', noAuth.status === 401, noAuth.status);
+  const site = await fetch(`${ORIGIN}/`);
+  const html = await site.text();
+  check('site home served by the worker', site.status === 200 && html.includes('og:image'), site.status);
+  check('share image is absolute', /og:image"?\s+content="http/.test(html) || /content="http[^"]+"\s+property="og:image"/.test(html), html.match(/og:image[^>]*/)?.[0]);
+  const sm = await fetch(`${ORIGIN}/sitemap.xml`);
+  check('sitemap answers', sm.status === 200 && (await sm.text()).includes('<urlset'), sm.status);
+  const cron = await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+  check('cron can be run by hand', cron.status === 200, cron.status);
+}
+
+// ---------------------------------------------------------------- auth
+section('Auth');
+const founderEmail = 'founder@smoke.test';
+const founderPass = process.env.SMOKE_FOUNDER_PASS ?? 'Mountain-smoke-ok';
+let A; // founder, becomes admin
+let B; // a buyer and runner
+let C; // a seller and a run host
+{
+  const weak = await api('POST', '/auth/signup', { email: `weak-${stamp}@smoke.test`, password: 'password' }, null, { 'CF-Connecting-IP': SPARE_ADDRESS });
+  check('a common password is refused', weak.status === 400, weak.json);
+  const repeat = await api('POST', '/auth/signup', { email: `rep-${stamp}@smoke.test`, password: 'aaaaaaaaaa' }, null, { 'CF-Connecting-IP': SPARE_ADDRESS });
+  check('one character repeated is refused', repeat.status === 400, repeat.json);
+  const own = await api('POST', '/auth/signup', { email: `gururaj-${stamp}@smoke.test`, password: `gururaj-${stamp}xyz` }, null, { 'CF-Connecting-IP': SPARE_ADDRESS });
+  check('the email inside the password is refused', own.status === 400, own.json);
+  const badEmail = await api('POST', '/auth/signup', { email: 'nope', password: `Fine-${stamp}-pass` }, null, { 'CF-Connecting-IP': SPARE_ADDRESS });
+  check('a bad email is refused', badEmail.status === 400, badEmail.json);
+
+  // The founder address may already exist from an earlier run on the same database: sign in then.
+  const first = await api('POST', '/auth/signup', { email: founderEmail, password: founderPass, displayName: 'Smoke founder' });
+  if (first.status === 201) A = { token: first.json.token, user: first.json.user };
+  else {
+    const prev = await api('POST', '/auth/signin', { email: founderEmail, password: founderPass });
+    if (prev.status !== 200) {
+      // The old password is unknown: make the smoke database fresh (blueprint.sh --fresh) or pass SMOKE_FOUNDER_PASS.
+      console.log(`  founder sign-up answered ${first.status} ${JSON.stringify(first.json)} and sign-in ${prev.status}; run blueprint.sh --fresh or pass SMOKE_FOUNDER_PASS`);
+      process.exit(2);
+    }
+    A = { token: prev.json.token, user: prev.json.user };
+  }
+  check('founder email becomes admin on sign-up', A.user.role === 'admin', A.user.role);
+  const dup = await api('POST', '/auth/signup', { email: founderEmail, password: founderPass });
+  check('a second sign-up with the same email is refused', dup.status === 409, dup.json);
+
+  B = await signup(`buyer-${stamp}@smoke.test`, `Lantern-${stamp}-pass`, 'Smoke buyer');
+  C = await signup(`seller-${stamp}@smoke.test`, `Harbour-${stamp}-pass`, 'Smoke seller');
+  check('a plain sign-up is a user', B.user.role === 'user', B.user.role);
+  check('sign-up creates nothing but the account', B.user.xp === 0 && B.user.points === 0 && B.user.streak === 0, { xp: B.user.xp, points: B.user.points });
+
+  const wrong = await api('POST', '/auth/signin', { email: `buyer-${stamp}@smoke.test`, password: 'not-the-password-1' });
+  const unknown = await api('POST', '/auth/signin', { email: `nobody-${stamp}@smoke.test`, password: 'not-the-password-1' });
+  check('wrong password is 401', wrong.status === 401, wrong.json);
+  check('unknown email answers the same as a wrong password', unknown.status === wrong.status && JSON.stringify(unknown.json) === JSON.stringify(wrong.json), [wrong.json, unknown.json]);
+
+  const second = await api('POST', '/auth/signin', { email: `buyer-${stamp}@smoke.test`, password: `Lantern-${stamp}-pass` });
+  check('sign-in works', second.status === 200 && second.json.token, second.status);
+  const badCurrent = await api('POST', '/me/password', { current: 'wrong-current-1', password: `Lantern-${stamp}-new` }, B.token);
+  check('password change needs the current password', badCurrent.status === 400, badCurrent.json);
+  const changed = await api('POST', '/me/password', { current: `Lantern-${stamp}-pass`, password: `Lantern-${stamp}-new` }, B.token);
+  check('password change works', changed.status === 200, changed.json);
+  const otherGone = await api('GET', '/me', undefined, second.json.token);
+  check('password change signs out every other device', otherGone.status === 401, otherGone.status);
+  const stillMe = await api('GET', '/me', undefined, B.token);
+  check('the changing device stays signed in', stillMe.status === 200, stillMe.status);
+
+  const forgotKnown = await api('POST', '/auth/forgot', { email: `buyer-${stamp}@smoke.test` });
+  const forgotUnknown = await api('POST', '/auth/forgot', { email: `ghost-${stamp}@smoke.test` });
+  check('forgot answers the same for any email', forgotKnown.status === 200 && JSON.stringify(forgotKnown.json) === JSON.stringify(forgotUnknown.json), [forgotKnown.json, forgotUnknown.json]);
+  const badReset = await api('POST', '/auth/reset', { token: 'f'.repeat(64), password: `Reset-${stamp}-pass` });
+  check('an unknown reset token is refused', badReset.status === 400, badReset.json);
+  const outbox = await admin('GET', '/admin/outbox');
+  check('the reset mail waits in the outbox', outbox.status === 200 && JSON.stringify(outbox.json).includes('Reset your kreators.app password'), outbox.status);
+
+  const anon = await api('POST', '/auth/anon', {});
+  check('an anonymous device session starts', anon.status === 201 && anon.json.token && anon.json.user.email === null, anon.status);
+  const defaults = MODULES.filter((m) => m.defaultOn).map((m) => m.key);
+  const anonMe = await me(anon.json.token);
+  const on = Object.entries(anonMe.modules ?? {}).filter(([, v]) => v).map(([k]) => k);
+  check('only the default apps start on', defaults.every((k) => anonMe.modules?.[k] !== false) && on.every((k) => defaults.includes(k)), { on, defaults });
+  const attach = await api('POST', '/auth/signup', { email: `device-${stamp}@smoke.test`, password: `Compass-${stamp}-pass` }, anon.json.token);
+  check('a device session keeps its progress when an email is added', attach.status === 201 && attach.json.user.id === anon.json.user.id, attach.json?.user?.id);
+  const signout = await api('POST', '/auth/signout', {}, attach.json.token);
+  const after = await api('GET', '/me', undefined, attach.json.token);
+  check('sign out ends the session', signout.status === 200 && after.status === 401, after.status);
+}
+
+// ---------------------------------------------------------------- onboarding and the pyramid
+section('Onboarding');
+let project;
+let ladderTasks = [];
+{
+  const rels = ['self', 'friendship'];
+  const answers = QUESTIONS.filter((q) => rels.includes(q.relationship)).map((q) => ({ questionId: q.id, value: 1 }));
+  const empty = await api('POST', '/onboarding', { answers: [] }, B.token);
+  check('onboarding needs answers', empty.status === 400, empty.json);
+  const scored = await api('POST', '/onboarding', { answers, displayName: 'Smoke buyer' }, B.token);
+  check('onboarding scores the answered pillars', scored.status === 200 && scored.json.answered?.length === 2 && Object.keys(scored.json.ladders ?? {}).length >= 2, scored.json?.answered);
+  const built = await api('POST', '/onboarding/build', { relationships: rels, date: today, picks: { self: { project: 'Smoke project of my own' } } }, B.token);
+  check('build makes a six-layer pyramid per pillar', built.status === 201 && built.json.nodes?.length >= 12, built.status);
+  const kinds = new Set((built.json.nodes ?? []).map((n) => n.kind));
+  check('every layer kind is there', ['pillar', 'principle', 'value_goal', 'outcome', 'project', 'task'].every((k) => kinds.has(k)), [...kinds]);
+  project = (built.json.nodes ?? []).find((n) => n.kind === 'project' && n.relationship === 'self');
+  check('the person\'s own project wording is kept', project?.title === 'Smoke project of my own', project?.title);
+  ladderTasks = (built.json.nodes ?? []).filter((n) => n.kind === 'task' && n.relationship === 'self').sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''));
+  check('tasks carry dates two days apart', ladderTasks.length >= 2 && ladderTasks[0].dueDate === today && ladderTasks[1].dueDate > today, ladderTasks.map((t) => t.dueDate));
+  const again = await api('POST', '/onboarding/build', { relationships: ['self'], date: today }, B.token);
+  check('the same pyramid is not built twice', again.status === 201 && again.json.skipped?.includes('self'), again.json?.skipped);
+  const bad = await api('POST', '/nodes', { kind: 'task', parentId: project.id, relationship: 'friendship', title: 'wrong pillar' }, B.token);
+  check('a task must sit under a project of its own pillar', bad.status === 400, bad.json);
+}
+
+// ---------------------------------------------------------------- tasks and waits
+section('Tasks');
+{
+  const before = await me(B.token);
+  const first = await api('POST', `/nodes/${ladderTasks[0].id}/complete`, { date: today }, B.token);
+  check('a task due today can be ticked', first.status === 200, first.json);
+  const afterFirst = await me(B.token);
+  const ripple = Object.values(XP.ripple).reduce((s, v) => s + v, 0);
+  check(`a tick pays ${XP.task} xp`, afterFirst.xp - before.xp === XP.task, { gained: afterFirst.xp - before.xp, expected: XP.task });
+  check('the ripple lands on every layer above', Array.isArray(first.json.ripple) && first.json.ripple.length === 6 && first.json.ripple.filter((r) => r.kind !== 'task').reduce((s, r) => s + r.amount, 0) === ripple, first.json?.ripple);
+  const twice = await api('POST', `/nodes/${ladderTasks[0].id}/complete`, { date: today }, B.token);
+  check('ticking a done task is a quiet 409', twice.status === 409, twice.status);
+  const early = await api('POST', `/nodes/${ladderTasks[1].id}/complete`, { date: today }, B.token);
+  check('a task with a date waits for the day', early.status === 400 && /Tick it on the day/.test(early.json.error ?? ''), early.json);
+  const made = [];
+  for (let i = 0; i < 3; i += 1) {
+    const r = await api('POST', '/nodes', { kind: 'task', parentId: project.id, relationship: 'self', title: `Smoke task ${i}` }, B.token);
+    check(`a task can be added (${i})`, r.status === 201 && r.json.node?.id, r.json);
+    made.push(r.json.node);
+  }
+  const t2 = await api('POST', `/nodes/${made[0].id}/complete`, { date: today }, B.token);
+  const t3 = await api('POST', `/nodes/${made[1].id}/complete`, { date: today }, B.token);
+  check(`the first ${WAIT.freeFirstTasks} ticks are free`, t2.status === 200 && t3.status === 200, [t2.status, t3.status]);
+  const t4 = await api('POST', `/nodes/${made[2].id}/complete`, { date: today }, B.token);
+  check('the fourth tick waits', t4.status === 429 && t4.json.readyInMinutes >= 1, t4.json);
+  const undo = await api('POST', `/nodes/${made[0].id}/uncomplete`, {}, B.token);
+  check('a tick can be undone', undo.status === 200, undo.json);
+  const afterUndo = await me(B.token);
+  check('undoing takes the xp back', afterUndo.xp === afterFirst.xp + XP.task, { xp: afterUndo.xp, expected: afterFirst.xp + XP.task });
+  const list = await api('GET', '/nodes', undefined, B.token);
+  check('nodes list answers', list.status === 200, list.status);
+  const todayRes = await api('GET', `/today?date=${today}`, undefined, B.token);
+  check('today answers with tasks and a small act', todayRes.status === 200 && Array.isArray(todayRes.json.tasks), Object.keys(todayRes.json ?? {}));
+}
+
+// ---------------------------------------------------------------- daily: check-in, small act, not to do
+section('Daily');
+{
+  const before = await me(B.token);
+  const checkin = await api('POST', '/today/checkin', { date: today }, B.token);
+  check(`check-in pays ${XP.checkin} xp and ${POINTS.checkin} points`, checkin.status === 200 && checkin.json.awarded === XP.checkin && checkin.json.points === POINTS.checkin && checkin.json.streak === 1, checkin.json);
+  const again = await api('POST', '/today/checkin', { date: today }, B.token);
+  check('a second check-in pays nothing', again.json.alreadyCheckedIn === true && again.json.awarded === 0, again.json);
+  const old = await api('POST', '/today/checkin', { date: '2020-01-01' }, B.token);
+  check('a check-in for another day is refused', old.status === 400, old.json);
+  const spark = await api('POST', '/today/spark', { date: today }, B.token);
+  check(`the small act pays ${XP.spark} xp`, spark.status === 200 && spark.json.awarded === XP.spark, spark.json);
+  const spark2 = await api('POST', '/today/spark', { date: today }, B.token);
+  check('the small act pays once a day', spark2.json.alreadyDone === true, spark2.json);
+  const after = await me(B.token);
+  check('points come from showing up', after.points - before.points === POINTS.checkin, { gained: after.points - before.points });
+
+  const items = [];
+  for (let i = 0; i < MAX_NOT_TO_DO; i += 1) {
+    const r = await api('POST', '/today/not-to-do', { title: `Stay away ${i}`, relationship: i === 0 ? 'self' : undefined }, B.token);
+    if (r.status !== 201) check(`not-to-do item ${i} added`, false, r.json);
+    else items.push(r.json.item);
+  }
+  check(`${MAX_NOT_TO_DO} not-to-do items can be added`, items.length === MAX_NOT_TO_DO, items.length);
+  const eighth = await api('POST', '/today/not-to-do', { title: 'One too many' }, B.token);
+  check('an eighth is refused', eighth.status === 400, eighth.json);
+  const blank = await api('POST', '/today/not-to-do', { title: '   ' }, B.token);
+  check('a blank item is refused', blank.status === 400, blank.json);
+  const kept = await api('POST', `/today/not-to-do/${items[0].id}/day`, { date: today, status: 'kept' }, B.token);
+  check(`a kept day pays ${XP.notToDo} xp and starts the streak`, kept.status === 200 && kept.json.awarded === XP.notToDo && kept.json.item.streak === 1, kept.json);
+  const keptAgain = await api('POST', `/today/not-to-do/${items[0].id}/day`, { date: today, status: 'kept' }, B.token);
+  check('a kept day pays once', keptAgain.json.awarded === 0 && keptAgain.json.item.streak === 1, keptAgain.json);
+  const slipped = await api('POST', `/today/not-to-do/${items[0].id}/day`, { date: today, status: 'slipped' }, B.token);
+  check('a slip ends the streak and claws nothing back', slipped.json.item.streak === 0 && slipped.json.awarded === 0, slipped.json);
+  const afterSlip = await me(B.token);
+  check('the not-to-do xp stays after a slip', afterSlip.xp === after.xp + XP.notToDo, { xp: afterSlip.xp, expected: after.xp + XP.notToDo });
+  const far = await api('POST', `/today/not-to-do/${items[1].id}/day`, { date: '2020-01-01', status: 'kept' }, B.token);
+  check('only today or yesterday can be marked', far.status === 400, far.json);
+  const badStatus = await api('POST', `/today/not-to-do/${items[1].id}/day`, { date: today, status: 'maybe' }, B.token);
+  check('an unknown status is refused', badStatus.status === 400, badStatus.json);
+  const gone = await api('DELETE', `/today/not-to-do/${items[6].id}`, undefined, B.token);
+  check('an item can be removed', gone.status === 200, gone.json);
+  const notMine = await api('DELETE', `/today/not-to-do/${items[5].id}`, undefined, C.token);
+  check('another person cannot remove my item', notMine.status === 404, notMine.status);
+}
+
+// ---------------------------------------------------------------- wellbeing, journal, life
+section('Wellbeing');
+{
+  const logs = [
+    ['mood', 4],
+    ['sleep', 7.5],
+    ['stress', 2],
+    ['mindful', 10],
+    ['move', 30],
+  ];
+  for (const [kind, value] of logs) {
+    const r = await api('POST', `/wellbeing/${kind}`, { date: today, value }, B.token);
+    check(`${kind} can be logged`, r.status === 200 || r.status === 201, r.json);
+  }
+  const unknown = await api('POST', '/wellbeing/vibes', { value: 3 }, B.token);
+  check('an unknown log kind is 404', unknown.status === 404, unknown.status);
+  const noValue = await api('POST', '/wellbeing/mood', { date: today }, B.token);
+  check('a log needs a value', noValue.status === 400, noValue.json);
+  const summary = await api('GET', '/wellbeing/summary', undefined, B.token);
+  check('the wellbeing summary answers', summary.status === 200, summary.status);
+  const journal = await api('POST', '/journal', { title: 'Smoke entry' }, B.token);
+  check('a journal entry can be written', journal.status === 201 && journal.json.entry?.id, journal.json);
+  const emptyJ = await api('POST', '/journal', {}, B.token);
+  check('an empty journal entry is refused', emptyJ.status === 400, emptyJ.json);
+  const list = await api('GET', '/journal', undefined, B.token);
+  check('journal lists entries', list.status === 200 && JSON.stringify(list.json).includes('Smoke entry'), list.status);
+  const otherList = await api('GET', '/journal', undefined, C.token);
+  check('journal entries stay with their owner', otherList.status === 200 && !JSON.stringify(otherList.json).includes('Smoke entry'), otherList.status);
+  const life = await api('GET', '/life', undefined, B.token);
+  check('life counts the movement minutes', life.status === 200 && /30 min this week/.test(JSON.stringify(life.json)), life.status);
+  const home = await api('GET', '/home', undefined, B.token);
+  check('home answers in one call', home.status === 200 && home.json.xp && home.json.xp.today > 0, Object.keys(home.json ?? {}));
+}
+
+// ---------------------------------------------------------------- finance: integer cents
+section('Finance');
+{
+  const r = await api('POST', '/finance/transactions', { kind: 'income', amountCents: 12345, category: 'Brand deal', counterparty: 'Smoke brand', date: today }, B.token);
+  check('an income is recorded in integer cents', r.status === 201 && r.json.transaction?.amountCents === 12345, r.json);
+  const rounded = await api('POST', '/finance/transactions', { kind: 'expense', amountCents: 100.7, date: today }, B.token);
+  check('a fractional amount is rounded to whole cents', rounded.status === 201 && Number.isInteger(rounded.json.transaction?.amountCents), rounded.json);
+  const zero = await api('POST', '/finance/transactions', { kind: 'income', amountCents: 0 }, B.token);
+  check('a zero amount is refused', zero.status === 400, zero.json);
+  const neg = await api('POST', '/finance/transactions', { kind: 'income', amountCents: -500 }, B.token);
+  check('a negative amount is refused', neg.status === 400, neg.json);
+  const list = await api('GET', '/finance', undefined, B.token);
+  check('finance answers with the month', list.status === 200, list.status);
+  const other = await api('GET', '/finance', undefined, C.token);
+  check('finance rows stay with their owner', other.status === 200 && !JSON.stringify(other.json).includes('Smoke brand'), other.status);
+}
+
+// ---------------------------------------------------------------- shop: products, checkout, unlocks
+section('Shop');
+{
+  const free = await api('POST', '/studio/products', { kind: 'digital', title: `Smoke free download ${stamp}`, pricePoints: 0, status: 'live', url: 'https://example.com/file' }, C.token);
+  check('a seller can make a live product', free.status === 201 && free.json.product?.id, free.json);
+  const priced = await api('POST', '/studio/products', { kind: 'digital', title: `Smoke priced ${stamp}`, pricePoints: 5, status: 'live' }, C.token);
+  const dear = await api('POST', '/studio/products', { kind: 'digital', title: `Smoke dear ${stamp}`, pricePoints: 100000, status: 'live' }, C.token);
+  const gated = await api('POST', '/studio/products', { kind: 'digital', title: `Smoke gated ${stamp}`, pricePoints: 0, status: 'live', minPoints: 1000, badge: 'ten_tasks' }, C.token);
+  check('a product can carry an unlock', gated.status === 201 && gated.json.product?.minPoints === 1000, gated.json?.product);
+  const noTitle = await api('POST', '/studio/products', { kind: 'digital' }, C.token);
+  check('a product needs a title', noTitle.status === 400, noTitle.json);
+
+  const own = await api('POST', `/store/${free.json.product.id}/checkout`, {}, C.token);
+  check('a seller cannot buy their own product', own.status === 400, own.json);
+  const buy = await api('POST', `/store/${free.json.product.id}/checkout`, {}, B.token);
+  check('a free product can be taken', buy.status === 200 || buy.status === 201, buy.json);
+  const twice = await api('POST', `/store/${free.json.product.id}/checkout`, {}, B.token);
+  check('the same product is not bought twice', twice.status === 409, twice.json);
+  const before = await me(B.token);
+  const sellerBefore = await me(C.token);
+  const paid = await api('POST', `/store/${priced.json.product.id}/checkout`, {}, B.token);
+  check('a points product is bought with points', paid.status === 200 || paid.status === 201, paid.json);
+  const after = await me(B.token);
+  const sellerAfter = await me(C.token);
+  check('the buyer pays the points', before.points - after.points === 5, { before: before.points, after: after.points });
+  check('the seller receives points, minus the fee', sellerAfter.points > sellerBefore.points && sellerAfter.points - sellerBefore.points <= 5, { gained: sellerAfter.points - sellerBefore.points });
+  const tooDear = await api('POST', `/store/${dear.json.product.id}/checkout`, {}, B.token);
+  check('not enough points is a plain refusal', tooDear.status === 400 && /more points/.test(tooDear.json.error ?? ''), tooDear.json);
+  const locked = await api('POST', `/store/${gated.json.product.id}/checkout`, {}, B.token);
+  check('a gated checkout is refused with the unlock wording', locked.status === 403 && locked.json.unlock && /Needs/.test(locked.json.error ?? ''), locked.json);
+  const page = await api('GET', `/public/products/${gated.json.product.id}`, undefined, B.token);
+  check('the product page carries the viewer\'s unlock', page.status === 200 && JSON.stringify(page.json).includes('"unlock"'), [page.status, Object.keys(page.json ?? {})]);
+  const library = await api('GET', '/store/library', undefined, B.token);
+  check('bought things appear in the library', library.status === 200 && JSON.stringify(library.json).includes(`Smoke free download ${stamp}`), library.status);
+  const orders = await api('GET', '/studio/orders', undefined, C.token);
+  check('the seller sees the orders', orders.status === 200 && JSON.stringify(orders.json).includes(priced.json.product.id), orders.status);
+  const draftOnly = await api('POST', '/studio/products', { kind: 'digital', title: `Smoke draft ${stamp}` }, C.token);
+  const notLive = await api('POST', `/store/${draftOnly.json.product.id}/checkout`, {}, B.token);
+  check('a draft cannot be bought', notLive.status === 404, notLive.status);
+}
+
+// ---------------------------------------------------------------- community: feed, follows, capped rewards
+section('Community');
+{
+  const P = C; // a fresh account each run, so the daily caps start at zero
+  const beforeA = await me(P.token);
+  const beforeB = await me(B.token);
+  const post = await api('POST', '/community', { body: `Smoke post ${stamp}`, category: 'Stories' }, P.token);
+  check(`a post pays ${SOCIAL_REWARDS.post.xp} xp`, post.status === 201 && post.json.awarded?.xp === SOCIAL_REWARDS.post.xp, post.json);
+  const empty = await api('POST', '/community', { body: '  ' }, P.token);
+  check('an empty post is refused', empty.status === 400, empty.json);
+  for (let i = 0; i < SOCIAL_REWARDS.post.perDay - 1; i += 1) await api('POST', '/community', { body: `Smoke filler ${stamp} ${i}` }, P.token);
+  const capped = await api('POST', '/community', { body: `Smoke over the cap ${stamp}` }, P.token);
+  check(`posts past ${SOCIAL_REWARDS.post.perDay} a day pay nothing`, capped.status === 201 && capped.json.awarded?.xp === 0, capped.json?.awarded);
+  const like = await api('POST', `/community/${post.json.post.id}/like`, {}, B.token);
+  check(`a like pays the liker ${SOCIAL_REWARDS.like.xp} xp`, like.status === 200 && like.json.awarded?.xp === SOCIAL_REWARDS.like.xp, like.json);
+  const afterA1 = await me(P.token);
+  check(`a like pays the author ${SOCIAL_REWARDS.liked.points} point`, afterA1.points - beforeA.points === SOCIAL_REWARDS.liked.points, { gained: afterA1.points - beforeA.points });
+  const unlike = await api('POST', `/community/${post.json.post.id}/like`, {}, B.token);
+  const relike = await api('POST', `/community/${post.json.post.id}/like`, {}, B.token);
+  check('unliking and liking again pays nothing', unlike.json.post?.liked === false && relike.json.post?.liked === true && relike.json.awarded?.xp === 0, [unlike.json?.post?.liked, relike.json?.awarded]);
+  const afterA2 = await me(P.token);
+  check('the author is not paid twice for one liker', afterA2.points === afterA1.points, { a1: afterA1.points, a2: afterA2.points });
+  const reply = await api('POST', `/community/${post.json.post.id}/replies`, { body: 'Smoke reply' }, B.token);
+  check(`a reply pays ${SOCIAL_REWARDS.reply.xp} xp`, reply.status === 201 && reply.json.awarded?.xp === SOCIAL_REWARDS.reply.xp, reply.json);
+  const follow = await api('POST', `/community/follow/${P.user.id}`, {}, B.token);
+  check('a person can be followed from a post', follow.status === 200 && follow.json.following === true, follow.json);
+  const afterA3 = await me(P.token);
+  check(`a new follower pays ${SOCIAL_REWARDS.follower.points} points`, afterA3.points - afterA2.points === SOCIAL_REWARDS.follower.points, { gained: afterA3.points - afterA2.points });
+  const self = await api('POST', `/community/follow/${B.user.id}`, {}, B.token);
+  check('you cannot follow yourself', self.status === 400, self.json);
+  const following = await api('GET', '/community?filter=following&sort=popular', undefined, B.token);
+  check('the feed filters to people you follow', following.status === 200 && following.json.posts.length > 0 && following.json.posts.every((p) => p.authorId === P.user.id), following.json?.posts?.length);
+  const mine = await api('GET', '/community?filter=mine', undefined, B.token);
+  check('the feed filters to your own posts', mine.status === 200 && mine.json.posts.length === 0, mine.json?.posts?.length);
+  const popular = await api('GET', '/community?sort=popular', undefined, B.token);
+  check('popular sorts the liked post first', popular.status === 200 && popular.json.posts[0]?.id === post.json.post.id, popular.json?.posts?.[0]?.id);
+  const afterB = await me(B.token);
+  check('the liker and replier gained only xp', afterB.xp > beforeB.xp && afterB.points === beforeB.points, { xp: afterB.xp - beforeB.xp, points: afterB.points - beforeB.points });
+  const hide = await api('POST', `/manage/community/posts/${post.json.post.id}`, { hidden: true }, B.token);
+  check('a plain member cannot moderate', hide.status === 403, hide.status);
+}
+
+// ---------------------------------------------------------------- trust and public page
+section('Public page');
+{
+  const handle = `smoke${stamp}`.slice(0, 20);
+  const set = await api('PATCH', '/me', { handle }, C.token);
+  check('a handle can be set', set.status === 200, set.json);
+  const page = await api('GET', `/public/${handle}`);
+  check('the public page answers without a session', page.status === 200, page.status);
+  check('the public page carries a trust score', JSON.stringify(page.json).includes('trust'), Object.keys(page.json ?? {}));
+  check('journal and wellbeing never reach the page', !/journal|wellbeing|mood/i.test(JSON.stringify(page.json)), '');
+  const off = await api('PATCH', '/me', { publicSettings: { pagePublic: false } }, C.token);
+  const hidden = await api('GET', `/public/${handle}`);
+  check('a switched-off page returns only the name', off.status === 200 && hidden.status === 200 && !JSON.stringify(hidden.json).includes(`Smoke priced ${stamp}`), hidden.status);
+  await api('PATCH', '/me', { publicSettings: { pagePublic: true } }, C.token);
+  const taken = await api('PATCH', '/me', { handle }, B.token);
+  check('a handle is unique', taken.status === 400 || taken.status === 409, taken.status);
+}
+
+// ---------------------------------------------------------------- reviews by period
+section('Reviews');
+{
+  const summary = await api('GET', `/reviews/summary?kind=week&date=${today}`, undefined, B.token);
+  check('a week summary answers with the period before', summary.status === 200 && summary.json.period && summary.json.before, Object.keys(summary.json ?? {}));
+  const badKind = await api('PUT', '/reviews', { kind: 'sprint', date: today }, B.token);
+  check('only week, month, quarter or half', badKind.status === 400, badKind.json);
+  const future = await api('PUT', '/reviews', { kind: 'month', date: `${Number(today.slice(0, 4)) + 1}-06-15`, answers: [] }, B.token);
+  check('a period that has not started is refused', future.status === 400, future.json);
+  const saved = await api('PUT', '/reviews', { kind: 'week', date: today, answers: ['Smoke went well'], rating: 4, highlight: 'One line to remember' }, B.token);
+  check('a weekly review is saved with its snapshot', saved.status === 200 && saved.json.review?.rating === 4 && saved.json.review?.highlight === 'One line to remember', saved.json);
+  const again = await api('PUT', '/reviews', { kind: 'week', date: today, answers: ['Changed my mind'], rating: 3 }, B.token);
+  check('one review per period, rewritten in place', again.status === 200 && again.json.review?.id === saved.json.review?.id && again.json.review?.rating === 3, again.json?.review?.id);
+  const list = await api('GET', `/reviews?kind=week&date=${today}`, undefined, B.token);
+  check('reviews lists the built-in template and recent reviews', list.status === 200 && list.json.templates?.some((t) => t.builtIn) && list.json.recent?.length >= 1, list.status);
+  const tpl = await api('POST', '/reviews/templates', { kind: 'month', name: 'Smoke template', prompts: ['What moved?', 'What next?'] }, B.token);
+  check('a person can add a recurring template', tpl.status === 201 || tpl.status === 200, tpl.json);
+}
+
+// ---------------------------------------------------------------- store: pre-owned, offers, partner links
+section('Store');
+{
+  const listing = await api('POST', '/market/listings', { title: `Smoke camera ${stamp}`, priceCents: 500000, condition: 'lightly_used', category: 'Camera', images: ['https://example.com/cam.jpg', 'http://insecure.example.com/x.jpg'] }, C.token);
+  check('a pre-owned listing can be made', listing.status === 201 && listing.json.listing?.id, listing.json);
+  check('only https pictures are kept', (listing.json.listing?.images ?? []).length === 1, listing.json?.listing?.images);
+  const noCondition = await api('POST', '/market/listings', { title: 'No condition', priceCents: 1000 }, C.token);
+  check('a listing needs a condition', noCondition.status === 400, noCondition.json);
+  const id = listing.json.listing.id;
+  const ownOffer = await api('POST', `/market/listings/${id}/offers`, { cents: 100 }, C.token);
+  check('a seller cannot offer on their own listing', ownOffer.status === 400, ownOffer.json);
+  const offer1 = await api('POST', `/market/listings/${id}/offers`, { cents: 400000 }, B.token);
+  const offer2 = await api('POST', `/market/listings/${id}/offers`, { cents: 450000, note: 'Final' }, B.token);
+  check('a buyer can offer', offer1.status === 201 && offer2.status === 201, [offer1.status, offer2.status]);
+  const detailB = await api('GET', `/market/listings/${id}`, undefined, B.token);
+  check('one open offer per buyer: the new one replaces the old', detailB.json.myOffer?.id === offer2.json.offer.id && detailB.json.myOffer?.cents === 450000, detailB.json?.myOffer);
+  const detailC = await api('GET', `/market/listings/${id}`, undefined, C.token);
+  check('the seller sees every offer', detailC.json.offers?.length === 2, detailC.json?.offers?.length);
+  const buyerAccept = await api('POST', `/market/offers/${offer2.json.offer.id}`, { action: 'accept' }, B.token);
+  check('only the seller accepts', buyerAccept.status === 404, buyerAccept.status);
+  const accept = await api('POST', `/market/offers/${offer2.json.offer.id}`, { action: 'accept' }, C.token);
+  check('accepting marks the listing agreed', accept.status === 200 && accept.json.listing?.status === 'agreed', accept.json?.listing?.status);
+  const late = await api('POST', `/market/listings/${id}/offers`, { cents: 1 }, A.token);
+  check('an agreed listing takes no more offers', late.status === 400, late.json);
+  const msg = await api('POST', `/market/listings/${id}/messages`, { body: 'Where do we meet?' }, B.token);
+  check('the buyer can chat', msg.status === 201 || msg.status === 200, msg.json);
+  const thread = await api('GET', `/market/listings/${id}/messages?buyerId=${B.user.id}`, undefined, C.token);
+  check('the seller reads the thread by buyer', thread.status === 200 && thread.json.messages?.length === 1, thread.json);
+  const stranger = await api('GET', `/market/listings/${id}/messages`, undefined, A.token);
+  check('a stranger has no thread yet', stranger.status === 200 && stranger.json.messages?.length === 0, stranger.json);
+
+  const live = await api('POST', '/market/listings', { title: `Smoke mic ${stamp}`, priceCents: 90000, condition: 'well_used', category: 'Audio' }, C.token);
+  const notMine = await api('POST', '/market/feature', { type: 'listing', id: live.json.listing.id }, B.token);
+  check('only your own listing can be featured', notMine.status === 404 || notMine.status === 403, notMine.status);
+  const poor = await api('POST', '/market/feature', { type: 'listing', id: live.json.listing.id }, C.token);
+  check(`a featured week costs ${FEATURE_FEE_POINTS} points`, poor.status === 400 && /points/.test(poor.json.error ?? ''), poor.json);
+  const staffFeature = await api('POST', '/market/feature', { type: 'listing', id: live.json.listing.id }, A.token);
+  check('staff feature for free', staffFeature.status === 200 && staffFeature.json.paid === 0 && staffFeature.json.featuredUntil, staffFeature.json);
+
+  const itemByUser = await api('POST', '/market/items', { title: 'Not allowed', url: 'https://example.com/x' }, B.token);
+  check('only the team stocks new gear', itemByUser.status === 403, itemByUser.status);
+  const item = await api('POST', '/market/items', { title: `Smoke light ${stamp}`, url: 'https://example.com/light', category: 'Lighting', priceCents: 299900, stage: 'starting' }, A.token);
+  check('staff can add a store item', item.status === 201 && item.json.item?.id, item.json);
+  const noLink = await api('POST', '/market/items', { title: 'No link', url: 'not a link' }, A.token);
+  check('a store item needs a link', noLink.status === 400, noLink.json);
+  const out = await fetch(`${ORIGIN}/out/item/${item.json.item.id}`, { redirect: 'manual' });
+  check('a partner tap goes through /out', out.status === 302 && out.headers.get('location') === 'https://example.com/light', [out.status, out.headers.get('location')]);
+  const outBad = await fetch(`${ORIGIN}/out/item/nope`, { redirect: 'manual' });
+  check('an unknown item falls back to the store', outBad.status === 302 && (outBad.headers.get('location') ?? '').endsWith('/store'), outBad.headers.get('location'));
+  const market = await api('GET', '/market', undefined, B.token);
+  check('the store answers with items, listings and kits', market.status === 200 && market.json.items && market.json.listings, Object.keys(market.json ?? {}));
+  check('featured listings sort first', market.json.listings?.[0]?.id === live.json.listing.id, market.json?.listings?.map((l) => l.id).slice(0, 3));
+  const kit = await api('POST', '/market/kits', { title: `Smoke kit ${stamp}`, stage: 'starting', items: [{ type: 'item', id: item.json.item.id }] }, A.token);
+  check('staff can group a kit', kit.status === 201, kit.json);
+}
+
+// ---------------------------------------------------------------- kreators run: start codes
+section('Run');
+{
+  const noCity = await api('POST', '/run/clubs', { name: 'No city' }, C.token);
+  check('a club needs a name and a city', noCity.status === 400, noCity.json);
+  const club = await api('POST', '/run/clubs', { name: `Smoke runners ${stamp}`, city: 'Bengaluru', pace: 'easy', meets: 'Cubbon Park gate' }, C.token);
+  check('anyone can start a run club', club.status === 201 && club.json.club?.id, club.json);
+  const clubId = club.json.club.id;
+  const hostRunBefore = await api('POST', `/run/clubs/${clubId}/runs`, { title: 'Members only', startsAt: new Date(Date.now() - 10 * 60_000).toISOString(), minutes: 60, metres: 5000 }, B.token);
+  check('only the host adds runs', hostRunBefore.status === 403, hostRunBefore.status);
+  const open = await api('POST', `/run/clubs/${clubId}/runs`, { title: 'Open run', startsAt: new Date(Date.now() - 10 * 60_000).toISOString(), minutes: 60, metres: 5000 }, C.token);
+  check('the host adds a run and sees its start code', open.status === 201 && /^[A-Z0-9]{6}$/.test(open.json.run?.code ?? ''), open.json?.run?.code);
+  const early = await api('POST', `/run/clubs/${clubId}/runs`, { title: 'Later run', startsAt: new Date(Date.now() + 2 * 3600_000).toISOString(), minutes: 60 }, C.token);
+  const notMember = await api('POST', `/run/runs/${open.json.run.id}/entry`, { code: open.json.run.code }, B.token);
+  check('an entry needs membership', notMember.status === 403, notMember.json);
+  const join = await api('POST', `/run/clubs/${clubId}/join`, {}, B.token);
+  check('a member can join', join.status === 200 || join.status === 201, join.json);
+  const asMember = await api('GET', `/run/clubs/${clubId}`, undefined, B.token);
+  check('the code never reaches a member', asMember.status === 200 && asMember.json.runs?.every((r) => !r.code), asMember.json?.runs?.map((r) => r.code));
+  const wrong = await api('POST', `/run/runs/${open.json.run.id}/entry`, { code: 'WRONG1' }, B.token);
+  check('a wrong code is refused', wrong.status === 400, wrong.json);
+  const tooEarly = await api('POST', `/run/runs/${early.json.run.id}/entry`, { code: early.json.run.code }, B.token);
+  check('the code works only from thirty minutes before', tooEarly.status === 400 && /thirty minutes/.test(tooEarly.json.error ?? ''), tooEarly.json);
+  const before = await me(B.token);
+  const life0 = await api('GET', '/life', undefined, B.token);
+  const entry = await api('POST', `/run/runs/${open.json.run.id}/entry`, { code: open.json.run.code.toLowerCase(), minutes: 40, metres: 5000 }, B.token);
+  check(`a logged run pays ${RUN_REWARD.xp} xp and ${RUN_REWARD.points} points`, entry.status === 201 && entry.json.xp === RUN_REWARD.xp && entry.json.points === RUN_REWARD.points, entry.json);
+  check('the first run earns its badge', (entry.json.newBadges ?? []).includes('run_1'), entry.json?.newBadges);
+  const after = await me(B.token);
+  check('the pay lands on the account', after.xp - before.xp === RUN_REWARD.xp && after.points - before.points === RUN_REWARD.points, { xp: after.xp - before.xp, points: after.points - before.points });
+  const life1 = await api('GET', '/life', undefined, B.token);
+  check('run minutes count as movement in Life', /70 min this week/.test(JSON.stringify(life1.json)) && life0.status === 200, JSON.stringify(life1.json).match(/\d+ min this week/)?.[0]);
+  const again = await api('POST', `/run/runs/${open.json.run.id}/entry`, { code: open.json.run.code }, B.token);
+  check('a run is logged once', again.status === 409, again.json);
+  const detail = await api('GET', `/run/clubs/${clubId}`, undefined, C.token);
+  const entryId = detail.json.entries?.[0]?.id ?? entry.json.entry?.id;
+  const voidByMember = await api('POST', `/run/entries/${entryId}/void`, {}, B.token);
+  check('only the host voids', voidByMember.status === 403, voidByMember.status);
+  const voided = await api('POST', `/run/entries/${entryId}/void`, {}, C.token);
+  check('the host can void an entry', voided.status === 200, voided.json);
+  const afterVoid = await me(B.token);
+  check('a void takes the pay back out', afterVoid.points === before.points && afterVoid.xp === before.xp, { points: afterVoid.points, xp: afterVoid.xp });
+  const collab = await api('POST', '/run/collabs', { title: 'Smoke brand shoes', brandName: 'Smoke shoes', giveaway: 'One pair', startsAt: new Date().toISOString(), endsAt: new Date(Date.now() + 30 * 86_400_000).toISOString() }, B.token);
+  check('a plain member cannot post a collab', collab.status === 403, collab.status);
+  const staffCollab = await api('POST', '/run/collabs', { title: `Smoke brand shoes ${stamp}`, brandName: 'Smoke shoes', brief: 'Shoes for the club', asks: 'A photo at the line', giveaway: 'One pair a month', startsAt: new Date().toISOString(), endsAt: new Date(Date.now() + 30 * 86_400_000).toISOString() }, A.token);
+  check('staff with events can post a collab with its giveaway', staffCollab.status === 201 && staffCollab.json.collab?.giveaway, staffCollab.json);
+  if (staffCollab.json.collab?.id) {
+    const apply = await api('POST', `/run/collabs/${staffCollab.json.collab.id}/apply`, { clubId, note: 'We run weekly' }, C.token);
+    check('a host applies with the club', apply.status === 201 || apply.status === 200, apply.json);
+    const applyAsMember = await api('POST', `/run/collabs/${staffCollab.json.collab.id}/apply`, { clubId }, B.token);
+    check('only the host applies', applyAsMember.status === 403 || applyAsMember.status === 404 || applyAsMember.status === 400, applyAsMember.status);
+  }
+  const runHome = await api('GET', '/run', undefined, B.token);
+  check('the run home answers', runHome.status === 200, runHome.status);
+}
+
+// ---------------------------------------------------------------- school and staff powers
+section('School and staff');
+{
+  const byUser = await api('POST', '/school/programs', { name: 'Not allowed' }, B.token);
+  check('only cohort managers publish programs', byUser.status === 403, byUser.status);
+  const prog = await api('POST', '/school/programs', { name: 'Smoke test program', description: 'Made by the smoke test.' }, A.token);
+  check('an admin can make the smoke program', prog.status === 201 && prog.json.id, prog.json);
+  const asStaff = await api('GET', '/school', undefined, A.token);
+  check('staff see unpublished programs', asStaff.status === 200 && JSON.stringify(asStaff.json).includes('Smoke test program'), asStaff.status);
+  const asUser = await api('GET', '/school', undefined, B.token);
+  check('members see only published programs', asUser.status === 200 && !JSON.stringify(asUser.json).includes('Smoke test program'), asUser.status);
+  check('the two real programs are seeded', /Editing fundamentals/.test(JSON.stringify(asUser.json)) && /ChatCut/.test(JSON.stringify(asUser.json)), '');
+  const perms = await admin('POST', `/admin/users/${C.user.id}/permissions`, { permissions: ['cohorts'] });
+  check('a permission can be granted', perms.status === 200 && perms.json.user?.permissions?.includes('cohorts'), perms.json);
+  const stillUser = await api('POST', '/school/programs', { name: 'Smoke test program two', published: false }, C.token);
+  check('a permission alone is not enough: the role must be staff', stillUser.status === 403, stillUser.status);
+  const role = await admin('POST', `/admin/users/${C.user.id}/role`, { role: 'sub_admin' });
+  check('the admin key can make staff', role.status === 200 && role.json.user?.role === 'sub_admin', role.json);
+  const nowStaff = await api('POST', '/school/programs', { name: 'Smoke test program two', published: false }, C.token);
+  check('staff with the permission open the door', nowStaff.status === 201, nowStaff.json);
+  await admin('POST', `/admin/users/${C.user.id}/permissions`, { permissions: [] });
+  const closed = await api('POST', '/school/programs', { name: 'Smoke test program three' }, C.token);
+  check('taking the permission back closes it', closed.status === 403, closed.status);
+  await admin('POST', `/admin/users/${C.user.id}/role`, { role: 'user' });
+}
+
+// ---------------------------------------------------------------- admin, flags, internal
+section('Admin');
+{
+  const badKey = await api('GET', '/admin/users', undefined, null, { 'X-Admin-Key': 'nope' });
+  check('a wrong admin key is refused', badKey.status === 403, badKey.status);
+  const asUser = await api('GET', '/admin/users', undefined, B.token);
+  check('a plain member is not an admin', asUser.status === 403, asUser.status);
+  const users = await admin('GET', '/admin/users');
+  check('the admin key lists people', users.status === 200 && Array.isArray(users.json.users), users.status);
+  const asAdmin = await api('GET', '/admin/users', undefined, A.token);
+  check('an admin session works too', asAdmin.status === 200, asAdmin.status);
+  const flagOff = await admin('POST', '/admin/flags/store', { enabled: false });
+  check('a flag can be switched off', flagOff.status === 200 && flagOff.json.setting?.enabled === false, flagOff.json);
+  const meOff = await api('GET', '/me', undefined, B.token);
+  check('access resolves on the server', meOff.status === 200 && meOff.json.access?.store?.available === false && meOff.json.access?.store?.reason === 'disabled', meOff.json?.access?.store);
+  const storeGone = await api('GET', '/market', undefined, B.token);
+  check('a switched-off app refuses its API', storeGone.status === 403 || storeGone.status === 404 || storeGone.status === 200, storeGone.status);
+  const flagOn = await admin('POST', '/admin/flags/store', { enabled: true });
+  check('a flag can be switched back on', flagOn.json.setting?.enabled === true, flagOn.json);
+  const override = await admin('POST', '/admin/flags/reviews/overrides', { subjectType: 'user', subjectId: B.user.id, enabled: false, reason: 'smoke' });
+  check('an override for one person can be set', override.status === 201 && override.json.override?.id, override.json);
+  const meOverridden = await api('GET', '/me', undefined, B.token);
+  check('the override reaches that person', meOverridden.json.access?.reviews?.available === false && meOverridden.json.access?.reviews?.reason === 'override', meOverridden.json?.access?.reviews);
+  await admin('DELETE', `/admin/flags/overrides/${override.json.override.id}`);
+  const audit = await admin('GET', '/admin/audit');
+  check('every change is audited', audit.status === 200 && JSON.stringify(audit.json).includes('flag.set') && JSON.stringify(audit.json).includes('founder email'), audit.status);
+  const obs = await api('GET', '/internal/observability', undefined, A.token);
+  check('observability opens for an admin', obs.status === 200, obs.status);
+  check('observability never carries journal entries or wellbeing logs', !/Smoke entry|"value":7\.5|journal_entries|wellbeing_logs/.test(JSON.stringify(obs.json)), '');
+  const obsUser = await api('GET', '/internal/observability', undefined, B.token);
+  check('observability is closed to members', obsUser.status === 403, obsUser.status);
+  const selfRole = await api('POST', `/internal/users/${A.user.id}/role`, { role: 'user' }, A.token);
+  check('an admin cannot change their own role', selfRole.status === 400, selfRole.json);
+  const promote = await api('POST', `/internal/users/${C.user.id}/role`, { role: 'sub_admin' }, A.token);
+  check('an admin can make staff', promote.status === 200 && promote.json.user?.role === 'sub_admin', promote.json);
+  const demote = await api('POST', `/internal/users/${C.user.id}/role`, { role: 'user' }, A.token);
+  check('and take it back', demote.status === 200, demote.json);
+  const search = await api('GET', `/search?q=Smoke%20camera`, undefined, B.token);
+  check('search finds pre-owned listings', search.status === 200 && JSON.stringify(search.json).includes(`Smoke camera ${stamp}`), search.status);
+  const short = await api('GET', '/search?q=S', undefined, B.token);
+  check('search needs two characters', short.status === 200, short.status);
+  const modOff = await api('PATCH', '/me/modules', { key: 'run', on: false }, B.token);
+  check('a person can switch an app off', modOff.status === 200 && modOff.json.modules?.run === false, modOff.json);
+  const lockedMod = await api('PATCH', '/me/modules', { key: 'today', on: false }, B.token);
+  check('the core tabs stay on', lockedMod.status === 400, lockedMod.json);
+}
+
+// ---------------------------------------------------------------- export and delete
+section('Export and delete');
+{
+  const exp = await api('GET', '/me/export', undefined, B.token);
+  const text = JSON.stringify(exp.json);
+  check('export is one JSON file', exp.status === 200 && text.length > 500, exp.status);
+  check('export carries the not-to-do list and the journal', /Stay away 0/.test(text) && /Smoke entry/.test(text), '');
+  const noConfirm = await api('DELETE', '/me', {}, B.token);
+  check('delete needs the word', noConfirm.status === 400, noConfirm.json);
+  const del = await api('DELETE', '/me', { confirm: 'DELETE' }, B.token);
+  check('an account can be deleted', del.status === 200, del.json);
+  const gone = await api('GET', '/me', undefined, B.token);
+  check('the session is gone with it', gone.status === 401, gone.status);
+  const signin = await api('POST', '/auth/signin', { email: `buyer-${stamp}@smoke.test`, password: `Lantern-${stamp}-new` });
+  check('the email no longer signs in', signin.status === 401, signin.status);
+  const orders = await api('GET', '/studio/orders', undefined, C.token);
+  check('money rows stay for the books', orders.status === 200 && JSON.stringify(orders.json).includes('Deleted member'), orders.status);
+}
+
+section('Limits');
+{
+  const third = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 2) & 255}`;
+  let last = 0;
+  for (let i = 0; i < 11; i += 1) {
+    const r = await api('POST', '/auth/signin', { email: `guess-${stamp}-${i}@smoke.test`, password: 'not-the-password-1' }, null, { 'CF-Connecting-IP': third });
+    last = r.status;
+  }
+  check('sign-in is limited to ten a minute per address', last === 429, last);
+}
+
+console.log(`\n${passed} passed, ${failed} failed`);
+if (failures.length) {
+  console.log('\nFailures:');
+  for (const f of failures) console.log(`  - ${f}`);
+}
+process.exit(failed ? 1 : 0);

@@ -5,3 +5,8 @@ dist
 *.log
 .DS_Store
 .env
+# The smoke server's database, log and screenshots live beside its scripts.
+scripts/smoke/state
+scripts/smoke/shots
+scripts/smoke/server.log
+shubham.md

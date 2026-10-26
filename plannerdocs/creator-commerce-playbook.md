@@ -1,5 +1,7 @@
 # Booth: Technical Playbook
 
+> **Status note, 26 October 2026.** This is research, not a spec. "Booth" became the Shop, Content, Auto-DM and Audience modules of kreators.app (`apps/web/src/screens/Studio*.tsx`, `Content.tsx`, `Automations.tsx`, `StudioAudience.tsx`; `apps/api/src/routes/studio.ts`, `growth.ts`, `buyer.ts`, `go.ts`). The three tiers were adopted on 24 October 2026 (`docs/DECISIONS.md`): parity features built plainly, content-to-revenue attribution and funnels as the difference, the white-label app, the marketplace and instalments skipped. The "no marketplace" line was partly reversed on 25 October 2026 for the Store (partner links and creator-to-creator pre-owned gear, with no money moving through kreators.app). The `CLAUDE.md` in §14.2 is superseded by the real one at the repo root; the data model in §7 is superseded by `plannerdocs/04_DATA_MODEL.md`. Competitor pricing is as of 24 October 2026 and should be re-checked before any of it is quoted.
+
 A creator commerce app (link-in-bio storefront, bookings, digital products, webinars and courses, with content-to-revenue attribution as the differentiator), built with AI coding tools, competing with TagMango, SuperProfile and Topmate on features.
 
 "Booth" is a working codename. Rename it everywhere once you pick a real name.
