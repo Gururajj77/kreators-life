@@ -26,7 +26,9 @@ import { Sheet } from '../components/Sheet';
 import { TaskRow } from '../components/TaskRow';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
-import { useMe, useNodes, useRefreshAll } from '../lib/queries';
+import { useAuthed, useMe, useNodes, useRefreshAll } from '../lib/queries';
+import { placementLine } from '../components/LifeMap';
+import { Link } from 'react-router';
 import { useActionQueue } from '../lib/useActionQueue';
 
 const RUNGS = KINDS.filter((k) => k !== 'task');
@@ -50,6 +52,8 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
   const fail = (e: unknown) => setNotice(e instanceof Error ? e.message : 'That did not work. Try again.');
 
   const state = me.data?.relationships.find((r) => r.key === relationship);
+  const sess = useAuthed(['session', today], () => api.session(today));
+  const placement = sess.data?.assessment?.placements.find((p) => p.relationship === relationship) ?? null;
   const nodes = nodesQ.data?.nodes ?? [];
   const byKind = (k: NodeKind) => nodes.filter((n) => n.kind === k);
   const built = nodes.some((n) => n.kind === 'pillar');
@@ -116,6 +120,14 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                 : 'Final form.'}
           </p>
           <p className="mt-md m-0 rounded-card rounded-tl-[8px] bg-card p-md text-[16px] font-semibold text-ink">{rel.greeting}</p>
+          {placement && (
+            <p className="mt-sm m-0 text-[14px] font-bold">
+              {placementLine(placement)}{' '}
+              <Link to="/tower#life-map" className="underline underline-offset-4">
+                See the map
+              </Link>
+            </p>
+          )}
         </div>
       </div>
 

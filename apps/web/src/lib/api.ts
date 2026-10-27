@@ -1,4 +1,6 @@
 import type { Page, Unlock } from '@kreators/shared';
+import type { Brand, BrandDetail, BrandPiece, BrandSource, PieceKind, ResearchKind, ResearchRun } from '@kreators/shared';
+import type { Contract, DayType, Fear, Insecurity, Placement, Practices, RealDay, Scores, SessionResponse } from '@kreators/shared';
 import type { FeedFilter, FeedSort, SocialAward, TrustScore } from '@kreators/shared';
 import type { ListingDetail, MarketResponse, PreownedListing, PreownedMessage, PreownedOffer, StoreItem, StoreKit } from '@kreators/shared';
 import type { PeriodKind, Review, ReviewSummary, ReviewTemplate, ReviewsResponse } from '@kreators/shared';
@@ -485,6 +487,27 @@ export const api = {
   createSequence: (body: { productId?: string | null; delayDays: number; title: string; body: string }) => post<{ sequence: Sequence | null }>('/studio/sequences', body),
   setSequence: (id: string, active: boolean) => patch<{ ok: true }>(`/studio/sequences/${id}`, { active }),
   deleteSequence: (id: string) => del<{ ok: true }>(`/studio/sequences/${id}`),
+  // the strategy session
+  session: (date: string) => request<SessionResponse>(`/session?date=${date}`),
+  submitAssessment: (body: { placements: Placement[]; fears: Fear[]; insecurities: Insecurity[]; scores: Scores; behaviour: Partial<Record<RelationshipKey, number>>; realDay: RealDay }) => post<SessionResponse & { suggestedFocus: RelationshipKey[] }>('/session/assessment', body),
+  submitPlan: (body: { focus: RelationshipKey[]; practices: Practices; contract: Pick<Contract, 'minDays' | 'checkinTime' | 'penalty' | 'signedName'>; date: string }) => post<SessionResponse>('/session/plan', body),
+  markRoutineDay: (body: { date: string; dayType: DayType; steps: string[] }) => post<SessionResponse>('/session/day', body),
+
+  // content strategist: brand folders
+  brands: (pq = '') => request<{ page: Page; brands: Brand[]; tools: BrandDetail['tools'] }>(withQ('/studio/brands', pq)),
+  createBrand: (body: { name: string; niche?: string; description?: string; voice?: string }) => post<{ brand: Brand }>('/studio/brands', body),
+  brand: (id: string, pq = '') => request<BrandDetail>(withQ(`/studio/brands/${id}`, pq)),
+  updateBrand: (id: string, body: { name?: string; niche?: string; description?: string; voice?: string }) => patch<{ brand: Brand }>(`/studio/brands/${id}`, body),
+  deleteBrand: (id: string) => del<{ ok: true }>(`/studio/brands/${id}`),
+  addBrandSource: (id: string, body: { url: string; label?: string; kind?: BrandSource['kind'] }) => post<{ source: BrandSource }>(`/studio/brands/${id}/sources`, body),
+  removeBrandSource: (id: string, sid: string) => del<{ ok: true }>(`/studio/brands/${id}/sources/${sid}`),
+  readBrandSource: (id: string, sid: string) => post<{ run: ResearchRun | null; source: BrandSource | null }>(`/studio/brands/${id}/sources/${sid}/read`, {}),
+  researchBrand: (id: string, body: { kind: ResearchKind; query: string; limit?: number }) => post<{ run: ResearchRun | null }>(`/studio/brands/${id}/research`, body),
+  removeBrandRun: (id: string, rid: string) => del<{ ok: true }>(`/studio/brands/${id}/runs/${rid}`),
+  writePiece: (id: string, body: { kind: PieceKind; brief: string; runIds?: string[]; research?: boolean }) => post<{ piece: BrandPiece | null }>(`/studio/brands/${id}/pieces`, body),
+  updatePiece: (id: string, pid: string, body: { title?: string; body?: string; status?: BrandPiece['status'] }) => patch<{ piece: BrandPiece | null }>(`/studio/brands/${id}/pieces/${pid}`, body),
+  removePiece: (id: string, pid: string) => del<{ ok: true }>(`/studio/brands/${id}/pieces/${pid}`),
+
   customers: (pq = '') => request<{ page: Page; customers: Customer[] }>(withQ('/studio/customers', pq)),
   customersCsvUrl: '/api/studio/customers?format=csv',
   refund: (orderId: string, reason: string) => post<{ order: Order | null }>(`/studio/orders/${orderId}/refund`, { reason }),

@@ -10,6 +10,7 @@
 //   SHOOT_PROBE=scripts/smoke/contrast-probe.js   run this probe file on every shot and list its hits
 //   SHOOT_LIST=shots.json                a JSON array of shots instead of the default list
 //   SHOOT_CHROME=/path/to/chrome         the browser binary
+//   SHOOT_TOKEN=<session token>          an account prepared elsewhere (shots-all.mjs), instead of a fresh one
 //
 // A shot is { path, name?, desktop?, width?, height?, theme?, needsSession?, before?, viewport? }: `viewport: true` shoots only the first screen, not the whole page.
 // a phone is 390 by 844, a laptop 1440 by 900, a phone on its side `desktop: true, width: 844, height: 390`.
@@ -72,7 +73,8 @@ const list = process.argv.slice(2).length
     : DEFAULT_SHOTS;
 
 fs.mkdirSync(OUT, { recursive: true });
-const token = list.some((s) => s.needsSession) ? await session() : null;
+// SHOOT_TOKEN reuses an account something else prepared (scripts/smoke/shots-all.mjs), instead of making a fresh one.
+const token = process.env.SHOOT_TOKEN ?? (list.some((s) => s.needsSession) ? await session() : null);
 const browser = await puppeteer.launch({ executablePath: chromePath(), headless: true, args: ['--no-first-run', '--disable-gpu'] });
 const probeHits = [];
 try {
@@ -123,7 +125,7 @@ try {
   await browser.close();
 }
 if (PROBE) {
-  console.log(`\ncontrast probe: ${probeHits.length} hit${probeHits.length === 1 ? '' : 's'} under 2.2:1`);
-  for (const h of probeHits) console.log(`  ${h.shot}  ${h.ratio}:1  "${h.text}"  ${h.color} on ${h.background}  ${h.where}`);
+  console.log(`\n${path.basename(process.env.SHOOT_PROBE)}: ${probeHits.length} hit${probeHits.length === 1 ? '' : 's'}`);
+  for (const h of probeHits) console.log(`  ${h.shot}  ${h.line ?? `${h.ratio}:1  "${h.text}"  ${h.color} on ${h.background}  ${h.where}`}`);
   if (probeHits.length) process.exitCode = 1;
 }

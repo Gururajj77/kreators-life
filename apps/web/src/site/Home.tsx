@@ -220,7 +220,7 @@ export function Home() {
             </ul>
           </motion.div>
         </div>
-        <div className="mt-md flex items-center gap-md rounded-card bg-card p-md shadow-toy-soft">
+        <div className="mt-md flex flex-col items-start gap-md rounded-card bg-card p-md shadow-toy-soft sm:flex-row sm:items-center">
           <div className="flex shrink-0 items-end gap-xs" aria-hidden="true">
             {[1, 2, 3, 4, 5].map((s) => (
               <Person key={s} stage={s} size={40 + s * 8} decorative />

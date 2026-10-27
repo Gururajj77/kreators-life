@@ -2,7 +2,7 @@
 
 **Product:** kreators.app
 **Version:** 0.3, reconciled with the app on 26 October 2026
-**Source of truth:** the 27 migrations in `apps/api/migrations`, applied in order with `pnpm db:migrate:local` or `pnpm db:migrate`. This doc lists every table and its columns as they stand after migration 0027. Types are omitted; `_at` columns are UTC ISO strings, `_cents` are integer cents, `_points` are integer points, `_json` is a JSON string.
+**Source of truth:** the 28 migrations in `apps/api/migrations`, applied in order with `pnpm db:migrate:local` or `pnpm db:migrate`. This doc lists every table and its columns as they stand after migration 0028. Types are omitted; `_at` columns are UTC ISO strings, `_cents` are integer cents, `_points` are integer points, `_json` is a JSON string.
 
 ## 1. Principles as built
 
@@ -20,6 +20,11 @@
 - `sessions`: token, user_id, created_at.
 - `relationship_scores`: user_id, relationship, score, xp. Seven rows per person, created at sign-up.
 - `onboarding_answers`: id, user_id, question_id, relationship, value, points, created_at.
+- `assessments` (migration 0029): id, user_id, kind, fears_json, insecurities_json, scores_json, real_day_json, focus_json, created_at. One per session run; the latest is the one that counts.
+- `placements`: id, assessment_id, user_id, relationship (unique with the assessment), core_level, floor_level, core_band, floor_band, evidence, created_at. Levels are map values from 20 to 540; the flags (capped, required, volatile) are not stored but computed by `placementFlags` whenever they are read.
+- `routines`: id, user_id, assessment_id, ramp_step, general_json, exceptional_json, practices_json, created_at.
+- `contracts`: id, user_id, assessment_id, min_days, checkin_time, penalty, next_weekly, next_monthly, signed_name, signed_at.
+- `routine_days`: user_id, day (primary key together), day_type, steps_json, done, updated_at. One row per person per local day; done only when every morning step is ticked.
 - `nodes`: id, user_id, kind (pillar, principle, value_goal, outcome, project, task), parent_id, relationship, title, note, status, xp, due_date, due_time, estimate_min, ready_at, completed_at, sort_order, created_at, updated_at. The pyramid is a tree of nodes.
 - `xp_events`: id, user_id, relationship, source, source_id, amount, created_at.
 - `spark_completions`: user_id, date, relationship, created_at. The small act.
@@ -109,6 +114,7 @@
 - `outbound_clicks`: id, kind (store, tool), target_id, ip_hash, user_agent, created_at.
 - `tools`: id, name, category, url, description, affiliate, verified, suggested_by, featured_until, min_points, badge, created_at.
 - `resources`: id, author_id, kind, title, summary, body, url, tags, published, created_at, updated_at.
+- `brands` (migration 0028): id, owner_id, name, niche, description, voice, created_at, updated_at. `brand_sources`: id, brand_id, kind, url, label, summary, meta_json, last_read_at, created_at. `research_runs`: id, brand_id, kind, query, status, backend, items_json, error, created_at, finished_at. `brand_pieces`: id, brand_id, kind, title, brief, body, sources_json, writer, status, created_at, updated_at. Owner-scoped through the brand; in the export; deleted with the account.
 
 ## 9. Departures from the v0.1 model
 

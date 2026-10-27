@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
 import { BackLink } from '../components/PageHeader';
@@ -18,6 +18,10 @@ export function Inbox() {
   const readAll = useMutation({ mutationFn: api.readAll, onSuccess: () => refresh() });
   const readOne = useMutation({ mutationFn: (id: string) => api.readOne(id), onSuccess: () => refresh() });
   const [time, setTime] = useState(me.data?.user.reminderTime ?? '');
+  // The profile lands after the first render; take the saved time when it does.
+  useEffect(() => {
+    if (me.data) setTime(me.data.user.reminderTime ?? '');
+  }, [me.data]);
   const saveTime = useMutation({ mutationFn: (t: string | null) => api.updateMe({ reminderTime: t }), onSuccess: () => refresh() });
   const list = q.data?.notifications ?? [];
 
@@ -39,11 +43,13 @@ export function Inbox() {
         <h2 id="rem-heading" className="text-[18px]">
           Daily reminder
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">A nudge lands here each day you have not checked in yet.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+          {me.data?.user.reminderTime ? `Set for ${me.data.user.reminderTime} in ${me.data.user.timezone}. ` : 'Off. '}A nudge lands here at that time on any day you have not checked in yet.
+        </p>
         <div className="mt-sm flex gap-xs">
           <input type="time" value={time} onChange={(e) => setTime(e.target.value)} aria-label="Reminder time" className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
-          <Button onClick={() => saveTime.mutate(time || null)} disabled={saveTime.isPending}>
-            {time ? 'Save' : 'Off'}
+          <Button onClick={() => saveTime.mutate(time || null)} disabled={saveTime.isPending || time === (me.data?.user.reminderTime ?? '')}>
+            {saveTime.isPending ? 'Saving' : time ? 'Save' : 'Turn off'}
           </Button>
         </div>
       </section>

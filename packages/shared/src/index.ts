@@ -1920,6 +1920,407 @@ export function passwordProblem(password: string, email = ''): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// The strategy session: onboarding as a self-serve session. A map of levels, a placement per
+// relationship (where you live, where you drop), fears and insecurities asked early, a scorecard, the
+// person's real day, up to two focus pillars, a routine ramped from that day, practices and a contract.
+// The map builds on Hawkins' Map of Consciousness: a shared order of levels, never a measurement.
+// ---------------------------------------------------------------------------
+
+export const MAP_BANDS = ['victim', 'empowerment', 'realization'] as const;
+export type MapBand = (typeof MAP_BANDS)[number];
+export const MAP_BAND_META: Record<MapBand, { name: string; blurb: string; from: number; to: number }> = {
+  victim: { name: 'Stuck', blurb: 'Fear, blame or shame run the show.', from: 20, to: 199 },
+  empowerment: { name: 'Owning it', blurb: 'You show up, keep promises, take what is yours.', from: 200, to: 399 },
+  realization: { name: 'At ease', blurb: 'It flows. You give without keeping score.', from: 400, to: 540 },
+};
+export interface MapLevel {
+  value: number;
+  name: string;
+  band: MapBand;
+  /** What it sounds like in your own head. */
+  sounds: string;
+}
+export const MAP_LEVELS: readonly MapLevel[] = [
+  { value: 20, name: 'Shame', band: 'victim', sounds: 'I am the problem.' },
+  { value: 30, name: 'Guilt', band: 'victim', sounds: 'I always mess this up.' },
+  { value: 50, name: 'Apathy', band: 'victim', sounds: "What's the point." },
+  { value: 75, name: 'Grief', band: 'victim', sounds: "It's gone and I can't get it back." },
+  { value: 100, name: 'Fear', band: 'victim', sounds: "What if it goes wrong? I'll avoid it." },
+  { value: 125, name: 'Desire', band: 'victim', sounds: 'I need this to feel okay.' },
+  { value: 150, name: 'Anger', band: 'victim', sounds: "It's their fault." },
+  { value: 175, name: 'Pride', band: 'victim', sounds: "I'm above this." },
+  { value: 200, name: 'Courage', band: 'empowerment', sounds: "I'm scared and I'm doing it anyway." },
+  { value: 250, name: 'Neutrality', band: 'empowerment', sounds: 'Fine either way.' },
+  { value: 310, name: 'Willingness', band: 'empowerment', sounds: "I'll show up and do the work." },
+  { value: 350, name: 'Acceptance', band: 'empowerment', sounds: 'This is mine to own.' },
+  { value: 400, name: 'Inner light', band: 'realization', sounds: 'I can see how this works.' },
+  { value: 440, name: 'Inner wisdom', band: 'realization', sounds: 'I know why, and I act from that.' },
+  { value: 500, name: 'Inner love', band: 'realization', sounds: 'I act from care, not need.' },
+  { value: 540, name: 'Oneness', band: 'realization', sounds: 'Your good is my good.' },
+];
+export const COURAGE = 200;
+export const ACCEPTANCE = 350;
+export const VOLATILE_GAP = 150;
+export const levelByValue = (v: number): MapLevel | undefined => MAP_LEVELS.find((l) => l.value === v);
+export const levelsInBand = (band: MapBand): MapLevel[] => MAP_LEVELS.filter((l) => l.band === band);
+export const bandOfLevel = (v: number): MapBand => (v >= 400 ? 'realization' : v >= COURAGE ? 'empowerment' : 'victim');
+
+/** The statement for each band, per relationship. Health sits inside Self; work and wealth inside Servant leader. */
+export const BAND_STATEMENTS: Record<RelationshipKey, Record<MapBand, string>> = {
+  self: { victim: 'Shame about my looks or body. I attack myself, numb out, and compare all the time.', empowerment: 'I keep promises to myself, hold routines through moods, and own my mistakes.', realization: 'Self-respect that needs no proof. Rest and discipline feel the same.' },
+  lover_partner: { victim: 'I avoid approaching, or I stay from fear of being alone. Jealousy, control, neediness.', empowerment: 'I start honestly, say what I need, and survive a no without falling apart.', realization: 'I love without keeping score and give the other person room.' },
+  friendship: { victim: 'I isolate or people-please. Envy. Friends of convenience.', empowerment: 'I show up, reach out first, and disagree honestly.', realization: "Friendship as service. I celebrate others' wins fully." },
+  parent_child: { victim: 'Resentment, blame, duty out of guilt, harshness.', empowerment: 'Clear boundaries, responsibility, respectful contact.', realization: 'Gratitude and forgiveness. I teach by example, not lectures.' },
+  servant_leader: { victim: 'I work from fear of loss, blame the boss, and let money worry drive my choices.', empowerment: 'I own outcomes, keep learning, and build income on purpose.', realization: 'Work as service. I lead by example. Wealth is a tool for others.' },
+  guru: { victim: 'I reject all guidance, or depend on it blindly. I shop for validation.', empowerment: 'I ask for feedback, apply it, and stay coachable and critical.', realization: 'Student and teacher at once. I pass it on.' },
+  divine: { victim: 'Fear of punishment, bargaining, no practice, or spiritual pride.', empowerment: 'A regular practice: prayer, mantra, reading. I am searching for meaning.', realization: 'Surrender and presence. The practice is a way of living.' },
+};
+
+export interface Placement {
+  relationship: RelationshipKey;
+  /** Where you usually live. */
+  core: number;
+  /** Where you drop under stress. */
+  floor: number;
+  /** For a core of 400 or more: what you did last week that shows it. Without it the core is capped at Acceptance. */
+  evidence: string;
+}
+export interface PlacementFlags {
+  core: number;
+  floor: number;
+  /** A floor under Courage: a required focus for month one. */
+  required: boolean;
+  /** A gap of more than 150 between floor and core: a weekly check. */
+  volatile: boolean;
+  capped: boolean;
+}
+/** The placement rules, in one place. */
+export function placementFlags(p: Placement): PlacementFlags {
+  const capped = p.core >= 400 && p.evidence.trim().length < 10;
+  const core = capped ? ACCEPTANCE : p.core;
+  const floor = Math.min(p.floor, core);
+  return { core, floor, required: floor < COURAGE, volatile: core - floor > VOLATILE_GAP, capped };
+}
+
+export const FEAR_OPTIONS = ['Trying new things', 'Being rejected', 'Being judged', 'Failing in public', 'Being alone', 'Losing money', 'Letting people down', 'Being seen'] as const;
+export const DRIVES = ['yes', 'sometimes', 'no'] as const;
+export type Drives = (typeof DRIVES)[number];
+export interface Fear {
+  text: string;
+  relationship: RelationshipKey;
+  drives: Drives;
+}
+export interface Insecurity {
+  text: string;
+  /** Out of 10. */
+  weight: number;
+  relationship: RelationshipKey;
+}
+export const MAX_FEARS = 8;
+export const MAX_INSECURITIES = 8;
+
+export const SCORECARD = {
+  health: ['sleep', 'nutrition', 'movement', 'positive_stress', 'negative_stress', 'emotional_control'],
+  wealth: ['income', 'passive_income', 'learning', 'time'],
+} as const;
+export type ScoreKey = (typeof SCORECARD.health)[number] | (typeof SCORECARD.wealth)[number] | RelationshipKey;
+export const SCORE_LABEL: Record<(typeof SCORECARD.health)[number] | (typeof SCORECARD.wealth)[number], string> = {
+  sleep: 'Sleep',
+  nutrition: 'Food',
+  movement: 'Movement',
+  positive_stress: 'Good stress, the kind that gets you up',
+  negative_stress: 'Bad stress, the kind that wears you down',
+  emotional_control: 'Control over your feelings',
+  income: 'Income',
+  passive_income: 'Money that comes in without your hours',
+  learning: 'Learning',
+  time: 'Time that is yours',
+};
+export type Scores = Partial<Record<ScoreKey, number>>;
+/** A slider at 8 or more over a floor under Courage gets one behaviour question. Fewer than four days in seven caps it at 6. */
+export function settleScore(score: number, floor: number, daysInSeven: number | null): number {
+  if (score < 8 || floor >= COURAGE) return score;
+  if (daysInSeven === null) return score;
+  return daysInSeven < 4 ? Math.min(score, 6) : score;
+}
+
+export interface RealDay {
+  wake: string;
+  sleep: string;
+  workStart: string;
+  workEnd: string;
+  evening: string;
+  gym: string;
+}
+export const DEFAULT_REAL_DAY: RealDay = { wake: '08:30', sleep: '00:30', workStart: '10:00', workEnd: '18:30', evening: '', gym: '' };
+
+/** Up to two focus pillars: every floor under Courage first, then the lowest cores weighted by insecurity. */
+export function pickFocus(placements: Placement[], insecurities: Insecurity[]): RelationshipKey[] {
+  const flagged = placements.map((p) => ({ key: p.relationship, f: placementFlags(p) }));
+  const required = flagged.filter((x) => x.f.required).sort((a, b) => a.f.floor - b.f.floor).map((x) => x.key);
+  if (required.length >= 2) return required.slice(0, 2);
+  const weight = (k: RelationshipKey) => insecurities.filter((i) => i.relationship === k).reduce((a, i) => a + i.weight, 0);
+  const rest = flagged
+    .filter((x) => !required.includes(x.key))
+    .sort((a, b) => a.f.core - weight(a.key) * 10 - (b.f.core - weight(b.key) * 10))
+    .map((x) => x.key);
+  return [...required, ...rest].slice(0, 2);
+}
+
+export const BLOCK_KEYS = ['morning', 'nutrition', 'work', 'skills', 'social', 'sleep'] as const;
+export type BlockKey = (typeof BLOCK_KEYS)[number];
+export interface RoutineBlock {
+  key: BlockKey;
+  name: string;
+  start: string;
+  end: string;
+  /** Only the morning block has steps; the day is done when every one is ticked. */
+  steps: string[];
+  note: string;
+}
+export interface Routine {
+  general: RoutineBlock[];
+  exceptional: RoutineBlock[];
+}
+export type DayType = 'general' | 'exceptional';
+export const TARGET_WAKE = '06:30';
+export const TARGET_SLEEP = '23:30';
+export const RAMP_MINUTES = 30;
+const toMin = (hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return ((h ?? 0) * 60 + (m ?? 0) + 24 * 60) % (24 * 60);
+};
+const toHHMM = (min: number) => {
+  const m = ((min % (24 * 60)) + 24 * 60) % (24 * 60);
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+};
+/** Thirty minutes a week from the real time toward the target, never past it. Sleep counts past midnight as late. */
+export function rampTime(real: string, target: string, weeksCompliant: number, direction: 'earlier'): string {
+  const r = toMin(real);
+  const t = toMin(target);
+  // Times after 20:00 are "last night"; treat them as before midnight for the arithmetic.
+  const late = (v: number) => (v < 12 * 60 ? v + 24 * 60 : v);
+  const rr = late(r);
+  const tt = late(t);
+  const moved = rr - RAMP_MINUTES * Math.max(0, weeksCompliant);
+  void direction;
+  return toHHMM(Math.max(tt, moved));
+}
+/** The routine from the coach's template, ramped from the person's real day. Pure, so it can be tested. */
+export function routineFor(day: RealDay, weeksCompliant: number, focus: RelationshipKey[], placements: Placement[]): Routine {
+  const wake = rampTime(day.wake || DEFAULT_REAL_DAY.wake, TARGET_WAKE, weeksCompliant, 'earlier');
+  const sleep = rampTime(day.sleep || DEFAULT_REAL_DAY.sleep, TARGET_SLEEP, weeksCompliant, 'earlier');
+  const w = toMin(wake);
+  const exposure = placements.filter((p) => placementFlags(p).required).map((p) => RELATIONSHIP_BY_KEY[p.relationship].name.toLowerCase());
+  const morningSteps = ['Mantra, five to ten minutes', 'Three breathing rounds', 'Two minutes of seeing the day go well', 'Ten minutes of movement', 'One page of reading'];
+  const general: RoutineBlock[] = [
+    { key: 'morning', name: 'Morning routine', start: wake, end: toHHMM(w + 60), steps: morningSteps, note: 'Done only when every step is ticked.' },
+    { key: 'nutrition', name: 'Food and water', start: toHHMM(w + 60), end: '20:00', steps: [], note: 'Water through the day. Last meal by eight.' },
+    { key: 'work', name: 'Work', start: day.workStart || DEFAULT_REAL_DAY.workStart, end: day.workEnd || DEFAULT_REAL_DAY.workEnd, steps: [], note: day.gym ? `Gym at ${day.gym}, before dinner.` : 'Gym before dinner if you train.' },
+    { key: 'social', name: 'People', start: day.workEnd || DEFAULT_REAL_DAY.workEnd, end: '21:00', steps: [], note: exposure.length ? `One small scary thing a day for ${exposure.join(' and ')}. Log it.` : focus.length ? `One real conversation a day for ${focus.map((k) => RELATIONSHIP_BY_KEY[k].name.toLowerCase()).join(' or ')}.` : 'One real conversation a day.' },
+    { key: 'skills', name: 'Learning and reflection', start: '21:00', end: '23:00', steps: [], note: 'A lesson, then the journal: mood, stress, where you were on the map today.' },
+    { key: 'sleep', name: 'Lights out', start: sleep, end: wake, steps: [], note: 'Evening line on the way down.' },
+  ];
+  const exceptional: RoutineBlock[] = general.map((b) =>
+    b.key === 'morning' ? { ...b, end: toHHMM(w + 20), steps: ['Mantra, five minutes', 'One breathing round', 'Five minutes of movement'], note: 'The short form for a day that is not yours.' } : b.key === 'skills' ? { ...b, start: '22:00', note: 'Just the journal tonight.' } : b,
+  );
+  return { general, exceptional };
+}
+
+export const MANTRAS = [
+  { key: 'om_namah_shivaya', name: 'Om Namah Shivaya', blurb: 'For the material path: work, money, the body.' },
+  { key: 'hare_krishna', name: 'Hare Krishna', blurb: 'For the spiritual path: practice, surrender, meaning.' },
+  { key: 'none', name: 'No mantra yet', blurb: 'Breathing and reading only.' },
+] as const;
+export const BREATHING = [
+  { key: 'box', name: 'Box breathing', blurb: 'In four, hold four, out four, hold four.' },
+  { key: '478', name: 'Four seven eight', blurb: 'In four, hold seven, out eight.' },
+  { key: 'nostril', name: 'Alternate nostril', blurb: 'One side in, the other out, slow.' },
+] as const;
+export interface Practices {
+  mantra: (typeof MANTRAS)[number]['key'];
+  breathing: (typeof BREATHING)[number]['key'];
+  affirmation: string;
+  reading: string;
+}
+/** One line to say on waking and before sleep, from the focus. */
+export function affirmationFor(focus: RelationshipKey[]): string {
+  const names = focus.map((k) => RELATIONSHIP_BY_KEY[k].name.toLowerCase());
+  if (names.length === 0) return 'I show up today, scared or not.';
+  return `I show up for ${names.join(' and ')} today, scared or not. Courage first; the rest follows.`;
+}
+
+export const PENALTIES = [
+  { key: 'streak', name: 'The streak breaks', blurb: 'A missed week resets the routine streak to zero.' },
+  { key: 'unlock', name: 'Unlocks wait', blurb: 'The next app does not open until a full week is in.' },
+  { key: 'roster', name: 'The coach sees it', blurb: 'A red week shows on the coach roster.' },
+] as const;
+export interface Contract {
+  minDays: number;
+  checkinTime: string;
+  penalty: (typeof PENALTIES)[number]['key'];
+  nextWeekly: string;
+  nextMonthly: string;
+  signedName: string;
+  signedAt: string;
+}
+export const CONTRACT_MIN_DAYS_DEFAULT = 5;
+
+export interface Assessment {
+  id: string;
+  kind: 'onboard' | 'monthly' | 'quarterly' | 'biannual';
+  placements: (Placement & PlacementFlags)[];
+  fears: Fear[];
+  insecurities: Insecurity[];
+  scores: Scores;
+  realDay: RealDay;
+  focus: RelationshipKey[];
+  createdAt: string;
+}
+export interface RoutineDay {
+  day: string;
+  dayType: DayType;
+  steps: string[];
+  done: boolean;
+}
+export interface SessionResponse {
+  assessment: Assessment | null;
+  routine: (Routine & { id: string; rampStep: number; practices: Practices; createdAt: string }) | null;
+  contract: Contract | null;
+  today: RoutineDay | null;
+  /** Days this week the morning routine was fully done, out of seven. */
+  week: { done: number; days: (boolean | null)[] };
+}
+
+// ---------------------------------------------------------------------------
+// Content strategist: one folder per brand, fed links, researched through Agent Reach, written up by a model.
+// ---------------------------------------------------------------------------
+
+export const MAX_BRANDS = 20;
+export const MAX_BRAND_SOURCES = 40;
+export const BRAND_NAME_MAX = 80;
+export const BRIEF_MAX = 4000;
+
+export const BRAND_SOURCE_KINDS = ['site', 'youtube', 'instagram', 'x', 'tiktok', 'reddit', 'article', 'competitor'] as const;
+export type BrandSourceKind = (typeof BRAND_SOURCE_KINDS)[number];
+export const BRAND_SOURCE_META: Record<BrandSourceKind, { name: string; emoji: string }> = {
+  site: { name: 'Website', emoji: '🌐' },
+  youtube: { name: 'YouTube', emoji: '▶️' },
+  instagram: { name: 'Instagram', emoji: '📸' },
+  x: { name: 'X', emoji: '✖️' },
+  tiktok: { name: 'TikTok', emoji: '🎵' },
+  reddit: { name: 'Reddit', emoji: '👽' },
+  article: { name: 'Article', emoji: '📰' },
+  competitor: { name: 'Competitor', emoji: '🥊' },
+};
+/** Which kind a link is, from its address. A competitor is a choice, never a guess. */
+export function sourceKindOf(url: string): BrandSourceKind {
+  const u = url.toLowerCase();
+  if (u.includes('youtube.com') || u.includes('youtu.be')) return 'youtube';
+  if (u.includes('instagram.com')) return 'instagram';
+  if (u.includes('twitter.com') || u.includes('x.com/')) return 'x';
+  if (u.includes('tiktok.com')) return 'tiktok';
+  if (u.includes('reddit.com') || u.includes('redd.it')) return 'reddit';
+  if (/\/(blog|news|article|post)s?\//.test(u) || u.includes('medium.com') || u.includes('substack.com')) return 'article';
+  return 'site';
+}
+
+export const RESEARCH_KINDS = ['read', 'search', 'youtube_search', 'outliers', 'x_search', 'reddit_search', 'transcript', 'profile'] as const;
+export type ResearchKind = (typeof RESEARCH_KINDS)[number];
+export const RESEARCH_META: Record<ResearchKind, { name: string; blurb: string; needsQuery: boolean }> = {
+  read: { name: 'Read a link', blurb: 'The page, post or video behind a link, as text.', needsQuery: false },
+  search: { name: 'Search the web', blurb: 'What the web says about a topic, niche or brand.', needsQuery: true },
+  youtube_search: { name: 'Search YouTube', blurb: 'Videos on a topic, newest and most relevant.', needsQuery: true },
+  outliers: { name: 'Find outliers', blurb: 'Videos on a topic sorted by views, so the ones that broke out float up.', needsQuery: true },
+  x_search: { name: 'Search X', blurb: 'Posts on a topic. Needs Agent Reach with an X login.', needsQuery: true },
+  reddit_search: { name: 'Search Reddit', blurb: 'Threads on a topic. Needs Agent Reach with a Reddit login.', needsQuery: true },
+  transcript: { name: 'Transcript', blurb: 'The words spoken in a YouTube video.', needsQuery: false },
+  profile: { name: 'Profile', blurb: 'An X or Instagram account and its recent posts.', needsQuery: false },
+};
+
+export const PIECE_KINDS = ['audit', 'plan', 'calendar', 'ideas', 'hooks', 'script', 'post', 'analysis'] as const;
+export type PieceKind = (typeof PIECE_KINDS)[number];
+export const PIECE_META: Record<PieceKind, { name: string; emoji: string; blurb: string; askFor: string }> = {
+  audit: { name: 'Strategy audit', emoji: '🔍', blurb: 'What the brand does now, what wins in its niche, the gaps, and ten moves in order.', askFor: 'Anything the audit should weigh, like a launch date or a platform you care about most.' },
+  plan: { name: 'Marketing plan', emoji: '🗺️', blurb: 'Positioning, who it is for, three content pillars, channels and cadence, the first 30, 60 and 90 days, and the numbers to watch.', askFor: 'The goal, the budget if any, and the time you can give it each week.' },
+  calendar: { name: 'Four-week calendar', emoji: '📅', blurb: 'Four weeks of posts: day, platform, format, hook and call to action.', askFor: 'How many posts a week, and on which platforms.' },
+  ideas: { name: 'Video ideas', emoji: '💡', blurb: 'Fifteen ideas, each with its angle, hook, format and the research that says it should work.', askFor: 'A theme, a product to push, or nothing at all.' },
+  hooks: { name: 'Hooks', emoji: '🪝', blurb: 'Twenty opening lines in the patterns the outliers used, grouped by type, each with why it works.', askFor: 'The topic of the video the hooks are for.' },
+  script: { name: 'Short-form script', emoji: '🎬', blurb: 'A 30 to 60 second script: the hook, the setup, the payoff, the call to action. Remix a winner, start from scratch, or fix a draft.', askFor: 'The idea, or paste a draft to fix, or name the research item to remix.' },
+  post: { name: 'Posts and captions', emoji: '✍️', blurb: 'Captions and threads ready to post, one per platform you name.', askFor: 'What the post is about and which platforms.' },
+  analysis: { name: 'Why it worked', emoji: '🧪', blurb: 'One video or post taken apart: the hook, the structure, the format, the style, and what to take from it.', askFor: 'Which research item to take apart, or paste the transcript.' },
+};
+
+export interface Brand {
+  id: string;
+  name: string;
+  niche: string;
+  description: string;
+  /** How the brand sounds, in the owner's words. Goes into every piece. */
+  voice: string;
+  sources: number;
+  runs: number;
+  pieces: number;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface BrandSource {
+  id: string;
+  kind: BrandSourceKind;
+  url: string;
+  label: string;
+  /** The first lines of what was read, so the folder shows what each link is. */
+  summary: string;
+  meta: Record<string, unknown>;
+  lastReadAt: string | null;
+  createdAt: string;
+}
+/** One thing research brought back: a page, a video, a post. */
+export interface ResearchItem {
+  title: string;
+  url: string;
+  author: string;
+  publishedAt: string;
+  text: string;
+  /** Numbers when the platform gives them: views, likes, comments, followers. */
+  stats: Record<string, number>;
+}
+export interface ResearchRun {
+  id: string;
+  kind: ResearchKind;
+  query: string;
+  status: 'done' | 'failed';
+  /** Which road brought the data: agent-reach, page, youtube-api, or none. */
+  backend: string;
+  items: ResearchItem[];
+  error: string;
+  createdAt: string;
+}
+export interface BrandPiece {
+  id: string;
+  kind: PieceKind;
+  title: string;
+  brief: string;
+  /** Markdown in the app's small dialect. */
+  body: string;
+  sources: string[];
+  /** claude, workers-ai or digest, so a draft never passes for a model's work. */
+  writer: string;
+  status: 'draft' | 'kept';
+  createdAt: string;
+  updatedAt: string;
+}
+export interface BrandDetail {
+  brand: Brand;
+  sources: BrandSource[];
+  runs: ResearchRun[];
+  pieces: BrandPiece[];
+  page: Page;
+  /** What the server can do right now, so the screen says it before anyone waits. */
+  tools: { reach: boolean; writer: 'claude' | 'workers-ai' | 'none' };
+}
+
+// ---------------------------------------------------------------------------
 // Pages: every long list is served a page at a time, 10, 25, 50 or 100 rows, with a next page.
 // ---------------------------------------------------------------------------
 
@@ -3901,6 +4302,17 @@ export const TERMS: Record<string, string> = {
   'start code': 'Six letters the host shows at the start line. Enter it during the run and your entry is logged, once. That is how a run pays points without anyone cheating.',
   collab: 'A brand offer to run clubs: what the brand gives, what it asks, and a giveaway for the runners. A host applies with the club.',
   giveaway: 'What a brand gives runners at a collab run: shoes, a kit, a voucher. Listed on the collab before anyone applies.',
+  'brand folder': 'One place for one brand in Content: its links, the research done on them, and the pieces written from that.',
+  outlier: 'A video or post that did far better than the rest of its channel or niche. Research sorts them to the top.',
+  hook: 'The first line of a video or post, the part that decides whether anyone stays.',
+  piece: 'Something Content wrote for a brand: an audit, a plan, a calendar, ideas, hooks, a script, posts, or a breakdown.',
+  'strategy session': 'The twenty minutes that start the app: the map, your fears and insecurities, a scorecard, your real day, a focus, a routine and a contract.',
+  map: 'A ladder of sixteen levels, from Shame to Oneness, used as a shared language for how you operate. Names, never numbers.',
+  'life map': 'The page under Pillars that keeps everything the strategy session found: all seven on the map, your scores, what gets in the way, your routine and your contract.',
+  core: 'Where you usually live on the map, in one relationship.',
+  floor: 'Where you drop to under stress, in one relationship. A floor under Courage makes that pillar a month-one focus.',
+  routine: 'Six blocks a day, built from your real day and moved thirty minutes a week. The morning block counts only when every step is ticked.',
+  contract: 'Your signed deal: days a week, a check-in time, and what a short week costs.',
 };
 
 export interface HowTo {
@@ -3922,30 +4334,29 @@ export const HOW_TO: Record<string, HowTo> = {
   },
   today: {
     steps: [
-      'Daily is three boxes a day: check in, do the small act, tick one task. Checking in pays 10 xp and 10 points and keeps your streak; every seventh day in a row pays 50 points more.',
+      'Daily is three boxes a day: check in, do the small act, tick one task. Checking in pays 10 xp and 10 points and keeps your streak; every seventh day in a row pays 50 points more. Your routine from the strategy session sits under the first box.',
       'The small act is a two-minute thing for your weakest pillar, picked for you each day. It pays 15 xp.',
       'Tasks come from the pillars you set up. Each pays 20 xp and sends a ripple down its pyramid. A task with a date waits for that day, and a new task waits ten minutes before it can be ticked.',
       'Under the tasks, the not-to-do list holds up to seven things you are staying away from. Tick one to say you kept it today: a kept day pays 5 xp and grows that item’s streak. A slip or a missed day starts the streak over.',
       'At the bottom, who you are becoming shows the figure your xp is filling in, and how far away the next form is.',
     ],
-    terms: ['daily three', 'check-in', 'small act', 'task', 'not-to-do', 'kept day', 'who you are becoming'],
+    terms: ['daily three', 'check-in', 'small act', 'task', 'not-to-do', 'kept day', 'who you are becoming', 'routine'],
   },
   tower: {
     steps: [
-      'Seven pillars, one for each relationship in your life. Tap one that is not set up and answer a short vibe check, three taps per pillar. You never fill in a form.',
+      'It starts with the strategy session: twenty minutes that place all seven relationships on the map (where you usually live, where you drop under stress), score your health and wealth, and build a routine and a contract from your real day. Your life map, under Pillars, keeps every answer and can be run again. Then each pillar is set up with a short vibe check, three taps per pillar; you never fill in a form.',
       'Each pillar is a pyramid with six layers. The foundation is the one thing you will not let break. The guiding principle is a line you live by so it holds. The value goal is how you want to feel more often. The goal outcome is what you would see when that is real. Then a project, and tasks at the tip.',
       'Your answers build the lower four layers; you pick or write the project and its tasks. Tick a task on Daily and the glow runs down to the base: 20 xp for the task, then a smaller ripple to each layer under it. Clear every task in a project for 30 xp more.',
       'Every pillar has a level and a character that grows with it. The weakest pillar is the one that sends your small act.',
       'Open a pillar to see its pyramid, add tasks, give them dates and times, and archive what no longer fits.',
     ],
-    terms: ['pillar', 'pyramid', 'foundation', 'guiding principle', 'value goal', 'goal outcome', 'project', 'task', 'ripple'],
+    terms: ['pillar', 'pyramid', 'foundation', 'guiding principle', 'value goal', 'goal outcome', 'project', 'task', 'ripple', 'strategy session', 'life map', 'core', 'floor'],
   },
   apps: {
     steps: [
-      'Every part of the app is a switch here. Apps sit in groups by what they are for: Contribution, Creation, Connection, Reflection, Essentials and Operations.',
-      'An app that is on opens when you tap it. A grey one is off: tap it and a sheet explains it and asks before switching it on.',
-      'An app you switch on joins the laptop sidebar under its group, and the phone menu under the top-right button.',
-      'Switching off happens under Profile, Features, where the same groups and switches live.',
+      'Apps lists only what is on, in groups by what they are for: Contribution, Creation, Connection, Reflection, Essentials and Operations. Tap one to open it.',
+      'The button at the top, Turn apps on or off, leads to Profile, Features, the one place every app is switched on or off.',
+      'An app you switch on joins this list, the laptop sidebar under its group, and the phone menu under the top-right button.',
       'Only a few apps start on: School, Work, Army, Journal, Life, Shop and Public page. The rest wait until you want them.',
     ],
     terms: [],
@@ -4179,11 +4590,12 @@ export const HOW_TO: Record<string, HowTo> = {
   },
   content: {
     steps: [
-      'Add a post by its link and get a tracked link back.',
-      'Share the tracked link instead of the plain one.',
-      'The dashboard shows clicks, sales and revenue per piece of content, so you make more of what sells.',
+      'Content is a strategist with a folder per brand. Make a folder, say what the brand is and how it sounds, and feed it links: the site, the channels, the competitors.',
+      'Research reads those links and searches the web, YouTube, X and Reddit through Agent Reach. Outliers are the videos that broke out in a niche; every run is kept with what it found.',
+      'Create turns the research into pieces: a strategy audit, a marketing plan, a four-week calendar, video ideas, hooks, a short-form script, posts, or a video taken apart. Each piece says who wrote it.',
+      'Your posts and links still live here: add a post by its link, share the tracked link, and see clicks, sales and revenue per post.',
     ],
-    terms: [],
+    terms: ['brand folder', 'outlier', 'hook', 'piece'],
   },
   automations: {
     steps: [

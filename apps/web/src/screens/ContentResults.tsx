@@ -15,9 +15,7 @@ const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-
 const chip = (on: boolean) => `min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`;
 
 function Back() {
-  return (
-    <BackLink to="/shop">Shop</BackLink>
-  );
+  return <BackLink to="/shop/content">Content</BackLink>;
 }
 
 function Stat({ label, value }: { label: string; value: string | number }) {
@@ -31,7 +29,8 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 
 const err = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
-export function Content() {
+/** Which post made money: tracked links and the posts behind them. The brand folders live one level up. */
+export function ContentResults() {
   const [sort, setSort] = useState<'revenue' | 'views' | 'recent'>('revenue');
   const pg = usePage();
   const kp = usePage('k');
@@ -49,7 +48,7 @@ export function Content() {
     <Screen>
       <header className="pt-lg">
         <Back />
-        <h1 className="text-[30px]">Content</h1>
+        <h1 className="text-[30px]">Posts and links</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Which post made money. Share the /go link instead of the plain one and every sale is credited to the post it came from.</p>
       </header>
 

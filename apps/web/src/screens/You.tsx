@@ -97,7 +97,7 @@ function YouView({ data }: { data: MeResponse }) {
     mutationFn: () => api.reset(),
     onSuccess: async () => {
       await refresh();
-      nav('/vibe-check', { replace: true });
+      nav('/onboarding', { replace: true });
     },
   });
 
@@ -427,9 +427,14 @@ function YouView({ data }: { data: MeResponse }) {
               );
             })}
           </ul>
-          <Link to="/vibe-check" className="mt-md inline-flex min-h-[44px] items-center font-bold text-ink-soft underline underline-offset-4">
-            Retake the vibe check
-          </Link>
+          <div className="mt-md flex flex-wrap gap-sm">
+            <Link to="/session" className="inline-flex min-h-[44px] items-center font-bold text-ink-soft underline underline-offset-4">
+              Run the strategy session again
+            </Link>
+            <Link to="/vibe-check" className="inline-flex min-h-[44px] items-center font-bold text-ink-soft underline underline-offset-4">
+              Retake the vibe check
+            </Link>
+          </div>
         </div>
       </section>
 

@@ -71,6 +71,7 @@ Every screen is driven by TanStack Query, so loading, error and empty come for f
 - Aria labels and roles throughout (about 670 `aria-*` attributes and 170 roles); headings in order; labels on fields.
 - Reduced motion honoured in GSAP and the few `motion/react` places.
 - Contrast probed over every route in dark mode; two accepted exceptions.
+- Phone layout probed over every route (`scripts/smoke/overflow-probe.js` through the screenshot tool): no page scrolls sideways and nothing pokes past the screen, in portrait or landscape. A class may not carry `inline-flex` or `inline-block` next to `hidden`, because Tailwind 4 orders those after `hidden`.
 - Keyboard: focus-visible rings, disclosure rows that open from the keyboard.
 - Not done: a WCAG target is not stated anywhere; no screen-reader pass has been made; text alternatives on the drawn characters are decorative by design.
 

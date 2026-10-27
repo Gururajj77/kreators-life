@@ -21,13 +21,14 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import gsap from 'gsap';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { InterestPicker } from '../components/InterestPicker';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams, Link } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { CheckRow } from '../components/CheckRow';
 import { OnboardingTroupe } from '../components/OnboardingTroupe';
 import { Pyramid } from '../components/Pyramid';
 import { Screen } from '../components/Screen';
+import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { useMe, useRefreshAll } from '../lib/queries';
@@ -55,7 +56,9 @@ function CloseVibe({ inline = false }: { inline?: boolean }) {
     const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
     if (single) nav('/tower');
     else if (onboarded && idx > 0) nav(-1);
-    else nav(onboarded ? '/home' : '/start');
+    else if (onboarded) nav('/home');
+    else if (params.get('floors')) nav('/session');
+    else nav('/start');
   };
   return (
     <button type="button" aria-label="Close" onClick={leave} className={`toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-card text-ink-soft hover:text-ink ${inline ? '' : 'safe-top fixed top-sm left-md z-30'}`}>
@@ -76,8 +79,11 @@ export function VibeCheck() {
   const [params] = useSearchParams();
   // One floor at a time, from the Tower: skip the intro and only ask that floor.
   const single = isRelationshipKey(params.get('floor')) ? (params.get('floor') as RelationshipKey) : null;
-  const [floors, setFloors] = useState<RelationshipKey[]>(single ? [single] : []);
-  const [stage, setStage] = useState<Stage>(single ? { kind: 'question', id: firstQuestionId(single), history: [] } : { kind: 'intro' });
+  // From the strategy session: the focus pillars are already chosen, so skip the picker and ask them in turn.
+  const preset = (params.get('floors') ?? '').split(',').filter(isRelationshipKey);
+  const first = single ?? preset[0] ?? null;
+  const [floors, setFloors] = useState<RelationshipKey[]>(single ? [single] : preset);
+  const [stage, setStage] = useState<Stage>(first ? { kind: 'question', id: firstQuestionId(first), history: [] } : { kind: 'intro' });
   const [name, setName] = useState('');
   const [focus, setFocus] = useState('');
   const [answers, setAnswers] = useState<Answers>({});

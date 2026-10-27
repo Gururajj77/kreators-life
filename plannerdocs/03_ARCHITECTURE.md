@@ -32,13 +32,15 @@ Hono Worker, basePath /api
           +---- ops.ts      rate limits, email outbox, timeline, analytics
           +---- rewards.ts  social rewards, capped and paid once
           +---- payments.ts the provider interface (test, Razorpay)
+  +---- reach.ts    research: Agent Reach over the bridge, page reads and YouTube as fallbacks
+  +---- strategist.ts the writer: Claude by SDK, Workers AI, or a labelled digest
           +---- cron.ts     every fifteen minutes
           |
           v
 D1 (SQLite): 25 migrations, about 110 tables
           |
           v
-Adapters: Razorpay, Resend (through the outbox), YouTube Data API, Meta webhooks, Workers AI (optional)
+Adapters: Razorpay, Resend (through the outbox), YouTube Data API, Meta webhooks, Workers AI (optional), the Anthropic SDK (the content strategist's writer), the Agent Reach bridge (research, scripts/reach/server.mjs)
 ```
 
 ## 3. Module boundaries as built
@@ -73,7 +75,7 @@ Adapters: Razorpay, Resend (through the outbox), YouTube Data API, Meta webhooks
 
 ## 6. The cron
 
-`*/15 * * * *` runs `runScheduled`: closes money orders nobody paid within half an hour so the product is buyable again; sends post-purchase sequences into inboxes; posts monthly recurring finance entries; sets circle tables two days out and opens the next weekly occurrence; refreshes YouTube numbers for content items older than six hours and for reward submissions. Locally `pnpm dev` passes `--test-scheduled`, so `GET /__scheduled?cron=*+*+*+*+*` runs it by hand.
+`*/15 * * * *` runs `runScheduled`: closes money orders nobody paid within half an hour so the product is buyable again; sends post-purchase sequences into inboxes; posts monthly recurring finance entries; sets circle tables two days out and opens the next weekly occurrence; refreshes YouTube numbers for content items older than six hours and for reward submissions; sends the daily reminder to anyone whose check-in time has passed within the last hour in their own zone and who has not checked in that day, once per due time. Locally `pnpm dev` passes `--test-scheduled`, so `GET /__scheduled?cron=*+*+*+*+*` runs it by hand.
 
 ## 7. Environments and deployment
 

@@ -22,6 +22,8 @@ import { Cohort } from './screens/Cohort';
 import { Community } from './screens/Community';
 import { Companion } from './screens/Companion';
 import { Content } from './screens/Content';
+import { ContentResults } from './screens/ContentResults';
+import { Brand } from './screens/Brand';
 import { Customers } from './screens/Customers';
 import { Finance } from './screens/Finance';
 import { DmInbox } from './screens/DmInbox';
@@ -46,6 +48,7 @@ import { Profile } from './screens/Profile';
 import { Proposals } from './screens/Proposals';
 import { Public } from './screens/Public';
 import { Realm } from './screens/Realm';
+import { ResumeOnboarding } from './screens/Onboarding';
 import { Resources } from './screens/Resources';
 import { Rewards } from './screens/Rewards';
 import { School } from './screens/School';
@@ -60,6 +63,7 @@ import { Today } from './screens/Today';
 import { Tools } from './screens/Tools';
 import { Tower } from './screens/Tower';
 import { VibeCheck } from './screens/VibeCheck';
+import { Session } from './screens/Session';
 import { Welcome } from './screens/Welcome';
 import { Wellbeing } from './screens/Wellbeing';
 import { Reward, Win } from './screens/Win';
@@ -113,7 +117,7 @@ function Shell() {
       </div>
     );
   }
-  if (!me.data.user.onboardedAt) return <Navigate to="/vibe-check" replace />;
+  if (!me.data.user.onboardedAt) return <Navigate to="/onboarding" replace />;
   return (
     <>
       <Outlet />
@@ -180,7 +184,11 @@ const router = createBrowserRouter([
       { path: '/admin', element: <Admin /> },
       {
         element: <RequireSession />,
-        children: [{ path: '/vibe-check', element: <VibeCheck /> }],
+        children: [
+          { path: '/onboarding', element: <ResumeOnboarding /> },
+          { path: '/vibe-check', element: <VibeCheck /> },
+          { path: '/session', element: <Session /> },
+        ],
       },
     ],
   },
@@ -191,6 +199,7 @@ const router = createBrowserRouter([
       { path: '/home', element: explained('home', <Dashboard />) },
       { path: '/today', element: explained('today', <Today />) },
       { path: '/tower', element: explained('tower', <Tower />) },
+      { path: '/tower/map', element: <Navigate to="/tower#life-map" replace /> },
       { path: '/realm/:key', element: <Realm /> },
       { path: '/apps', element: explained('apps', <Apps />) },
       { path: '/you', element: explained('you', <You />) },
@@ -248,6 +257,8 @@ const router = createBrowserRouter([
       { path: '/shop/testimonials', element: gated('shop', <Studio tab="reviews" />) },
       { path: '/shop/audience', element: gated('audience', <StudioAudience />) },
       { path: '/shop/content', element: gated('content', <Content />) },
+      { path: '/shop/content/results', element: gated('content', <ContentResults />) },
+      { path: '/shop/content/:id', element: gated('content', <Brand />) },
       { path: '/shop/automations', element: gated('automations', <Automations />) },
       { path: '/shop/customers', element: gated('shop', <Customers />) },
       { path: '/shop/dm', element: gated('shop', <DmInbox />) },

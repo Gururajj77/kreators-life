@@ -30,28 +30,32 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
   const token = useSession((s) => s.token);
   const themeMode = useTheme((s) => s.mode);
   const setThemeMode = useTheme((s) => s.setMode);
-  const nav = 'inline-flex min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill px-sm text-[16px] font-bold text-ink-soft transition-colors hover:text-ink aria-[current=page]:text-ink';
+  // Two classes, because Tailwind 4 orders `inline-flex` after `hidden`: a link that carries both would always show.
+  const navBase = 'min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill px-sm text-[16px] font-bold text-ink-soft transition-colors hover:text-ink aria-[current=page]:text-ink';
+  const nav = `inline-flex ${navBase}`;
+  // Phones keep only the logo, "Go to app" and the theme button; the rest comes back from the laptop breakpoint.
+  const navWide = `hidden md:inline-flex ${navBase}`;
   return (
     <div className="min-h-dvh bg-paper text-ink">
       <header className="safe-top sticky top-0 z-30 border-b border-line bg-paper/90 backdrop-blur">
-        <div className={`mx-auto flex ${wide ? 'max-w-[1080px]' : 'max-w-[720px]'} items-center justify-between gap-sm px-md py-xs`}>
+        <div className={`mx-auto flex min-w-0 ${wide ? 'max-w-[1080px]' : 'max-w-[720px]'} items-center justify-between gap-sm px-md py-xs`}>
           <Logo />
-          <nav aria-label="Site" className="flex items-center gap-xs">
-            <NavLink to="/explore" className={nav}>
+          <nav aria-label="Site" className="flex min-w-0 items-center gap-xs">
+            <NavLink to="/explore" className={navWide}>
               Explore
             </NavLink>
             {wide && (
-              <a href="/#features" className={`${nav} hidden sm:inline-flex`}>
+              <a href="/#features" className={navWide}>
                 Features
               </a>
             )}
             {wide && (
-              <a href="/#brands" className={`${nav} hidden md:inline-flex`}>
+              <a href="/#brands" className={navWide}>
                 For brands
               </a>
             )}
             {!token && (
-              <Link to="/signin" className={`${nav} hidden sm:inline-flex`}>
+              <Link to="/signin" className={navWide}>
                 Sign in
               </Link>
             )}

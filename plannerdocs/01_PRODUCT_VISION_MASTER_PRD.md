@@ -95,9 +95,9 @@ Founder addresses in `apps/api/src/admins.ts` and `ADMIN_EMAILS` become admins o
 ### Anyone joins
 1. The site at `/`. "Start free" goes to sign-up; "Go to app" goes to sign-in, or to Home with a session.
 2. An anonymous device session can start first; an email and password can be added later and the device's progress comes with it. Sign-up asks for an email, a password, a phone number and a date of birth, and refuses anyone under eighteen. It creates the user and seven zero scores and nothing else.
-3. The vibe check asks which pillars need work now and asks only those, three taps each. The rest wait on Pillars.
-4. On the derived screen the person picks or writes the value goal and project per pillar. Then the pyramid is built and explained one card at a time.
-5. Daily shows the three boxes. The first three task ticks are free; after that a task needs ten minutes of age and a ten-minute gap.
+3. The strategy session (`/session`, eleven cards): the frame; a placement on the map for each relationship (core and floor, names never numbers, evidence when placed high); fears and insecurities; a scorecard with a behaviour check; the real day; a focus of at most two (floors under Courage first and locked); a routine of six blocks ramped from the real day; practices; a signed contract whose check-in time becomes the daily reminder; the optional live call.
+4. Leaving halfway resumes at the same step (`/onboarding` reads the saved session). The vibe check then asks only the focus pillars, three taps each; the rest wait on Pillars. On the derived screen the person picks or writes the value goal and project per pillar. Then the pyramid is built and explained one card at a time.
+5. Pillars ends with the life map (the `#life-map` section): all seven on the map, the focus, the scores, fears and insecurities, the routine and the contract, with a run-again button; each pillar page says where it sits. Daily shows the three boxes and, under the first, the routine: the morning steps as tick rows, the other blocks, the week against the contract. The first three task ticks are free; after that a task needs ten minutes of age and a ten-minute gap.
 
 ### Every day
 Check in (10 xp, 10 points, the streak), the small act (15 xp), one task (20 xp, a ripple down the pyramid), the not-to-do list (5 xp per kept day). Six rewarded ticks a day; every seventh day in a row pays 50 points.

@@ -70,6 +70,8 @@ export function Policy({ kind }: { kind: Kind }) {
           </P>
           <H>Cookies and storage</H>
           <P>We use one cookie for tracked links (thirty days) and your device's storage for your session and theme. No third-party advertising trackers.</P>
+          <H>The content strategist</H>
+          <P>Content keeps a folder per brand: the links you add, what research brought back from them, and the pieces written from that. When a writing model is connected, that folder's research and your brief go to Anthropic to be written up, and nothing else about you goes with it: never your journal, your wellbeing logs or your customers. Research goes out through Agent Reach, a read-only tool that never posts or logs in for you. Folders are yours alone, come with your export, and go with your account.</P>
         </section>
       )}
 

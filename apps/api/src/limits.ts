@@ -33,6 +33,10 @@ export const LIMITS = {
   apply: { max: 10, windowSec: 3600 },
   /** Run entries with a start code. */
   entry: { max: 10, windowSec: 3600 },
+  /** Content research runs: reads, searches, outliers, transcripts. Each one reaches out to another site. */
+  research: { max: 40, windowSec: 3600 },
+  /** Pieces the strategist writes. Each one is a model call. */
+  generate: { max: 20, windowSec: 3600 },
 } as const;
 
 export type LimitName = keyof typeof LIMITS;
@@ -71,6 +75,10 @@ export const ROUTE_LIMITS: readonly { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE
   { method: 'POST', path: '/club/apply', limit: 'apply' },
   { method: 'POST', path: '/run/collabs/:id/apply', limit: 'apply' },
   { method: 'POST', path: '/run/runs/:id/entry', limit: 'entry' },
+  { method: 'POST', path: '/studio/brands', limit: 'create' },
+  { method: 'POST', path: '/studio/brands/:id/sources/:sid/read', limit: 'research' },
+  { method: 'POST', path: '/studio/brands/:id/research', limit: 'research' },
+  { method: 'POST', path: '/studio/brands/:id/pieces', limit: 'generate' },
 ];
 
 /** The doors that take no session are limited before the session check; everything else after it, per person. */

@@ -7,3 +7,12 @@ ADMIN_EMAILS=
 # Resend: an API key with "Sending access", and a From on a domain you verified there.
 RESEND_API_KEY=
 EMAIL_FROM=kreators.app <hello@yourdomain.com>
+# The content strategist. Claude writes the pieces when this is set (claude-opus-5-5 unless ANTHROPIC_MODEL says otherwise); without it the app lays the research out as a draft.
+ANTHROPIC_API_KEY=
+# Agent Reach bridge: node scripts/reach/server.mjs on a machine where agent-reach is installed, and the key it was started with.
+# Without it, Content can still read plain web pages, and YouTube only through the key below.
+REACH_URL=
+REACH_KEY=
+# YouTube Data API v3 key (Google Cloud console, API key restricted to the YouTube Data API). The fallback for reading and
+# searching YouTube when Agent Reach is not connected.
+YOUTUBE_API_KEY=

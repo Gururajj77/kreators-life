@@ -4,10 +4,12 @@ import { runSequences } from './routes/growth';
 import { runRecurring } from './routes/finance';
 import { matchDueCircles, rollWeeklyCircles } from './routes/circles';
 import { fetchMetrics } from './social';
+import { zonedToUtc } from '@kreators/shared';
 
 /** Every fifteen minutes: sequence messages, then fresh numbers for posts and reward submissions where a platform lets us read them. */
-export async function runScheduled(env: Env): Promise<{ sequences: number; recurring: number; circles: number; weekly: number; content: number; submissions: number }> {
+export async function runScheduled(env: Env): Promise<{ sequences: number; recurring: number; circles: number; weekly: number; content: number; submissions: number; reminders: number }> {
   const db = env.DB;
+  const reminders = await sendReminders(db);
   const sequences = await runSequences(db);
   const recurring = await runRecurring(db);
   const circles = await matchDueCircles(db);
@@ -36,5 +38,36 @@ export async function runScheduled(env: Env): Promise<{ sequences: number; recur
     ]);
     submissions += 1;
   }
-  return { sequences, recurring, circles, weekly, content, submissions };
+  return { sequences, recurring, circles, weekly, content, submissions, reminders };
+}
+
+/**
+ * The daily reminder: a person sets a time under Inbox, in their own zone. Each run looks at everyone with a
+ * time, works out today's instant for it in their zone, and drops one reminder into the inbox when that
+ * instant has passed in the last hour and they have not checked in today. One a day, never more.
+ */
+export async function sendReminders(db: D1Database): Promise<number> {
+  const now = new Date();
+  const rows = await db.prepare("SELECT id, reminder_time, timezone, last_checkin FROM users WHERE reminder_time IS NOT NULL AND reminder_time != ''").all<{ id: string; reminder_time: string; timezone: string; last_checkin: string | null }>();
+  let sent = 0;
+  for (const u of rows.results) {
+    const zone = u.timezone || 'Asia/Kolkata';
+    const [h, m] = u.reminder_time.split(':').map(Number);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) continue;
+    let localDay: string;
+    try {
+      localDay = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+    } catch {
+      continue;
+    }
+    if (u.last_checkin === localDay) continue;
+    const due = zonedToUtc(localDay, (h ?? 0) * 60 + (m ?? 0), zone);
+    const since = now.getTime() - due.getTime();
+    if (since < 0 || since > 60 * 60_000) continue;
+    const already = await db.prepare("SELECT 1 FROM notifications WHERE user_id = ? AND kind = 'reminder' AND created_at >= ?").bind(u.id, due.toISOString()).first();
+    if (already) continue;
+    await db.prepare("INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', ?, ?, '/today', NULL, ?)").bind(crypto.randomUUID(), u.id, 'Time to check in', 'Three boxes on Daily. The first one keeps your streak.', nowIso()).run();
+    sent += 1;
+  }
+  return sent;
 }

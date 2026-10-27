@@ -50,6 +50,8 @@ import { home } from './routes/home';
 import { reviews } from './routes/reviews';
 import { market } from './routes/market';
 import { run } from './routes/run';
+import { strategist } from './routes/strategist';
+import { session } from './routes/session';
 
 const app = new Hono<AppEnv>().basePath('/api');
 
@@ -98,6 +100,7 @@ for (const r of ROUTE_LIMITS) if (!isOpenDoor(r.path)) app.on(r.method, r.path, 
 
 app.route('/me', me);
 app.route('/onboarding', onboarding);
+app.route('/session', session);
 app.route('/nodes', nodes);
 app.route('/today', today);
 app.route('/leaderboard', leaderboard);
@@ -137,6 +140,7 @@ app.route('/market', market);
 app.route('/run', run);
 app.route('/kyc', kyc);
 app.route('/studio', builder);
+app.route('/studio', strategist);
 
 app.notFound((c) => c.json({ error: 'not found' }, 404));
 app.onError((err, c) => {

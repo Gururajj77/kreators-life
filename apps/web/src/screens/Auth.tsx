@@ -53,7 +53,8 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
     onSuccess: async (r) => {
       setToken(r.token);
       await refresh();
-      nav(r.user?.onboardedAt ? (next ?? '/home') : '/vibe-check', { replace: true });
+      // A new or unfinished account starts with the strategy session; /onboarding picks up at the right step.
+      nav(r.user?.onboardedAt ? (next ?? '/home') : '/onboarding', { replace: true });
     },
   });
   // What the server will say, said here first. Only on sign-up: a sign-in password is whatever it is.
@@ -215,7 +216,7 @@ export function ResetPassword() {
     onSuccess: async (r) => {
       setToken(r.token);
       await refresh();
-      nav(r.user?.onboardedAt ? '/home' : '/vibe-check', { replace: true });
+      nav(r.user?.onboardedAt ? '/home' : '/onboarding', { replace: true });
     },
   });
   const weak = password ? passwordProblem(password) : null;

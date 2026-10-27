@@ -28,6 +28,7 @@ export const MODULE_FOR_PREFIX: Record<string, readonly string[]> = {
   studio: ['shop'],
   'studio/links': ['content', 'automations'],
   'studio/content': ['content', 'automations'],
+  'studio/brands': ['content'],
   'studio/automations': ['automations'],
   'studio/funnels': ['automations'],
   'studio/sequences': ['automations'],

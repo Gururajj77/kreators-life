@@ -22,6 +22,13 @@ export interface Env {
   EMAIL_FROM?: string;
   /** Extra founder addresses that become admins on sign-up or sign-in, comma separated. */
   ADMIN_EMAILS?: string;
+  /** The content strategist's writer. With it, pieces are written by Claude through the official SDK. */
+  ANTHROPIC_API_KEY?: string;
+  /** Optional model id for the writer; claude-opus-5-5 when unset. */
+  ANTHROPIC_MODEL?: string;
+  /** The Agent Reach bridge (scripts/reach/server.mjs) and its key. Without it, research reads plain pages and YouTube only. */
+  REACH_URL?: string;
+  REACH_KEY?: string;
 }
 
 export interface UserRow {

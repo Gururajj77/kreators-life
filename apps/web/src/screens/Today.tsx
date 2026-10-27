@@ -10,6 +10,7 @@ import { GuideCard, useGuide } from '../components/Guide';
 import { NotToDoList } from '../components/NotToDoList';
 import { Nudge } from '../components/Nudge';
 import { Person } from '../components/Person';
+import { RoutineSection } from '../components/RoutineSection';
 import { Screen } from '../components/Screen';
 import { TaskRow } from '../components/TaskRow';
 import { api } from '../lib/api';
@@ -133,6 +134,8 @@ export function Today() {
               />
             </div>
           </section>
+
+          <RoutineSection date={date} />
 
           <section className="mt-lg" aria-labelledby="spark-heading">
             <div className="flex items-center gap-sm">

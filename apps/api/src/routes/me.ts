@@ -238,6 +238,14 @@ me.get('/export', async (c) => {
     ['offers', 'SELECT * FROM preowned_offers WHERE buyer_id = ?'],
     ['runEntries', 'SELECT * FROM run_entries WHERE user_id = ?'],
     ['runClubs', 'SELECT * FROM run_members WHERE user_id = ?'],
+    ['assessments', 'SELECT * FROM assessments WHERE user_id = ?'],
+    ['placements', 'SELECT * FROM placements WHERE user_id = ?'],
+    ['routines', 'SELECT * FROM routines WHERE user_id = ?'],
+    ['contracts', 'SELECT * FROM contracts WHERE user_id = ?'],
+    ['routineDays', 'SELECT * FROM routine_days WHERE user_id = ?'],
+    ['brands', 'SELECT * FROM brands WHERE owner_id = ?'],
+    ['brandSources', 'SELECT s.* FROM brand_sources s JOIN brands b ON b.id = s.brand_id WHERE b.owner_id = ?'],
+    ['brandPieces', 'SELECT p.* FROM brand_pieces p JOIN brands b ON b.id = p.brand_id WHERE b.owner_id = ?'],
   ];
   const out: Record<string, unknown> = { exportedAt: nowIso(), user: toUser(user) };
   for (const [name, sql] of tables) {
@@ -271,6 +279,17 @@ me.delete('/', async (c) => {
     db.prepare('DELETE FROM notifications WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM portfolio_items WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM kyc_profiles WHERE user_id = ?').bind(user.id),
+    // The strategy session: the map, the scores, the routine and the contract.
+    db.prepare('DELETE FROM assessments WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM placements WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM routines WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM contracts WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM routine_days WHERE user_id = ?').bind(user.id),
+    // The content strategist's folders hold research and drafts about the person's brands: they go too.
+    db.prepare('DELETE FROM brand_pieces WHERE brand_id IN (SELECT id FROM brands WHERE owner_id = ?)').bind(user.id),
+    db.prepare('DELETE FROM research_runs WHERE brand_id IN (SELECT id FROM brands WHERE owner_id = ?)').bind(user.id),
+    db.prepare('DELETE FROM brand_sources WHERE brand_id IN (SELECT id FROM brands WHERE owner_id = ?)').bind(user.id),
+    db.prepare('DELETE FROM brands WHERE owner_id = ?').bind(user.id),
     db.prepare("UPDATE products SET status = 'archived' WHERE owner_id = ?").bind(user.id),
   ]);
   await logEvent(db, 'user', user.id, 'account.deleted');
@@ -311,11 +330,16 @@ me.post('/reset', async (c) => {
     db.prepare('DELETE FROM xp_events WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM spark_completions WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM onboarding_answers WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM assessments WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM placements WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM routines WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM contracts WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM routine_days WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM points_ledger WHERE user_id = ?').bind(user.id),
     db.prepare("DELETE FROM redemptions WHERE user_id = ? AND status = 'reserved'").bind(user.id),
     db.prepare('UPDATE relationship_scores SET score = 0, xp = 0 WHERE user_id = ?').bind(user.id),
     db
-      .prepare('UPDATE users SET xp = 0, points = 0, streak = 0, best_streak = 0, last_checkin = NULL, onboarded_at = NULL WHERE id = ?')
+      .prepare('UPDATE users SET xp = 0, points = 0, streak = 0, best_streak = 0, last_checkin = NULL, onboarded_at = NULL, reminder_time = NULL WHERE id = ?')
       .bind(user.id),
   ]);
   return c.json({ ok: true, at: nowIso() });

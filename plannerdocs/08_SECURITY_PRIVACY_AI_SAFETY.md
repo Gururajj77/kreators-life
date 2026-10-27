@@ -74,7 +74,8 @@ Nothing from the 10 TB collection or the 25,000 books is in the app. Knowledge i
 
 ## 7. AI data handling as built
 
-- Workers AI is optional and used in two places. The Companion sends it the person's first name, streak, wellbeing score and label, today's mood, last night's sleep, the weakest pillar, the open task count, the next task title, the day's small act, and the message. Course drafting sends pasted notes. Cloudflare processes both inside the Worker's account. No other AI provider is called.
+- Workers AI is optional and used in two places. The Companion sends it the person's first name, streak, wellbeing score and label, today's mood, last night's sleep, the weakest pillar, the open task count, the next task title, the day's small act, and the message. Course drafting sends pasted notes. Cloudflare processes both inside the Worker's account.
+- The content strategist sends one brand folder at a time to Anthropic through the official SDK when `ANTHROPIC_API_KEY` is set: the brand's name, niche, description and voice, its sources with their summaries, the research runs the owner picked, and the brief. Nothing else about the person goes with it. Research goes out through Agent Reach, which is read-only and never posts or logs in for anyone; the bridge accepts only known channels and plain parameters. The privacy page says all of this.
 - Journal text is never sent to a model.
 - The system prompt holds no secret and no privileged logic.
 - Not done: the privacy page does not yet name Workers AI or what the Companion sends it.
@@ -92,4 +93,4 @@ Nothing is written. The pieces that exist: `pnpm cf:logs` for live logs, Wrangle
 - No report button, no report queue, no code of conduct.
 - No email or phone verification, and no age verification beyond the date typed.
 - No incident response document, no written backup and restore.
-- The privacy page does not mention Workers AI.
+- The privacy page names the strategist and Anthropic but not Workers AI.

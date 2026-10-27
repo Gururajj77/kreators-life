@@ -14,9 +14,9 @@ import { useMe, useRefreshAll } from '../lib/queries';
 const ORDER: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'core', 'manage', 'internal'];
 
 /**
- * Every app as a list, grouped, each group in its own colour. An app that is on opens; one that is off
- * sits grey, and tapping it asks before switching it on. Switching off happens under Profile, Features,
- * so nothing here can be turned off by accident. Rank and rewards are part of the game, not apps.
+ * The apps that are on, as a list, grouped, each group in its own colour. Apps that are off are not
+ * shown here at all: one clear button at the top leads to Profile, Features, where every app is
+ * switched on or off. Rank and rewards are part of the game, not apps.
  */
 export function Apps() {
   const me = useMe();
@@ -31,16 +31,29 @@ export function Apps() {
       setAsking(null);
     },
   });
-  const listed = modules.filter((m) => !m.locked && m.available);
-  const onCount = listed.filter((m) => m.on).length;
+  const available = modules.filter((m) => !m.locked && m.available);
+  const listed = available.filter((m) => m.on);
+  const offCount = available.length - listed.length;
 
   return (
     <Screen>
       <header className="pt-lg">
         <h1 className="text-[30px]">Apps</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          {onCount} of {listed.length} on. Tap an app that is on to open it. Tap a grey one to switch it on.
+          {listed.length} on. Tap one to open it.
         </p>
+        <Link to="/you#features" className="toy mt-md flex items-center gap-sm rounded-card bg-ink p-md text-on-ink" style={{ '--toy-color': 'var(--color-ink)' } as CSSProperties}>
+          <span className="flex size-[48px] shrink-0 items-center justify-center rounded-pill bg-on-ink/15 text-[24px]" aria-hidden="true">
+            🧩
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[18px] font-extrabold leading-tight">Turn apps on or off</span>
+            <span className="mt-xs block text-[14px] font-semibold text-on-ink/70">{offCount > 0 ? `${offCount} more ${offCount === 1 ? 'app is' : 'apps are'} waiting. Switch on only what you need.` : 'Every app is on. Switch off what you do not use.'}</span>
+          </span>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+            <path d="M9 5l7 7-7 7" />
+          </svg>
+        </Link>
         <div className="mt-md">
           <SearchBox placeholder="Search tasks, journals, library, products, people" />
         </div>
@@ -64,7 +77,7 @@ export function Apps() {
                 </p>
               </div>
               <span className="shrink-0 rounded-pill bg-card px-xs text-[12px] font-extrabold leading-[24px]" style={{ color: `var(--deep-${rel.key})` }}>
-                {on} of {list.length} on
+                {on} on
               </span>
             </div>
             <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
@@ -78,13 +91,7 @@ export function Apps() {
         );
       })}
 
-      <p className="span-all mt-lg m-0 rounded-tile bg-paper p-sm text-center text-[14px] font-semibold text-ink-soft">
-        To switch an app off, go to{' '}
-        <Link to="/you#features" className="font-bold text-ink underline underline-offset-4">
-          Profile, Features
-        </Link>
-        . Rank and rewards are part of the game and live under Profile too.
-      </p>
+      <p className="span-all mt-lg m-0 rounded-tile bg-paper p-sm text-center text-[14px] font-semibold text-ink-soft">Rank and rewards are part of the game and live under Profile.</p>
 
       <Sheet open={Boolean(asking)} onClose={() => setAsking(null)} title={asking ? `Switch on ${asking.name}?` : 'Switch on'}>
         {asking && (

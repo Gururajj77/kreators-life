@@ -1,6 +1,9 @@
 import { BADGES as ALL_BADGES, HOW_TO, kmLabel, MODULES as MODS, paceLabel, RUN_BADGES, runEntryState, TERMS, weekStart, weekStreak } from './index';
 import { earningGuide, nextBadge, unlockFor } from './index';
 import { ageOn, birthDateProblem, MIN_AGE, normalizePhone, phoneProblem } from './index';
+import { BRAND_SOURCE_KINDS, BRAND_SOURCE_META, PIECE_KINDS, PIECE_META, RESEARCH_KINDS, RESEARCH_META, sourceKindOf } from './index';
+import { BAND_STATEMENTS, MAP_LEVELS, pickFocus, placementFlags, rampTime, routineFor, settleScore } from './index';
+import type { Placement } from './index';
 import { SOCIAL_REWARDS, trustScore } from './index';
 import { FEATURE_FEE_POINTS, isFeatured, parseImageUrls, STORE_STAGE_META, PREOWNED_CONDITION_META } from './index';
 import { builtInTemplate, parseReviewPrompts, periodDays, periodFor, periodLabel, periodShift } from './index';
@@ -337,5 +340,66 @@ describe('sign-up', () => {
     expect(phoneProblem('12')).toBeTruthy();
     expect(phoneProblem('+1 234 567 890 123 456')).toBeTruthy();
     expect(phoneProblem('call me')).toBeTruthy();
+  });
+});
+
+describe('content strategist', () => {
+  it('knows what kind of link it was handed, and leaves competitor to the owner', () => {
+    expect(sourceKindOf('https://www.youtube.com/@someone')).toBe('youtube');
+    expect(sourceKindOf('https://youtu.be/abc')).toBe('youtube');
+    expect(sourceKindOf('https://www.instagram.com/someone/')).toBe('instagram');
+    expect(sourceKindOf('https://x.com/someone')).toBe('x');
+    expect(sourceKindOf('https://www.reddit.com/r/videography/')).toBe('reddit');
+    expect(sourceKindOf('https://someone.substack.com/p/hooks')).toBe('article');
+    expect(sourceKindOf('https://example.com')).toBe('site');
+    expect(BRAND_SOURCE_KINDS).toContain('competitor');
+  });
+  it('has words for every kind of source, research and piece', () => {
+    for (const k of BRAND_SOURCE_KINDS) expect(BRAND_SOURCE_META[k].name).toBeTruthy();
+    for (const k of RESEARCH_KINDS) expect(RESEARCH_META[k].blurb.length).toBeGreaterThan(10);
+    for (const k of PIECE_KINDS) expect(PIECE_META[k].askFor.length).toBeGreaterThan(10);
+  });
+});
+
+describe('strategy session', () => {
+  const P = (relationship: Placement['relationship'], core: number, floor: number, evidence = ''): Placement => ({ relationship, core, floor, evidence });
+  it('applies the placement rules: required under Courage, volatile over a 150 gap, capped without evidence', () => {
+    expect(placementFlags(P('self', 350, 100))).toMatchObject({ required: true, volatile: true, capped: false });
+    expect(placementFlags(P('self', 310, 250))).toMatchObject({ required: false, volatile: false });
+    expect(placementFlags(P('self', 440, 200))).toMatchObject({ core: 350, capped: true });
+    expect(placementFlags(P('self', 440, 200, 'I taught two friends to edit for free last Tuesday.'))).toMatchObject({ core: 440, capped: false });
+    expect(placementFlags(P('self', 200, 350)).floor).toBe(200);
+    expect(MAP_LEVELS.length).toBe(16);
+    for (const r of Object.keys(BAND_STATEMENTS)) expect(Object.keys(BAND_STATEMENTS[r as Placement['relationship']]).length).toBe(3);
+  });
+  it('picks up to two focus pillars, floors under Courage first, then the lowest cores weighted by insecurity', () => {
+    const all: Placement[] = [P('self', 310, 250), P('lover_partner', 350, 100), P('friendship', 250, 200), P('parent_child', 310, 310), P('servant_leader', 200, 75), P('guru', 350, 350), P('divine', 400, 310, 'daily practice, logged')];
+    expect(pickFocus(all, [])).toEqual(['servant_leader', 'lover_partner']);
+    const one: Placement[] = all.map((p) => (p.relationship === 'servant_leader' ? P('servant_leader', 310, 250) : p));
+    expect(pickFocus(one, [])[0]).toBe('lover_partner');
+    // guru at 350 less a weight of 9 is 260, still above friendship at 250; two heavy worries pull it under.
+    expect(pickFocus(one, [{ text: 'awkward', weight: 9, relationship: 'guru' }])).toEqual(['lover_partner', 'friendship']);
+    expect(pickFocus(one, [{ text: 'awkward', weight: 9, relationship: 'guru' }, { text: 'no mentor', weight: 6, relationship: 'guru' }])).toEqual(['lover_partner', 'guru']);
+  });
+  it('ramps the day thirty minutes a week and never past the target', () => {
+    expect(rampTime('08:30', '06:30', 0, 'earlier')).toBe('08:30');
+    expect(rampTime('08:30', '06:30', 2, 'earlier')).toBe('07:30');
+    expect(rampTime('08:30', '06:30', 9, 'earlier')).toBe('06:30');
+    expect(rampTime('00:30', '23:30', 1, 'earlier')).toBe('00:00');
+    expect(rampTime('00:30', '23:30', 5, 'earlier')).toBe('23:30');
+  });
+  it('builds six blocks from the real day, with a short morning on an exceptional day', () => {
+    const r = routineFor({ wake: '09:00', sleep: '01:00', workStart: '10:00', workEnd: '18:00', evening: '', gym: '' }, 0, ['friendship'], [P('friendship', 310, 100)]);
+    expect(r.general.map((b) => b.key)).toEqual(['morning', 'nutrition', 'work', 'social', 'skills', 'sleep']);
+    expect(r.general[0]?.start).toBe('09:00');
+    expect(r.general[0]?.steps.length).toBe(5);
+    expect(r.general[3]?.note).toMatch(/scary thing/);
+    expect(r.exceptional[0]?.steps.length).toBe(3);
+  });
+  it('settles a high score over a low floor with the behaviour answer', () => {
+    expect(settleScore(9, 100, 2)).toBe(6);
+    expect(settleScore(9, 100, 5)).toBe(9);
+    expect(settleScore(9, 250, 0)).toBe(9);
+    expect(settleScore(5, 100, 0)).toBe(5);
   });
 });

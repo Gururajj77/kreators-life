@@ -656,6 +656,103 @@ section('Pages');
   check('observability pages by the same rule', obs.status === 200 && obs.json.page?.size === 10 && typeof obs.json.total === 'number', obs.json?.page);
 }
 
+section('Strategy session');
+{
+  const LEVELS = { self: [400, 200], lover_partner: [350, 100], friendship: [310, 250], parent_child: [310, 310], servant_leader: [250, 200], guru: [350, 350], divine: [540, 400] };
+  const placements = Object.entries(LEVELS).map(([relationship, [core, floor]]) => ({ relationship, core, floor, evidence: relationship === 'divine' ? 'Sat every morning this week, twenty minutes, logged.' : '' }));
+  const short = await api('POST', '/session/assessment', { placements: placements.slice(0, 3) }, B.token);
+  check('an assessment needs all seven placements', short.status === 400, short.json);
+  const a = await api('POST', '/session/assessment', { placements, fears: [{ text: 'Being judged', relationship: 'friendship', drives: 'yes' }], insecurities: [{ text: 'awkward in groups', weight: 8, relationship: 'friendship' }], scores: { sleep: 4, lover_partner: 9, self: 6 }, behaviour: { lover_partner: 2 }, realDay: { wake: '09:00', sleep: '01:00', workStart: '10:00', workEnd: '18:00', evening: 'scrolling', gym: '' } }, B.token);
+  check('the assessment is kept with the rules applied', a.status === 201 && a.json.assessment?.placements?.length === 7, a.json?.assessment?.placements?.length);
+  const by = Object.fromEntries((a.json.assessment?.placements ?? []).map((p) => [p.relationship, p]));
+  check('a core of 400 without evidence is capped at Acceptance', by.self?.core === 350 && by.self?.capped === true, by.self);
+  check('a core of 540 with evidence stands', by.divine?.core === 540 && by.divine?.capped === false, by.divine);
+  check('a floor under Courage is a required focus', by.lover_partner?.required === true && by.friendship?.required === false, by.lover_partner);
+  check('a high score over a low floor is settled by the behaviour answer', a.json.assessment?.scores?.lover_partner === 6 && a.json.assessment?.scores?.self === 6, a.json?.assessment?.scores);
+  check('the focus is suggested, floors under Courage first', Array.isArray(a.json.suggestedFocus) && a.json.suggestedFocus[0] === 'lover_partner' && a.json.suggestedFocus.length === 2, a.json?.suggestedFocus);
+  const unsigned = await api('POST', '/session/plan', { focus: ['lover_partner', 'friendship'], contract: { minDays: 5, checkinTime: '21:30', penalty: 'streak' } }, B.token);
+  check('the contract needs a signature', unsigned.status === 400, unsigned.json);
+  const plan = await api('POST', '/session/plan', { focus: ['guru'], practices: { mantra: 'om_namah_shivaya', breathing: '478' }, contract: { minDays: 5, checkinTime: '21:30', penalty: 'unlock', signedName: 'Smoke buyer' }, date: today }, B.token);
+  check('the plan holds the required focus whatever was asked', plan.status === 201 && plan.json.assessment?.focus?.includes('lover_partner') && plan.json.assessment?.focus?.length === 2, plan.json?.assessment?.focus);
+  check('the routine is six blocks ramped from the real day', plan.json.routine?.general?.length === 6 && plan.json.routine?.general?.[0]?.start === '09:00' && plan.json.routine?.exceptional?.[0]?.steps?.length === 3, plan.json?.routine?.general?.[0]);
+  check('the contract is signed with its dates and penalty', plan.json.contract?.signedName === 'Smoke buyer' && plan.json.contract?.penalty === 'unlock' && /\d{4}-\d{2}-\d{2}/.test(plan.json.contract?.nextWeekly ?? '') && plan.json.contract?.minDays === 5, plan.json?.contract);
+  check('the practices carry a line to say', typeof plan.json.routine?.practices?.affirmation === 'string' && plan.json.routine.practices.affirmation.length > 10 && plan.json.routine?.practices?.mantra === 'om_namah_shivaya', plan.json?.routine?.practices);
+  const meAfter = await me(B.token);
+  check('the check-in time becomes the daily reminder', meAfter.reminderTime === '21:30', meAfter.reminderTime);
+  const steps = plan.json.routine.general[0].steps;
+  const part = await api('POST', '/session/day', { date: today, dayType: 'general', steps: steps.slice(0, 2) }, B.token);
+  check('a morning with some steps ticked is not done', part.status === 200 && part.json.today?.done === false && part.json.today?.steps?.length === 2, part.json?.today);
+  const full = await api('POST', '/session/day', { date: today, dayType: 'general', steps }, B.token);
+  check('every step ticked is a done morning, and the week counts it', full.json.today?.done === true && full.json.week?.done === 1, full.json?.week);
+  const junk = await api('POST', '/session/day', { date: today, dayType: 'general', steps: ['Skip it all'] }, B.token);
+  check('a step that is not in the routine is ignored', junk.json.today?.steps?.length === 0, junk.json?.today);
+  const get = await api('GET', `/session?date=${today}`, undefined, B.token);
+  check('the session answers in one call', get.status === 200 && get.json.assessment && get.json.routine && get.json.contract && Array.isArray(get.json.week?.days), get.status);
+  const noPlan = await api('POST', '/session/day', { date: today, steps: [] }, C.token);
+  check('a day needs a routine first', noPlan.status === 400, noPlan.json);
+  const fresh = await api('GET', `/session?date=${today}`, undefined, C.token);
+  check('a new account has no session yet, so onboarding starts with it', fresh.status === 200 && fresh.json.assessment === null && fresh.json.contract === null, fresh.json);
+}
+
+section('Daily reminder');
+{
+  // The seller has not checked in today and has no zone, so the cron reads them in Asia/Kolkata.
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
+  const nowMin = Number(parts.find((x) => x.type === 'hour')?.value ?? 0) * 60 + Number(parts.find((x) => x.type === 'minute')?.value ?? 0);
+  const dueMin = Math.max(0, nowMin - 10);
+  const at = `${String(Math.floor(dueMin / 60)).padStart(2, '0')}:${String(dueMin % 60).padStart(2, '0')}`;
+  const setTime = await api('PATCH', '/me', { reminderTime: at }, C.token);
+  check('a reminder time is kept on the profile', setTime.status === 200 && (await me(C.token)).reminderTime === at, setTime.json);
+  const tick = await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+  check('the cron sends reminders', tick.status === 200, tick.status);
+  const reminders = (list) => (list.json.items ?? list.json.notifications ?? list.json ?? []).filter?.((n) => n.kind === 'reminder') ?? [];
+  const inboxC = await api('GET', '/inbox', undefined, C.token);
+  check('a reminder lands in the inbox once the time has passed', reminders(inboxC).length === 1 && JSON.stringify(inboxC.json).includes('Time to check in'), JSON.stringify(inboxC.json).slice(0, 200));
+  await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+  const inboxC2 = await api('GET', '/inbox', undefined, C.token);
+  check('the next cron does not send it again', reminders(inboxC2).length === 1, reminders(inboxC2).length);
+  const inboxB = await api('GET', '/inbox', undefined, B.token);
+  check('someone who checked in today gets no reminder', reminders(inboxB).length === 0, reminders(inboxB).length);
+  await api('PATCH', '/me', { reminderTime: null }, C.token);
+  check('the reminder can be switched off', (await me(C.token)).reminderTime === null, '');
+}
+
+section('Content strategist');
+{
+  await api('PATCH', '/me/modules', { key: 'content', on: true }, B.token);
+  const list0 = await api('GET', '/studio/brands?size=10', undefined, B.token);
+  check('brand folders list with a page and the tools on offer', list0.status === 200 && Array.isArray(list0.json.brands) && list0.json.page?.size === 10 && typeof list0.json.tools?.reach === 'boolean', list0.json);
+  const noName = await api('POST', '/studio/brands', { niche: 'x' }, B.token);
+  check('a brand needs a name', noName.status === 400, noName.json);
+  const made = await api('POST', '/studio/brands', { name: `Smoke brand ${stamp}`, niche: 'phone videography', description: 'Teaches creators to shoot on a phone.', voice: 'Warm and direct.' }, B.token);
+  check('a brand folder is made', made.status === 201 && made.json.brand?.id, made.json);
+  const bid = made.json.brand?.id;
+  const stranger = await api('GET', `/studio/brands/${bid}`, undefined, C.token);
+  check('another person cannot open the folder', stranger.status === 404, stranger.status);
+  const badLink = await api('POST', `/studio/brands/${bid}/sources`, { url: 'ftp://nope' }, B.token);
+  check('a source needs an https link', badLink.status === 400, badLink.json);
+  const src = await api('POST', `/studio/brands/${bid}/sources`, { url: 'https://www.youtube.com/@smoke', label: 'Their channel' }, B.token);
+  check('a link joins the folder with its kind guessed', src.status === 201 && src.json.source?.kind === 'youtube', src.json?.source);
+  const comp = await api('POST', `/studio/brands/${bid}/sources`, { url: 'https://example.com', kind: 'competitor' }, B.token);
+  check('a competitor is a choice, not a guess', comp.status === 201 && comp.json.source?.kind === 'competitor', comp.json?.source);
+  const read = await api('POST', `/studio/brands/${bid}/sources/${comp.json.source.id}/read`, {}, B.token);
+  check('reading a source keeps a run either way', (read.status === 201 || read.status === 200) && read.json.run?.kind === 'read' && ['done', 'failed'].includes(read.json.run?.status), read.json?.run);
+  const search = await api('POST', `/studio/brands/${bid}/research`, { kind: 'x_search', query: 'phone videography' }, B.token);
+  check('a search that needs Agent Reach says so instead of pretending', search.status === 200 && search.json.run?.status === 'failed' && /Agent Reach/.test(search.json.run?.error ?? ''), search.json?.run);
+  const empty = await api('POST', `/studio/brands/${bid}/research`, { kind: 'search', query: '' }, B.token);
+  check('research needs something to look for', empty.status === 400, empty.json);
+  const piece = await api('POST', `/studio/brands/${bid}/pieces`, { kind: 'plan', brief: 'Grow to 10k followers in 90 days.' }, B.token);
+  check('a piece is written, and says who wrote it', piece.status === 201 && piece.json.piece?.kind === 'plan' && typeof piece.json.piece?.writer === 'string' && piece.json.piece?.body.length > 100, piece.json?.piece?.writer);
+  check('without a model the piece is an honest digest', piece.json.piece?.writer !== 'digest' || /No writing model/.test(piece.json.piece?.body ?? ''), piece.json?.piece?.writer);
+  const kept = await api('PATCH', `/studio/brands/${bid}/pieces/${piece.json.piece.id}`, { status: 'kept', title: 'The plan' }, B.token);
+  check('a piece can be kept and renamed', kept.status === 200 && kept.json.piece?.status === 'kept' && kept.json.piece?.title === 'The plan', kept.json?.piece);
+  const detail = await api('GET', `/studio/brands/${bid}?size=10`, undefined, B.token);
+  check('the folder shows its links, runs and pieces', detail.status === 200 && detail.json.sources?.length === 2 && detail.json.runs?.length >= 2 && detail.json.pieces?.length === 1 && detail.json.page?.size === 10, { s: detail.json?.sources?.length, r: detail.json?.runs?.length, p: detail.json?.pieces?.length });
+  const gone = await api('DELETE', `/studio/brands/${bid}`, undefined, B.token);
+  const after = await api('GET', `/studio/brands/${bid}`, undefined, B.token);
+  check('removing the folder takes everything in it', gone.status === 200 && after.status === 404, after.status);
+}
+
 // ---------------------------------------------------------------- admin, flags, internal
 section('Admin');
 {
@@ -707,7 +804,8 @@ section('Admin');
   check('an admin can make staff', promote.status === 200 && promote.json.user?.role === 'sub_admin', promote.json);
   const demote = await api('POST', `/internal/users/${C.user.id}/role`, { role: 'user' }, A.token);
   check('and take it back', demote.status === 200, demote.json);
-  const search = await api('GET', `/search?q=Smoke%20camera`, undefined, B.token);
+  // The smoke database keeps every run's listings, so search for this run's title, not the shared prefix.
+  const search = await api('GET', `/search?q=${encodeURIComponent(`Smoke camera ${stamp}`)}`, undefined, B.token);
   check('search finds pre-owned listings', search.status === 200 && JSON.stringify(search.json).includes(`Smoke camera ${stamp}`), search.status);
   const short = await api('GET', '/search?q=S', undefined, B.token);
   check('search needs two characters', short.status === 200, short.status);
@@ -724,6 +822,7 @@ section('Export and delete');
   const text = JSON.stringify(exp.json);
   check('export is one JSON file', exp.status === 200 && text.length > 500, exp.status);
   check('export carries the not-to-do list and the journal', /Stay away 0/.test(text) && /Smoke entry/.test(text), '');
+  check('export carries the strategy session', Array.isArray(exp.json.assessments) && exp.json.assessments.length >= 1 && exp.json.placements?.length === 7 && exp.json.contracts?.length >= 1, Object.keys(exp.json ?? {}).filter((k) => /assess|placem|contract/.test(k)));
   const noConfirm = await api('DELETE', '/me', {}, B.token);
   check('delete needs the word', noConfirm.status === 400, noConfirm.json);
   const del = await api('DELETE', '/me', { confirm: 'DELETE' }, B.token);
