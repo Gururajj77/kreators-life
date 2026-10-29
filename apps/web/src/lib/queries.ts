@@ -1,3 +1,4 @@
+import type { InboxShow, InboxTab } from '@kreators/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { FeedFilter, FeedSort, LeaderboardSort, LogKind, RelationshipKey } from '@kreators/shared';
 import { api } from './api';
@@ -43,7 +44,7 @@ export const useWellbeing = () => useAuthed(['wellbeing'], api.wellbeing);
 export const useLogs = (kind: LogKind, days = 30) => useAuthed(['logs', kind, days], () => api.logs(kind, days));
 export const useJournal = (pq = '') => useAuthed(['journal', pq], () => api.journal(pq));
 export const useCompanion = () => useAuthed(['companion'], api.companion);
-export const useInbox = (pq = '') => useAuthed(['inbox', pq], () => api.inbox(pq));
+export const useInbox = (pq = '', tab: InboxTab = 'all', show: InboxShow = 'inbox') => useAuthed(['inbox', pq, tab, show], () => api.inbox(pq, tab, show));
 export const useResources = (tag?: string, pq = '') => useAuthed(['resources', tag ?? '', pq], () => api.resources(tag, pq));
 export const useCommunity = (category?: string, product?: string, all = false, sort: FeedSort = 'recent', filter: FeedFilter = 'all', pq = '') => useAuthed(['community', category ?? '', product ?? '', all, sort, filter, pq], () => api.community(category, product, all, sort, filter, pq));
 export const useStudio = () => useAuthed(['studio'], api.studio);

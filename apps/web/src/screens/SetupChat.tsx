@@ -303,8 +303,15 @@ export function SetupChat() {
     return showMatch(a, asked, lead);
   };
 
-  const finish = (m: SetupMatch, on: string[]) => {
+  const finish = (m: SetupMatch, on: string[], coach: 'coach' | 'asked' | 'waiting' | null = null) => {
     const top = on.map((k) => MODULE_BY_KEY[k]).find(Boolean);
+    // Saying "I'm a life coach" asked the team to make you one; it is said plainly, so nobody waits wondering.
+    const coachLine =
+      coach === 'coach'
+        ? 'You are a life coach here already: your badge says so. Coaching is where your students are.'
+        : coach
+          ? 'You said you are a life coach, so I asked the team to make you one. They check every coach first. The answer lands in your inbox, and then your badge says Life coach and students can find you in Coaching.'
+          : null;
     const session =
       m.session === 'now'
         ? 'You said you want to work on yourself. The best start for that is the strategy session, in Pillars. It takes a few minutes, and you leave with a routine and a plan.'
@@ -321,6 +328,7 @@ export function SetupChat() {
         `All set! 🎉 ${on.length === 1 ? "I've switched on your app." : `I've switched on your ${on.length} apps.`}`,
         'Five tabs are always there: Home, Daily, Pillars, Apps and Profile.',
         'Daily gives you three small things to do each day. Pillars is where you work on the seven relationships in your life: with yourself, your family, your friends, a partner, your work, your teachers and your faith.',
+        ...(coachLine ? [coachLine] : []),
         session,
         'One more thing, if you like: add your interests, so people who like the same things can find you.',
       ],
@@ -386,7 +394,7 @@ export function SetupChat() {
       .setup({ ...a, apps })
       .then(async (r) => {
         await refresh();
-        finish(r.match, r.on);
+        finish(r.match, r.on, r.coach);
       })
       .catch((e) => {
         setNotice(err(e));

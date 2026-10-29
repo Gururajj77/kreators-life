@@ -45,9 +45,14 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
               Explore
             </NavLink>
             {wide && (
-              <a href="/#features" className={navWide}>
+              <NavLink to="/features" end className={navWide}>
                 Features
-              </a>
+              </NavLink>
+            )}
+            {wide && (
+              <NavLink to="/7rp" className={navWide}>
+                7RP
+              </NavLink>
             )}
             {wide && (
               <a href="/#brands" className={navWide}>
@@ -75,14 +80,14 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
           </div>
           <nav aria-label="Footer" className="grid grid-cols-2 gap-xs text-[14px] font-bold text-ink-soft sm:grid-cols-3">
             <Link to="/explore" className="min-h-[32px] hover:text-ink">
-              Explore listings
+              Explore
             </Link>
-            <a href="/#floors" className="min-h-[32px] hover:text-ink">
-              Seven pillars
-            </a>
-            <a href="/#features" className="min-h-[32px] hover:text-ink">
+            <Link to="/7rp" className="min-h-[32px] hover:text-ink">
+              7RP
+            </Link>
+            <Link to="/features" className="min-h-[32px] hover:text-ink">
               Features
-            </a>
+            </Link>
             <a href="/#brands" className="min-h-[32px] hover:text-ink">
               For brands
             </a>
@@ -122,7 +127,13 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
             ))}
           </div>
         </div>
-        <p className="m-0 px-md pb-lg text-center text-[12px] font-semibold text-ink-mute">Your journal and wellbeing numbers are never shown to brands, staff, the leaderboard or Club selection.</p>
+        <p className="m-0 px-md text-center text-[12px] font-semibold text-ink-mute">Your journal and wellbeing numbers are never shown to brands, staff, the leaderboard or Club selection.</p>
+        <p className="m-0 px-md pb-lg text-center text-[12px] font-semibold text-ink-mute">
+          Built with ❤️ by{' '}
+          <a href="https://brandingbum.com" target="_blank" rel="noopener noreferrer" className="font-bold underline underline-offset-4 hover:text-ink">
+            BrandingBum
+          </a>
+        </p>
       </footer>
     </div>
   );

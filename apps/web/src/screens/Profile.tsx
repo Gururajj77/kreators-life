@@ -192,7 +192,9 @@ function ProfileView({ user }: { user: User }) {
         </div>
         <OneOf legend="Experience" options={EXPERIENCE_LEVELS} value={experienceLevel} onChange={setExperience} />
         <OneOf legend="Availability" options={AVAILABILITY} value={availability} onChange={setAvailability} />
-        <InterestPicker value={interests} onChange={setInterests} hint="What you are into. Circles seat you with people whose interests fit yours." />
+        <div id="interests" className="scroll-mt-[64px]">
+          <InterestPicker value={interests} onChange={setInterests} hint="What you are into. Circles seat you with people whose interests fit yours." />
+        </div>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">City</span>

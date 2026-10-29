@@ -4,12 +4,15 @@ import { runSequences } from './routes/growth';
 import { runRecurring } from './routes/finance';
 import { matchDueCircles, rollWeeklyCircles } from './routes/circles';
 import { fetchMetrics } from './social';
+import { closeSeason, sendEventReminders } from './engage';
 import { zonedToUtc } from '@kreators/shared';
 
 /** Every fifteen minutes: sequence messages, then fresh numbers for posts and reward submissions where a platform lets us read them. */
-export async function runScheduled(env: Env): Promise<{ sequences: number; recurring: number; circles: number; weekly: number; content: number; submissions: number; reminders: number }> {
+export async function runScheduled(env: Env): Promise<{ sequences: number; recurring: number; circles: number; weekly: number; content: number; submissions: number; reminders: number; events: number; season: number }> {
   const db = env.DB;
   const reminders = await sendReminders(db);
+  const events = await sendEventReminders(db);
+  const season = await closeSeason(db);
   const sequences = await runSequences(db);
   const recurring = await runRecurring(db);
   const circles = await matchDueCircles(db);
@@ -38,7 +41,7 @@ export async function runScheduled(env: Env): Promise<{ sequences: number; recur
     ]);
     submissions += 1;
   }
-  return { sequences, recurring, circles, weekly, content, submissions, reminders };
+  return { sequences, recurring, circles, weekly, content, submissions, reminders, events, season };
 }
 
 /**

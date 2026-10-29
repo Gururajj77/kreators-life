@@ -26,6 +26,8 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
 
   const when = [task.dueTime ? timeLabel(task.dueTime) : null, task.estimateMin ? `${task.estimateMin} min` : null].filter(Boolean).join(' · ');
   const timeChip = when && !done ? <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">{when}</span> : null;
+  // A task a life coach added says so; it ticks and pays like any other.
+  const coachChip = task.fromCoach ? <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">From your coach</span> : null;
   const badge =
     wait > 0 ? (
       <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">Ready in {wait} min</span>
@@ -57,8 +59,9 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
         hint={hint}
         lockedMessage={early ? `For ${dueLabel(task.dueDate, today)?.text.toLowerCase() ?? task.dueDate}. Tick it on the day.` : wait > 0 ? `Ready in ${wait} ${wait === 1 ? 'minute' : 'minutes'}. Do it first, then tick it.` : null}
         badge={
-          badge || timeChip ? (
+          badge || timeChip || coachChip ? (
             <span className="flex flex-wrap justify-end gap-xs">
+              {coachChip}
               {timeChip}
               {badge}
             </span>

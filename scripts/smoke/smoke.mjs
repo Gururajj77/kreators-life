@@ -2,7 +2,7 @@
 // Node imports the shared model straight from TypeScript (--experimental-strip-types).
 import { RELATIONSHIPS, QUESTIONS, XP, POINTS, WAIT, RUN_REWARD, SOCIAL_REWARDS, MAX_NOT_TO_DO, MODULES, FEATURE_FEE_POINTS, matchSetup, parseSetup, setupSwitchable } from '../../packages/shared/src/index.ts';
 import { LIMITS } from '../../apps/api/src/limits.ts';
-import { PLANS } from '../../packages/shared/src/index.ts';
+import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, PLANS } from '../../packages/shared/src/index.ts';
 import http from 'node:http';
 
 const ORIGIN = process.env.SMOKE_ORIGIN ?? 'http://127.0.0.1:8788';
@@ -1010,6 +1010,337 @@ section('Assistant and credits');
   const reasons = new Set((history.json.entries ?? []).map((e) => e.reason));
   check('the history shows the plan, the grant, the use and the expiry', ['plan', 'admin', 'expire'].every((r) => reasons.has(r)) && (!mock || reasons.has('usage')), [...reasons]);
   check('no plan, no Pro mark', (await me(E.token)).isPro === false, '');
+}
+
+// ---------------------------------------------------------------- attendee codes
+section('Attendee codes');
+{
+  // Its own address, so these sign-ups never touch the sign-up limit the rest of the checks use.
+  const CODE_ADDRESS = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 3) & 255}`;
+  const join = async (who) => {
+    const r = await api('POST', '/auth/signup', { email: `${who}-${stamp}@smoke.test`, password: `Kettle-${stamp}-pass`, displayName: `Smoke ${who}`, phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': CODE_ADDRESS });
+    return { token: r.json.token, user: r.json.user };
+  };
+  const H = await join('host');
+  const G = await join('guest');
+  const O = await join('outsider');
+  for (const t of [H, G, O]) for (const key of ['party', 'run', 'circles']) await api('PATCH', '/me/modules', { key, on: true }, t.token);
+  const soon = (min) => new Date(Date.now() + min * 60_000).toISOString();
+
+  // Party: xp set with the event, a code in the host's own word.
+  const made = await api('POST', '/party/events', { title: `Coffee walk ${stamp}`, startsAt: soon(10), minutes: 60, attendeeXp: 30, attendeeCode: 'smoke meet' }, H.token);
+  const ev = made.json.event;
+  check('a host sets the guests’ xp and their own code when making the event', made.status === 201 && ev?.attendeeXp === 30 && made.json.codeError === null, made.json);
+  const asHost = await api('GET', `/party/events/${ev.id}`, undefined, H.token);
+  check('the host sees the code, the xp and how many claimed it', asHost.json.hostCode?.code === 'SMOKEMEET' && asHost.json.hostCode.xp === 30 && asHost.json.hostCode.claims === 0, asHost.json.hostCode);
+  const tooMuch = await api('PUT', `/party/events/${ev.id}/attendee-code`, { xp: ATTENDEE_XP_MAX + 1 }, H.token);
+  check(`the xp a host sets is capped at ${ATTENDEE_XP_MAX}`, tooMuch.status === 400, tooMuch.json);
+  const notHost = await api('PUT', `/party/events/${ev.id}/attendee-code`, { xp: 50 }, O.token);
+  check('only the host (or events staff) sets the code', notHost.status === 403, notHost.status);
+  await api('POST', `/party/events/${ev.id}/rsvp`, {}, G.token);
+  const asGuest = await api('GET', `/party/events/${ev.id}`, undefined, G.token);
+  check('a guest sees the xp and that the code is open, never the code itself', asGuest.json.attendee?.xp === 30 && asGuest.json.attendee.state === 'open' && !JSON.stringify(asGuest.json).includes('SMOKEMEET'), asGuest.json.attendee);
+  const stranger = await api('POST', `/party/events/${ev.id}/claim`, { code: 'SMOKEMEET' }, O.token);
+  check('someone not on the guest list cannot use the code', stranger.status === 403, stranger.json);
+  const self = await api('POST', `/party/events/${ev.id}/claim`, { code: 'SMOKEMEET' }, H.token);
+  check('the host never claims their own code', self.status === 403, self.json);
+  const wrong = await api('POST', `/party/events/${ev.id}/claim`, { code: 'NOPE1' }, G.token);
+  check('a wrong code pays nothing', wrong.status === 400, wrong.json);
+  const xpBefore = (await me(G.token)).xp;
+  const got = await api('POST', `/party/events/${ev.id}/claim`, { code: 'Smoke-Meet' }, G.token);
+  check('a guest typing the code (any case, any spacing) gets the xp the host set', got.status === 201 && got.json.xp === 30 && (await me(G.token)).xp === xpBefore + 30, got.json);
+  const twice = await api('POST', `/party/events/${ev.id}/claim`, { code: 'SMOKEMEET' }, G.token);
+  check('a code pays once per person', twice.status === 409, twice.json);
+  const reg = (await api('GET', `/party/events/${ev.id}`, undefined, H.token)).json;
+  check('claiming the code checks the guest in', reg.registrations?.find((r) => r.userId === G.user.id)?.status === 'attended' && reg.hostCode?.claims === 1, reg.registrations?.map((r) => r.status));
+  const recoded = await api('PUT', `/party/events/${ev.id}/attendee-code`, { fresh: true }, H.token);
+  check('a leaked code can be replaced by a random one', recoded.status === 200 && recoded.json.hostCode?.code !== 'SMOKEMEET' && recoded.json.hostCode.claims === 1, recoded.json);
+  const started = await api('POST', '/party/events', { title: `Already on ${stamp}`, startsAt: soon(20), minutes: 60 }, H.token);
+  const late = await api('PUT', `/party/events/${started.json.event.id}/attendee-code`, { xp: 20 }, H.token);
+  check('the xp is set before the code opens, thirty minutes before the start, never after', late.status === 400 && /before the code opens/.test(late.json.error ?? ''), late.json);
+  const moved = await api('PUT', `/party/events/${ev.id}/attendee-code`, { xp: 40 }, H.token);
+  check('once the code is open the xp is fixed, even before the start', moved.status === 400 && /fixed once the code opens/.test(moved.json.error ?? ''), moved.json);
+  const fixedEvent = await api('POST', '/party/events', { title: `Fixed xp ${stamp}`, startsAt: soon(-1), minutes: 60, attendeeXp: 20 }, H.token);
+  check('an event made after its start gets no code, and says why', fixedEvent.status === 201 && fixedEvent.json.event?.attendeeXp === null && /already started/.test(fixedEvent.json.codeError ?? ''), fixedEvent.json);
+  await api('PATCH', '/me/modules', { key: 'party', on: true }, A.token);
+  await api('POST', `/party/events/${ev.id}/rsvp`, {}, A.token);
+  const current = (await api('GET', `/party/events/${ev.id}`, undefined, H.token)).json.hostCode?.code;
+  const staffClaim = await api('POST', `/party/events/${ev.id}/claim`, { code: current }, A.token);
+  check('staff who can see a code never claim it, even on the guest list', staffClaim.status === 403, staffClaim.json);
+  // The day's cap: the guest claims more events' codes.
+  let last = 0;
+  for (let i = 1; i <= ATTENDEE_CLAIMS_PER_DAY; i += 1) {
+    const e = (await api('POST', '/party/events', { title: `More ${i} ${stamp}`, startsAt: soon(5), minutes: 30, attendeeXp: 5, attendeeCode: `MORE${i}X` }, H.token)).json.event;
+    await api('POST', `/party/events/${e.id}/rsvp`, {}, G.token);
+    last = (await api('POST', `/party/events/${e.id}/claim`, { code: `MORE${i}X` }, G.token)).status;
+  }
+  check(`event codes pay at most ${ATTENDEE_CLAIMS_PER_DAY} a day`, last === 429, last);
+
+  // Run: the host sets the run's xp and can use their own word as the start code; the host does not log their own run.
+  const club = (await api('POST', '/run/clubs', { name: `Code runners ${stamp}`, city: 'Bengaluru', pace: 'easy', meets: 'Gate' }, H.token)).json.club;
+  const capped = await api('POST', `/run/clubs/${club.id}/runs`, { title: 'Too much', startsAt: soon(10), minutes: 60, xp: ATTENDEE_XP_MAX + 10 }, H.token);
+  check(`a run's xp is capped at ${ATTENDEE_XP_MAX} too`, capped.status === 400, capped.json);
+  const pastRun = await api('POST', `/run/clubs/${club.id}/runs`, { title: 'Added late', startsAt: soon(-10), minutes: 60, xp: 50 }, H.token);
+  check('a run added after its start gets its code, but only the usual xp, and says why', pastRun.status === 201 && pastRun.json.run?.xp === ATTENDEE_XP_DEFAULT && /already started/.test(pastRun.json.codeError ?? ''), pastRun.json);
+  const runMade = await api('POST', `/run/clubs/${club.id}/runs`, { title: 'Own word run', startsAt: soon(10), minutes: 60, xp: 35, code: 'go team' }, H.token);
+  check('a host sets the run’s xp and their own start code', runMade.status === 201 && runMade.json.run?.xp === 35 && runMade.json.run.code === 'GOTEAM', runMade.json.run);
+  await api('POST', `/run/clubs/${club.id}/join`, {}, G.token);
+  const hostLog = await api('POST', `/run/runs/${runMade.json.run.id}/entry`, { code: 'GOTEAM' }, H.token);
+  check('the host does not log their own run', hostLog.status === 403, hostLog.json);
+  const ran = await api('POST', `/run/runs/${runMade.json.run.id}/entry`, { code: 'goteam', minutes: 30 }, G.token);
+  check('a runner who enters the host’s word gets the run’s xp', ran.status === 201 && ran.json.xp === 35, ran.json);
+  const reRun = await api('POST', `/run/runs/${runMade.json.run.id}/recode`, {}, H.token);
+  check('New code with nothing asked is still a fresh random code', reRun.status === 200 && reRun.json.code !== 'GOTEAM' && reRun.json.xp === 35, reRun.json);
+
+  // Circles: the code works only for the people seated.
+  const circle = await api('POST', '/circles/events', { title: `Code circle ${stamp}`, city: 'Bengaluru', startsAt: soon(60 * 24 * 5), attendeeXp: 25, attendeeCode: 'TABLE5' }, A.token);
+  check('events staff open a circle with xp for the people seated', circle.status === 201 && circle.json.event?.attendeeXp === 25 && circle.json.event.hostCode?.code === 'TABLE5', circle.json.event);
+  const unseated = await api('POST', `/circles/events/${circle.json.event.id}/claim`, { code: 'TABLE5' }, G.token);
+  check('someone not seated at the circle cannot use its code', unseated.status === 403, unseated.json);
+  const circleNotStaff = await api('PUT', `/circles/events/${circle.json.event.id}/attendee-code`, { xp: 50 }, G.token);
+  check('only the circle’s host or events staff set its code', circleNotStaff.status === 403, circleNotStaff.status);
+  // A weekly circle: once this week's tables are set, next week's opens with the same xp and a new code.
+  const weeklyCircle = (await api('POST', '/circles/events', { title: `Weekly code ${stamp}`, city: `Code town ${stamp}`, startsAt: soon(60 * 24 * 3), repeat: 'weekly', attendeeXp: 15, attendeeCode: 'WEEKONE' }, A.token)).json.event;
+  await api('POST', `/circles/events/${weeklyCircle.id}/match`, {}, A.token);
+  await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+  const running = await api('GET', '/circles?hostsize=100', undefined, A.token);
+  check('the team sees every circle they run, with its code, in any city', running.status === 200 && running.json.hosting?.some((e) => e.id === weeklyCircle.id && e.hostCode?.code === 'WEEKONE'), running.json.hosting?.length);
+  const series = (await admin('GET', `/admin/attendee-codes?app=circles&q=${encodeURIComponent(`Weekly code ${stamp}`)}`)).json.codes ?? [];
+  const nextWeek = series.find((r) => r.thingId !== weeklyCircle.id);
+  check('next week’s circle keeps the xp with a new random code', series.length === 2 && nextWeek?.xp === 15 && nextWeek.code && nextWeek.code !== 'WEEKONE', series);
+  const notRunning = await api('GET', '/circles', undefined, G.token);
+  check('people who do not run circles get no codes', Array.isArray(notRunning.json.hosting) && notRunning.json.hosting.length === 0 && !JSON.stringify(notRunning.json).includes('WEEKONE'), notRunning.json.hosting?.length);
+
+  // Admin: every event with guests, and the same rules from the panel.
+  const listed = await admin('GET', `/admin/attendee-codes?app=party&q=${encodeURIComponent(`Coffee walk ${stamp}`)}`);
+  const row = listed.json.codes?.find((r) => r.thingId === ev.id);
+  check('admins see every event’s xp, code and claims', listed.status === 200 && row?.xp === 30 && row.claims === 1 && row.guests >= 1, row);
+  const adminSet = await admin('PUT', `/admin/attendee-codes/party/${ev.id}`, { code: 'ADMINSET' });
+  check('an admin sets any event’s code', adminSet.status === 200 && adminSet.json.code?.code === 'ADMINSET', adminSet.json);
+  const runRow = await admin('PUT', `/admin/attendee-codes/run/${runMade.json.run.id}`, { xp: 999 });
+  check('the admin is held to the same cap', runRow.status === 400, runRow.json);
+  const notAdmin = await api('GET', '/admin/attendee-codes', undefined, H.token);
+  check('the attendee code panel is for admins only', notAdmin.status === 403, notAdmin.status);
+  const auditText = JSON.stringify((await admin('GET', '/admin/audit')).json);
+  check('code changes are audited', auditText.includes('attendee_code.set'), '');
+  const exp = await api('GET', '/me/export', undefined, G.token);
+  check('a person’s claims are in their export', Array.isArray(exp.json.attendeeClaims) && exp.json.attendeeClaims.length >= 1, exp.json.attendeeClaims?.length);
+}
+
+// ---------------------------------------------------------------- life coaches
+section('Life coaches');
+{
+  const COACH_ADDRESS = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 4) & 255}`;
+  const join = async (who) => {
+    const email = `${who}-${stamp}@smoke.test`;
+    const r = await api('POST', '/auth/signup', { email, password: `Compass-${stamp}-pass`, displayName: `Smoke ${who}`, phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': COACH_ADDRESS });
+    return { token: r.json.token, user: r.json.user, email };
+  };
+  const K = await join('coach');
+  const S = await join('student');
+  const T = await join('third');
+
+  // Saying "I'm a life coach" in the setup chat asks the team; nothing is given until an admin says yes.
+  const setup = await api('POST', '/onboarding/setup', { identities: ['coach'], goals: ['sell'], blockers: [] }, K.token);
+  check('saying you are a life coach in the setup chat asks the team', setup.status === 200 && setup.json.coach === 'asked' && setup.json.on?.includes('coaching'), { coach: setup.json.coach, on: setup.json.on });
+  const asks = await admin('GET', '/admin/coaching/asks?size=100');
+  check('admins see who asked to be a life coach', asks.json.asks?.some((a) => a.userId === K.user.id), asks.json.asks?.length);
+  const early = await api('POST', '/coach/requests', { who: S.email }, K.token);
+  check('nobody coaches before the team makes them a life coach', early.status === 403, early.json);
+  const adminHub = await api('GET', '/coach', undefined, A.token);
+  check('an admin is not a life coach unless given it', adminHub.status === 200 && adminHub.json.coach === false, adminHub.json.coach);
+  const granted = await admin('POST', `/admin/users/${K.user.id}/permissions`, { permissions: ['coach'] });
+  check('an admin makes someone a life coach with the permission', granted.status === 200 && granted.json.user?.permissions?.includes('coach') && granted.json.user.coachAskedAt === null, granted.json.user);
+  const told = await api('GET', '/inbox', undefined, K.token);
+  check('the new coach is told', JSON.stringify(told.json).includes('You are a life coach now'), '');
+  const meK = await me(K.token);
+  check('a creator who coaches holds the permission the badge reads', meK.role === 'user' && meK.permissions.includes('coach'), meK.permissions);
+
+  // The student has a pyramid to add tasks to, and a journal a coach must never read.
+  const answers = QUESTIONS.filter((q) => q.relationship === 'self').map((q) => ({ questionId: q.id, value: 1 }));
+  await api('POST', '/onboarding', { answers, displayName: 'Smoke student' }, S.token);
+  const built = await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: { project: 'Coached project' } } }, S.token);
+  const sProject = (built.json.nodes ?? []).find((n) => n.kind === 'project');
+  const secret = `Private journal line ${stamp}`;
+  await api('PATCH', '/me/modules', { key: 'journal', on: true }, S.token);
+  await api('POST', '/journal', { title: secret, body: secret }, S.token);
+
+  // A coach asks by email; nothing is shared until the student says yes.
+  const asked = await api('POST', '/coach/requests', { who: S.email }, K.token);
+  check('a life coach asks a student by email', asked.status === 201 && asked.json.link?.status === 'pending', asked.json);
+  const twice = await api('POST', '/coach/requests', { who: S.email }, K.token);
+  check('one ask at a time between the same two', twice.status === 409, twice.json);
+  const peek = await api('GET', `/coach/students/${S.user.id}`, undefined, K.token);
+  check('a coach sees nothing before the yes', peek.status === 404, peek.status);
+  const linkId = asked.json.link?.id;
+  const selfAnswer = await api('POST', `/me/coach/links/${linkId}/answer`, { yes: true }, K.token);
+  check('the side that asked cannot answer its own ask', selfAnswer.status === 403, selfAnswer.json);
+  const mine = await api('GET', '/me/coach', undefined, S.token);
+  check('the student sees the ask under /me/coach', mine.json.links?.some((l) => l.id === linkId && l.status === 'pending' && l.coach.badge === 'coach'), mine.json.links?.length);
+  const yes = await api('POST', `/me/coach/links/${linkId}/answer`, { yes: true }, S.token);
+  check('the student says yes', yes.status === 200 && yes.json.link?.status === 'active', yes.json);
+
+  const view = await api('GET', `/coach/students/${S.user.id}`, undefined, K.token);
+  const text = JSON.stringify(view.json);
+  check('a coach sees what the student shares: daily, pillars, routine, life map and reflection', view.status === 200 && view.json.daily && view.json.pillars?.nodes?.length >= 6 && view.json.reflection?.wellbeing && 'routine' in view.json && 'lifeMap' in view.json, view.status);
+  check('the journal never reaches a coach', !text.includes(secret), '');
+  const off = await api('PATCH', `/me/coach/links/${linkId}/share`, { reflection: false }, S.token);
+  const viewOff = await api('GET', `/coach/students/${S.user.id}`, undefined, K.token);
+  check('a part the student switches off is gone from the coach’s view at once', off.status === 200 && viewOff.json.reflection === null && viewOff.json.daily !== null, viewOff.json.reflection);
+
+  // The coach adds and changes a task; the student ticks it, the coach never does.
+  const added = await api('POST', `/coach/students/${S.user.id}/tasks`, { parentId: sProject?.id, title: 'Walk after lunch', dueDate: today }, K.token);
+  check('a coach adds a task under the student’s project', added.status === 201 && added.json.node?.fromCoach === true, added.json);
+  const sNodes = await api('GET', '/nodes', undefined, S.token);
+  check('the student sees it, marked from the coach', sNodes.json.nodes?.some((n) => n.id === added.json.node?.id && n.fromCoach), '');
+  const changed = await api('PATCH', `/coach/students/${S.user.id}/tasks/${added.json.node?.id}`, { title: 'Walk after lunch, 20 min', status: 'archived' }, K.token);
+  check('a coach changes the words, never the status', changed.status === 200 && changed.json.node?.title === 'Walk after lunch, 20 min' && changed.json.node.status === 'active', changed.json.node);
+  const badParent = await api('POST', `/coach/students/${S.user.id}/tasks`, { parentId: 'not-a-project', title: 'Nope' }, K.token);
+  check('a coach’s task needs one of the student’s projects', badParent.status === 400, badParent.json);
+  const note = await api('POST', `/coach/students/${S.user.id}/notes`, { body: 'Good week. Keep the walks.' }, K.token);
+  check('a coach leaves a note', note.status === 201, note.json);
+  const notes = await api('GET', '/me/coach', undefined, S.token);
+  check('the student reads every note', notes.json.notes?.some((n) => n.body === 'Good week. Keep the walks.'), notes.json.notes?.length);
+  const log = await api('GET', '/me/coach/log', undefined, S.token);
+  const lines = (log.json.log ?? []).map((l) => l.action);
+  check('the change log keeps the ask, the yes, the share change, the task changes and the note, with times', ['link.ask', 'link.yes', 'share.change', 'task.add', 'task.edit', 'note.add'].every((a) => lines.includes(a)) && log.json.log.every((l) => l.createdAt), lines);
+  const hub = await api('GET', '/coach', undefined, K.token);
+  check('the coach’s roster lists the student with what they share', hub.json.coach === true && hub.json.counts?.students === 1 && hub.json.students?.[0]?.student?.id === S.user.id && hub.json.students[0].share.reflection === false, hub.json.counts);
+
+  // The student finds a coach in the directory and asks; a no waits a month before another ask.
+  const dir = await api('GET', '/coach/directory?dirsize=100', undefined, T.token);
+  check('the directory lists life coaches taking students', dir.json.coaches?.some((k) => k.coach.id === K.user.id), dir.json.coaches?.length);
+  const tAsks = await api('POST', `/coach/ask/${K.user.id}`, {}, T.token);
+  check('a student asks a coach from the directory', tAsks.status === 201 && tAsks.json.link?.askedBy === 'student', tAsks.json);
+  const no = await api('POST', `/me/coach/links/${tAsks.json.link?.id}/answer`, { yes: false }, K.token);
+  check('the coach answers a student’s ask', no.status === 200 && no.json.link?.status === 'declined', no.json);
+  const again = await api('POST', `/coach/ask/${K.user.id}`, {}, T.token);
+  check('after a no, the same ask waits a month', again.status === 409, again.json);
+
+  // An admin links two directly; either side can end it, and the view closes at once.
+  const notCoach = await admin('POST', '/admin/coaching/links', { coachId: T.user.id, student: S.email, mode: 'link' });
+  check('only a life coach can be linked as one', notCoach.status === 400, notCoach.json);
+  await admin('POST', `/admin/users/${T.user.id}/permissions`, { permissions: ['coach'] });
+  const direct = await admin('POST', '/admin/coaching/links', { coachId: T.user.id, student: S.email, mode: 'link' });
+  check('an admin links a coach and a student directly', direct.status === 201 && direct.json.link?.status === 'active', direct.json);
+  const ended = await api('DELETE', `/me/coach/links/${direct.json.link?.id}`, undefined, S.token);
+  const gone = await api('GET', `/coach/students/${S.user.id}`, undefined, T.token);
+  check('the student ends it and the coach sees nothing more', ended.status === 200 && gone.status === 404, gone.status);
+
+  // Switching Coaching off closes the coach's side; the student's side stays open, so nobody is stuck.
+  await admin('POST', '/admin/flags/coaching', { enabled: false });
+  const shut = await api('GET', '/coach', undefined, K.token);
+  const stillMine = await api('GET', '/me/coach', undefined, S.token);
+  await admin('POST', '/admin/flags/coaching', { enabled: true });
+  check('Coaching off closes the coach’s side, never the student’s', shut.status === 403 && stillMine.status === 200, { shut: shut.status, mine: stillMine.status });
+
+  // Taking the badge away ends every link of that coach, and the student is told.
+  const taken = await admin('POST', `/admin/users/${K.user.id}/permissions`, { permissions: [] });
+  const after = await api('GET', '/me/coach', undefined, S.token);
+  const sInbox = await api('GET', '/inbox', undefined, S.token);
+  check('taking the badge away ends the coaching and tells the student', taken.status === 200 && !after.json.links?.some((l) => l.coach.id === K.user.id) && JSON.stringify(sInbox.json).includes('has ended'), after.json.links?.length);
+  const exp = await api('GET', '/me/export', undefined, S.token);
+  check('coaching is in the student’s export', exp.json.coachLinks?.length >= 2 && exp.json.coachNotes?.length >= 1 && exp.json.coachLog?.length >= 6, { links: exp.json.coachLinks?.length, notes: exp.json.coachNotes?.length });
+}
+
+// ---------------------------------------------------------------- engagement: reactions, threads, pins, inbox, reminders, seasons, brief
+section('Engagement');
+{
+  const ADDRESS = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 5) & 255}`;
+  const join = async (who) => {
+    const r = await api('POST', '/auth/signup', { email: `${who}-${stamp}@smoke.test`, password: `Lighthouse-${stamp}-pass`, displayName: `Smoke ${who}`, phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': ADDRESS });
+    await api('PATCH', '/me/modules', { key: 'community', on: true }, r.json.token);
+    await api('PATCH', '/me/modules', { key: 'party', on: true }, r.json.token);
+    return { token: r.json.token, user: r.json.user };
+  };
+  const P = await join('poster');
+  const R = await join('reacter');
+  const W = await join('watcher');
+  const handle = `smk${stamp}`.slice(0, 20);
+  await api('PATCH', '/me', { handle }, W.token);
+
+  // Reactions: the first one pays as the like did, changing it pays nothing more, the same one again takes it back.
+  const post = (await api('POST', '/community', { category: 'Stories', body: `Engagement post ${stamp}` }, P.token)).json.post;
+  const first = await api('POST', `/community/${post.id}/like`, { kind: 'celebrate' }, R.token);
+  check('a reaction counts as the like that pays', first.status === 200 && first.json.post?.myReaction === 'celebrate' && first.json.post.reactions?.celebrate === 1 && first.json.awarded?.xp > 0, first.json.post?.reactions);
+  const changed = await api('POST', `/community/${post.id}/like`, { kind: 'insightful' }, R.token);
+  check('changing a reaction pays nothing more', changed.json.post?.myReaction === 'insightful' && changed.json.post.likes === 1 && changed.json.awarded?.xp === 0, changed.json.awarded);
+  const off = await api('POST', `/community/${post.id}/like`, { kind: 'insightful' }, R.token);
+  check('the same reaction again takes it back', off.json.post?.myReaction === null && off.json.post.likes === 0, off.json.post?.likes);
+
+  // Following a post and mentions: the author follows by default; a follower hears about replies, a mention is told.
+  check('the author follows their own post', post.followingPost === true, post.followingPost);
+  await api('POST', `/community/${post.id}/follow-post`, {}, W.token);
+  await api('POST', `/community/${post.id}/replies`, { body: 'A reply for the followers' }, R.token);
+  const wInbox = await api('GET', '/inbox?tab=following', undefined, W.token);
+  check('a follower of the post hears about a new reply, under Following', wInbox.json.notifications?.some((n) => n.kind === 'thread'), wInbox.json.notifications?.map((n) => n.kind));
+  await api('POST', '/community', { category: 'Stories', body: `Hey @${handle}, look at this ${stamp}` }, P.token);
+  const mentions = await api('GET', '/inbox?tab=replies', undefined, W.token);
+  check('an @page name tells that person, under Replies and mentions', mentions.json.notifications?.some((n) => n.kind === 'mention'), mentions.json.tabs);
+  const reply = (await api('GET', `/community/${post.id}/replies`, undefined, P.token)).json.replies?.[0];
+  const rr = await api('POST', `/community/replies/${reply?.id}/react`, { kind: 'love' }, P.token);
+  check('a reply takes reactions too', rr.status === 200 && rr.json.reply?.reactions?.love === 1, rr.json.reply?.reactions);
+
+  // Inbox: archive puts a note away, Archived finds it again.
+  const note = wInbox.json.notifications?.[0];
+  await api('POST', `/inbox/${note?.id}/archive`, { archived: true }, W.token);
+  const away = await api('GET', '/inbox?tab=following', undefined, W.token);
+  const archived = await api('GET', '/inbox?tab=following&show=archived', undefined, W.token);
+  check('archiving moves a note out of the inbox and into Archived', !away.json.notifications?.some((n) => n.id === note?.id) && archived.json.notifications?.some((n) => n.id === note?.id && n.readAt), archived.json.notifications?.length);
+  const team = await api('GET', '/inbox?tab=team', undefined, W.token);
+  check('the Team tab is only for the team', team.json.tab === 'all' && !team.json.tabs?.some((t) => t.tab === 'team'), team.json.tab);
+
+  // Pins: three per category, and only guides pin.
+  const feed = await api('GET', '/community?category=Learning&size=100', undefined, A.token);
+  for (const p of feed.json.posts ?? []) if (p.pinned) await api('POST', `/manage/community/posts/${p.id}/pin`, { pinned: false }, A.token);
+  const pinIds = [];
+  for (let i = 0; i < 4; i += 1) pinIds.push((await api('POST', '/community', { category: 'Learning', body: `Pin me ${i} ${stamp}` }, R.token)).json.post?.id);
+  const pins = [];
+  for (const id of pinIds) pins.push((await api('POST', `/manage/community/posts/${id}/pin`, { pinned: true }, A.token)).status);
+  check('a guide pins up to three posts in a category', pins.slice(0, 3).every((st) => st === 200) && pins[3] === 409, pins);
+  const notGuide = await api('POST', `/manage/community/posts/${pinIds[3]}/pin`, { pinned: true }, P.token);
+  check('only guides pin', notGuide.status === 403, notGuide.status);
+  const top = await api('GET', '/community?category=Learning', undefined, R.token);
+  check('pinned posts come first in their category', (top.json.posts ?? []).slice(0, 3).every((p) => p.pinned), (top.json.posts ?? []).slice(0, 3).map((p) => p.pinned));
+  for (const id of pinIds.slice(0, 3)) await api('POST', `/manage/community/posts/${id}/pin`, { pinned: false }, A.token);
+
+  // Held first posts: with holding on, a new member's first post waits for a guide, then pays.
+  await api('PUT', '/manage/community/settings', { holdFirstPosts: true }, A.token);
+  const N = await join('newbie');
+  const held = await api('POST', '/community', { category: 'Stories', body: `My first post ${stamp}` }, N.token);
+  const othersFeed = await api('GET', '/community?filter=all&size=100', undefined, R.token);
+  check('a new member’s first post waits, unpaid and unseen by others', held.json.held === true && held.json.awarded?.xp === 0 && !othersFeed.json.posts?.some((p) => p.id === held.json.post?.id), held.json);
+  const queue = await api('GET', '/manage/community/held', undefined, A.token);
+  const okay = await api('POST', `/manage/community/posts/${held.json.post?.id}/approve`, {}, A.token);
+  const nMe = await me(N.token);
+  check('a guide says okay, the post goes up and pays', queue.json.posts?.some((p) => p.id === held.json.post?.id) && okay.status === 200 && okay.json.post?.held === false && nMe.xp > 0, { held: okay.json.post?.held, xp: nMe.xp });
+  await api('PUT', '/manage/community/settings', { holdFirstPosts: false }, A.token);
+
+  // Events: a reminder an hour before, once; a host runs the event again on a new date.
+  const ev = (await api('POST', '/party/events', { title: `Reminder walk ${stamp}`, startsAt: new Date(Date.now() + 40 * 60_000).toISOString(), minutes: 60, attendeeXp: 10 }, P.token)).json.event;
+  await api('POST', `/party/events/${ev.id}/rsvp`, {}, R.token);
+  await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+  await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+  const reminded = await api('GET', '/inbox?tab=events&size=100', undefined, R.token);
+  const hourNotes = (reminded.json.notifications ?? []).filter((n) => n.title === `In under an hour: Reminder walk ${stamp}`);
+  check('a guest gets one reminder an hour before, under Events', hourNotes.length === 1, hourNotes.length);
+  const again = await api('POST', `/party/events/${ev.id}/duplicate`, { startsAt: new Date(Date.now() + 8 * 86_400_000).toISOString() }, P.token);
+  const againPage = await api('GET', `/party/events/${again.json.event?.id}`, undefined, P.token);
+  check('a host runs an event again: same details, no guests, the xp with a new code', again.status === 201 && again.json.event?.title === ev.title && again.json.event.registered === 0 && againPage.json.hostCode?.xp === 10, againPage.json.hostCode);
+  const notHost = await api('POST', `/party/events/${ev.id}/duplicate`, {}, R.token);
+  check('only the host runs it again', notHost.status === 403, notHost.status);
+
+  // Seasons and the brief.
+  const board = await api('GET', '/leaderboard?by=season', undefined, P.token);
+  check('the leaderboard has a monthly season', board.status === 200 && board.json.by === 'season' && /^\d{4}-\d{2}$/.test(board.json.season?.season ?? '') && Array.isArray(board.json.past), board.json.season);
+  const brief = await api('GET', `/home/brief?date=${today}&hour=20`, undefined, P.token);
+  check('Home has a brief: three signals and three next steps', brief.status === 200 && brief.json.brief?.signals?.length >= 1 && brief.json.brief.actions?.length === 3, brief.json.brief?.actions?.map((a) => a.key));
+  check('a new account sees the Getting started list', brief.json.gettingStarted?.show === true && brief.json.gettingStarted.items?.length === 7, brief.json.gettingStarted?.done);
+  await api('POST', '/home/getting-started/hide', {}, P.token);
+  const folded = await api('GET', `/home/brief?date=${today}&hour=9`, undefined, P.token);
+  check('the list folds away for good', folded.json.gettingStarted?.show === false, folded.json.gettingStarted?.show);
+  const teamBrief = await api('GET', `/home/brief?date=${today}&hour=9`, undefined, A.token);
+  check('the team gets its own lines', Array.isArray(teamBrief.json.brief?.team) && brief.json.brief?.team === null, teamBrief.json.brief?.team?.length);
 }
 
 // ---------------------------------------------------------------- export and delete

@@ -54,7 +54,8 @@ const json = <T,>(s: string, fb: T): T => {
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const time = (v: unknown, fb: string) => (typeof v === 'string' && TIME_RE.test(v) ? v : fb);
 
-async function latest(db: D1Database, userId: string, date: string): Promise<SessionResponse> {
+/** Everything the session holds for one person on a date. Also read for a student by their life coach, who gets only the parts that student shares. */
+export async function latest(db: D1Database, userId: string, date: string): Promise<SessionResponse> {
   const a = await db.prepare("SELECT * FROM assessments WHERE user_id = ? AND kind = 'onboard' ORDER BY created_at DESC LIMIT 1").bind(userId).first<ARow>();
   let assessment: Assessment | null = null;
   if (a) {

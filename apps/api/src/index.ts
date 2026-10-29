@@ -54,6 +54,7 @@ import { strategist } from './routes/strategist';
 import { session } from './routes/session';
 import { assistantRoutes } from './routes/assistant';
 import { credits } from './routes/credits';
+import { coach, myCoach } from './routes/coach';
 
 const app = new Hono<AppEnv>().basePath('/api');
 
@@ -100,6 +101,8 @@ app.use('*', async (c, next) => {
 // The rest of the limits, per person. Same file.
 for (const r of ROUTE_LIMITS) if (!isOpenDoor(r.path)) app.on(r.method, r.path, rateLimit(r.limit));
 
+// The student's side of coaching is core, so it is mounted before the rest of /me and never gated.
+app.route('/me/coach', myCoach);
 app.route('/me', me);
 app.route('/onboarding', onboarding);
 app.route('/session', session);
@@ -146,6 +149,7 @@ app.route('/studio', strategist);
 // The assistant calls the app's own routes as the person, so it gets the app itself to call into.
 app.route('/assistant', assistantRoutes((req, env, ctx) => app.fetch(req, env, ctx)));
 app.route('/credits', credits);
+app.route('/coach', coach);
 
 app.notFound((c) => c.json({ error: 'not found' }, 404));
 app.onError((err, c) => {

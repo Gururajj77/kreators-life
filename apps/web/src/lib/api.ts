@@ -1,4 +1,5 @@
 import type { Page, Unlock } from '@kreators/shared';
+import type { AdminAttendeeCode, AttendeeCodeHost, AttendeeCodeView } from '@kreators/shared';
 import type { AssistantContext, AssistantReceipt, AssistantReply, AssistantStatus, AssistantTurn, CreditEntry, CreditsResponse, PlanKey } from '@kreators/shared';
 import type { Brand, BrandDetail, BrandPiece, BrandSource, PieceKind, ResearchKind, ResearchRun } from '@kreators/shared';
 import type { Contract, DayType, Fear, Insecurity, Placement, Practices, RealDay, RoutineBlock, Scores, SessionResponse } from '@kreators/shared';
@@ -7,6 +8,8 @@ import type { ListingDetail, MarketResponse, PreownedListing, PreownedMessage, P
 import type { PeriodKind, Review, ReviewSummary, ReviewTemplate, ReviewsResponse } from '@kreators/shared';
 import type { NotToDo, NotToDoStatus } from '@kreators/shared';
 import type { SetupMatch } from '@kreators/shared';
+import type { DailyBrief, GettingStarted, InboxShow, InboxTab, ReactionKind } from '@kreators/shared';
+import type { AdminCoachAsk, AdminCoachLink, CoachDirectoryEntry, CoachHub, CoachLink, CoachLogEntry, CoachProfile, CoachShare, CoachStudentView, CoachTaskInput, MyCoachResponse } from '@kreators/shared';
 import type { LinkBlock } from '@kreators/shared';
 import type { ObservabilityResponse } from '@kreators/shared';
 import type {
@@ -167,6 +170,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 const post = <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body: body === undefined ? '{}' : JSON.stringify(body) });
 const patch = <T>(path: string, body: unknown) => request<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
 const del = <T>(path: string) => request<T>(path, { method: 'DELETE' });
+const put = <T>(path: string, body: unknown) => request<T>(path, { method: 'PUT', body: JSON.stringify(body) });
+/** What an attendee code change asks for: a new xp (before the event starts), the host's own code, or a fresh random one. */
+type CodeChange = { xp?: number; code?: string; fresh?: boolean };
 
 export const api = {
   // accounts
@@ -234,7 +240,7 @@ export const api = {
 
   // onboarding and the tower
   /** The setup chat: tags, goals, what gets in the way, and the apps the person kept. */
-  setup: (body: { identities: string[]; goals: string[]; blockers: string[]; apps: string[] }) => post<{ user: User; match: SetupMatch; on: string[] }>('/onboarding/setup', body),
+  setup: (body: { identities: string[]; goals: string[]; blockers: string[]; apps: string[] }) => post<{ user: User; match: SetupMatch; on: string[]; coach: 'coach' | 'asked' | 'waiting' | null }>('/onboarding/setup', body),
   onboard: (body: { answers: OnboardingAnswer[]; displayName?: string; focus?: string }) => post<OnboardingResponse>('/onboarding', body),
   build: (relationships: RelationshipKey[], date: string, picks?: LadderPicks) => post<{ nodes: Node[]; skipped: RelationshipKey[] }>('/onboarding/build', { relationships, date, picks }),
   acceptQuest: (relationship: RelationshipKey, date: string, picks?: LadderPicks) => post<{ nodes: Node[] }>('/onboarding/accept-quest', { relationship, date, picks }),
@@ -281,15 +287,26 @@ export const api = {
   clearCompanion: () => del<{ ok: true }>('/companion'),
 
   // inbox, library, community, search
-  inbox: (pq = '') => request<{ page: Page; notifications: Notification[]; unread: number }>(withQ('/inbox', pq)),
-  readAll: () => post<{ ok: true }>('/inbox/read-all'),
+  inbox: (pq = '', tab: InboxTab = 'all', show: InboxShow = 'inbox') => request<{ page: Page; notifications: Notification[]; unread: number; tab: InboxTab; show: InboxShow; tabs: { tab: InboxTab; unread: number }[] }>(withQ(`/inbox?tab=${tab}&show=${show}`, pq)),
+  readAll: (tab: InboxTab = 'all') => post<{ ok: true }>('/inbox/read-all', { tab }),
+  archiveNote: (id: string, archived: boolean) => post<{ ok: true }>(`/inbox/${id}/archive`, { archived }),
+  archiveRead: (tab: InboxTab) => post<{ ok: true; archived: number }>('/inbox/archive-read', { tab }),
+  brief: (date: string, hour: number) => request<{ brief: DailyBrief; gettingStarted: GettingStarted }>(`/home/brief?date=${date}&hour=${hour}`),
+  hideGettingStarted: () => post<{ ok: true }>('/home/getting-started/hide'),
+  duplicateEvent: (id: string, startsAt: string) => post<{ event: PartyEvent | null }>(`/party/events/${id}/duplicate`, { startsAt }),
   readOne: (id: string) => post<{ ok: true }>(`/inbox/${id}/read`),
   resources: (tag?: string, pq = '') => request<{ page: Page; resources: Resource[] }>(withQ(`/resources${tag ? `?tag=${encodeURIComponent(tag)}` : ''}`, pq)),
   resource: (id: string) => request<{ resource: Resource }>(`/resources/${id}`),
   community: (category?: string, product?: string, all = false, sort: FeedSort = 'recent', filter: FeedFilter = 'all', pq = '') =>
     request<{ page: Page; posts: CommunityPost[]; categories: readonly string[]; sort: FeedSort; filter: FeedFilter }>(withQ(`/community?${new URLSearchParams({ ...(category ? { category } : {}), ...(product ? { product } : {}), ...(all ? { all: '1' } : {}), sort, filter })}`, pq)),
-  createPost: (body: { category: string; body: string; productId?: string | null }) => post<{ post: CommunityPost; awarded: SocialAward }>('/community', body),
-  likePost: (id: string) => post<{ post: CommunityPost; awarded: SocialAward }>(`/community/${id}/like`),
+  createPost: (body: { category: string; body: string; productId?: string | null }) => post<{ post: CommunityPost; awarded: SocialAward; held: boolean }>('/community', body),
+  likePost: (id: string, kind?: ReactionKind) => post<{ post: CommunityPost; awarded: SocialAward }>(`/community/${id}/like`, kind ? { kind } : {}),
+  followPost: (id: string) => post<{ following: boolean }>(`/community/${id}/follow-post`),
+  reactReply: (id: string, kind: ReactionKind) => post<{ reply: CommunityReply | null }>(`/community/replies/${id}/react`, { kind }),
+  pinPost: (id: string, pinned: boolean) => post<{ post: CommunityPost | null }>(`/manage/community/posts/${id}/pin`, { pinned }),
+  approvePost: (id: string) => post<{ post: CommunityPost | null }>(`/manage/community/posts/${id}/approve`),
+  heldPosts: (pq = '') => request<{ posts: CommunityPost[]; page: Page; holdFirstPosts: boolean }>(withQ('/manage/community/held', pq)),
+  setHoldFirstPosts: (holdFirstPosts: boolean) => put<{ holdFirstPosts: boolean }>('/manage/community/settings', { holdFirstPosts }),
   replies: (id: string, pq = '') => request<{ page: Page; replies: CommunityReply[] }>(withQ(`/community/${id}/replies`, pq)),
   reply: (id: string, body: string) => post<{ reply: CommunityReply; awarded: SocialAward }>(`/community/${id}/replies`, { body }),
   followUser: (id: string) => post<{ following: boolean; followers: number; awarded: SocialAward }>(`/community/follow/${id}`),
@@ -399,8 +416,10 @@ export const api = {
 
   // party
   party: (pq = '') => request<{ page: Page; events: PartyEvent[]; hosting: PartyEvent[]; canHostAll: boolean; club: boolean }>(withQ('/party', pq)),
-  createEvent: (body: Partial<PartyEvent> & { title: string; startsAt: string; minutes?: number }) => post<{ event: PartyEvent }>('/party/events', body),
-  event: (id: string) => request<{ event: PartyEvent; registrations: EventRegistration[]; host: boolean; feedback: { average: number | null; count: number } }>(`/party/events/${id}`),
+  createEvent: (body: Partial<PartyEvent> & { title: string; startsAt: string; minutes?: number; attendeeXp?: number; attendeeCode?: string }) => post<{ event: PartyEvent; codeError: string | null }>('/party/events', body),
+  event: (id: string) => request<{ event: PartyEvent; registrations: EventRegistration[]; host: boolean; feedback: { average: number | null; count: number }; hostCode: AttendeeCodeHost | null; attendee: AttendeeCodeView | null }>(`/party/events/${id}`),
+  setEventCode: (id: string, change: CodeChange) => put<{ hostCode: AttendeeCodeHost }>(`/party/events/${id}/attendee-code`, change),
+  claimEventCode: (id: string, code: string) => post<{ xp: number; newBadges: string[] }>(`/party/events/${id}/claim`, { code }),
   rsvp: (id: string, networking: boolean) => post<{ status: EventRegistration['status'] }>(`/party/events/${id}/rsvp`, { networking }),
   cancelRsvp: (id: string) => post<{ ok: true }>(`/party/events/${id}/cancel-rsvp`),
   checkinGuest: (id: string, userId: string) => post<{ ok: true }>(`/party/events/${id}/checkin`, { userId }),
@@ -413,8 +432,9 @@ export const api = {
   setRunClub: (id: string, body: { status?: 'active' | 'closed'; description?: string; meets?: string; pace?: RunPace; visibility?: 'public' | 'private' }) => patch<{ ok: true }>(`/run/clubs/${id}`, body),
   joinRunClub: (id: string) => post<{ ok: true }>(`/run/clubs/${id}/join`),
   leaveRunClub: (id: string) => post<{ ok: true }>(`/run/clubs/${id}/leave`),
-  addRun: (clubId: string, body: { title: string; startsAt: string; minutes: number; meetingPoint?: string; metres?: number; collabId?: string | null }) => post<{ run: Run | null }>(`/run/clubs/${clubId}/runs`, body),
-  recodeRun: (id: string) => post<{ code: string }>(`/run/runs/${id}/recode`),
+  addRun: (clubId: string, body: { title: string; startsAt: string; minutes: number; meetingPoint?: string; metres?: number; collabId?: string | null; xp?: number; code?: string }) => post<{ run: Run | null; codeError: string | null }>(`/run/clubs/${clubId}/runs`, body),
+  /** A new start code (random with no change), the host's own, or the xp before the run starts. */
+  recodeRun: (id: string, change: CodeChange = {}) => post<{ code: string; xp: number }>(`/run/runs/${id}/recode`, change),
   setRun: (id: string, status: 'published' | 'cancelled' | 'done') => patch<{ ok: true }>(`/run/runs/${id}`, { status }),
   logRun: (id: string, body: { code: string; metres: number; minutes: number }) => post<{ entry: RunEntry | null; xp: number; points: number; capped: boolean; newBadges: string[] }>(`/run/runs/${id}/entry`, body),
   voidRunEntry: (id: string) => post<{ ok: true }>(`/run/entries/${id}/void`),
@@ -537,12 +557,14 @@ export const api = {
   answerDm: (id: string, answer: string) => post<{ ok: true }>(`/studio/dm/${id}/answer`, { answer }),
 
   // circles and life
-  circles: () => request<{ events: CircleEvent[]; groups: CircleGroup[]; city: string; area: string; interests: string[]; hasLocation: boolean; canCreate: boolean }>('/circles'),
-  createCircle: (body: { title: string; city: string; area?: string; startsAt: string; venueHint?: string; groupSize?: number; repeat?: 'none' | 'weekly' }) => post<{ event: CircleEvent }>('/circles/events', body),
+  circles: (query = '') => request<{ events: CircleEvent[]; hosting: CircleEvent[]; hostingPage: Page; groups: CircleGroup[]; city: string; area: string; interests: string[]; hasLocation: boolean; canCreate: boolean }>(`/circles${query ? `?${query}` : ''}`),
+  createCircle: (body: { title: string; city: string; area?: string; startsAt: string; venueHint?: string; groupSize?: number; repeat?: 'none' | 'weekly'; attendeeXp?: number; attendeeCode?: string }) => post<{ event: CircleEvent; codeError: string | null }>('/circles/events', body),
+  setCircleCode: (id: string, change: CodeChange) => put<{ hostCode: AttendeeCodeHost }>(`/circles/events/${id}/attendee-code`, change),
+  claimCircleCode: (id: string, code: string) => post<{ xp: number; newBadges: string[] }>(`/circles/events/${id}/claim`, { code }),
   joinCircle: (id: string, status: CircleStatus, note?: string) => post<{ ok: true; status: CircleStatus }>(`/circles/events/${id}/join`, { status, note }),
   leaveCircle: (id: string) => del<{ ok: true }>(`/circles/events/${id}/join`),
   matchCircle: (id: string) => post<{ groups: number; unmatched: number }>(`/circles/events/${id}/match`),
-  circleGroup: (id: string) => request<{ group: CircleGroup; opensInMinutes: number }>(`/circles/groups/${id}`),
+  circleGroup: (id: string) => request<{ group: CircleGroup; opensInMinutes: number; attendee: AttendeeCodeView | null }>(`/circles/groups/${id}`),
   circleSay: (id: string, body: string) => post<{ ok: true; id: string }>(`/circles/groups/${id}/messages`, { body }),
   circlePlan: (id: string, body: { venue?: string; plan?: string }) => post<{ ok: true }>(`/circles/groups/${id}/plan`, body),
   life: () => request<LifeSummary>('/life'),
@@ -568,10 +590,27 @@ export const api = {
   deleteInvoice: (id: string) => del<{ ok: true }>(`/finance/invoices/${id}`),
 
   // staff
+  // Coaching. The coach's side and the directory are under /coach; the student's side, and answers either way, under /me/coach.
+  coachHub: (query = '') => request<CoachHub>(`/coach${query ? `?${query}` : ''}`),
+  coachDirectory: (pq = '') => request<{ page: Page; coaches: CoachDirectoryEntry[] }>(withQ('/coach/directory', pq)),
+  saveCoachProfile: (body: { about?: string; open?: boolean }) => put<{ profile: CoachProfile }>('/coach/profile', body),
+  askToCoach: (about: string) => post<{ profile: CoachProfile }>('/coach/apply', { about }),
+  askStudent: (who: string) => post<{ link: CoachLink }>('/coach/requests', { who }),
+  askCoach: (coachId: string) => post<{ link: CoachLink }>(`/coach/ask/${coachId}`),
+  coachStudent: (id: string, query = '') => request<CoachStudentView>(`/coach/students/${id}${query ? `?${query}` : ''}`),
+  coachNote: (studentId: string, body: string) => post<{ ok: true; id: string }>(`/coach/students/${studentId}/notes`, { body }),
+  removeCoachNote: (studentId: string, noteId: string) => del<{ ok: true }>(`/coach/students/${studentId}/notes/${noteId}`),
+  coachAddTask: (studentId: string, body: CoachTaskInput) => post<{ node: Node }>(`/coach/students/${studentId}/tasks`, body),
+  coachEditTask: (studentId: string, taskId: string, body: Partial<Omit<CoachTaskInput, 'parentId'>>) => patch<{ node: Node }>(`/coach/students/${studentId}/tasks/${taskId}`, body),
+  myCoach: (query = '') => request<MyCoachResponse & { linksPage: Page }>(`/me/coach${query ? `?${query}` : ''}`),
+  myCoachLog: (pq = '') => request<{ log: CoachLogEntry[]; logPage: Page }>(withQ('/me/coach/log', pq)),
+  answerCoach: (linkId: string, yes: boolean) => post<{ link: CoachLink | null }>(`/me/coach/links/${linkId}/answer`, { yes }),
+  endCoach: (linkId: string) => del<{ ok: true }>(`/me/coach/links/${linkId}`),
+  shareWithCoach: (linkId: string, share: Partial<CoachShare>) => patch<{ link: CoachLink | null }>(`/me/coach/links/${linkId}/share`, share),
   manageOverview: () =>
     request<{
       permissions: Permission[];
-      queues: { campaigns: number; applications: number; tickets: number; clubApplied: number; bountyQueue: number; proposals: number; assignments: number };
+      queues: { campaigns: number; applications: number; tickets: number; clubApplied: number; bountyQueue: number; proposals: number; assignments: number; coachAsks: number };
       members: number;
       newThisWeek: number;
       postsThisWeek: number;
@@ -610,6 +649,14 @@ export const adminApi = {
   revokeHonor: (key: string, id: string, honor: string) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/honors/${honor}`, { method: 'DELETE' }),
   addPoints: (key: string, id: string, amount: number, note: string) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/points`, { method: 'POST', body: JSON.stringify({ amount, note }) }),
   setPlan: (key: string, id: string, plan: PlanKey, days: number) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/plan`, { method: 'POST', body: JSON.stringify({ plan, days }) }),
+  attendeeCodes: (key: string, app: string, q: string, pq = '') => adminRequest<{ page: Page; codes: AdminAttendeeCode[] }>(key, withQ(`/attendee-codes?app=${encodeURIComponent(app)}&q=${encodeURIComponent(q)}`, pq)),
+  setAttendeeCode: (key: string, app: string, id: string, change: CodeChange) => adminRequest<{ code: AdminAttendeeCode | null }>(key, `/attendee-codes/${app}/${id}`, { method: 'PUT', body: JSON.stringify(change) }),
+  coachAsks: (key: string, pq = '') => adminRequest<{ page: Page; asks: AdminCoachAsk[] }>(key, withQ('/coaching/asks', pq)),
+  declineCoachAsk: (key: string, userId: string) => adminRequest<{ ok: true }>(key, `/coaching/asks/${userId}/decline`, { method: 'POST', body: '{}' }),
+  coaches: (key: string, pq = '') => adminRequest<{ page: Page; coaches: { id: string; name: string; handle: string | null; email: string | null; students: number }[] }>(key, withQ('/coaching/coaches', pq)),
+  coachLinks: (key: string, status: string, pq = '') => adminRequest<{ page: Page; links: AdminCoachLink[] }>(key, withQ(`/coaching/links?status=${encodeURIComponent(status)}`, pq)),
+  linkCoach: (key: string, body: { coachId: string; student: string; mode: 'ask' | 'link' }) => adminRequest<{ link: AdminCoachLink | null }>(key, '/coaching/links', { method: 'POST', body: JSON.stringify(body) }),
+  endCoachLink: (key: string, id: string) => adminRequest<{ ok: true }>(key, `/coaching/links/${id}`, { method: 'DELETE' }),
   addCredits: (key: string, id: string, credits: number, note: string) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/credits`, { method: 'POST', body: JSON.stringify({ credits, note }) }),
   redemptions: (key: string, status?: string, pq = '') => adminRequest<{ page: Page; redemptions: AdminRedemption[] }>(key, withQ(`/redemptions${status ? `?status=${status}` : ''}`, pq)),
   setRedemption: (key: string, id: string, status: 'fulfilled' | 'cancelled') => adminRequest<{ redemption: Redemption }>(key, `/redemptions/${id}`, { method: 'POST', body: JSON.stringify({ status }) }),

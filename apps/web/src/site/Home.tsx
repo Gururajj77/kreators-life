@@ -1,306 +1,264 @@
-import { HELP_FAQ, MODULE_GROUPS, RELATIONSHIPS, type ModuleGroup, type Relationship, type RelationshipKey , LIFE_AREAS, RELATIONSHIP_BY_KEY, type LifeAreaKey} from '@kreators/shared';
+import { BUMLING, characterTitle, HELP_FAQ, MODULE_BY_KEY, RELATIONSHIPS } from '@kreators/shared';
 import { useQuery } from '@tanstack/react-query';
-import { motion, useInView, useReducedMotion } from 'motion/react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { motion } from 'motion/react';
 import { Link } from 'react-router';
 import { Avatar } from '../components/Avatar';
-import { Person } from '../components/Person';
 import { publicApi } from '../lib/api';
-import { BRAND_PITCH, FEATURES, featuresForLifeArea, featuresForRelationship, SITE_FEATURES } from './content';
-import { ListingCard } from './ListingCard';
-import { ScrollTroupe } from './ScrollTroupe';
 import { useSession } from '../lib/store';
+import { BRAND_PITCH, FEATURES } from './content';
+import { rise, Tower } from './SevenRP';
 import { SiteLayout, useAppEntry } from './SiteLayout';
 
-/** Tells the troupe which relationship is on screen. Null means none, so everyone walks as equals. */
-function Zone({ value, onActive, children, className = '', id }: { value: RelationshipKey | null; onActive: (k: RelationshipKey | null) => void; children: ReactNode; className?: string; id?: string }) {
-  const ref = useRef<HTMLElement>(null);
-  const inView = useInView(ref, { margin: '-45% 0px -45% 0px' });
-  useEffect(() => {
-    if (inView) onActive(value);
-  }, [inView, value, onActive]);
-  return (
-    <section ref={ref} id={id} className={className}>
-      {children}
-    </section>
-  );
-}
+/**
+ * The landing page tells one story, in the PASTOR order: the problem, what it costs (the villains), the story and the
+ * solution (you are the hero, the app is the guide), the change it makes, the offer, and the one thing to do next.
+ * The five Ws sit in the middle, so nobody has to guess who it is for, what it is, when, where or why. The seven
+ * relationships live on /7rp and every feature on /features; this page is only about why kreators.app is worth it.
+ */
 
-const rise = { initial: { opacity: 0, y: 24 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, margin: '-60px' }, transition: { duration: 0.5 } };
+/** The five villains every creator meets. Each one has an answer in the app, below. */
+const VILLAINS = [
+  { key: 'grind', name: 'The Grind', emoji: '🌀', does: 'Says one more video, one more hour. It takes your sleep first, then your mornings, then your mood.', costs: 'Burnout that shows up in your work too.' },
+  { key: 'scatter', name: 'The Scatter', emoji: '🧩', does: 'Ten apps, ten logins, and nothing talks to anything. Courses, gigs, money and notes all live in different places.', costs: 'Hours lost looking, and chances you never see.' },
+  { key: 'silence', name: 'The Silence', emoji: '🫥', does: 'You work alone in your room. Nobody checks in, cheers you on or tells you the truth.', costs: 'Doubt grows fast when nobody is around.' },
+  { key: 'drift', name: 'The Drift', emoji: '⏳', does: 'Days pass. Goals sit in a note you never open. You feel busy, but nothing moves.', costs: 'A year goes by, and you are in the same place.' },
+  { key: 'squeeze', name: 'The Squeeze', emoji: '🪫', does: 'Money comes in bits, late, or not at all. Brands want views; you want rent.', costs: 'Stress that leaks into every relationship you have.' },
+] as const;
 
-function Tower() {
-  const reduce = useReducedMotion();
-  const floors = [...RELATIONSHIPS].sort((a, b) => b.floor - a.floor);
-  return (
-    <div className="relative mx-auto flex w-full max-w-[360px] flex-col items-center gap-[6px]" aria-hidden="true">
-      {floors.map((r, i) => {
-        const width = 46 + (7 - r.floor) * 8;
-        return (
-          <motion.div
-            key={r.key}
-            className="relative flex h-[44px] items-center justify-center rounded-pill"
-            style={{ width: `${width}%`, background: r.color }}
-            initial={reduce ? false : { opacity: 0, scale: 0.6, y: -30 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ delay: 0.1 + i * 0.08, type: 'spring', stiffness: 260, damping: 18 }}
-          >
-            <motion.div className="absolute -top-[30px]" animate={reduce ? undefined : { y: [0, -6, 0] }} transition={{ duration: 2.4 + i * 0.2, repeat: Infinity, ease: 'easeInOut', delay: i * 0.3 }}>
-              <Avatar relationship={r.key} size={44} decorative />
-            </motion.div>
-          </motion.div>
-        );
-      })}
-    </div>
-  );
-}
-
-function FloorSection({ r, onActive }: { r: Relationship; onActive: (k: RelationshipKey | null) => void }) {
-  const features = featuresForRelationship(r.key);
-  const dark = r.text === '#FFFFFF';
-  return (
-    <Zone value={r.key} onActive={onActive} className="scroll-mt-xl">
-      <motion.div {...rise} className="grid gap-md rounded-card p-md md:grid-cols-[1fr_2fr] md:items-center md:gap-lg md:p-lg" style={{ background: `var(--soft-${r.key})` }}>
-        <div className="flex flex-col items-center gap-sm">
-          <motion.div whileInView={{ rotate: [0, -6, 6, 0] }} viewport={{ margin: '-30%' }} transition={{ duration: 0.9 }}>
-            <Avatar relationship={r.key} size={160} mood="excited" />
-          </motion.div>
-          <div className="h-[16px] w-[200px] rounded-pill" style={{ background: r.color }} aria-hidden="true" />
-          <p className="m-0 text-[14px] font-extrabold" style={{ color: `var(--deep-${r.key})` }}>
-            Floor {r.floor} of 7
-          </p>
-        </div>
-        <div>
-          <h3 className="m-0 text-[32px] leading-tight md:text-[40px]">{r.name}</h3>
-          <p className="mt-xs m-0 text-[18px] font-bold leading-snug">“{r.greeting}”</p>
-          <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">
-            The question {r.character}, your {r.role}, keeps asking: <span className="text-ink">{r.question}</span>
-          </p>
-          {features.length > 0 && (
-            <ul className="mt-md flex list-none flex-wrap gap-xs p-0 m-0">
-              {features.map((m) => (
-                <li key={m.key}>
-                  <Link to={`/features/${m.key}`} className={`toy inline-flex min-h-[40px] items-center gap-xs rounded-pill px-sm text-[14px] font-bold ${dark ? 'text-white' : 'text-ink-fixed'}`} style={{ background: r.color, ['--toy-color' as string]: r.deep }}>
-                    <span aria-hidden="true">{m.emoji}</span>
-                    {m.name}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </motion.div>
-    </Zone>
-  );
-}
-
-/** One of the five areas of life, with the apps that serve it, in its relationship's colour. */
-function LifeAreaSection({ k }: { k: LifeAreaKey }) {
-  const meta = LIFE_AREAS[k];
-  const r = RELATIONSHIP_BY_KEY[meta.relationship];
-  const features = featuresForLifeArea(k);
-  const dark = r.text === '#FFFFFF';
-  return (
-    <motion.div {...rise} className="grid gap-md rounded-card p-md md:grid-cols-[1fr_2fr] md:items-center md:gap-lg md:p-lg" style={{ background: `var(--soft-${r.key})` }}>
-      <div className="flex flex-col items-center gap-sm">
-        <Avatar relationship={r.key} size={120} mood="happy" />
-        <p className="m-0 text-[36px]" aria-hidden="true">
-          {meta.emoji}
-        </p>
-      </div>
-      <div>
-        <h3 className="m-0 text-[32px] leading-tight md:text-[40px]">{meta.name}</h3>
-        <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">{meta.blurb}</p>
-        <ul className="mt-md flex list-none flex-wrap gap-xs p-0 m-0">
-          {features.map((m) => (
-            <li key={m.key}>
-              <Link to={`/features/${m.key}`} className={`toy inline-flex min-h-[40px] items-center gap-xs rounded-pill px-sm text-[14px] font-bold ${dark ? 'text-white' : 'text-ink-fixed'}`} style={{ background: r.color, ['--toy-color' as string]: r.deep }}>
-                <span aria-hidden="true">{m.emoji}</span>
-                {m.name}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </motion.div>
-  );
-}
-
-const DAILY = [
-  { label: 'Check in', hint: '+10 points', color: 'var(--color-r4)', text: 'var(--color-ink-fixed)' },
-  { label: 'Pip’s small act: text a friend you have not seen this month', hint: 'Friendship', color: 'var(--color-r2)', text: 'var(--color-ink-fixed)' },
-  { label: 'Draft the first minute of the video', hint: 'ready in 7 min', color: 'var(--color-r1)', text: '#fff' },
+/** How the app beats each villain: what it does, what you get, and the apps that do it. */
+const ANSWERS: { villain: (typeof VILLAINS)[number]['key']; how: string; benefit: string; apps: string[] }[] = [
+  { villain: 'grind', how: 'A routine built from your real day, a wake time that moves thirty minutes a week, and trackers for sleep, mood and stress. Your daily brief tells you when sleep starts to dip.', benefit: 'You keep your energy, so your best work lasts.', apps: ['today', 'life', 'sleep', 'mindful'] },
+  { villain: 'scatter', how: 'One app for learning, paid work, brand campaigns, your shop and your money. Switch on only what you need; the rest stays out of the way.', benefit: 'One place and one login. Nothing slips past you.', apps: ['school', 'work', 'shop', 'finance'] },
+  { villain: 'silence', how: 'Small circles near you, run clubs, events, a kind community, and a life coach if you want one, who sees only what you share.', benefit: 'People in your corner, every week.', apps: ['circles', 'run', 'party', 'community', 'coaching'] },
+  { villain: 'drift', how: 'Seven pillars, each a pyramid from a foundation you will not let break down to the task for today. Reviews each week and month show what moved.', benefit: 'A big goal becomes one box you can tick today.', apps: ['tower', 'reviews', 'journal'] },
+  { villain: 'squeeze', how: 'Paid gigs, brand campaigns, pay for every verified view, your own shop with fair fees, and all your money in one picture.', benefit: 'More ways to earn, and a clear view of what comes in.', apps: ['army', 'win', 'shop', 'finance'] },
 ];
 
+const FIVE_WS = [
+  { w: 'Who', text: 'Creators, freelancers, students and anyone building something of their own, aged eighteen and up.' },
+  { w: 'What', text: 'A daily game for the seven relationships in your life, with the apps a creator needs built in: learn, earn, meet people, sell and stay well.' },
+  { w: 'When', text: 'A few minutes a day. Check in, do one small act, tick one task. Then a short look back each week and month.' },
+  { w: 'Where', text: 'On your phone or laptop, in the browser. Nothing to install. Add an email and your progress follows you anywhere.' },
+  { w: 'Why', text: 'A career built on burnout does not last. When the seven relationships are strong, the work gets better too.' },
+];
+
+const BEFORE = ['Up at three in the morning, editing again', 'Goals in a note you never open', 'Ten apps and no plan', 'Nobody to check in with', 'Money you cannot see coming'];
+const AFTER = ['A routine that fits your real day', 'Today’s task moves a big goal', 'One app with only what you use', 'Circles, clubs and a coach who check in', 'All your money in and out, in one place'];
+
+const FREE = ['The daily game: check in, a small act, a task', 'Your seven pillars and the strategy session', 'Every app you switch on, from School to the Shop', 'The assistant’s tap flows, and help any time'];
+
 export function Home() {
-  const [active, setActive] = useState<RelationshipKey | null>(null);
-  const [view, setView] = useState<'seven' | 'five'>('seven');
   const entry = useAppEntry();
   const token = useSession((s) => s.token);
+  const start = token ? entry : '/start';
   const stats = useQuery({ queryKey: ['site', 'stats'], queryFn: publicApi.stats });
-  const featured = useQuery({ queryKey: ['site', 'featured'], queryFn: () => publicApi.explore({ featured: true, limit: 6 }) });
-  const latest = useQuery({ queryKey: ['site', 'latest'], queryFn: () => publicApi.explore({ limit: 6 }) });
-  const live = (featured.data?.listings.length ? featured.data.listings : latest.data?.listings) ?? [];
-  const groups: ModuleGroup[] = ['earn', 'community', 'wellbeing', 'creator'];
 
   return (
     <SiteLayout>
-      <ScrollTroupe active={active} />
-
-      <Zone value={null} onActive={setActive} className="grid gap-lg pt-lg md:grid-cols-2 md:items-center md:pt-xl">
+      {/* The hero: who it is for and the promise, in one screen. */}
+      <section className="grid gap-lg pt-lg md:grid-cols-2 md:items-center md:pt-xl">
         <div className="@container">
-          <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-mute">The one stop for creators</p>
-          {/* Sized from the column width so each line stays whole: the longer line is 11.1em wide in Urbanist 900. */}
-          <h1 className="mt-xs text-[clamp(24px,8.7cqw,60px)] leading-[1.05]">
-            Better Creator life with
+          <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-mute">For creators who want a full life, not just a full feed</p>
+          {/* Sized from the column width so each line stays whole. */}
+          <h1 className="mt-xs text-[clamp(28px,9.5cqw,60px)] leading-[1.05] text-balance">
+            Grow your work
             <br />
-            The Seven Relationships
+            without losing your life
           </h1>
-          <p className="mt-md m-0 max-w-[520px] text-[18px] font-semibold leading-snug text-ink-soft">
-            A daily game that keeps the seven relationships of your life in balance, with everything a creator needs stacked on top: learning, paid work, brand campaigns, content rewards, events, run clubs, a shop, a store for gear, reviews by week and month, and tools for staying well.
+          <p className="mt-md m-0 max-w-[520px] text-pretty text-[18px] font-semibold leading-snug text-ink-soft">
+            kreators.app is a daily game for the seven relationships in your life, with the tools a creator needs built in. Three small boxes a day keep your work, your health and your people moving together.
           </p>
           <div className="mt-lg flex flex-wrap gap-sm">
-            <Link to={token ? entry : '/start'} className="toy inline-flex min-h-[56px] items-center rounded-pill bg-ink px-lg text-[18px] font-bold text-on-ink">
+            <Link to={start} className="toy inline-flex min-h-[56px] items-center rounded-pill bg-ink px-lg text-[18px] font-bold text-on-ink">
               {token ? 'Go to app' : 'Start free'}
             </Link>
-            <Link to="/explore" className="toy toy-ink inline-flex min-h-[56px] items-center rounded-pill border-2 border-ink bg-card px-lg text-[18px] font-bold">
-              Explore what is open
-            </Link>
+            <a href="#story" className="toy toy-ink inline-flex min-h-[56px] items-center rounded-pill border-2 border-ink bg-card px-lg text-[18px] font-bold">
+              See the story
+            </a>
           </div>
-          <p className="mt-sm m-0 text-[14px] font-semibold text-ink-mute">Free to start: an email and a password, nothing else. Already have an account? Go to app signs you in.</p>
+          <p className="mt-sm m-0 text-[14px] font-semibold text-ink-mute">Free to start: an email and a password, nothing else.</p>
         </div>
         <div className="pt-lg md:pt-0">
           <Tower />
         </div>
-      </Zone>
+      </section>
 
-      <Zone value={null} onActive={setActive} id="how" className="mt-2xl">
-        <motion.div {...rise}>
-          <h2 className="text-[32px] md:text-[40px]">How it works</h2>
-          <p className="mt-xs m-0 max-w-[640px] text-[16px] font-semibold text-ink-soft">Nothing to fill in. Answer a few questions, we build your pillars, and you tick a few boxes a day.</p>
+      {/* P: the problem. */}
+      <section id="problem" className="mt-2xl scroll-mt-lg" aria-labelledby="problem-heading">
+        <motion.div {...rise} className="max-w-[720px]">
+          <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-mute">The problem</p>
+          <h2 id="problem-heading" className="mt-xs text-[32px] md:text-[40px] text-balance">
+            The work grows. The rest of your life slips.
+          </h2>
+          <p className="mt-sm m-0 text-pretty text-[18px] font-semibold leading-snug text-ink-soft">
+            Creators are told to post more, grow faster and never stop. So the channel grows, and the things that hold a life together slip: sleep, friends, family, health, faith. You are not lazy. You are fighting five villains at once, and mostly alone.
+          </p>
         </motion.div>
-        <div className="mt-md grid gap-sm md:grid-cols-3">
+      </section>
+
+      {/* A: amplify. The villains, and what they cost when nobody stops them. */}
+      <section id="villains" className="mt-xl scroll-mt-lg" aria-labelledby="villains-heading">
+        <motion.div {...rise}>
+          <h2 id="villains-heading" className="text-[28px] md:text-[32px] text-balance">
+            Meet the villains
+          </h2>
+          <p className="mt-xs m-0 max-w-[640px] text-pretty text-[16px] font-semibold text-ink-soft">They never come all at once. They creep in, one late night at a time. Left alone, they win.</p>
+        </motion.div>
+        <ul className="mt-md grid list-none gap-sm p-0 m-0 sm:grid-cols-2 lg:grid-cols-3">
+          {VILLAINS.map((v) => (
+            <motion.li key={v.key} {...rise} className="rounded-card bg-card p-md shadow-toy-soft">
+              <p className="m-0 text-[32px]" aria-hidden="true">
+                {v.emoji}
+              </p>
+              <h3 className="mt-xs m-0 text-[22px] text-balance">{v.name}</h3>
+              <p className="mt-xs m-0 text-pretty text-[16px] font-semibold">{v.does}</p>
+              <p className="mt-sm m-0 text-pretty text-[14px] font-extrabold text-ink-soft">What it costs: {v.costs}</p>
+            </motion.li>
+          ))}
+        </ul>
+      </section>
+
+      {/* S: the story and the solution. You are the hero; the app is the map and the guides. */}
+      <section id="story" className="mt-2xl scroll-mt-lg" aria-labelledby="story-heading">
+        <motion.div {...rise} className="rounded-card bg-card p-md shadow-toy-soft md:p-lg">
+          <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-mute">The story</p>
+          <h2 id="story-heading" className="mt-xs text-[32px] md:text-[40px] text-balance">
+            You are the hero. Every hero needs a guide.
+          </h2>
+          <p className="mt-sm m-0 max-w-[720px] text-pretty text-[18px] font-semibold leading-snug text-ink-soft">
+            In this story the app is not the hero; you are. kreators.app is the map and the guides. Seven characters walk with you, one for each relationship in your life, and Bumling, the app’s own guide, shows you around.
+          </p>
+          <ul className="mt-md flex list-none flex-wrap gap-xs p-0 m-0" aria-label="Your guides">
+            <li className="flex items-center gap-xs rounded-pill bg-paper pr-sm pl-xs">
+              <Avatar relationship={BUMLING.key} size={36} decorative />
+              <span className="text-[14px] font-bold">{characterTitle(BUMLING.key)}</span>
+            </li>
+            {RELATIONSHIPS.map((r) => (
+              <li key={r.key} className="flex items-center gap-xs rounded-pill bg-paper pr-sm pl-xs">
+                <Avatar relationship={r.key} size={36} decorative />
+                <span className="text-[14px] font-bold">{characterTitle(r.key)}</span>
+              </li>
+            ))}
+          </ul>
+          <ol className="mt-lg grid list-none gap-sm p-0 m-0 md:grid-cols-3">
+            {[
+              ['1. A short chat', 'Say who you are and what you want. It switches on the apps that fit, and nothing else.'],
+              ['2. Your pillars', 'A quick session places your seven relationships and builds a pyramid for the ones that need you most.'],
+              ['3. Three boxes a day', 'Check in, do one small act, tick one task. Every tick moves a pillar, and your guides grow with you.'],
+            ].map(([t, d]) => (
+              <li key={t} className="rounded-tile bg-paper p-md">
+                <h3 className="m-0 text-[20px] text-balance">{t}</h3>
+                <p className="mt-xs m-0 text-pretty text-[14px] font-semibold text-ink-soft">{d}</p>
+              </li>
+            ))}
+          </ol>
+          <Link to="/7rp" className="toy toy-soft mt-md inline-flex min-h-[48px] items-center rounded-pill bg-paper px-md font-bold">
+            Meet the seven relationships
+          </Link>
+        </motion.div>
+      </section>
+
+      {/* The five Ws. */}
+      <section id="five-ws" className="mt-2xl scroll-mt-lg" aria-labelledby="ws-heading">
+        <motion.div {...rise}>
+          <h2 id="ws-heading" className="text-[28px] md:text-[32px] text-balance">
+            Who, what, when, where and why
+          </h2>
+        </motion.div>
+        <dl className="mt-md grid gap-sm m-0 sm:grid-cols-2 lg:grid-cols-5">
+          {FIVE_WS.map((x) => (
+            <motion.div key={x.w} {...rise} className="rounded-card bg-card p-md shadow-toy-soft">
+              <dt className="font-display text-[24px] font-extrabold">{x.w}</dt>
+              <dd className="mt-xs m-0 text-pretty text-[14px] font-semibold text-ink-soft">{x.text}</dd>
+            </motion.div>
+          ))}
+        </dl>
+      </section>
+
+      {/* The problems we tackle: each villain, how the app beats it, what you get, and the apps that do it. */}
+      <section id="tackle" className="mt-2xl scroll-mt-lg" aria-labelledby="tackle-heading">
+        <motion.div {...rise} className="flex flex-wrap items-end justify-between gap-sm">
+          <div>
+            <h2 id="tackle-heading" className="text-[32px] md:text-[40px] text-balance">
+              How you beat each villain
+            </h2>
+            <p className="mt-xs m-0 max-w-[640px] text-pretty text-[16px] font-semibold text-ink-soft">The problems we tackle, what the app does about each one, and what you get out of it.</p>
+          </div>
+          <Link to="/features" className="toy toy-ink inline-flex min-h-[48px] items-center rounded-pill border-2 border-ink bg-card px-md font-bold">
+            See every feature
+          </Link>
+        </motion.div>
+        <ul className="mt-md flex list-none flex-col gap-sm p-0 m-0">
+          {ANSWERS.map((a) => {
+            const v = VILLAINS.find((x) => x.key === a.villain)!;
+            return (
+              <motion.li key={a.villain} {...rise} className="grid gap-sm rounded-card bg-card p-md shadow-toy-soft md:grid-cols-[200px_1fr]">
+                <div>
+                  <p className="m-0 text-[28px]" aria-hidden="true">
+                    {v.emoji}
+                  </p>
+                  <h3 className="m-0 text-[20px] text-balance">Against {v.name}</h3>
+                </div>
+                <div>
+                  <p className="m-0 text-pretty text-[16px] font-semibold">{a.how}</p>
+                  <p className="mt-xs m-0 text-pretty text-[16px] font-extrabold">{a.benefit}</p>
+                  <ul className="mt-sm flex list-none flex-wrap gap-xs p-0 m-0">
+                    {a.apps
+                      .filter((k) => FEATURES[k] && MODULE_BY_KEY[k])
+                      .map((k) => (
+                        <li key={k}>
+                          <Link to={`/features/${k}`} title={FEATURES[k]?.tagline} className="toy toy-soft inline-flex min-h-[40px] items-center gap-xs rounded-pill bg-paper px-sm text-[14px] font-bold">
+                            <span aria-hidden="true">{MODULE_BY_KEY[k]?.emoji}</span>
+                            {MODULE_BY_KEY[k]?.name}
+                          </Link>
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              </motion.li>
+            );
+          })}
+        </ul>
+      </section>
+
+      {/* T: the change. Before and after, and the real numbers so far. */}
+      <section id="change" className="mt-2xl scroll-mt-lg" aria-labelledby="change-heading">
+        <motion.div {...rise}>
+          <h2 id="change-heading" className="text-[32px] md:text-[40px] text-balance">
+            What changes
+          </h2>
+        </motion.div>
+        <div className="mt-md grid gap-sm md:grid-cols-2">
           <motion.div {...rise} className="rounded-card bg-card p-md shadow-toy-soft">
-            <p className="m-0 text-[14px] font-extrabold text-ink-mute">1. Vibe check</p>
-            <h3 className="mt-xs m-0 text-[22px]">Questions that branch</h3>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Each answer picks the next question. Three minutes, and we know which pillars need you most.</p>
-            <div className="mt-md flex flex-col gap-xs" aria-hidden="true">
-              {['Who did you serve this week?', 'Mostly people I lead', 'A few close friends'].map((t, i) => (
-                <span key={t} className={`rounded-pill px-sm text-[14px] font-bold leading-[40px] ${i === 0 ? 'bg-ink text-on-ink' : 'bg-paper text-ink-soft'}`}>
-                  {t}
-                </span>
-              ))}
-            </div>
-          </motion.div>
-          <motion.div {...rise} className="rounded-card bg-card p-md shadow-toy-soft">
-            <p className="m-0 text-[14px] font-extrabold text-ink-mute">2. Your pillars</p>
-            <h3 className="mt-xs m-0 text-[22px]">A pyramid in every pillar</h3>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Foundation, guiding principle, value goal, goal outcome, project, task. Tick a task and the whole pyramid brightens.</p>
-            <ol className="mt-md m-0 flex list-none flex-col gap-[6px] p-0" aria-hidden="true">
-              {['Foundation', 'Guiding principle', 'Value goal', 'Goal outcome', 'Project', 'Task'].map((k, i) => (
-                <li key={k} className="rounded-pill text-[12px] font-extrabold leading-[26px]" style={{ background: RELATIONSHIPS[i]?.color ?? '#ccc', color: RELATIONSHIPS[i]?.text, width: `${100 - i * 10}%`, paddingLeft: 12 }}>
-                  {k}
+            <h3 className="m-0 text-[20px] text-ink-soft text-balance">Before</h3>
+            <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+              {BEFORE.map((b) => (
+                <li key={b} className="flex items-start gap-xs text-[16px] font-semibold text-ink-soft">
+                  <span aria-hidden="true">✕</span>
+                  {b}
                 </li>
               ))}
-            </ol>
+            </ul>
           </motion.div>
-          <motion.div {...rise} className="rounded-card bg-card p-md shadow-toy-soft">
-            <p className="m-0 text-[14px] font-extrabold text-ink-mute">3. The daily three</p>
-            <h3 className="mt-xs m-0 text-[22px]">Boxes, not forms</h3>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Every action is a checkbox row. Waits and limits stop anyone farming points.</p>
-            <ul className="mt-md flex list-none flex-col gap-xs p-0 m-0" aria-hidden="true">
-              {DAILY.map((d, i) => (
-                <li key={d.label} className="flex items-center gap-sm rounded-tile bg-paper p-xs">
-                  <span className={`flex size-[28px] shrink-0 items-center justify-center rounded-[8px] border-2 border-ink ${i === 0 ? 'bg-ink text-on-ink' : 'bg-card'}`}>{i === 0 ? '✓' : ''}</span>
-                  <span className="min-w-0 flex-1 text-[14px] font-bold leading-tight">{d.label}</span>
-                  <span className="shrink-0 rounded-pill px-xs text-[11px] font-extrabold leading-[20px]" style={{ background: d.color, color: d.text }}>
-                    {d.hint}
-                  </span>
+          <motion.div {...rise} className="rounded-card bg-r4 p-md text-on-fill">
+            <h3 className="m-0 text-[20px] text-on-fill text-balance">After</h3>
+            <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+              {AFTER.map((b) => (
+                <li key={b} className="flex items-start gap-xs text-[16px] font-bold">
+                  <span aria-hidden="true">✓</span>
+                  {b}
                 </li>
               ))}
             </ul>
           </motion.div>
         </div>
-        <div className="mt-md flex flex-col items-start gap-md rounded-card bg-card p-md shadow-toy-soft sm:flex-row sm:items-center">
-          <div className="flex shrink-0 items-end gap-xs" aria-hidden="true">
-            {[1, 2, 3, 4, 5].map((s) => (
-              <Person key={s} stage={s} size={40 + s * 8} decorative />
-            ))}
-          </div>
-          <p className="m-0 text-[16px] font-semibold text-ink-soft">
-            <span className="font-extrabold text-ink">You evolve too.</span> Your figure fills from the feet up as you climb, and each new form unlocks on a schedule nobody can rush.
-          </p>
-        </div>
-      </Zone>
-
-      <div id="floors" className="mt-2xl scroll-mt-lg">
-        <motion.div {...rise}>
-          <h2 className="text-[32px] md:text-[40px]">{view === 'seven' ? 'Seven areas' : 'Five areas of life'}</h2>
-          <p className="mt-xs m-0 max-w-[640px] text-[16px] font-semibold text-ink-soft">
-            {view === 'seven' ? 'Red at the bottom, violet at the top. Each pillar has its own character, and each part of the app serves at least one pillar.' : 'Physical, financial, emotional, mental and spiritual: the same seven relationships, read the way a life is usually read. Each one lists the apps that serve it.'}
-          </p>
-          <div role="group" aria-label="View" className="mt-sm flex flex-wrap gap-xs">
-            {(['seven', 'five'] as const).map((v) => (
-              <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)} className={`toy min-h-[44px] rounded-pill border-2 px-md text-[14px] font-bold ${view === v ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card text-ink'}`}>
-                {v === 'seven' ? 'Seven relationships' : 'Five areas of life'}
-              </button>
-            ))}
-          </div>
-        </motion.div>
-        <div className="mt-md flex flex-col gap-md">
-          {view === 'seven'
-            ? RELATIONSHIPS.map((r) => <FloorSection key={r.key} r={r} onActive={setActive} />)
-            : (Object.keys(LIFE_AREAS) as LifeAreaKey[]).map((k) => <LifeAreaSection key={k} k={k} />)}
-        </div>
-      </div>
-
-      <Zone value={null} onActive={setActive} id="features" className="mt-2xl scroll-mt-lg">
-        <motion.div {...rise}>
-          <h2 className="text-[32px] md:text-[40px]">Everything a creator needs</h2>
-          <p className="mt-xs m-0 max-w-[640px] text-[16px] font-semibold text-ink-soft">Every feature is a switch. Keep what you use, hide the rest. Each one opens into the app once you sign in.</p>
-        </motion.div>
-        {groups.map((g) => {
-          const list = SITE_FEATURES.filter((m) => m.group === g);
-          if (list.length === 0) return null;
-          return (
-            <div key={g} className="mt-lg">
-              <h3 className="text-[22px]">{MODULE_GROUPS[g]}</h3>
-              <ul className="mt-sm grid list-none gap-xs p-0 m-0 sm:grid-cols-2 lg:grid-cols-3">
-                {list.map((m) => (
-                  <motion.li key={m.key} {...rise}>
-                    <Link to={`/features/${m.key}`} className="toy toy-soft flex min-h-[120px] flex-col rounded-tile bg-card p-md">
-                      <span className="text-[28px]" aria-hidden="true">
-                        {m.emoji}
-                      </span>
-                      <span className="mt-xs block text-[18px] font-extrabold leading-tight">{m.name}</span>
-                      <span className="block text-[14px] font-semibold leading-snug text-ink-soft">{FEATURES[m.key]?.tagline ?? m.blurb}</span>
-                    </Link>
-                  </motion.li>
-                ))}
-              </ul>
-            </div>
-          );
-        })}
-      </Zone>
-
-      <Zone value={null} onActive={setActive} id="live" className="mt-2xl scroll-mt-lg">
-        <motion.div {...rise} className="flex flex-wrap items-end justify-between gap-sm">
-          <div>
-            <h2 className="text-[32px] md:text-[40px]">Open right now</h2>
-            <p className="mt-xs m-0 max-w-[640px] text-[16px] font-semibold text-ink-soft">Rewards, opportunities, events, programs and tools, straight from the team and the brands we work with.</p>
-          </div>
-          <Link to="/explore" className="toy toy-ink inline-flex min-h-[48px] items-center rounded-pill border-2 border-ink bg-card px-md font-bold">
-            Search everything
-          </Link>
-        </motion.div>
         {stats.data && (
-          <ul className="mt-md grid list-none grid-cols-2 gap-xs p-0 m-0 sm:grid-cols-3 lg:grid-cols-6" aria-label="Numbers">
+          <ul className="mt-md grid list-none grid-cols-2 gap-xs p-0 m-0 sm:grid-cols-4" aria-label="So far">
             {(
               [
                 ['members', stats.data.members],
-                ['rewards open', stats.data.rewardsOpen],
-                ['opportunities', stats.data.opportunitiesOpen],
                 ['events coming', stats.data.eventsUpcoming],
-                ['programs', stats.data.programs],
+                ['opportunities open', stats.data.opportunitiesOpen],
                 ['points paid out', stats.data.pointsPaid],
               ] as [string, number][]
             ).map(([label, value]) => (
@@ -311,28 +269,44 @@ export function Home() {
             ))}
           </ul>
         )}
-        {live.length > 0 ? (
-          <ul className="mt-md grid list-none gap-sm p-0 m-0 md:grid-cols-2 lg:grid-cols-3">
-            {live.map((l) => (
-              <ListingCard key={`${l.type}-${l.id}`} listing={l} />
+        <Link to="/explore" className="toy toy-soft mt-md inline-flex min-h-[48px] items-center rounded-pill bg-card px-md font-bold">
+          See what is open right now
+        </Link>
+      </section>
+
+      {/* O: the offer. What is free, and what brands get. */}
+      <section id="offer" className="mt-2xl scroll-mt-lg" aria-labelledby="offer-heading">
+        <motion.div {...rise} className="rounded-card bg-card p-md shadow-toy-soft md:p-lg">
+          <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-mute">The offer</p>
+          <h2 id="offer-heading" className="mt-xs text-[32px] md:text-[40px] text-balance">
+            Free to start. Free to stay.
+          </h2>
+          <ul className="mt-md grid list-none gap-xs p-0 m-0 sm:grid-cols-2">
+            {FREE.map((f) => (
+              <li key={f} className="flex items-start gap-xs rounded-tile bg-paper p-sm text-[16px] font-bold">
+                <span aria-hidden="true">✓</span>
+                {f}
+              </li>
             ))}
           </ul>
-        ) : (
-          <p className="mt-md m-0 rounded-tile bg-card p-md text-[16px] font-semibold text-ink-soft shadow-toy-soft">Listings appear here as soon as the team or a brand publishes one. Sign in and switch the modules on to be the first to see them.</p>
-        )}
-      </Zone>
+          <p className="mt-sm m-0 text-pretty text-[14px] font-semibold text-ink-soft">
+            Typing to the assistant, so it does things for you, comes with a plan.{' '}
+            <Link to="/pricing" className="font-bold underline underline-offset-4">
+              See pricing
+            </Link>
+            .
+          </p>
+        </motion.div>
+      </section>
 
-      <Zone value="servant_leader" onActive={setActive} id="brands" className="mt-2xl scroll-mt-lg">
+      <section id="brands" className="mt-xl scroll-mt-lg" aria-labelledby="brands-heading">
         <motion.div {...rise} className="grid gap-md rounded-card p-md md:grid-cols-[2fr_1fr] md:items-center md:p-lg" style={{ background: 'var(--tint-brown)' }}>
           <div>
             <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-mute">{BRAND_PITCH.tagline}</p>
-            <h2 className="mt-xs text-[32px] md:text-[40px]">Run campaigns and content rewards with real creators</h2>
-            <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">{BRAND_PITCH.pitch}</p>
-            <ol className="mt-md m-0 grid gap-xs p-0 pl-md text-[16px] font-semibold">
-              {BRAND_PITCH.steps.map((s) => (
-                <li key={s}>{s}</li>
-              ))}
-            </ol>
+            <h2 id="brands-heading" className="mt-xs text-[28px] md:text-[32px] text-balance">
+              Work with creators who show up
+            </h2>
+            <p className="mt-xs m-0 text-pretty text-[16px] font-semibold text-ink-soft">{BRAND_PITCH.pitch}</p>
             <div className="mt-md flex flex-wrap gap-sm">
               <Link to="/start" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
                 Create your brand
@@ -343,14 +317,16 @@ export function Home() {
             </div>
           </div>
           <div className="flex justify-center" aria-hidden="true">
-            <Avatar relationship="servant_leader" size={180} mood="excited" />
+            <Avatar relationship="servant_leader" size={160} mood="excited" />
           </div>
         </motion.div>
-      </Zone>
+      </section>
 
-      <Zone value={null} onActive={setActive} className="mt-2xl">
+      <section className="mt-2xl" aria-labelledby="faq-heading">
         <motion.div {...rise}>
-          <h2 className="text-[32px] md:text-[40px]">Questions people ask</h2>
+          <h2 id="faq-heading" className="text-[28px] md:text-[32px] text-balance">
+            Questions people ask
+          </h2>
         </motion.div>
         <div className="mt-md grid gap-xs md:grid-cols-2">
           {HELP_FAQ.map((f) => (
@@ -363,26 +339,29 @@ export function Home() {
                   </svg>
                 </span>
               </summary>
-              <p className="m-0 px-sm pb-sm text-[14px] font-semibold text-ink-soft">{f.a}</p>
+              <p className="m-0 px-sm pb-sm text-pretty text-[14px] font-semibold text-ink-soft">{f.a}</p>
             </details>
           ))}
         </div>
-      </Zone>
+      </section>
 
-      <Zone value={null} onActive={setActive} className="mt-2xl text-center">
+      {/* R: the response. One thing to do next. */}
+      <section className="mt-2xl text-center" aria-labelledby="start-heading">
         <motion.div {...rise} className="rounded-card bg-ink p-lg text-on-ink">
           <div className="flex justify-center gap-xs" aria-hidden="true">
             {RELATIONSHIPS.map((r) => (
               <Avatar key={r.key} relationship={r.key} size={36} decorative />
             ))}
           </div>
-          <h2 className="mt-md text-[32px] text-on-ink md:text-[40px]">Three boxes a day. Start today.</h2>
-          <p className="mt-xs m-0 text-[16px] font-semibold opacity-80">Free to play. Nothing to install. Add an email when you want your progress to follow you.</p>
-          <Link to={entry} className="toy mt-md inline-flex min-h-[56px] items-center rounded-pill bg-card px-lg text-[18px] font-bold text-ink">
-            Start the vibe check
+          <h2 id="start-heading" className="mt-md text-[32px] text-on-ink md:text-[40px] text-balance">
+            The villains have had enough time. Your turn.
+          </h2>
+          <p className="mt-xs m-0 text-pretty text-[16px] font-semibold text-on-ink/80">Three boxes a day. Free to start, nothing to install.</p>
+          <Link to={start} className="toy mt-md inline-flex min-h-[56px] items-center rounded-pill bg-card px-lg text-[18px] font-bold text-ink">
+            {token ? 'Go to app' : 'Start free'}
           </Link>
         </motion.div>
-      </Zone>
+      </section>
     </SiteLayout>
   );
 }

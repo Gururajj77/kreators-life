@@ -89,6 +89,8 @@ export interface UserRow {
   fee_bps: number;
   streak: number;
   best_streak: number;
+  /** The first-week checklist on Home was folded away. */
+  getting_started_hidden_at?: string | null;
   last_checkin: string | null;
   onboarded_at: string | null;
   created_at: string;

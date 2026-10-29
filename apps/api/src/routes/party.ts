@@ -52,7 +52,7 @@ party.post('/events', async (c) => {
   // An attendee code from the start, when the host set xp for the guests. A bad xp or code is said, and the event stays.
   let codeError: string | null = null;
   if (body.attendeeXp !== undefined && body.attendeeXp !== null && body.attendeeXp !== '' && Number(body.attendeeXp) > 0) {
-    const set = await setEventCode(db, 'party', id, start.toISOString(), user.id, { xp: body.attendeeXp, code: body.attendeeCode });
+    const set = await setEventCode(db, 'party', id, start.toISOString(), user.id, { xp: body.attendeeXp, code: body.attendeeCode }, true);
     if ('error' in set) codeError = set.error;
     else await audit(db, user.id, 'attendee_code.set', 'event', id, '', { xp: set.row.xp });
   }
@@ -79,7 +79,7 @@ party.get('/events/:id', async (c) => {
     registrations: regs.results.map(toReg),
     host,
     feedback: { average: fb?.avg ? Math.round(fb.avg * 10) / 10 : null, count: fb?.n ?? 0 },
-    hostCode: host ? await hostView(db, code, row.starts_at, row.registered) : null,
+    hostCode: host ? await hostView(db, code, row.starts_at, row.ends_at, row.registered) : null,
     attendee: !host && guest && row.status !== 'cancelled' ? await guestView(db, code, user.id, row.starts_at, row.ends_at) : null,
   });
 });
@@ -158,11 +158,36 @@ party.post('/events/:id/checkin', async (c) => {
   return c.json({ ok: true });
 });
 
+// A host makes the same event again on a new date: everything carries over but the guests, and the xp comes with a
+// new random code. A week later when no date is given.
+party.post('/events/:id/duplicate', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await db.prepare('SELECT * FROM events WHERE id = ?').bind(c.req.param('id')).first<{ id: string; title: string; description: string; event_type: string; host_user_id: string; venue: string; online_url: string | null; timezone: string; starts_at: string; ends_at: string; capacity: number | null; price_points: number; visibility: string }>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  if (row.host_user_id !== user.id && !can(user, 'events')) return c.json({ error: 'the host copies an event' }, 403);
+  const body = await c.req.json<{ startsAt?: unknown }>().catch(() => ({}) as { startsAt?: unknown });
+  const asked = typeof body.startsAt === 'string' ? new Date(body.startsAt) : new Date(Date.parse(row.starts_at) + 7 * 86_400_000);
+  if (Number.isNaN(asked.getTime())) return c.json({ error: 'a start time' }, 400);
+  if (asked.getTime() <= Date.now()) return c.json({ error: 'Pick a start time that has not passed yet.' }, 400);
+  const length = Date.parse(row.ends_at) - Date.parse(row.starts_at);
+  const id = newId();
+  await db
+    .prepare("INSERT INTO events (id, title, description, event_type, host_user_id, venue, online_url, timezone, starts_at, ends_at, capacity, price_points, visibility, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?)")
+    .bind(id, row.title, row.description, row.event_type, row.host_user_id, row.venue, row.online_url, row.timezone, asked.toISOString(), new Date(asked.getTime() + length).toISOString(), row.capacity, row.price_points, row.visibility, nowIso())
+    .run();
+  await audit(db, user.id, 'event.create', 'event', id, row.id, row.title);
+  const code = await codeOf(db, 'party', row.id);
+  if (code) await setEventCode(db, 'party', id, asked.toISOString(), user.id, { xp: code.xp, fresh: true }, true);
+  const fresh = await db.prepare(`${SELECT} WHERE e.id = ?`).bind(id).first<EventRow>();
+  return c.json({ event: fresh ? toEvent(fresh, null) : null }, 201);
+});
+
 // The host sets the guests' xp before it starts, and the code: their own word, or a fresh random one.
 party.put('/events/:id/attendee-code', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const row = await db.prepare('SELECT id, host_user_id, starts_at, status FROM events WHERE id = ?').bind(c.req.param('id')).first<{ id: string; host_user_id: string; starts_at: string; status: string }>();
+  const row = await db.prepare('SELECT id, host_user_id, starts_at, ends_at, status FROM events WHERE id = ?').bind(c.req.param('id')).first<{ id: string; host_user_id: string; starts_at: string; ends_at: string; status: string }>();
   if (!row) return c.json({ error: 'not found' }, 404);
   if (row.host_user_id !== user.id && !can(user, 'events')) return c.json({ error: 'the host sets the code' }, 403);
   if (row.status === 'cancelled') return c.json({ error: 'This event was cancelled.' }, 400);
@@ -172,10 +197,11 @@ party.put('/events/:id/attendee-code', async (c) => {
   if ('error' in set) return c.json({ error: set.error }, set.status);
   await audit(db, user.id, 'attendee_code.set', 'event', row.id, prev ? { xp: prev.xp } : '', { xp: set.row.xp, newCode: set.row.code !== prev?.code });
   const n = await db.prepare("SELECT COUNT(*) AS n FROM event_registrations WHERE event_id = ? AND status IN ('registered','attended')").bind(row.id).first<{ n: number }>();
-  return c.json({ hostCode: await hostView(db, set.row, row.starts_at, n?.n ?? 0) });
+  return c.json({ hostCode: await hostView(db, set.row, row.starts_at, row.ends_at, n?.n ?? 0) });
 });
 
-// A guest types the code at the event: the xp the host set, once. It also checks them in.
+// A guest types the code at the event: the xp the host set, once. It also checks them in. Whoever can see the code
+// (the host, events staff, admins) cannot claim it, even when they registered.
 party.post('/events/:id/claim', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
@@ -183,7 +209,7 @@ party.post('/events/:id/claim', async (c) => {
   if (!row) return c.json({ error: 'not found' }, 404);
   const reg = await db.prepare("SELECT id FROM event_registrations WHERE event_id = ? AND user_id = ? AND status IN ('registered','attended')").bind(row.id, user.id).first<{ id: string }>();
   const body = await c.req.json<{ code?: unknown }>().catch(() => ({}) as { code?: unknown });
-  const got = await claimEventCode(db, { app: 'party', thingId: row.id, userId: user.id, hostId: row.host_user_id, guest: Boolean(reg), cancelled: row.status === 'cancelled', startsAt: row.starts_at, endsAt: row.ends_at, code: body.code });
+  const got = await claimEventCode(db, { app: 'party', thingId: row.id, userId: user.id, host: row.host_user_id === user.id || can(user, 'events'), guest: Boolean(reg), cancelled: row.status === 'cancelled', startsAt: row.starts_at, endsAt: row.ends_at, code: body.code });
   if ('error' in got) return c.json({ error: got.error }, got.status);
   if (reg) await db.prepare("UPDATE event_registrations SET status = 'attended', checked_in_at = COALESCE(checked_in_at, ?) WHERE id = ?").bind(nowIso(), reg.id).run();
   return c.json(got, 201);

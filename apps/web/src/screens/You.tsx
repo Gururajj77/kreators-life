@@ -1,9 +1,10 @@
-import { BADGES, FOCUS_OPTIONS, HONORS, IDENTITY_BY_KEY, IDENTITY_STAGES, identityLabel, identityLine, levelFromXp, matchSetup, passwordProblem, MODULE_GROUP_ACCENT, MODULE_GROUP_BLURB, MODULE_GROUPS, POINTS, RELATIONSHIP_BY_KEY, RELATIONSHIPS, ROLE_META, setupSwitchable, type MeResponse, type ModuleGroup , nextBadge } from '@kreators/shared';
+import { BADGES, FOCUS_OPTIONS, HONORS, IDENTITY_BY_KEY, IDENTITY_STAGES, identityLabel, identityLine, levelFromXp, matchSetup, passwordProblem, MODULE_GROUP_ACCENT, MODULE_GROUP_BLURB, MODULE_GROUPS, POINTS, RELATIONSHIP_BY_KEY, RELATIONSHIPS, BADGE_META, badgeRoleOf, setupSwitchable, type MeResponse, type ModuleGroup , nextBadge } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
+import { MyCoachSection } from '../components/MyCoach';
 import { Nudge } from '../components/Nudge';
 import { Person } from '../components/Person';
 import { RoleBadge } from '../components/RoleBadge';
@@ -128,11 +129,11 @@ function YouView({ data }: { data: MeResponse }) {
             <span className="flex size-[64px] items-center justify-center overflow-hidden rounded-pill bg-card shadow-toy-soft">
               {identity ? <Person stage={identity.stage.stage} size={52} decorative /> : <Avatar relationship="self" size={44} decorative still />}
             </span>
-            <RoleBadge role={user.role} className="absolute right-0 bottom-0" />
+            <RoleBadge role={badgeRoleOf(user)} className="absolute right-0 bottom-0" />
           </span>
           <h1 className="min-w-0 truncate text-[30px]">{user.displayName ? user.displayName : 'You'}</h1>
           {user.isPro && <span className="shrink-0 rounded-pill bg-r7 px-sm py-xs text-[14px] font-extrabold text-white">Pro</span>}
-          {user.role !== 'user' && <span className="shrink-0 rounded-pill bg-r6 px-sm py-xs text-[14px] font-extrabold text-white">{ROLE_META[user.role].name}</span>}
+          {badgeRoleOf(user) !== 'user' && <span className="shrink-0 rounded-pill bg-r6 px-sm py-xs text-[14px] font-extrabold text-white">{BADGE_META[badgeRoleOf(user)].name}</span>}
         </div>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
           {(FOCUS_OPTIONS as readonly string[]).includes(user.focus) && user.focus !== 'Other' ? `Mostly ${user.focus.toLowerCase()}. ` : ''}Level{' '}
@@ -173,6 +174,8 @@ function YouView({ data }: { data: MeResponse }) {
         </Link>
         <Nudge className="mt-xs" text="Tags pick your apps and fill in your skills and interests. They never show on your public page." />
       </section>
+
+      <MyCoachSection />
 
       <section className="mt-lg" aria-labelledby="look-heading">
         <h2 id="look-heading" className="text-[24px]">

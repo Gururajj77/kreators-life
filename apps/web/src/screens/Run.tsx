@@ -1,4 +1,4 @@
-import { BADGES, kmLabel, paceLabel, RELATIONSHIP_BY_KEY, RUN_BADGES, RUN_PACE_META, RUN_PACES, RUN_REWARD, type Run as RunItem, type RunClub, type RunCollab, type RunCollabApplication, type RunPace, type RunResponse, type RunTracking } from '@kreators/shared';
+import { ATTENDEE_CODE_MAX, ATTENDEE_CODE_MIN, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, attendeeXpLocked, BADGES, kmLabel, normalizeCode, paceLabel, RELATIONSHIP_BY_KEY, RUN_BADGES, RUN_PACE_META, RUN_PACES, RUN_REWARD, type Run as RunItem, type RunClub, type RunCollab, type RunCollabApplication, type RunPace, type RunResponse, type RunTracking } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
@@ -13,6 +13,7 @@ import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { shortDay } from '../lib/date';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
+import { useNow } from '../lib/useNow';
 import { Pager, usePage } from '../components/Pager';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
@@ -174,7 +175,7 @@ function ClubsTab({ d, onStart }: { d: RunResponse; onStart: () => void }) {
   const others = d.clubs.filter((k) => !k.mine);
   return (
     <>
-      <Nudge className="mt-sm" text={`A logged run is ${RUN_REWARD.xp} xp and ${RUN_REWARD.points} points, and its minutes count as movement in Life.`} />
+      <Nudge className="mt-sm" text={`A logged run pays the xp its host set (up to ${ATTENDEE_XP_MAX}) and ${RUN_REWARD.points} points, and its minutes count as movement in Life.`} />
       <Button className="mt-md" onClick={onStart}>
         Start a club
       </Button>
@@ -620,7 +621,39 @@ function ApplySheet({ collab, clubs, onClose, onDone }: { collab: RunCollab | nu
   );
 }
 
-function RunCard({ r, host, member, onLog, onRecode, onStatus, busy }: { r: RunItem; host: boolean; member: boolean; onLog: () => void; onRecode: () => void; onStatus: (s: 'cancelled' | 'done') => void; busy: boolean }) {
+/** The host's own start code and the run's xp. The xp changes until the code opens, thirty minutes before the start; the code any time. */
+function RunCodeEditor({ r, onRecode, busy }: { r: RunItem; onRecode: (change: { xp?: number; code?: string }) => void; busy: boolean }) {
+  const [xp, setXp] = useState(String(r.xp));
+  const [own, setOwn] = useState('');
+  const started = attendeeXpLocked(r.startsAt, useNow());
+  const box = 'w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
+  return (
+    <div className="mt-sm flex flex-col gap-xs">
+      <div className="grid grid-cols-[1fr_auto] gap-xs">
+        <input type="number" inputMode="numeric" min={1} max={ATTENDEE_XP_MAX} value={xp} onChange={(e) => setXp(e.target.value)} disabled={started || busy} aria-label="Xp each runner" className={box} />
+        <Button variant="outline" disabled={started || busy || Number(xp) === r.xp || !(Number(xp) >= 1)} onClick={() => onRecode({ xp: Number(xp) })}>
+          Set xp
+        </Button>
+      </div>
+      {started && <p className="m-0 text-[12px] font-semibold text-ink-soft">The xp is fixed: the code is open.</p>}
+      <div className="grid grid-cols-[1fr_auto] gap-xs">
+        <input value={own} onChange={(e) => setOwn(normalizeCode(e.target.value))} maxLength={ATTENDEE_CODE_MAX} placeholder="Your own code" aria-label="Your own code" autoCapitalize="characters" disabled={busy} className={`${box} uppercase placeholder:normal-case`} />
+        <Button
+          variant="outline"
+          disabled={busy || own.length < ATTENDEE_CODE_MIN}
+          onClick={() => {
+            onRecode({ code: own });
+            setOwn('');
+          }}
+        >
+          Use it
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function RunCard({ r, host, member, onLog, onRecode, onStatus, busy }: { r: RunItem; host: boolean; member: boolean; onLog: () => void; onRecode: (change?: { xp?: number; code?: string }) => void; onStatus: (s: 'cancelled' | 'done') => void; busy: boolean }) {
   return (
     <li className="rounded-card bg-card p-md shadow-toy-soft">
       <p className="m-0 text-[16px] font-bold">{r.title}</p>
@@ -638,21 +671,26 @@ function RunCard({ r, host, member, onLog, onRecode, onStatus, busy }: { r: RunI
       )}
       {host && r.code && (
         <div className="mt-sm rounded-tile p-sm" style={pill('green')}>
-          <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">Start code</p>
-          <p className="m-0 font-display text-[40px] font-extrabold leading-none tracking-[0.2em]">{r.code}</p>
-          <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Show this at the start line. It works from thirty minutes before the start until three hours after the end, once per runner.</p>
+          <div className="flex items-start justify-between gap-sm">
+            <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">Start code</p>
+            <p className="m-0 shrink-0 rounded-pill bg-card px-sm py-xs text-[14px] font-extrabold">+{r.xp} xp each</p>
+          </div>
+          <p className="m-0 font-display text-[40px] font-extrabold leading-none tracking-[0.2em] break-all">{r.code}</p>
+          <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Show this at the start line. It works from thirty minutes before the start until three hours after the end, once per runner. You do not log your own run.</p>
+          <RunCodeEditor r={r} onRecode={onRecode} busy={busy} />
         </div>
       )}
       <div className="mt-sm flex flex-wrap gap-xs">
-        {member && !r.mine && r.entryState === 'open' && (
+        {/* Whoever is shown the code (the host, the team) shows it; they never log the run. */}
+        {member && !r.mine && !r.code && r.entryState === 'open' && (
           <Button onClick={onLog} disabled={busy}>
             Enter the start code
           </Button>
         )}
         {host && (
           <>
-            <Button variant="outline" onClick={onRecode} disabled={busy}>
-              New code
+            <Button variant="outline" onClick={() => onRecode()} disabled={busy}>
+              New random code
             </Button>
             <Button variant="outline" onClick={() => onStatus('done')} disabled={busy}>
               Mark done
@@ -695,13 +733,13 @@ function EntrySheet({ run, onClose, onDone }: { run: RunItem | null; onClose: ()
           className="flex flex-col gap-md"
           onSubmit={(e) => {
             e.preventDefault();
-            if (code.trim().length >= 4) log.mutate();
+            if (code.length >= ATTENDEE_CODE_MIN) log.mutate();
           }}
         >
           <p className="m-0 text-[14px] font-semibold text-ink-soft">{run.title}. The host shows the start code at the line.</p>
           <label className="block">
             <span className="block text-[14px] font-bold">Start code</span>
-            <input autoFocus value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} maxLength={8} autoCapitalize="characters" autoComplete="off" spellCheck={false} required className={`${field} font-display text-[28px] font-extrabold tracking-[0.2em]`} />
+            <input autoFocus value={code} onChange={(e) => setCode(normalizeCode(e.target.value))} maxLength={ATTENDEE_CODE_MAX} autoCapitalize="characters" autoComplete="off" spellCheck={false} required className={`${field} font-display text-[28px] font-extrabold tracking-[0.2em]`} />
           </label>
           <div className="grid grid-cols-2 gap-xs">
             <label className="block">
@@ -713,9 +751,9 @@ function EntrySheet({ run, onClose, onDone }: { run: RunItem | null; onClose: ()
               <input type="number" min={0} max={600} value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="Optional" className={field} />
             </label>
           </div>
-          <Nudge text={`Logs once per run. ${RUN_REWARD.xp} xp and ${RUN_REWARD.points} points, up to ${RUN_REWARD.perDay} runs a day. Minutes count as movement in Life.`} />
+          <Nudge text={`Logs once per run. ${run?.xp ?? RUN_REWARD.xp} xp and ${RUN_REWARD.points} points, up to ${RUN_REWARD.perDay} runs a day. Minutes count as movement in Life.`} />
           <Err e={log.isError ? log.error : null} />
-          <Button type="submit" size="lg" full disabled={log.isPending || code.trim().length < 4}>
+          <Button type="submit" size="lg" full disabled={log.isPending || code.length < ATTENDEE_CODE_MIN}>
             Log my run
           </Button>
         </form>
@@ -731,17 +769,29 @@ function AddRunSheet({ open, clubId, collabs, onClose, onDone }: { open: boolean
   const [meetingPoint, setMeetingPoint] = useState('');
   const [km, setKm] = useState('5');
   const [collabId, setCollabId] = useState('');
+  const [xp, setXp] = useState(String(ATTENDEE_XP_DEFAULT));
+  const [own, setOwn] = useState('');
+  // A run added after its start keeps its code but pays the usual xp; the sheet says so instead of closing.
+  const [late, setLate] = useState<string | null>(null);
   const add = useMutation({
-    mutationFn: () => api.addRun(clubId, { title, startsAt: new Date(startsAt).toISOString(), minutes: Number(minutes) || 60, meetingPoint, metres: Math.round((Number(km) || 5) * 1000), collabId: collabId || null }),
-    onSuccess: () => {
+    mutationFn: () => api.addRun(clubId, { title, startsAt: new Date(startsAt).toISOString(), minutes: Number(minutes) || 60, meetingPoint, metres: Math.round((Number(km) || 5) * 1000), collabId: collabId || null, xp: Number(xp) || ATTENDEE_XP_DEFAULT, ...(own ? { code: own } : {}) }),
+    onSuccess: (r) => {
       setTitle('');
       setStartsAt('');
       onDone();
-      onClose();
+      if (r.codeError) setLate(`The run is up. ${r.codeError}`);
+      else onClose();
     },
   });
   return (
-    <Sheet open={open} onClose={onClose} title="Add a run">
+    <Sheet
+      open={open}
+      onClose={() => {
+        setLate(null);
+        onClose();
+      }}
+      title="Add a run"
+    >
       <form
         className="flex flex-col gap-md"
         onSubmit={(e) => {
@@ -786,7 +836,22 @@ function AddRunSheet({ open, clubId, collabs, onClose, onDone }: { open: boolean
             </select>
           </label>
         )}
-        <p className="m-0 text-[12px] font-bold text-ink-soft">You get a six-letter start code for this run. Only you see it. Members log the run by entering it at the line.</p>
+        <div className="grid grid-cols-2 gap-xs">
+          <label className="block">
+            <span className="block text-[14px] font-bold">Xp for each runner</span>
+            <input type="number" inputMode="numeric" min={1} max={ATTENDEE_XP_MAX} value={xp} onChange={(e) => setXp(e.target.value)} className={field} />
+          </label>
+          <label className="block">
+            <span className="block text-[14px] font-bold">Your own code</span>
+            <input value={own} onChange={(e) => setOwn(normalizeCode(e.target.value))} maxLength={ATTENDEE_CODE_MAX} placeholder="Random" autoCapitalize="characters" className={`${field} uppercase placeholder:normal-case`} />
+          </label>
+        </div>
+        <p className="m-0 text-[12px] font-bold text-ink-soft">Up to {ATTENDEE_XP_MAX} xp, fixed thirty minutes before the start, when the code opens. You get a start code (six letters, or your own word) that only you see. Members log the run by entering it at the line.</p>
+        {late && (
+          <p role="status" className="m-0 rounded-tile bg-r3/30 p-sm text-[14px] font-bold">
+            {late}
+          </p>
+        )}
         <Err e={add.isError ? add.error : null} />
         <Button type="submit" size="lg" full disabled={add.isPending || !startsAt}>
           Add the run
@@ -810,7 +875,7 @@ export function RunClubPage() {
   const join = useMutation({ mutationFn: () => api.joinRunClub(id), onSuccess: after });
   const leave = useMutation({ mutationFn: () => api.leaveRunClub(id), onSuccess: after });
   const close = useMutation({ mutationFn: () => api.setRunClub(id, { status: 'closed' }), onSuccess: after });
-  const recode = useMutation({ mutationFn: (runId: string) => api.recodeRun(runId), onSuccess: () => q.refetch() });
+  const recode = useMutation({ mutationFn: (v: { runId: string; change?: { xp?: number; code?: string } }) => api.recodeRun(v.runId, v.change ?? {}), onSuccess: () => q.refetch() });
   const setRun = useMutation({ mutationFn: (v: { runId: string; status: 'cancelled' | 'done' }) => api.setRun(v.runId, v.status), onSuccess: after });
   const voidEntry = useMutation({ mutationFn: (entryId: string) => api.voidRunEntry(entryId), onSuccess: after });
 
@@ -895,7 +960,7 @@ export function RunClubPage() {
         <Err e={recode.isError ? recode.error : setRun.isError ? setRun.error : null} />
         <ul className="mt-sm flex list-none flex-col gap-sm p-0 m-0">
           {d.runs.map((r) => (
-            <RunCard key={r.id} r={r} host={k.host} member={k.mine} onLog={() => setLogging(r)} onRecode={() => recode.mutate(r.id)} onStatus={(status) => setRun.mutate({ runId: r.id, status })} busy={busy} />
+            <RunCard key={r.id} r={r} host={k.host} member={k.mine} onLog={() => setLogging(r)} onRecode={(change) => recode.mutate({ runId: r.id, change })} onStatus={(status) => setRun.mutate({ runId: r.id, status })} busy={busy} />
           ))}
         </ul>
       </section>

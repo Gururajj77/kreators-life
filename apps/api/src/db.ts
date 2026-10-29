@@ -22,6 +22,8 @@ export interface NodeRow {
   sort_order: number;
   created_at: string;
   updated_at: string;
+  /** The life coach who added this task, when one did. */
+  added_by?: string | null;
 }
 
 export const newId = () => crypto.randomUUID();
@@ -232,6 +234,7 @@ export function toNode(r: NodeRow, gate?: TaskGate): Node {
     sortOrder: r.sort_order,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    fromCoach: Boolean(r.added_by),
   };
 }
 

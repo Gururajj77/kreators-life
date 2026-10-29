@@ -43,6 +43,10 @@ export const LIMITS = {
   claim: { max: 10, windowSec: 3600 },
   /** Messages typed to the assistant. Each one is a model call paid in credits; the plan's own caps come on top. */
   assistant: { max: 60, windowSec: 3600 },
+  /** Coaching asks: a coach asking a student, a student asking a coach, and asking the team to be made a life coach. */
+  coachAsk: { max: 20, windowSec: 3600 },
+  /** What a life coach writes for a student: notes, and tasks added or changed. */
+  coachWrite: { max: 60, windowSec: 3600 },
 } as const;
 
 export type LimitName = keyof typeof LIMITS;
@@ -85,6 +89,15 @@ export const ROUTE_LIMITS: readonly { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE
   { method: 'POST', path: '/assistant', limit: 'assistant' },
   { method: 'POST', path: '/party/events/:id/claim', limit: 'claim' },
   { method: 'POST', path: '/circles/events/:id/claim', limit: 'claim' },
+  { method: 'POST', path: '/party/events/:id/duplicate', limit: 'create' },
+  { method: 'POST', path: '/community/:id/follow-post', limit: 'follow' },
+  { method: 'POST', path: '/community/replies/:id/react', limit: 'like' },
+  { method: 'POST', path: '/coach/requests', limit: 'coachAsk' },
+  { method: 'POST', path: '/coach/ask/:coachId', limit: 'coachAsk' },
+  { method: 'POST', path: '/coach/apply', limit: 'coachAsk' },
+  { method: 'POST', path: '/coach/students/:id/notes', limit: 'coachWrite' },
+  { method: 'POST', path: '/coach/students/:id/tasks', limit: 'coachWrite' },
+  { method: 'PATCH', path: '/coach/students/:id/tasks/:taskId', limit: 'coachWrite' },
   { method: 'POST', path: '/studio/brands/:id/sources/:sid/read', limit: 'research' },
   { method: 'POST', path: '/studio/brands/:id/research', limit: 'research' },
   { method: 'POST', path: '/studio/brands/:id/pieces', limit: 'generate' },

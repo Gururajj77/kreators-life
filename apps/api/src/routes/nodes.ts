@@ -32,30 +32,41 @@ nodes.get('/', async (c) => {
   return c.json({ nodes: rows.results.map((r) => toNode(r, gate)) });
 });
 
-nodes.post('/', async (c) => {
-  const db = c.env.DB;
-  const user = c.get('user');
-  const body = await c.req
-    .json<{ kind?: string; parentId?: string | null; relationship?: string; title?: string; note?: string; dueDate?: string | null; dueTime?: string | null; estimateMin?: number | null }>()
-    .catch(() => ({}) as Record<string, never>);
+/** What a layer is made from, as sent: checked here, whoever sends it. */
+export interface NodeBody {
+  kind?: unknown;
+  parentId?: unknown;
+  relationship?: unknown;
+  title?: unknown;
+  note?: unknown;
+  dueDate?: unknown;
+  dueTime?: unknown;
+  estimateMin?: unknown;
+  status?: unknown;
+}
+type Refused = { error: string; status: 400 | 404 };
 
-  if (!isNodeKind(body.kind)) return c.json({ error: 'bad kind' }, 400);
-  if (!isRelationshipKey(body.relationship)) return c.json({ error: 'bad relationship' }, 400);
+/**
+ * Add a layer to someone's pyramid. The one rule for it: the person's own tap, and a life coach adding a task to a
+ * student's pyramid (`addedBy` is the coach), so a coach's task waits, pays and ticks exactly like the student's own.
+ */
+export async function createNode(db: D1Database, ownerId: string, body: NodeBody, addedBy: string | null = null): Promise<{ row: NodeRow } | Refused> {
+  if (!isNodeKind(body.kind)) return { error: 'bad kind', status: 400 };
+  if (!isRelationshipKey(body.relationship)) return { error: 'bad relationship', status: 400 };
+  const kind = body.kind;
   const title = typeof body.title === 'string' ? body.title.trim().slice(0, 140) : '';
-  if (!title) return c.json({ error: 'title required' }, 400);
+  if (!title) return { error: 'title required', status: 400 };
   const note = typeof body.note === 'string' ? body.note.trim().slice(0, 500) : '';
   const dueDate = typeof body.dueDate === 'string' && DATE_RE.test(body.dueDate) ? body.dueDate : null;
-  const dueTime = body.kind === 'task' && typeof body.dueTime === 'string' && TIME_RE.test(body.dueTime) ? body.dueTime : null;
-  const estimateMin = body.kind === 'task' && Number.isFinite(Number(body.estimateMin)) && Number(body.estimateMin) > 0 ? Math.min(600, Math.round(Number(body.estimateMin))) : null;
+  const dueTime = kind === 'task' && typeof body.dueTime === 'string' && TIME_RE.test(body.dueTime) ? body.dueTime : null;
+  const estimateMin = kind === 'task' && Number.isFinite(Number(body.estimateMin)) && Number(body.estimateMin) > 0 ? Math.min(600, Math.round(Number(body.estimateMin))) : null;
 
-  const expectedParent = parentKind(body.kind);
+  const expectedParent = parentKind(kind);
   let parentId: string | null = null;
   if (expectedParent) {
-    if (typeof body.parentId !== 'string') return c.json({ error: `a ${expectedParent} is required first` }, 400);
-    const parent = await getNode(db, user.id, body.parentId);
-    if (!parent || parent.kind !== expectedParent || parent.relationship !== body.relationship) {
-      return c.json({ error: 'parent does not fit this rung' }, 400);
-    }
+    if (typeof body.parentId !== 'string') return { error: `a ${expectedParent} is required first`, status: 400 };
+    const parent = await getNode(db, ownerId, body.parentId);
+    if (!parent || parent.kind !== expectedParent || parent.relationship !== body.relationship) return { error: 'parent does not fit this layer', status: 400 };
     parentId = parent.id;
   }
 
@@ -63,27 +74,24 @@ nodes.post('/', async (c) => {
   const id = newId();
   const sortRow = await db
     .prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM nodes WHERE user_id = ? AND kind = ? AND relationship = ?')
-    .bind(user.id, body.kind, body.relationship)
+    .bind(ownerId, kind, body.relationship)
     .first<{ next: number }>();
   await db
     .prepare(
-      `INSERT INTO nodes (id, user_id, kind, parent_id, relationship, title, note, status, xp, due_date, completed_at, ready_at, sort_order, created_at, updated_at, due_time, estimate_min)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 0, ?, NULL, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO nodes (id, user_id, kind, parent_id, relationship, title, note, status, xp, due_date, completed_at, ready_at, sort_order, created_at, updated_at, due_time, estimate_min, added_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 0, ?, NULL, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(id, user.id, body.kind, parentId, body.relationship, title, note, dueDate, body.kind === 'task' ? readyFromNow() : null, sortRow?.next ?? 0, now, now, dueTime, estimateMin)
+    .bind(id, ownerId, kind, parentId, body.relationship, title, note, dueDate, kind === 'task' ? readyFromNow() : null, sortRow?.next ?? 0, now, now, dueTime, estimateMin, addedBy)
     .run();
-  const row = await getNode(db, user.id, id);
-  return c.json({ node: row ? toNode(row) : null }, 201);
-});
+  const row = await getNode(db, ownerId, id);
+  return row ? { row } : { error: 'not found', status: 404 };
+}
 
-nodes.patch('/:id', async (c) => {
-  const db = c.env.DB;
-  const user = c.get('user');
-  const row = await getNode(db, user.id, c.req.param('id'));
-  if (!row) return c.json({ error: 'not found' }, 404);
-  const body = await c.req
-    .json<{ title?: string; note?: string; dueDate?: string | null; status?: string; dueTime?: string | null; estimateMin?: number | null }>()
-    .catch(() => ({}) as Record<string, never>);
+/**
+ * Change a layer's words, date and plan, or archive it and bring it back. The one rule, for the person and for a
+ * life coach changing a task (who never sends a status). Returns the row as it is now.
+ */
+export async function editNode(db: D1Database, row: NodeRow, body: NodeBody): Promise<NodeRow> {
   const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim().slice(0, 140) : row.title;
   const note = typeof body.note === 'string' ? body.note.trim().slice(0, 500) : row.note;
   const dueDate = body.dueDate === null ? null : typeof body.dueDate === 'string' && DATE_RE.test(body.dueDate) ? body.dueDate : row.due_date;
@@ -100,8 +108,23 @@ nodes.patch('/:id', async (c) => {
     .prepare('UPDATE nodes SET title = ?, note = ?, due_date = ?, status = ?, ready_at = ?, updated_at = ?, due_time = ?, estimate_min = ? WHERE id = ?')
     .bind(title, note, dueDate, status, readyAt, nowIso(), dueTime, estimateMin, row.id)
     .run();
-  const fresh = await getNode(db, user.id, row.id);
-  return c.json({ node: fresh ? toNode(fresh) : null });
+  return (await getNode(db, row.user_id, row.id)) ?? row;
+}
+
+nodes.post('/', async (c) => {
+  const body = await c.req.json<NodeBody>().catch(() => ({}) as NodeBody);
+  const made = await createNode(c.env.DB, c.get('user').id, body);
+  if ('error' in made) return c.json({ error: made.error }, made.status);
+  return c.json({ node: toNode(made.row) }, 201);
+});
+
+nodes.patch('/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await getNode(db, user.id, c.req.param('id'));
+  if (!row) return c.json({ error: 'not found' }, 404);
+  const body = await c.req.json<NodeBody>().catch(() => ({}) as NodeBody);
+  return c.json({ node: toNode(await editNode(db, row, body)) });
 });
 
 nodes.delete('/:id', async (c) => {

@@ -1,4 +1,4 @@
-import { greetingFor, LIFE_AREAS, MODULE_GROUPS, money, MOODS, RELATIONSHIP_BY_KEY, STRESS_LEVELS, type HomeResponse, type ModuleGroup } from '@kreators/shared';
+import { badgeRoleOf, greetingFor, LIFE_AREAS, MODULE_GROUPS, money, MOODS, RELATIONSHIP_BY_KEY, STRESS_LEVELS, type HomeResponse, type ModuleGroup } from '@kreators/shared';
 import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router';
 import { PeriodPanel } from '../components/PeriodPanel';
@@ -13,6 +13,7 @@ import { Ring } from '../components/Ring';
 import { RoleBadge } from '../components/RoleBadge';
 import { Screen } from '../components/Screen';
 import { SearchBox } from '../components/SearchBox';
+import { DailyBrief } from '../components/DailyBrief';
 import { Section, SeeAll } from '../components/Section';
 import { api } from '../lib/api';
 import { prettyDate, todayLocal } from '../lib/date';
@@ -89,7 +90,7 @@ export function Home() {
             <span className="flex size-[64px] items-center justify-center overflow-hidden rounded-pill bg-paper">
               {identity ? <Person stage={identity.stage.stage} size={52} decorative /> : <Avatar relationship="self" size={44} decorative still />}
             </span>
-            {user && <RoleBadge role={user.role} className="absolute right-0 bottom-0" />}
+            {user && <RoleBadge role={badgeRoleOf(user)} className="absolute right-0 bottom-0" />}
           </Link>
           <div className="min-w-0">
             <h1 className="truncate text-[30px] text-on-ink">{firstName ? `Hi, ${firstName}!` : 'Hi there!'}</h1>
@@ -116,6 +117,8 @@ export function Home() {
           <SearchBox placeholder="Search anything" onDark />
         </div>
       </header>
+
+      <DailyBrief date={date} hour={hour} />
 
 
       {q.isPending && (

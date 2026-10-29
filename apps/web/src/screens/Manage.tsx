@@ -16,8 +16,9 @@ const PERMISSION_META: Record<Permission, { name: string; blurb: string; to: str
   support: { name: 'Support', blurb: 'Answer tickets from Help', to: '/help', emoji: '🛟', queue: (q) => q.tickets },
   review: { name: 'Review', blurb: 'Club, rewards, tools, TV and Fund proposals', to: '/club', emoji: '🔎', queue: (q) => q.clubApplied + q.proposals },
   mentor: { name: 'Mentor', blurb: 'Feedback on learners’ assignments', to: '/school', emoji: '🧑‍🏫', queue: (q) => q.assignments },
+  coach: { name: 'Life coach', blurb: 'Your students, their asks, notes and tasks', to: '/coaching', emoji: '🎯', queue: (q) => q.coachAsks },
 };
-type Queues = { campaigns: number; applications: number; tickets: number; clubApplied: number; bountyQueue: number; proposals: number; assignments: number };
+type Queues = { campaigns: number; applications: number; tickets: number; clubApplied: number; bountyQueue: number; proposals: number; assignments: number; coachAsks: number };
 
 export function Manage() {
   const me = useMe();
@@ -44,7 +45,8 @@ export function Manage() {
           </h2>
           {o.permissions.length === 0 && role !== 'admin' && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">No staff permissions yet. An admin grants them under Admin, People.</p>}
           <ul className="mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0">
-            {(role === 'admin' ? (Object.keys(PERMISSION_META) as Permission[]) : o.permissions).map((p) => {
+            {/* An admin holds every permission but Life coach, which the server lists only when given. */}
+            {(role === 'admin' ? (Object.keys(PERMISSION_META) as Permission[]).filter((p) => p !== 'coach' || o.permissions.includes('coach')) : o.permissions).map((p) => {
               const m = PERMISSION_META[p];
               const n = m.queue ? m.queue(o.queues) : 0;
               return (

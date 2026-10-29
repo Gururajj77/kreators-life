@@ -1,5 +1,5 @@
 import { IDENTITY_STAGES, type LeaderboardEntry, type LeaderboardSort } from '@kreators/shared';
-import { useState } from 'react';
+import { useParamState } from '../lib/useParamState';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
 import { BackLink } from '../components/PageHeader';
@@ -7,7 +7,8 @@ import { Screen } from '../components/Screen';
 import { useLeaderboard } from '../lib/queries';
 
 const SORTS: { key: LeaderboardSort; label: string; stat: (e: LeaderboardEntry) => string }[] = [
-  { key: 'xp', label: 'Xp', stat: (e) => `${e.xp} xp` },
+  { key: 'xp', label: 'All time', stat: (e) => `${e.xp} xp` },
+  { key: 'season', label: 'This month', stat: (e) => `${e.seasonXp} xp` },
   { key: 'streak', label: 'Streak', stat: (e) => `${e.streak} ${e.streak === 1 ? 'day' : 'days'}` },
   { key: 'badges', label: 'Badges', stat: (e) => `${e.badgeCount} ${e.badgeCount === 1 ? 'badge' : 'badges'}` },
 ];
@@ -42,7 +43,8 @@ function Entry({ e, stat }: { e: LeaderboardEntry; stat: string }) {
 }
 
 export function Leaderboard() {
-  const [by, setBy] = useState<LeaderboardSort>('xp');
+  const [byRaw, setBy] = useParamState('by', 'xp');
+  const by: LeaderboardSort = SORTS.some((s) => s.key === byRaw) ? (byRaw as LeaderboardSort) : 'xp';
   const q = useLeaderboard(by);
   const sort = SORTS.find((s) => s.key === by) ?? SORTS[0]!;
 
@@ -51,10 +53,10 @@ export function Leaderboard() {
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Leaderboard</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">The top twenty climbers. Badges count both the ones you earn and the ones you are awarded.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">The top twenty climbers. This month is a season: everyone starts level on the first, and the top three when it ends get the Season top three honor. Badges count both the ones you earn and the ones you are awarded.</p>
       </header>
 
-      <div className="mt-md grid grid-cols-3 gap-xs" role="group" aria-label="Rank by">
+      <div className="mt-md grid grid-cols-2 gap-xs sm:grid-cols-4" role="group" aria-label="Rank by">
         {SORTS.map((s) => (
           <button
             key={s.key}
@@ -88,7 +90,7 @@ export function Leaderboard() {
             <p className="mt-md m-0 rounded-tile bg-card p-sm text-[14px] font-semibold shadow-toy-soft">
               You are hidden from the leaderboard. Turn it on under{' '}
               <Link to="/you" className="underline underline-offset-4">
-                You
+                Profile
               </Link>
               .
             </p>
@@ -105,6 +107,11 @@ export function Leaderboard() {
               ))}
             </ol>
           )}
+          {by === 'season' && (
+            <p className="mt-sm m-0 text-[14px] font-bold text-ink-soft">
+              {q.data.season.label}, ends {new Date(q.data.season.endsAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}.
+            </p>
+          )}
           {q.data.me && q.data.me.rank > q.data.entries.length && (
             <div className="mt-md">
               <p className="m-0 text-[14px] font-bold text-ink-soft">Your spot</p>
@@ -112,6 +119,23 @@ export function Leaderboard() {
                 <Entry e={q.data.me} stat={sort.stat(q.data.me)} />
               </ol>
             </div>
+          )}
+          {q.data.past.length > 0 && (
+            <section className="mt-lg" aria-labelledby="seasons-heading">
+              <h2 id="seasons-heading" className="text-[24px]">
+                Past seasons
+              </h2>
+              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+                {q.data.past.map((p) => (
+                  <li key={p.season} className="rounded-tile bg-card p-sm shadow-toy-soft">
+                    <p className="m-0 text-[14px] font-extrabold">{p.label}</p>
+                    <p className="m-0 text-[14px] font-semibold text-ink-soft">
+                      {p.top.map((t) => `${t.place === 1 ? '🥇' : t.place === 2 ? '🥈' : '🥉'} ${t.name}${t.isMe ? ' (you)' : ''}, ${t.xp} xp`).join(' · ')}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
         </>
       )}

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { MAX_RUN_METRES, MAX_RUN_MINUTES, normalizeCode, RUN_PACES, RUN_REWARD, runEntryState, weekStreak, type Run, type RunClub, type RunClubDetail, type RunCollab, type RunCollabApplication, type RunCollabsResponse, type RunEntry, type RunResponse, type RunTracking } from '@kreators/shared';
+import { MAX_RUN_METRES, MAX_RUN_MINUTES, normalizeCode, RUN_CODE_WINDOW, RUN_PACES, RUN_REWARD, runEntryState, weekStreak, type Run, type RunClub, type RunClubDetail, type RunCollab, type RunCollabApplication, type RunCollabsResponse, type RunEntry, type RunResponse, type RunTracking } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
 import { newRunCode, setRunCode } from '../attendee';
 import { audit, badgesNow, can, diffBadges, nameOf, newId, notify, nowIso, num, oneOf, orgIdsOf, orgRole, str, pageOf, paged } from '../db';
@@ -102,7 +102,8 @@ run.get('/', async (c) => {
   const ask = pageOf(c);
   const [clubs, upcoming, mine, collabs, track] = await Promise.all([
     db.prepare(`${CLUB} WHERE k.status = 'active' AND (k.visibility = 'public' OR k.host_user_id = ?1 OR k.id IN (SELECT club_id FROM run_members WHERE user_id = ?1 AND status = 'member')) ORDER BY (next_run_at IS NULL), next_run_at, members DESC, k.created_at DESC LIMIT ? OFFSET ?`).bind(user.id, now, ask.limit, ask.offset).all<ClubRow>(),
-    db.prepare(`${RUN} WHERE r.status = 'published' AND r.ends_at >= ?2 AND r.club_id IN (SELECT club_id FROM run_members WHERE user_id = ?1 AND status = 'member') ORDER BY r.starts_at LIMIT 20`).bind(user.id, now).all<RunRow>(),
+    // Runs whose start code still works, done or not: people log a run on the way home.
+    db.prepare(`${RUN} WHERE r.status IN ('published','done') AND r.ends_at >= ?2 AND r.club_id IN (SELECT club_id FROM run_members WHERE user_id = ?1 AND status = 'member') ORDER BY r.starts_at LIMIT 20`).bind(user.id, new Date(Date.now() - RUN_CODE_WINDOW.after * 60_000).toISOString()).all<RunRow>(),
     db.prepare(`${ENTRY} WHERE e.user_id = ? AND e.status = 'logged'`).bind(user.id).all<EntryRow>(),
     db.prepare("SELECT COUNT(*) AS n FROM run_collabs WHERE status = 'open' AND ends_at >= ?").bind(now).first<{ n: number }>(),
     tracking(db, user.id),
@@ -161,8 +162,9 @@ run.get('/clubs/:id', async (c) => {
   const all = runs.results.map((r) => toRun(r, myEntries.get(r.id) ?? null, host));
   const detail: RunClubDetail = {
     club,
-    runs: all.filter((r) => r.status === 'published' && r.endsAt >= now).sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
-    past: all.filter((r) => r.status !== 'published' || r.endsAt < now),
+    // A run stays on the list while its start code works, done or not; after that, or cancelled, it is past.
+    runs: all.filter((r) => r.status !== 'cancelled' && r.entryState !== 'closed').sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
+    past: all.filter((r) => r.status === 'cancelled' || r.entryState === 'closed'),
     board: board.results.map((b) => ({ userId: b.user_id, name: nameOf({ display_name: b.name }), metres: b.metres, runs: b.runs })),
     collabs: collabs.results.map((k) => toCollab(k, [], false)),
     entries: entries.results.map(toEntry),
@@ -226,17 +228,18 @@ run.post('/clubs/:id/runs', async (c) => {
     collabId = body.collabId;
   }
   // The xp the run pays, set now by the host (shared caps it), and the start code: their own word or six random letters.
-  const set = newRunCode({ xp: body.xp, code: body.code });
+  const set = newRunCode({ xp: body.xp, code: body.code }, start.toISOString());
   if ('error' in set) return c.json({ error: set.error }, set.status);
   const id = newId();
   await db
     .prepare("INSERT INTO runs (id, club_id, title, meeting_point, starts_at, ends_at, metres, code, xp, collab_id, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?)")
     .bind(id, club.id, title, str(body.meetingPoint, 200), start.toISOString(), new Date(start.getTime() + minutes * 60_000).toISOString(), num(body.metres, 5000, 100, MAX_RUN_METRES) ?? 5000, set.code, set.xp, collabId, nowIso())
     .run();
+  await audit(db, user.id, 'attendee_code.set', 'run', id, '', { xp: set.xp });
   const members = await db.prepare("SELECT user_id FROM run_members WHERE club_id = ? AND status = 'member' AND user_id != ?").bind(club.id, user.id).all<{ user_id: string }>();
   for (const m of members.results) await notify(db, m.user_id, 'run', `New run: ${title}`, `${club.name}, ${new Date(start).toUTCString()}`, `/run/clubs/${club.id}`);
   const row = await db.prepare(`${RUN} WHERE r.id = ?`).bind(id).first<RunRow>();
-  return c.json({ run: row ? toRun(row, null, true) : null }, 201);
+  return c.json({ run: row ? toRun(row, null, true) : null, codeError: set.note }, 201);
 });
 
 async function runWithClub(db: D1Database, id: string) {
@@ -279,18 +282,26 @@ run.patch('/runs/:id', async (c) => {
   return c.json({ ok: true });
 });
 
-/** Pay one logged run: once per run, at most RUN_REWARD.perDay paid runs a day. Capped runs still log, they just do not pay. */
+/**
+ * Pay one logged run: once per run, at most RUN_REWARD.perDay paid runs a day. Capped runs still log, they just do
+ * not pay. The cap is checked inside the batch that pays: the entry takes its pay only while the day has room, and
+ * everything after it pays only when it did, so two entries at once cannot both slip under the cap.
+ */
 async function payRun(db: D1Database, userId: string, runId: string, entryId: string, xp: number): Promise<{ xp: number; points: number; capped: boolean }> {
   const now = nowIso();
   const dayStart = `${now.slice(0, 10)}T00:00:00`;
   const today = await db.prepare("SELECT COUNT(*) AS n FROM xp_events WHERE user_id = ? AND source = 'run' AND created_at >= ?").bind(userId, dayStart).first<{ n: number }>();
   if ((today?.n ?? 0) >= RUN_REWARD.perDay) return { xp: 0, points: 0, capped: true };
-  await db.batch([
-    db.prepare('UPDATE users SET xp = xp + ?, points = points + ? WHERE id = ?').bind(xp, RUN_REWARD.points, userId),
-    db.prepare("INSERT INTO xp_events (user_id, relationship, source, source_id, amount, created_at) VALUES (?, 'friendship', 'run', ?, ?, ?)").bind(userId, runId, xp, now),
-    db.prepare("INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, 'run', ?, ?)").bind(userId, RUN_REWARD.points, entryId, now),
-    db.prepare('UPDATE run_entries SET xp = ?, points = ? WHERE id = ?').bind(xp, RUN_REWARD.points, entryId),
+  // ?1 person, ?2 entry, ?3 xp, ?4 points.
+  const paid = 'EXISTS (SELECT 1 FROM run_entries WHERE id = ?2 AND points > 0)';
+  const done = await db.batch([
+    db.prepare("UPDATE run_entries SET xp = ?3, points = ?4 WHERE id = ?2 AND (SELECT COUNT(*) FROM xp_events WHERE user_id = ?1 AND source = 'run' AND created_at >= ?5) < ?6").bind(userId, entryId, xp, RUN_REWARD.points, dayStart, RUN_REWARD.perDay),
+    db.prepare(`UPDATE users SET xp = xp + ?3, points = points + ?4 WHERE id = ?1 AND ${paid}`).bind(userId, entryId, xp, RUN_REWARD.points),
+    db.prepare(`UPDATE relationship_scores SET xp = xp + ?3 WHERE user_id = ?1 AND relationship = 'friendship' AND ${paid}`).bind(userId, entryId, xp),
+    db.prepare(`INSERT INTO xp_events (user_id, relationship, source, source_id, amount, created_at) SELECT ?1, 'friendship', 'run', ?4, ?3, ?5 WHERE ${paid}`).bind(userId, entryId, xp, runId, now),
+    db.prepare(`INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) SELECT ?1, ?3, 'run', ?2, ?4 WHERE ${paid}`).bind(userId, entryId, RUN_REWARD.points, now),
   ]);
+  if ((done[0]?.meta.changes ?? 0) === 0) return { xp: 0, points: 0, capped: true };
   return { xp, points: RUN_REWARD.points, capped: false };
 }
 
@@ -301,10 +312,11 @@ run.post('/runs/:id/entry', async (c) => {
   const found = await runWithClub(db, c.req.param('id'));
   if (!found) return c.json({ error: 'not found' }, 404);
   const { r, club } = found;
-  if (r.status !== 'published') return c.json({ error: `this run is ${r.status}` }, 400);
+  // A run marked done still takes entries inside its window: people log it on the way home.
+  if (r.status === 'cancelled') return c.json({ error: 'this run is cancelled' }, 400);
   if (!(await isMember(db, club.id, user.id))) return c.json({ error: 'join the club first' }, 403);
-  // The host shows the code; the xp is for the people who came to run with them.
-  if (club.host_user_id === user.id) return c.json({ error: 'Hosts show the start code; they do not log their own run.' }, 403);
+  // Whoever can see the code (the club's host, events staff, admins) shows it; the xp is for the people who came.
+  if (hostOf(club, user)) return c.json({ error: 'Hosts and the team show the start code; they do not log the run.' }, 403);
   const state = runEntryState(r.starts_at, r.ends_at);
   if (state === 'early') return c.json({ error: 'The start code works from thirty minutes before the start. Come back then.' }, 400);
   if (state === 'closed') return c.json({ error: 'This run closed three hours after its end. Ask the host if you were there.' }, 400);
@@ -344,6 +356,7 @@ run.post('/entries/:id/void', async (c) => {
   if (e.xp > 0 || e.points > 0) {
     stmts.push(
       db.prepare('UPDATE users SET xp = MAX(0, xp - ?), points = MAX(0, points - ?) WHERE id = ?').bind(e.xp, e.points, e.user_id),
+      db.prepare("UPDATE relationship_scores SET xp = MAX(0, xp - ?) WHERE user_id = ? AND relationship = 'friendship'").bind(e.xp, e.user_id),
       db.prepare("INSERT INTO xp_events (user_id, relationship, source, source_id, amount, created_at) VALUES (?, 'friendship', 'run:void', ?, ?, ?)").bind(e.user_id, e.run_id, -e.xp, now),
       db.prepare("INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, 'run:void', ?, ?)").bind(e.user_id, -e.points, e.id, now),
     );

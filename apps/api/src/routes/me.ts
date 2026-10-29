@@ -252,6 +252,14 @@ me.get('/export', async (c) => {
     ['creditAccount', 'SELECT * FROM credit_accounts WHERE user_id = ?'],
     ['creditLedger', 'SELECT * FROM credit_ledger WHERE user_id = ?'],
     ['attendeeClaims', 'SELECT * FROM attendee_claims WHERE user_id = ?'],
+    // Coaching, on either side: the links, the notes, the change log, and a coach's own line.
+    ['coachLinks', 'SELECT * FROM coach_links WHERE coach_id = ? OR student_id = ?'],
+    ['coachNotes', 'SELECT * FROM coach_notes WHERE coach_id = ? OR student_id = ?'],
+    ['coachLog', 'SELECT * FROM coach_log WHERE coach_id = ? OR student_id = ?'],
+    ['coachProfile', 'SELECT * FROM coach_profiles WHERE user_id = ?'],
+    ['postsFollowed', 'SELECT * FROM community_post_follows WHERE user_id = ?'],
+    ['replyReactions', 'SELECT * FROM community_reply_reactions WHERE user_id = ?'],
+    ['seasonResults', 'SELECT * FROM season_results WHERE user_id = ?'],
   ];
   const out: Record<string, unknown> = { exportedAt: nowIso(), user: toUser(user) };
   for (const [name, sql] of tables) {
@@ -268,7 +276,7 @@ me.delete('/', async (c) => {
   const body = await c.req.json<{ confirm?: string }>().catch(() => ({}) as { confirm?: string });
   if (body.confirm !== 'DELETE') return c.json({ error: 'send confirm: DELETE' }, 400);
   await db.batch([
-    db.prepare("UPDATE users SET display_name = 'Deleted member', email = NULL, phone = '', birth_date = '', password_hash = NULL, password_salt = NULL, handle = NULL, bio = '', avatar_url = '', socials_json = '{}', skills = '[]', categories = '[]', goals = '[]', interests = '[]', identities = '[]', intake_json = '{}', city = '', area = '', lat = NULL, lng = NULL, location = '', reminder_time = NULL, open_to_intros = 0 WHERE id = ?").bind(user.id),
+    db.prepare("UPDATE users SET display_name = 'Deleted member', email = NULL, phone = '', birth_date = '', password_hash = NULL, password_salt = NULL, handle = NULL, bio = '', avatar_url = '', socials_json = '{}', skills = '[]', categories = '[]', goals = '[]', interests = '[]', identities = '[]', intake_json = '{}', city = '', area = '', lat = NULL, lng = NULL, location = '', reminder_time = NULL, open_to_intros = 0, permissions = '[]' WHERE id = ?").bind(user.id),
     db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM nodes WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM not_to_do WHERE user_id = ?').bind(user.id),
@@ -300,6 +308,14 @@ me.delete('/', async (c) => {
     db.prepare('DELETE FROM assistant_actions WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM assistant_runs WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM attendee_claims WHERE user_id = ?').bind(user.id),
+    // Coaching ends with the account, on either side, and its notes, change log and coach line go with it.
+    db.prepare("UPDATE coach_links SET status = 'ended', ended_at = ?, ended_by = ? WHERE (coach_id = ? OR student_id = ?) AND status IN ('pending','active')").bind(nowIso(), user.id, user.id, user.id),
+    db.prepare('DELETE FROM coach_notes WHERE coach_id = ? OR student_id = ?').bind(user.id, user.id),
+    db.prepare('DELETE FROM coach_log WHERE coach_id = ? OR student_id = ?').bind(user.id, user.id),
+    db.prepare('DELETE FROM coach_profiles WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM community_post_follows WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM community_reply_reactions WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM event_reminders WHERE user_id = ?').bind(user.id),
     db.prepare("UPDATE products SET status = 'archived' WHERE owner_id = ?").bind(user.id),
   ]);
   await logEvent(db, 'user', user.id, 'account.deleted');
@@ -336,7 +352,6 @@ me.post('/reset', async (c) => {
     db.prepare('DELETE FROM nodes WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM not_to_do WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM reviews WHERE user_id = ?').bind(user.id),
-    db.prepare('DELETE FROM run_entries WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM xp_events WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM spark_completions WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM onboarding_answers WHERE user_id = ?').bind(user.id),
@@ -346,7 +361,9 @@ me.post('/reset', async (c) => {
     db.prepare('DELETE FROM contracts WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM routine_days WHERE user_id = ?').bind(user.id),
     // Starting over clears what the assistant did; a plan and its credits are paid for, so they stay. Attendee claims
-    // stay too: clearing them would let the same event's code be claimed again.
+    // and run entries stay too: clearing them would let the same event's code, or the same run, pay again. A life
+    // coach stays as well, with the notes and the change log: that is a person, not progress. The tasks a coach
+    // added go with the pyramids.
     db.prepare('DELETE FROM assistant_actions WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM assistant_runs WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM points_ledger WHERE user_id = ?').bind(user.id),

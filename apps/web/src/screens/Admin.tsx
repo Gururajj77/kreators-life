@@ -1,5 +1,7 @@
 import { DEFAULT_PAGE_SIZE, pageQuery, type Page, type PageSize } from '@kreators/shared';
 import { MAX_CREDIT_GRANT, PAID_PLANS, PLAN_DAYS, planName, type PlanKey } from '@kreators/shared';
+import { ATTENDEE_XP_MAX, codeProblem, normalizeCode, type AdminAttendeeCode } from '@kreators/shared';
+import { MAX_COACHES, type AdminCoachAsk, type AdminCoachLink } from '@kreators/shared';
 import {
   EVENT_TYPES,
   HONORS,
@@ -45,8 +47,17 @@ import { useMe } from '../lib/queries';
 
 const ADMIN_HONORS = HONORS.filter((h) => h.source === 'admin' && h.key !== 'pro');
 const KEY_STORE = 'kreators.adminKey';
-const PERMISSION_NAMES: Record<Permission, string> = { talent: 'Talent', cohorts: 'Cohorts', events: 'Events', finance: 'Finance', moderation: 'Moderation', support: 'Support', review: 'Review', mentor: 'Mentor' };
-type Tab = 'people' | 'flags' | 'listings' | 'orders' | 'webhooks' | 'kyc' | 'ops' | 'redemptions' | 'audit';
+const PERMISSION_NAMES: Record<Permission, string> = { talent: 'Talent', cohorts: 'Cohorts', events: 'Events', finance: 'Finance', moderation: 'Moderation', support: 'Support', review: 'Review', mentor: 'Mentor', coach: 'Life coach' };
+const TAB_KEYS = ['people', 'flags', 'listings', 'coaches', 'codes', 'orders', 'webhooks', 'kyc', 'ops', 'redemptions', 'audit'] as const;
+type Tab = (typeof TAB_KEYS)[number];
+/** The tab a link asked for (an inbox note about a coach ask opens Life coaches), else People. */
+const firstTab = (): Tab => {
+  const t = new URLSearchParams(window.location.search).get('tab');
+  return (TAB_KEYS as readonly string[]).includes(t ?? '') ? (t as Tab) : 'people';
+};
+const LINK_STATUS_NAMES: Record<AdminCoachLink['status'], string> = { pending: 'Waiting', active: 'Active', declined: 'Said no', ended: 'Ended' };
+const ASKED_BY_NAMES: Record<AdminCoachLink['askedBy'], string> = { coach: 'Coach asked', student: 'Student asked', admin: 'The team' };
+const APP_NAMES: Record<AdminAttendeeCode['app'], string> = { party: 'Party', run: 'Run', circles: 'Circles' };
 const ORDER_STATUSES = ['', 'pending', 'paid', 'test', 'failed', 'refunded', 'expired'] as const;
 const statusTone = (s: string) => (s === 'paid' || s === 'test' ? 'bg-r4 text-on-fill' : s === 'pending' ? 'bg-r3 text-ink-fixed' : s === 'refunded' || s === 'failed' ? 'bg-r1 text-white' : 'bg-paper text-ink-soft');
 const ROLE_OPTIONS = ROLES.map((r) => ({ value: ROLE_META[r].name, label: ROLE_META[r].name }));
@@ -77,7 +88,7 @@ const Label = ({ children, text }: { children: ReactNode; text: string }) => (
 const Pill = ({ children, tone = 'bg-paper text-ink-soft' }: { children: ReactNode; tone?: string }) => <span className={`inline-flex rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${tone}`}>{children}</span>;
 
 /**
- * The admin console. Every list is a table: sort by any column, search, filter by a column's values,
+ * The admin console. Every list is a table: sort by any column, search, filter by a column’s values,
  * tick rows and act on them together, and change a cell where it sits. Each change is written to the
  * audit log on the server.
  */
@@ -85,7 +96,7 @@ export function Admin() {
   const me = useMe();
   const sessionAdmin = me.data?.user.role === 'admin';
   const [key, setKey] = useState(readKey);
-  const [tab, setTab] = useState<Tab>('people');
+  const [tab, setTab] = useState<Tab>(firstTab);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -117,6 +128,19 @@ export function Admin() {
   const [grant, setGrant] = useState('1000');
   const [grantNote, setGrantNote] = useState('');
   const [preview, setPreview] = useState<{ name: string; access: Record<string, ModuleAccess> } | null>(null);
+  // life coaches: asks to become one, every coach, every link
+  const [coachAsks, setCoachAsks] = useState<AdminCoachAsk[] | null>(null);
+  const [coaches, setCoaches] = useState<{ id: string; name: string; handle: string | null; email: string | null; students: number }[]>([]);
+  const [coachLinks, setCoachLinks] = useState<AdminCoachLink[]>([]);
+  const [linkStatus, setLinkStatus] = useState('');
+  const [linkCoach, setLinkCoach] = useState('');
+  const [linkStudent, setLinkStudent] = useState('');
+  const [linkMode, setLinkMode] = useState<'ask' | 'link'>('ask');
+  const [linked, setLinked] = useState<string | null>(null);
+  // attendee codes: every event with guests, across Party, Run and Circles
+  const [codes, setCodes] = useState<AdminAttendeeCode[] | null>(null);
+  const [codeApp, setCodeApp] = useState('');
+  const [codeQ, setCodeQ] = useState('');
   // flags
   const [settings, setSettings] = useState<ModuleSetting[]>([]);
   const [overrides, setOverrides] = useState<FlagOverride[]>([]);
@@ -188,6 +212,11 @@ export function Admin() {
     if (sessionAdmin && !loaded && !busy) void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionAdmin]);
+  // A link that opened Life coaches fetches it once the rest is in.
+  useEffect(() => {
+    if (loaded && tab === 'coaches' && coachAsks === null) void loadCoaches();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded]);
 
   const applyUser = (u: AdminUser) => {
     setSelected((s) => (s?.id === u.id ? u : s));
@@ -241,6 +270,41 @@ export function Admin() {
       setKycList(k.kyc);
       gotPage('kyc', k.page);
     });
+  const loadCoaches = (status = linkStatus) =>
+    run(async () => {
+      const [a, k, l] = await Promise.all([adminApi.coachAsks(key, pq('coachAsks')), adminApi.coaches(key, pq('coaches')), adminApi.coachLinks(key, status, pq('coachLinks'))]);
+      setCoachAsks(a.asks);
+      gotPage('coachAsks', a.page);
+      setCoaches(k.coaches);
+      gotPage('coaches', k.page);
+      setCoachLinks(l.links);
+      gotPage('coachLinks', l.page);
+    });
+  const reloadCoachPart = (part: 'coachAsks' | 'coaches' | 'coachLinks') => (ask: Ask) =>
+    part === 'coachAsks'
+      ? adminApi.coachAsks(key, pq(part, ask)).then((a) => (setCoachAsks(a.asks), gotPage(part, a.page)))
+      : part === 'coaches'
+        ? adminApi.coaches(key, pq(part, ask)).then((k) => (setCoaches(k.coaches), gotPage(part, k.page)))
+        : adminApi.coachLinks(key, linkStatus, pq(part, ask)).then((l) => (setCoachLinks(l.links), gotPage(part, l.page)));
+  /** Saying yes to an ask is giving the Life coach permission, through the one permissions route. */
+  const makeCoach = async (userId: string, on: boolean) => {
+    const target = users.find((u) => u.id === userId) ?? (await adminApi.users(key, userId, pageQuery(1, DEFAULT_PAGE_SIZE))).users.find((u) => u.id === userId);
+    if (!target) throw new Error('That person is not on the server any more.');
+    const next = on ? [...new Set([...target.permissions, 'coach' as Permission])] : target.permissions.filter((p) => p !== 'coach');
+    applyUser((await adminApi.setPermissions(key, userId, next)).user);
+  };
+  const loadCodes = (app = codeApp, ask?: Ask) =>
+    run(async () => {
+      const r = await adminApi.attendeeCodes(key, app, codeQ, pq('codes', ask));
+      setCodes(r.codes);
+      gotPage('codes', r.page);
+    });
+  /** One event’s xp or code, by the hosts’ own rules; the row comes back as the server sees it. */
+  const setCode = (row: AdminAttendeeCode, change: { xp?: number; code?: string; fresh?: boolean }) =>
+    run(async () => {
+      const r = await adminApi.setAttendeeCode(key, row.app, row.thingId, change);
+      if (r.code) setCodes((all) => (all ?? []).map((x) => (x.app === row.app && x.thingId === row.thingId ? r.code! : x)));
+    });
   const loadOps = (ask?: Ask) =>
     run(async () => {
       const [f, o] = await Promise.all([adminApi.funnels(key), adminApi.outbox(key, pq('outbox', ask))]);
@@ -255,6 +319,8 @@ export function Admin() {
     if (k === 'webhooks' && hooks === null) void loadHooks();
     if (k === 'kyc' && kycList === null) void loadKyc();
     if (k === 'ops' && funnels === null) void loadOps();
+    if (k === 'codes' && codes === null) void loadCodes();
+    if (k === 'coaches' && coachAsks === null) void loadCoaches();
   };
   /** The same change on every ticked row, one after the other, then one refresh. */
   const each = async <T,>(rows: T[], fn: (row: T) => Promise<void>) => {
@@ -265,6 +331,8 @@ export function Admin() {
     ['people', 'People'],
     ['flags', 'Flags'],
     ['listings', 'Listings'],
+    ['coaches', 'Life coaches'],
+    ['codes', 'Attendee codes'],
     ['orders', 'Orders'],
     ['webhooks', 'Webhooks'],
     ['kyc', 'KYC'],
@@ -359,6 +427,7 @@ export function Admin() {
                     },
                     { key: 'email', label: 'Email', get: (u) => u.email ?? '', wide: true },
                     { key: 'role', label: 'Role', get: (u) => ROLE_META[u.role].name, filter: true, edit: { kind: 'select', options: ROLE_OPTIONS, onEdit: (u, v) => run(async () => applyUser((await adminApi.setRole(key, u.id, roleByName(String(v)))).user)) } },
+                    { key: 'coach', label: 'Life coach', get: (u) => (u.permissions.includes('coach') ? 'Yes' : u.coachAskedAt ? 'Asked' : 'No'), filter: true },
                     { key: 'plan', label: 'Plan', get: (u) => planName(u.plan), filter: true, edit: { kind: 'select', options: PLAN_OPTIONS, onEdit: (u, v) => run(async () => applyUser((await adminApi.setPlan(key, u.id, planByName(String(v)), PLAN_DAYS)).user)) } },
                     { key: 'credits', label: 'Credits', get: (u) => creditsOf(u), align: 'right' },
                     { key: 'perms', label: 'Permissions', get: (u) => (u.role === 'admin' ? 'all' : u.permissions.map((p) => PERMISSION_NAMES[p]).join(', ')), wide: true, wrap: true },
@@ -371,6 +440,7 @@ export function Admin() {
                     { label: 'Make creator', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setRole(key, u.id, 'user')).user))) },
                     { label: 'Make staff', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setRole(key, u.id, 'sub_admin')).user))) },
                     { label: 'Make admin', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setRole(key, u.id, 'admin')).user))) },
+                    { label: 'Make life coach', onClick: (rows) => run(() => each(rows, (u) => makeCoach(u.id, true))) },
                     { label: 'Start Pro', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setPlan(key, u.id, 'pro', PLAN_DAYS)).user))) },
                     { label: 'End plan', variant: 'ghost', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setPlan(key, u.id, 'none', PLAN_DAYS)).user))) },
                   ]}
@@ -390,7 +460,7 @@ export function Admin() {
                   </div>
 
                   <p className="mt-md m-0 text-[14px] font-bold">Permissions</p>
-                  <p className="m-0 text-[12px] font-semibold text-ink-soft">A permission is a job someone is trusted with. Admins hold all of them.</p>
+                  <p className="m-0 text-[12px] font-semibold text-ink-soft">A permission is a job someone is trusted with. Admins hold all of them but Life coach. A creator can hold Mentor and Life coach; the rest need the Staff role.</p>
                   <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label="Permissions">
                     {PERMISSIONS.map((p) => {
                       const on = selected.permissions.includes(p);
@@ -399,9 +469,9 @@ export function Admin() {
                           key={p}
                           type="button"
                           aria-pressed={on}
-                          disabled={busy || selected.role === 'admin'}
+                          disabled={busy || (selected.role === 'admin' && p !== 'coach')}
                           onClick={() => run(async () => applyUser((await adminApi.setPermissions(key, selected.id, on ? selected.permissions.filter((x) => x !== p) : [...selected.permissions, p])).user))}
-                          className={`toy rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on || selected.role === 'admin' ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+                          className={`toy rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on || (selected.role === 'admin' && p !== 'coach') ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
                         >
                           {PERMISSION_NAMES[p]}
                         </button>
@@ -1148,6 +1218,238 @@ export function Admin() {
                     { key: 'status', label: 'Status', get: (m) => m.status, filter: true, render: (m) => <Pill tone={m.status === 'sent' ? 'bg-r4 text-on-fill' : m.status === 'failed' ? 'bg-r1 text-white' : 'bg-paper text-ink-soft'}>{m.status}</Pill> },
                     { key: 'created', label: 'Created', get: (m) => m.createdAt, render: (m) => when(m.createdAt) },
                     { key: 'error', label: 'Error', get: (m) => m.error, wide: true, wrap: true },
+                  ]}
+                />
+              </div>
+            </section>
+          )}
+
+          {tab === 'coaches' && (
+            <section className="mt-md" aria-labelledby="coaches-heading">
+              <h2 id="coaches-heading" className="text-[24px]">
+                Life coaches
+              </h2>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+                A life coach wears the Life coach badge and works only with students who said yes. They see what each student shares, leave notes and add tasks, never the journal. A student has up to {MAX_COACHES} coaches. Giving or taking the badge is the Life coach permission; every change is audited, and the person is told.
+              </p>
+
+              <h3 className="mt-md text-[18px]">Asked to be a life coach</h3>
+              <div className="mt-sm">
+                <DataTable<AdminCoachAsk>
+                  rows={coachAsks ?? []}
+                  page={pages.coachAsks}
+                  onPage={turn('coachAsks', reloadCoachPart('coachAsks'))}
+                  rowKey={(r) => r.userId}
+                  label="Asked to be a life coach"
+                  selectable
+                  busy={busy}
+                  empty="Nobody is waiting."
+                  columns={[
+                    { key: 'name', label: 'Name', get: (r) => r.name, render: (r) => (<><span className="block font-bold">{r.name}</span>{r.handle && <span className="block text-[12px] font-bold text-ink-soft">@{r.handle}</span>}</>) },
+                    { key: 'email', label: 'Email', get: (r) => r.email ?? '', wide: true },
+                    { key: 'about', label: 'Their coaching', get: (r) => r.about, wrap: true },
+                    { key: 'asked', label: 'Asked', get: (r) => r.askedAt, render: (r) => day(r.askedAt) },
+                  ]}
+                  bulk={[
+                    { label: 'Make life coach', onClick: (rows) => run(() => each(rows, (r) => makeCoach(r.userId, true)).then(() => loadCoaches())) },
+                    { label: 'Say no', variant: 'ghost', onClick: (rows) => run(() => each(rows, (r) => adminApi.declineCoachAsk(key, r.userId).then(() => undefined)).then(() => loadCoaches())) },
+                  ]}
+                />
+              </div>
+
+              <h3 className="mt-md text-[18px]">Life coaches</h3>
+              <div className="mt-sm">
+                <DataTable<(typeof coaches)[number]>
+                  rows={coaches}
+                  page={pages.coaches}
+                  onPage={turn('coaches', reloadCoachPart('coaches'))}
+                  rowKey={(r) => r.id}
+                  label="Life coaches"
+                  selectable
+                  busy={busy}
+                  empty="No life coaches yet. Make one from an ask above, or from People."
+                  columns={[
+                    { key: 'name', label: 'Name', get: (r) => r.name, render: (r) => (<><span className="block font-bold">{r.name}</span>{r.handle && <span className="block text-[12px] font-bold text-ink-soft">@{r.handle}</span>}</>) },
+                    { key: 'email', label: 'Email', get: (r) => r.email ?? '', wide: true },
+                    { key: 'students', label: 'Students', get: (r) => r.students, align: 'right' },
+                  ]}
+                  bulk={[{ label: 'Take the badge', variant: 'ghost', onClick: (rows) => run(() => each(rows, (r) => makeCoach(r.id, false)).then(() => loadCoaches())) }]}
+                />
+              </div>
+
+              <h3 className="mt-md text-[18px]">Link a coach and a student</h3>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Ask, and the student says yes or no on their Profile tab. Link now only when they agreed with you already; they can still end it any time.</p>
+              <form
+                className="mt-sm grid gap-xs md:grid-cols-[1fr_1fr_auto_auto]"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void run(async () => {
+                    setLinked(null);
+                    const r = await adminApi.linkCoach(key, { coachId: linkCoach, student: linkStudent, mode: linkMode });
+                    setLinked(r.link ? `${r.link.status === 'active' ? 'Linked' : 'Asked'}: ${r.link.coachName} and ${r.link.studentName}.` : null);
+                    setLinkStudent('');
+                    await loadCoaches();
+                  });
+                }}
+              >
+                <Select value={linkCoach} onChange={(e) => setLinkCoach(e.target.value)} aria-label="Life coach" selectClass="rounded-pill bg-card">
+                  <option value="">Pick a life coach</option>
+                  {coaches.map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {k.name}
+                      {k.handle ? ` (@${k.handle})` : ''}
+                    </option>
+                  ))}
+                </Select>
+                <input value={linkStudent} onChange={(e) => setLinkStudent(e.target.value)} placeholder="Student's email or @handle" aria-label="Student's email or handle" className="min-w-0 rounded-pill border-2 border-line bg-card px-md py-sm text-[16px]" />
+                <Select value={linkMode} onChange={(e) => setLinkMode(e.target.value === 'link' ? 'link' : 'ask')} aria-label="How" selectClass="rounded-pill bg-card">
+                  <option value="ask">Ask the student</option>
+                  <option value="link">Link now</option>
+                </Select>
+                <Button type="submit" disabled={busy || !linkCoach || !linkStudent.trim()}>
+                  {linkMode === 'link' ? 'Link them' : 'Send the ask'}
+                </Button>
+              </form>
+              {linked && <p className="mt-xs m-0 text-[14px] font-bold">{linked}</p>}
+
+              <h3 className="mt-md text-[18px]">Every link</h3>
+              <div className="mt-sm flex flex-wrap gap-xs">
+                <Select
+                  value={linkStatus}
+                  onChange={(e) => {
+                    setLinkStatus(e.target.value);
+                    void run(() => adminApi.coachLinks(key, e.target.value, pageQuery(1, asks.coachLinks?.size ?? DEFAULT_PAGE_SIZE)).then((l) => (setCoachLinks(l.links), gotPage('coachLinks', l.page))));
+                  }}
+                  aria-label="Status"
+                  selectClass="rounded-pill bg-card"
+                >
+                  <option value="">Every status</option>
+                  {(Object.keys(LINK_STATUS_NAMES) as AdminCoachLink['status'][]).map((k) => (
+                    <option key={k} value={k}>
+                      {LINK_STATUS_NAMES[k]}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="mt-sm">
+                <DataTable<AdminCoachLink>
+                  rows={coachLinks}
+                  page={pages.coachLinks}
+                  onPage={turn('coachLinks', reloadCoachPart('coachLinks'))}
+                  rowKey={(r) => r.id}
+                  label="Coaching links"
+                  selectable
+                  busy={busy}
+                  empty="No links yet."
+                  columns={[
+                    { key: 'coach', label: 'Life coach', get: (r) => r.coachName },
+                    { key: 'student', label: 'Student', get: (r) => r.studentName },
+                    { key: 'status', label: 'Status', get: (r) => LINK_STATUS_NAMES[r.status], filter: true },
+                    { key: 'askedBy', label: 'Started by', get: (r) => ASKED_BY_NAMES[r.askedBy], filter: true, wide: true },
+                    { key: 'since', label: 'Since', get: (r) => r.createdAt, render: (r) => day(r.createdAt) },
+                    { key: 'ended', label: 'Ended', get: (r) => r.endedAt ?? '', render: (r) => day(r.endedAt), wide: true },
+                  ]}
+                  bulk={[{ label: 'End', variant: 'ghost', onClick: (rows) => run(() => each(rows.filter((r) => r.status === 'pending' || r.status === 'active'), (r) => adminApi.endCoachLink(key, r.id).then(() => undefined)).then(() => loadCoaches())) }]}
+                />
+              </div>
+            </section>
+          )}
+
+          {tab === 'codes' && (
+            <section className="mt-md" aria-labelledby="codes-heading">
+              <h2 id="codes-heading" className="text-[24px]">
+                Attendee codes
+              </h2>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+                Every event with guests across Party, Run and Circles, from a week ago on, soonest first. Set its xp (up to {ATTENDEE_XP_MAX}, until thirty minutes before the start, when the code opens) and its code, the same rules a host has; only its own guests can use the code, once each, and the host hears about your change. Every change is in the audit log.
+              </p>
+              <form
+                className="mt-sm flex flex-wrap gap-xs"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void loadCodes(codeApp, { page: 1, size: asks.codes?.size ?? DEFAULT_PAGE_SIZE });
+                }}
+              >
+                <select
+                  value={codeApp}
+                  onChange={(e) => {
+                    setCodeApp(e.target.value);
+                    void loadCodes(e.target.value, { page: 1, size: asks.codes?.size ?? DEFAULT_PAGE_SIZE });
+                  }}
+                  aria-label="App"
+                  className="rounded-pill border-2 border-line bg-card px-md py-sm text-[16px]"
+                >
+                  <option value="">All apps</option>
+                  <option value="party">Party</option>
+                  <option value="run">Run</option>
+                  <option value="circles">Circles</option>
+                </select>
+                <input value={codeQ} onChange={(e) => setCodeQ(e.target.value)} placeholder="Event title" aria-label="Search events by title" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-[16px]" />
+                <Button type="submit" variant="outline" disabled={busy}>
+                  Search
+                </Button>
+              </form>
+              <div className="mt-sm">
+                <DataTable<AdminAttendeeCode>
+                  rows={codes ?? []}
+                  page={pages.codes}
+                  onPage={turn('codes', (ask) => loadCodes(codeApp, ask))}
+                  rowKey={(r) => `${r.app}:${r.thingId}`}
+                  label="Attendee codes"
+                  selectable
+                  busy={busy}
+                  empty={codes === null ? 'Loading' : 'No events with guests from a week ago on.'}
+                  columns={[
+                    { key: 'app', label: 'App', get: (r) => APP_NAMES[r.app], filter: true },
+                    {
+                      key: 'title',
+                      label: 'Event',
+                      get: (r) => r.title,
+                      render: (r) => (
+                        <>
+                          <span className="block font-bold">{r.title}</span>
+                          <span className="block text-[12px] font-bold text-ink-soft">Host: {r.hostName}</span>
+                        </>
+                      ),
+                    },
+                    { key: 'starts', label: 'Starts', get: (r) => r.startsAt, render: (r) => when(r.startsAt) },
+                    { key: 'status', label: 'Status', get: (r) => r.status, filter: true },
+                    {
+                      key: 'xp',
+                      label: 'Xp each',
+                      get: (r) => r.xp ?? 0,
+                      align: 'right',
+                      edit: {
+                        kind: 'number',
+                        min: 1,
+                        max: ATTENDEE_XP_MAX,
+                        step: 5,
+                        disabled: (r) => r.locked || r.status === 'cancelled',
+                        onEdit: (r, v) => setCode(r, { xp: Math.max(1, Math.min(ATTENDEE_XP_MAX, Math.round(Number(v)))) }),
+                      },
+                    },
+                    {
+                      key: 'code',
+                      label: 'Code',
+                      get: (r) => r.code ?? '',
+                      edit: {
+                        kind: 'text',
+                        disabled: (r) => r.status === 'cancelled' || (!r.code && r.locked),
+                        onEdit: (r, v) => {
+                          const problem = codeProblem(String(v));
+                          if (problem) {
+                            setError(problem);
+                            return;
+                          }
+                          return setCode(r, { code: normalizeCode(String(v)) });
+                        },
+                      },
+                    },
+                    { key: 'claims', label: 'Claimed', get: (r) => r.claims, align: 'right', render: (r) => `${r.claims} of ${r.guests}` },
+                  ]}
+                  bulk={[
+                    // Only events that already have a code get a new one: a code with xp is made through the xp cell, on purpose.
+                    { label: 'New random codes', onClick: (rows) => run(() => each(rows.filter((r) => r.status !== 'cancelled' && r.code), (r) => adminApi.setAttendeeCode(key, r.app, r.thingId, { fresh: true }).then(() => undefined)).then(() => loadCodes())) },
                   ]}
                 />
               </div>

@@ -10,7 +10,7 @@ function dateParam(v: string | undefined): string {
 }
 
 /** Where the person's day starts and ends, in UTC, from their zone (the app's default zone when none is set). */
-function dayBounds(date: string, zone: string): [string, string] {
+export function dayBounds(date: string, zone: string): [string, string] {
   try {
     return [zonedToUtc(date, 0, zone || 'Asia/Kolkata').toISOString(), zonedToUtc(shiftDate(date, 1), 0, zone || 'Asia/Kolkata').toISOString()];
   } catch {
@@ -18,7 +18,7 @@ function dayBounds(date: string, zone: string): [string, string] {
   }
 }
 
-async function weakestRelationship(db: D1Database, userId: string): Promise<RelationshipKey> {
+export async function weakestRelationship(db: D1Database, userId: string): Promise<RelationshipKey> {
   const row = await db
     .prepare('SELECT relationship FROM relationship_scores WHERE user_id = ? ORDER BY score ASC, xp ASC, relationship ASC LIMIT 1')
     .bind(userId)
@@ -52,7 +52,7 @@ function toNotToDo(row: NotToDoRow, days: DayMap, date: string): NotToDo {
 }
 
 /** Every item with its streak counted live for `date`, from enough days back to re-count the longest stored run. */
-async function notToDoList(db: D1Database, userId: string, date: string): Promise<NotToDo[]> {
+export async function notToDoList(db: D1Database, userId: string, date: string): Promise<NotToDo[]> {
   const rows = await db.prepare('SELECT * FROM not_to_do WHERE user_id = ? ORDER BY created_at ASC').bind(userId).all<NotToDoRow>();
   if (rows.results.length === 0) return [];
   const reach = Math.max(8, ...rows.results.map((r) => r.streak + 2));

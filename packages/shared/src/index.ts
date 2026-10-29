@@ -959,6 +959,8 @@ export interface Node {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+  /** A task a life coach added: the student still ticks it, and it pays the same. */
+  fromCoach?: boolean;
 }
 
 export interface RippleEvent {
@@ -1333,7 +1335,7 @@ export interface Honor {
   key: string;
   name: string;
   emoji: string;
-  source: 'admin' | 'time';
+  source: 'admin' | 'time' | 'season';
   /** For time honors: days since the account started. */
   days?: number;
   how: string;
@@ -1348,6 +1350,7 @@ export const HONORS: readonly Honor[] = [
   { key: 'month_in', name: 'One month in', emoji: '🌿', source: 'time', days: 30, how: 'Unlocks thirty days after you start' },
   { key: 'season_in', name: 'One season in', emoji: '🌳', source: 'time', days: 90, how: 'Unlocks ninety days after you start' },
   { key: 'year_in', name: 'One year in', emoji: '🌲', source: 'time', days: 365, how: 'Unlocks a year after you start' },
+  { key: 'season_top', name: 'Season top three', emoji: '🏅', source: 'season', how: 'Finished a monthly season in the top three on the leaderboard' },
 ];
 
 export const HONOR_BY_KEY: Record<string, Honor> = Object.fromEntries(HONORS.map((h) => [h.key, h]));
@@ -1409,7 +1412,31 @@ export interface RewardsResponse {
 // Leaderboard
 // ---------------------------------------------------------------------------
 
-export type LeaderboardSort = 'xp' | 'streak' | 'badges';
+export type LeaderboardSort = 'xp' | 'season' | 'streak' | 'badges';
+
+/**
+ * A season is a calendar month (UTC): the season board counts only the xp earned in it, so everyone starts level
+ * at the start of the month. When a month ends its top three are kept and get the Season top three honor.
+ */
+export const seasonOf = (iso: string): string => iso.slice(0, 7);
+export const seasonStart = (season: string): string => `${season}-01T00:00:00.000Z`;
+/** "October 2026". */
+export function seasonLabel(season: string): string {
+  const [y, m] = season.split('-').map(Number);
+  return new Date(Date.UTC(y ?? 2026, (m ?? 1) - 1, 1)).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+/** The month before: "2026-10" for "2026-11", "2025-12" for "2026-01". */
+export function previousSeason(season: string): string {
+  const [y, m] = season.split('-').map(Number);
+  const d = new Date(Date.UTC(y ?? 2026, (m ?? 1) - 2, 1));
+  return d.toISOString().slice(0, 7);
+}
+export const SEASON_TOP = 3;
+export interface SeasonResult {
+  season: string;
+  label: string;
+  top: { place: number; name: string; xp: number; isMe: boolean }[];
+}
 
 export interface LeaderboardEntry {
   rank: number;
@@ -1423,6 +1450,8 @@ export interface LeaderboardEntry {
   isPro: boolean;
   stage: number;
   isMe: boolean;
+  /** Xp earned this season (this calendar month). */
+  seasonXp: number;
 }
 
 export interface LeaderboardResponse {
@@ -1430,6 +1459,9 @@ export interface LeaderboardResponse {
   entries: LeaderboardEntry[];
   me: LeaderboardEntry | null;
   optedIn: boolean;
+  /** This season's month and when it ends, and the last few closed seasons' top three. */
+  season: { season: string; label: string; endsAt: string };
+  past: SeasonResult[];
 }
 
 // ---------------------------------------------------------------------------
@@ -1456,6 +1488,8 @@ export interface AdminUser {
   /** Credits left: the plan's for this period, and extra ones that stay. */
   planCredits: number;
   extraCredits: number;
+  /** Asked to be made a life coach, and still waiting for an answer. */
+  coachAskedAt: string | null;
 }
 
 export interface AdminRedemption extends Redemption {
@@ -1491,9 +1525,14 @@ export const ROLE_META: Record<Role, { name: string; blurb: string; emoji: strin
   admin: { name: 'Admin', blurb: 'Everything, including roles, permissions and which features exist.', emoji: '🔑', accent: 'divine' },
 };
 
-/** Staff permissions. A permission is a job someone is trusted with; admins hold all of them. */
-export const PERMISSIONS = ['talent', 'cohorts', 'events', 'finance', 'moderation', 'support', 'review', 'mentor'] as const;
+/**
+ * Staff permissions. A permission is a job someone is trusted with; admins hold all of them, apart from Life coach,
+ * which is never implied: a life coach is someone the team chose to coach, so even an admin is given it on purpose.
+ */
+export const PERMISSIONS = ['talent', 'cohorts', 'events', 'finance', 'moderation', 'support', 'review', 'mentor', 'coach'] as const;
 export type Permission = (typeof PERMISSIONS)[number];
+/** The permissions a creator can hold. Every other one needs the Staff role. */
+export const CREATOR_PERMISSIONS: readonly Permission[] = ['mentor', 'coach'];
 
 export const PERMISSION_META: Record<Permission, { name: string; blurb: string }> = {
   talent: { name: 'Talent manager', blurb: 'Runs Army campaigns, shortlists and assigns creators.' },
@@ -1504,17 +1543,33 @@ export const PERMISSION_META: Record<Permission, { name: string; blurb: string }
   support: { name: 'Support', blurb: 'Answers help requests.' },
   review: { name: 'Reviewer', blurb: 'Decides Club applications, bounties, TV and Fund proposals.' },
   mentor: { name: 'Mentor', blurb: 'Gives feedback on assignments. Can be held by a creator.' },
+  coach: { name: 'Life coach', blurb: 'Coaches students who said yes: sees what they share, leaves notes, adds tasks. Never their journal. Can be held by a creator.' },
 };
 
 export function hasPermission(user: { role: Role; permissions: readonly string[] }, perm: Permission): boolean {
   return user.role === 'admin' || user.permissions.includes(perm);
 }
 
-/** Staff-level: admin or staff holding the permission. Mentor is the one permission a creator can hold. */
+/**
+ * Staff-level: admin or staff holding the permission. Mentor and Life coach are the permissions a creator can hold,
+ * and Life coach is the one an admin does not hold unless given it.
+ */
 export function isStaffFor(user: { role: Role; permissions: readonly string[] }, perm: Permission): boolean {
+  if (perm === 'coach') return user.permissions.includes('coach');
   if (user.role === 'admin') return true;
-  if (perm === 'mentor') return user.permissions.includes('mentor');
+  if (CREATOR_PERMISSIONS.includes(perm)) return user.permissions.includes(perm);
   return user.role === 'sub_admin' && user.permissions.includes(perm);
+}
+
+/** What the small badge on a picture says: the role, or Life coach for a creator the team made a life coach. */
+export type BadgeRole = Role | 'coach';
+export const BADGE_META: Record<BadgeRole, { name: string; blurb: string; emoji: string; accent: RelationshipKey }> = {
+  ...ROLE_META,
+  coach: { name: 'Life coach', blurb: 'Coaches students who said yes. The team makes someone a life coach.', emoji: '🎯', accent: 'guru' },
+};
+/** Staff and admins keep their own badge; a creator who holds Life coach wears that one. */
+export function badgeRoleOf(user: { role: Role; permissions: readonly string[] }): BadgeRole {
+  return user.role === 'user' && user.permissions.includes('coach') ? 'coach' : user.role;
 }
 
 // ---------------------------------------------------------------------------
@@ -1571,6 +1626,7 @@ export const MODULES: readonly AppModule[] = [
   { key: 'journal', name: 'Journal', blurb: 'Write it down with an emotion and a stress level.', emoji: '📓', group: 'wellbeing', path: '/journal', defaultOn: true, minRole: 'user', accent: 'self' },
   { key: 'reviews', name: 'Reviews', blurb: 'Weekly, monthly, quarterly and mid-year reviews: the numbers from every app, and what you make of them.', emoji: '📝', group: 'wellbeing', path: '/reviews', defaultOn: false, minRole: 'user', accent: 'self' },
   { key: 'companion', name: 'Companion', blurb: 'A chat that knows how you are doing. Not a therapist.', emoji: '💬', group: 'wellbeing', path: '/companion', defaultOn: false, minRole: 'user', accent: 'guru' },
+  { key: 'coaching', name: 'Coaching', blurb: 'Work with a life coach who sees the progress you choose to share, or coach your own students. Never your journal.', emoji: '🎯', group: 'wellbeing', path: '/coaching', defaultOn: false, minRole: 'user', accent: 'guru' },
 
   { key: 'profile', name: 'Public page', blurb: 'What people see: bio, skills, portfolio, links and what you sell.', emoji: '🔗', group: 'creator', path: '/profile', defaultOn: true, minRole: 'user', accent: 'self' },
   { key: 'shop', name: 'Shop', blurb: 'Sell downloads, courses, memberships, sessions and events.', emoji: '🛍️', group: 'creator', path: '/shop', defaultOn: true, minRole: 'user', accent: 'servant_leader' },
@@ -1765,10 +1821,19 @@ export interface CommunityPost {
   body: string;
   /** Members-only posts belong to a membership product. */
   productId: string | null;
+  /** Every reaction counts here; `liked` is whether the viewer reacted at all. */
   likes: number;
   liked: boolean;
+  reactions: ReactionCounts;
+  myReaction: ReactionKind | null;
   replies: number;
   hidden: boolean;
+  /** Pinned to the top of its category by a guide. */
+  pinned: boolean;
+  /** A first post waiting for a guide's okay: only its author and guides see it. */
+  held: boolean;
+  /** The viewer follows the post: new replies land in their inbox under Following. */
+  followingPost: boolean;
   createdAt: string;
 }
 
@@ -1778,7 +1843,37 @@ export interface CommunityReply {
   authorId: string;
   authorName: string;
   body: string;
+  reactions: ReactionCounts;
+  myReaction: ReactionKind | null;
   createdAt: string;
+}
+
+/** Six ways to react to a post or a reply. Any of them on a post is the like that pays, once per post. */
+export const REACTIONS = ['like', 'celebrate', 'support', 'love', 'insightful', 'funny'] as const;
+export type ReactionKind = (typeof REACTIONS)[number];
+export type ReactionCounts = Partial<Record<ReactionKind, number>>;
+export const REACTION_META: Record<ReactionKind, { name: string; emoji: string }> = {
+  like: { name: 'Like', emoji: '👍' },
+  celebrate: { name: 'Celebrate', emoji: '🎉' },
+  support: { name: 'Support', emoji: '🙌' },
+  love: { name: 'Love', emoji: '❤️' },
+  insightful: { name: 'Insightful', emoji: '💡' },
+  funny: { name: 'Funny', emoji: '😄' },
+};
+export const isReaction = (v: unknown): v is ReactionKind => typeof v === 'string' && (REACTIONS as readonly string[]).includes(v);
+/** Pinned posts a category can hold at once. */
+export const MAX_PINNED = 3;
+/** People one post or reply can mention. More @handles are left as plain text. */
+export const MAX_MENTIONS = 5;
+/** The @handles in a text, lower case, in order, each once: the same shape a handle is saved in. */
+export function mentionsIn(text: string): string[] {
+  const out: string[] = [];
+  for (const m of text.matchAll(/(?:^|[^a-z0-9_@.])@([a-z0-9_]{3,20})\b/gi)) {
+    const h = (m[1] ?? '').toLowerCase();
+    if (!out.includes(h)) out.push(h);
+    if (out.length >= MAX_MENTIONS) break;
+  }
+  return out;
 }
 
 export type ResourceKind = 'article' | 'exercise' | 'video';
@@ -1803,8 +1898,33 @@ export interface Notification {
   body: string;
   link: string | null;
   readAt: string | null;
+  archivedAt: string | null;
   createdAt: string;
 }
+
+/**
+ * Inbox tabs, by what a note is about. All holds everything; Team is only offered to staff and admins. A kind that is
+ * in no tab shows under All only.
+ */
+export const INBOX_TABS = ['all', 'replies', 'following', 'events', 'coaching', 'team'] as const;
+export type InboxTab = (typeof INBOX_TABS)[number];
+export const INBOX_TAB_META: Record<InboxTab, { name: string; kinds: readonly string[] }> = {
+  all: { name: 'All', kinds: [] },
+  replies: { name: 'Replies and mentions', kinds: ['reply', 'mention'] },
+  following: { name: 'Following', kinds: ['thread', 'follow', 'broadcast'] },
+  events: { name: 'Events', kinds: ['party', 'circle', 'run', 'event'] },
+  coaching: { name: 'Coaching', kinds: ['coach'] },
+  // Notes about work waiting for the team, such as an ask to be made a life coach.
+  team: { name: 'Team', kinds: ['team'] },
+};
+export const isInboxTab = (v: unknown): v is InboxTab => typeof v === 'string' && (INBOX_TABS as readonly string[]).includes(v);
+export type InboxShow = 'inbox' | 'unread' | 'archived';
+
+/** Reminders before an event someone signed up for: a day before, then an hour before. */
+export const EVENT_REMINDERS = [
+  { kind: 'day', before: 24 * 60 },
+  { kind: 'hour', before: 60 },
+] as const;
 
 export interface ChatMessage {
   id: string;
@@ -3853,23 +3973,35 @@ export function codeProblem(text: unknown): string | null {
 export function attendeeXpProblem(xp: unknown): string | null {
   return typeof xp === 'number' && Number.isInteger(xp) && xp >= 1 && xp <= ATTENDEE_XP_MAX ? null : `The xp is a whole number from 1 to ${ATTENDEE_XP_MAX}.`;
 }
-/** Once an event has started, its xp is fixed: it was promised to the guests. */
-export const attendeeXpLocked = (startsAt: string, now: number = Date.now()): boolean => now >= Date.parse(startsAt);
+/**
+ * The xp is fixed once the code opens, thirty minutes before the start: from then on a guest can claim it, so it
+ * was promised to them. Before that the host can still change it.
+ */
+export const attendeeXpLocked = (startsAt: string, now: number = Date.now()): boolean => now >= Date.parse(startsAt) - RUN_CODE_WINDOW.before * 60_000;
+/** When an event's code works: from RUN_CODE_WINDOW.before minutes before the start to RUN_CODE_WINDOW.after after the end. */
+export function codeWindow(startsAt: string, endsAt: string): { opensAt: string; closesAt: string } {
+  return { opensAt: new Date(Date.parse(startsAt) - RUN_CODE_WINDOW.before * 60_000).toISOString(), closesAt: new Date(Date.parse(endsAt) + RUN_CODE_WINDOW.after * 60_000).toISOString() };
+}
 
-/** What a guest sees: the xp, whether they claimed it, and whether the code works now. Never the code. */
+/** What a guest sees: the xp, whether they claimed it, and when the code works. Never the code. */
 export interface AttendeeCodeView {
   xp: number;
   claimed: boolean;
+  /** Whether it works now, when this was read. The screen works it out again from the two times as the clock moves. */
   state: RunEntryState;
+  opensAt: string;
+  closesAt: string;
 }
 /** What the host (or staff) sees. Circles show counts only: their guests are aliases. */
 export interface AttendeeCodeHost {
   code: string;
   xp: number;
-  /** The xp is fixed: the event has started. */
+  /** The xp is fixed: the code has opened. */
   locked: boolean;
   claims: number;
   guests: number;
+  opensAt: string;
+  closesAt: string;
 }
 /** One event in the admin's list of every attendee code. */
 export interface AdminAttendeeCode {
@@ -4431,8 +4563,8 @@ export function earningGuide(): { title: string; lines: EarningLine[] }[] {
       { what: 'A like you give', pays: `${SOCIAL_REWARDS.like.xp} xp`, how: `Up to ${SOCIAL_REWARDS.like.perDay} a day.` },
       { what: 'A like on your post', pays: `${SOCIAL_REWARDS.liked.points} point`, how: 'Paid to you, once per person per post.' },
       { what: 'A new follower', pays: `${SOCIAL_REWARDS.follower.points} points`, how: 'Paid to you, once per person.' },
-      { what: 'A run with a club', pays: `Up to ${ATTENDEE_XP_MAX} xp and ${RUN_REWARD.points} points`, how: `The host sets the xp before it starts. Enter the start code during the run. Once per run, ${RUN_REWARD.perDay} runs a day.` },
-      { what: 'Going to an event or a circle', pays: `Up to ${ATTENDEE_XP_MAX} xp`, how: `If the host set xp, type their attendee code at the event. Guests only, once each, ${ATTENDEE_CLAIMS_PER_DAY} a day.` },
+      { what: 'A run with a club', pays: `Up to ${ATTENDEE_XP_MAX} xp and ${RUN_REWARD.points} points`, how: `The host sets the xp before the code opens. Enter the start code during the run. Once per run, ${RUN_REWARD.perDay} runs a day.` },
+      { what: 'Going to an event or a circle', pays: `Up to ${ATTENDEE_XP_MAX} xp`, how: `If the host set xp, type their attendee code at the event. Guests only, once each, ${ATTENDEE_CLAIMS_PER_DAY} in any 24 hours.` },
     ],
   },
   {
@@ -4448,6 +4580,226 @@ export function earningGuide(): { title: string; lines: EarningLine[] }[] {
     lines: BADGES.map((b) => ({ what: `${b.emoji} ${b.name}`, pays: 'a badge on your page', how: b.how })),
   },
   ];
+}
+
+// ---------------------------------------------------------------------------
+// Life coaches. The team makes someone a life coach (the coach permission, which a creator can hold, and the Life
+// coach badge). A coach works only with students who said yes: they see the parts of a student's progress the
+// student shares, leave notes, and add or edit tasks; every step lands in a change log both of them see. A link
+// starts three ways: a coach (or an admin) asks and the student says yes, a student asks and the coach says yes, or
+// an admin links the two. Either side can end it. The journal never reaches a coach.
+// ---------------------------------------------------------------------------
+
+/** The five parts of a student's progress a coach can see. Each is the student's own switch, on to start with. */
+export const COACH_SHARE_PARTS = ['daily', 'pillars', 'routine', 'lifeMap', 'reflection'] as const;
+export type CoachSharePart = (typeof COACH_SHARE_PARTS)[number];
+export type CoachShare = Record<CoachSharePart, boolean>;
+export const DEFAULT_COACH_SHARE: CoachShare = { daily: true, pillars: true, routine: true, lifeMap: true, reflection: true };
+export const COACH_SHARE_META: Record<CoachSharePart, { name: string; blurb: string }> = {
+  daily: { name: 'Daily and streaks', blurb: 'Check-ins, streaks, xp, the day’s tasks, the small act and your not to do list.' },
+  pillars: { name: 'Pillars and pyramids', blurb: 'Every layer of your seven pyramids. With this on, your coach can add and edit tasks.' },
+  routine: { name: 'Routine and contract', blurb: 'Your routine, the days you kept it, and the deal you signed.' },
+  lifeMap: { name: 'Life map answers', blurb: 'Where each pillar sits on the map, your scores, your fears and what weighs on you.' },
+  reflection: { name: 'Reflection', blurb: 'Wellbeing, mood, sleep, stress, mindful minutes and your saved reviews. Never your journal or tracker notes.' },
+};
+/** The one reader for what a student shares: known parts as true or false, over the defaults. */
+export function parseCoachShare(raw: unknown): CoachShare {
+  let v: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      v = JSON.parse(raw || '{}');
+    } catch {
+      v = {};
+    }
+  }
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  const out = { ...DEFAULT_COACH_SHARE };
+  for (const k of COACH_SHARE_PARTS) if (typeof o[k] === 'boolean') out[k] = o[k] as boolean;
+  return out;
+}
+
+/** Coaches a student can have at once, linked or asked. */
+export const MAX_COACHES = 3;
+/** Asks a coach can have waiting at once. */
+export const MAX_COACH_ASKS = 20;
+/** After a no, the same coach and student wait this long before either asks again. */
+export const COACH_ASK_AGAIN_DAYS = 30;
+export const COACH_NOTE_MAX = 1000;
+export const COACH_ABOUT_MAX = 280;
+
+export type CoachLinkStatus = 'pending' | 'active' | 'declined' | 'ended';
+export type CoachAskedBy = 'coach' | 'student' | 'admin';
+
+/** Someone on the other side of a link: a name, a handle and the badge. Never an email, a phone or a birthday. */
+export interface CoachPerson {
+  id: string;
+  name: string;
+  handle: string | null;
+  badge: BadgeRole;
+}
+
+export interface CoachLink {
+  id: string;
+  coach: CoachPerson;
+  student: CoachPerson;
+  status: CoachLinkStatus;
+  askedBy: CoachAskedBy;
+  /** What the student shares with this coach. */
+  share: CoachShare;
+  createdAt: string;
+  answeredAt: string | null;
+  endedAt: string | null;
+}
+
+export interface CoachNote {
+  id: string;
+  linkId: string;
+  coachName: string;
+  body: string;
+  /** Written by the person reading it. */
+  mine: boolean;
+  createdAt: string;
+}
+
+export type CoachLogAction = 'link.ask' | 'link.yes' | 'link.no' | 'link.end' | 'link.admin' | 'share.change' | 'note.add' | 'note.remove' | 'task.add' | 'task.edit';
+/** One line of the change log: who did what, in plain words, and when. */
+export interface CoachLogEntry {
+  id: string;
+  action: CoachLogAction;
+  label: string;
+  actorName: string;
+  coachName: string;
+  studentName: string;
+  createdAt: string;
+}
+
+/** One student on a coach's roster. Each number is there only when the student shares the part it comes from. */
+export interface CoachRosterRow {
+  linkId: string;
+  student: CoachPerson;
+  since: string;
+  share: CoachShare;
+  streak: number | null;
+  lastCheckin: string | null;
+  /** The routine's last seven days: kept, missed, or no record. */
+  week: (boolean | null)[] | null;
+  contractDays: number | null;
+  /** Last week (Monday to Sunday) came in under the contract's days. */
+  redWeek: boolean | null;
+  focus: RelationshipKey[] | null;
+}
+
+export interface CoachProfile {
+  about: string;
+  /** Open to new students: the directory lists only open coaches. */
+  open: boolean;
+  /** Asked the team to be made a life coach, and still waiting. */
+  askedAt: string | null;
+}
+
+/** The Coaching page for a coach: their profile, their students a page at a time, and the asks either way. */
+export interface CoachHub {
+  coach: boolean;
+  profile: CoachProfile;
+  /** How many students, asks to answer and asks still out, over every page. */
+  counts: { students: number; asks: number; sent: number };
+  students: CoachRosterRow[];
+  studentsPage: Page;
+  /** Students who asked this coach, a page at a time. */
+  asks: CoachLink[];
+  asksPage: Page;
+  /** This coach's own asks and the team's, still waiting, a page at a time. */
+  sent: CoachLink[];
+  sentPage: Page;
+}
+
+export interface CoachDirectoryEntry {
+  coach: CoachPerson;
+  about: string;
+  students: number;
+  /** Where the viewer stands with this coach. */
+  mine: CoachLinkStatus | null;
+}
+
+/** The student's side: their coaches and asks, and their coaches' notes a page at a time. */
+export interface MyCoachResponse {
+  links: CoachLink[];
+  notes: CoachNote[];
+  notesPage: Page;
+}
+
+/** A day of trackers for a coach: the numbers only, never a note. */
+export interface CoachTrackerDay {
+  date: string;
+  mood: number | null;
+  sleep: number | null;
+  stress: number | null;
+  mindful: number;
+  move: number;
+}
+
+/** A coach's view of one student. Each part is null when the student does not share it. */
+export interface CoachStudentView {
+  link: CoachLink;
+  /** The student's own today, from their zone. */
+  date: string;
+  daily: {
+    streak: number;
+    bestStreak: number;
+    lastCheckin: string | null;
+    checkedIn: boolean;
+    xp: number;
+    /** Days checked in, over the last thirty. */
+    checkins: string[];
+    /** Tasks ticked per day over the last thirty, oldest first. */
+    tasksByDay: number[];
+    tasks: Node[];
+    done: Node[];
+    /** Today's small act: done or not, and the pillar it was for once it is done. */
+    smallAct: { relationship: RelationshipKey | null; done: boolean };
+    notToDo: NotToDo[];
+  } | null;
+  pillars: { relationships: { key: RelationshipKey; xp: number }[]; nodes: Node[] } | null;
+  routine: { general: RoutineBlock[]; exceptional: RoutineBlock[]; contract: Omit<Contract, 'signedName'> | null; today: RoutineDay | null; week: { done: number; days: (boolean | null)[] } } | null;
+  lifeMap: Pick<Assessment, 'placements' | 'fears' | 'insecurities' | 'scores' | 'realDay' | 'focus' | 'createdAt'> | null;
+  reflection: { wellbeing: WellbeingSummary; days: CoachTrackerDay[]; reviews: Review[]; reviewsPage: Page } | null;
+  notes: CoachNote[];
+  notesPage: Page;
+  log: CoachLogEntry[];
+  logPage: Page;
+}
+
+/** What a coach sends to add a task to a student's pyramid: under one of the student's projects. */
+export interface CoachTaskInput {
+  parentId: string;
+  title: string;
+  note?: string;
+  dueDate?: string | null;
+  dueTime?: string | null;
+  estimateMin?: number | null;
+}
+
+/** One link in the admin's list. */
+export interface AdminCoachLink {
+  id: string;
+  coachId: string;
+  coachName: string;
+  studentId: string;
+  studentName: string;
+  status: CoachLinkStatus;
+  askedBy: CoachAskedBy;
+  createdAt: string;
+  endedAt: string | null;
+}
+
+/** Someone who asked to be made a life coach, for the admin to say yes or no. */
+export interface AdminCoachAsk {
+  userId: string;
+  name: string;
+  email: string | null;
+  handle: string | null;
+  about: string;
+  askedAt: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -4500,7 +4852,7 @@ export const TERMS: Record<string, string> = {
   guide: 'A team member who keeps the community kind.',
   'run club': 'A group that runs together. Anyone can start one; members log runs with the start code.',
   'start code': 'The code the host shows at the start line: six letters, or a word the host picks. Enter it during the run and your entry is logged, once. That is how a run pays without anyone cheating.',
-  'attendee code': 'The code a host shows at their event. The guests on its list type it in to get the xp the host set before it started, once each. Hosts give it; they never claim it.',
+  'attendee code': 'The code a host shows at their event. The guests on its list type it in to get the xp the host set, once each. The xp is fixed when the code opens, thirty minutes before the start. Hosts give it; they never claim it.',
   collab: 'A brand offer to run clubs: what the brand gives, what it asks, and a giveaway for the runners. A host applies with the club.',
   giveaway: 'What a brand gives runners at a collab run: shoes, a kit, a voucher. Listed on the collab before anyone applies.',
   'brand folder': 'One place for one brand in Content: its links, the research done on them, and the pieces written from that.',
@@ -4519,6 +4871,13 @@ export const TERMS: Record<string, string> = {
   floor: 'Where you drop to under stress, in one relationship. A floor under Courage makes that pillar a month-one focus.',
   routine: 'Six blocks a day, built from your real day and moved thirty minutes a week. The morning block counts only when every step is ticked.',
   contract: 'Your signed deal: days a week, a check-in time, and what a short week costs.',
+  'life coach': 'Someone the team made a life coach. Once you both say yes, they see the parts of your progress you share, leave you notes and add tasks. Never your journal. Their badge says Life coach.',
+  student: 'Someone a life coach works with, once both said yes. In the setup chat, Student means someone at school or college.',
+  'daily brief': 'The card at the top of Home: three things that changed and three next steps, worked out each day from your own numbers. It costs nothing and only says what your numbers back up.',
+  reaction: 'One of six ways to answer a post or a reply without words: Like, Celebrate, Support, Love, Insightful or Funny. Your first reaction on a post is the like that pays.',
+  mention: 'An @ and someone’s page name in a post or reply. It tells them, in their inbox under Replies and mentions.',
+  season: 'One month on the leaderboard. Everyone starts level on the first; the top three when it ends keep the Season top three honor.',
+  'change log': 'The list at the end of a coaching page: every ask, yes, note and task change between a coach and a student, with when it happened.',
 };
 
 export interface HowTo {
@@ -4540,13 +4899,13 @@ export const HOW_TO: Record<string, HowTo> = {
   },
   home: {
     steps: [
-      'Home opens after sign-in and answers “how am I doing” before “what do I do”. The top tiles are your streak, xp today, points and level.',
+      'Home opens after sign-in and answers “how am I doing” before “what do I do”. Your daily brief comes first: three things that changed and three next steps, from your own numbers. In your first two weeks a Getting started list sits under it and ticks itself as you go.',
       'Under them sits what moves those numbers: the three boxes on Daily, your trackers, and your money and shop when those apps are on.',
       'Up next lists the events, runs, sessions and circles you are booked into, soonest first.',
       'Pick a period at the bottom to see the same numbers by week, month, quarter or half year, next to the period before.',
       'The search box at the top finds apps, tasks, people, products and more as you type.',
     ],
-    terms: ['xp', 'points', 'level', 'streak', 'period', 'assistant'],
+    terms: ['daily brief', 'xp', 'points', 'level', 'streak', 'period', 'assistant'],
   },
   today: {
     steps: [
@@ -4579,13 +4938,13 @@ export const HOW_TO: Record<string, HowTo> = {
   },
   you: {
     steps: [
-      'Who you are sits at the top: the identity tags from the setup chat. Run the setup again to change them and the apps that fit. Your account, badges and honors live here too.',
+      'Who you are sits at the top: the identity tags from the setup chat. Run the setup again to change them and the apps that fit. Your account, badges, honors and life coach live here too: say yes to a coach, pick what they see, or end it.',
       'Badges are earned by the app’s own count: your first task, streaks, ten tasks, a cleared project, level five, small acts, the Club, and runs. Honors are given by the team or unlocked by time here.',
       'Under Account, add an email and password so your progress survives this device, change the password, export your data, or delete the account.',
       'Under Features, switch apps on or off, in the same groups and colours as the Apps page. An app that fits your tags says why. Appearance picks light, dark or auto.',
       'See my public page shows exactly what other people see at your address.',
     ],
-    terms: ['identity tag', 'setup chat', 'badge', 'honor', 'who you are becoming', 'public page'],
+    terms: ['identity tag', 'setup chat', 'badge', 'honor', 'life coach', 'who you are becoming', 'public page'],
   },
   profile: {
     steps: [
@@ -4637,10 +4996,10 @@ export const HOW_TO: Record<string, HowTo> = {
   },
   party: {
     steps: [
-      'Meetups anyone can host. Parties, workshops, camps and Kreators Days are run by the team.',
+      'Meetups anyone can host, and run again on a new date with one tap. Parties, workshops, camps and Kreators Days are run by the team. Everyone signed up gets a reminder a day before and an hour before.',
       'RSVP to take a seat. A full room puts you on the waitlist, first in line: if a seat opens, the first person waiting gets it and a note in their inbox.',
       'Some events cost points for a ticket. Cancelling a seat refunds them.',
-      `A host can set xp for the guests before it starts, up to ${ATTENDEE_XP_MAX}, and shows an attendee code on the day. Type it on the event page to get the xp, once. Afterwards, rate it and say if you are happy to be introduced; Bond uses that to suggest people you met.`,
+      `A host can set xp for the guests, up to ${ATTENDEE_XP_MAX}, and shows an attendee code at the event. It works from thirty minutes before the start to three hours after the end, once each, for up to ${ATTENDEE_CLAIMS_PER_DAY} events in 24 hours. Then the xp is fixed. Afterwards, rate it and say if you are happy to be introduced.`,
       'Club members see Club-only events. Private events only show to people with the link.',
     ],
     terms: ['attendee code', 'xp'],
@@ -4648,7 +5007,7 @@ export const HOW_TO: Record<string, HowTo> = {
   run: {
     steps: [
       'Join a run club near you, or start one: a name, a city, a pace and where it usually meets. The host is its first member.',
-      `The host adds runs and sets each one's xp before it starts (${ATTENDEE_XP_DEFAULT} unless they say, up to ${ATTENDEE_XP_MAX}). Each run gets a start code only the host sees: six letters, or a word the host picks, to show at the start line.`,
+      `The host adds runs and sets each one's xp until its code opens (${ATTENDEE_XP_DEFAULT} unless they say, up to ${ATTENDEE_XP_MAX}). Each run gets a start code only the host sees: six letters, or a word the host picks, to show at the start line.`,
       'Enter the code during the run to log it: from thirty minutes before the start to three hours after the end, once per run. A logged run pays its xp and 10 points, up to two paid runs a day, and its minutes count as movement in Life. The host does not log their own run.',
       'My runs tracks your kilometres over thirty days, your weekly streak, and three badges: First run, Ten runs and Hundred k.',
       'Brand collabs have their own tab: what a brand gives, what it asks, and the giveaway. A host applies with the club; an accepted collab shows its giveaway on the club and on the runs tied to it.',
@@ -4657,13 +5016,13 @@ export const HOW_TO: Record<string, HowTo> = {
   },
   community: {
     steps: [
-      'Community is posts, replies and likes by category, kept kind by guides on the team.',
+      `Community is posts and replies by category, kept kind by guides on the team. Guides pin up to ${MAX_PINNED} posts at the top of a category, and can ask that a new member's first post waits for their okay.`,
       'Sort the feed by recent, popular or most replies. Filter it to everyone, people you follow, or your own posts.',
-      'Follow anyone from their post. The Following filter shows you their posts first.',
-      'A post pays 5 xp (up to three a day), a reply 2 xp (up to five), a like you give 1 xp (up to ten). A like on your post pays you a point and a new follower two, up to twenty a day. Each pays once, so nothing can be farmed.',
+      `React to a post or a reply in six ways, from Like to Funny. Follow a person, or follow a post to hear about new replies. Type @ and a page name to tell someone, up to ${MAX_MENTIONS} people at a time.`,
+      'A post pays 5 xp (up to three a day), a reply 2 xp (up to five), a reaction you give 1 xp (up to ten). A reaction on your post pays you a point and a new follower two, up to twenty a day. Each pays once, so changing a reaction pays nothing more.',
       'Members-only spaces come with memberships you buy from a creator’s shop.',
     ],
-    terms: ['xp', 'points', 'guide'],
+    terms: ['reaction', 'mention', 'xp', 'points', 'guide'],
   },
   club: {
     steps: [
@@ -4689,7 +5048,7 @@ export const HOW_TO: Record<string, HowTo> = {
       'Two days before, tables are set: people nearby whose interests complement yours, under aliases.',
       'The chat opens a day before. Agree on the exact place and time together.',
       'Show up in the colour that says where you stand: red if you are single, white if you are committed. Rather not say? Wear what you like.',
-      'Meet. If the host set xp, type the attendee code shown at the meetup on your table page. Afterwards, open an anonymous chat with anyone from your table under Bond. Nobody is ever revealed.',
+      `Meet. If the host set xp, type the code shown at the meetup on your table page, once, from thirty minutes before to ${(CIRCLE_MINUTES + RUN_CODE_WINDOW.after) / 60} hours after the start. A weekly circle keeps its xp with a new code. Later, chat with your table under Bond, under aliases.`,
     ],
     terms: ['circle', 'alias', 'attendee code'],
   },
@@ -4755,6 +5114,16 @@ export const HOW_TO: Record<string, HowTo> = {
       'The feeling you tag feeds the emotional part of Life.',
     ],
     terms: [],
+  },
+  coaching: {
+    steps: [
+      'A life coach is someone the team chose, with the Life coach badge. Find one under Coaching and ask, or say yes when a coach asks you. Nothing is shared until you do.',
+      `You pick what your coach sees, in five parts: Daily and streaks, pillars and pyramids, routine and contract, life map answers, and reflection. Never your journal. Change it or end it any time on your Profile tab. Up to ${MAX_COACHES} coaches at once.`,
+      'Your coach leaves notes and can add or edit tasks in your pyramids, marked From your coach. Only you tick them, and they pay the same xp as your own.',
+      'Every ask, yes, note and task change is in the change log at the end of the page, with the time, for both of you.',
+      'Are you a life coach? Say so in the setup chat or ask here, and the team checks first. Then add students by email or handle; each one has to say yes.',
+    ],
+    terms: ['life coach', 'student', 'change log', 'pyramid', 'task', 'life map', 'routine', 'contract'],
   },
   companion: {
     steps: [
@@ -4900,11 +5269,11 @@ export const HOW_TO: Record<string, HowTo> = {
   },
   notifications: {
     steps: [
-      'What happened while you were away: seats, replies, decisions, payouts and reminders.',
-      'Daily reminders land here at the time you set under Profile.',
-      'Tap one to go where it came from.',
+      'What happened while you were away, in tabs: All, Replies and mentions, Following, Events and Coaching, and Team for the team.',
+      'Reminders land here: your daily one at the time you set, and one a day before and an hour before any event, circle or run you signed up for.',
+      'Tap one to go where it came from. Archive the ones you are done with; show Unread or Archived to find them again.',
     ],
-    terms: [],
+    terms: ['mention'],
   },
   search: {
     steps: [
@@ -4916,7 +5285,7 @@ export const HOW_TO: Record<string, HowTo> = {
   },
   manage: {
     steps: [
-      'Queues for staff: campaigns, cohorts, events, review, moderation, support, finance and mentoring.',
+      'Queues for staff: campaigns, cohorts, events, review, moderation, support, finance, mentoring and life coaching.',
       'Each power comes from a permission an admin gives.',
       'Everything you do here is audited.',
     ],
@@ -4927,8 +5296,9 @@ export const HOW_TO: Record<string, HowTo> = {
       'Tables for people, flags, listings, orders, webhooks, KYC, mail and audit.',
       'Sort by any column, search, filter, tick rows for bulk actions, and edit a cell in place.',
       'Only an admin changes a role, never their own.',
+      'Life coaches: say yes or no to people who asked to coach, give or take the Life coach badge, and link a coach to a student. A link you ask for waits for the student’s yes.',
     ],
-    terms: [],
+    terms: ['life coach', 'student'],
   },
   observability: {
     steps: [
@@ -5298,6 +5668,141 @@ export function nudgeFor(s: NudgeInput): HomeNudge {
   };
 }
 
+// ---------------------------------------------------------------------------
+// The daily brief, after Circle's: three signals (what changed) and three next steps (what to do about it), worked
+// out by rules from the person's own numbers, so it costs no credits and says nothing it cannot back. Coaches get
+// lines about their students, and the team lines about what waits for them.
+// ---------------------------------------------------------------------------
+
+export type BriefTone = 'good' | 'watch' | 'neutral';
+export interface BriefLine {
+  key: string;
+  text: string;
+  /** Where to act on it, an in-app path. */
+  to: string | null;
+  tone: BriefTone;
+}
+export interface DailyBrief {
+  signals: BriefLine[];
+  actions: BriefLine[];
+  /** For a life coach: their students. Null for everyone else. */
+  coach: BriefLine[] | null;
+  /** For staff and admins: what waits for the team. Null for everyone else. */
+  team: BriefLine[] | null;
+}
+
+/** What the brief is worked out from: the person's own numbers for their own today. */
+export interface BriefFacts {
+  hour: number;
+  checkedIn: boolean;
+  streak: number;
+  bestStreak: number;
+  level: number;
+  xpToNext: number;
+  tasksDue: number;
+  tasksOverdue: number;
+  doneWeek: number;
+  doneWeekBefore: number;
+  smallActDone: boolean;
+  notToDoSlipped: number;
+  /** Routine days kept in the last seven, and the contract's days, when there is a routine. */
+  routineWeek: number | null;
+  contractDays: number | null;
+  sleepAvg: number | null;
+  sleepAvgBefore: number | null;
+  moodAvg: number | null;
+  moodAvgBefore: number | null;
+  stressAvg: number | null;
+  /** The next event someone signed up for in the next two days. */
+  nextEvent: { title: string; when: string; to: string } | null;
+  coachNotes: number;
+  coachAsks: number;
+  reviewDue: boolean;
+  /** The apps that are on, so a step never points at one that is off. */
+  apps: readonly string[];
+}
+
+const BRIEF_SIZE = 3;
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const one1 = (n: number) => Math.round(n * 10) / 10;
+
+/** The one rule for the brief: every line that applies, ranked, the top three of each. */
+export function briefFor(f: BriefFacts): { signals: BriefLine[]; actions: BriefLine[] } {
+  const on = (app: string) => f.apps.includes(app);
+  const signals: (BriefLine & { rank: number })[] = [];
+  const actions: (BriefLine & { rank: number })[] = [];
+  const sig = (rank: number, key: string, tone: BriefTone, text: string, to: string | null) => signals.push({ rank, key, tone, text, to });
+  const act = (rank: number, key: string, text: string, to: string | null) => actions.push({ rank, key, tone: 'neutral', text, to });
+
+  if (!f.checkedIn && f.streak >= 3 && f.hour >= 17) sig(100, 'streak-risk', 'watch', `Your ${f.streak}-day streak ends tonight unless you check in.`, '/today');
+  else if (f.checkedIn && f.streak >= 3 && f.streak >= f.bestStreak) sig(70, 'streak-best', 'good', `A new best: ${plural(f.streak, 'day')} in a row.`, '/today');
+  else if (f.streak >= 3) sig(40, 'streak', 'good', `${plural(f.streak, 'day')} in a row so far.`, '/today');
+  if (f.tasksOverdue > 0) sig(90, 'overdue', 'watch', `${plural(f.tasksOverdue, 'task')} ${f.tasksOverdue === 1 ? 'is' : 'are'} past ${f.tasksOverdue === 1 ? 'its' : 'their'} day.`, '/tower');
+  if (f.doneWeekBefore > 0 && f.doneWeek > f.doneWeekBefore) sig(60, 'tasks-up', 'good', `${plural(f.doneWeek, 'task')} ticked these seven days, ${f.doneWeek - f.doneWeekBefore} more than the seven before.`, '/today');
+  else if (f.doneWeekBefore > 0 && f.doneWeek < f.doneWeekBefore) sig(65, 'tasks-down', 'watch', `${plural(f.doneWeek, 'task')} ticked these seven days, ${f.doneWeekBefore - f.doneWeek} fewer than the seven before.`, '/today');
+  if (f.sleepAvg !== null && f.sleepAvgBefore !== null && Math.abs(f.sleepAvg - f.sleepAvgBefore) >= 0.5)
+    sig(f.sleepAvg < f.sleepAvgBefore ? 80 : 50, 'sleep', f.sleepAvg < f.sleepAvgBefore ? 'watch' : 'good', `Sleep is ${f.sleepAvg < f.sleepAvgBefore ? 'down' : 'up'} to ${one1(f.sleepAvg)} hours a night, from ${one1(f.sleepAvgBefore)}.`, on('sleep') ? '/sleep' : null);
+  if (f.moodAvg !== null && f.moodAvgBefore !== null && Math.abs(f.moodAvg - f.moodAvgBefore) >= 0.5)
+    sig(f.moodAvg < f.moodAvgBefore ? 75 : 45, 'mood', f.moodAvg < f.moodAvgBefore ? 'watch' : 'good', `Your mood is ${f.moodAvg < f.moodAvgBefore ? 'lower' : 'brighter'} this week than last.`, on('mood') ? '/mood' : null);
+  if (f.stressAvg !== null && f.stressAvg >= 4) sig(85, 'stress', 'watch', 'Stress has been high most of this week.', on('stress') ? '/stress' : null);
+  if (f.notToDoSlipped > 0) sig(55, 'slipped', 'watch', `You slipped on ${plural(f.notToDoSlipped, 'not to do item')} yesterday. Today is a fresh start.`, '/today');
+  if (f.routineWeek !== null && f.contractDays !== null)
+    sig(f.routineWeek < f.contractDays ? 58 : 35, 'routine', f.routineWeek < f.contractDays ? 'watch' : 'good', `Your routine: ${f.routineWeek} of the last 7 days, against a deal of ${f.contractDays}.`, '/today');
+  if (f.nextEvent) sig(68, 'event', 'neutral', `${f.nextEvent.title} is ${f.nextEvent.when}.`, f.nextEvent.to);
+  if (f.coachNotes > 0) sig(72, 'coach-note', 'neutral', f.coachNotes === 1 ? 'Your life coach left you a note.' : `Your life coach left you ${f.coachNotes} notes.`, '/coaching');
+  if (f.coachAsks > 0) sig(74, 'coach-ask', 'neutral', f.coachAsks === 1 ? 'A life coach asked to work with you.' : `${f.coachAsks} life coaches asked to work with you.`, '/you#coach');
+  sig(10, 'level', 'neutral', `Level ${f.level}. ${f.xpToNext} xp to the next one.`, '/you');
+
+  if (!f.checkedIn) act(100, 'checkin', 'Check in on Daily. It keeps your streak.', '/today');
+  if (f.tasksDue > 0) act(90, 'task', f.tasksDue === 1 ? 'Tick today’s task.' : `Tick one of today’s ${f.tasksDue} tasks.`, '/today');
+  if (!f.smallActDone) act(80, 'act', 'Do today’s small act. It takes a minute.', '/today');
+  if (f.coachAsks > 0) act(88, 'coach-ask', 'Answer the coach who asked: yes or no, on your Profile tab.', '/you#coach');
+  if (f.coachNotes > 0 && on('coaching')) act(76, 'coach-note', 'Read your coach’s note.', '/coaching');
+  if (f.tasksOverdue > 0) act(70, 'overdue', 'Move or finish the tasks past their day.', '/tower');
+  if (f.reviewDue && on('reviews')) act(65, 'review', 'Write last week’s review. Five minutes, and the numbers are filled in.', '/reviews');
+  if (f.stressAvg !== null && f.stressAvg >= 4 && on('mindful')) act(72, 'breathe', 'Take five minutes with the breathing timer.', '/mindful');
+  if (f.sleepAvg !== null && f.sleepAvgBefore !== null && f.sleepAvg < f.sleepAvgBefore - 0.5 && on('sleep')) act(60, 'sleep', 'Log tonight’s sleep, and aim for lights out on time.', '/sleep');
+  if (f.nextEvent) act(55, 'event', `Check the plan for ${f.nextEvent.title}.`, f.nextEvent.to);
+  act(20, 'pillar', 'Add a task to the pillar you want to grow.', '/tower');
+  if (on('journal')) act(15, 'journal', 'Write one line in your journal about today.', '/journal');
+
+  const top = (xs: (BriefLine & { rank: number })[]) =>
+    xs
+      .sort((a, b) => b.rank - a.rank)
+      .slice(0, BRIEF_SIZE)
+      .map(({ rank: _r, ...line }) => line);
+  return { signals: top(signals), actions: top(actions) };
+}
+
+// ---------------------------------------------------------------------------
+// Getting started: a short list on Home for the first two weeks, ticked by what the person actually does, never by
+// a tap on the list. It pays nothing; it points the way. It folds away once every item is done, after two weeks, or
+// when the person folds it.
+// ---------------------------------------------------------------------------
+
+export const GETTING_STARTED = [
+  { key: 'checkin', label: 'Check in on Daily', to: '/today' },
+  { key: 'task', label: 'Tick your first task', to: '/today' },
+  { key: 'act', label: 'Do a small act', to: '/today' },
+  { key: 'interests', label: 'Pick two interests', to: '/profile#interests' },
+  { key: 'handle', label: 'Choose your page name', to: '/profile' },
+  { key: 'people', label: 'Join a circle, an event or a run club', to: '/apps' },
+  { key: 'session', label: 'Take the strategy session', to: '/session' },
+] as const;
+export type GettingStartedKey = (typeof GETTING_STARTED)[number]['key'];
+export const GETTING_STARTED_DAYS = 14;
+export interface GettingStarted {
+  items: { key: GettingStartedKey; label: string; to: string; done: boolean }[];
+  done: number;
+  /** Shown while some item is open, the account is under GETTING_STARTED_DAYS old, and it was not folded. */
+  show: boolean;
+}
+export function gettingStarted(done: Partial<Record<GettingStartedKey, boolean>>, ageDays: number, hidden: boolean): GettingStarted {
+  const items = GETTING_STARTED.map((g) => ({ key: g.key, label: g.label, to: g.to, done: Boolean(done[g.key]) }));
+  const n = items.filter((i) => i.done).length;
+  return { items, done: n, show: !hidden && ageDays < GETTING_STARTED_DAYS && n < items.length };
+}
+
 /** "Good morning", by the local hour. */
 export function greetingFor(hour: number): string {
   if (hour < 5) return 'Still up';
@@ -5345,6 +5850,7 @@ export const IDENTITIES: readonly IdentityOption[] = [
   { key: 'employee', label: 'Employee', emoji: '💼', kind: 'role', blurb: 'I have a job', because: 'you have a job', words: ['my job', 'day job', 'full time job', 'i have a job', 'office', 'employee', 'corporate', 'salaried', 'working professional', '9 to 5', '9-5', 'nine to five', 'i work at', 'i work in'], focus: 'Work', apps: { reviews: 2, finance: 2, journal: 1, school: 1 } },
   { key: 'founder', label: 'Founder', emoji: '🚀', kind: 'role', blurb: 'I run a business', because: 'you run a business', words: ['founder', 'co-founder', 'cofounder', 'my business', 'own business', 'small business', 'startup', 'my brand', 'brand owner', 'business owner', 'shop owner', 'store owner', 'entrepreneur', 'my shop', 'my store', 'my company', 'run a business', 'run a brand', 'run a company', 'run a shop', 'run a store', 'run a startup', 'run a small', 'own a business', 'own a shop', 'own brand', 'd2c'], focus: 'Business', apps: { shop: 2, finance: 3, audience: 2, content: 2, automations: 1 } },
   { key: 'explorer', label: 'Explorer', emoji: '🧭', kind: 'role', blurb: "I'm between things", because: 'you are working out what is next', words: ['between jobs', 'unemployed', 'jobless', 'gap year', 'figuring out', 'figuring it out', 'career change', 'quit my job', 'looking for a job', 'looking for work', 'fresh start', 'what is next'], focus: 'Other', apps: { work: 3, school: 2, knowledge: 1, journal: 1 } },
+  { key: 'coach', label: 'Life coach', emoji: '🎯', kind: 'role', blurb: "I'm a life coach", because: 'you coach people', words: ["i'm a life coach", 'i am a life coach', 'im a life coach', "i'm a coach", 'i am a coach', 'im a coach', 'work as a coach', 'work as a life coach', 'certified coach', 'certified life coach', 'i coach people', 'coach for a living'], focus: 'Work', apps: { coaching: 3, shop: 2, profile: 1 } },
   { key: 'parent', label: 'Parent or carer', emoji: '👪', kind: 'role', blurb: 'I look after family', because: 'you look after family', words: ['parent', 'mom', 'mum', 'mother', 'dad', 'father', 'my kids', 'my son', 'my daughter', 'children', 'my baby', 'carer', 'caregiver', 'looking after'], focus: 'Family', interest: 'Parenting', apps: { sleep: 2, stress: 2, journal: 1, mood: 1, finance: 1 } },
   // What a creator makes.
   { key: 'short_video', label: 'Short-form creator', emoji: '📱', kind: 'craft', blurb: 'Reels and Shorts', because: 'you make short videos', words: ['reels', 'reel', 'shorts', 'tiktok', 'tiktoks', 'short videos', 'short form', 'short-form'], interest: 'Video', apps: { win: 2, army: 1, content: 1, automations: 1 } },
@@ -5417,7 +5923,8 @@ export const SETUP_GOALS: readonly SetupGoal[] = [
   { key: 'people', label: 'Meet new people', emoji: '🫶', blurb: 'Small tables near you, a feed, events and friends.', because: 'you want to meet people', to: 'meet people', words: ['meet people', 'friends', 'make friends', 'network', 'networking', 'community', 'people like me', 'collab', 'collabs', 'collaborate'], profileGoal: 'Collaborate', apps: { circles: 3, community: 2, bond: 2, party: 2, club: 1 } },
   { key: 'health', label: 'Feel better day to day', emoji: '🌿', blurb: 'Mood, sleep, stress and calm, on one score.', because: 'you want to feel better day to day', to: 'feel better day to day', words: ['feel better', 'mood', 'mental health', 'calm', 'peace', 'health', 'healthy', 'happier', 'sleep better'], profileGoal: 'Get healthier habits', apps: { wellbeing: 3, mood: 2, sleep: 2, stress: 2, mindful: 2, life: 1 } },
   { key: 'move', label: 'Move more', emoji: '👟', blurb: 'Run clubs, movement minutes and a body score.', because: 'you want to move more', to: 'move more', words: ['fitness', 'get fit', 'lose weight', 'weight loss', 'exercise', 'run more', 'move more', 'workout', 'be active'], profileGoal: 'Get healthier habits', apps: { run: 3, life: 2, wellbeing: 1 } },
-  { key: 'life', label: 'Work on myself', emoji: '🏰', blurb: 'The deeper path: your seven relationships, a routine and a plan.', because: 'you want to work on yourself', to: 'work on yourself', words: ['my life', 'life together', 'purpose', 'discipline', 'self improvement', 'self-improvement', 'better person', 'habits', 'routine', 'relationships', 'grow as a person', 'life coach'], apps: { journal: 2, reviews: 2, life: 2, mindful: 1 } },
+  { key: 'life', label: 'Work on myself', emoji: '🏰', blurb: 'The deeper path: your seven relationships, a routine and a plan.', because: 'you want to work on yourself', to: 'work on yourself', words: ['my life', 'life together', 'purpose', 'discipline', 'self improvement', 'self-improvement', 'better person', 'habits', 'routine', 'relationships', 'grow as a person'], apps: { journal: 2, reviews: 2, life: 2, mindful: 1 } },
+  { key: 'find_coach', label: 'Work with a life coach', emoji: '🙋', blurb: 'A coach the team checked sees what you share and helps you keep going.', because: 'you want a coach in your corner', to: 'work with a life coach', words: ['need a life coach', 'want a life coach', 'find a life coach', 'get a life coach', 'need a coach', 'want a coach', 'find a coach', 'get a coach', 'my coach', 'accountability', 'keep me accountable', 'hold me accountable'], apps: { coaching: 3, life: 1, reviews: 1 } },
 ];
 
 export const SETUP_GOAL_BY_KEY: Record<string, SetupGoal> = Object.fromEntries(SETUP_GOALS.map((g) => [g.key, g]));
@@ -5463,6 +5970,8 @@ export const SETUP_COMBOS: readonly SetupCombo[] = [
   { when: ['short_video', 'earn'], apps: { win: 2 }, because: 'you make short videos and want them to pay' },
   { when: ['long_video', 'grow'], apps: { content: 2 }, because: 'you make long videos and want more people to watch' },
   { when: ['teach', 'sell'], apps: { shop: 2 }, because: 'you teach and want to sell your lessons' },
+  { when: ['coach', 'sell'], apps: { shop: 2 }, because: 'you coach and want to sell your sessions' },
+  { when: ['coach', 'grow'], apps: { profile: 1, audience: 1 }, because: 'you coach and want more people to find you' },
   { when: ['social', 'grow'], apps: { content: 1, automations: 1 }, because: 'you run pages and want them to grow' },
   { when: ['shooter', 'work'], apps: { work: 1, store: 1 }, because: 'you shoot for clients, and the right gear wins jobs' },
   { when: ['starting', 'learn'], apps: { school: 2, tools: 1 }, because: 'you are just starting and want to learn the craft' },
@@ -5797,11 +6306,11 @@ export interface ChoiceGroup {
 export const SETUP_GOAL_GROUPS: readonly ChoiceGroup[] = [
   { label: 'Money and work', emoji: '💸', keys: ['earn', 'work', 'sell', 'money'] },
   { label: 'Grow', emoji: '🌱', keys: ['learn', 'grow', 'people'] },
-  { label: 'You', emoji: '🌿', keys: ['health', 'move', 'life'] },
+  { label: 'You', emoji: '🌿', keys: ['health', 'move', 'life', 'find_coach'] },
 ];
 
 export const SETUP_ROLE_GROUPS: readonly ChoiceGroup[] = [
-  { label: 'What you do', emoji: '🛠️', keys: ['creator', 'freelancer', 'employee', 'founder'] },
+  { label: 'What you do', emoji: '🛠️', keys: ['creator', 'freelancer', 'employee', 'founder', 'coach'] },
   { label: 'Where you are in life', emoji: '🧭', keys: ['student', 'explorer', 'parent'] },
 ];
 
@@ -5832,6 +6341,7 @@ export const SETUP_APP_LINES: Readonly<Record<string, string>> = {
   journal: 'Write it down, with how you felt.',
   reviews: 'A short look back each week.',
   companion: 'A chat about how you are doing. Not a therapist.',
+  coaching: 'Work with a life coach, or coach your students.',
   profile: 'Your page: links, work and shop.',
   shop: 'Sell courses, downloads and sessions.',
   store: 'Gear, new or second hand.',

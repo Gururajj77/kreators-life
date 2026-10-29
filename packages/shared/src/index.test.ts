@@ -642,3 +642,79 @@ describe('assistant credits', () => {
   });
 });
 
+
+import { badgeRoleOf, BADGE_META, COACH_SHARE_PARTS, DEFAULT_COACH_SHARE, isStaffFor, parseCoachShare } from './index';
+import { attendeeXpLocked, codeWindow } from './index';
+
+describe('life coaches', () => {
+  it('lets a creator hold Life coach and Mentor, never the staff jobs, and never gives Life coach without asking', () => {
+    const creator = { role: 'user' as const, permissions: ['coach', 'talent'] };
+    expect(isStaffFor(creator, 'coach')).toBe(true);
+    expect(isStaffFor(creator, 'talent')).toBe(false);
+    expect(isStaffFor({ role: 'user', permissions: ['mentor'] }, 'mentor')).toBe(true);
+    const admin = { role: 'admin' as const, permissions: [] };
+    expect(isStaffFor(admin, 'talent')).toBe(true);
+    expect(isStaffFor(admin, 'coach')).toBe(false);
+    expect(isStaffFor({ role: 'admin', permissions: ['coach'] }, 'coach')).toBe(true);
+  });
+
+  it('names the badge Life coach for a creator who coaches; staff and admins keep their own', () => {
+    expect(badgeRoleOf({ role: 'user', permissions: ['coach'] })).toBe('coach');
+    expect(BADGE_META[badgeRoleOf({ role: 'user', permissions: ['coach'] })].name).toBe('Life coach');
+    expect(badgeRoleOf({ role: 'user', permissions: [] })).toBe('user');
+    expect(badgeRoleOf({ role: 'sub_admin', permissions: ['coach'] })).toBe('sub_admin');
+  });
+
+  it('reads what a student shares over the defaults, and keeps the journal out of every part', () => {
+    expect(parseCoachShare('{}')).toEqual(DEFAULT_COACH_SHARE);
+    expect(parseCoachShare('{"reflection":false,"journal":true}')).toEqual({ ...DEFAULT_COACH_SHARE, reflection: false });
+    expect(parseCoachShare('not json')).toEqual(DEFAULT_COACH_SHARE);
+    expect(COACH_SHARE_PARTS as readonly string[]).not.toContain('journal');
+  });
+
+  it('tells a life coach from someone who wants one, in the setup chat', () => {
+    expect(readAbout("I'm a life coach for creators").identities).toContain('coach');
+    expect(readAbout("I'm a life coach for creators").goals).not.toContain('find_coach');
+    expect(readAbout('I need a coach to keep me on track').goals).toContain('find_coach');
+    expect(readAbout('I need a coach to keep me on track').identities).not.toContain('coach');
+    expect(matchSetup({ identities: ['coach'], goals: ['sell'], blockers: [] }).apps.map((a) => a.key)).toContain('coaching');
+    expect(matchSetup({ identities: ['student'], goals: ['find_coach'], blockers: [] }).apps.map((a) => a.key)).toContain('coaching');
+  });
+});
+
+describe('attendee codes', () => {
+  it('fixes the xp when the code opens, thirty minutes before the start', () => {
+    const start = '2026-11-01T10:00:00.000Z';
+    expect(attendeeXpLocked(start, Date.parse('2026-11-01T09:29:00.000Z'))).toBe(false);
+    expect(attendeeXpLocked(start, Date.parse('2026-11-01T09:30:00.000Z'))).toBe(true);
+    expect(codeWindow(start, '2026-11-01T11:00:00.000Z')).toEqual({ opensAt: '2026-11-01T09:30:00.000Z', closesAt: '2026-11-01T14:00:00.000Z' });
+  });
+});
+
+import { briefFor, gettingStarted, GETTING_STARTED, mentionsIn, previousSeason, seasonLabel, type BriefFacts } from './index';
+
+describe('engagement', () => {
+  const facts: BriefFacts = { hour: 20, checkedIn: false, streak: 12, bestStreak: 12, level: 4, xpToNext: 80, tasksDue: 2, tasksOverdue: 1, doneWeek: 3, doneWeekBefore: 8, smallActDone: false, notToDoSlipped: 0, routineWeek: null, contractDays: null, sleepAvg: 6, sleepAvgBefore: 7.2, moodAvg: null, moodAvgBefore: null, stressAvg: null, nextEvent: null, coachNotes: 0, coachAsks: 0, reviewDue: false, apps: ['sleep'] };
+  it('briefs three signals and three steps, the most pressing first, never to an app that is off', () => {
+    const b = briefFor(facts);
+    expect(b.signals.map((x) => x.key)).toEqual(['streak-risk', 'overdue', 'sleep']);
+    expect(b.actions.map((x) => x.key)).toEqual(['checkin', 'task', 'act']);
+    const calm = briefFor({ ...facts, apps: [], checkedIn: true, tasksDue: 0, smallActDone: true, tasksOverdue: 0, sleepAvg: 6, sleepAvgBefore: 7.2 });
+    expect(calm.actions.every((a) => a.to !== '/sleep' && a.to !== '/journal')).toBe(true);
+    expect(calm.signals.find((x) => x.key === 'sleep')?.to).toBeNull();
+  });
+  it('ticks the checklist from what was done, and folds it away when done, folded or old', () => {
+    expect(gettingStarted({ checkin: true }, 2, false)).toMatchObject({ done: 1, show: true });
+    expect(gettingStarted({ checkin: true }, 20, false).show).toBe(false);
+    expect(gettingStarted({ checkin: true }, 2, true).show).toBe(false);
+    expect(gettingStarted(Object.fromEntries(GETTING_STARTED.map((g) => [g.key, true])), 2, false).show).toBe(false);
+  });
+  it('reads mentions as page names, each once, five at most, never an email', () => {
+    expect(mentionsIn('Thanks @Asha_R and @asha_r, see @kiran. Mail me at a@b.co')).toEqual(['asha_r', 'kiran']);
+    expect(mentionsIn('@a1b @a2b @a3b @a4b @a5b @a6b').length).toBe(5);
+  });
+  it('counts seasons by calendar month', () => {
+    expect(previousSeason('2026-01')).toBe('2025-12');
+    expect(seasonLabel('2026-10')).toBe('October 2026');
+  });
+});

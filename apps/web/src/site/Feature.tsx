@@ -26,7 +26,7 @@ export function Feature() {
     <SiteLayout>
       <motion.header initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mt-lg grid gap-md rounded-card p-md md:grid-cols-[2fr_1fr] md:items-center md:p-lg" style={{ background: `var(--soft-${lead.key})` }}>
         <div>
-          <Link to="/#features" className="inline-flex min-h-[44px] items-center gap-xs text-[14px] font-bold text-ink-soft">
+          <Link to="/features" className="inline-flex min-h-[44px] items-center gap-xs text-[14px] font-bold text-ink-soft">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
               <path d="M15 5l-7 7 7 7" />
             </svg>
@@ -76,10 +76,10 @@ export function Feature() {
             const r = RELATIONSHIP_BY_KEY[k];
             return (
               <li key={k}>
-                <a href={`/#floors`} className="toy toy-soft inline-flex min-h-[48px] items-center gap-xs rounded-pill bg-card pr-md pl-xs text-[14px] font-bold">
+                <a href={`/7rp#${k}`} className="toy toy-soft inline-flex min-h-[48px] items-center gap-xs rounded-pill bg-card pr-md pl-xs text-[14px] font-bold">
                   <Avatar relationship={k} size={32} decorative />
                   {r.name}
-                  <span className="text-ink-soft">floor {r.floor}</span>
+                  <span className="text-ink-soft">pillar {r.floor}</span>
                 </a>
               </li>
             );

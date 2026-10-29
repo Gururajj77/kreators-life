@@ -1,4 +1,4 @@
-import { MODULE_GROUPS, RELATIONSHIPS, ROLE_META, type ModuleGroup } from '@kreators/shared';
+import { BADGE_META, badgeRoleOf, MODULE_GROUPS, RELATIONSHIPS, type ModuleGroup } from '@kreators/shared';
 import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router';
 import { useModules } from '../lib/modules';
@@ -130,8 +130,8 @@ export function TabBar() {
       <Sheet open={menu} onClose={() => setMenu(false)} title="Your apps">
         {me.data && (
           <p className="m-0 flex items-center gap-xs text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
-            <RoleBadge role={me.data.user.role} size={20} />
-            {ROLE_META[me.data.user.role].name}
+            <RoleBadge role={badgeRoleOf(me.data.user)} size={20} />
+            {BADGE_META[badgeRoleOf(me.data.user)].name}
           </p>
         )}
         {sidebarApps.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing switched on yet. Pick apps under Apps.</p>}
@@ -180,8 +180,8 @@ export function TabBar() {
         <div className="mt-xs flex min-h-[44px] items-center justify-between gap-xs px-xs">
           {me.data ? (
             <p className="m-0 flex items-center gap-xs text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
-              <RoleBadge role={me.data.user.role} size={20} />
-              {ROLE_META[me.data.user.role].name}
+              <RoleBadge role={badgeRoleOf(me.data.user)} size={20} />
+              {BADGE_META[badgeRoleOf(me.data.user)].name}
             </p>
           ) : (
             <span />

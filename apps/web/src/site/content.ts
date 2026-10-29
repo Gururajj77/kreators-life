@@ -214,6 +214,12 @@ export const FEATURES: Record<string, FeatureCopy> = {
     steps: ['Read the answers.', 'Write to the team.', 'Get a reply in your inbox.'],
     relationships: ['friendship', 'guru'],
   },
+  coaching: {
+    tagline: 'A life coach in your corner.',
+    pitch: 'Life coaches the team chose, with the Life coach badge. Ask one, or say yes when one asks. You pick what they see, never your journal. They leave notes and add tasks only you tick, and every step is in a change log you both read.',
+    steps: ['Find a life coach and ask, or answer a coach who asked you.', 'Pick what they see: daily, pillars, routine, life map or reflection.', 'Read their notes, tick their tasks, and end it any time.'],
+    relationships: ['guru', 'self'],
+  },
 };
 
 /** Modules worth a public page. */
@@ -234,7 +240,7 @@ export function featuresForRelationship(key: RelationshipKey): AppModule[] {
 export const LIFE_AREA_FEATURES: Record<LifeAreaKey, string[]> = {
   physical: ['run', 'wellbeing', 'sleep', 'mindful', 'life', 'store'],
   financial: ['finance', 'shop', 'work', 'army', 'win', 'fund', 'store', 'audience', 'content'],
-  emotional: ['mood', 'journal', 'companion', 'bond', 'community', 'party', 'circles', 'profile'],
+  emotional: ['mood', 'journal', 'companion', 'coaching', 'bond', 'community', 'party', 'circles', 'profile'],
   mental: ['stress', 'school', 'knowledge', 'library', 'tools', 'reviews', 'tv'],
   spiritual: ['today', 'tower', 'mindful', 'club', 'leaderboard', 'rewards'],
 };

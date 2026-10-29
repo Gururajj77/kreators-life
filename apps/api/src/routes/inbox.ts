@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { Notification } from '@kreators/shared';
+import { INBOX_TAB_META, INBOX_TABS, isInboxTab, roleRank, type InboxShow, type InboxTab, type Notification } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { nowIso, pageOf, paged } from '../db';
 
@@ -12,26 +12,65 @@ interface Row {
   body: string;
   link: string | null;
   read_at: string | null;
+  archived_at: string | null;
   created_at: string;
 }
-const toN = (r: Row): Notification => ({ id: r.id, kind: r.kind, title: r.title, body: r.body, link: r.link, readAt: r.read_at, createdAt: r.created_at });
+const toN = (r: Row): Notification => ({ id: r.id, kind: r.kind, title: r.title, body: r.body, link: r.link, readAt: r.read_at, archivedAt: r.archived_at, createdAt: r.created_at });
 
+/** The SQL that keeps one tab's kinds, with its binds. All keeps everything. */
+function tabWhere(tab: InboxTab): { sql: string; binds: string[] } {
+  const kinds = INBOX_TAB_META[tab].kinds;
+  return kinds.length ? { sql: ` AND kind IN (${kinds.map(() => '?').join(',')})`, binds: [...kinds] } : { sql: '', binds: [] };
+}
+
+// A page of notes for one tab: the inbox (not archived), only the unread, or the archive. Team is for staff only.
 inbox.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
+  const staff = roleRank(user.role) >= roleRank('sub_admin');
+  const asked = c.req.query('tab');
+  const tab: InboxTab = isInboxTab(asked) && (asked !== 'team' || staff) ? asked : 'all';
+  const showRaw = c.req.query('show');
+  const show: InboxShow = showRaw === 'unread' || showRaw === 'archived' ? showRaw : 'inbox';
   const ask = pageOf(c);
-  const rows = await db.prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?').bind(user.id, ask.limit, ask.offset).all<Row>();
-  const unread = await db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL').bind(user.id).first<{ n: number }>();
+  const t = tabWhere(tab);
+  const state = show === 'archived' ? ' AND archived_at IS NOT NULL' : show === 'unread' ? ' AND archived_at IS NULL AND read_at IS NULL' : ' AND archived_at IS NULL';
+  const rows = await db.prepare(`SELECT * FROM notifications WHERE user_id = ?${t.sql}${state} ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(user.id, ...t.binds, ask.limit, ask.offset).all<Row>();
+  // Unread per tab, so each tab can say how many wait in it.
+  const unreadRows = await db.prepare('SELECT kind, COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL AND archived_at IS NULL GROUP BY kind').bind(user.id).all<{ kind: string; n: number }>();
+  const tabs = INBOX_TABS.filter((k) => k !== 'team' || staff).map((k) => {
+    const kinds = INBOX_TAB_META[k].kinds;
+    return { tab: k, unread: unreadRows.results.filter((r) => kinds.length === 0 || kinds.includes(r.kind)).reduce((a, r) => a + r.n, 0) };
+  });
   const pg = paged(rows.results, ask);
-  return c.json({ page: pg.page, notifications: pg.items.map(toN), unread: unread?.n ?? 0 });
+  return c.json({ page: pg.page, notifications: pg.items.map(toN), unread: tabs.find((x) => x.tab === 'all')?.unread ?? 0, tab, show, tabs });
 });
 
 inbox.post('/read-all', async (c) => {
-  await c.env.DB.prepare('UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL').bind(nowIso(), c.get('user').id).run();
+  const body = await c.req.json<{ tab?: unknown }>().catch(() => ({}) as { tab?: unknown });
+  const t = tabWhere(isInboxTab(body.tab) ? body.tab : 'all');
+  await c.env.DB.prepare(`UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL${t.sql}`).bind(nowIso(), c.get('user').id, ...t.binds).run();
   return c.json({ ok: true });
 });
 
 inbox.post('/:id/read', async (c) => {
   await c.env.DB.prepare('UPDATE notifications SET read_at = COALESCE(read_at, ?) WHERE id = ? AND user_id = ?').bind(nowIso(), c.req.param('id'), c.get('user').id).run();
   return c.json({ ok: true });
+});
+
+// Put a note away, or bring it back. Putting it away also marks it read.
+inbox.post('/:id/archive', async (c) => {
+  const body = await c.req.json<{ archived?: unknown }>().catch(() => ({}) as { archived?: unknown });
+  const now = nowIso();
+  const away = body.archived !== false;
+  await c.env.DB.prepare('UPDATE notifications SET archived_at = ?, read_at = COALESCE(read_at, ?) WHERE id = ? AND user_id = ?').bind(away ? now : null, now, c.req.param('id'), c.get('user').id).run();
+  return c.json({ ok: true, archived: away });
+});
+
+// Put every read note in a tab away at once.
+inbox.post('/archive-read', async (c) => {
+  const body = await c.req.json<{ tab?: unknown }>().catch(() => ({}) as { tab?: unknown });
+  const t = tabWhere(isInboxTab(body.tab) ? body.tab : 'all');
+  const done = await c.env.DB.prepare(`UPDATE notifications SET archived_at = ? WHERE user_id = ? AND read_at IS NOT NULL AND archived_at IS NULL${t.sql}`).bind(nowIso(), c.get('user').id, ...t.binds).run();
+  return c.json({ ok: true, archived: done.meta.changes ?? 0 });
 });

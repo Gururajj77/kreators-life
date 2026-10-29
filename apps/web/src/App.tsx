@@ -52,6 +52,8 @@ import { Realm } from './screens/Realm';
 import { Resources } from './screens/Resources';
 import { Rewards } from './screens/Rewards';
 import { Plans } from './screens/Plans';
+import { Coaching } from './screens/Coaching';
+import { CoachStudent } from './screens/CoachStudent';
 import { School } from './screens/School';
 import { Search } from './screens/Search';
 import { Sessions } from './screens/Sessions';
@@ -76,6 +78,8 @@ import { Policy } from './site/Policy';
 import { Explore } from './site/Explore';
 import { Feature } from './site/Feature';
 import { Home } from './site/Home';
+import { Features } from './site/Features';
+import { SevenRP } from './site/SevenRP';
 
 function Loading() {
   return (
@@ -165,6 +169,8 @@ const router = createBrowserRouter([
   // The public site: no account needed.
   { path: '/', element: <Home /> },
   { path: '/explore', element: <Explore /> },
+  { path: '/features', element: <Features /> },
+  { path: '/7rp', element: <SevenRP /> },
   { path: '/features/:key', element: <Feature /> },
   { path: '/c/:code', element: <CertificatePage /> },
   { path: '/i/:token', element: <InvoicePage /> },
@@ -241,6 +247,8 @@ const router = createBrowserRouter([
       // wellbeing
       { path: '/life', element: gated('life', <Life />) },
       { path: '/reviews', element: gated('reviews', <Reviews />) },
+      { path: '/coaching', element: gated('coaching', <Coaching />) },
+      { path: '/coaching/students/:id', element: gated('coaching', <CoachStudent />) },
       { path: '/wellbeing', element: gated('wellbeing', <Wellbeing />) },
       { path: '/mood', element: gated('mood', <Mood />) },
       { path: '/sleep', element: gated('sleep', <Sleep />) },

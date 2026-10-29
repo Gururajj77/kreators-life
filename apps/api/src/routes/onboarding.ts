@@ -21,6 +21,7 @@ import {
 } from '@kreators/shared';
 import { resolveAccess } from '../access';
 import { getUser, parseList, parseModules, str, toUser } from '../db';
+import { askToCoach, isCoach } from '../coaching';
 import type { AppEnv } from '../env';
 import { DATE_RE, newId, nowIso, readyFromNow, shiftDate, toNode, type NodeRow } from '../db';
 
@@ -229,6 +230,8 @@ onboarding.post('/setup', async (c) => {
       user.id,
     )
     .run();
+  // Saying "I'm a life coach" asks the team to make you one: the badge and the students wait for their yes.
+  const coach = answers.identities.includes('coach') ? (isCoach(user) ? 'coach' : await askToCoach(db, user, '')) : null;
   const fresh = await getUser(db, user.id);
-  return c.json({ user: fresh ? toUser(fresh) : null, match, on: [...keep] });
+  return c.json({ user: fresh ? toUser(fresh) : null, match, on: [...keep], coach });
 });

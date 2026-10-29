@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { PERMISSIONS } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { can, nameOf, parseList, requireRole, pageOf, paged } from '../db';
 
@@ -23,7 +24,7 @@ manage.get('/overview', async (c) => {
     .bind(since, new Date().toISOString().slice(0, 10))
     .first<{ members: number; new_this_week: number; posts_this_week: number; hidden_posts: number; resources: number; drafts: number; active_today: number }>();
   const user = c.get('user');
-  const perms = (['talent', 'cohorts', 'events', 'finance', 'moderation', 'support', 'review', 'mentor'] as const).filter((p) => can(user, p));
+  const perms = PERMISSIONS.filter((p) => can(user, p));
   const counts = await db
     .prepare(
       `SELECT
@@ -33,12 +34,14 @@ manage.get('/overview', async (c) => {
         (SELECT COUNT(*) FROM memberships WHERE status = 'applied') AS club_applied,
         (SELECT COUNT(*) FROM bounty_submissions WHERE status IN ('submitted','verified','disputed')) AS bounty_queue,
         (SELECT COUNT(*) FROM proposals WHERE stage IN ('submitted','review','diligence')) AS proposals,
-        (SELECT COUNT(*) FROM submissions WHERE status = 'submitted') AS assignments`,
+        (SELECT COUNT(*) FROM submissions WHERE status = 'submitted') AS assignments,
+        (SELECT COUNT(*) FROM coach_links WHERE coach_id = ?1 AND status = 'pending' AND asked_by = 'student') AS coach_asks`,
     )
-    .first<{ campaigns: number; applications: number; tickets: number; club_applied: number; bounty_queue: number; proposals: number; assignments: number }>();
+    .bind(user.id)
+    .first<{ campaigns: number; applications: number; tickets: number; club_applied: number; bounty_queue: number; proposals: number; assignments: number; coach_asks: number }>();
   return c.json({
     permissions: perms,
-    queues: { campaigns: counts?.campaigns ?? 0, applications: counts?.applications ?? 0, tickets: counts?.tickets ?? 0, clubApplied: counts?.club_applied ?? 0, bountyQueue: counts?.bounty_queue ?? 0, proposals: counts?.proposals ?? 0, assignments: counts?.assignments ?? 0 },
+    queues: { campaigns: counts?.campaigns ?? 0, applications: counts?.applications ?? 0, tickets: counts?.tickets ?? 0, clubApplied: counts?.club_applied ?? 0, bountyQueue: counts?.bounty_queue ?? 0, proposals: counts?.proposals ?? 0, assignments: counts?.assignments ?? 0, coachAsks: counts?.coach_asks ?? 0 },
     members: row?.members ?? 0,
     newThisWeek: row?.new_this_week ?? 0,
     postsThisWeek: row?.posts_this_week ?? 0,

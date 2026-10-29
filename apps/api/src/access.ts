@@ -25,6 +25,9 @@ export const MODULE_FOR_PREFIX: Record<string, readonly string[]> = {
   journal: ['journal'],
   reviews: ['reviews'],
   companion: ['companion'],
+  // The coach's side and the directory. The student's own side (answers, what they share, ending a link) lives
+  // under /me/coach, which is core, so switching Coaching off never stops anyone from saying no or ending it.
+  coach: ['coaching'],
   assistant: ['assistant'],
   studio: ['shop'],
   'studio/links': ['content', 'automations'],

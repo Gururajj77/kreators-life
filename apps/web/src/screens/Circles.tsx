@@ -8,6 +8,8 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { Toggle } from '../components/Toggle';
+import { attendeeBody, AttendeeFields, attendeeProblem, ClaimCard, HostCodeCard, type CodeChange } from '../components/AttendeeCode';
+import { Pager, usePage } from '../components/Pager';
 import { api } from '../lib/api';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
 import { useNow } from '../lib/useNow';
@@ -27,11 +29,13 @@ const countdown = (iso: string, now: number) => {
 
 /** Anonymous small groups near you. */
 export function Circles() {
-  const q = useAuthed(['circles'], api.circles);
+  const hostPage = usePage('host');
+  const q = useAuthed(['circles', hostPage.query], () => api.circles(hostPage.query));
   const me = useMe();
   const refresh = useRefreshAll();
   const d = q.data;
   const [creating, setCreating] = useState(false);
+  const [codeError, setCodeError] = useState<string | null>(null);
   const [joining, setJoining] = useState<CircleEvent | null>(null);
   const join = useMutation({
     mutationFn: (v: { id: string; status: CircleStatus }) => api.joinCircle(v.id, v.status),
@@ -73,6 +77,36 @@ export function Circles() {
         )}
       </header>
 
+      {d && d.hosting.length > 0 && (
+        <section className="mt-lg" aria-labelledby="hosting-heading">
+          <h2 id="hosting-heading" className="text-[24px]">
+            Circles you run
+          </h2>
+          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Every city, until each code closes. Set the tables and the attendee code here.</p>
+          {codeError && (
+            <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+              The circle is open, but its xp was not set: {codeError} Set it on its card.
+            </p>
+          )}
+          <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+            {d.hosting.map((e) => (
+              <HostCard
+                key={e.id}
+                e={e}
+                busy={match.isPending}
+                onMatch={() => match.mutate(e.id)}
+                onCode={async (change) => {
+                  await api.setCircleCode(e.id, change);
+                  setCodeError(null);
+                  await q.refetch();
+                }}
+              />
+            ))}
+          </ul>
+          <Pager page={d.hostingPage} prefix="host" label="circles you run" />
+        </section>
+      )}
+
       {d && d.groups.length > 0 && (
         <section className="mt-lg" aria-labelledby="tables-heading">
           <h2 id="tables-heading" className="text-[24px]">
@@ -109,7 +143,7 @@ export function Circles() {
         {d && d.events.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">No circles here yet. The team opens them city by city; check Explore for other cities.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {d?.events.map((e) => (
-            <EventCard key={e.id} e={e} ready={ready} canMatch={Boolean(d.canCreate)} busy={join.isPending || leave.isPending || match.isPending} onJoin={() => setJoining(e)} onLeave={() => leave.mutate(e.id)} onMatch={() => match.mutate(e.id)} />
+            <EventCard key={e.id} e={e} ready={ready} busy={join.isPending || leave.isPending} onJoin={() => setJoining(e)} onLeave={() => leave.mutate(e.id)} />
           ))}
         </ul>
         {join.isError && (
@@ -122,7 +156,14 @@ export function Circles() {
         </p>
       </section>
 
-      <CreateSheet open={creating} onClose={() => setCreating(false)} onDone={() => q.refetch()} />
+      <CreateSheet
+        open={creating}
+        onClose={() => setCreating(false)}
+        onDone={(error) => {
+          setCodeError(error);
+          void q.refetch();
+        }}
+      />
       <JoinSheet event={joining} onClose={() => setJoining(null)} busy={join.isPending} error={join.isError ? (join.error instanceof Error ? join.error.message : 'Could not join.') : null} onJoin={(status) => joining && join.mutate({ id: joining.id, status })} />
     </Screen>
   );
@@ -176,7 +217,37 @@ function JoinSheet({ event, onClose, busy, error, onJoin }: { event: CircleEvent
   );
 }
 
-function EventCard({ e, ready, canMatch, busy, onJoin, onLeave, onMatch }: { e: CircleEvent; ready: boolean; canMatch: boolean; busy: boolean; onJoin: () => void; onLeave: () => void; onMatch: () => void }) {
+/** One circle for the team that runs it: when and where, who signed up and who is seated, the tables and the code. */
+function HostCard({ e, busy, onMatch, onCode }: { e: CircleEvent; busy: boolean; onMatch: () => void; onCode: (change: CodeChange) => Promise<void> }) {
+  const seated = e.hostCode?.guests;
+  return (
+    <li className="rounded-tile bg-card p-sm shadow-toy-soft">
+      <div className="flex items-start justify-between gap-sm">
+        <div className="min-w-0">
+          <p className="m-0 text-[16px] font-bold">{e.title}</p>
+          <p className="m-0 text-[14px] font-semibold text-ink-soft">
+            {when(e.startsAt)}, {[e.area, e.city].filter(Boolean).join(', ')}. {e.signups} signed up{seated !== undefined ? `, ${seated} seated` : ''}.
+          </p>
+          {e.repeat === 'weekly' && <p className="m-0 text-[12px] font-extrabold text-ink-mute">{weekly(e.startsAt)}</p>}
+        </div>
+        <span className={`shrink-0 rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${e.status === 'matched' ? 'bg-r4 text-on-fill' : 'bg-paper text-ink-soft'}`}>{e.status === 'matched' ? 'tables set' : 'signups'}</span>
+      </div>
+      {e.status === 'open' && e.signups >= 3 && (
+        <Button variant="outline" className="mt-xs" onClick={onMatch} disabled={busy}>
+          Set the tables now
+        </Button>
+      )}
+      <details className="mt-sm group">
+        <summary className="toy toy-flat inline-flex min-h-[40px] cursor-pointer list-none items-center rounded-pill px-sm text-[14px] font-bold">{e.hostCode ? `Attendee code, +${e.hostCode.xp} xp` : 'Attendee code'}</summary>
+        <div className="mt-xs">
+          <HostCodeCard value={e.hostCode} startsAt={e.startsAt} onSave={onCode} guests="people seated" />
+        </div>
+      </details>
+    </li>
+  );
+}
+
+function EventCard({ e, ready, busy, onJoin, onLeave }: { e: CircleEvent; ready: boolean; busy: boolean; onJoin: () => void; onLeave: () => void }) {
   const now = useNow();
   const closes = new Date(e.startsAt).getTime() - 36 * 3600_000;
   const open = e.status === 'open' && now < closes;
@@ -190,6 +261,7 @@ function EventCard({ e, ready, canMatch, busy, onJoin, onLeave, onMatch }: { e: 
           </p>
           {e.repeat === 'weekly' && <p className="m-0 text-[12px] font-extrabold text-ink-mute">{weekly(e.startsAt)}. The next one opens once this week&rsquo;s tables are set.</p>}
           {e.venueHint && <p className="m-0 text-[14px] font-semibold text-ink-soft">{e.venueHint}</p>}
+          {e.attendeeXp ? <p className="m-0 mt-xs text-[12px] font-extrabold text-ink-soft">+{e.attendeeXp} xp for the people seated, with the code at the meetup</p> : null}
         </div>
         <span className={`shrink-0 rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${e.status === 'matched' ? 'bg-r4 text-on-fill' : open ? 'bg-paper text-ink-soft' : 'bg-line text-ink'}`}>{e.status === 'matched' ? 'tables set' : open ? `closes in ${countdown(new Date(closes).toISOString(), now)}` : 'closed'}</span>
       </div>
@@ -212,17 +284,12 @@ function EventCard({ e, ready, canMatch, busy, onJoin, onLeave, onMatch }: { e: 
             Join
           </Button>
         ) : null}
-        {canMatch && e.status === 'open' && e.signups >= 3 && (
-          <Button variant="outline" onClick={onMatch} disabled={busy}>
-            Set the tables now
-          </Button>
-        )}
       </div>
     </li>
   );
 }
 
-function CreateSheet({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
+function CreateSheet({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: (codeError: string | null) => void }) {
   const [title, setTitle] = useState('');
   const [city, setCity] = useState('');
   const [area, setArea] = useState('');
@@ -230,11 +297,13 @@ function CreateSheet({ open, onClose, onDone }: { open: boolean; onClose: () => 
   const [venueHint, setVenueHint] = useState('');
   const [groupSize, setGroupSize] = useState('5');
   const [repeat, setRepeat] = useState(true);
+  const [attendeeXp, setAttendeeXp] = useState('');
+  const [attendeeCode, setAttendeeCode] = useState('');
   const create = useMutation({
-    mutationFn: () => api.createCircle({ title, city, area, startsAt: new Date(startsAt).toISOString(), venueHint, groupSize: Number(groupSize) || 5, repeat: repeat ? 'weekly' : 'none' }),
-    onSuccess: () => {
+    mutationFn: () => api.createCircle({ title, city, area, startsAt: new Date(startsAt).toISOString(), venueHint, groupSize: Number(groupSize) || 5, repeat: repeat ? 'weekly' : 'none', ...attendeeBody(attendeeXp, attendeeCode) }),
+    onSuccess: (r) => {
       setTitle('');
-      onDone();
+      onDone(r.codeError);
       onClose();
     },
   });
@@ -274,12 +343,13 @@ function CreateSheet({ open, onClose, onDone }: { open: boolean; onClose: () => 
           <input value={venueHint} onChange={(e) => setVenueHint(e.target.value)} maxLength={200} placeholder="A cafe near the metro; each table picks the exact one" className={field} />
         </label>
         <Toggle on={repeat} onChange={setRepeat} label="Every week at this time. The next one opens on its own once tables are set." />
+        <AttendeeFields xp={attendeeXp} onXp={setAttendeeXp} code={attendeeCode} onCode={setAttendeeCode} one="person seated" many="people seated" note={repeat ? 'Each week’s circle keeps this xp, with a new random code.' : undefined} />
         {create.isError && (
           <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
             {create.error instanceof Error ? create.error.message : 'Could not open it.'}
           </p>
         )}
-        <Button type="submit" size="lg" full disabled={create.isPending}>
+        <Button type="submit" size="lg" full disabled={create.isPending || attendeeProblem(attendeeXp, attendeeCode) !== null}>
           Open it
         </Button>
       </form>
@@ -416,6 +486,22 @@ export function CircleGroup() {
         <p className="mt-xs m-0 text-[16px] font-bold">{g.venue || 'Where: not decided yet'}</p>
         <p className="m-0 text-[14px] font-semibold text-ink-soft">{g.plan || 'Agree on the exact time and table in the chat, then write it here so everyone sees it.'}</p>
       </section>
+
+      {q.data?.attendee && (
+        <section className="mt-md" aria-labelledby="code-heading">
+          <h2 id="code-heading" className="text-[18px]">
+            Attendee code
+          </h2>
+          <ClaimCard
+            view={q.data.attendee}
+            onClaim={async (code) => {
+              const r = await api.claimCircleCode(g.eventId, code);
+              await q.refetch();
+              return r;
+            }}
+          />
+        </section>
+      )}
 
       <section className="mt-md" aria-labelledby="chat-heading">
         <h2 id="chat-heading" className="text-[18px]">

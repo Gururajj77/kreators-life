@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { attendeeXpLocked, EVENT_TYPES, HONOR_BY_KEY, isPaidPlan, type AdminAttendeeCode, type AttendeeCodeApp, isRole, MAX_CREDIT_GRANT, PLAN_DAYS, LISTING_TYPES, MODULE_BY_KEY, MODULES, OPPORTUNITY_TYPES, PERMISSIONS, TOOL_CATEGORIES, type AdminRedemption, type AdminUser, type AuditLog, type FlagOverride, type Listing, type ListingType, type ModuleSetting, type Permission } from '@kreators/shared';
+import { attendeeXpLocked, type AdminCoachAsk, type AdminCoachLink, EVENT_TYPES, HONOR_BY_KEY, isPaidPlan, type AdminAttendeeCode, type AttendeeCodeApp, isRole, MAX_CREDIT_GRANT, PLAN_DAYS, LISTING_TYPES, MODULE_BY_KEY, MODULES, OPPORTUNITY_TYPES, PERMISSIONS, TOOL_CATEGORIES, type AdminRedemption, type AdminUser, type AuditLog, type FlagOverride, type Listing, type ListingType, type ModuleSetting, type Permission } from '@kreators/shared';
 import { resolveAccess } from '../access';
 import { listingsFor } from './explore';
 import { ORDER_SELECT, toOrder, type OrderRow } from './studio';
@@ -13,9 +13,11 @@ import { notify, pageOf, paged } from '../db';
 import type { AdminFunnel, AdminKyc, AdminOrder, OrderEvent, OutboxEmail, WebhookEvent } from '@kreators/shared';
 import type { Context } from 'hono';
 import type { AppEnv, UserRow } from '../env';
-import { audit, getUser, nameOf, newId, nowIso, num, oneOf, parseList, sessionUser, str } from '../db';
+import { audit, can, getUser, nameOf, newId, nowIso, num, oneOf, parseList, sessionUser, str } from '../db';
 import { accountOf, addCredits, setPlan } from '../credits';
 import { setEventCode, setRunCode } from '../attendee';
+import { endLink, LINK, linkById, logCoach, type LinkRow } from '../coaching';
+import { linkProblem, startLink } from './coach';
 import { toRedemption, type RedemptionRow } from './rewards';
 
 export const admin = new Hono<AppEnv>();
@@ -52,6 +54,7 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 interface UserListRow extends UserRow {
   honor_keys: string | null;
+  coach_asked_at: string | null;
   ca_plan: string | null;
   ca_plan_until: string | null;
   ca_plan_credits: number | null;
@@ -79,6 +82,7 @@ function toAdminUser(r: UserListRow): AdminUser {
     planUntil: live ? r.ca_plan_until : null,
     planCredits: live ? (r.ca_plan_credits ?? 0) : 0,
     extraCredits: r.ca_extra_credits ?? 0,
+    coachAskedAt: r.coach_asked_at ?? null,
   };
 }
 
@@ -90,8 +94,109 @@ admin.post('/users/:id/permissions', async (c) => {
   if (!prev) return c.json({ error: 'not found' }, 404);
   await db.prepare('UPDATE users SET permissions = ? WHERE id = ?').bind(JSON.stringify(perms), prev.id).run();
   await audit(db, actorOf(c), 'user.permissions', 'user', prev.id, parseList(prev.permissions), perms);
+  // Life coach is the one permission the person hears about: given, it answers their ask; taken, their students are told.
+  const was = parseList(prev.permissions).includes('coach');
+  const now = perms.includes('coach');
+  if (!was && now) {
+    await db.prepare('UPDATE coach_profiles SET asked_at = NULL WHERE user_id = ?').bind(prev.id).run();
+    await notify(db, prev.id, 'coach', 'You are a life coach now', 'Your badge says Life coach. Open Coaching to write your line and ask your first students; each one has to say yes.', '/coaching');
+  } else if (was && !now) {
+    const open = await db.prepare(`${LINK} WHERE l.coach_id = ? AND l.status IN ('pending','active')`).bind(prev.id).all<LinkRow>();
+    for (const l of open.results) await endLink(db, l, { id: null, name: 'The team' });
+    await notify(db, prev.id, 'coach', 'You are no longer a life coach', open.results.length ? 'Your students were told, and you no longer see their progress.' : '', '/coaching');
+  }
   const fresh = await loadUser(db, prev.id);
   return c.json({ user: fresh ? toAdminUser(fresh) : null });
+});
+
+// ---- life coaches: the asks to become one, every link between a coach and a student, and linking two people
+const COACH_LINK_SELECT = `SELECT l.id, l.coach_id, l.student_id, l.status, l.asked_by, l.created_at, l.ended_at, c.display_name AS coach_name, s.display_name AS student_name
+  FROM coach_links l JOIN users c ON c.id = l.coach_id JOIN users s ON s.id = l.student_id`;
+interface AdminLinkRow { id: string; coach_id: string; student_id: string; status: AdminCoachLink['status']; asked_by: AdminCoachLink['askedBy']; created_at: string; ended_at: string | null; coach_name: string; student_name: string }
+const toAdminLink = (r: AdminLinkRow): AdminCoachLink => ({ id: r.id, coachId: r.coach_id, coachName: nameOf({ display_name: r.coach_name }), studentId: r.student_id, studentName: nameOf({ display_name: r.student_name }), status: r.status, askedBy: r.asked_by, createdAt: r.created_at, endedAt: r.ended_at });
+
+admin.get('/coaching/links', async (c) => {
+  const ask = pageOf(c);
+  const want = c.req.query('status') ?? '';
+  const status = ['pending', 'active', 'declined', 'ended'].includes(want) ? want : '';
+  const q = (c.req.query('q') ?? '').trim();
+  const rows = await c.env.DB.prepare(`${COACH_LINK_SELECT} WHERE (?1 = '' OR l.status = ?1) AND (?2 = '' OR c.display_name LIKE ?3 OR s.display_name LIKE ?3) ORDER BY l.created_at DESC, l.id LIMIT ?4 OFFSET ?5`)
+    .bind(status, q, `%${q.replace(/[%_]/g, '')}%`, ask.limit, ask.offset)
+    .all<AdminLinkRow>();
+  const pg = paged(rows.results, ask);
+  return c.json({ links: pg.items.map(toAdminLink), page: pg.page });
+});
+
+// Every life coach, for the link form: who they are and how many students they have.
+admin.get('/coaching/coaches', async (c) => {
+  const ask = pageOf(c);
+  const rows = await c.env.DB.prepare(
+    `SELECT u.id, u.display_name, u.handle, u.email, (SELECT COUNT(*) FROM coach_links x WHERE x.coach_id = u.id AND x.status = 'active') AS students
+     FROM users u WHERE u.permissions LIKE '%"coach"%' ORDER BY u.display_name COLLATE NOCASE, u.id LIMIT ? OFFSET ?`,
+  )
+    .bind(ask.limit, ask.offset)
+    .all<{ id: string; display_name: string; handle: string | null; email: string | null; students: number }>();
+  const pg = paged(rows.results, ask);
+  return c.json({ coaches: pg.items.map((r) => ({ id: r.id, name: nameOf(r), handle: r.handle, email: r.email, students: r.students })), page: pg.page });
+});
+
+// People who asked to be made a life coach. Saying yes is giving the Life coach permission, above.
+admin.get('/coaching/asks', async (c) => {
+  const ask = pageOf(c);
+  const rows = await c.env.DB.prepare(
+    `SELECT u.id, u.display_name, u.email, u.handle, p.about, p.asked_at FROM coach_profiles p JOIN users u ON u.id = p.user_id
+     WHERE p.asked_at IS NOT NULL AND u.permissions NOT LIKE '%"coach"%' ORDER BY p.asked_at ASC, u.id LIMIT ? OFFSET ?`,
+  )
+    .bind(ask.limit, ask.offset)
+    .all<{ id: string; display_name: string; email: string | null; handle: string | null; about: string; asked_at: string }>();
+  const pg = paged(rows.results, ask);
+  const asks: AdminCoachAsk[] = pg.items.map((r) => ({ userId: r.id, name: nameOf(r), email: r.email, handle: r.handle, about: r.about, askedAt: r.asked_at }));
+  return c.json({ asks, page: pg.page });
+});
+
+admin.post('/coaching/asks/:id/decline', async (c) => {
+  const db = c.env.DB;
+  const row = await db.prepare('SELECT user_id FROM coach_profiles WHERE user_id = ? AND asked_at IS NOT NULL').bind(c.req.param('id')).first<{ user_id: string }>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  await db.prepare('UPDATE coach_profiles SET asked_at = NULL WHERE user_id = ?').bind(row.user_id).run();
+  await audit(db, actorOf(c), 'coach.ask.decline', 'user', row.user_id);
+  await notify(db, row.user_id, 'coach', 'Not a life coach for now', 'The team said no to coaching for now. You can ask again later from Coaching.', '/coaching');
+  return c.json({ ok: true });
+});
+
+// Link a coach and a student: ask the student (they say yes or no) or, when they agreed outside the app, link them now.
+admin.post('/coaching/links', async (c) => {
+  const db = c.env.DB;
+  const body = await c.req.json<{ coachId?: unknown; student?: unknown; mode?: unknown }>().catch(() => ({}) as Record<string, never>);
+  const coachRow = typeof body.coachId === 'string' ? await getUser(db, body.coachId) : null;
+  if (!coachRow || !can(coachRow, 'coach')) return c.json({ error: 'Pick a life coach.' }, 400);
+  const who = typeof body.student === 'string' ? body.student.trim().toLowerCase() : '';
+  const student = who
+    ? await db.prepare('SELECT * FROM users WHERE id = ? OR LOWER(email) = ? OR handle = ?').bind(who, who, who.replace(/^@/, '')).first<UserRow>()
+    : null;
+  if (!student) return c.json({ error: 'No account has that email, handle or id.' }, 404);
+  const bad = await linkProblem(db, coachRow.id, student.id);
+  if (bad) return c.json({ error: bad.error }, bad.status);
+  const now = body.mode === 'link';
+  const link = await startLink(db, { coachId: coachRow.id, studentId: student.id, askedBy: 'admin', createdBy: actorOf(c), active: now });
+  if (!link) return c.json({ error: 'not found' }, 404);
+  await audit(db, actorOf(c), now ? 'coach.link' : 'coach.ask', 'coach_link', link.id, '', { coach: coachRow.id, student: student.id });
+  await logCoach(db, { linkId: link.id, coachId: coachRow.id, studentId: student.id, actorId: null, action: now ? 'link.admin' : 'link.ask', label: now ? `The team linked ${nameOf(coachRow)} and ${nameOf(student)}` : `The team asked ${nameOf(student)} to work with ${nameOf(coachRow)}` });
+  await notify(db, student.id, 'coach', now ? `${nameOf(coachRow)} is your life coach now` : `The team suggests ${nameOf(coachRow)} as your life coach`, now ? 'Pick what they see on your Profile tab, or end it there.' : 'Say yes or no on your Profile tab. Nothing is shared until you say yes.', '/you#coach');
+  await notify(db, coachRow.id, 'coach', now ? `${nameOf(student)} is your student now` : `The team asked ${nameOf(student)} to work with you`, now ? 'Open Coaching to see what they share.' : 'You hear back when they answer.', '/coaching');
+  const row = await db.prepare(`${COACH_LINK_SELECT} WHERE l.id = ?`).bind(link.id).first<AdminLinkRow>();
+  return c.json({ link: row ? toAdminLink(row) : null }, 201);
+});
+
+admin.delete('/coaching/links/:id', async (c) => {
+  const db = c.env.DB;
+  const link = await linkById(db, c.req.param('id'));
+  if (!link) return c.json({ error: 'not found' }, 404);
+  if (link.status === 'pending' || link.status === 'active') {
+    await endLink(db, link, { id: null, name: 'The team' });
+    await audit(db, actorOf(c), 'coach.end', 'coach_link', link.id, link.status, 'ended');
+  }
+  return c.json({ ok: true });
 });
 
 admin.post('/users/:id/role', async (c) => {
@@ -449,6 +554,7 @@ admin.patch('/listings/:type/:id', async (c) => {
 });
 
 const USER_SELECT = `SELECT u.*, (SELECT GROUP_CONCAT(honor_key) FROM honors h WHERE h.user_id = u.id) AS honor_keys,
+  (SELECT cp.asked_at FROM coach_profiles cp WHERE cp.user_id = u.id) AS coach_asked_at,
   ca.plan AS ca_plan, ca.plan_until AS ca_plan_until, ca.plan_credits AS ca_plan_credits, ca.extra_credits AS ca_extra_credits
   FROM users u LEFT JOIN credit_accounts ca ON ca.user_id = u.id`;
 
@@ -622,7 +728,16 @@ admin.put('/attendee-codes/:app/:id', async (c) => {
     before = prev ? { xp: prev.xp } : '';
     after = { xp: set.row.xp, newCode: set.row.code !== prev?.code };
   } else return c.json({ error: 'app must be party, run or circles' }, 400);
-  await audit(db, actorOf(c), 'attendee_code.set', app, id, before, after);
+  // The same resource names the hosts' own changes use, so one event's history reads as one.
+  await audit(db, actorOf(c), 'attendee_code.set', app === 'party' ? 'event' : app === 'circles' ? 'circle' : 'run', id, before, after);
+  // The host hears about it: a code they show, or xp they promised, changed under them.
+  const hostId =
+    app === 'party'
+      ? (await db.prepare('SELECT host_user_id AS id FROM events WHERE id = ?').bind(id).first<{ id: string }>())?.id
+      : app === 'run'
+        ? (await db.prepare('SELECT k.host_user_id AS id FROM runs r JOIN run_clubs k ON k.id = r.club_id WHERE r.id = ?').bind(id).first<{ id: string }>())?.id
+        : null;
+  if (hostId && hostId !== actorOf(c)) await notify(db, hostId, app === 'run' ? 'run' : 'party', 'The team changed your attendee code', 'Open the event to see the code and the xp before you show it.', app === 'run' ? '/run' : `/party/${id}`);
   // The same row the list shows, whatever its date (the first value is the list's date floor).
   const fresh = await db.prepare(`${ATTENDEE_EVENTS} SELECT * FROM every_event WHERE app = ?2 AND thing_id = ?3`).bind('0000', app, id).first<AttendeeRow>();
   return c.json({ code: fresh ? toAttendee(fresh) : null });

@@ -33,7 +33,7 @@ const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 const round1 = (v: number) => Math.round(v * 10) / 10;
 
 interface TemplateRow { id: string; user_id: string; kind: PeriodKind; name: string; prompts_json: string; created_at: string; updated_at: string }
-interface ReviewRow { id: string; user_id: string; kind: PeriodKind; period_start: string; period_end: string; template_id: string | null; template_name: string; prompts_json: string; answers_json: string; rating: number | null; highlight: string; snapshot_json: string; created_at: string; updated_at: string }
+export interface ReviewRow { id: string; user_id: string; kind: PeriodKind; period_start: string; period_end: string; template_id: string | null; template_name: string; prompts_json: string; answers_json: string; rating: number | null; highlight: string; snapshot_json: string; created_at: string; updated_at: string }
 
 function strings(raw: string): string[] {
   try {
@@ -44,7 +44,7 @@ function strings(raw: string): string[] {
   }
 }
 const toTemplate = (r: TemplateRow): ReviewTemplate => ({ id: r.id, kind: r.kind, name: r.name, prompts: strings(r.prompts_json), builtIn: false, createdAt: r.created_at });
-function toReview(r: ReviewRow): Review {
+export function toReview(r: ReviewRow): Review {
   let snapshot: ReviewSummary | null = null;
   try {
     const v = JSON.parse(r.snapshot_json || '{}') as ReviewSummary;

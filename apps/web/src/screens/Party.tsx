@@ -1,7 +1,7 @@
 import { EVENT_TYPE_META, EVENT_TYPES, type EventRegistration, type EventType, type PartyEvent } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { Button } from '../components/Button';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
@@ -9,6 +9,7 @@ import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useAuthed, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
+import { attendeeBody, AttendeeFields, attendeeProblem, ClaimCard, HostCodeCard } from '../components/AttendeeCode';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -65,7 +66,10 @@ function EventCard({ e }: { e: PartyEvent }) {
             {e.onlineUrl ? 'Online' : e.venue || 'Venue to be announced'}, {seats(e)}
           </span>
         </span>
-        <span className="shrink-0 text-[14px] font-extrabold">{e.pricePoints > 0 ? `${e.pricePoints} pts` : 'Free'}</span>
+        <span className="flex shrink-0 flex-col items-end gap-xs">
+          <span className="text-[14px] font-extrabold">{e.pricePoints > 0 ? `${e.pricePoints} pts` : 'Free'}</span>
+          {e.attendeeXp ? <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold">+{e.attendeeXp} xp</span> : null}
+        </span>
       </Link>
     </li>
   );
@@ -160,6 +164,8 @@ function HostSheet({ open, onClose, canHostAll }: { open: boolean; onClose: () =
   const [capacity, setCapacity] = useState('');
   const [pricePoints, setPricePoints] = useState('0');
   const [visibility, setVisibility] = useState<PartyEvent['visibility']>('public');
+  const [attendeeXp, setAttendeeXp] = useState('');
+  const [attendeeCode, setAttendeeCode] = useState('');
   const create = useMutation({
     mutationFn: () =>
       api.createEvent({
@@ -173,11 +179,13 @@ function HostSheet({ open, onClose, canHostAll }: { open: boolean; onClose: () =
         capacity: capacity ? Number(capacity) : null,
         pricePoints: Number(pricePoints) || 0,
         visibility,
+        ...attendeeBody(attendeeXp, attendeeCode),
       }),
     onSuccess: (r) => {
       refresh();
       onClose();
-      if (r.event) nav(`/party/${r.event.id}`);
+      // The event is up either way; a code the server would not set is said on the event page, where it is set again.
+      if (r.event) nav(`/party/${r.event.id}`, { state: r.codeError ? { codeError: r.codeError } : null });
     },
   });
   return (
@@ -253,8 +261,9 @@ function HostSheet({ open, onClose, canHostAll }: { open: boolean; onClose: () =
             ))}
           </div>
         </fieldset>
+        <AttendeeFields xp={attendeeXp} onXp={setAttendeeXp} code={attendeeCode} onCode={setAttendeeCode} />
         <Err e={create.isError ? create.error : null} />
-        <Button type="submit" size="lg" full disabled={create.isPending || !title.trim() || !startsAt}>
+        <Button type="submit" size="lg" full disabled={create.isPending || !title.trim() || !startsAt || attendeeProblem(attendeeXp, attendeeCode) !== null}>
           Publish event
         </Button>
       </form>
@@ -266,6 +275,7 @@ export function EventPage() {
   const { id = '' } = useParams();
   const q = useAuthed(['event', id], () => api.event(id));
   const refresh = useRefreshAll();
+  const codeError = ((useLocation().state as { codeError?: string } | null)?.codeError ?? null);
   const [networking, setNetworking] = useState(false);
   const [rsvpResult, setRsvpResult] = useState<string | null>(null);
   const [rating, setRating] = useState(0);
@@ -359,6 +369,22 @@ export function EventPage() {
         {e.description && <p className="mt-sm m-0 whitespace-pre-wrap text-[16px] font-semibold leading-relaxed">{e.description}</p>}
       </section>
 
+      {d.attendee && (
+        <section className="mt-lg" aria-labelledby="code-heading">
+          <h2 id="code-heading" className="text-[24px]">
+            Attendee code
+          </h2>
+          <ClaimCard
+            view={d.attendee}
+            onClaim={async (code) => {
+              const r = await api.claimEventCode(id, code);
+              refresh();
+              return r;
+            }}
+          />
+        </section>
+      )}
+
       {e.status === 'published' && !over && (
         <section className="mt-lg" aria-labelledby="rsvp-heading">
           <h2 id="rsvp-heading" className="text-[24px]">
@@ -443,6 +469,24 @@ export function EventPage() {
             {e.registered} registered, {e.waitlisted} waiting.{' '}
             {d.feedback.count > 0 ? `Rated ${d.feedback.average} by ${d.feedback.count} ${d.feedback.count === 1 ? 'guest' : 'guests'}.` : 'No feedback yet.'}
           </p>
+          {e.status !== 'cancelled' && (
+            <div className="mt-sm">
+              {codeError && !d.hostCode && (
+                <p role="alert" className="m-0 mb-sm rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+                  The event is up, but its xp was not set: {codeError} Set it here.
+                </p>
+              )}
+              <HostCodeCard
+                value={d.hostCode}
+                startsAt={e.startsAt}
+                onSave={async (change) => {
+                  await api.setEventCode(id, change);
+                  await q.refetch();
+                }}
+              />
+            </div>
+          )}
+          <DuplicateEvent id={e.id} startsAt={e.startsAt} />
           {e.status === 'published' && (
             <div className="mt-sm flex flex-wrap gap-xs">
               <Button variant="outline" onClick={() => setStatus.mutate('done')} disabled={setStatus.isPending}>
@@ -483,5 +527,46 @@ export function EventPage() {
         </section>
       )}
     </Screen>
+  );
+}
+
+/** The datetime-local value for an instant, in the device's own time. */
+const localInput = (iso: string) => {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+/** Make the same event again on a new date: a week later to start with. Guests do not carry over; the xp does, with a new code. */
+function DuplicateEvent({ id, startsAt }: { id: string; startsAt: string }) {
+  const nav = useNavigate();
+  const refresh = useRefreshAll();
+  const [open, setOpen] = useState(false);
+  const [when, setWhen] = useState(() => localInput(new Date(Math.max(Date.parse(startsAt), Date.now()) + 7 * 86_400_000).toISOString()));
+  const copy = useMutation({
+    mutationFn: () => api.duplicateEvent(id, new Date(when).toISOString()),
+    onSuccess: (r) => {
+      setOpen(false);
+      refresh();
+      if (r.event) nav(`/party/${r.event.id}`);
+    },
+  });
+  return (
+    <>
+      <Button variant="outline" className="mt-sm" onClick={() => setOpen(true)}>
+        Run it again
+      </Button>
+      <Sheet open={open} onClose={() => setOpen(false)} title="Run it again">
+        <p className="m-0 text-[14px] font-semibold text-ink-soft">The same event on a new date: title, place, seats and price carry over. Guests sign up again, and any xp comes with a new code.</p>
+        <label className="mt-md block">
+          <span className="block text-[14px] font-bold">Starts</span>
+          <input type="datetime-local" value={when} onChange={(ev) => setWhen(ev.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+        </label>
+        <Err e={copy.isError ? copy.error : null} />
+        <Button size="lg" full className="mt-md" disabled={copy.isPending || !when} onClick={() => copy.mutate()}>
+          Make the new event
+        </Button>
+      </Sheet>
+    </>
   );
 }
