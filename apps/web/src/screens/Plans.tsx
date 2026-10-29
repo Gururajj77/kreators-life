@@ -62,7 +62,7 @@ export function Plans() {
       await api.creditCheckout(kind, key);
       setSaid((s) => ({ ...s, [id]: 'Done.' }));
     } catch (e) {
-      setSaid((s) => ({ ...s, [id]: e instanceof Error ? e.message : 'That did not go through.' }));
+      setSaid((s) => ({ ...s, [id]: e instanceof Error ? e.message : 'That did not go through. Nothing was charged. Try again.' }));
     } finally {
       setAsking(null);
     }
@@ -215,7 +215,7 @@ export function Plans() {
           </Section>
 
           <Section id="plans-history" title="History" lede="Every credit in and out, newest first.">
-            {ledger.data && ledger.data.entries.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">Nothing yet. Credits come with a plan.</p>}
+            {ledger.data && ledger.data.entries.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">Nothing yet. When a plan starts or you type to the assistant, each move is listed here.</p>}
             {ledger.data && ledger.data.entries.length > 0 && (
               <ul className="m-0 flex list-none flex-col gap-xs p-0">
                 {ledger.data.entries.map((e) => (

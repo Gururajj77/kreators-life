@@ -95,19 +95,19 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
           <label className="block">
             <span className="block text-[14px] font-bold">Phone</span>
             <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" maxLength={24} placeholder="+91 98765 43210" className={field} />
-            <span className="mt-xs block text-[12px] font-bold text-ink-soft">{phoneBad ?? 'With the country code. Never shown on your page.'}</span>
+            <span className="mt-xs block text-[12px] font-bold text-ink-soft">{phoneBad ?? 'Add the country code. We ask so everyone here is real. Never shown to anyone.'}</span>
           </label>
         )}
         {mode === 'signup' && (
           <label className="block">
             <span className="block text-[14px] font-bold">Date of birth</span>
             <input type="date" required value={birthDate} onChange={(e) => setBirthDate(e.target.value)} autoComplete="bday" max={new Date().toISOString().slice(0, 10)} className={field} />
-            <span className="mt-xs block text-[12px] font-bold text-ink-soft">{ageBad ?? `You need to be ${MIN_AGE} or older. Nobody else sees it.`}</span>
+            <span className="mt-xs block text-[12px] font-bold text-ink-soft">{ageBad ?? `We ask so everyone here is ${MIN_AGE} or older. Nobody else sees it.`}</span>
           </label>
         )}
         {go.isError && (
           <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-            {go.error instanceof Error ? go.error.message : 'That did not work.'}
+            {go.error instanceof Error ? go.error.message : 'That did not work. Check your connection and try again.'}
           </p>
         )}
         <Button type="submit" size="lg" full disabled={go.isPending || !ready}>
@@ -185,7 +185,7 @@ export function Forgot() {
           </label>
           {send.isError && (
             <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-              {send.error instanceof Error ? send.error.message : 'That did not work.'}
+              {send.error instanceof Error ? send.error.message : 'That did not work. Check your connection and try again.'}
             </p>
           )}
           <Button type="submit" size="lg" full disabled={send.isPending || !email}>
@@ -241,7 +241,7 @@ export function ResetPassword() {
           <PasswordField label="Password, once more" value={confirm} onChange={setConfirm} autoComplete="new-password" hint={mismatch ? 'The two do not match yet.' : undefined} />
           {reset.isError && (
             <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-              {reset.error instanceof Error ? reset.error.message.charAt(0).toUpperCase() + reset.error.message.slice(1) : 'That did not work.'}
+              {reset.error instanceof Error ? reset.error.message.charAt(0).toUpperCase() + reset.error.message.slice(1) : 'That did not work. Check your connection and try again.'}
             </p>
           )}
           <Button type="submit" size="lg" full disabled={reset.isPending || !ready}>

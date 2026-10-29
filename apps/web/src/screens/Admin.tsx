@@ -181,7 +181,7 @@ export function Admin() {
     try {
       await fn();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something failed.');
+      setError(e instanceof Error ? e.message : 'That did not work. Try again.');
     } finally {
       setBusy(false);
     }
@@ -412,7 +412,7 @@ export function Admin() {
                   busy={busy}
                   activeKey={selected?.id ?? null}
                   onRowClick={(u) => setSelected(u)}
-                  empty="Nobody matches on the server. Search above."
+                  empty="Nobody matches. Try another name or email in the search box above."
                   columns={[
                     {
                       key: 'name',
@@ -920,7 +920,7 @@ export function Admin() {
                   label="Reserved rewards"
                   selectable
                   busy={busy}
-                  empty="Nothing waiting."
+                  empty="Nothing is waiting for you."
                   columns={[
                     { key: 'person', label: 'Person', get: (r) => r.userName, render: (r) => <span className="font-bold">{r.userName}</span> },
                     { key: 'reward', label: 'Reward', get: (r) => REWARD_BY_KEY[r.rewardKey]?.name ?? r.rewardKey, filter: true },
@@ -1088,7 +1088,7 @@ export function Admin() {
                   rowKey={(h) => h.id}
                   label="Webhooks"
                   busy={busy}
-                  empty="Nothing has come in yet."
+                  empty="Nothing has come in yet. New items show up here."
                   columns={[
                     { key: 'provider', label: 'Provider', get: (h) => h.provider, filter: true },
                     { key: 'type', label: 'Event', get: (h) => h.type, filter: true },
@@ -1211,7 +1211,7 @@ export function Admin() {
                   rowKey={(m) => m.id}
                   label="Email outbox"
                   busy={busy}
-                  empty="Nothing queued yet."
+                  empty="Nothing is queued."
                   columns={[
                     { key: 'to', label: 'To', get: (m) => m.to },
                     { key: 'subject', label: 'Subject', get: (m) => m.subject, wrap: true, render: (m) => <span className="font-bold">{m.subject}</span> },
@@ -1340,7 +1340,7 @@ export function Admin() {
                   label="Coaching links"
                   selectable
                   busy={busy}
-                  empty="No links yet."
+                  empty="No links yet. Add one above."
                   columns={[
                     { key: 'coach', label: 'Life coach', get: (r) => r.coachName },
                     { key: 'student', label: 'Student', get: (r) => r.studentName },

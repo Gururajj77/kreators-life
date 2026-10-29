@@ -93,7 +93,7 @@ export function Customers() {
             {csvError}
           </p>
         )}
-        {customers.data && customers.data.customers.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No buyers yet.</p>}
+        {customers.data && customers.data.customers.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No buyers yet. They appear here after someone buys one of your products.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {customers.data?.customers.map((c) => (
             <li key={c.userId} className="rounded-tile bg-card p-sm shadow-toy-soft">
@@ -137,7 +137,7 @@ export function Customers() {
             <Stat label={live ? 'money' : 'test money'} value={(p.testCents / 100).toFixed(2)} />
           </div>
         )}
-        {p && p.rows.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No sales yet.</p>}
+        {p && p.rows.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No sales yet. Each sale is listed here with its fee.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {p?.rows.map((r) => (
             <li key={r.orderId} className="rounded-tile bg-card p-sm shadow-toy-soft">

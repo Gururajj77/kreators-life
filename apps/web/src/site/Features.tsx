@@ -12,16 +12,17 @@ export function Features() {
   return (
     <SiteLayout>
       <header className="pt-lg md:pt-xl">
-        <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-mute">Features</p>
-        <h1 className="mt-xs text-[clamp(32px,6vw,56px)] leading-[1.05] text-balance">Everything a creator needs</h1>
-        <p className="mt-md m-0 max-w-[640px] text-pretty text-[18px] font-semibold leading-snug text-ink-soft">Every feature is a switch. Keep what you use, hide the rest. Each one opens into the app once you sign in.</p>
+        <p className="m-0 type-eyebrow text-ink-mute">Features</p>
+        <h1 className="type-hook mt-sm text-[clamp(40px,9vw,80px)]">Everything a creator needs, <em>one switch at a time</em></h1>
+        <p className="type-context type-measure mt-md m-0 text-[20px] text-ink-soft">Courses in one app, gigs in another, money in a sheet. It adds up to ten logins and no plan. Here every app is a switch inside one place: keep what you use, and the rest stays out of the way.</p>
+        <p className="type-measure mt-sm m-0 text-[16px] font-semibold text-ink-soft">A short chat at the start switches on the ones that fit you. Tap any app below to see how it works.</p>
       </header>
       {groups.map((g) => {
         const list = SITE_FEATURES.filter((m) => m.group === g);
         if (list.length === 0) return null;
         return (
           <section key={g} className="mt-xl" aria-labelledby={`group-${g}`}>
-            <h2 id={`group-${g}`} className="text-[28px] text-balance">
+            <h2 id={`group-${g}`} className="type-hook text-[clamp(28px,5vw,40px)]">
               {MODULE_GROUPS[g]}
             </h2>
             <ul className="mt-sm grid list-none gap-xs p-0 m-0 sm:grid-cols-2 lg:grid-cols-3">
@@ -31,7 +32,7 @@ export function Features() {
                     <span className="text-[28px]" aria-hidden="true">
                       {m.emoji}
                     </span>
-                    <span className="mt-xs block text-[18px] font-extrabold leading-tight">{m.name}</span>
+                    <span className="mt-xs block text-[18px] font-extrabold leading-tight tracking-tight">{m.name}</span>
                     <span className="block text-pretty text-[14px] font-semibold leading-snug text-ink-soft">{FEATURES[m.key]?.tagline ?? m.blurb}</span>
                   </Link>
                 </motion.li>
@@ -40,10 +41,10 @@ export function Features() {
           </section>
         );
       })}
-      <section className="mt-2xl text-center">
+      <section className="mt-2xl">
         <div className="rounded-card bg-ink p-lg text-on-ink">
-          <h2 className="text-[32px] text-on-ink text-balance">Switch on only what you need</h2>
-          <p className="mt-xs m-0 text-pretty text-[16px] font-semibold text-on-ink/80">A short chat at the start picks the apps that fit you. Change them any time.</p>
+          <h2 className="type-hook text-[clamp(32px,6vw,56px)] text-on-ink">Switch on only <em>what you need</em></h2>
+          <p className="type-context mt-sm m-0 text-[18px] text-on-ink/80">Answer three questions and we switch on the apps that fit you. Change them any time, free.</p>
           <Link to={entry === '/home' ? '/home' : '/start'} className="toy mt-md inline-flex min-h-[56px] items-center rounded-pill bg-card px-lg text-[18px] font-bold text-ink">
             Start free
           </Link>

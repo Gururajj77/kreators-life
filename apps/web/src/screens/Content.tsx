@@ -148,7 +148,7 @@ export function NewBrandSheet({ open, onClose, onMade }: { open: boolean; onClos
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">How it sounds</span>
-          <textarea value={voice} onChange={(e) => setVoice(e.target.value)} rows={2} maxLength={1000} placeholder="Warm and direct. Jokes allowed. Never says 'unlock your potential'." className={field} />
+          <textarea value={voice} onChange={(e) => setVoice(e.target.value)} rows={2} maxLength={1000} placeholder="Warm and direct. Jokes allowed. Never says 'game-changer'." className={field} />
         </label>
         {make.isError && (
           <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">

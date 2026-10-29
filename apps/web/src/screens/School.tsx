@@ -70,7 +70,7 @@ export function School() {
           </h2>
           {d?.staff && <Button onClick={() => setCreating(true)}>New program</Button>}
         </div>
-        {d && d.programs.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No programs yet. The first cohorts open soon.</p>}
+        {d && d.programs.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No programs are open yet. Each program lists its cohort dates here once the team sets them.</p>}
         <ul className="mt-sm flex list-none flex-col gap-sm p-0 m-0">
           {d?.programs.map((p) => (
             <li key={p.id}>
@@ -121,7 +121,7 @@ function ProgramCard({ program: p, staff, myIds, onChange }: { program: Program;
           <span className="font-bold">Before you start:</span> {p.prerequisites}
         </p>
       )}
-      {open.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Cohort dates coming soon.</p>}
+      {open.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No cohort dates are set yet. Come back after the team adds one.</p>}
       <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
         {open.map((k) => (
           <li key={k.id} className="flex items-center gap-sm rounded-tile bg-paper p-sm">

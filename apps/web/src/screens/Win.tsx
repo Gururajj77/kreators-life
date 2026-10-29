@@ -244,7 +244,7 @@ export function Win() {
             <h2 id="open-heading" className="text-[24px]">
               Open rewards
             </h2>
-            {d.bounties.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">No brand has opened a pool yet. Check back soon.</p>}
+            {d.bounties.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">No reward is open yet. A brand funds a pool of points, then you post and submit your link.</p>}
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
               {d.bounties.map((b) => (
                 <BountyCard key={b.id} b={b} />

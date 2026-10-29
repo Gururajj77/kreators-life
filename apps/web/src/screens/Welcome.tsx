@@ -69,7 +69,7 @@ export function Welcome() {
           One you.
         </h1>
         <p className="mt-md text-[18px] font-semibold leading-snug text-ink-soft">
-          A daily game for the seven relationships that make a life, with the apps a creator needs around it. Start with a short chat: say who you are and what you want, and the apps that fit switch on. The deeper strategy session waits in Pillars for when you want it.
+          A daily game for the seven relationships that make a life, with the apps a creator needs around it. Start with a short chat. It is three questions, about two minutes, and the apps that fit you switch on. The deeper strategy session waits in Pillars until you want it.
         </p>
       </div>
       <div className="flex flex-col gap-sm pb-lg">
@@ -79,10 +79,10 @@ export function Welcome() {
           </p>
         )}
         <Button size="lg" full onClick={start} disabled={busy}>
-          {busy ? 'Opening the gates' : resuming ? 'Carry on setting up' : 'Start with a short chat'}
+          {busy ? 'Opening your chat' : resuming ? 'Carry on setting up' : 'Start with a short chat'}
         </Button>
         <p className="m-0 text-center text-[14px] font-semibold text-ink-mute">
-          Progress is saved on this device. Add this page to your home screen to keep it close.
+          Free to start. Your answers are saved on this device, so you can stop and come back. Add this page to your home screen to keep it close.
         </p>
         <p className="m-0 text-center text-[14px] font-semibold">
           Already have an account?{' '}

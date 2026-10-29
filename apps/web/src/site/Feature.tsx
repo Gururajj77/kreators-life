@@ -35,7 +35,7 @@ export function Feature() {
           <p className="m-0 text-[40px] leading-none" aria-hidden="true">
             {module.emoji}
           </p>
-          <h1 className="mt-xs text-[clamp(36px,6vw,56px)] leading-[1.02]">{module.name}</h1>
+          <h1 className="type-hook mt-xs text-[clamp(40px,9vw,80px)]">{module.name}</h1>
           <p className="mt-xs m-0 text-[20px] font-extrabold" style={{ color: `var(--deep-${lead.key})` }}>
             {copy.tagline}
           </p>
@@ -59,7 +59,7 @@ export function Feature() {
       <section className="mt-lg grid gap-sm md:grid-cols-3" aria-label="How it goes">
         {copy.steps.map((s, i) => (
           <motion.div key={s} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }} className="rounded-tile bg-card p-md shadow-toy-soft">
-            <p className="m-0 font-display text-[28px] font-extrabold leading-none" style={{ color: lead.color }}>
+            <p className="m-0 type-hook text-[32px] leading-none" style={{ color: lead.color }}>
               {i + 1}
             </p>
             <p className="mt-xs m-0 text-[16px] font-bold leading-snug">{s}</p>

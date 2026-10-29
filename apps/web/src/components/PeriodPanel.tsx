@@ -130,7 +130,7 @@ export function PeriodPanel({ id, parts, title = 'By period', span = false }: { 
           <SummaryTiles summary={q.data} parts={parts} />
         ) : (
           <p className="m-0 text-[14px] font-bold text-ink-soft" role="status">
-            {q.isError ? 'Could not load this period.' : 'Adding it up'}
+            {q.isError ? 'Could not load this period. Try another one.' : 'Adding up your numbers'}
           </p>
         )}
       </div>

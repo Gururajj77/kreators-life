@@ -119,7 +119,7 @@ today.get('/', async (c) => {
   // the day's check-in has not happened yet.
   if (user.reminder_time && user.last_checkin !== date) {
     const already = await db.prepare("SELECT 1 FROM notifications WHERE user_id = ? AND kind = 'reminder' AND created_at >= ?").bind(user.id, `${date}T00:00:00`).first();
-    if (!already) await notify(db, user.id, 'reminder', 'Your daily three are waiting', 'Check in, do the spark, tick a task.', '/today');
+    if (!already) await notify(db, user.id, 'reminder', 'Your daily three are waiting', 'Check in, do your small act, tick a task.', '/today');
   }
 
   const gate = await taskGate(db, user.id);

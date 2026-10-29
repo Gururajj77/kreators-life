@@ -17,7 +17,7 @@ function Err({ e }: { e: unknown }) {
   if (!e) return null;
   return (
     <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-      {e instanceof Error ? e.message : 'That did not work.'}
+      {e instanceof Error ? e.message : 'That did not work. Check your connection and try again.'}
     </p>
   );
 }

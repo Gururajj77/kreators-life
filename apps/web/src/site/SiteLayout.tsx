@@ -76,7 +76,7 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
         <div className={`mx-auto flex ${wide ? 'max-w-[1080px]' : 'max-w-[720px]'} flex-col gap-md px-md py-lg md:flex-row md:items-start md:justify-between`}>
           <div>
             <Logo />
-            <p className="mt-xs m-0 max-w-[420px] text-[14px] font-semibold text-ink-soft">A daily game for the seven relationships that make a life, and every tool a creator needs to learn, earn, meet people and stay well.</p>
+            <p className="mt-xs m-0 max-w-[420px] text-[14px] font-semibold text-ink-soft">A daily game for the seven relationships that make a life, with the tools a creator needs built in. One small act a day, for all seven. Free to start, free to stay.</p>
           </div>
           <nav aria-label="Footer" className="grid grid-cols-2 gap-xs text-[14px] font-bold text-ink-soft sm:grid-cols-3">
             <Link to="/explore" className="min-h-[32px] hover:text-ink">

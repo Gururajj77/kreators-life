@@ -673,7 +673,7 @@ function Receipts({ scope, ids }: { scope: string; ids: string[] }) {
 const PAYWALL: Record<AssistantPaywall, { title: string; line: string }> = {
   plan: {
     title: 'Typing is part of a plan',
-    line: `Pro is ${money(PLANS.pro.priceCents, 'USD')} a month for ${PLANS.pro.credits.toLocaleString('en-US')} credits, about ${messagesFor(PLANS.pro.credits).toLocaleString('en-US')} messages. The flows stay free.`,
+    line: `Pro is ${money(PLANS.pro.priceCents, 'USD')} a month for ${PLANS.pro.credits.toLocaleString('en-US')} credits, about ${messagesFor(PLANS.pro.credits).toLocaleString('en-US')} messages. The flows stay free. See Plans and credits in the Profile tab.`,
   },
   credits: { title: 'Out of credits', line: 'Top up, or wait for your plan to start again. The flows stay free.' },
   day: { title: "Today's limit is used", line: 'It frees up over the next 24 hours, and a bigger plan has more room. The flows stay free.' },
@@ -1386,7 +1386,7 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
     if (!canType) {
       const answers = isQuestion(text) ? explainTyped(text) : [];
       if (answers.length) return say('bumling', answers, null);
-      if (!status.data?.connected) return say('bumling', ['Typing to me is not switched on here yet. Tap one of the flows instead.'], null);
+      if (!status.data?.connected) return say('bumling', ['Typing to me is not switched on here yet, because no AI model is connected. You can tap one of the flows instead. They are free and work now.'], null);
       return say('bumling', ['I can do that for you with a plan. Typing to me is part of one; the flows here stay free.', { node: <PlanCard reason="plan" /> }], null);
     }
     // Each earlier reply says what it did as things stand now, so an Undo since then is not news to the model.
@@ -1575,10 +1575,14 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
+const INVITE_GAP_MS = 60_000;
+let lastInvite = 0;
+
 /**
  * The round button at the bottom right, on every screen inside the app: above the tab bar on a phone, in the
  * corner on a laptop. Bumling sits in it, bobbing and blinking, and gives a small hop every few seconds; pointing at
- * it (or reaching it with the keyboard) makes him jump and brings up "Chat with AI assistant" above it. It opens the
+ * it (or reaching it with the keyboard) makes him jump and brings up "Chat with AI assistant" above it; a phone has no
+ * hover, so there both play on their own when a screen opens, at most once a minute. It opens the
  * panel over the page. Hidden on the Companion, which is a chat of its own, and when the team has switched the
  * assistant off. Motion is GSAP; with reduced motion he stays put and the bubble just appears.
  */
@@ -1630,6 +1634,23 @@ export function Assistant() {
     gsap.to(t, { autoAlpha: on ? 1 : 0, y: on ? 0 : 6, duration: 0.2, ease: 'power2.out', overwrite: true });
     if (on) gsap.fromTo(him, { y: 0, scale: 1 }, { y: -6, scale: 1.08, duration: 0.18, ease: 'power2.out', yoyo: true, repeat: 1, overwrite: 'auto' });
   };
+
+  // A phone has no hover, so there the jump and the bubble play on their own a moment after a screen opens, at most once a minute.
+  const available = Boolean(mod?.available);
+  useEffect(() => {
+    if (open || !available || !window.matchMedia('(hover: none)').matches) return;
+    if (Date.now() - lastInvite < INVITE_GAP_MS) return;
+    const show = window.setTimeout(() => {
+      lastInvite = Date.now();
+      point(true);
+    }, 1200);
+    const hide = window.setTimeout(() => point(false), 4200);
+    return () => {
+      window.clearTimeout(show);
+      window.clearTimeout(hide);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, available, loc.pathname]);
 
   if (!mod?.available || loc.pathname.startsWith('/companion')) return null;
   if (open) return <AssistantPanel onClose={() => setOpen(false)} />;

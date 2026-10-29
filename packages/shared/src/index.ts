@@ -80,7 +80,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     soft: '#F0F2E8',
     deep: '#5A6B38',
     text: '#FFFFFF',
-    greeting: "I'm Clover. Love is a daily habit, not a yearly highlight.",
+    greeting: "I'm Clover. Love is a daily act, not a yearly highlight.",
     question: 'Was there phone-free time?',
   },
   {
@@ -1044,7 +1044,7 @@ export type PeriodKind = 'week' | 'month' | 'quarter' | 'half';
 export const PERIOD_KINDS: readonly PeriodKind[] = ['week', 'month', 'quarter', 'half'];
 export const PERIOD_META: Record<PeriodKind, { name: string; short: string; blurb: string; previous: string }> = {
   week: { name: 'Weekly review', short: 'Week', blurb: 'Seven days: what moved, what slipped, one thing for next week.', previous: 'the week before' },
-  month: { name: 'Monthly review', short: 'Month', blurb: 'A month: the numbers, the habits that held, what to change.', previous: 'the month before' },
+  month: { name: 'Monthly review', short: 'Month', blurb: 'A month: the numbers, the routines that held, what to change.', previous: 'the month before' },
   quarter: { name: 'Quarterly review', short: 'Quarter', blurb: 'Three months: progress on the big things, and the next quarter\'s focus.', previous: 'the quarter before' },
   half: { name: 'Mid-year check-in', short: 'Half year', blurb: 'Six months: where the year is going, and what the second half is for.', previous: 'the half before' },
 };
@@ -1109,7 +1109,7 @@ export const periodKey = (p: Period) => `${p.kind}:${p.start}`;
 /** The prompts every review starts from. A person can add templates of their own on top. */
 export const REVIEW_PROMPTS: Record<PeriodKind, string[]> = {
   week: ['What went well this week?', 'What got in the way?', 'Which pillar needs you most next week?', 'One thing to do differently next week.'],
-  month: ['What are you proud of this month?', 'What did you let slide?', 'Which habits held, and which did not?', 'What will you change next month?'],
+  month: ['What are you proud of this month?', 'What did you let slide?', 'Which routines held, and which did not?', 'What will you change next month?'],
   quarter: ['What moved forward in the last three months?', 'What did you learn about how you work?', 'What should stop, and what should start?', 'The one focus for the next quarter.'],
   half: ['Where is the year going so far?', 'Which of the seven pillars grew the most, and which the least?', 'What do you want the second half to be about?', 'What would make December feel like a good year?'],
 };
@@ -1289,7 +1289,7 @@ export const CHARACTER_STAGES: readonly EvolutionStage[] = [
 
 export const IDENTITY_STAGES: readonly EvolutionStage[] = [
   { stage: 1, name: 'Seed', minXp: 0, minDays: 0, blurb: 'Everything is still underground.' },
-  { stage: 2, name: 'Sprout', minXp: 300, minDays: 3, blurb: 'First habits breaking the surface.' },
+  { stage: 2, name: 'Sprout', minXp: 300, minDays: 3, blurb: 'First small acts breaking the surface.' },
   { stage: 3, name: 'Climber', minXp: 900, minDays: 14, blurb: 'Your pyramids are holding weight.' },
   { stage: 4, name: 'Steady hand', minXp: 2000, minDays: 45, blurb: 'All seven pillars lit up.' },
   { stage: 5, name: 'Luminary', minXp: 4000, minDays: 120, blurb: 'People climb because you did.' },
@@ -4841,7 +4841,7 @@ export const TERMS: Record<string, string> = {
   kit: 'What to buy at a stage, within a budget: new and pre-owned pieces added up.',
   offer: 'Your price for a pre-owned piece. The seller accepts or declines.',
   unlock: 'Some things ask for a points balance, a badge, or both before you can buy them.',
-  Pro: 'A paid membership with more room and the Pro mark.',
+  Pro: 'A paid plan that gives credits for typing to the assistant, and the Pro mark.',
   Club: 'A curated membership the team reviews you into.',
   cohort: 'A group that goes through a program together, with dates.',
   campaign: 'A brand brief that pays points per verified view.',
@@ -4862,13 +4862,13 @@ export const TERMS: Record<string, string> = {
   'strategy session': 'The setup for your pillars, in Pillars, whenever you want it: a few minutes that place all seven relationships on the map, name what gets in the way, and leave you with a focus, a routine and a contract.',
   'setup chat': 'The short chat at the start. It asks what you want, who you are and what gets in your way, then switches on the apps that fit. Run it again from Profile.',
   'identity tag': 'A word for who you are, like Student or Video editor, from the setup chat or in your own words. Your tags pick your apps and fill in your skills and interests. They never show on your public page.',
-  map: 'A ladder of sixteen levels, from Shame to Oneness, used as a shared language for how you operate. Names, never numbers.',
+  map: 'Sixteen levels, from Shame to Oneness, that name how you act in each relationship. You see names, never numbers.',
   'life map': 'The page under Pillars that keeps everything the strategy session found: all seven on the map, your scores, what gets in the way, your routine and your contract.',
   assistant: 'The round button at the bottom right of every screen. Tap a flow to log something by answering a question or two, free for everyone. With a plan you can also type what you did, and it is done in the app for you, each change with an Undo.',
   credits: 'What typing to the assistant runs on. One credit is a tenth of a US cent of model use, so a typical message is about 12 credits. A plan gives credits each month; top-ups and team grants add more that do not run out.',
   'top-up': 'Extra credits on top of your plan. They stay until you use them, after the plan\'s own credits are gone.',
   core: 'Where you usually live on the map, in one relationship.',
-  floor: 'Where you drop to under stress, in one relationship. A floor under Courage makes that pillar a month-one focus.',
+  floor: 'Where you drop to under stress, in one relationship. A floor under Courage marks that pillar as a good place to start.',
   routine: 'Six blocks a day, built from your real day and moved thirty minutes a week. The morning block counts only when every step is ticked.',
   contract: 'Your signed deal: days a week, a check-in time, and what a short week costs.',
   'life coach': 'Someone the team made a life coach. Once you both say yes, they see the parts of your progress you share, leave you notes and add tasks. Never your journal. Their badge says Life coach.',
@@ -5503,7 +5503,7 @@ export interface SupportTicket {
 
 export const HELP_FAQ = [
   { q: 'What are the daily three?', a: 'Check in, do the small act, tick one task. They are on Daily. Each one you tick pays xp. The check-in pays points too.' },
-  { q: 'What are the seven pillars?', a: 'The seven relationships that make a life, one pillar each. Each pillar has a pyramid: a foundation at the top, then a guiding principle, a value goal, a goal outcome, a project, and tasks at the point at the bottom. Tick a task and the whole pyramid gets stronger.' },
+  { q: 'What are the seven pillars?', a: 'The seven relationships that make a life, one pillar each. Each pillar has a pyramid: a foundation at the top, then a guiding principle, a value goal, a goal outcome, a project, and tasks at the point at the bottom. Tick a task and its xp runs up through every layer above it.' },
   { q: 'What is a small act?', a: 'One quick thing for your weakest pillar, picked for you each day. It takes two minutes and pays fifteen xp.' },
   { q: 'Why can I not tick a task yet?', a: 'A task needs ten minutes after being written or renamed before it can be ticked. Only six ticks a day pay xp; the rest still count as done.' },
   { q: 'Points versus xp?', a: 'Xp levels you and your pillars up. Points come from showing up. You can trade points for rewards, for things people sell, and for events.' },
@@ -6457,9 +6457,9 @@ export const PLAN_DAYS = 30;
 export const PLAN_CURRENCY = 'USD';
 /** The only three plans. Each gives a fixed worth of model use a month, and the price on top pays for the rest. */
 export const PLANS: Readonly<Record<PaidPlan, Plan>> = {
-  pro: { key: 'pro', name: 'Pro', priceCents: 1_500, credits: 10_000, blurb: 'US$10 of model use a month. Plenty for a few messages a day.' },
-  pro_max: { key: 'pro_max', name: 'Pro Max', priceCents: 12_500, credits: 100_000, blurb: 'US$100 of model use a month, and room for long chats.' },
-  ultra: { key: 'ultra', name: 'Ultra', priceCents: 50_000, credits: 400_000, blurb: 'US$400 of model use a month, for heavy daily use.' },
+  pro: { key: 'pro', name: 'Pro', priceCents: 1_500, credits: 10_000, blurb: '10,000 credits a month: US$10 of model use.' },
+  pro_max: { key: 'pro_max', name: 'Pro Max', priceCents: 12_500, credits: 100_000, blurb: '100,000 credits a month: US$100 of model use.' },
+  ultra: { key: 'ultra', name: 'Ultra', priceCents: 50_000, credits: 400_000, blurb: '400,000 credits a month: US$400 of model use.' },
 };
 export const planName = (key: string): string => (isPaidPlan(key) ? PLANS[key].name : 'No plan');
 

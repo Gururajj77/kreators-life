@@ -94,7 +94,7 @@ export function Inbox() {
             </Button>
           )}
         </div>
-        {list.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{show === 'archived' ? 'Nothing archived here.' : show === 'unread' ? 'All caught up.' : 'Nothing yet. Replies, orders, bookings and broadcasts show up here.'}</p>}
+        {list.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{show === 'archived' ? 'Nothing archived here.' : show === 'unread' ? 'All caught up.' : 'Nothing yet. This is where replies, orders, bookings and team notes land.'}</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {list.map((n) => {
             const inner = (

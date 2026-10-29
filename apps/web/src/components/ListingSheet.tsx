@@ -45,14 +45,14 @@ export function ListingSheet({ id, onClose, feature }: Props) {
   const status = useMutation({ mutationFn: (s: 'live' | 'withdrawn') => api.marketUpdateListing(id!, { status: s }), onSuccess: refresh });
   const promote = useMutation({ mutationFn: () => api.marketFeature('listing', id!), onSuccess: refresh });
   const remove = useMutation({ mutationFn: () => api.marketRemoveListing(id!), onSuccess: () => { refresh(); onClose(); } });
-  const err = (m: { isError: boolean; error: unknown }) => (m.isError ? <p role="alert" className="mt-xs m-0 text-[14px] font-bold">{m.error instanceof Error ? m.error.message : 'That did not work.'}</p> : null);
+  const err = (m: { isError: boolean; error: unknown }) => (m.isError ? <p role="alert" className="mt-xs m-0 text-[14px] font-bold">{m.error instanceof Error ? m.error.message : 'That did not work. Try again.'}</p> : null);
 
   const messages = l?.mine ? (thread.data?.messages ?? []) : (d?.messages ?? []);
   const accepted = d?.offers.find((o) => o.status === 'accepted') ?? null;
 
   return (
     <Sheet open={id !== null} onClose={onClose} title={l?.title ?? 'Listing'}>
-      {!l && <p className="m-0 text-[14px] font-bold text-ink-soft" role="status">{q.isError ? 'Could not load this one.' : 'Opening'}</p>}
+      {!l && <p className="m-0 text-[14px] font-bold text-ink-soft" role="status">{q.isError ? 'Could not load this listing.' : 'Opening'}</p>}
       {l && (
         <div className="flex flex-col gap-md pb-xl">
           {l.images.length > 0 && (

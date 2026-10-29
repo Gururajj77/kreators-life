@@ -431,7 +431,7 @@ function BookingsTab() {
         <h2 id="bookings-heading" className="text-[24px]">
           Bookings
         </h2>
-        {q.data && q.data.bookings.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">No bookings yet.</p>}
+        {q.data && q.data.bookings.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">No bookings yet. They appear here once someone books a session you offer.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {q.data?.bookings.map((b) => (
             <li key={b.id} className="rounded-tile bg-card p-sm shadow-toy-soft">

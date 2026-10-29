@@ -73,7 +73,7 @@ export function Observability() {
       )}
       {d.isError && (
         <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-          Could not load this. Try again.
+          Could not load this. Refresh the page to try again.
         </p>
       )}
 
@@ -184,7 +184,7 @@ export function Observability() {
             </p>
             {setRole.isError && (
               <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-                {setRole.error instanceof Error ? setRole.error.message : 'Could not change the role.'}
+                {setRole.error instanceof Error ? setRole.error.message : 'Could not change the role. Try again.'}
               </p>
             )}
             <div className="mt-md flex gap-xs">

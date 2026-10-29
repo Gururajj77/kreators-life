@@ -123,7 +123,7 @@ export function MyCoachSection({ id = 'coach', title = 'Your life coach' }: { id
       <Pager page={q.data?.linksPage} prefix="coach" label="coaches" />
       {error && (
         <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-          {error instanceof Error ? error.message : 'That did not work.'}
+          {error instanceof Error ? error.message : 'That did not work. Check your connection and try again.'}
         </p>
       )}
       <Nudge className="mt-xs" text={`Up to ${MAX_COACHES} coaches at once. Every ask, yes, note and task change is in the change log under Coaching.`} />

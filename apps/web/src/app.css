@@ -48,8 +48,21 @@
   --color-scale-green: #24b25c;
   --color-scale-lime: #a8cf3a;
 
+  /* Three faces, each with one job. Urbanist is the sans for reading and every control; Fraunces is the
+     serif hook, only for the big headlines on the public site, read from across the room; JetBrains Mono
+     is for eyebrows and numbers, where every figure takes the same width. */
   --font-display: 'Urbanist', system-ui, sans-serif;
   --font-body: 'Urbanist', system-ui, sans-serif;
+  --font-serif: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Leading (baseline to baseline) and tracking. Big type sits tight, small type breathes. */
+  --leading-hook: 0.98;
+  --leading-heading: 1.12;
+  --leading-body: 1.55;
+  --tracking-hook: -0.035em;
+  --tracking-heading: -0.02em;
+  --tracking-eyebrow: 0.08em;
 
   --radius-card: 32px;
   --radius-tile: 24px;
@@ -196,6 +209,9 @@
     background: var(--color-paper);
     -webkit-tap-highlight-color: transparent;
     font-size: 16px;
+    /* Kerning on everywhere: the pairs the font designer fixed (AV, To, Ty) stay fixed. */
+    font-kerning: normal;
+    text-rendering: optimizeLegibility;
   }
   body {
     margin: 0;
@@ -206,9 +222,17 @@
   h2,
   h3 {
     font-family: var(--font-display);
-    letter-spacing: -0.02em;
-    line-height: 1.2;
+    letter-spacing: var(--tracking-heading);
+    line-height: var(--leading-heading);
     font-weight: 800;
+  }
+  h3 {
+    letter-spacing: -0.01em;
+  }
+  p,
+  li,
+  dd {
+    line-height: var(--leading-body);
   }
   button,
   input,
@@ -232,6 +256,18 @@
 @media (max-width: 767.98px), (max-height: 479.98px) {
   .screen > header:first-child {
     padding-top: 64px;
+  }
+  /* The assistant's open panel fills the page from just under the logo row down to the tab bar. */
+  section[aria-label^='Bumling AI assistant'] {
+    top: calc(var(--spacing-xl) + env(safe-area-inset-top));
+    bottom: calc(var(--spacing-xl) + 1px + env(safe-area-inset-bottom));
+    left: 0;
+    right: 0;
+    height: auto;
+    border-width: 0;
+    border-top-width: 2px;
+    border-radius: 0;
+    box-shadow: none;
   }
 }
 
@@ -561,3 +597,46 @@ details[open] > summary {
   }
 }
 
+
+/* Type for the public site, laid out like a poster: three layers read at three distances.
+   The hook is read from across the room, the context draws you closer, the details are read at arm's length.
+   Everything is set left, never justified. */
+.type-hook {
+  font-family: var(--font-serif);
+  font-optical-sizing: auto;
+  font-weight: 700;
+  line-height: var(--leading-hook);
+  letter-spacing: var(--tracking-hook);
+  text-wrap: balance;
+}
+/* A word inside a hook that carries the weight: the same serif, lighter and in italic, so the line has one focal point. */
+.type-hook em {
+  font-style: italic;
+  font-weight: 500;
+}
+.type-context {
+  font-family: var(--font-body);
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.005em;
+  text-wrap: pretty;
+}
+.type-eyebrow {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1.4;
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+}
+.type-figure {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+/* Long reading: a measure of about sixty-five characters. */
+.type-measure {
+  max-width: 65ch;
+}

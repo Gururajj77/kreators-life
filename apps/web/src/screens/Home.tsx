@@ -138,7 +138,7 @@ export function Home() {
       {d && (
         <>
           <Section id="home-metrics" title="Your metrics" action={<SeeAll to="/life">Life</SeeAll>} span>
-            <ul className="-mx-md flex snap-x list-none gap-xs overflow-x-auto px-md pb-xs scrollbar-none m-0 md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0">
+            <ul className="-mx-md flex snap-x scroll-px-md list-none gap-xs overflow-x-auto px-md pb-xs scrollbar-none m-0 md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0">
               <li className="w-[168px] shrink-0 snap-start md:w-auto">
                 <MetricCard to="/life" title="Life score" emoji="🧭" tone="var(--color-r4)" deep="var(--deep-lover_partner)" corner={<Avatar relationship="lover_partner" size={36} decorative mood={(d.life?.overall ?? 0) >= 60 ? 'excited' : 'happy'} />}>
                   <span className="flex flex-1 items-center justify-center">

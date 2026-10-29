@@ -38,7 +38,7 @@ export function Explore() {
   return (
     <SiteLayout>
       <header className="pt-lg">
-        <h1 className="text-[clamp(32px,6vw,48px)]">Explore</h1>
+        <h1 className="type-hook text-[clamp(40px,9vw,72px)]">Explore</h1>
         <p className="mt-xs m-0 max-w-[640px] text-[16px] font-semibold text-ink-soft">Content rewards, opportunities, events, programs, tools and campaigns. Search here, then sign in to join, apply or submit. You come straight back to the one you picked.</p>
         <label className="mt-md block">
           <span className="sr-only">Search listings</span>

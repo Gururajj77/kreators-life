@@ -71,7 +71,7 @@ export function Journal() {
         <h2 id="entries-heading" className="text-[24px]">
           My journals
         </h2>
-        {entries.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Nothing written yet. Say anything that is on your mind.</p>}
+        {entries.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Nothing written yet. This page is only for you. Write what is on your mind.</p>}
         <ol className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {entries.map((e) => {
             const m = e.emotion ? MOODS.find((x) => x.value === e.emotion) : null;
@@ -141,7 +141,7 @@ function EntrySheet({ entry, onClose, onSaved }: { entry: JournalEntry | null | 
   const words = body.trim() ? body.trim().split(/\s+/).length : 0;
 
   return (
-    <Sheet open={entry !== null} onClose={onClose} title={existing ? 'Edit journal' : 'New journal'}>
+    <Sheet open={entry !== null} onClose={onClose} title={existing ? 'Edit entry' : 'New entry'}>
       <form
         className="flex flex-col gap-md"
         onSubmit={(e) => {
@@ -199,7 +199,7 @@ function EntrySheet({ entry, onClose, onSaved }: { entry: JournalEntry | null | 
           </p>
         )}
         <Button type="submit" size="lg" full disabled={save.isPending || (!body.trim() && !title.trim())}>
-          {existing ? 'Save changes' : 'Create journal'}
+          {existing ? 'Save changes' : 'Save entry'}
         </Button>
         {existing && (
           <Button variant="ghost" disabled={remove.isPending} onClick={() => window.confirm('Delete this entry?') && remove.mutate()}>

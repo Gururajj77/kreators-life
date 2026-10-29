@@ -69,7 +69,7 @@ export function Rewards() {
               Check in daily for {POINTS.checkin}. Every {POINTS.streakBonusEvery}th day in a row pays {POINTS.streakBonus} extra.
             </p>
           </section>
-          <Nudge className="mt-sm" text="A check-in is 10 points, a week in a row 50 more, a like on your post 1, a new follower 2." />
+          <Nudge className="mt-sm" text={`A check-in is ${POINTS.checkin} points, every ${POINTS.streakBonusEvery}th day in a row ${POINTS.streakBonus} more, a like on your post 1, a new follower 2.`} />
           <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">
             Rewards are reservations until the first drop ships. Cancel any time and the points come straight back.
           </p>

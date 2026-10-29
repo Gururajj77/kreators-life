@@ -1,9 +1,9 @@
-import { BADGE_META, badgeRoleOf, MODULE_GROUPS, RELATIONSHIPS, type ModuleGroup } from '@kreators/shared';
+import { BADGE_META, badgeRoleOf, MODULE_GROUPS, type ModuleGroup } from '@kreators/shared';
 import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router';
 import { useModules } from '../lib/modules';
 import { useMe } from '../lib/queries';
-import { Avatar } from './Avatar';
+import { BrandMark } from './BrandMark';
 import { RoleBadge } from './RoleBadge';
 import { Sheet } from './Sheet';
 import { SignOut } from './SignOut';
@@ -112,7 +112,12 @@ export function TabBar() {
           ))}
         </ul>
       </nav>
-      {/* Phone: theme on the left, the apps menu on the right, both in the top-right corner. */}
+      {/* Phone: the brand in the top-left corner; theme, then the apps menu, in the top-right. The name drops on narrow phones. */}
+      <div className="safe-top fixed top-sm left-md z-30 md:hidden">
+        <Link to="/home" aria-label="kreators.app, home" className="toy toy-soft flex min-h-[44px] min-w-[44px] items-center justify-center gap-xs whitespace-nowrap rounded-pill bg-card px-sm font-display text-[16px] font-extrabold tracking-tight">
+          <BrandMark size={14} compact />
+        </Link>
+      </div>
       <div className="safe-top fixed top-sm right-md z-30 flex items-center gap-xs md:hidden">
         <ThemeToggle />
         <button
@@ -169,12 +174,7 @@ export function TabBar() {
       {/* Laptop: a sidebar on the left. */}
       <nav aria-label="Main" className="safe-top fixed inset-y-0 left-0 z-30 hidden w-[240px] flex-col overflow-y-auto border-r border-line bg-card px-sm py-md md:flex">
         <Link to="/home" className="flex min-h-[44px] items-center gap-xs px-xs font-display text-[18px] font-extrabold">
-          <span className="flex items-end gap-[2px]" aria-hidden="true">
-            {RELATIONSHIPS.slice(0, 3).map((r, i) => (
-              <Avatar key={r.key} relationship={r.key} size={16 + i * 4} decorative still />
-            ))}
-          </span>
-          kreators.app
+          <BrandMark />
         </Link>
         {/* Your role, right under the logo: creator, staff or admin. The theme button sits beside it. */}
         <div className="mt-xs flex min-h-[44px] items-center justify-between gap-xs px-xs">

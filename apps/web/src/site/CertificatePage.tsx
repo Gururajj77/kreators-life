@@ -33,7 +33,7 @@ export function CertificatePage() {
                 <Avatar key={r.key} relationship={r.key} size={28} decorative still />
               ))}
             </div>
-            <p className="mt-md m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-mute">Certificate of completion</p>
+            <p className="mt-md m-0 type-eyebrow text-ink-mute">Certificate of completion</p>
             <h1 className="mt-xs text-[clamp(28px,5vw,40px)] leading-tight">{c.learnerName}</h1>
             <p className="mt-xs m-0 text-[18px] font-semibold text-ink-soft">completed</p>
             <p className="mt-xs m-0 text-[24px] font-extrabold">{c.productTitle}</p>

@@ -12,7 +12,7 @@ export interface FeatureCopy {
 
 export const FEATURES: Record<string, FeatureCopy> = {
   today: {
-    tagline: 'Three boxes a day.',
+    tagline: 'Three small boxes. One better day.',
     pitch: 'Check in, do one small act, tick one task. That is the whole daily ask. Every tick pays xp, and the check-in pays points you can spend. Under the tasks, a not-to-do list keeps a streak for each thing you are staying away from.',
     steps: ['Open the app and check in.', 'Do the small act for your weakest pillar.', 'Tick one task. Watch the pyramid light up.'],
     relationships: ['servant_leader', 'friendship', 'parent_child', 'lover_partner', 'self', 'guru', 'divine'],
@@ -45,9 +45,9 @@ export const FEATURES: Record<string, FeatureCopy> = {
     listing: 'campaign',
   },
   win: {
-    tagline: 'Make a video. Get paid per view.',
-    pitch: 'Content rewards: a brand funds a pool and sets a rate per thousand verified views. You post, we track the numbers, a reviewer confirms, finance pays. No follower count required.',
-    steps: ['Pick a reward and read the brief.', 'Post your video and submit the public link.', 'Views are read or confirmed, then points land in your balance.'],
+    tagline: 'Get paid for views that are real.',
+    pitch: 'Content rewards: a brand funds a pool and sets a rate per thousand verified views. You post, the views are checked, a reviewer confirms, and finance pays. No follower count needed.',
+    steps: ['Pick a reward and read the brief.', 'Post your video and submit the public link.', 'Once the views are checked, points land in your balance.'],
     relationships: ['servant_leader', 'self'],
     listing: 'reward',
   },
@@ -65,9 +65,9 @@ export const FEATURES: Record<string, FeatureCopy> = {
     relationships: ['friendship', 'self', 'lover_partner'],
   },
   community: {
-    tagline: 'Posts, replies, likes. By topic.',
-    pitch: 'A calm place to ask, share and cheer each other on, with moderators who keep it kind. Members-only spaces come with memberships you buy.',
-    steps: ['Pick a category.', 'Post or reply.', 'Like what helps.'],
+    tagline: 'A kind room to ask and share.',
+    pitch: 'You want a place to ask without being judged. Community is a calm room, split by topic, where guides keep it kind. Post, reply, react, and follow the threads you care about.',
+    steps: ['Pick a topic.', 'Post a question or reply to one.', 'React to what helps, and follow the threads you care about.'],
     relationships: ['friendship', 'guru'],
   },
   club: {
@@ -83,9 +83,9 @@ export const FEATURES: Record<string, FeatureCopy> = {
     relationships: ['friendship', 'lover_partner'],
   },
   circles: {
-    tagline: 'Meet five strangers who fit.',
-    pitch: 'Circles run every week in your city. Join this week\'s and, two days before, you are seated at a table of people nearby whose interests complement yours: the writer with the editor, the one on camera with the one behind it. Everyone has an alias. Show up in red if you are single, white if you are committed, so the table reads itself. The group chat opens a day before you meet, and names only appear when someone chooses to reveal.',
-    steps: ['Pick your interests and your city.', 'Join this week\'s circle. Tables are set two days before.', 'Wear red if single, white if committed. Plan in the chat, meet, then reveal if you like.'],
+    tagline: 'Five strangers who fit. One table.',
+    pitch: 'Circles run every week in your city. Join this week\'s and, two days before, you are seated at a table of people nearby whose interests complement yours: the writer with the editor, the one on camera with the one behind it. Everyone has an alias. Show up in red if you are single, white if you are committed, so the table reads itself. The group chat opens a day before you meet, and everyone keeps their alias.',
+    steps: ['Pick your interests and your city.', 'Join this week\'s circle. Tables are set two days before.', 'Wear red if single, white if committed. Plan in the chat, then meet.'],
     relationships: ['friendship', 'lover_partner'],
     listing: 'circle',
   },
@@ -142,13 +142,13 @@ export const FEATURES: Record<string, FeatureCopy> = {
     relationships: ['self', 'servant_leader', 'guru'],
   },
   audience: {
-    tagline: 'Followers, leads, broadcasts.',
+    tagline: 'Know the people who want more.',
     pitch: 'See who follows you, collect leads from your page, send a broadcast, and share an affiliate link that pays twenty percent.',
     steps: ['People follow your page.', 'Leads land in one list.', 'Broadcast when you have news.'],
     relationships: ['servant_leader', 'friendship'],
   },
   content: {
-    tagline: 'Which post made money?',
+    tagline: 'Find the posts that sell.',
     pitch: 'Every post gets a tracked link. The dashboard shows clicks, sales and revenue per piece of content, so you make more of what sells.',
     steps: ['Add a post and copy its tracked link.', 'Share that link instead of the plain one.', 'Watch revenue per post, not just views.'],
     relationships: ['servant_leader'],
@@ -160,7 +160,7 @@ export const FEATURES: Record<string, FeatureCopy> = {
     relationships: ['servant_leader'],
   },
   finance: {
-    tagline: 'Know your numbers.',
+    tagline: 'See your money clearly.',
     pitch: 'Money in, money out, by category and by month. Track what you are owed and what repeats, set budgets and goals, and see what the platform paid you alongside everything else. Yours alone to see.',
     steps: ['Log what came in and what went out.', 'Track dues and monthly repeats; settle them with a tap.', 'Watch the month, keep budgets and goals honest.'],
     relationships: ['self', 'servant_leader', 'parent_child'],
@@ -197,7 +197,7 @@ export const FEATURES: Record<string, FeatureCopy> = {
     relationships: ['divine', 'servant_leader'],
   },
   leaderboard: {
-    tagline: 'The top twenty climbers.',
+    tagline: 'Climb on effort, not followers.',
     pitch: 'Opt in and see where you stand on experience, streaks and honors. Never on follower counts.',
     steps: ['Opt in under Profile.', 'Climb.', 'See the top twenty.'],
     relationships: ['friendship', 'self'],
@@ -250,6 +250,20 @@ export function featuresForLifeArea(key: LifeAreaKey): AppModule[] {
 
 export const BRAND_PITCH = {
   tagline: 'For brands and agencies',
-  pitch: 'Submit a brief, approve a shortlist, review versions, and fund content rewards that pay creators per verified view. One workspace for your team, with usage rights written down.',
+  pitch: 'Write a brief, approve a shortlist and review every version in one thread. Or fund a content reward that pays creators per verified view, and only after a reviewer checks. Usage rights are written down before anyone shoots.',
   steps: ['Create your brand and invite your team.', 'Write a brief or launch a content reward.', 'Approve, review, and see every version and view count.'],
 };
+
+/** The doubts a first-time visitor has, most common first. Each answer accepts the worry, then answers it. */
+export const SITE_FAQ: { q: string; a: string }[] = [
+  { q: 'What’s the catch?', a: 'Fair question. The daily game and every app are free to start and free to stay. Two things cost money. Typing to the assistant needs a plan, because the model costs us money; plans are not on sale yet. The Shop takes 5% of each sale. Partner links in the Store may earn us a share, and every card says so.' },
+  { q: 'I don’t have time for another app.', a: 'That is the point of it. The daily ask is three moves: check in, do one small act, tick one task. It takes a few minutes. The rest is there when you want it, and switched off when you don’t.' },
+  { q: 'Who sees my journal?', a: 'Only you. Your journal and wellbeing numbers never reach brands, staff, the leaderboard or Club selection. The assistant reads the journal only when you ask it to, and only through models that keep nothing. A life coach never sees it.' },
+  { q: 'I’m not a creator. Is it for me?', a: 'Yes, if you are 18 or over. The seven relationships are for everyone: work, friends, family, love, yourself, teachers and faith. The creator apps, like the Shop and Win, stay off until you want them.' },
+  { q: 'Apps like this never stick for me.', a: 'That isn’t you. Most apps track one part of life and forget the other six. Here each tick climbs a pillar you chose, toward a foundation you wrote. And a task with a date can only be ticked on its day, so the plan stays honest.' },
+  { q: 'Won’t it be too many apps?', a: 'Only a few are on at the start. A short chat asks what you want and switches on up to five more that fit you. You can switch any of them on or off later, under the Profile tab.' },
+  { q: 'Is the pay real?', a: 'It is real, and it is careful. Win pays per verified view, not per follower, and a reviewer checks before anything pays. Everything that pays out has a wait or a person who checks it. Points work today; money checkout turns on when payments go live.' },
+  { q: 'Will I be on my own?', a: 'No. Bumling, the app’s own guide, and seven characters walk with you. Every app ends with a How it works section, Help answers questions, and you can work with a life coach if you want one.' },
+  { q: 'Can I leave?', a: 'Any time. From the Profile tab you can export everything, erase your progress, or delete your account. Switching an app off is one tap.' },
+  { q: 'Why do you ask for my phone and birthday?', a: 'So that everyone here is 18 or over. Nobody under 18 gets an account. Neither your phone number nor your birthday is ever shown to anyone else, and you can change the phone number under the Profile tab.' },
+];

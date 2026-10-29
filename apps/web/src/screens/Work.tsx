@@ -93,7 +93,7 @@ export function Work() {
           </h2>
           {d?.canPost && <Button onClick={() => setPosting(true)}>Post one</Button>}
         </div>
-        {d && d.opportunities.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing open right now. Check back soon.</p>}
+        {d && d.opportunities.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing is open right now. Brands post paid work here, and you apply to what fits.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {d?.opportunities.map((o) => (
             <li key={o.id}>

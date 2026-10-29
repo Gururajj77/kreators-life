@@ -148,7 +148,7 @@ function YouView({ data }: { data: MeResponse }) {
           <Link to="/profile" className="inline-flex min-h-[48px] items-center px-sm text-[14px] font-bold text-ink-mute underline-offset-4 hover:text-ink hover:underline">
             Edit page
           </Link>
-          <Link to="/plans" className="toy toy-soft ml-auto inline-flex min-h-[48px] items-center gap-xs rounded-pill bg-card px-md text-[14px] font-bold text-ink">
+          <Link to="/plans" className="toy toy-soft inline-flex min-h-[48px] w-full items-center justify-center gap-xs rounded-pill bg-card px-md text-[14px] font-bold text-ink md:ml-auto md:w-auto md:justify-start">
             <span aria-hidden="true">🪄</span>
             Plans and credits
           </Link>

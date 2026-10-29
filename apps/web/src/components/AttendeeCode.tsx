@@ -19,7 +19,7 @@ export interface CodeChange {
   fresh?: boolean;
 }
 
-const say = (e: unknown) => (e instanceof Error ? e.message : 'That did not work.');
+const say = (e: unknown) => (e instanceof Error ? e.message : 'That did not work. Try again.');
 /** A time in the window, as the clock on the wall says it: "Sat 18:30". */
 const clock = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
 

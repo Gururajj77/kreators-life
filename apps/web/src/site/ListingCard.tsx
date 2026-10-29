@@ -15,7 +15,7 @@ export function ListingCard({ listing, showFeature = true }: { listing: Listing;
           {meta.emoji}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-mute">
+          <p className="m-0 type-eyebrow text-ink-mute">
             {meta.name}
             {listing.featured && <span className="ml-xs rounded-pill bg-r3 px-xs text-[11px] leading-[18px] text-ink-fixed">Featured</span>}
             {!listing.live && <span className="ml-xs rounded-pill bg-line px-xs text-[11px] leading-[18px] text-ink">Not live</span>}

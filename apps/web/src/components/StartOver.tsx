@@ -22,7 +22,7 @@ export function StartOver({ onConfirm, className = '' }: { onConfirm: () => void
       aria-live="polite"
       className={`toy inline-flex min-h-[40px] shrink-0 items-center rounded-pill px-sm text-[14px] font-bold ${asking ? 'bg-ink text-on-ink' : 'bg-card'} ${className}`}
     >
-      {asking ? 'Tap again to start over' : 'Start over'}
+      {asking ? 'Tap again to confirm' : 'Start over'}
     </button>
   );
 }

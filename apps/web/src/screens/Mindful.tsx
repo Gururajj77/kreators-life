@@ -51,7 +51,7 @@ export function Mindful() {
     { label: 'One minute', color: 'var(--color-r3)', test: (m: number) => m <= 1 },
     { label: 'Three', color: 'var(--color-r4)', test: (m: number) => m > 1 && m <= 3 },
     { label: 'Five', color: 'var(--color-r2)', test: (m: number) => m > 3 && m <= 5 },
-    { label: 'Ten or more', color: 'var(--color-r6)', test: (m: number) => m > 5 },
+    { label: 'More than five', color: 'var(--color-r6)', test: (m: number) => m > 5 },
   ].map((b) => ({ ...b, value: (logs.data?.logs ?? []).filter((l) => b.test(l.value)).reduce((s, l) => s + l.value, 0) }));
   const monthTotal = buckets.reduce((s, b) => s + b.value, 0);
 
@@ -139,7 +139,7 @@ export function Mindful() {
         <h2 id="hist-heading" className="text-[24px]">
           Sessions
         </h2>
-        {logs.data && logs.data.logs.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">No sessions yet. Even one minute counts.</p>}
+        {logs.data && logs.data.logs.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">No sessions yet. Pick a length above and start. Even one minute counts.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {logs.data?.logs.map((l) => (
             <li key={l.id} className={`flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft`}>

@@ -273,7 +273,7 @@ export function ProductPage() {
                   <Button variant="outline" full className="mt-sm" onClick={() => buy.mutate({ pay: 'money' })} disabled={busy || !ready || !d.unlock.ok}>
                     {live ? `Pay ${moneyLabel}` : `Record a money order (test), ${moneyLabel}`}
                   </Button>
-                  <p className="mt-xs m-0 text-center text-[12px] font-bold text-ink-soft">{live ? 'UPI, cards and netbanking through Razorpay. Your purchase unlocks once the bank confirms.' : 'Payments are in test mode here: the order is recorded and nothing is charged.'}</p>
+                  <p className="mt-xs m-0 text-center text-[12px] font-bold text-ink-soft">{live ? 'UPI, cards and netbanking through Razorpay. Your purchase unlocks once the bank confirms.' : 'Money checkout is not live yet, so this only records a test order and charges nothing. Points work today.'}</p>
                 </>
               )}
             </section>

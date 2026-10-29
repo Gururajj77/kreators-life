@@ -98,7 +98,7 @@ function Switch({ on, onChange, disabled, label }: { on: boolean; onChange: (on:
  * its values, tick rows and act on them together, and edit a cell where it sits. Scrolls sideways on
  * a phone instead of squeezing. Nothing here talks to the server; the columns say what each edit does.
  */
-export function DataTable<T>({ rows, columns, rowKey, label, search = true, selectable = false, bulk = [], actions, pageSize = 25, page: serverPage, onPage, empty = 'Nothing here.', busy = false, onRowClick, activeKey = null }: Props<T>) {
+export function DataTable<T>({ rows, columns, rowKey, label, search = true, selectable = false, bulk = [], actions, pageSize = 25, page: serverPage, onPage, empty = 'Nothing here yet.', busy = false, onRowClick, activeKey = null }: Props<T>) {
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
   const [q, setQ] = useState('');
   const [filters, setFilters] = useState<Record<string, string>>({});
@@ -273,7 +273,7 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
             {page.length === 0 && (
               <tr>
                 <td colSpan={cols} className="px-md py-lg text-[14px] font-semibold text-ink-soft">
-                  {rows.length === 0 ? empty : 'Nothing matches.'}
+                  {rows.length === 0 ? empty : 'Nothing matches. Clear the filters to see every row.'}
                 </td>
               </tr>
             )}

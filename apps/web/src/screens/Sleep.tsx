@@ -35,7 +35,7 @@ export function Sleep() {
       {wb.data && (
         <Hero color="var(--color-r6)" deep="var(--deep-guru)" className="mt-md" character="guru" characterSize={64} mood={avg !== null && avg >= 7 ? "happy" : "sleepy"}>
           <div className="flex items-center justify-between gap-md">
-            <HeroNumber value={avg === null ? '–' : avg.toFixed(1)} unit="h" label={avg === null ? 'No nights logged yet' : avg >= 7 ? 'You are sleeping well' : avg >= 6 ? 'A little short this week' : 'Running on empty'} />
+            <HeroNumber value={avg === null ? '–' : avg.toFixed(1)} unit="h" label={avg === null ? 'No nights logged yet' : avg >= 7 ? 'You are sleeping well' : avg >= 6 ? 'A little short this week' : 'Short on sleep this week'} />
             <Donut segments={[{ value: avg ?? 0, color: 'var(--color-on-fill)', label: 'slept' }, { value: Math.max(0, 8 - (avg ?? 0)), color: 'rgba(255,255,255,0.3)', label: 'to eight' }]} size={112} stroke={14} track="rgba(255,255,255,0.3)" label="Hours a night against eight">
               <span className="text-[12px] font-extrabold">of 8 h</span>
             </Donut>

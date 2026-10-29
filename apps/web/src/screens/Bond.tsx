@@ -113,7 +113,7 @@ export function Bond() {
           </ul>
         )}
         {friends.filter((f) => f.status !== 'pending').length === 0 ? (
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">No friends yet. Open someone's page from the community feed and tap Add friend.</p>
+          <p className="m-0 text-[14px] font-semibold text-ink-soft">No friends yet. Open someone's page from the community feed and tap Add friend. Chats stay anonymous.</p>
         ) : (
           <ul className="flex list-none flex-col gap-xs p-0 m-0">
             {friends

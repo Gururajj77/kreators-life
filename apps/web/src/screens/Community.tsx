@@ -258,7 +258,7 @@ function PostSheet({ open, product, onClose, onSaved }: { open: boolean; product
     },
   });
   return (
-    <Sheet open={open} onClose={onClose} title="Add new post">
+    <Sheet open={open} onClose={onClose} title="Write a post">
       <form
         className="flex flex-col gap-md"
         onSubmit={(e) => {
@@ -267,7 +267,7 @@ function PostSheet({ open, product, onClose, onSaved }: { open: boolean; product
         }}
       >
         <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[14px] font-bold">Select post category</legend>
+          <legend className="text-[14px] font-bold">Pick a category</legend>
           <div className="mt-xs grid grid-cols-3 gap-xs">
             {POST_CATEGORIES.map((c) => (
               <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)} className={`min-h-[44px] rounded-tile border-2 text-[12px] font-bold ${category === c ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
@@ -277,7 +277,7 @@ function PostSheet({ open, product, onClose, onSaved }: { open: boolean; product
           </div>
         </fieldset>
         <label className="block">
-          <span className="block text-[14px] font-bold">Post content</span>
+          <span className="block text-[14px] font-bold">Your post</span>
           <textarea autoFocus value={body} onChange={(e) => setBody(e.target.value)} maxLength={2000} rows={5} placeholder="What is on your mind?" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
         </label>
         {save.isError && (
@@ -332,7 +332,7 @@ function RepliesSheet({ post, onClose, onSaved }: { post: CommunityPost | null; 
               if (text.trim()) send.mutate();
             }}
           >
-            <input value={text} onChange={(e) => setText(e.target.value)} maxLength={1000} placeholder="Type reply to community" aria-label="Reply" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-paper px-md py-sm text-[16px]" />
+            <input value={text} onChange={(e) => setText(e.target.value)} maxLength={1000} placeholder="Write a reply" aria-label="Reply" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-paper px-md py-sm text-[16px]" />
             <Button type="submit" disabled={send.isPending || !text.trim()}>
               Send
             </Button>

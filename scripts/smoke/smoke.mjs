@@ -9,7 +9,8 @@ const ORIGIN = process.env.SMOKE_ORIGIN ?? 'http://127.0.0.1:8788';
 const ADMIN_KEY = process.env.SMOKE_ADMIN_KEY ?? 'smoke-admin-key';
 const API = `${ORIGIN}/api`;
 const stamp = Date.now().toString(36);
-const today = new Date().toISOString().slice(0, 10);
+// The app's default zone is Asia/Kolkata, so "today" is that zone's date; the UTC date is a day behind for the first five and a half hours of an Indian morning.
+const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
 let passed = 0;
 let failed = 0;

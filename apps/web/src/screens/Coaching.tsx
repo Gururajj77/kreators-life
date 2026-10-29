@@ -80,7 +80,7 @@ function RosterRow({ r }: { r: CoachRosterRow }) {
           )}
           {(r.redWeek || (r.focus && r.focus.length > 0)) && (
             <span className="mt-xs flex flex-wrap gap-xs">
-              {r.redWeek && <span className="rounded-pill bg-r1 px-xs text-[12px] font-extrabold leading-[24px] text-on-fill">Missed the deal last week</span>}
+              {r.redWeek && <span className="rounded-pill bg-r1 px-xs text-[12px] font-extrabold leading-[24px] text-on-fill">Below the plan last week</span>}
               {r.focus?.map((k) => (
                 <span key={k} className="rounded-pill px-xs text-[12px] font-extrabold leading-[24px]" style={{ background: RELATIONSHIP_BY_KEY[k].color, color: RELATIONSHIP_BY_KEY[k].text }}>
                   {RELATIONSHIP_BY_KEY[k].name}

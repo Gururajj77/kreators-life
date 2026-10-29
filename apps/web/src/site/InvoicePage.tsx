@@ -23,7 +23,7 @@ export function InvoicePage() {
           <article className="rounded-card bg-card p-md shadow-toy md:p-lg">
             <div className="flex flex-wrap items-start justify-between gap-sm">
               <div>
-                <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-mute">Invoice</p>
+                <p className="m-0 type-eyebrow text-ink-mute">Invoice</p>
                 <h1 className="mt-xs text-[30px]">{inv.number}</h1>
                 <p className="m-0 text-[16px] font-semibold text-ink-soft">
                   from{' '}

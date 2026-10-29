@@ -1,4 +1,4 @@
-import { AFFILIATE_SHARE } from '@kreators/shared';
+import { AFFILIATE_SHARE, PAID_PLANS, PAYMENTS_LIVE, PLAN_DAYS, PLANS } from '@kreators/shared';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { SiteLayout } from './SiteLayout';
@@ -10,7 +10,7 @@ const TITLES: Record<Kind, { title: string; lede: string }> = {
   privacy: { title: 'Privacy', lede: 'What we keep, why, who sees it, and how to take it with you or delete it.' },
   refunds: { title: 'Refunds and cancellations', lede: 'How money and points move back when something does not work out.' },
   contact: { title: 'Contact', lede: 'A person answers. Support tickets inside the app are fastest.' },
-  pricing: { title: 'Pricing', lede: 'Free to play. Fees only when you sell.' },
+  pricing: { title: 'Pricing', lede: 'Free to start, free to stay. A fee when you sell, and a plan if you want the assistant to type for you.' },
 };
 
 function H({ children }: { children: ReactNode }) {
@@ -26,8 +26,8 @@ export function Policy({ kind }: { kind: Kind }) {
   return (
     <SiteLayout wide={false}>
       <header className="pt-lg">
-        <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-mute">kreators.app</p>
-        <h1 className="mt-xs text-[clamp(32px,6vw,48px)]">{t.title}</h1>
+        <p className="m-0 type-eyebrow text-ink-mute">kreators.app</p>
+        <h1 className="type-hook mt-sm text-[clamp(40px,8vw,64px)]">{t.title}</h1>
         <P>{t.lede}</P>
       </header>
 
@@ -100,11 +100,11 @@ export function Policy({ kind }: { kind: Kind }) {
         <section>
           <H>Support</H>
           <P>
-            Open Help inside the app and write to the team; replies land in your inbox. Signed out, email <span className="select-all font-extrabold text-ink">hello@kreators.life</span>.
+            Open Help inside the app and write to the team; replies land in your inbox. Signed out, email <span className="select-all font-extrabold text-ink">brandingbum@gmail.com</span>.
           </P>
           <H>Brands and partners</H>
           <P>
-            Create your organization from Army after signing in, or email <span className="select-all font-extrabold text-ink">brands@kreators.life</span>.
+            Create your organization from Army after signing in, or email <span className="select-all font-extrabold text-ink">brandingbum@gmail.com</span>.
           </P>
           <H>Business address</H>
           <P>kreators.app, registered address to be added once the entity is set up.</P>
@@ -113,15 +113,16 @@ export function Policy({ kind }: { kind: Kind }) {
 
       {kind === 'pricing' && (
         <section>
-          <div className="mt-lg grid gap-sm md:grid-cols-3">
+          <div className="mt-lg grid gap-sm sm:grid-cols-2">
             {[
-              ['Play', 'Free', 'The whole game, the dashboard, circles, events and learning. Always free.'],
+              ['Play', 'Free', 'The daily game, your seven pillars, every app you switch on, circles, events and learning. Free to start, free to stay.'],
               ['Sell', '5% of each sale', 'Downloads, courses, sessions, memberships and everything in the shop. The fee is taken from each sale; nothing up front. Creators who refer others earn a share of ' + Math.round(AFFILIATE_SHARE * 100) + '% on referred sales.'],
-              ['Brands', 'Per campaign', 'Campaign scoping and content-reward pools are priced per brief. Write to brands@kreators.life.'],
+              ['Assistant', `From US$${PLANS.pro.priceCents / 100}`, `Typing to the assistant, so it does things for you, needs a plan: ${PAID_PLANS.map((k) => `${PLANS[k].name} US$${PLANS[k].priceCents / 100}`).join(', ')}, each for ${PLAN_DAYS} days. Credits do not carry over. Its tap flows stay free.${PAYMENTS_LIVE ? '' : ' Plans are not on sale yet, so nothing is charged.'}`],
+              ['Brands', 'Per campaign', 'Campaign scoping and content-reward pools are priced per brief. Write to brandingbum@gmail.com.'],
             ].map(([name, price, blurb]) => (
               <div key={name} className="rounded-card bg-card p-md shadow-toy-soft">
-                <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-mute">{name}</p>
-                <p className="mt-xs m-0 font-display text-[32px] font-extrabold leading-none">{price}</p>
+                <p className="m-0 type-eyebrow text-ink-mute">{name}</p>
+                <p className="mt-xs m-0 type-hook text-[36px]">{price}</p>
                 <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{blurb}</p>
               </div>
             ))}

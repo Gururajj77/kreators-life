@@ -1,6 +1,7 @@
-import { BADGE_META, COACH_NOTE_MAX, COACH_SHARE_META, COACH_SHARE_PARTS, KIND_META, levelFromXp, PENALTIES, RELATIONSHIP_BY_KEY, RELATIONSHIPS, SCORE_LABEL, SCORECARD, weightWord, type Node, type NodeKind } from '@kreators/shared';
+import { BADGE_META, COACH_NOTE_MAX, COACH_SHARE_META, COACH_SHARE_PARTS, type CoachShare, type CoachSharePart, KIND_META, levelFromXp, PENALTIES, RELATIONSHIP_BY_KEY, RELATIONSHIPS, SCORE_LABEL, SCORECARD, weightWord, type Node, type NodeKind } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import gsap from 'gsap';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { Button } from '../components/Button';
 import { AreaLine, Gauge, HBars, MultiLine, StatTile, WeekDots } from '../components/Charts';
@@ -19,6 +20,63 @@ const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const say = (e: unknown) => (e instanceof Error ? e.message : 'That did not work.');
 const LAYERS: NodeKind[] = ['pillar', 'principle', 'value_goal', 'outcome'];
+const PART_SECTION_ID: Record<CoachSharePart, string> = { daily: 'daily-heading', pillars: 'pillars-heading', routine: 'routine-heading', lifeMap: 'map-heading', reflection: 'reflection-heading' };
+
+/** Scrolls a part's section to just under the stuck bar. Reduced motion jumps instead of sliding. */
+function jumpTo(id: string) {
+  const heading = document.getElementById(id);
+  const bar = document.getElementById('share-bar');
+  if (!heading) return;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const stuckAt = bar ? parseFloat(getComputedStyle(bar).top) || 0 : 0;
+  const top = heading.getBoundingClientRect().top + window.scrollY - stuckAt - (bar?.offsetHeight ?? 0) - 16;
+  window.scrollTo({ top, behavior: reduce ? 'auto' : 'smooth' });
+}
+
+/**
+ * The parts a student shares, as a row that sticks to the top of the screen. Flat while it sits in the page; once it
+ * sticks, a frosted backdrop and a hairline fade in. On a phone the strip reaches up behind the logo and the corner
+ * buttons, and the chips sit under them.
+ */
+function ShareBar({ share }: { share: CoachShare }) {
+  const sentinel = useRef<HTMLDivElement>(null);
+  const backdrop = useRef<HTMLDivElement>(null);
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => setStuck(Boolean(e && !e.isIntersecting && e.boundingClientRect.top < 0)));
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  useEffect(() => {
+    if (!backdrop.current) return;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) gsap.set(backdrop.current, { opacity: stuck ? 1 : 0 });
+    else gsap.to(backdrop.current, { opacity: stuck ? 1 : 0, duration: 0.25, ease: 'power2.out' });
+  }, [stuck]);
+  return (
+    <>
+      <div ref={sentinel} aria-hidden="true" />
+      <div id="share-bar" className="sticky top-[calc(64px+env(safe-area-inset-top))] z-20 -mx-md md:top-0 md:-mx-lg">
+        <div ref={backdrop} aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 -top-[calc(64px+env(safe-area-inset-top))] border-b border-line bg-paper/85 opacity-0 backdrop-blur-md md:top-0" />
+        <nav aria-label="What they share" className="scroll-row relative m-0 py-sm [mask-image:linear-gradient(to_right,black_calc(100%-32px),transparent)] md:px-lg md:[mask-image:none]">
+          {COACH_SHARE_PARTS.map((k) =>
+            share[k] ? (
+              <button key={k} type="button" onClick={() => jumpTo(PART_SECTION_ID[k])} className="toy toy-soft inline-flex min-h-[40px] shrink-0 items-center rounded-pill bg-card px-sm text-[12px] font-extrabold text-ink">
+                {COACH_SHARE_META[k].name}
+              </button>
+            ) : (
+              <span key={k} title="They do not share this" className="inline-flex min-h-[40px] shrink-0 items-center rounded-pill bg-line px-sm text-[12px] font-extrabold text-ink-soft line-through">
+                {COACH_SHARE_META[k].name}
+              </span>
+            ),
+          )}
+        </nav>
+      </div>
+    </>
+  );
+}
 
 function Problem({ e }: { e: unknown }) {
   if (!e) return null;
@@ -177,21 +235,16 @@ export function CoachStudent() {
             </p>
           </div>
         </div>
-        <ul className="mt-sm m-0 flex list-none flex-wrap gap-xs p-0" aria-label="What they share">
-          {COACH_SHARE_PARTS.map((k) => (
-            <li key={k} className={`rounded-pill px-sm py-xs text-[12px] font-extrabold ${share[k] ? 'bg-card text-ink shadow-toy-soft' : 'bg-line text-ink-soft line-through'}`}>
-              {COACH_SHARE_META[k].name}
-            </li>
-          ))}
-        </ul>
         <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">They pick what you see and can change it any time. Never their journal.</p>
       </header>
+
+      <ShareBar share={share} />
 
       <div className="mt-lg grid grid-cols-2 gap-xs sm:grid-cols-3">
         {d.daily && <StatTile label="Streak" value={d.daily.streak} hint={`Best ${d.daily.bestStreak}. ${d.daily.checkedIn ? 'Checked in today.' : 'Not checked in today.'}`} />}
         {d.daily && <StatTile label="Level" value={levelFromXp(d.daily.xp)} hint={`${d.daily.xp} xp`} />}
         {d.daily && <StatTile label="Tasks, 30 days" value={d.daily.tasksByDay.reduce((a, b) => a + b, 0)} hint={`${d.daily.checkins.length} check-ins`} />}
-        {d.routine && <StatTile label="Routine, 7 days" value={`${d.routine.week.done} of 7`} hint={d.routine.contract ? `The deal: ${d.routine.contract.minDays} a week` : 'No contract yet'} />}
+        {d.routine && <StatTile label="Routine, 7 days" value={`${d.routine.week.done} of 7`} hint={d.routine.contract ? `Their plan: ${d.routine.contract.minDays} days a week` : 'No contract yet'} />}
         {d.reflection && <StatTile label="Wellbeing" value={d.reflection.wellbeing.score} hint={d.reflection.wellbeing.label} />}
       </div>
 
@@ -236,6 +289,7 @@ export function CoachStudent() {
       {d.pillars && (
         <Section
           id="pillars-heading"
+         
           title="Pillars and pyramids"
           lede="Each pyramid top down: the foundation first, projects last. Add a task under a project, or change an open one."
           action={
@@ -306,7 +360,7 @@ export function CoachStudent() {
       )}
 
       {d.routine && (
-        <Section id="routine-heading" title="Routine and contract" lede="The routine from their strategy session, the last seven days, and the deal they signed.">
+        <Section id="routine-heading" title="Routine and contract" lede="The routine from their strategy session, the last seven days, and the plan they signed.">
           <WeekDots days={d.routine.week.days.map(Boolean)} color="var(--color-r4)" label={`Routine kept ${d.routine.week.done} of the last 7 days`} />
           {d.routine.contract ? (
             <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0 text-[14px] font-semibold">
@@ -363,6 +417,12 @@ export function CoachStudent() {
               </ul>
             </>
           )}
+        </Section>
+      )}
+
+      {!d.lifeMap && share.lifeMap && (
+        <Section id="map-heading" title="Life map answers" lede="Where each pillar sits on the map, their scores and what gets in the way.">
+          <p className="m-0 text-[14px] font-semibold text-ink-soft">No life map yet. It fills in once they finish their strategy session.</p>
         </Section>
       )}
 

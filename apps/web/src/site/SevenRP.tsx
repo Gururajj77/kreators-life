@@ -67,7 +67,7 @@ function FloorSection({ r, onActive }: { r: Relationship; onActive: (k: Relation
           </p>
         </div>
         <div>
-          <h2 className="m-0 text-[32px] leading-tight md:text-[40px] text-balance">{r.name}</h2>
+          <h2 className="type-hook m-0 text-[clamp(32px,6vw,48px)]">{r.name}</h2>
           <p className="mt-xs m-0 text-pretty text-[18px] font-bold leading-snug">“{r.greeting}”</p>
           <p className="mt-xs m-0 text-pretty text-[16px] font-semibold text-ink-soft">
             The question {r.character}, your {r.role}, keeps asking: <span className="text-ink">{r.question}</span>
@@ -105,7 +105,7 @@ function LifeAreaSection({ k }: { k: LifeAreaKey }) {
         </p>
       </div>
       <div>
-        <h2 className="m-0 text-[32px] leading-tight md:text-[40px] text-balance">{meta.name}</h2>
+        <h2 className="type-hook m-0 text-[clamp(32px,6vw,48px)]">{meta.name}</h2>
         <p className="mt-xs m-0 text-pretty text-[16px] font-semibold text-ink-soft">{meta.blurb}</p>
         <ul className="mt-md flex list-none flex-wrap gap-xs p-0 m-0">
           {features.map((m) => (
@@ -136,8 +136,8 @@ export function SevenRP() {
       <ScrollTroupe active={active} />
       <Zone value={null} onActive={setActive} className="grid gap-lg pt-lg md:grid-cols-2 md:items-center md:pt-xl">
         <div>
-          <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-mute">7RP: the seven relationships</p>
-          <h1 className="mt-xs text-[clamp(32px,6vw,56px)] leading-[1.05] text-balance">Seven relationships make a life</h1>
+          <p className="m-0 type-eyebrow text-ink-mute">7RP: the seven relationships</p>
+          <h1 className="type-hook mt-sm text-[clamp(40px,9vw,80px)]">Seven relationships <em>make a life</em></h1>
           <p className="mt-md m-0 max-w-[520px] text-pretty text-[18px] font-semibold leading-snug text-ink-soft">
             Work and money, friends, family, a partner, yourself, your teachers and your faith. In kreators.app each one is a pillar with its own guide, and every app serves at least one of them.
           </p>
@@ -165,7 +165,7 @@ export function SevenRP() {
 
       <Zone value={null} onActive={setActive} className="mt-2xl text-center">
         <motion.div {...rise} className="rounded-card bg-ink p-lg text-on-ink">
-          <h2 className="text-[32px] text-on-ink md:text-[40px] text-balance">Find out where yours stand</h2>
+          <h2 className="type-hook text-[clamp(32px,6vw,56px)] text-on-ink">Find out where <em>yours stand</em></h2>
           <p className="mt-xs m-0 text-pretty text-[16px] font-semibold text-on-ink/80">A short chat places all seven, then builds a pillar for the ones that need you most.</p>
           <Link to={entry === '/home' ? '/home' : '/start'} className="toy mt-md inline-flex min-h-[56px] items-center rounded-pill bg-card px-lg text-[18px] font-bold text-ink">
             Start free
