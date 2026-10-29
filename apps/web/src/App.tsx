@@ -7,6 +7,7 @@ import { ThemeToggle } from './components/ThemeToggle';
 import { Gate } from './components/Gate';
 import { HowTo } from './components/HowTo';
 import { TabBar } from './components/TabBar';
+import { Assistant } from './components/Assistant';
 import { useMe } from './lib/queries';
 import { useApplyTheme } from './lib/theme';
 import { useSession } from './lib/store';
@@ -48,9 +49,9 @@ import { Profile } from './screens/Profile';
 import { Proposals } from './screens/Proposals';
 import { Public } from './screens/Public';
 import { Realm } from './screens/Realm';
-import { ResumeOnboarding } from './screens/Onboarding';
 import { Resources } from './screens/Resources';
 import { Rewards } from './screens/Rewards';
+import { Plans } from './screens/Plans';
 import { School } from './screens/School';
 import { Search } from './screens/Search';
 import { Sessions } from './screens/Sessions';
@@ -63,7 +64,8 @@ import { Today } from './screens/Today';
 import { Tools } from './screens/Tools';
 import { Tower } from './screens/Tower';
 import { VibeCheck } from './screens/VibeCheck';
-import { Session } from './screens/Session';
+import { SessionChat } from './screens/SessionChat';
+import { SetupChat } from './screens/SetupChat';
 import { Welcome } from './screens/Welcome';
 import { Wellbeing } from './screens/Wellbeing';
 import { Reward, Win } from './screens/Win';
@@ -122,6 +124,7 @@ function Shell() {
     <>
       <Outlet />
       <TabBar />
+      <Assistant />
     </>
   );
 }
@@ -184,12 +187,16 @@ const router = createBrowserRouter([
       { path: '/admin', element: <Admin /> },
       {
         element: <RequireSession />,
-        children: [
-          { path: '/onboarding', element: <ResumeOnboarding /> },
-          { path: '/vibe-check', element: <VibeCheck /> },
-          { path: '/session', element: <Session /> },
-        ],
+        children: [{ path: '/vibe-check', element: <VibeCheck /> }],
       },
+    ],
+  },
+  // The two chats draw their own header, with the theme switch in it.
+  {
+    element: <RequireSession />,
+    children: [
+      { path: '/onboarding', element: <SetupChat /> },
+      { path: '/session', element: <SessionChat /> },
     ],
   },
   // The app: everything behind a session.
@@ -210,6 +217,7 @@ const router = createBrowserRouter([
       // Rank and rewards are part of the game, not apps: always on.
       { path: '/leaderboard', element: <Leaderboard /> },
       { path: '/rewards', element: <Rewards /> },
+      { path: '/plans', element: explained('assistant', <Plans />) },
       // learn and earn
       { path: '/school', element: gated('school', <School />) },
       { path: '/school/:id', element: gated('school', <Cohort />) },

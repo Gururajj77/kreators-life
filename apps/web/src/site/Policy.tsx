@@ -72,6 +72,8 @@ export function Policy({ kind }: { kind: Kind }) {
           <P>We use one cookie for tracked links (thirty days) and your device's storage for your session and theme. No third-party advertising trackers.</P>
           <H>The content strategist</H>
           <P>Content keeps a folder per brand: the links you add, what research brought back from them, and the pieces written from that. When a writing model is connected, that folder's research and your brief go to Anthropic to be written up, and nothing else about you goes with it: never your journal, your wellbeing logs or your customers. Research goes out through Agent Reach, a read-only tool that never posts or logs in for you. Folders are yours alone, come with your export, and go with your account.</P>
+          <H>The assistant</H>
+          <P>The assistant's tap flows stay inside the app. When you type to it with a plan, what you type, the chat so far and what it looks up to do the job go to a language model through OpenRouter. That can be your tasks and money. While we try models out you can pick one in the assistant. Some keep nothing, and only those may read your journal (when you ask about it) and your trackers. Free ones may keep what is sent to them, so they never get your journal or trackers, and the assistant tells you so when one is picked. The assistant acts as you, on your own things, with the same limits as a tap. It keeps a list of what it did, with an Undo: plain labels, never your journal text. The list comes with your export and goes with your account, and the credits each message used show in your history.</P>
         </section>
       )}
 

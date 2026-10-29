@@ -37,6 +37,12 @@ export const LIMITS = {
   research: { max: 40, windowSec: 3600 },
   /** Pieces the strategist writes. Each one is a model call. */
   generate: { max: 20, windowSec: 3600 },
+  /** The setup chat's save: tags, goals and the apps that come on. */
+  setup: { max: 20, windowSec: 3600 },
+  /** Attendee codes typed at an event: Party and Circles. Wrong guesses count, so a custom word cannot be guessed at. */
+  claim: { max: 10, windowSec: 3600 },
+  /** Messages typed to the assistant. Each one is a model call paid in credits; the plan's own caps come on top. */
+  assistant: { max: 60, windowSec: 3600 },
 } as const;
 
 export type LimitName = keyof typeof LIMITS;
@@ -76,9 +82,13 @@ export const ROUTE_LIMITS: readonly { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE
   { method: 'POST', path: '/run/collabs/:id/apply', limit: 'apply' },
   { method: 'POST', path: '/run/runs/:id/entry', limit: 'entry' },
   { method: 'POST', path: '/studio/brands', limit: 'create' },
+  { method: 'POST', path: '/assistant', limit: 'assistant' },
+  { method: 'POST', path: '/party/events/:id/claim', limit: 'claim' },
+  { method: 'POST', path: '/circles/events/:id/claim', limit: 'claim' },
   { method: 'POST', path: '/studio/brands/:id/sources/:sid/read', limit: 'research' },
   { method: 'POST', path: '/studio/brands/:id/research', limit: 'research' },
   { method: 'POST', path: '/studio/brands/:id/pieces', limit: 'generate' },
+  { method: 'POST', path: '/onboarding/setup', limit: 'setup' },
 ];
 
 /** The doors that take no session are limited before the session check; everything else after it, per person. */

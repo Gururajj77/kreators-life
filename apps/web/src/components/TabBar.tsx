@@ -163,7 +163,7 @@ export function TabBar() {
           <Link to="/" className="text-[12px] font-bold text-ink-soft hover:text-ink">
             About kreators.app
           </Link>
-          <SignOut variant="outline" />
+          <SignOut />
         </div>
       </Sheet>
       {/* Laptop: a sidebar on the left. */}
@@ -232,7 +232,7 @@ export function TabBar() {
           })}
         </div>
         <div className="mt-auto flex flex-col gap-xs px-xs pt-md">
-          <SignOut variant="outline" className="w-full" />
+          <SignOut className="w-full" />
           <Link to="/" className="inline-flex min-h-[44px] items-center text-[12px] font-bold text-ink-soft hover:text-ink">
             About kreators.app
           </Link>

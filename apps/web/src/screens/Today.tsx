@@ -7,7 +7,7 @@ import { useCelebrate } from '../components/Celebration';
 import { CheckRow } from '../components/CheckRow';
 import { EvolutionReveal } from '../components/EvolutionReveal';
 import { GuideCard, useGuide } from '../components/Guide';
-import { NotToDoList } from '../components/NotToDoList';
+import { NotToDoBlock } from '../components/NotToDoList';
 import { Nudge } from '../components/Nudge';
 import { Person } from '../components/Person';
 import { RoutineSection } from '../components/RoutineSection';
@@ -51,8 +51,16 @@ export function Today() {
       });
     });
 
+  // A task ticked by mistake comes back: unticking takes back what it paid, the same as on a pillar page.
+  const untick = (id: string) =>
+    queue.run(id, async () => {
+      await api.uncomplete(id);
+    });
+
   const rel = data ? RELATIONSHIP_BY_KEY[data.spark.relationship] : null;
   const tasks = data?.tasks ?? [];
+  const done = data?.done ?? [];
+  const doneAt = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '');
   const taskDone = Boolean(data && data.doneRecently > 0);
   const doneCount = data ? Number(data.checkedIn) + Number(data.spark.done) + Number(taskDone) : 0;
   const identity = me.data?.identity ?? null;
@@ -84,6 +92,7 @@ export function Today() {
           </div>
         )}
       </header>
+
 
       {!guide.seen && <GuideCard onDismiss={guide.dismiss} />}
 
@@ -150,7 +159,7 @@ export function Today() {
                 checked={data.spark.done}
                 onToggle={doSpark}
                 title={data.spark.text}
-                subtitle={data.spark.done ? `Done. ${rel.character} is glowing.` : `${rel.character}’s pillar. Two minutes, +15 xp.`}
+                subtitle={data.spark.done ? `Done. ${rel.character} is glowing.` : `${rel.character} is your ${rel.role}. Two minutes, +15 xp.`}
                 color={rel.color}
                 deep={`var(--deep-${rel.key})`}
                 text={rel.text}
@@ -207,9 +216,41 @@ export function Today() {
                 </Link>
               </div>
             )}
+            {done.length > 0 && (
+              <div role="group" className="mt-md" aria-labelledby="done-heading">
+                <div className="flex items-baseline justify-between gap-sm">
+                  <h3 id="done-heading" className="text-[16px]">
+                    Done today
+                  </h3>
+                  <span className="text-[14px] font-bold text-ink-soft">{done.length}</span>
+                </div>
+                <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+                  <AnimatePresence initial={false}>
+                    {done.map((t) => (
+                      <TaskRow
+                        key={t.id}
+                        task={t}
+                        today={date}
+                        subtitle={`${RELATIONSHIP_BY_KEY[t.relationship].name}${t.completedAt ? `, done at ${doneAt(t.completedAt)}` : ''}`}
+                        busy={queue.isPending(t.id)}
+                        hint={queue.hint(t.id)}
+                        onToggle={() => untick(t.id)}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </ul>
+                <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+                  Tap one to untick it; that takes back its xp. Earlier days are on each pillar in{' '}
+                  <Link to="/tower" className="underline underline-offset-4 hover:text-ink">
+                    Pillars
+                  </Link>
+                  .
+                </p>
+              </div>
+            )}
           </section>
 
-          <NotToDoList items={data.notToDo} date={date} queue={queue} />
+          <NotToDoBlock />
         </>
       )}
 

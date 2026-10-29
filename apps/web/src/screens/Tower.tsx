@@ -7,7 +7,9 @@ import { Ring } from '../components/Ring';
 import { Screen } from '../components/Screen';
 import { Pyramid } from '../components/Pyramid';
 import { XpBar } from '../components/XpBar';
+import { ConsciousnessMap } from '../components/LifeMap';
 import { LifeMapPanel } from '../components/LifeMapPanel';
+import { NotToDoBlock } from '../components/NotToDoList';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { useAuthed, useMe } from '../lib/queries';
@@ -60,7 +62,7 @@ function Floor({ r, state, delay, placement, focus }: { r: Relationship; state: 
               <span className="absolute top-0 h-full w-px bg-current opacity-60" style={{ left: `${pct(COURAGE)}%` }} />
               <span className="absolute top-0 h-full rounded-pill bg-current" style={{ left: `${pct(f.floor)}%`, width: `${Math.max(2, pct(f.core) - pct(f.floor))}%` }} />
             </span>
-            {(f.required || f.volatile) && <span className="mt-xs block text-[12px] font-bold">{f.required ? 'The floor is under Courage: month one.' : 'A big drop under stress: check it weekly.'}</span>}
+            {(f.required || f.volatile) && <span className="mt-xs block text-[12px] font-bold">{f.required ? 'The floor is under Courage: a good place to start.' : 'A big drop under stress: check it weekly.'}</span>}
           </span>
         )}
       </Link>
@@ -68,13 +70,13 @@ function Floor({ r, state, delay, placement, focus }: { r: Relationship; state: 
   );
 }
 
-/** Before the strategy session: one card that starts it. After it, the pillar cards carry the map themselves. */
+/** The pillars' own setup: before the strategy session, one card that starts it. After it, the pillar cards carry the map themselves. */
 function StartSessionCard() {
   return (
     <Link to="/session" className="toy toy-soft mt-md flex items-center gap-sm rounded-card bg-ink p-md text-on-ink">
       <span className="min-w-0 flex-1">
-        <span className="block font-display text-[18px] font-extrabold">Start with the strategy session</span>
-        <span className="mt-xs block text-[14px] font-semibold text-on-ink/70">Twenty minutes. Place all seven on the map, score your health and wealth, leave with a routine and a contract.</span>
+        <span className="block font-display text-[18px] font-extrabold">Set up your pillars: the strategy session</span>
+        <span className="mt-xs block text-[14px] font-semibold text-on-ink/70">A few minutes with all seven characters. Place each relationship on the map, then leave with a routine, a contract and your first pyramids.</span>
       </span>
       <span aria-hidden="true" className="text-[22px]">→</span>
     </Link>
@@ -124,6 +126,8 @@ export function Tower() {
           <Floor key={r.key} r={r} state={byKey.get(r.key)} delay={(floors.length - 1 - i) * 0.07} placement={placementOf(r.key)} focus={focus.includes(r.key)} />
         ))}
       </ol>
+      {/* The same not-to-do block as on Daily: what you stay away from protects these pillars too. */}
+      <NotToDoBlock />
       <LifeMapPanel />
       <section className="mt-lg rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="how-heading">
         <div>
@@ -132,16 +136,20 @@ export function Tower() {
               How a pillar works
             </h2>
             <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-              Every pillar is a pyramid. The base is one thing you will not let break. The tip is one small task for today. Tick the task and the whole pyramid gets stronger. That is the whole game.
+              Every pillar is a pyramid. The foundation at the top is one thing you will not let break. The point at the bottom is one small task for today. Tick the task and the whole pyramid gets stronger. That is the whole game.
             </p>
             <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">
-              Most apps start with tasks, and tasks fade in a week. This starts at the base, so each task has a reason to exist.
+              Most apps start with tasks, and tasks fade in a week. This starts at the foundation, so each task has a reason to exist.
             </p>
           </div>
           <div className="mt-md">
             <Pyramid relationship={weakest} compact />
           </div>
         </div>
+      </section>
+      {/* The scale the map is drawn on, from the strategy session, under how a pillar works and above How it works. */}
+      <section className="mt-lg" aria-label="The scale of consciousness">
+        <ConsciousnessMap />
       </section>
     </Screen>
   );

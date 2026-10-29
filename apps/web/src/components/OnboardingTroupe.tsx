@@ -1,4 +1,4 @@
-import { RELATIONSHIP_BY_KEY, type RelationshipKey } from '@kreators/shared';
+import { RELATIONSHIP_BY_KEY, type RelationshipKey, characterTitle } from '@kreators/shared';
 import gsap from 'gsap';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { Avatar } from './Avatar';
@@ -73,7 +73,7 @@ export function OnboardingTroupe({ floors, current, step, steps }: { floors: Rel
           <div ref={walker} className="absolute bottom-sm left-0 will-change-transform">
             <Avatar relationship={current} size={64} mood={step >= steps ? 'excited' : 'happy'} decorative className="avatar-hop" />
             <span className="mt-xs block text-center text-[12px] font-extrabold" style={{ color: `var(--deep-${current})` }}>
-              {RELATIONSHIP_BY_KEY[current].character}
+              {characterTitle(current)}
             </span>
           </div>
         )}

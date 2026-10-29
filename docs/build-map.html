@@ -147,7 +147,7 @@
       cards: [
         { title: 'Stack', route: 'pnpm workspace', visual: 'blocks', items: [
           ['React 19 + Vite 7 PWA', 'ok', 'apps/web'], ['Hono Worker + D1', 'ok', 'apps/api'], ['Shared domain model', 'ok', 'packages/shared'],
-          ['One Worker serves API and app', 'ok'], ['Cron every 15 min', 'ok'], ['25 migrations', 'ok'],
+          ['One Worker serves API and app', 'ok'], ['Cron every 15 min', 'ok'], ['30 migrations', 'ok'],
         ]},
         { title: 'Design', route: 'app.css, figma-tokens.json', visual: 'blocks', items: [
           ['Figma kit tokens frozen', 'ok'], ['Dark mode, same hues reversed', 'ok'], ['Theme switch on every page', 'ok'],
@@ -169,6 +169,12 @@
         { title: 'Tower and ladder', route: '/tower, /realm/:key', visual: 'ladder', items: [
           ['Pillar', 'ok'], ['Guiding principle', 'ok'], ['Value goal', 'ok'], ['Goal outcome', 'ok'], ['Project', 'ok'], ['Task, ticks ripple XP up', 'ok'],
         ], extra: [['Branching vibe check derives it', 'ok'], ['Evolution fills from the feet up', 'ok']] },
+        { title: 'Setup chat', route: '/onboarding', visual: 'pipe', items: [
+          ['Account in two small cards', 'ok'], ['One guide, three grouped questions', 'ok'], ['Type or ask at any point', 'ok'], ['What gets in the way: time, ADHD, laziness', 'ok'], ['Five apps at most, each says why', 'ok'], ['Strategy session offered when it fits', 'ok'], ['Chat layout like ChatGPT and Claude', 'ok'], ['Skip on the left, Next on the right with the count', 'ok'], ['Assistant and Companion in the same look', 'ok'], ['Strategy session: the full consciousness scale as the map picture, full-width buttons', 'ok'], ['Bumling, the app guide, hosts the general parts', 'ok'], ['Scorecard in stars, insecurities in words, own mantra', 'ok'], ['Focus picked freely, nothing locked', 'ok'], ['Interests and profile at the end of both chats', 'ok'], ['Pyramid on its point: foundation on top, task at the point', 'ok'],
+        ]},
+        { title: 'Assistant and credits', route: 'every screen, /plans', visual: 'pipe', items: [
+          ['Round button bottom right, panel over the page', 'ok'], ['Tap flows free for everyone', 'ok'], ['Typing acts as you through the app\'s own routes', 'ok'], ['Undo on every change, Confirm before removing', 'ok'], ['Journal read only when asked', 'ok'], ['Any model, OpenRouter and Kimi to start', 'key', 'ASSISTANT_API_KEY'], ['Pro, Pro Max, Ultra in credits from tokens', 'ok'], ['Limits per agent per plan', 'ok'], ['Top-ups shown, checkout not live', 'test'], ['Admin starts plans and adds credits', 'ok'], ['Eval of thirty-odd messages', 'ok'], ['MCP server for ChatGPT and Claude', 'off'],
+        ]},
         { title: 'Home dashboard', route: '/home', visual: 'blocks', items: [
           ['Kit home: dark header, avatar, pills, search', 'ok'], ['Metric cards with characters and faces', 'ok'], ['White on colour everywhere; yellow takes brown', 'ok'], ['Lines with axes, pill bars, gauges, donuts, bubbles, month grids', 'ok'], ['Week chart: mood, sleep, calm on one scale', 'ok'], ['Onboarding: pick floors, walk the characters (GSAP)', 'ok'], ['Pick value goal + project before build', 'ok'], ['First 3 ticks free, then age + gap', 'ok'], ['Apps: grouped colour list, confirm sheet to switch on, off only under You', 'ok'], ['Plain words: pillars, pyramid layers, small act', 'ok'], ['Tabs: Home, Daily, Pillars, Apps, Profile', 'ok'], ['Groups: Contribution, Creation, Connection, Reflection', 'ok'], ['Inline search with live results', 'ok'], ['Onboarding: tappable pyramid + one card at a time', 'ok'], ['Public page switches: whole page + each part, server-enforced', 'ok'], ['Animated pyramid in onboarding, Pillars, pillar page', 'ok'], ['Full-width Pillars, Profile, Apps on laptop', 'ok'], ['Sidebar groups, back buttons', 'ok'], ['Bond: friends + anonymous chats, no reveal', 'ok'], ['Dark mode wears each app hue', 'ok'], ['Kit stat tiles + green Today card', 'ok'], ['Tracker rows with mini visuals', 'ok', 'mindful, sleep, journal, stress, mood'], ['Up next card, companion card, Knowledge cards', 'ok'], ['Four results first', 'ok', 'xp today, streak, points, level'], ['Three boxes + next step', 'ok', 'nudge names the box'], ['14-day xp bars', 'ok'],
           ['Life rings, floor bars', 'ok'], ['Money + shop when on', 'ok'], ['Up next: events, sessions, circles', 'ok'], ['Shortcut grid into every app', 'ok'],
@@ -265,6 +271,7 @@
           ['META_APP_SECRET + VERIFY_TOKEN + ACCESS_TOKEN', 'key', 'Instagram comment webhook and private replies.'],
           ['CLICK_SALT', 'key', 'Hashing click IPs on tracked links. Falls back locally.'],
           ['AI binding', 'key', 'Companion answers through Workers AI.'],
+          ['ASSISTANT_API_KEY + BASE_URL + MODEL', 'key', 'Typing to the assistant, through OpenRouter (zero retention) unless set.'],
           ['Google Calendar', 'off', 'Busy times and Meet links; needs OAuth consent review.'],
         ]},
         { title: 'Not built, by choice or dependency', visual: 'blocks', items: [

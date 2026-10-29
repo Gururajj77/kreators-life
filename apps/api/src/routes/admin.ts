@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { EVENT_TYPES, HONOR_BY_KEY, isRole, LISTING_TYPES, MODULE_BY_KEY, MODULES, OPPORTUNITY_TYPES, PERMISSIONS, TOOL_CATEGORIES, type AdminRedemption, type AdminUser, type AuditLog, type FlagOverride, type Listing, type ListingType, type ModuleSetting, type Permission } from '@kreators/shared';
+import { attendeeXpLocked, EVENT_TYPES, HONOR_BY_KEY, isPaidPlan, type AdminAttendeeCode, type AttendeeCodeApp, isRole, MAX_CREDIT_GRANT, PLAN_DAYS, LISTING_TYPES, MODULE_BY_KEY, MODULES, OPPORTUNITY_TYPES, PERMISSIONS, TOOL_CATEGORIES, type AdminRedemption, type AdminUser, type AuditLog, type FlagOverride, type Listing, type ListingType, type ModuleSetting, type Permission } from '@kreators/shared';
 import { resolveAccess } from '../access';
 import { listingsFor } from './explore';
 import { ORDER_SELECT, toOrder, type OrderRow } from './studio';
@@ -14,6 +14,8 @@ import type { AdminFunnel, AdminKyc, AdminOrder, OrderEvent, OutboxEmail, Webhoo
 import type { Context } from 'hono';
 import type { AppEnv, UserRow } from '../env';
 import { audit, getUser, nameOf, newId, nowIso, num, oneOf, parseList, sessionUser, str } from '../db';
+import { accountOf, addCredits, setPlan } from '../credits';
+import { setEventCode, setRunCode } from '../attendee';
 import { toRedemption, type RedemptionRow } from './rewards';
 
 export const admin = new Hono<AppEnv>();
@@ -50,9 +52,14 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 interface UserListRow extends UserRow {
   honor_keys: string | null;
+  ca_plan: string | null;
+  ca_plan_until: string | null;
+  ca_plan_credits: number | null;
+  ca_extra_credits: number | null;
 }
 
 function toAdminUser(r: UserListRow): AdminUser {
+  const live = isPaidPlan(r.ca_plan) && (!r.ca_plan_until || r.ca_plan_until > nowIso());
   return {
     id: r.id,
     displayName: r.display_name,
@@ -67,6 +74,11 @@ function toAdminUser(r: UserListRow): AdminUser {
     email: r.email,
     handle: r.handle,
     permissions: parseList(r.permissions).filter((p): p is Permission => (PERMISSIONS as readonly string[]).includes(p)),
+    // A plan whose time is up reads as none here; it is closed for good the next time the account is read.
+    plan: live ? (r.ca_plan as AdminUser['plan']) : 'none',
+    planUntil: live ? r.ca_plan_until : null,
+    planCredits: live ? (r.ca_plan_credits ?? 0) : 0,
+    extraCredits: r.ca_extra_credits ?? 0,
   };
 }
 
@@ -436,7 +448,9 @@ admin.patch('/listings/:type/:id', async (c) => {
   return c.json({ listing });
 });
 
-const USER_SELECT = `SELECT u.*, (SELECT GROUP_CONCAT(honor_key) FROM honors h WHERE h.user_id = u.id) AS honor_keys FROM users u`;
+const USER_SELECT = `SELECT u.*, (SELECT GROUP_CONCAT(honor_key) FROM honors h WHERE h.user_id = u.id) AS honor_keys,
+  ca.plan AS ca_plan, ca.plan_until AS ca_plan_until, ca.plan_credits AS ca_plan_credits, ca.extra_credits AS ca_extra_credits
+  FROM users u LEFT JOIN credit_accounts ca ON ca.user_id = u.id`;
 
 admin.get('/users', async (c) => {
   const q = (c.req.query('q') ?? '').trim();
@@ -454,20 +468,50 @@ async function loadUser(db: D1Database, id: string): Promise<UserListRow | null>
   return db.prepare(`${USER_SELECT} WHERE u.id = ?`).bind(id).first<UserListRow>();
 }
 
+// Pro is a plan now: on starts Pro for a period (unless a plan is already running), off ends whatever plan there is.
 admin.post('/users/:id/pro', async (c) => {
   const db = c.env.DB;
   const user = await getUser(db, c.req.param('id'));
   if (!user) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<{ pro?: boolean }>().catch(() => ({}) as { pro?: boolean });
   const pro = body.pro === true;
-  const now = nowIso();
-  await db.batch([
-    db.prepare('UPDATE users SET is_pro = ? WHERE id = ?').bind(pro ? 1 : 0, user.id),
-    pro
-      ? db.prepare("INSERT OR IGNORE INTO honors (user_id, honor_key, note, awarded_at) VALUES (?, 'pro', 'Pro membership', ?)").bind(user.id, now)
-      : db.prepare("DELETE FROM honors WHERE user_id = ? AND honor_key = 'pro'").bind(user.id),
-  ]);
-  await audit(db, actorOf(c), 'user.pro', 'user', user.id, user.is_pro === 1, pro);
+  const before = await accountOf(db, user.id);
+  if (!pro) await setPlan(db, user.id, 'none', 0, actorOf(c));
+  else if (!isPaidPlan(before.plan)) await setPlan(db, user.id, 'pro', PLAN_DAYS, actorOf(c));
+  await audit(db, actorOf(c), 'user.pro', 'user', user.id, before.plan, pro);
+  const fresh = await loadUser(db, user.id);
+  return c.json({ user: fresh ? toAdminUser(fresh) : null });
+});
+
+// Start a plan (Pro, Pro Max, Ultra) for a number of days, or end it with none. Its credits are granted fresh and
+// whatever was left of the last plan's credits expires. Admins only, until payments do this.
+admin.post('/users/:id/plan', async (c) => {
+  const db = c.env.DB;
+  const user = await getUser(db, c.req.param('id'));
+  if (!user) return c.json({ error: 'not found' }, 404);
+  const body = await c.req.json<{ plan?: unknown; days?: unknown }>().catch(() => ({}) as { plan?: unknown; days?: unknown });
+  if (body.plan !== 'none' && !isPaidPlan(body.plan)) return c.json({ error: 'plan must be none, pro, pro_max or ultra' }, 400);
+  const days = Math.round(Number(body.days ?? PLAN_DAYS));
+  if (!Number.isFinite(days) || days < 1 || days > 366) return c.json({ error: 'days must be from 1 to 366' }, 400);
+  const before = await accountOf(db, user.id);
+  await setPlan(db, user.id, body.plan, days, actorOf(c));
+  await audit(db, actorOf(c), 'user.plan', 'user', user.id, { plan: before.plan, until: before.plan_until }, { plan: body.plan, days });
+  const fresh = await loadUser(db, user.id);
+  return c.json({ user: fresh ? toAdminUser(fresh) : null });
+});
+
+// Add extra credits, which stay until used. Positive whole numbers only; the note says why.
+admin.post('/users/:id/credits', async (c) => {
+  const db = c.env.DB;
+  const user = await getUser(db, c.req.param('id'));
+  if (!user) return c.json({ error: 'not found' }, 404);
+  const body = await c.req.json<{ credits?: unknown; note?: unknown }>().catch(() => ({}) as { credits?: unknown; note?: unknown });
+  const credits = Number(body.credits);
+  if (!Number.isInteger(credits) || credits < 1 || credits > MAX_CREDIT_GRANT) return c.json({ error: `credits must be a whole number from 1 to ${MAX_CREDIT_GRANT}` }, 400);
+  const note = str(body.note, 200) || 'Added by the team';
+  const before = await accountOf(db, user.id);
+  await addCredits(db, user.id, credits, 'admin', note, actorOf(c));
+  await audit(db, actorOf(c), 'user.credits', 'user', user.id, before.extra_credits, { credits, note });
   const fresh = await loadUser(db, user.id);
   return c.json({ user: fresh ? toAdminUser(fresh) : null });
 });
@@ -514,6 +558,74 @@ admin.post('/users/:id/points', async (c) => {
   await audit(db, actorOf(c), 'user.points', 'user', user.id, user.points, { amount, note });
   const fresh = await loadUser(db, user.id);
   return c.json({ user: fresh ? toAdminUser(fresh) : null });
+});
+
+// ---- attendee codes: every event with guests, across Party, Run and Circles, recent and upcoming
+interface AttendeeRow { app: AttendeeCodeApp; thing_id: string; title: string; host_name: string; starts_at: string; status: string; xp: number | null; code: string | null; claims: number; guests: number }
+const ATTENDEE_EVENTS = `WITH every_event AS (
+  SELECT 'party' AS app, e.id AS thing_id, e.title, COALESCE(u.display_name, '') AS host_name, e.starts_at, e.status, a.xp AS xp, a.code AS code,
+    (SELECT COUNT(*) FROM attendee_claims x WHERE x.app = 'party' AND x.thing_id = e.id) AS claims,
+    (SELECT COUNT(*) FROM event_registrations r WHERE r.event_id = e.id AND r.status IN ('registered','attended')) AS guests
+  FROM events e LEFT JOIN users u ON u.id = e.host_user_id LEFT JOIN attendee_codes a ON a.app = 'party' AND a.thing_id = e.id
+  WHERE e.ends_at >= ?1
+  UNION ALL
+  SELECT 'run', r.id, r.title, COALESCE(u.display_name, ''), r.starts_at, r.status, r.xp, r.code,
+    (SELECT COUNT(*) FROM run_entries x WHERE x.run_id = r.id AND x.status = 'logged'),
+    (SELECT COUNT(*) FROM run_members m WHERE m.club_id = r.club_id AND m.status = 'member')
+  FROM runs r JOIN run_clubs k ON k.id = r.club_id LEFT JOIN users u ON u.id = k.host_user_id
+  WHERE r.ends_at >= ?1
+  UNION ALL
+  SELECT 'circles', e.id, e.title, COALESCE(u.display_name, ''), e.starts_at, e.status, a.xp, a.code,
+    (SELECT COUNT(*) FROM attendee_claims x WHERE x.app = 'circles' AND x.thing_id = e.id),
+    (SELECT COUNT(*) FROM circle_members m JOIN circle_groups g ON g.id = m.group_id WHERE g.event_id = e.id)
+  FROM circle_events e LEFT JOIN users u ON u.id = e.created_by LEFT JOIN attendee_codes a ON a.app = 'circles' AND a.thing_id = e.id
+  WHERE e.starts_at >= ?1
+)`;
+const toAttendee = (r: AttendeeRow): AdminAttendeeCode => ({ app: r.app, thingId: r.thing_id, title: r.title, hostName: r.host_name || 'Team', startsAt: r.starts_at, status: r.status, xp: r.xp, code: r.code, locked: attendeeXpLocked(r.starts_at), claims: r.claims, guests: r.guests });
+
+// Upcoming and the last week's events, soonest first, with their xp and code. Filter by app and by title.
+admin.get('/attendee-codes', async (c) => {
+  const ask = pageOf(c);
+  const want = c.req.query('app');
+  const app = want === 'party' || want === 'run' || want === 'circles' ? want : '';
+  const q = (c.req.query('q') ?? '').trim();
+  const rows = await c.env.DB.prepare(`${ATTENDEE_EVENTS} SELECT * FROM every_event WHERE (?2 = '' OR app = ?2) AND (?3 = '' OR title LIKE ?4) ORDER BY starts_at ASC, thing_id ASC LIMIT ?5 OFFSET ?6`)
+    .bind(new Date(Date.now() - 7 * 86_400_000).toISOString(), app, q, `%${q.replace(/[%_]/g, '')}%`, ask.limit, ask.offset)
+    .all<AttendeeRow>();
+  const pg = paged(rows.results, ask);
+  return c.json({ page: pg.page, codes: pg.items.map(toAttendee) });
+});
+
+// Set any event's xp (before it starts) and code (any time): the same rules a host has, from the admin panel.
+admin.put('/attendee-codes/:app/:id', async (c) => {
+  const db = c.env.DB;
+  const app = c.req.param('app');
+  const id = c.req.param('id');
+  const body = await c.req.json<{ xp?: unknown; code?: unknown; fresh?: unknown }>().catch(() => ({}) as Record<string, never>);
+  let before: unknown = '';
+  let after: unknown = '';
+  if (app === 'run') {
+    const run = await db.prepare('SELECT id, starts_at, xp, code, status FROM runs WHERE id = ?').bind(id).first<{ id: string; starts_at: string; xp: number; code: string; status: string }>();
+    if (!run) return c.json({ error: 'not found' }, 404);
+    if (run.status === 'cancelled') return c.json({ error: 'This run was cancelled.' }, 400);
+    const set = await setRunCode(db, run, body);
+    if ('error' in set) return c.json({ error: set.error }, set.status);
+    before = { xp: run.xp };
+    after = { xp: set.xp, newCode: set.code !== run.code };
+  } else if (app === 'party' || app === 'circles') {
+    const row = await db.prepare(app === 'party' ? 'SELECT id, starts_at, status FROM events WHERE id = ?' : 'SELECT id, starts_at, status FROM circle_events WHERE id = ?').bind(id).first<{ id: string; starts_at: string; status: string }>();
+    if (!row) return c.json({ error: 'not found' }, 404);
+    if (row.status === 'cancelled') return c.json({ error: 'This event was cancelled.' }, 400);
+    const prev = await db.prepare('SELECT xp, code FROM attendee_codes WHERE app = ? AND thing_id = ?').bind(app, id).first<{ xp: number; code: string }>();
+    const set = await setEventCode(db, app, id, row.starts_at, actorOf(c), body);
+    if ('error' in set) return c.json({ error: set.error }, set.status);
+    before = prev ? { xp: prev.xp } : '';
+    after = { xp: set.row.xp, newCode: set.row.code !== prev?.code };
+  } else return c.json({ error: 'app must be party, run or circles' }, 400);
+  await audit(db, actorOf(c), 'attendee_code.set', app, id, before, after);
+  // The same row the list shows, whatever its date (the first value is the list's date floor).
+  const fresh = await db.prepare(`${ATTENDEE_EVENTS} SELECT * FROM every_event WHERE app = ?2 AND thing_id = ?3`).bind('0000', app, id).first<AttendeeRow>();
+  return c.json({ code: fresh ? toAttendee(fresh) : null });
 });
 
 interface AdminRedemptionRow extends RedemptionRow {

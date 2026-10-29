@@ -45,7 +45,7 @@ export function Feature() {
               {token ? `Open ${module.name}` : `Sign in to open ${module.name}`}
             </Link>
             {!token && (
-              <Link to="/signup" className="toy toy-ink inline-flex min-h-[56px] items-center rounded-pill border-2 border-ink bg-card px-lg text-[18px] font-bold">
+              <Link to="/start" className="toy toy-ink inline-flex min-h-[56px] items-center rounded-pill border-2 border-ink bg-card px-lg text-[18px] font-bold">
                 Start free
               </Link>
             )}

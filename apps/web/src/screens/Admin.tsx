@@ -1,4 +1,5 @@
 import { DEFAULT_PAGE_SIZE, pageQuery, type Page, type PageSize } from '@kreators/shared';
+import { MAX_CREDIT_GRANT, PAID_PLANS, PLAN_DAYS, planName, type PlanKey } from '@kreators/shared';
 import {
   EVENT_TYPES,
   HONORS,
@@ -50,6 +51,11 @@ const ORDER_STATUSES = ['', 'pending', 'paid', 'test', 'failed', 'refunded', 'ex
 const statusTone = (s: string) => (s === 'paid' || s === 'test' ? 'bg-r4 text-on-fill' : s === 'pending' ? 'bg-r3 text-ink-fixed' : s === 'refunded' || s === 'failed' ? 'bg-r1 text-white' : 'bg-paper text-ink-soft');
 const ROLE_OPTIONS = ROLES.map((r) => ({ value: ROLE_META[r].name, label: ROLE_META[r].name }));
 const roleByName = (name: string): Role => ROLES.find((r) => ROLE_META[r].name === name) ?? 'user';
+// Plans, by name in the table: No plan, Pro, Pro Max, Ultra. Until payments are live only an admin starts one.
+const PLAN_KEYS: PlanKey[] = ['none', ...PAID_PLANS];
+const PLAN_OPTIONS = PLAN_KEYS.map((k) => ({ value: planName(k), label: planName(k) }));
+const planByName = (name: string): PlanKey => PLAN_KEYS.find((k) => planName(k) === name) ?? 'none';
+const creditsOf = (u: AdminUser) => u.planCredits + u.extraCredits;
 const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '');
 const day = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 
@@ -106,6 +112,10 @@ export function Admin() {
   const [honor, setHonor] = useState(ADMIN_HONORS[0]?.key ?? 'founder');
   const [note, setNote] = useState('');
   const [amount, setAmount] = useState('100');
+  const [plan, setPlan] = useState<PlanKey>('pro');
+  const [planDays, setPlanDays] = useState(String(PLAN_DAYS));
+  const [grant, setGrant] = useState('1000');
+  const [grantNote, setGrantNote] = useState('');
   const [preview, setPreview] = useState<{ name: string; access: Record<string, ModuleAccess> } | null>(null);
   // flags
   const [settings, setSettings] = useState<ModuleSetting[]>([]);
@@ -310,7 +320,7 @@ export function Admin() {
               <h2 id="people-heading" className="text-[24px]">
                 People
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Search the whole list on the server, then sort, filter and edit the rows here. Role and Pro change in the row; tick rows to change several at once. Tap a row for honors, points and what that person sees.</p>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Search the whole list on the server, then sort, filter and edit the rows here. Role and plan change in the row; tick rows to change several at once. Tap a row for honors, points, credits and what that person sees.</p>
               <form
                 className="mt-sm flex gap-xs"
                 onSubmit={(e) => {
@@ -349,7 +359,8 @@ export function Admin() {
                     },
                     { key: 'email', label: 'Email', get: (u) => u.email ?? '', wide: true },
                     { key: 'role', label: 'Role', get: (u) => ROLE_META[u.role].name, filter: true, edit: { kind: 'select', options: ROLE_OPTIONS, onEdit: (u, v) => run(async () => applyUser((await adminApi.setRole(key, u.id, roleByName(String(v)))).user)) } },
-                    { key: 'pro', label: 'Pro', get: (u) => u.isPro, filter: true, edit: { kind: 'toggle', onEdit: (u, v) => run(async () => applyUser((await adminApi.setPro(key, u.id, Boolean(v))).user)) } },
+                    { key: 'plan', label: 'Plan', get: (u) => planName(u.plan), filter: true, edit: { kind: 'select', options: PLAN_OPTIONS, onEdit: (u, v) => run(async () => applyUser((await adminApi.setPlan(key, u.id, planByName(String(v)), PLAN_DAYS)).user)) } },
+                    { key: 'credits', label: 'Credits', get: (u) => creditsOf(u), align: 'right' },
                     { key: 'perms', label: 'Permissions', get: (u) => (u.role === 'admin' ? 'all' : u.permissions.map((p) => PERMISSION_NAMES[p]).join(', ')), wide: true, wrap: true },
                     { key: 'xp', label: 'XP', get: (u) => u.xp, align: 'right' },
                     { key: 'points', label: 'Points', get: (u) => u.points, align: 'right' },
@@ -360,8 +371,8 @@ export function Admin() {
                     { label: 'Make creator', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setRole(key, u.id, 'user')).user))) },
                     { label: 'Make staff', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setRole(key, u.id, 'sub_admin')).user))) },
                     { label: 'Make admin', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setRole(key, u.id, 'admin')).user))) },
-                    { label: 'Pro on', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setPro(key, u.id, true)).user))) },
-                    { label: 'Pro off', variant: 'ghost', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setPro(key, u.id, false)).user))) },
+                    { label: 'Start Pro', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setPlan(key, u.id, 'pro', PLAN_DAYS)).user))) },
+                    { label: 'End plan', variant: 'ghost', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setPlan(key, u.id, 'none', PLAN_DAYS)).user))) },
                   ]}
                 />
               </div>
@@ -428,6 +439,32 @@ export function Admin() {
                       Add
                     </Button>
                   </div>
+
+                  <p className="mt-md m-0 text-[14px] font-bold">Plan and credits</p>
+                  <p className="m-0 text-[12px] font-semibold text-ink-soft">
+                    {planName(selected.plan)}
+                    {selected.planUntil ? ` until ${selected.planUntil.slice(0, 10)}` : ''}. {selected.planCredits.toLocaleString('en-US')} plan credits, {selected.extraCredits.toLocaleString('en-US')} extra. Payments are not live, so plans start here. A new plan grants its credits fresh; extra credits stay until used.
+                  </p>
+                  <div className="mt-xs grid grid-cols-[1fr_auto_auto] gap-xs">
+                    <select value={plan} onChange={(e) => setPlan(e.target.value as PlanKey)} aria-label="Plan" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]">
+                      {PLAN_KEYS.map((k) => (
+                        <option key={k} value={k}>
+                          {planName(k)}
+                        </option>
+                      ))}
+                    </select>
+                    <input type="number" min={1} max={366} value={planDays} onChange={(e) => setPlanDays(e.target.value)} aria-label="Days" className="w-[96px] rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+                    <Button variant="outline" disabled={busy || (plan !== 'none' && !(Number(planDays) >= 1))} onClick={() => run(async () => applyUser((await adminApi.setPlan(key, selected.id, plan, Number(planDays) || PLAN_DAYS)).user))}>
+                      {plan === 'none' ? 'End plan' : 'Start'}
+                    </Button>
+                  </div>
+                  <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
+                    <input type="number" min={1} max={MAX_CREDIT_GRANT} value={grant} onChange={(e) => setGrant(e.target.value)} aria-label="Credits to add" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+                    <Button variant="outline" disabled={busy || !(Number.isInteger(Number(grant)) && Number(grant) >= 1 && Number(grant) <= MAX_CREDIT_GRANT)} onClick={() => run(async () => applyUser((await adminApi.addCredits(key, selected.id, Number(grant), grantNote)).user))}>
+                      Add credits
+                    </Button>
+                  </div>
+                  <input value={grantNote} onChange={(e) => setGrantNote(e.target.value)} placeholder="Why, for the history (optional)" aria-label="Why the credits" className={field} />
 
                   <Button variant="ghost" className="mt-md" disabled={busy} onClick={() => run(async () => setPreview(await adminApi.previewAccess(key, selected.id)))}>
                     What does this person see?

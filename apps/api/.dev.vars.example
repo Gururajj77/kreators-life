@@ -16,3 +16,16 @@ REACH_KEY=
 # YouTube Data API v3 key (Google Cloud console, API key restricted to the YouTube Data API). The fallback for reading and
 # searching YouTube when Agent Reach is not connected.
 YOUTUBE_API_KEY=
+# The assistant's model, for typing to the assistant (its tap flows work without it). Any OpenAI-compatible endpoint:
+# OpenRouter by default. The panel picks from OpenRouter's free models (ASSISTANT_MODELS in packages/shared); this is
+# the default when nothing is picked. Free models need the OpenRouter account's privacy settings to allow free
+# endpoints that keep data (openrouter.ai/settings/privacy), and allow 50 requests a day until it has bought US$10.
+ASSISTANT_API_KEY=
+ASSISTANT_BASE_URL=https://openrouter.ai/api/v1
+ASSISTANT_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free
+# Only for a model not listed in MODEL_PRICES (packages/shared): its price in US dollars per million tokens.
+ASSISTANT_PRICE_IN=
+ASSISTANT_PRICE_OUT=
+# For a model that is not on the free list: zero-retention providers only, on by default because the assistant can read
+# the journal when asked. "off" drops that ask for a model with no zero-retention host, and the journal and tracker reads go with it.
+ASSISTANT_ZDR=

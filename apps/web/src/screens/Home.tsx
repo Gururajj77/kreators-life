@@ -117,6 +117,7 @@ export function Home() {
         </div>
       </header>
 
+
       {q.isPending && (
         <p className="span-all mt-md m-0 text-[14px] font-bold text-ink-soft" role="status">
           Adding up your week

@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
-import { MAX_RUN_METRES, MAX_RUN_MINUTES, RUN_CODE_LENGTH, RUN_PACES, RUN_REWARD, runEntryState, weekStreak, type Run, type RunClub, type RunClubDetail, type RunCollab, type RunCollabApplication, type RunCollabsResponse, type RunEntry, type RunResponse, type RunTracking } from '@kreators/shared';
+import { MAX_RUN_METRES, MAX_RUN_MINUTES, normalizeCode, RUN_PACES, RUN_REWARD, runEntryState, weekStreak, type Run, type RunClub, type RunClubDetail, type RunCollab, type RunCollabApplication, type RunCollabsResponse, type RunEntry, type RunResponse, type RunTracking } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { audit, badgesNow, can, diffBadges, nameOf, newId, notify, nowIso, num, oneOf, orgIdsOf, orgRole, randomCode, str, pageOf, paged } from '../db';
+import { newRunCode, setRunCode } from '../attendee';
+import { audit, badgesNow, can, diffBadges, nameOf, newId, notify, nowIso, num, oneOf, orgIdsOf, orgRole, str, pageOf, paged } from '../db';
 
 /**
  * Kreators Run: run clubs like meetups, with one difference that makes the points honest. Every run has a start code
@@ -19,7 +20,7 @@ const CLUB = `SELECT k.*, u.display_name AS host_name,
   FROM run_clubs k JOIN users u ON u.id = k.host_user_id`;
 const toClub = (r: ClubRow, viewer: string): RunClub => ({ id: r.id, name: r.name, city: r.city, description: r.description, pace: r.pace, meets: r.meets, hostId: r.host_user_id, hostName: nameOf({ display_name: r.host_name }), visibility: r.visibility, status: r.status, members: r.members, nextRunAt: r.next_run_at, mine: r.mine > 0 || r.host_user_id === viewer, host: r.host_user_id === viewer, createdAt: r.created_at });
 
-interface RunRow { id: string; club_id: string; title: string; meeting_point: string; starts_at: string; ends_at: string; metres: number; code: string; collab_id: string | null; collab_title: string | null; collab_brand: string | null; collab_giveaway: string | null; status: Run['status']; created_at: string; entries: number }
+interface RunRow { id: string; club_id: string; title: string; meeting_point: string; starts_at: string; ends_at: string; metres: number; code: string; xp: number; collab_id: string | null; collab_title: string | null; collab_brand: string | null; collab_giveaway: string | null; status: Run['status']; created_at: string; entries: number }
 const RUN = `SELECT r.*, c.title AS collab_title, c.brand_name AS collab_brand, c.giveaway AS collab_giveaway,
   (SELECT COUNT(*) FROM run_entries e WHERE e.run_id = r.id AND e.status = 'logged') AS entries
   FROM runs r LEFT JOIN run_collabs c ON c.id = r.collab_id`;
@@ -32,6 +33,7 @@ const toRun = (r: RunRow, mine: RunEntry | null, showCode: boolean): Run => ({
   endsAt: r.ends_at,
   metres: r.metres,
   code: showCode ? r.code : null,
+  xp: r.xp,
   entryState: runEntryState(r.starts_at, r.ends_at),
   collab: r.collab_id ? { id: r.collab_id, title: r.collab_title ?? '', brand: r.collab_brand ?? '', giveaway: r.collab_giveaway ?? '' } : null,
   status: r.status,
@@ -223,10 +225,13 @@ run.post('/clubs/:id/runs', async (c) => {
     if (!ok) return c.json({ error: 'that collab has not accepted this club' }, 400);
     collabId = body.collabId;
   }
+  // The xp the run pays, set now by the host (shared caps it), and the start code: their own word or six random letters.
+  const set = newRunCode({ xp: body.xp, code: body.code });
+  if ('error' in set) return c.json({ error: set.error }, set.status);
   const id = newId();
   await db
-    .prepare("INSERT INTO runs (id, club_id, title, meeting_point, starts_at, ends_at, metres, code, collab_id, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?)")
-    .bind(id, club.id, title, str(body.meetingPoint, 200), start.toISOString(), new Date(start.getTime() + minutes * 60_000).toISOString(), num(body.metres, 5000, 100, MAX_RUN_METRES) ?? 5000, randomCode(RUN_CODE_LENGTH), collabId, nowIso())
+    .prepare("INSERT INTO runs (id, club_id, title, meeting_point, starts_at, ends_at, metres, code, xp, collab_id, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?)")
+    .bind(id, club.id, title, str(body.meetingPoint, 200), start.toISOString(), new Date(start.getTime() + minutes * 60_000).toISOString(), num(body.metres, 5000, 100, MAX_RUN_METRES) ?? 5000, set.code, set.xp, collabId, nowIso())
     .run();
   const members = await db.prepare("SELECT user_id FROM run_members WHERE club_id = ? AND status = 'member' AND user_id != ?").bind(club.id, user.id).all<{ user_id: string }>();
   for (const m of members.results) await notify(db, m.user_id, 'run', `New run: ${title}`, `${club.name}, ${new Date(start).toUTCString()}`, `/run/clubs/${club.id}`);
@@ -242,16 +247,20 @@ async function runWithClub(db: D1Database, id: string) {
   });
 }
 
-// A leaked code gets replaced; entries already logged stay.
+// A leaked code gets replaced, by six random letters or the host's own word, and the xp can change until the run
+// starts. Entries already logged stay. With nothing asked, it is a fresh random code, as it always was.
 run.post('/runs/:id/recode', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const found = await runWithClub(db, c.req.param('id'));
   if (!found) return c.json({ error: 'not found' }, 404);
   if (!hostOf(found.club, user)) return c.json({ error: 'the host changes the code' }, 403);
-  const code = randomCode(RUN_CODE_LENGTH);
-  await db.prepare('UPDATE runs SET code = ? WHERE id = ?').bind(code, found.r.id).run();
-  return c.json({ code });
+  const body = await c.req.json<{ xp?: unknown; code?: unknown; fresh?: unknown }>().catch(() => ({}) as Record<string, never>);
+  const asked = body.xp !== undefined || (typeof body.code === 'string' && body.code.trim() !== '');
+  const set = await setRunCode(db, found.r, asked ? body : { fresh: true });
+  if ('error' in set) return c.json({ error: set.error }, set.status);
+  await audit(db, user.id, 'attendee_code.set', 'run', found.r.id, { xp: found.r.xp }, { xp: set.xp, newCode: set.code !== found.r.code });
+  return c.json({ code: set.code, xp: set.xp });
 });
 
 run.patch('/runs/:id', async (c) => {
@@ -271,18 +280,18 @@ run.patch('/runs/:id', async (c) => {
 });
 
 /** Pay one logged run: once per run, at most RUN_REWARD.perDay paid runs a day. Capped runs still log, they just do not pay. */
-async function payRun(db: D1Database, userId: string, runId: string, entryId: string): Promise<{ xp: number; points: number; capped: boolean }> {
+async function payRun(db: D1Database, userId: string, runId: string, entryId: string, xp: number): Promise<{ xp: number; points: number; capped: boolean }> {
   const now = nowIso();
   const dayStart = `${now.slice(0, 10)}T00:00:00`;
   const today = await db.prepare("SELECT COUNT(*) AS n FROM xp_events WHERE user_id = ? AND source = 'run' AND created_at >= ?").bind(userId, dayStart).first<{ n: number }>();
   if ((today?.n ?? 0) >= RUN_REWARD.perDay) return { xp: 0, points: 0, capped: true };
   await db.batch([
-    db.prepare('UPDATE users SET xp = xp + ?, points = points + ? WHERE id = ?').bind(RUN_REWARD.xp, RUN_REWARD.points, userId),
-    db.prepare("INSERT INTO xp_events (user_id, relationship, source, source_id, amount, created_at) VALUES (?, 'friendship', 'run', ?, ?, ?)").bind(userId, runId, RUN_REWARD.xp, now),
+    db.prepare('UPDATE users SET xp = xp + ?, points = points + ? WHERE id = ?').bind(xp, RUN_REWARD.points, userId),
+    db.prepare("INSERT INTO xp_events (user_id, relationship, source, source_id, amount, created_at) VALUES (?, 'friendship', 'run', ?, ?, ?)").bind(userId, runId, xp, now),
     db.prepare("INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, 'run', ?, ?)").bind(userId, RUN_REWARD.points, entryId, now),
-    db.prepare('UPDATE run_entries SET xp = ?, points = ? WHERE id = ?').bind(RUN_REWARD.xp, RUN_REWARD.points, entryId),
+    db.prepare('UPDATE run_entries SET xp = ?, points = ? WHERE id = ?').bind(xp, RUN_REWARD.points, entryId),
   ]);
-  return { xp: RUN_REWARD.xp, points: RUN_REWARD.points, capped: false };
+  return { xp, points: RUN_REWARD.points, capped: false };
 }
 
 // The entry: a member types the start code during the run. One per person per run, and the window is the only clock.
@@ -294,11 +303,13 @@ run.post('/runs/:id/entry', async (c) => {
   const { r, club } = found;
   if (r.status !== 'published') return c.json({ error: `this run is ${r.status}` }, 400);
   if (!(await isMember(db, club.id, user.id))) return c.json({ error: 'join the club first' }, 403);
+  // The host shows the code; the xp is for the people who came to run with them.
+  if (club.host_user_id === user.id) return c.json({ error: 'Hosts show the start code; they do not log their own run.' }, 403);
   const state = runEntryState(r.starts_at, r.ends_at);
   if (state === 'early') return c.json({ error: 'The start code works from thirty minutes before the start. Come back then.' }, 400);
   if (state === 'closed') return c.json({ error: 'This run closed three hours after its end. Ask the host if you were there.' }, 400);
   const body = await c.req.json<{ code?: string; metres?: number; minutes?: number }>().catch(() => ({}) as Record<string, never>);
-  const code = str(body.code, 12).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const code = normalizeCode(body.code);
   if (code !== r.code) return c.json({ error: 'That is not the start code for this run. The host shows it at the line.' }, 400);
   const existing = await db.prepare('SELECT status FROM run_entries WHERE run_id = ? AND user_id = ?').bind(r.id, user.id).first<{ status: string }>();
   if (existing?.status === 'logged') return c.json({ error: 'You already logged this run.' }, 409);
@@ -309,7 +320,7 @@ run.post('/runs/:id/entry', async (c) => {
   const now = nowIso();
   const before = await badgesNow(db, user.id);
   await db.prepare("INSERT INTO run_entries (id, run_id, club_id, user_id, metres, minutes, xp, points, status, logged_at) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 'logged', ?)").bind(id, r.id, club.id, user.id, metres, minutes, now).run();
-  const paid = await payRun(db, user.id, r.id, id);
+  const paid = await payRun(db, user.id, r.id, id, r.xp);
   // The minutes count as movement for the Life physical score, the same as a run logged by hand.
   if (minutes > 0) {
     await db.prepare("INSERT INTO wellbeing_logs (id, user_id, kind, date, value, extra, note, created_at) VALUES (?, ?, 'move', ?, ?, ?, ?, ?)").bind(newId(), user.id, now.slice(0, 10), minutes, JSON.stringify({ source: 'run', runId: r.id, metres }), r.title, now).run();

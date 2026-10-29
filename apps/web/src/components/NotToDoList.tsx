@@ -1,7 +1,8 @@
 import { MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, RELATIONSHIP_BY_KEY, RELATIONSHIPS, type NotToDo, type NotToDoStatus, type RelationshipKey } from '@kreators/shared';
 import { useState, type FormEvent } from 'react';
 import { api } from '../lib/api';
-import type { useActionQueue } from '../lib/useActionQueue';
+import { useRefreshAll, useToday } from '../lib/queries';
+import { useActionQueue } from '../lib/useActionQueue';
 import { Button } from './Button';
 import { useCelebrate } from './Celebration';
 import { WeekDots } from './Charts';
@@ -19,8 +20,19 @@ interface Props {
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 
 /**
- * The not-to-do list under Tasks on Daily: things you stay away from, each with its own streak.
- * Tick the box when you kept it today. The three-dot button offers "I slipped" and "Remove".
+ * The not-to-do block, the same one on Daily (under Tasks) and on Pillars (under the seven pillars). It reads
+ * the same data as Daily, so a tick in one place shows in the other.
+ */
+export function NotToDoBlock() {
+  const { date, data } = useToday();
+  const queue = useActionQueue(useRefreshAll());
+  if (!data) return null;
+  return <NotToDoList items={data.notToDo} date={date} queue={queue} />;
+}
+
+/**
+ * The not-to-do list: things you stay away from, each with its own streak. Tick the box when you kept it
+ * today. The three-dot button offers "I slipped" and "Remove".
  */
 export function NotToDoList({ items, date, queue }: Props) {
   const celebrate = useCelebrate();

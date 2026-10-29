@@ -25,6 +25,7 @@ export const MODULE_FOR_PREFIX: Record<string, readonly string[]> = {
   journal: ['journal'],
   reviews: ['reviews'],
   companion: ['companion'],
+  assistant: ['assistant'],
   studio: ['shop'],
   'studio/links': ['content', 'automations'],
   'studio/content': ['content', 'automations'],

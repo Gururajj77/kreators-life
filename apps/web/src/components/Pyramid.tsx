@@ -3,8 +3,8 @@ import gsap from 'gsap';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Avatar } from './Avatar';
 
-/** The six layers, tip first: task on top, foundation at the base. */
-const LAYERS: NodeKind[] = [...KINDS].reverse();
+/** The six layers, top down: the foundation is the wide top, the task the point at the bottom. */
+const LAYERS: NodeKind[] = [...KINDS];
 
 interface Props {
   /** Which pillar's colour to draw in. */
@@ -22,9 +22,10 @@ interface Props {
 }
 
 /**
- * The pyramid that explains a pillar. Six layers stack up from the base (a foundation) to the tip (a task).
- * A check lands on the tip, then a glow runs down layer by layer, so it is plain that one small tick makes
- * the whole pyramid stronger. Tap the stack to see it again. Drawn with GSAP; honours reduced motion.
+ * The pyramid that explains a pillar, standing on its point: six layers from the foundation, the wide top, down
+ * to a task, the point at the bottom. A check lands on the task, then a glow runs up layer by layer to the
+ * foundation, so it is plain that one small tick makes the whole pyramid stronger. Tap the stack to see it
+ * again. Drawn with GSAP; honours reduced motion.
  */
 export function Pyramid({ relationship, words = {}, autoplay = false, compact = false, selected = null, onSelect, className = '' }: Props) {
   const rel = RELATIONSHIP_BY_KEY[relationship];
@@ -33,29 +34,29 @@ export function Pyramid({ relationship, words = {}, autoplay = false, compact = 
   const [played, setPlayed] = useState(0);
   const reduce = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // Layers stack in on mount, base first.
+  // Layers drop in on mount, the foundation first.
   useEffect(() => {
     const el = root.current;
     if (!el) return;
-    const rows = Array.from(el.querySelectorAll<HTMLElement>('[data-layer]')).reverse();
+    const rows = Array.from(el.querySelectorAll<HTMLElement>('[data-layer]'));
     if (reduce) {
       gsap.set(rows, { opacity: 1, y: 0, scaleX: 1 });
       return;
     }
     const tl = gsap.timeline();
-    tl.fromTo(rows, { opacity: 0, y: 24, scaleX: 0.6 }, { opacity: 1, y: 0, scaleX: 1, duration: 0.45, stagger: 0.12, ease: 'back.out(1.6)' });
+    tl.fromTo(rows, { opacity: 0, y: -24, scaleX: 0.6 }, { opacity: 1, y: 0, scaleX: 1, duration: 0.45, stagger: 0.12, ease: 'back.out(1.6)' });
     if (autoplay) tl.add(() => setPlayed((n) => n + 1), '+=0.4');
     return () => {
       tl.kill();
     };
   }, [autoplay, reduce]);
 
-  // The ripple: a tick lands on the task, then the glow runs down to the foundation.
+  // The ripple: a tick lands on the task, then the glow runs up to the foundation.
   useEffect(() => {
     if (played === 0) return;
     const el = root.current;
     if (!el) return;
-    const rows = Array.from(el.querySelectorAll<HTMLElement>('[data-layer]'));
+    const rows = Array.from(el.querySelectorAll<HTMLElement>('[data-layer]')).reverse();
     const tick = el.querySelector<HTMLElement>('[data-tick]');
     const glows = rows.map((r) => r.querySelector<HTMLElement>('[data-glow]'));
     if (reduce) {
@@ -87,19 +88,13 @@ export function Pyramid({ relationship, words = {}, autoplay = false, compact = 
       <Stack
         type={onSelect ? undefined : 'button'}
         onClick={onSelect ? undefined : () => setPlayed((n) => n + 1)}
-        aria-label={onSelect ? undefined : 'Tick a task and watch the glow run down the pyramid'}
+        aria-label={onSelect ? undefined : 'Tick a task and watch the glow run up the pyramid'}
         className={`relative mx-auto flex w-full max-w-[420px] flex-col items-center gap-xs border-0 bg-transparent p-0 text-inherit ${onSelect ? '' : 'cursor-pointer'}`}
       >
-        {/* the tick that lands on the tip */}
-        <span data-tick className="absolute -top-sm right-[8%] z-10 flex size-[32px] items-center justify-center rounded-pill bg-card shadow-toy-soft" style={{ transform: 'scale(0)' }} aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke={rel.color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M5 12.5l4.5 4.5L19 7.5" />
-          </svg>
-        </span>
         {LAYERS.map((k, i) => {
           const meta = KIND_META[k];
-          const width = 52 + i * 9.6; // tip 52%, base 100%
-          const strength = 1 - i * 0.1;
+          const width = 100 - i * 9.6; // the foundation 100% at the top, the task 52% at the point
+          const strength = 0.5 + i * 0.1;
           const on = active === k || selected === k;
           const Tag = onSelect ? 'button' : 'div';
           return (
@@ -114,14 +109,23 @@ export function Pyramid({ relationship, words = {}, autoplay = false, compact = 
                 {
                   width: `${width}%`,
                   background: `color-mix(in oklab, ${rel.color} ${Math.round(strength * 100)}%, white)`,
-                  // Only the strong fills near the tip take white; the paler layers toward the base take brown, so every word reads.
-                  color: strength >= 0.8 ? 'var(--color-on-fill)' : 'var(--color-ink-fixed)',
+                  // The two strong fills at the point take the pillar's own text colour (white, or the dark ink on yellow);
+                  // the paler layers above them take the dark ink, so every word reads.
+                  color: strength >= 0.9 ? rel.text : 'var(--color-ink-fixed)',
                   outline: on ? '3px solid var(--color-ink)' : 'none',
                   outlineOffset: 2,
                 } as CSSProperties
               }
             >
               <span data-glow className="pointer-events-none absolute inset-0 rounded-pill bg-white" style={{ opacity: 0 }} aria-hidden="true" />
+              {k === 'task' && (
+                // The tick that lands on the task, at the point.
+                <span data-tick className="absolute -top-xs -right-xs z-10 flex size-[32px] items-center justify-center rounded-pill bg-card shadow-toy-soft" style={{ transform: 'scale(0)' }} aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke={rel.color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 12.5l4.5 4.5L19 7.5" />
+                  </svg>
+                </span>
+              )}
               <span className="relative px-sm text-[14px] font-extrabold leading-tight text-balance">
                 {meta.label}
                 <span className="block text-[12px] font-bold opacity-90 text-balance">{text(k)}</span>
@@ -131,7 +135,7 @@ export function Pyramid({ relationship, words = {}, autoplay = false, compact = 
         })}
         <span className="mt-xs flex items-center gap-xs text-[12px] font-bold text-ink-soft" aria-hidden="true">
           <Avatar relationship={relationship} size={28} decorative still />
-          {rel.character} holds this one up.
+          {rel.character}, your {rel.role}, holds this one up.
         </span>
       </Stack>
 
@@ -156,7 +160,7 @@ export function Pyramid({ relationship, words = {}, autoplay = false, compact = 
       )}
 
       <p className="mt-sm m-0 text-center text-[14px] font-semibold text-ink-soft">
-        Tick a task and the glow runs down to the base. {onSelect ? 'Tap a layer to read about it.' : 'Tap the pyramid to see it again.'}
+        Tick the task at the point and the glow runs up to the foundation. {onSelect ? 'Tap a layer to read about it.' : 'Tap the pyramid to see it again.'}
       </p>
     </div>
   );

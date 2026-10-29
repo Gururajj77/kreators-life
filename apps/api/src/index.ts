@@ -52,6 +52,8 @@ import { market } from './routes/market';
 import { run } from './routes/run';
 import { strategist } from './routes/strategist';
 import { session } from './routes/session';
+import { assistantRoutes } from './routes/assistant';
+import { credits } from './routes/credits';
 
 const app = new Hono<AppEnv>().basePath('/api');
 
@@ -141,6 +143,9 @@ app.route('/run', run);
 app.route('/kyc', kyc);
 app.route('/studio', builder);
 app.route('/studio', strategist);
+// The assistant calls the app's own routes as the person, so it gets the app itself to call into.
+app.route('/assistant', assistantRoutes((req, env, ctx) => app.fetch(req, env, ctx)));
+app.route('/credits', credits);
 
 app.notFound((c) => c.json({ error: 'not found' }, 404));
 app.onError((err, c) => {

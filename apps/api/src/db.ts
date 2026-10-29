@@ -1,4 +1,4 @@
-import { pageSizeOf, parseLinkBlocks, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
+import { pageSizeOf, parseIdentities, parseIntake, parseLinkBlocks, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
 import { BADGES, EMPTY_SOCIALS, parsePublicSettings, HONORS, isStaffFor, levelFromXp, PERMISSIONS, RELATIONSHIPS, roleRank, RUN_BADGES, taskReadyAt, timeHonors, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
 import type { Context, Next } from 'hono';
 import type { AppEnv } from './env';
@@ -96,6 +96,8 @@ export function toUser(r: UserRow): User {
     location: r.location,
     openToIntros: r.open_to_intros === 1,
     interests: parseList(r.interests),
+    identities: parseIdentities(parseList(r.identities)),
+    intake: parseIntake(r.intake_json),
     city: r.city ?? '',
     area: r.area ?? '',
     hasLocation: r.lat !== null && r.lat !== undefined && r.lng !== null && r.lng !== undefined,

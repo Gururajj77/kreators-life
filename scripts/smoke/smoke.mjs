@@ -1,7 +1,9 @@
 // The smoke checks. Run through blueprint.sh, which starts the server this talks to.
 // Node imports the shared model straight from TypeScript (--experimental-strip-types).
-import { QUESTIONS, XP, POINTS, WAIT, RUN_REWARD, SOCIAL_REWARDS, MAX_NOT_TO_DO, MODULES, FEATURE_FEE_POINTS } from '../../packages/shared/src/index.ts';
+import { RELATIONSHIPS, QUESTIONS, XP, POINTS, WAIT, RUN_REWARD, SOCIAL_REWARDS, MAX_NOT_TO_DO, MODULES, FEATURE_FEE_POINTS, matchSetup, parseSetup, setupSwitchable } from '../../packages/shared/src/index.ts';
 import { LIMITS } from '../../apps/api/src/limits.ts';
+import { PLANS } from '../../packages/shared/src/index.ts';
+import http from 'node:http';
 
 const ORIGIN = process.env.SMOKE_ORIGIN ?? 'http://127.0.0.1:8788';
 const ADMIN_KEY = process.env.SMOKE_ADMIN_KEY ?? 'smoke-admin-key';
@@ -45,6 +47,46 @@ async function api(method, path, body, token, headers = {}) {
   return { status: res.status, json, headers: res.headers };
 }
 const admin = (method, path, body) => api(method, path, body, null, { 'X-Admin-Key': ADMIN_KEY });
+
+// A stand-in for the assistant's model, so the checks never pay for a real one. blueprint.sh points the smoke server
+// at it (ASSISTANT_BASE_URL). A user line "DO [{name, args}, ...]" comes back as exactly those tool calls; after the
+// tools answer, it says one line. It keeps the last request, so the checks can see which tools were offered.
+const MOCK_PORT = Number(process.env.SMOKE_MODEL_PORT ?? 8799);
+const mockModel = { last: null };
+const mockServer = http.createServer(async (req, res) => {
+  let raw = '';
+  for await (const chunk of req) raw += chunk;
+  const body = JSON.parse(raw || '{}');
+  mockModel.last = body;
+  const last = { ...((body.messages ?? []).at(-1) ?? {}) };
+  // "SLOW <line>" answers <line> after a wait, so Stop can land while the model is thinking.
+  if (last.role === 'user' && last.content?.startsWith('SLOW ')) {
+    await new Promise((r) => setTimeout(r, 2500));
+    last.content = last.content.slice(5);
+  }
+  if (last.role === 'user' && last.content === 'FAIL') {
+    res.writeHead(500, { 'content-type': 'application/json' });
+    return res.end(JSON.stringify({ error: { message: 'mock failure' } }));
+  }
+  let message = { role: 'assistant', content: 'The mock heard you.' };
+  const asked = last.role === 'user' && /^DO (\[.*\])$/s.exec(last.content ?? '');
+  if (asked) message = { role: 'assistant', content: null, tool_calls: JSON.parse(asked[1]).map((c, i) => ({ id: `call_${i}`, type: 'function', function: { name: c.name, arguments: JSON.stringify(c.args ?? {}) } })) };
+  else if (last.role === 'tool') message = { role: 'assistant', content: `Mock done: ${String(last.content).slice(0, 120)}` };
+  // "ASK" asks leave first, like a shy model; the assistant's go-ahead turns it into the check-in. "WHICH" asks a real question.
+  else if (last.role === 'user' && last.content === 'ASK') message = { role: 'assistant', content: 'I can see your day. Do you want me to check you in?' };
+  else if (last.role === 'user' && last.content?.startsWith('Yes, go ahead')) message = { role: 'assistant', content: null, tool_calls: [{ id: 'call_go', type: 'function', function: { name: 'check_in', arguments: '{}' } }] };
+  else if (last.role === 'user' && last.content === 'WHICH') message = { role: 'assistant', content: 'Which one should I tick, the vlog or the intro?' };
+  res.writeHead(200, { 'content-type': 'application/json' });
+  res.end(JSON.stringify({ id: 'mock', choices: [{ index: 0, message, finish_reason: message.tool_calls ? 'tool_calls' : 'stop' }], usage: { prompt_tokens: 1000, completion_tokens: 50 } }));
+});
+await new Promise((resolve) => {
+  mockServer.once('error', (e) => {
+    console.log(`  (the mock model could not start on ${MOCK_PORT}: ${e.code ?? e.message})`);
+    resolve();
+  });
+  mockServer.listen(MOCK_PORT, '127.0.0.1', resolve);
+});
+mockServer.unref();
 const userOf = (r) => r.json?.user ?? r.json;
 async function me(token) {
   return userOf(await api('GET', '/me', undefined, token));
@@ -168,18 +210,52 @@ let ladderTasks = [];
   check('onboarding needs answers', empty.status === 400, empty.json);
   const scored = await api('POST', '/onboarding', { answers, displayName: 'Smoke buyer' }, B.token);
   check('onboarding scores the answered pillars', scored.status === 200 && scored.json.answered?.length === 2 && Object.keys(scored.json.ladders ?? {}).length >= 2, scored.json?.answered);
-  const built = await api('POST', '/onboarding/build', { relationships: rels, date: today, picks: { self: { project: 'Smoke project of my own' } } }, B.token);
+  const built = await api('POST', '/onboarding/build', { relationships: rels, date: today, picks: { self: { project: 'Smoke project of my own' }, friendship: { pillar: 'A friend call every Sunday' } } }, B.token);
   check('build makes a six-layer pyramid per pillar', built.status === 201 && built.json.nodes?.length >= 12, built.status);
   const kinds = new Set((built.json.nodes ?? []).map((n) => n.kind));
   check('every layer kind is there', ['pillar', 'principle', 'value_goal', 'outcome', 'project', 'task'].every((k) => kinds.has(k)), [...kinds]);
   project = (built.json.nodes ?? []).find((n) => n.kind === 'project' && n.relationship === 'self');
   check('the person\'s own project wording is kept', project?.title === 'Smoke project of my own', project?.title);
+  const ownFoundation = (built.json.nodes ?? []).find((n) => n.kind === 'pillar' && n.relationship === 'friendship');
+  check('a foundation in the person\'s own words is kept', ownFoundation?.title === 'A friend call every Sunday', ownFoundation?.title);
   ladderTasks = (built.json.nodes ?? []).filter((n) => n.kind === 'task' && n.relationship === 'self').sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''));
   check('tasks carry dates two days apart', ladderTasks.length >= 2 && ladderTasks[0].dueDate === today && ladderTasks[1].dueDate > today, ladderTasks.map((t) => t.dueDate));
   const again = await api('POST', '/onboarding/build', { relationships: ['self'], date: today }, B.token);
   check('the same pyramid is not built twice', again.status === 201 && again.json.skipped?.includes('self'), again.json?.skipped);
   const bad = await api('POST', '/nodes', { kind: 'task', parentId: project.id, relationship: 'friendship', title: 'wrong pillar' }, B.token);
   check('a task must sit under a project of its own pillar', bad.status === 400, bad.json);
+}
+
+// ---------------------------------------------------------------- the setup chat: tags, goals, the apps that fit
+section('Setup');
+{
+  const D = (await api('POST', '/auth/anon', {})).json.token;
+  const none = await api('POST', '/onboarding/setup', {}, D);
+  check('the setup needs a tag or a goal', none.status === 400, none.json);
+  const before = (await api('GET', '/me', undefined, D)).json;
+  const available = MODULES.filter((m) => setupSwitchable(m) && (before.access?.[m.key]?.available ?? true)).map((m) => m.key);
+  const answers = { identities: ['student', 'freelancer', 'editor', 'Dancer', '!!'], goals: ['learn', 'work', 'bogus'], blockers: ['time', 'nope'] };
+  const expected = matchSetup(parseSetup(answers), available);
+  const keepApps = [...expected.apps.map((a) => a.key).filter((k) => k !== 'army'), 'today', 'admin'];
+  const r = await api('POST', '/onboarding/setup', { ...answers, apps: keepApps }, D);
+  const u = r.json.user ?? {};
+  check('the setup saves and counts as onboarded', r.status === 200 && Boolean(u.onboardedAt), r.json);
+  check('the server matches the same apps, with the same reasons, as the shared rule', JSON.stringify(r.json.match?.apps) === JSON.stringify(expected.apps), [r.json.match?.apps?.map((a) => a.key), expected.apps.map((a) => a.key)]);
+  check('short on time means three apps at most', expected.apps.length <= 3 && expected.cap === 3, expected.apps.map((a) => a.key));
+  check('tags are cleaned: known keys and your own words stay, junk goes', JSON.stringify(u.identities) === JSON.stringify(['student', 'freelancer', 'editor', 'Dancer']), u.identities);
+  check('goals and what gets in the way keep only what is on their lists', JSON.stringify(u.intake?.goals) === '["learn","work"]' && JSON.stringify(u.intake?.blockers) === '["time"]', u.intake);
+  check('the apps kept are on and the rest are off, old defaults too', ['work', 'school', 'profile'].every((k) => u.modules?.[k] === true) && u.modules?.army === false && u.modules?.journal === false, u.modules);
+  check('locked apps and the team tools are left alone', u.modules?.today === undefined && u.modules?.admin === undefined, { today: u.modules?.today, admin: u.modules?.admin });
+  check('the profile picks up what the tags carry', u.focus === 'Study' && u.skills?.includes('Editing') && u.interests?.includes('Video') && u.availability === 'Open to work' && u.goals?.includes('Learn skills'), { focus: u.focus, skills: u.skills, interests: u.interests, availability: u.availability, goals: u.goals });
+  const again = await api('POST', '/onboarding/setup', { identities: ['parent'], goals: ['health'], blockers: [] }, D);
+  const on = again.json.on ?? [];
+  check('a second run without a list switches on its own match', again.status === 200 && on.length >= 3 && on.every((k) => again.json.user?.modules?.[k] === true) && again.json.user?.modules?.work === false, on);
+  check('a second run keeps the first onboarding date', again.json.user?.onboardedAt === u.onboardedAt, [again.json.user?.onboardedAt, u.onboardedAt]);
+  const edited = await api('PATCH', '/me', { identities: ['runner', 'Chef', 'Baker', 'Potter', 'Weaver', 'runner'] }, D);
+  check('tags changed under Profile go through the same cleaner', JSON.stringify(edited.json.user?.identities) === JSON.stringify(['runner', 'Chef', 'Baker', 'Potter']), edited.json.user?.identities);
+  const erased = await api('POST', '/me/reset', {}, D);
+  const after = await me(D);
+  check('erase forgets the tags and sends the person back to the setup', erased.status === 200 && after.identities?.length === 0 && after.intake?.goals?.length === 0 && after.onboardedAt === null, { identities: after.identities, onboardedAt: after.onboardedAt });
 }
 
 // ---------------------------------------------------------------- tasks and waits
@@ -192,6 +268,8 @@ section('Tasks');
   const ripple = Object.values(XP.ripple).reduce((s, v) => s + v, 0);
   check(`a tick pays ${XP.task} xp`, afterFirst.xp - before.xp === XP.task, { gained: afterFirst.xp - before.xp, expected: XP.task });
   check('the ripple lands on every layer above', Array.isArray(first.json.ripple) && first.json.ripple.length === 6 && first.json.ripple.filter((r) => r.kind !== 'task').reduce((s, r) => s + r.amount, 0) === ripple, first.json?.ripple);
+  const daily = await api('GET', `/today?date=${today}`, undefined, B.token);
+  check('a ticked task stays on Daily, under Done today', daily.json.done?.some((t) => t.id === ladderTasks[0].id && t.status === 'done') && !daily.json.tasks?.some((t) => t.id === ladderTasks[0].id), daily.json.done?.map((t) => t.title));
   const twice = await api('POST', `/nodes/${ladderTasks[0].id}/complete`, { date: today }, B.token);
   check('ticking a done task is a quiet 409', twice.status === 409, twice.status);
   const early = await api('POST', `/nodes/${ladderTasks[1].id}/complete`, { date: today }, B.token);
@@ -667,16 +745,16 @@ section('Strategy session');
   const by = Object.fromEntries((a.json.assessment?.placements ?? []).map((p) => [p.relationship, p]));
   check('a core of 400 without evidence is capped at Acceptance', by.self?.core === 350 && by.self?.capped === true, by.self);
   check('a core of 540 with evidence stands', by.divine?.core === 540 && by.divine?.capped === false, by.divine);
-  check('a floor under Courage is a required focus', by.lover_partner?.required === true && by.friendship?.required === false, by.lover_partner);
+  check('a floor under Courage is flagged as the place to start', by.lover_partner?.required === true && by.friendship?.required === false, by.lover_partner);
   check('a high score over a low floor is settled by the behaviour answer', a.json.assessment?.scores?.lover_partner === 6 && a.json.assessment?.scores?.self === 6, a.json?.assessment?.scores);
   check('the focus is suggested, floors under Courage first', Array.isArray(a.json.suggestedFocus) && a.json.suggestedFocus[0] === 'lover_partner' && a.json.suggestedFocus.length === 2, a.json?.suggestedFocus);
   const unsigned = await api('POST', '/session/plan', { focus: ['lover_partner', 'friendship'], contract: { minDays: 5, checkinTime: '21:30', penalty: 'streak' } }, B.token);
   check('the contract needs a signature', unsigned.status === 400, unsigned.json);
-  const plan = await api('POST', '/session/plan', { focus: ['guru'], practices: { mantra: 'om_namah_shivaya', breathing: '478' }, contract: { minDays: 5, checkinTime: '21:30', penalty: 'unlock', signedName: 'Smoke buyer' }, date: today }, B.token);
-  check('the plan holds the required focus whatever was asked', plan.status === 201 && plan.json.assessment?.focus?.includes('lover_partner') && plan.json.assessment?.focus?.length === 2, plan.json?.assessment?.focus);
+  const plan = await api('POST', '/session/plan', { focus: ['guru'], practices: { mantra: 'own', ownMantra: 'Slow is smooth', breathing: '478' }, contract: { minDays: 5, checkinTime: '21:30', penalty: 'unlock', signedName: 'Smoke buyer' }, date: today }, B.token);
+  check('the plan keeps the focus the person picked, nothing forced', plan.status === 201 && JSON.stringify(plan.json.assessment?.focus) === JSON.stringify(['guru']), plan.json?.assessment?.focus);
   check('the routine is six blocks ramped from the real day', plan.json.routine?.general?.length === 6 && plan.json.routine?.general?.[0]?.start === '09:00' && plan.json.routine?.exceptional?.[0]?.steps?.length === 3, plan.json?.routine?.general?.[0]);
   check('the contract is signed with its dates and penalty', plan.json.contract?.signedName === 'Smoke buyer' && plan.json.contract?.penalty === 'unlock' && /\d{4}-\d{2}-\d{2}/.test(plan.json.contract?.nextWeekly ?? '') && plan.json.contract?.minDays === 5, plan.json?.contract);
-  check('the practices carry a line to say', typeof plan.json.routine?.practices?.affirmation === 'string' && plan.json.routine.practices.affirmation.length > 10 && plan.json.routine?.practices?.mantra === 'om_namah_shivaya', plan.json?.routine?.practices);
+  check('the practices carry a line to say', typeof plan.json.routine?.practices?.affirmation === 'string' && plan.json.routine.practices.affirmation.length > 10 && plan.json.routine?.practices?.mantra === 'own' && plan.json.routine?.practices?.ownMantra === 'Slow is smooth', plan.json?.routine?.practices);
   const meAfter = await me(B.token);
   check('the check-in time becomes the daily reminder', meAfter.reminderTime === '21:30', meAfter.reminderTime);
   const steps = plan.json.routine.general[0].steps;
@@ -686,10 +764,17 @@ section('Strategy session');
   check('every step ticked is a done morning, and the week counts it', full.json.today?.done === true && full.json.week?.done === 1, full.json?.week);
   const junk = await api('POST', '/session/day', { date: today, dayType: 'general', steps: ['Skip it all'] }, B.token);
   check('a step that is not in the routine is ignored', junk.json.today?.steps?.length === 0, junk.json?.today);
+  const edited = await api('PATCH', '/session/routine', { date: today, general: [{ key: 'morning', start: '08:45', end: '09:30', steps: ['Water', 'Stretch'], minutes: [2, 10] }, { key: 'work', start: '09:30', end: '17:00', note: 'Deep work first' }] }, B.token);
+  const em = edited.json.routine?.general?.find((b) => b.key === 'morning');
+  check('the routine can be edited: times, morning steps and their minutes', edited.status === 200 && em?.start === '08:45' && JSON.stringify(em?.steps) === '["Water","Stretch"]' && JSON.stringify(em?.minutes) === '[2,10]' && edited.json.routine.general.find((b) => b.key === 'work')?.note === 'Deep work first', em);
+  const keptStep = await api('PATCH', '/session/routine', { date: today, exceptional: [{ key: 'morning', steps: [] }] }, B.token);
+  check('an edit never leaves the morning without a step', keptStep.status === 200 && keptStep.json.routine?.exceptional?.find((b) => b.key === 'morning')?.steps?.length > 0, keptStep.json?.routine?.exceptional?.[0]);
   const get = await api('GET', `/session?date=${today}`, undefined, B.token);
   check('the session answers in one call', get.status === 200 && get.json.assessment && get.json.routine && get.json.contract && Array.isArray(get.json.week?.days), get.status);
   const noPlan = await api('POST', '/session/day', { date: today, steps: [] }, C.token);
   check('a day needs a routine first', noPlan.status === 400, noPlan.json);
+  const noRoutine = await api('PATCH', '/session/routine', { general: [] }, C.token);
+  check('editing needs a routine first', noRoutine.status === 400, noRoutine.json);
   const fresh = await api('GET', `/session?date=${today}`, undefined, C.token);
   check('a new account has no session yet, so onboarding starts with it', fresh.status === 200 && fresh.json.assessment === null && fresh.json.contract === null, fresh.json);
 }
@@ -813,6 +898,118 @@ section('Admin');
   check('a person can switch an app off', modOff.status === 200 && modOff.json.modules?.run === false, modOff.json);
   const lockedMod = await api('PATCH', '/me/modules', { key: 'today', on: false }, B.token);
   check('the core tabs stay on', lockedMod.status === 400, lockedMod.json);
+}
+
+// ---------------------------------------------------------------- the assistant and credits
+section('Assistant and credits');
+{
+  const E = await signup(`assistant-${stamp}@smoke.test`, `Beacon-${stamp}-pass`, 'Smoke assistant');
+  const status0 = await api('GET', '/assistant', undefined, E.token);
+  const mock = status0.json?.model === 'smoke-mock';
+  check('the assistant says whether a model is set up, and starts with no plan and no credits', status0.status === 200 && status0.json.account?.plan === 'none' && status0.json.account?.total === 0, status0.json);
+  const paywalled = await api('POST', '/assistant', { messages: [{ role: 'user', text: 'tick my task' }], context: { date: today } }, E.token);
+  check('typing needs a plan: no plan is refused with the paywall', mock ? paywalled.status === 402 && paywalled.json.paywall === 'plan' : [402, 503].includes(paywalled.status), paywalled.json);
+  const credits = await api('GET', '/credits', undefined, E.token);
+  check('credits list the three plans, the top-ups and thirty days of use', credits.status === 200 && credits.json.plans?.map((p) => p.key).join() === 'pro,pro_max,ultra' && credits.json.topUps?.length >= 1 && credits.json.usage?.length === 30, credits.json?.plans);
+  const checkout = await api('POST', '/credits/checkout', { kind: 'plan', key: 'pro' }, E.token);
+  check('checkout charges nothing until payments are live', checkout.status === 409 && checkout.json.live === false, checkout.json);
+  const own = await api('POST', `/admin/users/${E.user.id}/plan`, { plan: 'ultra' }, E.token);
+  check('a person cannot start their own plan', own.status === 403, own.status);
+  const started = await admin('POST', `/admin/users/${E.user.id}/plan`, { plan: 'pro', days: 30 });
+  check('an admin starts Pro with its credits', started.status === 200 && started.json.user?.plan === 'pro' && started.json.user?.planCredits === PLANS.pro.credits, started.json.user);
+  const granted = await admin('POST', `/admin/users/${E.user.id}/credits`, { credits: 500, note: 'Smoke grant' });
+  check('an admin adds extra credits', granted.status === 200 && granted.json.user?.extraCredits === 500, granted.json.user);
+  const negative = await admin('POST', `/admin/users/${E.user.id}/credits`, { credits: -5 });
+  check('credits are added in positive whole numbers only', negative.status === 400, negative.status);
+  const audits = JSON.stringify((await admin('GET', '/admin/audit')).json);
+  check('plan and credit changes are audited', audits.includes('user.plan') && audits.includes('user.credits'), '');
+  check('a plan wears the Pro mark', (await me(E.token)).isPro === true, '');
+
+  if (!mock) console.log('  (the model checks need the smoke server that blueprint.sh starts with the mock model; skipped)');
+  else {
+    const answers = QUESTIONS.filter((q) => q.relationship === 'self').map((q) => ({ questionId: q.id, value: 1 }));
+    await api('POST', '/onboarding', { answers, displayName: 'Smoke assistant' }, E.token);
+    const built = await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: {} } }, E.token);
+    const mine = (built.json.nodes ?? []).filter((n) => n.kind === 'task').sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''));
+    const say = (text, token = E.token) => api('POST', '/assistant', { messages: [{ role: 'user', text }], context: { path: '/today', date: today, timeZone: 'UTC' } }, token);
+    const DO = (...calls) => `DO ${JSON.stringify(calls)}`;
+    const nodeOf = async (id, token = E.token) => (await api('GET', '/nodes', undefined, token)).json.nodes?.find((n) => n.id === id);
+
+    const look = await say(DO({ name: 'get_daily' }));
+    check('a read runs as the person and changes nothing', look.status === 200 && look.json.receipts?.length === 0 && look.json.calls?.[0]?.tool === 'get_daily' && look.json.calls[0].ok === true, look.json);
+    const offered = (mockModel.last?.tools ?? []).map((t) => t.function.name);
+    check('the model is offered only the tools for apps that are on', offered.includes('complete_task') && offered.includes('write_journal') && !offered.includes('add_money'), offered);
+    check('every request asks the provider to keep nothing (zero retention)', mockModel.last?.provider === undefined || mockModel.last?.provider?.data_collection === 'deny', mockModel.last?.provider);
+    const before = (await api('GET', '/credits', undefined, E.token)).json.account;
+    const tick = await say(DO({ name: 'complete_task', args: { taskId: mine[0]?.id } }));
+    const receipt = tick.json.receipts?.[0];
+    check('a write goes through the same route a tap does', tick.status === 200 && receipt?.status === 'done' && receipt.undo === true && receipt.refresh?.includes('today'), tick.json);
+    check('the screen sees the task done', (await nodeOf(mine[0]?.id))?.status === 'done', '');
+    const after = (await api('GET', '/credits', undefined, E.token)).json.account;
+    check('the message is paid in credits from the plan first, extra untouched', tick.json.credits?.spent > 0 && after.planCredits === before.planCredits - tick.json.credits.spent && after.extraCredits === 500, { spent: tick.json.credits, before, after });
+    const undo = await api('POST', `/assistant/actions/${receipt?.id}/undo`, { date: today }, E.token);
+    check('Undo takes it back through the reverse route', undo.status === 200 && undo.json.receipt?.status === 'undone' && (await nodeOf(mine[0]?.id))?.status === 'active', undo.json);
+    const again = await api('POST', `/assistant/actions/${receipt?.id}/undo`, { date: today }, E.token);
+    check('an Undo is done once', again.status === 409, again.status);
+    const early = await say(DO({ name: 'complete_task', args: { taskId: mine[1]?.id } }));
+    check('a task with a later date still waits for its day', early.json.receipts?.[0]?.status === 'failed' && /on the day/i.test(early.json.receipts[0].error), early.json.receipts);
+    const theirs = await say(DO({ name: 'complete_task', args: { taskId: ladderTasks[2]?.id ?? ladderTasks[0]?.id } }));
+    check("someone else's task cannot be touched", theirs.json.receipts?.[0]?.status === 'failed' && (await nodeOf(ladderTasks[2]?.id ?? ladderTasks[0]?.id, B.token))?.status !== undefined, theirs.json.receipts);
+    const sneaky = await say(DO({ name: 'complete_task', args: { taskId: '../../admin/users' } }));
+    check('an id the model makes up cannot walk the path', sneaky.json.calls?.[0]?.ok === false && /look right/.test(sneaky.json.calls[0].error ?? ''), sneaky.json.calls);
+
+    const item = (await api('POST', '/today/not-to-do', { title: 'Smoke scrolling' }, E.token)).json.item;
+    const ask = await say(DO({ name: 'remove_not_to_do', args: { itemId: item?.id } }));
+    const pending = ask.json.receipts?.[0];
+    const stillThere = async () => (await api('GET', `/today?date=${today}`, undefined, E.token)).json.notToDo?.some((i) => i.id === item?.id);
+    check('a removal waits for Confirm and changes nothing yet', pending?.status === 'pending' && /Smoke scrolling/.test(pending.label) && (await stillThere()), ask.json.receipts);
+    const stranger = await api('POST', `/assistant/actions/${pending?.id}/confirm`, { date: today }, C.token);
+    check("nobody else can confirm a person's card", stranger.status === 404, stranger.status);
+    const cancelled = await api('POST', `/assistant/actions/${pending?.id}/cancel`, {}, E.token);
+    check('Cancel leaves it as it was', cancelled.json.receipt?.status === 'cancelled' && (await stillThere()), cancelled.json);
+    const ask2 = await say(DO({ name: 'remove_not_to_do', args: { itemId: item?.id } }));
+    const confirmed = await api('POST', `/assistant/actions/${ask2.json.receipts?.[0]?.id}/confirm`, { date: today }, E.token);
+    check('Confirm runs it, as the person', confirmed.status === 200 && confirmed.json.receipt?.status === 'done' && !(await stillThere()), confirmed.json);
+
+    const secret = `Smoke secret ${stamp}`;
+    const wrote = await say(DO({ name: 'write_journal', args: { body: secret } }));
+    check('the journal can be written by asking', wrote.json.receipts?.[0]?.status === 'done' && wrote.json.receipts[0].label === 'Wrote a journal entry', wrote.json.receipts);
+    const exported = await api('GET', '/me/export', undefined, E.token);
+    const actions = JSON.stringify(exported.json.assistantActions ?? null);
+    check('the export carries what the assistant did, and never the journal text', Array.isArray(exported.json.assistantActions) && exported.json.assistantActions.length >= 3 && !actions.includes(secret) && JSON.stringify(exported.json.journal).includes(secret), actions.slice(0, 200));
+    await api('PATCH', '/me/modules', { key: 'journal', on: false }, E.token);
+    const off = await say(DO({ name: 'write_journal', args: { body: 'Should not land' } }));
+    check('an app switched off is out of reach', off.json.calls?.[0]?.ok === false && /switched off/.test(off.json.calls[0].error ?? ''), off.json.calls);
+    const shy = await say('ASK');
+    check('a model that asks leave to do what was asked is told to go ahead, and does it', shy.status === 200 && shy.json.calls?.some((x) => x.tool === 'check_in' && x.ok), shy.json.calls);
+    const which = await say('WHICH');
+    check('a real question (which one) is left for the person to answer', which.status === 200 && which.json.calls?.length === 0 && /Which one/.test(which.json.text ?? ''), which.json);
+    const runId = crypto.randomUUID();
+    const running = api('POST', '/assistant', { messages: [{ role: 'user', text: `SLOW ${DO({ name: 'complete_task', args: { taskId: mine[0]?.id } })}` }], runId, context: { path: '/today', date: today, timeZone: 'UTC' } }, E.token);
+    await new Promise((r) => setTimeout(r, 800));
+    const stopNow = await api('POST', '/assistant/stop', { runId }, E.token);
+    const halted = await running;
+    check('Stop ends a message before its tools run, and says nothing changed', stopNow.status === 200 && halted.json.stopped === 'user' && halted.json.receipts?.length === 0 && (await nodeOf(mine[0]?.id))?.status === 'active', halted.json);
+    const noId = await api('POST', '/assistant/stop', {}, E.token);
+    check('Stop needs the run it stops', noId.status === 400, noId.status);
+    const broken = await say('FAIL');
+    check('a model that fails before doing anything is an error, not the assistant talking', broken.status === 502 && /could not answer/.test(broken.json?.error ?? ''), broken.json);
+    const named = await say(DO({ name: 'add_not_to_do', args: { title: 'Smoke late nights', pillar: RELATIONSHIPS[0].name } }));
+    check('a pillar given by its name instead of its key is understood', named.json.receipts?.[0]?.status === 'done', named.json.calls);
+    const many = await say(DO(...Array.from({ length: 9 }, () => ({ name: 'get_routine' }))));
+    const answered = (mockModel.last?.messages ?? []).filter((m) => m.role === 'tool');
+    check('every tool call gets an answer, and past eight the answer says to call again', many.status === 200 && answered.length === 9 && /at most 8/.test(answered.at(-1)?.content ?? ''), answered.length);
+    const notes = JSON.stringify(off.json);
+    check('a reply carries a note of what was done, for the next turn', typeof wrote.json.note === 'string' && wrote.json.note.includes('write_journal') && notes.length > 0, wrote.json.note);
+  }
+
+  const ended = await admin('POST', `/admin/users/${E.user.id}/plan`, { plan: 'none' });
+  const left = (await api('GET', '/credits', undefined, E.token)).json;
+  check('ending the plan expires its credits and keeps the extra ones', ended.json.user?.plan === 'none' && left.account?.planCredits === 0 && left.account?.extraCredits === 500, left.account);
+  const history = await api('GET', '/credits/ledger?size=50', undefined, E.token);
+  const reasons = new Set((history.json.entries ?? []).map((e) => e.reason));
+  check('the history shows the plan, the grant, the use and the expiry', ['plan', 'admin', 'expire'].every((r) => reasons.has(r)) && (!mock || reasons.has('usage')), [...reasons]);
+  check('no plan, no Pro mark', (await me(E.token)).isPro === false, '');
 }
 
 // ---------------------------------------------------------------- export and delete

@@ -3,11 +3,14 @@ import { earningGuide, nextBadge, unlockFor } from './index';
 import { ageOn, birthDateProblem, MIN_AGE, normalizePhone, phoneProblem } from './index';
 import { BRAND_SOURCE_KINDS, BRAND_SOURCE_META, PIECE_KINDS, PIECE_META, RESEARCH_KINDS, RESEARCH_META, sourceKindOf } from './index';
 import { BAND_STATEMENTS, MAP_LEVELS, pickFocus, placementFlags, rampTime, routineFor, settleScore } from './index';
+import { characterHello, characterTitle, INSECURITY_WEIGHTS, mantraLine, scoreOfStars, STAR_WORDS, starsOf, weightWord } from './index';
+import { blockMinutes, minutesLabel, parseRoutineBlocks, stepsMinutes } from './index';
 import type { Placement } from './index';
 import { SOCIAL_REWARDS, trustScore } from './index';
 import { FEATURE_FEE_POINTS, isFeatured, parseImageUrls, STORE_STAGE_META, PREOWNED_CONDITION_META } from './index';
 import { builtInTemplate, parseReviewPrompts, periodDays, periodFor, periodLabel, periodShift } from './index';
 import { MAX_NOT_TO_DO, notToDoStreak, notToDoWeek, shiftDay } from './index';
+import { AGENT_LIMITS, AGENTS, ASSISTANT_MODELS, centsFrom, creditsFor, FALLBACK_PRICE, isPaidPlan, messagesFor, microsFrom, MODEL_PRICES, PAID_PLANS, PLANS, priceOf, spendSplit, TOPUP_PACKS } from './index';
 import { describe, expect, it } from 'vitest';
 import { bountyPayout, COMPLEMENTS, dressCodeFor, feeBps, greetingFor, INTEREST_GROUPS, INTERESTS, ladderOptions, MAX_INTERESTS, MODULE_GROUPS, MODULES, moduleState, nextWeek, passwordProblem, matchCircles, matchScore, money, nudgeFor, rolloutBucket, slotsFor, timeLabel, zonedToUtc } from './index';
 
@@ -403,3 +406,239 @@ describe('strategy session', () => {
     expect(settleScore(5, 100, 0)).toBe(5);
   });
 });
+
+import { cleanIdentity, goalsFor, IDENTITIES, identityLine, matchSetup, parseIdentities, parseSetup, readAbout, SETUP_APP_LINES, SETUP_APPS_MAX, SETUP_APPS_MIN, SETUP_BLOCKER_GROUPS, SETUP_BLOCKERS, SETUP_COMBOS, SETUP_GOAL_GROUPS, SETUP_GOALS, SETUP_ROLE_GROUPS, setupSwitchable } from './index';
+
+describe('setup', () => {
+  it('only names apps, tags, goals and blockers that exist', () => {
+    const switchable = new Set(MODS.filter(setupSwitchable).map((m) => m.key));
+    const keys = [...IDENTITIES.map((i) => i.key), ...SETUP_GOALS.map((g) => g.key), ...SETUP_BLOCKERS.map((b) => b.key)];
+    expect(new Set(keys).size).toBe(keys.length);
+    for (const k of keys) expect(k).toMatch(/^[a-z_]+$/);
+    for (const x of [...IDENTITIES, ...SETUP_GOALS, ...SETUP_BLOCKERS, ...SETUP_COMBOS]) for (const app of Object.keys(x.apps)) expect(switchable.has(app), app).toBe(true);
+    for (const c of SETUP_COMBOS) for (const k of c.when) expect(keys, k).toContain(k);
+    for (const i of IDENTITIES) if (i.interest) expect(INTERESTS).toContain(i.interest);
+    expect(switchable.has('today')).toBe(false);
+    expect(switchable.has('notifications')).toBe(false);
+    expect(switchable.has('admin')).toBe(false);
+  });
+
+  it('matches apps from the whole combination, each with a reason', () => {
+    const editor = matchSetup({ identities: ['student', 'freelancer', 'editor'], goals: ['learn', 'work'], blockers: [] });
+    expect(editor.apps.map((a) => a.key).slice(0, 2).sort()).toEqual(['school', 'work']);
+    expect(editor.apps.find((a) => a.key === 'school')?.why).toBe('Because you edit and want to get better at it.');
+    for (const a of editor.apps) expect(a.why).toMatch(/^Because .+\.$/);
+    const creator = matchSetup({ identities: ['creator', 'short_video', 'starting'], goals: ['earn', 'grow'], blockers: ['focus'] });
+    // Just starting brings School in: the stage is an answer too, so it brings its own app.
+    expect(creator.apps.map((a) => a.key)).toEqual(['win', 'army', 'content', 'school']);
+    expect(creator.cap).toBe(4);
+    const parent = matchSetup({ identities: ['parent'], goals: ['health'], blockers: ['time'] });
+    expect(parent.apps.length).toBeLessThanOrEqual(3);
+    expect(parent.apps.map((a) => a.key)).toContain('sleep');
+    expect(parent.apps.map((a) => a.key)).not.toContain('work');
+    // Only apps the person can have: a switched-off app is never offered.
+    expect(matchSetup({ identities: ['creator'], goals: ['earn'], blockers: [] }, ['army', 'work', 'school', 'journal']).apps.map((a) => a.key)).not.toContain('win');
+  });
+
+  it('gives every role and goal pair its own result, never too many apps or too few', () => {
+    const full = new Set<string>();
+    const sets = new Set<string>();
+    let pairs = 0;
+    for (const r of IDENTITIES.filter((i) => i.kind === 'role')) {
+      for (const g of SETUP_GOALS) {
+        const m = matchSetup({ identities: [r.key], goals: [g.key], blockers: [] });
+        expect(m.apps.length).toBeGreaterThanOrEqual(SETUP_APPS_MIN);
+        expect(m.apps.length).toBeLessThanOrEqual(SETUP_APPS_MAX);
+        full.add(JSON.stringify([m.line, m.apps]));
+        sets.add(m.apps.map((a) => a.key).sort().join());
+        pairs += 1;
+      }
+    }
+    expect(full.size).toBe(pairs);
+    expect(sets.size / pairs).toBeGreaterThan(0.9);
+  });
+
+  it('keeps things light when time or focus is short, and offers the strategy session when asked for', () => {
+    const busy = matchSetup({ identities: ['founder', 'creator'], goals: ['sell', 'grow', 'money'], blockers: ['time'] });
+    expect(busy.cap).toBe(3);
+    expect(busy.apps.length).toBe(3);
+    expect(busy.more.length).toBeGreaterThan(0);
+    expect(matchSetup({ identities: [], goals: ['life'], blockers: [] }).session).toBe('now');
+    expect(matchSetup({ identities: [], goals: ['health'], blockers: ['energy'] }).session).toBe('soon');
+    expect(matchSetup({ identities: ['creator'], goals: ['earn'], blockers: [] }).session).toBe('later');
+  });
+
+  it('fills the profile from the tags', () => {
+    const m = matchSetup({ identities: ['student', 'freelancer', 'editor', 'runner'], goals: ['work'], blockers: [] });
+    expect(m.profile.focus).toBe('Study');
+    expect(m.profile.skills).toEqual(['Editing']);
+    expect(m.profile.interests).toEqual(['Video', 'Running']);
+    expect(m.profile.availability).toBe('Open to work');
+    expect(m.profile.goals).toEqual(['Find paid work']);
+  });
+
+  it('says who you are in one line', () => {
+    expect(identityLine({ identities: ['student', 'freelancer', 'editor'], goals: ['learn', 'work'], blockers: [] })).toBe('A student and freelance video editor, here to learn a skill and find paid work.');
+    expect(identityLine({ identities: ['creator', 'short_video', 'starting'], goals: ['earn'], blockers: [] })).toBe('A short-form creator, just starting, here to earn from what you make.');
+    expect(identityLine({ identities: ['explorer', 'Dancer'], goals: [], blockers: [] })).toBe('An explorer and dancer.');
+    expect(identityLine({ identities: [], goals: ['money'], blockers: [] })).toBe('Here to sort out your money.');
+  });
+
+  it('reads tags from your own words, and makes your own tag when none fits', () => {
+    const r = readAbout("Final year student. I edit reels for a few clients and want to earn more. Always tired, ADHD. I'm a dancer too.");
+    expect(r.identities).toEqual(expect.arrayContaining(['student', 'freelancer', 'short_video', 'editor']));
+    expect(r.goals).toContain('earn');
+    expect(r.blockers).toEqual(expect.arrayContaining(['energy', 'focus']));
+    expect(r.custom).toEqual(['Dancer']);
+    expect(readAbout('I am a final year student').custom).toEqual([]);
+    expect(readAbout("I'm a bit lazy").custom).toEqual([]);
+    expect(readAbout('I am a software engineer at a bank').custom).toEqual(['Software engineer']);
+    expect(readAbout('I want to add a business model').identities).toEqual([]);
+    const brand = readAbout('I run a small skincare brand and want to sell more online. No time.');
+    expect(brand.identities).toEqual(['founder']);
+    expect(brand.goals).toEqual(['sell']);
+    expect(brand.blockers).toEqual(['time']);
+  });
+
+  it('cleans tags: known keys, your own words, three of those at most, one stage', () => {
+    expect(cleanIdentity('student')).toBe('student');
+    expect(cleanIdentity('  video   editor ')).toBe('editor');
+    expect(cleanIdentity('chef!!')).toBe('Chef');
+    expect(cleanIdentity('!!')).toBeNull();
+    expect(cleanIdentity(42)).toBeNull();
+    expect(parseIdentities(['student', 'Chef', 'Dancer', 'Potter', 'Baker', 'student'])).toEqual(['student', 'Chef', 'Dancer', 'Potter']);
+    expect(parseIdentities(['starting', 'earning'])).toEqual(['earning']);
+    expect(parseSetup({ goals: ['learn', 'nope', 'work', 'earn', 'grow'], blockers: ['time', 'x'] })).toEqual({ identities: [], goals: ['learn', 'work', 'earn'], blockers: ['time'] });
+  });
+
+  it('groups every choice exactly once, and says every app in plain words', () => {
+    const once = (groups: readonly { keys: readonly string[] }[], keys: string[]) => expect(groups.flatMap((g) => g.keys).sort()).toEqual([...keys].sort());
+    once(SETUP_GOAL_GROUPS, SETUP_GOALS.map((g) => g.key));
+    once(SETUP_ROLE_GROUPS, IDENTITIES.filter((i) => i.kind === 'role').map((i) => i.key));
+    once(SETUP_BLOCKER_GROUPS, SETUP_BLOCKERS.map((b) => b.key));
+    for (const m of MODS.filter(setupSwitchable)) expect(SETUP_APP_LINES[m.key], m.key).toBeTruthy();
+  });
+
+  it('puts the goals that fit your tags first', () => {
+    expect(goalsFor(['student'])[0]?.key).toBe('learn');
+    expect(['grow', 'sell']).toContain(goalsFor(['founder'])[0]?.key);
+    expect(goalsFor([]).map((g) => g.key)).toEqual(SETUP_GOALS.map((g) => g.key));
+  });
+});
+
+describe('the session in words and stars', () => {
+  it('says a mantra in words: a known name, your own words in quotes, or none yet', () => {
+    expect(mantraLine({ mantra: 'hare_krishna' })).toBe('Hare Krishna');
+    expect(mantraLine({ mantra: 'own', ownMantra: '  Slow is smooth ' })).toBe('“Slow is smooth”');
+    expect(mantraLine({ mantra: 'own', ownMantra: '' })).toBe('No mantra yet');
+    expect(mantraLine({ mantra: 'none' })).toBe('No mantra yet');
+  });
+  it('weighs an insecurity in words, and reads older numbers as the nearest word', () => {
+    expect(INSECURITY_WEIGHTS.map((w) => weightWord(w.weight))).toEqual(INSECURITY_WEIGHTS.map((w) => w.name));
+    expect(weightWord(9)).toBe('A lot');
+    expect(weightWord(0)).toBe('A little');
+  });
+  it('turns stars into a score out of ten and back, two points a star, so the score rules hold', () => {
+    expect([1, 2, 3, 4, 5].map(scoreOfStars)).toEqual([2, 4, 6, 8, 10]);
+    expect([0, 3, 6, 7, 10].map(starsOf)).toEqual([0, 2, 3, 4, 5]);
+    expect(STAR_WORDS).toHaveLength(5);
+    // Four stars is a score of 8: a high score over a floor under Courage still gets its behaviour question.
+    expect(settleScore(scoreOfStars(4), 100, 2)).toBe(6);
+  });
+  it('names Bumling with its role, like the seven', () => {
+    expect(characterTitle('bumling')).toBe('Bumling, guide to the app');
+    expect(characterHello('bumling')).toBe('Bumling here, your guide to the app.');
+    expect(characterTitle('self')).toBe('Dew, guide to yourself');
+  });
+});
+
+describe('editing the routine', () => {
+  const day = { wake: '07:00', sleep: '23:30', workStart: '10:00', workEnd: '18:00', evening: '', gym: '' };
+  const built = routineFor(day, 0, [], []);
+  it('counts how long a block runs, wrapping past midnight, and what the steps add up to', () => {
+    const morning = built.general.find((b) => b.key === 'morning')!;
+    expect(blockMinutes(morning)).toBe(60);
+    expect(blockMinutes(built.general.find((b) => b.key === 'sleep')!)).toBe(450);
+    expect(stepsMinutes(morning)).toBe(30);
+    expect([45, 60, 90].map(minutesLabel)).toEqual(['45 min', '1 hr', '1 hr 30 min']);
+  });
+  it('keeps the six blocks in order, checks the times, and keeps steps only in the morning', () => {
+    const edited = parseRoutineBlocks(
+      [
+        { key: 'morning', start: '06:45', end: '25:00', steps: ['  Water  ', 'Water', 'Stretch', ''], minutes: [2, 9, 500], note: 'x' },
+        { key: 'work', start: '09:00', end: '17:30', steps: ['Not here'], note: 'Deep work first' },
+      ],
+      built.general,
+    );
+    expect(edited.map((b) => b.key)).toEqual(built.general.map((b) => b.key));
+    const morning = edited.find((b) => b.key === 'morning')!;
+    expect([morning.start, morning.end]).toEqual(['06:45', built.general[0]!.end]);
+    expect(morning.steps).toEqual(['Water', 'Stretch']);
+    expect(morning.minutes).toEqual([2, 120]);
+    const work = edited.find((b) => b.key === 'work')!;
+    expect([work.start, work.end, work.note, work.steps.length]).toEqual(['09:00', '17:30', 'Deep work first', 0]);
+    expect(edited.find((b) => b.key === 'social')).toEqual(built.general.find((b) => b.key === 'social'));
+  });
+  it('never leaves the morning without a step, so the day can still be done', () => {
+    const edited = parseRoutineBlocks([{ key: 'morning', steps: [] }], built.general);
+    expect(edited.find((b) => b.key === 'morning')!.steps).toEqual(built.general[0]!.steps);
+  });
+});
+
+describe('assistant credits', () => {
+  it('prices the three plans as agreed: Pro $15 for $10 of use, Pro Max $125 for $100, Ultra $500 for $400', () => {
+    expect(PAID_PLANS).toEqual(['pro', 'pro_max', 'ultra']);
+    // One credit is a tenth of a US cent, so a dollar of model use is a thousand credits.
+    expect([PLANS.pro.priceCents, PLANS.pro.credits]).toEqual([1_500, 10_000]);
+    expect([PLANS.pro_max.priceCents, PLANS.pro_max.credits]).toEqual([12_500, 100_000]);
+    expect([PLANS.ultra.priceCents, PLANS.ultra.credits]).toEqual([50_000, 400_000]);
+    for (const k of PAID_PLANS) expect(PLANS[k].priceCents).toBeGreaterThan(PLANS[k].credits / 10);
+    expect(isPaidPlan('none')).toBe(false);
+    expect(isPaidPlan('pro_max')).toBe(true);
+  });
+  it('gives every plan a limit for every agent, growing with the plan', () => {
+    for (const a of AGENTS) {
+      const [pro, max, ultra] = PAID_PLANS.map((k) => AGENT_LIMITS[k][a]);
+      expect(pro!.contextTokens).toBeLessThan(max!.contextTokens);
+      expect(max!.contextTokens).toBeLessThan(ultra!.contextTokens);
+      expect(pro!.perMessage).toBeLessThan(pro!.perDay);
+      for (const k of PAID_PLANS) expect(AGENT_LIMITS[k][a].perDay).toBeLessThanOrEqual(PLANS[k].credits);
+    }
+    // Top-ups never sell credits cheaper than the biggest plan does.
+    for (const t of TOPUP_PACKS) expect(t.priceCents / t.credits).toBeGreaterThanOrEqual(PLANS.ultra.priceCents / PLANS.ultra.credits);
+  });
+  it('turns tokens into whole credits, rounding up, with no float in between', () => {
+    const kimi = MODEL_PRICES['moonshotai/kimi-k2.6']!;
+    // 20,000 tokens in at $0.5415 a million is 1.083 cents; 500 out at $2.28 a million is 0.114 cents: 11.97 credits.
+    expect(creditsFor({ input: 20_000, output: 500 }, kimi)).toBe(12);
+    expect(creditsFor({ input: 0, output: 0 }, kimi)).toBe(0);
+    expect(creditsFor({ input: 1, output: 0 }, kimi)).toBe(1);
+    // Exactly a dollar of the fallback price is exactly a thousand credits.
+    expect(creditsFor({ input: 1_000_000 / 3, output: 0 }, FALLBACK_PRICE)).toBe(1_000);
+    expect(microsFrom('0.5415')).toBe(541_500);
+    expect(microsFrom('3')).toBe(3_000_000);
+    expect(microsFrom('1.2345678')).toBeNull();
+    expect(messagesFor(10_000)).toBe(833);
+  });
+  it('charges nothing for free models and the fallback for an unknown one', () => {
+    expect(creditsFor({ input: 50_000, output: 4_000 }, priceOf('nvidia/nemotron-3-ultra-550b-a55b:free'))).toBe(0);
+    expect(priceOf('moonshotai/kimi-k2.6')).toEqual(MODEL_PRICES['moonshotai/kimi-k2.6']);
+    expect(priceOf('someone/unknown-model')).toEqual(FALLBACK_PRICE);
+    expect(ASSISTANT_MODELS.every((m) => m.id.endsWith(':free'))).toBe(true);
+    expect(new Set(ASSISTANT_MODELS.map((m) => m.id)).size).toBe(ASSISTANT_MODELS.length);
+  });
+  it('reads amounts as text into whole cents', () => {
+    expect(centsFrom('12.50')).toBe(1250);
+    expect(centsFrom(12.5)).toBe(1250);
+    expect(centsFrom('400')).toBe(40_000);
+    expect(centsFrom('0')).toBeNull();
+    expect(centsFrom('12.345')).toBeNull();
+  });
+  it('spends plan credits first, then extra ones, and never more than there is', () => {
+    expect(spendSplit(30, 100, 50)).toEqual({ plan: 30, extra: 0 });
+    expect(spendSplit(130, 100, 50)).toEqual({ plan: 100, extra: 30 });
+    expect(spendSplit(500, 100, 50)).toEqual({ plan: 100, extra: 50 });
+    expect(spendSplit(10, 0, 0)).toEqual({ plan: 0, extra: 0 });
+  });
+});
+

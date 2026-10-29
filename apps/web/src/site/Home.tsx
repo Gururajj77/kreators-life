@@ -73,7 +73,7 @@ function FloorSection({ r, onActive }: { r: Relationship; onActive: (k: Relation
           <h3 className="m-0 text-[32px] leading-tight md:text-[40px]">{r.name}</h3>
           <p className="mt-xs m-0 text-[18px] font-bold leading-snug">“{r.greeting}”</p>
           <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">
-            The question {r.character} keeps asking: <span className="text-ink">{r.question}</span>
+            The question {r.character}, your {r.role}, keeps asking: <span className="text-ink">{r.question}</span>
           </p>
           {features.length > 0 && (
             <ul className="mt-md flex list-none flex-wrap gap-xs p-0 m-0">
@@ -159,7 +159,7 @@ export function Home() {
             A daily game that keeps the seven relationships of your life in balance, with everything a creator needs stacked on top: learning, paid work, brand campaigns, content rewards, events, run clubs, a shop, a store for gear, reviews by week and month, and tools for staying well.
           </p>
           <div className="mt-lg flex flex-wrap gap-sm">
-            <Link to={token ? entry : '/signup'} className="toy inline-flex min-h-[56px] items-center rounded-pill bg-ink px-lg text-[18px] font-bold text-on-ink">
+            <Link to={token ? entry : '/start'} className="toy inline-flex min-h-[56px] items-center rounded-pill bg-ink px-lg text-[18px] font-bold text-on-ink">
               {token ? 'Go to app' : 'Start free'}
             </Link>
             <Link to="/explore" className="toy toy-ink inline-flex min-h-[56px] items-center rounded-pill border-2 border-ink bg-card px-lg text-[18px] font-bold">
@@ -334,7 +334,7 @@ export function Home() {
               ))}
             </ol>
             <div className="mt-md flex flex-wrap gap-sm">
-              <Link to="/signup?next=%2Farmy" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+              <Link to="/start" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
                 Create your brand
               </Link>
               <Link to="/features/win" className="toy toy-ink inline-flex min-h-[48px] items-center rounded-pill border-2 border-ink bg-card px-md font-bold">

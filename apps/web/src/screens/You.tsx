@@ -1,6 +1,6 @@
-import { BADGES, FOCUS_OPTIONS, HONORS, IDENTITY_STAGES, levelFromXp, passwordProblem, MODULE_GROUP_ACCENT, MODULE_GROUP_BLURB, MODULE_GROUPS, POINTS, RELATIONSHIP_BY_KEY, RELATIONSHIPS, ROLE_META, type MeResponse, type ModuleGroup , nextBadge } from '@kreators/shared';
+import { BADGES, FOCUS_OPTIONS, HONORS, IDENTITY_BY_KEY, IDENTITY_STAGES, identityLabel, identityLine, levelFromXp, matchSetup, passwordProblem, MODULE_GROUP_ACCENT, MODULE_GROUP_BLURB, MODULE_GROUPS, POINTS, RELATIONSHIP_BY_KEY, RELATIONSHIPS, ROLE_META, setupSwitchable, type MeResponse, type ModuleGroup , nextBadge } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
@@ -103,13 +103,25 @@ function YouView({ data }: { data: MeResponse }) {
 
   const byKey = new Map(relationships.map((r) => [r.key, r]));
   const floors = [...RELATIONSHIPS].sort((a, b) => b.floor - a.floor);
+  // Who you are, from the setup chat, and the apps it says fit: the same match, so Features can say why.
+  const setup = { identities: user.identities, goals: user.intake.goals, blockers: user.intake.blockers };
+  const whoLine = identityLine(setup);
+  const fits = useMemo(() => {
+    if (setup.identities.length === 0 && setup.goals.length === 0) return new Map<string, string>();
+    const m = matchSetup(setup, modules.filter((x) => setupSwitchable(x) && x.available).map((x) => x.key));
+    return new Map([...m.apps, ...m.more].map((a) => [a.key, a.why]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.identities.join('|'), user.intake.goals.join('|'), user.intake.blockers.join('|'), modules]);
   const earned = new Set(badges);
   const awarded = new Set(honors);
 
   return (
     <Screen columns={false}>
       <header className="pt-lg">
-        <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-mute">Profile</p>
+        <div className="flex items-center justify-between gap-sm">
+          <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-mute">Profile</p>
+          <SignOut compact />
+        </div>
         <div className="flex items-center gap-sm">
           {/* The profile picture with the role badge on it: creator, staff or admin. Earned badges live further down. */}
           <span className="relative shrink-0">
@@ -135,9 +147,32 @@ function YouView({ data }: { data: MeResponse }) {
           <Link to="/profile" className="inline-flex min-h-[48px] items-center px-sm text-[14px] font-bold text-ink-mute underline-offset-4 hover:text-ink hover:underline">
             Edit page
           </Link>
-          <SignOut variant="ghost" className="ml-auto" />
+          <Link to="/plans" className="toy toy-soft ml-auto inline-flex min-h-[48px] items-center gap-xs rounded-pill bg-card px-md text-[14px] font-bold text-ink">
+            <span aria-hidden="true">🪄</span>
+            Plans and credits
+          </Link>
         </div>
       </header>
+
+      <section className="mt-lg" aria-labelledby="who-heading">
+        <h2 id="who-heading" className="text-[24px]">
+          Who you are
+        </h2>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{whoLine || 'No tags yet. A short chat sets them, and switches on the apps that fit.'}</p>
+        {user.identities.length > 0 && (
+          <ul className="mt-sm flex list-none flex-wrap gap-xs p-0 m-0" aria-label="Your tags">
+            {user.identities.map((k) => (
+              <li key={k} className="rounded-pill bg-card px-sm py-xs text-[14px] font-bold shadow-toy-soft">
+                {IDENTITY_BY_KEY[k]?.emoji ?? '🏷️'} {identityLabel(k)}
+              </li>
+            ))}
+          </ul>
+        )}
+        <Link to="/onboarding?fresh=1" className="toy toy-soft mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-card px-md text-[14px] font-bold text-ink">
+          {user.identities.length ? 'Change my tags and apps' : 'Set my tags and apps'}
+        </Link>
+        <Nudge className="mt-xs" text="Tags pick your apps and fill in your skills and interests. They never show on your public page." />
+      </section>
 
       <section className="mt-lg" aria-labelledby="look-heading">
         <h2 id="look-heading" className="text-[24px]">
@@ -186,7 +221,34 @@ function YouView({ data }: { data: MeResponse }) {
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                 {list.map((m) => (
                   <li key={m.key}>
-                    <Toggle on={m.on} onChange={(on) => toggle.mutate({ key: m.key, on })} label={`${m.emoji} ${m.name}`} hint={m.blurb} disabled={toggle.isPending} color={rel.color} />
+                    <Toggle
+                      on={m.on}
+                      onChange={(on) => toggle.mutate({ key: m.key, on })}
+                      label={
+                        fits.has(m.key) ? (
+                          <>
+                            {m.emoji} {m.name}{' '}
+                            <span className="ml-xs rounded-pill px-xs align-middle text-[11px] font-extrabold uppercase tracking-wide" style={{ background: `var(--soft-${rel.key})`, color: `var(--deep-${rel.key})` }}>
+                              Fits you
+                            </span>
+                          </>
+                        ) : (
+                          `${m.emoji} ${m.name}`
+                        )
+                      }
+                      hint={
+                        fits.has(m.key) ? (
+                          <>
+                            {m.blurb}
+                            <span className="mt-xs block text-[12px] font-bold">{fits.get(m.key)}</span>
+                          </>
+                        ) : (
+                          m.blurb
+                        )
+                      }
+                      disabled={toggle.isPending}
+                      color={rel.color}
+                    />
                   </li>
                 ))}
               </ul>
@@ -216,7 +278,7 @@ function YouView({ data }: { data: MeResponse }) {
           <div className="mt-sm rounded-card p-md" style={{ background: 'var(--tint-yellow)' }}>
             <p className="m-0 text-[16px] font-bold">Only on this device so far.</p>
             <p className="mt-xs m-0 text-[14px] font-semibold">Add an email and password and everything here comes with you to a new phone.</p>
-            <Link to="/signup" className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+            <Link to="/onboarding" className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
               Create an account
             </Link>
           </div>
@@ -428,7 +490,7 @@ function YouView({ data }: { data: MeResponse }) {
             })}
           </ul>
           <div className="mt-md flex flex-wrap gap-sm">
-            <Link to="/session" className="inline-flex min-h-[44px] items-center font-bold text-ink-soft underline underline-offset-4">
+            <Link to="/session?fresh=1" className="inline-flex min-h-[44px] items-center font-bold text-ink-soft underline underline-offset-4">
               Run the strategy session again
             </Link>
             <Link to="/vibe-check" className="inline-flex min-h-[44px] items-center font-bold text-ink-soft underline underline-offset-4">

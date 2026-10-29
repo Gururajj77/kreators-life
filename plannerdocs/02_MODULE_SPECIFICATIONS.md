@@ -59,7 +59,7 @@ Each block below gives: purpose, path and default, who can do what, tables, the 
 | manage | admin | Admin | /admin | on | admin |
 | internal (Internal) | observability | Observability | /internal/observability | on | sub_admin |
 
-Not modules, but screens: Apps (the grouped list with the switches), the Profile tab (`/you`: account, badges, honors, features, appearance, sign out), Rank (`/leaderboard`) and Rewards (`/rewards`) which are part of the game and live under Profile, onboarding (`/onboarding` resolves to the strategy session at `/session`, then `/vibe-check` for the focus pillars; the results live at the bottom of Pillars, `/tower#life-map`), sign-in and sign-up, the public page (`/u/<handle>`, `/people/<id>`), and the site.
+Not modules, but screens: Apps (the grouped list with the switches), the Profile tab (`/you`: account, badges, honors, features, appearance, sign out), Rank (`/leaderboard`) and Rewards (`/rewards`) which are part of the game and live under Profile, onboarding (`/onboarding` resolves to the strategy session at `/session`, one chat that ends with the vibe check for the focus pillars; the results live at the bottom of Pillars, `/tower#life-map`), sign-in and sign-up, the public page (`/u/<handle>`, `/people/<id>`), and the site.
 
 ## A. Core platform
 

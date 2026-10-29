@@ -31,6 +31,7 @@ import { placementLine } from '../components/LifeMap';
 import { Link } from 'react-router';
 import { useActionQueue } from '../lib/useActionQueue';
 
+/** The layers above the tasks, top down like the pyramid: the foundation first, projects last. */
 const RUNGS = KINDS.filter((k) => k !== 'task');
 
 export function Realm() {
@@ -97,7 +98,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
             Pillars
           </BackLink>
           <p className="mt-sm m-0 text-[14px] font-bold">
-            Pillar {rel.floor} of 7, {rel.character}
+            Pillar {rel.floor} of 7, {rel.character}, your {rel.role}
           </p>
           <h1 className="text-[30px]">{rel.name}</h1>
           <div className="mt-md">
@@ -198,7 +199,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                 The pyramid
               </h2>
               <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-                Five layers hold up the tasks. Open a layer to see what is there, change it, or add to it.
+                Five layers lead down to the tasks. Open a layer to see what is there, change it, or add to it.
               </p>
               <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
                 <Pyramid

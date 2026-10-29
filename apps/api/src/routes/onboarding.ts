@@ -3,6 +3,11 @@ import {
   deriveAllLadders,
   deriveLadder,
   isRelationshipKey,
+  matchSetup,
+  MAX_INTERESTS,
+  MODULES,
+  parseSetup,
+  setupSwitchable,
   pointsForAnswer,
   QUESTION_BY_ID,
   RELATIONSHIPS,
@@ -14,7 +19,8 @@ import {
   type OnboardingResponse,
   type RelationshipKey,
 } from '@kreators/shared';
-import { str } from '../db';
+import { resolveAccess } from '../access';
+import { getUser, parseList, parseModules, str, toUser } from '../db';
 import type { AppEnv } from '../env';
 import { DATE_RE, newId, nowIso, readyFromNow, shiftDate, toNode, type NodeRow } from '../db';
 
@@ -75,13 +81,14 @@ onboarding.post('/', async (c) => {
   return c.json(res);
 });
 
-/** The person's own words for a value goal or project, if they gave any, else what the ladder derived. */
+/** The person's own words for the foundation, the value goal or the project, if they gave any, else what the ladder derived. */
 function withPicks(ladder: DerivedLadder, picks: LadderPicks): DerivedLadder {
   const p = picks[ladder.relationship];
   if (!p) return ladder;
+  const pillar = str(p.pillar, 120);
   const valueGoal = str(p.valueGoal, 120);
   const project = str(p.project, 120);
-  return { ...ladder, valueGoal: valueGoal || ladder.valueGoal, project: project || ladder.project };
+  return { ...ladder, pillar: pillar || ladder.pillar, valueGoal: valueGoal || ladder.valueGoal, project: project || ladder.project };
 }
 
 function readPicks(raw: unknown): LadderPicks {
@@ -89,8 +96,8 @@ function readPicks(raw: unknown): LadderPicks {
   if (!raw || typeof raw !== 'object') return out;
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
     if (!isRelationshipKey(k) || !v || typeof v !== 'object') continue;
-    const o = v as { valueGoal?: unknown; project?: unknown };
-    out[k] = { valueGoal: typeof o.valueGoal === 'string' ? o.valueGoal : undefined, project: typeof o.project === 'string' ? o.project : undefined };
+    const o = v as { pillar?: unknown; valueGoal?: unknown; project?: unknown };
+    out[k] = { pillar: typeof o.pillar === 'string' ? o.pillar : undefined, valueGoal: typeof o.valueGoal === 'string' ? o.valueGoal : undefined, project: typeof o.project === 'string' ? o.project : undefined };
   }
   return out;
 }
@@ -182,4 +189,46 @@ onboarding.post('/accept-quest', async (c) => {
   const rows = await buildLadder(db, user.id, withPicks(deriveLadder(body.relationship, answers), readPicks(body.picks)), date);
   if (!rows) return c.json({ error: 'that ladder is already standing on this floor' }, 409);
   return c.json({ nodes: rows.map((r) => toNode(r)) }, 201);
+});
+
+// The setup chat: who you are, what you came for and what gets in the way. The match is worked out again here
+// from the answers, so the profile only ever gets what the tags carry. The apps the person kept are switched on
+// and every other app they could switch is switched off; the essentials and the team's tools are left alone.
+onboarding.post('/setup', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const answers = parseSetup(body);
+  if (answers.identities.length === 0 && answers.goals.length === 0) return c.json({ error: 'say who you are or what you want first' }, 400);
+  const { access } = await resolveAccess(db, user);
+  const available = MODULES.filter((m) => setupSwitchable(m) && (access[m.key]?.available ?? true)).map((m) => m.key);
+  const match = matchSetup(answers, available);
+  const asked = Array.isArray(body.apps) ? body.apps.filter((k): k is string => typeof k === 'string') : null;
+  const keep = new Set((asked ?? match.apps.map((a) => a.key)).filter((k) => available.includes(k)));
+  const mine = parseModules(user.modules);
+  for (const k of available) mine[k] = keep.has(k);
+  const merged = (prev: string, add: string[], max: number) => JSON.stringify([...new Set([...parseList(prev), ...add])].slice(0, max));
+  const p = match.profile;
+  const now = nowIso();
+  await db
+    .prepare(
+      `UPDATE users SET identities = ?, intake_json = ?, modules = ?, creator_type = ?, skills = ?, interests = ?, goals = ?,
+        experience_level = ?, availability = ?, onboarded_at = COALESCE(onboarded_at, ?) WHERE id = ?`,
+    )
+    .bind(
+      JSON.stringify(answers.identities),
+      JSON.stringify({ goals: answers.goals, blockers: answers.blockers, at: now }),
+      JSON.stringify(mine),
+      p.focus || user.creator_type,
+      merged(user.skills, p.skills, 12),
+      merged(user.interests, p.interests, MAX_INTERESTS),
+      merged(user.goals, p.goals, 12),
+      p.level || user.experience_level,
+      p.availability || user.availability,
+      now,
+      user.id,
+    )
+    .run();
+  const fresh = await getUser(db, user.id);
+  return c.json({ user: fresh ? toUser(fresh) : null, match, on: [...keep] });
 });

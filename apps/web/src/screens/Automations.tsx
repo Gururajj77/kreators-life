@@ -45,7 +45,7 @@ export function Automations() {
       </header>
 
       {autos.data && !autos.data.metaConnected && (
-        <p className="mt-md m-0 rounded-tile p-sm text-[14px] font-bold text-ink-fixed" style={{ background: 'var(--tint-yellow)' }}>
+        <p className="mt-md m-0 rounded-tile p-sm text-[14px] font-bold text-ink" style={{ background: 'var(--tint-yellow)' }}>
           Meta is not connected on this server, so matched comments are queued here for you to send by hand.
         </p>
       )}

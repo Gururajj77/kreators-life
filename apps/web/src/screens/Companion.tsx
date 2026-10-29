@@ -1,26 +1,29 @@
 import { useMutation } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Button } from '../components/Button';
+import { ChatComposer, ChatTurns, ChoiceChips, type ChatLine, type ChatVoice } from '../components/Chat';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useCompanion } from '../lib/queries';
 
 const STARTERS = ['I feel tired today', 'I am stressed about work', 'What should I do next?', 'Today went well'];
+const VOICE: ChatVoice = { name: 'Companion', emoji: '💬' };
 
+/** The Companion, drawn like the other chats: its lines as plain text under its name, yours as bubbles. */
 export function Companion() {
   const q = useCompanion();
-  const [text, setText] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
-  const send = useMutation({
-    mutationFn: (body: string) => api.say(body),
-    onSuccess: () => {
-      setText('');
-      q.refetch();
-    },
-  });
+  const lastTurn = useRef<HTMLElement>(null);
+  const send = useMutation({ mutationFn: (body: string) => api.say(body), onSuccess: () => q.refetch() });
   const clear = useMutation({ mutationFn: api.clearCompanion, onSuccess: () => q.refetch() });
   const messages = q.data?.messages ?? [];
+  const log: ChatLine[] = [
+    { id: 'hello', from: 'bot', text: messages.length ? 'Say anything.' : 'Say anything. Here are a few ways in.' },
+    ...messages.map((m): ChatLine => ({ id: m.id, from: m.role === 'user' ? 'you' : 'bot', text: m.body })),
+  ];
+  // What you sent shows as your line straight away, while the answer is on its way.
+  if (send.isPending && send.variables) log.push({ id: 'sending', from: 'you', text: send.variables });
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
@@ -43,40 +46,12 @@ export function Companion() {
         </p>
       </header>
 
-      <div className="mt-md flex flex-col gap-xs" role="log" aria-live="polite">
-        {messages.length === 0 && (
-          <div className="rounded-card bg-card p-md shadow-toy-soft">
-            <p className="m-0 text-[16px] font-bold">Say anything. A few ways in:</p>
-            <div className="mt-sm flex flex-wrap gap-xs">
-              {STARTERS.map((s) => (
-                <button key={s} type="button" onClick={() => send.mutate(s)} className="toy toy-soft rounded-pill bg-paper px-sm py-xs text-[14px] font-bold">
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {messages.map((m) => (
-          <div key={m.id} className={`max-w-[85%] rounded-card p-sm text-[16px] font-semibold leading-relaxed ${m.role === 'user' ? 'self-end rounded-br-[8px] bg-ink text-on-ink' : 'self-start rounded-bl-[8px] bg-card shadow-toy-soft'}`}>
-            {m.body}
-          </div>
-        ))}
-        {send.isPending && <div className="self-start rounded-card rounded-bl-[8px] bg-card p-sm text-[16px] font-semibold text-ink-soft shadow-toy-soft">Thinking</div>}
+      <div role="log" aria-live="polite">
+        <ChatTurns log={log} typing={send.isPending ? VOICE : null} voice={VOICE} answer={messages.length === 0 && !send.isPending ? <ChoiceChips choices={STARTERS.map((s) => ({ value: s, label: s }))} onPick={(c) => send.mutate(c.value)} /> : null} room="0px" lastTurn={lastTurn} />
         <div ref={endRef} />
       </div>
 
-      <form
-        className="mt-md flex gap-xs"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (text.trim()) send.mutate(text.trim());
-        }}
-      >
-        <input value={text} onChange={(e) => setText(e.target.value)} maxLength={2000} placeholder="Type to start chatting" aria-label="Message" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-[16px]" />
-        <Button type="submit" disabled={send.isPending || !text.trim()}>
-          Send
-        </Button>
-      </form>
+      <ChatComposer placeholder="Type to start chatting" onSend={(t) => send.mutate(t)} disabled={send.isPending} maxLength={2000} className="mt-sm" />
     </Screen>
   );
 }

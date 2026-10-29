@@ -45,11 +45,11 @@ The session is in kreators.app as the onboarding flow at `/session`, self-serve,
 
 | Part of this spec | Status | Where |
 | --- | --- | --- |
-| Onboarding, steps 1 to 11 | Built | `apps/web/src/screens/Session.tsx`, `apps/api/src/routes/session.ts`, migration `0029_strategy_session.sql` |
+| Onboarding, steps 1 to 11, as one conversation hosted by the seven characters | Built | `apps/web/src/screens/SessionChat.tsx`, `apps/api/src/routes/session.ts`, migration `0029_strategy_session.sql` |
 | Placement rules, focus rule, score settling, ramp | Built as pure functions with unit tests | `placementFlags`, `pickFocus`, `settleScore`, `rampTime`, `routineFor` in `packages/shared` |
 | Daily loop: morning block as ticks, day type, timeline, week dots | Built, under Show up on Daily | `apps/web/src/components/RoutineSection.tsx` |
 | Daily check-in reminder at the contract time | Built, sent by the cron | `sendReminders` in `apps/api/src/cron.ts` |
-| The seven pyramids for the focus pillars | Built: the session hands its focus to the existing vibe check | `/vibe-check?floors=a,b` |
+| The seven pyramids for the focus pillars | Built: the vibe check for the focus runs inside the same chat | parts 13 and 14 of `SessionChat.tsx` |
 | The life map: every answer in one place, inside Pillars | Built: the map ladder with all seven placed, the bars, the focus, the scorecard, fears, insecurities, routine, practices and contract; a card on Pillars and a line on each pillar page; run again, keeping last time's map or placing afresh | the `#life-map` section at the bottom of `/tower`; `components/LifeMapPanel.tsx`, `components/LifeMap.tsx` |
 | Resume: leaving halfway never restarts | Built: `/onboarding` reads the saved session and sends the person to the right step; the session opens on its saved answers | `apps/web/src/screens/Onboarding.tsx`, `lib/onboarding.ts` |
 | Weekly loop: streak against the contract, heatmap, three questions, ramp step, unlocks | Partly: the week's dots and the count against the minimum show on Daily. The Sunday review, the heatmap, the ramp step and focus-tied unlocks are not built | |
@@ -139,7 +139,23 @@ Inner Wisdom (440) and above are not six-month targets. Treating them as targets
 
 Onboarding is the strategy call, fully self-serve: eleven cards, one at a time, twenty to thirty minutes, ending in a signed plan. It starts from the Welcome screen after sign-up (`/start`, button "Start the strategy session") and runs at `/session`. A live call with the coach is an optional paid add-on at the end, never a gate. The order is the spec's: emotions and insecurities first, the routine last, so the routine answers what the person said.
 
-**How the flow is built.** One screen (`Session.tsx`) holds a stage machine over the eleven steps. Every card has the step count on top ("Step 4 of 11"), a Close (to the life map for someone already in the app, to Welcome otherwise), Back, and one forward button. Nothing is saved until step 6 ends; steps 1 to 6 are collected on the screen and sent as one assessment, steps 7 to 10 as one plan. On open the screen loads the latest saved session: a half-done run (assessment saved, no contract) jumps to step 7 with its answers; a person running it again finds every answer filled in and a button on the first card to keep last time's map and go straight to the focus. Anyone who leaves is brought back to the right step by `/onboarding`, which every app route redirects to until onboarding is done. Reduced motion is respected. People see level names, never numbers; the map's Hell, Purgatory and Heaven labels never appear.
+**How the flow is built: a conversation.** One screen (`SessionChat.tsx`) runs the session as a chat, not a left-to-right card flow, and never one tap per question: each part is one card answered in one go, and the card sits in the conversation itself, never in a box with its own scrollbar. Sign-up is the first card: Start free opens a device session and the chat, Dew asks for the account (name, email, password, phone, date of birth) and the device user is upgraded in place, so nothing said is lost; someone who already has an account skips it. The map is placed for all seven at once (two levels per relationship, grouped by band with that relationship's band statement) and the focus is derived from the whole. Fears and insecurities share one card; the scorecard is one card; the real day, the practices, the contract and the first steps for every focus pillar are one card each. The chat ends with the pyramids drawn and the order to work through all seven, each with its reason. Twelve parts, each hosted by one of the seven characters in its own voice, with that character's tint behind the whole screen and its name and tone in the header ("Part 4 of 15. Fears. Pip, warm and playful, says it straight"). The host explains before every question; every ask carries a "Tell me more" that adds one longer explanation; "Change my last answer" undoes one step. Every answer is a tap on a chip, a short line, or one small card in the dock (sliders for a scorecard group, time fields for the real day, a weight slider for an insecurity, the check-in time). The hosts hand over cards inside the chat: the frame list, the map ladder, the placement chart, the routine preview. Nothing is saved until part 7 ends; parts 2 to 7 are sent as one assessment, parts 8 to 11 as one plan, then the vibe check for the focus pillars runs inside the same chat and builds the pyramids. On open the chat loads the latest saved session: a half-done run opens at the focus with Sage; a signed plan without pyramids opens at the vibe check; a person running it again is offered "Keep my map, go to the focus". Anyone who leaves is brought back by `/onboarding`, which every app route redirects to until onboarding is done.
+
+| Part | Host | Voice | What the host does |
+| --- | --- | --- | --- |
+| 1 Your account, 2 The frame | Dew (With yourself) | calm and clear, short sentences | Makes the account when there is none, welcomes, sets the frame, hands over the seven and the map ladder |
+| 3 The map | each relationship's own character | its own | Greets, asks where you live with it, then where you drop; asks for evidence when placed high |
+| 4 Fears | Pip (Friendship) | warm and playful, says it straight | The fear list, then a pillar and "does it drive you?" per fear |
+| 5 Insecurities | Clover (Lover & partner) | gentle and honest, no judgement | One at a time, a weight, a pillar |
+| 6 Scorecard | Ember (Servant leader) | direct, numbers first | Three slider cards, then the behaviour check when a score and the map disagree |
+| 7 Your real day | Sunny (Parent & child) | caring and practical | The day as it is now |
+| 8 Your focus | Sage (With the guru) | the mentor, asks why, sees the whole | Shows the map, explains the rule, pre-picks, lets you swap |
+| 9 Your routine | Sunny | caring and practical | The six blocks, both day types, the ramp |
+| 10 Practices | Lumen (With the divine) | quiet and spacious | Mantra, breathing, the line, the page |
+| 11 The contract | Ember | direct, numbers first | Days, check-in time, penalty, signature |
+| 12 A live call | Sage | the mentor | One offer, once |
+| 13 Your pillars, 14 First steps | each focus pillar's character | its own | The three-tap vibe check, then the value goal and project picks |
+| 15 Done | Sage | the mentor | Opens Pillars | Reduced motion is respected. People see level names, never numbers; the map's Hell, Purgatory and Heaven labels never appear.
 
 **Integration contract, in short**
 

@@ -1,10 +1,12 @@
 import type { Page, Unlock } from '@kreators/shared';
+import type { AssistantContext, AssistantReceipt, AssistantReply, AssistantStatus, AssistantTurn, CreditEntry, CreditsResponse, PlanKey } from '@kreators/shared';
 import type { Brand, BrandDetail, BrandPiece, BrandSource, PieceKind, ResearchKind, ResearchRun } from '@kreators/shared';
-import type { Contract, DayType, Fear, Insecurity, Placement, Practices, RealDay, Scores, SessionResponse } from '@kreators/shared';
+import type { Contract, DayType, Fear, Insecurity, Placement, Practices, RealDay, RoutineBlock, Scores, SessionResponse } from '@kreators/shared';
 import type { FeedFilter, FeedSort, SocialAward, TrustScore } from '@kreators/shared';
 import type { ListingDetail, MarketResponse, PreownedListing, PreownedMessage, PreownedOffer, StoreItem, StoreKit } from '@kreators/shared';
 import type { PeriodKind, Review, ReviewSummary, ReviewTemplate, ReviewsResponse } from '@kreators/shared';
 import type { NotToDo, NotToDoStatus } from '@kreators/shared';
+import type { SetupMatch } from '@kreators/shared';
 import type { LinkBlock } from '@kreators/shared';
 import type { ObservabilityResponse } from '@kreators/shared';
 import type {
@@ -132,9 +134,12 @@ import { useSession } from './store';
 
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  /** The whole answer, for the few calls that say more than an error line (the assistant's paywall). */
+  data: Record<string, unknown>;
+  constructor(message: string, status: number, data: Record<string, unknown> = {}) {
     super(message);
     this.status = status;
+    this.data = data;
   }
 }
 
@@ -154,7 +159,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (res.status === 401 && !path.startsWith('/auth/')) useSession.getState().setToken(null);
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new ApiError(body.error ?? res.statusText, res.status);
+    throw new ApiError(body.error ?? res.statusText, res.status, body);
   }
   return (await res.json()) as T;
 }
@@ -191,6 +196,7 @@ export const api = {
     location?: string;
     openToIntros?: boolean;
     interests?: string[];
+    identities?: string[];
     city?: string;
     area?: string;
     lat?: number | null;
@@ -210,11 +216,25 @@ export const api = {
   setModule: (key: string, on: boolean) => patch<{ modules: Record<string, boolean> }>('/me/modules', { key, on }),
   reset: () => post<{ ok: true }>('/me/reset'),
   linkClicks: () => request<{ clicks: Record<string, number> }>('/me/link-clicks'),
+  // the assistant: typing (with a plan), and Confirm, Cancel and Undo on what it did
+  assistantStatus: () => request<AssistantStatus>('/assistant'),
+  assistantSend: (body: { messages: AssistantTurn[]; context: AssistantContext; model?: string; runId?: string }) => post<AssistantReply>('/assistant', body),
+  /** Stop a message that is still running: it ends before its next model call or tool, keeping what was already done. */
+  assistantStop: (runId: string) => post<{ ok: true }>('/assistant/stop', { runId }),
+  assistantConfirm: (id: string, date: string) => post<{ receipt: AssistantReceipt }>(`/assistant/actions/${id}/confirm`, { date }),
+  assistantCancel: (id: string) => post<{ receipt: AssistantReceipt }>(`/assistant/actions/${id}/cancel`),
+  assistantUndo: (id: string, date: string) => post<{ receipt: AssistantReceipt }>(`/assistant/actions/${id}/undo`, { date }),
+  // plans and credits
+  credits: () => request<CreditsResponse>('/credits'),
+  creditLedger: (pq = '') => request<{ page: Page; entries: CreditEntry[] }>(withQ('/credits/ledger', pq)),
+  creditCheckout: (kind: 'plan' | 'topup', key: string) => post<{ ok: true }>('/credits/checkout', { kind, key }),
   // internal, team only
   observability: (q: string, pq = '') => request<ObservabilityResponse>(withQ(`/internal/observability?q=${encodeURIComponent(q)}`, pq)),
   setRole: (id: string, role: Role) => post<{ user: { id: string; name: string; handle: string | null; role: Role } }>(`/internal/users/${id}/role`, { role }),
 
   // onboarding and the tower
+  /** The setup chat: tags, goals, what gets in the way, and the apps the person kept. */
+  setup: (body: { identities: string[]; goals: string[]; blockers: string[]; apps: string[] }) => post<{ user: User; match: SetupMatch; on: string[] }>('/onboarding/setup', body),
   onboard: (body: { answers: OnboardingAnswer[]; displayName?: string; focus?: string }) => post<OnboardingResponse>('/onboarding', body),
   build: (relationships: RelationshipKey[], date: string, picks?: LadderPicks) => post<{ nodes: Node[]; skipped: RelationshipKey[] }>('/onboarding/build', { relationships, date, picks }),
   acceptQuest: (relationship: RelationshipKey, date: string, picks?: LadderPicks) => post<{ nodes: Node[] }>('/onboarding/accept-quest', { relationship, date, picks }),
@@ -492,6 +512,7 @@ export const api = {
   submitAssessment: (body: { placements: Placement[]; fears: Fear[]; insecurities: Insecurity[]; scores: Scores; behaviour: Partial<Record<RelationshipKey, number>>; realDay: RealDay }) => post<SessionResponse & { suggestedFocus: RelationshipKey[] }>('/session/assessment', body),
   submitPlan: (body: { focus: RelationshipKey[]; practices: Practices; contract: Pick<Contract, 'minDays' | 'checkinTime' | 'penalty' | 'signedName'>; date: string }) => post<SessionResponse>('/session/plan', body),
   markRoutineDay: (body: { date: string; dayType: DayType; steps: string[] }) => post<SessionResponse>('/session/day', body),
+  updateRoutine: (body: { date: string; general?: RoutineBlock[]; exceptional?: RoutineBlock[] }) => patch<SessionResponse>('/session/routine', body),
 
   // content strategist: brand folders
   brands: (pq = '') => request<{ page: Page; brands: Brand[]; tools: BrandDetail['tools'] }>(withQ('/studio/brands', pq)),
@@ -588,6 +609,8 @@ export const adminApi = {
   grantHonor: (key: string, id: string, honor: string, note: string) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/honors`, { method: 'POST', body: JSON.stringify({ key: honor, note }) }),
   revokeHonor: (key: string, id: string, honor: string) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/honors/${honor}`, { method: 'DELETE' }),
   addPoints: (key: string, id: string, amount: number, note: string) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/points`, { method: 'POST', body: JSON.stringify({ amount, note }) }),
+  setPlan: (key: string, id: string, plan: PlanKey, days: number) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/plan`, { method: 'POST', body: JSON.stringify({ plan, days }) }),
+  addCredits: (key: string, id: string, credits: number, note: string) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/credits`, { method: 'POST', body: JSON.stringify({ credits, note }) }),
   redemptions: (key: string, status?: string, pq = '') => adminRequest<{ page: Page; redemptions: AdminRedemption[] }>(key, withQ(`/redemptions${status ? `?status=${status}` : ''}`, pq)),
   setRedemption: (key: string, id: string, status: 'fulfilled' | 'cancelled') => adminRequest<{ redemption: Redemption }>(key, `/redemptions/${id}`, { method: 'POST', body: JSON.stringify({ status }) }),
   modules: (key: string) => adminRequest<{ settings: ModuleSetting[] }>(key, '/modules'),

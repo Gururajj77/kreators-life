@@ -1,3 +1,4 @@
+import { forgetKept } from './kept';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -27,5 +28,30 @@ export function storedRef(): string | null {
 }
 
 export const useSession = create<SessionState>()(
-  persist((set) => ({ token: null, setToken: (token) => set({ token }) }), { name: 'kreators.session' }),
+  persist(
+    (set) => ({
+      token: null,
+      setToken: (token) => {
+        // Signing out, or a session the server no longer knows, forgets every kept chat.
+        if (!token) forgetKept();
+        set({ token });
+      },
+    }),
+    { name: 'kreators.session' },
+  ),
 );
+
+/**
+ * Which model the assistant runs on, picked in its panel while models are being tried out. Kept in this browser
+ * only; null means the server's default. The server takes only a model from its own list.
+ */
+export const useAssistantModel = create<{ model: string | null; setModel: (model: string | null) => void }>()(
+  persist(
+    (set) => ({
+      model: null,
+      setModel: (model) => set({ model }),
+    }),
+    { name: 'kreators.assistant-model' },
+  ),
+);
+

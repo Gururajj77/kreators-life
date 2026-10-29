@@ -2,17 +2,19 @@ import { Hono } from 'hono';
 import { EVENT_TYPE_META, EVENT_TYPES, type EventRegistration, type PartyEvent } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { audit, can, nameOf, newId, notify, nowIso, num, oneOf, str, isClubMember, pageOf, paged } from '../db';
+import { claimEventCode, codeOf, guestView, hostView, setEventCode } from '../attendee';
 
 export const party = new Hono<AppEnv>();
 
-interface EventRow { id: string; title: string; description: string; event_type: PartyEvent['eventType']; host_user_id: string; host_name: string; venue: string; online_url: string | null; timezone: string; starts_at: string; ends_at: string; capacity: number | null; price_points: number; visibility: PartyEvent['visibility']; status: PartyEvent['status']; created_at: string; registered: number; waitlisted: number }
+interface EventRow { id: string; title: string; description: string; event_type: PartyEvent['eventType']; host_user_id: string; host_name: string; venue: string; online_url: string | null; timezone: string; starts_at: string; ends_at: string; capacity: number | null; price_points: number; visibility: PartyEvent['visibility']; status: PartyEvent['status']; created_at: string; registered: number; waitlisted: number; attendee_xp: number | null }
 const SELECT = `SELECT e.*, u.display_name AS host_name,
   (SELECT COUNT(*) FROM event_registrations r WHERE r.event_id = e.id AND r.status IN ('registered','attended')) AS registered,
-  (SELECT COUNT(*) FROM event_registrations r WHERE r.event_id = e.id AND r.status = 'waitlisted') AS waitlisted
+  (SELECT COUNT(*) FROM event_registrations r WHERE r.event_id = e.id AND r.status = 'waitlisted') AS waitlisted,
+  (SELECT a.xp FROM attendee_codes a WHERE a.app = 'party' AND a.thing_id = e.id) AS attendee_xp
   FROM events e JOIN users u ON u.id = e.host_user_id`;
 interface RegRow { id: string; event_id: string; user_id: string; name: string; status: EventRegistration['status']; registered_at: string; checked_in_at: string | null; networking_opt_in: number }
 const toReg = (r: RegRow): EventRegistration => ({ id: r.id, eventId: r.event_id, userId: r.user_id, name: nameOf({ display_name: r.name }), status: r.status, registeredAt: r.registered_at, checkedInAt: r.checked_in_at, networkingOptIn: r.networking_opt_in === 1 });
-const toEvent = (r: EventRow, mine: EventRegistration | null): PartyEvent => ({ id: r.id, title: r.title, description: r.description, eventType: r.event_type, hostId: r.host_user_id, hostName: nameOf({ display_name: r.host_name }), venue: r.venue, onlineUrl: r.online_url, timezone: r.timezone, startsAt: r.starts_at, endsAt: r.ends_at, capacity: r.capacity, pricePoints: r.price_points, visibility: r.visibility, status: r.status, registered: r.registered, waitlisted: r.waitlisted, mine, createdAt: r.created_at });
+const toEvent = (r: EventRow, mine: EventRegistration | null): PartyEvent => ({ id: r.id, title: r.title, description: r.description, eventType: r.event_type, hostId: r.host_user_id, hostName: nameOf({ display_name: r.host_name }), venue: r.venue, onlineUrl: r.online_url, timezone: r.timezone, startsAt: r.starts_at, endsAt: r.ends_at, capacity: r.capacity, pricePoints: r.price_points, visibility: r.visibility, status: r.status, registered: r.registered, waitlisted: r.waitlisted, mine, attendeeXp: r.attendee_xp ?? null, createdAt: r.created_at });
 
 const clubMember = isClubMember;
 
@@ -47,8 +49,15 @@ party.post('/events', async (c) => {
     .bind(id, title, str(body.description, 3000), type, user.id, str(body.venue, 200), str(body.onlineUrl, 500) || null, str(body.timezone, 60, 'UTC') || 'UTC', start.toISOString(), new Date(start.getTime() + minutes * 60_000).toISOString(), num(body.capacity, null, 1, 100000), num(body.pricePoints, 0, 0) ?? 0, oneOf(body.visibility, ['public', 'private', 'club'] as const, 'public'), nowIso())
     .run();
   await audit(db, user.id, 'event.create', 'event', id, '', title);
+  // An attendee code from the start, when the host set xp for the guests. A bad xp or code is said, and the event stays.
+  let codeError: string | null = null;
+  if (body.attendeeXp !== undefined && body.attendeeXp !== null && body.attendeeXp !== '' && Number(body.attendeeXp) > 0) {
+    const set = await setEventCode(db, 'party', id, start.toISOString(), user.id, { xp: body.attendeeXp, code: body.attendeeCode });
+    if ('error' in set) codeError = set.error;
+    else await audit(db, user.id, 'attendee_code.set', 'event', id, '', { xp: set.row.xp });
+  }
   const row = await db.prepare(`${SELECT} WHERE e.id = ?`).bind(id).first<EventRow>();
-  return c.json({ event: row ? toEvent(row, null) : null }, 201);
+  return c.json({ event: row ? toEvent(row, null) : null, codeError }, 201);
 });
 
 party.get('/events/:id', async (c) => {
@@ -62,7 +71,17 @@ party.get('/events/:id', async (c) => {
   if (!host && !mineRow && row.visibility === 'club' && !(await clubMember(db, user.id))) return c.json({ error: 'club members only' }, 403);
   const regs = host ? await db.prepare('SELECT r.*, u.display_name AS name FROM event_registrations r JOIN users u ON u.id = r.user_id WHERE r.event_id = ? ORDER BY r.registered_at').bind(row.id).all<RegRow>() : { results: [] as RegRow[] };
   const fb = await db.prepare('SELECT AVG(rating) AS avg, COUNT(*) AS n FROM event_feedback WHERE event_id = ?').bind(row.id).first<{ avg: number | null; n: number }>();
-  return c.json({ event: toEvent(row, mineRow ? toReg(mineRow) : null), registrations: regs.results.map(toReg), host, feedback: { average: fb?.avg ? Math.round(fb.avg * 10) / 10 : null, count: fb?.n ?? 0 } });
+  // The code goes to the host and events staff only; a guest sees the xp, whether they claimed it, and when it works.
+  const code = await codeOf(db, 'party', row.id);
+  const guest = Boolean(mineRow && (mineRow.status === 'registered' || mineRow.status === 'attended'));
+  return c.json({
+    event: toEvent(row, mineRow ? toReg(mineRow) : null),
+    registrations: regs.results.map(toReg),
+    host,
+    feedback: { average: fb?.avg ? Math.round(fb.avg * 10) / 10 : null, count: fb?.n ?? 0 },
+    hostCode: host ? await hostView(db, code, row.starts_at, row.registered) : null,
+    attendee: !host && guest && row.status !== 'cancelled' ? await guestView(db, code, user.id, row.starts_at, row.ends_at) : null,
+  });
 });
 
 // RSVP: the seat is taken in a single statement so two people cannot both get the last one.
@@ -137,6 +156,37 @@ party.post('/events/:id/checkin', async (c) => {
   const res = await db.prepare("UPDATE event_registrations SET status = 'attended', checked_in_at = ? WHERE event_id = ? AND user_id = ? AND status IN ('registered','attended')").bind(nowIso(), row.id, str(body.userId, 64)).run();
   if (res.meta.changes === 0) return c.json({ error: 'that person is not registered' }, 400);
   return c.json({ ok: true });
+});
+
+// The host sets the guests' xp before it starts, and the code: their own word, or a fresh random one.
+party.put('/events/:id/attendee-code', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await db.prepare('SELECT id, host_user_id, starts_at, status FROM events WHERE id = ?').bind(c.req.param('id')).first<{ id: string; host_user_id: string; starts_at: string; status: string }>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  if (row.host_user_id !== user.id && !can(user, 'events')) return c.json({ error: 'the host sets the code' }, 403);
+  if (row.status === 'cancelled') return c.json({ error: 'This event was cancelled.' }, 400);
+  const body = await c.req.json<{ xp?: unknown; code?: unknown; fresh?: unknown }>().catch(() => ({}) as Record<string, never>);
+  const prev = await codeOf(db, 'party', row.id);
+  const set = await setEventCode(db, 'party', row.id, row.starts_at, user.id, body);
+  if ('error' in set) return c.json({ error: set.error }, set.status);
+  await audit(db, user.id, 'attendee_code.set', 'event', row.id, prev ? { xp: prev.xp } : '', { xp: set.row.xp, newCode: set.row.code !== prev?.code });
+  const n = await db.prepare("SELECT COUNT(*) AS n FROM event_registrations WHERE event_id = ? AND status IN ('registered','attended')").bind(row.id).first<{ n: number }>();
+  return c.json({ hostCode: await hostView(db, set.row, row.starts_at, n?.n ?? 0) });
+});
+
+// A guest types the code at the event: the xp the host set, once. It also checks them in.
+party.post('/events/:id/claim', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await db.prepare('SELECT id, host_user_id, starts_at, ends_at, status FROM events WHERE id = ?').bind(c.req.param('id')).first<{ id: string; host_user_id: string; starts_at: string; ends_at: string; status: string }>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  const reg = await db.prepare("SELECT id FROM event_registrations WHERE event_id = ? AND user_id = ? AND status IN ('registered','attended')").bind(row.id, user.id).first<{ id: string }>();
+  const body = await c.req.json<{ code?: unknown }>().catch(() => ({}) as { code?: unknown });
+  const got = await claimEventCode(db, { app: 'party', thingId: row.id, userId: user.id, hostId: row.host_user_id, guest: Boolean(reg), cancelled: row.status === 'cancelled', startsAt: row.starts_at, endsAt: row.ends_at, code: body.code });
+  if ('error' in got) return c.json({ error: got.error }, got.status);
+  if (reg) await db.prepare("UPDATE event_registrations SET status = 'attended', checked_in_at = COALESCE(checked_in_at, ?) WHERE id = ?").bind(nowIso(), reg.id).run();
+  return c.json(got, 201);
 });
 
 party.post('/events/:id/feedback', async (c) => {

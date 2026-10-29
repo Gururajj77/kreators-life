@@ -1,12 +1,12 @@
-import { BREATHING, MANTRAS, PENALTIES, RELATIONSHIP_BY_KEY, RELATIONSHIPS, SCORE_LABEL, SCORECARD } from '@kreators/shared';
+import { BREATHING, mantraLine, PENALTIES, RELATIONSHIP_BY_KEY, RELATIONSHIPS, SCORE_LABEL, SCORECARD, weightWord } from '@kreators/shared';
 import { Link } from 'react-router';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { useAuthed, useMe } from '../lib/queries';
 import { Avatar } from './Avatar';
-import { Segments } from './Charts';
 import { MapLadder, PlacementChart, ScoreRow } from './LifeMap';
 import { Ring } from './Ring';
+import { RoutinePanel } from './RoutinePanel';
 import { Section } from './Section';
 
 const avg = (vals: (number | undefined)[]) => {
@@ -14,11 +14,13 @@ const avg = (vals: (number | undefined)[]) => {
   return v.length ? Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 10) / 10 : null;
 };
 
-function Gauge10({ value, label, color }: { value: number | null; label: string; color: string }) {
+/** An average score as stars out of five: a score out of ten is two points a star. */
+function GaugeStars({ value, label, color }: { value: number | null; label: string; color: string }) {
+  const stars = value === null ? null : Math.round((value / 2) * 10) / 10;
   return (
     <div className="flex flex-col items-center gap-xs rounded-tile bg-card p-sm shadow-toy-soft">
-      <Ring value={value === null ? 0 : value / 10} size={64} stroke={7} color={color} label={`${label}, ${value ?? 'not rated'} of 10`}>
-        <span className="font-display text-[16px] font-extrabold">{value ?? '–'}</span>
+      <Ring value={stars === null ? 0 : stars / 5} size={64} stroke={7} color={color} label={`${label}, ${stars ?? 'not rated'} of 5 stars`}>
+        <span className="font-display text-[16px] font-extrabold">{stars ?? '–'}★</span>
       </Ring>
       <span className="text-[12px] font-bold text-ink-soft">{label}</span>
     </div>
@@ -53,7 +55,7 @@ export function LifeMapPanel() {
       </h2>
       <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{`From your strategy session on ${when}. Health lives inside With yourself; work, money and time inside Servant leader.`}</p>
       <div className="mt-sm flex flex-wrap gap-xs">
-        <Link to="/session" className="toy inline-flex min-h-[44px] items-center rounded-pill bg-card px-sm text-[14px] font-bold shadow-toy-soft">
+        <Link to="/session?fresh=1" className="toy inline-flex min-h-[44px] items-center rounded-pill bg-card px-sm text-[14px] font-bold shadow-toy-soft">
           Run the session again
         </Link>
         {unbuilt.length > 0 && (
@@ -84,11 +86,11 @@ export function LifeMapPanel() {
         <MapLadder placements={a.placements} />
       </Section>
 
-      <Section id="scores-heading" title="Day zero scores" lede="Out of ten, as you rated them. A high score over a low floor was settled by what you did last week.">
+      <Section id="scores-heading" title="Day zero scores" lede="In stars, as you rated them. A high score over a low floor was settled by what you did last week.">
         <div className="grid grid-cols-3 gap-xs">
-          <Gauge10 value={avg(SCORECARD.health.map((k) => a.scores[k]))} label="Health" color="var(--deep-self)" />
-          <Gauge10 value={avg(SCORECARD.wealth.map((k) => a.scores[k]))} label="Wealth" color="var(--deep-servant_leader)" />
-          <Gauge10 value={avg(relScores)} label="Relationships" color="var(--deep-friendship)" />
+          <GaugeStars value={avg(SCORECARD.health.map((k) => a.scores[k]))} label="Health" color="var(--deep-self)" />
+          <GaugeStars value={avg(SCORECARD.wealth.map((k) => a.scores[k]))} label="Wealth" color="var(--deep-servant_leader)" />
+          <GaugeStars value={avg(relScores)} label="Relationships" color="var(--deep-friendship)" />
         </div>
         <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
           {SCORECARD.health.map((k) => (
@@ -121,7 +123,7 @@ export function LifeMapPanel() {
               <li key={`${it.text}-${i}`} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <Avatar relationship={it.relationship} size={24} decorative still />
                 <span className="min-w-0 flex-1 text-[14px] font-bold">{it.text}</span>
-                <Segments value={it.weight} max={10} color={RELATIONSHIP_BY_KEY[it.relationship].color} label={`weighs ${it.weight} of 10`} />
+                <span className="shrink-0 text-[12px] font-bold text-ink-soft">weighs {weightWord(it.weight).toLowerCase()}</span>
               </li>
             ))}
           </ul>
@@ -129,23 +131,10 @@ export function LifeMapPanel() {
       </Section>
 
       {d.routine && (
-        <Section id="routine-heading" title="Your routine" lede={`Built from your day: up at ${a.realDay.wake}, lights out ${a.realDay.sleep}, work ${a.realDay.workStart} to ${a.realDay.workEnd}. Wake-up moves thirty minutes earlier for every week you keep the deal.`}>
-          <ol className="m-0 flex list-none flex-col gap-xs p-0">
-            {d.routine.general.map((b) => (
-              <li key={b.key} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <p className="m-0 flex items-center justify-between text-[14px] font-bold">
-                  <span>{b.name}</span>
-                  <span className="text-[12px] text-ink-soft">
-                    {b.start} to {b.end}
-                  </span>
-                </p>
-                {b.steps.length > 0 && <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{b.steps.join(' · ')}</p>}
-                <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{b.note}</p>
-              </li>
-            ))}
-          </ol>
+        <Section id="routine-heading" title="Your routine" lede={`Built from your day: up at ${a.realDay.wake}, lights out ${a.realDay.sleep}, work ${a.realDay.workStart} to ${a.realDay.workEnd}. Wake-up moves thirty minutes earlier for every week you keep the deal. You can change any of it.`}>
+          <RoutinePanel general={d.routine.general} exceptional={d.routine.exceptional} date={date} />
           <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0 text-[14px] font-semibold">
-            <li>Mantra: {MANTRAS.find((m) => m.key === d.routine?.practices.mantra)?.name ?? 'none'}.</li>
+            <li>Mantra: {mantraLine(d.routine.practices)}.</li>
             <li>Breathing: {BREATHING.find((b) => b.key === d.routine?.practices.breathing)?.name ?? 'box'}.</li>
             {d.routine.practices.affirmation && <li>Your line: “{d.routine.practices.affirmation}”</li>}
             {d.routine.practices.reading && <li>One page a morning from {d.routine.practices.reading}.</li>}

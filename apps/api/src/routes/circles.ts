@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
-import { ALIAS_WORDS, isCircleStatus, matchCircles, nextWeek, RELATIONSHIPS, type CircleEvent, type CircleGroup, type CircleMember, type CircleMessage, type CircleStatus, type MatchCandidate, type RelationshipKey } from '@kreators/shared';
+import { ALIAS_WORDS, attendeeXpLocked, CIRCLE_MINUTES, isCircleStatus, matchCircles, nextWeek, RELATIONSHIPS, type CircleEvent, type CircleGroup, type CircleMember, type CircleMessage, type CircleStatus, type MatchCandidate, type RelationshipKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { can, newId, notify, nowIso, num, parseList, str } from '../db';
+import { audit, can, newId, notify, nowIso, num, parseList, str } from '../db';
+import { claimEventCode, codeOf, guestView, hostView, setEventCode } from '../attendee';
 
 /**
  * Circles: small anonymous groups near you. Staff open an event in a city; people sign up;
@@ -13,14 +14,40 @@ export const circles = new Hono<AppEnv>();
 
 const HOUR = 3600_000;
 
-interface EventRow { id: string; title: string; city: string; area: string; starts_at: string; venue_hint: string; group_size: number; status: CircleEvent['status']; repeat: 'none' | 'weekly'; series_id: string | null; created_by: string | null; created_at: string; signups: number; joined: number; my_status: string | null; my_group_id: string | null }
+interface EventRow { id: string; title: string; city: string; area: string; starts_at: string; venue_hint: string; group_size: number; status: CircleEvent['status']; repeat: 'none' | 'weekly'; series_id: string | null; created_by: string | null; created_at: string; signups: number; joined: number; my_status: string | null; my_group_id: string | null; attendee_xp: number | null; attendee_code: string | null; attendee_claims: number; seated: number }
 const EVENT_SELECT = (userId: string) => `SELECT e.*,
   (SELECT COUNT(*) FROM circle_signups s WHERE s.event_id = e.id) AS signups,
   (SELECT COUNT(*) FROM circle_signups s WHERE s.event_id = e.id AND s.user_id = '${userId.replace(/'/g, '')}') AS joined,
   (SELECT s.status FROM circle_signups s WHERE s.event_id = e.id AND s.user_id = '${userId.replace(/'/g, '')}') AS my_status,
-  (SELECT g.id FROM circle_groups g JOIN circle_members m ON m.group_id = g.id WHERE g.event_id = e.id AND m.user_id = '${userId.replace(/'/g, '')}' LIMIT 1) AS my_group_id
+  (SELECT g.id FROM circle_groups g JOIN circle_members m ON m.group_id = g.id WHERE g.event_id = e.id AND m.user_id = '${userId.replace(/'/g, '')}' LIMIT 1) AS my_group_id,
+  (SELECT a.xp FROM attendee_codes a WHERE a.app = 'circles' AND a.thing_id = e.id) AS attendee_xp,
+  (SELECT a.code FROM attendee_codes a WHERE a.app = 'circles' AND a.thing_id = e.id) AS attendee_code,
+  (SELECT COUNT(*) FROM attendee_claims x WHERE x.app = 'circles' AND x.thing_id = e.id) AS attendee_claims,
+  (SELECT COUNT(*) FROM circle_members m JOIN circle_groups g ON g.id = m.group_id WHERE g.event_id = e.id) AS seated
   FROM circle_events e`;
-const toEvent = (r: EventRow): CircleEvent => ({ id: r.id, title: r.title, city: r.city, area: r.area, startsAt: r.starts_at, venueHint: r.venue_hint, groupSize: r.group_size, status: r.status, repeat: r.repeat === 'weekly' ? 'weekly' : 'none', seriesId: r.series_id, signups: r.signups, joined: r.joined > 0, myStatus: isCircleStatus(r.my_status) ? r.my_status : null, myGroupId: r.my_group_id, createdAt: r.created_at });
+/** `showCode` is for the circle's host (who opened it) and events staff: the code and how many of the seated claimed it. Never names: circles are aliases. */
+const toEvent = (r: EventRow, showCode: boolean): CircleEvent => ({
+  id: r.id,
+  title: r.title,
+  city: r.city,
+  area: r.area,
+  startsAt: r.starts_at,
+  venueHint: r.venue_hint,
+  groupSize: r.group_size,
+  status: r.status,
+  repeat: r.repeat === 'weekly' ? 'weekly' : 'none',
+  seriesId: r.series_id,
+  signups: r.signups,
+  joined: r.joined > 0,
+  myStatus: isCircleStatus(r.my_status) ? r.my_status : null,
+  myGroupId: r.my_group_id,
+  attendeeXp: r.attendee_xp ?? null,
+  hostCode: showCode && r.attendee_code ? { code: r.attendee_code, xp: r.attendee_xp ?? 0, locked: attendeeXpLocked(r.starts_at), claims: r.attendee_claims, guests: r.seated } : null,
+  createdAt: r.created_at,
+});
+/** A circle has a start and no end; its code window counts it as CIRCLE_MINUTES long. */
+const circleEnd = (startsAt: string) => new Date(Date.parse(startsAt) + CIRCLE_MINUTES * 60_000).toISOString();
+const hostsCircle = (r: { created_by: string | null }, user: { id: string } & Parameters<typeof can>[0]) => r.created_by === user.id || can(user, 'events');
 
 interface GroupRow { id: string; event_id: string; event_title: string; city: string; area: string; starts_at: string; repeat: 'none' | 'weekly'; name: string; venue: string; plan: string; chat_opens_at: string }
 const GROUP_SELECT = 'SELECT g.*, e.title AS event_title, e.city, e.area, e.starts_at, e.repeat FROM circle_groups g JOIN circle_events e ON e.id = g.event_id';
@@ -84,7 +111,7 @@ circles.get('/', async (c) => {
     : await db.prepare(`${EVENT_SELECT(user.id)} WHERE e.status IN ('open','matched') AND e.starts_at >= ? AND (${joinable} OR ${signedUp}) ORDER BY e.starts_at LIMIT 50`).bind(new Date(Date.now() - 48 * HOUR).toISOString()).all<EventRow>();
   const groups = await db.prepare(`${GROUP_SELECT} WHERE g.id IN (SELECT group_id FROM circle_members WHERE user_id = ?) ORDER BY e.starts_at DESC LIMIT 20`).bind(user.id).all<GroupRow>();
   const mine = await Promise.all(groups.results.map((g) => groupFor(db, g, user.id, false)));
-  return c.json({ events: events.results.map(toEvent), groups: mine, city: user.city, area: user.area, interests: parseList(user.interests), hasLocation: user.lat !== null && user.lng !== null, canCreate: can(user, 'events') });
+  return c.json({ events: events.results.map((e) => toEvent(e, hostsCircle(e, user))), groups: mine, city: user.city, area: user.area, interests: parseList(user.interests), hasLocation: user.lat !== null && user.lng !== null, canCreate: can(user, 'events') });
 });
 
 circles.post('/events', async (c) => {
@@ -101,8 +128,15 @@ circles.post('/events', async (c) => {
     .prepare("INSERT INTO circle_events (id, title, city, area, starts_at, venue_hint, group_size, status, repeat, series_id, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)")
     .bind(id, title, city, str(body.area, 80), start.toISOString(), str(body.venueHint, 200), num(body.groupSize, 5, 3, 8) ?? 5, body.repeat === 'weekly' ? 'weekly' : 'none', id, user.id, nowIso())
     .run();
+  // An attendee code from the start, when the host set xp for the seated guests.
+  let codeError: string | null = null;
+  if (body.attendeeXp !== undefined && body.attendeeXp !== null && body.attendeeXp !== '' && Number(body.attendeeXp) > 0) {
+    const set = await setEventCode(db, 'circles', id, start.toISOString(), user.id, { xp: body.attendeeXp, code: body.attendeeCode });
+    if ('error' in set) codeError = set.error;
+    else await audit(db, user.id, 'attendee_code.set', 'circle', id, '', { xp: set.row.xp });
+  }
   const row = await db.prepare(`${EVENT_SELECT(user.id)} WHERE e.id = ?`).bind(id).first<EventRow>();
-  return c.json({ event: row ? toEvent(row) : null }, 201);
+  return c.json({ event: row ? toEvent(row, true) : null, codeError }, 201);
 });
 
 // Signing up needs interests and a city, otherwise there is nothing to match on.
@@ -207,6 +241,36 @@ circles.post('/events/:id/match', async (c) => {
   return c.json(await matchEvent(c.env.DB, c.req.param('id')));
 });
 
+// The circle's host (who opened it) or events staff set the xp before it starts, and the code.
+circles.put('/events/:id/attendee-code', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await db.prepare('SELECT id, created_by, starts_at, status FROM circle_events WHERE id = ?').bind(c.req.param('id')).first<{ id: string; created_by: string | null; starts_at: string; status: string }>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  if (!hostsCircle(row, user)) return c.json({ error: 'the host sets the code' }, 403);
+  if (row.status === 'cancelled') return c.json({ error: 'This circle was cancelled.' }, 400);
+  const body = await c.req.json<{ xp?: unknown; code?: unknown; fresh?: unknown }>().catch(() => ({}) as Record<string, never>);
+  const prev = await codeOf(db, 'circles', row.id);
+  const set = await setEventCode(db, 'circles', row.id, row.starts_at, user.id, body);
+  if ('error' in set) return c.json({ error: set.error }, set.status);
+  await audit(db, user.id, 'attendee_code.set', 'circle', row.id, prev ? { xp: prev.xp } : '', { xp: set.row.xp, newCode: set.row.code !== prev?.code });
+  const seated = await db.prepare('SELECT COUNT(*) AS n FROM circle_members m JOIN circle_groups g ON g.id = m.group_id WHERE g.event_id = ?').bind(row.id).first<{ n: number }>();
+  return c.json({ hostCode: await hostView(db, set.row, row.starts_at, seated?.n ?? 0) });
+});
+
+// Someone seated at one of the circle's tables types the code at the meetup.
+circles.post('/events/:id/claim', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await db.prepare('SELECT id, created_by, starts_at, status FROM circle_events WHERE id = ?').bind(c.req.param('id')).first<{ id: string; created_by: string | null; starts_at: string; status: string }>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  const seat = await db.prepare('SELECT 1 FROM circle_members m JOIN circle_groups g ON g.id = m.group_id WHERE g.event_id = ? AND m.user_id = ?').bind(row.id, user.id).first();
+  const body = await c.req.json<{ code?: unknown }>().catch(() => ({}) as { code?: unknown });
+  const got = await claimEventCode(db, { app: 'circles', thingId: row.id, userId: user.id, hostId: row.created_by, guest: Boolean(seat), cancelled: row.status === 'cancelled', startsAt: row.starts_at, endsAt: circleEnd(row.starts_at), code: body.code });
+  if ('error' in got) return c.json({ error: got.error }, got.status);
+  return c.json(got, 201);
+});
+
 async function myGroup(db: D1Database, groupId: string, userId: string): Promise<GroupRow | null> {
   return db.prepare(`${GROUP_SELECT} WHERE g.id = ? AND g.id IN (SELECT group_id FROM circle_members WHERE user_id = ?)`).bind(groupId, userId).first<GroupRow>();
 }
@@ -217,7 +281,8 @@ circles.get('/groups/:id', async (c) => {
   const row = await myGroup(db, c.req.param('id'), user.id);
   if (!row) return c.json({ error: 'not your table' }, 404);
   const group = await groupFor(db, row, user.id, true);
-  return c.json({ group, opensInMinutes: Math.max(0, Math.ceil((new Date(row.chat_opens_at).getTime() - Date.now()) / 60_000)) });
+  const attendee = await guestView(db, await codeOf(db, 'circles', row.event_id), user.id, row.starts_at, circleEnd(row.starts_at));
+  return c.json({ group, opensInMinutes: Math.max(0, Math.ceil((new Date(row.chat_opens_at).getTime() - Date.now()) / 60_000)), attendee });
 });
 
 circles.post('/groups/:id/messages', async (c) => {

@@ -38,6 +38,15 @@
   --color-r5: #926247; /* Mindful Brown 60 */
   --color-r6: #7f45e2; /* Kind Purple 60 */
   --color-r7: #5d2aad; /* Kind Purple 80 */
+  /* The scale of consciousness (ConsciousnessMap): the funnel's colours that the seven do not have. Fixed in both modes. */
+  --color-scale-silver: #e6e6ea;
+  --color-scale-night: #161616;
+  --color-scale-gold: #e8b431;
+  --color-scale-violet: #6a5ae0;
+  --color-scale-blue: #3b7cf0;
+  --color-scale-sky: #2aaee6;
+  --color-scale-green: #24b25c;
+  --color-scale-lime: #a8cf3a;
 
   --font-display: 'Urbanist', system-ui, sans-serif;
   --font-body: 'Urbanist', system-ui, sans-serif;

@@ -17,6 +17,8 @@ export interface Relationship {
   floor: number;
   name: string;
   character: string;
+  /** What the character looks after, said next to its name so the name is never alone. */
+  role: string;
   color: string;
   soft: string;
   deep: string;
@@ -34,6 +36,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     floor: 1,
     name: 'Servant leader',
     character: 'Ember',
+    role: 'guide to work and money',
     color: '#E11D48',
     soft: '#FFE4E6',
     deep: '#9F1239',
@@ -46,6 +49,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     floor: 2,
     name: 'Friendship',
     character: 'Pip',
+    role: 'guide to friends',
     color: '#FB8728',
     soft: '#FFEDD5',
     deep: '#C2410C',
@@ -58,6 +62,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     floor: 3,
     name: 'Parent & child',
     character: 'Sunny',
+    role: 'guide to family',
     color: '#FACC15',
     soft: '#FEF9C3',
     deep: '#A16207',
@@ -70,6 +75,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     floor: 4,
     name: 'Lover & partner',
     character: 'Clover',
+    role: 'guide to love',
     color: '#9BB068',
     soft: '#F0F2E8',
     deep: '#5A6B38',
@@ -82,6 +88,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     floor: 5,
     name: 'With yourself',
     character: 'Dew',
+    role: 'guide to yourself',
     color: '#926247',
     soft: '#E8DDD9',
     deep: '#4F3422',
@@ -94,6 +101,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     floor: 6,
     name: 'With the guru',
     character: 'Sage',
+    role: 'guide to teachers',
     color: '#7F45E2',
     soft: '#EDE9FE',
     deep: '#5D2AAD',
@@ -106,6 +114,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     floor: 7,
     name: 'With the divine',
     character: 'Lumen',
+    role: 'guide to faith',
     color: '#5D2AAD',
     soft: '#DDD6FE',
     deep: '#2E1065',
@@ -118,6 +127,29 @@ export const RELATIONSHIPS: readonly Relationship[] = [
 export const RELATIONSHIP_BY_KEY: Record<RelationshipKey, Relationship> = Object.fromEntries(
   RELATIONSHIPS.map((r) => [r.key, r]),
 ) as Record<RelationshipKey, Relationship>;
+
+/** A character's name with what it looks after: "Dew, guide to yourself". */
+/**
+ * Bumling: the app's own guide. It runs the parts of a chat that belong to no one of the seven, like setting up
+ * the app, the map and the plan, so a character only speaks where its relationship is the subject.
+ */
+export const BUMLING = { key: 'bumling', character: 'Bumling', role: 'guide to the app' } as const;
+/** Who speaks in a chat: one of the seven, or Bumling. */
+export type Host = RelationshipKey | 'bumling';
+export const hostName = (h: Host): string => (h === 'bumling' ? BUMLING.character : RELATIONSHIP_BY_KEY[h].character);
+
+export function characterTitle(key: Host): string {
+  if (key === 'bumling') return `${BUMLING.character}, ${BUMLING.role}`;
+  const r = RELATIONSHIP_BY_KEY[key];
+  return `${r.character}, ${r.role}`;
+}
+
+/** How a character introduces itself in a chat: "Dew here, your guide to yourself." */
+export function characterHello(key: Host): string {
+  if (key === 'bumling') return `${BUMLING.character} here, your ${BUMLING.role}.`;
+  const r = RELATIONSHIP_BY_KEY[key];
+  return `${r.character} here, your ${r.role}.`;
+}
 
 export function isRelationshipKey(v: unknown): v is RelationshipKey {
   return typeof v === 'string' && v in RELATIONSHIP_BY_KEY;
@@ -152,8 +184,8 @@ export const KIND_META: Record<NodeKind, KindMeta> = {
     label: 'Foundation',
     plural: 'Foundations',
     prompt: 'One thing you will not let break',
-    hint: 'The base. What must stay standing no matter what.',
-    explain: 'The base of the pyramid. One thing you will not let break, ever.',
+    hint: 'The first layer, at the top. What must stay standing no matter what.',
+    explain: 'The first layer, at the top of the pyramid. One thing you will not let break, ever.',
     example: 'Family gets the first call',
   },
   principle: {
@@ -203,7 +235,7 @@ export const KIND_META: Record<NodeKind, KindMeta> = {
     plural: 'Tasks',
     prompt: 'One thing you can tick off today',
     hint: 'Small moves. Tick one and the whole pyramid feels it.',
-    explain: 'One small thing you can tick off today. The tip of the pyramid.',
+    explain: 'One small thing you can tick off today. The point of the pyramid, at the bottom.',
     example: 'Call a parent for ten minutes',
   },
 };
@@ -385,7 +417,7 @@ export const QUESTIONS: readonly Question[] = [
   ]),
   foundation('parent_child', 'Pick the foundation that must never crack:', [
     ['first_call', 'Family gets the first call', '📞'],
-    ['share_first', 'Family hears it first', '🎁'],
+    ['be_there', 'Be there for the family moments', '🏡'],
     ['real_questions', 'Ask real questions, not updates', '❓'],
   ]),
   // Clover
@@ -567,9 +599,9 @@ export const LADDERS: Record<RelationshipKey, Record<string, LadderTemplate>> = 
     first_call: L('Family gets the first call', 'Everything else can wait ten minutes', 'Feel close to home', 'Family that knows what my week was like', 'The ten-minute call',
       ['Call a parent or kid for ten minutes with no agenda', 'Send a photo from your day to family', 'Reply to the family chat today'],
       ['Make the call three times this week', 'Plan a visit and put it in the calendar', 'Have one call where you only listen']),
-    share_first: L('Family hears it first', 'They hear the news before anyone else', 'Feel like they are part of it', 'Family that can explain what I do', 'Family first',
-      ['Tell family your next bit of news before anyone else', 'Ask what they thought and actually listen', 'Explain one thing about your work in plain words'],
-      ['Do something together that you usually do alone', 'Show them what a normal day looks like for you', 'Let a family member plan your next weekend']),
+    be_there: L('Be there for the family moments', 'Birthdays, meals and hard days come first when I can', 'Feel like I belong at home', 'Family can count on me to show up', 'Show up at home',
+      ['Put the next family birthday or event in your calendar', 'Eat one meal with family this week, phones away', 'Ask a family member what they need help with this week'],
+      ['Plan a family day out and lead it', 'Help with one family job without being asked', 'Visit someone in the family you have not seen in a while']),
     real_questions: L('Ask real questions, not updates', 'One real question per conversation', 'Feel close', 'I know what my family worries about', 'The question jar',
       ['Ask a family member one question about their life, not yours', 'Ask about a story from before you were born', 'Ask what they are proud of this year'],
       ['Record a family story, with permission', 'Have the hard conversation you have been avoiding', 'Write a letter to a family member and send it']),
@@ -666,8 +698,8 @@ export function ladderOptions(relationship: RelationshipKey): { valueGoals: stri
   return { valueGoals: [...new Set(ts.map((t) => t.valueGoal))], projects: [...new Set(ts.map((t) => t.project))] };
 }
 
-/** What the person chose on the "derived from your answers" screen, by floor. Free text is allowed. */
-export type LadderPicks = Partial<Record<RelationshipKey, { valueGoal?: string; project?: string }>>;
+/** What the person chose or wrote for a floor: the value goal and the project, and the foundation in their own words. Free text is allowed. */
+export type LadderPicks = Partial<Record<RelationshipKey, { pillar?: string; valueGoal?: string; project?: string }>>;
 
 export function deriveAllLadders(answers: Answers): Record<RelationshipKey, DerivedLadder> {
   return Object.fromEntries(RELATIONSHIPS.map((r) => [r.key, deriveLadder(r.key, answers)])) as Record<RelationshipKey, DerivedLadder>;
@@ -818,6 +850,10 @@ export interface User {
   openToIntros: boolean;
   /** What they make and care about, for matching. */
   interests: string[];
+  /** Who they are, from the setup chat: known tag keys and labels in their own words. Never on the public page. */
+  identities: string[];
+  /** What the setup chat heard: goals and what gets in the way. */
+  intake: Intake;
   city: string;
   area: string;
   /** True when the person shared their position for nearby matching. The coordinates never leave the server. */
@@ -947,6 +983,8 @@ export interface TodayResponse {
   checkedIn: boolean;
   streak: number;
   tasks: Node[];
+  /** Tasks ticked on the person's day (in their zone), newest first, so a tick stays in sight and can be undone. */
+  done: Node[];
   /** Tasks ticked in the last day, so Today can say the routine is done. */
   doneRecently: number;
   spark: { relationship: RelationshipKey; text: string; done: boolean };
@@ -1412,6 +1450,12 @@ export interface AdminUser {
   email: string | null;
   handle: string | null;
   permissions: Permission[];
+  /** The assistant plan, or none, and when it ends. */
+  plan: PlanKey;
+  planUntil: string | null;
+  /** Credits left: the plan's for this period, and extra ones that stay. */
+  planCredits: number;
+  extraCredits: number;
 }
 
 export interface AdminRedemption extends Redemption {
@@ -1503,6 +1547,8 @@ export const MODULES: readonly AppModule[] = [
   { key: 'search', name: 'Search', blurb: 'Find anything you wrote, bought, applied to or read.', emoji: '🔍', group: 'core', path: '/search', defaultOn: true, locked: true, minRole: 'user' },
   { key: 'notifications', name: 'Inbox', blurb: 'What happened while you were away, and daily reminders.', emoji: '🔔', group: 'core', path: '/inbox', defaultOn: true, minRole: 'user' },
   { key: 'help', name: 'Help', blurb: 'Answers to common questions, and a line to the team.', emoji: '🛟', group: 'core', path: '/help', defaultOn: true, minRole: 'user' },
+  // The assistant is part of every screen, not an app of its own: locked on, and its page is its plan and credits.
+  { key: 'assistant', name: 'Assistant', blurb: 'Tap a flow to log something, or type what you did and it is done in the app for you. Typing is part of a plan.', emoji: '🪄', group: 'core', path: '/plans', defaultOn: true, locked: true, minRole: 'user' },
 
   { key: 'school', name: 'School', blurb: 'Programs and cohorts: lessons, assignments, mentor feedback, completion.', emoji: '🎓', group: 'earn', path: '/school', defaultOn: true, minRole: 'user', accent: 'guru' },
   { key: 'work', name: 'Work', blurb: 'Opportunities from brands and the team. Apply, track, get hired.', emoji: '💼', group: 'earn', path: '/work', defaultOn: true, minRole: 'user', accent: 'servant_leader' },
@@ -1994,7 +2040,10 @@ export interface PlacementFlags {
   volatile: boolean;
   capped: boolean;
 }
-/** The placement rules, in one place. */
+/**
+ * The placement rules, in one place. `required` marks a floor under Courage: the pillar the session suggests
+ * starting with. The person still picks their own focus; nothing is forced on them.
+ */
 export function placementFlags(p: Placement): PlacementFlags {
   const capped = p.core >= 400 && p.evidence.trim().length < 10;
   const core = capped ? ACCEPTANCE : p.core;
@@ -2012,12 +2061,23 @@ export interface Fear {
 }
 export interface Insecurity {
   text: string;
-  /** Out of 10. */
+  /** Out of 10, picked as one of the words in INSECURITY_WEIGHTS. */
   weight: number;
   relationship: RelationshipKey;
 }
 export const MAX_FEARS = 8;
 export const MAX_INSECURITIES = 8;
+/** How heavy an insecurity is, in words. Each keeps its number out of ten, so the focus rules are unchanged. */
+export const INSECURITY_WEIGHTS = [
+  { weight: 2, name: 'A little' },
+  { weight: 5, name: 'Some' },
+  { weight: 8, name: 'A lot' },
+  { weight: 10, name: 'Very heavy' },
+] as const;
+/** The word for a weight out of ten: the nearest one, so older numbers read too. */
+export function weightWord(weight: number): string {
+  return [...INSECURITY_WEIGHTS].sort((a, b) => Math.abs(a.weight - weight) - Math.abs(b.weight - weight))[0]!.name;
+}
 
 export const SCORECARD = {
   health: ['sleep', 'nutrition', 'movement', 'positive_stress', 'negative_stress', 'emotional_control'],
@@ -2037,7 +2097,13 @@ export const SCORE_LABEL: Record<(typeof SCORECARD.health)[number] | (typeof SCO
   time: 'Time that is yours',
 };
 export type Scores = Partial<Record<ScoreKey, number>>;
-/** A slider at 8 or more over a floor under Courage gets one behaviour question. Fewer than four days in seven caps it at 6. */
+/** What each star means on the scorecard, one star to five. */
+export const STAR_WORDS = ['Very poor', 'Poor', 'Okay', 'Good', 'Great'] as const;
+/** Stars from a score out of ten (two points a star), and back. */
+export const starsOf = (score: number): number => Math.max(0, Math.min(5, Math.round(score / 2)));
+export const scoreOfStars = (stars: number): number => Math.max(0, Math.min(10, Math.round(stars) * 2));
+
+/** A score of 8 or more (four stars or five) over a floor under Courage gets one behaviour question. Fewer than four days in seven caps it at 6. */
 export function settleScore(score: number, floor: number, daysInSeven: number | null): number {
   if (score < 8 || floor >= COURAGE) return score;
   if (daysInSeven === null) return score;
@@ -2054,7 +2120,7 @@ export interface RealDay {
 }
 export const DEFAULT_REAL_DAY: RealDay = { wake: '08:30', sleep: '00:30', workStart: '10:00', workEnd: '18:30', evening: '', gym: '' };
 
-/** Up to two focus pillars: every floor under Courage first, then the lowest cores weighted by insecurity. */
+/** The suggested focus, up to two pillars: every floor under Courage first, then the lowest cores weighted by insecurity. The person can change it. */
 export function pickFocus(placements: Placement[], insecurities: Insecurity[]): RelationshipKey[] {
   const flagged = placements.map((p) => ({ key: p.relationship, f: placementFlags(p) }));
   const required = flagged.filter((x) => x.f.required).sort((a, b) => a.f.floor - b.f.floor).map((x) => x.key);
@@ -2076,6 +2142,8 @@ export interface RoutineBlock {
   end: string;
   /** Only the morning block has steps; the day is done when every one is ticked. */
   steps: string[];
+  /** The minutes each morning step takes, in the same order. Older routines may not have them. */
+  minutes?: number[];
   note: string;
 }
 export interface Routine {
@@ -2114,7 +2182,7 @@ export function routineFor(day: RealDay, weeksCompliant: number, focus: Relation
   const exposure = placements.filter((p) => placementFlags(p).required).map((p) => RELATIONSHIP_BY_KEY[p.relationship].name.toLowerCase());
   const morningSteps = ['Mantra, five to ten minutes', 'Three breathing rounds', 'Two minutes of seeing the day go well', 'Ten minutes of movement', 'One page of reading'];
   const general: RoutineBlock[] = [
-    { key: 'morning', name: 'Morning routine', start: wake, end: toHHMM(w + 60), steps: morningSteps, note: 'Done only when every step is ticked.' },
+    { key: 'morning', name: 'Morning routine', start: wake, end: toHHMM(w + 60), steps: morningSteps, minutes: [10, 3, 2, 10, 5], note: 'Done only when every step is ticked.' },
     { key: 'nutrition', name: 'Food and water', start: toHHMM(w + 60), end: '20:00', steps: [], note: 'Water through the day. Last meal by eight.' },
     { key: 'work', name: 'Work', start: day.workStart || DEFAULT_REAL_DAY.workStart, end: day.workEnd || DEFAULT_REAL_DAY.workEnd, steps: [], note: day.gym ? `Gym at ${day.gym}, before dinner.` : 'Gym before dinner if you train.' },
     { key: 'social', name: 'People', start: day.workEnd || DEFAULT_REAL_DAY.workEnd, end: '21:00', steps: [], note: exposure.length ? `One small scary thing a day for ${exposure.join(' and ')}. Log it.` : focus.length ? `One real conversation a day for ${focus.map((k) => RELATIONSHIP_BY_KEY[k].name.toLowerCase()).join(' or ')}.` : 'One real conversation a day.' },
@@ -2122,16 +2190,69 @@ export function routineFor(day: RealDay, weeksCompliant: number, focus: Relation
     { key: 'sleep', name: 'Lights out', start: sleep, end: wake, steps: [], note: 'Evening line on the way down.' },
   ];
   const exceptional: RoutineBlock[] = general.map((b) =>
-    b.key === 'morning' ? { ...b, end: toHHMM(w + 20), steps: ['Mantra, five minutes', 'One breathing round', 'Five minutes of movement'], note: 'The short form for a day that is not yours.' } : b.key === 'skills' ? { ...b, start: '22:00', note: 'Just the journal tonight.' } : b,
+    b.key === 'morning' ? { ...b, end: toHHMM(w + 20), steps: ['Mantra, five minutes', 'One breathing round', 'Five minutes of movement'], minutes: [5, 1, 5], note: 'The short form for a day that is not yours.' } : b.key === 'skills' ? { ...b, start: '22:00', note: 'Just the journal tonight.' } : b,
   );
   return { general, exceptional };
+}
+
+/** How much a routine can hold once edited: morning steps, and the words in a step or a note. */
+export const ROUTINE_STEPS_MAX = 10;
+export const ROUTINE_STEP_MAX = 80;
+export const ROUTINE_NOTE_MAX = 160;
+export const ROUTINE_STEP_MINUTES_MAX = 120;
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** How long a block runs, start to end, in minutes. A block that runs past midnight, like lights out, wraps. */
+export function blockMinutes(b: Pick<RoutineBlock, 'start' | 'end'>): number {
+  const d = toMin(b.end) - toMin(b.start);
+  return d >= 0 ? d : d + 24 * 60;
+}
+/** The minutes a block's steps add up to. */
+export function stepsMinutes(b: Pick<RoutineBlock, 'steps' | 'minutes'>): number {
+  return b.steps.reduce((a, _, i) => a + (b.minutes?.[i] ?? 0), 0);
+}
+/** Minutes in words: "45 min", "1 hr", "1 hr 30 min". */
+export function minutesLabel(n: number): string {
+  const h = Math.floor(n / 60);
+  const m = n % 60;
+  return h ? (m ? `${h} hr ${m} min` : `${h} hr`) : `${m} min`;
+}
+/**
+ * The one check on an edited routine, for the editor and for PATCH /session/routine: the six blocks in the
+ * routine's own order (a block that is not sent keeps what it had), times as HH:MM, a note per block, and the morning's steps
+ * with their minutes, one to ROUTINE_STEPS_MAX, each named once. The other blocks keep no steps.
+ */
+export function parseRoutineBlocks(input: unknown, current: RoutineBlock[]): RoutineBlock[] {
+  const given = Array.isArray(input) ? input : [];
+  const text = (v: unknown, max: number) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
+  // The routine's own order, which is the day's order; a block it somehow lacks joins at the end.
+  const order = [...current.map((b) => b.key), ...BLOCK_KEYS.filter((k) => !current.some((b) => b.key === k))];
+  return order.map((key) => {
+    const was = current.find((b) => b.key === key) ?? { key, name: key, start: '00:00', end: '00:00', steps: [], note: '' };
+    const raw = given.find((g): g is Record<string, unknown> => Boolean(g) && typeof g === 'object' && (g as { key?: unknown }).key === key);
+    if (!raw) return was;
+    const time = (v: unknown, fallback: string) => (typeof v === 'string' && HHMM.test(v) ? v : fallback);
+    const block: RoutineBlock = { key, name: was.name, start: time(raw.start, was.start), end: time(raw.end, was.end), steps: [], note: typeof raw.note === 'string' ? text(raw.note, ROUTINE_NOTE_MAX) : was.note };
+    if (key !== 'morning') return block;
+    const minutes = Array.isArray(raw.minutes) ? raw.minutes : [];
+    const seen = new Set<string>();
+    const kept = (Array.isArray(raw.steps) ? raw.steps : [])
+      .map((st, i) => ({ step: text(st, ROUTINE_STEP_MAX), mins: Math.max(0, Math.min(ROUTINE_STEP_MINUTES_MAX, Math.round(Number(minutes[i]) || 0))) }))
+      .filter((x) => x.step && !seen.has(x.step.toLowerCase()) && seen.add(x.step.toLowerCase()))
+      .slice(0, ROUTINE_STEPS_MAX);
+    // The morning always keeps at least one step, or the day could never be done.
+    if (kept.length === 0) return { ...block, steps: was.steps, ...(was.minutes ? { minutes: was.minutes } : {}) };
+    return { ...block, steps: kept.map((x) => x.step), minutes: kept.map((x) => x.mins) };
+  });
 }
 
 export const MANTRAS = [
   { key: 'om_namah_shivaya', name: 'Om Namah Shivaya', blurb: 'For the material path: work, money, the body.' },
   { key: 'hare_krishna', name: 'Hare Krishna', blurb: 'For the spiritual path: practice, surrender, meaning.' },
+  { key: 'own', name: 'My own mantra', blurb: 'Words of your own.' },
   { key: 'none', name: 'No mantra yet', blurb: 'Breathing and reading only.' },
 ] as const;
+export const OWN_MANTRA_MAX = 80;
 export const BREATHING = [
   { key: 'box', name: 'Box breathing', blurb: 'In four, hold four, out four, hold four.' },
   { key: '478', name: 'Four seven eight', blurb: 'In four, hold seven, out eight.' },
@@ -2139,10 +2260,19 @@ export const BREATHING = [
 ] as const;
 export interface Practices {
   mantra: (typeof MANTRAS)[number]['key'];
+  /** The words, when the mantra is your own. */
+  ownMantra?: string;
   breathing: (typeof BREATHING)[number]['key'];
   affirmation: string;
   reading: string;
 }
+/** The mantra in words: a known one's name, your own words in quotes, or none yet. */
+export function mantraLine(p: Pick<Practices, 'mantra' | 'ownMantra'>): string {
+  const own = p.ownMantra?.trim();
+  if (p.mantra === 'own') return own ? `“${own}”` : 'No mantra yet';
+  return MANTRAS.find((m) => m.key === p.mantra)?.name ?? 'No mantra yet';
+}
+
 /** One line to say on waking and before sleep, from the focus. */
 export function affirmationFor(focus: RelationshipKey[]): string {
   const names = focus.map((k) => RELATIONSHIP_BY_KEY[k].name.toLowerCase());
@@ -3106,6 +3236,10 @@ export interface CircleEvent {
   /** The person's own pick when they joined. Never anyone else's. */
   myStatus: CircleStatus | null;
   myGroupId: string | null;
+  /** The xp its attendee code gives, when the host made one. */
+  attendeeXp: number | null;
+  /** The code itself, with its counts, for the host and events staff only. */
+  hostCode: AttendeeCodeHost | null;
   createdAt: string;
 }
 
@@ -3661,6 +3795,8 @@ export interface PartyEvent {
   registered: number;
   waitlisted: number;
   mine: EventRegistration | null;
+  /** The xp its attendee code gives, when the host made one. */
+  attendeeXp: number | null;
   createdAt: string;
 }
 
@@ -3689,6 +3825,66 @@ export const RUN_PACE_META: Record<RunPace, { name: string; blurb: string }> = {
 };
 /** What one logged run pays. Paid by the start code, once per run, at most twice a day. */
 export const RUN_REWARD = { xp: 20, points: 10, perDay: 2 } as const;
+
+/**
+ * Attendee codes, for the Connection apps that hold events with guests: Party events, runs and circles. Before the
+ * event starts its host sets how much xp it gives (up to ATTENDEE_XP_MAX) and makes a code, random or their own word.
+ * On the day only the event's own guests can claim it, once each, inside the event's window (the run window), and
+ * never the host. A run's code is its start code, which also pays the run's points.
+ */
+export const ATTENDEE_CODE_APPS = ['party', 'run', 'circles'] as const;
+export type AttendeeCodeApp = (typeof ATTENDEE_CODE_APPS)[number];
+/** The most xp a host can set for one event. */
+export const ATTENDEE_XP_MAX = 50;
+/** What an event gives when its host does not say. The same as a run always gave. */
+export const ATTENDEE_XP_DEFAULT = 20;
+/** Event codes (Party and Circles) that pay in any 24 hours. Runs keep their own cap, RUN_REWARD.perDay. */
+export const ATTENDEE_CLAIMS_PER_DAY = 3;
+export const ATTENDEE_CODE_MIN = 4;
+export const ATTENDEE_CODE_MAX = 12;
+/** A circle has a start and no end; for its code window it lasts this long. */
+export const CIRCLE_MINUTES = 120;
+
+/** A code as it is kept and compared: capitals and digits only, at most ATTENDEE_CODE_MAX. "sunday run!" is SUNDAYRUN. */
+export const normalizeCode = (text: unknown): string => (typeof text === 'string' ? text.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, ATTENDEE_CODE_MAX) : '');
+export function codeProblem(text: unknown): string | null {
+  return normalizeCode(text).length < ATTENDEE_CODE_MIN ? `A code is ${ATTENDEE_CODE_MIN} to ${ATTENDEE_CODE_MAX} letters or numbers.` : null;
+}
+export function attendeeXpProblem(xp: unknown): string | null {
+  return typeof xp === 'number' && Number.isInteger(xp) && xp >= 1 && xp <= ATTENDEE_XP_MAX ? null : `The xp is a whole number from 1 to ${ATTENDEE_XP_MAX}.`;
+}
+/** Once an event has started, its xp is fixed: it was promised to the guests. */
+export const attendeeXpLocked = (startsAt: string, now: number = Date.now()): boolean => now >= Date.parse(startsAt);
+
+/** What a guest sees: the xp, whether they claimed it, and whether the code works now. Never the code. */
+export interface AttendeeCodeView {
+  xp: number;
+  claimed: boolean;
+  state: RunEntryState;
+}
+/** What the host (or staff) sees. Circles show counts only: their guests are aliases. */
+export interface AttendeeCodeHost {
+  code: string;
+  xp: number;
+  /** The xp is fixed: the event has started. */
+  locked: boolean;
+  claims: number;
+  guests: number;
+}
+/** One event in the admin's list of every attendee code. */
+export interface AdminAttendeeCode {
+  app: AttendeeCodeApp;
+  thingId: string;
+  title: string;
+  hostName: string;
+  startsAt: string;
+  status: string;
+  xp: number | null;
+  code: string | null;
+  locked: boolean;
+  claims: number;
+  guests: number;
+}
 /** How long before the start and after the end a start code still works, in minutes. */
 export const RUN_CODE_WINDOW = { before: 30, after: 180 } as const;
 export const RUN_CODE_LENGTH = 6;
@@ -3778,6 +3974,8 @@ export interface Run {
   metres: number;
   /** The start code. Only the host sees it; everyone else gets null. */
   code: string | null;
+  /** The xp a logged run pays, set by the host before it starts. */
+  xp: number;
   entryState: RunEntryState;
   collab: { id: string; title: string; brand: string; giveaway: string } | null;
   status: 'published' | 'cancelled' | 'done';
@@ -4233,7 +4431,8 @@ export function earningGuide(): { title: string; lines: EarningLine[] }[] {
       { what: 'A like you give', pays: `${SOCIAL_REWARDS.like.xp} xp`, how: `Up to ${SOCIAL_REWARDS.like.perDay} a day.` },
       { what: 'A like on your post', pays: `${SOCIAL_REWARDS.liked.points} point`, how: 'Paid to you, once per person per post.' },
       { what: 'A new follower', pays: `${SOCIAL_REWARDS.follower.points} points`, how: 'Paid to you, once per person.' },
-      { what: 'A run with a club', pays: `${RUN_REWARD.xp} xp and ${RUN_REWARD.points} points`, how: `Enter the start code during the run. Once per run, ${RUN_REWARD.perDay} runs a day.` },
+      { what: 'A run with a club', pays: `Up to ${ATTENDEE_XP_MAX} xp and ${RUN_REWARD.points} points`, how: `The host sets the xp before it starts. Enter the start code during the run. Once per run, ${RUN_REWARD.perDay} runs a day.` },
+      { what: 'Going to an event or a circle', pays: `Up to ${ATTENDEE_XP_MAX} xp`, how: `If the host set xp, type their attendee code at the event. Guests only, once each, ${ATTENDEE_CLAIMS_PER_DAY} a day.` },
     ],
   },
   {
@@ -4258,13 +4457,13 @@ export function earningGuide(): { title: string; lines: EarningLine[] }[] {
 /** Every term the app coined, with its meaning. Shown under "Words we use" and in each app's how-to. */
 export const TERMS: Record<string, string> = {
   pillar: 'One of the seven relationships in your life, as a place in the app. Each pillar is a pyramid.',
-  pyramid: 'How a pillar is built: a foundation at the base, then a guiding principle, a value goal, a goal outcome, a project, and tasks at the tip.',
-  foundation: 'The base of a pillar: one thing you will not let break, ever.',
+  pyramid: 'How a pillar is built: a foundation at the top, then a guiding principle, a value goal, a goal outcome, a project, and tasks at the point at the bottom.',
+  foundation: 'The first layer of a pillar, at the top: one thing you will not let break, ever.',
   'guiding principle': 'The second layer: a line you live by, so the foundation holds.',
   'value goal': 'The third layer: how you want to feel more often. No numbers, just the feeling.',
   'goal outcome': 'The fourth layer: what you would see when the value goal is real.',
   project: 'The fifth layer: a bunch of tasks with a finish line.',
-  task: 'The tip of the pyramid: one small thing you can tick off today. Each one pays xp and sends a ripple down.',
+  task: 'The point of the pyramid, at the bottom: one small thing you can tick off today. Each one pays xp and sends a ripple up.',
   'small act': 'One two-minute thing a day for your weakest pillar, picked for you.',
   'check-in': 'The first box on Daily. Ten xp, ten points, and it keeps your streak.',
   streak: 'Days in a row. A check-in streak pays extra every seventh day.',
@@ -4273,7 +4472,8 @@ export const TERMS: Record<string, string> = {
   level: 'Where your xp has got you. Each level needs more than the last.',
   badge: 'Proof you did something, earned by the app\'s own count. It sits on your public page.',
   honor: 'A badge the team gives, or time unlocks.',
-  ripple: 'Xp that runs down from a ticked task to every layer under it.',
+  ripple: 'Xp that runs up from a ticked task to every layer above it.',
+  bumling: 'The app’s own guide. Bumling helps you set things up and runs the chats about the whole app, not one relationship.',
   'daily three': 'Check in, the small act, one task.',
   'not-to-do': 'Things you stay away from, each with its own streak of kept days.',
   'kept day': 'A day you ticked a not-to-do: you stayed away from it.',
@@ -4299,16 +4499,22 @@ export const TERMS: Record<string, string> = {
   alias: 'The made-up name you carry in circles and Bond chats. Nobody sees the real one.',
   guide: 'A team member who keeps the community kind.',
   'run club': 'A group that runs together. Anyone can start one; members log runs with the start code.',
-  'start code': 'Six letters the host shows at the start line. Enter it during the run and your entry is logged, once. That is how a run pays points without anyone cheating.',
+  'start code': 'The code the host shows at the start line: six letters, or a word the host picks. Enter it during the run and your entry is logged, once. That is how a run pays without anyone cheating.',
+  'attendee code': 'The code a host shows at their event. The guests on its list type it in to get the xp the host set before it started, once each. Hosts give it; they never claim it.',
   collab: 'A brand offer to run clubs: what the brand gives, what it asks, and a giveaway for the runners. A host applies with the club.',
   giveaway: 'What a brand gives runners at a collab run: shoes, a kit, a voucher. Listed on the collab before anyone applies.',
   'brand folder': 'One place for one brand in Content: its links, the research done on them, and the pieces written from that.',
   outlier: 'A video or post that did far better than the rest of its channel or niche. Research sorts them to the top.',
   hook: 'The first line of a video or post, the part that decides whether anyone stays.',
   piece: 'Something Content wrote for a brand: an audit, a plan, a calendar, ideas, hooks, a script, posts, or a breakdown.',
-  'strategy session': 'The twenty minutes that start the app: the map, your fears and insecurities, a scorecard, your real day, a focus, a routine and a contract.',
+  'strategy session': 'The setup for your pillars, in Pillars, whenever you want it: a few minutes that place all seven relationships on the map, name what gets in the way, and leave you with a focus, a routine and a contract.',
+  'setup chat': 'The short chat at the start. It asks what you want, who you are and what gets in your way, then switches on the apps that fit. Run it again from Profile.',
+  'identity tag': 'A word for who you are, like Student or Video editor, from the setup chat or in your own words. Your tags pick your apps and fill in your skills and interests. They never show on your public page.',
   map: 'A ladder of sixteen levels, from Shame to Oneness, used as a shared language for how you operate. Names, never numbers.',
   'life map': 'The page under Pillars that keeps everything the strategy session found: all seven on the map, your scores, what gets in the way, your routine and your contract.',
+  assistant: 'The round button at the bottom right of every screen. Tap a flow to log something by answering a question or two, free for everyone. With a plan you can also type what you did, and it is done in the app for you, each change with an Undo.',
+  credits: 'What typing to the assistant runs on. One credit is a tenth of a US cent of model use, so a typical message is about 12 credits. A plan gives credits each month; top-ups and team grants add more that do not run out.',
+  'top-up': 'Extra credits on top of your plan. They stay until you use them, after the plan\'s own credits are gone.',
   core: 'Where you usually live on the map, in one relationship.',
   floor: 'Where you drop to under stress, in one relationship. A floor under Courage makes that pillar a month-one focus.',
   routine: 'Six blocks a day, built from your real day and moved thirty minutes a week. The morning block counts only when every step is ticked.',
@@ -4322,6 +4528,16 @@ export interface HowTo {
 }
 /** How every app works, by module key, shown at the bottom of its main screen, plus the terms it leans on. */
 export const HOW_TO: Record<string, HowTo> = {
+  assistant: {
+    steps: [
+      'Tap the round button at the bottom right of any screen. The assistant opens over the page, so you can watch each change land.',
+      'Tap a flow to log something by answering a question or two: a check-in, a task, your sleep, money in or out. The flows are free for everyone.',
+      'With a plan you can also type what you did, like “I edited the vlog and slept six hours”. It does it in the app as you, then lists each change with an Undo. Removing things and settling money wait for your Confirm.',
+      'Typing spends credits: one credit is a tenth of a US cent of model use, and a typical message is about 12. Pro gives 10,000 credits a month, Pro Max 100,000 and Ultra 400,000. Each plan also caps what one message and one day can spend.',
+      'It earns the same xp and points as a tap, waits the same waits, and never sees anything that is not yours. It reads your journal only when you ask about it.',
+    ],
+    terms: ['assistant', 'credits', 'top-up'],
+  },
   home: {
     steps: [
       'Home opens after sign-in and answers “how am I doing” before “what do I do”. The top tiles are your streak, xp today, points and level.',
@@ -4330,46 +4546,46 @@ export const HOW_TO: Record<string, HowTo> = {
       'Pick a period at the bottom to see the same numbers by week, month, quarter or half year, next to the period before.',
       'The search box at the top finds apps, tasks, people, products and more as you type.',
     ],
-    terms: ['xp', 'points', 'level', 'streak', 'period'],
+    terms: ['xp', 'points', 'level', 'streak', 'period', 'assistant'],
   },
   today: {
     steps: [
       'Daily is three boxes a day: check in, do the small act, tick one task. Checking in pays 10 xp and 10 points and keeps your streak; every seventh day in a row pays 50 points more. Your routine from the strategy session sits under the first box.',
       'The small act is a two-minute thing for your weakest pillar, picked for you each day. It pays 15 xp.',
-      'Tasks come from the pillars you set up. Each pays 20 xp and sends a ripple down its pyramid. A task with a date waits for that day, and a new task waits ten minutes before it can be ticked.',
+      'Tasks come from the pillars you set up. Each pays 20 xp and sends a ripple up its pyramid. A task with a date waits for that day, and a new task waits ten minutes before it can be ticked.',
       'Under the tasks, the not-to-do list holds up to seven things you are staying away from. Tick one to say you kept it today: a kept day pays 5 xp and grows that item’s streak. A slip or a missed day starts the streak over.',
       'At the bottom, who you are becoming shows the figure your xp is filling in, and how far away the next form is.',
     ],
-    terms: ['daily three', 'check-in', 'small act', 'task', 'not-to-do', 'kept day', 'who you are becoming', 'routine'],
+    terms: ['daily three', 'check-in', 'small act', 'task', 'not-to-do', 'kept day', 'who you are becoming', 'routine', 'assistant'],
   },
   tower: {
     steps: [
-      'It starts with the strategy session: twenty minutes that place all seven relationships on the map (where you usually live, where you drop under stress), score your health and wealth, and build a routine and a contract from your real day. Your life map, under Pillars, keeps every answer and can be run again. Then each pillar is set up with a short vibe check, three taps per pillar; you never fill in a form.',
+      'Pillars has its own setup, the strategy session, for whenever you want it: a few minutes that place all seven relationships on the map (where you usually live, where you drop under stress), score your health and wealth, and build a routine and a contract from your real day. Your life map, under Pillars, keeps every answer and can be run again. Or set up one pillar at a time with a short vibe check, three taps each.',
       'Each pillar is a pyramid with six layers. The foundation is the one thing you will not let break. The guiding principle is a line you live by so it holds. The value goal is how you want to feel more often. The goal outcome is what you would see when that is real. Then a project, and tasks at the tip.',
-      'Your answers build the lower four layers; you pick or write the project and its tasks. Tick a task on Daily and the glow runs down to the base: 20 xp for the task, then a smaller ripple to each layer under it. Clear every task in a project for 30 xp more.',
+      'Your answers build the first four layers; you pick or write the project and its tasks. Tick a task on Daily and the glow runs up to the foundation: 20 xp for the task, then a smaller ripple to each layer above it. Clear every task in a project for 30 xp more.',
       'Every pillar has a level and a character that grows with it. The weakest pillar is the one that sends your small act.',
       'Open a pillar to see its pyramid, add tasks, give them dates and times, and archive what no longer fits.',
     ],
-    terms: ['pillar', 'pyramid', 'foundation', 'guiding principle', 'value goal', 'goal outcome', 'project', 'task', 'ripple', 'strategy session', 'life map', 'core', 'floor'],
+    terms: ['pillar', 'pyramid', 'foundation', 'guiding principle', 'value goal', 'goal outcome', 'project', 'task', 'ripple', 'strategy session', 'life map', 'core', 'floor', 'assistant'],
   },
   apps: {
     steps: [
       'Apps lists only what is on, in groups by what they are for: Contribution, Creation, Connection, Reflection, Essentials and Operations. Tap one to open it.',
       'The button at the top, Turn apps on or off, leads to Profile, Features, the one place every app is switched on or off.',
       'An app you switch on joins this list, the laptop sidebar under its group, and the phone menu under the top-right button.',
-      'Only a few apps start on: School, Work, Army, Journal, Life, Shop and Public page. The rest wait until you want them.',
+      'The setup chat at the start switches on the apps that fit who you are and what you want, and leaves the rest off. Run it again from Profile, or switch any app yourself.',
     ],
-    terms: [],
+    terms: ['setup chat', 'identity tag'],
   },
   you: {
     steps: [
-      'Your account, your badges and honors, and the figure you are becoming all live here.',
+      'Who you are sits at the top: the identity tags from the setup chat. Run the setup again to change them and the apps that fit. Your account, badges and honors live here too.',
       'Badges are earned by the app’s own count: your first task, streaks, ten tasks, a cleared project, level five, small acts, the Club, and runs. Honors are given by the team or unlocked by time here.',
       'Under Account, add an email and password so your progress survives this device, change the password, export your data, or delete the account.',
-      'Under Features, switch apps on or off, in the same groups and colours as the Apps page. Appearance picks light, dark or auto.',
+      'Under Features, switch apps on or off, in the same groups and colours as the Apps page. An app that fits your tags says why. Appearance picks light, dark or auto.',
       'See my public page shows exactly what other people see at your address.',
     ],
-    terms: ['badge', 'honor', 'who you are becoming', 'public page'],
+    terms: ['identity tag', 'setup chat', 'badge', 'honor', 'who you are becoming', 'public page'],
   },
   profile: {
     steps: [
@@ -4424,16 +4640,16 @@ export const HOW_TO: Record<string, HowTo> = {
       'Meetups anyone can host. Parties, workshops, camps and Kreators Days are run by the team.',
       'RSVP to take a seat. A full room puts you on the waitlist, first in line: if a seat opens, the first person waiting gets it and a note in their inbox.',
       'Some events cost points for a ticket. Cancelling a seat refunds them.',
-      'The host checks people in at the door. Afterwards, rate it and say if you are happy to be introduced; Bond uses that to suggest people you met.',
+      `A host can set xp for the guests before it starts, up to ${ATTENDEE_XP_MAX}, and shows an attendee code on the day. Type it on the event page to get the xp, once. Afterwards, rate it and say if you are happy to be introduced; Bond uses that to suggest people you met.`,
       'Club members see Club-only events. Private events only show to people with the link.',
     ],
-    terms: [],
+    terms: ['attendee code', 'xp'],
   },
   run: {
     steps: [
       'Join a run club near you, or start one: a name, a city, a pace and where it usually meets. The host is its first member.',
-      'The host adds runs. Each run gets a six-letter start code that only the host sees, to show at the start line.',
-      'Enter the code during the run to log it: from thirty minutes before the start to three hours after the end, once per run. A logged run pays 20 xp and 10 points, up to two paid runs a day, and its minutes count as movement in Life.',
+      `The host adds runs and sets each one's xp before it starts (${ATTENDEE_XP_DEFAULT} unless they say, up to ${ATTENDEE_XP_MAX}). Each run gets a start code only the host sees: six letters, or a word the host picks, to show at the start line.`,
+      'Enter the code during the run to log it: from thirty minutes before the start to three hours after the end, once per run. A logged run pays its xp and 10 points, up to two paid runs a day, and its minutes count as movement in Life. The host does not log their own run.',
       'My runs tracks your kilometres over thirty days, your weekly streak, and three badges: First run, Ten runs and Hundred k.',
       'Brand collabs have their own tab: what a brand gives, what it asks, and the giveaway. A host applies with the club; an accepted collab shows its giveaway on the club and on the runs tied to it.',
     ],
@@ -4473,9 +4689,9 @@ export const HOW_TO: Record<string, HowTo> = {
       'Two days before, tables are set: people nearby whose interests complement yours, under aliases.',
       'The chat opens a day before. Agree on the exact place and time together.',
       'Show up in the colour that says where you stand: red if you are single, white if you are committed. Rather not say? Wear what you like.',
-      'Meet. Afterwards, open an anonymous chat with anyone from your table under Bond. Nobody is ever revealed.',
+      'Meet. If the host set xp, type the attendee code shown at the meetup on your table page. Afterwards, open an anonymous chat with anyone from your table under Bond. Nobody is ever revealed.',
     ],
-    terms: ['circle', 'alias'],
+    terms: ['circle', 'alias', 'attendee code'],
   },
   life: {
     steps: [
@@ -4917,7 +5133,7 @@ export interface SupportTicket {
 
 export const HELP_FAQ = [
   { q: 'What are the daily three?', a: 'Check in, do the small act, tick one task. They are on Daily. Each one you tick pays xp. The check-in pays points too.' },
-  { q: 'What are the seven pillars?', a: 'The seven relationships that make a life, one pillar each. Each pillar has a pyramid: a foundation at the base, then a guiding principle, a value goal, a goal outcome, a project, and tasks at the tip. Tick a task and the whole pyramid gets stronger.' },
+  { q: 'What are the seven pillars?', a: 'The seven relationships that make a life, one pillar each. Each pillar has a pyramid: a foundation at the top, then a guiding principle, a value goal, a goal outcome, a project, and tasks at the point at the bottom. Tick a task and the whole pyramid gets stronger.' },
   { q: 'What is a small act?', a: 'One quick thing for your weakest pillar, picked for you each day. It takes two minutes and pays fifteen xp.' },
   { q: 'Why can I not tick a task yet?', a: 'A task needs ten minutes after being written or renamed before it can be ticked. Only six ticks a day pay xp; the rest still count as done.' },
   { q: 'Points versus xp?', a: 'Xp levels you and your pillars up. Points come from showing up. You can trade points for rewards, for things people sell, and for events.' },
@@ -5089,3 +5305,791 @@ export function greetingFor(hour: number): string {
   if (hour < 18) return 'Good afternoon';
   return 'Good evening';
 }
+
+// ---------------------------------------------------------------------------
+// Setup: the first chat. Who you are (identity tags, made as you answer, in your own words when no tag
+// fits), what you came for, and what gets in the way. The apps that fit are matched from the whole
+// combination, never one answer at a time: every answer weighs the apps, pairs of answers that belong
+// together weigh more, and every app that comes on says why, in words built from your own answers. The
+// strategy session is the pillars' own onboarding, inside Pillars, offered here when the answers ask for it.
+// ---------------------------------------------------------------------------
+
+export type IdentityKind = 'role' | 'craft' | 'service' | 'stage' | 'life';
+
+/** Something the setup can tag you as. A known tag carries what it adds to the profile and how well each app fits. */
+export interface IdentityOption {
+  key: string;
+  /** The tag as it shows: Student, Video editor. */
+  label: string;
+  emoji: string;
+  kind: IdentityKind;
+  /** The line under it on its card. */
+  blurb: string;
+  /** How a reason says it, after "because": "you are studying". */
+  because: string;
+  /** Typed words that tag it: lower case, whole words or phrases. */
+  words: readonly string[];
+  skill?: (typeof SKILLS)[number];
+  interest?: Interest;
+  focus?: (typeof FOCUS_OPTIONS)[number];
+  level?: (typeof EXPERIENCE_LEVELS)[number];
+  /** How well each app fits this tag, 1 to 3. */
+  apps: Readonly<Record<string, number>>;
+}
+
+export const IDENTITIES: readonly IdentityOption[] = [
+  // Who you are right now: the first card.
+  { key: 'creator', label: 'Creator', emoji: '🎬', kind: 'role', blurb: 'I make content', because: 'you make content', words: ['creator', 'content creator', 'influencer', 'youtuber', 'instagrammer', 'vlogger', 'make content', 'create content', 'post content', 'make videos', 'my channel', 'my page', 'my followers', 'my subscribers'], focus: 'Creating', apps: { profile: 2, army: 2, win: 2, work: 1, content: 1, tools: 1 } },
+  { key: 'freelancer', label: 'Freelancer', emoji: '🧳', kind: 'role', blurb: 'I freelance for clients', because: 'you make things for clients', words: ['freelance', 'freelancer', 'freelancing', 'clients', 'my clients', 'client work', 'fiverr', 'upwork', 'agency'], focus: 'Creating', apps: { work: 3, profile: 2, army: 1, finance: 1 } },
+  { key: 'student', label: 'Student', emoji: '🎓', kind: 'role', blurb: "I'm a student", because: 'you are studying', words: ['student', 'studying', 'college', 'university', 'uni', 'school', 'exams', 'semester', 'degree', 'final year', 'class 12'], focus: 'Study', apps: { school: 3, work: 1, knowledge: 1, circles: 1 } },
+  { key: 'employee', label: 'Employee', emoji: '💼', kind: 'role', blurb: 'I have a job', because: 'you have a job', words: ['my job', 'day job', 'full time job', 'i have a job', 'office', 'employee', 'corporate', 'salaried', 'working professional', '9 to 5', '9-5', 'nine to five', 'i work at', 'i work in'], focus: 'Work', apps: { reviews: 2, finance: 2, journal: 1, school: 1 } },
+  { key: 'founder', label: 'Founder', emoji: '🚀', kind: 'role', blurb: 'I run a business', because: 'you run a business', words: ['founder', 'co-founder', 'cofounder', 'my business', 'own business', 'small business', 'startup', 'my brand', 'brand owner', 'business owner', 'shop owner', 'store owner', 'entrepreneur', 'my shop', 'my store', 'my company', 'run a business', 'run a brand', 'run a company', 'run a shop', 'run a store', 'run a startup', 'run a small', 'own a business', 'own a shop', 'own brand', 'd2c'], focus: 'Business', apps: { shop: 2, finance: 3, audience: 2, content: 2, automations: 1 } },
+  { key: 'explorer', label: 'Explorer', emoji: '🧭', kind: 'role', blurb: "I'm between things", because: 'you are working out what is next', words: ['between jobs', 'unemployed', 'jobless', 'gap year', 'figuring out', 'figuring it out', 'career change', 'quit my job', 'looking for a job', 'looking for work', 'fresh start', 'what is next'], focus: 'Other', apps: { work: 3, school: 2, knowledge: 1, journal: 1 } },
+  { key: 'parent', label: 'Parent or carer', emoji: '👪', kind: 'role', blurb: 'I look after family', because: 'you look after family', words: ['parent', 'mom', 'mum', 'mother', 'dad', 'father', 'my kids', 'my son', 'my daughter', 'children', 'my baby', 'carer', 'caregiver', 'looking after'], focus: 'Family', interest: 'Parenting', apps: { sleep: 2, stress: 2, journal: 1, mood: 1, finance: 1 } },
+  // What a creator makes.
+  { key: 'short_video', label: 'Short-form creator', emoji: '📱', kind: 'craft', blurb: 'Reels and Shorts', because: 'you make short videos', words: ['reels', 'reel', 'shorts', 'tiktok', 'tiktoks', 'short videos', 'short form', 'short-form'], interest: 'Video', apps: { win: 2, army: 1, content: 1, automations: 1 } },
+  { key: 'long_video', label: 'Video creator', emoji: '🎥', kind: 'craft', blurb: 'YouTube videos', because: 'you make long videos', words: ['youtube', 'youtuber', 'long videos', 'long form', 'long-form', 'vlog', 'vlogs', 'documentary', 'documentaries'], interest: 'Video', apps: { content: 2, win: 1, army: 1, tools: 1, tv: 1 } },
+  { key: 'photo', label: 'Photographer', emoji: '📷', kind: 'craft', blurb: 'Photos', because: 'you take photos', words: ['photo', 'photos', 'photography', 'photographer', 'carousels'], skill: 'Photography', interest: 'Photography', apps: { work: 2, store: 1, shop: 1 } },
+  { key: 'podcast', label: 'Podcaster', emoji: '🎙️', kind: 'craft', blurb: 'Podcasts', because: 'you make a podcast', words: ['podcast', 'podcasts', 'podcaster', 'talk show'], skill: 'Interviewing', interest: 'Podcasting', apps: { tv: 2, content: 1, tools: 1 } },
+  { key: 'writing', label: 'Writer', emoji: '✍️', kind: 'craft', blurb: 'Writing', because: 'you write', words: ['writer', 'writing', 'blog', 'blogger', 'newsletter', 'threads', 'articles', 'substack'], skill: 'Writing', interest: 'Writing', apps: { content: 2, knowledge: 1 } },
+  { key: 'music', label: 'Musician', emoji: '🎵', kind: 'craft', blurb: 'Music', because: 'you make music', words: ['music', 'musician', 'singer', 'rapper', 'music producer', 'beats', 'songs', 'covers', 'my band'], interest: 'Music making', apps: { party: 2, shop: 1 } },
+  { key: 'stream', label: 'Streamer', emoji: '🎮', kind: 'craft', blurb: 'Live streams', because: 'you stream', words: ['stream', 'streams', 'streaming', 'streamer', 'twitch', 'live stream', 'go live'], skill: 'Live streaming', interest: 'Gaming', apps: { audience: 2, community: 1, tools: 1 } },
+  { key: 'teach', label: 'Educator', emoji: '🧑‍🏫', kind: 'craft', blurb: 'Courses or lessons', because: 'you teach', words: ['teach', 'teacher', 'teaching', 'tutor', 'tutoring', 'coaching', 'online course', 'courses', 'lessons', 'workshops'], skill: 'Teaching', interest: 'Education', apps: { shop: 2, audience: 1, school: 1 } },
+  // What a freelancer does for others.
+  { key: 'editor', label: 'Video editor', emoji: '✂️', kind: 'service', blurb: 'Editing', because: 'you edit', words: ['edit', 'edits', 'editing', 'editor', 'video editor', 'premiere', 'premiere pro', 'davinci', 'resolve', 'capcut', 'final cut', 'after effects'], skill: 'Editing', interest: 'Video', apps: { work: 2, school: 2, tools: 1, army: 1 } },
+  { key: 'shooter', label: 'Videographer', emoji: '📹', kind: 'service', blurb: 'Shooting', because: 'you shoot', words: ['videographer', 'shoot', 'shooting', 'cinematographer', 'camera operator', 'dop', 'filming', 'filmmaker'], skill: 'Videography', interest: 'Film making', apps: { work: 2, store: 2, army: 1 } },
+  { key: 'designer', label: 'Designer', emoji: '🎨', kind: 'service', blurb: 'Design', because: 'you design', words: ['design', 'designer', 'graphic', 'graphics', 'thumbnail', 'thumbnails', 'figma', 'canva', 'illustrator', 'photoshop'], skill: 'Design', interest: 'Art & design', apps: { work: 2, tools: 1 } },
+  { key: 'copywriter', label: 'Copywriter', emoji: '📝', kind: 'service', blurb: 'Scripts and copy', because: 'you write for others', words: ['copywriter', 'copywriting', 'scripts', 'scriptwriter', 'script writer', 'ghostwriter', 'ghostwriting'], skill: 'Writing', apps: { work: 2, content: 1 } },
+  { key: 'sound', label: 'Sound person', emoji: '🎧', kind: 'service', blurb: 'Sound', because: 'you do sound', words: ['mixing', 'mastering', 'sound design', 'audio engineer', 'sound engineer'], skill: 'Sound', apps: { work: 2, store: 1 } },
+  { key: 'host', label: 'Host', emoji: '🎤', kind: 'service', blurb: 'On camera or on stage', because: 'you are on camera', words: ['host', 'hosting', 'anchor', 'presenter', 'on camera', 'actor', 'acting', 'modelling', 'modeling', 'emcee'], skill: 'On camera', apps: { army: 2, work: 1 } },
+  { key: 'social', label: 'Social media manager', emoji: '📲', kind: 'service', blurb: 'Social pages', because: 'you run pages for brands', words: ['social media manager', 'smm', 'managing pages', 'manage pages', 'community manager'], skill: 'Community', apps: { content: 2, automations: 2, audience: 1, work: 1 } },
+  // Where you are with it. One at a time.
+  { key: 'starting', label: 'Just starting', emoji: '🌱', kind: 'stage', blurb: 'Not much out there yet', because: 'you are just starting', words: ['just started', 'just starting', 'starting out', 'beginner', 'new to this', 'zero followers', 'no followers'], level: 'Just starting', apps: { school: 2, knowledge: 1, tools: 1, win: 1 } },
+  { key: 'growing', label: 'Growing', emoji: '📈', kind: 'stage', blurb: 'Posting, not earning yet', because: 'you post but do not earn yet', words: ['growing', 'consistent', 'posting daily', 'post daily', 'not earning', 'no income yet'], level: 'Early', apps: { content: 1, audience: 1, win: 2, army: 1 } },
+  { key: 'earning', label: 'Earning', emoji: '🪙', kind: 'stage', blurb: 'Some money comes in', because: 'your work already earns', words: ['brand deals', 'brand deal', 'sponsorships', 'sponsored', 'monetized', 'monetised', 'paid collabs', 'already earning'], level: 'Working', apps: { finance: 2, shop: 1, audience: 1, army: 1 } },
+  { key: 'full_time', label: 'Full time', emoji: '🏆', kind: 'stage', blurb: 'It is my living', because: 'this is your living', words: ['full time creator', 'full-time creator', 'creator full time', 'my living', 'main income'], level: 'Established', apps: { finance: 3, shop: 2, audience: 2, automations: 1, club: 1 } },
+  // The rest of life: from your own words, or the extra pills on the first card.
+  { key: 'runner', label: 'Runner', emoji: '🏃', kind: 'life', blurb: 'I run', because: 'you run', words: ['runner', 'running', 'marathon', 'half marathon', '5k', '10k', 'jogging'], interest: 'Running', apps: { run: 3, life: 1 } },
+  { key: 'gym', label: 'Gym regular', emoji: '🏋️', kind: 'life', blurb: 'I train', because: 'you train', words: ['gym', 'lifting', 'weights', 'workouts', 'bodybuilding', 'crossfit'], interest: 'Gym', apps: { life: 2, wellbeing: 1, sleep: 1 } },
+  { key: 'yogi', label: 'Yoga and breath', emoji: '🧘', kind: 'life', blurb: 'I do yoga or meditate', because: 'you do yoga or meditate', words: ['yoga', 'meditate', 'meditation', 'breathwork', 'pranayama'], interest: 'Yoga', apps: { mindful: 3, wellbeing: 1 } },
+  { key: 'reader', label: 'Reader', emoji: '📚', kind: 'life', blurb: 'I read a lot', because: 'you read', words: ['reader', 'reading', 'books', 'bookworm'], interest: 'Books', apps: { knowledge: 2, journal: 1 } },
+  { key: 'gamer', label: 'Gamer', emoji: '🕹️', kind: 'life', blurb: 'I play games', because: 'you play games', words: ['gamer', 'gaming', 'video games', 'playstation', 'xbox', 'esports', 'bgmi', 'valorant'], interest: 'Gaming', apps: { community: 2, circles: 1 } },
+  { key: 'traveller', label: 'Traveller', emoji: '✈️', kind: 'life', blurb: 'I travel when I can', because: 'you travel', words: ['travel', 'traveller', 'traveler', 'travelling', 'traveling', 'backpacking'], interest: 'Travel', apps: { party: 1, finance: 1 } },
+  { key: 'night_owl', label: 'Night owl', emoji: '🦉', kind: 'life', blurb: 'I come alive late', because: 'you are up late', words: ['night owl', 'up late', 'sleep late', 'late nights', 'nocturnal', 'stay up late'], apps: { sleep: 2 } },
+  { key: 'spiritual', label: 'Spiritual', emoji: '🪔', kind: 'life', blurb: 'Faith or practice matters to me', because: 'faith or practice matters to you', words: ['spiritual', 'spirituality', 'my faith', 'god', 'temple', 'church', 'mosque', 'prayer', 'pray', 'bhakti'], interest: 'Spirituality', apps: { mindful: 2, journal: 1 } },
+  { key: 'volunteer', label: 'Volunteer', emoji: '🤝', kind: 'life', blurb: 'I give my time', because: 'you give your time', words: ['volunteer', 'volunteering', 'ngo', 'charity', 'social work'], interest: 'Volunteering', apps: { community: 2, party: 1 } },
+];
+
+export const IDENTITY_BY_KEY: Record<string, IdentityOption> = Object.fromEntries(IDENTITIES.map((i) => [i.key, i]));
+
+/** The known tags of one kind, in order: the roles on the first card, a creator's crafts, a freelancer's services, the stages, the rest of life. */
+export function identitiesOf(kind: IdentityKind): IdentityOption[] {
+  return IDENTITIES.filter((i) => i.kind === kind);
+}
+
+/** A tag as people read it: a known tag's label, or your own words as you wrote them. */
+export function identityLabel(key: string): string {
+  return IDENTITY_BY_KEY[key]?.label ?? key;
+}
+
+export interface SetupGoal {
+  key: string;
+  label: string;
+  emoji: string;
+  /** What it opens, said on its card. */
+  blurb: string;
+  because: string;
+  /** How the summary says it, after "here to": "find paid work". */
+  to: string;
+  words: readonly string[];
+  /** The profile goal it fills, when one fits. */
+  profileGoal?: (typeof GOALS)[number];
+  apps: Readonly<Record<string, number>>;
+}
+
+export const SETUP_GOALS: readonly SetupGoal[] = [
+  { key: 'earn', label: 'Earn from my content', emoji: '💸', blurb: 'Win pays per verified view. Army runs paid brand campaigns.', because: 'you want to earn from what you make', to: 'earn from what you make', words: ['earn', 'make money', 'monetize', 'monetise', 'get paid', 'side income', 'side hustle', 'extra income'], profileGoal: 'Find paid work', apps: { win: 3, army: 3, work: 1, finance: 1 } },
+  { key: 'work', label: 'Find paid work', emoji: '🧰', blurb: 'Gigs and jobs from brands and the team, in Work.', because: 'you want paid work', to: 'find paid work', words: ['find work', 'paid work', 'gigs', 'more clients', 'get hired', 'find a job', 'need a job', 'get a job', 'new job', 'internship', 'opportunities'], profileGoal: 'Find paid work', apps: { work: 3, army: 1, profile: 2, club: 1 } },
+  { key: 'learn', label: 'Learn a new skill', emoji: '📖', blurb: 'Programs with lessons and a mentor, in School.', because: 'you want to learn', to: 'learn a skill', words: ['learn', 'learning', 'a skill', 'new skill', 'skills', 'upskill', 'get better at', 'improve my'], profileGoal: 'Learn skills', apps: { school: 3, knowledge: 2, tools: 1 } },
+  { key: 'grow', label: 'Grow my audience', emoji: '📣', blurb: 'What worked, who follows, and replies that sell.', because: 'you want to grow an audience', to: 'grow an audience', words: ['grow', 'growth', 'more followers', 'followers', 'audience', 'reach', 'views', 'subscribers', 'go viral', 'viral', 'engagement'], apps: { content: 3, audience: 2, automations: 2, profile: 1, community: 1 } },
+  { key: 'sell', label: 'Sell what I make', emoji: '🛍️', blurb: 'Courses, downloads, sessions and memberships, in Shop.', because: 'you want to sell', to: 'sell what you make', words: ['sell', 'selling', 'products', 'merch', 'my course', 'digital products', 'presets', 'ebook', 'my services'], profileGoal: 'Sell what I make', apps: { shop: 3, profile: 2, finance: 1, audience: 1, automations: 1 } },
+  { key: 'money', label: 'Sort out my money', emoji: '💰', blurb: 'Money in and out, dues, budgets and goals, in Finance.', because: 'you want your money sorted', to: 'sort out your money', words: ['save money', 'saving', 'savings', 'budget', 'budgeting', 'debt', 'loan', 'expenses', 'spending', 'my money', 'finances', 'taxes'], apps: { finance: 3, reviews: 1 } },
+  { key: 'people', label: 'Meet new people', emoji: '🫶', blurb: 'Small tables near you, a feed, events and friends.', because: 'you want to meet people', to: 'meet people', words: ['meet people', 'friends', 'make friends', 'network', 'networking', 'community', 'people like me', 'collab', 'collabs', 'collaborate'], profileGoal: 'Collaborate', apps: { circles: 3, community: 2, bond: 2, party: 2, club: 1 } },
+  { key: 'health', label: 'Feel better day to day', emoji: '🌿', blurb: 'Mood, sleep, stress and calm, on one score.', because: 'you want to feel better day to day', to: 'feel better day to day', words: ['feel better', 'mood', 'mental health', 'calm', 'peace', 'health', 'healthy', 'happier', 'sleep better'], profileGoal: 'Get healthier habits', apps: { wellbeing: 3, mood: 2, sleep: 2, stress: 2, mindful: 2, life: 1 } },
+  { key: 'move', label: 'Move more', emoji: '👟', blurb: 'Run clubs, movement minutes and a body score.', because: 'you want to move more', to: 'move more', words: ['fitness', 'get fit', 'lose weight', 'weight loss', 'exercise', 'run more', 'move more', 'workout', 'be active'], profileGoal: 'Get healthier habits', apps: { run: 3, life: 2, wellbeing: 1 } },
+  { key: 'life', label: 'Work on myself', emoji: '🏰', blurb: 'The deeper path: your seven relationships, a routine and a plan.', because: 'you want to work on yourself', to: 'work on yourself', words: ['my life', 'life together', 'purpose', 'discipline', 'self improvement', 'self-improvement', 'better person', 'habits', 'routine', 'relationships', 'grow as a person', 'life coach'], apps: { journal: 2, reviews: 2, life: 2, mindful: 1 } },
+];
+
+export const SETUP_GOAL_BY_KEY: Record<string, SetupGoal> = Object.fromEntries(SETUP_GOALS.map((g) => [g.key, g]));
+/** Three goals at most: a setup that wants everything matches nothing. */
+export const MAX_SETUP_GOALS = 3;
+
+export interface SetupBlocker {
+  key: string;
+  label: string;
+  emoji: string;
+  because: string;
+  words: readonly string[];
+  apps: Readonly<Record<string, number>>;
+  /** With this ticked, at most this many apps come on: less to look at, not more. Time short: three; focus hard: four. */
+  cap?: number;
+}
+
+export const SETUP_BLOCKERS: readonly SetupBlocker[] = [
+  { key: 'time', label: 'Not enough time', emoji: '⏳', because: 'time is short', words: ['no time', 'not enough time', 'busy', 'too busy', 'short on time'], cap: 3, apps: {} },
+  { key: 'focus', label: 'Hard to focus (ADHD counts)', emoji: '🌀', because: 'focus is hard', words: ['adhd', 'distracted', 'procrastinate', 'procrastinating', 'procrastination', "can't focus", 'cant focus', 'hard to focus', 'overthinking'], cap: 4, apps: { mindful: 1 } },
+  { key: 'energy', label: 'Low energy or feeling lazy', emoji: '🔋', because: 'energy runs low', words: ['lazy', 'laziness', 'tired', 'no energy', 'low energy', 'unmotivated', 'no motivation', 'burnt out', 'burned out', 'burnout', 'exhausted'], apps: { sleep: 2, mood: 1, wellbeing: 1 } },
+  { key: 'start', label: 'Not sure where to start', emoji: '🗺️', because: 'you are not sure where to start', words: ['where to start', 'how to start', "don't know how", 'dont know how', 'confused', 'feel lost', "i'm lost", 'no idea'], apps: { school: 2, knowledge: 2 } },
+  { key: 'alone', label: 'Doing it alone', emoji: '🫥', because: 'you are doing it alone', words: ['alone', 'lonely', 'loneliness', 'no friends', 'by myself', 'isolated', 'on my own'], apps: { circles: 2, community: 2, bond: 1, party: 1 } },
+  { key: 'cash', label: 'Money is tight', emoji: '🪫', because: 'money is tight', words: ['broke', 'no money', 'money is tight', 'tight on money', "can't afford", 'cant afford', 'in debt'], apps: { finance: 2, win: 1, work: 1 } },
+  { key: 'stress', label: 'Stress or worry', emoji: '🌊', because: 'stress gets in', words: ['stress', 'stressed', 'anxious', 'anxiety', 'worry', 'worried', 'overwhelmed', 'pressure'], apps: { stress: 2, journal: 2, mindful: 1 } },
+  { key: 'sleep', label: 'Bad sleep', emoji: '🌙', because: 'sleep is off', words: ['bad sleep', 'insomnia', "can't sleep", 'cant sleep', 'sleep badly', 'no sleep', 'sleep at 4', 'sleep at 3'], apps: { sleep: 3 } },
+];
+
+export const SETUP_BLOCKER_BY_KEY: Record<string, SetupBlocker> = Object.fromEntries(SETUP_BLOCKERS.map((b) => [b.key, b]));
+
+/** Two answers that mean more together than apart. Each pair adds its own weight and gives its own reason. */
+export interface SetupCombo {
+  when: readonly [string, string];
+  apps: Readonly<Record<string, number>>;
+  /** After "because": names both halves. */
+  because: string;
+}
+
+/** Most specific first: when two pairs back the same app equally, the first one gives the reason. */
+export const SETUP_COMBOS: readonly SetupCombo[] = [
+  { when: ['editor', 'learn'], apps: { school: 3 }, because: 'you edit and want to get better at it' },
+  { when: ['editor', 'work'], apps: { work: 1, army: 1 }, because: 'brands need editors for their campaigns' },
+  { when: ['short_video', 'earn'], apps: { win: 2 }, because: 'you make short videos and want them to pay' },
+  { when: ['long_video', 'grow'], apps: { content: 2 }, because: 'you make long videos and want more people to watch' },
+  { when: ['teach', 'sell'], apps: { shop: 2 }, because: 'you teach and want to sell your lessons' },
+  { when: ['social', 'grow'], apps: { content: 1, automations: 1 }, because: 'you run pages and want them to grow' },
+  { when: ['shooter', 'work'], apps: { work: 1, store: 1 }, because: 'you shoot for clients, and the right gear wins jobs' },
+  { when: ['starting', 'learn'], apps: { school: 2, tools: 1 }, because: 'you are just starting and want to learn the craft' },
+  { when: ['starting', 'earn'], apps: { win: 2 }, because: 'you are new and want your first pay' },
+  { when: ['earning', 'money'], apps: { finance: 2 }, because: 'creator money comes in bits, so it helps to see it in one place' },
+  { when: ['full_time', 'sell'], apps: { automations: 2, shop: 1 }, because: 'this is your living, so selling should run while you sleep' },
+  { when: ['runner', 'people'], apps: { run: 2 }, because: 'you run and want company' },
+  { when: ['night_owl', 'health'], apps: { sleep: 2 }, because: 'you are up late and want to feel better' },
+  { when: ['student', 'earn'], apps: { work: 2, win: 2 }, because: 'you study and want to earn on the side' },
+  { when: ['student', 'work'], apps: { work: 2 }, because: 'you study and want paid work that fits around classes' },
+  { when: ['student', 'learn'], apps: { school: 2 }, because: 'you study and want a skill that pays' },
+  { when: ['explorer', 'work'], apps: { work: 2, school: 1 }, because: 'you are between things and want paid work' },
+  { when: ['explorer', 'learn'], apps: { school: 2, knowledge: 1 }, because: 'a new skill is a good next step' },
+  { when: ['employee', 'earn'], apps: { win: 2, work: 1 }, because: 'you have a job and want to earn on the side' },
+  { when: ['employee', 'money'], apps: { finance: 1, reviews: 1 }, because: 'a salary goes further with a plan' },
+  { when: ['creator', 'earn'], apps: { win: 2, army: 2 }, because: 'you make content and want it to pay' },
+  { when: ['creator', 'grow'], apps: { content: 2, audience: 1 }, because: 'you make content and want more people to see it' },
+  { when: ['creator', 'sell'], apps: { shop: 2, automations: 1 }, because: 'you make content and want to sell to the people who watch' },
+  { when: ['creator', 'people'], apps: { community: 1, circles: 1, party: 1 }, because: 'creators grow faster with other creators around' },
+  { when: ['freelancer', 'work'], apps: { work: 2, profile: 1 }, because: 'your page is your portfolio for the gigs you apply to' },
+  { when: ['freelancer', 'money'], apps: { finance: 2 }, because: 'client money comes in bits, so it helps to see it in one place' },
+  { when: ['freelancer', 'grow'], apps: { profile: 1, content: 1 }, because: 'you work for clients and want more of them to find you' },
+  { when: ['founder', 'sell'], apps: { shop: 2, automations: 1 }, because: 'you run a business and want to sell more' },
+  { when: ['founder', 'grow'], apps: { audience: 2, content: 1 }, because: 'you run a business and want more people to know it' },
+  { when: ['founder', 'money'], apps: { finance: 2, reviews: 1 }, because: 'a business needs its money in one place' },
+  { when: ['parent', 'health'], apps: { sleep: 1, stress: 1 }, because: 'looking after others starts with your own sleep and stress' },
+  { when: ['parent', 'money'], apps: { finance: 1 }, because: 'a family budget is easier in one place' },
+  { when: ['move', 'people'], apps: { run: 2 }, because: 'run clubs are moving and meeting in one' },
+  { when: ['people', 'alone'], apps: { circles: 2, bond: 1 }, because: 'you do it alone and want people around' },
+  { when: ['health', 'stress'], apps: { stress: 2, mindful: 1 }, because: 'you want to feel better and stress gets in' },
+  { when: ['health', 'sleep'], apps: { sleep: 2 }, because: 'better days start with better nights' },
+  { when: ['health', 'energy'], apps: { sleep: 1, mood: 1 }, because: 'low energy shows up in sleep and mood first' },
+  { when: ['learn', 'start'], apps: { school: 2, knowledge: 1 }, because: 'a program gives you a first step' },
+  { when: ['life', 'focus'], apps: { reviews: 1 }, because: 'a short look back each week keeps you on track' },
+  { when: ['life', 'energy'], apps: { journal: 1 }, because: 'writing it down shows what drains you' },
+  { when: ['money', 'cash'], apps: { finance: 2 }, because: 'money is tight and you want it sorted' },
+  { when: ['earn', 'cash'], apps: { win: 1, work: 1 }, because: 'money is tight and you want to earn' },
+];
+
+export interface SetupAnswers {
+  /** Known tag keys, and labels in your own words. */
+  identities: string[];
+  goals: string[];
+  blockers: string[];
+}
+
+/** What the setup chat heard, kept with the account so a second run starts from it. */
+export interface Intake {
+  goals: string[];
+  blockers: string[];
+  /** When the setup was last saved. */
+  at: string | null;
+}
+
+export interface AppPick {
+  key: string;
+  score: number;
+  /** One sentence, built from your answers. */
+  why: string;
+}
+
+export interface SetupMatch {
+  /** Switched on, best fit first. */
+  apps: AppPick[];
+  /** A good fit too, left off to keep things light. */
+  more: AppPick[];
+  /** Who you are and what you came for, in one sentence. */
+  line: string;
+  /** What the setup writes into the profile. */
+  profile: { focus: string; skills: string[]; interests: string[]; level: string; availability: string; goals: string[] };
+  /** The strategy session: offer it now, soon, or leave it in Pillars for later. */
+  session: 'now' | 'soon' | 'later';
+  /** The most apps that could come on, from what gets in the way. */
+  cap: number;
+}
+
+export const MAX_IDENTITIES = 12;
+/** Tags in your own words, on top of the known ones. */
+export const MAX_CUSTOM_IDENTITIES = 3;
+export const IDENTITY_LABEL_MAX = 30;
+export const SETUP_APPS_MIN = 3;
+export const SETUP_APPS_MAX = 5;
+/** The score an app needs to come on by itself. A goal counts double, so one goal and one tag are enough. */
+export const SETUP_PASS = 4;
+
+/** The apps the setup switches: every app a person can turn on or off, apart from the essentials and the team's tools. */
+export function setupSwitchable(m: AppModule): boolean {
+  return !m.locked && (m.group === 'earn' || m.group === 'creator' || m.group === 'community' || m.group === 'wellbeing');
+}
+
+const lowerFirst = (label: string) => (/^\S[^\sA-Z]*(\s|$)/.test(label) ? label.charAt(0).toLowerCase() + label.slice(1) : label);
+const listed = (items: string[]) => (items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
+const STAGE_SAID: Record<string, string> = { starting: 'just starting', growing: 'growing', earning: 'already earning', full_time: 'doing it full time' };
+
+/** Who you are and what you came for, in one sentence: "A student and freelance video editor, here to learn a skill and find paid work." */
+export function identityLine(a: SetupAnswers): string {
+  const has = (k: string) => a.identities.includes(k);
+  const anyOf = (kind: IdentityKind) => a.identities.some((k) => IDENTITY_BY_KEY[k]?.kind === kind);
+  const nouns = a.identities
+    .filter((k) => {
+      const o = IDENTITY_BY_KEY[k];
+      if (!o) return true;
+      if (o.kind === 'stage') return false;
+      // A craft says more than "creator", and "freelance video editor" more than "freelancer".
+      if (k === 'creator' && anyOf('craft')) return false;
+      if (k === 'freelancer' && anyOf('service')) return false;
+      return true;
+    })
+    .map((k) => {
+      const o = IDENTITY_BY_KEY[k];
+      const label = lowerFirst(o?.label ?? k);
+      return o?.kind === 'service' && has('freelancer') ? `freelance ${label}` : label;
+    });
+  const stage = a.identities.map((k) => STAGE_SAID[k]).find(Boolean);
+  const goals = a.goals.map((g) => SETUP_GOAL_BY_KEY[g]?.to).filter((x): x is string => Boolean(x));
+  const who = nouns.length ? `${/^[aeiou]/i.test(nouns[0]!) ? 'An' : 'A'} ${listed(nouns)}` : '';
+  const parts = [who, stage ?? '', goals.length ? `here to ${listed(goals)}` : ''].filter(Boolean);
+  if (parts.length === 0) return '';
+  const s = parts.join(', ');
+  return `${s.charAt(0).toUpperCase()}${s.slice(1)}.`;
+}
+
+/** The goals in the order that fits these tags: the ones a tag or a pair points at come first. */
+export function goalsFor(identities: readonly string[]): SetupGoal[] {
+  const tags = identities.map((k) => IDENTITY_BY_KEY[k]).filter((o): o is IdentityOption => Boolean(o));
+  const fit = (g: SetupGoal) => {
+    let f = 0;
+    for (const t of tags) for (const [app, w] of Object.entries(g.apps)) f += Math.min(w, t.apps[app] ?? 0);
+    for (const c of SETUP_COMBOS) if (c.when.includes(g.key) && c.when.some((k) => identities.includes(k))) f += 3;
+    return f;
+  };
+  return SETUP_GOALS.map((g, i) => ({ g, i, f: fit(g) }))
+    .sort((x, y) => y.f - x.f || x.i - y.i)
+    .map((x) => x.g);
+}
+
+/**
+ * The one matching rule. Every tag, goal and thing in the way weighs the apps (a goal counts double), every pair
+ * in SETUP_COMBOS that is all there adds its own weight, and the apps that clear SETUP_PASS come on, best first,
+ * no more than the cap (fewer when time or focus is short). Each app says why: the pair behind it when there is
+ * one, else the two answers that weigh most. The same answers always give the same result, and a different mix
+ * gives its own.
+ */
+export function matchSetup(a: SetupAnswers, available?: readonly string[]): SetupMatch {
+  const order = new Map(MODULES.map((m, i) => [m.key, i]));
+  const open = new Set(MODULES.filter((m) => setupSwitchable(m) && (!available || available.includes(m.key))).map((m) => m.key));
+  const score = new Map<string, number>();
+  const sources = new Map<string, { because: string; w: number; pair: boolean }[]>();
+  const add = (app: string, w: number, because: string, pair = false) => {
+    if (!open.has(app) || w <= 0) return;
+    score.set(app, (score.get(app) ?? 0) + w);
+    sources.set(app, [...(sources.get(app) ?? []), { because, w, pair }]);
+  };
+  const tags = a.identities.map((k) => IDENTITY_BY_KEY[k]).filter((o): o is IdentityOption => Boolean(o));
+  const goals = a.goals.map((k) => SETUP_GOAL_BY_KEY[k]).filter((g): g is SetupGoal => Boolean(g));
+  const blockers = a.blockers.map((k) => SETUP_BLOCKER_BY_KEY[k]).filter((b): b is SetupBlocker => Boolean(b));
+  for (const t of tags) for (const [app, w] of Object.entries(t.apps)) add(app, w, t.because);
+  for (const g of goals) for (const [app, w] of Object.entries(g.apps)) add(app, w * 2, g.because);
+  for (const b of blockers) for (const [app, w] of Object.entries(b.apps)) add(app, w, b.because);
+  const keys = new Set([...a.identities, ...a.goals, ...a.blockers]);
+  for (const c of SETUP_COMBOS) if (c.when.every((k) => keys.has(k))) for (const [app, w] of Object.entries(c.apps)) add(app, w, c.because, true);
+
+  const why = (app: string) => {
+    const list = sources.get(app) ?? [];
+    const pair = list.filter((s) => s.pair).reduce<{ because: string; w: number } | null>((best, s) => (!best || s.w > best.w ? s : best), null);
+    if (pair) return `Because ${pair.because}.`;
+    const top = [...new Set([...list].sort((x, y) => y.w - x.w).map((s) => s.because))].slice(0, 2);
+    return top.length ? `Because ${top.join(' and ')}.` : 'A good place to start.';
+  };
+  const cap = Math.max(SETUP_APPS_MIN, Math.min(SETUP_APPS_MAX, ...blockers.map((b) => b.cap ?? SETUP_APPS_MAX)));
+  const rank = (x: string, y: string) => (score.get(y) ?? 0) - (score.get(x) ?? 0) || (order.get(x) ?? 0) - (order.get(y) ?? 0);
+  const ranked = [...score.entries()].sort((x, y) => rank(x[0], y[0]));
+  // Every answer brings its own app first, so the mix always shows both who you are and what you came for:
+  // each goal its main app, each tag its strongest (a fit of 2 or more), each thing in the way its strongest,
+  // then each tag its second. The rest fill in by score, up to the cap.
+  const tops = (apps: Readonly<Record<string, number>>, min: number, n: number) =>
+    Object.entries(apps)
+      .filter(([app, w]) => w >= min && open.has(app))
+      .sort((x, y) => y[1] - x[1] || rank(x[0], y[0]))
+      .slice(0, n)
+      .map(([app]) => app);
+  const lasting = tags.filter((t) => t.kind !== 'stage');
+  const anchors = [
+    ...goals.flatMap((g) => tops(g.apps, 1, 1)),
+    ...lasting.flatMap((t) => tops(t.apps, 2, 1)),
+    ...blockers.flatMap((b) => tops(b.apps, 2, 1)),
+    ...tags.filter((t) => t.kind === 'stage').flatMap((t) => tops(t.apps, 2, 1)),
+    ...lasting.flatMap((t) => tops(t.apps, 2, 2).slice(1)),
+  ];
+  const picked: string[] = [];
+  for (const k of [...anchors, ...ranked.filter(([, s]) => s >= SETUP_PASS).map(([k]) => k)]) if (picked.length < cap && !picked.includes(k)) picked.push(k);
+  // Too little to go on: the next best fits, then the apps most people start with.
+  for (const [k] of ranked) if (picked.length < SETUP_APPS_MIN && !picked.includes(k)) picked.push(k);
+  for (const k of ['journal', 'life', 'school']) if (picked.length < SETUP_APPS_MIN && open.has(k) && !picked.includes(k)) picked.push(k);
+  picked.sort(rank);
+  const pick = (k: string): AppPick => ({ key: k, score: score.get(k) ?? 0, why: why(k) });
+  const more = ranked.filter(([k, s]) => s >= 2 && !picked.includes(k)).slice(0, 3).map(([k]) => pick(k));
+
+  const uniq = (xs: (string | undefined)[]) => [...new Set(xs.filter((x): x is string => Boolean(x)))];
+  const has = (k: string) => a.identities.includes(k);
+  const wants = (k: string) => a.goals.includes(k);
+  const availability = (wants('work') || wants('earn')) && ['freelancer', 'explorer', 'student', 'creator'].some(has) ? 'Open to work' : (wants('people') || wants('grow')) && has('creator') ? 'Open to collabs' : '';
+  const signs = ['focus', 'energy', 'stress', 'sleep'];
+  const session = wants('life') ? 'now' : (wants('health') || wants('move')) && a.blockers.some((b) => signs.includes(b)) ? 'soon' : 'later';
+  return {
+    apps: picked.map(pick),
+    more,
+    line: identityLine(a),
+    profile: {
+      focus: tags.find((t) => t.focus)?.focus ?? '',
+      skills: uniq(tags.map((t) => t.skill)),
+      interests: uniq(tags.map((t) => t.interest)),
+      level: tags.find((t) => t.level)?.level ?? '',
+      availability,
+      goals: uniq(goals.map((g) => g.profileGoal)),
+    },
+    session,
+    cap,
+  };
+}
+
+// Reading your own words: whole words and phrases from each tag's list, nothing guessed past them.
+const plain = (s: string) => ` ${s.toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z0-9'+\s-]+/g, ' ').replace(/\s+/g, ' ').trim()} `;
+const CUSTOM_STOP = new Set(['and', 'who', 'but', 'with', 'at', 'in', 'on', 'from', 'for', 'to', 'of', 'that', 'so', 'also', 'or', 'by', 'too', 'as', 'now', 'here', 'there', 'currently', 'trying', 'looking']);
+const CUSTOM_PLAIN = new Set(['person', 'guy', 'girl', 'boy', 'man', 'woman', 'human', 'fan', 'lover', 'bit', 'lot', 'member', 'newbie', 'other', 'user', 'kid', 'adult', 'teen', 'teenager', 'citizen', 'resident', 'number', 'computer', 'paper', 'water', 'power', 'poster', 'sticker', 'corner', 'winter', 'summer', 'server', 'center', 'centre', 'after', 'under', 'over', 'never', 'ever', 'rather', 'better', 'bigger', 'later', 'quarter', 'chapter', 'letter', 'matter', 'character', 'monster', 'introvert', 'extrovert', 'student', 'parent', 'agent', 'client', 'talent', 'content', 'moment', 'event', 'percent', 'giant', 'want', 'plant']);
+const CUSTOM_ADJ = new Set(['final', 'first', 'second', 'third', 'big', 'small', 'little', 'huge', 'good', 'bad', 'new', 'young', 'old', 'full', 'part', 'proud', 'single', 'busy', 'lazy', 'tired', 'year', 'time', 'aspiring', 'wannabe', 'struggling', 'budding', 'very', 'really', 'total', 'complete', 'real', 'pro', 'professional', 'freelance', 'part-time', 'full-time']);
+const CUSTOM_ROLE = /(er|or|ist|ian|ant|ent|eur|ee|smith|maker|wright)$/;
+const CUSTOM_ALLOW = new Set(['chef', 'cook', 'nurse', 'poet', 'athlete', 'pilot', 'vet', 'dj', 'barista', 'medic', 'monk', 'artisan', 'architect', 'analyst', 'scientist']);
+
+export interface AboutRead {
+  identities: string[];
+  /** Tags in your own words, from "I am a ..." when no known tag fits. */
+  custom: string[];
+  goals: string[];
+  blockers: string[];
+}
+
+/** Tags, goals and what gets in the way, read from a line you typed. Every one of them is shown back to be ticked or not. */
+export function readAbout(text: string): AboutRead {
+  const t = plain(text.slice(0, 600));
+  const hit = (words: readonly string[]) => words.some((w) => t.includes(plain(w)));
+  // A word some tag already knows is never made into a tag of your own.
+  const known = new Set([...IDENTITIES.flatMap((i) => i.words), ...SETUP_GOALS.flatMap((g) => g.words), ...SETUP_BLOCKERS.flatMap((b) => b.words)]);
+  let identities = IDENTITIES.filter((i) => hit(i.words)).map((i) => i.key);
+  // One stage at a time: the furthest along.
+  const stages = identities.filter((k) => IDENTITY_BY_KEY[k]!.kind === 'stage');
+  if (stages.length > 1) identities = identities.filter((k) => IDENTITY_BY_KEY[k]!.kind !== 'stage' || k === stages.at(-1));
+  const custom: string[] = [];
+  for (const m of t.matchAll(/ (?:i am|i'm|im|i work as|working as|work as|job as) (?:a|an) ([a-z][a-z'-]*(?: [a-z][a-z'-]*){0,2})/g)) {
+    const words: string[] = [];
+    for (const w of (m[1] ?? '').split(' ')) {
+      if (CUSTOM_STOP.has(w)) break;
+      words.push(w);
+    }
+    // The rightmost word that names what someone does is the tag: "a software engineer", "a dancer too".
+    let at = words.length - 1;
+    while (at >= 0 && !(CUSTOM_ROLE.test(words[at]!) || CUSTOM_ALLOW.has(words[at]!))) at -= 1;
+    const head = words[at];
+    if (!head || CUSTOM_PLAIN.has(head) || known.has(head)) continue;
+    const before = words[at - 1];
+    const phrase = before && !CUSTOM_ADJ.has(before) && !known.has(before) ? `${before} ${head}` : head;
+    const label = phrase.charAt(0).toUpperCase() + phrase.slice(1);
+    if (custom.length < MAX_CUSTOM_IDENTITIES && !custom.includes(label)) custom.push(label);
+  }
+  return {
+    identities,
+    custom,
+    goals: SETUP_GOALS.filter((g) => hit(g.words)).map((g) => g.key).slice(0, MAX_SETUP_GOALS),
+    blockers: SETUP_BLOCKERS.filter((b) => hit(b.words)).map((b) => b.key),
+  };
+}
+
+/** A tag as it is kept: a known key, or your own words cleaned up. A label that names a known tag becomes that tag. */
+export function cleanIdentity(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  if (IDENTITY_BY_KEY[raw]) return raw;
+  const label = raw.normalize('NFKC').replace(/[^\p{L}\p{N} &'.-]+/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, IDENTITY_LABEL_MAX).trim();
+  if (label.replace(/[^\p{L}\p{N}]/gu, '').length < 2) return null;
+  const lower = label.toLowerCase();
+  const known = IDENTITIES.find((i) => i.label.toLowerCase() === lower || i.words.includes(lower));
+  if (known) return known.key;
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+/** The one validator for a list of tags: known keys and cleaned labels, no repeats, three of your own at most, one stage. */
+export function parseIdentities(raw: unknown): string[] {
+  const out: string[] = [];
+  let own = 0;
+  for (const x of Array.isArray(raw) ? raw : []) {
+    const k = cleanIdentity(x);
+    if (!k || out.some((o) => o.toLowerCase() === k.toLowerCase())) continue;
+    if (!IDENTITY_BY_KEY[k]) {
+      if (own >= MAX_CUSTOM_IDENTITIES) continue;
+      own += 1;
+    }
+    out.push(k);
+    if (out.length >= MAX_IDENTITIES) break;
+  }
+  const stages = out.filter((k) => IDENTITY_BY_KEY[k]?.kind === 'stage');
+  return stages.length > 1 ? out.filter((k) => IDENTITY_BY_KEY[k]?.kind !== 'stage' || k === stages.at(-1)) : out;
+}
+
+/** The setup's answers from a request body: tags through parseIdentities, goals and blockers from their lists only. */
+export function parseSetup(raw: unknown): SetupAnswers {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const pick = (v: unknown, keys: readonly string[], max: number) => [...new Set((Array.isArray(v) ? v : []).filter((x): x is string => typeof x === 'string' && keys.includes(x)))].slice(0, max);
+  return {
+    identities: parseIdentities(o.identities),
+    goals: pick(o.goals, SETUP_GOALS.map((g) => g.key), MAX_SETUP_GOALS),
+    blockers: pick(o.blockers, SETUP_BLOCKERS.map((b) => b.key), SETUP_BLOCKERS.length),
+  };
+}
+
+/** What a stored intake holds, whatever was saved. */
+export function parseIntake(raw: string | null | undefined): Intake {
+  try {
+    const v = JSON.parse(raw || '{}') as Record<string, unknown>;
+    const a = parseSetup(v);
+    return { goals: a.goals, blockers: a.blockers, at: typeof v.at === 'string' ? v.at : null };
+  } catch {
+    return { goals: [], blockers: [], at: null };
+  }
+}
+
+/** A few small groups of choices, so a list reads at a glance. The setup chat draws every list this way. */
+export interface ChoiceGroup {
+  label: string;
+  emoji: string;
+  keys: readonly string[];
+}
+
+export const SETUP_GOAL_GROUPS: readonly ChoiceGroup[] = [
+  { label: 'Money and work', emoji: '💸', keys: ['earn', 'work', 'sell', 'money'] },
+  { label: 'Grow', emoji: '🌱', keys: ['learn', 'grow', 'people'] },
+  { label: 'You', emoji: '🌿', keys: ['health', 'move', 'life'] },
+];
+
+export const SETUP_ROLE_GROUPS: readonly ChoiceGroup[] = [
+  { label: 'What you do', emoji: '🛠️', keys: ['creator', 'freelancer', 'employee', 'founder'] },
+  { label: 'Where you are in life', emoji: '🧭', keys: ['student', 'explorer', 'parent'] },
+];
+
+export const SETUP_BLOCKER_GROUPS: readonly ChoiceGroup[] = [
+  { label: 'Time and energy', emoji: '⏳', keys: ['time', 'energy', 'sleep'] },
+  { label: 'Head space', emoji: '🧠', keys: ['focus', 'stress', 'start'] },
+  { label: 'Life stuff', emoji: '🤝', keys: ['alone', 'cash'] },
+];
+
+/** Every app the setup can switch on, said the way a friend would say it. The match shows this line under each app. */
+export const SETUP_APP_LINES: Readonly<Record<string, string>> = {
+  school: 'Short lessons with a mentor.',
+  work: 'Paid gigs from brands.',
+  army: 'Brand campaigns you can join.',
+  win: 'Get paid for views on brand videos.',
+  party: 'Meetups and events near you.',
+  run: 'Run clubs near you. Runs earn points.',
+  community: 'Post, ask and cheer each other on.',
+  club: 'A members club with perks.',
+  bond: 'Stay friends with people you meet.',
+  circles: 'A small group that meets each week.',
+  life: 'Your body, money, mood, mind and faith.',
+  wellbeing: 'One score for how you are doing.',
+  mood: 'Tap a face each day.',
+  sleep: 'Log your nights, sleep better.',
+  stress: 'Note your stress and what causes it.',
+  mindful: 'A timer for calm breathing.',
+  journal: 'Write it down, with how you felt.',
+  reviews: 'A short look back each week.',
+  companion: 'A chat about how you are doing. Not a therapist.',
+  profile: 'Your page: links, work and shop.',
+  shop: 'Sell courses, downloads and sessions.',
+  store: 'Gear, new or second hand.',
+  audience: 'See who follows you, send them news.',
+  content: 'Ideas, hooks and scripts for posts.',
+  automations: 'Auto DM a link when people comment.',
+  finance: 'Money in and out, and your goals.',
+  library: 'Everything you bought, in one place.',
+  knowledge: 'Short reads worth your time.',
+  tools: 'Creator tools the team checked.',
+  tv: 'Pitch a show idea.',
+  fund: 'Ask for money to back a project.',
+};
+
+// ---------------------------------------------------------------------------
+// The assistant and credits. The assistant does things in the app as the person: the free flows, and, with a
+// plan, typing to a model that calls the same API routes the screens use. Typing is paid for in credits: one
+// credit is a tenth of a US cent of model use, worked out from the tokens with whole numbers only.
+// ---------------------------------------------------------------------------
+
+/** "12.50" or 12.5 to 1250. Integer cents only, never a float: the decimal is read as text. */
+export function centsFrom(input: string | number): number | null {
+  const m = /^\s*(\d{1,9})(?:[.,](\d{1,2}))?\s*$/.exec(String(input));
+  if (!m) return null;
+  const cents = Number(m[1]) * 100 + Number((m[2] ?? '').padEnd(2, '0') || '0');
+  return cents > 0 ? cents : null;
+}
+
+/** A model's price in US micro-dollars per million tokens, which is the same number as picodollars per token. */
+export interface ModelPrice {
+  input: number;
+  output: number;
+}
+/** One credit is US$0.001, which is 10^9 picodollars. */
+export const PICO_PER_CREDIT = 1_000_000_000;
+/** Known prices. A deployment can override them with ASSISTANT_PRICE_IN and ASSISTANT_PRICE_OUT. */
+export const MODEL_PRICES: Readonly<Record<string, ModelPrice>> = {
+  'moonshotai/kimi-k2.6': { input: 541_500, output: 2_280_000 },
+};
+/** What a model with no known price is charged: high on purpose, so a missing price never undercharges. */
+export const FALLBACK_PRICE: ModelPrice = { input: 3_000_000, output: 15_000_000 };
+/** OpenRouter's free models (ids ending in ":free") cost nothing, so a message on one spends no credits. */
+export const FREE_PRICE: ModelPrice = { input: 0, output: 0 };
+export const priceOf = (model: string): ModelPrice => (model.endsWith(':free') ? FREE_PRICE : (MODEL_PRICES[model] ?? FALLBACK_PRICE));
+
+/** A model the assistant can run on, picked in the panel for now. */
+export interface AssistantModel {
+  id: string;
+  name: string;
+  by: string;
+  /**
+   * True when OpenRouter lists a zero-retention host for it. Only then is the assistant offered the journal and the
+   * trackers to read, and only then is OpenRouter told to keep nothing. A model that keeps data never sees them.
+   */
+  private: boolean;
+  /** Its reasoning cannot be switched off, so it gets more room to answer. Every other model is asked not to reason. */
+  thinks?: boolean;
+}
+/**
+ * The models to pick from while the assistant is being tried out: OpenRouter's free models that take tools (checked
+ * against OpenRouter's model list on 29 Oct 2026). Free models are limited by OpenRouter to 20 requests a minute,
+ * and 50 a day until the key's account has bought US$10 of credits. The first one is the default.
+ */
+export const ASSISTANT_MODELS: readonly AssistantModel[] = [
+  { id: 'nvidia/nemotron-3-ultra-550b-a55b:free', name: 'Nemotron 3 Ultra', by: 'NVIDIA', private: false },
+  { id: 'nvidia/nemotron-3.5-super-vl:free', name: 'Nemotron 3.5 Super VL', by: 'NVIDIA', private: false },
+  { id: 'nvidia/nemotron-3.5-lightning:free', name: 'Nemotron 3.5 Lightning', by: 'NVIDIA', private: false },
+  { id: 'xingchen-agi/xing4.0-29b-a4b:free', name: 'Xing4.0 29B', by: 'XingChen', private: true },
+  { id: 'poolside/laguna-s-2.1:free', name: 'Laguna S 2.1', by: 'Poolside', private: false },
+  { id: 'poolside/laguna-xs-2.1:free', name: 'Laguna XS 2.1', by: 'Poolside', private: false },
+  { id: 'dots-studio/dots-3-note-preview:free', name: 'Dots3-Note Preview', by: 'Dots Studio', private: false },
+  { id: 'thinkingmachines/inkling:free', name: 'Inkling', by: 'Thinking Machines', private: false },
+  { id: 'thinkingmachines/inkling-small:free', name: 'Inkling Small', by: 'Thinking Machines', private: false },
+  { id: 'recursive/flint-v1.0:free', name: 'Flint', by: 'Recursive', private: false, thinks: true },
+  { id: 'cohere/north-mini-code:free', name: 'North Mini Code', by: 'Cohere', private: false },
+  { id: 'google/gemma-4-31b-it:free', name: 'Gemma 4 31B', by: 'Google', private: false },
+  { id: 'google/gemma-4-26b-a4b-it:free', name: 'Gemma 4 26B', by: 'Google', private: false },
+  { id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', name: 'Nemotron 3 Nano Omni', by: 'NVIDIA', private: false },
+  { id: 'liquid/lfm-2.5-2.6b:free', name: 'LFM2.5 2.6B', by: 'Liquid', private: false, thinks: true },
+];
+export const ASSISTANT_MODEL_BY_ID: Readonly<Record<string, AssistantModel>> = Object.fromEntries(ASSISTANT_MODELS.map((m) => [m.id, m]));
+
+/** "0.5415" (US dollars per million tokens) to 541500 micro-dollars, read as text so no float is involved. */
+export function microsFrom(input: string): number | null {
+  const m = /^\s*(\d{1,5})(?:\.(\d{1,6}))?\s*$/.exec(input);
+  if (!m) return null;
+  return Number(m[1]) * 1_000_000 + Number((m[2] ?? '').padEnd(6, '0') || '0');
+}
+
+/** The credits some tokens cost at a price, rounded up to a whole credit. Whole numbers all the way through. */
+export function creditsFor(tokens: { input: number; output: number }, price: ModelPrice): number {
+  const pico = Math.max(0, Math.round(tokens.input)) * price.input + Math.max(0, Math.round(tokens.output)) * price.output;
+  const rest = pico % PICO_PER_CREDIT;
+  return (pico - rest) / PICO_PER_CREDIT + (rest > 0 ? 1 : 0);
+}
+
+export const PAID_PLANS = ['pro', 'pro_max', 'ultra'] as const;
+export type PaidPlan = (typeof PAID_PLANS)[number];
+export type PlanKey = PaidPlan | 'none';
+export const isPaidPlan = (v: unknown): v is PaidPlan => (PAID_PLANS as readonly unknown[]).includes(v);
+
+export interface Plan {
+  key: PaidPlan;
+  name: string;
+  /** What it costs, in US cents a period. */
+  priceCents: number;
+  /** Credits for each period. They do not carry over. */
+  credits: number;
+  blurb: string;
+}
+/** A plan runs this many days, then ends unless it is renewed. */
+export const PLAN_DAYS = 30;
+export const PLAN_CURRENCY = 'USD';
+/** The only three plans. Each gives a fixed worth of model use a month, and the price on top pays for the rest. */
+export const PLANS: Readonly<Record<PaidPlan, Plan>> = {
+  pro: { key: 'pro', name: 'Pro', priceCents: 1_500, credits: 10_000, blurb: 'US$10 of model use a month. Plenty for a few messages a day.' },
+  pro_max: { key: 'pro_max', name: 'Pro Max', priceCents: 12_500, credits: 100_000, blurb: 'US$100 of model use a month, and room for long chats.' },
+  ultra: { key: 'ultra', name: 'Ultra', priceCents: 50_000, credits: 400_000, blurb: 'US$400 of model use a month, for heavy daily use.' },
+};
+export const planName = (key: string): string => (isPaidPlan(key) ? PLANS[key].name : 'No plan');
+
+export interface TopUpPack {
+  key: string;
+  priceCents: number;
+  credits: number;
+}
+/** Extra credits on top of a plan. They stay until used. */
+export const TOPUP_PACKS: readonly TopUpPack[] = [
+  { key: 'small', priceCents: 1_000, credits: 8_000 },
+  { key: 'medium', priceCents: 2_500, credits: 20_000 },
+  { key: 'large', priceCents: 5_000, credits: 40_000 },
+];
+/** True once a payment provider takes money for plans and top-ups. Until then the team switches plans on. */
+export const PAYMENTS_LIVE = false;
+/** The most credits the team can grant in one go. */
+export const MAX_CREDIT_GRANT = 1_000_000;
+
+/** The agents that spend credits. More join this list as they move onto a model. */
+export const AGENTS = ['assistant'] as const;
+export type AgentKey = (typeof AGENTS)[number];
+export const AGENT_META: Readonly<Record<AgentKey, { name: string; blurb: string }>> = {
+  assistant: { name: 'Assistant', blurb: 'Does things in the app when you type what you want.' },
+};
+export interface AgentLimit {
+  /** How much the agent reads per message, in tokens: its own rules, its tools, the chat so far and what it looks up. */
+  contextTokens: number;
+  /** The most one message may spend, in credits. */
+  perMessage: number;
+  /** The most the agent may spend in any 24 hours, in credits. */
+  perDay: number;
+  /** How many rounds of tools one message may take. */
+  steps: number;
+}
+/** Each plan's limits, per agent. One place to change them. */
+export const AGENT_LIMITS: Readonly<Record<PaidPlan, Record<AgentKey, AgentLimit>>> = {
+  pro: { assistant: { contextTokens: 16_000, perMessage: 60, perDay: 1_000, steps: 6 } },
+  pro_max: { assistant: { contextTokens: 64_000, perMessage: 250, perDay: 8_000, steps: 10 } },
+  ultra: { assistant: { contextTokens: 128_000, perMessage: 600, perDay: 30_000, steps: 12 } },
+};
+/** About what one assistant message costs, to say how far credits go. A guess, and said as one. */
+export const TYPICAL_MESSAGE_CREDITS = 12;
+export const messagesFor = (credits: number): number => Math.floor(Math.max(0, credits) / TYPICAL_MESSAGE_CREDITS);
+
+/** Plan credits are spent first, then the extra ones. Never more than there is. */
+export function spendSplit(cost: number, plan: number, extra: number): { plan: number; extra: number } {
+  const want = Math.max(0, Math.round(cost));
+  const fromPlan = Math.min(want, Math.max(0, plan));
+  return { plan: fromPlan, extra: Math.min(want - fromPlan, Math.max(0, extra)) };
+}
+
+export interface CreditAccount {
+  plan: PlanKey;
+  planName: string;
+  planUntil: string | null;
+  planCredits: number;
+  extraCredits: number;
+  total: number;
+  /** The plan's limits per agent, or null without a plan. */
+  limits: Record<AgentKey, AgentLimit> | null;
+  /** Credits each agent spent in the last 24 hours. */
+  usedToday: Record<AgentKey, number>;
+}
+export type CreditReason = 'plan' | 'topup' | 'admin' | 'usage' | 'expire';
+export interface CreditEntry {
+  id: string;
+  bucket: 'plan' | 'extra';
+  amount: number;
+  reason: CreditReason;
+  agent: AgentKey | null;
+  note: string;
+  tokens: { input: number; output: number } | null;
+  createdAt: string;
+}
+export interface CreditsResponse {
+  account: CreditAccount;
+  /** Credits used per day over the last thirty days, oldest first. */
+  usage: { date: string; credits: number }[];
+  plans: Plan[];
+  topUps: readonly TopUpPack[];
+  paymentsLive: boolean;
+}
+
+/** One line of the chat, as the client keeps it. `note` is what the assistant did that turn, for its memory. */
+export interface AssistantTurn {
+  role: 'user' | 'assistant';
+  text: string;
+  note?: string;
+  /** The client's own record of the receipts a reply made, so the note it sends says what is true now (after an Undo). */
+  actions?: string[];
+}
+export interface AssistantContext {
+  /** The screen the person is on. */
+  path: string;
+  /** The person's own date and zone; the model never picks "today". */
+  date: string;
+  timeZone: string;
+}
+export type AssistantActionStatus = 'done' | 'failed' | 'pending' | 'undone' | 'cancelled';
+/** One thing the assistant did, or waits to do until the person confirms. */
+export interface AssistantReceipt {
+  id: string;
+  tool: string;
+  label: string;
+  status: AssistantActionStatus;
+  error: string;
+  /** True when Undo can take it back. */
+  undo: boolean;
+  /** The query keys on screen that show this change. */
+  refresh: string[];
+}
+export interface AssistantCall {
+  tool: string;
+  args: Record<string, unknown>;
+  ok: boolean;
+  error?: string;
+}
+export interface AssistantReply {
+  text: string;
+  /** The model that answered. */
+  model: string;
+  receipts: AssistantReceipt[];
+  note: string;
+  calls: AssistantCall[];
+  credits: { spent: number; left: number };
+  /** Why it stopped early, when it did: the message's cap, the credits ran out, the step cap, or the person tapped Stop. */
+  stopped: 'limit' | 'credits' | 'steps' | 'user' | null;
+  /** The model failed after some tools ran; the text says so, and the receipts show what did happen. */
+  failed?: boolean;
+}
+export interface AssistantStatus {
+  /** A model is set up on the server. */
+  connected: boolean;
+  /** The server's default model, used when none is picked. */
+  model: string | null;
+  /** The models that can be picked in the panel. */
+  models: readonly AssistantModel[];
+  account: CreditAccount;
+}
+/** Why typing is refused: no plan, no credits left, or the day's cap reached. */
+export type AssistantPaywall = 'plan' | 'credits' | 'day';
+

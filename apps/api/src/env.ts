@@ -29,6 +29,19 @@ export interface Env {
   /** The Agent Reach bridge (scripts/reach/server.mjs) and its key. Without it, research reads plain pages and YouTube only. */
   REACH_URL?: string;
   REACH_KEY?: string;
+  /**
+   * The assistant's model: any OpenAI-compatible chat endpoint. Without the key, typing to the assistant is off and
+   * its free flows still work. The base URL defaults to OpenRouter, the model to the first of ASSISTANT_MODELS (a free
+   * one); the panel can pick any model on that list.
+   */
+  ASSISTANT_API_KEY?: string;
+  ASSISTANT_BASE_URL?: string;
+  ASSISTANT_MODEL?: string;
+  /** Optional: the model's price in US dollars per million tokens ("0.5415"), when it is not in MODEL_PRICES. */
+  ASSISTANT_PRICE_IN?: string;
+  ASSISTANT_PRICE_OUT?: string;
+  /** For a model not on ASSISTANT_MODELS, on OpenRouter: zero-retention hosts only, unless "off" (then it may not read the journal or trackers). */
+  ASSISTANT_ZDR?: string;
 }
 
 export interface UserRow {
@@ -60,6 +73,10 @@ export interface UserRow {
   location: string;
   open_to_intros: number;
   interests: string;
+  /** JSON list of identity tags: known keys and labels in the person's own words. */
+  identities: string;
+  /** JSON: the setup chat's goals and what gets in the way, with when it was saved. */
+  intake_json: string;
   city: string;
   area: string;
   lat: number | null;

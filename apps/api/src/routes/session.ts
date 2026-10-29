@@ -10,6 +10,8 @@ import {
   MANTRAS,
   MAX_FEARS,
   MAX_INSECURITIES,
+  OWN_MANTRA_MAX,
+  parseRoutineBlocks,
   PENALTIES,
   pickFocus,
   placementFlags,
@@ -151,16 +153,18 @@ session.post('/plan', async (c) => {
   if (!a) return c.json({ error: 'do the assessment first' }, 400);
   const ps = await db.prepare('SELECT relationship, core_level, floor_level, evidence FROM placements WHERE assessment_id = ?').bind(a.id).all<PRow>();
   const placements: Placement[] = ps.results.map((p) => ({ relationship: p.relationship, core: p.core_level, floor: p.floor_level, evidence: p.evidence }));
-  const required = placements.filter((p) => placementFlags(p).required).map((p) => p.relationship);
-  const asked = (Array.isArray(body.focus) ? body.focus : []).filter(isRelationshipKey);
-  // A floor under Courage cannot be dropped from the focus; the rest is the person's pick, two at most.
-  const focus = [...new Set([...required, ...asked])].slice(0, 2);
+  // The focus is the person's pick, two at most. A floor under Courage is only where the session suggests starting.
+  const focus = [...new Set((Array.isArray(body.focus) ? body.focus : []).filter(isRelationshipKey))].slice(0, 2);
   if (focus.length === 0) return c.json({ error: 'pick at least one pillar to focus on' }, 400);
   const realDay = json<RealDay>(a.real_day_json, DEFAULT_REAL_DAY);
   const routine: Routine = routineFor(realDay, 0, focus, placements);
   const pr = (body.practices && typeof body.practices === 'object' ? body.practices : {}) as Record<string, unknown>;
+  const mantra = oneOf(pr.mantra, MANTRAS.map((m) => m.key) as unknown as readonly Practices['mantra'][], 'none');
+  const ownMantra = str(pr.ownMantra, OWN_MANTRA_MAX);
   const practices: Practices = {
-    mantra: oneOf(pr.mantra, MANTRAS.map((m) => m.key) as unknown as readonly Practices['mantra'][], 'none'),
+    // A mantra of your own needs its words; without them it is no mantra yet.
+    mantra: mantra === 'own' && !ownMantra ? 'none' : mantra,
+    ...(mantra === 'own' && ownMantra ? { ownMantra } : {}),
     breathing: oneOf(pr.breathing, BREATHING.map((b) => b.key) as unknown as readonly Practices['breathing'][], 'box'),
     affirmation: str(pr.affirmation, 240) || affirmationFor(focus),
     reading: str(pr.reading, 120),
@@ -185,6 +189,23 @@ session.post('/plan', async (c) => {
 });
 
 /** A day of the routine: which morning steps were done. Done only when every step of that day type is ticked. */
+/** Edit the routine: each block's times, the morning steps and their minutes, and a note per block, through parseRoutineBlocks. */
+session.patch('/routine', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const r = await db.prepare('SELECT * FROM routines WHERE user_id = ? ORDER BY created_at DESC LIMIT 1').bind(user.id).first<RRow>();
+  if (!r) return c.json({ error: 'no routine yet; run the strategy session first' }, 400);
+  const general = json<RoutineBlock[]>(r.general_json, []);
+  const exceptional = json<RoutineBlock[]>(r.exceptional_json, []);
+  const next = {
+    general: body.general === undefined ? general : parseRoutineBlocks(body.general, general),
+    exceptional: body.exceptional === undefined ? exceptional : parseRoutineBlocks(body.exceptional, exceptional),
+  };
+  await db.prepare('UPDATE routines SET general_json = ?, exceptional_json = ? WHERE id = ? AND user_id = ?').bind(JSON.stringify(next.general), JSON.stringify(next.exceptional), r.id, user.id).run();
+  return c.json(await latest(db, user.id, dateOf(typeof body.date === 'string' ? body.date : undefined)));
+});
+
 session.post('/day', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');

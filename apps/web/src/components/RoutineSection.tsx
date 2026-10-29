@@ -1,4 +1,4 @@
-import { type DayType } from '@kreators/shared';
+import { minutesLabel, stepsMinutes, type DayType } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { api } from '../lib/api';
@@ -32,7 +32,7 @@ export function RoutineSection({ date }: { date: string }) {
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[16px] font-bold">Run the strategy session</span>
-            <span className="block text-[14px] font-semibold text-ink-soft">Twenty minutes: the map, your day, a routine and a contract.</span>
+            <span className="block text-[14px] font-semibold text-ink-soft">A few minutes: the map, your day, a routine and a contract.</span>
           </span>
         </Link>
       </section>
@@ -78,10 +78,11 @@ export function RoutineSection({ date }: { date: string }) {
         <div className="mt-sm flex flex-col gap-xs">
           <p className="m-0 text-[14px] font-bold">
             Morning routine, {morning.start} to {morning.end}
+            {stepsMinutes(morning) > 0 ? `, ${minutesLabel(stepsMinutes(morning))} of steps` : ''}
             {d.today?.done ? '. Done.' : ''}
           </p>
-          {morning.steps.map((step) => (
-            <CheckRow key={step} checked={ticked.has(step)} onToggle={() => toggle(step)} title={step} busy={mark.isPending} />
+          {morning.steps.map((step, i) => (
+            <CheckRow key={step} checked={ticked.has(step)} onToggle={() => toggle(step)} title={step} subtitle={morning.minutes?.[i] ? minutesLabel(morning.minutes[i]!) : undefined} busy={mark.isPending} />
           ))}
         </div>
       )}

@@ -53,7 +53,7 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
     onSuccess: async (r) => {
       setToken(r.token);
       await refresh();
-      // A new or unfinished account starts with the strategy session; /onboarding picks up at the right step.
+      // A new or unfinished account starts with the setup chat at /onboarding; the strategy session waits in Pillars.
       nav(r.user?.onboardedAt ? (next ?? '/home') : '/onboarding', { replace: true });
     },
   });
@@ -132,7 +132,7 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
         ) : (
           <>
             New here?{' '}
-            <Link to={`/signup${loc.search}`} className="underline underline-offset-4">
+            <Link to={`/start${loc.search}`} className="underline underline-offset-4">
               Create an account
             </Link>
           </>

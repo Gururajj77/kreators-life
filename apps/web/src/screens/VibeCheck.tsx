@@ -58,7 +58,7 @@ function CloseVibe({ inline = false }: { inline?: boolean }) {
     else if (onboarded && idx > 0) nav(-1);
     else if (onboarded) nav('/home');
     else if (params.get('floors')) nav('/session');
-    else nav('/start');
+    else nav('/onboarding');
   };
   return (
     <button type="button" aria-label="Close" onClick={leave} className={`toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-card text-ink-soft hover:text-ink ${inline ? '' : 'safe-top fixed top-sm left-md z-30'}`}>
@@ -254,7 +254,7 @@ function PickFloors({ chosen, onChange, onBack, onNext }: { chosen: Relationship
                 checked={on}
                 onToggle={() => onChange(on ? chosen.filter((k) => k !== r.key) : [...chosen, r.key])}
                 title={r.name}
-                subtitle={`${r.character} asks three questions.`}
+                subtitle={`${r.character}, your ${r.role}, asks three questions.`}
                 color={r.color}
                 deep={`var(--deep-${r.key})`}
                 text={r.text}
@@ -296,7 +296,7 @@ function QuestionStage({
   const rel = RELATIONSHIP_BY_KEY[q.relationship];
   const step = STEP_OF_ROLE[q.role];
   const at = floors.indexOf(q.relationship);
-  const asks = q.role === 'foundation' ? `${rel.character} needs a foundation` : `${rel.character} asks`;
+  const asks = q.role === 'foundation' ? `${rel.character}, your ${rel.role}, needs a foundation` : `${rel.character}, your ${rel.role}, asks`;
   return (
     <div className="min-h-dvh pb-2xl" style={{ background: `var(--soft-${rel.key})` }}>
       <Screen tabs={false}>
@@ -399,7 +399,7 @@ function QuestionStage({
             </div>
             {q.role === 'foundation' && (
               <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">
-                This becomes the base of {rel.character}&rsquo;s pyramid. The guiding principle, the value goal, the goal outcome, the project and the first tasks come from it.
+                This becomes the foundation of {rel.character}&rsquo;s pyramid, its first layer. The guiding principle, the value goal, the goal outcome, the project and the first tasks come from it.
               </p>
             )}
           </motion.div>
@@ -717,7 +717,7 @@ function Learn({ result, floors, onNext }: { result: OnboardingResponse; floors:
       key: 'rule',
       eyebrow: 'The one rule',
       title: 'It will not work unless',
-      body: <p className="m-0 text-[16px] font-semibold text-ink-soft">You tick one task a day. Tick the tip, and the whole pyramid gets stronger. Miss a week, and nothing moves. That is the only rule.</p>,
+      body: <p className="m-0 text-[16px] font-semibold text-ink-soft">You tick one task a day. Tick the task at the point, and the whole pyramid gets stronger. Miss a week, and nothing moves. That is the only rule.</p>,
     },
     {
       key: 'expect',

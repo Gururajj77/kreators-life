@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, notToDoStreak, notToDoWeek, POINTS, RELATIONSHIPS, sparkFor, XP, type CheckinResponse, type NotToDo, type NotToDoStatus, type RelationshipKey, type TodayResponse } from '@kreators/shared';
+import { MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, notToDoStreak, notToDoWeek, POINTS, RELATIONSHIPS, sparkFor, XP, zonedToUtc, type CheckinResponse, type NotToDo, type NotToDoStatus, type RelationshipKey, type TodayResponse } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { DATE_RE, dateNearToday, getUser, newId, notify, nowIso, shiftDate, toNode, type NodeRow, taskGate } from '../db';
 
@@ -7,6 +7,15 @@ export const today = new Hono<AppEnv>();
 
 function dateParam(v: string | undefined): string {
   return v && DATE_RE.test(v) ? v : new Date().toISOString().slice(0, 10);
+}
+
+/** Where the person's day starts and ends, in UTC, from their zone (the app's default zone when none is set). */
+function dayBounds(date: string, zone: string): [string, string] {
+  try {
+    return [zonedToUtc(date, 0, zone || 'Asia/Kolkata').toISOString(), zonedToUtc(shiftDate(date, 1), 0, zone || 'Asia/Kolkata').toISOString()];
+  } catch {
+    return [`${date}T00:00:00.000Z`, `${shiftDate(date, 1)}T00:00:00.000Z`];
+  }
 }
 
 async function weakestRelationship(db: D1Database, userId: string): Promise<RelationshipKey> {
@@ -94,6 +103,13 @@ today.get('/', async (c) => {
     tasks = [...tasks, ...fill.results];
   }
 
+  // What was ticked today stays in sight under the tasks still waiting, so a tick can be seen and undone.
+  const [dayStart, dayEnd] = dayBounds(date, user.timezone);
+  const doneToday = await db
+    .prepare("SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? AND completed_at < ? ORDER BY completed_at DESC LIMIT 20")
+    .bind(user.id, dayStart, dayEnd)
+    .all<NodeRow>();
+
   const recent = await db
     .prepare("SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ?")
     .bind(user.id, new Date(Date.now() - 86_400_000).toISOString())
@@ -118,6 +134,7 @@ today.get('/', async (c) => {
     checkedIn: user.last_checkin === date,
     streak: user.streak,
     tasks: tasks.map((t) => toNode(t, gate)),
+    done: doneToday.results.map((t) => toNode(t, gate)),
     doneRecently: recent?.n ?? 0,
     timePlan: { plannedMin: plan?.planned ?? 0, doneMin: plan?.done ?? 0, timed: plan?.timed ?? 0 },
     spark: {

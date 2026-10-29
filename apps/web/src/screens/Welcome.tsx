@@ -51,7 +51,7 @@ export function Welcome() {
         const r = await api.anon(storedRef());
         setToken(r.token);
       }
-      nav(resuming ? '/onboarding' : '/session');
+      nav('/onboarding');
     } catch {
       setError("Couldn't reach the server. Check your connection and try again.");
     } finally {
@@ -69,7 +69,7 @@ export function Welcome() {
           One you.
         </h1>
         <p className="mt-md text-[18px] font-semibold leading-snug text-ink-soft">
-          A daily game for the seven relationships that make a life. Start with a twenty-minute strategy session: place yourself on the map, name what gets in the way, and leave with a routine, a plan and a contract. Then tick a few boxes every day.
+          A daily game for the seven relationships that make a life, with the apps a creator needs around it. Start with a short chat: say who you are and what you want, and the apps that fit switch on. The deeper strategy session waits in Pillars for when you want it.
         </p>
       </div>
       <div className="flex flex-col gap-sm pb-lg">
@@ -79,7 +79,7 @@ export function Welcome() {
           </p>
         )}
         <Button size="lg" full onClick={start} disabled={busy}>
-          {busy ? 'Opening the gates' : resuming ? 'Continue the strategy session' : 'Start the strategy session'}
+          {busy ? 'Opening the gates' : resuming ? 'Carry on setting up' : 'Start with a short chat'}
         </Button>
         <p className="m-0 text-center text-[14px] font-semibold text-ink-mute">
           Progress is saved on this device. Add this page to your home screen to keep it close.

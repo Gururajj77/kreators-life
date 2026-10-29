@@ -1,4 +1,4 @@
-import { RELATIONSHIP_BY_KEY, type RelationshipKey } from '@kreators/shared';
+import { BUMLING, RELATIONSHIP_BY_KEY, type Host } from '@kreators/shared';
 
 export type Mood = 'happy' | 'excited' | 'neutral' | 'sleepy';
 
@@ -12,7 +12,7 @@ interface Shape {
 }
 
 // Every character is a different silhouette drawn in a 100 x 100 box.
-const SHAPES: Record<RelationshipKey, Shape> = {
+const SHAPES: Record<Host, Shape> = {
   // Ember: a shield.
   servant_leader: {
     body: 'M50 6 C62 12 76 16 90 18 L90 52 C90 76 70 90 50 96 C30 90 10 76 10 52 L10 18 C24 16 38 12 50 6 Z',
@@ -69,7 +69,18 @@ const SHAPES: Record<RelationshipKey, Shape> = {
     mouth: [50, 82],
     top: [50, 0],
   },
+  // Bumling: a round little guide with an antenna.
+  bumling: {
+    body: 'M50 22 C72 22 88 36 88 60 C88 82 72 96 50 96 C28 96 12 82 12 60 C12 36 28 22 50 22 Z',
+    eyes: [[38, 58], [62, 58]],
+    eyeR: 7,
+    mouth: [50, 76],
+    top: [50, 2],
+  },
 };
+
+/** Bumling wears a colour none of the seven wear, so it never reads as one of them. */
+const BUMLING_LOOK = { character: BUMLING.character, role: BUMLING.role, color: '#5FAEEA', deep: '#3A84C2' };
 
 const INK = '#262626';
 const GOLD = '#FDE047';
@@ -107,7 +118,8 @@ function Eye({ x, y, r, mood }: { x: number; y: number; r: number; mood: Mood })
 }
 
 interface Props {
-  relationship: RelationshipKey;
+  /** One of the seven, or Bumling. */
+  relationship: Host;
   size?: number;
   mood?: Mood;
   /** Disable the idle bob, for dense lists. */
@@ -120,7 +132,7 @@ interface Props {
 }
 
 export function Avatar({ relationship, size = 64, mood = 'happy', still = false, decorative = false, stage = 1, className = '' }: Props) {
-  const r = RELATIONSHIP_BY_KEY[relationship];
+  const r = relationship === 'bumling' ? BUMLING_LOOK : RELATIONSHIP_BY_KEY[relationship];
   const s = SHAPES[relationship];
   const [[x1, y1], [x2, y2]] = s.eyes;
   const [mx, my] = s.mouth;
@@ -133,7 +145,7 @@ export function Avatar({ relationship, size = 64, mood = 'happy', still = false,
       height={size * 1.04}
       role={decorative ? undefined : 'img'}
       aria-hidden={decorative || undefined}
-      aria-label={decorative ? undefined : `${r.character}, the ${r.name.toLowerCase()} character${stage > 1 ? `, stage ${stage}` : ''}`}
+      aria-label={decorative ? undefined : `${r.character}, ${r.role}${stage > 1 ? `, stage ${stage}` : ''}`}
       className={`${still ? '' : 'avatar-bob'} shrink-0 overflow-visible ${className}`}
     >
       {stage >= 2 && <circle cx="50" cy="54" r="54" fill={r.color} opacity="0.22" />}
@@ -152,6 +164,12 @@ export function Avatar({ relationship, size = 64, mood = 'happy', still = false,
         </g>
       )}
       {relationship === 'guru' && <path d="M46 65 L54 65 L50 71 Z" fill={r.deep} />}
+      {relationship === 'bumling' && (
+        <g>
+          <path d="M50 23 L50 11" stroke={r.deep} strokeWidth="3" strokeLinecap="round" />
+          <circle cx="50" cy="8" r="5.5" fill={GOLD} stroke={r.deep} strokeWidth="2" />
+        </g>
+      )}
 
       <g className="avatar-eyes">
         <Eye x={x1} y={y1} r={s.eyeR} mood={mood} />
