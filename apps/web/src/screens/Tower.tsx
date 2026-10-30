@@ -35,7 +35,7 @@ function Floor({ r, state, delay, placement, focus }: { r: Relationship; state: 
       <Link
         to={asked ? `/realm/${r.key}` : `/vibe-check?floor=${r.key}`}
         className="toy block rounded-tile p-sm"
-        style={{ background: r.color, color: r.text, '--toy-color': `var(--deep-${r.key})` } as CSSProperties}
+        style={{ background: `linear-gradient(135deg, ${r.color}, color-mix(in oklab, ${r.color} 78%, var(--fill-shade)))`, color: r.text, '--toy-color': `var(--deep-${r.key})` } as CSSProperties}
       >
         <span className="flex items-center gap-sm">
           <Avatar relationship={r.key} size={52} mood={built ? 'happy' : 'sleepy'} stage={state?.stage ?? 1} still decorative className="avatar-hop" />

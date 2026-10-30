@@ -56,6 +56,7 @@ import { assistantRoutes } from './routes/assistant';
 import { credits } from './routes/credits';
 import { coach, myCoach } from './routes/coach';
 import { media, mediaPublic } from './routes/media';
+import { reminders } from './routes/reminders';
 import { connect } from './routes/connect';
 
 const app = new Hono<AppEnv>().basePath('/api');
@@ -136,6 +137,7 @@ app.route('/club', club);
 app.route('/win', win);
 app.route('/bond', bond);
 app.route('/media', media);
+app.route('/reminders', reminders);
 app.route('/connect', connect);
 app.route('/tools', tools);
 app.route('/proposals', proposals);

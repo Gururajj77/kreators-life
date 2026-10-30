@@ -15,7 +15,7 @@ export function useAppEntry(): string {
 export function Logo() {
   return (
     <Link to="/" className="inline-flex min-h-[44px] shrink-0 items-center gap-xs whitespace-nowrap font-display text-[20px] font-extrabold tracking-tight">
-      <span className="flex items-end gap-[2px]" aria-hidden="true">
+      <span className="flex items-end gap-[2px] max-[380px]:hidden" aria-hidden="true">
         {RELATIONSHIPS.slice(0, 3).map((r, i) => (
           <Avatar key={r.key} relationship={r.key} size={18 + i * 4} decorative still />
         ))}
@@ -34,10 +34,10 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
   const navBase = 'min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill px-sm text-[16px] font-bold text-ink-soft transition-colors hover:text-ink aria-[current=page]:text-ink';
   const nav = `inline-flex ${navBase}`;
   // Phones keep only the logo, "Go to app" and the theme button; the rest comes back from the laptop breakpoint.
-  const navWide = `hidden md:inline-flex ${navBase}`;
+  const navWide = `hidden lg:inline-flex ${navBase}`;
   return (
-    <div className="min-h-dvh bg-paper text-ink">
-      <header className="safe-top sticky top-0 z-30 border-b border-line bg-paper/90 backdrop-blur">
+    <div className="min-h-dvh text-ink">
+      <header className="safe-top sticky top-0 z-30 border-b border-line bg-card backdrop-blur-md">
         <div className={`mx-auto flex min-w-0 ${wide ? 'max-w-[1080px]' : 'max-w-[720px]'} items-center justify-between gap-sm px-md py-xs`}>
           <Logo />
           <nav aria-label="Site" className="flex min-w-0 items-center gap-xs">
@@ -64,7 +64,7 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
                 Sign in
               </Link>
             )}
-            <Link to={entry} className="toy inline-flex min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink">
+            <Link to={entry} className="toy inline-flex min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink max-[380px]:px-sm">
               Go to app
             </Link>
             <ThemeToggle />

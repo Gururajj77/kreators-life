@@ -1,3 +1,4 @@
+import { HeroBlobs } from '../components/Hero';
 import {
   CHARACTER_STAGES,
   evolutionFor,
@@ -92,11 +93,16 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
 
   return (
     <>
-      <div style={{ background: rel.color, color: rel.text }}>
-        <div className="safe-top mx-auto w-full max-w-[480px] px-md pb-lg pt-md md:ml-[240px] md:max-w-[1040px] md:px-lg lg:mx-auto lg:pl-[240px]">
-          <BackLink to="/tower" inherit>
-            Pillars
-          </BackLink>
+      {/* A calm wash instead of a flat block: the pillar's colour with a soft light at the top left, deepening toward the bottom. */}
+      <div className="relative overflow-hidden rounded-b-card" style={{ background: `radial-gradient(70% 55% at 12% 0%, rgba(255, 255, 255, 0.22), transparent 70%), linear-gradient(165deg, ${rel.color}, color-mix(in oklab, ${rel.color} 62%, var(--fill-shade)))`, color: rel.text }}>
+        <HeroBlobs />
+        <div className="safe-top relative mx-auto w-full max-w-[480px] px-md pb-lg pt-md md:ml-[240px] md:max-w-[1040px] md:px-lg lg:mx-auto lg:pl-[240px]">
+          {/* On a phone the brand and the corner buttons float over the top 56px, so the way back starts below them. */}
+          <div className="pt-xl md:pt-0">
+            <BackLink to="/tower" inherit>
+              Pillars
+            </BackLink>
+          </div>
           <p className="mt-sm m-0 text-[14px] font-bold">
             Pillar {rel.floor} of 7, {rel.character}, your {rel.role}
           </p>
@@ -144,7 +150,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
             <h2 id="build-heading" className="text-[24px]">
               Set up this pillar
             </h2>
-            <div className="mt-sm rounded-card p-md" style={{ background: `var(--soft-${rel.key})` }}>
+            <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft" style={{ backgroundImage: `linear-gradient(145deg, color-mix(in oklab, ${rel.color} 16%, transparent), transparent 65%)` }}>
               <p className="m-0 text-[16px] font-semibold">
                 {rel.character} built a pyramid from your answers: the foundation you picked, then a guiding principle, a value goal, a goal outcome, a project and three tasks. One tap and they show up on Daily.
               </p>

@@ -18,26 +18,28 @@
      values live on :root below so dark mode can swap them. */
   --color-ink: var(--ink);
   /* The arrow every select draws for itself; it follows the ink colour below. */
-  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23262626' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2325293a' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   --color-ink-soft: var(--ink-soft);
   --color-ink-mute: var(--ink-mute);
-  --color-ink-fixed: #262626; /* always the dark grey ink, for text on colored fills */
+  --color-ink-fixed: #25293a; /* always the dark slate ink, for text on colored fills */
   --color-on-ink: var(--on-ink);
   /* On a solid colour fill the foreground is white, in both modes. Yellow is the one fill that takes the dark ink. */
   --color-on-fill: #ffffff;
-  --color-on-yellow: #262626;
+  --color-on-yellow: #25293a;
   --color-paper: var(--paper);
   --color-card: var(--card);
+  /* A card that must stay readable whatever is under it: on a coloured fill, in a menu, in a dialog. */
+  --color-card-strong: var(--card-strong);
   --color-line: var(--line);
   --color-shadow: var(--shadow);
 
-  --color-r1: #e11d48; /* Present Red 60 */
-  --color-r2: #fb8728; /* Empathy Orange 40 */
-  --color-r3: #facc15; /* Zen Yellow 40 */
-  --color-r4: #9bb068; /* Serenity Green 50 */
-  --color-r5: #926247; /* Mindful Brown 60 */
-  --color-r6: #7f45e2; /* Kind Purple 60 */
-  --color-r7: #5d2aad; /* Kind Purple 80 */
+  --color-r1: #d6456b; /* Present Red 60 */
+  --color-r2: #f08a4b; /* Empathy Orange 40 */
+  --color-r3: #f3cf5a; /* Zen Yellow 40 */
+  --color-r4: #6f9b74; /* Serenity Green 50 */
+  --color-r5: #8c6a57; /* Mindful Brown 60 */
+  --color-r6: #7b5bd6; /* Kind Purple 60 */
+  --color-r7: #5a3fa6; /* Kind Purple 80 */
   /* The scale of consciousness (ConsciousnessMap): the funnel's colours that the seven do not have. Fixed in both modes. */
   --color-scale-silver: #e6e6ea;
   --color-scale-night: #161616;
@@ -65,49 +67,70 @@
   --tracking-eyebrow: 0.08em;
 
   --radius-card: 32px;
+  /* Concentric curves, the way Apple draws them: a shape inside another has the outer radius minus the gap between them, so the two
+     curves share a centre. A card is 32px with 16px of padding, so what sits inside it is 16px; with 12px of padding, 20px. */
+  --radius-inner: 16px;
+  --radius-inner-sm: 20px;
   --radius-tile: 24px;
   --radius-pill: 999px;
 
   /* Resting cards: a hairline edge so the card reads on any paper, plus a soft drop.
      The edge and the two shade stops live on :root so dark mode can turn them up. */
-  --shadow-toy: 0 0 0 1px var(--edge), 0 8px 16px var(--shade-2);
-  --shadow-toy-soft: 0 0 0 1px var(--edge), 0 2px 4px var(--shade-1), 0 10px 24px -8px var(--shade-2);
+  --shadow-toy: 0 0 0 1px var(--edge), inset 0 1px 0 var(--glass-hi), 0 8px 16px var(--shade-2);
+  --shadow-toy-soft: 0 0 0 1px var(--edge), inset 0 1px 0 var(--glass-hi), 0 2px 4px var(--shade-1), 0 10px 24px -8px var(--shade-2);
 }
 
 /* Light: the kit's light mode. */
+/* Where a coloured fill's gradient deepens to: a calm indigo, the same in both modes. */
+:root {
+  --fill-shade: #2a2f55;
+}
+
+/* Light: calm. A pale periwinkle, seafoam and blush wash behind frosted glass; the ink is a cool slate, never pure black. */
 :root {
   color-scheme: light;
-  --ink: #262626; /* 85% black: the darkest grey, where the kit had brown */
-  --ink-soft: #5c5c5c;
-  --ink-mute: #858585;
+  --ink: #25293a; /* a slate that leans blue, so the page feels quiet */
+  --ink-soft: #565c72;
+  --ink-mute: #737890;
   --on-ink: #ffffff;
-  --paper: #f4f4f4;
-  --card: #ffffff;
-  --line: #e2e2e2;
-  --shadow: #111111;
-  --edge: rgba(38, 38, 38, 0.1);
-  --shade-1: rgba(17, 17, 17, 0.06);
-  --shade-2: rgba(17, 17, 17, 0.14);
-  --tint-red: #ffe4e6;
-  --tint-orange: #ffedd5;
-  --tint-yellow: #fef9c3;
-  --tint-green: #f0f2e8;
-  --tint-brown: #e8ddd9;
-  --tint-purple: #ede9fe;
-  --tint-purple-deep: #ddd6fe;
-  --soft-servant_leader: #ffe4e6;
-  --soft-friendship: #ffedd5;
-  --soft-parent_child: #fef9c3;
-  --soft-lover_partner: #f0f2e8;
-  --soft-self: #e8ddd9;
-  --soft-guru: #ede9fe;
-  --soft-divine: #ddd6fe;
+  /* The page is a gradient (see `body`), so paper and card are glass over it: translucent white. */
+  --paper: rgba(255, 255, 255, 0.5);
+  --card: rgba(255, 255, 255, 0.62);
+  --card-strong: rgba(255, 255, 255, 0.97);
+  --line: rgba(70, 80, 130, 0.14);
+  --shadow: #2a3158;
+  --edge: rgba(255, 255, 255, 0.7);
+  --glass-hi: rgba(255, 255, 255, 0.85);
+  --glass-blur: 14px;
+  --shade-1: rgba(60, 70, 130, 0.07);
+  --shade-2: rgba(60, 70, 130, 0.16);
+  /* The wash behind everything: three soft glows over a pale base. */
+  --page-base-a: #eceffd;
+  --page-base-b: #e2f2ee;
+  --glow-1: #c9d3ff; /* periwinkle */
+  --glow-2: #bfe8dc; /* seafoam */
+  --glow-3: #fbd3d2; /* blush */
+  --glow-4: #ddcdf8; /* lavender */
+  --tint-red: #fde8ee;
+  --tint-orange: #fdeee0;
+  --tint-yellow: #fbf3cf;
+  --tint-green: #e6f2e4;
+  --tint-brown: #ece3de;
+  --tint-purple: #ece8fb;
+  --tint-purple-deep: #dcd5f7;
+  --soft-servant_leader: #fde8ee;
+  --soft-friendship: #fdeee0;
+  --soft-parent_child: #fbf3cf;
+  --soft-lover_partner: #e6f2e4;
+  --soft-self: #ece3de;
+  --soft-guru: #ece8fb;
+  --soft-divine: #dcd5f7;
   --deep-servant_leader: #9f1239;
   --deep-friendship: #c2410c;
   --deep-parent_child: #a16207;
-  --deep-lover_partner: #5a6b38;
+  --deep-lover_partner: #4f6a3c;
   --deep-self: #4f3422;
-  --deep-guru: #5d2aad;
+  --deep-guru: #5a3fa6;
   --deep-divine: #2e1065;
 }
 
@@ -117,32 +140,40 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --ink: #f2f2f2;
-    --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f2f2f2' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-    --ink-soft: #c2c2c2;
-    --ink-mute: #9a9a9a;
-    --on-ink: #121212;
-    --paper: #121212; /* near black, where the kit had deep brown */
-    --card: #1e1e1e;
-    --line: #333333;
+    --ink: #eef0f8;
+    --ink-soft: #bcc2d6;
+    --ink-mute: #8f96ad;
+    --on-ink: #10131f;
+    --paper: rgba(255, 255, 255, 0.05);
+    --card: rgba(255, 255, 255, 0.075);
+    --card-strong: rgba(24, 28, 46, 0.985);
+    --line: rgba(255, 255, 255, 0.12);
     --shadow: #000000;
-    --edge: rgba(255, 255, 255, 0.1);
-    --shade-1: rgba(0, 0, 0, 0.35);
-    --shade-2: rgba(0, 0, 0, 0.55);
-    --tint-red: #4c0519;
-    --tint-orange: #431407;
-    --tint-yellow: #422006;
-    --tint-green: #191e10;
-    --tint-brown: #372315;
-    --tint-purple: #2e1065;
-    --tint-purple-deep: #4e248e;
-    --soft-servant_leader: #4c0519;
-    --soft-friendship: #431407;
-    --soft-parent_child: #422006;
-    --soft-lover_partner: #191e10;
-    --soft-self: #372315;
-    --soft-guru: #2e1065;
-    --soft-divine: #4e248e;
+    --edge: rgba(255, 255, 255, 0.12);
+    --glass-hi: rgba(255, 255, 255, 0.14);
+    --glass-blur: 16px;
+    --shade-1: rgba(0, 0, 0, 0.3);
+    --shade-2: rgba(0, 0, 0, 0.5);
+    --page-base-a: #0e1220;
+    --page-base-b: #101c26;
+    --glow-1: rgba(104, 116, 232, 0.42);
+    --glow-2: rgba(58, 170, 170, 0.3);
+    --glow-3: rgba(214, 110, 150, 0.24);
+    --glow-4: rgba(130, 100, 220, 0.34);
+--tint-red: #3a1626;
+    --tint-orange: #3a2416;
+    --tint-yellow: #35301a;
+    --tint-green: #1b2c25;
+    --tint-brown: #2e2622;
+    --tint-purple: #2a2350;
+    --tint-purple-deep: #3a3070;
+    --soft-servant_leader: #3a1626;
+    --soft-friendship: #3a2416;
+    --soft-parent_child: #35301a;
+    --soft-lover_partner: #1b2c25;
+    --soft-self: #2e2622;
+    --soft-guru: #2a2350;
+    --soft-divine: #3a3070;
     --deep-servant_leader: #fda4af;
     --deep-friendship: #fdba74;
     --deep-parent_child: #fde047;
@@ -155,31 +186,40 @@
 :root[data-theme='dark'] {
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f2f2f2' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   color-scheme: dark;
-  --ink: #f2f2f2;
-  --ink-soft: #c2c2c2;
-  --ink-mute: #9a9a9a;
-  --on-ink: #121212;
-  --paper: #121212;
-  --card: #1e1e1e;
-  --line: #333333;
+  --ink: #eef0f8;
+  --ink-soft: #bcc2d6;
+  --ink-mute: #8f96ad;
+  --on-ink: #10131f;
+  --paper: rgba(255, 255, 255, 0.05);
+  --card: rgba(255, 255, 255, 0.075);
+  --card-strong: rgba(24, 28, 46, 0.985);
+  --line: rgba(255, 255, 255, 0.12);
   --shadow: #000000;
-  --edge: rgba(255, 255, 255, 0.1);
-  --shade-1: rgba(0, 0, 0, 0.35);
-  --shade-2: rgba(0, 0, 0, 0.55);
-  --tint-red: #4c0519;
-  --tint-orange: #431407;
-  --tint-yellow: #422006;
-  --tint-green: #191e10;
-  --tint-brown: #372315;
-  --tint-purple: #2e1065;
-  --tint-purple-deep: #4e248e;
-  --soft-servant_leader: #4c0519;
-  --soft-friendship: #431407;
-  --soft-parent_child: #422006;
-  --soft-lover_partner: #191e10;
-  --soft-self: #372315;
-  --soft-guru: #2e1065;
-  --soft-divine: #4e248e;
+  --edge: rgba(255, 255, 255, 0.12);
+  --glass-hi: rgba(255, 255, 255, 0.14);
+  --glass-blur: 16px;
+  --shade-1: rgba(0, 0, 0, 0.3);
+  --shade-2: rgba(0, 0, 0, 0.5);
+  --page-base-a: #0e1220;
+  --page-base-b: #101c26;
+  --glow-1: rgba(104, 116, 232, 0.42);
+  --glow-2: rgba(58, 170, 170, 0.3);
+  --glow-3: rgba(214, 110, 150, 0.24);
+  --glow-4: rgba(130, 100, 220, 0.34);
+--tint-red: #3a1626;
+  --tint-orange: #3a2416;
+  --tint-yellow: #35301a;
+  --tint-green: #1b2c25;
+  --tint-brown: #2e2622;
+  --tint-purple: #2a2350;
+  --tint-purple-deep: #3a3070;
+  --soft-servant_leader: #3a1626;
+  --soft-friendship: #3a2416;
+  --soft-parent_child: #35301a;
+  --soft-lover_partner: #1b2c25;
+  --soft-self: #2e2622;
+  --soft-guru: #2a2350;
+  --soft-divine: #3a3070;
   --deep-servant_leader: #fda4af;
   --deep-friendship: #fdba74;
   --deep-parent_child: #fde047;
@@ -206,7 +246,7 @@
   html {
     font-family: var(--font-body);
     color: var(--color-ink);
-    background: var(--color-paper);
+    background: var(--page-base-a);
     -webkit-tap-highlight-color: transparent;
     font-size: 16px;
     /* Kerning on everywhere: the pairs the font designer fixed (AV, To, Ty) stay fixed. */
@@ -217,6 +257,21 @@
     margin: 0;
     min-height: 100dvh;
     overscroll-behavior-y: none;
+  }
+  /* The wash behind everything: soft glows over a gradient base, never a flat fill. It is fixed to the screen, so the
+     glass above it always has something to frost. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(60rem 42rem at 6% -6%, var(--glow-1), transparent 62%),
+      radial-gradient(52rem 40rem at 104% 6%, var(--glow-3), transparent 60%),
+      radial-gradient(56rem 44rem at 82% 108%, var(--glow-2), transparent 62%),
+      radial-gradient(44rem 36rem at -4% 96%, var(--glow-4), transparent 62%),
+      linear-gradient(165deg, var(--page-base-a), var(--page-base-b));
   }
   h1,
   h2,
@@ -497,103 +552,61 @@ details[open] > summary {
   overflow: hidden;
 }
 
-/* Dark mode wears each app's colour: the paper, cards and lines take a deep shade of that hue, not plain brown. */
+/* Dark mode wears each app's colour in the glow behind the glass: the wash leans toward that app's hue, and the cards stay frosted. */
 :root[data-theme='dark'][data-accent='servant_leader'] {
-  --paper: color-mix(in oklab, var(--soft-servant_leader) 55%, #1a0f06);
-  --card: color-mix(in oklab, var(--soft-servant_leader) 70%, #2a1a0d);
-  --line: color-mix(in oklab, var(--deep-servant_leader) 22%, var(--card));
-  --tint-brown: var(--card);
+  --glow-2: color-mix(in oklab, var(--deep-servant_leader) 30%, transparent);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light'])[data-accent='servant_leader'] {
-    --paper: color-mix(in oklab, var(--soft-servant_leader) 55%, #1a0f06);
-    --card: color-mix(in oklab, var(--soft-servant_leader) 70%, #2a1a0d);
-    --line: color-mix(in oklab, var(--deep-servant_leader) 22%, var(--card));
-    --tint-brown: var(--card);
+    --glow-2: color-mix(in oklab, var(--deep-servant_leader) 30%, transparent);
   }
 }
 :root[data-theme='dark'][data-accent='friendship'] {
-  --paper: color-mix(in oklab, var(--soft-friendship) 55%, #1a0f06);
-  --card: color-mix(in oklab, var(--soft-friendship) 70%, #2a1a0d);
-  --line: color-mix(in oklab, var(--deep-friendship) 22%, var(--card));
-  --tint-brown: var(--card);
+  --glow-2: color-mix(in oklab, var(--deep-friendship) 30%, transparent);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light'])[data-accent='friendship'] {
-    --paper: color-mix(in oklab, var(--soft-friendship) 55%, #1a0f06);
-    --card: color-mix(in oklab, var(--soft-friendship) 70%, #2a1a0d);
-    --line: color-mix(in oklab, var(--deep-friendship) 22%, var(--card));
-    --tint-brown: var(--card);
+    --glow-2: color-mix(in oklab, var(--deep-friendship) 30%, transparent);
   }
 }
 :root[data-theme='dark'][data-accent='parent_child'] {
-  --paper: color-mix(in oklab, var(--soft-parent_child) 55%, #1a0f06);
-  --card: color-mix(in oklab, var(--soft-parent_child) 70%, #2a1a0d);
-  --line: color-mix(in oklab, var(--deep-parent_child) 22%, var(--card));
-  --tint-brown: var(--card);
+  --glow-2: color-mix(in oklab, var(--deep-parent_child) 30%, transparent);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light'])[data-accent='parent_child'] {
-    --paper: color-mix(in oklab, var(--soft-parent_child) 55%, #1a0f06);
-    --card: color-mix(in oklab, var(--soft-parent_child) 70%, #2a1a0d);
-    --line: color-mix(in oklab, var(--deep-parent_child) 22%, var(--card));
-    --tint-brown: var(--card);
+    --glow-2: color-mix(in oklab, var(--deep-parent_child) 30%, transparent);
   }
 }
 :root[data-theme='dark'][data-accent='lover_partner'] {
-  --paper: color-mix(in oklab, var(--soft-lover_partner) 55%, #1a0f06);
-  --card: color-mix(in oklab, var(--soft-lover_partner) 70%, #2a1a0d);
-  --line: color-mix(in oklab, var(--deep-lover_partner) 22%, var(--card));
-  --tint-brown: var(--card);
+  --glow-2: color-mix(in oklab, var(--deep-lover_partner) 30%, transparent);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light'])[data-accent='lover_partner'] {
-    --paper: color-mix(in oklab, var(--soft-lover_partner) 55%, #1a0f06);
-    --card: color-mix(in oklab, var(--soft-lover_partner) 70%, #2a1a0d);
-    --line: color-mix(in oklab, var(--deep-lover_partner) 22%, var(--card));
-    --tint-brown: var(--card);
+    --glow-2: color-mix(in oklab, var(--deep-lover_partner) 30%, transparent);
   }
 }
 :root[data-theme='dark'][data-accent='self'] {
-  --paper: color-mix(in oklab, var(--soft-self) 55%, #1a0f06);
-  --card: color-mix(in oklab, var(--soft-self) 70%, #2a1a0d);
-  --line: color-mix(in oklab, var(--deep-self) 22%, var(--card));
-  --tint-brown: var(--card);
+  --glow-2: color-mix(in oklab, var(--deep-self) 30%, transparent);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light'])[data-accent='self'] {
-    --paper: color-mix(in oklab, var(--soft-self) 55%, #1a0f06);
-    --card: color-mix(in oklab, var(--soft-self) 70%, #2a1a0d);
-    --line: color-mix(in oklab, var(--deep-self) 22%, var(--card));
-    --tint-brown: var(--card);
+    --glow-2: color-mix(in oklab, var(--deep-self) 30%, transparent);
   }
 }
 :root[data-theme='dark'][data-accent='guru'] {
-  --paper: color-mix(in oklab, var(--soft-guru) 55%, #1a0f06);
-  --card: color-mix(in oklab, var(--soft-guru) 70%, #2a1a0d);
-  --line: color-mix(in oklab, var(--deep-guru) 22%, var(--card));
-  --tint-brown: var(--card);
+  --glow-2: color-mix(in oklab, var(--deep-guru) 30%, transparent);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light'])[data-accent='guru'] {
-    --paper: color-mix(in oklab, var(--soft-guru) 55%, #1a0f06);
-    --card: color-mix(in oklab, var(--soft-guru) 70%, #2a1a0d);
-    --line: color-mix(in oklab, var(--deep-guru) 22%, var(--card));
-    --tint-brown: var(--card);
+    --glow-2: color-mix(in oklab, var(--deep-guru) 30%, transparent);
   }
 }
 :root[data-theme='dark'][data-accent='divine'] {
-  --paper: color-mix(in oklab, var(--soft-divine) 55%, #1a0f06);
-  --card: color-mix(in oklab, var(--soft-divine) 70%, #2a1a0d);
-  --line: color-mix(in oklab, var(--deep-divine) 22%, var(--card));
-  --tint-brown: var(--card);
+  --glow-2: color-mix(in oklab, var(--deep-divine) 30%, transparent);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light'])[data-accent='divine'] {
-    --paper: color-mix(in oklab, var(--soft-divine) 55%, #1a0f06);
-    --card: color-mix(in oklab, var(--soft-divine) 70%, #2a1a0d);
-    --line: color-mix(in oklab, var(--deep-divine) 22%, var(--card));
-    --tint-brown: var(--card);
+    --glow-2: color-mix(in oklab, var(--deep-divine) 30%, transparent);
   }
 }
 
@@ -649,14 +662,148 @@ details[open] > summary {
 
 /* Callout colours: each is its relationship colour thinned into the card, so it stays pale in light mode and deep in dark mode. */
 .tip-card {
-  background-color: color-mix(in oklab, var(--color-r6) 14%, var(--color-card));
+  background-color: color-mix(in oklab, var(--color-r6) 14%, var(--color-card-strong));
 }
 .tip-yellow {
-  background-color: color-mix(in oklab, var(--color-r3) 24%, var(--color-card));
+  background-color: color-mix(in oklab, var(--color-r3) 24%, var(--color-card-strong));
 }
 .tip-green {
-  background-color: color-mix(in oklab, var(--color-r4) 26%, var(--color-card));
+  background-color: color-mix(in oklab, var(--color-r4) 26%, var(--color-card-strong));
 }
 .tip-orange {
-  background-color: color-mix(in oklab, var(--color-r2) 20%, var(--color-card));
+  background-color: color-mix(in oklab, var(--color-r2) 20%, var(--color-card-strong));
+}
+
+
+/* ------------------------------------------------------------------------------------------------
+   Glass and bento. A card is frosted glass: a translucent fill, a hairline that catches the light along
+   its top edge, and a blur of what is behind it. Only the big surfaces blur (cards, tiles, sheets, bars);
+   small chips stay translucent without it, so a long list does not cost a blur each. Readability comes first:
+   text sits on a fill that is never thinner than the tokens above, and the glass turns solid for anyone who
+   asks for less transparency or more contrast, and on browsers that cannot blur.
+   ------------------------------------------------------------------------------------------------ */
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .bg-card.rounded-card,
+  .bg-card.rounded-tile,
+  nav.bg-card,
+  [role='dialog'],
+  [aria-modal='true'] {
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+    backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  }
+}
+/* Overlays sit over moving content, so they are frosted harder and nearly opaque. */
+[role='dialog'],
+[aria-modal='true'],
+nav {
+  --card: var(--card-strong);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --card: var(--card-strong);
+    --paper: var(--card-strong);
+  }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  :root {
+    --card: var(--card-strong);
+    --paper: var(--card-strong);
+  }
+  .bg-card.rounded-card,
+  .bg-card.rounded-tile,
+  nav.bg-card,
+  [role='dialog'],
+  [aria-modal='true'] {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* Gradients in place of flat fills. The ink button leans a little toward violet; each of the seven colours keeps its hue
+   and gains a soft light from the top left, so a coloured card has depth. */
+.bg-ink {
+  background-image: linear-gradient(135deg, var(--color-ink), color-mix(in oklab, var(--color-ink) 80%, var(--color-r6)));
+}
+.bg-r1,
+.bg-r2,
+.bg-r3,
+.bg-r4,
+.bg-r5,
+.bg-r6,
+.bg-r7 {
+  background-image: linear-gradient(140deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 55%, rgba(30, 30, 60, 0.1));
+}
+
+/* Bento: one gap, one radius, and size that says what matters. Cells span columns and rows by their class;
+   on a phone everything stacks, but a wide cell keeps its extra height so the order of importance still reads. */
+.bento {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: var(--spacing-sm);
+  grid-auto-flow: dense;
+}
+@media (width >= 40rem) {
+  .bento {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .bento-w2 {
+    grid-column: span 2;
+  }
+  .bento-w3 {
+    grid-column: span 3;
+  }
+  .bento-w4 {
+    grid-column: span 4;
+  }
+  .bento-h2 {
+    grid-row: span 2;
+  }
+}
+.bento > * {
+  min-width: 0;
+}
+.bento-h2 {
+  min-height: 160px;
+}
+
+/* The one big cell in a bento: a wash of two calm colours behind the glass, so the eye lands there first. */
+.bento-feature {
+  background-image: linear-gradient(150deg, color-mix(in oklab, var(--color-r6) 18%, transparent), color-mix(in oklab, var(--color-r4) 14%, transparent) 70%, transparent);
+}
+
+/* Glass over glass over colour: a card that sits on a coloured fill or an ink card has nothing calm to frost, so it turns solid. */
+:is(.bg-ink, .bg-r1, .bg-r2, .bg-r3, .bg-r4, .bg-r5, .bg-r6, .bg-r7, [style*='linear-gradient']) .bg-card {
+  background-color: var(--card-strong);
+}
+
+/* Anything that floats over the page (the corner buttons, the tab bar, the assistant's button, sticky headers) must read on whatever
+   scrolls under it, so it is never the thin glass: it takes the strong fill and keeps a visible edge. */
+.fixed.bg-paper,
+.sticky.bg-paper,
+[role='dialog'].bg-paper,
+.fixed.bg-card,
+.fixed .bg-card,
+.sticky.bg-card,
+.sticky .bg-card,
+nav .bg-card {
+  background-color: var(--card-strong);
+  box-shadow: 0 0 0 1px var(--line), inset 0 1px 0 var(--glass-hi), 0 4px 14px var(--shade-2);
+}
+
+/* Continuous corners ("squircles") where the browser can draw them: the curve eases into the straight edge instead of meeting it at a
+   hard angle, which is what makes Apple's corners look softer at the same radius. Elsewhere the plain round corner stays. */
+@supports (corner-shape: squircle) {
+  .rounded-card,
+  .rounded-tile,
+  .rounded-inner,
+  .rounded-inner-sm,
+  .rounded-t-card {
+    corner-shape: squircle;
+  }
+}
+
+/* Checkboxes and radios take the calm violet, not the browser's loud blue. */
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--color-r6);
 }

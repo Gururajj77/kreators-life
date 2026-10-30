@@ -95,7 +95,7 @@ export function TabBar() {
               <NavLink
                 to={t.to}
                 className={({ isActive }) =>
-                  `tab flex min-h-[64px] flex-col items-center justify-center gap-xs text-[12px] font-bold transition-colors ${isActive ? 'text-ink' : 'text-ink-mute hover:text-ink'}`
+                  `tab flex min-h-[72px] flex-col items-center justify-center gap-[6px] pt-sm pb-xs text-[12px] font-bold transition-colors ${isActive ? 'text-ink' : 'text-ink-soft hover:text-ink'}`
                 }
               >
                 {({ isActive }) => (

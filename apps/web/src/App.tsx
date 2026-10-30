@@ -8,6 +8,7 @@ import { Gate } from './components/Gate';
 import { HowTo } from './components/HowTo';
 import { TabBar } from './components/TabBar';
 import { Assistant } from './components/Assistant';
+import { ReminderBubble } from './components/Reminders';
 import { useMe } from './lib/queries';
 import { useApplyTheme } from './lib/theme';
 import { useSession } from './lib/store';
@@ -129,6 +130,7 @@ function Shell() {
       <Outlet />
       <TabBar />
       <Assistant />
+      <ReminderBubble />
     </>
   );
 }

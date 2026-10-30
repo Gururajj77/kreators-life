@@ -120,9 +120,9 @@ export function Home() {
           </h2>
           <p className="type-context mt-sm m-0 text-[16px] text-ink-soft">They never arrive all at once. They creep in, one late night at a time. Which of these sounds like your week?</p>
         </motion.div>
-        <ul className="mt-md grid list-none gap-sm p-0 m-0 sm:grid-cols-2 lg:grid-cols-3">
-          {VILLAINS.map((v) => (
-            <motion.li key={v.key} {...rise} className="rounded-card bg-card p-md shadow-toy-soft">
+        <ul className="bento mt-md list-none p-0 m-0">
+          {VILLAINS.map((v, i) => (
+            <motion.li key={v.key} {...rise} className={`rounded-card bg-card p-md shadow-toy-soft ${i === 0 ? 'bento-w2 bento-h2 bento-feature' : ''}`}>
               <p className="m-0 text-[32px] leading-none" aria-hidden="true">
                 {v.emoji}
               </p>
@@ -160,13 +160,13 @@ export function Home() {
           <p className="type-measure mt-lg m-0 text-[16px] font-semibold">
             Picture a Monday. You open the Daily tab, check in, and do one small act for the pillar that needs you most. Then you tick one task. Each pillar is a pyramid standing on its point, so the tick lands on the task and climbs through the project and the goals up to the foundation, the reason you started.
           </p>
-          <ol className="mt-lg grid list-none gap-sm p-0 m-0 md:grid-cols-3">
+          <ol className="bento mt-lg list-none p-0 m-0">
             {[
               ['A short chat', 'Answer three questions, four if you make things. It switches on the apps that fit, and nothing else.'],
               ['Your pillars', 'A short session places your seven relationships on a map and builds a pyramid for the ones that need you most.'],
               ['Three boxes a day', 'Check in, do one small act, tick one task. Every tick climbs a pillar, and your guides grow with you.'],
             ].map(([t, d], i) => (
-              <li key={t} className="rounded-tile bg-paper p-md">
+              <li key={t} className={`rounded-tile bg-paper p-md ${i === 0 ? 'bento-w2' : ''}`}>
                 <p className="m-0 type-figure text-[28px] text-ink-mute" aria-hidden="true">
                   0{i + 1}
                 </p>
@@ -189,9 +189,9 @@ export function Home() {
             Who it’s for, and why
           </h2>
         </motion.div>
-        <dl className="mt-md grid gap-sm m-0 sm:grid-cols-2 lg:grid-cols-5">
-          {FIVE_WS.map((x) => (
-            <motion.div key={x.w} {...rise} className="rounded-card bg-card p-md shadow-toy-soft">
+        <dl className="bento mt-md m-0">
+          {FIVE_WS.map((x, i) => (
+            <motion.div key={x.w} {...rise} className={`rounded-card bg-card p-md shadow-toy-soft ${i === 0 || i === 4 ? 'bento-w2' : ''} ${i === 0 ? 'bento-feature' : ''}`}>
               <dt className="type-hook text-[28px]">{x.w}</dt>
               <dd className="mt-xs m-0 text-pretty text-[14px] font-semibold text-ink-soft">{x.text}</dd>
             </motion.div>
@@ -258,8 +258,8 @@ export function Home() {
           </h2>
           <p className="type-context mt-sm m-0 text-[16px] text-ink-soft">Today, a tick. On Sunday, your first week review. Each month and each quarter, a look back with the numbers next to the period before.</p>
         </motion.div>
-        <div className="mt-md grid gap-sm md:grid-cols-2">
-          <motion.div {...rise} className="rounded-card bg-card p-md shadow-toy-soft">
+        <div className="bento mt-md">
+          <motion.div {...rise} className="bento-w2 rounded-card bg-card p-md shadow-toy-soft">
             <h3 className="m-0 text-[20px] text-ink-soft text-balance">Before</h3>
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
               {BEFORE.map((b) => (
@@ -270,7 +270,7 @@ export function Home() {
               ))}
             </ul>
           </motion.div>
-          <motion.div {...rise} className="rounded-card bg-r4 p-md text-on-fill">
+          <motion.div {...rise} className="bento-w2 rounded-card bg-r4 p-md text-on-fill">
             <h3 className="m-0 text-[20px] text-on-fill text-balance">After</h3>
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
               {AFTER.map((b) => (
@@ -281,20 +281,13 @@ export function Home() {
               ))}
             </ul>
           </motion.div>
+          {live.map(([label, value]) => (
+            <motion.div key={label} {...rise} className="rounded-tile bg-card p-sm shadow-toy-soft">
+              <p className="m-0 type-figure text-[28px]">{value.toLocaleString()}</p>
+              <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{label} <span className="sr-only">live from the app</span></p>
+            </motion.div>
+          ))}
         </div>
-        {live.length > 0 && (
-          <div className="mt-lg">
-            <p className={eyebrow}>Live from the app</p>
-            <ul className="mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0 sm:grid-cols-4" aria-label="Live from the app">
-              {live.map(([label, value]) => (
-                <li key={label} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                  <p className="m-0 type-figure text-[28px]">{value.toLocaleString()}</p>
-                  <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{label}</p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
         <Link to="/explore" className="toy toy-soft mt-md inline-flex min-h-[48px] items-center rounded-pill bg-card px-md font-bold">
           See what is open right now
         </Link>
@@ -308,9 +301,9 @@ export function Home() {
             Free to start. <em>Free to stay.</em>
           </h2>
           <p className="type-context mt-sm m-0 text-[18px] text-ink-soft">{TOUCHSTONE}</p>
-          <ul className="mt-md grid list-none gap-xs p-0 m-0 sm:grid-cols-2">
-            {FREE.map((f) => (
-              <li key={f} className="flex items-start gap-xs rounded-tile bg-paper p-sm text-[16px] font-bold">
+          <ul className="bento mt-md list-none p-0 m-0">
+            {FREE.map((f, i) => (
+              <li key={f} className={`flex items-start gap-xs rounded-tile bg-paper p-sm text-[16px] font-bold ${i === 0 ? 'bento-w2' : i === 3 ? 'bento-w4' : ''}`}>
                 <span aria-hidden="true">✓</span>
                 {f}
               </li>

@@ -1249,6 +1249,39 @@ section('Attendee codes');
   await api('POST', `/connect/party/${ev.id}/messages`, { body: 'Yes, behind the hall.', parentId: evRoot?.id }, H.token);
   const evThread = (await api('GET', `/connect/party/${ev.id}`, undefined, G.token)).json.messages?.filter((m) => ['Is there parking?', 'Yes, behind the hall.'].includes(m.body));
   check('a line in an event can be answered, and threads under it', evThread?.map((m) => m.depth).join() === '0,1', evThread);
+
+  // Water and reminders.
+  const w0 = await api('GET', `/reminders?day=${today}`, undefined, G.token);
+  check('water starts at zero with a goal and a glass of the person’s own', w0.status === 200 && w0.json.water?.ml === 0 && w0.json.water.goalMl === 2000 && w0.json.water.glassMl === 250 && w0.json.water.on === true && w0.json.water.week?.length === 7, w0.json.water);
+  await api('POST', '/reminders/water', { day: today }, G.token);
+  const w2 = await api('POST', '/reminders/water', { day: today }, G.token);
+  check('a tap adds a glass', w2.status === 201 && w2.json.water?.ml === 500 && w2.json.water.glasses === 2, w2.json.water);
+  const wOdd = await api('POST', '/reminders/water', { day: today, ml: 400 }, G.token);
+  check('any amount can be added', wOdd.json.water?.ml === 900, wOdd.json.water);
+  const wUndo = await api('DELETE', `/reminders/water?day=${today}`, undefined, G.token);
+  check('the last one can be taken back', wUndo.json.water?.ml === 500, wUndo.json.water);
+  const wBig = await api('POST', '/reminders/water', { day: today, ml: 5000 }, G.token);
+  check('a slip of the thumb cannot add a huge amount', wBig.status === 400, wBig.json);
+  const wOld = await api('GET', '/reminders?day=2020-01-01', undefined, G.token);
+  check('only today or yesterday can be logged or read', wOld.status === 400, wOld.status);
+  const wSet = await api('PUT', '/reminders/water/settings', { day: today, goalMl: 2500, everyMin: 60, from: '08:00', to: '20:00' }, G.token);
+  check('the goal, the gap and the hours can be changed', wSet.json.water?.goalMl === 2500 && wSet.json.water.everyMin === 60 && wSet.json.water.from === '08:00', wSet.json.water);
+  const wBad = await api('PUT', '/reminders/water/settings', { day: today, from: '21:00', to: '09:00' }, G.token);
+  check('a day must start before it ends', wBad.status === 400, wBad.json);
+  const wOff = await api('PUT', '/reminders/water/settings', { day: today, on: false }, G.token);
+  check('water reminders can be switched off', wOff.json.water?.on === false, wOff.json.water);
+  const mk = await api('POST', '/reminders/custom', { title: 'Stretch', time: '17:30', days: [1, 2, 3, 4, 5] }, G.token);
+  check('a person adds their own reminder', mk.status === 201 && mk.json.reminder?.time === '17:30' && mk.json.reminder.days.length === 5 && mk.json.reminder.enabled, mk.json);
+  const mkBad = await api('POST', '/reminders/custom', { title: 'x', time: '25:99' }, G.token);
+  check('a reminder needs a real time', mkBad.status === 400, mkBad.json);
+  const stranger2 = await api('PATCH', `/reminders/custom/${mk.json.reminder.id}`, { enabled: false }, O.token);
+  check('nobody else can change it', stranger2.status === 404, stranger2.status);
+  const off = await api('PATCH', `/reminders/custom/${mk.json.reminder.id}`, { enabled: false, title: 'Stretch more' }, G.token);
+  check('it can be turned off and renamed', off.json.reminder?.enabled === false && off.json.reminder.title === 'Stretch more', off.json);
+  const expW = await api('GET', '/me/export', undefined, G.token);
+  check('water and reminders are in the export', expW.json.waterLogs?.length >= 2 && expW.json.customReminders?.length === 1, [expW.json.waterLogs?.length, expW.json.customReminders?.length]);
+  await api('DELETE', `/reminders/custom/${mk.json.reminder.id}`, undefined, G.token);
+  check('and it can be removed', (await api('GET', `/reminders?day=${today}`, undefined, G.token)).json.custom?.length === 0, '');
     check('a person’s claims are in their export', Array.isArray(exp.json.attendeeClaims) && exp.json.attendeeClaims.length >= 1, exp.json.attendeeClaims?.length);
 }
 
@@ -1469,9 +1502,12 @@ section('Engagement');
   const brief = await api('GET', `/home/brief?date=${today}&hour=20`, undefined, P.token);
   check('Home has a brief: three signals and three next steps', brief.status === 200 && brief.json.brief?.signals?.length >= 1 && brief.json.brief.actions?.length === 3, brief.json.brief?.actions?.map((a) => a.key));
   check('a new account sees the Getting started list', brief.json.gettingStarted?.show === true && brief.json.gettingStarted.items?.length === 7, brief.json.gettingStarted?.done);
-  await api('POST', '/home/getting-started/hide', {}, P.token);
+  await api('PUT', '/home/getting-started', { folded: true }, P.token);
   const folded = await api('GET', `/home/brief?date=${today}&hour=9`, undefined, P.token);
-  check('the list folds away for good', folded.json.gettingStarted?.show === false, folded.json.gettingStarted?.show);
+  check('the list folds into a small toggle', folded.json.gettingStarted?.show === true && folded.json.gettingStarted?.folded === true, folded.json.gettingStarted);
+  await api('PUT', '/home/getting-started', { folded: false }, P.token);
+  const reopened = await api('GET', `/home/brief?date=${today}&hour=9`, undefined, P.token);
+  check('and opens again', reopened.json.gettingStarted?.folded === false, reopened.json.gettingStarted);
   const teamBrief = await api('GET', `/home/brief?date=${today}&hour=9`, undefined, A.token);
   check('the team gets its own lines', Array.isArray(teamBrief.json.brief?.team) && brief.json.brief?.team === null, teamBrief.json.brief?.team?.length);
 }

@@ -1534,7 +1534,7 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
       onKeyDown={(e) => {
         if (e.key === 'Escape') onClose();
       }}
-      className="fixed inset-x-sm bottom-[calc(var(--spacing-xl)+var(--spacing-sm)+env(safe-area-inset-bottom))] z-40 flex h-[max(50dvh,320px)] flex-col overflow-hidden rounded-card border-2 border-line bg-paper shadow-toy-soft md:left-auto md:right-md md:bottom-md md:h-[min(640px,calc(100dvh-32px))] md:w-[400px]"
+      className="fixed inset-x-sm bottom-[calc(var(--spacing-xl)+var(--spacing-sm)+env(safe-area-inset-bottom))] z-40 flex h-[max(50dvh,320px)] flex-col overflow-hidden rounded-card border-2 border-line bg-card-strong shadow-toy-soft md:left-auto md:right-md md:bottom-md md:h-[min(640px,calc(100dvh-32px))] md:w-[400px]"
     >
       <header className="flex items-center gap-xs border-b-2 border-line py-xs pr-sm pl-md">
         {/* The name and the line under it wrap on a narrow phone rather than being cut short. */}

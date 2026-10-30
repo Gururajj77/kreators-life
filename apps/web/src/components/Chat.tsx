@@ -566,8 +566,8 @@ export function ChatScreen({
   useChatMotion({ count: countTurns(log), lines: log.length, lastTurn, root: body, head });
 
   return (
-    <div className="min-h-dvh bg-paper">
-      <header ref={head} className="safe-top sticky top-0 z-20 bg-paper">
+    <div className="min-h-dvh">
+      <header ref={head} className="safe-top sticky top-0 z-20 bg-card-strong">
         {/* Start over on the left, Close and the theme on the right. On a phone the title and the step take a second
             line under the buttons, so they are never cut short; on a laptop they sit between them. */}
         <div className="mx-auto grid w-full max-w-[760px] grid-cols-[1fr_auto] items-center gap-x-xs gap-y-xs px-md py-sm md:grid-cols-[1fr_auto_1fr]">
@@ -595,8 +595,8 @@ export function ChatScreen({
       </main>
 
       <footer ref={foot} className="sticky bottom-0 z-20">
-        <div className="h-md" style={{ background: 'linear-gradient(to top, var(--color-paper), transparent)' }} aria-hidden="true" />
-        <div className="safe-bottom bg-paper">{composer ? <ChatComposer {...composer} className="mx-auto max-w-[760px] px-md pb-sm" /> : <div className="h-sm" />}</div>
+        <div className="h-md" style={{ background: 'linear-gradient(to top, var(--card-strong), transparent)' }} aria-hidden="true" />
+        <div className="safe-bottom bg-card-strong">{composer ? <ChatComposer {...composer} className="mx-auto max-w-[760px] px-md pb-sm" /> : <div className="h-sm" />}</div>
       </footer>
     </div>
   );

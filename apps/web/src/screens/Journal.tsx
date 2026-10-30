@@ -7,6 +7,7 @@ import { CalendarGrid } from '../components/Charts';
 import { Hero } from '../components/Hero';
 import { MoodFace } from '../components/MoodFace';
 import { BackLink } from '../components/PageHeader';
+import { RemindersSection } from '../components/Reminders';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
@@ -28,6 +29,8 @@ export function Journal() {
         <BackLink to="/wellbeing">Wellbeing</BackLink>
         <h1 className="text-[30px]">Journal</h1>
       </header>
+
+      <RemindersSection />
 
       {stats && (
         <Hero color="var(--color-r5)" deep="var(--deep-self)" className="mt-md" character="self" mood={stats.thisMonth > 0 ? "happy" : "sleepy"}>

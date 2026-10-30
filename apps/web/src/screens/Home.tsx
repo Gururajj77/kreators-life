@@ -1,3 +1,4 @@
+import { RemindersSection } from '../components/Reminders';
 import { badgeRoleOf, greetingFor, LIFE_AREAS, MODULE_GROUPS, money, MOODS, RELATIONSHIP_BY_KEY, STRESS_LEVELS, type HomeResponse, type ModuleGroup } from '@kreators/shared';
 import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router';
@@ -118,6 +119,7 @@ export function Home() {
         </div>
       </header>
 
+      <RemindersSection always />
       <DailyBrief date={date} hour={hour} />
 
 
@@ -138,8 +140,8 @@ export function Home() {
       {d && (
         <>
           <Section id="home-metrics" title="Your metrics" action={<SeeAll to="/life">Life</SeeAll>} span>
-            <ul className="-mx-md flex snap-x scroll-px-md list-none gap-xs overflow-x-auto px-md pb-xs scrollbar-none m-0 md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0">
-              <li className="w-[168px] shrink-0 snap-start md:w-auto">
+            <ul className="-mx-md flex snap-x scroll-px-md list-none gap-xs overflow-x-auto px-md pb-xs scrollbar-none m-0 md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0">
+              <li className="w-[168px] shrink-0 snap-start md:col-span-2 md:w-auto">
                 <MetricCard to="/life" title="Life score" emoji="🧭" tone="var(--color-r4)" deep="var(--deep-lover_partner)" corner={<Avatar relationship="lover_partner" size={36} decorative mood={(d.life?.overall ?? 0) >= 60 ? 'excited' : 'happy'} />}>
                   <span className="flex flex-1 items-center justify-center">
                     <Gauge value={(d.life?.overall ?? 0) / 100} size={120} stroke={12} color={WHITE} track={WHITE_TRACK} label={`Life ${d.life?.overall ?? 0} of 100`}>
@@ -581,7 +583,7 @@ export function Home() {
 /** One of the kit's coloured metric cards: a title with its icon, then whatever the card shows, all in white. */
 function MetricCard({ to, title, emoji, tone, deep, corner, children }: { to: string; title: string; emoji: string; tone: string; deep: string; corner?: ReactNode; children: ReactNode }) {
   return (
-    <Link to={to} className="toy relative flex h-[204px] flex-col overflow-hidden rounded-card p-sm text-on-fill" style={{ background: tone, '--toy-color': deep } as CSSProperties}>
+    <Link to={to} className="toy relative flex h-[204px] flex-col overflow-hidden rounded-card p-sm text-on-fill" style={{ background: `linear-gradient(140deg, ${tone}, color-mix(in oklab, ${tone} 72%, var(--fill-shade)))`, '--toy-color': deep } as CSSProperties}>
       <HeroBlobs opacity={0.1} />
       <span className="relative flex items-center justify-between gap-xs text-[14px] font-extrabold">
         <span className="flex items-center gap-xs">

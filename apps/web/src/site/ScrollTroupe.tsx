@@ -24,7 +24,7 @@ export function ScrollTroupe({ active }: { active: RelationshipKey | null }) {
   const order = active ? [active, ...RELATIONSHIPS.map((r) => r.key).filter((k) => k !== active)] : RELATIONSHIPS.map((r) => r.key);
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-20 h-[96px]" aria-hidden="true" style={{ background: 'linear-gradient(to top, var(--paper) 55%, transparent)' }}>
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-20 h-[96px] overflow-hidden" aria-hidden="true" style={{ background: 'linear-gradient(to top, var(--card-strong) 55%, transparent)' }}>
       <div className="relative mx-auto h-full max-w-[1080px]">
         {RELATIONSHIPS.map((r) => {
           const i = order.indexOf(r.key);

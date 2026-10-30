@@ -339,8 +339,9 @@ home.get('/brief', async (c) => {
   return c.json({ brief, gettingStarted: started });
 });
 
-// Fold the first-week checklist away for good.
-home.post('/getting-started/hide', async (c) => {
-  await c.env.DB.prepare('UPDATE users SET getting_started_hidden_at = COALESCE(getting_started_hidden_at, ?) WHERE id = ?').bind(nowIso(), c.get('user').id).run();
+// Fold the first-week checklist into its small toggle, or open it again.
+home.put('/getting-started', async (c) => {
+  const body = await c.req.json<{ folded?: boolean }>().catch(() => ({}) as { folded?: boolean });
+  await c.env.DB.prepare('UPDATE users SET getting_started_hidden_at = ? WHERE id = ?').bind(body.folded === false ? null : nowIso(), c.get('user').id).run();
   return c.json({ ok: true });
 });

@@ -10,7 +10,7 @@ import type { NotToDo, NotToDoStatus } from '@kreators/shared';
 import type { SetupMatch } from '@kreators/shared';
 import type { DailyBrief, GettingStarted, InboxShow, InboxTab, ReactionKind } from '@kreators/shared';
 import type { AdminCoachAsk, AdminCoachLink, CoachDirectoryEntry, CoachHub, CoachLink, CoachLogEntry, CoachProfile, CoachShare, CoachStudentView, CoachTaskInput, MyCoachResponse } from '@kreators/shared';
-import type { BlockedPerson, EventApp, EventExtras, LinkBlock, MediaItem, MediaOwner } from '@kreators/shared';
+import type { CustomReminder, RemindersResponse, WaterState, BlockedPerson, EventApp, EventExtras, LinkBlock, MediaItem, MediaOwner } from '@kreators/shared';
 import type { ObservabilityResponse } from '@kreators/shared';
 import type {
   HomeResponse,
@@ -297,7 +297,7 @@ export const api = {
   archiveNote: (id: string, archived: boolean) => post<{ ok: true }>(`/inbox/${id}/archive`, { archived }),
   archiveRead: (tab: InboxTab) => post<{ ok: true; archived: number }>('/inbox/archive-read', { tab }),
   brief: (date: string, hour: number) => request<{ brief: DailyBrief; gettingStarted: GettingStarted }>(`/home/brief?date=${date}&hour=${hour}`),
-  hideGettingStarted: () => post<{ ok: true }>('/home/getting-started/hide'),
+  foldGettingStarted: (folded: boolean) => put<{ ok: true }>('/home/getting-started', { folded }),
   duplicateEvent: (id: string, startsAt: string) => post<{ event: PartyEvent | null }>(`/party/events/${id}/duplicate`, { startsAt }),
   readOne: (id: string) => post<{ ok: true }>(`/inbox/${id}/read`),
   resources: (tag?: string, pq = '') => request<{ page: Page; resources: Resource[] }>(withQ(`/resources${tag ? `?tag=${encodeURIComponent(tag)}` : ''}`, pq)),
@@ -473,6 +473,13 @@ export const api = {
   answerIntro: (id: string, status: 'accepted' | 'declined') => post<{ ok: true }>(`/bond/intros/${id}`, { status }),
   friends: () => request<{ friends: Friend[] }>('/bond/friends'),
   addFriend: (userId: string) => post<{ ok: true; status: 'sent' | 'friends' }>('/bond/friends', { userId }),
+  reminders: (day: string) => request<RemindersResponse>(`/reminders?day=${day}`),
+  drinkWater: (day: string, ml?: number) => post<{ water: WaterState }>('/reminders/water', { day, ...(ml ? { ml } : {}) }),
+  undoWater: (day: string) => del<{ water: WaterState }>(`/reminders/water?day=${day}`),
+  waterSettings: (day: string, s: Partial<{ on: boolean; goalMl: number; glassMl: number; everyMin: number; from: string; to: string }>) => put<{ water: WaterState }>('/reminders/water/settings', { day, ...s }),
+  addReminder: (r: { title: string; time: string; days: number[] }) => post<{ reminder: CustomReminder }>('/reminders/custom', r),
+  changeReminder: (id: string, r: Partial<{ title: string; time: string; days: number[]; enabled: boolean }>) => patch<{ reminder: CustomReminder }>(`/reminders/custom/${id}`, r),
+  removeReminder: (id: string) => del<{ ok: true }>(`/reminders/custom/${id}`),
   blocks: () => request<{ blocked: BlockedPerson[] }>('/bond/blocks'),
   unblock: (userId: string) => del<{ ok: true }>(`/bond/block/${userId}`),
   mutes: () => request<{ mutes: { userId: string; name: string; handle: string | null; reason: string; by: string; createdAt: string }[] }>('/community/mutes'),

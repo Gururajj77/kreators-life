@@ -43,7 +43,7 @@ function Lines({ title, lines, label }: { title: string; lines: BriefLine[]; lab
  */
 export function DailyBrief({ date, hour }: { date: string; hour: number }) {
   const q = useAuthed(['brief', date, hour], () => api.brief(date, hour));
-  const hide = useMutation({ mutationFn: api.hideGettingStarted, onSuccess: () => void q.refetch() });
+  const fold = useMutation({ mutationFn: (folded: boolean) => api.foldGettingStarted(folded), onSuccess: () => void q.refetch() });
   const d = q.data;
   if (!d) return null;
   const g = d.gettingStarted;
@@ -60,32 +60,37 @@ export function DailyBrief({ date, hour }: { date: string; hour: number }) {
         {d.brief.team && <Lines title="For the team" lines={d.brief.team} label="For the team" />}
       </section>
       {g.show && (
-        <section className="span-all mt-md rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="start-heading">
-          <div className="flex items-center justify-between gap-sm">
-            <h2 id="start-heading" className="text-[20px]">
+        <section className="span-all mt-md rounded-card bg-card p-sm shadow-toy-soft" aria-labelledby="start-heading">
+          {/* A small toggle: the heading is the button, so the list can be folded away and opened again. */}
+          <button type="button" aria-expanded={!g.folded} aria-controls="start-list" onClick={() => fold.mutate(!g.folded)} disabled={fold.isPending} className="toy toy-flat flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile px-sm text-left">
+            <span id="start-heading" className="text-[16px] font-extrabold">
               Getting started
-            </h2>
-            <span className="shrink-0 text-[14px] font-extrabold text-ink-soft">
-              {g.done} of {g.items.length}
             </span>
-          </div>
-          <p className="m-0 text-[12px] font-bold text-ink-soft">Your first {GETTING_STARTED_DAYS} days. Each one ticks itself when you do it.</p>
-          <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-            {g.items.map((i) => (
-              <li key={i.key}>
-                <Link to={i.to} className={`toy toy-soft flex items-center gap-sm rounded-tile p-sm ${i.done ? 'bg-paper text-ink-soft' : 'bg-paper'}`}>
-                  <span className={`flex size-[24px] shrink-0 items-center justify-center rounded-pill border-2 text-[14px] font-extrabold ${i.done ? 'border-r4 bg-r4 text-on-fill' : 'border-line'}`} aria-hidden="true">
-                    {i.done ? '✓' : ''}
-                  </span>
-                  <span className={`min-w-0 flex-1 text-[14px] font-bold ${i.done ? 'line-through' : ''}`}>{i.label}</span>
-                  <span className="sr-only">{i.done ? 'done' : 'not yet'}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-          <button type="button" onClick={() => hide.mutate()} disabled={hide.isPending} className="toy toy-flat mt-sm min-h-[40px] rounded-pill px-sm text-[14px] font-bold text-ink-soft">
-            Fold this away
+            <span className="flex shrink-0 items-center gap-xs text-[14px] font-extrabold text-ink-soft">
+              {g.done} of {g.items.length}
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={g.folded ? '' : 'rotate-180'}>
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </span>
           </button>
+          {!g.folded && (
+            <div id="start-list" className="px-sm pb-sm">
+              <p className="m-0 text-[12px] font-bold text-ink-soft">Your first {GETTING_STARTED_DAYS} days. Each one ticks itself when you do it.</p>
+              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+                {g.items.map((i) => (
+                  <li key={i.key}>
+                    <Link to={i.to} className={`toy toy-soft flex items-center gap-sm rounded-tile p-sm ${i.done ? 'bg-paper text-ink-soft' : 'bg-paper'}`}>
+                      <span className={`flex size-[24px] shrink-0 items-center justify-center rounded-pill border-2 text-[14px] font-extrabold ${i.done ? 'border-r4 bg-r4 text-on-fill' : 'border-line'}`} aria-hidden="true">
+                        {i.done ? '✓' : ''}
+                      </span>
+                      <span className={`min-w-0 flex-1 text-[14px] font-bold ${i.done ? 'line-through' : ''}`}>{i.label}</span>
+                      <span className="sr-only">{i.done ? 'done' : 'not yet'}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </section>
       )}
     </>

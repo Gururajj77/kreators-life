@@ -83,7 +83,7 @@ leaderboard.get('/', async (c) => {
         (SELECT COUNT(*) FROM honors h WHERE h.user_id = u.id) AS admin_honors,
         (SELECT COALESCE(SUM(x.amount), 0) FROM xp_events x WHERE x.user_id = u.id AND x.created_at >= ?1 ${scope === 'pillar' ? 'AND x.relationship = ?2' : ''}) AS season_xp
        FROM users u ${sc.join}
-       WHERE u.leaderboard_opt_in = 1 AND u.onboarded_at IS NOT NULL ${sc.where} ${NOT_BLOCKED}
+       WHERE u.leaderboard_opt_in = 1 AND u.onboarded_at IS NOT NULL AND u.display_name != 'Deleted member' ${sc.where} ${NOT_BLOCKED}
        ORDER BY ${by === 'season' ? 'season_xp DESC,' : ''} ${sc.xp} DESC, u.created_at ASC
        LIMIT ${LEADERBOARD_POOL}`,
     )
@@ -153,7 +153,7 @@ leaderboard.get('/', async (c) => {
 leaderboard.get('/options', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const on = "u.leaderboard_opt_in = 1 AND u.onboarded_at IS NOT NULL AND (u.id = ?1 OR NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ?1 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = ?1)))";
+  const on = "u.leaderboard_opt_in = 1 AND u.onboarded_at IS NOT NULL AND u.display_name != 'Deleted member' AND (u.id = ?1 OR NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ?1 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = ?1)))";
   const [goals, pillars, cities, tags, levels] = await Promise.all([
     db.prepare(`SELECT j.value AS v, COUNT(*) AS n FROM users u, json_each(u.intake_json, '$.goals') j WHERE ${on} GROUP BY j.value`).bind(user.id).all<{ v: string; n: number }>(),
     db.prepare(`SELECT rs.relationship AS v, COUNT(*) AS n FROM users u JOIN relationship_scores rs ON rs.user_id = u.id WHERE rs.xp > 0 AND ${on} GROUP BY rs.relationship`).bind(user.id).all<{ v: string; n: number }>(),
@@ -188,7 +188,7 @@ leaderboard.get('/blocks', async (c) => {
     targets.map((t) => {
       const sc = scopeSql(t.scope);
       return db
-        .prepare(`SELECT u.id, u.display_name, ${sc.xp} AS xp FROM users u ${sc.join} WHERE u.leaderboard_opt_in = 1 AND u.onboarded_at IS NOT NULL ${sc.where} ${NOT_BLOCKED} ORDER BY ${sc.xp} DESC, u.created_at ASC LIMIT ${LEADERBOARD_POOL}`)
+        .prepare(`SELECT u.id, u.display_name, ${sc.xp} AS xp FROM users u ${sc.join} WHERE u.leaderboard_opt_in = 1 AND u.onboarded_at IS NOT NULL AND u.display_name != 'Deleted member' ${sc.where} ${NOT_BLOCKED} ORDER BY ${sc.xp} DESC, u.created_at ASC LIMIT ${LEADERBOARD_POOL}`)
         .bind(null, t.value, user.id);
     }),
   );

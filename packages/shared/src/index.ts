@@ -37,7 +37,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     name: 'Servant leader',
     character: 'Ember',
     role: 'guide to work and money',
-    color: '#E11D48',
+    color: '#D6456B',
     soft: '#FFE4E6',
     deep: '#9F1239',
     text: '#FFFFFF',
@@ -50,7 +50,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     name: 'Friendship',
     character: 'Pip',
     role: 'guide to friends',
-    color: '#FB8728',
+    color: '#F08A4B',
     soft: '#FFEDD5',
     deep: '#C2410C',
     text: '#FFFFFF',
@@ -63,7 +63,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     name: 'Parent & child',
     character: 'Sunny',
     role: 'guide to family',
-    color: '#FACC15',
+    color: '#F3CF5A',
     soft: '#FEF9C3',
     deep: '#A16207',
     text: '#262626',
@@ -76,7 +76,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     name: 'Lover & partner',
     character: 'Clover',
     role: 'guide to love',
-    color: '#9BB068',
+    color: '#6F9B74',
     soft: '#F0F2E8',
     deep: '#5A6B38',
     text: '#FFFFFF',
@@ -89,7 +89,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     name: 'With yourself',
     character: 'Dew',
     role: 'guide to yourself',
-    color: '#926247',
+    color: '#8C6A57',
     soft: '#E8DDD9',
     deep: '#4F3422',
     text: '#FFFFFF',
@@ -102,9 +102,9 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     name: 'With the guru',
     character: 'Sage',
     role: 'guide to teachers',
-    color: '#7F45E2',
+    color: '#7B5BD6',
     soft: '#EDE9FE',
-    deep: '#5D2AAD',
+    deep: '#5A3FA6',
     text: '#FFFFFF',
     greeting: "I'm Sage. Everyone you admire had a teacher. Who's yours?",
     question: 'What did you learn on purpose?',
@@ -115,7 +115,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     name: 'With the divine',
     character: 'Lumen',
     role: 'guide to faith',
-    color: '#5D2AAD',
+    color: '#5A3FA6',
     soft: '#DDD6FE',
     deep: '#2E1065',
     text: '#FFFFFF',
@@ -5635,6 +5635,62 @@ export interface BlockedPerson {
   createdAt: string;
 }
 
+// ---------------------------------------------------------------------------
+// Water and reminders, for Daily and Journal. A bubble on a laptop, a section on a phone; never a floating button on a phone.
+// ---------------------------------------------------------------------------
+
+export const WATER_EVERY_CHOICES = [30, 45, 60, 90, 120, 180] as const;
+export const WATER_GOAL_MIN = 500;
+export const WATER_GOAL_MAX = 6000;
+export const WATER_GLASS_MIN = 50;
+export const WATER_GLASS_MAX = 1000;
+/** The most one tap can add, and the most a day can hold, so a slip of the thumb cannot ruin a day's number. */
+export const WATER_DAY_MAX = 10_000;
+export const MAX_CUSTOM_REMINDERS = 12;
+export const REMINDER_TITLE_MAX = 60;
+export const WEEKDAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
+
+export interface WaterState {
+  day: string;
+  ml: number;
+  goalMl: number;
+  glassMl: number;
+  /** Whole glasses drunk, and how many make the goal. */
+  glasses: number;
+  goalGlasses: number;
+  on: boolean;
+  everyMin: number;
+  from: string;
+  to: string;
+  /** The last seven days, oldest first, for the small chart. */
+  week: { day: string; ml: number }[];
+}
+export interface CustomReminder {
+  id: string;
+  title: string;
+  time: string;
+  /** ISO weekdays: 1 is Monday, 7 is Sunday. */
+  days: number[];
+  enabled: boolean;
+}
+export interface RemindersResponse {
+  water: WaterState;
+  custom: CustomReminder[];
+}
+export const REMINDER_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+/** The days of a reminder from anything the browser sends: whole numbers 1 to 7, once each, in order. */
+export function parseWeekdays(v: unknown): number[] {
+  if (!Array.isArray(v)) return [];
+  return [...new Set(v.map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 7))].sort((a, b) => a - b);
+}
+/** "Mon to Fri", "Every day", or the days named. */
+export function weekdaysLabel(days: readonly number[]): string {
+  if (days.length === 7) return 'Every day';
+  if (days.length === 5 && days.every((d, i) => d === i + 1)) return 'Mon to Fri';
+  if (days.length === 2 && days[0] === 6 && days[1] === 7) return 'Weekends';
+  return days.map((d) => WEEKDAY_NAMES[d - 1]).join(', ');
+}
+
 /** The direct store: a new product that staff added, bought through a partner link. */
 export interface StoreItem {
   id: string;
@@ -6076,13 +6132,15 @@ export const GETTING_STARTED_DAYS = 14;
 export interface GettingStarted {
   items: { key: GettingStartedKey; label: string; to: string; done: boolean }[];
   done: number;
-  /** Shown while some item is open, the account is under GETTING_STARTED_DAYS old, and it was not folded. */
+  /** Shown while some item is open and the account is under GETTING_STARTED_DAYS old. */
   show: boolean;
+  /** The person folded it into the small toggle. It stays one tap from open again. */
+  folded: boolean;
 }
-export function gettingStarted(done: Partial<Record<GettingStartedKey, boolean>>, ageDays: number, hidden: boolean): GettingStarted {
+export function gettingStarted(done: Partial<Record<GettingStartedKey, boolean>>, ageDays: number, folded: boolean): GettingStarted {
   const items = GETTING_STARTED.map((g) => ({ key: g.key, label: g.label, to: g.to, done: Boolean(done[g.key]) }));
   const n = items.filter((i) => i.done).length;
-  return { items, done: n, show: !hidden && ageDays < GETTING_STARTED_DAYS && n < items.length };
+  return { items, done: n, show: ageDays < GETTING_STARTED_DAYS && n < items.length, folded };
 }
 
 /** "Good morning", by the local hour. */

@@ -717,7 +717,7 @@ describe('engagement', () => {
   it('ticks the checklist from what was done, and folds it away when done, folded or old', () => {
     expect(gettingStarted({ checkin: true }, 2, false)).toMatchObject({ done: 1, show: true });
     expect(gettingStarted({ checkin: true }, 20, false).show).toBe(false);
-    expect(gettingStarted({ checkin: true }, 2, true).show).toBe(false);
+    expect(gettingStarted({ checkin: true }, 2, true)).toMatchObject({ show: true, folded: true });
     expect(gettingStarted(Object.fromEntries(GETTING_STARTED.map((g) => [g.key, true])), 2, false).show).toBe(false);
   });
   it('reads mentions as page names, each once, five at most, never an email', () => {

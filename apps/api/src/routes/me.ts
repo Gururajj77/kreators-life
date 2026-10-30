@@ -266,6 +266,9 @@ me.get('/export', async (c) => {
     ['eventMessages', 'SELECT * FROM event_messages WHERE user_id = ?'],
     ['eventNetworking', 'SELECT * FROM event_networking WHERE user_id = ?'],
     ['blocks', 'SELECT * FROM blocks WHERE blocker_id = ?'],
+    ['waterLogs', 'SELECT * FROM water_logs WHERE user_id = ?'],
+    ['reminderPrefs', 'SELECT * FROM reminder_prefs WHERE user_id = ?'],
+    ['customReminders', 'SELECT * FROM custom_reminders WHERE user_id = ?'],
   ];
   const out: Record<string, unknown> = { exportedAt: nowIso(), user: toUser(user) };
   for (const [name, sql] of tables) {
@@ -282,10 +285,13 @@ me.delete('/', async (c) => {
   const body = await c.req.json<{ confirm?: string }>().catch(() => ({}) as { confirm?: string });
   if (body.confirm !== 'DELETE') return c.json({ error: 'send confirm: DELETE' }, 400);
   await db.batch([
-    db.prepare("UPDATE users SET display_name = 'Deleted member', email = NULL, phone = '', birth_date = '', password_hash = NULL, password_salt = NULL, handle = NULL, bio = '', avatar_url = '', socials_json = '{}', skills = '[]', categories = '[]', goals = '[]', interests = '[]', identities = '[]', intake_json = '{}', city = '', area = '', lat = NULL, lng = NULL, location = '', reminder_time = NULL, open_to_intros = 0, permissions = '[]', friend_code = NULL WHERE id = ?").bind(user.id),
+    db.prepare("UPDATE users SET display_name = 'Deleted member', email = NULL, phone = '', birth_date = '', password_hash = NULL, password_salt = NULL, handle = NULL, bio = '', avatar_url = '', socials_json = '{}', skills = '[]', categories = '[]', goals = '[]', interests = '[]', identities = '[]', intake_json = '{}', city = '', area = '', lat = NULL, lng = NULL, location = '', reminder_time = NULL, open_to_intros = 0, permissions = '[]', friend_code = NULL, leaderboard_opt_in = 0 WHERE id = ?").bind(user.id),
     db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM nodes WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM media_files WHERE owner_id = ?').bind(user.id),
+    db.prepare('DELETE FROM water_logs WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM reminder_prefs WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM custom_reminders WHERE user_id = ?').bind(user.id),
     db.prepare("DELETE FROM media_items WHERE added_by = ? AND url LIKE '/api/public/media/%'").bind(user.id),
     db.prepare('DELETE FROM event_messages WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM event_networking WHERE user_id = ?').bind(user.id),

@@ -12,6 +12,7 @@ import { Nudge } from '../components/Nudge';
 import { Person } from '../components/Person';
 import { RoutineSection } from '../components/RoutineSection';
 import { Screen } from '../components/Screen';
+import { RemindersSection } from '../components/Reminders';
 import { TaskRow } from '../components/TaskRow';
 import { api } from '../lib/api';
 import { prettyDate } from '../lib/date';
@@ -93,6 +94,7 @@ export function Today() {
         )}
       </header>
 
+      <RemindersSection />
 
       {!guide.seen && <GuideCard onDismiss={guide.dismiss} />}
 

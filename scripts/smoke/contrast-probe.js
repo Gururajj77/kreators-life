@@ -67,8 +67,22 @@
     let images = false;
     for (let e = el; e; e = e.parentElement) {
       const cs = getComputedStyle(e);
-      const bg = parse(cs.backgroundColor);
-      if (cs.backgroundImage && cs.backgroundImage !== 'none') images = true;
+      let bg = parse(cs.backgroundColor);
+      if (cs.backgroundImage && cs.backgroundImage !== 'none') {
+        images = true;
+        // A fill that is only a gradient (a hero, a coloured card): read its first colour stop, the lightest end, as the worst case for white text.
+        if (!(bg && bg.a > 0) && /gradient/.test(cs.backgroundImage)) {
+          // The first stop that is mostly opaque: a soft white glow layered on top does not count as the fill.
+          const stops = cs.backgroundImage.match(/(?:rgba?|color|oklab|oklch)\([^)]*\)/g) ?? [];
+          for (const t of stops) {
+            const c = parse(t);
+            if (c && c.a > 0.5) {
+              bg = c;
+              break;
+            }
+          }
+        }
+      }
       if (bg && bg.a > 0) {
         acc = over(acc, bg);
         if (acc.a >= 0.999) return { color: acc, images };
@@ -81,6 +95,17 @@
   };
   const hits = [];
   const seen = new Set();
+  // Anything fixed or sticky that carries text has to be solid enough to read over whatever scrolls under it.
+  for (const el of document.querySelectorAll('body *')) {
+    const cs = getComputedStyle(el);
+    if (cs.position !== 'fixed' && cs.position !== 'sticky') continue;
+    if (cs.visibility === 'hidden' || cs.display === 'none' || el.getBoundingClientRect().width < 24) continue;
+    if (!(el.textContent ?? '').trim()) continue;
+    const bg = parse(cs.backgroundColor);
+    const image = cs.backgroundImage && cs.backgroundImage !== 'none';
+    // A fade or a wrapper with no fill of its own is fine when its children carry the fill; flag a fill that is there but thin.
+    if (bg && bg.a > 0.02 && bg.a < 0.88 && !image) hits.push({ text: (el.textContent ?? '').trim().slice(0, 60), color: 'chrome', background: `alpha ${Math.round(bg.a * 100)}%`, ratio: 1, where: where(el) });
+  }
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const text = (node.textContent ?? '').replace(/\s+/g, ' ').trim();
