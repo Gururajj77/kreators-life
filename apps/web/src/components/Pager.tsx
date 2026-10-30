@@ -1,4 +1,5 @@
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES, pageQuery, pageSizeOf, type Page, type PageSize } from '@kreators/shared';
+import { useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
 import { Button } from './Button';
 
@@ -45,16 +46,25 @@ export function usePage(prefix = ''): { page: number; size: PageSize; query: str
 
 /** The pager bar bound to the URL. Pair it with `usePage` of the same prefix. */
 export function Pager({ page, prefix = '', label }: { page: Page | undefined; prefix?: string; label?: string }) {
-  const [, setP] = useParamState(`${prefix}page`, '1');
-  const [, setS] = useParamState(`${prefix}size`, String(DEFAULT_PAGE_SIZE));
+  const [, setParams] = useSearchParams();
   return (
     <PagerBar
       page={page}
       label={label}
-      onPage={(p, s) => {
-        setS(String(s));
-        setP(String(p));
-      }}
+      // One update for both: two in a row each start from the old address, so the second would undo the first.
+      onPage={(p, s) =>
+        setParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            if (p === 1) next.delete(`${prefix}page`);
+            else next.set(`${prefix}page`, String(p));
+            if (s === DEFAULT_PAGE_SIZE) next.delete(`${prefix}size`);
+            else next.set(`${prefix}size`, String(s));
+            return next;
+          },
+          { replace: true },
+        )
+      }
     />
   );
 }

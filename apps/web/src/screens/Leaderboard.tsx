@@ -1,5 +1,5 @@
 import { IDENTITY_STAGES, LEADERBOARD_POOL, LEADERBOARD_SCOPES, isLeaderboardScope, type LeaderboardBlock, type LeaderboardEntry, type LeaderboardOption, type LeaderboardScope, type LeaderboardSort } from '@kreators/shared';
-import { useParamState } from '../lib/useParamState';
+import { useSearchParams } from 'react-router';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
 import { BackLink } from '../components/PageHeader';
@@ -93,11 +93,25 @@ function BlockCard({ b, onOpen }: { b: LeaderboardBlock; onOpen: () => void }) {
 }
 
 export function Leaderboard() {
-  const [byRaw, setBy] = useParamState('by', 'xp');
+  // One update for everything a click changes. Several separate URL updates in a row each start from the old address, so the last one would undo the others.
+  const [params, setParams] = useSearchParams();
+  const patch = (changes: Record<string, string>) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        for (const [k, v] of Object.entries({ page: '', ...changes })) {
+          if (v === '' || (k === 'by' && v === 'xp') || (k === 'scope' && v === 'all')) next.delete(k);
+          else next.set(k, v);
+        }
+        return next;
+      },
+      { replace: true },
+    );
+  const byRaw = params.get('by') ?? 'xp';
   const by: LeaderboardSort = SORTS.some((s) => s.key === byRaw) ? (byRaw as LeaderboardSort) : 'xp';
-  const [scopeRaw, setScope] = useParamState('scope', 'all');
+  const scopeRaw = params.get('scope') ?? 'all';
   const scope: LeaderboardScope = isLeaderboardScope(scopeRaw) ? scopeRaw : 'all';
-  const [valueRaw, setValue] = useParamState('value', '');
+  const valueRaw = params.get('value') ?? '';
   const paging = usePage();
   const options = useAuthed(['leaderboard', 'options'], api.leaderboardOptions);
   const blocks = useAuthed(['leaderboard', 'blocks'], api.leaderboardBlocks);
@@ -109,9 +123,7 @@ export function Leaderboard() {
   const pillarBoard = scope === 'pillar';
   const statFor = (e: LeaderboardEntry) => (by === 'xp' && pillarBoard ? `${e.xp} xp here` : sort.stat(e));
   const open = (b: LeaderboardBlock) => {
-    setScope(b.scope);
-    setValue(b.value);
-    paging.reset();
+    patch({ scope: b.scope, value: b.value });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   const goalBlocks = (blocks.data?.blocks ?? []).filter((b) => b.scope === 'goal');
@@ -137,9 +149,7 @@ export function Leaderboard() {
               key={s.key}
               on={scope === s.key}
               onClick={() => {
-                setScope(s.key);
-                setValue('');
-                paging.reset();
+                patch({ scope: s.key, value: '' });
               }}
             >
               {s.label}
@@ -152,8 +162,7 @@ export function Leaderboard() {
             <select
               value={value}
               onChange={(e) => {
-                setValue(e.target.value);
-                paging.reset();
+                patch({ value: e.target.value });
               }}
               className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]"
             >
@@ -174,8 +183,7 @@ export function Leaderboard() {
               key={s.key}
               on={by === s.key}
               onClick={() => {
-                setBy(s.key);
-                paging.reset();
+                patch({ by: s.key });
               }}
             >
               {s.label}
