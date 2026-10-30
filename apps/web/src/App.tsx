@@ -221,7 +221,7 @@ const router = createBrowserRouter([
       { path: '/help', element: gated('help', <Help />) },
       { path: '/inbox', element: gated('notifications', <Inbox />) },
       // Rank and rewards are part of the game, not apps: always on.
-      { path: '/leaderboard', element: <Leaderboard /> },
+      { path: '/leaderboard', element: gated('leaderboard', <Leaderboard />) },
       { path: '/rewards', element: <Rewards /> },
       { path: '/plans', element: explained('assistant', <Plans />) },
       // learn and earn

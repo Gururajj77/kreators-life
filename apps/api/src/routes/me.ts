@@ -260,6 +260,12 @@ me.get('/export', async (c) => {
     ['postsFollowed', 'SELECT * FROM community_post_follows WHERE user_id = ?'],
     ['replyReactions', 'SELECT * FROM community_reply_reactions WHERE user_id = ?'],
     ['seasonResults', 'SELECT * FROM season_results WHERE user_id = ?'],
+    // What the person added to events, listings and lessons, and who they blocked. Uploaded files are listed without their bytes.
+    ['uploads', 'SELECT id, mime, size, created_at FROM media_files WHERE owner_id = ?'],
+    ['mediaItems', 'SELECT * FROM media_items WHERE added_by = ?'],
+    ['eventMessages', 'SELECT * FROM event_messages WHERE user_id = ?'],
+    ['eventNetworking', 'SELECT * FROM event_networking WHERE user_id = ?'],
+    ['blocks', 'SELECT * FROM blocks WHERE blocker_id = ?'],
   ];
   const out: Record<string, unknown> = { exportedAt: nowIso(), user: toUser(user) };
   for (const [name, sql] of tables) {
@@ -276,9 +282,15 @@ me.delete('/', async (c) => {
   const body = await c.req.json<{ confirm?: string }>().catch(() => ({}) as { confirm?: string });
   if (body.confirm !== 'DELETE') return c.json({ error: 'send confirm: DELETE' }, 400);
   await db.batch([
-    db.prepare("UPDATE users SET display_name = 'Deleted member', email = NULL, phone = '', birth_date = '', password_hash = NULL, password_salt = NULL, handle = NULL, bio = '', avatar_url = '', socials_json = '{}', skills = '[]', categories = '[]', goals = '[]', interests = '[]', identities = '[]', intake_json = '{}', city = '', area = '', lat = NULL, lng = NULL, location = '', reminder_time = NULL, open_to_intros = 0, permissions = '[]' WHERE id = ?").bind(user.id),
+    db.prepare("UPDATE users SET display_name = 'Deleted member', email = NULL, phone = '', birth_date = '', password_hash = NULL, password_salt = NULL, handle = NULL, bio = '', avatar_url = '', socials_json = '{}', skills = '[]', categories = '[]', goals = '[]', interests = '[]', identities = '[]', intake_json = '{}', city = '', area = '', lat = NULL, lng = NULL, location = '', reminder_time = NULL, open_to_intros = 0, permissions = '[]', friend_code = NULL WHERE id = ?").bind(user.id),
     db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM nodes WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM media_files WHERE owner_id = ?').bind(user.id),
+    db.prepare("DELETE FROM media_items WHERE added_by = ? AND url LIKE '/api/public/media/%'").bind(user.id),
+    db.prepare('DELETE FROM event_messages WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM event_networking WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM community_mutes WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM blocks WHERE blocker_id = ?').bind(user.id),
     db.prepare('DELETE FROM not_to_do WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM reviews WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM review_templates WHERE user_id = ?').bind(user.id),

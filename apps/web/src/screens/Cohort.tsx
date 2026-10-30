@@ -1,4 +1,4 @@
-import type { CohortSession, CourseAssignment, Enrollment, Submission } from '@kreators/shared';
+import { videoEmbed, type CohortSession, type CourseAssignment, type Enrollment, type Submission } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useParams } from 'react-router';
@@ -8,6 +8,8 @@ import { Markdown } from '../components/Markdown';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { Tip, Term } from '../components/Tip';
+import { MediaSection } from '../components/MediaSection';
+import { MediaTile } from '../components/Media';
 import { api } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
 
@@ -87,6 +89,8 @@ export function Cohort() {
         )}
       </header>
 
+      <MediaSection type="program" id={k.programId} />
+
       <section className="mt-lg" aria-labelledby="lessons-heading">
         <h2 id="lessons-heading" className="text-[24px]">
           Lessons
@@ -110,7 +114,9 @@ export function Cohort() {
                 </button>
                 {open && (
                   <div className="mt-sm">
-                    {item.contentRef && (
+                    {item.contentType === 'video' && item.contentRef && videoEmbed(item.contentRef) && <MediaTile item={{ id: item.id, kind: 'video', url: item.contentRef, caption: item.moduleTitle }} />}
+                    <MediaSection type="lesson" id={item.id} title="Lesson pictures and videos" />
+                    {item.contentRef && !(item.contentType === 'video' && videoEmbed(item.contentRef)) && (
                       <a href={item.contentRef} target="_blank" rel="noreferrer" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
                         {item.contentType === 'video' ? 'Watch' : item.contentRef.startsWith('/resources/') ? 'Open the full skill file' : 'Open'}
                       </a>

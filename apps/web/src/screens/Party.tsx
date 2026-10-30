@@ -2,6 +2,8 @@ import { EVENT_TYPE_META, EVENT_TYPES, type EventRegistration, type EventType, t
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
+import { MediaSection } from '../components/MediaSection';
+import { EventPanel } from '../components/EventPanel';
 import { Button } from '../components/Button';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
@@ -352,6 +354,8 @@ export function EventPage() {
         </div>
       </header>
 
+      <MediaSection type="event" id={e.id} />
+
       <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-label="Details">
         <p className="m-0 text-[16px] font-bold">{when(e.startsAt)}</p>
         <p className="m-0 text-[14px] font-semibold text-ink-soft">
@@ -526,6 +530,7 @@ export function EventPage() {
           </ul>
         </section>
       )}
+      {(d.host || (mine && (mine.status === 'registered' || mine.status === 'attended'))) && <EventPanel app="party" id={e.id} />}
     </Screen>
   );
 }

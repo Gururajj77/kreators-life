@@ -18,7 +18,10 @@ export const MODULE_FOR_PREFIX: Record<string, readonly string[]> = {
   run: ['run'],
   community: ['community'],
   club: ['club'],
+  leaderboard: ['leaderboard'],
   bond: ['bond'],
+  // Photos, the conversation and who to meet inside an event: open when either events app is.
+  connect: ['party', 'run'],
   circles: ['circles'],
   life: ['life'],
   wellbeing: ['wellbeing', 'mood', 'sleep', 'stress', 'mindful', 'life'],

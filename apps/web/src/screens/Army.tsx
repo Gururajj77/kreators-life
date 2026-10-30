@@ -10,6 +10,7 @@ import { Toggle } from '../components/Toggle';
 import { api } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
+import { MediaSection } from '../components/MediaSection';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const fmtDate = (d: string | null) => (d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'no date');
@@ -446,6 +447,8 @@ export function Campaign() {
           })}
         </ol>
       </section>
+
+      <MediaSection type="campaign" id={c.id} />
 
       <section className="mt-lg rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="brief-heading">
         <h2 id="brief-heading" className="text-[24px]">

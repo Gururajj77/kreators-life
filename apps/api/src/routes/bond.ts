@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { ALIAS_WORDS, normalizeCode, RELATIONSHIPS, type BondChat, type BondMessage, type Friend, type Introduction } from '@kreators/shared';
-import type { AppEnv } from '../env';
+import { ALIAS_WORDS, normalizeCode, type BlockedPerson, RELATIONSHIPS, type BondChat, type BondMessage, type Friend, type Introduction } from '@kreators/shared';
+import type { AppEnv, UserRow } from '../env';
 import { nameOf, newId, notify, nowIso, oneOf, parseList, publicOf, str } from '../db';
 import { memberBehindAlias } from './circles';
 
@@ -78,8 +78,24 @@ bond.post('/block', async (c) => {
   const body = await c.req.json<{ userId?: string; reason?: string }>().catch(() => ({}) as Record<string, never>);
   const id = str(body.userId, 64);
   if (!id || id === user.id) return c.json({ error: 'who?' }, 400);
-  await db.prepare('INSERT OR REPLACE INTO blocks (blocker_id, blocked_id, reason, created_at) VALUES (?, ?, ?, ?)').bind(user.id, id, str(body.reason, 300), nowIso()).run();
+  // Blocking ends any friendship or open request between the two, in either direction.
+  await db.batch([
+    db.prepare('INSERT OR REPLACE INTO blocks (blocker_id, blocked_id, reason, created_at) VALUES (?, ?, ?, ?)').bind(user.id, id, str(body.reason, 300), nowIso()),
+    db.prepare('DELETE FROM friendships WHERE (requester_id = ?1 AND recipient_id = ?2) OR (requester_id = ?2 AND recipient_id = ?1)').bind(user.id, id),
+  ]);
   return c.json({ ok: true }, 201);
+});
+
+// Who I have blocked, and taking a block back. Anyone can do both, whatever their role.
+bond.get('/blocks', async (c) => {
+  const rows = await c.env.DB.prepare('SELECT b.blocked_id AS user_id, b.created_at, u.display_name, u.handle FROM blocks b JOIN users u ON u.id = b.blocked_id WHERE b.blocker_id = ? ORDER BY b.created_at DESC LIMIT 200').bind(c.get('user').id).all<{ user_id: string; created_at: string; display_name: string; handle: string | null }>();
+  const blocked: BlockedPerson[] = rows.results.map((r) => ({ userId: r.user_id, name: nameOf(r), handle: r.handle, createdAt: r.created_at }));
+  return c.json({ blocked });
+});
+
+bond.delete('/block/:userId', async (c) => {
+  await c.env.DB.prepare('DELETE FROM blocks WHERE blocker_id = ? AND blocked_id = ?').bind(c.get('user').id, c.req.param('userId')).run();
+  return c.json({ ok: true });
 });
 
 // ---------------------------------------------------------------------------
@@ -111,6 +127,26 @@ bond.get('/friends', async (c) => {
   return c.json({ friends });
 });
 
+/** Ask someone to be friends, or say yes if they asked first. Shared by the friend code, a page and an event. */
+export async function requestFriend(db: D1Database, user: UserRow, id: string, via = ''): Promise<{ code: number; body: Record<string, unknown> }> {
+  const blocked = await db.prepare('SELECT 1 FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)').bind(user.id, id, id, user.id).first();
+  if (blocked) return { code: 400, body: { error: 'not possible' } };
+  const existing = await db.prepare('SELECT id, requester_id, status FROM friendships WHERE (requester_id = ?1 AND recipient_id = ?2) OR (requester_id = ?2 AND recipient_id = ?1)').bind(user.id, id).first<{ id: string; requester_id: string; status: string }>();
+  if (existing?.status === 'accepted') return { code: 409, body: { error: 'already friends' } };
+  if (existing?.status === 'pending') {
+    // They asked first: asking back is a yes.
+    if (existing.requester_id !== user.id) {
+      await db.prepare("UPDATE friendships SET status = 'accepted', answered_at = ? WHERE id = ?").bind(nowIso(), existing.id).run();
+      await notify(db, existing.requester_id, 'bond', `${nameOf(user)} is now your friend`, 'Say hello from Bond.', '/bond');
+      return { code: 200, body: { ok: true, status: 'friends' } };
+    }
+    return { code: 409, body: { error: 'already asked' } };
+  }
+  await db.prepare("INSERT OR REPLACE INTO friendships (id, requester_id, recipient_id, status, created_at, answered_at) VALUES (?, ?, ?, 'pending', ?, NULL)").bind(newId(), user.id, id, nowIso()).run();
+  await notify(db, id, 'bond', `${nameOf(user)} would like to be friends`, via ? `You are both in ${via}. Accept or decline under Bond.` : 'Accept or decline under Bond.', '/bond');
+  return { code: 201, body: { ok: true, status: 'sent' } };
+}
+
 bond.post('/friends', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
@@ -126,22 +162,8 @@ bond.post('/friends', async (c) => {
   if (id === user.id) return c.json({ error: code ? 'that is your own code' : 'who?' }, 400);
   const tp = publicOf(target);
   if (!tp.allowFriendRequests || (!code && !tp.pagePublic)) return c.json({ error: 'this person is not taking friend requests' }, 403);
-  const blocked = await db.prepare('SELECT 1 FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)').bind(user.id, id, id, user.id).first();
-  if (blocked) return c.json({ error: 'not possible' }, 400);
-  const existing = await db.prepare('SELECT id, requester_id, status FROM friendships WHERE (requester_id = ?1 AND recipient_id = ?2) OR (requester_id = ?2 AND recipient_id = ?1)').bind(user.id, id).first<{ id: string; requester_id: string; status: string }>();
-  if (existing?.status === 'accepted') return c.json({ error: 'already friends' }, 409);
-  if (existing?.status === 'pending') {
-    // They asked first: asking back is a yes.
-    if (existing.requester_id !== user.id) {
-      await db.prepare("UPDATE friendships SET status = 'accepted', answered_at = ? WHERE id = ?").bind(nowIso(), existing.id).run();
-      await notify(db, existing.requester_id, 'bond', `${nameOf(user)} is now your friend`, 'Say hello from Bond.', '/bond');
-      return c.json({ ok: true, status: 'friends' });
-    }
-    return c.json({ error: 'already asked' }, 409);
-  }
-  await db.prepare("INSERT OR REPLACE INTO friendships (id, requester_id, recipient_id, status, created_at, answered_at) VALUES (?, ?, ?, 'pending', ?, NULL)").bind(newId(), user.id, id, nowIso()).run();
-  await notify(db, id, 'bond', `${nameOf(user)} would like to be friends`, 'Accept or decline under Bond.', '/bond');
-  return c.json({ ok: true, status: 'sent' }, 201);
+  const r = await requestFriend(db, user, id);
+  return c.json(r.body, r.code as 400);
 });
 
 bond.post('/friends/:id', async (c) => {

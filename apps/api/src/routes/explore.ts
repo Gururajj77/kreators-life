@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { EVENT_TYPE_META, LISTING_TYPES, type Listing, type ListingType, type PublicStats } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { nameOf } from '../db';
+import { mediaForListings } from './media';
 
 /** The public side of every module: what is on offer, with no account needed. */
 export const explore = new Hono<AppEnv>();
@@ -145,7 +146,14 @@ export async function listingsFor(db: D1Database, o: Opts): Promise<Listing[]> {
   if (q) list = list.filter((l) => [l.title, l.by, l.blurb, ...l.facts].join(' ').toLowerCase().includes(q));
   if (o.featuredOnly) list = list.filter((l) => l.featured);
   list.sort((a, b) => Number(b.featured) - Number(a.featured) || (b.createdAt < a.createdAt ? -1 : 1));
-  return list.slice(0, o.limit ?? 100);
+  const shown = list.slice(0, o.limit ?? 100);
+  // Pictures, GIFs and videos the owners added: the card shows the first picture as its cover.
+  const media = await mediaForListings(db, shown.map((l) => ({ type: l.type, id: l.id })));
+  for (const l of shown) {
+    const m = media.get(`${l.type}:${l.id}`);
+    if (m) l.media = m;
+  }
+  return shown;
 }
 
 explore.get('/', async (c) => {

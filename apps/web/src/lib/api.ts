@@ -10,7 +10,7 @@ import type { NotToDo, NotToDoStatus } from '@kreators/shared';
 import type { SetupMatch } from '@kreators/shared';
 import type { DailyBrief, GettingStarted, InboxShow, InboxTab, ReactionKind } from '@kreators/shared';
 import type { AdminCoachAsk, AdminCoachLink, CoachDirectoryEntry, CoachHub, CoachLink, CoachLogEntry, CoachProfile, CoachShare, CoachStudentView, CoachTaskInput, MyCoachResponse } from '@kreators/shared';
-import type { LinkBlock } from '@kreators/shared';
+import type { BlockedPerson, EventApp, EventExtras, LinkBlock, MediaItem, MediaOwner } from '@kreators/shared';
 import type { ObservabilityResponse } from '@kreators/shared';
 import type {
   HomeResponse,
@@ -106,7 +106,10 @@ import type {
   Coupon,
   JournalEntry,
   Lead,
+  LeaderboardBlock,
+  LeaderboardOptions,
   LeaderboardResponse,
+  LeaderboardScope,
   LeaderboardSort,
   Lesson,
   LogKind,
@@ -268,7 +271,9 @@ export const api = {
   spark: (date: string) => post<{ awarded: number; relationship: RelationshipKey; alreadyDone: boolean }>('/today/spark', { date }),
 
   // rank and rewards
-  leaderboard: (by: LeaderboardSort) => request<LeaderboardResponse>(`/leaderboard?by=${by}`),
+  leaderboard: (by: LeaderboardSort, scope: LeaderboardScope = 'all', value = '', paging = '') => request<LeaderboardResponse>(`/leaderboard?by=${by}&scope=${scope}&value=${encodeURIComponent(value)}${paging ? `&${paging}` : ''}`),
+  leaderboardOptions: () => request<LeaderboardOptions>('/leaderboard/options'),
+  leaderboardBlocks: () => request<{ blocks: LeaderboardBlock[] }>('/leaderboard/blocks'),
   rewards: () => request<RewardsResponse>('/rewards'),
   redeem: (key: string) => post<{ redemption: Redemption; points: number }>(`/rewards/${key}/redeem`),
   cancelRedemption: (id: string) => post<{ ok: true; points: number }>(`/rewards/redemptions/${id}/cancel`),
@@ -298,8 +303,8 @@ export const api = {
   resources: (tag?: string, pq = '') => request<{ page: Page; resources: Resource[] }>(withQ(`/resources${tag ? `?tag=${encodeURIComponent(tag)}` : ''}`, pq)),
   resource: (id: string) => request<{ resource: Resource }>(`/resources/${id}`),
   community: (category?: string, product?: string, all = false, sort: FeedSort = 'recent', filter: FeedFilter = 'all', pq = '') =>
-    request<{ page: Page; posts: CommunityPost[]; categories: readonly string[]; sort: FeedSort; filter: FeedFilter }>(withQ(`/community?${new URLSearchParams({ ...(category ? { category } : {}), ...(product ? { product } : {}), ...(all ? { all: '1' } : {}), sort, filter })}`, pq)),
-  createPost: (body: { category: string; body: string; productId?: string | null }) => post<{ post: CommunityPost; awarded: SocialAward; held: boolean }>('/community', body),
+    request<{ page: Page; posts: CommunityPost[]; categories: readonly string[]; sort: FeedSort; filter: FeedFilter; muted: boolean }>(withQ(`/community?${new URLSearchParams({ ...(category ? { category } : {}), ...(product ? { product } : {}), ...(all ? { all: '1' } : {}), sort, filter })}`, pq)),
+  createPost: (body: { category: string; body: string; productId?: string | null; anonymous?: boolean }) => post<{ post: CommunityPost; awarded: SocialAward; held: boolean }>('/community', body),
   likePost: (id: string, kind?: ReactionKind) => post<{ post: CommunityPost; awarded: SocialAward }>(`/community/${id}/like`, kind ? { kind } : {}),
   followPost: (id: string) => post<{ following: boolean }>(`/community/${id}/follow-post`),
   reactReply: (id: string, kind: ReactionKind) => post<{ reply: CommunityReply | null }>(`/community/replies/${id}/react`, { kind }),
@@ -308,7 +313,9 @@ export const api = {
   heldPosts: (pq = '') => request<{ posts: CommunityPost[]; page: Page; holdFirstPosts: boolean }>(withQ('/manage/community/held', pq)),
   setHoldFirstPosts: (holdFirstPosts: boolean) => put<{ holdFirstPosts: boolean }>('/manage/community/settings', { holdFirstPosts }),
   replies: (id: string, pq = '') => request<{ page: Page; replies: CommunityReply[] }>(withQ(`/community/${id}/replies`, pq)),
-  reply: (id: string, body: string) => post<{ reply: CommunityReply; awarded: SocialAward }>(`/community/${id}/replies`, { body }),
+  reply: (id: string, body: string, opts: { anonymous?: boolean; parentId?: string | null } = {}) => post<{ reply: CommunityReply; awarded: SocialAward }>(`/community/${id}/replies`, { body, ...opts }),
+  blockPostAuthor: (id: string) => post<{ ok: true }>(`/community/posts/${id}/block-author`),
+  blockReplyAuthor: (id: string) => post<{ ok: true }>(`/community/replies/${id}/block-author`),
   followUser: (id: string) => post<{ following: boolean; followers: number; awarded: SocialAward }>(`/community/follow/${id}`),
   deletePost: (id: string) => del<{ ok: true }>(`/community/${id}`),
   search: (q: string) => request<SearchResults>(`/search?q=${encodeURIComponent(q)}`),
@@ -466,6 +473,27 @@ export const api = {
   answerIntro: (id: string, status: 'accepted' | 'declined') => post<{ ok: true }>(`/bond/intros/${id}`, { status }),
   friends: () => request<{ friends: Friend[] }>('/bond/friends'),
   addFriend: (userId: string) => post<{ ok: true; status: 'sent' | 'friends' }>('/bond/friends', { userId }),
+  blocks: () => request<{ blocked: BlockedPerson[] }>('/bond/blocks'),
+  unblock: (userId: string) => del<{ ok: true }>(`/bond/block/${userId}`),
+  mutes: () => request<{ mutes: { userId: string; name: string; handle: string | null; reason: string; by: string; createdAt: string }[] }>('/community/mutes'),
+  mute: (userId: string, reason = '') => post<{ ok: true }>(`/community/members/${userId}/mute`, { reason }),
+  unmute: (userId: string) => del<{ ok: true }>(`/community/members/${userId}/mute`),
+  mediaFor: (type: MediaOwner, id: string) => request<{ items: MediaItem[]; canEdit: boolean; max: number }>(`/media/for/${type}/${id}`),
+  setMedia: (type: MediaOwner, id: string, items: { url: string; caption: string }[]) => put<{ items: MediaItem[] }>(`/media/for/${type}/${id}`, { items }),
+  uploadMedia: async (file: Blob) => {
+    const token = useSession.getState().token;
+    const res = await fetch('/api/media/upload', { method: 'POST', body: file, headers: { 'Content-Type': file.type, ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+    const body = (await res.json().catch(() => ({}))) as { url?: string; kind?: MediaItem['kind']; error?: string };
+    if (!res.ok || !body.url) throw new ApiError(body.error ?? 'That upload did not work.', res.status, body);
+    return { url: body.url, kind: body.kind ?? 'image' };
+  },
+  eventExtras: (app: EventApp, id: string) => request<EventExtras>(`/connect/${app}/${id}`),
+  eventSay: (app: EventApp, id: string, body: string, opts: { anonymous?: boolean; parentId?: string | null } = {}) => post<{ ok: true }>(`/connect/${app}/${id}/messages`, { body, ...opts }),
+  eventUnsay: (app: EventApp, id: string, mid: string) => del<{ ok: true }>(`/connect/${app}/${id}/messages/${mid}`),
+  eventPhotos: (app: EventApp, id: string, url: string, note: string) => put<{ ok: true }>(`/connect/${app}/${id}/photos`, { url, note }),
+  eventPhotosOff: (app: EventApp, id: string) => del<{ ok: true }>(`/connect/${app}/${id}/photos`),
+  eventListed: (app: EventApp, id: string, on: boolean) => put<{ ok: true }>(`/connect/${app}/${id}/networking`, { on }),
+  eventConnect: (app: EventApp, id: string, userId: string) => post<{ ok: true; status: string }>(`/connect/${app}/${id}/people/${userId}/connect`),
   addFriendByCode: (code: string) => post<{ ok: true; status: 'sent' | 'friends' }>('/bond/friends', { code }),
   answerFriend: (id: string, status: 'accepted' | 'declined') => post<{ ok: true }>(`/bond/friends/${id}`, { status }),
   unfriend: (userId: string) => del<{ ok: true }>(`/bond/friends/${userId}`),

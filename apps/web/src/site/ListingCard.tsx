@@ -1,5 +1,6 @@
 import { LISTING_TYPE_META, MODULE_BY_KEY, type Listing } from '@kreators/shared';
 import { Link } from 'react-router';
+import { MediaCover } from '../components/Media';
 import { useSession } from '../lib/store';
 
 /** One thing on offer, with the door into the app. Signing in brings you straight back to it. */
@@ -10,6 +11,7 @@ export function ListingCard({ listing, showFeature = true }: { listing: Listing;
   const to = token ? listing.path : `/signin?next=${encodeURIComponent(listing.path)}`;
   return (
     <li className="flex flex-col rounded-tile bg-card p-md shadow-toy-soft">
+      <MediaCover items={listing.media} />
       <div className="flex items-start gap-sm">
         <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-[22px]" aria-hidden="true">
           {meta.emoji}

@@ -66,6 +66,8 @@ export function Bond() {
       fr.refetch();
     },
   });
+  const blocked = useAuthed(['bond-blocks'], api.blocks);
+  const unblock = useMutation({ mutationFn: (id: string) => api.unblock(id), onSuccess: () => { void blocked.refetch(); fr.refetch(); } });
   const unfriend = useMutation({ mutationFn: (userId: string) => api.unfriend(userId), onSuccess: () => fr.refetch() });
   const openChat = useMutation({ mutationFn: (userId: string) => api.openChat({ userId }), onSuccess: (r) => nav(`/bond/chats/${r.chat.id}`) });
   const d = q.data;
@@ -102,6 +104,21 @@ export function Bond() {
         )}
         <Err e={openChat.isError ? openChat.error : null} />
       </Section>
+
+      {(blocked.data?.blocked.length ?? 0) > 0 && (
+        <Section id="bond-blocked" title="People you blocked" lede="They cannot see your posts or ask you to be friends, and you do not see theirs. Anyone can lift a block.">
+          <ul className="flex list-none flex-col gap-xs p-0 m-0">
+            {blocked.data?.blocked.map((b) => (
+              <li key={b.userId} className="flex items-center justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+                <span className="min-w-0 truncate text-[16px] font-bold">{b.name}{b.handle ? ` (@${b.handle})` : ''}</span>
+                <Button variant="outline" size="sm" onClick={() => unblock.mutate(b.userId)} disabled={unblock.isPending}>
+                  Unblock
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
 
       <Section id="bond-friends" title="Friends" lede="Add people with their friend code or from their page. A chat with a friend is anonymous too." action={<SeeAll to="/community">Community</SeeAll>}>
         <div className="mb-sm grid gap-sm rounded-tile bg-card p-sm shadow-toy-soft sm:grid-cols-2">

@@ -2,6 +2,7 @@ import { OPPORTUNITY_TYPES, SKILLS, type Application, type ApplicationStatus, ty
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
+import { MediaSection } from '../components/MediaSection';
 import { Button } from '../components/Button';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
@@ -373,6 +374,8 @@ export function Opportunity() {
         <Facts o={o} />
         <Chips items={o.skillsRequired} />
       </header>
+
+      <MediaSection type="opportunity" id={o.id} />
 
       <section className="mt-lg rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="about-heading">
         <h2 id="about-heading" className="text-[24px]">

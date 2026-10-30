@@ -137,6 +137,49 @@ async function youtubeApi(env: Env, action: 'read' | 'search', target: string, l
   }
 }
 
+/** The channels winning on a topic: YouTube's channel search with counts when there is a key, else the videos grouped by who made them. */
+async function channelsFor(env: Env, query: string, n: number): Promise<ReachResult> {
+  if (env.YOUTUBE_API_KEY) {
+    try {
+      const s = (await (await fetch(`${YT}/search?part=snippet&type=channel&maxResults=${Math.min(25, n)}&q=${encodeURIComponent(query)}&key=${env.YOUTUBE_API_KEY}`)).json()) as { items?: { id?: { channelId?: string } }[] };
+      const ids = (s.items ?? []).map((c) => c.id?.channelId ?? '').filter(Boolean);
+      if (ids.length) {
+        const d = (await (await fetch(`${YT}/channels?part=snippet,statistics&id=${ids.join(',')}&key=${env.YOUTUBE_API_KEY}`)).json()) as { items?: { id: string; snippet?: { title?: string; description?: string; publishedAt?: string }; statistics?: { subscriberCount?: string; viewCount?: string; videoCount?: string } }[] };
+        const items: ResearchItem[] = (d.items ?? [])
+          .map((c) => ({
+            title: clip(c.snippet?.title ?? '', 200),
+            url: `https://www.youtube.com/channel/${c.id}`,
+            author: clip(c.snippet?.title ?? '', 80),
+            publishedAt: c.snippet?.publishedAt ?? '',
+            text: clip(c.snippet?.description ?? '', 1500),
+            stats: { subscribers: Number(c.statistics?.subscriberCount ?? 0), views: Number(c.statistics?.viewCount ?? 0), videos: Number(c.statistics?.videoCount ?? 0) },
+          }))
+          .sort((a, b) => (b.stats.subscribers ?? 0) - (a.stats.subscribers ?? 0))
+          .slice(0, n);
+        if (items.length) return { ok: true, backend: 'youtube-api', items, error: '' };
+      }
+    } catch {
+      // fall through to grouping videos
+    }
+  }
+  const r = reachConnected(env) ? await bridge(env, 'youtube', 'search', { query, limit: 25 }) : await youtubeApi(env, 'search', query, 25);
+  if (!r.ok) return r;
+  const by = new Map<string, { item: ResearchItem; views: number; videos: number; best: ResearchItem }>();
+  for (const v of r.items) {
+    const key = v.author || v.url;
+    const row = by.get(key) ?? { item: v, views: 0, videos: 0, best: v };
+    row.views += v.stats.views ?? 0;
+    row.videos += 1;
+    if ((v.stats.views ?? 0) > (row.best.stats.views ?? 0)) row.best = v;
+    by.set(key, row);
+  }
+  const items: ResearchItem[] = [...by.values()]
+    .sort((a, b) => b.views - a.views)
+    .slice(0, n)
+    .map((g) => ({ title: g.item.author || g.item.title, url: g.best.url, author: g.item.author, publishedAt: '', text: `Best video here: ${g.best.title}`, stats: { views: g.views, videos: g.videos } }));
+  return { ...r, items };
+}
+
 /** Read one link: the channel is picked from the address, Agent Reach first, the Worker's own readers after. */
 export async function readLink(env: Env, url: string): Promise<ReachResult> {
   const platform = detectPlatform(url);
@@ -164,6 +207,8 @@ export async function research(env: Env, kind: string, query: string, limit: num
       const r = reachConnected(env) ? await bridge(env, 'youtube', 'search', { query, limit: n }) : fail('');
       return r.ok ? r : youtubeApi(env, 'search', query, n);
     }
+    case 'channels':
+      return channelsFor(env, query, n);
     case 'outliers': {
       const r = reachConnected(env) ? await bridge(env, 'youtube', 'search', { query, limit: Math.max(n, 15) }) : fail('');
       const base = r.ok ? r : await youtubeApi(env, 'search', query, Math.max(n, 15));

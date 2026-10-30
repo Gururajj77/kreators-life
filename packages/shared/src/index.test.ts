@@ -1,7 +1,7 @@
 import { BADGES as ALL_BADGES, HOW_TO, kmLabel, MODULES as MODS, paceLabel, RUN_BADGES, runEntryState, TERMS, termGroups, weekStart, weekStreak } from './index';
 import { earningGuide, nextBadge, unlockFor } from './index';
 import { ageOn, birthDateProblem, MIN_AGE, normalizePhone, phoneProblem } from './index';
-import { BRAND_SOURCE_KINDS, BRAND_SOURCE_META, PIECE_KINDS, PIECE_META, RESEARCH_KINDS, RESEARCH_META, sourceKindOf } from './index';
+import { BRAND_SOURCE_KINDS, BRAND_SOURCE_META, PIECE_KINDS, PIECE_META, RESEARCH_KINDS, RESEARCH_META, sourceKindOf, strategyPath, threadOrder, anonAliasFrom, MAX_REPLY_DEPTH } from './index';
 import { BAND_STATEMENTS, MAP_LEVELS, pickFocus, placementFlags, rampTime, routineFor, settleScore } from './index';
 import { characterHello, characterTitle, INSECURITY_WEIGHTS, mantraLine, scoreOfStars, STAR_WORDS, starsOf, weightWord } from './index';
 import { blockMinutes, minutesLabel, parseRoutineBlocks, stepsMinutes } from './index';
@@ -154,10 +154,13 @@ describe('circles', () => {
 describe('apps', () => {
   it('starts with only the core apps on', () => {
     const on = MODULES.filter((m) => m.defaultOn && !m.locked && m.minRole === 'user').map((m) => m.key).sort();
-    expect(on).toEqual(['help', 'journal', 'life', 'notifications', 'profile', 'school', 'shop', 'work', 'army'].sort());
+    expect(on).toEqual(['help', 'journal', 'leaderboard', 'life', 'notifications', 'profile', 'school', 'shop', 'work', 'army'].sort());
   });
-  it('does not list rank or rewards as apps', () => {
-    expect(MODULES.some((m) => m.key === 'leaderboard' || m.key === 'rewards')).toBe(false);
+  it('lists the leaderboard as an app that is on for everyone, but not rewards', () => {
+    const lb = MODULES.find((m) => m.key === 'leaderboard');
+    expect(lb?.defaultOn).toBe(true);
+    expect(lb?.group).toBe('core');
+    expect(MODULES.some((m) => m.key === 'rewards')).toBe(false);
   });
   it('keeps internal tools behind a team role, and gives every group a name', () => {
     const obs = MODULES.find((m) => m.key === 'observability')!;
@@ -724,5 +727,32 @@ describe('engagement', () => {
   it('counts seasons by calendar month', () => {
     expect(previousSeason('2026-01')).toBe('2025-12');
     expect(seasonLabel('2026-10')).toBe('October 2026');
+  });
+});
+
+describe('threads, anonymous names and the strategy path', () => {
+  it('puts each reply under what it answers and caps the depth', () => {
+    const rows = [
+      { id: 'a', parentId: null, depth: 0 },
+      { id: 'b', parentId: null, depth: 0 },
+      { id: 'a1', parentId: 'a', depth: 1 },
+      { id: 'a1x', parentId: 'a1', depth: 2 },
+      { id: 'orphan', parentId: 'gone', depth: 3 },
+    ];
+    expect(threadOrder(rows).map((r) => `${r.id}:${r.depth}`)).toEqual(['a:0', 'a1:1', 'a1x:2', 'b:0', 'orphan:0']);
+    const long = Array.from({ length: 9 }, (_, i) => ({ id: `n${i}`, parentId: i === 0 ? null : `n${i - 1}`, depth: i }));
+    expect(Math.max(...threadOrder(long).map((r) => r.depth))).toBe(MAX_REPLY_DEPTH);
+  });
+  it('makes a readable made-up name from hash bytes, the same every time', () => {
+    expect(anonAliasFrom([0, 0, 0])).toBe('Quiet Otter 10');
+    expect(anonAliasFrom([1, 2, 91])).toBe(anonAliasFrom([1, 2, 91]));
+    expect(anonAliasFrom([3, 4, 5])).toMatch(/^\w+ \w+ \d\d$/);
+  });
+  it('walks the strategy path in order and marks a step done only by doing it', () => {
+    const none = strategyPath({ niche: '', voice: '' }, { runs: {}, pieces: {} });
+    expect(none.map((x) => x.key)).toEqual(['say', 'channels', 'outliers', 'analysis', 'playbook', 'ideas', 'script', 'calendar']);
+    expect(none.every((x) => !x.done)).toBe(true);
+    const some = strategyPath({ niche: 'phones', voice: 'warm' }, { runs: { channels: 1 }, pieces: { playbook: 2 } });
+    expect(some.filter((x) => x.done).map((x) => x.key)).toEqual(['say', 'channels', 'playbook']);
   });
 });

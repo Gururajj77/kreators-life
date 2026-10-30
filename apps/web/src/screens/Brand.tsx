@@ -1,6 +1,6 @@
-import { BRAND_SOURCE_META, PIECE_KINDS, PIECE_META, RESEARCH_KINDS, RESEARCH_META, type BrandPiece, type BrandSource, type PieceKind, type ResearchItem, type ResearchKind, type ResearchRun } from '@kreators/shared';
+import { BRAND_SOURCE_META, strategyPath, PIECE_KINDS, PIECE_META, RESEARCH_KINDS, RESEARCH_META, type BrandPiece, type BrandSource, type PieceKind, type ResearchItem, type ResearchKind, type ResearchRun } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '../components/Button';
 import { Markdown } from '../components/Markdown';
@@ -35,6 +35,43 @@ function Err({ e, fallback = 'That did not work.' }: { e: unknown; fallback?: st
   );
 }
 
+type Preset = { research?: ResearchKind; piece?: PieceKind; query?: string; at: number };
+
+/** The way from "who is this for" to a month of posts: eight steps, done by doing them. The next one is the one to tap. */
+function StrategyPath({ brand, counts, onGo }: { brand: { niche: string; voice: string }; counts: Parameters<typeof strategyPath>[1]; onGo: (go: ReturnType<typeof strategyPath>[number]['go']) => void }) {
+  const steps = strategyPath(brand, counts);
+  const done = steps.filter((s) => s.done).length;
+  const next = steps.find((s) => !s.done);
+  return (
+    <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="path-heading">
+      <h2 id="path-heading" className="text-[18px]">
+        Your strategy, step by step
+      </h2>
+      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+        {next ? `${done} of ${steps.length} done. Next: ${next.title.toLowerCase()}.` : 'All eight steps done. Run the steps again whenever the niche moves.'}
+      </p>
+      <div className="mt-sm h-[8px] rounded-pill bg-line" role="progressbar" aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={done} aria-label="Strategy steps done">
+        <div className="h-full rounded-pill bg-ink" style={{ width: `${(done / steps.length) * 100}%` }} />
+      </div>
+      <ol className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
+        {steps.map((s, i) => (
+          <li key={s.key}>
+            <button type="button" onClick={() => onGo(s.go)} className={`toy toy-flat flex min-h-[44px] w-full items-start gap-sm rounded-tile p-xs text-left ${s === next ? 'bg-paper' : ''}`}>
+              <span aria-hidden="true" className={`mt-[2px] flex size-[28px] shrink-0 items-center justify-center rounded-pill text-[14px] font-extrabold ${s.done ? 'bg-r4 text-on-fill' : s === next ? 'bg-ink text-on-ink' : 'bg-line text-ink-soft'}`}>
+                {s.done ? '✓' : i + 1}
+              </span>
+              <span className="min-w-0">
+                <span className={`block text-[16px] font-bold ${s.done ? 'text-ink-soft' : ''}`}>{s.title}</span>
+                <span className="block text-[12px] font-bold text-ink-soft">{s.why}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 /** One brand's folder: the links it is fed, the research done on them, what to create, and the pieces so far. */
 export function Brand() {
   const { id = '' } = useParams();
@@ -46,6 +83,7 @@ export function Brand() {
   const [editing, setEditing] = useState(false);
   const [openRun, setOpenRun] = useState<ResearchRun | null>(null);
   const [openPiece, setOpenPiece] = useState<BrandPiece | null>(null);
+  const [preset, setPreset] = useState<Preset | null>(null);
   const remove = useMutation({ mutationFn: () => api.deleteBrand(id), onSuccess: () => nav('/shop/content', { replace: true }) });
   const d = q.data;
 
@@ -90,6 +128,16 @@ export function Brand() {
         </div>
       </header>
 
+      <StrategyPath
+        brand={b}
+        counts={d.counts}
+        onGo={(go) => {
+          if (go.to === 'edit') return setEditing(true);
+          setPreset(go.to === 'research' ? { research: go.kind, query: b.niche, at: Date.now() } : { piece: go.kind, at: Date.now() });
+          setTab(go.to);
+        }}
+      />
+
       <div className="mt-md">
         <nav className="scroll-row" aria-label="Folder sections">
           {TABS.map((t) => (
@@ -102,10 +150,11 @@ export function Brand() {
       </div>
 
       {tab === 'sources' && <SourcesTab id={id} sources={d.sources} onChange={() => q.refetch()} onOpenRun={setOpenRun} />}
-      {tab === 'research' && <ResearchTab id={id} runs={d.runs} reach={d.tools.reach} onChange={() => q.refetch()} onOpen={setOpenRun} />}
+      {tab === 'research' && <ResearchTab id={id} runs={d.runs} preset={preset} reach={d.tools.reach} onChange={() => q.refetch()} onOpen={setOpenRun} />}
       {tab === 'create' && (
         <CreateTab
           id={id}
+          preset={preset}
           runs={d.runs}
           writer={d.tools.writer}
           onMade={(p) => {
@@ -212,10 +261,16 @@ function SourcesTab({ id, sources, onChange, onOpenRun }: { id: string; sources:
   );
 }
 
-function ResearchTab({ id, runs, reach, onChange, onOpen }: { id: string; runs: ResearchRun[]; reach: boolean; onChange: () => void; onOpen: (r: ResearchRun) => void }) {
+function ResearchTab({ id, runs, preset, reach, onChange, onOpen }: { id: string; runs: ResearchRun[]; preset: Preset | null; reach: boolean; onChange: () => void; onOpen: (r: ResearchRun) => void }) {
   const [kind, setKind] = useState<ResearchKind>('outliers');
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState('10');
+  useEffect(() => {
+    if (preset?.research) {
+      setKind(preset.research);
+      setQuery(preset.query ?? '');
+    }
+  }, [preset]);
   const go = useMutation({
     mutationFn: () => api.researchBrand(id, { kind, query: query.trim(), limit: Number(limit) || 10 }),
     onSuccess: (r) => {
@@ -290,9 +345,12 @@ function ResearchTab({ id, runs, reach, onChange, onOpen }: { id: string; runs: 
   );
 }
 
-function CreateTab({ id, runs, writer, onMade }: { id: string; runs: ResearchRun[]; writer: 'claude' | 'workers-ai' | 'none'; onMade: (p: BrandPiece) => void }) {
+function CreateTab({ id, runs, preset, writer, onMade }: { id: string; runs: ResearchRun[]; preset: Preset | null; writer: 'claude' | 'workers-ai' | 'none'; onMade: (p: BrandPiece) => void }) {
   const [kind, setKind] = useState<PieceKind>('audit');
   const [brief, setBrief] = useState('');
+  useEffect(() => {
+    if (preset?.piece) setKind(preset.piece);
+  }, [preset]);
   const done = runs.filter((r) => r.status === 'done');
   const [picked, setPicked] = useState<Set<string>>(new Set());
   // On by default: Content reads the unread links and runs fresh research on the niche before it writes.

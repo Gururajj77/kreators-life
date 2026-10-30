@@ -1,6 +1,6 @@
 import type { InboxShow, InboxTab } from '@kreators/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { FeedFilter, FeedSort, LeaderboardSort, LogKind, RelationshipKey } from '@kreators/shared';
+import type { FeedFilter, FeedSort, LeaderboardScope, LeaderboardSort, LogKind, RelationshipKey } from '@kreators/shared';
 import { api } from './api';
 import { useSession } from './store';
 import { todayLocal } from './date';
@@ -9,7 +9,7 @@ export const keys = {
   me: ['me'] as const,
   nodes: (relationship: RelationshipKey) => ['nodes', relationship] as const,
   today: (date: string) => ['today', date] as const,
-  leaderboard: (by: LeaderboardSort) => ['leaderboard', by] as const,
+  leaderboard: (by: LeaderboardSort, scope: LeaderboardScope, value: string, paging: string) => ['leaderboard', by, scope, value, paging] as const,
   rewards: ['rewards'] as const,
 };
 
@@ -32,8 +32,8 @@ export function useToday() {
   return { date, ...useAuthed(keys.today(date), () => api.today(date)) };
 }
 
-export function useLeaderboard(by: LeaderboardSort) {
-  return useAuthed(keys.leaderboard(by), () => api.leaderboard(by));
+export function useLeaderboard(by: LeaderboardSort, scope: LeaderboardScope = 'all', value = '', paging = '') {
+  return useAuthed(keys.leaderboard(by, scope, value, paging), () => api.leaderboard(by, scope, value, paging), scope === 'all' || Boolean(value));
 }
 
 export function useRewards() {

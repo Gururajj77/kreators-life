@@ -2,6 +2,7 @@ import { bountyPayout, detectPlatform, SOCIAL_PLATFORM_META, type Bounty, type B
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
+import { MediaSection } from '../components/MediaSection';
 import { Button } from '../components/Button';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
@@ -713,6 +714,8 @@ export function Reward() {
           </Button>
         )}
       </header>
+
+      <MediaSection type="reward" id={b.id} />
 
       <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-label="The brief">
         <div className="grid grid-cols-2 gap-xs">

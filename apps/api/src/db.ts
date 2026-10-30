@@ -1,4 +1,4 @@
-import { pageSizeOf, parseIdentities, parseIntake, parseLinkBlocks, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
+import { anonAliasFrom, pageSizeOf, parseIdentities, parseIntake, parseLinkBlocks, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
 import { BADGES, EMPTY_SOCIALS, parsePublicSettings, HONORS, isStaffFor, levelFromXp, PERMISSIONS, RELATIONSHIPS, roleRank, RUN_BADGES, taskReadyAt, timeHonors, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
 import type { Context, Next } from 'hono';
 import type { AppEnv } from './env';
@@ -209,6 +209,12 @@ export async function notify(db: D1Database, userId: string, kind: string, title
     .prepare('INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)')
     .bind(newId(), userId, kind, title, body, link, nowIso())
     .run();
+}
+
+/** The made-up name someone writes under in one conversation (`scope`): the same all through it, different in the next, and not reversible without the salt. */
+export async function anonAlias(env: { CLICK_SALT?: string }, userId: string, scope: string): Promise<string> {
+  const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${env.CLICK_SALT ?? 'kreators-local'}:anon:${scope}:${userId}`)));
+  return anonAliasFrom(bytes);
 }
 
 /** A username every account starts with; the person can change it under Profile. */

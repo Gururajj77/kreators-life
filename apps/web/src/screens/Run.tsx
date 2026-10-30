@@ -1,6 +1,7 @@
 import { ATTENDEE_CODE_MAX, ATTENDEE_CODE_MIN, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, attendeeXpLocked, BADGES, kmLabel, normalizeCode, paceLabel, RELATIONSHIP_BY_KEY, RUN_BADGES, RUN_PACE_META, RUN_PACES, RUN_REWARD, type Run as RunItem, type RunClub, type RunCollab, type RunCollabApplication, type RunPace, type RunResponse, type RunTracking } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
+import { EventPanel } from '../components/EventPanel';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { Button } from '../components/Button';
 import { useCelebrate } from '../components/Celebration';
@@ -653,6 +654,19 @@ function RunCodeEditor({ r, onRecode, busy }: { r: RunItem; onRecode: (change: {
   );
 }
 
+/** Photos, the conversation and the people to meet for one run, opened on request so a list of runs does not poll for each. */
+function RunTalk({ runId }: { runId: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <li className="list-none">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="toy toy-flat min-h-[44px] rounded-pill px-md text-[14px] font-bold underline underline-offset-4">
+        {open ? 'Hide photos, chat and people' : 'Photos, chat and people'}
+      </button>
+      {open && <EventPanel app="run" id={runId} />}
+    </li>
+  );
+}
+
 function RunCard({ r, host, member, onLog, onRecode, onStatus, busy }: { r: RunItem; host: boolean; member: boolean; onLog: () => void; onRecode: (change?: { xp?: number; code?: string }) => void; onStatus: (s: 'cancelled' | 'done') => void; busy: boolean }) {
   return (
     <li className="rounded-card bg-card p-md shadow-toy-soft">
@@ -960,7 +974,10 @@ export function RunClubPage() {
         <Err e={recode.isError ? recode.error : setRun.isError ? setRun.error : null} />
         <ul className="mt-sm flex list-none flex-col gap-sm p-0 m-0">
           {d.runs.map((r) => (
-            <RunCard key={r.id} r={r} host={k.host} member={k.mine} onLog={() => setLogging(r)} onRecode={(change) => recode.mutate({ runId: r.id, change })} onStatus={(status) => setRun.mutate({ runId: r.id, status })} busy={busy} />
+            <Fragment key={r.id}>
+              <RunCard r={r} host={k.host} member={k.mine} onLog={() => setLogging(r)} onRecode={(change) => recode.mutate({ runId: r.id, change })} onStatus={(status) => setRun.mutate({ runId: r.id, status })} busy={busy} />
+              {(k.host || k.mine) && <RunTalk runId={r.id} />}
+            </Fragment>
           ))}
         </ul>
       </section>

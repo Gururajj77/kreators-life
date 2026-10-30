@@ -41,6 +41,8 @@ export const LIMITS = {
   setup: { max: 20, windowSec: 3600 },
   /** Attendee codes typed at an event: Party and Circles. Wrong guesses count, so a custom word cannot be guessed at. */
   claim: { max: 10, windowSec: 3600 },
+  /** Pictures and GIFs a person uploads. */
+  upload: { max: 30, windowSec: 3600 },
   /** Messages typed to the assistant. Each one is a model call paid in credits; the plan's own caps come on top. */
   assistant: { max: 60, windowSec: 3600 },
   /** Coaching asks: a coach asking a student, a student asking a coach, and asking the team to be made a life coach. */
@@ -102,6 +104,10 @@ export const ROUTE_LIMITS: readonly { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE
   { method: 'POST', path: '/studio/brands/:id/research', limit: 'research' },
   { method: 'POST', path: '/studio/brands/:id/pieces', limit: 'generate' },
   { method: 'POST', path: '/onboarding/setup', limit: 'setup' },
+  { method: 'POST', path: '/media/upload', limit: 'upload' },
+  { method: 'PUT', path: '/media/for/:type/:id', limit: 'create' },
+  { method: 'POST', path: '/connect/:app/:id/messages', limit: 'message' },
+  { method: 'POST', path: '/connect/:app/:id/people/:userId/connect', limit: 'intro' },
 ];
 
 /** The doors that take no session are limited before the session check; everything else after it, per person. */

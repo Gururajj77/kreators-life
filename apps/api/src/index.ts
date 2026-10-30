@@ -55,6 +55,8 @@ import { session } from './routes/session';
 import { assistantRoutes } from './routes/assistant';
 import { credits } from './routes/credits';
 import { coach, myCoach } from './routes/coach';
+import { media, mediaPublic } from './routes/media';
+import { connect } from './routes/connect';
 
 const app = new Hono<AppEnv>().basePath('/api');
 
@@ -68,6 +70,7 @@ app.route('/auth', auth);
 // Admin uses its own key, or an admin's session. Public pages need no session.
 app.route('/admin', admin);
 app.route('/public/explore', explore);
+app.route('/public/media', mediaPublic);
 app.route('/public/certificates', certificates);
 app.route('/public/invoices', publicInvoices);
 app.route('/public', publicPage);
@@ -132,6 +135,8 @@ app.route('/party', party);
 app.route('/club', club);
 app.route('/win', win);
 app.route('/bond', bond);
+app.route('/media', media);
+app.route('/connect', connect);
 app.route('/tools', tools);
 app.route('/proposals', proposals);
 app.route('/support', support);

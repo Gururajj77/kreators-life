@@ -67,10 +67,12 @@ strategist.get('/brands/:id', async (c) => {
   const row = await mine(db, user.id, c.req.param('id'));
   if (!row) return c.json({ error: 'not found' }, 404);
   const ask = pageOf(c);
-  const [sources, runs, pieces] = await Promise.all([
+  const [sources, runs, pieces, runCounts, pieceCounts] = await Promise.all([
     db.prepare('SELECT * FROM brand_sources WHERE brand_id = ? ORDER BY created_at').bind(row.id).all<SourceRow>(),
     db.prepare('SELECT * FROM research_runs WHERE brand_id = ? ORDER BY created_at DESC LIMIT 40').bind(row.id).all<RunRow>(),
     db.prepare('SELECT * FROM brand_pieces WHERE brand_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?').bind(row.id, ask.limit, ask.offset).all<PieceRow>(),
+    db.prepare("SELECT kind, COUNT(*) AS n FROM research_runs WHERE brand_id = ? AND status = 'done' GROUP BY kind").bind(row.id).all<{ kind: string; n: number }>(),
+    db.prepare('SELECT kind, COUNT(*) AS n FROM brand_pieces WHERE brand_id = ? GROUP BY kind').bind(row.id).all<{ kind: string; n: number }>(),
   ]);
   const pg = paged(pieces.results, ask);
   const res: BrandDetail = {
@@ -80,6 +82,7 @@ strategist.get('/brands/:id', async (c) => {
     pieces: pg.items.map(toPiece),
     page: pg.page,
     tools: { reach: reachConnected(c.env), writer: writerFor(c.env) },
+    counts: { runs: Object.fromEntries(runCounts.results.map((r) => [r.kind, r.n])), pieces: Object.fromEntries(pieceCounts.results.map((r) => [r.kind, r.n])) },
   };
   return c.json(res);
 });

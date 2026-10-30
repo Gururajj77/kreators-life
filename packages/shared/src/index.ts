@@ -1414,7 +1414,45 @@ export interface RewardsResponse {
 // Leaderboard
 // ---------------------------------------------------------------------------
 
+/** Each board ranks the top of this many opted-in people; the rest are not ranked. */
+export const LEADERBOARD_POOL = 200;
 export type LeaderboardSort = 'xp' | 'season' | 'streak' | 'badges';
+
+/** What a board is about. Goals and pillars are what people work on; the rest is who they are. */
+export type LeaderboardScope = 'all' | 'goal' | 'pillar' | 'city' | 'identity' | 'level';
+export const LEADERBOARD_SCOPES: readonly { key: LeaderboardScope; label: string; group: 'Everyone' | 'What people work on' | 'Who they are' }[] = [
+  { key: 'all', label: 'Everyone', group: 'Everyone' },
+  { key: 'goal', label: 'By goal', group: 'What people work on' },
+  { key: 'pillar', label: 'By pillar', group: 'What people work on' },
+  { key: 'city', label: 'By city', group: 'Who they are' },
+  { key: 'identity', label: 'By who they are', group: 'Who they are' },
+  { key: 'level', label: 'By experience', group: 'Who they are' },
+];
+export const isLeaderboardScope = (v: unknown): v is LeaderboardScope => LEADERBOARD_SCOPES.some((s) => s.key === v);
+export interface LeaderboardOption {
+  value: string;
+  label: string;
+  emoji?: string;
+  /** People on the board who opted in. */
+  count: number;
+}
+export interface LeaderboardOptions {
+  goal: LeaderboardOption[];
+  pillar: LeaderboardOption[];
+  city: LeaderboardOption[];
+  identity: LeaderboardOption[];
+  level: LeaderboardOption[];
+}
+/** One small board in the overview: the top three of a goal or pillar and where the viewer stands. */
+export interface LeaderboardBlock {
+  scope: LeaderboardScope;
+  value: string;
+  label: string;
+  emoji: string;
+  people: number;
+  top: { rank: number; name: string; xp: number; isMe: boolean }[];
+  myRank: number | null;
+}
 
 /**
  * A season is a calendar month (UTC): the season board counts only the xp earned in it, so everyone starts level
@@ -1456,8 +1494,17 @@ export interface LeaderboardEntry {
   seasonXp: number;
 }
 
+
 export interface LeaderboardResponse {
   by: LeaderboardSort;
+  scope: LeaderboardScope;
+  /** The goal, pillar, city, tag or level chosen, empty for everyone. */
+  value: string;
+  /** What the board is called: "Learn a new skill", "Friends", "Pune". */
+  label: string;
+  page: Page;
+  /** People on this board, up to the pool the board ranks (`LEADERBOARD_POOL`). */
+  people: number;
   entries: LeaderboardEntry[];
   me: LeaderboardEntry | null;
   optedIn: boolean;
@@ -1602,6 +1649,8 @@ export const MODULES: readonly AppModule[] = [
   { key: 'today', name: 'Daily', blurb: 'Your three boxes a day.', emoji: '☀️', group: 'core', path: '/today', defaultOn: true, locked: true, minRole: 'user' },
   { key: 'tower', name: 'Pillars', blurb: 'The seven pillars of your life, one per relationship.', emoji: '🏰', group: 'core', path: '/tower', defaultOn: true, locked: true, minRole: 'user' },
   { key: 'search', name: 'Search', blurb: 'Find anything you wrote, bought, applied to or read.', emoji: '🔍', group: 'core', path: '/search', defaultOn: true, locked: true, minRole: 'user' },
+  // On for everyone. People still only appear after they opt in under Profile, and journal and wellbeing never count.
+  { key: 'leaderboard', name: 'Leaderboard', blurb: 'See where you stand by goal, pillar, city and more. Boards for each goal, filters, and a monthly season.', emoji: '🏆', group: 'core', path: '/leaderboard', defaultOn: true, minRole: 'user' },
   { key: 'notifications', name: 'Inbox', blurb: 'What happened while you were away, and daily reminders.', emoji: '🔔', group: 'core', path: '/inbox', defaultOn: true, minRole: 'user' },
   { key: 'help', name: 'Help', blurb: 'Answers to common questions, and a line to the team.', emoji: '🛟', group: 'core', path: '/help', defaultOn: true, minRole: 'user' },
   // The assistant is part of every screen, not an app of its own: locked on, and its page is its plan and credits.
@@ -1815,6 +1864,12 @@ export interface CommunityPost {
   authorId: string;
   authorName: string;
   authorHandle: string | null;
+  /** The author's standing, so a guide or admin sees whether they may mute them. */
+  authorRank: CommunityRank;
+  /** Written under a made-up name. The author's id, handle and followers are never sent, except the id to staff. */
+  anonymous: boolean;
+  /** The viewer wrote it. */
+  mine: boolean;
   authorPro: boolean;
   /** Whether the viewer follows the author, and how many people do. */
   authorFollowing: boolean;
@@ -1844,6 +1899,12 @@ export interface CommunityReply {
   postId: string;
   authorId: string;
   authorName: string;
+  anonymous: boolean;
+  mine: boolean;
+  /** The reply this answers, or null for a reply straight to the post. */
+  parentId: string | null;
+  /** How far in it sits: 0 for a reply to the post, up to `MAX_REPLY_DEPTH`. */
+  depth: number;
   body: string;
   reactions: ReactionCounts;
   myReaction: ReactionKind | null;
@@ -2477,12 +2538,13 @@ export function sourceKindOf(url: string): BrandSourceKind {
   return 'site';
 }
 
-export const RESEARCH_KINDS = ['read', 'search', 'youtube_search', 'outliers', 'x_search', 'reddit_search', 'transcript', 'profile'] as const;
+export const RESEARCH_KINDS = ['read', 'search', 'youtube_search', 'channels', 'outliers', 'x_search', 'reddit_search', 'transcript', 'profile'] as const;
 export type ResearchKind = (typeof RESEARCH_KINDS)[number];
 export const RESEARCH_META: Record<ResearchKind, { name: string; blurb: string; needsQuery: boolean }> = {
   read: { name: 'Read a link', blurb: 'The page, post or video behind a link, as text.', needsQuery: false },
   search: { name: 'Search the web', blurb: 'What the web says about a topic, niche or brand.', needsQuery: true },
   youtube_search: { name: 'Search YouTube', blurb: 'Videos on a topic, newest and most relevant.', needsQuery: true },
+  channels: { name: 'Find channels', blurb: 'The YouTube channels winning on a topic, with how many people follow each and how their videos do.', needsQuery: true },
   outliers: { name: 'Find outliers', blurb: 'Videos on a topic sorted by views, so the ones that broke out float up.', needsQuery: true },
   x_search: { name: 'Search X', blurb: 'Posts on a topic. Needs Agent Reach with an X login.', needsQuery: true },
   reddit_search: { name: 'Search Reddit', blurb: 'Threads on a topic. Needs Agent Reach with a Reddit login.', needsQuery: true },
@@ -2490,7 +2552,7 @@ export const RESEARCH_META: Record<ResearchKind, { name: string; blurb: string; 
   profile: { name: 'Profile', blurb: 'An X or Instagram account and its recent posts.', needsQuery: false },
 };
 
-export const PIECE_KINDS = ['audit', 'plan', 'calendar', 'ideas', 'hooks', 'script', 'post', 'analysis'] as const;
+export const PIECE_KINDS = ['audit', 'plan', 'calendar', 'ideas', 'hooks', 'script', 'post', 'analysis', 'playbook'] as const;
 export type PieceKind = (typeof PIECE_KINDS)[number];
 export const PIECE_META: Record<PieceKind, { name: string; emoji: string; blurb: string; askFor: string }> = {
   audit: { name: 'Strategy audit', emoji: '🔍', blurb: 'What the brand does now, what wins in its niche, the gaps, and ten moves in order.', askFor: 'Anything the audit should weigh, like a launch date or a platform you care about most.' },
@@ -2500,6 +2562,7 @@ export const PIECE_META: Record<PieceKind, { name: string; emoji: string; blurb:
   hooks: { name: 'Hooks', emoji: '🪝', blurb: 'Twenty opening lines in the patterns the outliers used, grouped by type, each with why it works.', askFor: 'The topic of the video the hooks are for.' },
   script: { name: 'Short-form script', emoji: '🎬', blurb: 'A 30 to 60 second script: the hook, the setup, the payoff, the call to action. Remix a winner, start from scratch, or fix a draft.', askFor: 'The idea, or paste a draft to fix, or name the research item to remix.' },
   post: { name: 'Posts and captions', emoji: '✍️', blurb: 'Captions and threads ready to post, one per platform you name.', askFor: 'What the post is about and which platforms.' },
+  playbook: { name: 'What is working', emoji: '📘', blurb: 'The patterns behind the winners: hook types, structures, lengths and topics, counted, each with the video that shows it, and what to copy and what to skip.', askFor: 'The platform and format you want the patterns for, like YouTube Shorts under a minute.' },
   analysis: { name: 'Why it worked', emoji: '🧪', blurb: 'One video or post taken apart: the hook, the structure, the format, the style, and what to take from it.', askFor: 'Which research item to take apart, or paste the transcript.' },
 };
 
@@ -2570,6 +2633,32 @@ export interface BrandDetail {
   page: Page;
   /** What the server can do right now, so the screen says it before anyone waits. */
   tools: { reach: boolean; writer: 'claude' | 'workers-ai' | 'none' };
+  /** How many finished runs and pieces of each kind the folder holds, so the strategy path knows where you are. */
+  counts: { runs: Partial<Record<ResearchKind, number>>; pieces: Partial<Record<PieceKind, number>> };
+}
+
+/** The path from "who is this for" to a month of posts. Each step is done by doing the thing, never ticked by hand. */
+export interface PathStep {
+  key: string;
+  title: string;
+  why: string;
+  done: boolean;
+  /** Where the step's button goes: the brand's details, a research run, or a piece to write. */
+  go: { to: 'edit' } | { to: 'research'; kind: ResearchKind } | { to: 'create'; kind: PieceKind };
+}
+export function strategyPath(brand: Pick<Brand, 'niche' | 'voice'>, counts: BrandDetail['counts']): PathStep[] {
+  const r = (k: ResearchKind) => (counts.runs[k] ?? 0) > 0;
+  const p = (k: PieceKind) => (counts.pieces[k] ?? 0) > 0;
+  return [
+    { key: 'say', title: 'Say what this brand makes and how it sounds', why: 'Every step after this leans on the niche and the voice.', done: Boolean(brand.niche.trim() && brand.voice.trim()), go: { to: 'edit' } },
+    { key: 'channels', title: 'See who is winning', why: 'The channels that already own your topic show what an audience wants.', done: r('channels'), go: { to: 'research', kind: 'channels' } },
+    { key: 'outliers', title: 'Find what broke out', why: 'Videos far above their channel\'s usual views are the ones to learn from.', done: r('outliers'), go: { to: 'research', kind: 'outliers' } },
+    { key: 'analysis', title: 'Take one winner apart', why: 'See its hook, its beats and its length, one at a time.', done: p('analysis'), go: { to: 'create', kind: 'analysis' } },
+    { key: 'playbook', title: 'Write your playbook', why: 'The patterns across all the winners, counted, with what to copy and what to skip.', done: p('playbook'), go: { to: 'create', kind: 'playbook' } },
+    { key: 'ideas', title: 'Pick your ideas', why: 'Fifteen ideas that lean on the playbook, each with its hook.', done: p('ideas'), go: { to: 'create', kind: 'ideas' } },
+    { key: 'script', title: 'Write the script for the best one', why: 'Hook, setup, payoff and call to action, in your voice.', done: p('script'), go: { to: 'create', kind: 'script' } },
+    { key: 'calendar', title: 'Plan the month', why: 'Four weeks of posts, so you are never starting from a blank page.', done: p('calendar'), go: { to: 'create', kind: 'calendar' } },
+  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -3316,6 +3405,31 @@ export function matchCircles(candidates: MatchCandidate[], groupSize: number): {
   return { groups: groups.map((g) => g.map((c) => c.id)), unmatched };
 }
 
+/** Replies nest this deep; an answer to the deepest one lands beside it, so a long argument stays readable. */
+export const MAX_REPLY_DEPTH = 4;
+export const ANON_ANIMALS = ['Otter', 'Heron', 'Fox', 'Finch', 'Lynx', 'Panda', 'Gecko', 'Owl', 'Koala', 'Swan', 'Hare', 'Wren'] as const;
+/** A made-up name from some bytes of a hash: the same person gets the same name in one conversation and a new one in the next. */
+export function anonAliasFrom(bytes: ArrayLike<number>): string {
+  return `${ALIAS_WORDS[(bytes[0] ?? 0) % ALIAS_WORDS.length]} ${ANON_ANIMALS[(bytes[1] ?? 0) % ANON_ANIMALS.length]} ${10 + ((bytes[2] ?? 0) % 90)}`;
+}
+/** Put replies in reading order: each one right under what it answers, oldest first inside a level. An orphan becomes a top-level reply. */
+export function threadOrder<T extends { id: string; parentId: string | null; depth: number }>(rows: readonly T[]): T[] {
+  const ids = new Set(rows.map((r) => r.id));
+  const kids = new Map<string | null, T[]>();
+  for (const r of rows) {
+    const key = r.parentId && ids.has(r.parentId) ? r.parentId : null;
+    kids.set(key, [...(kids.get(key) ?? []), r]);
+  }
+  const out: T[] = [];
+  const walk = (key: string | null, depth: number) => {
+    for (const r of kids.get(key) ?? []) {
+      out.push({ ...r, depth: Math.min(depth, MAX_REPLY_DEPTH) });
+      walk(r.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
+}
 export const ALIAS_WORDS = ['Quiet', 'Bright', 'Curious', 'Steady', 'Wild', 'Gentle', 'Bold', 'Warm', 'Swift', 'Calm', 'Keen', 'Merry'] as const;
 
 /** How someone will show up, so the table knows what colour to look for. Red for single, white for committed. */
@@ -4360,6 +4474,8 @@ export interface Listing {
   live: boolean;
   endsAt: string | null;
   createdAt: string;
+  /** Pictures, GIFs and videos the owner added. The first picture is the card's cover. */
+  media?: MediaItem[];
 }
 
 export interface PublicStats {
@@ -5276,11 +5392,11 @@ export const HOW_TO: Record<string, HowTo> = {
   },
   leaderboard: {
     steps: [
-      'The top twenty climbers by xp, streak or badges. Never by follower counts.',
-      'Opt in from Profile to appear. Otherwise you are never listed.',
-      'Journal and wellbeing never count here.',
+      'Pick a board: everyone, a goal such as Learn a new skill, a pillar, a city, a tag like Student, or an experience level. Rank it by xp, this month, streak or badges.',
+      'Your spot, your xp and the size of the board sit at the top. Each goal and pillar also has a small board with its top three; open one to see everyone.',
+      'You appear only after you opt in under Profile. People you blocked, and people who blocked you, never show up. Journal and wellbeing never count here.',
     ],
-    terms: ['xp', 'streak', 'badge'],
+    terms: ['xp', 'streak', 'badge', 'season'],
   },
   rewards: {
     steps: [
@@ -5382,6 +5498,141 @@ export function parseImageUrls(v: unknown): string[] {
     .map((x) => x.trim().slice(0, 500))
     .filter((x) => /^https:\/\//.test(x))
     .slice(0, MAX_LISTING_IMAGES);
+}
+
+// ---------------------------------------------------------------------------
+// Media: pictures, GIFs and videos on listings, lessons and events. Uploaded or linked.
+// ---------------------------------------------------------------------------
+
+export type MediaKind = 'image' | 'gif' | 'video';
+export interface MediaItem {
+  id: string;
+  kind: MediaKind;
+  /** An https link, or the app's own `/api/public/media/<id>` for a file that was uploaded. */
+  url: string;
+  caption: string;
+}
+/** Who can carry media: every public listing, and a lesson in School. */
+export type MediaOwner = ListingType | 'lesson';
+export const MEDIA_OWNERS: readonly MediaOwner[] = [...LISTING_TYPES, 'lesson'];
+export const MAX_MEDIA_ITEMS = 8;
+export const MAX_MEDIA_CAPTION = 120;
+/** An upload is a picture or a GIF. The browser shrinks pictures first; videos are linked, never uploaded. */
+export const MAX_UPLOAD_BYTES = 1_000_000;
+export const UPLOAD_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'] as const;
+export const OWN_MEDIA_PREFIX = '/api/public/media/';
+
+export interface MediaEmbed {
+  /** `frame` is a player on another site; `file` is a video file the browser plays itself. */
+  type: 'frame' | 'file';
+  src: string;
+}
+
+/** A link taken apart, without needing the browser's URL: https only. */
+function splitLink(raw: string): { host: string; path: string; query: Record<string, string> } | null {
+  const m = /^https:\/\/([^/?#\s]+)([^?#\s]*)(?:\?([^#\s]*))?(?:#.*)?$/i.exec(raw.trim());
+  if (!m) return null;
+  const query: Record<string, string> = {};
+  for (const pair of (m[3] ?? '').split('&')) {
+    const [k, v = ''] = pair.split('=');
+    if (k) query[k] = v;
+  }
+  const host = (m[1] ?? '').toLowerCase().replace(/:\d+$/, '').replace(/^(www|m)\./, '');
+  return { host, path: m[2] ?? '', query };
+}
+
+/** How to play a video link: YouTube and Vimeo in their own player, a direct file in the browser's. */
+export function videoEmbed(url: string): MediaEmbed | null {
+  const u = splitLink(url);
+  if (!u) return null;
+  const parts = u.path.split('/').filter(Boolean);
+  const yt = (id: string): MediaEmbed | null => (/^[\w-]{6,20}$/.test(id) ? { type: 'frame', src: `https://www.youtube-nocookie.com/embed/${id}` } : null);
+  if (u.host === 'youtu.be') return yt(parts[0] ?? '');
+  if (u.host === 'youtube.com' || u.host === 'youtube-nocookie.com') return yt(u.query.v ?? (['embed', 'shorts', 'live'].includes(parts[0] ?? '') ? (parts[1] ?? '') : ''));
+  if (u.host === 'vimeo.com' || u.host === 'player.vimeo.com') {
+    const id = parts.find((x) => /^\d{5,}$/.test(x)) ?? '';
+    return id ? { type: 'frame', src: `https://player.vimeo.com/video/${id}` } : null;
+  }
+  return /\.(mp4|webm|mov|m4v)$/i.test(u.path) ? { type: 'file', src: url.trim() } : null;
+}
+
+/** What a pasted link is: a video we can play, a GIF, or a picture. Null when it is none of them. */
+export function mediaFromLink(raw: string): { kind: MediaKind; url: string } | null {
+  const url = raw.trim().slice(0, 500);
+  if (url.startsWith(OWN_MEDIA_PREFIX)) return { kind: 'image', url };
+  const u = splitLink(url);
+  if (!u) return null;
+  if (videoEmbed(url)) return { kind: 'video', url };
+  return { kind: /\.gif$/i.test(u.path) ? 'gif' : 'image', url };
+}
+
+/** Where a guest can get their pictures after an event: a shared folder on one of these. */
+export const PHOTO_HOSTS = ['drive.google.com', 'photos.google.com', 'photos.app.goo.gl', 'dropbox.com', 'icloud.com', '1drv.ms', 'onedrive.live.com', 'wetransfer.com', 'we.tl'] as const;
+export function photoLinkProblem(raw: unknown): string | null {
+  if (typeof raw !== 'string' || !raw.trim()) return 'Paste the link to your photo folder.';
+  const u = splitLink(raw);
+  if (!u) return 'Use a link that starts with https.';
+  return PHOTO_HOSTS.some((h) => u.host === h || u.host.endsWith(`.${h}`)) ? null : 'Use a Google Drive, Google Photos, Dropbox, iCloud, OneDrive or WeTransfer link.';
+}
+
+/** The events that carry a photo link, a conversation and a list of people to connect with. Circles keep their own anonymous tables. */
+export type EventApp = 'party' | 'run';
+export const EVENT_APPS: readonly EventApp[] = ['party', 'run'];
+export const MAX_EVENT_MESSAGE = 500;
+
+export interface EventPhotos {
+  url: string;
+  note: string;
+}
+export interface EventMessage {
+  id: string;
+  /** Empty for a line written anonymously. */
+  userId: string;
+  anonymous: boolean;
+  parentId: string | null;
+  depth: number;
+  name: string;
+  handle: string | null;
+  body: string;
+  createdAt: string;
+  mine: boolean;
+  /** The host's own lines wear a tag. */
+  host: boolean;
+}
+export interface EventPerson {
+  userId: string;
+  name: string;
+  handle: string | null;
+  /** none, sent (you asked), pending (they asked you), friends. */
+  friend: 'none' | 'sent' | 'pending' | 'friends';
+}
+/** What the event page shows beyond the event itself, for a guest, the host and staff. */
+export interface EventExtras {
+  /** Host, staff or a guest: who may read the conversation and the photos. */
+  role: 'host' | 'guest';
+  started: boolean;
+  ended: boolean;
+  photos: EventPhotos | null;
+  messages: EventMessage[];
+  /** Guests who said yes to meeting others, and allow friend requests. */
+  people: EventPerson[];
+  /** Whether the person is on that list themselves. */
+  iAmListed: boolean;
+}
+
+/** Who may do what to another member in Community. A rank, not a switch: nobody acts on an equal or a higher rank. */
+export const COMMUNITY_RANKS = { member: 0, guide: 1, staff: 2, admin: 3 } as const;
+export type CommunityRank = keyof typeof COMMUNITY_RANKS;
+export const communityRankOf = (u: { role: Role; permissions: readonly string[] }): CommunityRank =>
+  u.role === 'admin' ? 'admin' : u.role === 'sub_admin' ? 'staff' : u.permissions.includes('moderation') ? 'guide' : 'member';
+/** Muting someone from Community: a guide or above, and only someone of a lower rank. */
+export const canMute = (actor: CommunityRank, target: CommunityRank): boolean => COMMUNITY_RANKS[actor] >= COMMUNITY_RANKS.guide && COMMUNITY_RANKS[actor] > COMMUNITY_RANKS[target];
+
+export interface BlockedPerson {
+  userId: string;
+  name: string;
+  handle: string | null;
+  createdAt: string;
 }
 
 /** The direct store: a new product that staff added, bought through a partner link. */
