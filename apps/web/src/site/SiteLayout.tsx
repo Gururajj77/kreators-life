@@ -38,7 +38,7 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
   const navWide = `hidden lg:inline-flex ${navBase}`;
   return (
     <div className="min-h-dvh text-ink">
-      <header className="safe-top sticky top-0 z-30 border-b border-line bg-card backdrop-blur-md">
+      <header className="safe-top relative z-30 border-b border-line bg-card backdrop-blur-md md:sticky md:top-0">
         <div className={`mx-auto flex min-w-0 ${wide ? 'max-w-[1080px]' : 'max-w-[720px]'} items-center justify-between gap-sm px-md py-xs`}>
           <Logo />
           <nav aria-label="Site" className="flex min-w-0 items-center gap-xs">

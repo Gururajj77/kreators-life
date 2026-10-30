@@ -1,6 +1,12 @@
 import {
-  DISCOVER_PUZZLES,
+  DISCOVER_CORE_STEPS,
   DISCOVER_SCENES,
+  EQ_DIMS,
+  EQ_FEELINGS,
+  EQ_PEOPLE,
+  EQ_READING,
+  EQ_SCALE,
+  puzzleAt,
   DISCOVER_SECTIONS,
   DISCOVER_STATEMENTS,
   DISCOVER_STEPS,
@@ -14,6 +20,7 @@ import {
   emptyDiscoverAnswers,
   type DiscoverAnswers,
   type DiscoverPuzzle,
+  type PuzzleKind,
   type DiscoverResult,
   type PuzzleCell,
 } from '@kreators/shared';
@@ -43,7 +50,7 @@ interface Step {
 const STEPS: Step[] = (() => {
   const out: Step[] = [];
   DISCOVER_SECTIONS.forEach((s, section) => {
-    const base = s.key === 'puzzles2' ? 5 : 0;
+    const base = s.key === 'puzzles2' ? 6 : 0;
     for (let at = 0; at < s.count; at += 1) out.push({ section, at, i: base + at });
   });
   return out;
@@ -157,8 +164,7 @@ function Words({ index, value, onChange }: { index: number; value: { most: numbe
   );
 }
 
-function Scene({ index, value, onChange }: { index: number; value: { most: number; least: number } | null; onChange: (v: { most: number; least: number } | null) => void }) {
-  const s = DISCOVER_SCENES[index]!;
+function Scene({ scene: s, value, onChange }: { scene: { situation: string; options: readonly string[] }; value: { most: number; least: number } | null; onChange: (v: { most: number; least: number } | null) => void }) {
   const [half, setHalf] = useState<{ most: number; least: number }>({ most: value?.most ?? -1, least: value?.least ?? -1 });
   const choose = (row: number, side: 'most' | 'least') => {
     const next = { ...half, [side]: row } as { most: number; least: number };
@@ -194,7 +200,7 @@ const PIPS: Record<number, [number, number][]> = {
   6: [[18, 16], [42, 16], [18, 30], [42, 30], [18, 44], [42, 44]],
 };
 
-function CellArt({ kind, cell, tone }: { kind: DiscoverPuzzle['kind']; cell: PuzzleCell | null; tone: string }) {
+function CellArt({ kind, cell, tone }: { kind: PuzzleKind; cell: PuzzleCell | null; tone: string }) {
   if (!cell) {
     return (
       <svg viewBox="0 0 60 60" className="size-full" aria-label="The missing piece">
@@ -203,7 +209,14 @@ function CellArt({ kind, cell, tone }: { kind: DiscoverPuzzle['kind']; cell: Puz
       </svg>
     );
   }
-  if (kind === 'dice')
+  if (kind === 'numbers')
+    return (
+      <svg viewBox="0 0 60 60" className="size-full" role="img" aria-label={`The number ${cell.text}`}>
+        <rect x="4" y="4" width="52" height="52" rx="10" fill={tone} />
+        <text x="30" y="39" textAnchor="middle" fontSize={(cell.text ?? '').length > 2 ? 20 : 26} fontWeight="800" fill="var(--color-on-fill)">{cell.text}</text>
+      </svg>
+    );
+  if (kind === 'dice' || kind === 'odd')
     return (
       <svg viewBox="0 0 60 60" className="size-full" role="img" aria-label={`${cell.n} dots`}>
         <rect x="4" y="4" width="52" height="52" rx="10" fill={tone} />
@@ -234,21 +247,25 @@ function CellArt({ kind, cell, tone }: { kind: DiscoverPuzzle['kind']; cell: Puz
   );
 }
 
-function Puzzle({ index, value, onChange }: { index: number; value: number | null; onChange: (v: number) => void }) {
-  const p = DISCOVER_PUZZLES[index]!;
+function Puzzle({ puzzle: p, index, value, onChange }: { puzzle: DiscoverPuzzle; index: number; value: number | null; onChange: (v: number, ms: number) => void }) {
   const tone = ['var(--color-r2)', 'var(--color-r4)', 'var(--color-r5)', 'var(--color-r6)', 'var(--color-r1)'][index % 5]!;
-  const size = p.cols === 5 ? 56 : 72;
+  const size = p.cols >= 5 ? 52 : 72;
+  const started = useRef(performance.now());
   return (
     <div className="flex flex-col items-center gap-sm">
-      <p className="m-0 text-center text-[14px] font-bold text-ink-soft">Look over the picture.</p>
-      <div className="grid gap-xs rounded-card bg-card p-sm shadow-toy-soft" style={{ gridTemplateColumns: `repeat(${p.cols}, ${size}px)` }}>
-        {p.cells.map((c, k) => (
-          <div key={k} style={{ width: size, height: size }}>
-            <CellArt kind={p.kind} cell={c} tone={tone} />
+      {p.cells.length > 0 && (
+        <>
+          <p className="m-0 text-center text-[14px] font-bold text-ink-soft">Look over the picture.</p>
+          <div className="grid gap-xs rounded-card bg-card p-sm shadow-toy-soft" style={{ gridTemplateColumns: `repeat(${p.cols}, ${size}px)` }}>
+            {p.cells.map((c, k) => (
+              <div key={k} style={{ width: size, height: size }}>
+                <CellArt kind={p.kind} cell={c} tone={tone} />
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <p className="m-0 text-center text-[14px] font-bold">Tap the piece that should come next.</p>
+        </>
+      )}
+      <p className="m-0 text-center text-[14px] font-bold">{p.prompt}</p>
       <div role="radiogroup" aria-label="The pieces to choose from" className="flex flex-wrap justify-center gap-xs">
         {p.options.map((o, k) => (
           <button
@@ -257,14 +274,78 @@ function Puzzle({ index, value, onChange }: { index: number; value: number | nul
             role="radio"
             aria-checked={value === k}
             aria-label={`Piece ${k + 1}`}
-            onClick={() => onChange(k)}
+            onClick={() => onChange(k, Math.round(performance.now() - started.current))}
             className="toy rounded-tile border-2 bg-card p-xs"
             style={{ width: 72, height: 72, borderColor: value === k ? 'var(--color-ink)' : 'var(--color-line)' }}
           >
-            <CellArt kind={p.kind} cell={o} tone={tone} />
+            <CellArt kind={p.kind === 'odd' ? 'odd' : p.kind} cell={o} tone={tone} />
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** A screen of statements to rate from "not like me" to "very like me". */
+function Feelings({ index, value, onChange }: { index: number; value: number[] | null; onChange: (v: number[] | null) => void }) {
+  const items = EQ_FEELINGS[index]!;
+  const [rates, setRates] = useState<number[]>(value ?? items.map(() => -1));
+  const rate = (k: number, v: number) => {
+    const next = rates.map((x, j) => (j === k ? v : x));
+    setRates(next);
+    onChange(next.every((x) => x >= 0) ? next : null);
+  };
+  return (
+    <div role="group" aria-label="Rate each line from not like me to very like me" className="flex flex-col gap-xs">
+      <div className="flex justify-between gap-sm px-xs text-[12px] font-extrabold text-ink-soft">
+        <span>{EQ_SCALE[0]}</span>
+        <span>{EQ_SCALE[4]}</span>
+      </div>
+      {items.map((it, k) => (
+        <div key={it.text} className="rounded-tile bg-card p-sm shadow-toy-soft">
+          <p className="m-0 text-center text-[16px] font-semibold">{it.text}</p>
+          <div role="radiogroup" aria-label={it.text} className="mt-xs flex justify-center gap-xs">
+            {EQ_SCALE.map((label, v) => (
+              <button
+                key={label}
+                type="button"
+                role="radio"
+                aria-checked={rates[k] === v}
+                aria-label={`${label}: ${it.text}`}
+                onClick={() => rate(k, v)}
+                className="flex size-[44px] items-center justify-center rounded-pill border-2 text-[14px] font-extrabold transition-colors"
+                style={{ borderColor: rates[k] === v ? 'var(--color-r4)' : 'var(--color-line)', background: rates[k] === v ? 'var(--color-r4)' : 'transparent', color: rates[k] === v ? 'var(--color-on-fill)' : 'var(--color-ink)' }}
+              >
+                {v + 1}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** A short scene: pick the feeling that fits. */
+function Reading({ index, value, onChange }: { index: number; value: number | null; onChange: (v: number) => void }) {
+  const q = EQ_READING[index]!;
+  return (
+    <div role="radiogroup" aria-label="Pick the feeling that fits" className="flex flex-col gap-xs">
+      <p className="m-0 rounded-tile bg-card p-sm text-[16px] font-semibold shadow-toy-soft">{q.scene}</p>
+      <p className="m-0 text-center text-[14px] font-bold">What is the person feeling?</p>
+      {q.options.map((o, k) => (
+        <button
+          key={o}
+          type="button"
+          role="radio"
+          aria-checked={value === k}
+          onClick={() => onChange(k)}
+          className="toy min-h-[48px] rounded-tile border-2 bg-card px-sm text-center text-[16px] font-bold"
+          style={{ borderColor: value === k ? 'var(--color-ink)' : 'var(--color-line)' }}
+        >
+          {o}
+        </button>
+      ))}
     </div>
   );
 }
@@ -293,6 +374,9 @@ function stepAnswered(a: DiscoverAnswers, st: Step): boolean {
   if (key === 'priorities') return a.triads[st.i] !== null;
   if (key === 'words') return a.words[st.i] !== null;
   if (key === 'scenes') return a.scenes[st.i] !== null;
+  if (key === 'feelings') return a.feelings[st.i] !== null;
+  if (key === 'reading') return a.reading[st.i] !== null;
+  if (key === 'people') return a.people[st.i] !== null;
   return a.puzzles[st.i] !== null;
 }
 
@@ -304,6 +388,10 @@ function Quiz({ answers, setAnswers, onLeave, onDone, busy, error }: { answers: 
   const st = STEPS[at]!;
   const sec = DISCOVER_SECTIONS[st.section]!;
   const last = at === STEPS.length - 1;
+  const coreLast = at === DISCOVER_CORE_STEPS - 1;
+  const eqStarted = answers.feelings.some(Boolean) || answers.reading.some((x) => x !== null) || answers.people.some(Boolean);
+  // After the core parts the quiz can end, or carry on into emotional intelligence.
+  const [gate, setGate] = useState(false);
   const ready = stepAnswered(answers, st);
 
   const go = (to: number) => {
@@ -311,6 +399,13 @@ function Quiz({ answers, setAnswers, onLeave, onDone, busy, error }: { answers: 
     const s = STEPS[to]!;
     setIntro(s.at === 0 && to > at ? s.section : null);
     top.current?.scrollIntoView({ block: 'start' });
+  };
+  // A puzzle depends on the answers before it, so changing an earlier pick clears the ones after it.
+  const setPuzzle = (i: number, v: number, ms: number) => {
+    const changed = answers.puzzles[i] !== v;
+    const puzzles = answers.puzzles.map((x, j) => (j > i && changed ? null : j === i ? v : x));
+    const puzzleMs = answers.puzzleMs.map((x, j) => (j > i && changed ? null : j === i ? (changed || x === null ? ms : x) : x));
+    setAnswers({ ...answers, puzzles, puzzleMs });
   };
   const set = <K extends keyof DiscoverAnswers>(k: K, i: number, v: DiscoverAnswers[K][number]) => {
     const copy = { ...answers, [k]: [...answers[k]] } as DiscoverAnswers;
@@ -332,10 +427,25 @@ function Quiz({ answers, setAnswers, onLeave, onDone, busy, error }: { answers: 
         </Button>
       </div>
     );
+  } else if (gate) {
+    body = (
+      <div className="rounded-card bg-card p-md shadow-toy-soft">
+        <h2 className="text-[24px]">Your strengths are ready</h2>
+        <p className="mt-sm m-0 text-[16px] font-semibold">You can see them now. Or go further and add the emotional intelligence part: how you handle your feelings, read people and work through situations with them. It adds a detailed read, and you can do it later.</p>
+        <div className="mt-md flex flex-col gap-xs">
+          <Button onClick={() => { setGate(false); go(at + 1); }}>Add emotional intelligence</Button>
+          <Button variant="outline" onClick={onDone} disabled={busy}>{busy ? 'Working it out' : 'See my strengths now'}</Button>
+          <Button variant="ghost" onClick={() => setGate(false)}>Go back</Button>
+        </div>
+      </div>
+    );
   } else if (sec.key === 'priorities') body = <Triad key={st.i} index={st.i} value={answers.triads[st.i] ?? null} onChange={(v) => set('triads', st.i, v)} />;
   else if (sec.key === 'words') body = <Words key={st.i} index={st.i} value={answers.words[st.i] ?? null} onChange={(v) => set('words', st.i, v)} />;
-  else if (sec.key === 'scenes') body = <Scene key={st.i} index={st.i} value={answers.scenes[st.i] ?? null} onChange={(v) => set('scenes', st.i, v)} />;
-  else body = <Puzzle key={st.i} index={st.i} value={answers.puzzles[st.i] ?? null} onChange={(v) => set('puzzles', st.i, v)} />;
+  else if (sec.key === 'scenes') body = <Scene key={`s${st.i}`} scene={DISCOVER_SCENES[st.i]!} value={answers.scenes[st.i] ?? null} onChange={(v) => set('scenes', st.i, v)} />;
+  else if (sec.key === 'people') body = <Scene key={`p${st.i}`} scene={EQ_PEOPLE[st.i]!} value={answers.people[st.i] ?? null} onChange={(v) => set('people', st.i, v)} />;
+  else if (sec.key === 'feelings') body = <Feelings key={st.i} index={st.i} value={answers.feelings[st.i] ?? null} onChange={(v) => set('feelings', st.i, v)} />;
+  else if (sec.key === 'reading') body = <Reading key={st.i} index={st.i} value={answers.reading[st.i] ?? null} onChange={(v) => set('reading', st.i, v)} />;
+  else body = <Puzzle key={`z${st.i}-${answers.puzzles.slice(0, st.i).join('')}`} puzzle={puzzleAt(answers.puzzles, st.i)} index={st.i} value={answers.puzzles[st.i] ?? null} onChange={(v, ms) => setPuzzle(st.i, v, ms)} />;
 
   return (
     <>
@@ -345,7 +455,7 @@ function Quiz({ answers, setAnswers, onLeave, onDone, busy, error }: { answers: 
         </button>
         <h1 className="mt-xs text-[24px]">{sec.name}</h1>
         <p className="m-0 text-[14px] font-bold text-ink-soft">
-          {intro === null ? `Question ${st.at + 1} of ${sec.count}` : 'Before you start'}
+          {gate ? 'Core parts done' : intro === null ? `Question ${st.at + 1} of ${sec.count}${sec.optional ? ', optional' : ''}` : 'Before you start'}
         </p>
         <Segmented answers={answers} at={at} />
       </header>
@@ -355,7 +465,7 @@ function Quiz({ answers, setAnswers, onLeave, onDone, busy, error }: { answers: 
           {error}
         </p>
       )}
-      {intro === null && (
+      {intro === null && !gate && (
         <div className="mt-md flex items-center justify-between gap-sm">
           <Button variant="outline" onClick={() => go(at - 1)} disabled={at === 0}>
             Back
@@ -365,7 +475,7 @@ function Quiz({ answers, setAnswers, onLeave, onDone, busy, error }: { answers: 
               {busy ? 'Working it out' : 'See my strengths'}
             </Button>
           ) : (
-            <Button onClick={() => go(at + 1)} disabled={!ready}>
+            <Button onClick={() => (coreLast && !eqStarted ? setGate(true) : go(at + 1))} disabled={!ready}>
               Next
             </Button>
           )}
@@ -399,6 +509,7 @@ const TABS: [string, string][] = [
   ['strengths', 'Strengths'],
   ['personality', 'Personality'],
   ['reasoning', 'Reasoning'],
+  ['eq', 'Emotional intelligence'],
   ['use', 'Use my results'],
 ];
 
@@ -446,6 +557,73 @@ function PersonalityTab({ result }: { result: DiscoverResult }) {
   );
 }
 
+function EqTab({ result }: { result: DiscoverResult }) {
+  const eq = analyseDiscover(result).eq;
+  if (!eq) return null;
+  return (
+    <>
+      <Section id="eq-top" title="Your emotional intelligence" lede="How you notice and handle feelings, yours and other people’s. Each part mixes how you see yourself with how you chose in real situations.">
+        <div className="relative overflow-hidden rounded-card p-md text-on-fill" style={fillOf(RELATIONSHIP_BY_KEY.lover_partner.color)}>
+          <HeroBlobs seed="eq" />
+          <p className="relative m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">Across the five parts</p>
+          <p className="relative m-0 font-display text-[44px] font-extrabold leading-none">{eq.overall}</p>
+          <p className="relative mt-xs m-0 text-[14px] font-semibold">
+            Strongest: {EQ_DIMS.find((d) => d.key === eq.strongest)!.name}. Quietest: {EQ_DIMS.find((d) => d.key === eq.quietest)!.name}.
+          </p>
+        </div>
+      </Section>
+      <Section id="eq-parts" title="The five parts">
+        <ul className="m-0 flex list-none flex-col gap-xs p-0">
+          {eq.dims.map((d) => {
+            const rel = RELATIONSHIP_BY_KEY[d.helps];
+            return (
+              <li key={d.dim} className="rounded-card bg-card p-md shadow-toy-soft">
+                <div className="flex items-baseline justify-between gap-sm">
+                  <h3 className="text-[18px]">{d.name}</h3>
+                  <span className="font-display text-[24px] font-extrabold">{d.score}</span>
+                </div>
+                <p className="m-0 text-[14px] font-extrabold text-ink-soft">{d.reading.title}</p>
+                <div className="relative mt-xs h-[8px] rounded-pill" style={{ background: 'var(--color-line)' }} role="img" aria-label={`${d.name}: ${d.score} out of 100`}>
+                  <span className="absolute inset-y-0 left-0 rounded-pill" style={{ width: `${d.score}%`, background: rel.color }} />
+                </div>
+                <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">How you see yourself: {d.self}. How you chose in situations: {d.ability}.</p>
+                <p className="mt-sm m-0 text-[14px] font-semibold">{d.reading.describes}</p>
+                {d.gap && <p className="mt-xs m-0 text-[14px] font-semibold">{d.gap}</p>}
+                <dl className="mt-sm m-0 flex flex-col gap-xs text-[14px] font-semibold">
+                  <div>
+                    <dt className="font-extrabold">At your best</dt>
+                    <dd className="m-0 text-ink-soft">{d.reading.atBest}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-extrabold">Watch for</dt>
+                    <dd className="m-0 text-ink-soft">{d.reading.watchFor}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-extrabold">With the people close to you</dt>
+                    <dd className="m-0 text-ink-soft">{d.reading.inRelationships}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-extrabold">Try this week</dt>
+                    <dd className="m-0 text-ink-soft">{d.reading.tryThis}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-extrabold">Helps most with</dt>
+                    <dd className="m-0 text-ink-soft">{DISCOVER_STRENGTHS[d.helps].name}, in {rel.role}</dd>
+                  </div>
+                </dl>
+              </li>
+            );
+          })}
+        </ul>
+      </Section>
+      <Section id="eq-read" title="Reading people">
+        <p className="m-0 text-[14px] font-semibold">{eq.readingLine}</p>
+      </Section>
+      <p className="mt-lg m-0 text-[12px] font-semibold text-ink-soft">This is a self-discovery tool, not a clinical test. It shows how you see yourself and how you chose in eight situations today. It can change with sleep, stress and practice.</p>
+    </>
+  );
+}
+
 function ReasoningTab({ result }: { result: DiscoverResult }) {
   const r = analyseDiscover(result).reasoning;
   return (
@@ -453,16 +631,17 @@ function ReasoningTab({ result }: { result: DiscoverResult }) {
       <Section id="level" title="Your reasoning">
         <div className="relative overflow-hidden rounded-card p-md text-on-fill" style={fillOf(RELATIONSHIP_BY_KEY.guru.color)}>
           <HeroBlobs seed="reasoning" />
-          <p className="relative m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">Pattern puzzles</p>
+          <p className="relative m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">Adjusting puzzles</p>
           <p className="relative m-0 font-display text-[44px] font-extrabold leading-none">
             {r.right} <span className="text-[20px]">of {r.of}</span>
           </p>
+          {r.levelNumber !== null && <p className="relative m-0 text-[14px] font-bold opacity-90">Settled at level {r.levelNumber} of 5</p>}
           <h3 className="relative mt-xs text-[22px]">{r.level}</h3>
           <p className="relative mt-xs m-0 text-[14px] font-semibold">{r.levelLine}</p>
         </div>
       </Section>
       {r.kinds.length > 0 && (
-        <Section id="kinds" title="By kind of puzzle" lede="Ten puzzles, three kinds. Each one trains a different way of seeing a rule.">
+        <Section id="kinds" title="By kind of puzzle" lede="The puzzles move up when you get one right and down when you do not, so the level shows where you settled. Each kind trains a different way of seeing a rule.">
           <ul className="m-0 flex list-none flex-col gap-xs p-0">
             {r.kinds.map((k) => (
               <li key={k.kind} className="rounded-tile bg-card p-sm shadow-toy-soft">
@@ -480,9 +659,10 @@ function ReasoningTab({ result }: { result: DiscoverResult }) {
           </ul>
         </Section>
       )}
-      {r.trend && (
-        <Section id="trend" title="Over the two parts">
-          <p className="m-0 text-[14px] font-semibold">{r.trend}</p>
+      {(r.trend || r.speed) && (
+        <Section id="trend" title="How you worked">
+          {r.trend && <p className="m-0 text-[14px] font-semibold">{r.trend}</p>}
+          {r.speed && <p className="mt-xs m-0 text-[14px] font-semibold">{r.speed}</p>}
         </Section>
       )}
       <Section id="situations" title="Real situations" lede="The last part asked how you would handle people. It is judged against the team’s own reading of each case, not a test.">
@@ -505,20 +685,23 @@ function UseTab({ settings, onChange }: { settings: { steps: boolean; assistant:
 }
 
 function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, deleting }: { id: string; at: string; result: DiscoverResult; settings: { steps: boolean; assistant: boolean }; onSettings: (s: Partial<{ steps: boolean; assistant: boolean }>) => void; onRetake: () => void; onDelete: (id: string) => void; deleting: boolean }) {
-  const [tab, setTab] = useParamState('tab', 'strengths');
+  const [tabAsked, setTab] = useParamState('tab', 'strengths');
+  // A link to the emotional intelligence tab only works when that part was taken.
+  const tab = tabAsked === 'eq' && !result.eq ? 'strengths' : tabAsked;
   const growth = DISCOVER_STRENGTHS[result.growth];
   const growthRel = RELATIONSHIP_BY_KEY[result.growth];
   return (
     <>
       <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Taken {new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}. Only you can see this.</p>
       <div className="scroll-row mt-sm flex gap-xs" role="group" aria-label="Parts of your result">
-        {TABS.map(([k, label]) => (
+        {TABS.filter(([k]) => k !== 'eq' || result.eq).map(([k, label]) => (
           <button key={k} type="button" aria-pressed={tab === k} onClick={() => setTab(k)} className={`toy min-h-[44px] shrink-0 rounded-pill border-2 px-md text-[14px] font-bold ${tab === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
             {label}
           </button>
         ))}
       </div>
       {tab === 'personality' && <PersonalityTab result={result} />}
+      {tab === 'eq' && <EqTab result={result} />}
       {tab === 'reasoning' && <ReasoningTab result={result} />}
       {tab === 'use' && <UseTab settings={settings} onChange={onSettings} />}
       {tab === 'strengths' && (
@@ -697,7 +880,7 @@ export function Discover() {
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Discover</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">A quiz about how you think, feel and act. About fifteen minutes. It gives you a detailed read on your personality and your reasoning, and your strengths across the seven relationships.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">A quiz about how you think, feel and act. It gives you a detailed read on your personality and your reasoning, and your strengths across the seven relationships.</p>
       </header>
 
       {q.isPending && (
@@ -723,11 +906,16 @@ export function Discover() {
           <section className="relative mt-md overflow-hidden rounded-card p-md text-on-fill" style={fillOf(RELATIONSHIP_BY_KEY.self.color)} aria-labelledby="quiz-head">
             <HeroBlobs seed="discover" />
             <h2 id="quiz-head" className="relative text-[22px]">{prog.done === 0 ? 'Find out what you are good at' : `${prog.done} of ${DISCOVER_STEPS} answered`}</h2>
-            <p className="relative mt-xs m-0 text-[14px] font-semibold">Five parts: pick what is most and least like you, solve pattern puzzles, choose words that fit you and judge real situations. It saves as you go, so you can stop and come back.</p>
+            <p className="relative mt-xs m-0 text-[14px] font-semibold">Five parts: pick what is most and least like you, solve pattern puzzles that adjust to you, choose words that fit you and judge real situations. Then, if you like, add emotional intelligence. It saves as you go, so you can stop and come back.</p>
             <div className="relative mt-sm flex flex-wrap gap-xs">
               <Button variant="light" onClick={() => setMode('quiz')}>
-                {prog.done === 0 ? 'Start the quiz' : 'Continue'}
+                {prog.done === 0 ? 'Start the quiz' : prog.core.done === prog.core.total ? 'Add emotional intelligence' : 'Continue'}
               </Button>
+              {prog.core.done === prog.core.total && answers && (
+                <Button variant="light" onClick={() => submit.mutate(answers)} disabled={submit.isPending}>
+                  {submit.isPending ? 'Working it out' : 'See my strengths'}
+                </Button>
+              )}
               {prog.done > 0 && (
                 <Button variant="light" onClick={() => { setAnswersState(emptyDiscoverAnswers()); dirty.current = false; api.dropDiscoverDraft().then(() => refresh()); }}>
                   Start again
@@ -744,7 +932,7 @@ export function Discover() {
                   <li key={s.key} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                     <span className="flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-paper text-[14px] font-extrabold">{k + 1}</span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[16px] font-bold">{s.name}</span>
+                      <span className="block text-[16px] font-bold">{s.name}{s.optional ? ' (optional)' : ''}</span>
                       <span className="block text-[14px] font-semibold text-ink-soft">{p.done} of {s.count} done</span>
                     </span>
                   </li>

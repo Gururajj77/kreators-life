@@ -112,13 +112,13 @@ export function TabBar() {
           ))}
         </ul>
       </nav>
-      {/* Phone: the brand in the top-left corner; theme, then the apps menu, in the top-right. The name drops on narrow phones. */}
-      <div className="safe-top fixed top-sm left-md z-30 md:hidden">
+      {/* Phone: the brand in the top-left corner; theme, then the apps menu, in the top-right. The name drops on narrow phones. They sit at the top of the page and scroll away with it, so they never cover the content. */}
+      <div className="safe-top absolute top-sm left-md z-30 md:hidden">
         <Link to="/home" aria-label="kreators.app, home" className="toy toy-soft flex min-h-[44px] min-w-[44px] items-center justify-center gap-xs whitespace-nowrap rounded-pill bg-card px-sm font-display text-[16px] font-extrabold tracking-tight">
           <BrandMark size={14} compact />
         </Link>
       </div>
-      <div className="safe-top fixed top-sm right-md z-30 flex items-center gap-xs md:hidden">
+      <div className="safe-top absolute top-sm right-md z-30 flex items-center gap-xs md:hidden">
         <ThemeToggle />
         <button
           type="button"
@@ -202,7 +202,7 @@ export function TabBar() {
           ))}
         </ul>
         {/* The apps that are on, under their category, folded away until you open one or step inside it. Switch more on from Apps. */}
-        <div className="mt-md flex flex-col gap-xs">
+        <div className="mt-md flex flex-col gap-sm">
           {SIDEBAR_GROUPS.map((g) => {
             const list = sidebarApps.filter((m) => m.group === g);
             if (list.length === 0) return null;
@@ -214,7 +214,7 @@ export function TabBar() {
                     <path d="M6 9l6 6 6-6" />
                   </svg>
                 </summary>
-                <ul className="flex list-none flex-col p-0 m-0">
+                <ul className="mt-xs flex list-none flex-col gap-xs p-0 pb-xs m-0">
                   {list.map((m) => (
                     <li key={m.key}>
                       <NavLink to={m.path} className={({ isActive }) => `tab flex min-h-[40px] items-center gap-xs rounded-pill px-sm text-[14px] font-bold transition-colors ${isActive ? 'bg-paper text-ink' : 'text-ink-soft hover:bg-paper hover:text-ink'}`}>

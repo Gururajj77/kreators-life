@@ -58,7 +58,7 @@ function ShareBar({ share }: { share: CoachShare }) {
   return (
     <>
       <div ref={sentinel} aria-hidden="true" />
-      <div id="share-bar" className="sticky top-[calc(64px+env(safe-area-inset-top))] z-20 -mx-md md:top-0 md:-mx-lg">
+      <div id="share-bar" className="sticky top-0 z-20 -mx-md md:-mx-lg">
         <div ref={backdrop} aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 -top-[calc(64px+env(safe-area-inset-top))] border-b border-line bg-paper/85 opacity-0 backdrop-blur-md md:top-0" />
         <nav aria-label="What they share" className="scroll-row relative m-0 py-sm [mask-image:linear-gradient(to_right,black_calc(100%-32px),transparent)] md:px-lg md:[mask-image:none]">
           {COACH_SHARE_PARTS.map((k) =>

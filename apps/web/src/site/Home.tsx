@@ -165,7 +165,7 @@ export function Home() {
           </p>
           <ol className="bento mt-lg list-none p-0 m-0">
             {[
-              ['A short chat', 'Answer three questions, four if you make things. It switches on the apps that fit, and nothing else.'],
+              ['A short chat', 'Answer a few questions. It switches on the apps that fit, and nothing else.'],
               ['Your pillars', 'A short session places your seven relationships on a map and builds a pyramid for the ones that need you most.'],
               ['Three boxes a day', 'Check in, do one small act, tick one task. Every tick climbs a pillar, and your guides grow with you.'],
             ].map(([t, d], i) => (
@@ -385,7 +385,7 @@ export function Home() {
             {token ? 'Go to app' : 'Start free'}
           </Link>
           <ol className="mt-md flex list-none flex-col gap-xs p-0 m-0 text-[14px] font-semibold text-on-ink/80 sm:flex-row sm:gap-md">
-            <li>1. Answer three questions.</li>
+            <li>1. Answer a few questions.</li>
             <li>2. We switch on the apps that fit.</li>
             <li>3. Tick your first box today.</li>
           </ol>

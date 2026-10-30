@@ -253,12 +253,29 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
     }
     setPiles((p) => ({ ...p, [deck.key]: pile.slice(0, -1) }));
     setTable((cur) => {
-      const n = cur.length;
-      const startX = pileX + size + 16;
-      const room = Math.max(1, box.w - startX - size - 16);
-      const roomY = Math.max(1, box.h - height - 32);
+      // Cards go anywhere on the table, the whole of it. Each new card takes the open spot nearest the middle that does not sit on another
+      // card or the pile; once the middle is full it works outwards, left and right alike, so nothing drifts to one side.
+      const n = uid.current;
+      const maxX = Math.max(0, box.w - size - 8);
+      const maxY = Math.max(0, box.h - height - 8);
+      const step = Math.max(24, Math.round(size * 0.3));
+      const others = [{ x: pileX, y: pileY }, ...cur.map((c) => ({ x: c.x, y: c.y }))];
+      const mid = { x: maxX / 2, y: maxY / 2 };
+      let best = { x: 8, y: 8, score: -Infinity };
+      for (let gy = 8; gy <= Math.max(8, maxY); gy += step) {
+        for (let gx = 8; gx <= Math.max(8, maxX); gx += step) {
+          const x0 = Math.min(maxX, gx + ((n * 7) % 13) - 6);
+          const y0 = Math.min(maxY, gy + ((n * 11) % 13) - 6);
+          // How far the nearest card is, counted only up to a card and a bit: past that, the spot is as good as any.
+          const near = Math.min(...others.map((o) => Math.hypot(o.x - x0, o.y - y0)), size * 1.1);
+          const score = near - 0.5 * Math.hypot(x0 - mid.x, y0 - mid.y);
+          if (score > best.score) best = { x: x0, y: y0, score };
+        }
+      }
+      const x = Math.max(0, best.x);
+      const y = Math.max(0, best.y);
       zTop.current += 1;
-      return [...cur, { uid: uid.current++, deck: deck.key, idx, x: startX + ((n * size * 0.62) % room), y: 16 + ((n * height * 0.37) % roomY), z: zTop.current, flipped: false, from: { x: pileX, y: pileY } }];
+      return [...cur, { uid: uid.current++, deck: deck.key, idx, x: Math.round(x), y: Math.round(y), z: zTop.current, flipped: false, from: { x: pileX, y: pileY } }];
     });
     setSaid(`Drew a card from ${deck.name}. ${pile.length - 1} left.`);
   }, [piles, deck, size, height, box.w, box.h]);
@@ -289,9 +306,14 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
 
   const byKey = useMemo(() => Object.fromEntries(game.decks.map((d) => [d.key, d])), [game]);
 
+  // In focus mode the whole table is one screen-sized column: the buttons on top, the table filling what is left, so on a phone it never runs past the screen.
   return (
-    <>
-      <div className="scroll-row mt-md flex gap-xs" role="group" aria-label="Decks">
+    <div
+      className={focus ? 'fixed inset-0 z-40 flex flex-col gap-sm overflow-hidden px-md' : undefined}
+      style={focus ? { paddingTop: 'calc(var(--spacing-md) + env(safe-area-inset-top))', paddingBottom: 'calc(var(--spacing-md) + env(safe-area-inset-bottom))' } : undefined}
+    >
+      {/* A game with one deck has nothing to choose, so in focus mode the lone button (it only repeats the name) goes. Several decks keep theirs. */}
+      <div className={`scroll-row flex shrink-0 gap-xs ${focus ? '' : 'mt-md'} ${focus && game.decks.length === 1 ? 'hidden' : ''}`} role="group" aria-label="Decks">
         {game.decks.map((d) => (
           <button key={d.key} type="button" aria-pressed={d.key === deck.key} onClick={() => setDeckKey(d.key)} className={`toy min-h-[44px] shrink-0 rounded-pill border-2 px-md text-[14px] font-bold ${d.key === deck.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
             {d.name} <span className="font-semibold opacity-70">{piles[d.key]?.length ?? 0}</span>
@@ -299,7 +321,7 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
         ))}
       </div>
 
-      <div className="mt-sm flex flex-wrap items-center gap-xs">
+      <div className={`flex shrink-0 flex-wrap items-center gap-xs ${focus ? '' : 'mt-sm'}`}>
         <Button size="sm" onClick={draw} disabled={left === 0}>
           Draw a card
         </Button>
@@ -317,7 +339,7 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
       </div>
       <p className="sr-only" role="status" aria-live="polite">{said}</p>
 
-      <div ref={boxRef} className="focus-target relative mt-sm overflow-hidden rounded-card border border-line bg-card" style={{ ...(focus ? { height: 'calc(100dvh - 150px)', minHeight: 320 } : { minHeight: narrow ? 480 : 580 }), isolation: 'isolate', background: `linear-gradient(160deg, var(--soft-${rel.key}), transparent 70%)` }} aria-label="Card table">
+      <div ref={boxRef} className={`focus-target relative overflow-hidden rounded-card border border-line bg-card ${focus ? 'min-h-0 flex-1' : 'mt-sm'}`} style={{ ...(focus ? { minHeight: 0 } : { minHeight: narrow ? 480 : 580 }), isolation: 'isolate', background: `linear-gradient(160deg, var(--soft-${rel.key}), transparent 70%)` }} aria-label="Card table">
         <button
           ref={pileRef}
           type="button"
@@ -397,7 +419,7 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
       <Sheet open={special !== null} onClose={() => setSpecial(null)} title="Special card">
         <p className="m-0 text-[18px] font-bold">{special}</p>
       </Sheet>
-    </>
+    </div>
   );
 }
 

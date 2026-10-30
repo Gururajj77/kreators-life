@@ -1795,7 +1795,7 @@ export const MODULES: readonly AppModule[] = [
   // Off on a new account; unlocking a game in Rewards switches it on.
   { key: 'cards', name: 'Card games', blurb: 'Unlock a game once with points, then shuffle, flip and play it with the people you are with.', emoji: '🃏', group: 'community', path: '/cards', defaultOn: false, minRole: 'user', accent: 'friendship' },
   // Off on a new account. Owner only, like the journal: never shown to brands, staff, the leaderboard, a coach or the assistant.
-  { key: 'discover', name: 'Discover', blurb: 'A quiz about how you think, feel and act, with puzzles and real situations. It gives a detailed read on your personality and your reasoning, and your strengths across the seven relationships.', emoji: '🔭', group: 'wellbeing', path: '/discover', defaultOn: false, minRole: 'user', accent: 'self' },
+  { key: 'discover', name: 'Discover', blurb: 'A quiz about how you think, feel and act, with puzzles and real situations. It gives a detailed read on your personality, your reasoning and your emotional intelligence, and your strengths across the seven relationships.', emoji: '🔭', group: 'wellbeing', path: '/discover', defaultOn: false, minRole: 'user', accent: 'self' },
   { key: 'notifications', name: 'Inbox', blurb: 'What happened while you were away, and daily reminders.', emoji: '🔔', group: 'core', path: '/inbox', defaultOn: true, minRole: 'user' },
   { key: 'help', name: 'Help', blurb: 'Answers to common questions, and a line to the team.', emoji: '🛟', group: 'core', path: '/help', defaultOn: true, minRole: 'user' },
   // The assistant is part of every screen, not an app of its own: locked on, and its page is its plan and credits.
@@ -5544,8 +5544,8 @@ export const HOW_TO: Record<string, HowTo> = {
   },
   discover: {
     steps: [
-      'Take the quiz in five parts: pick the statements most and least like you, solve pattern puzzles, choose words that describe you and judge real situations. It takes about fifteen minutes, and it saves as you go.',
-      'You get your top three strengths out of seven, one for each relationship, a detailed read on five personality traits and on your reasoning puzzles, in your own words and numbers. The reasoning part is not an IQ test.',
+      'Take the quiz in five parts: pick the statements most and least like you, solve pattern puzzles that get harder or easier as you go, choose words that describe you and judge real situations. Then, if you like, add emotional intelligence. It saves as you go, so you can stop and come back.',
+      'You get your top three strengths out of seven, one for each relationship, a detailed read on five personality traits, your reasoning puzzles and, if you add it, your emotional intelligence, in your own words and numbers. The reasoning part is not an IQ test.',
       'Every number is you against your own scale, never against other people. A strength is not a verdict: use it, watch for its other side, and try the small thing it suggests.',
       'Only you see it. It never reaches brands, staff, the leaderboard or a life coach. You choose whether it shapes your next steps (on by default, plain rules) and whether the assistant may learn from a short summary (off until you say). You can retake it or delete a result any time.',
     ],
@@ -6276,6 +6276,9 @@ export function briefFor(f: BriefFacts): { signals: BriefLine[]; actions: BriefL
     if (p.bands.s === 'low' && on('mindful')) act(64, 'style-calm', 'Take two minutes with the breathing timer before your hardest task.', '/mindful');
     if (p.bands.e === 'high') act(52, 'style-people', 'Do one step with another person today: a friend, a circle or a run.', on('circles') ? '/circles' : null);
     if (p.bands.o === 'high') act(50, 'style-new', 'Try one new thing in your pillars today, even a small one.', '/tower');
+    if (p.eq?.a === 'low' && on('journal')) act(54, 'eq-name', 'Write one line about how you feel right now and what set it off.', '/journal');
+    if (p.eq?.m === 'low' && on('mindful')) act(63, 'eq-calm', 'Before you answer a message that stung, take five slow breaths.', '/mindful');
+    if (p.eq?.e === 'low') act(51, 'eq-ask', 'Ask one person how they are today, then listen without fixing.', null);
     sig(30, 'strength', 'good', `Your strongest strength is ${DISCOVER_STRENGTHS[p.top[0]!].name}. Use it today.`, STRENGTH_PATH[p.top[0]!]);
   }
   act(20, 'pillar', 'Add a task to the pillar you want to grow.', '/tower');
@@ -7276,8 +7279,9 @@ export const DISCOVER_SCENES: readonly DiscoverScene[] = [
   },
 ];
 
-// ---- puzzles: made by code from fixed seeds, so the same ten every time and no answer key to keep ----
+// ---- puzzles: made by code from fixed seeds, so the same bank every time and no answer key to keep ----
 
+export type PuzzleKind = 'dice' | 'turn' | 'grid' | 'numbers' | 'odd';
 export interface PuzzleCell {
   /** A dice face, 1 to 6. */
   n?: number;
@@ -7286,15 +7290,22 @@ export interface PuzzleCell {
   dots?: number;
   /** A 3 by 3 pattern of 9 bits. */
   mask?: number;
+  /** A number in a series. */
+  text?: string;
 }
 export interface DiscoverPuzzle {
-  kind: 'dice' | 'turn' | 'grid';
+  id: number;
+  /** 1 (easy) to 5 (hard). The quiz moves up after a right answer and down after a wrong one. */
+  level: 1 | 2 | 3 | 4 | 5;
+  kind: PuzzleKind;
   /** Cells per row. The cell that is null is the one to find. */
   cols: number;
+  prompt: string;
   cells: (PuzzleCell | null)[];
   options: PuzzleCell[];
   answer: number;
 }
+type Made = Omit<DiscoverPuzzle, 'id' | 'level'>;
 
 function seeded(seed: number): () => number {
   let a = seed >>> 0;
@@ -7314,15 +7325,16 @@ function mixed<T>(list: readonly T[], r: () => number): T[] {
   }
   return a;
 }
-const cellKey = (c: PuzzleCell) => `${c.n ?? ''}|${c.rot ?? ''}|${c.dots ?? ''}|${c.mask ?? ''}`;
-function withAnswer(kind: DiscoverPuzzle['kind'], cols: number, cells: (PuzzleCell | null)[], right: PuzzleCell, wrong: PuzzleCell[], r: () => number): DiscoverPuzzle {
+const cellKey = (c: PuzzleCell) => `${c.n ?? ''}|${c.rot ?? ''}|${c.dots ?? ''}|${c.mask ?? ''}|${c.text ?? ''}`;
+const NEXT_PROMPT = 'Tap the piece that should come next.';
+function withAnswer(kind: PuzzleKind, cols: number, cells: (PuzzleCell | null)[], right: PuzzleCell, wrong: PuzzleCell[], r: () => number, prompt = NEXT_PROMPT): Made {
   const seen = new Set([cellKey(right)]);
   const rest = wrong.filter((w) => !seen.has(cellKey(w)) && seen.add(cellKey(w))).slice(0, 4);
   const options = mixed([right, ...rest], r);
-  return { kind, cols, cells, options, answer: options.findIndex((o) => cellKey(o) === cellKey(right)) };
+  return { kind, cols, prompt, cells, options, answer: options.findIndex((o) => cellKey(o) === cellKey(right)) };
 }
 
-function diceLatin(seed: number): DiscoverPuzzle {
+function diceLatin(seed: number): Made {
   const r = seeded(seed);
   const base = mixed([1, 2, 3, 4, 5, 6], r).slice(0, 3);
   const grid = [0, 1, 2].map((row) => base.map((_, c) => base[(c + row) % 3]!));
@@ -7331,7 +7343,7 @@ function diceLatin(seed: number): DiscoverPuzzle {
   const wrong = [1, 2, 3, 4, 5, 6].filter((n) => n !== right.n).map((n) => ({ n }));
   return withAnswer('dice', 3, cells, right, mixed(wrong, r), r);
 }
-function diceSum(seed: number): DiscoverPuzzle {
+function diceSum(seed: number): Made {
   const r = seeded(seed);
   const rows = [0, 1, 2].map(() => {
     const x = 1 + Math.floor(r() * 3);
@@ -7343,7 +7355,7 @@ function diceSum(seed: number): DiscoverPuzzle {
   const wrong = [1, 2, 3, 4, 5, 6].filter((n) => n !== right.n).sort((a, b) => Math.abs(a - right.n) - Math.abs(b - right.n)).map((n) => ({ n }));
   return withAnswer('dice', 3, cells, right, wrong, r);
 }
-function turned(seed: number, hard: boolean): DiscoverPuzzle {
+function turned(seed: number, hard: boolean): Made {
   const r = seeded(seed);
   const rot0 = Math.floor(r() * 4);
   const step = 1 + Math.floor(r() * 3);
@@ -7359,12 +7371,18 @@ function turned(seed: number, hard: boolean): DiscoverPuzzle {
   ];
   return withAnswer('turn', 5, [at(0), at(1), at(2), at(3), null], right, wrong, r);
 }
-function gridRule(seed: number, rule: 'xor' | 'or'): DiscoverPuzzle {
+/** A quarter turn of a 3 by 3 pattern. */
+const turnMask = (m: number) => {
+  let out = 0;
+  for (let b = 0; b < 9; b += 1) if ((m >> b) & 1) out |= 1 << (((b % 3) * 3) + (2 - Math.floor(b / 3)));
+  return out;
+};
+function gridRule(seed: number, rule: 'xor' | 'or' | 'turn'): Made {
   const r = seeded(seed);
   const rows = [0, 1, 2].map(() => {
     const a = 1 + Math.floor(r() * 510);
     const b = 1 + Math.floor(r() * 510);
-    return [a, b, rule === 'xor' ? (a ^ b) || 1 : a | b];
+    return [a, b, (rule === 'xor' ? a ^ b : rule === 'or' ? a | b : turnMask(a) ^ b) || 1];
   });
   const right = { mask: rows[2]![2]! };
   const cells = rows.flat().map((mask, i) => (i === 8 ? null : { mask }));
@@ -7372,35 +7390,195 @@ function gridRule(seed: number, rule: 'xor' | 'or'): DiscoverPuzzle {
   const wrong = bits.map((b) => ({ mask: (right.mask ^ (1 << b)) || 511 }));
   return withAnswer('grid', 3, cells, right, wrong, r);
 }
+/** A short number series with one gap at the end. Harder levels use bigger ideas than adding the same step. */
+function numbers(seed: number, level: number): Made {
+  const r = seeded(seed);
+  const int = (a: number, b: number) => a + Math.floor(r() * (b - a + 1));
+  let seq: number[];
+  let trap: number | null = null;
+  if (level <= 1) {
+    const s = int(2, 9);
+    const d = int(2, 5);
+    seq = [0, 1, 2, 3, 4].map((i) => s + d * i);
+  } else if (level === 2) {
+    const s = int(1, 4);
+    const k = int(2, 3);
+    seq = [0, 1, 2, 3, 4].map((i) => s * k ** i);
+  } else if (level === 3) {
+    const s = int(1, 6);
+    const d = int(2, 3);
+    seq = [s];
+    for (let i = 1; i < 5; i += 1) seq.push(seq[i - 1]! + d + (i - 1));
+    trap = seq[3]! + (seq[3]! - seq[2]!);
+  } else if (level === 4) {
+    seq = [int(1, 3), int(2, 4)];
+    for (let i = 2; i < 5; i += 1) seq.push(seq[i - 1]! + seq[i - 2]!);
+  } else {
+    const s1 = int(2, 6);
+    const d1 = int(2, 4);
+    const s2 = int(20, 30);
+    const d2 = int(3, 5);
+    seq = [0, 1, 2, 3, 4, 5].map((i) => (i % 2 === 0 ? s1 + d1 * (i / 2) : s2 - d2 * ((i - 1) / 2)));
+  }
+  const right = seq[seq.length - 1]!;
+  const shown = seq.slice(0, -1).map((v) => ({ text: String(v) }));
+  const near = [trap, right + 1, right - 1, right + 2, right - 2, right + 3, right - 3, right * 2].filter((v): v is number => v !== null && v > 0);
+  return withAnswer('numbers', shown.length + 1, [...shown, null], { text: String(right) }, near.map((v) => ({ text: String(v) })), r, 'Tap the number that comes next.');
+}
+/** Five dice faces, four follow a rule and one does not. Tap the one that does not belong. */
+function oddOne(seed: number, level: number): Made {
+  const r = seeded(seed);
+  const groups = level <= 1 ? [[2, 4, 6], [1, 3, 5]] : level === 2 ? [[4, 5, 6], [1, 2, 3]] : [[3, 6], [1, 2, 4, 5]];
+  const flip = r() < 0.5;
+  const major = groups[flip ? 1 : 0]!;
+  const minor = groups[flip ? 0 : 1]!;
+  const odd = minor[Math.floor(r() * minor.length)]!;
+  const faces = [...Array.from({ length: 4 }, () => major[Math.floor(r() * major.length)]!), odd];
+  const order = mixed([0, 1, 2, 3, 4], r);
+  return { kind: 'odd', cols: 5, prompt: 'Tap the one that does not belong.', cells: [], options: order.map((i) => ({ n: faces[i]! })), answer: order.indexOf(4) };
+}
 
-/** Part 1 and part 2, five each. The second part uses the harder rules. */
-export const DISCOVER_PUZZLES: readonly DiscoverPuzzle[] = [
-  diceLatin(11), turned(12, false), gridRule(13, 'xor'), diceSum(14), turned(15, false),
-  gridRule(21, 'or'), diceSum(22), turned(23, true), gridRule(24, 'xor'), diceLatin(25),
+const SPEC: [() => Made, DiscoverPuzzle['level']][] = [
+  [() => diceLatin(101), 1], [() => numbers(102, 1), 1], [() => oddOne(103, 1), 1], [() => numbers(104, 1), 1], [() => diceSum(105), 1], [() => turned(106, false), 1],
+  [() => numbers(201, 2), 2], [() => oddOne(202, 2), 2], [() => diceLatin(203), 2], [() => numbers(204, 2), 2], [() => turned(205, false), 2], [() => diceSum(206), 2],
+  [() => gridRule(301, 'xor'), 3], [() => numbers(302, 3), 3], [() => oddOne(303, 3), 3], [() => gridRule(304, 'or'), 3], [() => numbers(305, 3), 3], [() => turned(306, true), 3],
+  [() => gridRule(401, 'xor'), 4], [() => numbers(402, 4), 4], [() => gridRule(403, 'or'), 4], [() => numbers(404, 4), 4], [() => turned(405, true), 4], [() => gridRule(406, 'turn'), 4],
+  [() => gridRule(501, 'turn'), 5], [() => numbers(502, 5), 5], [() => gridRule(503, 'turn'), 5], [() => numbers(504, 5), 5], [() => turned(505, true), 5], [() => gridRule(506, 'xor'), 5],
+];
+/** Thirty puzzles, six at each of five levels. A person sees twelve. */
+export const DISCOVER_BANK: readonly DiscoverPuzzle[] = SPEC.map(([make, level], id) => ({ id, level, ...make() }));
+export const PUZZLES_SHOWN = 12;
+
+function pickPuzzle(level: number, seen: ReadonlySet<number>): DiscoverPuzzle {
+  for (const d of [0, 1, -1, 2, -2, 3, -3, 4, -4]) {
+    const lv = level + d;
+    const hit = lv >= 1 && lv <= 5 ? DISCOVER_BANK.find((p) => p.level === lv && !seen.has(p.id)) : undefined;
+    if (hit) return hit;
+  }
+  return DISCOVER_BANK[0]!;
+}
+/**
+ * The twelve puzzles one person sees, which depend on how they answered the ones before: start in the middle, go up a level
+ * after a right answer and down after a wrong one (or a skipped one). The same answers always give the same twelve.
+ */
+export function puzzleSequence(picks: readonly (number | null)[], count = PUZZLES_SHOWN): { puzzle: DiscoverPuzzle; pick: number | null }[] {
+  let level = 3;
+  const seen = new Set<number>();
+  const out: { puzzle: DiscoverPuzzle; pick: number | null }[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const puzzle = pickPuzzle(level, seen);
+    seen.add(puzzle.id);
+    const pick = picks[i] ?? null;
+    out.push({ puzzle, pick });
+    level = pick !== null && pick === puzzle.answer ? Math.min(5, level + 1) : Math.max(1, level - 1);
+  }
+  return out;
+}
+export const puzzleAt = (picks: readonly (number | null)[], i: number): DiscoverPuzzle => puzzleSequence(picks, i + 1)[i]!.puzzle;
+
+// ---- emotional intelligence: five parts, three kinds of question (how you see yourself, reading people, handling situations) ----
+
+export type EqDim = 'a' | 'm' | 'd' | 'e' | 's';
+export const EQ_DIMS: readonly { key: EqDim; name: string; blurb: string; helps: RelationshipKey }[] = [
+  { key: 'a', name: 'Knowing your feelings', blurb: 'Noticing what you feel, and why.', helps: 'self' },
+  { key: 'm', name: 'Handling your feelings', blurb: 'Staying steady when feelings run high.', helps: 'lover_partner' },
+  { key: 'd', name: 'Staying motivated', blurb: 'Keeping going toward what matters.', helps: 'servant_leader' },
+  { key: 'e', name: 'Reading other people', blurb: 'Sensing how someone feels and seeing their side.', helps: 'parent_child' },
+  { key: 's', name: 'Handling relationships', blurb: 'Talking things through, asking for help and staying close.', helps: 'friendship' },
 ];
 
-// ---- the five parts, the answers and the scoring ----
+/** Twenty statements to rate from "not like me" to "very like me": four screens of five, one from each part. */
+export const EQ_FEELINGS: readonly (readonly { dim: EqDim; sign: 1 | -1; text: string }[])[] = [
+  [
+    { dim: 'a', sign: 1, text: 'I can usually name what I am feeling.' },
+    { dim: 'm', sign: 1, text: 'I stay in control when I am angry.' },
+    { dim: 'd', sign: 1, text: 'I keep going when a goal gets hard.' },
+    { dim: 'e', sign: 1, text: 'I can tell how someone feels before they say it.' },
+    { dim: 's', sign: 1, text: 'I can disagree without hurting the relationship.' },
+  ],
+  [
+    { dim: 'a', sign: 1, text: 'I notice how my body reacts when I am stressed.' },
+    { dim: 'm', sign: 1, text: 'I can calm myself down when I am upset.' },
+    { dim: 'd', sign: 1, text: 'I set goals that matter to me.' },
+    { dim: 'e', sign: 1, text: 'I find it easy to see things from another person’s side.' },
+    { dim: 's', sign: 1, text: 'I make new people feel welcome.' },
+  ],
+  [
+    { dim: 'a', sign: -1, text: 'My own moods often surprise me.' },
+    { dim: 'm', sign: -1, text: 'I say things I regret when I am upset.' },
+    { dim: 'd', sign: -1, text: 'I give up quickly when I do not see results.' },
+    { dim: 'e', sign: -1, text: 'I often miss it when someone is upset.' },
+    { dim: 's', sign: -1, text: 'I put off hard talks until they get worse.' },
+  ],
+  [
+    { dim: 'a', sign: 1, text: 'I know what sets me off.' },
+    { dim: 'm', sign: 1, text: 'I can wait for what I want without rushing.' },
+    { dim: 'd', sign: 1, text: 'I find ways to stay hopeful after a setback.' },
+    { dim: 'e', sign: 1, text: 'People tell me I listen well.' },
+    { dim: 's', sign: 1, text: 'I know how to ask for help.' },
+  ],
+];
+export const EQ_SCALE = ['Not like me', 'A little like me', 'Somewhat like me', 'Quite like me', 'Very like me'] as const;
 
-export const DISCOVER_SECTIONS: readonly { key: 'priorities' | 'puzzles1' | 'words' | 'puzzles2' | 'scenes'; name: string; count: number; blurb: string }[] = [
+/** Six short scenes: what is the person feeling? */
+export const EQ_READING: readonly { scene: string; options: readonly string[]; key: number }[] = [
+  { scene: 'Sam goes quiet after being left out of a group chat, and says, “It’s fine.”', options: ['Excited', 'Hurt', 'Bored', 'Proud'], key: 1 },
+  { scene: 'Ana’s hands shake before she goes on stage, but she smiles and says she can’t wait.', options: ['Angry', 'Sad', 'Nervous and excited', 'Calm and sure'], key: 2 },
+  { scene: 'Ravi just won a small award. He looks around the room to see who noticed.', options: ['Guilty', 'Proud', 'Afraid', 'Bored'], key: 1 },
+  { scene: 'Mia snaps at everyone the day before an exam, then says sorry and sits alone.', options: ['Joyful', 'Jealous', 'Calm', 'Stressed'], key: 3 },
+  { scene: 'Leo hears his friend say, “Sorry, I forgot your birthday,” and looks at the floor.', options: ['Relieved', 'Disappointed', 'Amused', 'Proud'], key: 1 },
+  { scene: 'Priya is asked to lead the team and says yes quickly, then goes to wash her face.', options: ['Bored', 'Angry', 'Nervous and overwhelmed', 'Sad'], key: 2 },
+];
+
+/** Eight situations, each tagged with the part it tests. Keyed 1 (least) to 4 (most effective) by the team. */
+export const EQ_PEOPLE: readonly { dim: EqDim; situation: string; options: readonly string[]; key: readonly number[] }[] = [
+  { dim: 'm', situation: 'You get harsh feedback on something you worked hard on, and your face goes hot. What do you do first?', options: ['Reply right away to defend yourself.', 'Take a breath, wait an hour, then read it again.', 'Quietly decide the person is wrong.', 'Agree with everything to end the talk.'], key: [1, 4, 2, 2] },
+  { dim: 'a', situation: 'You feel low all day for no clear reason. What helps most?', options: ['Scroll until it passes.', 'Push on and ignore it.', 'Stop, and ask what happened today and what you need.', 'Snap at someone to feel better.'], key: [1, 2, 4, 1] },
+  { dim: 'd', situation: 'Your video flops after weeks of work. What do you do?', options: ['Blame the algorithm.', 'Delete it and say nothing.', 'Quit the format.', 'Study what worked in better ones, change one thing and post again.'], key: [2, 2, 1, 4] },
+  { dim: 'e', situation: 'A friend cancels plans again and says they are “just tired”. Their voice sounds flat.', options: ['Tell them they are always flaky.', 'Say “fine” and move on.', 'Ask if something else is going on and offer a quieter plan.', 'Stop texting until they text first.'], key: [1, 2, 4, 2] },
+  { dim: 's', situation: 'Two people on your team argue, and both look at you.', options: ['Leave the room.', 'Tell them to stop.', 'Pick the side you like.', 'Let each finish, ask what each needs and look for the overlap.'], key: [2, 2, 1, 4] },
+  { dim: 'a', situation: 'You notice you have been short with your partner all week because of work stress.', options: ['Say sorry, explain the stress without blaming them and plan time together.', 'Hope they have not noticed.', 'Explain that work comes first.', 'Ask them to be more understanding.'], key: [4, 1, 2, 2] },
+  { dim: 'd', situation: 'You are two weeks into a new habit and miss a day.', options: ['Double it tomorrow to catch up.', 'Count the whole thing as failed.', 'Wait for next Monday to restart.', 'Note why you missed and do the next day as planned.'], key: [2, 1, 2, 4] },
+  { dim: 's', situation: 'Someone tells you something private and starts to cry.', options: ['Change the subject to cheer them up.', 'Offer a quick fix.', 'Stay with them, listen and say you are glad they told you.', 'Tell them it is not a big deal.'], key: [2, 3, 4, 1] },
+];
+
+// ---- the eight parts, the answers and the scoring ----
+
+export const DISCOVER_SECTIONS: readonly { key: 'priorities' | 'puzzles1' | 'words' | 'puzzles2' | 'scenes' | 'feelings' | 'reading' | 'people'; name: string; count: number; blurb: string; /** Part of the emotional intelligence add-on, which can be left out. */ optional?: boolean }[] = [
   { key: 'priorities', name: 'Priorities and preferences', count: DISCOVER_TRIADS.length, blurb: 'Each question has three statements. Pick the one that is most like you and the one that is least like you. Some may fit you and others may not, and that is fine.' },
-  { key: 'puzzles1', name: 'Puzzles, part 1', count: 5, blurb: 'Now for something different. Look at each picture and tap the piece that should come next. There is no time limit, but go with your first good guess.' },
+  { key: 'puzzles1', name: 'Puzzles, part 1', count: 6, blurb: 'Now for something different. Look at each picture and pick the answer. There is no time limit, but go with your first good guess. The puzzles get harder when you do well and easier when you do not.' },
   { key: 'words', name: 'You, in words', count: DISCOVER_WORDS.length, blurb: 'Each question has ten words. Pick three that are most like you and three that are least like you. A word cannot be both.' },
-  { key: 'puzzles2', name: 'Puzzles, part 2', count: 5, blurb: 'Same as before, a little harder. Tap the piece that should come next.' },
+  { key: 'puzzles2', name: 'Puzzles, part 2', count: 6, blurb: 'Same as before. The puzzles keep adjusting to you.' },
   { key: 'scenes', name: 'Real situations', count: DISCOVER_SCENES.length, blurb: 'Read each situation. Pick the response you think is the most effective and the one you think is the least effective.' },
+  { key: 'feelings', name: 'Your feelings', count: EQ_FEELINGS.length, optional: true, blurb: 'Rate how much each line is like you, from not like me to very like me. Go with how you are most days, not your best or worst day.' },
+  { key: 'reading', name: 'Reading people', count: EQ_READING.length, optional: true, blurb: 'Each question is a short scene. Pick the feeling that fits the person best.' },
+  { key: 'people', name: 'With people', count: EQ_PEOPLE.length, optional: true, blurb: 'Read each situation. Pick the response you think is the most effective and the one you think is the least effective.' },
 ];
 export const DISCOVER_STEPS = DISCOVER_SECTIONS.reduce((n, s) => n + s.count, 0);
+/** The steps before the emotional intelligence add-on. */
+export const DISCOVER_CORE_STEPS = DISCOVER_SECTIONS.filter((s) => !s.optional).reduce((n, s) => n + s.count, 0);
 
 export interface DiscoverAnswers {
   triads: ({ most: number; least: number } | null)[];
+  /** The pick for each of the twelve puzzles shown, and how long each took in milliseconds. */
   puzzles: (number | null)[];
+  puzzleMs: (number | null)[];
   words: ({ most: number[]; least: number[] } | null)[];
   scenes: ({ most: number; least: number } | null)[];
+  /** For each screen of statements, a rating from 0 to 4 for each. */
+  feelings: (number[] | null)[];
+  reading: (number | null)[];
+  people: ({ most: number; least: number } | null)[];
 }
 export const emptyDiscoverAnswers = (): DiscoverAnswers => ({
   triads: DISCOVER_TRIADS.map(() => null),
-  puzzles: DISCOVER_PUZZLES.map(() => null),
+  puzzles: Array.from({ length: PUZZLES_SHOWN }, () => null),
+  puzzleMs: Array.from({ length: PUZZLES_SHOWN }, () => null),
   words: DISCOVER_WORDS.map(() => null),
   scenes: DISCOVER_SCENES.map(() => null),
+  feelings: EQ_FEELINGS.map(() => null),
+  reading: EQ_READING.map(() => null),
+  people: EQ_PEOPLE.map(() => null),
 });
 
 const intIn = (v: unknown, max: number): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < max;
@@ -7409,12 +7587,16 @@ export function parseDiscoverAnswers(raw: unknown): DiscoverAnswers {
   const out = emptyDiscoverAnswers();
   const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const arr = (k: string): unknown[] => (Array.isArray(o[k]) ? (o[k] as unknown[]) : []);
-  arr('triads').slice(0, out.triads.length).forEach((v, i) => {
+  const pair = (v: unknown, max: number) => {
     const t = v as { most?: unknown; least?: unknown } | null;
-    if (t && intIn(t.most, 3) && intIn(t.least, 3) && t.most !== t.least) out.triads[i] = { most: t.most, least: t.least };
-  });
+    return t && intIn(t.most, max) && intIn(t.least, max) && t.most !== t.least ? { most: t.most, least: t.least } : null;
+  };
+  arr('triads').slice(0, out.triads.length).forEach((v, i) => (out.triads[i] = pair(v, 3)));
   arr('puzzles').slice(0, out.puzzles.length).forEach((v, i) => {
     if (intIn(v, 5)) out.puzzles[i] = v;
+  });
+  arr('puzzleMs').slice(0, out.puzzleMs.length).forEach((v, i) => {
+    if (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 600_000) out.puzzleMs[i] = Math.round(v);
   });
   arr('words').slice(0, out.words.length).forEach((v, i) => {
     const w = v as { most?: unknown; least?: unknown } | null;
@@ -7423,24 +7605,31 @@ export function parseDiscoverAnswers(raw: unknown): DiscoverAnswers {
     const all = [...most, ...least];
     if (most.length === 3 && least.length === 3 && all.every((x) => intIn(x, 10)) && new Set(all).size === 6) out.words[i] = { most: most as number[], least: least as number[] };
   });
-  arr('scenes').slice(0, out.scenes.length).forEach((v, i) => {
-    const t = v as { most?: unknown; least?: unknown } | null;
-    if (t && intIn(t.most, 4) && intIn(t.least, 4) && t.most !== t.least) out.scenes[i] = { most: t.most, least: t.least };
+  arr('scenes').slice(0, out.scenes.length).forEach((v, i) => (out.scenes[i] = pair(v, 4)));
+  arr('feelings').slice(0, out.feelings.length).forEach((v, i) => {
+    if (Array.isArray(v) && v.length === EQ_FEELINGS[i]!.length && v.every((x) => intIn(x, 5))) out.feelings[i] = v as number[];
   });
+  arr('reading').slice(0, out.reading.length).forEach((v, i) => {
+    if (intIn(v, 4)) out.reading[i] = v;
+  });
+  arr('people').slice(0, out.people.length).forEach((v, i) => (out.people[i] = pair(v, 4)));
   return out;
 }
 
 /** How many steps are answered, in all and part by part. */
-export function discoverProgress(a: DiscoverAnswers): { done: number; total: number; parts: { key: string; done: number; count: number }[] } {
+export function discoverProgress(a: DiscoverAnswers): { done: number; total: number; core: { done: number; total: number }; parts: { key: string; done: number; count: number; optional: boolean }[] } {
   const done = {
     priorities: a.triads.filter(Boolean).length,
-    puzzles1: a.puzzles.slice(0, 5).filter((x) => x !== null).length,
+    puzzles1: a.puzzles.slice(0, 6).filter((x) => x !== null).length,
     words: a.words.filter(Boolean).length,
-    puzzles2: a.puzzles.slice(5).filter((x) => x !== null).length,
+    puzzles2: a.puzzles.slice(6).filter((x) => x !== null).length,
     scenes: a.scenes.filter(Boolean).length,
+    feelings: a.feelings.filter(Boolean).length,
+    reading: a.reading.filter((x) => x !== null).length,
+    people: a.people.filter(Boolean).length,
   };
-  const parts = DISCOVER_SECTIONS.map((s) => ({ key: s.key, done: done[s.key], count: s.count }));
-  return { done: parts.reduce((n, p) => n + p.done, 0), total: DISCOVER_STEPS, parts };
+  const parts = DISCOVER_SECTIONS.map((s) => ({ key: s.key, done: done[s.key], count: s.count, optional: Boolean(s.optional) }));
+  return { done: parts.reduce((n, p) => n + p.done, 0), total: DISCOVER_STEPS, core: { done: parts.filter((p) => !p.optional).reduce((n, p) => n + p.done, 0), total: DISCOVER_CORE_STEPS }, parts };
 }
 
 /** What each strength means, in plain words. One strength for each of the seven relationships. */
@@ -7465,31 +7654,107 @@ export const DISCOVER_WEIGHTS: Record<RelationshipKey, Record<Trait | 'p' | 'j',
   divine: { o: 0.3, c: 0.1, e: 0, a: 0.2, s: 0.25, p: 0, j: 0.15 },
 };
 
+export interface EqResult {
+  /** For each part: the mix of how you see yourself and how you chose in situations, 0 to 100. */
+  dims: Record<EqDim, { score: number; self: number; ability: number }>;
+  overall: number;
+  reading: { right: number; of: number };
+}
+
 export interface DiscoverResult {
   /** 0 to 100 for each trait, you against your own scale. */
   traits: Record<Trait, number>;
-  puzzles: { right: number; of: number; score: number; /** Right answers by kind of puzzle, and in part 1 and part 2. Results taken before this existed do not have it. */ byKind?: Record<DiscoverPuzzle['kind'], { right: number; of: number }>; parts?: [number, number] };
+  puzzles: {
+    right: number;
+    of: number;
+    score: number;
+    /** Where the puzzles settled, 1 to 5. Results taken before the puzzles adjusted do not have it. */
+    level?: number;
+    /** Right answers by kind of puzzle, and in the first and second six. */
+    byKind?: Partial<Record<PuzzleKind, { right: number; of: number }>>;
+    parts?: [number, number];
+    /** The middle time for one puzzle, in seconds, when it was measured. */
+    medianSeconds?: number | null;
+  };
   /** 0 to 100: how closely your picks match the team's reading of each situation. */
   judgment: number;
   /** All seven, best first. */
   strengths: { key: RelationshipKey; score: number }[];
   top: RelationshipKey[];
   growth: RelationshipKey;
+  /** Only when the emotional intelligence part was answered in full. */
+  eq?: EqResult;
 }
 
+const answered = (...xs: (unknown | null)[][]) => xs.every((x) => x.every((v) => v !== null));
+/** The five core parts, which are all a result needs. */
 export function discoverComplete(a: DiscoverAnswers): boolean {
-  const p = discoverProgress(a);
-  return p.done === p.total;
+  return answered(a.triads, a.puzzles, a.words, a.scenes);
+}
+/** The emotional intelligence add-on. */
+export function eqComplete(a: DiscoverAnswers): boolean {
+  return answered(a.feelings, a.reading, a.people);
 }
 
 const clamp100 = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
+const mean = (xs: number[]) => (xs.length ? xs.reduce((n, x) => n + x, 0) / xs.length : 0);
+
+/** The reasoning side: the staircase the puzzles walked, and where it settled. */
+export function puzzleSummary(a: DiscoverAnswers): NonNullable<DiscoverResult['puzzles']> {
+  const seq = puzzleSequence(a.puzzles);
+  const byKind: Partial<Record<PuzzleKind, { right: number; of: number }>> = {};
+  const parts: [number, number] = [0, 0];
+  let right = 0;
+  seq.forEach(({ puzzle, pick }, i) => {
+    const k = (byKind[puzzle.kind] ??= { right: 0, of: 0 });
+    k.of += 1;
+    if (pick === puzzle.answer) {
+      right += 1;
+      k.right += 1;
+      parts[i < 6 ? 0 : 1] += 1;
+    }
+  });
+  const last = seq[seq.length - 1]!;
+  const est = Math.max(1, Math.min(5, mean(seq.slice(4).map((s) => s.puzzle.level)) + (last.pick === last.puzzle.answer ? 0.5 : -0.5)));
+  const times = a.puzzleMs.filter((x): x is number => x !== null && x > 0).sort((x, y) => x - y);
+  const medianSeconds = times.length ? Math.round((times[Math.floor((times.length - 1) / 2)]! / 1000) * 10) / 10 : null;
+  return { right, of: seq.length, score: clamp100(((est - 1) / 4) * 100), level: Math.round(est * 10) / 10, byKind, parts, medianSeconds };
+}
+
+/** Emotional intelligence: each part is half how you see yourself and half how you chose in the situations (and, for reading people, the scenes). */
+export function scoreEq(a: DiscoverAnswers): EqResult {
+  const self: Record<EqDim, number[]> = { a: [], m: [], d: [], e: [], s: [] };
+  EQ_FEELINGS.forEach((screen, i) =>
+    screen.forEach((item, k) => {
+      const v = a.feelings[i]?.[k];
+      if (v !== undefined) self[item.dim].push(((item.sign === 1 ? v : 4 - v) / 4) * 100);
+    }),
+  );
+  const sj: Record<EqDim, number[]> = { a: [], m: [], d: [], e: [], s: [] };
+  EQ_PEOPLE.forEach((q, i) => {
+    const pick = a.people[i];
+    if (pick) sj[q.dim].push(((q.key[pick.most]! - q.key[pick.least]! + 3) / 6) * 100);
+  });
+  const readRight = EQ_READING.filter((q, i) => a.reading[i] === q.key).length;
+  const dims = Object.fromEntries(
+    EQ_DIMS.map((d) => {
+      const s = mean(self[d.key]);
+      const sjt = mean(sj[d.key]);
+      const ability = d.key === 'e' ? 0.5 * sjt + 0.5 * (readRight / EQ_READING.length) * 100 : sjt;
+      return [d.key, { score: clamp100(0.5 * s + 0.5 * ability), self: clamp100(s), ability: clamp100(ability) }];
+    }),
+  ) as Record<EqDim, { score: number; self: number; ability: number }>;
+  return { dims, overall: clamp100(mean(EQ_DIMS.map((d) => dims[d.key].score))), reading: { right: readRight, of: EQ_READING.length } };
+}
 
 /**
  * The scoring. Traits: each "most" pick adds a point towards the statement's trait (or takes one away when the statement
  * says the opposite), each "least" pick does the reverse; the total is shared by how often the trait was on offer, in the
- * statements (60%) and the words (40%), and centred on 50. Puzzles: the share you got right. Situations: for each one,
- * the key of your "most effective" pick minus the key of your "least effective" pick, over its best case of 3.
- * Strengths: the weights in DISCOVER_WEIGHTS over those seven numbers. No number is compared with other people.
+ * statements (60%) and the words (40%), and centred on 50. Puzzles: twelve that move up after a right answer and down after
+ * a wrong one; the score is where they settle, from level 1 to level 5. Situations: for each one, the key of your "most
+ * effective" pick minus the key of your "least effective" pick, over its best case of 3. Strengths: the weights in
+ * DISCOVER_WEIGHTS over those numbers. Emotional intelligence, when answered, is scored on its own (scoreEq). No number
+ * is compared with other people.
  */
 export function scoreDiscover(a: DiscoverAnswers): DiscoverResult {
   const raw: Record<Trait, number> = { o: 0, c: 0, e: 0, a: 0, s: 0 };
@@ -7519,17 +7784,7 @@ export function scoreDiscover(a: DiscoverAnswers): DiscoverResult {
       return [t.key, clamp100(50 + 50 * (0.6 * x + 0.4 * w))];
     }),
   ) as Record<Trait, number>;
-  const right = DISCOVER_PUZZLES.filter((p, i) => a.puzzles[i] === p.answer).length;
-  const byKind = { dice: { right: 0, of: 0 }, turn: { right: 0, of: 0 }, grid: { right: 0, of: 0 } };
-  const parts: [number, number] = [0, 0];
-  DISCOVER_PUZZLES.forEach((p, i) => {
-    byKind[p.kind].of += 1;
-    if (a.puzzles[i] === p.answer) {
-      byKind[p.kind].right += 1;
-      parts[i < 5 ? 0 : 1] += 1;
-    }
-  });
-  const puzzles = { right, of: DISCOVER_PUZZLES.length, score: clamp100((right / DISCOVER_PUZZLES.length) * 100), byKind, parts };
+  const puzzles = puzzleSummary(a);
   const gap = DISCOVER_SCENES.reduce((n, s, i) => {
     const pick = a.scenes[i];
     return pick ? n + (s.key[pick.most]! - s.key[pick.least]!) : n;
@@ -7539,7 +7794,7 @@ export function scoreDiscover(a: DiscoverAnswers): DiscoverResult {
   const strengths = (Object.keys(DISCOVER_WEIGHTS) as RelationshipKey[])
     .map((key) => ({ key, score: clamp100((Object.keys(measures) as (keyof typeof measures)[]).reduce((n, m) => n + DISCOVER_WEIGHTS[key][m] * measures[m], 0)) }))
     .sort((x, y) => y.score - x.score || x.key.localeCompare(y.key));
-  return { traits, puzzles, judgment, strengths, top: strengths.slice(0, 3).map((s) => s.key), growth: strengths[strengths.length - 1]!.key };
+  return { traits, puzzles, judgment, strengths, top: strengths.slice(0, 3).map((s) => s.key), growth: strengths[strengths.length - 1]!.key, ...(eqComplete(a) ? { eq: scoreEq(a) } : {}) };
 }
 
 // ---- the detailed analysis, written from a result: personality by trait and reasoning by kind of puzzle ----
@@ -7595,11 +7850,50 @@ export const TRAIT_POLES: Record<Trait, { high: string; low: string }> = {
   s: { high: 'calm', low: 'sensitive' },
 };
 
-export const REASONING_KINDS: Record<DiscoverPuzzle['kind'], { name: string; what: string; strong: string; weak: string }> = {
+export const REASONING_KINDS: Record<PuzzleKind, { name: string; what: string; strong: string; weak: string }> = {
   dice: { name: 'Number patterns', what: 'Dice grids where each row repeats a set or adds up.', strong: 'You spot rules in numbers quickly.', weak: 'Rules in numbers took longer. Count across rows and down columns before you guess.' },
   turn: { name: 'Turning shapes', what: 'Arrows that turn and gain dots, step by step.', strong: 'You follow step-by-step change well.', weak: 'Say the change out loud for each step, such as "turns a quarter, adds a dot", then apply it once more.' },
+  numbers: { name: 'Number series', what: 'A row of numbers where each one follows from the ones before.', strong: 'You see how numbers grow, even when the step changes.', weak: 'Write the gaps between the numbers. If the gaps are not the same, look at how the gaps change.' },
+  odd: { name: 'Odd one out', what: 'Five dice where four follow one rule.', strong: 'You find the rule fast and spot what breaks it.', weak: 'Sort the dice into two piles, such as even and odd, and see which pile has only one.' },
   grid: { name: 'Pattern rules', what: 'Grids of squares where the third piece comes from the first two.', strong: 'You see how pieces combine.', weak: 'Compare the first two pieces square by square. Which squares are in both, in one, or in neither?' },
 };
+
+/** What each emotional intelligence part reads like at each level. A low score is a place to practise, not a verdict. */
+export const EQ_READINGS: Record<EqDim, Record<TraitBand, TraitReading>> = {
+  a: {
+    low: reading('Still tuning in', 'Your feelings can arrive as a surprise, or as a general "off" mood you cannot name yet.', 'You are not stuck in your head. With a little practice you notice more.', 'Stress can build up in your body or your mood before you see it.', 'Others may know you are upset before you do. Ask them what they see.', 'Three times a day, stop and finish the line: "Right now I feel ... because ...".'),
+    mid: reading('Often aware', 'You can usually name what you feel, and sometimes it takes a while.', 'You catch the big feelings and many of the small ones.', 'Busy days can hide how you feel until they spill over.', 'You can say how you feel, if you take the minute to check.', 'End each day with one word for how it felt, and why.'),
+    high: reading('Tuned in', 'You know what you feel, what sets it off and how it shows in your body.', 'You can explain yourself to others and make clean choices.', 'You may analyse a feeling so much that you forget to just feel it.', 'People find you easy to understand because you say what is going on.', 'Share one feeling out loud this week before you try to fix it.'),
+  },
+  m: {
+    low: reading('Feelings run fast', 'Strong feelings can take over before you choose what to do with them.', 'Your feelings are real and quick, which makes you honest and alive.', 'You may say or do things you regret in the heat of the moment.', 'Loved ones may walk on eggshells. Tell them what you do when you feel it rise.', 'When you feel it rise, count five slow breaths before you speak.'),
+    mid: reading('Steady most of the time', 'You can usually calm down and choose your words, but a bad day can test it.', 'You recover well and you are good company in a crisis.', 'Tiredness or hunger can tip you faster than you expect.', 'You repair quickly after a snap. Keep saying sorry first.', 'Notice your early signs, such as a tight jaw, and take a pause then.'),
+    high: reading('Calm under pressure', 'You can feel a lot and still choose what to do.', 'You keep your head when others lose theirs.', 'You may hold feelings in too long, or seem hard to read.', 'You are a steady partner. Let people see you feel it too.', 'Tell one person about something that bothered you this week, in a calm voice.'),
+  },
+  d: {
+    low: reading('Easily knocked off course', 'Setbacks can drain you, and goals can slip when results are slow.', 'You are honest about what is hard, and that can point you to what matters.', 'You may quit one step before the payoff.', 'People who rely on you may not know whether you will stay the course. Say what you can commit to.', 'Pick one goal and cut it to a size you can do on your worst day.'),
+    mid: reading('Keeps going, mostly', 'You usually keep going, and you need a reason or a rhythm to stay with it.', 'You finish more than you quit.', 'Long goals with no feedback wear you down.', 'You can be counted on for most things. Build in small wins.', 'Write down what you did this week that you could not do a month ago.'),
+    high: reading('Driven and hopeful', 'You set goals that matter and find a way back after a setback.', 'You carry a team through the slow middle.', 'You may push too hard, or expect others to keep your pace.', 'You inspire people. Check that you are not leaving anyone behind.', 'Take one full rest day and see that the goals are still there.'),
+  },
+  e: {
+    low: reading('Learning to read people', 'Other people’s feelings can be hard to sense, especially when they do not say them.', 'You are direct and fair, because you do not read into things.', 'You may miss a hint that someone is hurt or worried.', 'Ask more than you guess: "How are you really?" goes a long way.', 'Next time someone seems off, ask one question and listen without fixing.'),
+    mid: reading('Often in step', 'You read most people well, and sometimes need to be told.', 'You listen and adapt to most people.', 'You may misread someone when you are busy or stressed.', 'Check your read out loud: "It seems like you are worried. Am I right?"', 'Look at faces, not phones, for one conversation a day.'),
+    high: reading('Reads the room', 'You sense how others feel and can see things from their side.', 'People feel understood around you.', 'You may carry other people’s feelings as if they were yours.', 'You are a caring friend or partner. Keep some of your energy for yourself.', 'After a heavy talk, take five minutes to reset before you move on.'),
+  },
+  s: {
+    low: reading('Hard talks are hard', 'Disagreement, asking for help or putting a thing into words can feel risky.', 'You avoid needless fights and take care not to hurt people.', 'Things may go unsaid until they grow.', 'Close people may not know what you need. Start small and say it kindly.', 'Say one honest thing this week that you would normally let go.'),
+    mid: reading('Good with people', 'You get on with most people and can handle most conversations, with a few you put off.', 'You can disagree and still keep the peace.', 'You may save hard talks for a better time that never comes.', 'You are easy to be around. Name hard things early and they stay small.', 'Pick one talk you have put off and set a time for it.'),
+    high: reading('A natural connector', 'You talk things through, ask for help and keep relationships in good repair.', 'You make people feel welcome and you mend things after a clash.', 'You may take on the role of peacemaker too often.', 'You are good at closeness. Let others do some of the work.', 'Ask someone to do one thing for you this week, and let them.'),
+  },
+};
+
+export interface EqAnalysis {
+  overall: number;
+  readingLine: string;
+  dims: { dim: EqDim; name: string; blurb: string; score: number; self: number; ability: number; band: TraitBand; reading: TraitReading; gap: string | null; helps: RelationshipKey }[];
+  strongest: EqDim;
+  quietest: EqDim;
+}
 
 export interface DiscoverAnalysis {
   /** One line on the two traits that stand out most. */
@@ -7609,10 +7903,34 @@ export interface DiscoverAnalysis {
     right: number;
     of: number;
     level: 'Just starting' | 'Steady' | 'Strong' | 'Sharp';
+    /** Where the puzzles settled, 1 to 5, when the puzzles adjusted. */
+    levelNumber: number | null;
     levelLine: string;
-    kinds: { kind: DiscoverPuzzle['kind']; name: string; what: string; right: number; of: number; note: string }[];
+    kinds: { kind: PuzzleKind; name: string; what: string; right: number; of: number; note: string }[];
     trend: string | null;
+    speed: string | null;
     caveat: string;
+  };
+  /** Only when the emotional intelligence part was answered. */
+  eq: EqAnalysis | null;
+}
+
+export function analyseEq(eq: EqResult): EqAnalysis {
+  const dims = EQ_DIMS.map((d) => {
+    const v = eq.dims[d.key];
+    const band = traitBand(v.score);
+    const diff = v.self - v.ability;
+    const gap = diff >= 20 ? 'You see yourself higher here than your choices in the situations showed. That is a good place to practise.' : diff <= -20 ? 'You chose better in the situations than you give yourself credit for. Trust yourself a little more here.' : null;
+    return { dim: d.key, name: d.name, blurb: d.blurb, score: v.score, self: v.self, ability: v.ability, band, reading: EQ_READINGS[d.key][band], gap, helps: d.helps };
+  });
+  const sorted = [...dims].sort((x, y) => y.score - x.score || x.dim.localeCompare(y.dim));
+  const r = eq.reading;
+  return {
+    overall: eq.overall,
+    readingLine: r.right >= 5 ? `You read ${r.right} of ${r.of} scenes right: you pick up how people feel from small clues.` : r.right >= 3 ? `You read ${r.right} of ${r.of} scenes right. Quiet clues are sometimes missed, and asking helps.` : `You read ${r.right} of ${r.of} scenes right. Feelings are often mixed or hidden, so asking, not guessing, will serve you well.`,
+    dims,
+    strongest: sorted[0]!.dim,
+    quietest: sorted[sorted.length - 1]!.dim,
   };
 }
 
@@ -7627,7 +7945,9 @@ export function analyseDiscover(result: DiscoverResult): DiscoverAnalysis {
 
   const right = result.puzzles.right;
   const of = result.puzzles.of;
-  const level = right >= 9 ? 'Sharp' : right >= 6 ? 'Strong' : right >= 3 ? 'Steady' : 'Just starting';
+  // New results carry the level the puzzles settled at; older ones only have a count out of ten.
+  const lv = result.puzzles.level;
+  const level = lv !== undefined ? (lv >= 4 ? 'Sharp' : lv >= 2.8 ? 'Strong' : lv >= 1.8 ? 'Steady' : 'Just starting') : right >= 9 ? 'Sharp' : right >= 6 ? 'Strong' : right >= 3 ? 'Steady' : 'Just starting';
   const levelLine = {
     Sharp: 'You found nearly every pattern, including the harder ones. You see rules fast and hold them while you check the options.',
     Strong: 'You found most of the patterns. A few took more care, which is normal when the rules get layered.',
@@ -7635,8 +7955,8 @@ export function analyseDiscover(result: DiscoverResult): DiscoverAnalysis {
     'Just starting': 'Few patterns clicked this time. That is common on a first try, a tired day or a noisy room. Try again when you are fresh.',
   }[level];
   const kinds = result.puzzles.byKind
-    ? (Object.keys(REASONING_KINDS) as DiscoverPuzzle['kind'][]).map((kind) => {
-        const k = result.puzzles.byKind![kind];
+    ? (Object.keys(result.puzzles.byKind) as PuzzleKind[]).map((kind) => {
+        const k = result.puzzles.byKind![kind]!;
         const k0 = REASONING_KINDS[kind];
         return { kind, name: k0.name, what: k0.what, right: k.right, of: k.of, note: k.of && k.right / k.of >= 0.66 ? k0.strong : k0.weak };
       })
@@ -7646,10 +7966,12 @@ export function analyseDiscover(result: DiscoverResult): DiscoverAnalysis {
     p1 === null || p2 === null
       ? null
       : p2 > p1
-        ? 'You did better in the harder second part, so you learn the rules as you go.'
+        ? 'You did better in the second part, which was harder, so you learn the rules as you go.'
         : p2 === p1
           ? 'You scored the same in both parts, even though the second was harder. That is steady.'
           : 'You scored lower in the second part. It is harder, and it usually is. Slow down on the layered ones.';
+  const sec = result.puzzles.medianSeconds;
+  const speed = sec === null || sec === undefined ? null : sec <= 8 ? `You answered fast, about ${sec} seconds a puzzle. Check that speed is not costing you the odd one.` : sec <= 25 ? `You took about ${sec} seconds a puzzle, a good pace for patterns.` : `You took about ${sec} seconds a puzzle. You think things through, and a quicker first guess may help on the easy ones.`;
   return {
     pattern,
     personality,
@@ -7657,11 +7979,14 @@ export function analyseDiscover(result: DiscoverResult): DiscoverAnalysis {
       right,
       of,
       level,
+      levelNumber: lv ?? null,
       levelLine,
       kinds,
       trend,
-      caveat: 'This is not an IQ score. A real IQ test has far more questions, is checked against thousands of people and is given by a trained person. These ten puzzles show how you handle patterns today, and the result can change with sleep, focus and practice.',
+      speed,
+      caveat: 'This is not an IQ score. A real IQ test has far more questions, is checked against thousands of people and is given by a trained person. These twelve puzzles show how you handle patterns today, and the result can change with sleep, focus and practice.',
     },
+    eq: result.eq ? analyseEq(result.eq) : null,
   };
 }
 
@@ -7674,12 +7999,15 @@ export interface DiscoverProfile {
   growth: RelationshipKey;
   bands: Record<Trait, TraitBand>;
   level: DiscoverAnalysis['reasoning']['level'];
+  /** How each emotional intelligence part reads, when that part was taken. */
+  eq?: Record<EqDim, TraitBand>;
 }
 
 export function discoverProfile(result: DiscoverResult, takenAt: string): DiscoverProfile {
   const a = analyseDiscover(result);
   const bands = Object.fromEntries(a.personality.map((p) => [p.trait, p.band])) as Record<Trait, TraitBand>;
-  return { takenAt, top: result.top, growth: result.growth, bands, level: a.reasoning.level };
+  const eq = a.eq ? (Object.fromEntries(a.eq.dims.map((d) => [d.dim, d.band])) as Record<EqDim, TraitBand>) : undefined;
+  return { takenAt, top: result.top, growth: result.growth, bands, level: a.reasoning.level, ...(eq ? { eq } : {}) };
 }
 
 /** How to help this person, in plain sentences: used to pick a tone and the size of a step. Rules only. */
@@ -7695,6 +8023,10 @@ export function styleHints(p: DiscoverProfile): string[] {
   if (p.bands.a === 'low') out.push('Be straight and brief. They prefer honesty to softness.');
   if (p.bands.o === 'high') out.push('Offer a fresh option now and then.');
   if (p.bands.o === 'low') out.push('Stick to routines that work and change one thing at a time.');
+  if (p.eq?.m === 'low') out.push('When they are upset, slow down and name the feeling before you offer a step.');
+  if (p.eq?.a === 'low') out.push('Ask how they feel before you suggest a fix.');
+  if (p.eq?.s === 'low') out.push('Keep hard conversations in small steps, and let them lead.');
+  if (p.eq?.d === 'low') out.push('Celebrate small wins, because motivation dips when results are slow.');
   out.push(p.level === 'Sharp' || p.level === 'Strong' ? 'They like to know the why: give a short reason.' : 'Use short examples and plain words.');
   return out;
 }
@@ -7703,7 +8035,8 @@ export function styleHints(p: DiscoverProfile): string[] {
 export function profileForAssistant(p: DiscoverProfile): string {
   const strengths = p.top.map((k) => DISCOVER_STRENGTHS[k].name).join(', ');
   const traits = TRAITS.map((t) => `${t.name.toLowerCase()}: ${p.bands[t.key]}`).join('; ');
-  return `They took the Discover quiz on ${p.takenAt.slice(0, 10)}. It is a self-check, not a diagnosis, so never state it back as a fact about them and never use it to label them. Use it only to pick your tone and the size of a step. Strongest: ${strengths}. Quietest: ${DISCOVER_STRENGTHS[p.growth].name}. Traits: ${traits}. Reasoning puzzles: ${p.level}. How to help: ${styleHints(p).join(' ')}`;
+  const eqLine = p.eq ? ` Emotional side: ${EQ_DIMS.map((d) => `${d.name.toLowerCase()}: ${p.eq![d.key]}`).join('; ')}.` : '';
+  return `They took the Discover quiz on ${p.takenAt.slice(0, 10)}. It is a self-check, not a diagnosis, so never state it back as a fact about them and never use it to label them. Use it only to pick your tone and the size of a step. Strongest: ${strengths}. Quietest: ${DISCOVER_STRENGTHS[p.growth].name}. Traits: ${traits}. Reasoning puzzles: ${p.level}.${eqLine} How to help: ${styleHints(p).join(' ')}`;
 }
 
 /** Where each strength is worked on in the app. */

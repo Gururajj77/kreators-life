@@ -216,7 +216,7 @@ export const FEATURES: Record<string, FeatureCopy> = {
   },
   discover: {
     tagline: 'Find out what you are good at.',
-    pitch: 'A fifteen minute quiz with picks, pattern puzzles, descriptor words and real situations. It names your top three strengths across the seven relationships, shows five traits in your own numbers and gives you one small thing to try. Only you see it.',
+    pitch: 'A quiz with picks, pattern puzzles that adjust to you, descriptor words and real situations, and an optional emotional intelligence part. It names your top three strengths across the seven relationships, reads five traits in your own numbers and gives you one small thing to try. Only you see it.',
     steps: ['Answer in five short parts. It saves as you go.', 'See your top three strengths and your five traits.', 'Try the small thing each strength suggests.'],
     relationships: ['self', 'guru', 'divine', 'lover_partner', 'servant_leader', 'friendship', 'parent_child'],
   },

@@ -55,7 +55,7 @@ export function Features() {
       <section className="mt-2xl">
         <div className="rounded-card bg-ink p-lg text-on-ink">
           <h2 className="type-hook text-[clamp(32px,6vw,56px)] text-on-ink">Switch on only <em>what you need</em></h2>
-          <p className="type-context mt-sm m-0 text-[18px] text-on-ink/80">Answer three questions and we switch on the apps that fit you. Change them any time, free.</p>
+          <p className="type-context mt-sm m-0 text-[18px] text-on-ink/80">Answer a few questions and we switch on the apps that fit you. Change them any time, free.</p>
           <Link to={entry === '/home' ? '/home' : '/start'} className="toy mt-md inline-flex min-h-[56px] items-center rounded-pill bg-card px-lg text-[18px] font-bold text-ink">
             Start free
           </Link>

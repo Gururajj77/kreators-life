@@ -314,11 +314,11 @@ export function SetupChat() {
           : null;
     const session =
       m.session === 'now'
-        ? 'You said you want to work on yourself. The best start for that is the strategy session, in Pillars. It takes about ten minutes, and you leave with a routine and a plan.'
+        ? 'You said you want to work on yourself. The best start for that is the strategy session, in Pillars. It takes a few minutes, and you leave with a routine and a plan.'
         : m.session === 'soon'
           ? 'When you feel ready, try the strategy session in Pillars. It builds a routine around your real day, with room for focus and energy.'
           : 'Want to go deeper some day? The strategy session in Pillars is there whenever you are.';
-    // Discover is offered beside the strategy session every time: it is the quicker way in (about fifteen minutes) and it makes the next steps personal.
+    // Discover is offered beside the strategy session every time: it is the quicker way in and it makes the next steps personal.
     const discoverChip: ChatChoice = { value: 'discover', label: 'Take the Discover quiz' };
     const chips: ChatChoice[] =
       m.session === 'now'
@@ -332,7 +332,7 @@ export function SetupChat() {
         'Daily gives you three small things to do each day. Pillars is where you work on the seven relationships in your life: with yourself, your family, your friends, a partner, your work, your teachers and your faith.',
         ...(coachLine ? [coachLine] : []),
         session,
-        'Or start with Discover. It is a quiz of about fifteen minutes with puzzles, personality and real situations. It shows your strengths and makes your next steps fit you.',
+        'Or start with Discover. It is a quiz with puzzles, personality and real situations. It shows your strengths and makes your next steps fit you.',
         'One more thing, if you like: add your interests, so people who like the same things can find you.',
       ],
       { part: 'done', ask: { kind: 'chips', chips: [...chips, { value: 'profile', label: 'Add my interests' }] } },
@@ -361,7 +361,7 @@ export function SetupChat() {
   // ---- server calls
 
   const askSignIn = (lead: Line[], name: string) =>
-    say([...lead, "I'll help you set up kreators.app so it fits you. It takes about two minutes.", "First, let's make your account, so nothing you tell me gets lost. Fill in the card below, then tap Next."], {
+    say([...lead, "I'll help you set up kreators.app so it fits you.", "First, let's make your account, so nothing you tell me gets lost. Fill in the card below, then tap Next."], {
       part: 'account',
       ask: { kind: 'form', render: (send) => <SignInCard initialName={name} onSend={send} />, more: 'The password needs eight or more letters, numbers or signs. It cannot be your email or a common one, like 12345678.' },
     });
@@ -546,7 +546,7 @@ export function SetupChat() {
         ask: { kind: 'chips', chips: [{ value: 'go', label: 'Yes, change my answers' }, { value: 'keep', label: 'No, keep them as they are' }] },
       });
     }
-    askGoals(EMPTY, [], [hi, "I'll ask you three or four quick questions. Your answers decide which apps I switch on for you.", 'Tap the answers that fit. You can also type in your own words, or ask me what anything means.']);
+    askGoals(EMPTY, [], [hi, "I'll ask you a few quick questions. Your answers decide which apps I switch on for you.", 'Tap the answers that fit. You can also type in your own words, or ask me what anything means.']);
   };
   const beginRef = useKeptRef(scope, 'begin', begin);
   beginRef.current = begin;

@@ -1575,14 +1575,11 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-const INVITE_GAP_MS = 60_000;
-let lastInvite = 0;
-
 /**
  * The round button at the bottom right, on every screen inside the app: above the tab bar on a phone, in the
  * corner on a laptop. Bumling sits in it, bobbing and blinking, and gives a small hop every few seconds; pointing at
- * it (or reaching it with the keyboard) makes him jump and brings up "Chat with AI assistant" above it; a phone has no
- * hover, so there both play on their own when a screen opens, at most once a minute. It opens the
+ * it (or reaching it with the keyboard) makes him jump and brings up "Chat with AI assistant" above it; a phone never shows
+ * that text by itself, because space is tight. It opens the
  * panel over the page. Hidden on the Companion, which is a chat of its own, and when the team has switched the
  * assistant off. Motion is GSAP; with reduced motion he stays put and the bubble just appears.
  */
@@ -1635,23 +1632,7 @@ export function Assistant() {
     if (on) gsap.fromTo(him, { y: 0, scale: 1 }, { y: -6, scale: 1.08, duration: 0.18, ease: 'power2.out', yoyo: true, repeat: 1, overwrite: 'auto' });
   };
 
-  // A phone has no hover, so there the jump and the bubble play on their own a moment after a screen opens, at most once a minute.
-  const available = Boolean(mod?.available);
-  useEffect(() => {
-    if (open || !available || !window.matchMedia('(hover: none)').matches) return;
-    if (Date.now() - lastInvite < INVITE_GAP_MS) return;
-    const show = window.setTimeout(() => {
-      lastInvite = Date.now();
-      point(true);
-    }, 1200);
-    const hide = window.setTimeout(() => point(false), 4200);
-    return () => {
-      window.clearTimeout(show);
-      window.clearTimeout(hide);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, available, loc.pathname]);
-
+  // The bubble and the jump belong to a mouse pointing at the button (or the keyboard reaching it). A phone never gets them on its own: that space is the page's.
   if (!mod?.available || loc.pathname.startsWith('/companion')) return null;
   if (open) return <AssistantPanel onClose={() => setOpen(false)} />;
   return (

@@ -69,7 +69,7 @@ export function Welcome() {
           One you.
         </h1>
         <p className="mt-md text-[18px] font-semibold leading-snug text-ink-soft">
-          A daily game for the seven relationships that make a life, with the apps a creator needs around it. Start with a short chat. It is three questions, about two minutes, and the apps that fit you switch on. The deeper strategy session waits in Pillars until you want it.
+          A daily game for the seven relationships that make a life, with the apps a creator needs around it. Start with a short chat. It is a few questions, and the apps that fit you switch on. The deeper strategy session waits in Pillars until you want it.
         </p>
       </div>
       <div className="flex flex-col gap-sm pb-lg">

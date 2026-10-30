@@ -6,7 +6,7 @@ import { BAND_STATEMENTS, MAP_LEVELS, pickFocus, placementFlags, rampTime, routi
 import { characterHello, characterTitle, INSECURITY_WEIGHTS, mantraLine, scoreOfStars, STAR_WORDS, starsOf, weightWord } from './index';
 import { blockMinutes, minutesLabel, parseRoutineBlocks, stepsMinutes } from './index';
 import type { Placement } from './index';
-import { CARD_GAMES, analyseDiscover, discoverProfile, profileForAssistant, styleHints, DISCOVER_PUZZLES, DISCOVER_SCENES, DISCOVER_STATEMENTS, DISCOVER_STEPS, DISCOVER_TRIADS, DISCOVER_WEIGHTS, DISCOVER_WORDS, REWARDS, REWARD_GROUPS, SOCIAL_REWARDS, discoverProgress, emptyDiscoverAnswers, parseDiscoverAnswers, scoreDiscover, trustScore } from './index';
+import { CARD_GAMES, analyseDiscover, discoverProfile, profileForAssistant, styleHints, DISCOVER_BANK, DISCOVER_CORE_STEPS, DISCOVER_SCENES, EQ_FEELINGS, EQ_PEOPLE, EQ_READING, PUZZLES_SHOWN, discoverComplete, eqComplete, puzzleAt, puzzleSequence, scoreEq, analyseEq, DISCOVER_STATEMENTS, DISCOVER_STEPS, DISCOVER_TRIADS, DISCOVER_WEIGHTS, DISCOVER_WORDS, REWARDS, REWARD_GROUPS, SOCIAL_REWARDS, discoverProgress, emptyDiscoverAnswers, parseDiscoverAnswers, scoreDiscover, trustScore } from './index';
 import { FEATURE_FEE_POINTS, isFeatured, parseImageUrls, STORE_STAGE_META, PREOWNED_CONDITION_META } from './index';
 import { builtInTemplate, parseReviewPrompts, periodDays, periodFor, periodLabel, periodShift } from './index';
 import { MAX_NOT_TO_DO, notToDoStreak, notToDoWeek, shiftDay } from './index';
@@ -187,25 +187,75 @@ describe('apps', () => {
       expect(ids.length).toBe(Object.keys(DISCOVER_STATEMENTS).length);
       for (const t of DISCOVER_TRIADS) expect(new Set(t.map((id) => DISCOVER_STATEMENTS[id]!.trait)).size).toBe(3);
       for (const list of DISCOVER_WORDS) expect(list).toHaveLength(10);
-      expect(DISCOVER_STEPS).toBe(DISCOVER_TRIADS.length + DISCOVER_PUZZLES.length + DISCOVER_WORDS.length + DISCOVER_SCENES.length);
+      expect(DISCOVER_STEPS).toBe(DISCOVER_TRIADS.length + PUZZLES_SHOWN + DISCOVER_WORDS.length + DISCOVER_SCENES.length + EQ_FEELINGS.length + EQ_READING.length + EQ_PEOPLE.length);
+      expect(DISCOVER_CORE_STEPS).toBe(DISCOVER_TRIADS.length + PUZZLES_SHOWN + DISCOVER_WORDS.length + DISCOVER_SCENES.length);
     });
-    it('makes ten puzzles with five different pieces and one right one', () => {
-      expect(DISCOVER_PUZZLES).toHaveLength(10);
-      for (const p of DISCOVER_PUZZLES) {
+    it('makes thirty puzzles, six at each of five levels, with five pieces and one right one', () => {
+      expect(DISCOVER_BANK).toHaveLength(30);
+      for (const level of [1, 2, 3, 4, 5]) expect(DISCOVER_BANK.filter((p) => p.level === level)).toHaveLength(6);
+      for (const p of DISCOVER_BANK) {
         expect(p.options).toHaveLength(5);
-        expect(new Set(p.options.map((o) => JSON.stringify(o))).size).toBe(5);
         expect(p.answer).toBeGreaterThanOrEqual(0);
-        expect(p.cells.filter((c) => c === null)).toHaveLength(1);
+        expect(p.answer).toBeLessThan(5);
+        if (p.kind === 'odd') expect(p.cells).toHaveLength(0);
+        else {
+          expect(new Set(p.options.map((o) => JSON.stringify(o))).size).toBe(5);
+          expect(p.cells.filter((c) => c === null)).toHaveLength(1);
+        }
+      }
+      // The odd one out really is the only one that breaks the rule.
+      for (const p of DISCOVER_BANK.filter((x) => x.kind === 'odd')) {
+        const faces = p.options.map((o) => o.n!);
+        const rules = [(n: number) => n % 2 === 0, (n: number) => n >= 4, (n: number) => n % 3 === 0];
+        expect(rules.some((r) => faces.filter((n) => r(n)).length === 1 || faces.filter((n) => !r(n)).length === 1)).toBe(true);
       }
     });
+    it('walks up after a right answer and down after a wrong one, the same way every time', () => {
+      const right = puzzleSequence([]).map((x) => x.puzzle.level);
+      expect(right[0]).toBe(3);
+      const picks: (number | null)[] = [];
+      for (let i = 0; i < PUZZLES_SHOWN; i += 1) picks.push(puzzleAt(picks, i).answer);
+      const up = puzzleSequence(picks).map((x) => x.puzzle.level);
+      expect(up.slice(0, 4)).toEqual([3, 4, 5, 5]);
+      expect(new Set(puzzleSequence(picks).map((x) => x.puzzle.id)).size).toBe(PUZZLES_SHOWN);
+      const wrong = Array.from({ length: PUZZLES_SHOWN }, (_, i) => (puzzleAt([], 0).answer + 1 + i) % 5);
+      const down = puzzleSequence(wrong.map((w, i) => (puzzleAt(wrong.slice(0, i), i).answer === w ? (w + 1) % 5 : w))).map((x) => x.puzzle.level);
+      expect(down.slice(0, 4)).toEqual([3, 2, 1, 1]);
+      expect(puzzleSequence(picks)).toEqual(puzzleSequence(picks));
+    });
+    it('scores emotional intelligence, and only counts it when it is all answered', () => {
+      const a = emptyDiscoverAnswers();
+      expect(eqComplete(a)).toBe(false);
+      expect(scoreDiscover(a).eq).toBeUndefined();
+      a.feelings = EQ_FEELINGS.map((screen) => screen.map((it) => (it.sign === 1 ? 4 : 0)));
+      a.reading = EQ_READING.map((q) => q.key);
+      a.people = EQ_PEOPLE.map((q) => ({ most: q.key.indexOf(4), least: q.key.indexOf(1) }));
+      expect(eqComplete(a)).toBe(true);
+      expect(discoverComplete(a)).toBe(false);
+      const top = scoreEq(a);
+      expect(top.overall).toBe(100);
+      expect(top.reading.right).toBe(6);
+      const low = emptyDiscoverAnswers();
+      low.feelings = EQ_FEELINGS.map((screen) => screen.map((it) => (it.sign === 1 ? 0 : 4)));
+      low.reading = EQ_READING.map((q) => (q.key + 1) % 4);
+      low.people = EQ_PEOPLE.map((q) => ({ most: q.key.indexOf(1), least: q.key.indexOf(4) }));
+      expect(scoreEq(low).overall).toBeLessThan(10);
+      // Seeing yourself higher than you chose shows up as a gap to practise.
+      const gap = scoreEq({ ...a, people: low.people });
+      expect(analyseEq(gap).dims.some((d) => d.gap !== null)).toBe(true);
+      expect(analyseEq(top).dims).toHaveLength(5);
+    });
     it('reads a result in detail: five traits, the two that stand out, reasoning by kind', () => {
-      const res = scoreDiscover({ ...emptyDiscoverAnswers(), puzzles: DISCOVER_PUZZLES.map((p, i) => (i < 7 ? p.answer : (p.answer + 1) % 5)) });
+      const picks: (number | null)[] = [];
+      for (let i = 0; i < PUZZLES_SHOWN; i += 1) picks.push(i < 7 ? puzzleAt(picks, i).answer : (puzzleAt(picks, i).answer + 1) % 5);
+      const res = scoreDiscover({ ...emptyDiscoverAnswers(), puzzles: picks });
       const a = analyseDiscover(res);
       expect(a.personality).toHaveLength(5);
       expect(a.reasoning.right).toBe(res.puzzles.right);
-      expect(a.reasoning.level).toBe(res.puzzles.right >= 6 ? 'Strong' : 'Steady');
-      expect(a.reasoning.kinds.map((k) => k.kind)).toEqual(['dice', 'turn', 'grid']);
-      expect(a.reasoning.kinds.reduce((n, k) => n + k.of, 0)).toBe(10);
+      expect(['Strong', 'Sharp']).toContain(a.reasoning.level);
+      expect(a.reasoning.kinds.length).toBeGreaterThanOrEqual(3);
+      expect(a.reasoning.kinds.reduce((n, k) => n + k.of, 0)).toBe(12);
+      expect(a.eq).toBeNull();
       expect(a.reasoning.caveat).toMatch(/not an IQ score/);
       // Results taken before the detail existed still read, just without the kinds.
       const old = { ...res, puzzles: { right: 4, of: 10, score: 40 } };
@@ -222,7 +272,7 @@ describe('apps', () => {
       expect(high.pattern).toMatch(/warm/);
     });
     it('turns a result into a small profile, tips for the assistant and next steps, and never the answers', () => {
-      const res = scoreDiscover({ ...emptyDiscoverAnswers(), puzzles: DISCOVER_PUZZLES.map((p) => p.answer) });
+      const res = scoreDiscover(emptyDiscoverAnswers());
       const p = discoverProfile({ ...res, traits: { o: 80, c: 20, e: 50, a: 50, s: 20 } }, '2026-10-31T10:00:00.000Z');
       expect(p.bands).toEqual({ o: 'high', c: 'low', e: 'mid', a: 'mid', s: 'low' });
       expect(styleHints(p).join(' ')).toMatch(/tiny/);
@@ -261,10 +311,11 @@ describe('apps', () => {
       expect(blank.puzzles.score).toBe(0);
       // Someone who always calls the most effective answer most effective, and puzzles right.
       const best = emptyDiscoverAnswers();
-      best.puzzles = DISCOVER_PUZZLES.map((p) => p.answer);
+      for (let i = 0; i < PUZZLES_SHOWN; i += 1) best.puzzles[i] = puzzleAt(best.puzzles, i).answer;
       best.scenes = DISCOVER_SCENES.map((s) => ({ most: s.key.indexOf(4), least: s.key.indexOf(1) }));
       const good = scoreDiscover(best);
-      expect(good.puzzles.score).toBe(100);
+      expect(good.puzzles.score).toBeGreaterThanOrEqual(90);
+      expect(good.puzzles.right).toBe(PUZZLES_SHOWN);
       expect(good.judgment).toBe(100);
       const worst = emptyDiscoverAnswers();
       worst.scenes = DISCOVER_SCENES.map((s) => ({ most: s.key.indexOf(1), least: s.key.indexOf(4) }));

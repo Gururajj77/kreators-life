@@ -1,6 +1,6 @@
 // The smoke checks. Run through blueprint.sh, which starts the server this talks to.
 // Node imports the shared model straight from TypeScript (--experimental-strip-types).
-import { DISCOVER_PUZZLES, DISCOVER_SCENES, DISCOVER_STEPS, RELATIONSHIPS, QUESTIONS, XP, POINTS, WAIT, RUN_REWARD, SOCIAL_REWARDS, MAX_NOT_TO_DO, MODULES, FEATURE_FEE_POINTS, matchSetup, parseSetup, setupSwitchable } from '../../packages/shared/src/index.ts';
+import { DISCOVER_CORE_STEPS, DISCOVER_SCENES, DISCOVER_STEPS, EQ_FEELINGS, EQ_PEOPLE, EQ_READING, PUZZLES_SHOWN, puzzleAt, RELATIONSHIPS, QUESTIONS, XP, POINTS, WAIT, RUN_REWARD, SOCIAL_REWARDS, MAX_NOT_TO_DO, MODULES, FEATURE_FEE_POINTS, matchSetup, parseSetup, setupSwitchable } from '../../packages/shared/src/index.ts';
 import { LIMITS } from '../../apps/api/src/limits.ts';
 import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, PLANS } from '../../packages/shared/src/index.ts';
 import http from 'node:http';
@@ -1538,19 +1538,36 @@ section('Engagement');
   check('Discover starts empty', dz0.status === 200 && dz0.json.progress?.done === 0 && dz0.json.progress?.total === DISCOVER_STEPS && dz0.json.latest === null, dz0.json.progress);
   const dzAnswers = {
     triads: Array.from({ length: 18 }, () => ({ most: 0, least: 1 })),
-    puzzles: DISCOVER_PUZZLES.map((p) => p.answer),
+    puzzles: (() => {
+      const picks = [];
+      for (let i = 0; i < PUZZLES_SHOWN; i += 1) picks.push(puzzleAt(picks, i).answer);
+      return picks;
+    })(),
+    puzzleMs: Array.from({ length: PUZZLES_SHOWN }, () => 4000),
     words: Array.from({ length: 3 }, () => ({ most: [0, 1, 2], least: [3, 4, 5] })),
     scenes: DISCOVER_SCENES.map((s) => ({ most: s.key.indexOf(4), least: s.key.indexOf(1) })),
   };
   const dzPart = await api('PUT', '/discover/draft', { answers: { ...dzAnswers, triads: [{ most: 0, least: 0 }, ...dzAnswers.triads.slice(1)], scenes: [] } }, R.token);
-  check('a half-finished quiz is saved, and a bad answer is dropped', dzPart.status === 200 && dzPart.json.progress?.done === DISCOVER_STEPS - 1 - 6, dzPart.json.progress);
+  check('a half-finished quiz is saved, and a bad answer is dropped', dzPart.status === 200 && dzPart.json.progress?.done === DISCOVER_CORE_STEPS - 1 - 6, dzPart.json.progress);
   const dzEarly = await api('POST', '/discover/submit', {}, R.token);
   check('the quiz cannot be finished with questions open', dzEarly.status === 400 && /open/.test(dzEarly.json.error ?? ''), dzEarly.json);
   const dzDone = await api('POST', '/discover/submit', { answers: dzAnswers }, R.token);
   const dzR = dzDone.json.result;
-  check('a finished quiz is scored on the server: puzzles and situations full marks, three top strengths', dzDone.status === 201 && dzR?.puzzles?.score === 100 && dzR?.judgment === 100 && dzR?.top?.length === 3 && new Set(dzR.top).size === 3 && dzR?.strengths?.length === 7 && Object.values(dzR.traits).every((n) => n >= 0 && n <= 100), dzDone.json);
+  check('a finished quiz is scored on the server: puzzles and situations full marks, three top strengths, no emotional intelligence part yet', dzDone.status === 201 && dzR?.puzzles?.right === PUZZLES_SHOWN && dzR?.puzzles?.score >= 90 && dzR?.puzzles?.medianSeconds === 4 && dzR?.eq === undefined && dzR?.judgment === 100 && dzR?.top?.length === 3 && new Set(dzR.top).size === 3 && dzR?.strengths?.length === 7 && Object.values(dzR.traits).every((n) => n >= 0 && n <= 100), dzDone.json);
   const dz1 = await api('GET', '/discover', undefined, R.token);
   check('the result is kept and the draft is gone', dz1.json.latest?.id === dzDone.json.id && dz1.json.progress?.done === 0, dz1.json.progress);
+  const eqAnswers = {
+    ...dzAnswers,
+    feelings: EQ_FEELINGS.map((screen) => screen.map((it) => (it.sign === 1 ? 4 : 0))),
+    reading: EQ_READING.map((q) => q.key),
+    people: EQ_PEOPLE.map((q) => ({ most: q.key.indexOf(4), least: q.key.indexOf(1) })),
+  };
+  const dzEq = await api('POST', '/discover/submit', { answers: eqAnswers }, R.token);
+  check('with the emotional intelligence part answered, it is scored too, and each part reads out', dzEq.status === 201 && dzEq.json.result?.eq?.overall === 100 && Object.keys(dzEq.json.result.eq.dims).length === 5 && dzEq.json.result.eq.reading.right === 6, dzEq.json.result?.eq);
+  const dzEqHalf = await api('POST', '/discover/submit', { answers: { ...eqAnswers, people: eqAnswers.people.slice(0, 3) } }, R.token);
+  check('a half-done add-on is left out, not scored', dzEqHalf.status === 201 && dzEqHalf.json.result?.eq === undefined, dzEqHalf.json.result?.eq);
+  await api('DELETE', `/discover/results/${dzEq.json.id}`, undefined, R.token);
+  await api('DELETE', `/discover/results/${dzEqHalf.json.id}`, undefined, R.token);
   check('Discover keeps its switches: next steps on, assistant off, until the person says', dz1.json.settings?.steps === true && dz1.json.settings?.assistant === false, dz1.json.settings);
   const dzLocked = await api('GET', '/discover/profile', undefined, R.token);
   check('the assistant gets nothing while its switch is off', dzLocked.status === 403 && /not let the assistant/.test(dzLocked.json.error ?? ''), dzLocked.json);
