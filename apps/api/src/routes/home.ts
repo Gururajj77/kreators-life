@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { briefFor, gettingStarted, levelProgress, nudgeFor, parseCoachShare, periodFor, RELATIONSHIPS, type BriefLine, type DailyBrief, type HomeFloor, type HomeResponse, type HomeUpNext, type RelationshipKey } from '@kreators/shared';
+import { briefFor, gettingStarted, isAutoHandle, levelProgress, nudgeFor, parseCoachShare, periodFor, RELATIONSHIPS, type BriefLine, type DailyBrief, type HomeFloor, type HomeResponse, type HomeUpNext, type RelationshipKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { can, nameOf, nowIso, parseList, shiftDate } from '../db';
 import { resolveAccess } from '../access';
@@ -329,7 +329,7 @@ home.get('/brief', async (c) => {
       task: (firsts?.tasks ?? 0) > 0,
       act: (firsts?.acts ?? 0) > 0,
       interests: parseList(user.interests).length >= 2,
-      handle: Boolean(user.handle),
+      handle: !isAutoHandle(user.handle),
       people: (firsts?.people ?? 0) > 0,
       session: (firsts?.sessions ?? 0) > 0,
     },

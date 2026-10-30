@@ -9,6 +9,15 @@ function inline(text: string, key: string): ReactNode[] {
  * The small markdown that lessons are written in: ## and ### headings, paragraphs, - bullets,
  * 1. numbered steps, > callouts and **bold**. Rendered with the app's own type and spacing.
  */
+/** A callout's colour comes from its bold label: tips are yellow, results green, warnings orange, anything else purple. */
+function calloutTone(first: string): string {
+  const label = /^\*\*([^*]+)\*\*/.exec(first)?.[1]?.toLowerCase() ?? '';
+  if (label.startsWith('pro tip') || label.startsWith('tip')) return 'tip-yellow';
+  if (label.startsWith('result')) return 'tip-green';
+  if (label.startsWith('watch') || label.startsWith('warning') || label.startsWith('careful')) return 'tip-orange';
+  return '';
+}
+
 export function Markdown({ text, className = '' }: { text: string; className?: string }) {
   const lines = text.replace(/\r\n/g, '\n').split('\n');
   const out: ReactNode[] = [];
@@ -83,8 +92,9 @@ export function Markdown({ text, className = '' }: { text: string; className?: s
     if (line.startsWith('> ')) {
       const quote = take((l) => l.startsWith('> ')).map((l) => l.slice(2));
       const k = key();
+      const tone = calloutTone(quote[0] ?? '');
       out.push(
-        <aside key={k} className="mt-sm rounded-tile bg-card p-sm text-[14px] font-semibold leading-relaxed shadow-toy-soft">
+        <aside key={k} className={`tip-card ${tone} mt-sm rounded-tile border border-line p-sm text-[14px] font-semibold leading-relaxed`}>
           {inline(quote.join(' '), k)}
         </aside>,
       );

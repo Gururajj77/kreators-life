@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { COACH_ABOUT_MAX, COACH_ASK_AGAIN_DAYS, COACH_NOTE_MAX, COACH_SHARE_PARTS, MAX_COACH_ASKS, MAX_COACHES, parentKind, parseCoachShare, type CoachDirectoryEntry, type CoachHub, type CoachLinkStatus, type CoachProfile, type MyCoachResponse } from '@kreators/shared';
+import { COACH_ABOUT_MAX, COACH_ASK_AGAIN_DAYS, COACH_NOTE_MAX, COACH_SHARE_PARTS, MAX_COACH_ASKS, MAX_COACHES, normalizeCode, parentKind, parseCoachShare, type CoachDirectoryEntry, type CoachHub, type CoachLinkStatus, type CoachProfile, type MyCoachResponse } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
 import { getNode, nameOf, newId, notify, nowIso, pageOf, paged, str, toNode } from '../db';
 import { activeLink, askToCoach, endLink, isCoach, LINK, linkById, logCoach, logPage, notePage, rosterRow, shareChange, studentView, toLink, toPerson, type LinkRow } from '../coaching';
@@ -48,11 +48,15 @@ export async function startLink(db: D1Database, a: { coachId: string; studentId:
   return linkById(db, id);
 }
 
-/** Someone by their email or their @handle. */
+/** Someone by their email, their @username or their friend code (the one Bond uses). */
 async function personBy(db: D1Database, who: string): Promise<UserRow | null> {
   const q = who.trim().toLowerCase();
   if (!q) return null;
-  return q.includes('@') && !q.startsWith('@') ? db.prepare('SELECT * FROM users WHERE LOWER(email) = ?').bind(q).first<UserRow>() : db.prepare('SELECT * FROM users WHERE handle = ?').bind(q.replace(/^@/, '')).first<UserRow>();
+  if (q.includes('@') && !q.startsWith('@')) return db.prepare('SELECT * FROM users WHERE LOWER(email) = ?').bind(q).first<UserRow>();
+  const byHandle = await db.prepare('SELECT * FROM users WHERE handle = ?').bind(q.replace(/^@/, '')).first<UserRow>();
+  if (byHandle) return byHandle;
+  const code = normalizeCode(q);
+  return code.length >= 8 ? db.prepare('SELECT * FROM users WHERE friend_code = ?').bind(code).first<UserRow>() : null;
 }
 
 // ---- the coach's side
@@ -153,7 +157,7 @@ coach.post('/requests', async (c) => {
   if (!isCoach(user)) return c.json({ error: 'Only a life coach can ask someone to be their student.' }, 403);
   const body = await c.req.json<{ who?: unknown }>().catch(() => ({}) as { who?: unknown });
   const student = await personBy(db, typeof body.who === 'string' ? body.who : '');
-  if (!student) return c.json({ error: 'No account has that email or handle.' }, 404);
+  if (!student) return c.json({ error: 'No account has that email, username or friend code.' }, 404);
   const waiting = await db.prepare("SELECT COUNT(*) AS n FROM coach_links WHERE coach_id = ? AND status = 'pending' AND asked_by = 'coach'").bind(user.id).first<{ n: number }>();
   if ((waiting?.n ?? 0) >= MAX_COACH_ASKS) return c.json({ error: `You have ${MAX_COACH_ASKS} asks waiting. Wait for answers, or take some back.` }, 429);
   const bad = await linkProblem(db, user.id, student.id);

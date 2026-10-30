@@ -63,7 +63,7 @@ function localReply(text: string, f: Facts): string {
     lines.push('Then tell me: what is the one thing on the pile that actually has a deadline today?');
   } else if (/\b(sad|down|low|lonely|alone|cry|empty)\b/.test(t)) {
     lines.push('Thank you for saying it plainly. That takes something.');
-    if (f.weakest) lines.push(`${f.weakest.character} on your ${f.weakest.name} floor keeps asking: ${f.weakest.question}`);
+    if (f.weakest) lines.push(`${f.weakest.character} on your ${f.weakest.name} pillar keeps asking: ${f.weakest.question}`);
     lines.push('Who is one person you could send a two-line message to in the next hour?');
   } else if (/\b(angry|furious|annoyed|frustrat)\b/.test(t)) {
     lines.push('Anger usually points at something you care about. What got stepped on?');
@@ -71,9 +71,9 @@ function localReply(text: string, f: Facts): string {
     lines.push(`Good. Write that down in your journal before the feed eats it. ${f.streak > 0 ? `Day ${f.streak} of your streak, too.` : ''}`.trim());
     lines.push('What did you do differently that made today go well?');
   } else if (/\b(what|should|how|help|idea|next)\b/.test(t)) {
-    if (f.nextTask) lines.push(`The next task on your tower is "${f.nextTask}". That is a good place to start.`);
-    else lines.push('Your tower has no open tasks right now. Build a floor and it will give you three.');
-    lines.push(`Today's spark: ${f.spark}`);
+    if (f.nextTask) lines.push(`The next task on your pillars is "${f.nextTask}". That is a good place to start.`);
+    else lines.push('Your pillars have no open tasks right now. Build a pyramid and it will give you three.');
+    lines.push(`Today's small act: ${f.spark}`);
   } else {
     lines.push(`I hear you, ${f.name}.`);
     lines.push(f.mood ? `You marked today as ${f.mood}.` : 'You have not marked a mood today.');

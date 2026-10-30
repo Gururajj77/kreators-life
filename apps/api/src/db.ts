@@ -85,6 +85,7 @@ export function toUser(r: UserRow): User {
     phone: r.phone ?? '',
     birthDate: r.birth_date ?? '',
     handle: r.handle,
+    friendCode: r.friend_code,
     bio: r.bio,
     reminderTime: r.reminder_time,
     referralCode: r.referral_code,
@@ -208,6 +209,16 @@ export async function notify(db: D1Database, userId: string, kind: string, title
     .prepare('INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)')
     .bind(newId(), userId, kind, title, body, link, nowIso())
     .run();
+}
+
+/** A username every account starts with; the person can change it under Profile. */
+export function newHandle(): string {
+  return `user_${randomCode(6).toLowerCase()}`;
+}
+
+/** The code a person shares so others can send them a friend request in Bond. */
+export function newFriendCode(): string {
+  return randomCode(8);
 }
 
 export function randomCode(len = 8): string {

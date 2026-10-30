@@ -69,7 +69,7 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
         <Avatar relationship="friendship" size={72} />
         <h1 className="mt-md text-[30px]">{mode === 'signup' ? 'Create your account' : 'Welcome back'}</h1>
         <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">
-          {mode === 'signup' ? (hasSession ? 'Everything on this phone comes with you. Add an email so it survives a new one.' : `An email, a password, a phone number and your date of birth. You need to be ${MIN_AGE} or older.`) : 'Sign in to pick up where you left off.'}
+          {mode === 'signup' ? (hasSession ? 'Everything on this phone comes with you. Add an email so it survives a new phone.' : `An email, a password, a phone number and your date of birth. You need to be ${MIN_AGE} or older.`) : 'Sign in to pick up where you left off.'}
         </p>
       </div>
       <form
@@ -156,7 +156,7 @@ export function Forgot() {
       <div className="pt-xl">
         <Avatar relationship="friendship" size={72} />
         <h1 className="mt-md text-[30px]">Forgot your password?</h1>
-        <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">Type your email and a link to choose a new one is on its way.</p>
+        <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">Type your email and we will send you a link to choose a new password.</p>
       </div>
       {send.isSuccess ? (
         <div className="mt-lg rounded-card bg-card p-md shadow-toy-soft" role="status">

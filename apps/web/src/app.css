@@ -640,3 +640,23 @@ details[open] > summary {
 .type-measure {
   max-width: 65ch;
 }
+
+/* Every tip is the same pale purple card; the tint turns deep purple in dark mode with the rest of the family. */
+.tip-card {
+  background-color: var(--tint-purple);
+  color: var(--color-ink);
+}
+
+/* Callout colours: each is its relationship colour thinned into the card, so it stays pale in light mode and deep in dark mode. */
+.tip-card {
+  background-color: color-mix(in oklab, var(--color-r6) 14%, var(--color-card));
+}
+.tip-yellow {
+  background-color: color-mix(in oklab, var(--color-r3) 24%, var(--color-card));
+}
+.tip-green {
+  background-color: color-mix(in oklab, var(--color-r4) 26%, var(--color-card));
+}
+.tip-orange {
+  background-color: color-mix(in oklab, var(--color-r2) 20%, var(--color-card));
+}

@@ -837,6 +837,8 @@ export interface User {
   handle: string | null;
   bio: string;
   reminderTime: string | null;
+  /** The code others type in Bond to send this person a friend request. */
+  friendCode: string | null;
   referralCode: string | null;
   /** Per-person module toggles. Missing keys use the module default. */
   modules: Record<string, boolean>;
@@ -4878,7 +4880,36 @@ export const TERMS: Record<string, string> = {
   mention: 'An @ and someone’s page name in a post or reply. It tells them, in their inbox under Replies and mentions.',
   season: 'One month on the leaderboard. Everyone starts level on the first; the top three when it ends keep the Season top three honor.',
   'change log': 'The list at the end of a coaching page: every ask, yes, note and task change between a coach and a student, with when it happened.',
+  username: 'Your own name in the app, like @sam_k. Nobody else has it. It is also your public page address. Change it under Profile.',
+  'friend code': 'Eight letters and numbers, yours alone. Give it to someone you know; they type it in Bond and you get a friend request.',
 };
+
+/** True for the username an account is given at sign-up, before the person picks their own. */
+export const isAutoHandle = (handle: string | null | undefined): boolean => !handle || /^user_[a-z0-9]{6,8}$/.test(handle);
+
+/** The glossary's categories, in the order they are shown. Every word in TERMS is in exactly one; the words inside each are sorted A to Z by `termGroups`. */
+export const TERM_GROUPS: { name: string; terms: string[] }[] = [
+  { name: 'Pillars and pyramids', terms: ['pillar', 'pyramid', 'foundation', 'guiding principle', 'value goal', 'goal outcome', 'project', 'task', 'ripple', 'map', 'life map', 'strategy session', 'routine', 'contract', 'core', 'floor'] },
+  { name: 'Daily and progress', terms: ['small act', 'check-in', 'daily three', 'daily brief', 'not-to-do', 'kept day', 'streak', 'xp', 'points', 'level', 'who you are becoming', 'life score', 'five areas of life', 'period', 'review', 'season'] },
+  { name: 'You and your page', terms: ['username', 'identity tag', 'setup chat', 'public page', 'badge', 'honor', 'trust', 'unlock'] },
+  { name: 'Friends and community', terms: ['friend code', 'alias', 'circle', 'reaction', 'mention', 'guide', 'life coach', 'student', 'change log', 'run club', 'start code', 'attendee code'] },
+  { name: 'Learn and earn', terms: ['cohort', 'campaign', 'bounty', 'Club', 'collab', 'giveaway'] },
+  { name: 'Shop and store', terms: ['featured', 'partner link', 'pre-owned', 'kit', 'offer'] },
+  { name: 'Content', terms: ['brand folder', 'outlier', 'hook', 'piece'] },
+  { name: 'Assistant and plans', terms: ['bumling', 'assistant', 'Pro', 'credits', 'top-up'] },
+];
+
+/** The glossary by category, each category and each word in it sorted A to Z, ignoring case. Any word not placed lands under Other. */
+export function termGroups(): { name: string; terms: [string, string][] }[] {
+  const placed = new Set(TERM_GROUPS.flatMap((g) => g.terms));
+  const loose = Object.keys(TERMS).filter((t) => !placed.has(t));
+  const groups = loose.length ? [...TERM_GROUPS, { name: 'Other', terms: loose }] : TERM_GROUPS;
+  const az = (a: string, b: string) => a.localeCompare(b, 'en', { sensitivity: 'base' });
+  return groups
+    .map((g) => ({ name: g.name, terms: g.terms.filter((t) => t in TERMS).sort(az).map((t): [string, string] => [t, TERMS[t] ?? '']) }))
+    .filter((g) => g.terms.length > 0)
+    .sort((a, b) => (a.name === 'Other' ? 1 : b.name === 'Other' ? -1 : az(a.name, b.name)));
+}
 
 export interface HowTo {
   /** Three to five concrete steps, each a sentence or two: what happens, what it pays, where it goes. */
@@ -5785,7 +5816,7 @@ export const GETTING_STARTED = [
   { key: 'task', label: 'Tick your first task', to: '/today' },
   { key: 'act', label: 'Do a small act', to: '/today' },
   { key: 'interests', label: 'Pick two interests', to: '/profile#interests' },
-  { key: 'handle', label: 'Choose your page name', to: '/profile' },
+  { key: 'handle', label: 'Choose your username', to: '/profile' },
   { key: 'people', label: 'Join a circle, an event or a run club', to: '/apps' },
   { key: 'session', label: 'Take the strategy session', to: '/session' },
 ] as const;

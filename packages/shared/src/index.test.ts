@@ -1,4 +1,4 @@
-import { BADGES as ALL_BADGES, HOW_TO, kmLabel, MODULES as MODS, paceLabel, RUN_BADGES, runEntryState, TERMS, weekStart, weekStreak } from './index';
+import { BADGES as ALL_BADGES, HOW_TO, kmLabel, MODULES as MODS, paceLabel, RUN_BADGES, runEntryState, TERMS, termGroups, weekStart, weekStreak } from './index';
 import { earningGuide, nextBadge, unlockFor } from './index';
 import { ageOn, birthDateProblem, MIN_AGE, normalizePhone, phoneProblem } from './index';
 import { BRAND_SOURCE_KINDS, BRAND_SOURCE_META, PIECE_KINDS, PIECE_META, RESEARCH_KINDS, RESEARCH_META, sourceKindOf } from './index';
@@ -286,6 +286,14 @@ describe('how-tos and terms', () => {
     for (const h of Object.values(HOW_TO)) expect(h.steps.length).toBeLessThanOrEqual(5);
     for (const h of Object.values(HOW_TO)) for (const term of h.terms) expect(TERMS[term], term).toBeTruthy();
     expect(Object.keys(TERMS).length).toBeGreaterThanOrEqual(30);
+    // Every word sits in a named category, once, and each list reads A to Z.
+    const groups = termGroups();
+    expect(groups.some((g) => g.name === 'Other')).toBe(false);
+    expect(groups.flatMap((g) => g.terms.map(([t]) => t)).sort()).toEqual(Object.keys(TERMS).sort());
+    for (const g of groups) {
+      const names = g.terms.map(([t]) => t);
+      expect(names, g.name).toEqual([...names].sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' })));
+    }
   });
 });
 

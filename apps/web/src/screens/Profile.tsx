@@ -133,12 +133,12 @@ function ProfileView({ user }: { user: User }) {
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Page name</span>
+          <span className="block text-[14px] font-bold">Username</span>
           <div className="mt-xs flex items-center gap-xs">
             <span className="text-[16px] font-bold text-ink-soft">/u/</span>
             <input value={handle} onChange={(e) => setHandle(e.target.value.toLowerCase())} maxLength={20} pattern="[a-z0-9_]{3,20}" placeholder="yourname" className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
           </div>
-          <span className="mt-xs block text-[12px] font-bold text-ink-soft">Three to twenty characters: letters, numbers, underscore.</span>
+          <span className="mt-xs block text-[12px] font-bold text-ink-soft">Yours alone, and it is your page address. Three to twenty characters: letters, numbers, underscore.</span>
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Bio</span>

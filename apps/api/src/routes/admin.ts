@@ -418,7 +418,7 @@ admin.get('/funnels', async (c) => {
       steps: [
         { label: 'Finished the vibe check', count: await one('SELECT COUNT(*) AS n FROM users WHERE onboarded_at IS NOT NULL') },
         { label: 'Added an email', count: await one('SELECT COUNT(*) AS n FROM users WHERE email IS NOT NULL') },
-        { label: 'Published a page', count: await one('SELECT COUNT(*) AS n FROM users WHERE handle IS NOT NULL') },
+        { label: 'Published a page', count: await one("SELECT COUNT(*) AS n FROM users WHERE handle IS NOT NULL AND handle NOT LIKE 'user!_%' ESCAPE '!'") },
         { label: 'Has a live product', count: await one("SELECT COUNT(DISTINCT owner_id) AS n FROM products WHERE status = 'live'") },
         { label: 'Made a sale', count: await one("SELECT COUNT(DISTINCT owner_id) AS n FROM orders WHERE status IN ('paid','test')") },
       ],

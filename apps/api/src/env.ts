@@ -63,6 +63,7 @@ export interface UserRow {
   modules: string;
   reminder_time: string | null;
   referral_code: string | null;
+  friend_code: string | null;
   referred_by: string | null;
   permissions: string;
   skills: string;

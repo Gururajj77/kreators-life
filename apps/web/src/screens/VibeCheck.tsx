@@ -267,7 +267,7 @@ function PickFloors({ chosen, onChange, onBack, onNext }: { chosen: Relationship
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-card p-md">
         <div className="mx-auto max-w-[480px]">
           <Button size="lg" full disabled={chosen.length === 0} onClick={onNext}>
-            {chosen.length === 0 ? 'Pick at least one floor' : `Ask me about ${chosen.length} ${chosen.length === 1 ? 'floor' : 'floors'}`}
+            {chosen.length === 0 ? 'Pick at least one pillar' : `Ask me about ${chosen.length} ${chosen.length === 1 ? 'pillar' : 'pillars'}`}
           </Button>
         </div>
       </div>
@@ -711,7 +711,7 @@ function Learn({ result, floors, onNext }: { result: OnboardingResponse; floors:
       key: 'not',
       eyebrow: 'What this is',
       title: 'Not a to-do list',
-      body: <p className="m-0 text-[16px] font-semibold text-ink-soft">Most apps start with tasks. Tasks fade in a week. It is not a to-do list and it is not a mood app. It is a pyramid for each pillar of your life, and every task has a base under it.</p>,
+      body: <p className="m-0 text-[16px] font-semibold text-ink-soft">Most apps start with tasks. Tasks alone are easy to drop. It is not a to-do list and it is not a mood app. It is a pyramid for each pillar of your life, and every task has a base under it.</p>,
     },
     {
       key: 'rule',

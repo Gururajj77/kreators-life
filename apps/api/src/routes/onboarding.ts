@@ -164,7 +164,7 @@ onboarding.post('/build', async (c) => {
   const user = c.get('user');
   const body = await c.req.json<{ relationships?: unknown; date?: string; picks?: unknown }>().catch(() => ({}) as { relationships?: unknown; date?: string; picks?: unknown });
   const keys = (Array.isArray(body.relationships) ? body.relationships : []).filter(isRelationshipKey);
-  if (keys.length === 0) return c.json({ error: 'pick at least one floor' }, 400);
+  if (keys.length === 0) return c.json({ error: 'pick at least one pillar' }, 400);
   const date = typeof body.date === 'string' && DATE_RE.test(body.date) ? body.date : new Date().toISOString().slice(0, 10);
   const answers = await storedAnswers(db, user.id);
   const picks = readPicks(body.picks);
@@ -188,7 +188,7 @@ onboarding.post('/accept-quest', async (c) => {
   const date = typeof body.date === 'string' && DATE_RE.test(body.date) ? body.date : new Date().toISOString().slice(0, 10);
   const answers = await storedAnswers(db, user.id);
   const rows = await buildLadder(db, user.id, withPicks(deriveLadder(body.relationship, answers), readPicks(body.picks)), date);
-  if (!rows) return c.json({ error: 'that ladder is already standing on this floor' }, 409);
+  if (!rows) return c.json({ error: 'that pillar already has a pyramid' }, 409);
   return c.json({ nodes: rows.map((r) => toNode(r)) }, 201);
 });
 

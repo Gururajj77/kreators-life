@@ -57,6 +57,15 @@ export function Bond() {
     },
   });
   const answerFriend = useMutation({ mutationFn: ({ id, status }: { id: string; status: 'accepted' | 'declined' }) => api.answerFriend(id, status), onSuccess: () => fr.refetch() });
+  const [codeIn, setCodeIn] = useState('');
+  const [copied, setCopied] = useState(false);
+  const addByCode = useMutation({
+    mutationFn: () => api.addFriendByCode(codeIn),
+    onSuccess: () => {
+      setCodeIn('');
+      fr.refetch();
+    },
+  });
   const unfriend = useMutation({ mutationFn: (userId: string) => api.unfriend(userId), onSuccess: () => fr.refetch() });
   const openChat = useMutation({ mutationFn: (userId: string) => api.openChat({ userId }), onSuccess: (r) => nav(`/bond/chats/${r.chat.id}`) });
   const d = q.data;
@@ -94,7 +103,45 @@ export function Bond() {
         <Err e={openChat.isError ? openChat.error : null} />
       </Section>
 
-      <Section id="bond-friends" title="Friends" lede="Add people from their page. A chat with a friend is anonymous too." action={<SeeAll to="/community">Community</SeeAll>}>
+      <Section id="bond-friends" title="Friends" lede="Add people with their friend code or from their page. A chat with a friend is anonymous too." action={<SeeAll to="/community">Community</SeeAll>}>
+        <div className="mb-sm grid gap-sm rounded-tile bg-card p-sm shadow-toy-soft sm:grid-cols-2">
+          <div>
+            <p className="m-0 text-[14px] font-bold">Your friend code</p>
+            <div className="mt-xs flex items-center gap-xs">
+              <span className="rounded-tile bg-paper px-sm py-xs font-mono text-[20px] font-bold tracking-widest">{me.data?.user.friendCode ?? '…'}</span>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const code = me.data?.user.friendCode;
+                  if (!code) return;
+                  navigator.clipboard?.writeText(code).then(() => setCopied(true), () => undefined);
+                  window.setTimeout(() => setCopied(false), 2000);
+                }}
+              >
+                {copied ? 'Copied' : 'Copy'}
+              </Button>
+            </div>
+            <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Share it with someone you know. They type it here and you get a request. Your username is @{me.data?.user.handle ?? '…'}.</p>
+          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (codeIn.trim()) addByCode.mutate();
+            }}
+          >
+            <label className="block">
+              <span className="block text-[14px] font-bold">Add a friend by code</span>
+              <input value={codeIn} onChange={(e) => setCodeIn(e.target.value.toUpperCase())} maxLength={12} autoCapitalize="characters" autoComplete="off" placeholder="Their code" className={field} />
+            </label>
+            <div className="mt-xs">
+              <Button type="submit" disabled={addByCode.isPending || !codeIn.trim()}>
+                Send request
+              </Button>
+            </div>
+            {addByCode.isSuccess && <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{addByCode.data.status === 'friends' ? 'You are friends now.' : 'Request sent. They will see it under Bond.'}</p>}
+            <Err e={addByCode.isError ? addByCode.error : null} />
+          </form>
+        </div>
         {pending.length > 0 && (
           <ul className="mb-sm flex list-none flex-col gap-xs p-0 m-0" aria-label="Friend requests">
             {pending.map((f) => (

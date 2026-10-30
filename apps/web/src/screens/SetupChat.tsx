@@ -314,9 +314,9 @@ export function SetupChat() {
           : null;
     const session =
       m.session === 'now'
-        ? 'You said you want to work on yourself. The best start for that is the strategy session, in Pillars. It takes a few minutes, and you leave with a routine and a plan.'
+        ? 'You said you want to work on yourself. The best start for that is the strategy session, in Pillars. It takes about ten minutes, and you leave with a routine and a plan.'
         : m.session === 'soon'
-          ? 'When you feel ready, try the strategy session in Pillars. It builds a routine around your real day, and that really helps with focus and energy.'
+          ? 'When you feel ready, try the strategy session in Pillars. It builds a routine around your real day, with room for focus and energy.'
           : 'Want to go deeper some day? The strategy session in Pillars is there whenever you are.';
     const chips: ChatChoice[] =
       m.session === 'now'

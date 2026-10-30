@@ -4,7 +4,7 @@ import { limited, sendEmail, track } from '../ops';
 import { promoteBootstrapAdmin } from '../admins';
 import { LIMITS } from '../limits';
 import type { AppEnv, UserRow } from '../env';
-import { getUser, newId, nowIso, randomCode, sessionUser, toUser } from '../db';
+import { getUser, newFriendCode, newHandle, newId, nowIso, randomCode, sessionUser, toUser } from '../db';
 
 export const auth = new Hono<AppEnv>();
 
@@ -47,7 +47,7 @@ auth.post('/anon', async (c) => {
   const body = await c.req.json<{ ref?: string }>().catch(() => ({}) as { ref?: string });
   const ref = typeof body.ref === 'string' && body.ref.trim() ? body.ref.trim().toUpperCase().slice(0, 12) : null;
   await db.batch([
-    db.prepare('INSERT INTO users (id, created_at, referral_code, referred_by) VALUES (?, ?, ?, ?)').bind(id, now, randomCode(), ref),
+    db.prepare('INSERT INTO users (id, created_at, referral_code, referred_by, handle, friend_code) VALUES (?, ?, ?, ?, ?, ?)').bind(id, now, randomCode(), ref, newHandle(), newFriendCode()),
     ...RELATIONSHIPS.map((r) =>
       db.prepare('INSERT INTO relationship_scores (user_id, relationship, score, xp) VALUES (?, ?, 0, 0)').bind(id, r.key),
     ),
@@ -95,8 +95,8 @@ auth.post('/signup', async (c) => {
     const now = nowIso();
     await db.batch([
       db
-        .prepare('INSERT INTO users (id, created_at, email, password_hash, password_salt, display_name, referral_code, phone, birth_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(id, now, email, hash, salt, displayName, randomCode(), phone, birthDate),
+        .prepare('INSERT INTO users (id, created_at, email, password_hash, password_salt, display_name, referral_code, phone, birth_date, handle, friend_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(id, now, email, hash, salt, displayName, randomCode(), phone, birthDate, newHandle(), newFriendCode()),
       ...RELATIONSHIPS.map((r) =>
         db.prepare('INSERT INTO relationship_scores (user_id, relationship, score, xp) VALUES (?, ?, 0, 0)').bind(id, r.key),
       ),

@@ -466,6 +466,7 @@ export const api = {
   answerIntro: (id: string, status: 'accepted' | 'declined') => post<{ ok: true }>(`/bond/intros/${id}`, { status }),
   friends: () => request<{ friends: Friend[] }>('/bond/friends'),
   addFriend: (userId: string) => post<{ ok: true; status: 'sent' | 'friends' }>('/bond/friends', { userId }),
+  addFriendByCode: (code: string) => post<{ ok: true; status: 'sent' | 'friends' }>('/bond/friends', { code }),
   answerFriend: (id: string, status: 'accepted' | 'declined') => post<{ ok: true }>(`/bond/friends/${id}`, { status }),
   unfriend: (userId: string) => del<{ ok: true }>(`/bond/friends/${userId}`),
   chats: () => request<{ chats: BondChat[] }>('/bond/chats'),

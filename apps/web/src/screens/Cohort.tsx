@@ -7,6 +7,7 @@ import { BackLink } from '../components/PageHeader';
 import { Markdown } from '../components/Markdown';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
+import { Tip, Term } from '../components/Tip';
 import { api } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
 
@@ -35,6 +36,12 @@ function Progress({ p }: { p: Enrollment['progress'] }) {
     </span>
   );
 }
+
+const KIND_TIP: Record<string, string> = {
+  lesson: 'Read it here, then try it. The full skill file opens in a new tab.',
+  video: 'Watch it, then try what it shows.',
+  reading: 'A page to read before the next step.',
+};
 
 export function Cohort() {
   const { id = '' } = useParams();
@@ -66,7 +73,7 @@ export function Cohort() {
       <header className="pt-lg">
         <Back />
         <p className="m-0 text-[14px] font-bold text-ink-soft">
-          {k.programName}, run by {k.managerName}
+          {k.programName}, <Term word="cohort">cohort</Term> run by {k.managerName}
         </p>
         <h1 className="text-[30px]">{k.name}</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
@@ -90,12 +97,14 @@ export function Cohort() {
             const open = openLesson === item.id;
             return (
               <li key={item.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <button type="button" aria-expanded={open} onClick={() => setOpenLesson(open ? null : item.id)} className="toy toy-flat flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile text-left">
+                <button type="button" aria-expanded={open} onClick={() => setOpenLesson(open ? null : item.id)} className="toy toy-flat flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile px-sm py-xs text-left focus-visible:outline-offset-0">
                   <span className="min-w-0">
                     <span className="block truncate text-[16px] font-bold">
                       {i + 1}. {item.moduleTitle}
                     </span>
-                    <span className="block text-[14px] font-semibold text-ink-soft">{item.contentType}</span>
+                    <span className="block text-[14px] font-semibold text-ink-soft">
+                      <Tip text={KIND_TIP[item.contentType] ?? 'A step in this program.'}>{item.contentType}</Tip>
+                    </span>
                   </span>
                   <span className="text-[14px] font-bold text-ink-soft">{open ? 'Hide' : 'Open'}</span>
                 </button>

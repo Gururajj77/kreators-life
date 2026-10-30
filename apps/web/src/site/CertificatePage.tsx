@@ -23,7 +23,7 @@ export function CertificatePage() {
         {q.isError && (
           <div role="alert" className="mt-md rounded-card bg-card p-md shadow-toy-soft">
             <h1 className="text-[30px]">No certificate with that code</h1>
-            <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">Check the code for typos. Certificates are issued by Kreators School and by creators’ courses in the Shop.</p>
+            <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">Check the code for typos. Certificates are issued by School on kreators.app and by creators’ courses in the Shop.</p>
           </div>
         )}
         {c && (

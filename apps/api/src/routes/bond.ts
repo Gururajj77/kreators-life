@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { ALIAS_WORDS, RELATIONSHIPS, type BondChat, type BondMessage, type Friend, type Introduction } from '@kreators/shared';
+import { ALIAS_WORDS, normalizeCode, RELATIONSHIPS, type BondChat, type BondMessage, type Friend, type Introduction } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { nameOf, newId, notify, nowIso, oneOf, parseList, publicOf, str } from '../db';
 import { memberBehindAlias } from './circles';
@@ -114,13 +114,18 @@ bond.get('/friends', async (c) => {
 bond.post('/friends', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const body = await c.req.json<{ userId?: string }>().catch(() => ({}) as { userId?: string });
-  const id = str(body.userId, 64);
-  if (!id || id === user.id) return c.json({ error: 'who?' }, 400);
-  const target = await db.prepare('SELECT id, public_json FROM users WHERE id = ?').bind(id).first<{ id: string; public_json: string }>();
-  if (!target) return c.json({ error: 'no such person' }, 404);
+  const body = await c.req.json<{ userId?: string; code?: string }>().catch(() => ({}) as { userId?: string; code?: string });
+  // A friend code is shared on purpose, so it works even when the page is private; the switch for friend requests still applies.
+  const code = typeof body.code === 'string' ? normalizeCode(body.code) : '';
+  const target = code
+    ? await db.prepare('SELECT id, public_json FROM users WHERE friend_code = ?').bind(code).first<{ id: string; public_json: string }>()
+    : await db.prepare('SELECT id, public_json FROM users WHERE id = ?').bind(str(body.userId, 64)).first<{ id: string; public_json: string }>();
+  if (!code && !str(body.userId, 64)) return c.json({ error: 'who?' }, 400);
+  if (!target) return c.json({ error: code ? 'no one has that friend code' : 'no such person' }, 404);
+  const id = target.id;
+  if (id === user.id) return c.json({ error: code ? 'that is your own code' : 'who?' }, 400);
   const tp = publicOf(target);
-  if (!tp.pagePublic || !tp.allowFriendRequests) return c.json({ error: 'this person is not taking friend requests' }, 403);
+  if (!tp.allowFriendRequests || (!code && !tp.pagePublic)) return c.json({ error: 'this person is not taking friend requests' }, 403);
   const blocked = await db.prepare('SELECT 1 FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)').bind(user.id, id, id, user.id).first();
   if (blocked) return c.json({ error: 'not possible' }, 400);
   const existing = await db.prepare('SELECT id, requester_id, status FROM friendships WHERE (requester_id = ?1 AND recipient_id = ?2) OR (requester_id = ?2 AND recipient_id = ?1)').bind(user.id, id).first<{ id: string; requester_id: string; status: string }>();

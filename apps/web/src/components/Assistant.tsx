@@ -1660,11 +1660,11 @@ export function Assistant() {
         ref={tip}
         id="assistant-tip"
         role="tooltip"
-        className="pointer-events-none absolute right-0 bottom-full mb-sm whitespace-nowrap rounded-pill bg-ink px-sm py-xs text-[14px] font-bold text-on-ink shadow-toy-soft"
+        className="tip-card pointer-events-none absolute right-0 bottom-full mb-sm whitespace-nowrap rounded-pill border border-line px-sm py-xs text-[14px] font-bold shadow-toy-soft"
         style={{ opacity: 0, visibility: 'hidden' }}
       >
         Chat with AI assistant
-        <span aria-hidden="true" className="absolute top-full right-[22px] -mt-[5px] size-[10px] rotate-45 bg-ink" />
+        <span aria-hidden="true" className="tip-card absolute top-full right-[22px] -mt-[5px] size-[10px] rotate-45 border-r border-b border-line" />
       </span>
       <button
         ref={button}

@@ -20,7 +20,7 @@ import { resolveAccess } from '../access';
 import { hashPassword, randomHex } from './auth';
 import { logEvent, track } from '../ops';
 import { parseSocials } from '../db';
-import { MAX_INTERESTS, parseIdentities, parseLinkBlocks, passwordProblem, TRACKED_EVENTS, type TrackedEvent } from '@kreators/shared';
+import { isAutoHandle, MAX_INTERESTS, parseIdentities, parseLinkBlocks, passwordProblem, TRACKED_EVENTS, type TrackedEvent } from '@kreators/shared';
 import type { Organization, PortfolioItem } from '@kreators/shared';
 
 export const me = new Hono<AppEnv>();
@@ -142,15 +142,15 @@ me.patch('/', async (c) => {
   }
   const reminderTime = body.reminderTime === null ? null : typeof body.reminderTime === 'string' && /^\d{2}:\d{2}$/.test(body.reminderTime) ? body.reminderTime : user.reminder_time;
   let handle = user.handle;
-  if (body.handle === null) handle = null;
-  else if (typeof body.handle === 'string') {
+  // Everyone keeps a username; it can change but not go blank.
+  if (typeof body.handle === 'string' && body.handle.trim()) {
     const h = body.handle.trim().toLowerCase();
-    if (h && !/^[a-z0-9_]{3,20}$/.test(h)) return c.json({ error: 'a page name is 3 to 20 letters, numbers or underscores' }, 400);
-    if (h && h !== user.handle) {
+    if (!/^[a-z0-9_]{3,20}$/.test(h)) return c.json({ error: 'a page name is 3 to 20 letters, numbers or underscores' }, 400);
+    if (h !== user.handle) {
       const taken = await db.prepare('SELECT id FROM users WHERE handle = ? AND id != ?').bind(h, user.id).first();
       if (taken) return c.json({ error: 'that page name is taken' }, 409);
     }
-    handle = h || null;
+    handle = h;
   }
   const list = (key: string, prev: string, max = 12) => (Array.isArray(body[key]) ? JSON.stringify((body[key] as unknown[]).filter((x): x is string => typeof x === 'string').map((x) => x.trim().slice(0, 40)).filter(Boolean).slice(0, max)) : prev);
   const skills = list('skills', user.skills);
@@ -187,7 +187,7 @@ me.patch('/', async (c) => {
     .prepare('UPDATE users SET display_name = ?, creator_type = ?, leaderboard_opt_in = ?, bio = ?, reminder_time = ?, handle = ?, skills = ?, categories = ?, goals = ?, experience_level = ?, availability = ?, location = ?, open_to_intros = ?, interests = ?, identities = ?, city = ?, area = ?, lat = ?, lng = ?, timezone = ?, avatar_url = ?, socials_json = ?, public_json = ?, links_json = ?, phone = ? WHERE id = ?')
     .bind(displayName, focus, optIn, bio, reminderTime, handle, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, identities, city, area, lat, lng, timezone, avatarUrl, socials, publicJson, links, phone, user.id)
     .run();
-  if (handle && !user.handle) await track(db, user.id, 'profile_published', { minutesSinceSignup: Math.round((Date.now() - new Date(user.created_at).getTime()) / 60_000) });
+  if (handle && isAutoHandle(user.handle) && !isAutoHandle(handle)) await track(db, user.id, 'profile_published', { minutesSinceSignup: Math.round((Date.now() - new Date(user.created_at).getTime()) / 60_000) });
   const fresh = await getUser(db, user.id);
   return c.json({ user: fresh ? toUser(fresh) : null });
 });
