@@ -120,3 +120,31 @@ One line per decision that changed the plan, with the date. Newest at the bottom
 - 2026-10-30: Deleted accounts no longer appear on the leaderboard (they are opted out on delete, and every board skips the "Deleted member" name).
 
 - 2026-10-30: Floating chrome (corner buttons, tab bar, the assistant panel, the chat's header and composer, sticky headers) is never thin glass: `.fixed`/`.sticky` surfaces take `--card-strong`, and the contrast probe flags any that do not. Hero backdrops are botanical (branches, flowers, pines) instead of circles. The public header's links wait for 1024px, so a tablet width no longer overflows.
+
+- 2026-10-30: The public site takes the same design as the app (glass, calm gradients, bento grids with no holes in their last row, a wash of the relationship's colour instead of flat pastel blocks, a faint branch and flower behind the hero). The apps listed under each relationship were rebuilt from what each app does for it. Mood and Journal calendars are interactive.
+
+- 2026-10-30: The botanical decoration is now one self-contained posy that scales to its box and fades at its edges, so nothing is cropped; it is petals and flowers first, two tiny leaves only. The public footer got a glass panel, a faint posy and a one-blossom rule.
+
+- 2026-10-30: The decoration is fewer, bigger and varied: one flower per box, seven kinds, each pillar with its own, the rest chosen by seed. It replaced the multi-shape posy, which repeated the same arrangement everywhere.
+
+- 2026-10-30: Admin can delete a person from the People list (not an admin, not themselves) and allow or block any app for one person from "What does this person see?". Home's header no longer flips to cream in dark mode.
+
+- 2026-10-30: Water reminders in the inbox are one line per person per day, rewritten by each reminder (new count, unread, newest first) instead of a new notice every time. It uses a fixed id, `water-<user>-<day>`, with an upsert in `sendWaterAndCustom`. Custom reminders still send one notice each.
+
+- 2026-10-30: The Archived view in the inbox can restore a note or delete it for good (one at a time, or all archived in the tab), always after a confirm sheet. The server deletes only archived notes, owner only.
+
+- 2026-10-31: Observability moved into the Operations group and the separate Internal group is gone. It is still staff and admins only by `minRole`; the path and key are unchanged.
+
+- 2026-10-31: Rewards gained shelves and a long catalog: apparel, tech, drinkware, stationery, lifestyle, novelty, and the founder's three books and the FyndGames card games. Point costs are first guesses in the same range as the sticker pack and tee, to be tuned once the first drop is priced.
+
+- 2026-10-31: Merch in Rewards carries the brand "Kreators" (Kreators tee, Kreators hoodie), not "kreators.app tee"; every reward has its own emoji instead of its shelf's.
+
+- 2026-10-31: Card games became an app. The nine FyndFlow games from the founder's print files are unlocked once with points (rewards of kind unlock, not physical) and played in the app on a table where cards are shuffled, drawn, flipped and dragged. Unlock prices (1,000 to 2,000 points) are first guesses to tune. The card text is served only to people who unlocked a game, so the file is not a free download.
+
+- 2026-10-31: Discover, a self-discovery quiz, was added from the founder's screen recordings of a commercial talent survey. Only the shape was taken (five parts, pick most and least, puzzles, descriptor words, situations, a results page with top strengths). Every item, puzzle and the scoring are our own, with the five well-known traits behind them and the seven relationships as the strengths. Its situation keys and the strength weights are the team's first reading and need a review by someone who knows assessment design before it is described as anything more than a self-discovery tool.
+
+- 2026-10-31: Calmer design from trymonocle.app: a quiet second half on public headlines, a long soft landing for every tap and arrival, hairline outline buttons, wider gutters on the public site, and a focus dim around the card table and the quiz. The books are The Relationship Method, Dictionary of Mistakes for Kreators and Dictionary of Mistakes for 20 Somethings.
+
+- 2026-10-31: The card text moved from a JSON file in the Worker to D1 (migration 0042), so sensitive content lives in the database and is read only for someone who unlocked the game. Names, prices and pictures stay in code because they are public. Adding or fixing cards is now a migration, or later an admin editor if staff need one.
+
+- 2026-10-31: Discover got a detailed personality and reasoning analysis, tabs for it, and two switches. Its result may now shape the daily brief's next steps (on by default, plain rules) and may be learned from by the assistant (off until the person says, a short profile only, private models only). The reasoning part is deliberately not called an IQ score: ten puzzles with no norm group cannot give one. It is also offered at the end of the setup chat. The card table has a Focus mode that hides the menu and the assistant.

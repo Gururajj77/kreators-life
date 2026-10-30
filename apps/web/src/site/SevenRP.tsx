@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { LIFE_AREAS, RELATIONSHIP_BY_KEY, RELATIONSHIPS, type LifeAreaKey, type Relationship, type RelationshipKey } from '@kreators/shared';
 import { motion, useInView, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -56,7 +57,7 @@ function FloorSection({ r, onActive }: { r: Relationship; onActive: (k: Relation
   const dark = r.text === '#FFFFFF';
   return (
     <Zone value={r.key} onActive={onActive} id={r.key} className="scroll-mt-xl">
-      <motion.div {...rise} className="grid gap-md rounded-card p-md md:grid-cols-[1fr_2fr] md:items-center md:gap-lg md:p-lg" style={{ background: `var(--soft-${r.key})` }}>
+      <motion.div {...rise} className="wash grid gap-md rounded-card bg-card p-md shadow-toy-soft md:grid-cols-[1fr_2fr] md:items-center md:gap-lg md:p-lg" style={{ '--wash': r.color } as CSSProperties}>
         <div className="flex flex-col items-center gap-sm">
           <motion.div whileInView={{ rotate: [0, -6, 6, 0] }} viewport={{ margin: '-30%' }} transition={{ duration: 0.9 }}>
             <Avatar relationship={r.key} size={160} mood="excited" />
@@ -97,7 +98,7 @@ function LifeAreaSection({ k }: { k: LifeAreaKey }) {
   const features = featuresForLifeArea(k);
   const dark = r.text === '#FFFFFF';
   return (
-    <motion.div {...rise} id={k} className="grid scroll-mt-xl gap-md rounded-card p-md md:grid-cols-[1fr_2fr] md:items-center md:gap-lg md:p-lg" style={{ background: `var(--soft-${r.key})` }}>
+    <motion.div {...rise} id={k} className="wash grid scroll-mt-xl gap-md rounded-card bg-card p-md shadow-toy-soft md:grid-cols-[1fr_2fr] md:items-center md:gap-lg md:p-lg" style={{ '--wash': r.color } as CSSProperties}>
       <div className="flex flex-col items-center gap-sm">
         <Avatar relationship={r.key} size={120} mood="happy" />
         <p className="m-0 text-[36px]" aria-hidden="true">

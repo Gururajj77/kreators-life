@@ -81,6 +81,13 @@
 }
 
 /* Light: the kit's light mode. */
+/* The Home header is always the night slate, in both modes: it does not flip to cream in dark mode, so its flower and its white text always show. */
+.night-card {
+  background-color: #25293a;
+  background-image: linear-gradient(135deg, #25293a, color-mix(in oklab, #25293a 80%, var(--color-r6)));
+  color: #ffffff;
+}
+
 /* Where a coloured fill's gradient deepens to: a calm indigo, the same in both modes. */
 :root {
   --fill-shade: #2a2f55;
@@ -374,6 +381,23 @@
   transform-origin: center;
   animation: blink 5.5s infinite;
 }
+:root {
+  /* Arrivals: fast out, a long soft landing. */
+  --ease-open: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Focus: while the pointer or the keyboard is inside the thing you are working on, the rest of the screen steps back, the way a
+   window is dimmed behind the one you use. Mouse and keyboard only; a touch screen keeps everything lit. */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .focus-dimmable {
+    transition: opacity 400ms var(--ease-open);
+  }
+  .focus-scope:has(.focus-target:hover) .focus-dimmable,
+  .focus-scope:has(.focus-target:focus-within) .focus-dimmable {
+    opacity: 0.4;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .avatar-bob,
   .avatar-eyes {
@@ -391,8 +415,8 @@
     0 4px 8px color-mix(in oklab, var(--toy-color) 22%, transparent),
     0 1px 2px color-mix(in oklab, var(--toy-color) 12%, transparent);
   transition:
-    transform 120ms ease,
-    box-shadow 120ms ease,
+    transform 220ms var(--ease-open),
+    box-shadow 220ms var(--ease-open),
     background-color 120ms ease,
     filter 120ms ease;
 }
@@ -626,6 +650,8 @@ details[open] > summary {
 .type-hook em {
   font-style: italic;
   font-weight: 500;
+  /* The quiet half of a headline, in large type only: the second half steps back so the first is read first. */
+  color: var(--color-ink-mute);
 }
 .type-context {
   font-family: var(--font-body);
@@ -772,7 +798,7 @@ nav {
 }
 
 /* Glass over glass over colour: a card that sits on a coloured fill or an ink card has nothing calm to frost, so it turns solid. */
-:is(.bg-ink, .bg-r1, .bg-r2, .bg-r3, .bg-r4, .bg-r5, .bg-r6, .bg-r7, [style*='linear-gradient']) .bg-card {
+:is(.bg-ink, .night-card, .bg-r1, .bg-r2, .bg-r3, .bg-r4, .bg-r5, .bg-r6, .bg-r7, [style*='linear-gradient']) :is(.bg-card, .bg-paper) {
   background-color: var(--card-strong);
 }
 
@@ -806,4 +832,9 @@ nav .bg-card {
 input[type='checkbox'],
 input[type='radio'] {
   accent-color: var(--color-r6);
+}
+
+/* A calm wash of one colour behind glass, in place of a flat pastel block: set --wash on the element. */
+.wash {
+  background-image: linear-gradient(145deg, color-mix(in oklab, var(--wash) 18%, transparent), color-mix(in oklab, var(--wash) 6%, transparent) 60%, transparent);
 }

@@ -1,6 +1,7 @@
-import { POINTS, REWARD_BY_KEY } from '@kreators/shared';
+import { POINTS, REWARD_BY_KEY, REWARD_GROUPS } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { Button } from '../components/Button';
 import { Nudge } from '../components/Nudge';
 import { useCelebrate } from '../components/Celebration';
@@ -20,7 +21,7 @@ export function Rewards() {
     onSuccess: (r) => {
       refresh();
       setError(null);
-      celebrate({ title: `Reserved. ${r.points} points left`, color: '#FACC15' });
+      celebrate({ title: r.game ? `Unlocked. ${r.points} points left` : `Reserved. ${r.points} points left`, color: '#FACC15' });
     },
     onError: (e) => setError(e instanceof Error ? e.message : 'Could not reserve that.'),
   });
@@ -71,7 +72,7 @@ export function Rewards() {
           </section>
           <Nudge className="mt-sm" text={`A check-in is ${POINTS.checkin} points, every ${POINTS.streakBonusEvery}th day in a row ${POINTS.streakBonus} more, a like on your post 1, a new follower 2.`} />
           <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">
-            Rewards are reservations until the first drop ships. Cancel any time and the points come straight back.
+            Gear is a reservation until the first drop ships; cancel any time and the points come straight back. A card game opens in the app at once and is yours for good.
           </p>
           {error && (
             <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
@@ -83,39 +84,60 @@ export function Rewards() {
             <h2 id="catalog-heading" className="text-[24px]">
               Catalog
             </h2>
-            <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-              {data.rewards.map((r) => {
-                const can = data.points >= r.cost;
-                return (
-                  <li key={r.key} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-                    <span
-                      className="flex size-[44px] shrink-0 items-center justify-center rounded-pill text-[24px]"
-                      style={{ background: r.kind === 'event' ? 'var(--tint-purple)' : 'var(--tint-yellow)' }}
-                      aria-hidden="true"
-                    >
-                      {r.kind === 'event' ? '🎟️' : '👕'}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[16px] font-bold">{r.name}</span>
-                      <span className="block text-[14px] font-semibold text-ink-soft">
-                        {r.blurb} {can ? '' : `${r.cost - data.points} more points to go.`}
-                      </span>
-                    </span>
-                    <Button
-                      variant={can ? 'primary' : 'outline'}
-                      className="shrink-0"
-                      disabled={!can || redeem.isPending}
-                      aria-label={`Reserve ${r.name} for ${r.cost} points`}
-                      onClick={() => {
-                        if (window.confirm(`Reserve ${r.name} for ${r.cost} points?`)) redeem.mutate(r.key);
-                      }}
-                    >
-                      {r.cost} pts
-                    </Button>
-                  </li>
-                );
-              })}
-            </ul>
+            {REWARD_GROUPS.map((g) => {
+              const list = data.rewards.filter((r) => r.group === g.key);
+              if (list.length === 0) return null;
+              return (
+                <div key={g.key} id={g.key} className="mt-md">
+                  <h3 className="text-[18px]">
+                    <span aria-hidden="true">{g.emoji} </span>
+                    {g.name}
+                  </h3>
+                  <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{g.blurb}</p>
+                  <ul className={g.key === 'games' ? 'mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-3' : 'mt-sm flex list-none flex-col gap-xs p-0 m-0'}>
+                    {list.map((r) => {
+                      const can = data.points >= r.cost;
+                      const tile = g.key === 'games';
+                      return (
+                        <li key={r.key} className={tile ? 'flex flex-col items-stretch gap-sm rounded-tile bg-card p-sm shadow-toy-soft' : 'flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft'}>
+                          <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill text-[24px]" style={{ background: r.kind === 'event' ? 'var(--tint-purple)' : 'var(--tint-yellow)' }} aria-hidden="true">
+                            {r.emoji}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[16px] font-bold">{r.name}</span>
+                            <span className="block text-[14px] font-semibold text-ink-soft">
+                              {r.blurb} {can ? '' : `${r.cost - data.points} more points to go.`}
+                            </span>
+                            {r.link && (
+                              <a href={r.link} target="_blank" rel="noreferrer" className="text-[14px] font-bold underline underline-offset-4">
+                                Read more
+                              </a>
+                            )}
+                          </span>
+                          {r.game && data.games.includes(r.game) ? (
+                            <Link to={`/cards/${r.game}`} className={`toy inline-flex min-h-[48px] shrink-0 items-center justify-center rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink ${tile ? 'w-full' : ''}`}>
+                              Play
+                            </Link>
+                          ) : (
+                            <Button
+                              variant={can ? 'primary' : 'outline'}
+                              className={tile ? 'w-full shrink-0' : 'shrink-0'}
+                              disabled={!can || redeem.isPending}
+                              aria-label={r.game ? `Unlock ${r.name} for ${r.cost} points` : `Reserve ${r.name} for ${r.cost} points`}
+                              onClick={() => {
+                                if (window.confirm(r.game ? `Unlock ${r.name} for ${r.cost} points? It is yours for good.` : `Reserve ${r.name} for ${r.cost} points?`)) redeem.mutate(r.key);
+                              }}
+                            >
+                              {r.game ? `Unlock ${r.cost} pts` : `${r.cost} pts`}
+                            </Button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              );
+            })}
           </section>
 
           {data.redemptions.length > 0 && (
@@ -131,7 +153,7 @@ export function Rewards() {
                       <span className="min-w-0 flex-1">
                         <span className="block text-[16px] font-bold">{r?.name ?? x.rewardKey}</span>
                         <span className="block text-[14px] font-semibold text-ink-soft">
-                          {x.points} points, {x.status}
+                          {x.points} points, {r?.kind === 'unlock' ? 'unlocked' : x.status}
                           {x.note ? `. ${x.note}` : ''}
                         </span>
                       </span>

@@ -1,5 +1,5 @@
 import { MOODS, STRESSORS, type JournalEntry } from '@kreators/shared';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { Button } from '../components/Button';
@@ -20,6 +20,17 @@ export function Journal() {
   const q = useJournal(pg.query);
   const refresh = useRefreshAll();
   const [editing, setEditing] = useState<JournalEntry | null | 'new'>(null);
+  // The calendar: the month on show, the day tapped, and the date a new entry is written for.
+  const [month, setMonth] = useState(todayLocal().slice(0, 7));
+  const [day, setDay] = useState<string | null>(null);
+  const [newFor, setNewFor] = useState<string | undefined>(undefined);
+  const monthQ = useQuery({ queryKey: ['journal-days', month], queryFn: () => api.journalDays(month) });
+  const marks = Object.fromEntries(
+    (monthQ.data?.days ?? []).map((d) => {
+      const m = d.emotion ? MOODS.find((x) => x.value === d.emotion) : null;
+      return [d.date, { color: m?.color ?? 'var(--color-r4)', mood: m?.value }];
+    }),
+  );
   const entries = q.data?.entries ?? [];
   const stats = q.data?.stats;
 
@@ -49,18 +60,7 @@ export function Journal() {
           <div className="mt-md rounded-tile bg-white/20 p-sm">
             <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">This month</p>
             <div className="mt-xs">
-              <CalendarGrid
-                onFill
-                month={todayLocal().slice(0, 7)}
-                today={todayLocal()}
-                marks={Object.fromEntries(
-                  entries.map((e) => {
-                    const m = e.emotion ? MOODS.find((x) => x.value === e.emotion) : null;
-                    return [e.createdAt.slice(0, 10), { color: m?.color ?? 'var(--color-r4)', mood: m?.value }];
-                  }),
-                )}
-                label="Days with an entry this month"
-              />
+              <CalendarGrid onFill month={month} today={todayLocal()} maxDate={todayLocal()} selected={day} onMonth={setMonth} onPick={setDay} marks={marks} label="Journal calendar. Tap a day to read, add or change its entries." />
             </div>
           </div>
         </Hero>
@@ -106,18 +106,77 @@ export function Journal() {
         <Pager page={q.data?.page} label="entries" />
       </section>
 
-      <EntrySheet entry={editing} onClose={() => setEditing(null)} onSaved={refresh} />
+      <DaySheet
+        date={day}
+        onClose={() => setDay(null)}
+        onOpen={(e) => {
+          setNewFor(undefined);
+          setEditing(e);
+        }}
+        onNew={(date) => {
+          setNewFor(date);
+          setEditing('new');
+        }}
+      />
+      <EntrySheet
+        entry={editing}
+        date={newFor}
+        onClose={() => {
+          setEditing(null);
+          setNewFor(undefined);
+        }}
+        onSaved={() => {
+          refresh();
+          void monthQ.refetch();
+        }}
+      />
     </Screen>
   );
 }
 
-function EntrySheet({ entry, onClose, onSaved }: { entry: JournalEntry | null | 'new'; onClose: () => void; onSaved: () => void }) {
+/** One day of the calendar: what was written that day, a way to open each entry, and a way to add another. */
+function DaySheet({ date, onClose, onOpen, onNew }: { date: string | null; onClose: () => void; onOpen: (e: JournalEntry) => void; onNew: (date: string) => void }) {
+  const q = useQuery({ queryKey: ['journal-day', date], queryFn: () => api.journalDay(date!), enabled: Boolean(date) });
+  const entries = q.data?.entries ?? [];
+  const pretty = date ? new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }) : '';
+  return (
+    <Sheet open={date !== null} onClose={onClose} title={pretty}>
+      <div className="flex flex-col gap-sm pb-xl">
+        {q.isPending && <p className="m-0 text-[14px] font-bold text-ink-soft" role="status">Opening</p>}
+        {q.data && entries.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">Nothing written on this day yet.</p>}
+        <ul className="m-0 flex list-none flex-col gap-xs p-0">
+          {entries.map((e) => {
+            const m = e.emotion ? MOODS.find((x) => x.value === e.emotion) : null;
+            return (
+              <li key={e.id}>
+                <button type="button" onClick={() => onOpen(e)} className="toy toy-soft flex w-full items-center gap-sm rounded-tile bg-card p-sm text-left">
+                  {m && <MoodFace value={m.value} size={36} />}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[16px] font-bold">{e.title}</span>
+                    <span className="block truncate text-[14px] font-semibold text-ink-soft">{e.body}</span>
+                  </span>
+                  <span className="text-[14px] font-bold text-ink-soft">Edit</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <Button full onClick={() => date && onNew(date)}>
+          {entries.length > 0 ? 'Add another entry for this day' : 'Write an entry for this day'}
+        </Button>
+      </div>
+    </Sheet>
+  );
+}
+
+function EntrySheet({ entry, date, onClose, onSaved }: { entry: JournalEntry | null | 'new'; date?: string; onClose: () => void; onSaved: () => void }) {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [emotion, setEmotion] = useState<number | null>(null);
   const [stress, setStress] = useState(2);
   const [stressors, setStressors] = useState<string[]>([]);
   const existing = entry && entry !== 'new' ? entry : null;
+  const qc = useQueryClient();
 
   useEffect(() => {
     setTitle(existing?.title ?? '');
@@ -128,9 +187,10 @@ function EntrySheet({ entry, onClose, onSaved }: { entry: JournalEntry | null | 
   }, [entry]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = useMutation({
-    mutationFn: () => (existing ? api.updateEntry(existing.id, { title, body, emotion, stress, stressors }) : api.createEntry({ title, body, emotion, stress, stressors })),
+    mutationFn: () => (existing ? api.updateEntry(existing.id, { title, body, emotion, stress, stressors }) : api.createEntry({ title, body, emotion, stress, stressors, ...(date ? { date } : {}) })),
     onSuccess: () => {
       onSaved();
+      void qc.invalidateQueries({ queryKey: ['journal-day'] });
       onClose();
     },
   });
@@ -138,13 +198,14 @@ function EntrySheet({ entry, onClose, onSaved }: { entry: JournalEntry | null | 
     mutationFn: () => api.deleteEntry(existing!.id),
     onSuccess: () => {
       onSaved();
+      void qc.invalidateQueries({ queryKey: ['journal-day'] });
       onClose();
     },
   });
   const words = body.trim() ? body.trim().split(/\s+/).length : 0;
 
   return (
-    <Sheet open={entry !== null} onClose={onClose} title={existing ? 'Edit entry' : 'New entry'}>
+    <Sheet open={entry !== null} onClose={onClose} title={existing ? 'Edit entry' : date ? `New entry for ${new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}` : 'New entry'}>
       <form
         className="flex flex-col gap-md"
         onSubmit={(e) => {

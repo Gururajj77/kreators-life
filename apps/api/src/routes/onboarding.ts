@@ -207,7 +207,9 @@ onboarding.post('/setup', async (c) => {
   const asked = Array.isArray(body.apps) ? body.apps.filter((k): k is string => typeof k === 'string') : null;
   const keep = new Set((asked ?? match.apps.map((a) => a.key)).filter((k) => available.includes(k)));
   const mine = parseModules(user.modules);
-  for (const k of available) mine[k] = keep.has(k);
+  // A card game someone paid points for keeps its app on, whatever the setup picks.
+  const ownsGame = Boolean(await db.prepare('SELECT 1 AS x FROM card_unlocks WHERE user_id = ? LIMIT 1').bind(user.id).first());
+  for (const k of available) mine[k] = keep.has(k) || (k === 'cards' && ownsGame);
   const merged = (prev: string, add: string[], max: number) => JSON.stringify([...new Set([...parseList(prev), ...add])].slice(0, max));
   const p = match.profile;
   const now = nowIso();

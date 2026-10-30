@@ -102,6 +102,7 @@ wellbeing.post('/:kind', async (c) => {
   if (!isKind(kind)) return c.json({ error: 'unknown log' }, 404);
   const body = await c.req.json<{ date?: string; value?: number; extra?: Record<string, unknown>; note?: string }>().catch(() => ({}) as Record<string, never>);
   const date = typeof body.date === 'string' && DATE_RE.test(body.date) ? body.date : new Date().toISOString().slice(0, 10);
+  if (date > shiftDate(new Date().toISOString().slice(0, 10), 1)) return c.json({ error: 'pick a day that is not in the future' }, 400);
   const raw = Number(body.value);
   if (!Number.isFinite(raw)) return c.json({ error: 'value required' }, 400);
   const value =

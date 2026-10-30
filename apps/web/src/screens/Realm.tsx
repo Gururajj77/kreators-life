@@ -1,4 +1,4 @@
-import { HeroBlobs } from '../components/Hero';
+import { HeroBlobs, PILLAR_FLOWER } from '../components/Hero';
 import {
   CHARACTER_STAGES,
   evolutionFor,
@@ -95,7 +95,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
     <>
       {/* A calm wash instead of a flat block: the pillar's colour with a soft light at the top left, deepening toward the bottom. */}
       <div className="relative overflow-hidden rounded-b-card" style={{ background: `radial-gradient(70% 55% at 12% 0%, rgba(255, 255, 255, 0.22), transparent 70%), linear-gradient(165deg, ${rel.color}, color-mix(in oklab, ${rel.color} 62%, var(--fill-shade)))`, color: rel.text }}>
-        <HeroBlobs />
+        <HeroBlobs kind={PILLAR_FLOWER[relationship]} />
         <div className="safe-top relative mx-auto w-full max-w-[480px] px-md pb-lg pt-md md:ml-[240px] md:max-w-[1040px] md:px-lg lg:mx-auto lg:pl-[240px]">
           {/* On a phone the brand and the corner buttons float over the top 56px, so the way back starts below them. */}
           <div className="pt-xl md:pt-0">

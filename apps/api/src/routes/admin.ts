@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { attendeeXpLocked, type AdminCoachAsk, type AdminCoachLink, EVENT_TYPES, HONOR_BY_KEY, isPaidPlan, type AdminAttendeeCode, type AttendeeCodeApp, isRole, MAX_CREDIT_GRANT, PLAN_DAYS, LISTING_TYPES, MODULE_BY_KEY, MODULES, OPPORTUNITY_TYPES, PERMISSIONS, TOOL_CATEGORIES, type AdminRedemption, type AdminUser, type AuditLog, type FlagOverride, type Listing, type ListingType, type ModuleSetting, type Permission } from '@kreators/shared';
 import { resolveAccess } from '../access';
 import { listingsFor } from './explore';
+import { deleteAccount } from '../account';
 import { ORDER_SELECT, toOrder, type OrderRow } from './studio';
 import { refundOrder } from './growth';
 import { handlePaymentEvent } from './go';
@@ -258,6 +259,8 @@ admin.post('/flags/:key/overrides', async (c) => {
   const subjectType = oneOf(body.subjectType, ['user', 'role', 'organization'] as const, 'user');
   const subjectId = str(body.subjectId, 80);
   if (!subjectId) return c.json({ error: 'who is this for?' }, 400);
+  // The core of the app cannot be switched off for anyone, so an override cannot try.
+  if (MODULE_BY_KEY[key]?.locked && body.enabled === false) return c.json({ error: 'That part of the app is always on.' }, 400);
   const id = newId();
   const expiresAt = str(body.expiresAt, 40) || null;
   await db
@@ -575,6 +578,20 @@ async function loadUser(db: D1Database, id: string): Promise<UserListRow | null>
 }
 
 // Pro is a plan now: on starts Pro for a period (unless a plan is already running), off ends whatever plan there is.
+// Delete a person's account from the People list. Same erase as the person's own "delete my account": details gone, money rows kept
+// anonymised. An admin is never deleted from here (take the role away first), and nobody deletes the account they are using.
+admin.delete('/users/:id', async (c) => {
+  const db = c.env.DB;
+  const target = await getUser(db, c.req.param('id'));
+  if (!target) return c.json({ error: 'not found' }, 404);
+  if (target.id === actorOf(c)) return c.json({ error: 'That is your own account. Delete it from your Profile.' }, 400);
+  if (target.role === 'admin') return c.json({ error: 'An admin cannot be deleted here. Change the role first.' }, 400);
+  const name = nameOf(target);
+  await deleteAccount(db, target.id);
+  await audit(db, actorOf(c), 'user.delete', 'user', target.id, { name, role: target.role }, '');
+  return c.json({ ok: true });
+});
+
 admin.post('/users/:id/pro', async (c) => {
   const db = c.env.DB;
   const user = await getUser(db, c.req.param('id'));

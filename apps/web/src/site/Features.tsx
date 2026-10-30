@@ -5,6 +5,17 @@ import { FEATURES, SITE_FEATURES } from './content';
 import { rise } from './SevenRP';
 import { SiteLayout, useAppEntry } from './SiteLayout';
 
+/** The first card is wide; the last one stretches to close the row, so a group never ends with a hole in its grid. */
+function span(i: number, n: number): string {
+  if (n < 2) return '';
+  if (i === 0) return 'bento-w2';
+  if (i === n - 1) {
+    const r = (n + 1) % 4;
+    return r === 0 ? '' : ['', 'bento-w4', 'bento-w3', 'bento-w2'][r] ?? '';
+  }
+  return '';
+}
+
 /** Everything a creator needs, by group: every app, each opening into its own page. */
 export function Features() {
   const entry = useAppEntry();
@@ -25,10 +36,10 @@ export function Features() {
             <h2 id={`group-${g}`} className="type-hook text-[clamp(28px,5vw,40px)]">
               {MODULE_GROUPS[g]}
             </h2>
-            <ul className="mt-sm grid list-none gap-xs p-0 m-0 sm:grid-cols-2 lg:grid-cols-3">
-              {list.map((m) => (
-                <motion.li key={m.key} {...rise}>
-                  <Link to={`/features/${m.key}`} className="toy toy-soft flex min-h-[120px] flex-col rounded-tile bg-card p-md">
+            <ul className="bento mt-sm list-none p-0 m-0">
+              {list.map((m, i) => (
+                <motion.li key={m.key} {...rise} className={span(i, list.length)}>
+                  <Link to={`/features/${m.key}`} className="toy toy-soft flex h-full min-h-[120px] flex-col rounded-tile bg-card p-md">
                     <span className="text-[28px]" aria-hidden="true">
                       {m.emoji}
                     </span>

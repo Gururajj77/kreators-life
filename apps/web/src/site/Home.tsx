@@ -1,5 +1,7 @@
+import type { CSSProperties } from 'react';
 import { BUMLING, characterTitle, MODULE_BY_KEY, PAYMENTS_LIVE, PLAN_DAYS, PLANS, RELATIONSHIPS } from '@kreators/shared';
 import { useQuery } from '@tanstack/react-query';
+import { HeroBlobs } from '../components/Hero';
 import { motion } from 'motion/react';
 import { Link } from 'react-router';
 import { Avatar } from '../components/Avatar';
@@ -72,7 +74,8 @@ export function Home() {
   return (
     <SiteLayout>
       {/* The hero, read like a poster: the hook from across the room, the context closer, the details at arm's length. */}
-      <section className="grid gap-lg pt-lg md:grid-cols-2 md:items-center md:pt-xl">
+      <section className="relative grid gap-lg pt-lg md:grid-cols-2 md:items-center md:pt-xl">
+        <HeroBlobs tone="ink" kind="blossom" />
         <div className="@container">
           <p className={eyebrow}>For creators, freelancers and students, 18 and up</p>
           {/* Sized from the column width so each line stays whole. */}
@@ -191,7 +194,7 @@ export function Home() {
         </motion.div>
         <dl className="bento mt-md m-0">
           {FIVE_WS.map((x, i) => (
-            <motion.div key={x.w} {...rise} className={`rounded-card bg-card p-md shadow-toy-soft ${i === 0 || i === 4 ? 'bento-w2' : ''} ${i === 0 ? 'bento-feature' : ''}`}>
+            <motion.div key={x.w} {...rise} className={`rounded-card bg-card p-md shadow-toy-soft ${i === 0 || i === 3 || i === 4 ? 'bento-w2' : ''} ${i === 0 ? 'bento-feature' : ''}`}>
               <dt className="type-hook text-[28px]">{x.w}</dt>
               <dd className="mt-xs m-0 text-pretty text-[14px] font-semibold text-ink-soft">{x.text}</dd>
             </motion.div>
@@ -282,7 +285,7 @@ export function Home() {
             </ul>
           </motion.div>
           {live.map(([label, value]) => (
-            <motion.div key={label} {...rise} className="rounded-tile bg-card p-sm shadow-toy-soft">
+            <motion.div key={label} {...rise} className={`rounded-tile bg-card p-sm shadow-toy-soft ${live.length < 4 && live[live.length - 1]?.[0] === label ? ['', 'bento-w4', 'bento-w3', 'bento-w2'][live.length] ?? '' : ''}`}>
               <p className="m-0 type-figure text-[28px]">{value.toLocaleString()}</p>
               <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{label} <span className="sr-only">live from the app</span></p>
             </motion.div>
@@ -320,7 +323,7 @@ export function Home() {
       </section>
 
       <section id="brands" className="mt-xl scroll-mt-lg" aria-labelledby="brands-heading">
-        <motion.div {...rise} className="grid gap-md rounded-card p-md md:grid-cols-[2fr_1fr] md:items-center md:p-lg" style={{ background: 'var(--tint-brown)' }}>
+        <motion.div {...rise} className="wash grid gap-md rounded-card bg-card p-md shadow-toy-soft md:grid-cols-[2fr_1fr] md:items-center md:p-lg" style={{ '--wash': 'var(--color-r5)' } as CSSProperties}>
           <div>
             <p className={eyebrow}>{BRAND_PITCH.tagline}</p>
             <h2 id="brands-heading" className="type-hook mt-xs text-[clamp(28px,5vw,40px)]">

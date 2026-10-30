@@ -74,3 +74,18 @@ inbox.post('/archive-read', async (c) => {
   const done = await c.env.DB.prepare(`UPDATE notifications SET archived_at = ? WHERE user_id = ? AND read_at IS NOT NULL AND archived_at IS NULL${t.sql}`).bind(nowIso(), c.get('user').id, ...t.binds).run();
   return c.json({ ok: true, archived: done.meta.changes ?? 0 });
 });
+
+// Delete for good, from the archive only: everything archived in a tab at once (before the :id route so "archived" is not read as an id)...
+inbox.delete('/archived', async (c) => {
+  const asked = c.req.query('tab');
+  const t = tabWhere(isInboxTab(asked) ? asked : 'all');
+  const done = await c.env.DB.prepare(`DELETE FROM notifications WHERE user_id = ? AND archived_at IS NOT NULL${t.sql}`).bind(c.get('user').id, ...t.binds).run();
+  return c.json({ ok: true, deleted: done.meta.changes ?? 0 });
+});
+
+// ...or one archived note. A note that is not archived yet is refused: it has to be put away first.
+inbox.delete('/:id', async (c) => {
+  const done = await c.env.DB.prepare('DELETE FROM notifications WHERE id = ? AND user_id = ? AND archived_at IS NOT NULL').bind(c.req.param('id'), c.get('user').id).run();
+  if (!(done.meta.changes ?? 0)) return c.json({ error: 'only an archived note can be deleted' }, 404);
+  return c.json({ ok: true });
+});

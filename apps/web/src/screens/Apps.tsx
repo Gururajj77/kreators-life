@@ -11,7 +11,7 @@ import { api } from '../lib/api';
 import { useModules, type ModuleView } from '../lib/modules';
 import { useMe, useRefreshAll } from '../lib/queries';
 
-const ORDER: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'core', 'manage', 'internal'];
+const ORDER: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'core', 'manage'];
 
 /**
  * The apps that are on, as a list, grouped, each group in its own colour. Apps that are off are not

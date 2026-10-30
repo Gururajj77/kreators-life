@@ -353,6 +353,18 @@ export const TOOLS: readonly Tool[] = [
     },
   },
   {
+    name: 'read_discover',
+    risk: 'read',
+    sensitive: true,
+    needs: ['discover'],
+    refresh: [],
+    title: 'Read your Discover profile',
+    description:
+      "A small profile from the person's own Discover quiz: their strongest and quietest strengths, how each of five traits reads (low, middle or high), their reasoning level and how to help them. Only works when they allowed it. Use it to choose a tone and the size of a step, never to label them, and never read it back to them unless they ask about their Discover results.",
+    params: { type: 'object', properties: {} },
+    run: async (_a, io) => ({ data: must(await io.call({ method: 'GET', path: '/discover/profile' })) }),
+  },
+  {
     name: 'read_journal',
     risk: 'read',
     sensitive: true,

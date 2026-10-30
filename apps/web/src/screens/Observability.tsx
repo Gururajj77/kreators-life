@@ -64,7 +64,7 @@ export function Observability() {
 
   return (
     <Screen>
-      <PageHeader back={{ to: '/apps', label: 'Apps' }} eyebrow={MODULE_GROUPS.internal} title="Observability" lede="Who is here, which apps they have on, and who holds which role. Only the team sees this. Journals and wellbeing never appear." />
+      <PageHeader back={{ to: '/apps', label: 'Apps' }} eyebrow={MODULE_GROUPS.manage} title="Observability" lede="Who is here, which apps they have on, and who holds which role. Only the team sees this. Journals and wellbeing never appear." />
 
       {d.isPending && (
         <p className="mt-md m-0 text-[14px] font-bold text-ink-soft" role="status">

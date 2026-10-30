@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { REWARD_BY_KEY, REWARDS, type Redemption, type RewardsResponse } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { getUser, newId, nowIso } from '../db';
+import { getUser, newId, nowIso, parseModules } from '../db';
 
 export const rewards = new Hono<AppEnv>();
 
@@ -27,7 +27,8 @@ rewards.get('/', async (c) => {
     .prepare('SELECT * FROM redemptions WHERE user_id = ? ORDER BY created_at DESC LIMIT 50')
     .bind(user.id)
     .all<RedemptionRow>();
-  const res: RewardsResponse = { points: user.points, rewards: [...REWARDS], redemptions: rows.results.map(toRedemption) };
+  const owned = await db.prepare('SELECT game_key FROM card_unlocks WHERE user_id = ?').bind(user.id).all<{ game_key: string }>();
+  const res: RewardsResponse = { points: user.points, games: owned.results.map((r) => r.game_key), rewards: [...REWARDS], redemptions: rows.results.map(toRedemption) };
   return c.json(res);
 });
 
@@ -37,10 +38,27 @@ rewards.post('/:key/redeem', async (c) => {
   const user = c.get('user');
   const reward = REWARD_BY_KEY[c.req.param('key')];
   if (!reward) return c.json({ error: 'no such reward' }, 404);
+  if (reward.game && (await db.prepare('SELECT 1 AS x FROM card_unlocks WHERE user_id = ? AND game_key = ?').bind(user.id, reward.game).first())) return c.json({ error: 'you already have this game' }, 409);
   if (user.points < reward.cost) return c.json({ error: `you need ${reward.cost - user.points} more points` }, 400);
 
   const now = nowIso();
   const id = newId();
+  // A card game is not posted to anyone: it opens in the app for good, right away. It also switches the Card games app on.
+  if (reward.kind === 'unlock' && reward.game) {
+    const mine = parseModules(user.modules);
+    mine.cards = true;
+    await db.batch([
+      db
+        .prepare('INSERT INTO redemptions (id, user_id, reward_key, points, status, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(id, user.id, reward.key, reward.cost, 'fulfilled', 'Unlocked', now, now),
+      db.prepare('UPDATE users SET points = points - ?, modules = ? WHERE id = ? AND points >= ?').bind(reward.cost, JSON.stringify(mine), user.id, reward.cost),
+      db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(user.id, -reward.cost, 'redeem', id, now),
+      db.prepare('INSERT INTO card_unlocks (user_id, game_key, redemption_id, unlocked_at) VALUES (?, ?, ?, ?)').bind(user.id, reward.game, id, now),
+    ]);
+    const fresh = await getUser(db, user.id);
+    const row = await db.prepare('SELECT * FROM redemptions WHERE id = ?').bind(id).first<RedemptionRow>();
+    return c.json({ redemption: row ? toRedemption(row) : null, points: fresh?.points ?? user.points, game: reward.game }, 201);
+  }
   await db.batch([
     db
       .prepare('INSERT INTO redemptions (id, user_id, reward_key, points, status, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')

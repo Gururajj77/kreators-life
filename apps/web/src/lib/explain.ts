@@ -18,7 +18,7 @@ export function explainTyped(text: string): string[] {
   const t = plain(text);
   const out: string[] = [];
   for (const m of MODULES) {
-    if (m.group === 'manage' || m.group === 'internal') continue;
+    if (m.group === 'manage') continue;
     if (has(t, m.name) || (m.key.length > 3 && has(t, m.key))) out.push(`${m.emoji} ${m.name}: ${SETUP_APP_LINES[m.key] ?? m.blurb}`);
   }
   for (const r of RELATIONSHIPS) {

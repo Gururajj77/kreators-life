@@ -11,6 +11,8 @@ export const keys = {
   today: (date: string) => ['today', date] as const,
   leaderboard: (by: LeaderboardSort, scope: LeaderboardScope, value: string, paging: string) => ['leaderboard', by, scope, value, paging] as const,
   rewards: ['rewards'] as const,
+  cards: ['cards'] as const,
+  discover: ['discover'] as const,
 };
 
 /** A query that only runs once there is a session. */
@@ -35,6 +37,10 @@ export function useToday() {
 export function useLeaderboard(by: LeaderboardSort, scope: LeaderboardScope = 'all', value = '', paging = '') {
   return useAuthed(keys.leaderboard(by, scope, value, paging), () => api.leaderboard(by, scope, value, paging), scope === 'all' || Boolean(value));
 }
+
+export const useDiscover = () => useAuthed(keys.discover, api.discover);
+export const useCardGames = () => useAuthed(keys.cards, api.cardGames);
+export const useCardGame = (key: string) => useAuthed([...keys.cards, key] as const, () => api.cardGame(key), Boolean(key));
 
 export function useRewards() {
   return useAuthed(keys.rewards, api.rewards);

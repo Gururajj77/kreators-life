@@ -55,3 +55,5 @@ export const useAssistantModel = create<{ model: string | null; setModel: (model
   ),
 );
 
+/** Focus mode: while it is on, the menu, the assistant and the reminders bubble step out of the way. Never kept: a reload starts normal. */
+export const useFocus = create<{ on: boolean; set: (on: boolean) => void }>()((set) => ({ on: false, set: (on) => set({ on }) }));

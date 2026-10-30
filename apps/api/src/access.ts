@@ -19,6 +19,8 @@ export const MODULE_FOR_PREFIX: Record<string, readonly string[]> = {
   community: ['community'],
   club: ['club'],
   leaderboard: ['leaderboard'],
+  cards: ['cards'],
+  discover: ['discover'],
   bond: ['bond'],
   // Photos, the conversation and who to meet inside an event: open when either events app is.
   connect: ['party', 'run'],

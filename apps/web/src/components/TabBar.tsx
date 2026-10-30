@@ -68,7 +68,7 @@ const TABS = [
   },
 ];
 
-const SIDEBAR_GROUPS: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'core', 'manage', 'internal'];
+const SIDEBAR_GROUPS: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'core', 'manage'];
 
 export function TabBar() {
   const me = useMe();

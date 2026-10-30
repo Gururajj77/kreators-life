@@ -51,7 +51,7 @@ export async function runScheduled(env: Env): Promise<{ sequences: number; recur
  */
 /**
  * Water and the person's own reminders, as inbox notices at the right local time. Water goes every few minutes the person
- * chose, inside their day, and only while the day's goal is not met; a custom reminder goes once on each of its days, within
+ * chose, inside their day, and only while the day's goal is not met, as one inbox line a day that each reminder rewrites; a custom reminder goes once on each of its days, within
  * an hour after its time. Nothing is sent to someone who switched water off or turned a reminder off.
  */
 export async function sendWaterAndCustom(db: D1Database): Promise<number> {
@@ -81,7 +81,13 @@ export async function sendWaterAndCustom(db: D1Database): Promise<number> {
     const so = await db.prepare('SELECT COALESCE(SUM(ml), 0) AS ml FROM water_logs WHERE user_id = ? AND day = ?').bind(w.user_id, at.day).first<{ ml: number }>();
     const drunk = so?.ml ?? 0;
     if (drunk >= w.water_goal_ml) continue;
-    await notice(w.user_id, 'Time for some water', `${Math.floor(drunk / w.water_glass_ml)} of ${Math.ceil(w.water_goal_ml / w.water_glass_ml)} glasses so far today. Tap to log one.`);
+    // One water line per person per day: later reminders rewrite it (new count, back to unread, newest first) instead of piling up.
+    await db
+      .prepare(
+        "INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', 'Time for some water', ?, '/today', NULL, ?) ON CONFLICT(id) DO UPDATE SET body = excluded.body, created_at = excluded.created_at, read_at = NULL",
+      )
+      .bind(`water-${w.user_id}-${at.day}`, w.user_id, `${Math.floor(drunk / w.water_glass_ml)} of ${Math.ceil(w.water_goal_ml / w.water_glass_ml)} glasses so far today. Tap to log one.`, nowIso())
+      .run();
     await db.prepare('UPDATE reminder_prefs SET last_water_at = ? WHERE user_id = ?').bind(nowIso(), w.user_id).run();
     sent += 1;
   }

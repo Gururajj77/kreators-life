@@ -2,6 +2,7 @@ import { RELATIONSHIPS } from '@kreators/shared';
 import type { ReactNode } from 'react';
 import { Link, NavLink } from 'react-router';
 import { Avatar } from '../components/Avatar';
+import { Ornament, Posy } from '../components/Hero';
 import { useSession } from '../lib/store';
 import { useTheme, type ThemeMode } from '../lib/theme';
 import { ThemeToggle } from '../components/ThemeToggle';
@@ -71,9 +72,10 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
           </nav>
         </div>
       </header>
-      <main className={`mx-auto ${wide ? 'max-w-[1080px]' : 'max-w-[720px]'} px-md pb-2xl`}>{children}</main>
-      <footer className="border-t border-line">
-        <div className={`mx-auto flex ${wide ? 'max-w-[1080px]' : 'max-w-[720px]'} flex-col gap-md px-md py-lg md:flex-row md:items-start md:justify-between`}>
+      <main className={`mx-auto ${wide ? 'max-w-[1080px]' : 'max-w-[720px]'} px-md md:px-lg lg:px-xl pb-2xl`}>{children}</main>
+      <footer className="relative mt-xl overflow-hidden rounded-t-card bg-card shadow-toy-soft" style={{ backgroundImage: 'linear-gradient(160deg, color-mix(in oklab, var(--color-r6) 10%, transparent), transparent 55%, color-mix(in oklab, var(--color-r4) 9%, transparent))' }}>
+        <Posy tone="ink" kind="lotus" className="right-0 bottom-0" />
+        <div className={`relative mx-auto flex ${wide ? 'max-w-[1080px]' : 'max-w-[720px]'} flex-col gap-md px-md py-lg md:flex-row md:items-start md:justify-between`}>
           <div>
             <Logo />
             <p className="mt-xs m-0 max-w-[420px] text-[14px] font-semibold text-ink-soft">A daily game for the seven relationships that make a life, with the tools a creator needs built in. One small act a day, for all seven. Free to start, free to stay.</p>
@@ -127,8 +129,9 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
             ))}
           </div>
         </div>
-        <p className="m-0 px-md text-center text-[12px] font-semibold text-ink-mute">Your journal and wellbeing numbers are never shown to brands, staff, the leaderboard or Club selection.</p>
-        <p className="m-0 px-md pb-lg text-center text-[12px] font-semibold text-ink-mute">
+        <Ornament className="mt-xs" />
+        <p className="relative m-0 px-md text-center text-[12px] font-semibold text-ink-mute">Your journal and wellbeing numbers are never shown to brands, staff, the leaderboard or Club selection.</p>
+        <p className="relative m-0 px-md pb-lg text-center text-[12px] font-semibold text-ink-mute">
           Built with ❤️ by{' '}
           <a href="https://brandingbum.com" target="_blank" rel="noopener noreferrer" className="font-bold underline underline-offset-4 hover:text-ink">
             BrandingBum

@@ -1365,6 +1365,86 @@ export function timeHonors(createdAt: string, now: Date = new Date()): string[] 
 }
 
 // ---------------------------------------------------------------------------
+// Card games
+// ---------------------------------------------------------------------------
+
+/**
+ * Card games, played in the app. Each game is unlocked once with points (see REWARDS in index.ts) and then played for good.
+ * The card text lives in apps/api/src/cards-data.json and is only served to someone who unlocked the game (or to the team);
+ * this file holds what the client needs before that: the name, the line, the picture and the price.
+ */
+export interface CardGameInfo {
+  key: string;
+  name: string;
+  tagline: string;
+  emoji: string;
+  /** The relationship whose colours the game wears. */
+  accent: RelationshipKey;
+  /** Points to unlock it for good. */
+  cost: number;
+}
+
+export const CARD_GAMES: readonly CardGameInfo[] = [
+  { key: 'ulta_seedha', name: 'Ulta Seedha', tagline: 'A game to help you overcome approach anxiety.', emoji: '🙃', accent: 'friendship', cost: 2000 },
+  { key: 'dateflow_connect', name: 'DateFlow Connect', tagline: 'A game for better dating experiences.', emoji: '💞', accent: 'lover_partner', cost: 2000 },
+  { key: 'date_guru', name: 'DateGuru', tagline: 'Fifty-two lessons for better dating experiences.', emoji: '🧭', accent: 'lover_partner', cost: 1500 },
+  { key: 'healflow', name: 'HealFlow', tagline: 'For mindful families who want to heal, bond and connect over fun, therapeutic activities.', emoji: '🌿', accent: 'parent_child', cost: 1500 },
+  { key: 'funflow', name: 'FunFlow', tagline: 'For friends and teams who want to bond and grow together.', emoji: '🎉', accent: 'friendship', cost: 1500 },
+  { key: 'relationship_method', name: 'The Relationship Method Challenge', tagline: 'One small daily challenge for each of the seven relationships.', emoji: '🌈', accent: 'self', cost: 1000 },
+  { key: 'roast_or_flirt', name: 'Roast or Flirt', tagline: 'Build better self-esteem with your relationships power.', emoji: '🔥', accent: 'friendship', cost: 2000 },
+  { key: 'shadowflow', name: 'ShadowFlow', tagline: 'Use ShadowFlow to learn more about your hidden self.', emoji: '🌙', accent: 'divine', cost: 1500 },
+  { key: 'workflow', name: 'WorkFlow', tagline: 'Reveal the hidden secrets of office culture.', emoji: '💼', accent: 'servant_leader', cost: 1500 },
+];
+
+export const CARD_GAME_BY_KEY: Record<string, CardGameInfo> = Object.fromEntries(CARD_GAMES.map((g) => [g.key, g]));
+
+/** A game's unlock is a reward with this key. */
+export const gameRewardKey = (gameKey: string) => `game_${gameKey}`;
+
+/** One card. A card with `alt` has two sides (Truth and Dare, Roast and Flirt, This and That): the flip shows the other. */
+export interface PlayCard {
+  /** A short name at the top, when the card has one. */
+  title?: string;
+  /** What the side is called: This, Roast, Seedha: Truth. */
+  label?: string;
+  text: string;
+  /** Extra lines under the text: examples, questions, riddles, statements. */
+  list?: string[];
+  alt?: { label: string; text: string };
+}
+
+export interface PlayDeck {
+  key: string;
+  name: string;
+  /** What the back of every card in this deck says, when the deck has its own line. */
+  hint?: string;
+  cards: PlayCard[];
+}
+
+/** What the game list shows for each game. */
+export interface CardGameCard extends CardGameInfo {
+  unlocked: boolean;
+  decks: { key: string; name: string; count: number }[];
+  total: number;
+}
+
+/** A whole game, served only when it is unlocked. */
+export interface CardGamePlay extends CardGameInfo {
+  howTo: string;
+  /** Special cards: rules that shake a turn up. */
+  special?: string[];
+  specialNote?: string;
+  /** House rules, for games that have them. */
+  rules?: string[];
+  decks: PlayDeck[];
+}
+
+export interface CardGamesResponse {
+  points: number;
+  games: CardGameCard[];
+}
+
+// ---------------------------------------------------------------------------
 // Points and rewards — check-ins earn points you can later trade for real
 // things. Rewards are reservations until the first drop ships.
 // ---------------------------------------------------------------------------
@@ -1376,19 +1456,78 @@ export const POINTS = {
   streakBonus: 50,
 } as const;
 
+export type RewardGroup = 'apparel' | 'tech' | 'drinkware' | 'stationery' | 'lifestyle' | 'novelty' | 'books' | 'games' | 'experiences';
+
 export interface Reward {
   key: string;
   name: string;
-  kind: 'event' | 'merch';
+  /** An unlock opens something in the app for good (a card game); a merch item or an event ships or happens later. */
+  kind: 'event' | 'merch' | 'unlock';
+  group: RewardGroup;
+  /** For kind unlock: the card game it opens. */
+  game?: string;
+  /** Its own picture on the card. */
+  emoji: string;
   cost: number;
   blurb: string;
+  /** Where to read more about it, for the books and games that come from the founder's own sites. */
+  link?: string;
 }
 
+/** The shelves of the catalog, in the order they are shown. */
+export const REWARD_GROUPS: readonly { key: RewardGroup; name: string; emoji: string; blurb: string }[] = [
+  { key: 'books', name: 'Books', emoji: '📚', blurb: 'Three books by Shubham Aggarwal, who builds kreators.app.' },
+  { key: 'games', name: 'Card games', emoji: '🃏', blurb: 'Unlock a game once with points and play it in the app: shuffle, flip and draw. Nothing is posted to you.' },
+  { key: 'apparel', name: 'Apparel and wearables', emoji: '👕', blurb: 'Wear it, and people ask what it is.' },
+  { key: 'tech', name: 'Tech accessories', emoji: '📱', blurb: 'Small things you use every day.' },
+  { key: 'drinkware', name: 'Drinkware', emoji: '☕', blurb: 'Keep a drink with you, again and again.' },
+  { key: 'stationery', name: 'Office and stationery', emoji: '📝', blurb: 'For your desk and your plans.' },
+  { key: 'lifestyle', name: 'Lifestyle and wellness', emoji: '🧼', blurb: 'Look after yourself, at home or on the road.' },
+  { key: 'novelty', name: 'Novelty and fun', emoji: '🎮', blurb: 'Just for the joy of it.' },
+  { key: 'experiences', name: 'Experiences', emoji: '🎟️', blurb: 'Time with real people.' },
+];
+
 export const REWARDS: readonly Reward[] = [
-  { key: 'stickers', name: 'Sticker pack', kind: 'merch', cost: 600, blurb: 'All seven characters, die-cut.' },
-  { key: 'meetup', name: 'Meetup ticket', kind: 'event', cost: 1500, blurb: 'A seat at the next city meetup.' },
-  { key: 'tee', name: 'kreators.app tee', kind: 'merch', cost: 2500, blurb: 'The seven characters, printed big.' },
-  { key: 'coaching', name: 'One-to-one call', kind: 'event', cost: 4000, blurb: 'Forty minutes with a mentor.' },
+  ...CARD_GAMES.map((g): Reward => ({ key: gameRewardKey(g.key), name: g.name, kind: 'unlock', emoji: g.emoji, group: 'games', cost: g.cost, blurb: g.tagline, game: g.key })),
+  { key: 'book_relationship_method', name: 'The Relationship Method', kind: 'merch', emoji: '📘', group: 'books', cost: 2000, blurb: 'The book behind the seven relationships this app is built on.', link: 'https://brandingbum.com' },
+  { key: 'book_dictionary_of_mistakes', name: 'Dictionary of Mistakes for Kreators', kind: 'merch', emoji: '📕', group: 'books', cost: 2000, blurb: 'The mistakes kreators make, so you can skip them.', link: 'https://brandingbum.com' },
+  { key: 'book_20_somethings', name: 'Dictionary of Mistakes for 20 Somethings', kind: 'merch', emoji: '📗', group: 'books', cost: 2000, blurb: 'The mistakes people in their twenties make, so you can skip them.', link: 'https://brandingbum.com' },
+
+  { key: 'tee', name: 'Kreators tee', kind: 'merch', emoji: '👕', group: 'apparel', cost: 2500, blurb: 'The seven characters, printed big.' },
+  { key: 'hoodie', name: 'Kreators hoodie', kind: 'merch', emoji: '🧥', group: 'apparel', cost: 4500, blurb: 'Warm, soft and easy to spot.' },
+  { key: 'cap', name: 'Cap', kind: 'merch', emoji: '🧢', group: 'apparel', cost: 1800, blurb: 'A plain cap with the Kreators mark.' },
+  { key: 'beanie', name: 'Beanie', kind: 'merch', emoji: '🎿', group: 'apparel', cost: 1500, blurb: 'For the cold days.' },
+  { key: 'socks', name: 'Socks', kind: 'merch', emoji: '🧦', group: 'apparel', cost: 1200, blurb: 'Fun socks with the characters.' },
+  { key: 'tote', name: 'Tote bag', kind: 'merch', emoji: '👜', group: 'apparel', cost: 1000, blurb: 'Strong, reusable and roomy.' },
+
+  { key: 'usb_drive', name: 'USB flash drive', kind: 'merch', emoji: '💾', group: 'tech', cost: 1500, blurb: 'Carry your files anywhere.' },
+  { key: 'power_bank', name: 'Power bank', kind: 'merch', emoji: '🔋', group: 'tech', cost: 3000, blurb: 'Charge your phone on the go.' },
+  { key: 'phone_grip', name: 'Phone grip and stand', kind: 'merch', emoji: '📲', group: 'tech', cost: 600, blurb: 'Sticks to your phone and holds it up.' },
+  { key: 'laptop_stickers', name: 'Laptop stickers', kind: 'merch', emoji: '💻', group: 'tech', cost: 400, blurb: 'A few small stickers for your laptop.' },
+
+  { key: 'water_bottle', name: 'Water bottle', kind: 'merch', emoji: '💧', group: 'drinkware', cost: 1800, blurb: 'A steel bottle for your daily water goal.' },
+  { key: 'mug', name: 'Coffee mug', kind: 'merch', emoji: '☕', group: 'drinkware', cost: 1200, blurb: 'A ceramic mug for your desk.' },
+  { key: 'tumbler', name: 'Tumbler', kind: 'merch', emoji: '🥤', group: 'drinkware', cost: 2200, blurb: 'Keeps drinks hot or cold for hours.' },
+
+  { key: 'notebook', name: 'Notebook', kind: 'merch', emoji: '📓', group: 'stationery', cost: 1200, blurb: 'A good notebook for plans and ideas.' },
+  { key: 'pens', name: 'Pen and highlighter set', kind: 'merch', emoji: '🖊️', group: 'stationery', cost: 500, blurb: 'The classic set.' },
+  { key: 'sticky_notes', name: 'Sticky notes', kind: 'merch', emoji: '🗒️', group: 'stationery', cost: 500, blurb: 'Small reminders you can see.' },
+  { key: 'desk_organizer', name: 'Desk organizer', kind: 'merch', emoji: '🗂️', group: 'stationery', cost: 1000, blurb: 'Keeps your desk tidy.' },
+
+  { key: 'lip_balm', name: 'Lip balm', kind: 'merch', emoji: '💋', group: 'lifestyle', cost: 400, blurb: 'Small enough for any bag.' },
+  { key: 'hand_sanitizer', name: 'Hand sanitizer', kind: 'merch', emoji: '🧴', group: 'lifestyle', cost: 400, blurb: 'A pocket size bottle.' },
+  { key: 'travel_pillow', name: 'Travel pillow', kind: 'merch', emoji: '😴', group: 'lifestyle', cost: 1800, blurb: 'For long trips.' },
+  { key: 'luggage_tag', name: 'Luggage tag', kind: 'merch', emoji: '🧳', group: 'lifestyle', cost: 500, blurb: 'Find your bag fast.' },
+  { key: 'sunglasses', name: 'Sunglasses', kind: 'merch', emoji: '🕶️', group: 'lifestyle', cost: 1500, blurb: 'For sunny days and festivals.' },
+
+  { key: 'stickers', name: 'Sticker pack', kind: 'merch', emoji: '✨', group: 'novelty', cost: 600, blurb: 'All seven characters, die-cut.' },
+  { key: 'stress_ball', name: 'Stress ball', kind: 'merch', emoji: '🟡', group: 'novelty', cost: 400, blurb: 'Squeeze it when work gets heavy.' },
+  { key: 'enamel_pin', name: 'Enamel pin', kind: 'merch', emoji: '📌', group: 'novelty', cost: 500, blurb: 'A collectible pin of one of the characters.' },
+  { key: 'keychain', name: 'Keychain', kind: 'merch', emoji: '🔑', group: 'novelty', cost: 500, blurb: 'Small, strong and always with you.' },
+  { key: 'bottle_opener', name: 'Bottle opener', kind: 'merch', emoji: '🍾', group: 'novelty', cost: 400, blurb: 'Useful more often than you think.' },
+
+  { key: 'meetup', name: 'Meetup ticket', kind: 'event', emoji: '🎟️', group: 'experiences', cost: 1500, blurb: 'A seat at the next city meetup.' },
+  { key: 'coaching', name: 'One-to-one call', kind: 'event', emoji: '🎯', group: 'experiences', cost: 4000, blurb: 'Forty minutes with a mentor.' },
 ];
 
 export const REWARD_BY_KEY: Record<string, Reward> = Object.fromEntries(REWARDS.map((r) => [r.key, r]));
@@ -1406,6 +1545,8 @@ export interface Redemption {
 
 export interface RewardsResponse {
   points: number;
+  /** The card games this person has unlocked. */
+  games: string[];
   rewards: Reward[];
   redemptions: Redemption[];
 }
@@ -1626,7 +1767,7 @@ export function badgeRoleOf(user: { role: Role; permissions: readonly string[] }
 // You; admins can disable one for everyone or limit it to a role.
 // ---------------------------------------------------------------------------
 
-export type ModuleGroup = 'core' | 'wellbeing' | 'earn' | 'community' | 'creator' | 'manage' | 'internal';
+export type ModuleGroup = 'core' | 'wellbeing' | 'earn' | 'community' | 'creator' | 'manage';
 
 export interface AppModule {
   key: string;
@@ -1651,6 +1792,10 @@ export const MODULES: readonly AppModule[] = [
   { key: 'search', name: 'Search', blurb: 'Find anything you wrote, bought, applied to or read.', emoji: '🔍', group: 'core', path: '/search', defaultOn: true, locked: true, minRole: 'user' },
   // On for everyone. People still only appear after they opt in under Profile, and journal and wellbeing never count.
   { key: 'leaderboard', name: 'Leaderboard', blurb: 'See where you stand by goal, pillar, city and more. Boards for each goal, filters, and a monthly season.', emoji: '🏆', group: 'core', path: '/leaderboard', defaultOn: true, minRole: 'user' },
+  // Off on a new account; unlocking a game in Rewards switches it on.
+  { key: 'cards', name: 'Card games', blurb: 'Unlock a game once with points, then shuffle, flip and play it with the people you are with.', emoji: '🃏', group: 'community', path: '/cards', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  // Off on a new account. Owner only, like the journal: never shown to brands, staff, the leaderboard, a coach or the assistant.
+  { key: 'discover', name: 'Discover', blurb: 'A quiz about how you think, feel and act, with puzzles and real situations. It gives a detailed read on your personality and your reasoning, and your strengths across the seven relationships.', emoji: '🔭', group: 'wellbeing', path: '/discover', defaultOn: false, minRole: 'user', accent: 'self' },
   { key: 'notifications', name: 'Inbox', blurb: 'What happened while you were away, and daily reminders.', emoji: '🔔', group: 'core', path: '/inbox', defaultOn: true, minRole: 'user' },
   { key: 'help', name: 'Help', blurb: 'Answers to common questions, and a line to the team.', emoji: '🛟', group: 'core', path: '/help', defaultOn: true, minRole: 'user' },
   // The assistant is part of every screen, not an app of its own: locked on, and its page is its plan and credits.
@@ -1694,8 +1839,8 @@ export const MODULES: readonly AppModule[] = [
 
   { key: 'manage', name: 'Manage', blurb: 'Your staff tools, as far as your permissions go.', emoji: '🛡️', group: 'manage', path: '/manage', defaultOn: true, minRole: 'sub_admin' },
   { key: 'admin', name: 'Admin', blurb: 'Roles, permissions, feature flags, audit log, honors, points.', emoji: '🔑', group: 'manage', path: '/admin', defaultOn: true, minRole: 'admin' },
-  // internal: tracking for the team. Only staff and admins see this group at all.
-  { key: 'observability', name: 'Observability', blurb: 'Who is here, which apps they have on, who holds which role, and the build map.', emoji: '📡', group: 'internal', path: '/internal/observability', defaultOn: true, minRole: 'sub_admin' },
+  // Tracking for the team, in Operations: the module's minRole keeps it to staff and admins.
+  { key: 'observability', name: 'Observability', blurb: 'Who is here, which apps they have on, who holds which role, and the build map.', emoji: '📡', group: 'manage', path: '/internal/observability', defaultOn: true, minRole: 'sub_admin' },
 ];
 
 export const MODULE_BY_KEY: Record<string, AppModule> = Object.fromEntries(MODULES.map((m) => [m.key, m]));
@@ -1707,7 +1852,6 @@ export const MODULE_GROUPS: Record<ModuleGroup, string> = {
   wellbeing: 'Reflection',
   core: 'Essentials',
   manage: 'Operations',
-  internal: 'Internal',
 };
 
 /** The relationship whose colour each app group wears on the Apps page and under You, Features. */
@@ -1718,7 +1862,6 @@ export const MODULE_GROUP_ACCENT: Record<ModuleGroup, RelationshipKey> = {
   wellbeing: 'lover_partner',
   core: 'self',
   manage: 'guru',
-  internal: 'divine',
 };
 
 /** One line on what each group is for. */
@@ -1729,7 +1872,6 @@ export const MODULE_GROUP_BLURB: Record<ModuleGroup, string> = {
   wellbeing: 'How you are doing, day by day.',
   core: 'The basics that are always around.',
   manage: 'Tools for the team.',
-  internal: 'Tracking for the team. Only the roles that need it see this.',
 };
 
 export interface ModuleSetting {
@@ -4958,7 +5100,9 @@ export const TERMS: Record<string, string> = {
   'pre-owned': 'Gear another creator is selling. You make an offer; the two of you settle the rest.',
   kit: 'What to buy at a stage, within a budget: new and pre-owned pieces added up.',
   offer: 'Your price for a pre-owned piece. The seller accepts or declines.',
-  unlock: 'Some things ask for a points balance, a badge, or both before you can buy them.',
+  unlock: 'Some things ask for a points balance, a badge, or both before you can buy them. A card game is unlocked once with points and then yours for good.',
+  strength: 'One of seven things you are good at in Discover, one for each relationship, such as Connecting or Getting it done. It comes from your answers, not from a comparison with other people.',
+  deck: 'A pile of cards in a card game. A game has one deck or several, and you pick which to draw from.',
   Pro: 'A paid plan that gives credits for typing to the assistant, and the Pro mark.',
   Club: 'A curated membership the team reviews you into.',
   cohort: 'A group that goes through a program together, with dates.',
@@ -5007,8 +5151,8 @@ export const isAutoHandle = (handle: string | null | undefined): boolean => !han
 export const TERM_GROUPS: { name: string; terms: string[] }[] = [
   { name: 'Pillars and pyramids', terms: ['pillar', 'pyramid', 'foundation', 'guiding principle', 'value goal', 'goal outcome', 'project', 'task', 'ripple', 'map', 'life map', 'strategy session', 'routine', 'contract', 'core', 'floor'] },
   { name: 'Daily and progress', terms: ['small act', 'check-in', 'daily three', 'daily brief', 'not-to-do', 'kept day', 'streak', 'xp', 'points', 'level', 'who you are becoming', 'life score', 'five areas of life', 'period', 'review', 'season'] },
-  { name: 'You and your page', terms: ['username', 'identity tag', 'setup chat', 'public page', 'badge', 'honor', 'trust', 'unlock'] },
-  { name: 'Friends and community', terms: ['friend code', 'alias', 'circle', 'reaction', 'mention', 'guide', 'life coach', 'student', 'change log', 'run club', 'start code', 'attendee code'] },
+  { name: 'You and your page', terms: ['strength', 'username', 'identity tag', 'setup chat', 'public page', 'badge', 'honor', 'trust', 'unlock'] },
+  { name: 'Friends and community', terms: ['friend code', 'alias', 'circle', 'reaction', 'mention', 'guide', 'life coach', 'student', 'change log', 'run club', 'start code', 'attendee code', 'deck'] },
   { name: 'Learn and earn', terms: ['cohort', 'campaign', 'bounty', 'Club', 'collab', 'giveaway'] },
   { name: 'Shop and store', terms: ['featured', 'partner link', 'pre-owned', 'kit', 'offer'] },
   { name: 'Content', terms: ['brand folder', 'outlier', 'hook', 'piece'] },
@@ -5398,10 +5542,28 @@ export const HOW_TO: Record<string, HowTo> = {
     ],
     terms: ['xp', 'streak', 'badge', 'season'],
   },
+  discover: {
+    steps: [
+      'Take the quiz in five parts: pick the statements most and least like you, solve pattern puzzles, choose words that describe you and judge real situations. It takes about fifteen minutes, and it saves as you go.',
+      'You get your top three strengths out of seven, one for each relationship, a detailed read on five personality traits and on your reasoning puzzles, in your own words and numbers. The reasoning part is not an IQ test.',
+      'Every number is you against your own scale, never against other people. A strength is not a verdict: use it, watch for its other side, and try the small thing it suggests.',
+      'Only you see it. It never reaches brands, staff, the leaderboard or a life coach. You choose whether it shapes your next steps (on by default, plain rules) and whether the assistant may learn from a short summary (off until you say). You can retake it or delete a result any time.',
+    ],
+    terms: ['strength'],
+  },
+  cards: {
+    steps: [
+      'Unlock a game once in Rewards with points. It opens in the app for good, and nothing is posted to you.',
+      'Open a game, pick a deck and tap Shuffle. Tap the pile to draw a card onto the table.',
+      'Tap a card to flip it. Some cards have two sides, like Truth and Dare or Roast and Flirt. Drag cards around the table; the one you touch comes to the front.',
+      'Special cards and house rules, where a game has them, are one tap away. Play with the people you are with: pass the phone round or put it in the middle.',
+    ],
+    terms: ['unlock', 'deck', 'points'],
+  },
   rewards: {
     steps: [
-      'Points buy rewards from the catalog: stickers, a meetup ticket, a tee, a call with a mentor.',
-      'A reward is a reservation until it ships. Cancel any time and the points come back.',
+      'Points buy rewards from the catalog: gear, books, a meetup ticket, a call with a mentor, and card games you unlock and play in the app.',
+      'Gear is a reservation until it ships; cancel any time and the points come back. A card game opens at once and is yours for good.',
       'Points also buy creators’ products, event tickets and featured spots.',
     ],
     terms: ['points'],
@@ -6058,6 +6220,8 @@ export interface BriefFacts {
   reviewDue: boolean;
   /** The apps that are on, so a step never points at one that is off. */
   apps: readonly string[];
+  /** What Discover taught the app, when the person took it and allows next steps to use it. profile is null when they have not, or switched it off. */
+  discover?: { taken: boolean; profile: DiscoverProfile | null };
 }
 
 const BRIEF_SIZE = 3;
@@ -6101,6 +6265,19 @@ export function briefFor(f: BriefFacts): { signals: BriefLine[]; actions: BriefL
   if (f.stressAvg !== null && f.stressAvg >= 4 && on('mindful')) act(72, 'breathe', 'Take five minutes with the breathing timer.', '/mindful');
   if (f.sleepAvg !== null && f.sleepAvgBefore !== null && f.sleepAvg < f.sleepAvgBefore - 0.5 && on('sleep')) act(60, 'sleep', 'Log tonight’s sleep, and aim for lights out on time.', '/sleep');
   if (f.nextEvent) act(55, 'event', `Check the plan for ${f.nextEvent.title}.`, f.nextEvent.to);
+  // Next steps that emerge from what Discover learned about this person: their quietest strength, and the shape of their traits.
+  const d = f.discover;
+  if (d && !d.taken && on('discover')) act(48, 'discover', 'Take the Discover quiz: puzzles, personality and strengths. Your next steps get personal.', '/discover');
+  if (d?.profile) {
+    const p = d.profile;
+    const grow = DISCOVER_STRENGTHS[p.growth];
+    act(58, 'strength-grow', `Your quietest strength is ${grow.name}. ${grow.tryThis}`, STRENGTH_PATH[p.growth]);
+    if (p.bands.c === 'low') act(66, 'style-small', 'Pick one task and finish only that today. Small and done beats big and open.', '/today');
+    if (p.bands.s === 'low' && on('mindful')) act(64, 'style-calm', 'Take two minutes with the breathing timer before your hardest task.', '/mindful');
+    if (p.bands.e === 'high') act(52, 'style-people', 'Do one step with another person today: a friend, a circle or a run.', on('circles') ? '/circles' : null);
+    if (p.bands.o === 'high') act(50, 'style-new', 'Try one new thing in your pillars today, even a small one.', '/tower');
+    sig(30, 'strength', 'good', `Your strongest strength is ${DISCOVER_STRENGTHS[p.top[0]!].name}. Use it today.`, STRENGTH_PATH[p.top[0]!]);
+  }
   act(20, 'pillar', 'Add a task to the pillar you want to grow.', '/tower');
   if (on('journal')) act(15, 'journal', 'Write one line in your journal about today.', '/journal');
 
@@ -6263,7 +6440,7 @@ export const SETUP_GOALS: readonly SetupGoal[] = [
   { key: 'people', label: 'Meet new people', emoji: '🫶', blurb: 'Small tables near you, a feed, events and friends.', because: 'you want to meet people', to: 'meet people', words: ['meet people', 'friends', 'make friends', 'network', 'networking', 'community', 'people like me', 'collab', 'collabs', 'collaborate'], profileGoal: 'Collaborate', apps: { circles: 3, community: 2, bond: 2, party: 2, club: 1 } },
   { key: 'health', label: 'Feel better day to day', emoji: '🌿', blurb: 'Mood, sleep, stress and calm, on one score.', because: 'you want to feel better day to day', to: 'feel better day to day', words: ['feel better', 'mood', 'mental health', 'calm', 'peace', 'health', 'healthy', 'happier', 'sleep better'], profileGoal: 'Get healthier habits', apps: { wellbeing: 3, mood: 2, sleep: 2, stress: 2, mindful: 2, life: 1 } },
   { key: 'move', label: 'Move more', emoji: '👟', blurb: 'Run clubs, movement minutes and a body score.', because: 'you want to move more', to: 'move more', words: ['fitness', 'get fit', 'lose weight', 'weight loss', 'exercise', 'run more', 'move more', 'workout', 'be active'], profileGoal: 'Get healthier habits', apps: { run: 3, life: 2, wellbeing: 1 } },
-  { key: 'life', label: 'Work on myself', emoji: '🏰', blurb: 'The deeper path: your seven relationships, a routine and a plan.', because: 'you want to work on yourself', to: 'work on yourself', words: ['my life', 'life together', 'purpose', 'discipline', 'self improvement', 'self-improvement', 'better person', 'habits', 'routine', 'relationships', 'grow as a person'], apps: { journal: 2, reviews: 2, life: 2, mindful: 1 } },
+  { key: 'life', label: 'Work on myself', emoji: '🏰', blurb: 'The deeper path: your seven relationships, a routine and a plan.', because: 'you want to work on yourself', to: 'work on yourself', words: ['my life', 'life together', 'purpose', 'discipline', 'self improvement', 'self-improvement', 'better person', 'habits', 'routine', 'relationships', 'grow as a person'], apps: { journal: 2, reviews: 2, life: 2, mindful: 1, discover: 2 } },
   { key: 'find_coach', label: 'Work with a life coach', emoji: '🙋', blurb: 'A coach the team checked sees what you share and helps you keep going.', because: 'you want a coach in your corner', to: 'work with a life coach', words: ['need a life coach', 'want a life coach', 'find a life coach', 'get a life coach', 'need a coach', 'want a coach', 'find a coach', 'get a coach', 'my coach', 'accountability', 'keep me accountable', 'hold me accountable'], apps: { coaching: 3, life: 1, reviews: 1 } },
 ];
 
@@ -6682,6 +6859,8 @@ export const SETUP_APP_LINES: Readonly<Record<string, string>> = {
   reviews: 'A short look back each week.',
   companion: 'A chat about how you are doing. Not a therapist.',
   coaching: 'Work with a life coach, or coach your students.',
+  cards: 'Card games to play with the people you are with.',
+  discover: 'A quiz on your personality, reasoning and strengths.',
   profile: 'Your page: links, work and shop.',
   shop: 'Sell courses, downloads and sessions.',
   store: 'Gear, new or second hand.',
@@ -6943,3 +7122,589 @@ export interface AssistantStatus {
 /** Why typing is refused: no plan, no credits left, or the day's cap reached. */
 export type AssistantPaywall = 'plan' | 'credits' | 'day';
 
+// ---------------------------------------------------------------------------
+// Discover: a short self-discovery quiz. Five parts in the shape of a modern talent survey (pick the statement that is most
+// and least like you; pattern puzzles; descriptor words; real situations), with our own items and our own scoring.
+// It never compares you with other people: every number is you against your own scale. Owner only, like the journal.
+// ---------------------------------------------------------------------------
+
+/** The five traits behind the scoring (the well-known Big Five, in plain words). */
+export type Trait = 'o' | 'c' | 'e' | 'a' | 's';
+export const TRAITS: readonly { key: Trait; name: string; high: string; low: string }[] = [
+  { key: 'o', name: 'Curiosity', high: 'Likes new ideas, new places and new ways', low: 'Likes what is proven and clear' },
+  { key: 'c', name: 'Follow-through', high: 'Plans, finishes and keeps promises', low: 'Goes with the flow and starts many things' },
+  { key: 'e', name: 'Energy with people', high: 'Gets energy from people and talks easily', low: 'Gets energy from quiet and thinks before talking' },
+  { key: 'a', name: 'Warmth', high: 'Puts people first and keeps the peace', low: 'Says it straight and stands firm' },
+  { key: 's', name: 'Calm', high: 'Stays steady when things go wrong', low: 'Feels things strongly and worries more' },
+];
+
+export interface DiscoverStatement {
+  id: string;
+  trait: Trait;
+  /** 1 when saying yes means more of the trait, -1 when it means less. */
+  sign: 1 | -1;
+  text: string;
+}
+
+const STATEMENT_TEXT: Record<Trait, { text: string; sign: 1 | -1 }[]> = {
+  o: [
+    { text: 'I like to try new and different things.', sign: 1 },
+    { text: 'I enjoy learning about ideas just for fun.', sign: 1 },
+    { text: 'I often come up with new ways to do things.', sign: 1 },
+    { text: 'I notice small details in art, music or words.', sign: 1 },
+    { text: 'I get bored when things stay the same.', sign: 1 },
+    { text: 'I like to ask why things work the way they do.', sign: 1 },
+    { text: 'I prefer to stick to what I know works.', sign: -1 },
+    { text: 'I like clear rules more than big ideas.', sign: -1 },
+    { text: 'I would rather do it the usual way.', sign: -1 },
+    { text: 'Abstract ideas lose me quickly.', sign: -1 },
+    { text: 'I like to explore places I have never been.', sign: 1 },
+  ],
+  c: [
+    { text: 'I finish what I start.', sign: 1 },
+    { text: 'I plan my week before it begins.', sign: 1 },
+    { text: 'I keep my space and files in order.', sign: 1 },
+    { text: 'I do the hard task first.', sign: 1 },
+    { text: 'I double-check my work before I share it.', sign: 1 },
+    { text: 'I keep promises, even small ones.', sign: 1 },
+    { text: 'I often leave things until the last minute.', sign: -1 },
+    { text: 'My plans change with my mood.', sign: -1 },
+    { text: 'I lose track of where I put things.', sign: -1 },
+    { text: 'I start many things and drop some.', sign: -1 },
+    { text: 'I keep a list and tick things off.', sign: 1 },
+  ],
+  e: [
+    { text: 'I feel full of energy around other people.', sign: 1 },
+    { text: 'I start conversations easily.', sign: 1 },
+    { text: 'I like being the one who gets things moving.', sign: 1 },
+    { text: 'I share my feelings out loud.', sign: 1 },
+    { text: 'I am happy in a big, busy group.', sign: 1 },
+    { text: 'I say yes to new invitations.', sign: 1 },
+    { text: 'I need quiet time alone to recharge.', sign: -1 },
+    { text: 'I think a lot before I speak.', sign: -1 },
+    { text: 'I keep my private life to myself.', sign: -1 },
+    { text: 'Big crowds tire me out.', sign: -1 },
+    { text: 'I am the first to speak up in a group.', sign: 1 },
+  ],
+  a: [
+    { text: 'I notice when someone needs help.', sign: 1 },
+    { text: 'I look for the good in people.', sign: 1 },
+    { text: 'I give way to keep the peace.', sign: 1 },
+    { text: 'I listen without rushing to fix things.', sign: 1 },
+    { text: 'I trust people until they show me otherwise.', sign: 1 },
+    { text: 'I share credit easily.', sign: 1 },
+    { text: 'I say what I think, even when it stings.', sign: -1 },
+    { text: 'I like to win an argument.', sign: -1 },
+    { text: 'I do not mind being disliked.', sign: -1 },
+    { text: 'I find it hard to forgive and forget.', sign: -1 },
+    { text: 'I put other people’s needs first.', sign: 1 },
+  ],
+  s: [
+    { text: 'I stay calm when things go wrong.', sign: 1 },
+    { text: 'I bounce back quickly after a bad day.', sign: 1 },
+    { text: 'I rarely worry about what might happen.', sign: 1 },
+    { text: 'I sleep well even before big days.', sign: 1 },
+    { text: 'Criticism rarely ruins my mood.', sign: 1 },
+    { text: 'I feel at ease with who I am.', sign: 1 },
+    { text: 'I replay mistakes in my head.', sign: -1 },
+    { text: 'My mood can swing from hour to hour.', sign: -1 },
+    { text: 'I get nervous before I share my work.', sign: -1 },
+    { text: 'Small problems can feel very big to me.', sign: -1 },
+  ],
+};
+
+export const DISCOVER_STATEMENTS: Record<string, DiscoverStatement> = Object.fromEntries(
+  (Object.keys(STATEMENT_TEXT) as Trait[]).flatMap((t) => STATEMENT_TEXT[t].map((s, i) => [`${t}${i + 1}`, { id: `${t}${i + 1}`, trait: t, sign: s.sign, text: s.text }] as const)),
+);
+
+/** Eighteen groups of three statements from three different traits, so a pick always says something. */
+export const DISCOVER_TRIADS: readonly (readonly [string, string, string])[] = [
+  ['e8', 'a7', 's1'], ['o10', 'c5', 's7'], ['a4', 'c7', 's3'], ['a1', 's10', 'o2'], ['o11', 'e10', 'a5'], ['a10', 'o6', 'c3'],
+  ['c2', 'e5', 'o3'], ['a6', 'c10', 'e3'], ['o9', 'e11', 's5'], ['e6', 'a3', 'c9'], ['s4', 'a9', 'c11'], ['c6', 'o4', 's9'],
+  ['c8', 'e9', 's2'], ['s6', 'a2', 'o5'], ['o8', 'e1', 'a8'], ['o7', 'c4', 'e2'], ['e7', 'o1', 'a11'], ['s8', 'c1', 'e4'],
+];
+
+export interface DiscoverWord {
+  trait: Trait;
+  sign: 1 | -1;
+  text: string;
+}
+/** Three lists of ten words, two from each trait in each list. */
+export const DISCOVER_WORDS: readonly (readonly DiscoverWord[])[] = [
+  [['Curious', 'o', 1], ['Reserved', 'e', -1], ['Calm', 's', 1], ['Scattered', 'c', -1], ['Kind', 'a', 1], ['Traditional', 'o', -1], ['Anxious', 's', -1], ['Outgoing', 'e', 1], ['Blunt', 'a', -1], ['Organized', 'c', 1]],
+  [['Moody', 's', -1], ['Generous', 'a', 1], ['Literal', 'o', -1], ['Talkative', 'e', 1], ['Impulsive', 'c', -1], ['Steady', 's', 1], ['Quiet', 'e', -1], ['Imaginative', 'o', 1], ['Stubborn', 'a', -1], ['Reliable', 'c', 1]],
+  [['Patient', 'a', 1], ['Energetic', 'e', 1], ['Thorough', 'c', 1], ['Inventive', 'o', 1], ['Relaxed', 's', 1], ['Disciplined', 'c', 1], ['Supportive', 'a', 1], ['Creative', 'o', 1], ['Cheerful', 'e', 1], ['Resilient', 's', 1]],
+].map((list) => list.map(([text, trait, sign]) => ({ text: text as string, trait: trait as Trait, sign: sign as 1 | -1 })));
+
+export interface DiscoverScene {
+  situation: string;
+  /** The options, as people read them. */
+  options: readonly string[];
+  /** How effective each option is, 1 (least) to 4 (most), from the team's own reading of the situation. */
+  key: readonly number[];
+}
+export const DISCOVER_SCENES: readonly DiscoverScene[] = [
+  {
+    situation: 'A brand asks you to redo a video you thought was finished. You think the notes are unfair. What would you do?',
+    options: ['Redo it quickly and say nothing, to keep them happy.', 'Ask what the main goal is, fix the notes that serve it and explain the ones that do not.', 'Tell them the video was fine and the notes are wrong.', 'Thank them, say you will review it, and reply tomorrow with what you can do.'],
+    key: [2, 4, 1, 3],
+  },
+  {
+    situation: 'A close friend keeps cancelling plans at the last minute, and you feel hurt. What would you do?',
+    options: ['Stop inviting them.', 'Tell them kindly that it hurts and ask what is going on.', 'Keep making plans and say it is fine, even though it is not.', 'Suggest a smaller, easier plan and see how they respond.'],
+    key: [1, 4, 2, 3],
+  },
+  {
+    situation: 'A teammate presents your idea in a meeting as if it were theirs. What would you do?',
+    options: ['Say in the meeting, “Glad you liked my idea.”', 'Talk to them privately, say what you noticed and ask them to credit you next time.', 'Let it go. It does not matter.', 'Share your next idea in writing with the whole team first.'],
+    key: [2, 4, 1, 3],
+  },
+  {
+    situation: 'Your partner says you are always on your phone. You are in the middle of a launch and stressed. What would you do?',
+    options: ['Say you are busy and it will pass.', 'Agree it is true, say when the launch ends and set one phone-free hour each evening.', 'Snap: “I am doing this for us.”', 'Put the phone away for the night but feel resentful.'],
+    key: [2, 4, 1, 3],
+  },
+  {
+    situation: 'A younger sibling asks for help just as you are up against a deadline. What would you do?',
+    options: ['Say “not now” and close the door.', 'Stop work and help for a long time, then rush the deadline.', 'Say you can give ten minutes now and a full hour once you have finished.', 'Pass them on to someone else.'],
+    key: [1, 2, 4, 3],
+  },
+  {
+    situation: 'A mentor gives you harsh but useful feedback on your work. What would you do?',
+    options: ['Defend each point.', 'Thank them, write the points down and pick one to act on this week.', 'Take it all in and change a few things right away.', 'Feel hurt and avoid them for a while.'],
+    key: [2, 4, 3, 1],
+  },
+];
+
+// ---- puzzles: made by code from fixed seeds, so the same ten every time and no answer key to keep ----
+
+export interface PuzzleCell {
+  /** A dice face, 1 to 6. */
+  n?: number;
+  /** A quarter turn, 0 to 3, and a count of dots. */
+  rot?: number;
+  dots?: number;
+  /** A 3 by 3 pattern of 9 bits. */
+  mask?: number;
+}
+export interface DiscoverPuzzle {
+  kind: 'dice' | 'turn' | 'grid';
+  /** Cells per row. The cell that is null is the one to find. */
+  cols: number;
+  cells: (PuzzleCell | null)[];
+  options: PuzzleCell[];
+  answer: number;
+}
+
+function seeded(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function mixed<T>(list: readonly T[], r: () => number): T[] {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(r() * (i + 1));
+    [a[i], a[j]] = [a[j]!, a[i]!];
+  }
+  return a;
+}
+const cellKey = (c: PuzzleCell) => `${c.n ?? ''}|${c.rot ?? ''}|${c.dots ?? ''}|${c.mask ?? ''}`;
+function withAnswer(kind: DiscoverPuzzle['kind'], cols: number, cells: (PuzzleCell | null)[], right: PuzzleCell, wrong: PuzzleCell[], r: () => number): DiscoverPuzzle {
+  const seen = new Set([cellKey(right)]);
+  const rest = wrong.filter((w) => !seen.has(cellKey(w)) && seen.add(cellKey(w))).slice(0, 4);
+  const options = mixed([right, ...rest], r);
+  return { kind, cols, cells, options, answer: options.findIndex((o) => cellKey(o) === cellKey(right)) };
+}
+
+function diceLatin(seed: number): DiscoverPuzzle {
+  const r = seeded(seed);
+  const base = mixed([1, 2, 3, 4, 5, 6], r).slice(0, 3);
+  const grid = [0, 1, 2].map((row) => base.map((_, c) => base[(c + row) % 3]!));
+  const right = { n: grid[2]![2]! };
+  const cells = grid.flat().map((n, i) => (i === 8 ? null : { n }));
+  const wrong = [1, 2, 3, 4, 5, 6].filter((n) => n !== right.n).map((n) => ({ n }));
+  return withAnswer('dice', 3, cells, right, mixed(wrong, r), r);
+}
+function diceSum(seed: number): DiscoverPuzzle {
+  const r = seeded(seed);
+  const rows = [0, 1, 2].map(() => {
+    const x = 1 + Math.floor(r() * 3);
+    const y = 1 + Math.floor(r() * 3);
+    return [x, y, x + y];
+  });
+  const right = { n: rows[2]![2]! };
+  const cells = rows.flat().map((n, i) => (i === 8 ? null : { n }));
+  const wrong = [1, 2, 3, 4, 5, 6].filter((n) => n !== right.n).sort((a, b) => Math.abs(a - right.n) - Math.abs(b - right.n)).map((n) => ({ n }));
+  return withAnswer('dice', 3, cells, right, wrong, r);
+}
+function turned(seed: number, hard: boolean): DiscoverPuzzle {
+  const r = seeded(seed);
+  const rot0 = Math.floor(r() * 4);
+  const step = 1 + Math.floor(r() * 3);
+  const d0 = 1 + Math.floor(r() * 2);
+  const at = (i: number): PuzzleCell => ({ rot: (rot0 + step * i) % 4, dots: hard ? d0 + (i % 3) : d0 + Math.min(i, 2) });
+  const right = at(4);
+  const wrong: PuzzleCell[] = [
+    { rot: (right.rot! + 1) % 4, dots: right.dots },
+    { rot: (right.rot! + 2) % 4, dots: right.dots },
+    { rot: (right.rot! + 3) % 4, dots: right.dots },
+    { rot: right.rot, dots: right.dots! + 1 },
+    { rot: right.rot, dots: Math.max(1, right.dots! - 1) },
+  ];
+  return withAnswer('turn', 5, [at(0), at(1), at(2), at(3), null], right, wrong, r);
+}
+function gridRule(seed: number, rule: 'xor' | 'or'): DiscoverPuzzle {
+  const r = seeded(seed);
+  const rows = [0, 1, 2].map(() => {
+    const a = 1 + Math.floor(r() * 510);
+    const b = 1 + Math.floor(r() * 510);
+    return [a, b, rule === 'xor' ? (a ^ b) || 1 : a | b];
+  });
+  const right = { mask: rows[2]![2]! };
+  const cells = rows.flat().map((mask, i) => (i === 8 ? null : { mask }));
+  const bits = mixed([0, 1, 2, 3, 4, 5, 6, 7, 8], r);
+  const wrong = bits.map((b) => ({ mask: (right.mask ^ (1 << b)) || 511 }));
+  return withAnswer('grid', 3, cells, right, wrong, r);
+}
+
+/** Part 1 and part 2, five each. The second part uses the harder rules. */
+export const DISCOVER_PUZZLES: readonly DiscoverPuzzle[] = [
+  diceLatin(11), turned(12, false), gridRule(13, 'xor'), diceSum(14), turned(15, false),
+  gridRule(21, 'or'), diceSum(22), turned(23, true), gridRule(24, 'xor'), diceLatin(25),
+];
+
+// ---- the five parts, the answers and the scoring ----
+
+export const DISCOVER_SECTIONS: readonly { key: 'priorities' | 'puzzles1' | 'words' | 'puzzles2' | 'scenes'; name: string; count: number; blurb: string }[] = [
+  { key: 'priorities', name: 'Priorities and preferences', count: DISCOVER_TRIADS.length, blurb: 'Each question has three statements. Pick the one that is most like you and the one that is least like you. Some may fit you and others may not, and that is fine.' },
+  { key: 'puzzles1', name: 'Puzzles, part 1', count: 5, blurb: 'Now for something different. Look at each picture and tap the piece that should come next. There is no time limit, but go with your first good guess.' },
+  { key: 'words', name: 'You, in words', count: DISCOVER_WORDS.length, blurb: 'Each question has ten words. Pick three that are most like you and three that are least like you. A word cannot be both.' },
+  { key: 'puzzles2', name: 'Puzzles, part 2', count: 5, blurb: 'Same as before, a little harder. Tap the piece that should come next.' },
+  { key: 'scenes', name: 'Real situations', count: DISCOVER_SCENES.length, blurb: 'Read each situation. Pick the response you think is the most effective and the one you think is the least effective.' },
+];
+export const DISCOVER_STEPS = DISCOVER_SECTIONS.reduce((n, s) => n + s.count, 0);
+
+export interface DiscoverAnswers {
+  triads: ({ most: number; least: number } | null)[];
+  puzzles: (number | null)[];
+  words: ({ most: number[]; least: number[] } | null)[];
+  scenes: ({ most: number; least: number } | null)[];
+}
+export const emptyDiscoverAnswers = (): DiscoverAnswers => ({
+  triads: DISCOVER_TRIADS.map(() => null),
+  puzzles: DISCOVER_PUZZLES.map(() => null),
+  words: DISCOVER_WORDS.map(() => null),
+  scenes: DISCOVER_SCENES.map(() => null),
+});
+
+const intIn = (v: unknown, max: number): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < max;
+/** The one reader for saved or sent answers: anything that is not a clean answer becomes "not answered yet". */
+export function parseDiscoverAnswers(raw: unknown): DiscoverAnswers {
+  const out = emptyDiscoverAnswers();
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const arr = (k: string): unknown[] => (Array.isArray(o[k]) ? (o[k] as unknown[]) : []);
+  arr('triads').slice(0, out.triads.length).forEach((v, i) => {
+    const t = v as { most?: unknown; least?: unknown } | null;
+    if (t && intIn(t.most, 3) && intIn(t.least, 3) && t.most !== t.least) out.triads[i] = { most: t.most, least: t.least };
+  });
+  arr('puzzles').slice(0, out.puzzles.length).forEach((v, i) => {
+    if (intIn(v, 5)) out.puzzles[i] = v;
+  });
+  arr('words').slice(0, out.words.length).forEach((v, i) => {
+    const w = v as { most?: unknown; least?: unknown } | null;
+    const most = Array.isArray(w?.most) ? (w!.most as unknown[]) : [];
+    const least = Array.isArray(w?.least) ? (w!.least as unknown[]) : [];
+    const all = [...most, ...least];
+    if (most.length === 3 && least.length === 3 && all.every((x) => intIn(x, 10)) && new Set(all).size === 6) out.words[i] = { most: most as number[], least: least as number[] };
+  });
+  arr('scenes').slice(0, out.scenes.length).forEach((v, i) => {
+    const t = v as { most?: unknown; least?: unknown } | null;
+    if (t && intIn(t.most, 4) && intIn(t.least, 4) && t.most !== t.least) out.scenes[i] = { most: t.most, least: t.least };
+  });
+  return out;
+}
+
+/** How many steps are answered, in all and part by part. */
+export function discoverProgress(a: DiscoverAnswers): { done: number; total: number; parts: { key: string; done: number; count: number }[] } {
+  const done = {
+    priorities: a.triads.filter(Boolean).length,
+    puzzles1: a.puzzles.slice(0, 5).filter((x) => x !== null).length,
+    words: a.words.filter(Boolean).length,
+    puzzles2: a.puzzles.slice(5).filter((x) => x !== null).length,
+    scenes: a.scenes.filter(Boolean).length,
+  };
+  const parts = DISCOVER_SECTIONS.map((s) => ({ key: s.key, done: done[s.key], count: s.count }));
+  return { done: parts.reduce((n, p) => n + p.done, 0), total: DISCOVER_STEPS, parts };
+}
+
+/** What each strength means, in plain words. One strength for each of the seven relationships. */
+export const DISCOVER_STRENGTHS: Record<RelationshipKey, { name: string; line: string; use: string; watch: string; tryThis: string }> = {
+  servant_leader: { name: 'Getting it done', line: 'You turn plans into finished work.', use: 'Take the project that needs an owner. People trust you with deadlines.', watch: 'Doing everything yourself. Ask for help before you are tired.', tryThis: 'Pick one project this week and write its finish line on a card.' },
+  friendship: { name: 'Connecting', line: 'You make it easy for people to be around you.', use: 'Introduce two people who should know each other. You are the glue of a group.', watch: 'Saying yes to every plan. Protect some time for yourself.', tryThis: 'Message one friend you have not heard from in a month.' },
+  parent_child: { name: 'Caring', line: 'You notice what the people close to you need.', use: 'Be the one who checks in. Families and teams run on this.', watch: 'Putting your own needs last until you run dry.', tryThis: 'Ask one person at home how they are, then just listen for two minutes.' },
+  lover_partner: { name: 'Opening up', line: 'You can be honest about what you feel, and steady when others are.', use: 'Say the true thing kindly. Closeness grows when someone goes first.', watch: 'Waiting for the perfect moment. Small honest talks work better.', tryThis: 'Tell someone you trust one thing you appreciate about them.' },
+  self: { name: 'Knowing yourself', line: 'You stay level and you know what you value.', use: 'Use your calm to make clear choices when others are rushed.', watch: 'Hiding in routine. Check that your days still match what you want.', tryThis: 'Write three lines in your journal tonight: what went well, what was hard, what you want tomorrow.' },
+  guru: { name: 'Learning', line: 'You pick up ideas fast and enjoy working things out.', use: 'Teach what you learn. Explaining it makes it yours.', watch: 'Learning without doing. Turn one idea into one action.', tryThis: 'Pick one lesson in School and finish it this week.' },
+  divine: { name: 'Finding meaning', line: 'You look for the bigger reason behind things and stay calm about it.', use: 'Pause and ask why. Your sense of purpose steadies people.', watch: 'Waiting for a sign. Choose a small practice and keep it.', tryThis: 'Spend ten quiet minutes in a practice that matters to you.' },
+};
+
+/** How much each measure feeds each strength. Every row adds up to 1. The measures: the five traits, puzzles (p) and situations (j). */
+export const DISCOVER_WEIGHTS: Record<RelationshipKey, Record<Trait | 'p' | 'j', number>> = {
+  servant_leader: { o: 0, c: 0.35, e: 0.1, a: 0.1, s: 0.15, p: 0.15, j: 0.15 },
+  friendship: { o: 0.1, c: 0, e: 0.3, a: 0.3, s: 0.1, p: 0, j: 0.2 },
+  parent_child: { o: 0, c: 0.2, e: 0.1, a: 0.35, s: 0.2, p: 0, j: 0.15 },
+  lover_partner: { o: 0.15, c: 0, e: 0.1, a: 0.3, s: 0.25, p: 0, j: 0.2 },
+  self: { o: 0.25, c: 0.2, e: 0, a: 0, s: 0.3, p: 0.1, j: 0.15 },
+  guru: { o: 0.35, c: 0.15, e: 0, a: 0.1, s: 0, p: 0.25, j: 0.15 },
+  divine: { o: 0.3, c: 0.1, e: 0, a: 0.2, s: 0.25, p: 0, j: 0.15 },
+};
+
+export interface DiscoverResult {
+  /** 0 to 100 for each trait, you against your own scale. */
+  traits: Record<Trait, number>;
+  puzzles: { right: number; of: number; score: number; /** Right answers by kind of puzzle, and in part 1 and part 2. Results taken before this existed do not have it. */ byKind?: Record<DiscoverPuzzle['kind'], { right: number; of: number }>; parts?: [number, number] };
+  /** 0 to 100: how closely your picks match the team's reading of each situation. */
+  judgment: number;
+  /** All seven, best first. */
+  strengths: { key: RelationshipKey; score: number }[];
+  top: RelationshipKey[];
+  growth: RelationshipKey;
+}
+
+export function discoverComplete(a: DiscoverAnswers): boolean {
+  const p = discoverProgress(a);
+  return p.done === p.total;
+}
+
+const clamp100 = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
+
+/**
+ * The scoring. Traits: each "most" pick adds a point towards the statement's trait (or takes one away when the statement
+ * says the opposite), each "least" pick does the reverse; the total is shared by how often the trait was on offer, in the
+ * statements (60%) and the words (40%), and centred on 50. Puzzles: the share you got right. Situations: for each one,
+ * the key of your "most effective" pick minus the key of your "least effective" pick, over its best case of 3.
+ * Strengths: the weights in DISCOVER_WEIGHTS over those seven numbers. No number is compared with other people.
+ */
+export function scoreDiscover(a: DiscoverAnswers): DiscoverResult {
+  const raw: Record<Trait, number> = { o: 0, c: 0, e: 0, a: 0, s: 0 };
+  const seen: Record<Trait, number> = { o: 0, c: 0, e: 0, a: 0, s: 0 };
+  DISCOVER_TRIADS.forEach((ids, i) => {
+    const pick = a.triads[i];
+    for (const id of new Set(ids.map((x) => DISCOVER_STATEMENTS[x]!.trait))) seen[id] += 1;
+    if (!pick) return;
+    const most = DISCOVER_STATEMENTS[ids[pick.most]!]!;
+    const least = DISCOVER_STATEMENTS[ids[pick.least]!]!;
+    raw[most.trait] += most.sign;
+    raw[least.trait] -= least.sign;
+  });
+  const wordRaw: Record<Trait, number> = { o: 0, c: 0, e: 0, a: 0, s: 0 };
+  const wordSeen: Record<Trait, number> = { o: 0, c: 0, e: 0, a: 0, s: 0 };
+  DISCOVER_WORDS.forEach((list, i) => {
+    for (const t of new Set(list.map((w) => w.trait))) wordSeen[t] += 2;
+    const pick = a.words[i];
+    if (!pick) return;
+    for (const k of pick.most) wordRaw[list[k]!.trait] += list[k]!.sign;
+    for (const k of pick.least) wordRaw[list[k]!.trait] -= list[k]!.sign;
+  });
+  const traits = Object.fromEntries(
+    TRAITS.map((t) => {
+      const x = seen[t.key] ? raw[t.key] / seen[t.key] : 0;
+      const w = wordSeen[t.key] ? wordRaw[t.key] / wordSeen[t.key] : 0;
+      return [t.key, clamp100(50 + 50 * (0.6 * x + 0.4 * w))];
+    }),
+  ) as Record<Trait, number>;
+  const right = DISCOVER_PUZZLES.filter((p, i) => a.puzzles[i] === p.answer).length;
+  const byKind = { dice: { right: 0, of: 0 }, turn: { right: 0, of: 0 }, grid: { right: 0, of: 0 } };
+  const parts: [number, number] = [0, 0];
+  DISCOVER_PUZZLES.forEach((p, i) => {
+    byKind[p.kind].of += 1;
+    if (a.puzzles[i] === p.answer) {
+      byKind[p.kind].right += 1;
+      parts[i < 5 ? 0 : 1] += 1;
+    }
+  });
+  const puzzles = { right, of: DISCOVER_PUZZLES.length, score: clamp100((right / DISCOVER_PUZZLES.length) * 100), byKind, parts };
+  const gap = DISCOVER_SCENES.reduce((n, s, i) => {
+    const pick = a.scenes[i];
+    return pick ? n + (s.key[pick.most]! - s.key[pick.least]!) : n;
+  }, 0);
+  const judgment = clamp100(((gap + 3 * DISCOVER_SCENES.length) / (6 * DISCOVER_SCENES.length)) * 100);
+  const measures = { ...traits, p: puzzles.score, j: judgment };
+  const strengths = (Object.keys(DISCOVER_WEIGHTS) as RelationshipKey[])
+    .map((key) => ({ key, score: clamp100((Object.keys(measures) as (keyof typeof measures)[]).reduce((n, m) => n + DISCOVER_WEIGHTS[key][m] * measures[m], 0)) }))
+    .sort((x, y) => y.score - x.score || x.key.localeCompare(y.key));
+  return { traits, puzzles, judgment, strengths, top: strengths.slice(0, 3).map((s) => s.key), growth: strengths[strengths.length - 1]!.key };
+}
+
+// ---- the detailed analysis, written from a result: personality by trait and reasoning by kind of puzzle ----
+
+export type TraitBand = 'low' | 'mid' | 'high';
+export const traitBand = (score: number): TraitBand => (score < 40 ? 'low' : score > 60 ? 'high' : 'mid');
+
+export interface TraitReading {
+  title: string;
+  describes: string;
+  atBest: string;
+  watchFor: string;
+  inRelationships: string;
+  tryThis: string;
+}
+const reading = (title: string, describes: string, atBest: string, watchFor: string, inRelationships: string, tryThis: string): TraitReading => ({ title, describes, atBest, watchFor, inRelationships, tryThis });
+
+/** What each trait reads like at each level. Not good and bad: a low score is a different way to be. */
+export const DISCOVER_TRAIT_READINGS: Record<Trait, Record<TraitBand, TraitReading>> = {
+  o: {
+    low: reading('Grounded and practical', 'You like what is proven and clear. You trust what works.', 'You are steady and sensible. You turn ideas into things that run.', 'You may skip a better way because the old one is comfortable.', 'People know where they stand with you. Plan something new together now and then, so things stay fresh.', 'Try one small new thing a week: a new route, a new food or a new tool.'),
+    mid: reading('Open, but not restless', 'You enjoy new ideas and also value what is tested.', 'You can bridge the dreamers and the doers.', 'You may sit on the fence when a bold change is needed.', 'You fit partners who like novelty and partners who like routine.', 'Pick the bolder option once this week and see how it feels.'),
+    high: reading('Curious and inventive', 'You love ideas, new places and new ways to do things.', 'You spot chances others miss and you learn fast.', 'You may start more than you finish, or tune out routine tasks.', 'You bring fun and depth. Partners may need you to stay for the boring parts too.', 'Pair every new idea with one finish line.'),
+  },
+  c: {
+    low: reading('Flexible and spontaneous', 'You go with the flow and keep plans loose.', 'You adapt fast and are fun when plans change.', 'Deadlines and details can slip, and others may feel they cannot count on you.', 'You are easy company. Be clear about promises so people can trust them.', 'Write the one thing that must happen today and do it first.'),
+    mid: reading('Organised when it counts', 'You plan when it matters and relax when it does not.', 'You balance structure and freedom well.', 'You may let small things pile up before a rush.', 'You are dependable without being rigid.', 'Pick one small habit to make automatic, such as a weekly review.'),
+    high: reading('Reliable and driven', 'You plan, finish and keep your promises.', 'People trust you with big jobs. You get things done.', 'You may be hard on yourself or others when things get messy.', 'You are dependable. Leave room for play and for plans to change.', 'Schedule rest the way you schedule work.'),
+  },
+  e: {
+    low: reading('Quiet and reflective', 'You recharge alone and think before you speak.', 'You listen well and go deep with a few people.', 'You may be missed in big groups, or hold ideas back.', 'You offer calm, close friendship. Say when you need space so nobody has to guess.', 'Share one idea out loud in every meeting.'),
+    mid: reading('Social when you choose', 'You enjoy people and also need time of your own.', 'You can fit a crowd or a quiet room.', 'You may be unsure how many invitations to accept.', 'You are easy to be with. Say clearly how much company you want.', 'Plan your social time and your quiet time on the same day.'),
+    high: reading('Outgoing and energised', 'People give you energy, and you start conversations easily.', 'You bring warmth and momentum to a group.', 'You may talk more than you listen, or feel flat when alone.', 'You are fun and open. Leave space for quieter people.', 'Ask one more question before you tell your own story.'),
+  },
+  a: {
+    low: reading('Direct and firm', 'You say what you think and hold your ground.', 'You are honest, clear and good at hard calls.', 'You may come across as cold, or win the point and lose the person.', 'People trust your honesty. Add a kind word before the hard one.', 'Say one thing you appreciate before you give feedback.'),
+    mid: reading('Kind and clear', 'You care about people and can stand firm when you need to.', 'You balance honesty with kindness.', 'You may swing between giving in and pushing back.', 'You can be supportive and straight. Name what you need.', 'Notice when you say yes but mean no, and practise a kind no.'),
+    high: reading('Warm and giving', 'You put people first and keep the peace.', 'You make others feel safe and heard.', 'You may avoid conflict or put your own needs last.', 'You are a loving friend and partner. Share your needs before you are tired.', 'Say no to one thing this week without a long explanation.'),
+  },
+  s: {
+    low: reading('Sensitive and deep-feeling', 'You feel things strongly and notice shifts in mood.', 'You read people well and care deeply about getting things right.', 'You may worry, replay mistakes or feel stress in your body.', 'You feel with people. Tell them what helps when you are anxious.', 'Take a two-minute breathing break before a big moment.'),
+    mid: reading('Steady most days', 'You handle most things well and feel the strain on hard days.', 'You recover fairly quickly and still care.', 'Tiredness can tip you into worry.', 'You are steady, with room to feel. Rest keeps you there.', 'Protect your sleep. It is the best friend of a calm mind.'),
+    high: reading('Calm and resilient', 'You stay level when things go wrong and bounce back fast.', 'Others lean on your steadiness in a crisis.', 'You may seem unbothered when someone needs you to feel it with them.', 'You are a rock. Show you care in words as well as in calm.', 'Check in with one person who is struggling this week.'),
+  },
+};
+
+/** One word for each end of each trait, used to say which two traits stand out. */
+export const TRAIT_POLES: Record<Trait, { high: string; low: string }> = {
+  o: { high: 'curious', low: 'practical' },
+  c: { high: 'reliable', low: 'flexible' },
+  e: { high: 'outgoing', low: 'reflective' },
+  a: { high: 'warm', low: 'direct' },
+  s: { high: 'calm', low: 'sensitive' },
+};
+
+export const REASONING_KINDS: Record<DiscoverPuzzle['kind'], { name: string; what: string; strong: string; weak: string }> = {
+  dice: { name: 'Number patterns', what: 'Dice grids where each row repeats a set or adds up.', strong: 'You spot rules in numbers quickly.', weak: 'Rules in numbers took longer. Count across rows and down columns before you guess.' },
+  turn: { name: 'Turning shapes', what: 'Arrows that turn and gain dots, step by step.', strong: 'You follow step-by-step change well.', weak: 'Say the change out loud for each step, such as "turns a quarter, adds a dot", then apply it once more.' },
+  grid: { name: 'Pattern rules', what: 'Grids of squares where the third piece comes from the first two.', strong: 'You see how pieces combine.', weak: 'Compare the first two pieces square by square. Which squares are in both, in one, or in neither?' },
+};
+
+export interface DiscoverAnalysis {
+  /** One line on the two traits that stand out most. */
+  pattern: string;
+  personality: { trait: Trait; name: string; score: number; band: TraitBand; reading: TraitReading }[];
+  reasoning: {
+    right: number;
+    of: number;
+    level: 'Just starting' | 'Steady' | 'Strong' | 'Sharp';
+    levelLine: string;
+    kinds: { kind: DiscoverPuzzle['kind']; name: string; what: string; right: number; of: number; note: string }[];
+    trend: string | null;
+    caveat: string;
+  };
+}
+
+export function analyseDiscover(result: DiscoverResult): DiscoverAnalysis {
+  const personality = TRAITS.map((t) => ({ trait: t.key, name: t.name, score: result.traits[t.key], band: traitBand(result.traits[t.key]), reading: DISCOVER_TRAIT_READINGS[t.key][traitBand(result.traits[t.key])] }));
+  const [first, second] = [...personality].sort((x, y) => Math.abs(y.score - 50) - Math.abs(x.score - 50) || x.trait.localeCompare(y.trait));
+  const pole = (p: { trait: Trait; score: number }) => TRAIT_POLES[p.trait][p.score >= 50 ? 'high' : 'low'];
+  const pattern =
+    first && second && Math.abs(first.score - 50) >= 8
+      ? `You read as ${pole(first)} and ${pole(second)}. Those two traits stand out most from your middle.`
+      : 'Your traits sit close to the middle. You are flexible: you can lean either way depending on the day.';
+
+  const right = result.puzzles.right;
+  const of = result.puzzles.of;
+  const level = right >= 9 ? 'Sharp' : right >= 6 ? 'Strong' : right >= 3 ? 'Steady' : 'Just starting';
+  const levelLine = {
+    Sharp: 'You found nearly every pattern, including the harder ones. You see rules fast and hold them while you check the options.',
+    Strong: 'You found most of the patterns. A few took more care, which is normal when the rules get layered.',
+    Steady: 'You found about half of the patterns. Puzzles like these respond well to practice, and the first few tries are often the hardest.',
+    'Just starting': 'Few patterns clicked this time. That is common on a first try, a tired day or a noisy room. Try again when you are fresh.',
+  }[level];
+  const kinds = result.puzzles.byKind
+    ? (Object.keys(REASONING_KINDS) as DiscoverPuzzle['kind'][]).map((kind) => {
+        const k = result.puzzles.byKind![kind];
+        const k0 = REASONING_KINDS[kind];
+        return { kind, name: k0.name, what: k0.what, right: k.right, of: k.of, note: k.of && k.right / k.of >= 0.66 ? k0.strong : k0.weak };
+      })
+    : [];
+  const [p1, p2] = result.puzzles.parts ?? [null, null];
+  const trend =
+    p1 === null || p2 === null
+      ? null
+      : p2 > p1
+        ? 'You did better in the harder second part, so you learn the rules as you go.'
+        : p2 === p1
+          ? 'You scored the same in both parts, even though the second was harder. That is steady.'
+          : 'You scored lower in the second part. It is harder, and it usually is. Slow down on the layered ones.';
+  return {
+    pattern,
+    personality,
+    reasoning: {
+      right,
+      of,
+      level,
+      levelLine,
+      kinds,
+      trend,
+      caveat: 'This is not an IQ score. A real IQ test has far more questions, is checked against thousands of people and is given by a trained person. These ten puzzles show how you handle patterns today, and the result can change with sleep, focus and practice.',
+    },
+  };
+}
+
+// ---- what the app learns from Discover, kept small: used for next steps and, if the person allows it, by the assistant ----
+
+/** A short summary of the latest result. Never the answers, and nothing a person could not read on their own Discover page. */
+export interface DiscoverProfile {
+  takenAt: string;
+  top: RelationshipKey[];
+  growth: RelationshipKey;
+  bands: Record<Trait, TraitBand>;
+  level: DiscoverAnalysis['reasoning']['level'];
+}
+
+export function discoverProfile(result: DiscoverResult, takenAt: string): DiscoverProfile {
+  const a = analyseDiscover(result);
+  const bands = Object.fromEntries(a.personality.map((p) => [p.trait, p.band])) as Record<Trait, TraitBand>;
+  return { takenAt, top: result.top, growth: result.growth, bands, level: a.reasoning.level };
+}
+
+/** How to help this person, in plain sentences: used to pick a tone and the size of a step. Rules only. */
+export function styleHints(p: DiscoverProfile): string[] {
+  const out: string[] = [];
+  if (p.bands.c === 'low') out.push('Keep steps tiny and one at a time, each with a clear finish line.');
+  if (p.bands.c === 'high') out.push('They like plans: give an ordered list and respect their deadlines.');
+  if (p.bands.s === 'low') out.push('Be calm and reassuring. Name one small step and do not pile on.');
+  if (p.bands.s === 'high') out.push('They are steady, so you can be direct.');
+  if (p.bands.e === 'low') out.push('Keep messages short. Do not push social plans.');
+  if (p.bands.e === 'high') out.push('They like energy: people-based steps, such as a friend, a circle or a run, suit them.');
+  if (p.bands.a === 'high') out.push('Gently encourage them to put their own needs on the list.');
+  if (p.bands.a === 'low') out.push('Be straight and brief. They prefer honesty to softness.');
+  if (p.bands.o === 'high') out.push('Offer a fresh option now and then.');
+  if (p.bands.o === 'low') out.push('Stick to routines that work and change one thing at a time.');
+  out.push(p.level === 'Sharp' || p.level === 'Strong' ? 'They like to know the why: give a short reason.' : 'Use short examples and plain words.');
+  return out;
+}
+
+/** The paragraph the assistant reads, when the person allowed it and the model keeps nothing. */
+export function profileForAssistant(p: DiscoverProfile): string {
+  const strengths = p.top.map((k) => DISCOVER_STRENGTHS[k].name).join(', ');
+  const traits = TRAITS.map((t) => `${t.name.toLowerCase()}: ${p.bands[t.key]}`).join('; ');
+  return `They took the Discover quiz on ${p.takenAt.slice(0, 10)}. It is a self-check, not a diagnosis, so never state it back as a fact about them and never use it to label them. Use it only to pick your tone and the size of a step. Strongest: ${strengths}. Quietest: ${DISCOVER_STRENGTHS[p.growth].name}. Traits: ${traits}. Reasoning puzzles: ${p.level}. How to help: ${styleHints(p).join(' ')}`;
+}
+
+/** Where each strength is worked on in the app. */
+export const STRENGTH_PATH: Record<RelationshipKey, string> = Object.fromEntries((Object.keys(DISCOVER_STRENGTHS) as RelationshipKey[]).map((k) => [k, `/realm/${k}`])) as Record<RelationshipKey, string>;

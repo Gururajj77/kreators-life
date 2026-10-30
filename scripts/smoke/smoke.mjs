@@ -1,6 +1,6 @@
 // The smoke checks. Run through blueprint.sh, which starts the server this talks to.
 // Node imports the shared model straight from TypeScript (--experimental-strip-types).
-import { RELATIONSHIPS, QUESTIONS, XP, POINTS, WAIT, RUN_REWARD, SOCIAL_REWARDS, MAX_NOT_TO_DO, MODULES, FEATURE_FEE_POINTS, matchSetup, parseSetup, setupSwitchable } from '../../packages/shared/src/index.ts';
+import { DISCOVER_PUZZLES, DISCOVER_SCENES, DISCOVER_STEPS, RELATIONSHIPS, QUESTIONS, XP, POINTS, WAIT, RUN_REWARD, SOCIAL_REWARDS, MAX_NOT_TO_DO, MODULES, FEATURE_FEE_POINTS, matchSetup, parseSetup, setupSwitchable } from '../../packages/shared/src/index.ts';
 import { LIMITS } from '../../apps/api/src/limits.ts';
 import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, PLANS } from '../../packages/shared/src/index.ts';
 import http from 'node:http';
@@ -1250,6 +1250,50 @@ section('Attendee codes');
   const evThread = (await api('GET', `/connect/party/${ev.id}`, undefined, G.token)).json.messages?.filter((m) => ['Is there parking?', 'Yes, behind the hall.'].includes(m.body));
   check('a line in an event can be answered, and threads under it', evThread?.map((m) => m.depth).join() === '0,1', evThread);
 
+  // The calendars: tap a day to add, change or remove what it holds.
+  const yday = new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10);
+  const back = await api('POST', '/journal', { title: 'Looking back', body: 'Written from the calendar.', emotion: 4, date: yday }, G.token);
+  check('a journal entry can be added to a past day from the calendar', back.status === 201 && back.json.entry?.createdAt?.startsWith(yday), back.json.entry?.createdAt);
+  const dayList = await api('GET', `/journal?date=${yday}`, undefined, G.token);
+  check('a day lists its own entries', dayList.json.entries?.some((e) => e.id === back.json.entry?.id), dayList.json.entries?.length);
+  const monthDays = await api('GET', `/journal/days?month=${yday.slice(0, 7)}`, undefined, G.token);
+  check('the month marks the day with its count and feeling', monthDays.json.days?.some((d) => d.date === yday && d.count >= 1 && d.emotion === 4), monthDays.json.days);
+  const futureJ = await api('POST', '/journal', { title: 'Too soon', body: 'x', date: '2999-01-01' }, G.token);
+  check('a future day cannot be written to', futureJ.status === 400, futureJ.json);
+  const editBack = await api('PATCH', `/journal/${back.json.entry.id}`, { body: 'Changed from the calendar.' }, G.token);
+  check('and an entry opened from it can be changed', editBack.json.entry?.body === 'Changed from the calendar.', editBack.json);
+  const moodBack = await api('POST', '/wellbeing/mood', { date: yday, value: 2, note: 'rough' }, G.token);
+  check('a mood can be added to a past day', moodBack.status === 201 && moodBack.json.log?.date === yday, moodBack.json);
+  const moodAgain = await api('POST', '/wellbeing/mood', { date: yday, value: 5 }, G.token);
+  const moodList = await api('GET', '/wellbeing/mood?days=30', undefined, G.token);
+  check('logging that day again changes it, one mood per day', moodList.json.logs?.filter((l) => l.date === yday).length === 1 && moodAgain.json.log?.value === 5, moodList.json.logs?.filter((l) => l.date === yday));
+  const moodFuture = await api('POST', '/wellbeing/mood', { date: '2999-01-01', value: 3 }, G.token);
+  check('a future day cannot take a mood', moodFuture.status === 400, moodFuture.json);
+  await api('DELETE', `/wellbeing/mood/${moodAgain.json.log.id}`, undefined, G.token);
+  check('a day’s mood can be removed', !(await api('GET', '/wellbeing/mood?days=30', undefined, G.token)).json.logs?.some((l) => l.date === yday), '');
+  await api('DELETE', `/journal/${back.json.entry.id}`, undefined, G.token);
+
+  // Admin: delete a person from the list, and allow or block an app for one person.
+  const victim = await api('POST', '/auth/signup', { email: `gone-${stamp}@smoke.test`, password: `Kettle-${stamp}-pass`, displayName: 'Smoke leaving', phone: PHONE, birthDate: GROWN }, undefined, { 'CF-Connecting-IP': CODE_ADDRESS });
+  const victimId = victim.json.user?.id;
+  const blockApp = await admin('POST', '/admin/flags/win/overrides', { subjectType: 'user', subjectId: victimId, enabled: false, reason: 'smoke' });
+  check('an app can be blocked for one person', blockApp.status === 201 && blockApp.json.override?.enabled === false, blockApp.json);
+  const theySee = await admin('GET', `/admin/flags/preview/${victimId}`);
+  check('what that person sees shows it as not allowed', theySee.json.access?.win?.available === false && theySee.json.access.win.reason === 'override', theySee.json.access?.win);
+  const allowApp = await admin('POST', '/admin/flags/work/overrides', { subjectType: 'user', subjectId: victimId, enabled: true, reason: 'smoke' });
+  check('and another allowed for just them', allowApp.status === 201 && (await admin('GET', `/admin/flags/preview/${victimId}`)).json.access?.work?.available === true, allowApp.json);
+  const lockedOff = await admin('POST', '/admin/flags/home/overrides', { subjectType: 'user', subjectId: victimId, enabled: false });
+  check('the core of the app cannot be blocked', lockedOff.status === 400, lockedOff.json);
+  const delAdmin = await api('DELETE', `/admin/users/${A.user.id}`, undefined, A.token);
+  check('an admin is not deleted from the list', delAdmin.status === 400, delAdmin.json);
+  const delSelf = await api('DELETE', `/admin/users/${H.user.id}`, undefined, H.token);
+  check('only an admin deletes people', delSelf.status === 403, delSelf.status);
+  const delUser = await api('DELETE', `/admin/users/${victimId}`, undefined, A.token);
+  check('an admin deletes a person from the list', delUser.status === 200, delUser.json);
+  const afterDel = await api('GET', '/me', undefined, victim.json.token);
+  check('their sign-in no longer works', afterDel.status === 401, afterDel.status);
+  check('and the delete is in the audit log', JSON.stringify((await admin('GET', '/admin/audit')).json).includes('user.delete'), '');
+
   // Water and reminders.
   const w0 = await api('GET', `/reminders?day=${today}`, undefined, G.token);
   check('water starts at zero with a goal and a glass of the person’s own', w0.status === 200 && w0.json.water?.ml === 0 && w0.json.water.goalMl === 2000 && w0.json.water.glassMl === 250 && w0.json.water.on === true && w0.json.water.week?.length === 7, w0.json.water);
@@ -1445,6 +1489,87 @@ section('Engagement');
   const away = await api('GET', '/inbox?tab=following', undefined, W.token);
   const archived = await api('GET', '/inbox?tab=following&show=archived', undefined, W.token);
   check('archiving moves a note out of the inbox and into Archived', !away.json.notifications?.some((n) => n.id === note?.id) && archived.json.notifications?.some((n) => n.id === note?.id && n.readAt), archived.json.notifications?.length);
+  const back = await api('POST', `/inbox/${note?.id}/archive`, { archived: false }, W.token);
+  const restored = await api('GET', '/inbox?tab=following', undefined, W.token);
+  check('Restore brings an archived note back to the inbox', back.status === 200 && restored.json.notifications?.some((n) => n.id === note?.id && !n.archivedAt), restored.json.notifications?.length);
+  const early = await api('DELETE', `/inbox/${note?.id}`, undefined, W.token);
+  check('a note in the inbox cannot be deleted before it is archived', early.status === 404, early.status);
+  await api('POST', `/inbox/${note?.id}/archive`, { archived: true }, W.token);
+  const stranger = await api('DELETE', `/inbox/${note?.id}`, undefined, P.token);
+  check("nobody deletes someone else's archived note", stranger.status === 404, stranger.status);
+  const gone = await api('DELETE', `/inbox/${note?.id}`, undefined, W.token);
+  const after = await api('GET', '/inbox?tab=following&show=archived', undefined, W.token);
+  check('an archived note is deleted for good', gone.status === 200 && !after.json.notifications?.some((n) => n.id === note?.id), after.json.notifications?.length);
+  const emptied = await api('DELETE', '/inbox/archived?tab=all', undefined, W.token);
+  const none = await api('GET', '/inbox?show=archived', undefined, W.token);
+  check('Delete all archived empties the archive and leaves the inbox alone', emptied.status === 200 && none.json.notifications?.length === 0, none.json.notifications?.length);
+  const shelf = await api('GET', '/rewards', undefined, W.token);
+  check('the rewards catalog lists the books, the card games and the merch shelves', ['book_relationship_method', 'book_dictionary_of_mistakes', 'book_20_somethings', 'game_date_guru', 'game_workflow', 'water_bottle', 'enamel_pin'].every((k) => shelf.json.rewards?.some((r) => r.key === k)), shelf.json.rewards?.length);
+
+  // Card games: unlocked once with points, the text served only to the person who has it (or the team).
+  const gamesTeam = await api('GET', '/cards', undefined, A.token);
+  check('the team sees all nine card games open, with their decks', gamesTeam.status === 200 && gamesTeam.json.games?.length === 9 && gamesTeam.json.games.every((g) => g.unlocked && g.total > 0), gamesTeam.json.games?.map((g) => [g.key, g.total]));
+  const guru = await api('GET', '/cards/date_guru', undefined, A.token);
+  check('a whole game comes with its cards, two sides where it has them', guru.status === 200 && guru.json.game?.decks?.[0]?.cards?.length === 52 && guru.json.game.decks[0].cards.every((c) => c.text && c.alt?.text), guru.json.game?.decks?.[0]?.cards?.length);
+  const roast = await api('GET', '/cards/roast_or_flirt', undefined, A.token);
+  check('Roast or Flirt has an English and a Hinglish deck of a hundred', roast.json.game?.decks?.map((d) => d.cards.length).join() === '100,100', roast.json.game?.decks?.map((d) => d.cards.length));
+  const lockedGame = await api('GET', '/cards/date_guru', undefined, R.token);
+  check('a game that is not unlocked is refused, with its price', lockedGame.status === 403 && lockedGame.json.locked === true && lockedGame.json.cost === 1500, lockedGame.json);
+  const brokeBuy = await api('POST', '/rewards/game_date_guru/redeem', undefined, R.token);
+  check('unlocking needs the points', brokeBuy.status === 400 && /more points/.test(brokeBuy.json.error ?? ''), brokeBuy.json);
+  await admin('POST', `/admin/users/${R.user.id}/points`, { amount: 2000, note: 'smoke card games' });
+  const buy = await api('POST', '/rewards/game_date_guru/redeem', undefined, R.token);
+  check('unlocking a game opens it at once and takes its points', buy.status === 201 && buy.json.game === 'date_guru' && buy.json.redemption?.status === 'fulfilled' && buy.json.points === 500, buy.json);
+  const opened = await api('GET', '/cards/date_guru', undefined, R.token);
+  check('the unlocked game is served to its owner', opened.status === 200 && opened.json.game?.decks?.[0]?.cards?.length === 52, opened.status);
+  const other = await api('GET', '/cards/ulta_seedha', undefined, R.token);
+  check('and only that game', other.status === 403, other.status);
+  const twice = await api('POST', '/rewards/game_date_guru/redeem', undefined, R.token);
+  check('a game cannot be bought twice', twice.status === 409, twice.status);
+  const undo = await api('POST', `/rewards/redemptions/${buy.json.redemption?.id}/cancel`, undefined, R.token);
+  check('an unlock is for good, not a reservation to cancel', undo.status === 400, undo.status);
+  const list = await api('GET', '/cards', undefined, R.token);
+  check('the list marks what the person has', list.json.games?.filter((g) => g.unlocked).map((g) => g.key).join() === 'date_guru', list.json.games?.filter((g) => g.unlocked).map((g) => g.key));
+  const shelf2 = await api('GET', '/rewards', undefined, R.token);
+  check('Rewards says which games are yours', shelf2.json.games?.join() === 'date_guru', shelf2.json.games);
+
+  // Discover: the quiz is scored on the server, kept per person and never shown to anyone else.
+  const dz0 = await api('GET', '/discover', undefined, R.token);
+  check('Discover starts empty', dz0.status === 200 && dz0.json.progress?.done === 0 && dz0.json.progress?.total === DISCOVER_STEPS && dz0.json.latest === null, dz0.json.progress);
+  const dzAnswers = {
+    triads: Array.from({ length: 18 }, () => ({ most: 0, least: 1 })),
+    puzzles: DISCOVER_PUZZLES.map((p) => p.answer),
+    words: Array.from({ length: 3 }, () => ({ most: [0, 1, 2], least: [3, 4, 5] })),
+    scenes: DISCOVER_SCENES.map((s) => ({ most: s.key.indexOf(4), least: s.key.indexOf(1) })),
+  };
+  const dzPart = await api('PUT', '/discover/draft', { answers: { ...dzAnswers, triads: [{ most: 0, least: 0 }, ...dzAnswers.triads.slice(1)], scenes: [] } }, R.token);
+  check('a half-finished quiz is saved, and a bad answer is dropped', dzPart.status === 200 && dzPart.json.progress?.done === DISCOVER_STEPS - 1 - 6, dzPart.json.progress);
+  const dzEarly = await api('POST', '/discover/submit', {}, R.token);
+  check('the quiz cannot be finished with questions open', dzEarly.status === 400 && /open/.test(dzEarly.json.error ?? ''), dzEarly.json);
+  const dzDone = await api('POST', '/discover/submit', { answers: dzAnswers }, R.token);
+  const dzR = dzDone.json.result;
+  check('a finished quiz is scored on the server: puzzles and situations full marks, three top strengths', dzDone.status === 201 && dzR?.puzzles?.score === 100 && dzR?.judgment === 100 && dzR?.top?.length === 3 && new Set(dzR.top).size === 3 && dzR?.strengths?.length === 7 && Object.values(dzR.traits).every((n) => n >= 0 && n <= 100), dzDone.json);
+  const dz1 = await api('GET', '/discover', undefined, R.token);
+  check('the result is kept and the draft is gone', dz1.json.latest?.id === dzDone.json.id && dz1.json.progress?.done === 0, dz1.json.progress);
+  check('Discover keeps its switches: next steps on, assistant off, until the person says', dz1.json.settings?.steps === true && dz1.json.settings?.assistant === false, dz1.json.settings);
+  const dzLocked = await api('GET', '/discover/profile', undefined, R.token);
+  check('the assistant gets nothing while its switch is off', dzLocked.status === 403 && /not let the assistant/.test(dzLocked.json.error ?? ''), dzLocked.json);
+  const dzStepsOn = await api('GET', `/home/brief?date=${new Date().toISOString().slice(0, 10)}&hour=10`, undefined, R.token);
+  check('next steps are shaped by the result: the quietest strength comes up', dzStepsOn.json.brief?.actions?.some((x) => x.key === 'strength-grow') || dzStepsOn.json.actions?.some((x) => x.key === 'strength-grow'), (dzStepsOn.json.brief?.actions ?? dzStepsOn.json.actions)?.map((x) => x.key));
+  await api('PUT', '/discover/settings', { steps: false }, R.token);
+  const dzStepsOff = await api('GET', `/home/brief?date=${new Date().toISOString().slice(0, 10)}&hour=10`, undefined, R.token);
+  check('and they go when the person switches next steps off', !(dzStepsOff.json.brief?.actions ?? dzStepsOff.json.actions)?.some((x) => x.key === 'strength-grow'), (dzStepsOff.json.brief?.actions ?? dzStepsOff.json.actions)?.map((x) => x.key));
+  const dzAllow = await api('PUT', '/discover/settings', { assistant: true }, R.token);
+  const dzProfile = await api('GET', '/discover/profile', undefined, R.token);
+  check('with the switch on the assistant reads a small profile, not the answers', dzAllow.status === 200 && dzProfile.status === 200 && dzProfile.json.profile?.top?.length === 3 && /self-check/.test(dzProfile.json.summary ?? '') && !JSON.stringify(dzProfile.json).includes('"triads"') && Array.isArray(dzProfile.json.howToHelp), dzProfile.json);
+  const dzNone = await api('GET', '/discover/profile', undefined, P.token);
+  check('someone who has not taken it has nothing to read', dzNone.status === 403 || dzNone.status === 404, dzNone.status);
+  const dzStranger = await api('DELETE', `/discover/results/${dzDone.json.id}`, undefined, P.token);
+  check("nobody deletes someone else's result", dzStranger.status === 404, dzStranger.status);
+  const dzOther = await api('GET', '/discover', undefined, P.token);
+  check('and nobody else sees it', dzOther.json.latest === null, dzOther.json.latest);
+  const dzGone = await api('DELETE', `/discover/results/${dzDone.json.id}`, undefined, R.token);
+  check('the owner can delete a result', dzGone.status === 200 && (await api('GET', '/discover', undefined, R.token)).json.latest === null, dzGone.status);
   const team = await api('GET', '/inbox?tab=team', undefined, W.token);
   check('the Team tab is only for the team', team.json.tab === 'all' && !team.json.tabs?.some((t) => t.tab === 'team'), team.json.tab);
 

@@ -6,7 +6,7 @@ import { BAND_STATEMENTS, MAP_LEVELS, pickFocus, placementFlags, rampTime, routi
 import { characterHello, characterTitle, INSECURITY_WEIGHTS, mantraLine, scoreOfStars, STAR_WORDS, starsOf, weightWord } from './index';
 import { blockMinutes, minutesLabel, parseRoutineBlocks, stepsMinutes } from './index';
 import type { Placement } from './index';
-import { SOCIAL_REWARDS, trustScore } from './index';
+import { CARD_GAMES, analyseDiscover, discoverProfile, profileForAssistant, styleHints, DISCOVER_PUZZLES, DISCOVER_SCENES, DISCOVER_STATEMENTS, DISCOVER_STEPS, DISCOVER_TRIADS, DISCOVER_WEIGHTS, DISCOVER_WORDS, REWARDS, REWARD_GROUPS, SOCIAL_REWARDS, discoverProgress, emptyDiscoverAnswers, parseDiscoverAnswers, scoreDiscover, trustScore } from './index';
 import { FEATURE_FEE_POINTS, isFeatured, parseImageUrls, STORE_STAGE_META, PREOWNED_CONDITION_META } from './index';
 import { builtInTemplate, parseReviewPrompts, periodDays, periodFor, periodLabel, periodShift } from './index';
 import { MAX_NOT_TO_DO, notToDoStreak, notToDoWeek, shiftDay } from './index';
@@ -162,9 +162,128 @@ describe('apps', () => {
     expect(lb?.group).toBe('core');
     expect(MODULES.some((m) => m.key === 'rewards')).toBe(false);
   });
+  it('keeps the rewards catalog tidy: unique keys, a shelf each, whole-number costs, the three books and the card games', () => {
+    expect(new Set(REWARDS.map((r) => r.key)).size).toBe(REWARDS.length);
+    const shelves = new Set(REWARD_GROUPS.map((g) => g.key));
+    for (const r of REWARDS) {
+      expect(shelves.has(r.group)).toBe(true);
+      expect(Number.isInteger(r.cost) && r.cost > 0).toBe(true);
+    }
+    expect(REWARDS.filter((r) => r.group === 'books').map((r) => r.name)).toEqual(['The Relationship Method', 'Dictionary of Mistakes for Kreators', 'Dictionary of Mistakes for 20 Somethings']);
+    expect(REWARDS.some((r) => r.group === 'games')).toBe(true);
+  });
+  it('sells nine card games as unlocks, never as things to post', () => {
+    expect(CARD_GAMES).toHaveLength(9);
+    const games = REWARDS.filter((r) => r.group === 'games');
+    expect(games).toHaveLength(9);
+    for (const g of games) expect(g.kind).toBe('unlock');
+    expect(new Set(games.map((g) => g.game))).toEqual(new Set(CARD_GAMES.map((g) => g.key)));
+  });
+  const BASE_FACTS: BriefFacts = { hour: 20, checkedIn: false, streak: 12, bestStreak: 12, level: 4, xpToNext: 80, tasksDue: 2, tasksOverdue: 1, doneWeek: 3, doneWeekBefore: 8, smallActDone: false, notToDoSlipped: 0, routineWeek: null, contractDays: null, sleepAvg: 6, sleepAvgBefore: 7.2, moodAvg: null, moodAvgBefore: null, stressAvg: null, nextEvent: null, coachNotes: 0, coachAsks: 0, reviewDue: false, apps: ['sleep'] };
+  describe('discover', () => {
+    it('uses every statement once, three different traits to a group', () => {
+      const ids = DISCOVER_TRIADS.flat();
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(ids.length).toBe(Object.keys(DISCOVER_STATEMENTS).length);
+      for (const t of DISCOVER_TRIADS) expect(new Set(t.map((id) => DISCOVER_STATEMENTS[id]!.trait)).size).toBe(3);
+      for (const list of DISCOVER_WORDS) expect(list).toHaveLength(10);
+      expect(DISCOVER_STEPS).toBe(DISCOVER_TRIADS.length + DISCOVER_PUZZLES.length + DISCOVER_WORDS.length + DISCOVER_SCENES.length);
+    });
+    it('makes ten puzzles with five different pieces and one right one', () => {
+      expect(DISCOVER_PUZZLES).toHaveLength(10);
+      for (const p of DISCOVER_PUZZLES) {
+        expect(p.options).toHaveLength(5);
+        expect(new Set(p.options.map((o) => JSON.stringify(o))).size).toBe(5);
+        expect(p.answer).toBeGreaterThanOrEqual(0);
+        expect(p.cells.filter((c) => c === null)).toHaveLength(1);
+      }
+    });
+    it('reads a result in detail: five traits, the two that stand out, reasoning by kind', () => {
+      const res = scoreDiscover({ ...emptyDiscoverAnswers(), puzzles: DISCOVER_PUZZLES.map((p, i) => (i < 7 ? p.answer : (p.answer + 1) % 5)) });
+      const a = analyseDiscover(res);
+      expect(a.personality).toHaveLength(5);
+      expect(a.reasoning.right).toBe(res.puzzles.right);
+      expect(a.reasoning.level).toBe(res.puzzles.right >= 6 ? 'Strong' : 'Steady');
+      expect(a.reasoning.kinds.map((k) => k.kind)).toEqual(['dice', 'turn', 'grid']);
+      expect(a.reasoning.kinds.reduce((n, k) => n + k.of, 0)).toBe(10);
+      expect(a.reasoning.caveat).toMatch(/not an IQ score/);
+      // Results taken before the detail existed still read, just without the kinds.
+      const old = { ...res, puzzles: { right: 4, of: 10, score: 40 } };
+      expect(analyseDiscover(old).reasoning.kinds).toEqual([]);
+      expect(analyseDiscover(old).reasoning.trend).toBeNull();
+      for (const t of ['low', 'mid', 'high'] as const) expect(['low', 'mid', 'high']).toContain(t);
+    });
+    it('says the bands the same way everywhere, and levels at the right counts', () => {
+      const base = scoreDiscover(emptyDiscoverAnswers());
+      const level = (right: number) => analyseDiscover({ ...base, puzzles: { right, of: 10, score: right * 10 } }).reasoning.level;
+      expect([level(0), level(2), level(3), level(5), level(6), level(8), level(9), level(10)]).toEqual(['Just starting', 'Just starting', 'Steady', 'Steady', 'Strong', 'Strong', 'Sharp', 'Sharp']);
+      const high = analyseDiscover({ ...base, traits: { o: 70, c: 30, e: 50, a: 90, s: 41 } });
+      expect(high.personality.map((p) => p.band)).toEqual(['high', 'low', 'mid', 'high', 'mid']);
+      expect(high.pattern).toMatch(/warm/);
+    });
+    it('turns a result into a small profile, tips for the assistant and next steps, and never the answers', () => {
+      const res = scoreDiscover({ ...emptyDiscoverAnswers(), puzzles: DISCOVER_PUZZLES.map((p) => p.answer) });
+      const p = discoverProfile({ ...res, traits: { o: 80, c: 20, e: 50, a: 50, s: 20 } }, '2026-10-31T10:00:00.000Z');
+      expect(p.bands).toEqual({ o: 'high', c: 'low', e: 'mid', a: 'mid', s: 'low' });
+      expect(styleHints(p).join(' ')).toMatch(/tiny/);
+      expect(styleHints(p).join(' ')).toMatch(/reassuring/);
+      const text = profileForAssistant(p);
+      expect(text).toMatch(/self-check, not a diagnosis/);
+      expect(text).not.toMatch(/most|least/i);
+      const facts = { ...BASE_FACTS, apps: ['discover', 'mindful', 'circles'], checkedIn: true, tasksDue: 0, smallActDone: true, tasksOverdue: 0 };
+      const none = briefFor({ ...facts, discover: { taken: false, profile: null } });
+      expect(none.actions.map((x) => x.key)).toContain('discover');
+      const learned = briefFor({ ...facts, discover: { taken: true, profile: p } });
+      expect(learned.actions.map((x) => x.key)).not.toContain('discover');
+      expect(learned.actions.map((x) => x.key)).toEqual(expect.arrayContaining(['style-small', 'style-calm']));
+      const off = briefFor({ ...facts, discover: { taken: true, profile: null } });
+      expect(off.actions.some((x) => x.key.startsWith('style') || x.key === 'strength-grow')).toBe(false);
+      expect(briefFor({ ...facts, apps: [] , discover: { taken: false, profile: null } }).actions.map((x) => x.key)).not.toContain('discover');
+    });
+    it('weighs every strength out of one', () => {
+      for (const w of Object.values(DISCOVER_WEIGHTS)) expect(Object.values(w).reduce((n, x) => n + x, 0)).toBeCloseTo(1, 5);
+    });
+    it('reads only clean answers', () => {
+      const a = parseDiscoverAnswers({ triads: [{ most: 0, least: 0 }, { most: 1, least: 2 }, 'x'], puzzles: [9, 2], words: [{ most: [0, 1, 2], least: [2, 3, 4] }, { most: [0, 1, 2], least: [3, 4, 5] }], scenes: [{ most: 1, least: 3 }] });
+      expect(a.triads[0]).toBeNull();
+      expect(a.triads[1]).toEqual({ most: 1, least: 2 });
+      expect(a.puzzles[0]).toBeNull();
+      expect(a.puzzles[1]).toBe(2);
+      expect(a.words[0]).toBeNull();
+      expect(a.words[1]).not.toBeNull();
+      expect(a.scenes[0]).toEqual({ most: 1, least: 3 });
+      expect(discoverProgress(parseDiscoverAnswers(null)).done).toBe(0);
+      expect(parseDiscoverAnswers(null)).toEqual(emptyDiscoverAnswers());
+    });
+    it('scores the extremes the way they should', () => {
+      const blank = scoreDiscover(emptyDiscoverAnswers());
+      expect(Object.values(blank.traits).every((n) => n === 50)).toBe(true);
+      expect(blank.puzzles.score).toBe(0);
+      // Someone who always calls the most effective answer most effective, and puzzles right.
+      const best = emptyDiscoverAnswers();
+      best.puzzles = DISCOVER_PUZZLES.map((p) => p.answer);
+      best.scenes = DISCOVER_SCENES.map((s) => ({ most: s.key.indexOf(4), least: s.key.indexOf(1) }));
+      const good = scoreDiscover(best);
+      expect(good.puzzles.score).toBe(100);
+      expect(good.judgment).toBe(100);
+      const worst = emptyDiscoverAnswers();
+      worst.scenes = DISCOVER_SCENES.map((s) => ({ most: s.key.indexOf(1), least: s.key.indexOf(4) }));
+      expect(scoreDiscover(worst).judgment).toBe(0);
+      // Always choosing the warm statement as most and the hard one as least raises Warmth.
+      const warm = emptyDiscoverAnswers();
+      warm.triads = DISCOVER_TRIADS.map((ids) => {
+        const kind = ids.map((id) => DISCOVER_STATEMENTS[id]!).map((s, i) => ({ i, v: s.trait === 'a' ? s.sign : 0 }));
+        const most = kind.find((k) => k.v === 1)?.i ?? kind.find((k) => k.v === 0)?.i ?? 0;
+        const least = kind.find((k) => k.v === -1)?.i ?? kind.find((k) => k.i !== most && k.v === 0)?.i ?? (most === 0 ? 1 : 0);
+        return { most, least: least === most ? (most + 1) % 3 : least };
+      });
+      expect(scoreDiscover(warm).traits.a).toBeGreaterThan(60);
+      expect(new Set(scoreDiscover(warm).top).size).toBe(3);
+    });
+  });
   it('keeps internal tools behind a team role, and gives every group a name', () => {
     const obs = MODULES.find((m) => m.key === 'observability')!;
-    expect(obs.group).toBe('internal');
+    expect(obs.group).toBe('manage');
     expect(moduleState(obs, 'user', {}, {}).available).toBe(false);
     expect(moduleState(obs, 'sub_admin', {}, {}).on).toBe(true);
     expect(moduleState(obs, 'admin', {}, {}).on).toBe(true);

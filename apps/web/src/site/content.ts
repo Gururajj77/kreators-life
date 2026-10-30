@@ -27,14 +27,14 @@ export const FEATURES: Record<string, FeatureCopy> = {
     tagline: 'Learn with a cohort, not alone.',
     pitch: 'Programs with lessons, assignments and a mentor who reads your work. Completion is a decision against the criteria, never a timer running out.',
     steps: ['Pick a program and a cohort date.', 'Do the lessons, submit the assignments, join the sessions.', 'Get feedback, finish, and move straight into Work.'],
-    relationships: ['guru', 'self'],
+    relationships: ['guru', 'servant_leader', 'self'],
     listing: 'program',
   },
   work: {
     tagline: 'Opportunities that fit your skills.',
     pitch: 'Brands and the team post gigs, campaigns, roles and collabs. Apply once with your portfolio attached, then follow every step in one place.',
     steps: ['Browse what is open and who it is for.', 'Apply with a short note. Your portfolio comes with it.', 'Track shortlist, selection and completion.'],
-    relationships: ['servant_leader', 'self'],
+    relationships: ['servant_leader'],
     listing: 'opportunity',
   },
   army: {
@@ -48,27 +48,27 @@ export const FEATURES: Record<string, FeatureCopy> = {
     tagline: 'Get paid for views that are real.',
     pitch: 'Content rewards: a brand funds a pool and sets a rate per thousand verified views. You post, the views are checked, a reviewer confirms, and finance pays. No follower count needed.',
     steps: ['Pick a reward and read the brief.', 'Post your video and submit the public link.', 'Once the views are checked, points land in your balance.'],
-    relationships: ['servant_leader', 'self'],
+    relationships: ['servant_leader'],
     listing: 'reward',
   },
   party: {
     tagline: 'Meet the people behind the handles.',
     pitch: 'Meetups anyone can host, workshops and parties from the team, and the big days. RSVP, join a waitlist, check in at the door, say what you thought afterwards.',
     steps: ['Find something near you or online.', 'RSVP. If it is full you are first in line.', 'Check in, meet people, opt in to introductions.'],
-    relationships: ['friendship', 'parent_child', 'lover_partner'],
+    relationships: ['friendship', 'parent_child', 'lover_partner', 'guru', 'divine'],
     listing: 'event',
   },
   run: {
     tagline: 'Run with people, not past them.',
     pitch: 'Run clubs anyone can start. Every run has a start code the host shows at the line: enter it and your run is logged once, with your kilometres, xp and points, and the minutes count toward your physical score. Badges for the first run, the tenth, and the hundredth kilometre. Brands post collabs with giveaways in their own tab, and a host applies with the club.',
     steps: ['Join a club near you, or start one.', 'At the start line, enter the code. Your run is logged and paid.', 'Watch your kilometres, earn badges, run brand collabs with giveaways.'],
-    relationships: ['friendship', 'self', 'lover_partner'],
+    relationships: ['friendship', 'lover_partner', 'self'],
   },
   community: {
     tagline: 'A kind room to ask and share.',
     pitch: 'You want a place to ask without being judged. Community is a calm room, split by topic, where guides keep it kind. Post, reply, react, and follow the threads you care about.',
     steps: ['Pick a topic.', 'Post a question or reply to one.', 'React to what helps, and follow the threads you care about.'],
-    relationships: ['friendship', 'guru'],
+    relationships: ['friendship', 'parent_child', 'guru', 'divine'],
   },
   club: {
     tagline: 'A curated circle.',
@@ -86,14 +86,14 @@ export const FEATURES: Record<string, FeatureCopy> = {
     tagline: 'Five strangers who fit. One table.',
     pitch: 'Circles run every week in your city. Join this week\'s and, two days before, you are seated at a table of people nearby whose interests complement yours: the writer with the editor, the one on camera with the one behind it. Everyone has an alias. Show up in red if you are single, white if you are committed, so the table reads itself. The group chat opens a day before you meet, and everyone keeps their alias.',
     steps: ['Pick your interests and your city.', 'Join this week\'s circle. Tables are set two days before.', 'Wear red if single, white if committed. Plan in the chat, then meet.'],
-    relationships: ['friendship', 'lover_partner'],
+    relationships: ['friendship', 'lover_partner', 'divine'],
     listing: 'circle',
   },
   life: {
     tagline: 'Five areas, one picture.',
     pitch: 'Physical, financial, emotional, mental and spiritual, each scored from what you already log, each part opening the screen where you act on it. Private to you.',
     steps: ['Keep logging what you log.', 'See the five scores and the week-on-week trend.', 'Tap the weakest part and go there.'],
-    relationships: ['self', 'parent_child', 'lover_partner', 'guru', 'divine', 'servant_leader'],
+    relationships: ['self', 'servant_leader', 'parent_child', 'lover_partner', 'guru', 'divine'],
   },
   wellbeing: {
     tagline: 'One score, four signals.',
@@ -102,44 +102,44 @@ export const FEATURES: Record<string, FeatureCopy> = {
     relationships: ['self', 'lover_partner'],
   },
   mood: { tagline: 'How are you, really?', pitch: 'Pick a face. See the week. That is it.', steps: ['Open Mood.', 'Pick a face.', 'See the pattern.'], relationships: ['self', 'parent_child', 'lover_partner'] },
-  sleep: { tagline: 'Hours and quality.', pitch: 'Log last night in a few seconds and see how your sleep lines up with everything else.', steps: ['Log hours.', 'Rate the quality.', 'Watch the week.'], relationships: ['self', 'lover_partner'] },
-  stress: { tagline: 'Level, and what is behind it.', pitch: 'Name the stress and the cause. Patterns show up faster than you expect.', steps: ['Set the level.', 'Name a cause.', 'See what repeats.'], relationships: ['self', 'servant_leader'] },
-  mindful: { tagline: 'Breathe, and log the minutes.', pitch: 'A breathing timer that counts toward your wellbeing score.', steps: ['Pick a length.', 'Breathe with the circle.', 'Minutes are logged.'], relationships: ['self', 'divine'] },
+  sleep: { tagline: 'Hours and quality.', pitch: 'Log last night in a few seconds and see how your sleep lines up with everything else.', steps: ['Log hours.', 'Rate the quality.', 'Watch the week.'], relationships: ['self', 'parent_child', 'lover_partner'] },
+  stress: { tagline: 'Level, and what is behind it.', pitch: 'Name the stress and the cause. Patterns show up faster than you expect.', steps: ['Set the level.', 'Name a cause.', 'See what repeats.'], relationships: ['self', 'servant_leader', 'parent_child', 'lover_partner'] },
+  mindful: { tagline: 'Breathe, and log the minutes.', pitch: 'A breathing timer that counts toward your wellbeing score.', steps: ['Pick a length.', 'Breathe with the circle.', 'Minutes are logged.'], relationships: ['self', 'lover_partner', 'divine'] },
   journal: {
     tagline: 'Write it down.',
     pitch: 'Entries with an emotion and a stress level. Nobody else sees them: not brands, not staff, not the leaderboard.',
     steps: ['Write a few lines.', 'Tag how you felt.', 'Look back a month later.'],
-    relationships: ['self', 'divine', 'lover_partner', 'parent_child'],
+    relationships: ['self', 'parent_child', 'lover_partner', 'divine'],
   },
   reviews: {
     tagline: 'Look back, by week, month, quarter or half year.',
     pitch: 'The numbers from every app for the period you pick, next to the one before: check-ins, tasks, xp by area, kept days, mood, sleep, money, sales, lessons, people. Then a few questions, a face for how it went, and one line to remember. Saved with the numbers as they were.',
     steps: ['Pick a week, a month, a quarter or half a year.', 'Read the numbers, each next to the period before.', 'Answer the questions, rate it, keep one line.'],
-    relationships: ['self', 'guru', 'parent_child', 'lover_partner', 'divine'],
+    relationships: ['self', 'parent_child', 'lover_partner', 'guru', 'divine'],
   },
   companion: {
     tagline: 'A chat that knows how you are doing.',
     pitch: 'Ask it anything about your week. It reflects and asks questions back. It is not a therapist and never pretends to be one.',
     steps: ['Say what is on your mind.', 'It asks a better question.', 'You decide what to do with it.'],
-    relationships: ['self', 'guru', 'parent_child', 'lover_partner'],
+    relationships: ['self', 'parent_child', 'lover_partner', 'guru', 'divine'],
   },
   profile: {
     tagline: 'One page for everything you are.',
     pitch: 'Bio, skills, portfolio, links and everything you sell on one public page at your own address.',
     steps: ['Pick a page name.', 'Add skills and portfolio pieces.', 'Share the link everywhere.'],
-    relationships: ['servant_leader', 'self'],
+    relationships: ['servant_leader', 'friendship', 'self'],
   },
   shop: {
     tagline: 'Sell anything you make.',
     pitch: 'Downloads, courses with drip and quizzes, memberships, sessions with booking, events with replays, payment links, bundles, locked posts and paid questions. Coupons, affiliates and refunds included.',
     steps: ['Make a product in a minute.', 'Share the link.', 'Points move instantly; money follows when payments are connected.'],
-    relationships: ['servant_leader', 'self'],
+    relationships: ['servant_leader'],
   },
   store: {
     tagline: 'Gear for creators, new and pre-owned.',
     pitch: 'New gear and software picked by the team, bought through partner links. Pre-owned gear from other creators, graded by condition, with offers and a chat built in. Kits that say what to buy at your stage, within your budget. Featured spots at the top for a week.',
     steps: ['Pick a category, a stage and a budget.', 'Tap Get it on new gear, or make an offer on pre-owned gear.', 'List your own gear when you move up.'],
-    relationships: ['self', 'servant_leader', 'guru'],
+    relationships: ['servant_leader'],
   },
   audience: {
     tagline: 'Know the people who want more.',
@@ -181,26 +181,26 @@ export const FEATURES: Record<string, FeatureCopy> = {
     tagline: 'The gear creators actually use.',
     pitch: 'A directory of tools for capture, editing, audio, design, scheduling, analytics and more, verified by the team. Suggest your own.',
     steps: ['Pick a category.', 'Open the tool.', 'Suggest one we missed.'],
-    relationships: ['self', 'guru', 'servant_leader'],
+    relationships: ['self', 'servant_leader', 'guru'],
     listing: 'tool',
   },
   tv: {
     tagline: 'Pitch a series.',
     pitch: 'Have a show in you? Submit a pitch and a budget. Follow it from review to diligence to release, with every decision logged.',
     steps: ['Write the pitch.', 'A reviewer reads it.', 'Track every stage.'],
-    relationships: ['guru', 'divine'],
+    relationships: ['servant_leader'],
   },
   fund: {
     tagline: 'Backing for a project.',
     pitch: 'Apply for a grant or backing. Same transparent pipeline as TV: submitted, review, diligence, decision.',
     steps: ['Describe the project and the money.', 'Review and diligence.', 'A decision with a reason.'],
-    relationships: ['divine', 'servant_leader'],
+    relationships: ['servant_leader'],
   },
   leaderboard: {
     tagline: 'Climb on effort, not followers.',
     pitch: 'Opt in and see where you stand on experience, streaks and honors. Never on follower counts.',
     steps: ['Opt in under Profile.', 'Climb.', 'See the top twenty.'],
-    relationships: ['friendship', 'self'],
+    relationships: ['friendship', 'servant_leader', 'self'],
   },
   rewards: {
     tagline: 'Points for real things.',
@@ -214,11 +214,23 @@ export const FEATURES: Record<string, FeatureCopy> = {
     steps: ['Read the answers.', 'Write to the team.', 'Get a reply in your inbox.'],
     relationships: ['friendship', 'guru'],
   },
+  discover: {
+    tagline: 'Find out what you are good at.',
+    pitch: 'A fifteen minute quiz with picks, pattern puzzles, descriptor words and real situations. It names your top three strengths across the seven relationships, shows five traits in your own numbers and gives you one small thing to try. Only you see it.',
+    steps: ['Answer in five short parts. It saves as you go.', 'See your top three strengths and your five traits.', 'Try the small thing each strength suggests.'],
+    relationships: ['self', 'guru', 'divine', 'lover_partner', 'servant_leader', 'friendship', 'parent_child'],
+  },
+  cards: {
+    tagline: 'Games for the people you are with.',
+    pitch: 'Card games about dating, family, friends, work and your inner self. Unlock a game once with points, then shuffle, draw and flip cards on a table, and drag them around. Nothing is posted to you.',
+    steps: ['Unlock a game in Rewards with points.', 'Pick a deck, shuffle, and tap the pile to draw.', 'Flip a card for its other side, and pass the phone round.'],
+    relationships: ['friendship', 'lover_partner', 'parent_child', 'self', 'servant_leader'],
+  },
   coaching: {
     tagline: 'A life coach in your corner.',
     pitch: 'Life coaches the team chose, with the Life coach badge. Ask one, or say yes when one asks. You pick what they see, never your journal. They leave notes and add tasks only you tick, and every step is in a change log you both read.',
     steps: ['Find a life coach and ask, or answer a coach who asked you.', 'Pick what they see: daily, pillars, routine, life map or reflection.', 'Read their notes, tick their tasks, and end it any time.'],
-    relationships: ['guru', 'self'],
+    relationships: ['guru', 'lover_partner', 'self', 'divine'],
   },
 };
 
@@ -233,14 +245,14 @@ export function featureFor(key: string): { module: AppModule; copy: FeatureCopy 
 
 /** Features that serve a relationship, for the seven floors section. */
 export function featuresForRelationship(key: RelationshipKey): AppModule[] {
-  return SITE_FEATURES.filter((m) => FEATURES[m.key]?.relationships.includes(key) && !['today', 'tower'].includes(m.key));
+  return SITE_FEATURES.filter((m) => FEATURES[m.key]?.relationships.includes(key) && !['today', 'tower', 'help'].includes(m.key));
 }
 
 /** The five areas of life, and which apps serve each. Another way to read the same seven relationships. */
 export const LIFE_AREA_FEATURES: Record<LifeAreaKey, string[]> = {
   physical: ['run', 'wellbeing', 'sleep', 'mindful', 'life', 'store'],
   financial: ['finance', 'shop', 'work', 'army', 'win', 'fund', 'store', 'audience', 'content'],
-  emotional: ['mood', 'journal', 'companion', 'coaching', 'bond', 'community', 'party', 'circles', 'profile'],
+  emotional: ['mood', 'journal', 'companion', 'discover', 'coaching', 'bond', 'community', 'party', 'circles', 'cards', 'profile'],
   mental: ['stress', 'school', 'knowledge', 'library', 'tools', 'reviews', 'tv'],
   spiritual: ['today', 'tower', 'mindful', 'club', 'leaderboard', 'rewards'],
 };

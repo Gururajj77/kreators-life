@@ -202,7 +202,7 @@ function YouView({ data }: { data: MeResponse }) {
           Features
         </h2>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">This is the one place an app can be switched off. Off means it goes grey on the Apps screen; nothing is deleted.</p>
-        {(['earn', 'creator', 'community', 'wellbeing', 'core', 'manage', 'internal'] as ModuleGroup[]).map((g) => {
+        {(['earn', 'creator', 'community', 'wellbeing', 'core', 'manage'] as ModuleGroup[]).map((g) => {
           const list = modules.filter((m) => m.group === g && m.available && !m.locked);
           if (list.length === 0) return null;
           const rel = RELATIONSHIP_BY_KEY[MODULE_GROUP_ACCENT[g]];

@@ -8,6 +8,7 @@ import type { ListingDetail, MarketResponse, PreownedListing, PreownedMessage, P
 import type { PeriodKind, Review, ReviewSummary, ReviewTemplate, ReviewsResponse } from '@kreators/shared';
 import type { NotToDo, NotToDoStatus } from '@kreators/shared';
 import type { SetupMatch } from '@kreators/shared';
+import type { CardGamePlay, CardGamesResponse, DiscoverAnswers, DiscoverResult } from '@kreators/shared';
 import type { DailyBrief, GettingStarted, InboxShow, InboxTab, ReactionKind } from '@kreators/shared';
 import type { AdminCoachAsk, AdminCoachLink, CoachDirectoryEntry, CoachHub, CoachLink, CoachLogEntry, CoachProfile, CoachShare, CoachStudentView, CoachTaskInput, MyCoachResponse } from '@kreators/shared';
 import type { CustomReminder, RemindersResponse, WaterState, BlockedPerson, EventApp, EventExtras, LinkBlock, MediaItem, MediaOwner } from '@kreators/shared';
@@ -275,7 +276,15 @@ export const api = {
   leaderboardOptions: () => request<LeaderboardOptions>('/leaderboard/options'),
   leaderboardBlocks: () => request<{ blocks: LeaderboardBlock[] }>('/leaderboard/blocks'),
   rewards: () => request<RewardsResponse>('/rewards'),
-  redeem: (key: string) => post<{ redemption: Redemption; points: number }>(`/rewards/${key}/redeem`),
+  redeem: (key: string) => post<{ redemption: Redemption; points: number; game?: string }>(`/rewards/${key}/redeem`),
+  discover: () => request<{ answers: DiscoverAnswers; progress: { done: number; total: number; parts: { key: string; done: number; count: number }[] }; latest: { id: string; createdAt: string; result: DiscoverResult } | null; history: { id: string; createdAt: string; result: DiscoverResult }[]; settings: { steps: boolean; assistant: boolean } }>('/discover'),
+  discoverSettings: (body: { steps?: boolean; assistant?: boolean }) => put<{ settings: { steps: boolean; assistant: boolean } }>('/discover/settings', body),
+  saveDiscover: (answers: DiscoverAnswers) => put<{ ok: true }>('/discover/draft', { answers }),
+  submitDiscover: (answers: DiscoverAnswers) => post<{ id: string; createdAt: string; result: DiscoverResult }>('/discover/submit', { answers }),
+  dropDiscoverDraft: () => del<{ ok: true }>('/discover/draft'),
+  deleteDiscoverResult: (id: string) => del<{ ok: true }>(`/discover/results/${id}`),
+  cardGames: () => request<CardGamesResponse>('/cards'),
+  cardGame: (key: string) => request<{ game: CardGamePlay }>(`/cards/${key}`),
   cancelRedemption: (id: string) => post<{ ok: true; points: number }>(`/rewards/redemptions/${id}/cancel`),
 
   // wellbeing
@@ -283,8 +292,10 @@ export const api = {
   logs: (kind: LogKind, days = 30) => request<{ logs: WellbeingLog[] }>(`/wellbeing/${kind}?days=${days}`),
   log: (kind: LogKind, body: { date?: string; value: number; extra?: Record<string, unknown>; note?: string }) => post<{ log: WellbeingLog; summary: WellbeingSummary }>(`/wellbeing/${kind}`, body),
   deleteLog: (kind: LogKind, id: string) => del<{ ok: true }>(`/wellbeing/${kind}/${id}`),
+  journalDay: (date: string) => request<{ entries: JournalEntry[] }>(`/journal?date=${date}&size=100`),
+  journalDays: (month: string) => request<{ days: { date: string; count: number; emotion: number | null }[] }>(`/journal/days?month=${month}`),
   journal: (pq = '') => request<{ page: Page; entries: JournalEntry[]; stats: { total: number; thisMonth: number; positive: number; negative: number } }>(withQ('/journal', pq)),
-  createEntry: (body: Partial<JournalEntry>) => post<{ entry: JournalEntry }>('/journal', body),
+  createEntry: (body: Partial<JournalEntry> & { date?: string }) => post<{ entry: JournalEntry }>('/journal', body),
   updateEntry: (id: string, body: Partial<JournalEntry>) => patch<{ entry: JournalEntry }>(`/journal/${id}`, body),
   deleteEntry: (id: string) => del<{ ok: true }>(`/journal/${id}`),
   companion: () => request<{ messages: ChatMessage[]; model: string }>('/companion'),
@@ -295,6 +306,8 @@ export const api = {
   inbox: (pq = '', tab: InboxTab = 'all', show: InboxShow = 'inbox') => request<{ page: Page; notifications: Notification[]; unread: number; tab: InboxTab; show: InboxShow; tabs: { tab: InboxTab; unread: number }[] }>(withQ(`/inbox?tab=${tab}&show=${show}`, pq)),
   readAll: (tab: InboxTab = 'all') => post<{ ok: true }>('/inbox/read-all', { tab }),
   archiveNote: (id: string, archived: boolean) => post<{ ok: true }>(`/inbox/${id}/archive`, { archived }),
+  deleteNote: (id: string) => del<{ ok: true }>(`/inbox/${id}`),
+  deleteArchived: (tab: InboxTab) => del<{ ok: true; deleted: number }>(`/inbox/archived?tab=${tab}`),
   archiveRead: (tab: InboxTab) => post<{ ok: true; archived: number }>('/inbox/archive-read', { tab }),
   brief: (date: string, hour: number) => request<{ brief: DailyBrief; gettingStarted: GettingStarted }>(`/home/brief?date=${date}&hour=${hour}`),
   foldGettingStarted: (folded: boolean) => put<{ ok: true }>('/home/getting-started', { folded }),
@@ -680,6 +693,7 @@ async function adminRequest<T>(key: string, path: string, init: RequestInit = {}
 export const adminApi = {
   users: (key: string, q: string, pq = '') => adminRequest<{ page: Page; users: AdminUser[] }>(key, withQ(`/users?q=${encodeURIComponent(q)}`, pq)),
   setPro: (key: string, id: string, pro: boolean) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/pro`, { method: 'POST', body: JSON.stringify({ pro }) }),
+  deleteUser: (key: string, id: string) => adminRequest<{ ok: true }>(key, `/users/${id}`, { method: 'DELETE' }),
   setRole: (key: string, id: string, role: Role) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/role`, { method: 'POST', body: JSON.stringify({ role }) }),
   grantHonor: (key: string, id: string, honor: string, note: string) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/honors`, { method: 'POST', body: JSON.stringify({ key: honor, note }) }),
   revokeHonor: (key: string, id: string, honor: string) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/honors/${honor}`, { method: 'DELETE' }),

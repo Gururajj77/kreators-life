@@ -318,10 +318,12 @@ export function SetupChat() {
         : m.session === 'soon'
           ? 'When you feel ready, try the strategy session in Pillars. It builds a routine around your real day, with room for focus and energy.'
           : 'Want to go deeper some day? The strategy session in Pillars is there whenever you are.';
+    // Discover is offered beside the strategy session every time: it is the quicker way in (about fifteen minutes) and it makes the next steps personal.
+    const discoverChip: ChatChoice = { value: 'discover', label: 'Take the Discover quiz' };
     const chips: ChatChoice[] =
       m.session === 'now'
-        ? [{ value: '/session', label: 'Start the strategy session' }, { value: '/home', label: 'Maybe later. Go to Home' }]
-        : [{ value: '/home', label: 'Go to Home' }, ...(top ? [{ value: top.path, label: `Open ${top.name}` }] : []), ...(m.session === 'soon' ? [{ value: '/session', label: 'Start the strategy session' }] : [])];
+        ? [{ value: '/session', label: 'Start the strategy session' }, discoverChip, { value: '/home', label: 'Maybe later. Go to Home' }]
+        : [{ value: '/home', label: 'Go to Home' }, ...(top ? [{ value: top.path, label: `Open ${top.name}` }] : []), ...(m.session === 'soon' ? [{ value: '/session', label: 'Start the strategy session' }] : []), discoverChip];
     setChat((c) => ({ ...c, doneChips: chips }));
     say(
       [
@@ -330,6 +332,7 @@ export function SetupChat() {
         'Daily gives you three small things to do each day. Pillars is where you work on the seven relationships in your life: with yourself, your family, your friends, a partner, your work, your teachers and your faith.',
         ...(coachLine ? [coachLine] : []),
         session,
+        'Or start with Discover. It is a quiz of about fifteen minutes with puzzles, personality and real situations. It shows your strengths and makes your next steps fit you.',
         'One more thing, if you like: add your interests, so people who like the same things can find you.',
       ],
       { part: 'done', ask: { kind: 'chips', chips: [...chips, { value: 'profile', label: 'Add my interests' }] } },
@@ -468,6 +471,14 @@ export function SetupChat() {
     if (c.part === 'match') return submitSetup(a, parse(rec.apps));
     if (c.part === 'done') {
       if (str === 'profile') return askProfile();
+      // Discover is off until someone picks it, so this turns the app on and then opens it.
+      if (str === 'discover') {
+        void api.setModule('discover', true).then(() => {
+          refresh();
+          nav('/discover', { replace: true });
+        });
+        return;
+      }
       if (rec.skip || rec.interests !== undefined) return saveProfile(rec);
       if (str) nav(str, { replace: true });
     }

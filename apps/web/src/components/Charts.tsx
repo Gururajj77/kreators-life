@@ -447,15 +447,57 @@ export function Bubbles({ items, size = 260, label, onFill = false }: { items: {
 }
 
 /** The kit's month grid: a dot per day, coloured when something was logged. Weeks start on Sunday. */
-export function CalendarGrid({ month, marks, label, today, onFill = false }: { month: string; marks: Record<string, { color: string; emoji?: string; mood?: number }>; label: string; today?: string; onFill?: boolean }) {
+export function CalendarGrid({
+  month,
+  marks,
+  label,
+  today,
+  onFill = false,
+  onPick,
+  onMonth,
+  maxDate,
+  selected,
+}: {
+  month: string;
+  marks: Record<string, { color: string; emoji?: string; mood?: number }>;
+  label: string;
+  today?: string;
+  onFill?: boolean;
+  /** Makes every day a button: tap one to add, edit or change what that day holds. */
+  onPick?: (date: string) => void;
+  /** Adds previous and next month buttons; it is given the new month as YYYY-MM. */
+  onMonth?: (month: string) => void;
+  /** The last day that can be picked, usually today. Later days are shown but cannot be tapped. */
+  maxDate?: string;
+  selected?: string | null;
+}) {
   const [y, m] = month.split('-').map(Number);
   const first = new Date(y ?? 2026, (m ?? 1) - 1, 1);
   const daysIn = new Date(y ?? 2026, m ?? 1, 0).getDate();
   const lead = first.getDay();
   const cells: (number | null)[] = [...Array.from({ length: lead }, () => null), ...Array.from({ length: daysIn }, (_, i) => i + 1)];
   const pad = (n: number) => String(n).padStart(2, '0');
+  const shift = (by: number) => {
+    const d = new Date(y ?? 2026, (m ?? 1) - 1 + by, 1);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+  };
+  const name = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const nextBlocked = Boolean(maxDate && shift(1) > maxDate.slice(0, 7));
+  const arrow = `toy toy-flat flex size-[44px] items-center justify-center rounded-pill ${onFill ? 'text-on-fill' : 'text-ink-soft hover:text-ink'} disabled:opacity-40`;
+  const ring = (key: string) => (key === today || key === selected ? { outline: `2px solid ${onFill ? 'white' : 'var(--color-ink)'}`, outlineOffset: 2 } : undefined);
   return (
-    <div role="img" aria-label={label}>
+    <div role={onPick ? 'group' : 'img'} aria-label={label}>
+      {onMonth && (
+        <div className="mb-xs flex items-center justify-between">
+          <button type="button" className={arrow} onClick={() => onMonth(shift(-1))} aria-label="Previous month">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
+          </button>
+          <span className={`text-[16px] font-extrabold ${onFill ? 'text-on-fill' : ''}`} aria-live="polite">{name}</span>
+          <button type="button" className={arrow} onClick={() => onMonth(shift(1))} disabled={nextBlocked} aria-label="Next month">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+          </button>
+        </div>
+      )}
       <div className="grid grid-cols-7 gap-xs">
         {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
           <span key={i} className={`text-center text-[12px] font-extrabold ${onFill ? 'text-on-fill opacity-80' : 'text-ink-soft'}`}>
@@ -466,28 +508,42 @@ export function CalendarGrid({ month, marks, label, today, onFill = false }: { m
           if (day === null) return <span key={`b${i}`} />;
           const key = `${month}-${pad(day)}`;
           const mark = marks[key];
-          const isToday = key === today;
-          return (
-            <span key={key} className="flex items-center justify-center">
-              {mark?.mood ? (
-                <span className="flex size-[28px] items-center justify-center rounded-pill" style={{ outline: isToday ? `2px solid ${onFill ? 'white' : 'var(--color-ink)'}` : undefined, outlineOffset: 2 }} title={key}>
-                  <MoodFace value={mark.mood} size={28} />
-                </span>
-              ) : (
-                <span
-                  className="flex size-[28px] items-center justify-center rounded-pill text-[12px] font-extrabold"
-                  style={{
-                    background: mark ? mark.color : onFill ? 'rgba(255,255,255,0.18)' : 'var(--color-paper)',
-                    color: mark ? 'white' : onFill ? 'white' : 'var(--color-ink-soft)',
-                    outline: isToday ? `2px solid ${onFill ? 'white' : 'var(--color-ink)'}` : undefined,
-                    outlineOffset: 2,
-                  }}
-                  title={key}
-                >
-                  {mark?.emoji ?? day}
-                </span>
-              )}
+          const face = mark?.mood ? (
+            <span className="flex size-[28px] items-center justify-center rounded-pill" style={ring(key)} title={key}>
+              <MoodFace value={mark.mood} size={28} />
             </span>
+          ) : (
+            <span
+              className="flex size-[28px] items-center justify-center rounded-pill text-[12px] font-extrabold"
+              style={{
+                background: mark ? mark.color : onFill ? 'rgba(255,255,255,0.18)' : 'var(--color-paper)',
+                color: mark ? 'white' : onFill ? 'white' : 'var(--color-ink-soft)',
+                ...ring(key),
+              }}
+              title={key}
+            >
+              {mark?.emoji ?? day}
+            </span>
+          );
+          const blocked = Boolean(maxDate && key > maxDate);
+          if (!onPick) {
+            return (
+              <span key={key} className="flex items-center justify-center">
+                {face}
+              </span>
+            );
+          }
+          return (
+            <button
+              key={key}
+              type="button"
+              disabled={blocked}
+              onClick={() => onPick(key)}
+              aria-label={`${new Date(`${key}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}, ${mark ? 'has an entry. Open it' : blocked ? 'not yet' : 'nothing yet. Add one'}`}
+              className={`toy toy-flat flex min-h-[44px] items-center justify-center rounded-pill ${blocked ? 'opacity-40' : ''}`}
+            >
+              {face}
+            </button>
           );
         })}
       </div>

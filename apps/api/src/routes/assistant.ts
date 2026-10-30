@@ -12,12 +12,14 @@ import {
   type AssistantReply,
   type AssistantStatus,
   type AssistantTurn,
+  profileForAssistant,
 } from '@kreators/shared';
 import type { AppEnv, Env } from '../env';
 import { resolveAccess } from '../access';
 import { accountOf, creditAccount, spend, usedToday } from '../credits';
 import { DATE_RE, dateNearToday, newId, nowIso, shiftDate } from '../db';
 import { caller, ToolError, type Req } from '../assistant/dispatch';
+import { latestProfile, settingsOf } from './discover';
 import { checkArgs, TOOL_BY_NAME, TOOLS, type Args, type Tool, type ToolIO } from '../assistant/tools';
 import { chat, MAX_OUT, ModelError, modelOf, tokensOf, tokensOfMessages, type Message, type ToolCall, type ToolSpec } from '../assistant/model';
 
@@ -83,7 +85,7 @@ function screenOf(path: string): string {
   return hit && hit.key !== 'assistant' ? hit.name : 'the app';
 }
 
-function systemPrompt(p: { name: string; date: string; weekday: string; timeZone: string; screen: string }): string {
+function systemPrompt(p: { name: string; date: string; weekday: string; timeZone: string; screen: string; learned?: string | null }): string {
   return `You are Bumling, the guide inside kreators.app. You do things in the app for the person you are talking to, by calling the tools. You act only as them, on their own things.
 
 ${p.name ? `Their name is ${p.name}. ` : ''}Today is ${p.weekday} ${p.date}, in ${p.timeZone}. They are on ${p.screen === 'the app' ? 'a screen of the app' : `the ${p.screen} screen`}, and it updates under you as you act.
@@ -100,7 +102,7 @@ How you work:
 - Money amounts go in as they said them, in their own currency.
 - You cannot pay, buy, post, message people, or change settings. Say so and point them to the screen for it.
 - The app's words: seven pillars, each a pyramid of layers (foundation, guiding principle, value goal, goal outcome, project, task); the small act; the not to do list; Daily; reviews by period.
-- Write short, plain sentences a teenager can read. No emoji, no tables, no headings.`;
+- Write short, plain sentences a teenager can read. No emoji, no tables, no headings.${p.learned ? `\n\nWhat you have learned about them, because they allowed it: ${p.learned}` : ''}`;
 }
 
 /** The turns that fit in the plan's context, newest kept first. The last line is always the person's. */
@@ -221,7 +223,9 @@ export function assistantRoutes(appFetch: AppFetch) {
     const tools = (await toolsOn(c)).filter((t) => cfg.private || !t.sensitive);
     const byName = new Map(tools.map((t) => [t.name, t]));
     const specs: ToolSpec[] = tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.risk === 'confirm' ? `${t.description} It waits for the person to tap Confirm.` : t.description, parameters: t.params } }));
-    const system = systemPrompt({ name: user.display_name, date, weekday: new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' }), timeZone, screen: screenOf(path) });
+    // What the person let the assistant learn from Discover: only when they switched it on and the model keeps nothing.
+    const learned = cfg.private && (await settingsOf(db, user.id)).assistant ? await latestProfile(db, user.id).then((p) => (p ? profileForAssistant(p) : null)) : null;
+    const system = systemPrompt({ learned, name: user.display_name, date, weekday: new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' }), timeZone, screen: screenOf(path) });
     const fixed = tokensOf(system) + tokensOf(JSON.stringify(specs));
     const messages: Message[] = [{ role: 'system', content: system }, ...fit(turns, limit.contextTokens - fixed - MAX_OUT)];
 

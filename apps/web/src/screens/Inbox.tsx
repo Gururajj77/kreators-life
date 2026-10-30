@@ -1,10 +1,11 @@
 import { INBOX_TAB_META, isInboxTab, type InboxShow, type InboxTab } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
+import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useInbox, useMe, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
@@ -31,6 +32,15 @@ export function Inbox() {
   const readOne = useMutation({ mutationFn: (id: string) => api.readOne(id), onSuccess: () => refresh() });
   const archive = useMutation({ mutationFn: (v: { id: string; archived: boolean }) => api.archiveNote(v.id, v.archived), onSuccess: () => refresh() });
   const archiveRead = useMutation({ mutationFn: () => api.archiveRead(tab), onSuccess: () => refresh() });
+  // Deleting for good always asks first: one note (its id) or everything archived in this tab ('all').
+  const [toDelete, setToDelete] = useState<string | 'all' | null>(null);
+  const remove = useMutation({
+    mutationFn: (what: string) => (what === 'all' ? api.deleteArchived(tab) : api.deleteNote(what)),
+    onSuccess: () => {
+      setToDelete(null);
+      refresh();
+    },
+  });
   const [time, setTime] = useState(me.data?.user.reminderTime ?? '');
   // The profile lands after the first render; take the saved time when it does.
   useEffect(() => {
@@ -93,6 +103,11 @@ export function Inbox() {
               Archive the read ones
             </Button>
           )}
+          {show === 'archived' && list.length > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => setToDelete('all')}>
+              Delete all archived
+            </Button>
+          )}
         </div>
         {list.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{show === 'archived' ? 'Nothing archived here.' : show === 'unread' ? 'All caught up.' : 'Nothing yet. This is where replies, orders, bookings and team notes land.'}</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -130,17 +145,49 @@ export function Inbox() {
                   disabled={archive.isPending}
                   aria-label={n.archivedAt ? `Bring back "${n.title}"` : `Archive "${n.title}"`}
                   title={n.archivedAt ? 'Bring back' : 'Archive'}
-                  className="toy toy-soft flex w-[48px] shrink-0 items-center justify-center rounded-tile bg-card text-ink-soft hover:text-ink"
+                  className="toy toy-soft flex w-[48px] shrink-0 flex-col items-center justify-center gap-xs rounded-tile bg-card text-ink-soft hover:text-ink"
                 >
                   <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                     {n.archivedAt ? <path d="M4 12l5-5M4 12l5 5M4 12h11a5 5 0 0 1 0 10h-2" /> : <><rect x="3" y="4" width="18" height="5" rx="1" /><path d="M5 9v10h14V9M10 13h4" /></>}
                   </svg>
+                  {n.archivedAt && <span className="text-[12px] font-extrabold">Restore</span>}
                 </button>
+                {n.archivedAt && (
+                  <button
+                    type="button"
+                    onClick={() => setToDelete(n.id)}
+                    aria-label={`Delete "${n.title}" for good`}
+                    title="Delete for good"
+                    className="toy toy-soft flex w-[48px] shrink-0 flex-col items-center justify-center gap-xs rounded-tile border-2 border-r1/40 bg-card text-r1 hover:bg-r1/10"
+                  >
+                    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
+                    </svg>
+                    <span className="text-[12px] font-extrabold">Delete</span>
+                  </button>
+                )}
               </li>
             );
           })}
         </ul>
         <Pager page={q.data?.page} label="notifications" />
+        <Sheet open={toDelete !== null} onClose={() => setToDelete(null)} title={toDelete === 'all' ? 'Delete everything archived?' : 'Delete this note for good?'}>
+          <p className="m-0 text-[14px] font-semibold text-ink-soft">{toDelete === 'all' ? 'Every archived note in this tab is removed and cannot be brought back.' : 'It is removed and cannot be brought back. Restore it instead if you might want it.'}</p>
+          <div className="mt-md flex flex-col gap-xs">
+            <button
+              type="button"
+              onClick={() => toDelete && remove.mutate(toDelete)}
+              disabled={remove.isPending}
+              className="toy inline-flex min-h-[56px] items-center justify-center rounded-pill bg-r1 px-md text-[18px] font-bold text-on-fill disabled:opacity-50"
+              style={{ '--toy-color': 'var(--deep-servant_leader)' } as CSSProperties}
+            >
+              {remove.isPending ? 'Deleting' : 'Yes, delete for good'}
+            </button>
+            <Button variant="ghost" onClick={() => setToDelete(null)}>
+              Keep {toDelete === 'all' ? 'them' : 'it'}
+            </Button>
+          </div>
+        </Sheet>
       </section>
     </Screen>
   );

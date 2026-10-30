@@ -22,7 +22,7 @@ import { useModules } from '../lib/modules';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
 import { useMutation } from '@tanstack/react-query';
 
-const SHORTCUT_ORDER: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'manage', 'internal'];
+const SHORTCUT_ORDER: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'manage'];
 const weekday = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' });
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 const KIND_EMOJI: Record<string, string> = { article: '📄', exercise: '🧘', video: '🎥', audio: '🎧', link: '🔗' };
@@ -62,22 +62,22 @@ export function Home() {
 
   return (
     <Screen columns>
-      <header className="relative -mx-md overflow-hidden rounded-b-card bg-ink px-md pt-lg pb-md text-on-ink md:mx-0 md:mt-md md:rounded-card">
-        <HeroBlobs opacity={0.06} />
+      <header className="relative -mx-md overflow-hidden rounded-b-card night-card px-md pt-lg pb-md text-on-fill md:mx-0 md:mt-md md:rounded-card">
+        <HeroBlobs opacity={0.06} kind="cosmos" />
         <div className="relative flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
           <p className="order-2 m-0 text-[14px] font-bold opacity-80 md:order-1">
             <span aria-hidden="true">📅 </span>
             {prettyDate(date)}, {greetingFor(hour).toLowerCase()}
           </p>
           <div className="order-1 flex items-center justify-between gap-xs md:order-2 md:shrink-0 md:justify-end">
-            <Link to={myPage} className="toy inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-on-ink/15 px-sm text-[14px] font-bold text-on-ink">
+            <Link to={myPage} className="toy inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-white/15 px-sm text-[14px] font-bold text-on-fill">
               <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="8" r="4" />
                 <path d="M4 21a8 8 0 0 1 16 0" />
               </svg>
               My page
             </Link>
-          <Link to="/inbox" aria-label={d && d.unread > 0 ? `Inbox, ${d.unread} unread` : 'Inbox'} className="toy relative flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-on-ink/15 text-on-ink">
+          <Link to="/inbox" aria-label={d && d.unread > 0 ? `Inbox, ${d.unread} unread` : 'Inbox'} className="toy relative flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-white/15 text-on-fill">
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
               <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16Z" />
               <path d="M10 20a2 2 0 0 0 4 0" />
@@ -94,7 +94,7 @@ export function Home() {
             {user && <RoleBadge role={badgeRoleOf(user)} className="absolute right-0 bottom-0" />}
           </Link>
           <div className="min-w-0">
-            <h1 className="truncate text-[30px] text-on-ink">{firstName ? `Hi, ${firstName}!` : 'Hi there!'}</h1>
+            <h1 className="text-[28px] leading-[1.2] [overflow-wrap:anywhere] sm:text-[30px] text-on-fill">{firstName ? `Hi, ${firstName}!` : 'Hi there!'}</h1>
             {d && (
               <p className="mt-xs m-0 flex flex-wrap items-center gap-xs text-[14px] font-bold opacity-90" aria-label="At a glance">
                 <Link to="/tower" className="underline-offset-4 hover:underline">
@@ -211,7 +211,7 @@ export function Home() {
 
           <Section id="home-today" title="Daily" action={<SeeAll to="/today">Open</SeeAll>}>
             <div className="relative overflow-hidden rounded-card bg-r4 p-md text-on-fill">
-              <HeroBlobs />
+              <HeroBlobs kind="daisy" />
               <div className="relative">
                 <div className="flex items-center justify-between gap-sm">
                   <div className="flex items-center gap-sm">
@@ -401,7 +401,7 @@ export function Home() {
 
           <Section id="home-companion" title="Companion" lede="A chat that knows how you are doing. Not a therapist.">
             <div className="relative overflow-hidden rounded-card bg-ink p-md text-on-ink">
-              <HeroBlobs opacity={0.06} />
+              <HeroBlobs opacity={0.06} kind="violet" />
               <div className="relative z-10 max-w-[60%]">
                 <p className="m-0 font-display text-[40px] font-extrabold leading-none">{d.companion.messages.toLocaleString()}</p>
                 <p className="mt-xs m-0 text-[18px] font-extrabold">{d.companion.messages === 1 ? 'message' : 'messages'}</p>
@@ -584,7 +584,7 @@ export function Home() {
 function MetricCard({ to, title, emoji, tone, deep, corner, children }: { to: string; title: string; emoji: string; tone: string; deep: string; corner?: ReactNode; children: ReactNode }) {
   return (
     <Link to={to} className="toy relative flex h-[204px] flex-col overflow-hidden rounded-card p-sm text-on-fill" style={{ background: `linear-gradient(140deg, ${tone}, color-mix(in oklab, ${tone} 72%, var(--fill-shade)))`, '--toy-color': deep } as CSSProperties}>
-      <HeroBlobs opacity={0.1} />
+      <HeroBlobs opacity={0.1} seed={title} />
       <span className="relative flex items-center justify-between gap-xs text-[14px] font-extrabold">
         <span className="flex items-center gap-xs">
           {emoji && <span aria-hidden="true">{emoji}</span>}

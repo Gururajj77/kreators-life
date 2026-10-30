@@ -113,14 +113,14 @@ export function Policy({ kind }: { kind: Kind }) {
 
       {kind === 'pricing' && (
         <section>
-          <div className="mt-lg grid gap-sm sm:grid-cols-2">
+          <div className="bento mt-lg">
             {[
               ['Play', 'Free', 'The daily game, your seven pillars, every app you switch on, circles, events and learning. Free to start, free to stay.'],
               ['Sell', '5% of each sale', 'Downloads, courses, sessions, memberships and everything in the shop. The fee is taken from each sale; nothing up front. Creators who refer others earn a share of ' + Math.round(AFFILIATE_SHARE * 100) + '% on referred sales.'],
               ['Assistant', `From US$${PLANS.pro.priceCents / 100}`, `Typing to the assistant, so it does things for you, needs a plan: ${PAID_PLANS.map((k) => `${PLANS[k].name} US$${PLANS[k].priceCents / 100}`).join(', ')}, each for ${PLAN_DAYS} days. Credits do not carry over. Its tap flows stay free.${PAYMENTS_LIVE ? '' : ' Plans are not on sale yet, so nothing is charged.'}`],
               ['Brands', 'Per campaign', 'Campaign scoping and content-reward pools are priced per brief. Write to brandingbum@gmail.com.'],
-            ].map(([name, price, blurb]) => (
-              <div key={name} className="rounded-card bg-card p-md shadow-toy-soft">
+            ].map(([name, price, blurb], i) => (
+              <div key={name} className={`rounded-card bg-card p-md shadow-toy-soft ${i === 0 ? 'bento-w2' : i === 3 ? 'bento-w4' : ''}`}>
                 <p className="m-0 type-eyebrow text-ink-mute">{name}</p>
                 <p className="mt-xs m-0 type-hook text-[36px]">{price}</p>
                 <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{blurb}</p>

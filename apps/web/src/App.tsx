@@ -11,7 +11,7 @@ import { Assistant } from './components/Assistant';
 import { ReminderBubble } from './components/Reminders';
 import { useMe } from './lib/queries';
 import { useApplyTheme } from './lib/theme';
-import { useSession } from './lib/store';
+import { useFocus, useSession } from './lib/store';
 import { Admin } from './screens/Admin';
 import { Apps } from './screens/Apps';
 import { Army, Campaign } from './screens/Army';
@@ -52,6 +52,9 @@ import { Public } from './screens/Public';
 import { Realm } from './screens/Realm';
 import { Resources } from './screens/Resources';
 import { Rewards } from './screens/Rewards';
+import { Cards } from './screens/Cards';
+import { Discover } from './screens/Discover';
+import { CardTable } from './screens/CardTable';
 import { Plans } from './screens/Plans';
 import { Coaching } from './screens/Coaching';
 import { CoachStudent } from './screens/CoachStudent';
@@ -109,6 +112,7 @@ function RequireSession() {
 }
 
 function Shell() {
+  const focus = useFocus((s) => s.on);
   const token = useSession((s) => s.token);
   const me = useMe();
   const loc = useLocation();
@@ -128,9 +132,13 @@ function Shell() {
   return (
     <>
       <Outlet />
-      <TabBar />
-      <Assistant />
-      <ReminderBubble />
+      {!focus && (
+        <>
+          <TabBar />
+          <Assistant />
+          <ReminderBubble />
+        </>
+      )}
     </>
   );
 }
@@ -224,6 +232,9 @@ const router = createBrowserRouter([
       { path: '/inbox', element: gated('notifications', <Inbox />) },
       // Rank and rewards are part of the game, not apps: always on.
       { path: '/leaderboard', element: gated('leaderboard', <Leaderboard />) },
+      { path: '/discover', element: gated('discover', <Discover />) },
+      { path: '/cards', element: gated('cards', <Cards />) },
+      { path: '/cards/:game', element: gated('cards', <CardTable />) },
       { path: '/rewards', element: <Rewards /> },
       { path: '/plans', element: explained('assistant', <Plans />) },
       // learn and earn

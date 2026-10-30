@@ -435,6 +435,35 @@ export function Admin() {
                     { key: 'points', label: 'Points', get: (u) => u.points, align: 'right' },
                     { key: 'honors', label: 'Honors', get: (u) => u.honors.map((h) => HONOR_BY_KEY[h]?.name ?? h).join(', '), render: (u) => <span aria-label={u.honors.map((h) => HONOR_BY_KEY[h]?.name ?? h).join(', ')}>{u.honors.map((h) => HONOR_BY_KEY[h]?.emoji ?? '').join(' ')}</span>, wide: true },
                     { key: 'joined', label: 'Joined', get: (u) => u.createdAt.slice(0, 10), render: (u) => day(u.createdAt), wide: true },
+                    {
+                      key: 'delete',
+                      label: 'Delete',
+                      get: () => '',
+                      sortable: false,
+                      align: 'right',
+                      render: (u) => (
+                        <button
+                          type="button"
+                          disabled={busy || u.role === 'admin'}
+                          title={u.role === 'admin' ? 'An admin cannot be deleted here. Change the role first.' : `Delete ${u.displayName || 'this account'}`}
+                          aria-label={`Delete ${u.displayName || 'this account'}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!window.confirm(`Delete ${u.displayName || 'this account'}? Their details and what they made go. Money records stay, without their name. This cannot be undone.`)) return;
+                            void run(async () => {
+                              await adminApi.deleteUser(key, u.id);
+                              if (selected?.id === u.id) setSelected(null);
+                              await refreshUsers(asks.users);
+                            });
+                          }}
+                          className="toy flex size-[44px] items-center justify-center rounded-pill text-ink-soft hover:text-r1 disabled:opacity-30"
+                        >
+                          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+                          </svg>
+                        </button>
+                      ),
+                    },
                   ]}
                   bulk={[
                     { label: 'Make creator', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setRole(key, u.id, 'user')).user))) },
@@ -536,21 +565,52 @@ export function Admin() {
                   </div>
                   <input value={grantNote} onChange={(e) => setGrantNote(e.target.value)} placeholder="Why, for the history (optional)" aria-label="Why the credits" className={field} />
 
-                  <Button variant="ghost" className="mt-md" disabled={busy} onClick={() => run(async () => setPreview(await adminApi.previewAccess(key, selected.id)))}>
+                  <Button variant="ghost" className="mt-md" disabled={busy} onClick={() => run(async () => { await refreshFlags(); setPreview(await adminApi.previewAccess(key, selected.id)); })}>
                     What does this person see?
                   </Button>
                   {preview && (
-                    <ul className="mt-xs grid list-none grid-cols-2 gap-xs p-0 m-0 md:grid-cols-4">
-                      {MODULES.map((m) => {
-                        const a = preview.access[m.key];
-                        return (
-                          <li key={m.key} className={`rounded-tile px-sm py-xs text-[12px] font-bold ${a?.on ? 'bg-paper' : 'bg-line text-ink-soft line-through'}`}>
-                            {m.emoji} {m.name}
-                            {a && !a.available && <span className="block text-[11px] font-semibold no-underline">{a.reason}</span>}
-                          </li>
-                        );
-                      })}
-                    </ul>
+                    <>
+                      <p className="mt-sm m-0 text-[12px] font-semibold text-ink-soft">Tick an app to allow it for this person, untick to block it. A struck-through app is not allowed. Locked apps cannot be blocked. "Reset" takes your choice back and returns the app to the usual rules.</p>
+                      <ul className="mt-xs grid list-none grid-cols-1 gap-xs p-0 m-0 sm:grid-cols-2 md:grid-cols-3">
+                        {MODULES.map((m) => {
+                          const a = preview.access[m.key];
+                          const allowed = Boolean(a?.available);
+                          const mine = overrides.filter((o) => o.flagKey === m.key && o.subjectType === 'user' && o.subjectId === selected.id);
+                          const setAccess = (allow: boolean) =>
+                            run(async () => {
+                              for (const o of mine) await adminApi.removeOverride(key, o.id);
+                              await adminApi.addOverride(key, m.key, { subjectType: 'user', subjectId: selected.id, enabled: allow, reason: 'Set from People' });
+                              await refreshFlags();
+                              setPreview(await adminApi.previewAccess(key, selected.id));
+                            });
+                          const reset = () =>
+                            run(async () => {
+                              for (const o of mine) await adminApi.removeOverride(key, o.id);
+                              await refreshFlags();
+                              setPreview(await adminApi.previewAccess(key, selected.id));
+                            });
+                          return (
+                            <li key={m.key} className={`flex items-center gap-xs rounded-inner-sm px-xs py-xs ${allowed ? 'bg-paper' : 'bg-line'}`}>
+                              <label className="toy toy-flat flex min-h-[44px] min-w-0 flex-1 cursor-pointer items-center gap-xs rounded-inner-sm px-xs">
+                                <input type="checkbox" checked={allowed} disabled={busy || Boolean(m.locked)} onChange={(e) => void setAccess(e.target.checked)} className="size-[20px] shrink-0" aria-label={`Allow ${m.name}`} />
+                                <span className="min-w-0">
+                                  <span className={`block truncate text-[14px] font-bold ${allowed ? '' : 'text-ink-soft line-through'}`}>
+                                    {m.emoji} {m.name}
+                                  </span>
+                                  {a && !a.available && <span className="block text-[11px] font-semibold text-ink-soft no-underline">{a.reason === 'override' ? 'Blocked for this person' : a.reason === 'role' ? 'Needs a higher role' : a.reason === 'rollout' ? 'Not rolled out to them yet' : 'Switched off for everyone'}</span>}
+                                  {a?.available && mine.length > 0 && <span className="block text-[11px] font-semibold text-ink-soft">Allowed for this person</span>}
+                                </span>
+                              </label>
+                              {mine.length > 0 && (
+                                <button type="button" onClick={() => void reset()} disabled={busy} className="min-h-[36px] shrink-0 rounded-pill px-xs text-[12px] font-bold text-ink-soft underline underline-offset-4">
+                                  Reset
+                                </button>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </>
                   )}
                 </div>
               )}

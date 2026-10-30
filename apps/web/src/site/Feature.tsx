@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { LISTING_TYPE_META, RELATIONSHIP_BY_KEY } from '@kreators/shared';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'motion/react';
@@ -24,7 +25,7 @@ export function Feature() {
 
   return (
     <SiteLayout>
-      <motion.header initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mt-lg grid gap-md rounded-card p-md md:grid-cols-[2fr_1fr] md:items-center md:p-lg" style={{ background: `var(--soft-${lead.key})` }}>
+      <motion.header initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="wash mt-lg grid gap-md rounded-card bg-card p-md shadow-toy-soft md:grid-cols-[2fr_1fr] md:items-center md:p-lg" style={{ '--wash': lead.color } as CSSProperties}>
         <div>
           <Link to="/features" className="inline-flex min-h-[44px] items-center gap-xs text-[14px] font-bold text-ink-soft">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -56,9 +57,9 @@ export function Feature() {
         </div>
       </motion.header>
 
-      <section className="mt-lg grid gap-sm md:grid-cols-3" aria-label="How it goes">
+      <section className="bento mt-lg" aria-label="How it goes">
         {copy.steps.map((s, i) => (
-          <motion.div key={s} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }} className="rounded-tile bg-card p-md shadow-toy-soft">
+          <motion.div key={s} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }} className={`rounded-tile bg-card p-md shadow-toy-soft ${i === 0 ? 'bento-w2' : ''}`}>
             <p className="m-0 type-hook text-[32px] leading-none" style={{ color: lead.color }}>
               {i + 1}
             </p>

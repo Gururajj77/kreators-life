@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { latestProfile, settingsOf } from './discover';
 import { briefFor, gettingStarted, isAutoHandle, levelProgress, nudgeFor, parseCoachShare, periodFor, RELATIONSHIPS, type BriefLine, type DailyBrief, type HomeFloor, type HomeResponse, type HomeUpNext, type RelationshipKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { can, nameOf, nowIso, parseList, shiftDate } from '../db';
@@ -258,7 +259,11 @@ home.get('/brief', async (c) => {
   const lp = levelProgress(user.xp);
   const when = next ? new Date(next.starts_at) : null;
   const hoursAway = when ? Math.round((when.getTime() - Date.now()) / 3600_000) : 0;
+  // What Discover taught the app: only the person's own latest result, and only while their next-steps switch is on.
+  const dSet = await settingsOf(db, user.id);
+  const dProfile = await latestProfile(db, user.id);
   const base = briefFor({
+    discover: { taken: Boolean(dProfile), profile: dSet.steps ? dProfile : null },
     hour,
     checkedIn: user.last_checkin === date,
     streak: user.streak,
