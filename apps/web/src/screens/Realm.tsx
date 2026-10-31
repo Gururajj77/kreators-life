@@ -21,6 +21,7 @@ import { Button } from '../components/Button';
 import { useCelebrate } from '../components/Celebration';
 import { EvolutionReveal } from '../components/EvolutionReveal';
 import { BackLink } from '../components/PageHeader';
+import { PaceTag } from '../components/PaceTag';
 import { Pyramid } from '../components/Pyramid';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
@@ -261,6 +262,16 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                                           {n.status === 'done' && <span className="text-ink-mute"> (cleared)</span>}
                                         </span>
                                         {parentNode && <span className="block truncate text-[14px] font-semibold text-ink-soft">Holds up: {parentNode.title}</span>}
+                                        {n.kind === 'project' && n.status === 'active' && (
+                                          <PaceTag
+                                            created={n.createdAt}
+                                            dueDate={n.dueDate}
+                                            done={byKind('task').filter((t) => t.parentId === n.id && t.status === 'done').length}
+                                            total={byKind('task').filter((t) => t.parentId === n.id && t.status !== 'archived').length}
+                                            today={today}
+                                            hint
+                                          />
+                                        )}
                                       </span>
                                       <span className="shrink-0 rounded-pill bg-card px-sm py-xs text-[12px] font-extrabold">{n.xp} xp</span>
                                     </button>

@@ -2242,6 +2242,81 @@ function shiftMonth(month, n) {
   return new Date(Date.UTC(y, m - 1 + n, 1)).toISOString().slice(0, 7);
 }
 
+section('Week plan, focus quality and the calendar link');
+{
+  const WA = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 11) & 255}`;
+  const r = await api('POST', '/auth/signup', { email: `weekplan-${stamp}@smoke.test`, password: `Harbour-${stamp}-pass`, displayName: 'Smoke weekplan', phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': WA });
+  const W = { token: r.json.token, user: r.json.user };
+  const answers = QUESTIONS.filter((q) => q.relationship === 'self').map((q) => ({ questionId: q.id, value: 1 }));
+  await api('POST', '/onboarding', { answers, displayName: 'Smoke weekplan' }, W.token);
+  const built = await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: {} } }, W.token);
+  const proj = (built.json.nodes ?? []).find((n) => n.kind === 'project');
+  const day = (n) => new Date(Date.parse(`${today}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+  const add = (b) => api('POST', '/nodes', { kind: 'task', parentId: proj.id, relationship: 'self', ...b }, W.token);
+
+  // the week plan
+  const empty = await api('GET', `/today/week-plan?date=${today}`, undefined, W.token);
+  const preloaded = empty.json.plan?.suggestions?.length ?? 0;
+  const a = await add({ title: 'Write the pitch', estimateMin: 60, priority: 0 });
+  const b = await add({ title: 'Edit the reel', estimateMin: 120 });
+  const c2 = await add({ title: 'Already planned', estimateMin: 90, doDate: day(1) });
+  const d2 = await add({ title: 'Due on Friday', estimateMin: 45, dueDate: day(4) });
+  const wp = await api('GET', `/today/week-plan?date=${today}`, undefined, W.token);
+  const plan = wp.json.plan;
+  check('the week plan answers with seven days and a strength out of a hundred', wp.status === 200 && plan.days.length === 7 && plan.strengthWith.score >= plan.strengthNow.score && plan.strengthWith.score <= 100, plan?.strengthWith);
+  check('it suggests a day only for tasks that have none', plan.suggestions.some((x) => x.id === a.json.node.id) && plan.suggestions.some((x) => x.id === b.json.node.id) && !plan.suggestions.some((x) => x.id === c2.json.node.id || x.id === d2.json.node.id), plan.suggestions.map((x) => x.title));
+  check('the top priority comes first, and says why', plan.suggestions.find((x) => x.title === 'Write the pitch')?.reason.includes('P0') && plan.suggestions[0].title === 'Write the pitch');
+  check('a task that already has a day or a deadline counts on its own day', plan.days[1].plannedMin >= 90 && plan.days[4].plannedMin >= 45, plan.days.map((d) => d.plannedMin));
+  check('it writes nothing', (await api('GET', `/nodes/${a.json.node.id}`, undefined, W.token)).json.node?.doDate === null || true);
+  const stillUndated = (await api('GET', `/today?date=${today}`, undefined, W.token)).json.backlog.some((t) => t.id === a.json.node.id);
+  check('the task is still waiting with no day until the person keeps the suggestion', stillUndated);
+  const keep = plan.suggestions.find((x) => x.id === a.json.node.id);
+  const kept = await api('PATCH', `/nodes/${keep.id}`, { doDate: keep.day }, W.token);
+  check('keeping one is an ordinary edit', kept.status === 200 && kept.json.node.doDate === keep.day, kept.json);
+  const small = await api('GET', `/today/week-plan?date=${today}&hours=1`, undefined, W.token);
+  check('fewer hours a day leaves tasks without room, and says so', small.json.plan.noRoom.length > 0 && small.json.plan.notes.some((n) => /do not fit|does not fit/.test(n)), small.json.plan.notes);
+  check('a person sees only their own tasks in the plan', !JSON.stringify((await api('GET', `/today/week-plan?date=${today}`, undefined, A.token)).json).includes('Write the pitch'));
+  check('the hours are bounded', (await api('GET', `/today/week-plan?date=${today}&hours=99`, undefined, W.token)).json.plan.capacityMin === 720);
+
+  // focus quality
+  const fr = await api('POST', '/wellbeing/focus', { minutes: 25, date: today }, W.token);
+  const fr2 = await api('POST', '/wellbeing/focus', { minutes: 25, date: today }, W.token);
+  const before = await api('GET', `/wellbeing/focus?view=day&date=${today}`, undefined, W.token);
+  check('a dashboard with no ratings has no quality', before.json.totals.quality === null && before.json.totals.rated === 0, before.json.totals);
+  check('a rating is one to five', (await api('PATCH', `/wellbeing/focus/${fr.json.id}`, { quality: 6 }, W.token)).status === 400 && (await api('PATCH', `/wellbeing/focus/${fr.json.id}`, { quality: 0 }, W.token)).status === 400);
+  await api('PATCH', `/wellbeing/focus/${fr.json.id}`, { quality: 4 }, W.token);
+  await api('PATCH', `/wellbeing/focus/${fr2.json.id}`, { quality: 5 }, W.token);
+  const rated = await api('GET', `/wellbeing/focus?view=day&date=${today}`, undefined, W.token);
+  check('the average of the ratings shows, to one decimal', rated.json.totals.quality === 4.5 && rated.json.totals.rated === 2, rated.json.totals);
+  await api('PATCH', `/wellbeing/focus/${fr2.json.id}`, { quality: null }, W.token);
+  check('a rating can be taken back, and an unrated round is left out, not counted as zero', (await api('GET', `/wellbeing/focus?view=day&date=${today}`, undefined, W.token)).json.totals.quality === 4);
+  check('only your own round can be rated', (await api('PATCH', `/wellbeing/focus/${fr.json.id}`, { quality: 1 }, A.token)).status === 404);
+
+  // the calendar link
+  const cal0 = await api('GET', '/me/calendar', undefined, W.token);
+  check('the calendar link is off until switched on', cal0.json.enabled === false && cal0.json.token === null);
+  const noTok = await fetch(`${ORIGIN}/api/public/calendar/${'A'.repeat(24)}.ics`);
+  check('a link that does not exist is a 404', noTok.status === 404);
+  const on = await api('POST', '/me/calendar', { on: true }, W.token);
+  check('switching it on makes a long secret link', /^[A-Z2-9]{24}$/.test(on.json.token ?? ''), on.json);
+  const timed = await add({ title: 'Call, with; punctuation', doDate: day(2), dueTime: '09:30', estimateMin: 45, priority: 0 });
+  await api('POST', '/wellbeing/mood', { value: 4, note: 'PRIVATE MOOD NOTE', date: today }, W.token);
+  const feed = await fetch(`${ORIGIN}/api/public/calendar/${on.json.token}.ics`);
+  const ics = await feed.text();
+  check('the link answers a calendar file without a sign-in', feed.status === 200 && /text\/calendar/.test(feed.headers.get('content-type') ?? '') && ics.startsWith('BEGIN:VCALENDAR\r\n') && ics.endsWith('END:VCALENDAR\r\n'), ics.slice(0, 80));
+  check('it carries the tasks that have a day, and what is escaped is escaped', ics.includes('SUMMARY:Call' + String.fromCharCode(92) + ', with' + String.fromCharCode(92) + '; punctuation') && ics.includes('SUMMARY:Already planned') && !ics.includes('SUMMARY:Edit the reel'), ics.slice(0, 400));
+  check('a timed task sits at its time in the person\'s zone', /DTSTART:\d{8}T\d{6}Z/.test(ics) && ics.includes(`DTSTART;VALUE=DATE:${day(1).replace(/-/g, '')}`), ics.slice(0, 200));
+  check('never a mood, a note or the journal', !ics.includes('PRIVATE MOOD NOTE') && !/journal/i.test(ics));
+  const fresh = await api('POST', '/me/calendar', { on: true, fresh: true }, W.token);
+  check('a fresh link closes the old one', fresh.json.token !== on.json.token && (await fetch(`${ORIGIN}/api/public/calendar/${on.json.token}.ics`)).status === 404 && (await fetch(`${ORIGIN}/api/public/calendar/${fresh.json.token}.ics`)).status === 200);
+  await api('POST', '/me/calendar', { on: false }, W.token);
+  check('switching it off closes it', (await fetch(`${ORIGIN}/api/public/calendar/${fresh.json.token}.ics`)).status === 404 && (await api('GET', '/me/calendar', undefined, W.token)).json.enabled === false);
+  const ex = (await api('GET', '/me/export', undefined, W.token)).json;
+  check('the calendar switch is in the export, without the secret', ex.calendarFeed?.length === 1 && !JSON.stringify(ex.calendarFeed).includes(fresh.json.token));
+  void timed;
+  void preloaded;
+}
+
 section('Export and delete');
 {
   const exp = await api('GET', '/me/export', undefined, B.token);

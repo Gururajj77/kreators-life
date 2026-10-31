@@ -124,6 +124,16 @@ wellbeing.post('/focus', async (c) => {
   return c.json({ ok: true, id }, 201);
 });
 
+// How the round felt, one to five (or null to take it back). Only the person's own round, and it pays nothing.
+wellbeing.patch('/focus/:id', async (c) => {
+  const body = await c.req.json<{ quality?: unknown }>().catch(() => ({}) as { quality?: unknown });
+  const q = body.quality === null ? null : Math.round(Number(body.quality));
+  if (q !== null && (!Number.isFinite(q) || q < 1 || q > 5)) return c.json({ error: 'a rating is 1 to 5' }, 400);
+  const res = await c.env.DB.prepare('UPDATE focus_rounds SET quality = ? WHERE id = ? AND user_id = ?').bind(q, c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
+  return c.json({ ok: true });
+});
+
 // The dashboard: minutes, rounds and tasks ticked by day, week or month, and where the time went.
 wellbeing.get('/focus', async (c) => {
   const db = c.env.DB;
@@ -147,7 +157,7 @@ wellbeing.get('/focus', async (c) => {
   const nowKeys = keys.slice(spec.count);
   const from = keys[0]!;
   const [rounds, done] = await Promise.all([
-    db.prepare('SELECT node_id, title, minutes, day FROM focus_rounds WHERE user_id = ? AND day >= ? AND day <= ?').bind(user.id, from, today).all<{ node_id: string | null; title: string; minutes: number; day: string }>(),
+    db.prepare('SELECT node_id, title, minutes, day, quality FROM focus_rounds WHERE user_id = ? AND day >= ? AND day <= ?').bind(user.id, from, today).all<{ node_id: string | null; title: string; minutes: number; day: string; quality: number | null }>(),
     db.prepare("SELECT substr(completed_at, 1, 10) AS day FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ?").bind(user.id, from).all<{ day: string }>(),
   ]);
   const label = (key: string) =>
@@ -180,6 +190,15 @@ wellbeing.get('/focus', async (c) => {
     t.rounds += 1;
     byTask.set(key, t);
   }
+  // The average of the ratings given in this stretch. Rounds nobody rated are left out, not counted as zero.
+  let ratedSum = 0;
+  let ratedCount = 0;
+  for (const r of rounds.results) {
+    if (r.quality !== null && nowSet.has(startOf(r.day))) {
+      ratedSum += r.quality;
+      ratedCount += 1;
+    }
+  }
   const minutes = sum(nowKeys, (b) => b.minutes);
   const before = sum(prevKeys, (b) => b.minutes);
   const top = [...buckets].sort((a, b) => b.minutes - a.minutes)[0];
@@ -187,7 +206,7 @@ wellbeing.get('/focus', async (c) => {
   const res: FocusResponse = {
     view,
     buckets,
-    totals: { minutes, rounds: sum(nowKeys, (b) => b.rounds), tasksDone: sum(nowKeys, (b) => b.tasksDone), activeBuckets: buckets.filter((b) => b.minutes > 0).length },
+    totals: { minutes, rounds: sum(nowKeys, (b) => b.rounds), tasksDone: sum(nowKeys, (b) => b.tasksDone), activeBuckets: buckets.filter((b) => b.minutes > 0).length, quality: ratedCount > 0 ? Math.round((ratedSum / ratedCount) * 10) / 10 : null, rated: ratedCount },
     tasks: [...byTask.values()].sort((a, b) => b.minutes - a.minutes).slice(0, 8),
     best: top && top.minutes > 0 ? { key: top.key, label: top.label, minutes: top.minutes } : null,
     trend: before === 0 && minutes === 0 ? 'No focus rounds yet. Start one above.' : before === 0 ? `A first stretch: ${minutes} minutes of focus in these ${unit}.` : minutes >= before ? `${minutes - before} minutes more than the ${unit} before.` : `${before - minutes} minutes fewer than the ${unit} before.`,

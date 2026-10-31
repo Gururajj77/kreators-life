@@ -1375,7 +1375,7 @@ describe('the timer settings a person keeps', () => {
   });
   it('marks a mini break with one beat and the long break with three, and has serene sounds to pick from', () => {
     expect(BREAK_BEATS).toEqual({ short: 1, long: 3 });
-    expect(AMBIENT_SOUNDS.map((a) => a.key)).toEqual(['off', 'rain', 'ocean', 'wind', 'hum']);
+    expect(AMBIENT_SOUNDS.map((a) => a.key)).toEqual(['off', 'rain', 'ocean', 'wind', 'hum', 'lofi']);
   });
 });
 
@@ -1574,5 +1574,152 @@ describe('agency numbers and business metrics', () => {
     expect(kpiShown('hours', 90, 'INR')).toBe('1h 30m');
     expect(kpiShown('percent', 82, 'INR')).toBe('82%');
     expect(kpiShown('money', 3500000, 'INR')).toBe('₹35,000');
+  });
+});
+
+import { blockTimeLabel, dayBlocks, focusQualityName, FOCUS_QUALITY, planStrength, planWeek, projectPace, PLAN_DAY_MINUTES, type PlanTask } from './index';
+
+describe('the week plan', () => {
+  const task = (id: string, o: Partial<PlanTask> = {}): PlanTask => ({ id, title: `Task ${id}`, relationship: 'self', estimateMin: 60, priority: null, doDate: null, dueDate: null, ...o });
+  const today = '2026-11-02'; // a Monday
+  it('suggests a day for a task that has none, and leaves the ones that have a day alone', () => {
+    const p = planWeek(today, [task('a'), task('b', { doDate: '2026-11-04' }), task('c', { dueDate: '2026-11-05' })]);
+    expect(p.suggestions.map((s) => s.id)).toEqual(['a']);
+    expect(p.days.find((d) => d.date === '2026-11-04')!.plannedMin).toBe(60);
+    expect(p.days.find((d) => d.date === '2026-11-05')!.plannedMin).toBe(60);
+  });
+  it('spreads the week: each task goes on the lightest day it fits, not the first', () => {
+    const p = planWeek(today, [task('a', { doDate: today }), task('b'), task('c')]);
+    const days = p.suggestions.map((s) => s.day);
+    expect(days[0]).not.toBe(today);
+    expect(new Set(days).size).toBe(2);
+  });
+  it('puts the top priority first and says why', () => {
+    const p = planWeek(today, [task('low', { priority: 3 }), task('hot', { priority: 0 }), task('plain')]);
+    expect(p.suggestions[0]!.id).toBe('hot');
+    expect(p.suggestions[0]!.reason).toMatch(/P0/);
+  });
+  it('never fills a day past its hours, and says what did not fit', () => {
+    const many = Array.from({ length: 30 }, (_, i) => task(`t${i}`, { estimateMin: 120 }));
+    const p = planWeek(today, many, 240);
+    for (const d of p.days) expect(d.plannedMin + d.suggestedMin).toBeLessThanOrEqual(240);
+    expect(p.suggestions.length).toBe(14);
+    expect(p.noRoom.length).toBe(16);
+    expect(p.notes.join(' ')).toMatch(/do not fit/);
+  });
+  it('counts a task with no estimate as thirty minutes, and flags a day that is already too full', () => {
+    const p = planWeek(today, [task('a', { doDate: today, estimateMin: 200 }), task('b', { doDate: today, estimateMin: 100 }), task('c', { doDate: today, estimateMin: null })]);
+    expect(p.days[0]!.plannedMin).toBe(330);
+    expect(p.days[0]!.overloaded).toBe(true);
+    expect(p.notes.join(' ')).toMatch(/Monday has 5h 30m planned/);
+  });
+  it('counts a late task on today', () => {
+    const p = planWeek(today, [task('late', { dueDate: '2026-10-30' })]);
+    expect(p.days[0]!.tasks).toBe(1);
+    expect(p.notes.join(' ')).toMatch(/1 late task is counted on today/);
+  });
+  it('scores a plan out of a hundred, and a better plan scores higher', () => {
+    const empty = planWeek(today, []);
+    expect(empty.strengthNow.score).toBe(0);
+    const open = Array.from({ length: 7 }, (_, i) => task(`o${i}`));
+    const p = planWeek(today, open);
+    expect(p.strengthWith.score).toBeGreaterThan(p.strengthNow.score);
+    expect(p.strengthWith.score).toBeLessThanOrEqual(100);
+    expect(p.strengthWith.parts.reduce((a, x) => a + x.max, 0)).toBe(100);
+    expect(planStrength([{ min: 600, tasks: 3 }], PLAN_DAY_MINUTES, 0, 3).parts[1]!.score).toBe(0);
+  });
+  it('writes nothing and is the same every time for the same week', () => {
+    const t = [task('a'), task('b', { priority: 1 }), task('c')];
+    expect(JSON.stringify(planWeek(today, t))).toBe(JSON.stringify(planWeek(today, t)));
+  });
+});
+
+describe('time blocks', () => {
+  it('lays timed tasks out as blocks with their length, and finds the free time between', () => {
+    const d = dayBlocks([
+      { id: 'a', title: 'Edit', dueTime: '09:00', estimateMin: 90 },
+      { id: 'b', title: 'Call', dueTime: '13:00', estimateMin: 30 },
+      { id: 'c', title: 'Someday', dueTime: null, estimateMin: 20 },
+    ]);
+    expect(d.blocks.map((b) => [b.start, b.end])).toEqual([[540, 630], [780, 810]]);
+    expect(d.free).toEqual([{ start: 630, end: 780 }]);
+    expect(d.untimed).toBe(1);
+  });
+  it('flags a block that starts before the one before it ends, and gives an untimed length of thirty minutes', () => {
+    const d = dayBlocks([{ id: 'a', title: 'A', dueTime: '10:00', estimateMin: 60 }, { id: 'b', title: 'B', dueTime: '10:30', estimateMin: null }]);
+    expect(d.blocks[1]!.overlaps).toBe(true);
+    expect(d.blocks[1]!.end - d.blocks[1]!.start).toBe(30);
+    expect(d.free).toEqual([]);
+  });
+  it('reads a time of day plainly', () => {
+    expect(blockTimeLabel(540)).toBe('9 am');
+    expect(blockTimeLabel(13 * 60 + 5)).toBe('1:05 pm');
+    expect(blockTimeLabel(0)).toBe('12 am');
+    expect(blockTimeLabel(12 * 60)).toBe('12 pm');
+  });
+});
+
+describe('a project\'s pace', () => {
+  it('is on track when the share of tasks done keeps up with the time gone', () => {
+    const p = projectPace('2026-10-01T08:00:00Z', '2026-10-31', 15, 30, '2026-10-16');
+    expect(p).toMatchObject({ status: 'on', day: 16, of: 31 });
+    expect(p.line).toMatch(/Day 16 of 31/);
+  });
+  it('slips, then falls behind, as the gap grows', () => {
+    expect(projectPace('2026-10-01T00:00:00Z', '2026-10-31', 8, 30, '2026-10-16').status).toBe('slipping');
+    expect(projectPace('2026-10-01T00:00:00Z', '2026-10-31', 1, 30, '2026-10-16').status).toBe('behind');
+  });
+  it('is behind once past its due day with tasks left, and on track when everything is done', () => {
+    expect(projectPace('2026-10-01T00:00:00Z', '2026-10-10', 3, 5, '2026-10-20').status).toBe('behind');
+    expect(projectPace('2026-10-01T00:00:00Z', '2026-10-10', 5, 5, '2026-10-20').status).toBe('on');
+  });
+  it('has no pace to judge without a due day or tasks, and never counts a day before the start', () => {
+    expect(projectPace('2026-10-01T00:00:00Z', null, 1, 2, '2026-10-05').status).toBe('none');
+    expect(projectPace('2026-10-01T00:00:00Z', '2026-10-31', 0, 0, '2026-10-05').status).toBe('none');
+    expect(projectPace('2026-10-10T00:00:00Z', '2026-10-31', 0, 4, '2026-10-05').day).toBe(1);
+  });
+});
+
+describe('focus quality', () => {
+  it('has five named steps and names a rating plainly', () => {
+    expect(FOCUS_QUALITY.map((q) => q.value)).toEqual([1, 2, 3, 4, 5]);
+    expect(focusQualityName(4)).toBe('Focused');
+    expect(focusQualityName(3.6)).toBe('Focused');
+    expect(focusQualityName(null)).toBe('Not rated');
+  });
+});
+
+import { buildCalendar, icsEscape, icsFold, type IcsTask } from './index';
+
+describe('the private calendar', () => {
+  const t = (o: Partial<IcsTask> = {}): IcsTask => ({ id: 'n1', title: 'Edit the reel', relationship: 'servant_leader', day: '2026-11-03', dueTime: null, estimateMin: null, priority: null, ...o });
+  const now = new Date('2026-11-01T10:00:00Z');
+  it('is a calendar file with CRLF lines and one event for each task', () => {
+    const f = buildCalendar([t(), t({ id: 'n2' })], 'Asia/Kolkata', now);
+    expect(f.startsWith('BEGIN:VCALENDAR\r\n')).toBe(true);
+    expect(f.endsWith('END:VCALENDAR\r\n')).toBe(true);
+    expect(f.match(/BEGIN:VEVENT/g)?.length).toBe(2);
+    expect(f.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/);
+  });
+  it('puts a timed task at its time in the person\'s zone, as long as its estimate', () => {
+    const f = buildCalendar([t({ dueTime: '09:00', estimateMin: 90 })], 'Asia/Kolkata', now);
+    expect(f).toContain('DTSTART:20261103T033000Z');
+    expect(f).toContain('DTEND:20261103T050000Z');
+  });
+  it('makes a task with no time an all-day event, and gives a short one thirty minutes', () => {
+    expect(buildCalendar([t()], 'Asia/Kolkata', now)).toContain('DTSTART;VALUE=DATE:20261103\r\nDTEND;VALUE=DATE:20261104');
+    expect(buildCalendar([t({ dueTime: '10:00' })], 'UTC', now)).toContain('DTEND:20261103T103000Z');
+  });
+  it('escapes what would break the file, and folds long lines', () => {
+    expect(icsEscape('a, b; c\\d\ne')).toBe('a\\, b\\; c\\\\d\\ne');
+    const long = icsFold(`SUMMARY:${'x'.repeat(200)}`);
+    for (const line of long.split('\r\n')) expect(line.length).toBeLessThanOrEqual(71);
+  });
+  it('carries the title, the pillar and the priority and nothing else', () => {
+    const f = buildCalendar([t({ priority: 0 })], 'UTC', now);
+    expect(f).toContain('SUMMARY:Edit the reel');
+    expect(f).toContain('PRIORITY:1');
+    expect(f).toContain('CATEGORIES:');
+    expect(f).not.toMatch(/NOTE|journal|mood/i);
   });
 });

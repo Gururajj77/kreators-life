@@ -61,6 +61,7 @@ import { media, mediaPublic } from './routes/media';
 import { reminders } from './routes/reminders';
 import { agency, agencyPublic } from './routes/agency';
 import { kpis } from './routes/kpis';
+import { calendarMe, calendarPublic } from './routes/calendar';
 import { agencyDocs, contractsPublic } from './routes/agencyDocs';
 import { connect } from './routes/connect';
 import { logger, pruneLogs, writeClientError, writeLog } from './logs';
@@ -90,6 +91,7 @@ app.route('/public/certificates', certificates);
 app.route('/public/invoices', publicInvoices);
 app.route('/public/agency', agencyPublic);
 app.route('/public/contracts', contractsPublic);
+app.route('/public/calendar', calendarPublic);
 app.route('/public', publicPage);
 // Webhooks verify their own signatures.
 app.route('/webhooks', webhooks);
@@ -127,6 +129,7 @@ for (const r of ROUTE_LIMITS) if (!isOpenDoor(r.path)) app.on(r.method, r.path, 
 
 // The student's side of coaching is core, so it is mounted before the rest of /me and never gated.
 app.route('/me/coach', myCoach);
+app.route('/me/calendar', calendarMe);
 app.route('/me', me);
 app.route('/onboarding', onboarding);
 app.route('/session', session);

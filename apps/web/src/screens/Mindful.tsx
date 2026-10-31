@@ -133,7 +133,15 @@ export function Mindful() {
       </section>
 
       <FocusRounds
-        onRound={(m, nodeId) => void api.logFocus(m, nodeId, todayLocal()).then(() => qc.invalidateQueries({ queryKey: ['focus'] })).catch(() => undefined)}
+        onRound={(m, nodeId) =>
+          api
+            .logFocus(m, nodeId, todayLocal())
+            .then((r) => {
+              void qc.invalidateQueries({ queryKey: ['focus'] });
+              return r.id;
+            })
+            .catch(() => undefined)
+        }
         onLog={(m, kind) =>
           void api.log('mindful', { date: todayLocal(), value: m, extra: { kind } }).then(() => {
             refresh();

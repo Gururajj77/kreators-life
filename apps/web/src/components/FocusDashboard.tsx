@@ -1,8 +1,9 @@
-import { FOCUS_VIEWS, RELATIONSHIP_BY_KEY, type FocusView } from '@kreators/shared';
+import { FOCUS_VIEWS, focusQualityName, RELATIONSHIP_BY_KEY, type FocusView } from '@kreators/shared';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { useSession } from '../lib/store';
+import { bento } from '../lib/bento';
 import { useParamState } from '../lib/useParamState';
 import { HBars, PillBars, StatTile } from './Charts';
 import { Section } from './Section';
@@ -64,11 +65,25 @@ export function FocusDashboard() {
 
       {d && (
         <>
-          <div className="mt-sm grid grid-cols-2 gap-xs md:grid-cols-4">
-            <StatTile label="Focus time" value={show(d.totals.minutes, unit)} hint={`${d.totals.rounds} ${d.totals.rounds === 1 ? 'session' : 'sessions'}`} />
-            <StatTile label="Tasks ticked" value={d.totals.tasksDone} hint="in the same stretch" />
-            <StatTile label="Active" value={`${d.totals.activeBuckets} of ${d.buckets.length}`} hint={view === 'day' ? 'days with a session' : view === 'week' ? 'weeks with a session' : 'months with a session'} />
-            <StatTile label="Best" value={d.best ? show(d.best.minutes, unit) : 'None yet'} hint={d.best ? d.best.label : 'Finish a session'} />
+          <div className="mt-sm grid grid-cols-2 gap-xs md:grid-cols-5">
+            <StatTile className={bento(0, 5, 2, 5)} label="Focus time" value={show(d.totals.minutes, unit)} hint={`${d.totals.rounds} ${d.totals.rounds === 1 ? 'session' : 'sessions'}`} />
+            <StatTile
+              className={bento(1, 5, 2, 5)}
+              label="Focus quality"
+              value={
+                d.totals.quality === null ? (
+                  '—'
+                ) : (
+                  <>
+                    {d.totals.quality} <span className="text-[14px] font-bold text-ink-soft">{focusQualityName(d.totals.quality)}</span>
+                  </>
+                )
+              }
+              hint={d.totals.rated > 0 ? `${d.totals.rated} ${d.totals.rated === 1 ? 'session' : 'sessions'} rated` : 'Rate a session to see it'}
+            />
+            <StatTile className={bento(2, 5, 2, 5)} label="Tasks ticked" value={d.totals.tasksDone} hint="in the same stretch" />
+            <StatTile className={bento(3, 5, 2, 5)} label="Active" value={`${d.totals.activeBuckets} of ${d.buckets.length}`} hint={view === 'day' ? 'days with a session' : view === 'week' ? 'weeks with a session' : 'months with a session'} />
+            <StatTile className={bento(4, 5, 2, 5)} label="Best" value={d.best ? show(d.best.minutes, unit) : 'None yet'} hint={d.best ? d.best.label : 'Finish a session'} />
           </div>
           <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{d.trend}</p>
 

@@ -14,7 +14,7 @@ import type { DailyBrief, GettingStarted, InboxShow, InboxTab, ReactionKind } fr
 import type { AdminCoachAsk, AdminCoachLink, CoachDirectoryEntry, CoachHub, CoachLink, CoachLogEntry, CoachProfile, CoachShare, CoachStudentView, CoachTaskInput, MyCoachResponse } from '@kreators/shared';
 import type { CustomReminder, RemindersResponse, WaterState, BlockedPerson, EventApp, EventExtras, LinkBlock, MediaItem, MediaOwner } from '@kreators/shared';
 import type { ObservabilityResponse } from '@kreators/shared';
-import type { AgencyTemplate, TemplateKind, AgencyClient, AgencyClientPage, AgencyContract, AgencyDeliverable, AgencyNote, AgencyOverview, AgencySettings, BoardColumn, BusinessProfile, ContractAnswer, ContractDoc, ContractListItem, DeliverableStage, DocComment, DocType, InvoiceDoc, InvoiceParty, Kpi, KpisResponse, Page as AgencyPage, PortalShow, PortalView, PublicContract } from '@kreators/shared';
+import type { WeekPlan, AgencyTemplate, TemplateKind, AgencyClient, AgencyClientPage, AgencyContract, AgencyDeliverable, AgencyNote, AgencyOverview, AgencySettings, BoardColumn, BusinessProfile, ContractAnswer, ContractDoc, ContractListItem, DeliverableStage, DocComment, DocType, InvoiceDoc, InvoiceParty, Kpi, KpisResponse, Page as AgencyPage, PortalShow, PortalView, PublicContract } from '@kreators/shared';
 import type {
   HomeResponse,
   PublicSettings,
@@ -373,6 +373,10 @@ export const api = {
   focusTasks: () => request<{ tasks: FocusTask[] }>('/wellbeing/focus/tasks'),
   focusSettings: () => request<{ settings: FocusSettings | null }>('/wellbeing/focus-settings'),
   saveFocusSettings: (settings: FocusSettings) => put<{ settings: FocusSettings }>('/wellbeing/focus-settings', { settings }),
+  focusQuality: (id: string, quality: number | null) => patch<{ ok: true }>(`/wellbeing/focus/${id}`, { quality }),
+  weekPlan: (date: string, hours?: number) => request<{ plan: WeekPlan }>(`/today/week-plan?date=${date}${hours ? `&hours=${hours}` : ''}`),
+  calendarLink: () => request<{ enabled: boolean; token: string | null }>('/me/calendar'),
+  calendarSwitch: (body: { on?: boolean; fresh?: boolean }) => post<{ enabled: boolean; token: string | null }>('/me/calendar', body),
   logFocus: (minutes: number, nodeId: string | null, date: string) => post<{ ok: true; id: string }>('/wellbeing/focus', { minutes, date, ...(nodeId ? { nodeId } : {}) }),
   focusDashboard: (view: FocusView, date: string) => request<FocusResponse>(`/wellbeing/focus?view=${view}&date=${date}`),
   appLogs: (params: string, paging: string) => request<LogsResponse>(withQ(`/internal/logs?${params}`, paging)),

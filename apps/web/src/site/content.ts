@@ -14,7 +14,7 @@ export const FEATURES: Record<string, FeatureCopy> = {
   today: {
     tagline: 'Three small boxes. One better day.',
     pitch: 'Check in, do one small act, tick one task. That is the whole daily ask. Every tick pays xp, and the check-in pays points you can spend. Every task has a do date and an optional due date, a priority from P0 (do now) to P3 (whenever), each in its own colour, and can repeat, hold subtasks, remind you and start a focus timer. Tasks with no date wait in a list until you pick one. Under the tasks, a not-to-do list keeps a streak for each thing you are staying away from.',
-    steps: ['Open the app and check in.', 'Do the small act for your weakest pillar.', 'Plan a task: pick its day, its priority and how long it takes. Tick it on its day and watch the pyramid light up.'],
+    steps: ['Open the app and check in.', 'Do the small act for your weakest pillar.', 'Plan a task, or the whole week: pick days and times, and let Plan my week suggest the rest. Tick each on its day and watch the pyramid light up.'],
     relationships: ['servant_leader', 'friendship', 'parent_child', 'lover_partner', 'self', 'guru', 'divine'],
   },
   tower: {

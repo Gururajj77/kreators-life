@@ -278,6 +278,7 @@ me.get('/export', async (c) => {
     ['waterLogs', 'SELECT * FROM water_logs WHERE user_id = ?'],
     ['reminderPrefs', 'SELECT * FROM reminder_prefs WHERE user_id = ?'],
     ['focusPrefs', 'SELECT * FROM focus_prefs WHERE user_id = ?'],
+    ['calendarFeed', 'SELECT user_id, enabled, created_at FROM calendar_feeds WHERE user_id = ?'],
     ['customReminders', 'SELECT * FROM custom_reminders WHERE user_id = ?'],
     ['agencySettings', 'SELECT * FROM agency_settings WHERE user_id = ?'],
     ['agencyClients', 'SELECT * FROM agency_clients WHERE user_id = ?'],

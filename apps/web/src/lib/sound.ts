@@ -100,6 +100,14 @@ const slow = (c: AudioContext, hz: number, depth: number, target: AudioParam) =>
   return lfo; // started by `play`, once. A second start throws and would leave the other sources playing.
 };
 
+/** A very short burst of noise, for a hat. */
+function noiseBurst(c: AudioContext): AudioBuffer {
+  const buf = c.createBuffer(1, Math.floor(c.sampleRate * 0.06), c.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i += 1) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+  return buf;
+}
+
 /** Start a background sound. `volume` is 0 to 100. Returns null where there is no audio. Fades in, and fades out when stopped. */
 export function startAmbient(kind: Exclude<AmbientKind, 'off'>, volume: number): Ambient | null {
   const c = audio();
@@ -176,7 +184,129 @@ export function startAmbient(kind: Exclude<AmbientKind, 'off'>, volume: number):
       play(a);
       play(slow(c, 0.06, 280, bp.frequency));
       play(slow(c, 0.11, 0.25, g.gain));
-    } else {
+  
+    } else if (kind === 'lofi') {
+      // Slow, mellow chords (I, vi, ii, V in C), a soft low beat and hat, a little tape wobble and a bed of vinyl crackle.
+      const BEAT = 60 / 70;
+      const BAR = BEAT * 4;
+      const CHORDS: readonly (readonly number[])[] = [
+        [130.81, 164.81, 196.0, 246.94],
+        [110.0, 130.81, 164.81, 196.0],
+        [146.83, 174.61, 220.0, 261.63],
+        [123.47, 146.83, 174.61, 196.0],
+      ];
+      const tone = c.createBiquadFilter();
+      tone.type = 'lowpass';
+      tone.frequency.value = 1150;
+      tone.Q.value = 0.4;
+      const bus = c.createGain();
+      bus.gain.value = 0.9;
+      tone.connect(bus).connect(out);
+      const wow = c.createGain();
+      wow.gain.value = 7;
+      const wobble = c.createOscillator();
+      wobble.frequency.value = 0.33;
+      wobble.connect(wow);
+      play(wobble);
+      const live = new Set<AudioScheduledSourceNode>();
+      const voice = (osc: AudioScheduledSourceNode, at: number, end: number) => {
+        osc.start(at);
+        osc.stop(end);
+        live.add(osc);
+        osc.onended = () => live.delete(osc);
+      };
+      stoppers.push(() => {
+        live.forEach((o) => {
+          try {
+            o.stop();
+          } catch {
+            // already ended
+          }
+        });
+        live.clear();
+      });
+      const tick = noiseBurst(c);
+      const scheduleBar = (at: number, n: number) => {
+        const chord = CHORDS[n % CHORDS.length]!;
+        const end = at + BAR + 0.5;
+        chord.forEach((hz, i) => {
+          for (const cents of [-5, 5]) {
+            const o = c.createOscillator();
+            o.type = 'triangle';
+            o.frequency.value = hz;
+            o.detune.value = cents;
+            wow.connect(o.detune);
+            const g = c.createGain();
+            g.gain.setValueAtTime(0.0001, at + i * 0.03);
+            g.gain.linearRampToValueAtTime(0.045, at + 0.35 + i * 0.03);
+            g.gain.linearRampToValueAtTime(0.03, at + BAR);
+            g.gain.linearRampToValueAtTime(0.0001, end);
+            o.connect(g).connect(tone);
+            voice(o, at, end + 0.05);
+          }
+        });
+        const bass = c.createOscillator();
+        bass.type = 'sine';
+        bass.frequency.value = Math.min(...chord) / 2;
+        const bg = c.createGain();
+        bg.gain.setValueAtTime(0.0001, at);
+        bg.gain.linearRampToValueAtTime(0.16, at + 0.12);
+        bg.gain.linearRampToValueAtTime(0.0001, at + BAR);
+        bass.connect(bg).connect(bus);
+        voice(bass, at, at + BAR + 0.05);
+        // A soft kick on the first and third beat, a hat on the off-beats.
+        for (const b of [0, 2]) {
+          const k = c.createOscillator();
+          const kg = c.createGain();
+          k.type = 'sine';
+          k.frequency.setValueAtTime(110, at + b * BEAT);
+          k.frequency.exponentialRampToValueAtTime(45, at + b * BEAT + 0.14);
+          kg.gain.setValueAtTime(0.0001, at + b * BEAT);
+          kg.gain.exponentialRampToValueAtTime(0.28, at + b * BEAT + 0.01);
+          kg.gain.exponentialRampToValueAtTime(0.0001, at + b * BEAT + 0.22);
+          k.connect(kg).connect(bus);
+          voice(k, at + b * BEAT, at + b * BEAT + 0.25);
+        }
+        for (const b of [0.5, 1.5, 2.5, 3.5]) {
+          const h = c.createBufferSource();
+          h.buffer = tick;
+          const hp = c.createBiquadFilter();
+          hp.type = 'highpass';
+          hp.frequency.value = 6500;
+          const hg = c.createGain();
+          hg.gain.value = b % 1 === 0.5 && b !== 2.5 ? 0.05 : 0.03;
+          h.connect(hp).connect(hg).connect(bus);
+          voice(h, at + b * BEAT, at + b * BEAT + 0.08);
+        }
+      };
+      // Keep a few seconds of music scheduled ahead, a bar at a time.
+      let next = c.currentTime + 0.1;
+      let bar = 0;
+      const fill = () => {
+        while (next < c.currentTime + 7) {
+          scheduleBar(next, bar);
+          next += BAR;
+          bar += 1;
+        }
+      };
+      fill();
+      const timer = window.setInterval(fill, 600);
+      stoppers.push(() => window.clearInterval(timer));
+      // Vinyl: faint hiss and sparse crackle that loops.
+      const vinyl = c.createBuffer(1, c.sampleRate * 5, c.sampleRate);
+      const vd = vinyl.getChannelData(0);
+      for (let i = 0; i < vd.length; i += 1) vd[i] = (Math.random() * 2 - 1) * 0.012 + (Math.random() < 0.00035 ? (Math.random() * 2 - 1) * 0.5 : 0);
+      const vs = c.createBufferSource();
+      vs.buffer = vinyl;
+      vs.loop = true;
+      const vhp = c.createBiquadFilter();
+      vhp.type = 'highpass';
+      vhp.frequency.value = 1800;
+      const vg = c.createGain();
+      vg.gain.value = 0.7;
+      vs.connect(vhp).connect(vg).connect(out);
+      play(vs);
+  } else {
       // A low, warm hum: three sines, a fifth and an octave apart, breathing slowly.
       const g = c.createGain();
       g.gain.value = 0.5;

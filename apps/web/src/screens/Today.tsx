@@ -7,6 +7,7 @@ import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { useCelebrate } from '../components/Celebration';
 import { CheckRow } from '../components/CheckRow';
+import { DayBlocks } from '../components/DayBlocks';
 import { EvolutionReveal } from '../components/EvolutionReveal';
 import { GuideCard, useGuide } from '../components/Guide';
 import { NotToDoBlock } from '../components/NotToDoList';
@@ -17,6 +18,7 @@ import { Screen } from '../components/Screen';
 import { RemindersSection } from '../components/Reminders';
 import { TaskRow } from '../components/TaskRow';
 import { TaskPanel } from '../components/TaskPlan';
+import { WeekPlanButton } from '../components/WeekPlan';
 import { api } from '../lib/api';
 import { prettyDate } from '../lib/date';
 import { useMe, useRefreshAll, useToday } from '../lib/queries';
@@ -239,7 +241,10 @@ export function Today() {
               <h2 id="tasks-heading" className="text-[18px]">
                 Tasks
               </h2>
-              {tasks.length > 0 && <span className="text-[14px] font-bold text-ink-soft">{tasks.length} waiting</span>}
+              <div className="flex flex-wrap items-center justify-end gap-sm">
+                {tasks.length > 0 && <span className="text-[14px] font-bold text-ink-soft">{tasks.length} waiting</span>}
+                <WeekPlanButton />
+              </div>
             </div>
             {(tasks.length > 1 || backlog.length > 1) && (
               <div className="mt-xs flex flex-wrap items-center gap-xs" role="group" aria-label="Sort tasks by">
@@ -264,6 +269,7 @@ export function Today() {
                 </div>
               </div>
             )}
+            <DayBlocks tasks={tasks.filter((t) => (t.doDate ?? t.dueDate) === date)} />
             {tasks.length > 0 ? (
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                 <AnimatePresence initial={false}>

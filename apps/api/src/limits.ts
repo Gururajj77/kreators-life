@@ -111,6 +111,8 @@ export const ROUTE_LIMITS: readonly { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE
   { method: 'POST', path: '/coach/apply', limit: 'coachAsk' },
   { method: 'POST', path: '/discover/submit', limit: 'discover' },
   { method: 'PUT', path: '/wellbeing/focus-settings', limit: 'prefs' },
+  { method: 'PATCH', path: '/wellbeing/focus/:id', limit: 'prefs' },
+  { method: 'POST', path: '/me/calendar', limit: 'prefs' },
   { method: 'POST', path: '/discover/more/:kind/submit', limit: 'discover' },
   { method: 'POST', path: '/public/client-error', limit: 'clientError' },
   { method: 'POST', path: '/coach/students/:id/notes', limit: 'coachWrite' },

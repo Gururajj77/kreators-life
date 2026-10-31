@@ -1,5 +1,5 @@
-import { BREAK_BEATS, FOCUS_PRESETS, RELATIONSHIP_BY_KEY, type FocusSettings } from '@kreators/shared';
-import { useQuery } from '@tanstack/react-query';
+import { BREAK_BEATS, FOCUS_PRESETS, FOCUS_QUALITY, focusQualityName, RELATIONSHIP_BY_KEY, type FocusSettings } from '@kreators/shared';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
@@ -77,8 +77,12 @@ function Stepper({ label, value, min, max, onChange, unit = '', hint, className 
  * in moves its end; the "adjust this part" buttons change only the part you are in. The clock runs on an end time, so a background tab stays
  * right. A round can be pointed at one of your tasks; a finished round is kept, with the task, for the dashboard.
  */
-export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind: 'break' | 'focus') => void; onRound: (minutes: number, nodeId: string | null) => void }) {
+export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind: 'break' | 'focus') => void; onRound: (minutes: number, nodeId: string | null) => void | Promise<string | void | undefined> }) {
   const reduce = useReducedMotion();
+  const qc = useQueryClient();
+  // How the last finished focus session felt. Asked after a session, never in the way of the clock; a rating is private and pays nothing.
+  const [rate, setRate] = useState<{ id: string | null; mode: 'ask' | 'rated'; value: number | null; failed: boolean } | null>(null);
+  const rateSeq = useRef(0);
   const token = useSession((s) => s.token);
   const { settings, set: setPrefs, ready } = useFocusPrefs();
   const fromUrl = useRef(false);
@@ -201,9 +205,21 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
           } catch {
             // not kept
           }
-          onRound(minutes, taskId || null);
+          const made = onRound(minutes, taskId || null);
+          rateSeq.current += 1;
+          const mine = rateSeq.current;
+          setRate({ id: null, mode: 'ask', value: null, failed: false });
+          // The round's id arrives a moment later; it only goes to the round it belongs to.
+          void Promise.resolve(made)
+            .then((id) => {
+              if (typeof id === 'string' && rateSeq.current === mine) setRate((r) => (r && r.id === null ? { ...r, id } : r));
+            })
+            .catch(() => undefined);
           if (settings.logFocus) onLog(minutes, 'focus');
-        } else if (settings.logBreaks) onLog(minutes, 'break');
+        } else {
+          setRate(null);
+          if (settings.logBreaks) onLog(minutes, 'break');
+        }
       }
       const go = counted && settings.auto;
       if (wasFocus) {
@@ -253,6 +269,7 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
 
   const start = () => {
     unlockAudio();
+    setRate(null);
     setFinished(false);
     endsAt.current = Date.now() + leftMs;
     setRunning(true);
@@ -264,7 +281,23 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
     setRunning(false);
     setSaid('Paused.');
   };
+  const rateIt = (value: number) => {
+    if (!rate || !rate.id) return;
+    const id = rate.id;
+    setRate({ ...rate, mode: 'rated', value, failed: false });
+    void api
+      .focusQuality(id, value)
+      .then(() => qc.invalidateQueries({ queryKey: ['focus'] }))
+      .catch(() => setRate((r) => (r && r.id === id ? { ...r, mode: 'ask', value: null, failed: true } : r)));
+  };
+  // A rating shows for a few seconds, then folds away. "Change" brings the choices back.
+  useEffect(() => {
+    if (rate?.mode !== 'rated') return;
+    const t = window.setTimeout(() => setRate(null), 7000);
+    return () => window.clearTimeout(t);
+  }, [rate?.mode, rate?.value]);
   const reset = () => {
+    setRate(null);
     endsAt.current = null;
     setRunning(false);
     setRound(1);
@@ -317,6 +350,47 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
           ? 'All the runs are done. Start again whenever you like.'
           : `Session ${round} of ${settings.every}${settings.cycles > 0 ? `, run ${cycle} of ${settings.cycles}` : ''}. ${isBreak ? 'Breathe in as the circle grows, out as it shrinks.' : picked ? `On it: ${picked.title}` : 'One thing at a time.'}`}
       </p>
+
+      {rate && (
+        <div className="mt-sm rounded-tile bg-card p-sm text-left" role="group" aria-label="How focused you were">
+          {rate.mode === 'rated' ? (
+            <div className="flex items-center justify-between gap-sm">
+              <p className="m-0 text-[14px] font-bold" role="status">
+                Rated {focusQualityName(rate.value)}
+              </p>
+              <Button variant="ghost" size="sm" onClick={() => setRate({ ...rate, mode: 'ask' })}>
+                Change
+              </Button>
+            </div>
+          ) : (
+            <>
+              <p className="m-0 text-[14px] font-extrabold">How focused were you?</p>
+              <div className="mt-xs flex flex-wrap gap-xs">
+                {FOCUS_QUALITY.map((q) => (
+                  <button
+                    key={q.value}
+                    type="button"
+                    disabled={!rate.id}
+                    onClick={() => rateIt(q.value)}
+                    aria-pressed={rate.value === q.value}
+                    className="toy toy-soft min-h-[44px] rounded-pill border-2 border-line bg-card-strong px-sm text-[14px] font-bold"
+                  >
+                    {q.name}
+                  </button>
+                ))}
+                <Button variant="ghost" size="sm" onClick={() => setRate(null)}>
+                  Skip
+                </Button>
+              </div>
+              {rate.failed && (
+                <p role="alert" className="mt-xs m-0 text-[12px] font-bold">
+                  That did not save. Try again.
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {/* The task for the session: one of your own, still to do. Changing it takes effect from the next session that ends. */}
       <label className="mt-sm block text-left">

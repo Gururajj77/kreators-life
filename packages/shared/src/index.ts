@@ -5234,6 +5234,8 @@ export const TERMS: Record<string, string> = {
   'five areas of life': 'Physical, financial, emotional, mental and spiritual: another way to read the seven relationships.',
   period: 'A week, a month, a quarter or half a year, for a review or a dashboard filter.',
   review: 'Your own look back at a period: the numbers from every app, then your answers.',
+  'plan strength': 'How well the week is planned: days with something on them, days that are not overloaded, and tasks that say how long they take.',
+  pace: 'Whether a project is moving as fast as its due day needs: on track, slipping or behind.',
   retainer: 'What a client pays you each month for an agreed amount of work.',
   deliverable: 'One item of content you make for a client: a video, a post, a script, a newsletter. It moves from idea to published.',
   'client link': 'A page you can share with a client. They see what is waiting for them and can approve it or send it back. Nothing else.',
@@ -5309,7 +5311,7 @@ export const TERM_GROUPS: { name: string; terms: string[] }[] = [
   { name: 'Daily and progress', terms: ['small act', 'check-in', 'daily three', 'do date', 'due date', 'priority', 'habit', 'subtask', 'remember', 'not scheduled', 'daily brief', 'not-to-do', 'kept day', 'streak', 'xp', 'points', 'level', 'who you are becoming', 'life score', 'five areas of life', 'period', 'review', 'season'] },
   { name: 'You and your page', terms: ['strength', 'personality type', 'love language', 'signs', 'human design', 'gate', 'channel', 'sidereal', 'numerology', 'master number', 'username', 'identity tag', 'setup chat', 'public page', 'badge', 'honor', 'trust', 'unlock'] },
   { name: 'Friends and community', terms: ['friend code', 'alias', 'circle', 'reaction', 'mention', 'guide', 'life coach', 'student', 'change log', 'run club', 'start code', 'attendee code', 'deck', 'focus mode', 'focus session'] },
-  { name: 'Learn and earn', terms: ['cohort', 'campaign', 'bounty', 'Club', 'collab', 'giveaway', 'retainer', 'deliverable', 'client link', 'utilisation', 'first pass'] },
+  { name: 'Learn and earn', terms: ['cohort', 'campaign', 'bounty', 'Club', 'collab', 'giveaway', 'retainer', 'deliverable', 'client link', 'utilisation', 'first pass', 'plan strength', 'pace'] },
   { name: 'Shop and store', terms: ['featured', 'partner link', 'pre-owned', 'kit', 'offer'] },
   { name: 'Content', terms: ['brand folder', 'outlier', 'hook', 'piece'] },
   { name: 'Assistant and plans', terms: ['bumling', 'assistant', 'Pro', 'credits', 'top-up'] },
@@ -5359,10 +5361,10 @@ export const HOW_TO: Record<string, HowTo> = {
       'Daily is three boxes a day: check in, do the small act, tick one task. Checking in pays 10 xp and 10 points and keeps your streak; every seventh day in a row pays 50 points more. The small act is a two-minute thing for your weakest pillar and pays 15 xp. Your routine from the strategy session sits under the first box.',
       'Tasks come from the pillars you set up. Each pays 20 xp and sends a ripple up its pyramid. A task has a do date, the day you will do it, and can have a due date, the deadline. It shows here from its do date and cannot be ticked before it. After its due date it says Overdue, but you can still tick it. A new task waits ten minutes before it can be ticked.',
       'Tap the pencil on a task to plan it. Tag it P0 (do now), P1, P2 or P3 (whenever), in red, orange, purple and grey, and sort the list by day, priority or due date. Make it repeat every day, week, month or year, and the next one appears when you tick it; that makes it a habit. Add subtasks, say how many minutes it takes, tag it Remember, and start a focus session on it. Remember tasks with no day wait in a To remember list on Daily, and with a day they also send a note to your inbox.',
-      'A task with no date waits under Not scheduled yet. It stays out of Tasks until you pick a do date or a due date, and then it moves up.',
+      'A task with no date waits under Not scheduled yet. It stays out of Tasks until you pick a do date or a due date, and then it moves up. Plan my week suggests a day for each one, spread so no day is overloaded, and shows how strong the plan is; nothing changes until you keep it. Tasks with a time show as time blocks, with the free time between.',
       'Under the tasks, the not-to-do list holds up to seven things you are staying away from. Tick one to say you kept it today: a kept day pays 5 xp and grows that item’s streak. At the bottom, who you are becoming shows the figure your xp is filling in.',
     ],
-    terms: ['daily three', 'check-in', 'small act', 'task', 'do date', 'due date', 'priority', 'habit', 'subtask', 'remember', 'not scheduled', 'not-to-do', 'kept day', 'who you are becoming', 'routine', 'assistant'],
+    terms: ['daily three', 'check-in', 'small act', 'task', 'do date', 'due date', 'priority', 'plan strength', 'habit', 'subtask', 'remember', 'not scheduled', 'not-to-do', 'kept day', 'who you are becoming', 'routine', 'assistant'],
   },
   tower: {
     steps: [
@@ -5370,9 +5372,9 @@ export const HOW_TO: Record<string, HowTo> = {
       'Each pillar is a pyramid with six layers. The foundation is the one thing you will not let break. The guiding principle is a line you live by so it holds. The value goal is how you want to feel more often. The goal outcome is what you would see when that is real. Then a project, and tasks at the tip.',
       'Your answers build the first four layers; you pick or write the project and its tasks. Tick a task on Daily and the glow runs up to the foundation: 20 xp for the task, then a smaller ripple to each layer above it. Clear every task in a project for 30 xp more.',
       'Every pillar has a level and a character that grows with it. The weakest pillar is the one that sends your small act.',
-      'Open a pillar to see its pyramid, add tasks, give them dates and times, and archive what no longer fits.',
+      'Open a pillar to see its pyramid, add tasks, give them dates and times, and archive what no longer fits. A project with a due day shows its pace: on track, slipping or behind, from how many tasks are done against how much time has gone.',
     ],
-    terms: ['pillar', 'pyramid', 'foundation', 'guiding principle', 'value goal', 'goal outcome', 'project', 'task', 'ripple', 'strategy session', 'life map', 'core', 'floor', 'assistant'],
+    terms: ['pillar', 'pyramid', 'foundation', 'guiding principle', 'value goal', 'goal outcome', 'project', 'task', 'ripple', 'strategy session', 'life map', 'core', 'floor', 'pace', 'assistant'],
   },
   apps: {
     steps: [
@@ -5556,9 +5558,9 @@ export const HOW_TO: Record<string, HowTo> = {
   },
   mindful: {
     steps: [
-      'Pick a length and breathe with the circle. The timer can play a background sound, such as rain, ocean, wind or a soft hum, that fades out when it stops.',
+      'Pick a length and breathe with the circle. The timer can play a background sound, such as rain, ocean, wind, a soft hum or slow lo-fi chords, that fades out when it stops.',
       'Or work in focus sessions. The classic is 25 minutes of focus and a 5 minute mini break, four times, then a 30 minute long break. Change any length, how many sessions come before the long break, and how many times it runs, even while it runs. Point a session at one of your tasks.',
-      'The minutes log themselves when the timer ends. A finished focus session counts as mindful minutes, and a finished break counts only if you switch that on. Starting the next part by itself is off until you switch it on. A chart shows your focus time and tasks ticked by day, week or month, in minutes or hours.',
+      'The minutes log themselves when the timer ends, and after a focus session you can rate how focused you were, from scattered to deep. The dashboard shows the average, for you alone. A finished focus session counts as mindful minutes, and a finished break counts only if you switch that on. Starting the next part by itself is off until you switch it on. A chart shows your focus time and tasks ticked by day, week or month, in minutes or hours.',
       'Sounds: one soft beat marks a mini break and three mark the long break. One switch turns every sound and alarm off at once, and your other choices are kept. All your timer choices are saved on your account, so they follow you to every device.',
       'Sixty minutes a week scores full marks. The minutes count in Life twice: as breath under physical and as stillness under spiritual.',
     ],
@@ -6172,6 +6174,9 @@ export interface SupportTicket {
 }
 
 export const HELP_FAQ = [
+  { q: 'What does Plan my week do?', a: 'On Daily, it looks at your open tasks and suggests a day for each one that has none. It puts the most important first and spreads them so no day is overloaded. It also shows how strong the plan is, out of a hundred, and a few notes on what to look at. Nothing changes until you tap Keep. It uses rules, not an AI, so it costs no credits.' },
+  { q: 'How do I see my tasks in Google, Apple or Outlook Calendar?', a: 'Under Profile, switch on Calendar. You get a private address to subscribe to in your calendar app. It shows each open task that has a day, with its time when it has one. It never shows notes, your journal or your mood. A fresh link closes the old one. It shows your tasks in the calendar; it does not change them from there.' },
+  { q: 'Can the app block other apps or websites while I focus?', a: 'No. A web app cannot block other apps. What it can do is time your focus sessions, play a background sound, and show how focused each one felt. Use your phone\'s own focus mode, or a blocker app, beside it.' },
   { q: 'What is Agency, and who is it for?', a: 'Agency is for a content agency or a freelance creator who makes videos, posts, scripts and newsletters for clients. Add a client, then move each deliverable from idea to published. Log your time, make invoices and agreements, and share a page where the client approves what is waiting. Switch it on under Features.' },
   { q: 'How do I share a dashboard with a client?', a: 'Open the client, find Client link and switch it on. Copy the link and send it. Under it you pick what they can see (what is waiting, coming up, published, the month so far, notes, and more) and what they can do (approve or send back, write notes). Use Open preview to see exactly what they see. A fresh link closes the old one.' },
   { q: 'What can a client never see?', a: 'Your private notes, your fee for each piece and the retainer amount, your time line by line, your other clients, and what a brand wrote in Army. Hours, invoices, agreements and channels stay off until you switch them on.' },
@@ -9590,7 +9595,7 @@ export interface FocusBucket {
 export interface FocusResponse {
   view: FocusView;
   buckets: FocusBucket[];
-  totals: { minutes: number; rounds: number; tasksDone: number; activeBuckets: number };
+  totals: { minutes: number; rounds: number; tasksDone: number; activeBuckets: number; /** The average of the ratings given, to one decimal, and how many rounds were rated. */ quality: number | null; rated: number };
   /** Where the time went in this stretch, most first. */
   tasks: { nodeId: string | null; title: string; minutes: number; rounds: number }[];
   best: { key: string; label: string; minutes: number } | null;
@@ -10206,7 +10211,7 @@ export function lineForDay(day: string): DailyLine & { round: number; position: 
 
 // ---- Mindful minutes timers: what a person chose, kept on their account ----
 
-export type AmbientKind = 'off' | 'rain' | 'ocean' | 'wind' | 'hum';
+export type AmbientKind = 'off' | 'rain' | 'ocean' | 'wind' | 'hum' | 'lofi';
 /** Serene background sounds, made in the browser (no files to download), played while a timer runs. */
 export const AMBIENT_SOUNDS: readonly { key: AmbientKind; name: string; blurb: string; emoji: string }[] = [
   { key: 'off', name: 'Off', blurb: 'Quiet.', emoji: '🔇' },
@@ -10214,6 +10219,7 @@ export const AMBIENT_SOUNDS: readonly { key: AmbientKind; name: string; blurb: s
   { key: 'ocean', name: 'Ocean', blurb: 'Slow waves, in and out.', emoji: '🌊' },
   { key: 'wind', name: 'Wind', blurb: 'Wind that rises and falls.', emoji: '🍃' },
   { key: 'hum', name: 'Soft hum', blurb: 'A low, warm hum, like a singing bowl.', emoji: '🔔' },
+  { key: 'lofi', name: 'Lo-fi', blurb: 'Slow, mellow chords with a little vinyl crackle. Made in your browser, no song to license.', emoji: '🎧' },
 ];
 export const isAmbientKind = (v: unknown): v is AmbientKind => AMBIENT_SOUNDS.some((s) => s.key === v);
 
@@ -11331,4 +11337,313 @@ export function templateSummary(kind: TemplateKind, doc: InvoiceDoc | ContractDo
   }
   const n = (doc as ContractDoc).sections.length;
   return `${n} ${n === 1 ? 'section' : 'sections'}`;
+}
+
+
+// ---------------------------------------------------------------------------
+// From a study of Superfocus (docs/superfocus-study.md): focus quality, a week plan with a plan strength, time blocks,
+// a project's pace, and a private calendar link. Rules only: no model, no cost, nothing leaves the account.
+// ---------------------------------------------------------------------------
+
+/** How focused a finished focus session felt, one to five. A private note to yourself; it pays nothing. */
+export const FOCUS_QUALITY = [
+  { value: 1, name: 'Scattered' },
+  { value: 2, name: 'Drifting' },
+  { value: 3, name: 'Steady' },
+  { value: 4, name: 'Focused' },
+  { value: 5, name: 'Deep' },
+] as const;
+export const focusQualityName = (v: number | null): string => (v === null ? 'Not rated' : (FOCUS_QUALITY.find((q) => q.value === Math.round(v))?.name ?? 'Not rated'));
+
+/** What a task with no time estimate counts as when a day is added up, and the default hours of planned work in a day. */
+export const PLAN_DEFAULT_MINUTES = 30;
+export const PLAN_DAY_MINUTES = 240;
+export const WEEK_PLAN_DAYS = 7;
+export const PLAN_MAX_SUGGESTIONS = 14;
+
+export interface PlanTask {
+  id: string;
+  title: string;
+  relationship: RelationshipKey;
+  estimateMin: number | null;
+  priority: Priority | null;
+  doDate: string | null;
+  dueDate: string | null;
+  /** Made from a pillar by the strategy session or the vibe check. */
+  fromPillar?: boolean;
+}
+export interface WeekPlanDay {
+  date: string;
+  /** Minutes already on the day, and minutes the suggestions would add. */
+  plannedMin: number;
+  suggestedMin: number;
+  tasks: number;
+  overloaded: boolean;
+}
+export interface WeekPlanSuggestion {
+  id: string;
+  title: string;
+  relationship: RelationshipKey;
+  estimateMin: number;
+  day: string;
+  reason: string;
+}
+export interface PlanStrength {
+  score: number;
+  label: 'Strong' | 'Fair' | 'Light';
+  parts: { name: string; score: number; max: number }[];
+}
+export interface WeekPlan {
+  from: string;
+  capacityMin: number;
+  days: WeekPlanDay[];
+  suggestions: WeekPlanSuggestion[];
+  /** Tasks with no day that did not fit anywhere this week. */
+  noRoom: { id: string; title: string }[];
+  /** The plan as it stands, and as it would be with every suggestion kept. */
+  strengthNow: PlanStrength;
+  strengthWith: PlanStrength;
+  /** A few plain lines on what to look at, most useful first. */
+  notes: string[];
+}
+
+const dayName = (date: string): string => new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
+const hm = (min: number): string => (min >= 60 ? `${Math.floor(min / 60)}h${min % 60 ? ` ${min % 60}m` : ''}` : `${min}m`);
+const planAddDays = (date: string, n: number): string => new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+
+/** How well a week is planned, 0 to 100: days with something on them (40), days that are not overloaded (40), tasks that say how long they take (20). */
+export function planStrength(load: readonly { min: number; tasks: number }[], capacityMin: number, estimated: number, total: number): PlanStrength {
+  const days = load.length || 1;
+  const covered = load.filter((d) => d.tasks > 0).length;
+  const over = load.filter((d) => d.min > capacityMin).length;
+  const coverage = Math.round((covered / days) * 40);
+  const balance = covered === 0 ? 0 : Math.round((1 - over / covered) * 40);
+  const estimates = total === 0 ? 0 : Math.round((estimated / total) * 20);
+  const score = coverage + balance + estimates;
+  return {
+    score,
+    label: score >= 75 ? 'Strong' : score >= 50 ? 'Fair' : 'Light',
+    parts: [
+      { name: 'Days with something planned', score: coverage, max: 40 },
+      { name: 'Days that are not overloaded', score: balance, max: 40 },
+      { name: 'Tasks that say how long they take', score: estimates, max: 20 },
+    ],
+  };
+}
+
+/**
+ * Plans the next seven days from the open tasks. A task is already placed when it has a do date, or only a due date (it opens on that day);
+ * a late one counts on today. The tasks with no day at all are the ones suggested a day: highest priority first, then ones made from a
+ * pillar, each on the lightest day it fits in, so the week is spread and not packed. A day over the capacity is flagged, not filled.
+ * Nothing here writes anything: the screen keeps what the person keeps, one task at a time, through the ordinary edit.
+ */
+export function planWeek(today: string, tasks: readonly PlanTask[], capacityMin: number = PLAN_DAY_MINUTES): WeekPlan {
+  const dates = Array.from({ length: WEEK_PLAN_DAYS }, (_, i) => planAddDays(today, i));
+  const last = dates[dates.length - 1]!;
+  const est = (t: PlanTask) => t.estimateMin ?? PLAN_DEFAULT_MINUTES;
+  const load = new Map(dates.map((d) => [d, { min: 0, tasks: 0, suggested: 0 }]));
+  let estimated = 0;
+  let total = 0;
+  let late = 0;
+  const open: PlanTask[] = [];
+  for (const t of tasks) {
+    const day = t.doDate ?? t.dueDate;
+    if (!day) {
+      open.push(t);
+      continue;
+    }
+    if (day > last) continue;
+    const at = day < today ? today : day;
+    if (day < today) late += 1;
+    const l = load.get(at)!;
+    l.min += est(t);
+    l.tasks += 1;
+    total += 1;
+    if (t.estimateMin) estimated += 1;
+  }
+  const rank = (t: PlanTask) => (t.priority ?? 9) * 2 + (t.fromPillar ? 0 : 1);
+  const sorted = [...open].sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title));
+  const suggestions: WeekPlanSuggestion[] = [];
+  const noRoom: { id: string; title: string }[] = [];
+  let sEst = 0;
+  for (const t of sorted) {
+    if (suggestions.length >= PLAN_MAX_SUGGESTIONS) {
+      noRoom.push({ id: t.id, title: t.title });
+      continue;
+    }
+    const need = est(t);
+    // The lightest day it fits in; the earliest on a tie.
+    const fit = dates.filter((d) => load.get(d)!.min + need <= capacityMin).sort((a, b) => load.get(a)!.min - load.get(b)!.min || a.localeCompare(b))[0];
+    if (!fit) {
+      noRoom.push({ id: t.id, title: t.title });
+      continue;
+    }
+    const l = load.get(fit)!;
+    l.min += need;
+    l.suggested += need;
+    l.tasks += 1;
+    suggestions.push({
+      id: t.id,
+      title: t.title,
+      relationship: t.relationship,
+      estimateMin: need,
+      day: fit,
+      reason: t.priority !== null && t.priority <= 1 ? `P${t.priority}, so it comes early` : t.fromPillar ? 'From your pillar' : 'It had no day yet',
+    });
+    total += 1;
+    if (t.estimateMin) sEst += 1;
+  }
+  const days: WeekPlanDay[] = dates.map((d) => {
+    const l = load.get(d)!;
+    return { date: d, plannedMin: l.min - l.suggested, suggestedMin: l.suggested, tasks: l.tasks, overloaded: l.min > capacityMin };
+  });
+  const withLoad = dates.map((d) => ({ min: load.get(d)!.min, tasks: load.get(d)!.tasks }));
+  const nowLoad = dates.map((d) => ({ min: load.get(d)!.min - load.get(d)!.suggested, tasks: load.get(d)!.tasks - suggestions.filter((s) => s.day === d).length }));
+  const nowTotal = total - suggestions.length;
+  const strengthNow = planStrength(nowLoad, capacityMin, estimated, nowTotal);
+  const strengthWith = planStrength(withLoad, capacityMin, estimated + sEst, total);
+  const notes: string[] = [];
+  const heavy = days.filter((d) => d.overloaded).sort((a, b) => b.plannedMin + b.suggestedMin - (a.plannedMin + a.suggestedMin))[0];
+  if (heavy) notes.push(`${dayName(heavy.date)} has ${hm(heavy.plannedMin + heavy.suggestedMin)} planned, over your ${hm(capacityMin)}. Move one task to a lighter day.`);
+  if (late > 0) notes.push(`${late} late ${late === 1 ? 'task is' : 'tasks are'} counted on today. Finish or move ${late === 1 ? 'it' : 'them'} first.`);
+  const empty = days.filter((d) => d.tasks === 0).map((d) => dayName(d.date).slice(0, 3));
+  if (empty.length > 0 && empty.length < WEEK_PLAN_DAYS) notes.push(`Nothing is planned on ${empty.slice(0, 3).join(', ')}${empty.length > 3 ? ' and more' : ''}. Rest is fine; make it a choice.`);
+  if (noRoom.length > 0) notes.push(`${noRoom.length} ${noRoom.length === 1 ? 'task does' : 'tasks do'} not fit this week at ${hm(capacityMin)} a day. Leave ${noRoom.length === 1 ? 'it' : 'them'} for next week, or raise the hours.`);
+  const unsized = tasks.filter((t) => !t.estimateMin && (t.doDate ?? t.dueDate) && (t.doDate ?? t.dueDate)! <= last).length;
+  if (unsized > 0) notes.push(`${unsized} ${unsized === 1 ? 'task has' : 'tasks have'} no time estimate. Add one so the days add up.`);
+  if (tasks.length === 0) notes.push('Add a few tasks first, then plan the week around them.');
+  return { from: today, capacityMin, days, suggestions, noRoom, strengthNow, strengthWith, notes: notes.slice(0, 4) };
+}
+
+/** A time of day as "9:30 am". */
+export function blockTimeLabel(min: number): string {
+  const h24 = Math.floor(min / 60) % 24;
+  const m = min % 60;
+  const h = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${h}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h24 < 12 ? 'am' : 'pm'}`;
+}
+
+export interface DayBlock {
+  id: string;
+  title: string;
+  start: number;
+  end: number;
+  /** It starts before the one before it ends. */
+  overlaps: boolean;
+}
+export interface DayBlocks {
+  blocks: DayBlock[];
+  /** Free stretches between blocks that are at least `FREE_MIN` long, in minutes from midnight. */
+  free: { start: number; end: number }[];
+  /** Tasks for the day that have no time yet, so they are not on the line. */
+  untimed: number;
+}
+export const FREE_MIN = 15;
+/** Lays a day's tasks out as blocks: the ones with a time, as long as their estimate (30 minutes when it has none), and the free gaps between. */
+export function dayBlocks(tasks: readonly { id: string; title: string; dueTime: string | null; estimateMin: number | null }[]): DayBlocks {
+  const timed = tasks
+    .filter((t) => t.dueTime && /^([01]\d|2[0-3]):[0-5]\d$/.test(t.dueTime))
+    .map((t) => {
+      const [h, m] = t.dueTime!.split(':').map(Number) as [number, number];
+      const start = h * 60 + m;
+      return { id: t.id, title: t.title, start, end: Math.min(24 * 60, start + (t.estimateMin ?? PLAN_DEFAULT_MINUTES)) };
+    })
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+  const blocks: DayBlock[] = [];
+  const free: { start: number; end: number }[] = [];
+  let reach = 0;
+  timed.forEach((b, i) => {
+    const overlaps = i > 0 && b.start < reach;
+    if (i > 0 && b.start - reach >= FREE_MIN) free.push({ start: reach, end: b.start });
+    blocks.push({ ...b, overlaps });
+    reach = Math.max(reach, b.end);
+  });
+  return { blocks, free, untimed: tasks.length - timed.length };
+}
+
+export type PaceStatus = 'on' | 'slipping' | 'behind' | 'none';
+export interface ProjectPace {
+  status: PaceStatus;
+  label: string;
+  /** Day X of Y between the day the project was made and its due day. */
+  day: number;
+  of: number;
+  /** Tasks done out of all of them, and how much of the time has gone, as whole percents. */
+  donePct: number;
+  timePct: number;
+  /** One plain line for the screen. */
+  line: string;
+}
+/**
+ * Whether a project is moving as fast as its due day needs. The share of its tasks done is set against the share of the time gone: within ten
+ * points is on track, within thirty is slipping, further is behind. A project with no due day or no tasks has no pace to judge.
+ */
+export function projectPace(created: string, dueDate: string | null, done: number, total: number, today: string): ProjectPace {
+  const none = (line: string): ProjectPace => ({ status: 'none', label: 'No pace yet', day: 0, of: 0, donePct: 0, timePct: 0, line });
+  if (!dueDate) return none('Add a due day to see the pace.');
+  const start = created.slice(0, 10);
+  const span = Math.round((Date.parse(`${dueDate}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000) + 1;
+  if (span < 1) return none('The due day is before the start.');
+  if (total === 0) return none('Add tasks to see the pace.');
+  const gone = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000) + 1;
+  const day = Math.max(1, Math.min(span, gone));
+  const donePct = Math.round((done / total) * 100);
+  const timePct = Math.round((day / span) * 100);
+  const finished = done >= total;
+  const late = today > dueDate && !finished;
+  const gap = timePct - donePct;
+  const status: PaceStatus = finished || (!late && gap <= 10) ? 'on' : !late && gap <= 30 ? 'slipping' : 'behind';
+  const label = status === 'on' ? 'On track' : status === 'slipping' ? 'Slipping' : 'Behind';
+  const line = finished ? 'Every task is done.' : late ? `Past its due day with ${total - done} left.` : `Day ${day} of ${span}, ${donePct}% of the tasks done.`;
+  return { status, label, day, of: span, donePct, timePct, line };
+}
+
+// ---- a private calendar link: the person's tasks as a calendar Google, Apple or Outlook can subscribe to ----
+
+export interface IcsTask {
+  id: string;
+  title: string;
+  relationship: RelationshipKey;
+  /** The day it opens (do date, else due date), YYYY-MM-DD. */
+  day: string;
+  dueTime: string | null;
+  estimateMin: number | null;
+  priority: Priority | null;
+}
+/** Text for a calendar file: backslash, semicolon, comma and line breaks escaped. */
+export const icsEscape = (t: string): string => t.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+/** A line folded at 70 characters, each continuation starting with one space, as the calendar format asks. */
+export function icsFold(line: string): string {
+  const parts: string[] = [];
+  const chars = Array.from(line);
+  for (let i = 0; i < chars.length; i += i === 0 ? 70 : 69) parts.push(chars.slice(i, i + (i === 0 ? 70 : 69)).join(''));
+  return parts.join('\r\n ');
+}
+const icsStamp = (d: Date): string => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+const icsDay = (day: string): string => day.replace(/-/g, '');
+/**
+ * The tasks with a day as calendar events: a timed one at its time in the person's zone for as long as its estimate (30 minutes when it
+ * has none), the rest as all-day events. Only the title, the pillar and the priority leave: never a note, a journal line or a number from
+ * a tracker. Pure, so the same tasks always give the same file.
+ */
+export function buildCalendar(tasks: readonly IcsTask[], zone: string, now: Date): string {
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//kreators.app//Tasks//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:kreators.app tasks', 'REFRESH-INTERVAL;VALUE=DURATION:PT1H'];
+  for (const t of tasks) {
+    const pillar = RELATIONSHIP_BY_KEY[t.relationship]?.name ?? '';
+    lines.push('BEGIN:VEVENT', `UID:${t.id}@kreators.app`, `DTSTAMP:${icsStamp(now)}`);
+    const m = t.dueTime ? /^([01]\d|2[0-3]):([0-5]\d)$/.exec(t.dueTime) : null;
+    if (m) {
+      const start = zonedToUtc(t.day, Number(m[1]) * 60 + Number(m[2]), zone);
+      const end = new Date(start.getTime() + (t.estimateMin ?? PLAN_DEFAULT_MINUTES) * 60_000);
+      lines.push(`DTSTART:${icsStamp(start)}`, `DTEND:${icsStamp(end)}`);
+    } else {
+      lines.push(`DTSTART;VALUE=DATE:${icsDay(t.day)}`, `DTEND;VALUE=DATE:${icsDay(planAddDays(t.day, 1))}`);
+    }
+    lines.push(`SUMMARY:${icsEscape(t.title)}`);
+    if (pillar) lines.push(`CATEGORIES:${icsEscape(pillar)}`, `DESCRIPTION:${icsEscape(`From your ${pillar} pillar`)}`);
+    if (t.priority !== null) lines.push(`PRIORITY:${t.priority === 0 ? 1 : t.priority === 1 ? 3 : t.priority === 2 ? 5 : 9}`);
+    lines.push('END:VEVENT');
+  }
+  lines.push('END:VCALENDAR');
+  return `${lines.map(icsFold).join('\r\n')}\r\n`;
 }

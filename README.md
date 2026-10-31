@@ -119,6 +119,10 @@ The invoice designer and calculator follows the founder's sample: sender and bil
 
 Business metrics in Reviews are for people who run a business: a switch on that page turns them on, and until then the server refuses them. A metric is typed each period or read from Agency (pieces published, approved first time, published on time, billable hours, utilisation, invoiced, paid, new clients).
 
+## Planning and focus
+
+Daily has **Plan my week**: it suggests a day for each open task that has none, the most important first and spread so no day is overloaded, shows how strong the plan is out of 100 and a few plain notes, and changes nothing until you keep a suggestion. Tasks with a time show as **time blocks**, with the free time between. On a pillar, each project with a due day shows its **pace**: on track, slipping or behind. In Mindful minutes you can rate a finished focus session from scattered to deep (private; the dashboard shows the average) and pick a **Lo-fi** background sound made in the browser. Profile has a **private calendar link** so your tasks show in Google, Apple or Outlook Calendar, one way, with only a title, a pillar and a priority. These came from a study of Superfocus (`docs/superfocus-study.md`); app and website blocking and two-way calendar sync were left out, and the study says why.
+
 ## Bond: friends and anonymous chats
 
 Every person has a public page (`/u/<handle>` or `/people/<id>` from the community feed). What it shows is the owner's choice, set under Public page: one switch for the whole page, then links, portfolio, what they sell, their community posts, their activity (level, streak, pillars set up, badges; never journal or wellbeing), friend requests, and chats. The server enforces every switch, including on friend requests and chat openings; a switched-off page returns only the name. Bond lists friends, friend requests, and anonymous one-to-one chats: both sides keep an alias for good, whether the chat started from a friend, a person you met at an event, or someone at your circle table (opened by alias, so the id never reaches the browser). Circles have no reveal at all.

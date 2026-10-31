@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, notToDoStreak, notToDoWeek, POINTS, RELATIONSHIPS, sparkFor, XP, zonedToUtc, type CheckinResponse, type NotToDo, type NotToDoStatus, type RelationshipKey, type TodayResponse } from '@kreators/shared';
+import { PLAN_DAY_MINUTES, planWeek, type PlanTask, MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, notToDoStreak, notToDoWeek, POINTS, RELATIONSHIPS, sparkFor, XP, zonedToUtc, type CheckinResponse, type NotToDo, type NotToDoStatus, type RelationshipKey, type TodayResponse } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { DATE_RE, dateNearToday, getUser, newId, notify, nowIso, shiftDate, toNode, type NodeRow, taskGate, withSubtasks } from '../db';
 
@@ -149,6 +149,20 @@ today.get('/', async (c) => {
     notToDo: await notToDoList(db, user.id, date),
   };
   return c.json(res);
+});
+
+// The week ahead, planned from the open tasks: a suggested day for each task that has none, how strong the plan is, and a few plain notes.
+// It writes nothing. The screen keeps what the person keeps, one task at a time, through the ordinary edit.
+today.get('/week-plan', async (c) => {
+  const user = c.get('user');
+  const date = dateParam(c.req.query('date'));
+  const hours = Math.max(1, Math.min(12, Math.round(Number(c.req.query('hours')) || PLAN_DAY_MINUTES / 60)));
+  const rows = await c.env.DB
+    .prepare("SELECT id, title, relationship, estimate_min, priority, do_date, due_date, origin FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' ORDER BY created_at LIMIT 600")
+    .bind(user.id)
+    .all<{ id: string; title: string; relationship: RelationshipKey; estimate_min: number | null; priority: number | null; do_date: string | null; due_date: string | null; origin: string | null }>();
+  const tasks: PlanTask[] = rows.results.map((r) => ({ id: r.id, title: r.title, relationship: r.relationship, estimateMin: r.estimate_min, priority: (r.priority as PlanTask['priority']) ?? null, doDate: r.do_date, dueDate: r.due_date, fromPillar: r.origin === 'build' }));
+  return c.json({ plan: planWeek(date, tasks, hours * 60) });
 });
 
 today.post('/checkin', async (c) => {
