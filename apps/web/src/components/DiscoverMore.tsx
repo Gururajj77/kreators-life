@@ -62,6 +62,7 @@ import { StatTile } from './Charts';
 import { useAuthed, useDiscover, useDiscoverMore, useRefreshAll } from '../lib/queries';
 import { Button } from './Button';
 import { HeroBlobs } from './Hero';
+import { BackLink } from './PageHeader';
 import { Section } from './Section';
 import { Toggle } from './Toggle';
 
@@ -425,9 +426,9 @@ function QuizScreen({ kind, onBack }: { kind: ExtraKind; onBack: () => void }) {
 
   const head = (
     <header className="pt-lg">
-      <button type="button" onClick={onBack} className="toy mb-xs inline-flex min-h-[44px] items-center text-[14px] font-bold text-ink-soft hover:text-ink">
-        ← Discover
-      </button>
+      <BackLink to="/discover" onBack={onBack}>
+        Discover
+      </BackLink>
       <h1 className="text-[30px]">{meta.name}</h1>
     </header>
   );
@@ -1009,9 +1010,9 @@ function DesignScreen({ onBack }: { onBack: () => void }) {
   }, [st, mode]);
   const head = (
     <header className="pt-lg">
-      <button type="button" onClick={onBack} className="toy mb-xs inline-flex min-h-[44px] items-center text-[14px] font-bold text-ink-soft hover:text-ink">
-        ← Discover
-      </button>
+      <BackLink to="/discover" onBack={onBack}>
+        Discover
+      </BackLink>
       <h1 className="text-[30px]">Human design</h1>
     </header>
   );

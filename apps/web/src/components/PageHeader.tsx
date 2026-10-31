@@ -1,12 +1,20 @@
 import type { MouseEvent, ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
 
-/** The way back, one step up. A small round button so it reads as a control, not a label. */
-export function BackLink({ to, children, inherit = false }: { to: string; children: ReactNode; inherit?: boolean }) {
+/**
+ * The way back, one step up. A small round button so it reads as a control, not a label. A screen that lives inside a page's own address
+ * (a part of Discover opened with ?more=) passes `onBack` to close itself, since going back a page would leave the whole app screen.
+ */
+export function BackLink({ to, children, inherit = false, onBack }: { to: string; children: ReactNode; inherit?: boolean; onBack?: () => void }) {
   const nav = useNavigate();
   // Go back one page when this tab has one, so the page you left keeps its filters and scroll; otherwise go up.
   const back = (e: MouseEvent<HTMLAnchorElement>) => {
     if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    if (onBack) {
+      e.preventDefault();
+      onBack();
+      return;
+    }
     const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
     if (idx > 0) {
       e.preventDefault();
