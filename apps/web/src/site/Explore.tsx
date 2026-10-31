@@ -22,7 +22,7 @@ export function Explore() {
     const next = new URLSearchParams(params);
     if (debounced) next.set('q', debounced);
     else next.delete('q');
-    if (next.toString() !== params.toString()) setParams(next, { replace: true });
+    if (next.toString() !== params.toString()) setParams(next, { replace: true, preventScrollReset: true });
   }, [debounced, params, setParams]);
 
   const results = useQuery({ queryKey: ['explore', debounced, type ?? ''], queryFn: () => publicApi.explore({ q: debounced, type, limit: 100 }) });
@@ -32,7 +32,7 @@ export function Explore() {
     const next = new URLSearchParams(params);
     if (t) next.set('type', t);
     else next.delete('type');
-    setParams(next, { replace: true });
+    setParams(next, { replace: true, preventScrollReset: true });
   };
 
   return (

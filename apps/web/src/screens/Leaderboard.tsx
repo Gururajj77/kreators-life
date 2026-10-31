@@ -105,7 +105,7 @@ export function Leaderboard() {
         }
         return next;
       },
-      { replace: true },
+      { replace: true, preventScrollReset: true },
     );
   const byRaw = params.get('by') ?? 'xp';
   const by: LeaderboardSort = SORTS.some((s) => s.key === byRaw) ? (byRaw as LeaderboardSort) : 'xp';

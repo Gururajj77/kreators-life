@@ -130,7 +130,7 @@ export function Run() {
   const [params, setParams] = useSearchParams();
   const asked = params.get('tab');
   const tab: Tab = TABS.some((t) => t.key === asked) ? (asked as Tab) : 'clubs';
-  const setTab = (t: Tab) => setParams(t === 'clubs' ? {} : { tab: t }, { replace: true });
+  const setTab = (t: Tab) => setParams(t === 'clubs' ? {} : { tab: t }, { replace: true, preventScrollReset: true });
   const [starting, setStarting] = useState(false);
   const d = q.data;
   return (

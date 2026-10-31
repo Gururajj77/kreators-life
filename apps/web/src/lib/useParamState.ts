@@ -18,7 +18,8 @@ export function useParamState(key: string, fallback: string): [string, (v: strin
           else next.set(key, v);
           return next;
         },
-        { replace: true },
+        // A tab, a filter or a toggle changes what is on the page, never where the person is: no jump back to the top.
+        { replace: true, preventScrollReset: true },
       );
     },
     [key, fallback, setParams],
