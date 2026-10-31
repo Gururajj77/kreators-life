@@ -892,3 +892,33 @@ input[type='radio'] {
   background-color: var(--pri);
   color: var(--color-on-fill);
 }
+
+/* Print and save as PDF: an invoice or an agreement prints as the page itself. Anything with .no-print (menus, buttons, the thread)
+   is left out, and .print-doc is left as the one thing on the sheet. Colours stay (a coloured bar prints as a bar). */
+@media print {
+  .no-print,
+  nav,
+  .tab-bar,
+  [data-assistant],
+  [data-reminders] {
+    display: none !important;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  body::before {
+    display: none !important;
+  }
+  .print-doc {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  @page {
+    margin: 12mm;
+  }
+}

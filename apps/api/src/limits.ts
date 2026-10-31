@@ -57,6 +57,10 @@ export const LIMITS = {
   discover: { max: 30, windowSec: 3600 },
   /** Saving the timer settings, which happens as a person taps a stepper or a switch. */
   prefs: { max: 240, windowSec: 3600 },
+  /** Everyday Agency work: moving a deliverable, a note, a time entry. */
+  agency: { max: 600, windowSec: 3600 },
+  /** A client at their link: approving, sending back, commenting, accepting. The link is the only key, so it is counted per address. */
+  portal: { max: 30, windowSec: 600 },
 } as const;
 
 export type LimitName = keyof typeof LIMITS;
@@ -124,6 +128,26 @@ export const ROUTE_LIMITS: readonly { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE
   { method: 'PUT', path: '/media/for/:type/:id', limit: 'create' },
   { method: 'POST', path: '/connect/:app/:id/messages', limit: 'message' },
   { method: 'POST', path: '/connect/:app/:id/people/:userId/connect', limit: 'intro' },
+  { method: 'POST', path: '/reviews/kpis', limit: 'create' },
+  { method: 'PUT', path: '/reviews/kpis/:id/value', limit: 'prefs' },
+  { method: 'PUT', path: '/reviews/kpis/settings', limit: 'prefs' },
+  { method: 'POST', path: '/agency/clients', limit: 'create' },
+  { method: 'POST', path: '/agency/clients/:id/invoice', limit: 'create' },
+  { method: 'POST', path: '/agency/invoices', limit: 'create' },
+  { method: 'POST', path: '/agency/invoices/:id/duplicate', limit: 'create' },
+  { method: 'POST', path: '/agency/contracts', limit: 'create' },
+  { method: 'POST', path: '/agency/contracts/:id/duplicate', limit: 'create' },
+  { method: 'POST', path: '/agency/items', limit: 'agency' },
+  { method: 'PATCH', path: '/agency/items/:id', limit: 'agency' },
+  { method: 'POST', path: '/agency/items/:id/notes', limit: 'agency' },
+  { method: 'POST', path: '/agency/items/:id/army/send', limit: 'agency' },
+  { method: 'POST', path: '/agency/time', limit: 'agency' },
+  { method: 'POST', path: '/agency/comments/:type/:id', limit: 'message' },
+  { method: 'PUT', path: '/agency/settings', limit: 'prefs' },
+  { method: 'POST', path: '/public/agency/:token/items/:id', limit: 'portal' },
+  { method: 'POST', path: '/public/contracts/:token/accept', limit: 'portal' },
+  { method: 'POST', path: '/public/contracts/:token/comments', limit: 'portal' },
+  { method: 'POST', path: '/public/invoices/:token/comments', limit: 'portal' },
 ];
 
 /** The doors that take no session are limited before the session check; everything else after it, per person. */

@@ -38,6 +38,12 @@ import { Leaderboard } from './screens/Leaderboard';
 import { Library } from './screens/Library';
 import { Life } from './screens/Life';
 import { Reviews } from './screens/Reviews';
+import { Agency } from './screens/Agency';
+import { AgencyClient } from './screens/AgencyClient';
+import { AgencyInvoice } from './screens/AgencyInvoice';
+import { AgencyContract } from './screens/AgencyContract';
+import { ClientPortal } from './site/ClientPortal';
+import { ContractPublic } from './site/ContractPublic';
 import { Run, RunClubPage } from './screens/Run';
 import { Store } from './screens/Store';
 import { Mindful } from './screens/Mindful';
@@ -141,11 +147,11 @@ function Shell() {
     <>
       <Outlet />
       {!focus && (
-        <>
+        <div className="contents no-print">
           <TabBar />
           <Assistant />
           <ReminderBubble />
-        </>
+        </div>
       )}
     </>
   );
@@ -192,6 +198,8 @@ const router = createBrowserRouter([
   { path: '/features/:key', element: <Feature /> },
   { path: '/c/:code', element: <CertificatePage /> },
   { path: '/i/:token', element: <InvoicePage /> },
+  { path: '/a/:token', element: <ClientPortal /> },
+  { path: '/k/:token', element: <ContractPublic /> },
   { path: '/terms', element: <Policy kind="terms" /> },
   { path: '/privacy', element: <Policy kind="privacy" /> },
   { path: '/refunds', element: <Policy kind="refunds" /> },
@@ -254,6 +262,10 @@ const router = createBrowserRouter([
       { path: '/army/:id', element: gated('army', <Campaign />) },
       { path: '/win', element: gated('win', <Win />) },
       { path: '/win/:id', element: gated('win', <Reward />) },
+      { path: '/agency', element: gated('agency', <Agency />) },
+      { path: '/agency/invoices/:id', element: gated('agency', <AgencyInvoice />) },
+      { path: '/agency/contracts/:id', element: gated('agency', <AgencyContract />) },
+      { path: '/agency/:id', element: gated('agency', <AgencyClient />) },
       // people
       { path: '/party', element: gated('party', <Party />) },
       { path: '/party/:id', element: gated('party', <EventPage />) },

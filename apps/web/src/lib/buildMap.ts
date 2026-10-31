@@ -290,9 +290,13 @@ export const BUILD_SECTIONS: readonly BuildSection[] = [
           ['💼 Work', 'ok', '/work'],
           ['🎬 Army', 'ok', '/army'],
           ['🥇 Win', 'key', '/win'],
+          ['🗂️ Agency: clients, pipeline, time, client dashboards', 'ok', '/agency'],
         ],
         extra: [
           ['Win: YouTube reads itself with a key; other platforms are typed then confirmed', 'key'],
+          ['Agency: invoice designer and calculator, agreements from templates, PDF by the browser\'s print', 'ok'],
+          ['Agency: client link with a switch for each part; typed acceptance on agreements is not a certified e-signature', 'test'],
+          ['Business metrics in Reviews, only for people who switch them on', 'ok'],
         ],
       },
       {

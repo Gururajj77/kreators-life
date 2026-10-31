@@ -58,6 +58,12 @@ export function paged<T>(rows: readonly T[], ask: PageAsk): { items: T[]; page: 
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** The person's own day, sent by their device as `?day=`. A day more than one day ahead of UTC is not a real "today", so it falls back to the UTC date. */
+export function dayFromDevice(v: string | undefined | null): string {
+  const utc = new Date().toISOString().slice(0, 10);
+  return v && DATE_RE.test(v) && v <= shiftDate(utc, 1) ? v : utc;
+}
+
 /** An approved Club membership that has not run out. */
 export async function isClubMember(db: D1Database, userId: string): Promise<boolean> {
   return Boolean(await db.prepare("SELECT 1 FROM memberships WHERE user_id = ? AND status IN ('approved','active') AND (ends_at IS NULL OR ends_at > ?)").bind(userId, nowIso()).first());

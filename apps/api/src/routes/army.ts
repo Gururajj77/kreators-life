@@ -181,25 +181,28 @@ army.post('/assignments/:id', async (c) => {
 });
 
 // Assigned creators upload versions; brand or staff review them.
-army.post('/deliverables/:id/versions', async (c) => {
-  const db = c.env.DB;
-  const user = c.get('user');
-  const d = await db.prepare('SELECT d.*, c.organization_id, c.owner_user_id FROM campaign_deliverables d JOIN campaigns c ON c.id = d.campaign_id WHERE d.id = ?').bind(c.req.param('id')).first<DeliverableRow & { organization_id: string; owner_user_id: string | null }>();
-  if (!d) return c.json({ error: 'not found' }, 404);
+/** Puts a new version of a deliverable up for the brand. Army's route and Agency's "send to Army" both come through here. */
+export async function uploadVersion(db: D1Database, user: UserRow, deliverableId: string, url: string, note: string): Promise<{ ok: true; id: string } | { ok: false; status: 400 | 403 | 404; error: string }> {
+  const d = await db.prepare('SELECT d.*, c.organization_id, c.owner_user_id FROM campaign_deliverables d JOIN campaigns c ON c.id = d.campaign_id WHERE d.id = ?').bind(deliverableId).first<DeliverableRow & { organization_id: string; owner_user_id: string | null }>();
+  if (!d) return { ok: false, status: 404, error: 'not found' };
   const who = await whoFor(db, user, { id: d.campaign_id, organization_id: d.organization_id });
-  if (who !== 'creator' && who !== 'staff') return c.json({ error: 'assigned creators upload work' }, 403);
-  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
-  const url = str(body.url, 500);
-  if (!url) return c.json({ error: 'a link to the work' }, 400);
+  if (who !== 'creator' && who !== 'staff') return { ok: false, status: 403, error: 'assigned creators upload work' };
+  if (!url) return { ok: false, status: 400, error: 'a link to the work' };
   const n = await db.prepare('SELECT COALESCE(MAX(version_number), 0) + 1 AS n FROM deliverable_versions WHERE deliverable_id = ?').bind(d.id).first<{ n: number }>();
   const id = newId();
   await db.batch([
-    db.prepare("INSERT INTO deliverable_versions (id, deliverable_id, version_number, url, note, submitted_by, submitted_at, review_status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')").bind(id, d.id, n?.n ?? 1, url, str(body.note, 1000), user.id, nowIso()),
+    db.prepare("INSERT INTO deliverable_versions (id, deliverable_id, version_number, url, note, submitted_by, submitted_at, review_status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')").bind(id, d.id, n?.n ?? 1, url, note, user.id, nowIso()),
     db.prepare("UPDATE campaign_deliverables SET status = 'submitted' WHERE id = ?").bind(d.id),
   ]);
   await logEvent(db, d.campaign_id, user.id, 'version', `Version ${n?.n ?? 1} of "${d.title}" uploaded`);
   if (d.owner_user_id) await notify(db, d.owner_user_id, 'campaign', `New version of ${d.title}`, '', `/army/${d.campaign_id}`);
-  return c.json({ ok: true, id }, 201);
+  return { ok: true, id };
+}
+
+army.post('/deliverables/:id/versions', async (c) => {
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const res = await uploadVersion(c.env.DB, c.get('user'), c.req.param('id'), str(body.url, 500), str(body.note, 1000));
+  return res.ok ? c.json({ ok: true, id: res.id }, 201) : c.json({ error: res.error }, res.status);
 });
 
 army.post('/versions/:id/review', async (c) => {

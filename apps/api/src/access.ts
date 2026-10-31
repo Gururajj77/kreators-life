@@ -14,6 +14,7 @@ export const MODULE_FOR_PREFIX: Record<string, readonly string[]> = {
   work: ['work'],
   army: ['army'],
   win: ['win'],
+  agency: ['agency'],
   party: ['party'],
   run: ['run'],
   community: ['community'],

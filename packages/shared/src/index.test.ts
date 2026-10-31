@@ -1378,3 +1378,201 @@ describe('the timer settings a person keeps', () => {
     expect(AMBIENT_SOUNDS.map((a) => a.key)).toEqual(['off', 'rain', 'ocean', 'wind', 'hum']);
   });
 });
+
+import {
+  amountInWords,
+  CONTRACT_TEMPLATES,
+  CONTRACT_VARS,
+  defaultPortalShow,
+  emptyInvoiceDoc,
+  fillContractText,
+  invoiceForClient,
+  invoiceTotals,
+  kpiFromInput,
+  kpiShown,
+  kpiStatus,
+  kpiToInput,
+  monthBounds,
+  parseContractDoc,
+  parseInvoiceDoc,
+  parsePortalShow,
+  PORTAL_NEVER,
+  PORTAL_PARTS,
+  priceForUnits,
+  utilisationPct,
+  deliverableOverdue,
+  type Invoice,
+} from './index';
+
+describe('the invoice calculator', () => {
+  const plain = { discountMode: 'none', discountValue: 0, gstBps: 0, gstSplit: false, tdsBps: 0, tdsMode: 'none' } as const;
+  it('adds the lines, and reproduces the sample invoice: five at 7,000', () => {
+    const t = invoiceTotals([{ description: 'Package', quantity: 5, unitCents: 700000 }], plain);
+    expect(t.subtotal).toBe(3500000);
+    expect(t.total).toBe(3500000);
+    expect(t.tdsAdjusted).toBe(0);
+  });
+  it('takes a flat or a percent discount off before GST, and never goes below zero', () => {
+    const items = [{ description: 'x', quantity: 1, unitCents: 100000 }];
+    expect(invoiceTotals(items, { ...plain, discountMode: 'percent', discountValue: 1000, gstBps: 1800 })).toMatchObject({ discount: 10000, taxable: 90000, gst: 16200, total: 106200 });
+    expect(invoiceTotals(items, { ...plain, discountMode: 'flat', discountValue: 5_000_000 })).toMatchObject({ discount: 100000, taxable: 0, total: 0 });
+  });
+  it('splits GST into two halves that add back to the whole', () => {
+    const t = invoiceTotals([{ description: 'x', quantity: 1, unitCents: 10001 }], { ...plain, gstBps: 1800, gstSplit: true });
+    expect(t.cgst + t.sgst).toBe(t.gst);
+    expect(t.total).toBe(10001 + t.gst);
+  });
+  it('adds TDS to the total so that after the client deducts it the person keeps the full amount', () => {
+    for (const bpsRate of [100, 200, 500, 1000]) {
+      const t = invoiceTotals([{ description: 'x', quantity: 1, unitCents: 3500000 }], { ...plain, tdsBps: bpsRate, tdsMode: 'grossup' });
+      expect(t.netReceivable).toBeGreaterThanOrEqual(3500000 - 1);
+      expect(t.netReceivable).toBeLessThanOrEqual(3500000 + 1);
+      expect(t.total).toBe(3500000 + t.tdsAdjusted);
+    }
+  });
+  it('can only show the TDS the client will deduct, without changing the total', () => {
+    const t = invoiceTotals([{ description: 'x', quantity: 1, unitCents: 100000 }], { ...plain, tdsBps: 1000, tdsMode: 'show' });
+    expect(t.total).toBe(100000);
+    expect(t.tdsDeducted).toBe(10000);
+    expect(t.netReceivable).toBe(90000);
+  });
+  it('never uses floats: every figure is a whole number', () => {
+    const t = invoiceTotals([{ description: 'x', quantity: 3, unitCents: 3333 }], { ...plain, discountMode: 'percent', discountValue: 333, gstBps: 1200, tdsBps: 200, tdsMode: 'grossup' });
+    for (const v of Object.values(t)) expect(Number.isInteger(v)).toBe(true);
+  });
+});
+
+describe('the amount in words', () => {
+  it('reads rupees with lakh and crore, and matches the sample', () => {
+    expect(amountInWords(3500000)).toBe('THIRTY FIVE THOUSAND ONLY');
+    expect(amountInWords(15000000)).toBe('ONE LAKH FIFTY THOUSAND ONLY');
+    expect(amountInWords(185000_00)).toBe('ONE LAKH EIGHTY FIVE THOUSAND ONLY');
+    expect(amountInWords(12_34_56_789_00)).toBe('TWELVE CRORE THIRTY FOUR LAKH FIFTY SIX THOUSAND SEVEN HUNDRED EIGHTY NINE ONLY');
+    expect(amountInWords(0)).toBe('ZERO ONLY');
+  });
+  it('adds paise, and uses thousands and millions for other currencies', () => {
+    expect(amountInWords(10050)).toBe('ONE HUNDRED AND FIFTY PAISE ONLY');
+    expect(amountInWords(123456789_00, 'USD')).toBe('ONE HUNDRED TWENTY THREE MILLION FOUR HUNDRED FIFTY SIX THOUSAND SEVEN HUNDRED EIGHTY NINE ONLY');
+    expect(amountInWords(2550, 'USD')).toBe('TWENTY FIVE AND FIFTY CENTS ONLY');
+  });
+});
+
+describe('what the client sees on an invoice', () => {
+  const base = (): Invoice => ({
+    id: 'i', number: 'SSBB-001', ownerName: 'Me', ownerHandle: null, clientName: 'C', clientEmail: '', items: [], totalCents: 0, currency: 'INR', status: 'sent', issueDate: '2026-09-22', dueDate: '2026-10-01', note: 'A private-ish note', token: 'T', paidAt: null, createdAt: '', revisedAt: null, agencyClientId: 'client-1',
+    doc: parseInvoiceDoc({ from: { name: 'F', taxIds: [{ label: 'PAN', value: 'ABCDE1234F' }] }, to: { name: 'T', taxIds: [{ label: 'GSTIN', value: '08XXXXX' }] }, bank: { bankName: 'B', account: '123456', ifsc: 'SBIN0001', upi: 'a@upi' }, footnote: 'Foot' }),
+  });
+  it('shows everything by default, and never the owner\'s client id', () => {
+    const v = invoiceForClient(base());
+    expect(v.doc.bank.account).toBe('123456');
+    expect(v.agencyClientId).toBeNull();
+  });
+  it('removes what each switch hides, so it never leaves the server', () => {
+    const inv = base();
+    inv.doc.show = { ...inv.doc.show, bank: false, taxIds: false, dueDate: false, notes: false };
+    const v = invoiceForClient(inv);
+    expect(v.doc.bank).toEqual({ bankName: '', holder: '', account: '', ifsc: '', upi: '' });
+    expect(v.doc.from.taxIds).toEqual([]);
+    expect(v.doc.to.taxIds).toEqual([]);
+    expect(v.dueDate).toBeNull();
+    expect(v.note).toBe('');
+    expect(v.doc.footnote).toBe('');
+    expect(JSON.stringify(v)).not.toContain('123456');
+  });
+  it('reads a saved design defensively', () => {
+    const d = parseInvoiceDoc({ design: 'nonsense', gstBps: 99999, tdsMode: 'x', discountMode: 'flat', discountValue: -5 });
+    expect(d.design).toBe('classic');
+    expect(d.gstBps).toBe(2800);
+    expect(d.tdsMode).toBe('none');
+    expect(d.discountValue).toBe(0);
+    expect(emptyInvoiceDoc().show.bank).toBe(true);
+  });
+});
+
+describe('the contract templates', () => {
+  it('has unique section and question ids, and every blank it names is a known variable', () => {
+    const known = new Set<string>(CONTRACT_VARS.map((v) => v.key));
+    for (const t of CONTRACT_TEMPLATES) {
+      const ids = t.doc.sections.map((s) => s.id);
+      expect(new Set(ids).size, t.key).toBe(ids.length);
+      for (const s of t.doc.sections) {
+        for (const m of s.body.matchAll(/\{\{(\w+)\}\}/g)) expect(known.has(m[1]!), `${t.key}/${s.id}: ${m[1]}`).toBe(true);
+        const qs = (s.questions ?? []).map((q) => q.id);
+        expect(new Set(qs).size).toBe(qs.length);
+      }
+      expect(t.doc.sections.some((s) => s.kind === 'signatures'), t.key).toBe(true);
+    }
+  });
+  it('survives being read back, and names no brand but the person\'s own', () => {
+    for (const t of CONTRACT_TEMPLATES) {
+      const back = parseContractDoc(JSON.parse(JSON.stringify(t.doc)));
+      expect(back?.sections.length).toBe(t.doc.sections.length);
+      expect(JSON.stringify(t.doc)).not.toMatch(/Kreators|Shubham|BrandingBum|Vox ?pop/i);
+    }
+  });
+  it('fills what it knows and leaves a blank line for the rest', () => {
+    expect(fillContractText('Hello {{client}} and {{brands}}', { client: ' Acme ' })).toBe('Hello Acme and __________');
+  });
+  it('prices a count by a package, or by whole blocks past the largest', () => {
+    const pk = [{ name: 'A', units: 5, feeCents: 50000_00 }, { name: 'B', units: 10, feeCents: 85000_00 }, { name: 'C', units: 20, feeCents: 150000_00 }];
+    const extra = { units: 5, feeCents: 35000_00 };
+    expect(priceForUnits(pk, extra, 10)).toBe(85000_00);
+    expect(priceForUnits(pk, extra, 25)).toBe(185000_00);
+    expect(priceForUnits(pk, extra, 30)).toBe(220000_00);
+    expect(priceForUnits(pk, extra, 22)).toBeNull();
+    expect(priceForUnits(pk, extra, 7)).toBeNull();
+  });
+});
+
+describe('the client dashboard link', () => {
+  it('starts with the five plain parts on and the three that name money or hours off', () => {
+    const d = defaultPortalShow();
+    for (const k of ['waiting', 'coming', 'published', 'progress', 'notes']) expect(d[k as keyof typeof d], k).toBe(true);
+    for (const k of ['channels', 'hours', 'invoices', 'contracts']) expect(d[k as keyof typeof d], k).toBe(false);
+    expect(PORTAL_PARTS.length).toBe(9);
+  });
+  it('takes a saved switch only when it is a real true or false', () => {
+    expect(parsePortalShow({ hours: true, canApprove: false, waiting: 'yes', nonsense: true })).toMatchObject({ hours: true, canApprove: false, waiting: true });
+  });
+  it('says plainly what is never shown', () => {
+    expect(PORTAL_NEVER.join(' ')).toMatch(/private notes/i);
+    expect(PORTAL_NEVER.join(' ')).toMatch(/Army/);
+  });
+});
+
+describe('agency numbers and business metrics', () => {
+  it('knows a month\'s first and last day, leap years included', () => {
+    expect(monthBounds('2026-09')).toEqual({ start: '2026-09-01', end: '2026-09-30' });
+    expect(monthBounds('2028-02').end).toBe('2028-02-29');
+  });
+  it('works utilisation out against the hours a person set for the weeks in the stretch', () => {
+    expect(utilisationPct(30 * 60, 30, 7)).toBe(100);
+    expect(utilisationPct(15 * 60, 30, 7)).toBe(50);
+    expect(utilisationPct(60, 0, 7)).toBe(0);
+  });
+  it('calls a piece late only until it is live', () => {
+    expect(deliverableOverdue('making', '2026-10-01', null, '2026-10-02')).toBe(true);
+    expect(deliverableOverdue('published', '2026-10-01', null, '2026-10-02')).toBe(false);
+    expect(deliverableOverdue('approved', '2026-09-01', '2026-10-05', '2026-10-02')).toBe(false);
+    expect(deliverableOverdue('idea', null, null, '2026-10-02')).toBe(false);
+  });
+  it('judges a metric against its target in either direction', () => {
+    expect(kpiStatus(10, 10, 'up')).toBe('on');
+    expect(kpiStatus(8, 10, 'up')).toBe('near');
+    expect(kpiStatus(7, 10, 'up')).toBe('off');
+    expect(kpiStatus(9, 10, 'down')).toBe('on');
+    expect(kpiStatus(12, 10, 'down')).toBe('near');
+    expect(kpiStatus(13, 10, 'down')).toBe('off');
+    expect(kpiStatus(null, 10, 'up')).toBe('none');
+    expect(kpiStatus(5, 0, 'up')).toBe('none');
+  });
+  it('stores money as cents and hours as minutes, and shows them back', () => {
+    expect(kpiFromInput('money', 1234.5)).toBe(123450);
+    expect(kpiFromInput('hours', 1.5)).toBe(90);
+    expect(kpiToInput('money', 123450)).toBe(1234.5);
+    expect(kpiToInput('hours', 90)).toBe(1.5);
+    expect(kpiShown('hours', 90, 'INR')).toBe('1h 30m');
+    expect(kpiShown('percent', 82, 'INR')).toBe('82%');
+    expect(kpiShown('money', 3500000, 'INR')).toBe('₹35,000');
+  });
+});

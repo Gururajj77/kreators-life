@@ -1,0 +1,185 @@
+import type { ContractAnswer } from '@kreators/shared';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router';
+import { Button } from '../components/Button';
+import { ContractView, paperDate } from '../components/ContractView';
+import { Inert } from '../components/Inert';
+import { ApiError, publicApi } from '../lib/api';
+import { SiteLayout } from './SiteLayout';
+
+const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
+const COPY = {
+  none: 'No agreement at this link. Ask the person who sent it for a fresh link.',
+  typed: 'Typing your name is your acceptance of this agreement.',
+  agree: 'I have read this agreement and I agree to it.',
+};
+
+/** The client's agreement: read it, answer the brief, ask for a change, and accept by typing a name. */
+export function ContractPublic() {
+  const { token = '' } = useParams();
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ['contract', token], queryFn: () => publicApi.contract(token), retry: false });
+  const d = q.data;
+  const [answers, setAnswers] = useState<Record<string, ContractAnswer>>({});
+  const [name, setName] = useState('');
+  const [title, setTitle] = useState('');
+  const [agree, setAgree] = useState(false);
+  const [ask, setAsk] = useState('');
+  const [sent, setSent] = useState(false);
+  // Once it is signed the answers on the page are the ones that were kept; until then they are the client's own, typed here.
+  useEffect(() => {
+    if (d?.status === 'signed') setAnswers(d.answers);
+  }, [d?.status, d?.answers]);
+
+  const accept = useMutation({
+    mutationFn: () => publicApi.contractAccept(token, { name: name.trim(), title: title.trim(), agree, answers }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['contract', token] }),
+  });
+  const comment = useMutation({
+    mutationFn: () => publicApi.contractComment(token, ask.trim()),
+    onSuccess: () => {
+      setAsk('');
+      setSent(true);
+      void qc.invalidateQueries({ queryKey: ['contract', token] });
+    },
+  });
+  const printIt = () => {
+    const prev = document.title;
+    document.title = d?.doc.title ?? 'Agreement';
+    const restore = () => {
+      document.title = prev;
+      window.removeEventListener('afterprint', restore);
+    };
+    window.addEventListener('afterprint', restore);
+    window.print();
+  };
+
+  return (
+    <SiteLayout wide={false}>
+      {/* On paper only the agreement prints: no site bar, no footer. */}
+      <style>{'@media print { header.safe-top, footer { display: none !important; } }'}</style>
+      <div className="pt-lg">
+        {q.isPending && <p className="m-0 text-[16px] font-semibold text-ink-soft">Loading…</p>}
+        {q.isError && (
+          <div role="alert" className="rounded-card bg-card p-md shadow-toy-soft">
+            <h1 className="text-[30px]">Not found</h1>
+            <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">{COPY.none}</p>
+          </div>
+        )}
+        {d && (
+          <>
+            <div className="no-print mb-md flex flex-wrap items-center justify-between gap-sm">
+              <p className="m-0 text-[14px] font-semibold text-ink-soft">
+                From <strong className="text-ink">{d.ownerName}</strong>
+                {d.revisedAt ? ` · Revised ${paperDate(d.revisedAt)}` : ''}
+              </p>
+              {d.doc.show.download && (
+                <Button size="sm" variant="outline" onClick={printIt}>
+                  Download PDF
+                </Button>
+              )}
+            </div>
+
+            <ContractView
+              doc={d.doc}
+              answers={answers}
+              onAnswer={d.status === 'sent' ? (id, a) => setAnswers((m) => ({ ...m, [id]: a })) : undefined}
+              acceptance={d.acceptance}
+              signLine={d.status === 'sent' && name.trim() ? { name: name.trim(), title: title.trim() } : null}
+            />
+
+            {d.status === 'signed' && d.acceptance && (
+              <p role="status" className="mt-md m-0 rounded-tile p-sm text-[16px] font-bold" style={{ background: 'var(--tint-green)' }}>
+                Accepted by {d.acceptance.name}
+                {d.acceptance.title ? `, ${d.acceptance.title}` : ''} on {paperDate(d.acceptance.at)}.
+              </p>
+            )}
+
+            {d.status === 'sent' && (
+              <form
+                className="no-print mt-lg rounded-card bg-card p-md shadow-toy"
+                aria-labelledby="accept-heading"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (name.trim() && agree) accept.mutate();
+                }}
+              >
+                <h2 id="accept-heading" className="text-[22px]">
+                  Accept this agreement
+                </h2>
+                <p className="mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">Answer the brief above first if it has one. {COPY.typed}</p>
+                <label className="mt-sm block text-[14px] font-bold" htmlFor="k-name">
+                  Your full name
+                </label>
+                <input id="k-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoComplete="name" className={field} />
+                <label className="mt-sm block text-[14px] font-bold" htmlFor="k-title">
+                  Your title
+                </label>
+                <input id="k-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} autoComplete="organization-title" className={field} />
+                <label className="mt-sm flex min-h-[44px] cursor-pointer items-center gap-xs text-[16px] font-bold">
+                  <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="size-[20px] shrink-0 accent-[var(--color-ink)]" />
+                  {COPY.agree}
+                </label>
+                {accept.isError && (
+                  <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+                    {accept.error instanceof ApiError ? accept.error.message : 'That did not work. Try again.'}
+                  </p>
+                )}
+                <div className="mt-sm">
+                  <Button type="submit" disabled={!name.trim() || !agree || accept.isPending}>
+                    {accept.isPending ? 'Accepting' : 'Accept'}
+                  </Button>
+                </div>
+              </form>
+            )}
+
+            {d.doc.show.comments && (
+              <section className="no-print mt-lg" aria-labelledby="ask-heading">
+                <h2 id="ask-heading" className="text-[22px]">
+                  Ask for a change
+                </h2>
+                <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+                  {d.comments.map((m) => (
+                    <li key={m.id} className={`rounded-tile p-sm shadow-toy-soft ${m.author === 'client' ? 'bg-card-strong' : 'bg-card'}`}>
+                      <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
+                        {m.author === 'client' ? 'You' : d.ownerName} · {paperDate(m.createdAt)}
+                      </p>
+                      <p className="mt-xs m-0 whitespace-pre-wrap text-[16px] font-semibold">
+                        <Inert text={m.body} />
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+                <form
+                  className="mt-sm"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (ask.trim()) comment.mutate();
+                  }}
+                >
+                  <label className="block text-[14px] font-bold" htmlFor="k-ask">
+                    What would you like changed?
+                  </label>
+                  <textarea id="k-ask" value={ask} onChange={(e) => { setAsk(e.target.value); setSent(false); }} rows={3} maxLength={600} className={field} />
+                  {comment.isError && (
+                    <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+                      {comment.error instanceof ApiError ? comment.error.message : 'That did not send. Try again.'}
+                    </p>
+                  )}
+                  {sent && <p role="status" className="mt-xs m-0 text-[14px] font-bold">Sent. They have been told.</p>}
+                  <div className="mt-xs">
+                    <Button type="submit" size="sm" variant="outline" disabled={comment.isPending || !ask.trim()}>
+                      {comment.isPending ? 'Sending' : 'Send'}
+                    </Button>
+                  </div>
+                </form>
+              </section>
+            )}
+            <p className="no-print mt-md m-0 text-[12px] font-semibold text-ink-mute">Made with kreators.app</p>
+          </>
+        )}
+      </div>
+    </SiteLayout>
+  );
+}

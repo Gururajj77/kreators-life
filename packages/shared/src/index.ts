@@ -920,6 +920,8 @@ export interface ObservedAdditions {
   /** How many people unlocked each game. */
   games: { key: string; name: string; emoji: string; unlocked: number }[];
   discover: { results: number; people: number; withEq: number; assistantOn: number; stepsOff: number; addons: { type: number; love: number; mind: number; design: number }; mindOn: number };
+  /** Agency: counts only, never a client, a name or an amount. */
+  agency: { people: number; clients: number; deliverables: number; published: number; invoices: number; agreementsSigned: number; clientLinksOn: number; metricsOn: number };
   /** What super admins gave by hand in the last thirty days. */
   grants: { xp: number; badges: number; points: number; honors: number };
   /** The app's own log, last 24 hours. */
@@ -1869,6 +1871,8 @@ export const MODULES: readonly AppModule[] = [
   { key: 'work', name: 'Work', blurb: 'Opportunities from brands and the team. Apply, track, get hired.', emoji: '💼', group: 'earn', path: '/work', defaultOn: true, minRole: 'user', accent: 'servant_leader' },
   { key: 'army', name: 'Army', blurb: 'Brand campaigns: briefs, shortlists, production, approvals, delivery.', emoji: '🎬', group: 'earn', path: '/army', defaultOn: true, minRole: 'user', accent: 'servant_leader' },
   { key: 'win', name: 'Win', blurb: 'Content rewards: make a video about a brand, get paid per verified view.', emoji: '🥇', group: 'earn', path: '/win', defaultOn: false, minRole: 'user', accent: 'parent_child' },
+  // Off on a new account. Owner only: a content agency's or a freelance creator's clients, pieces, time and approvals.
+  { key: 'agency', name: 'Agency', blurb: 'Clients, content pieces from idea to published, retainers, time, approvals and invoices.', emoji: '🗂️', group: 'earn', path: '/agency', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
 
   { key: 'party', name: 'Party', blurb: 'Meetups, workshops, camps and flagship days. RSVP, waitlist, check in.', emoji: '🎉', group: 'community', path: '/party', defaultOn: false, minRole: 'user', accent: 'friendship' },
   { key: 'run', name: 'Kreators Run', blurb: 'Run clubs near you. A start code at the line logs your run and pays points. Kilometres, badges, and brand collabs with giveaways.', emoji: '🏃', group: 'community', path: '/run', defaultOn: false, minRole: 'user', accent: 'friendship' },
@@ -3496,6 +3500,12 @@ export interface Invoice {
   token: string;
   paidAt: string | null;
   createdAt: string;
+  /** The designed invoice. Older ones have the empty design. */
+  doc: InvoiceDoc;
+  /** The Agency client it was made for, when it was. */
+  agencyClientId: string | null;
+  /** When it was last changed after the client could see it. */
+  revisedAt: string | null;
 }
 
 export interface FinanceBudget {
@@ -5224,6 +5234,11 @@ export const TERMS: Record<string, string> = {
   'five areas of life': 'Physical, financial, emotional, mental and spiritual: another way to read the seven relationships.',
   period: 'A week, a month, a quarter or half a year, for a review or a dashboard filter.',
   review: 'Your own look back at a period: the numbers from every app, then your answers.',
+  retainer: 'What a client pays you each month for an agreed amount of work.',
+  deliverable: 'One item of content you make for a client: a video, a post, a script, a newsletter. It moves from idea to published.',
+  'client link': 'A page you can share with a client. They see what is waiting for them and can approve it or send it back. Nothing else.',
+  utilisation: 'The share of your working hours that you spent on work a client pays for.',
+  'first pass': 'A piece the client approved without sending it back.',
   trust: 'A score out of 100 from what a seller earned here: xp, points, streaks, time, sales and honors.',
   featured: 'A week at the top of the Store or Tools. Staff give it; a seller pays 200 points.',
   'partner link': 'A link to another shop. kreators.app may earn a share if you buy.',
@@ -5294,7 +5309,7 @@ export const TERM_GROUPS: { name: string; terms: string[] }[] = [
   { name: 'Daily and progress', terms: ['small act', 'check-in', 'daily three', 'do date', 'due date', 'priority', 'habit', 'subtask', 'remember', 'not scheduled', 'daily brief', 'not-to-do', 'kept day', 'streak', 'xp', 'points', 'level', 'who you are becoming', 'life score', 'five areas of life', 'period', 'review', 'season'] },
   { name: 'You and your page', terms: ['strength', 'personality type', 'love language', 'signs', 'human design', 'gate', 'channel', 'sidereal', 'numerology', 'master number', 'username', 'identity tag', 'setup chat', 'public page', 'badge', 'honor', 'trust', 'unlock'] },
   { name: 'Friends and community', terms: ['friend code', 'alias', 'circle', 'reaction', 'mention', 'guide', 'life coach', 'student', 'change log', 'run club', 'start code', 'attendee code', 'deck', 'focus mode', 'focus session'] },
-  { name: 'Learn and earn', terms: ['cohort', 'campaign', 'bounty', 'Club', 'collab', 'giveaway'] },
+  { name: 'Learn and earn', terms: ['cohort', 'campaign', 'bounty', 'Club', 'collab', 'giveaway', 'retainer', 'deliverable', 'client link', 'utilisation', 'first pass'] },
   { name: 'Shop and store', terms: ['featured', 'partner link', 'pre-owned', 'kit', 'offer'] },
   { name: 'Content', terms: ['brand folder', 'outlier', 'hook', 'piece'] },
   { name: 'Assistant and plans', terms: ['bumling', 'assistant', 'Pro', 'credits', 'top-up'] },
@@ -5425,6 +5440,16 @@ export const HOW_TO: Record<string, HowTo> = {
       'If a reward changes after launch, its version goes up and everyone who entered gets a note saying what changed.',
     ],
     terms: ['bounty'],
+  },
+  agency: {
+    steps: [
+      'For a content agency or a freelance creator. Add each client with what they pay a month, how many deliverables you owe them and which channels you make for.',
+      'Every deliverable is one piece of content and has a stage: idea, script, making, review, approved, published. Move it along as you work; it has a due date and a day to go live.',
+      'Switch on a client link and the client can open one page, read what is waiting for them and approve it or send it back with a note. They never see your fees, hours or notes.',
+      'Log the time you spend. The page shows hours this month against what the client pays for, and your week against the hours you set.',
+      'Make an invoice from a client page for the retainer and the deliverables you finished. Reviews can show these numbers as business metrics if you switch that on.',
+    ],
+    terms: ['retainer', 'deliverable', 'client link', 'utilisation'],
   },
   party: {
     steps: [
@@ -6147,6 +6172,13 @@ export interface SupportTicket {
 }
 
 export const HELP_FAQ = [
+  { q: 'What is Agency, and who is it for?', a: 'Agency is for a content agency or a freelance creator who makes videos, posts, scripts and newsletters for clients. Add a client, then move each deliverable from idea to published. Log your time, make invoices and agreements, and share a page where the client approves what is waiting. Switch it on under Features.' },
+  { q: 'How do I share a dashboard with a client?', a: 'Open the client, find Client link and switch it on. Copy the link and send it. Under it you pick what they can see (what is waiting, coming up, published, the month so far, notes, and more) and what they can do (approve or send back, write notes). Use Open preview to see exactly what they see. A fresh link closes the old one.' },
+  { q: 'What can a client never see?', a: 'Your private notes, your fee for each piece and the retainer amount, your time line by line, your other clients, and what a brand wrote in Army. Hours, invoices, agreements and channels stay off until you switch them on.' },
+  { q: 'Can a client read and download an invoice or an agreement?', a: 'Yes. Each has its own link they open without signing in. They can save a copy as a PDF (the Download PDF button uses your browser\'s print and save), and write a comment to ask for a change. You switch each of those off per invoice or per agreement, and you can switch off the bank details, tax numbers, due date and notes on one invoice.' },
+  { q: 'Can I change an invoice or an agreement after I sent it?', a: 'Yes. Change it and the client sees the new version at the same link, marked Revised with the date. A paid invoice must be marked sent again first, so your money records stay true. A signed agreement is a record: use Revise to make a new draft from it.' },
+  { q: 'How do I copy an invoice for next month?', a: 'Open it and tap Duplicate. The copy takes the next number in the same series, today\'s date, and the same gap to the due date. A month written in the lines, like 2026-09, moves on with it.' },
+  { q: 'Who sees business metrics in Reviews?', a: 'Only you, and only after you switch them on. They sit in Reviews under the numbers. Type a number for each period, or read it from Agency. They never appear anywhere else.' },
   { q: 'What are the daily three?', a: 'Check in, do the small act, tick one task. They are on Daily. Each one you tick pays xp. The check-in pays points too.' },
   { q: 'What are the seven pillars?', a: 'The seven relationships that make a life, one pillar each. Each pillar has a pyramid: a foundation at the top, then a guiding principle, a value goal, a goal outcome, a project, and tasks at the point at the bottom. Tick a task and its xp runs up through every layer above it.' },
   { q: 'What is a small act?', a: 'One quick thing for your weakest pillar, picked for you each day. It takes two minutes and pays fifteen xp.' },
@@ -6699,6 +6731,7 @@ export const SETUP_COMBOS: readonly SetupCombo[] = [
   { when: ['employee', 'earn'], apps: { win: 2, work: 1 }, because: 'you have a job and want to earn on the side' },
   { when: ['employee', 'money'], apps: { finance: 1, reviews: 1 }, because: 'a salary goes further with a plan' },
   { when: ['creator', 'earn'], apps: { win: 2, army: 2 }, because: 'you make content and want it to pay' },
+  { when: ['freelancer', 'earn'], apps: { agency: 2 }, because: 'you make content for clients and want to be paid on time' },
   { when: ['creator', 'grow'], apps: { content: 2, audience: 1 }, because: 'you make content and want more people to see it' },
   { when: ['creator', 'sell'], apps: { shop: 2, automations: 1 }, because: 'you make content and want to sell to the people who watch' },
   { when: ['creator', 'people'], apps: { community: 1, circles: 1, party: 1 }, because: 'creators grow faster with other creators around' },
@@ -7037,6 +7070,7 @@ export const SETUP_APP_LINES: Readonly<Record<string, string>> = {
   work: 'Paid gigs from brands.',
   army: 'Brand campaigns you can join.',
   win: 'Get paid for views on brand videos.',
+  agency: 'Clients, content pieces and approvals in one place.',
   party: 'Meetups and events near you.',
   run: 'Run clubs near you. Runs earn points.',
   community: 'Post, ask and cheer each other on.',
@@ -10266,3 +10300,978 @@ export function parseFocusSettings(raw: unknown): FocusSettings {
 }
 /** How many soft beats mark the start of a break: one for a mini break, three for the long one. */
 export const BREAK_BEATS = { short: 1, long: 3 } as const;
+
+// ---------------------------------------------------------------------------
+// Agency: a content agency's or a freelance creator's clients, pieces, time and approvals
+// ---------------------------------------------------------------------------
+
+export const AGENCY_CLIENT_STATUSES = ['lead', 'active', 'paused', 'ended'] as const;
+export type AgencyClientStatus = (typeof AGENCY_CLIENT_STATUSES)[number];
+export const AGENCY_STATUS_NAME: Record<AgencyClientStatus, string> = { lead: 'Lead', active: 'Active', paused: 'Paused', ended: 'Ended' };
+export const AGENCY_HEALTH = ['green', 'amber', 'red'] as const;
+export type AgencyHealth = (typeof AGENCY_HEALTH)[number];
+export const AGENCY_HEALTH_NAME: Record<AgencyHealth, string> = { green: 'Going well', amber: 'Needs care', red: 'At risk' };
+
+/** What a piece is. */
+export const DELIVERABLE_KINDS = ['video', 'short', 'post', 'carousel', 'newsletter', 'blog', 'script', 'thumbnail', 'podcast', 'other'] as const;
+export type DeliverableKind = (typeof DELIVERABLE_KINDS)[number];
+export const DELIVERABLE_KIND_NAME: Record<DeliverableKind, string> = { video: 'Video', short: 'Short', post: 'Post', carousel: 'Carousel', newsletter: 'Newsletter', blog: 'Blog', script: 'Script', thumbnail: 'Thumbnail', podcast: 'Podcast', other: 'Other' };
+/** Channels offered as chips; a client can have any others typed in. */
+export const AGENCY_CHANNELS = ['YouTube', 'Instagram', 'TikTok', 'LinkedIn', 'X', 'Facebook', 'Podcast', 'Blog', 'Newsletter'] as const;
+
+/** The pipeline every piece moves along, in order. */
+export const DELIVERABLE_STAGES = ['idea', 'script', 'making', 'review', 'approved', 'published'] as const;
+export type DeliverableStage = (typeof DELIVERABLE_STAGES)[number];
+export const DELIVERABLE_STAGE_META: Record<DeliverableStage, { name: string; blurb: string; next: string | null }> = {
+  idea: { name: 'Idea', blurb: 'Worth making, not started.', next: 'Start the script' },
+  script: { name: 'Script', blurb: 'Being written.', next: 'Start making it' },
+  making: { name: 'Making', blurb: 'Shooting, editing or designing.', next: 'Send for review' },
+  review: { name: 'In review', blurb: 'Waiting for the client.', next: 'Mark approved' },
+  approved: { name: 'Approved', blurb: 'The client said yes.', next: 'Mark published' },
+  published: { name: 'Published', blurb: 'Live.', next: null },
+};
+export const nextDeliverableStage = (s: DeliverableStage): DeliverableStage | null => DELIVERABLE_STAGES[DELIVERABLE_STAGES.indexOf(s) + 1] ?? null;
+
+/** One column of a pipeline board: its stage, how many are in it in all, and the first cards. */
+export interface BoardColumn<T> {
+  stage: string;
+  total: number;
+  items: T[];
+}
+/** The two ways to see any pipeline. */
+export const PIPELINE_VIEWS = ['list', 'board'] as const;
+export type PipelineView = (typeof PIPELINE_VIEWS)[number];
+
+/** A status tag: its words and which relationship colour it wears (a token, never a hex). */
+export type TagTone = 'neutral' | 'info' | 'good' | 'warn' | 'bad';
+
+export const DELIVERABLE_STAGE_TONE: Record<DeliverableStage, TagTone> = { idea: 'neutral', script: 'neutral', making: 'info', review: 'warn', approved: 'good', published: 'good' };
+export const CLIENT_STATUS_TONE: Record<AgencyClientStatus, TagTone> = { lead: 'info', active: 'good', paused: 'warn', ended: 'neutral' };
+export const CLIENT_HEALTH_TONE: Record<AgencyHealth, TagTone> = { green: 'good', amber: 'warn', red: 'bad' };
+export const INVOICE_STATUS_TONE: Record<(typeof INVOICE_STATUSES)[number], TagTone> = { draft: 'neutral', sent: 'info', paid: 'good', void: 'bad' };
+export const INVOICE_STATUS_NAME: Record<(typeof INVOICE_STATUSES)[number], string> = { draft: 'Draft', sent: 'Sent', paid: 'Paid', void: 'Void' };
+
+export const AGENCY_MAX_CLIENTS = 60;
+export const AGENCY_MAX_ITEMS = 2000;
+export const AGENCY_NAME_MAX = 80;
+export const AGENCY_NOTES_MAX = 1000;
+export const AGENCY_TITLE_MAX = 120;
+export const AGENCY_NOTE_MAX = 500;
+export const AGENCY_MAX_MINUTES = 24 * 60;
+export const AGENCY_DEFAULT_WEEKLY_HOURS = 30;
+export const AGENCY_CURRENCIES = ['INR', 'USD', 'EUR', 'GBP', 'AED', 'AUD', 'CAD', 'SGD'] as const;
+
+export interface AgencySettings {
+  currency: string;
+  weeklyHours: number;
+  profile: BusinessProfile;
+}
+
+export interface AgencyClient {
+  id: string;
+  name: string;
+  contactName: string;
+  contactEmail: string;
+  status: AgencyClientStatus;
+  health: AgencyHealth;
+  channels: string[];
+  retainerCents: number;
+  piecesPerMonth: number;
+  hoursPerMonth: number;
+  renewalDate: string | null;
+  notes: string;
+  /** An Army campaign this client is served through, by id and name. */
+  campaignId: string | null;
+  campaignName: string;
+  /** What goes under "Billed to" and in contracts. */
+  billing: InvoiceParty;
+  /** What the client sees at their link. */
+  portal: PortalShow;
+  /** The client link is /a/<token>; null while it is switched off. */
+  portalToken: string | null;
+  createdAt: string;
+  /** Worked out by the server for this month. */
+  month: { published: number; inReview: number; open: number; overdue: number; minutes: number; billableMinutes: number };
+  /** Plain reasons to look at this client today. */
+  flags: string[];
+}
+
+export interface AgencyDeliverable {
+  id: string;
+  clientId: string;
+  clientName: string;
+  title: string;
+  kind: DeliverableKind;
+  platform: string;
+  stage: DeliverableStage;
+  dueDate: string | null;
+  publishDate: string | null;
+  link: string;
+  notes: string;
+  /** The Army deliverable this answers, and what Army says about it now. */
+  armyDeliverableId: string | null;
+  army: { status: string; feedback: string } | null;
+  /** How many notes are in the thread. */
+  noteCount: number;
+  feeCents: number;
+  revisions: number;
+  approvedAt: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+  overdue: boolean;
+}
+
+/** One line in a deliverable's thread. `me` is the person, `client` came through the client link, `brand` came from Army. */
+export interface AgencyNote {
+  id: string;
+  author: 'me' | 'client' | 'brand';
+  shared: boolean;
+  body: string;
+  createdAt: string;
+}
+export const AGENCY_AUTHOR_NAME: Record<AgencyNote['author'], string> = { me: 'You', client: 'Client', brand: 'Brand, from Army' };
+
+/** A campaign the person can serve through Army, and the deliverables it holds. */
+export interface AgencyCampaign {
+  id: string;
+  name: string;
+  brand: string;
+  deliverables: { id: string; title: string; platform: string; dueAt: string | null; status: string; linked: boolean }[];
+}
+
+export interface AgencyTimeEntry {
+  id: string;
+  clientId: string;
+  clientName: string;
+  itemId: string | null;
+  itemTitle: string;
+  day: string;
+  minutes: number;
+  billable: boolean;
+  note: string;
+}
+
+export interface AgencyTotals {
+  activeClients: number;
+  retainerCents: number;
+  open: number;
+  inReview: number;
+  overdue: number;
+  publishedMonth: number;
+  plannedMonth: number;
+  minutesMonth: number;
+  billableMonth: number;
+  minutesWeek: number;
+  billableWeek: number;
+  unpaidCents: number;
+}
+
+export interface AgencyOverview {
+  settings: AgencySettings;
+  totals: AgencyTotals;
+  /** Things to do today, in plain words, each with the client it is about. */
+  attention: { clientId: string; text: string }[];
+  clients: AgencyClient[];
+  page: Page;
+  /** Pieces due or going live in the next fourteen days, soonest first. */
+  coming: AgencyDeliverable[];
+}
+
+export interface AgencyInvoiceRow {
+  id: string;
+  number: string;
+  totalCents: number;
+  currency: string;
+  status: Invoice['status'];
+  issueDate: string;
+  token: string;
+}
+
+export interface AgencyClientPage {
+  settings: AgencySettings;
+  client: AgencyClient;
+  counts: Record<DeliverableStage, number>;
+  /** Published this month by channel. */
+  byChannel: { channel: string; published: number; open: number }[];
+  /** Army campaigns the person is a creator on, to link this client to. */
+  campaigns: AgencyCampaign[];
+  time: AgencyTimeEntry[];
+  invoices: AgencyInvoiceRow[];
+}
+
+/** The parts of a client's dashboard the owner can show at the client link. Each is a switch; the default says what it starts as. */
+export const PORTAL_PARTS = [
+  { key: 'waiting', name: 'Waiting for approval', blurb: 'What is in review, with the link to watch each one.', on: true },
+  { key: 'coming', name: 'Coming up', blurb: 'What is being made and when it goes live. The stage and the day only.', on: true },
+  { key: 'published', name: 'Published', blurb: 'What has gone live, with its link.', on: true },
+  { key: 'progress', name: 'This month so far', blurb: 'How many are live against the plan.', on: true },
+  { key: 'notes', name: 'Notes you share', blurb: 'Only notes you tick as shared, and what they write back.', on: true },
+  { key: 'channels', name: 'By channel', blurb: 'What went live and what is open on each channel.', on: false },
+  { key: 'hours', name: 'Hours', blurb: 'Hours worked this month against the hours they pay for.', on: false },
+  { key: 'invoices', name: 'Invoices', blurb: 'Number, amount and status, with the link to each. Drafts are never shown.', on: false },
+  { key: 'contracts', name: 'Agreements', blurb: 'Agreements sent to them, with the link to read and sign.', on: false },
+] as const;
+export type PortalPartKey = (typeof PORTAL_PARTS)[number]['key'];
+/** What the person at the link may do, apart from looking. */
+export const PORTAL_ACTIONS = [
+  { key: 'canApprove', name: 'Approve or send back', blurb: 'They can approve a deliverable in review, or send it back with a note.', on: true },
+  { key: 'canComment', name: 'Write notes', blurb: 'They can leave a note on any deliverable.', on: true },
+] as const;
+export type PortalActionKey = (typeof PORTAL_ACTIONS)[number]['key'];
+export type PortalShow = Record<PortalPartKey | PortalActionKey, boolean>;
+/** What is never at the link, whatever is switched on. Said on the screen next to the switches. */
+export const PORTAL_NEVER: readonly string[] = ['Your private notes', 'Your fee for each piece and the retainer amount', 'Your time, line by line', 'Other clients', 'What the brand wrote in Army'];
+
+export const defaultPortalShow = (): PortalShow => Object.fromEntries([...PORTAL_PARTS, ...PORTAL_ACTIONS].map((p) => [p.key, p.on])) as PortalShow;
+/** Reads the saved switches; a switch that was never saved takes its default, anything unclean is dropped. */
+export function parsePortalShow(v: unknown): PortalShow {
+  const base = defaultPortalShow();
+  if (!v || typeof v !== 'object') return base;
+  const o = v as Record<string, unknown>;
+  for (const k of Object.keys(base) as (keyof PortalShow)[]) if (typeof o[k] === 'boolean') base[k] = o[k] as boolean;
+  return base;
+}
+
+/** What a client sees at their link: only the parts that are switched on, and never fees, private notes or other clients. */
+export interface PortalView {
+  agencyName: string;
+  clientName: string;
+  show: PortalShow;
+  waiting: { id: string; title: string; kind: DeliverableKind; platform: string; link: string; publishDate: string | null; thread: { author: 'me' | 'client'; body: string; createdAt: string }[] }[];
+  coming: { title: string; kind: DeliverableKind; platform: string; stage: DeliverableStage; publishDate: string | null }[];
+  published: { title: string; kind: DeliverableKind; platform: string; link: string; publishedAt: string | null }[];
+  month: { published: number; planned: number } | null;
+  channels: { channel: string; published: number; open: number }[];
+  hours: { usedMinutes: number; includedMinutes: number } | null;
+  invoices: { number: string; totalCents: number; currency: string; status: Invoice['status']; issueDate: string; token: string }[];
+  contracts: { title: string; status: ContractStatus; token: string }[];
+}
+
+/** The retainer period for a month: first and last day. */
+export function monthBounds(month: string): { start: string; end: string } {
+  const [y, m] = month.split('-').map(Number);
+  const last = new Date(Date.UTC(y ?? 2026, m ?? 1, 0)).getUTCDate();
+  return { start: `${month}-01`, end: `${month}-${String(last).padStart(2, '0')}` };
+}
+
+/** Hours and minutes in a short plain form: 90 is "1h 30m". */
+export function minutesLabel2(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h === 0 ? `${m}m` : m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+/** Billable share of the hours a person set for the weeks in a stretch, as a whole percent. */
+export function utilisationPct(billableMinutes: number, weeklyHours: number, days: number): number {
+  const capacity = (weeklyHours * 60 * days) / 7;
+  return capacity <= 0 ? 0 : Math.round((billableMinutes / capacity) * 100);
+}
+
+/** Whether a piece is late: not live, and past its due date or its day to go live. */
+export function deliverableOverdue(stage: DeliverableStage, dueDate: string | null, publishDate: string | null, today: string): boolean {
+  if (stage === 'published') return false;
+  const day = stage === 'approved' ? (publishDate ?? dueDate) : dueDate;
+  return Boolean(day && day < today);
+}
+
+/** The invoice lines for a month: the retainer, then each piece published that month that has its own fee. */
+export function invoiceLinesFor(clientName: string, month: string, retainerCents: number, fees: { title: string; feeCents: number }[]): InvoiceItem[] {
+  const lines: InvoiceItem[] = [];
+  if (retainerCents > 0) lines.push({ description: `Monthly retainer, ${month}`, quantity: 1, unitCents: retainerCents });
+  for (const f of fees) if (f.feeCents > 0) lines.push({ description: f.title, quantity: 1, unitCents: f.feeCents });
+  void clientName;
+  return lines.slice(0, 30);
+}
+
+// ---- Business metrics in Reviews: only for people who switch them on
+
+export const KPI_UNITS = ['number', 'money', 'percent', 'hours'] as const;
+export type KpiUnit = (typeof KPI_UNITS)[number];
+export const KPI_UNIT_NAME: Record<KpiUnit, string> = { number: 'A count', money: 'Money', percent: 'A percent', hours: 'Hours' };
+export const MAX_KPIS = 12;
+export const KPI_NAME_MAX = 60;
+export const KPI_NOTE_MAX = 200;
+
+/** Numbers read from Agency for a period, so nobody types what the app already knows. */
+export const KPI_AUTO = [
+  { key: 'published', name: 'Pieces published', unit: 'number', direction: 'up' },
+  { key: 'first_pass', name: 'Approved first time', unit: 'percent', direction: 'up' },
+  { key: 'on_time', name: 'Published on time', unit: 'percent', direction: 'up' },
+  { key: 'hours', name: 'Billable hours', unit: 'hours', direction: 'up' },
+  { key: 'utilisation', name: 'Utilisation', unit: 'percent', direction: 'up' },
+  { key: 'invoiced', name: 'Invoiced', unit: 'money', direction: 'up' },
+  { key: 'paid', name: 'Paid', unit: 'money', direction: 'up' },
+  { key: 'new_clients', name: 'New clients', unit: 'number', direction: 'up' },
+] as const satisfies readonly { key: string; name: string; unit: KpiUnit; direction: 'up' | 'down' }[];
+export type KpiAutoKey = (typeof KPI_AUTO)[number]['key'];
+export const KPI_AUTO_BY_KEY: Record<string, (typeof KPI_AUTO)[number]> = Object.fromEntries(KPI_AUTO.map((a) => [a.key, a]));
+
+export type KpiStatus = 'on' | 'near' | 'off' | 'none';
+
+export interface Kpi {
+  id: string;
+  name: string;
+  unit: KpiUnit;
+  direction: 'up' | 'down';
+  cadence: PeriodKind;
+  target: number;
+  /** 'manual' or one of KPI_AUTO. */
+  source: string;
+  createdAt: string;
+}
+
+export interface KpiReading {
+  kpi: Kpi;
+  value: number | null;
+  previous: number | null;
+  note: string;
+  status: KpiStatus;
+  /** The last six periods, oldest first; null where nothing was recorded. */
+  series: (number | null)[];
+}
+
+export interface KpisResponse {
+  enabled: boolean;
+  period: Period;
+  currency: string;
+  readings: KpiReading[];
+  /** Metrics set for other cadences, so the screen can say they exist. */
+  elsewhere: number;
+}
+
+/** How a value stands against its target: on it, within a fifth of it, or off it. */
+export function kpiStatus(value: number | null, target: number, direction: 'up' | 'down'): KpiStatus {
+  if (value === null || target <= 0) return 'none';
+  if (direction === 'up') return value >= target ? 'on' : value >= target * 0.8 ? 'near' : 'off';
+  return value <= target ? 'on' : value <= target * 1.2 ? 'near' : 'off';
+}
+
+/** A metric's value for the screen. Money is cents, hours are minutes, a percent is a whole number. */
+export function kpiShown(unit: KpiUnit, value: number, currency: string): string {
+  if (unit === 'money') return money(value, currency);
+  if (unit === 'hours') return minutesLabel2(value);
+  if (unit === 'percent') return `${value}%`;
+  return value.toLocaleString();
+}
+
+/** What a person types for a unit becomes the stored whole number: money to cents, hours to minutes. */
+export function kpiFromInput(unit: KpiUnit, typed: number): number {
+  if (!Number.isFinite(typed) || typed < 0) return 0;
+  if (unit === 'money') return Math.round(typed * 100);
+  if (unit === 'hours') return Math.round(typed * 60);
+  return Math.round(typed);
+}
+/** The reverse, for filling a field. */
+export function kpiToInput(unit: KpiUnit, stored: number): number {
+  if (unit === 'money') return stored / 100;
+  if (unit === 'hours') return Math.round((stored / 60) * 100) / 100;
+  return stored;
+}
+
+// ---------------------------------------------------------------------------
+// Invoice designer and calculator
+// ---------------------------------------------------------------------------
+
+/** The looks an invoice can wear. Colours come from the theme tokens in the screen, never from here. */
+export const INVOICE_DESIGNS = ['classic', 'teal', 'warm', 'mono'] as const;
+export type InvoiceDesign = (typeof INVOICE_DESIGNS)[number];
+export const INVOICE_DESIGN_META: Record<InvoiceDesign, { name: string; blurb: string }> = {
+  classic: { name: 'Classic', blurb: 'Grey bars, a green total and a blue line for the words.' },
+  teal: { name: 'Teal', blurb: 'Teal bars with a soft sky total.' },
+  warm: { name: 'Warm', blurb: 'Sand bars with a soft peach total.' },
+  mono: { name: 'Plain', blurb: 'Black and white. Prints cleanly.' },
+};
+export const INVOICE_TITLES = ['Invoice', 'Advance invoice', 'Proforma invoice', 'Tax invoice'] as const;
+export const GST_RATES_BPS = [0, 500, 1200, 1800, 2800] as const;
+/** Common TDS rates for creative work, in basis points (one percent is 100). Any rate from 0 to 30 percent is allowed. */
+export const TDS_RATES_BPS = [0, 100, 200, 500, 1000] as const;
+export const TDS_MODES = ['none', 'grossup', 'show'] as const;
+export type TdsMode = (typeof TDS_MODES)[number];
+export const TDS_MODE_NAME: Record<TdsMode, string> = { none: 'No TDS', grossup: 'Add it to the total', show: 'Show what they will deduct' };
+export const MAX_INVOICE_LINES = 30;
+export const INVOICE_TEXT_MAX = 200;
+
+export interface InvoiceParty {
+  /** The big name: a brand for the sender, the client's brand for the other side. */
+  name: string;
+  /** The line under it: "Prop. Name for Brand" for the sender, the legal name for the client. */
+  line: string;
+  /** Tax numbers with their labels, such as PAN or GSTIN. */
+  taxIds: { label: string; value: string }[];
+  address: string;
+  email: string;
+  phone: string;
+}
+export const emptyParty = (): InvoiceParty => ({ name: '', line: '', taxIds: [], address: '', email: '', phone: '' });
+
+export interface BankDetails {
+  bankName: string;
+  holder: string;
+  account: string;
+  ifsc: string;
+  upi: string;
+}
+export const emptyBank = (): BankDetails => ({ bankName: '', holder: '', account: '', ifsc: '', upi: '' });
+
+/** What the client sees on this invoice. Each is a switch on the invoice; what is off never leaves the server. */
+export const INVOICE_SHOW_PARTS = [
+  { key: 'bank', name: 'Bank and UPI details', blurb: 'Where to pay. Switch it off to send those another way.', on: true },
+  { key: 'taxIds', name: 'Tax numbers', blurb: 'PAN, GSTIN and any others, for both sides.', on: true },
+  { key: 'dueDate', name: 'Payment due date', blurb: 'The "Payment due by" line.', on: true },
+  { key: 'words', name: 'Total in words', blurb: 'The line that spells the total out.', on: true },
+  { key: 'notes', name: 'Notes and footnote', blurb: 'The note on the invoice and the line under the totals.', on: true },
+  { key: 'comments', name: 'Comments from the client', blurb: 'They can write to ask for a change.', on: true },
+  { key: 'download', name: 'Download a PDF copy', blurb: 'They can save or print a copy.', on: true },
+] as const;
+export type InvoiceShowKey = (typeof INVOICE_SHOW_PARTS)[number]['key'];
+export type InvoiceShow = Record<InvoiceShowKey, boolean>;
+export const defaultInvoiceShow = (): InvoiceShow => Object.fromEntries(INVOICE_SHOW_PARTS.map((p) => [p.key, p.on])) as InvoiceShow;
+export function parseInvoiceShow(v: unknown, base: InvoiceShow = defaultInvoiceShow()): InvoiceShow {
+  const out = { ...base };
+  if (v && typeof v === 'object') for (const k of Object.keys(out) as InvoiceShowKey[]) if (typeof (v as Record<string, unknown>)[k] === 'boolean') out[k] = (v as Record<string, boolean>)[k]!;
+  return out;
+}
+
+export interface InvoiceDoc {
+  show: InvoiceShow;
+  title: string;
+  from: InvoiceParty;
+  to: InvoiceParty;
+  bank: BankDetails;
+  design: InvoiceDesign;
+  discountMode: 'none' | 'flat' | 'percent';
+  /** Cents for a flat discount, basis points for a percent one. */
+  discountValue: number;
+  gstBps: number;
+  /** Show GST as half CGST and half SGST. */
+  gstSplit: boolean;
+  tdsBps: number;
+  tdsMode: TdsMode;
+  /** The small line under the totals, such as who bears the TDS. */
+  footnote: string;
+  /** The line at the very foot of the page. */
+  footer: string;
+}
+export const emptyInvoiceDoc = (): InvoiceDoc => ({ show: defaultInvoiceShow(), title: 'Invoice', from: emptyParty(), to: emptyParty(), bank: emptyBank(), design: 'classic', discountMode: 'none', discountValue: 0, gstBps: 0, gstSplit: false, tdsBps: 0, tdsMode: 'none', footnote: '', footer: '' });
+
+/** What a person saves once and every invoice starts from. Their own details, on their own account. */
+export interface BusinessProfile {
+  show: InvoiceShow;
+  from: InvoiceParty;
+  bank: BankDetails;
+  design: InvoiceDesign;
+  title: string;
+  footnote: string;
+  footer: string;
+  invoicePrefix: string;
+  payDays: number;
+  gstBps: number;
+  tdsBps: number;
+  tdsMode: TdsMode;
+  /** For contracts. */
+  signerName: string;
+  signerTitle: string;
+  jurisdiction: string;
+}
+export const emptyProfile = (): BusinessProfile => ({ show: defaultInvoiceShow(), from: emptyParty(), bank: emptyBank(), design: 'classic', title: 'Invoice', footnote: '', footer: '', invoicePrefix: '', payDays: 14, gstBps: 0, tdsBps: 0, tdsMode: 'none', signerName: '', signerTitle: '', jurisdiction: '' });
+
+const cleanText = (v: unknown, max = INVOICE_TEXT_MAX): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+const bps = (v: unknown, max: number): number => {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) ? Math.max(0, Math.min(max, n)) : 0;
+};
+const oneOfList = <T extends string>(v: unknown, list: readonly T[], fallback: T): T => ((list as readonly string[]).includes(String(v)) ? (v as T) : fallback);
+
+export function parseParty(v: unknown): InvoiceParty {
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  const ids = Array.isArray(o.taxIds) ? o.taxIds : [];
+  return {
+    name: cleanText(o.name, 120),
+    line: cleanText(o.line, 160),
+    taxIds: ids
+      .map((x) => (x && typeof x === 'object' ? (x as Record<string, unknown>) : {}))
+      .map((x) => ({ label: cleanText(x.label, 20), value: cleanText(x.value, 40) }))
+      .filter((x) => x.label && x.value)
+      .slice(0, 4),
+    address: cleanText(o.address, 300),
+    email: cleanText(o.email, 120),
+    phone: cleanText(o.phone, 40),
+  };
+}
+export function parseBank(v: unknown): BankDetails {
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  return { bankName: cleanText(o.bankName, 80), holder: cleanText(o.holder, 80), account: cleanText(o.account, 40), ifsc: cleanText(o.ifsc, 20).toUpperCase(), upi: cleanText(o.upi, 80) };
+}
+export function parseInvoiceDoc(v: unknown, base: InvoiceDoc = emptyInvoiceDoc()): InvoiceDoc {
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  const mode = oneOfList(o.discountMode, ['none', 'flat', 'percent'] as const, base.discountMode);
+  return {
+    show: 'show' in o ? parseInvoiceShow(o.show, base.show) : base.show,
+    title: cleanText(o.title, 40) || base.title,
+    from: 'from' in o ? parseParty(o.from) : base.from,
+    to: 'to' in o ? parseParty(o.to) : base.to,
+    bank: 'bank' in o ? parseBank(o.bank) : base.bank,
+    design: oneOfList(o.design, INVOICE_DESIGNS, base.design),
+    discountMode: mode,
+    discountValue: mode === 'none' ? 0 : mode === 'percent' ? bps(o.discountValue, 10000) : Math.max(0, Math.min(1_000_000_000_00, Math.round(Number(o.discountValue)) || 0)),
+    gstBps: 'gstBps' in o ? bps(o.gstBps, 2800) : base.gstBps,
+    gstSplit: 'gstSplit' in o ? o.gstSplit === true : base.gstSplit,
+    tdsBps: 'tdsBps' in o ? bps(o.tdsBps, 3000) : base.tdsBps,
+    tdsMode: oneOfList(o.tdsMode, TDS_MODES, base.tdsMode),
+    footnote: 'footnote' in o ? cleanText(o.footnote, 300) : base.footnote,
+    footer: 'footer' in o ? cleanText(o.footer, 300) : base.footer,
+  };
+}
+export function parseProfile(v: unknown): BusinessProfile {
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  const e = emptyProfile();
+  return {
+    show: parseInvoiceShow(o.show),
+    from: parseParty(o.from),
+    bank: parseBank(o.bank),
+    design: oneOfList(o.design, INVOICE_DESIGNS, e.design),
+    title: cleanText(o.title, 40) || e.title,
+    footnote: cleanText(o.footnote, 300),
+    footer: cleanText(o.footer, 300),
+    invoicePrefix: cleanText(o.invoicePrefix, 12).toUpperCase().replace(/[^A-Z0-9-]/g, ''),
+    payDays: Math.max(0, Math.min(180, Math.round(Number(o.payDays)) || e.payDays)),
+    gstBps: bps(o.gstBps, 2800),
+    tdsBps: bps(o.tdsBps, 3000),
+    tdsMode: oneOfList(o.tdsMode, TDS_MODES, e.tdsMode),
+    signerName: cleanText(o.signerName, 80),
+    signerTitle: cleanText(o.signerTitle, 80),
+    jurisdiction: cleanText(o.jurisdiction, 80),
+  };
+}
+/** A fresh invoice's look and details, from the person's profile. */
+export function docFromProfile(p: BusinessProfile): InvoiceDoc {
+  return { ...emptyInvoiceDoc(), show: p.show, title: p.title, from: p.from, bank: p.bank, design: p.design, gstBps: p.gstBps, tdsBps: p.tdsBps, tdsMode: p.tdsMode, footnote: p.footnote, footer: p.footer };
+}
+
+/** The invoice as the client may see it: what the person switched off is removed here, so it never reaches the client's browser. */
+export function invoiceForClient(inv: Invoice): Invoice {
+  const show = inv.doc.show;
+  const doc: InvoiceDoc = { ...inv.doc, from: { ...inv.doc.from }, to: { ...inv.doc.to }, bank: { ...inv.doc.bank } };
+  if (!show.bank) doc.bank = emptyBank();
+  if (!show.taxIds) {
+    doc.from.taxIds = [];
+    doc.to.taxIds = [];
+  }
+  if (!show.notes) doc.footnote = '';
+  return { ...inv, doc, dueDate: show.dueDate ? inv.dueDate : null, note: show.notes ? inv.note : '', agencyClientId: null };
+}
+
+export interface InvoiceTotals {
+  subtotal: number;
+  discount: number;
+  taxable: number;
+  gst: number;
+  cgst: number;
+  sgst: number;
+  /** What is added to the total so the client's TDS comes out of it and nothing is lost. */
+  tdsAdjusted: number;
+  total: number;
+  /** What the client will deduct as TDS when they pay, and what reaches the person after it. */
+  tdsDeducted: number;
+  netReceivable: number;
+}
+
+/**
+ * The one sum behind every invoice, in whole cents and basis points, never floats. The discount comes off the subtotal,
+ * GST goes on what is left, and TDS is worked on the taxable amount (GST is not part of it). When the person asks to
+ * add the TDS to the total, the extra is taxable * rate / (1 - rate), so that after the client deducts the rate from
+ * (taxable + extra) the person is left with exactly the taxable amount.
+ */
+export function invoiceTotals(items: readonly InvoiceItem[], doc: Pick<InvoiceDoc, 'discountMode' | 'discountValue' | 'gstBps' | 'gstSplit' | 'tdsBps' | 'tdsMode'>): InvoiceTotals {
+  const subtotal = items.reduce((a, i) => a + Math.round(i.quantity) * Math.round(i.unitCents), 0);
+  const rawDiscount = doc.discountMode === 'flat' ? doc.discountValue : doc.discountMode === 'percent' ? Math.round((subtotal * doc.discountValue) / 10000) : 0;
+  const discount = Math.min(subtotal, Math.max(0, rawDiscount));
+  const taxable = subtotal - discount;
+  const gst = Math.round((taxable * doc.gstBps) / 10000);
+  const cgst = doc.gstSplit ? Math.floor(gst / 2) : 0;
+  const sgst = doc.gstSplit ? gst - cgst : 0;
+  const tdsAdjusted = doc.tdsMode === 'grossup' && doc.tdsBps > 0 && doc.tdsBps < 10000 ? Math.round((taxable * doc.tdsBps) / (10000 - doc.tdsBps)) : 0;
+  const total = taxable + gst + tdsAdjusted;
+  const tdsDeducted = doc.tdsMode === 'none' || doc.tdsBps <= 0 ? 0 : Math.round(((taxable + tdsAdjusted) * doc.tdsBps) / 10000);
+  return { subtotal, discount, taxable, gst, cgst, sgst, tdsAdjusted, total, tdsDeducted, netReceivable: total - tdsDeducted };
+}
+
+const NUM_ONES = ['', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE', 'TEN', 'ELEVEN', 'TWELVE', 'THIRTEEN', 'FOURTEEN', 'FIFTEEN', 'SIXTEEN', 'SEVENTEEN', 'EIGHTEEN', 'NINETEEN'];
+const NUM_TENS = ['', '', 'TWENTY', 'THIRTY', 'FORTY', 'FIFTY', 'SIXTY', 'SEVENTY', 'EIGHTY', 'NINETY'];
+function wordsUnder1000(n: number): string {
+  const parts: string[] = [];
+  if (n >= 100) parts.push(`${NUM_ONES[Math.floor(n / 100)]} HUNDRED`);
+  const rest = n % 100;
+  if (rest > 0) parts.push(rest < 20 ? (NUM_ONES[rest] ?? '') : `${NUM_TENS[Math.floor(rest / 10)]}${rest % 10 ? ` ${NUM_ONES[rest % 10]}` : ''}`);
+  return parts.join(' ');
+}
+/** A whole number in words with lakh and crore, the way Indian invoices write it. */
+function wordsIndian(n: number): string {
+  if (n === 0) return 'ZERO';
+  const steps: [number, string][] = [[10_000_000, 'CRORE'], [100_000, 'LAKH'], [1000, 'THOUSAND']];
+  const out: string[] = [];
+  let rest = n;
+  for (const [size, name] of steps) {
+    const q = Math.floor(rest / size);
+    if (q > 0) out.push(`${q >= 100 ? wordsIndian(q) : wordsUnder1000(q)} ${name}`);
+    rest %= size;
+  }
+  if (rest > 0) out.push(wordsUnder1000(rest));
+  return out.join(' ');
+}
+function wordsWestern(n: number): string {
+  if (n === 0) return 'ZERO';
+  const steps: [number, string][] = [[1_000_000_000, 'BILLION'], [1_000_000, 'MILLION'], [1000, 'THOUSAND']];
+  const out: string[] = [];
+  let rest = n;
+  for (const [size, name] of steps) {
+    const q = Math.floor(rest / size);
+    if (q > 0) out.push(`${wordsUnder1000(q)} ${name}`);
+    rest %= size;
+  }
+  if (rest > 0) out.push(wordsUnder1000(rest));
+  return out.join(' ');
+}
+/** "THIRTY FIVE THOUSAND ONLY". Rupees use lakh and crore; other currencies use thousand, million and billion. */
+export function amountInWords(cents: number, currency = 'INR'): string {
+  const abs = Math.abs(Math.round(cents));
+  const whole = Math.floor(abs / 100);
+  const minor = abs % 100;
+  const body = currency === 'INR' ? wordsIndian(whole) : wordsWestern(whole);
+  const minorName = currency === 'INR' ? 'PAISE' : currency === 'GBP' ? 'PENCE' : 'CENTS';
+  return `${cents < 0 ? 'MINUS ' : ''}${body}${minor > 0 ? ` AND ${wordsUnder1000(minor)} ${minorName}` : ''} ONLY`;
+}
+
+// ---------------------------------------------------------------------------
+// Contract creator: agreements built from sections, with the client's answers and typed acceptance
+// ---------------------------------------------------------------------------
+
+export const CONTRACT_STATUSES = ['draft', 'sent', 'signed', 'void'] as const;
+export type ContractStatus = (typeof CONTRACT_STATUSES)[number];
+export const CONTRACT_STATUS_NAME: Record<ContractStatus, string> = { draft: 'Draft', sent: 'Sent', signed: 'Signed', void: 'Void' };
+export const CONTRACT_STATUS_TONE: Record<ContractStatus, TagTone> = { draft: 'neutral', sent: 'info', signed: 'good', void: 'bad' };
+/** A line in the thread on an invoice or an agreement: the client asking for a change, the person answering. */
+export interface DocComment {
+  id: string;
+  author: 'me' | 'client';
+  body: string;
+  createdAt: string;
+}
+export const DOC_COMMENT_MAX = 600;
+export const DOC_TYPES = ['invoice', 'contract'] as const;
+export type DocType = (typeof DOC_TYPES)[number];
+
+export const MAX_CONTRACT_SECTIONS = 30;
+export const MAX_CONTRACT_QUESTIONS = 12;
+export const CONTRACT_TEXT_MAX = 6000;
+
+export type ContractSectionKind = 'text' | 'packages' | 'brief' | 'signatures';
+export interface ContractQuestion {
+  id: string;
+  label: string;
+  options: string[];
+  /** More than one option may be ticked. */
+  multi: boolean;
+  /** An "Other" line. */
+  other: boolean;
+  /** A free-text answer instead of options. */
+  text: boolean;
+}
+export interface ContractPackage {
+  name: string;
+  units: number;
+  feeCents: number;
+}
+export interface ContractSection {
+  id: string;
+  heading: string;
+  kind: ContractSectionKind;
+  /** Plain paragraphs, "- " bullets and **bold**; {{name}} fills from the variables. */
+  body: string;
+  packages?: ContractPackage[];
+  /** For a packages section: the price of each further block, and how many it holds. */
+  extra?: { units: number; feeCents: number };
+  unitName?: string;
+  questions?: ContractQuestion[];
+}
+export interface ContractDoc {
+  title: string;
+  subtitle: string;
+  templateKey: string;
+  /** What the client may do at the link, apart from reading and accepting. */
+  show: { comments: boolean; download: boolean };
+  /** Currency of the packages. */
+  currency: string;
+  vars: Record<string, string>;
+  sections: ContractSection[];
+}
+export interface ContractAnswer {
+  picked: string[];
+  other: string;
+  text: string;
+}
+
+/** The words that fill a contract. Where each comes from decides what the form prefills. */
+export const CONTRACT_VARS = [
+  { key: 'provider', label: 'Your name', from: 'profile' },
+  { key: 'providerTitle', label: 'Your title', from: 'profile' },
+  { key: 'providerBusiness', label: 'Your business', from: 'profile' },
+  { key: 'providerAddress', label: 'Your address', from: 'profile' },
+  { key: 'providerEmail', label: 'Your email', from: 'profile' },
+  { key: 'providerPhone', label: 'Your phone', from: 'profile' },
+  { key: 'client', label: 'Client', from: 'client' },
+  { key: 'clientAddress', label: 'Client address', from: 'client' },
+  { key: 'clientContact', label: 'Point of contact', from: 'client' },
+  { key: 'brands', label: 'Brand or brands', from: 'typed' },
+  { key: 'jurisdiction', label: 'Courts of', from: 'profile' },
+] as const;
+export type ContractVarKey = (typeof CONTRACT_VARS)[number]['key'];
+
+const uid = (p: string, i: number) => `${p}${i + 1}`;
+const text = (id: string, heading: string, body: string): ContractSection => ({ id, heading, kind: 'text', body });
+const question = (id: string, label: string, options: string[], opts: Partial<ContractQuestion> = {}): ContractQuestion => ({ id, label, options, multi: false, other: true, text: false, ...opts });
+
+const CONFIDENTIALITY = 'Both parties keep non-public information from the other private. This lasts five years after the agreement ends.\n\nThis agreement follows the laws of India. Only the courts of {{jurisdiction}} may hear a dispute about it.';
+const SIGNATURES = 'By signing below, both parties confirm they have read and agree to this agreement.';
+
+export interface ContractTemplate {
+  key: string;
+  name: string;
+  blurb: string;
+  doc: ContractDoc;
+}
+
+export const CONTRACT_TEMPLATES: readonly ContractTemplate[] = [
+  {
+    key: 'trial',
+    name: 'Trial and pilot',
+    blurb: 'A short paid or free trial, a brief the client fills in, then packages for the pilot.',
+    doc: {
+      title: 'Trial engagement agreement',
+      subtitle: 'Trial, brief and pilot terms',
+      templateKey: 'trial',
+      show: { comments: true, download: true },
+      currency: 'INR',
+      vars: {},
+      sections: [
+        text('parties', '1. Parties', '**Service provider:** {{provider}}, {{providerTitle}}, {{providerBusiness}}\n{{providerAddress}}\nEmail: {{providerEmail}} | Phone: {{providerPhone}}\n\n**Client:** {{client}}\nAddress: {{clientAddress}}\nBrand or brands for this trial: {{brands}}\nPoint of contact: {{clientContact}} (authorised to speak for the client)\n\nThe service provider and the client are the "parties".'),
+        text('purpose', '2. Purpose of the trial', 'The trial is a short test, so the client can see the service provider\'s style of work on its own brand before it commits to a paid pilot.\n\nThe scope, the number of trial pieces and any trial fee are confirmed in writing between the parties. The trial does not oblige either side to go on to a pilot.'),
+        {
+          id: 'brief',
+          heading: '3. Trial brief',
+          kind: 'brief',
+          body: 'The client fills in this brief before the shoot. It is the starting point for every creative choice in the trial. Settle the creative direction, the brand needs and the must-haves before filming. New asks after filming may mean extra editing, new deliverables or a reshoot, if they need footage that was not captured.',
+          questions: [
+            question('objective', '3.1 What is the main purpose of these videos?', ['Organic content (value and entertainment first)', 'Organic content with light brand awareness', 'Paid ads and performance marketing']),
+            question('brand', '3.2 How strongly should the brand show?', ['Minimal, story first', 'Subtle branding throughout', 'Product visible throughout', 'Product only in the intro and outro', 'Creator holding the product']),
+            question('response', '3.3 After watching, what should people think, feel or do?', [], { other: false, text: true }),
+            question('musts', '3.4 What must be in every video?', ['Product shots', 'Logo visible', 'Brand mention', 'Call to action', 'People trying the product', 'Intro hooks', 'Closing statements', 'Disclaimers'], { multi: true }),
+            question('guide', '3.5 Link to your brand guide: personality in 3 to 5 words, words to use and avoid, editing style, fonts, colours, music, pacing, logo and product shot rules. Add 3 to 5 videos that show the feel you want.', [], { other: false, text: true }),
+          ],
+        },
+        text('ownership', '4. Trial content, ownership and use', '**4.1 Trial content.** Anything made in the trial is for evaluation and approval only. The client may not publish, share, boost, advertise, reuse, sublicense or otherwise use it commercially unless a paid engagement is later confirmed in writing. If the work does not go ahead, unpublished trial content stays unused and published trial content comes down on request.\n\n**4.2 Rights.** Unless agreed in writing, ownership and usage rights do not pass to the client just because of the trial. Commercial rights are set by the final engagement agreement.\n\n**4.3 Conflicts.** Either party may stop talks if a conflict of interest or competitor overlap appears. If the service provider finds one, it may ask for the trial content to come out of use.'),
+        text('after', '5. What happens after the trial', 'If the client wants to go on, the pilot runs like this:\n\n- **Step 1, trial review.** The trial pieces are shared for review.\n- **Step 2, one set of feedback.** The client sends feedback through one point of contact. Small edits are handled as in section 8.\n- **Step 3, pick a package.** The client chooses a package from section 6, for one brand.\n- **Step 4, agreement and prepayment.** A pilot agreement is signed, an invoice is raised and the full package fee is paid in advance. Work starts when payment arrives.\n- **Step 5, plan before each shoot.** The parties lock the items in section 8 first. The brief in section 3 is the starting point.\n- **Step 6, shoot, edit, deliver.** The batch is made in a planned cycle, with review points where useful and small revisions included.\n- **Step 7, usage rights.** Rights to the final pieces pass on full payment, on the terms of the pilot agreement.\n\nDelivery dates are set in the pilot agreement once the plan is locked.'),
+        {
+          id: 'packages',
+          heading: '6. Packages and pricing',
+          kind: 'packages',
+          body: 'Pilot packages are priced below. Each package is for one brand only. Packages cannot be joined, pooled or split across brands, even where the client is an agency that works for several brands. Quantities not listed are quoted in writing before work begins. Fees do not include taxes such as GST.',
+          unitName: 'videos',
+          packages: [
+            { name: 'Starter', units: 5, feeCents: 0 },
+            { name: 'Growth', units: 10, feeCents: 0 },
+            { name: 'Scale', units: 20, feeCents: 0 },
+          ],
+          extra: { units: 5, feeCents: 0 },
+        },
+        text('payment', '7. Payment', 'All payments are prepaid. The full package fee is due before planning or production starts. An invoice is raised when the client confirms the package and signs the pilot agreement. Work starts when payment arrives.\n\nIf payment is late or only part paid, the service provider may pause work, hold back edited files and raw footage, and keep usage rights suspended. Refund and delivery terms are set out in the pilot agreement.'),
+        text('how', '8. How we work', '**8.1 Direction and execution.** The client gives the objective, the product facts and the must-haves. The service provider owns the creative execution. Before each shoot the parties lock: the main objective, the products featured, the target audience, the core message, the response wanted, required brand and product facts, mandatory items, things to avoid, and any special needs for the shoot.\n\n**8.2 Flexibility on the day.** Once the direction is agreed, the team needs reasonable room on the ground to follow what is working.\n\n**8.3 Reviews and revisions.** Small edit-level changes such as text, trims, order and captions are part of the process. A new concept, format, set-up, new footage or a reshoot is discussed separately before it is started. The client sends feedback through one point of contact.\n\n**8.4 Delivery.** The agreed batch is finished in one planned cycle, not by changing direction between single pieces. Work can be shared at agreed checkpoints.\n\n**8.5 Results.** The service provider will make the content to get attention and the aim of the campaign. Results also depend on the platform, the audience, the account, ad spend, the offer and how the content is spread. So no particular views, reach, engagement, sales or return on ad spend can be promised.'),
+        text('law', '9. Confidentiality and law', `${CONFIDENTIALITY}\n\nThis agreement, with the completed brief, is the whole understanding between the parties for the trial and replaces earlier talks about it. The pilot is covered by a separate agreement.`),
+        { id: 'sign', heading: '10. Acceptance', kind: 'signatures', body: SIGNATURES },
+      ],
+    },
+  },
+  {
+    key: 'retainer',
+    name: 'Monthly retainer',
+    blurb: 'A set number of pieces and hours each month for a fixed fee, with notice to end.',
+    doc: {
+      title: 'Content retainer agreement',
+      subtitle: 'Monthly content services',
+      templateKey: 'retainer',
+      show: { comments: true, download: true },
+      currency: 'INR',
+      vars: {},
+      sections: [
+        text('parties', '1. Parties', '**Service provider:** {{provider}}, {{providerTitle}}, {{providerBusiness}}\n{{providerAddress}}\nEmail: {{providerEmail}} | Phone: {{providerPhone}}\n\n**Client:** {{client}}\nAddress: {{clientAddress}}\nBrand or brands covered: {{brands}}\nPoint of contact: {{clientContact}}'),
+        text('scope', '2. What is included each month', 'The service provider makes the content set out below each month, for the brand or brands named above:\n\n- Number and kind of pieces: ______\n- Channels: ______\n- Hours of work included: ______\n\nAnything beyond this is quoted in writing before it starts. Unused pieces and hours do not carry over unless both parties agree in writing.'),
+        {
+          id: 'fees',
+          heading: '3. Fee',
+          kind: 'packages',
+          body: 'The monthly fee is below. It is paid in advance, on or before the first day of each month. Fees do not include taxes such as GST.',
+          unitName: 'pieces',
+          packages: [{ name: 'Monthly retainer', units: 8, feeCents: 0 }],
+        },
+        text('review', '4. Reviews and revisions', 'Each piece goes to the client\'s point of contact for review. Two rounds of small edit-level changes (text, trims, order, captions) are included for each piece. A new concept, format or new footage is quoted separately. If the client does not reply within five working days, the piece counts as approved.'),
+        text('rights', '5. Ownership and use', 'The client gets the right to use each final piece on its own channels once that month\'s fee is paid. The service provider keeps ownership of raw footage, drafts and working files, and may show the finished work in its portfolio unless the client asks in writing that it does not.'),
+        text('term', '6. Term and ending', 'This agreement starts on the date of the last signature and runs month to month. Either party can end it with thirty days\' notice in writing. Fees for the month in progress are not refunded. Work already paid for is delivered.'),
+        text('law', '7. Confidentiality and law', CONFIDENTIALITY),
+        { id: 'sign', heading: '8. Acceptance', kind: 'signatures', body: SIGNATURES },
+      ],
+    },
+  },
+  {
+    key: 'project',
+    name: 'One-off project',
+    blurb: 'A fixed piece of work: scope, fee with an advance, revisions and rights on full payment.',
+    doc: {
+      title: 'Content project agreement',
+      subtitle: 'One-off content project',
+      templateKey: 'project',
+      show: { comments: true, download: true },
+      currency: 'INR',
+      vars: {},
+      sections: [
+        text('parties', '1. Parties', '**Service provider:** {{provider}}, {{providerTitle}}, {{providerBusiness}}\n{{providerAddress}}\nEmail: {{providerEmail}} | Phone: {{providerPhone}}\n\n**Client:** {{client}}\nAddress: {{clientAddress}}\nBrand or brands: {{brands}}\nPoint of contact: {{clientContact}}'),
+        text('scope', '2. The work', 'The service provider will make the following for the client:\n\n- What: ______\n- How many: ______\n- Where it will be used: ______\n- Delivery date: ______\n\nAny change to this is agreed in writing before it starts.'),
+        {
+          id: 'fees',
+          heading: '3. Fee and payment',
+          kind: 'packages',
+          body: 'The fee is below. Half is due in advance and the rest on delivery of the final files, unless the parties write down another split. Fees do not include taxes such as GST. If payment is late the service provider may pause work and hold back the final files.',
+          unitName: 'pieces',
+          packages: [{ name: 'Project fee', units: 1, feeCents: 0 }],
+        },
+        text('review', '4. Revisions', 'Two rounds of small edit-level changes (text, trims, order, captions) are included. A new concept, a new format or new footage is quoted separately. The client sends feedback once, through one point of contact, in each round.'),
+        text('rights', '5. Ownership and use', 'Rights to use the final work pass to the client when the full fee is paid. Until then the service provider keeps all rights. The service provider keeps raw footage and working files and may show the finished work in its portfolio unless the client asks in writing that it does not.'),
+        text('law', '6. Ending, confidentiality and law', 'Either party may end this agreement in writing if the other does not meet its duties and does not fix this within seven days of being told. Work done up to that point is paid for.\n\n' + CONFIDENTIALITY),
+        { id: 'sign', heading: '7. Acceptance', kind: 'signatures', body: SIGNATURES },
+      ],
+    },
+  },
+];
+export const CONTRACT_TEMPLATE_BY_KEY: Record<string, ContractTemplate> = Object.fromEntries(CONTRACT_TEMPLATES.map((t) => [t.key, t]));
+
+const BLANK = '__________';
+/** Fills {{name}} from the variables; a missing one becomes a blank line to write on. */
+export function fillContractText(body: string, vars: Record<string, string>): string {
+  return body.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => (vars[k] && vars[k]!.trim() ? vars[k]!.trim() : BLANK));
+}
+
+/** The variables a new contract starts with, from the person's profile and the client's details. */
+export function contractVarsFor(profile: BusinessProfile, client: { name: string; address: string; contactName: string } | null): Record<string, string> {
+  return {
+    provider: profile.signerName,
+    providerTitle: profile.signerTitle,
+    providerBusiness: profile.from.name,
+    providerAddress: profile.from.address,
+    providerEmail: profile.from.email,
+    providerPhone: profile.from.phone,
+    client: client?.name ?? '',
+    clientAddress: client?.address ?? '',
+    clientContact: client?.contactName ?? '',
+    brands: client?.name ?? '',
+    jurisdiction: profile.jurisdiction,
+  };
+}
+
+/** What each package costs a unit, in whole cents, and the price of n units counting blocks past the largest package. */
+export function packageRate(p: ContractPackage): number {
+  return p.units > 0 ? Math.round(p.feeCents / p.units) : 0;
+}
+export function priceForUnits(packages: readonly ContractPackage[], extra: { units: number; feeCents: number } | undefined, units: number): number | null {
+  const sorted = [...packages].filter((p) => p.units > 0).sort((a, b) => a.units - b.units);
+  const exact = sorted.find((p) => p.units === units);
+  if (exact) return exact.feeCents;
+  const top = sorted[sorted.length - 1];
+  if (!top || !extra || extra.units <= 0 || units < top.units) return null;
+  const blocks = (units - top.units) / extra.units;
+  return Number.isInteger(blocks) ? top.feeCents + blocks * extra.feeCents : null;
+}
+
+export function parseContractDoc(v: unknown): ContractDoc | null {
+  if (!v || typeof v !== 'object') return null;
+  const o = v as Record<string, unknown>;
+  const sections = Array.isArray(o.sections) ? o.sections : [];
+  const kinds: readonly ContractSectionKind[] = ['text', 'packages', 'brief', 'signatures'];
+  const seen = new Set<string>();
+  const clean: ContractSection[] = [];
+  sections.slice(0, MAX_CONTRACT_SECTIONS).forEach((raw, i) => {
+    if (!raw || typeof raw !== 'object') return;
+    const s = raw as Record<string, unknown>;
+    let id = cleanText(s.id, 30).replace(/[^a-zA-Z0-9_-]/g, '') || uid('s', i);
+    while (seen.has(id)) id = `${id}x`;
+    seen.add(id);
+    const kind = oneOfList(s.kind, kinds, 'text');
+    const section: ContractSection = { id, heading: cleanText(s.heading, 120), kind, body: cleanText(s.body, CONTRACT_TEXT_MAX) };
+    if (kind === 'packages') {
+      const ps = Array.isArray(s.packages) ? s.packages : [];
+      section.packages = ps
+        .slice(0, 8)
+        .map((p) => (p && typeof p === 'object' ? (p as Record<string, unknown>) : {}))
+        .map((p) => ({ name: cleanText(p.name, 60), units: Math.max(0, Math.min(10000, Math.round(Number(p.units)) || 0)), feeCents: Math.max(0, Math.min(1_000_000_000_00, Math.round(Number(p.feeCents)) || 0)) }))
+        .filter((p) => p.name);
+      const e = s.extra && typeof s.extra === 'object' ? (s.extra as Record<string, unknown>) : null;
+      if (e) section.extra = { units: Math.max(0, Math.min(10000, Math.round(Number(e.units)) || 0)), feeCents: Math.max(0, Math.min(1_000_000_000_00, Math.round(Number(e.feeCents)) || 0)) };
+      section.unitName = cleanText(s.unitName, 20) || 'pieces';
+    }
+    if (kind === 'brief') {
+      const qs = Array.isArray(s.questions) ? s.questions : [];
+      const qseen = new Set<string>();
+      section.questions = qs
+        .slice(0, MAX_CONTRACT_QUESTIONS)
+        .map((q, j): ContractQuestion => {
+          const x = (q && typeof q === 'object' ? q : {}) as Record<string, unknown>;
+          let qid = cleanText(x.id, 30).replace(/[^a-zA-Z0-9_-]/g, '') || uid('q', j);
+          while (qseen.has(qid)) qid = `${qid}x`;
+          qseen.add(qid);
+          return { id: qid, label: cleanText(x.label, 400), options: (Array.isArray(x.options) ? x.options : []).map((t) => cleanText(t, 120)).filter(Boolean).slice(0, 12), multi: x.multi === true, other: x.other === true, text: x.text === true };
+        })
+        .filter((q) => q.label);
+    }
+    clean.push(section);
+  });
+  const vars: Record<string, string> = {};
+  const rawVars = o.vars && typeof o.vars === 'object' ? (o.vars as Record<string, unknown>) : {};
+  for (const d of CONTRACT_VARS) vars[d.key] = cleanText(rawVars[d.key], 300);
+  return { title: cleanText(o.title, 120) || 'Agreement', subtitle: cleanText(o.subtitle, 160), templateKey: cleanText(o.templateKey, 30) || 'custom', show: { comments: (o.show as Record<string, unknown> | undefined)?.comments !== false, download: (o.show as Record<string, unknown> | undefined)?.download !== false }, currency: cleanText(o.currency, 3).toUpperCase() || 'INR', vars, sections: clean };
+}
+
+export interface AgencyContract {
+  id: string;
+  clientId: string | null;
+  clientName: string;
+  status: ContractStatus;
+  doc: ContractDoc;
+  /** The client link is /k/<token> once it is sent. */
+  token: string | null;
+  sentAt: string | null;
+  signedAt: string | null;
+  revisedAt: string | null;
+  acceptance: { name: string; title: string; at: string } | null;
+  answers: Record<string, ContractAnswer>;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface ContractListItem {
+  id: string;
+  clientId: string | null;
+  clientName: string;
+  title: string;
+  templateKey: string;
+  status: ContractStatus;
+  sentAt: string | null;
+  signedAt: string | null;
+  updatedAt: string;
+}
+/** What a client sees at their contract link. */
+export interface PublicContract {
+  ownerName: string;
+  status: ContractStatus;
+  revisedAt: string | null;
+  comments: DocComment[];
+  doc: ContractDoc;
+  answers: Record<string, ContractAnswer>;
+  acceptance: { name: string; title: string; at: string } | null;
+}

@@ -1,6 +1,7 @@
 import { MOODS, PERIOD_KINDS, PERIOD_META, periodFor, periodLabel, RELATIONSHIP_BY_KEY, RELATIONSHIPS, REVIEW_ANSWER_MAX, REVIEW_HIGHLIGHT_MAX, REVIEW_NAME_MAX, type Period, type PeriodKind, type ReviewTemplate } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
+import { BusinessMetrics } from '../components/BusinessMetrics';
 import { Button } from '../components/Button';
 import { AreaLine, Donut, Legend } from '../components/Charts';
 import { Hero } from '../components/Hero';
@@ -113,6 +114,8 @@ export function Reviews() {
               <SummaryTiles summary={s} parts={PARTS} />
             </div>
           </section>
+
+          <BusinessMetrics kind={period.kind} date={period.start} />
 
           <section className="mt-lg" aria-labelledby="trend-heading">
             <h2 id="trend-heading" className="text-[24px]">

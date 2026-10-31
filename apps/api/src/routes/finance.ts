@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, INVOICE_STATUSES, type FinanceBudget, type FinanceDue, type FinanceGoal, type FinanceRecurring, type FinanceSplit, type FinanceSummary, type FinanceTransaction, type Invoice, type InvoiceItem } from '@kreators/shared';
+import { DOC_COMMENT_MAX, emptyInvoiceDoc, invoiceForClient, EXPENSE_CATEGORIES, INCOME_CATEGORIES, INVOICE_STATUSES, invoiceTotals, parseInvoiceDoc, type InvoiceDoc, type FinanceBudget, type FinanceDue, type FinanceGoal, type FinanceRecurring, type FinanceSplit, type FinanceSummary, type FinanceTransaction, type Invoice, type InvoiceItem } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { DATE_RE, nameOf, newId, nowIso, num, oneOf, randomCode, str } from '../db';
+import { DATE_RE, nameOf, newId, notify, nowIso, num, oneOf, randomCode, str } from '../db';
 
 /** Finance: a creator's money in and out, budgets and invoices. Nothing here touches points or payouts. */
 export const finance = new Hono<AppEnv>();
@@ -62,8 +62,8 @@ export async function runRecurring(db: D1Database): Promise<number> {
   return due.results.length;
 }
 
-interface InvRow { id: string; user_id: string; owner_name: string; owner_handle: string | null; number: string; client_name: string; client_email: string; items_json: string; total_cents: number; currency: string; status: Invoice['status']; issue_date: string; due_date: string | null; note: string; token: string; paid_at: string | null; created_at: string }
-const INV_SELECT = 'SELECT i.*, u.display_name AS owner_name, u.handle AS owner_handle FROM invoices i JOIN users u ON u.id = i.user_id';
+export interface InvRow { id: string; user_id: string; owner_name: string; owner_handle: string | null; number: string; client_name: string; client_email: string; items_json: string; total_cents: number; currency: string; status: Invoice['status']; issue_date: string; due_date: string | null; note: string; token: string; paid_at: string | null; created_at: string; doc_json?: string; agency_client_id?: string | null; revised_at?: string | null }
+export const INV_SELECT = 'SELECT i.*, u.display_name AS owner_name, u.handle AS owner_handle FROM invoices i JOIN users u ON u.id = i.user_id';
 function parseItems(raw: string): InvoiceItem[] {
   try {
     const v = JSON.parse(raw || '[]') as unknown;
@@ -72,7 +72,14 @@ function parseItems(raw: string): InvoiceItem[] {
     return [];
   }
 }
-export const toInvoice = (r: InvRow): Invoice => ({ id: r.id, number: r.number, ownerName: nameOf({ display_name: r.owner_name }), ownerHandle: r.owner_handle, clientName: r.client_name, clientEmail: r.client_email, items: parseItems(r.items_json), totalCents: r.total_cents, currency: r.currency, status: r.status, issueDate: r.issue_date, dueDate: r.due_date, note: r.note, token: r.token, paidAt: r.paid_at, createdAt: r.created_at });
+function docOf(raw: string | undefined): InvoiceDoc {
+  try {
+    return parseInvoiceDoc(JSON.parse(raw || '{}'));
+  } catch {
+    return emptyInvoiceDoc();
+  }
+}
+export const toInvoice = (r: InvRow): Invoice => ({ id: r.id, number: r.number, ownerName: nameOf({ display_name: r.owner_name }), ownerHandle: r.owner_handle, clientName: r.client_name, clientEmail: r.client_email, items: parseItems(r.items_json), totalCents: r.total_cents, currency: r.currency, status: r.status, issueDate: r.issue_date, dueDate: r.due_date, note: r.note, token: r.token, paidAt: r.paid_at, createdAt: r.created_at, doc: docOf(r.doc_json), agencyClientId: r.agency_client_id ?? null, revisedAt: r.revised_at ?? null });
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const monthOf = (v: string | undefined) => (v && MONTH_RE.test(v) ? v : new Date().toISOString().slice(0, 7));
@@ -332,8 +339,83 @@ finance.put('/budgets', async (c) => {
 });
 
 // ---- invoices
+interface NewInvoice { clientName: string; clientEmail: string; items: InvoiceItem[]; dueDate: string | null; note: string; currency: string; agencyClientId?: string | null; doc?: InvoiceDoc; prefix?: string; number?: string; issueDate?: string }
+
+/** The number that follows another in its own series: SSBB-001 becomes SSBB-002, INV-2026-009 becomes INV-2026-010. Never one already taken. */
+export async function nextNumberAfter(db: D1Database, userId: string, number: string): Promise<string> {
+  const m = /^(.*?)(\d+)$/.exec(number);
+  if (!m) return nextNumber(db, userId, '');
+  const stem = m[1] ?? '';
+  const width = (m[2] ?? '').length;
+  let n = Number(m[2]) + 1;
+  for (;;) {
+    const candidate = `${stem}${String(n).padStart(width, '0')}`;
+    const taken = await db.prepare('SELECT 1 AS x FROM invoices WHERE user_id = ? AND number = ?').bind(userId, candidate).first();
+    if (!taken) return candidate;
+    n += 1;
+  }
+}
+
+/** The next number: INV-2026-001 by default, or PREFIX-001 when the person set a prefix. Never one that is already taken. */
+export async function nextNumber(db: D1Database, userId: string, prefix: string): Promise<string> {
+  const stem = prefix ? `${prefix}-` : `INV-${new Date().getFullYear()}-`;
+  const count = await db.prepare('SELECT COUNT(*) AS n FROM invoices WHERE user_id = ? AND number LIKE ?').bind(userId, `${stem}%`).first<{ n: number }>();
+  let n = (count?.n ?? 0) + 1;
+  for (;;) {
+    const number = `${stem}${String(n).padStart(3, '0')}`;
+    const taken = await db.prepare('SELECT 1 AS x FROM invoices WHERE user_id = ? AND number = ?').bind(userId, number).first();
+    if (!taken) return number;
+    n += 1;
+  }
+}
+
+/** The cents an invoice comes to: the designed sum when it has a design, else the plain sum of its lines. */
+const totalOf = (items: InvoiceItem[], doc: InvoiceDoc | undefined) => (doc ? invoiceTotals(items, doc).total : items.reduce((a, i) => a + i.quantity * i.unitCents, 0));
+
+/** Makes a draft invoice with the next number. Finance and Agency both use it. */
+export async function createInvoice(db: D1Database, userId: string, input: NewInvoice): Promise<Invoice | null> {
+  const number = input.number ?? (await nextNumber(db, userId, input.prefix ?? ''));
+  const id = newId();
+  await db
+    .prepare("INSERT INTO invoices (id, user_id, number, client_name, client_email, items_json, total_cents, currency, status, issue_date, due_date, note, token, paid_at, created_at, agency_client_id, doc_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, NULL, ?, ?, ?)")
+    .bind(id, userId, number, input.clientName, input.clientEmail, JSON.stringify(input.items), totalOf(input.items, input.doc), input.currency, input.issueDate ?? new Date().toISOString().slice(0, 10), input.dueDate, input.note, randomCode(12), nowIso(), input.agencyClientId ?? null, JSON.stringify(input.doc ?? {}))
+    .run();
+  const row = await db.prepare(`${INV_SELECT} WHERE i.id = ?`).bind(id).first<InvRow>();
+  return row ? toInvoice(row) : null;
+}
+
+/** Changes a draft or a sent invoice: its lines, design, dates and note. A sent one is marked revised, so the client's page says so. A paid or void one cannot change. Null when it is not editable. */
+export async function updateDraftInvoice(db: D1Database, userId: string, invoiceId: string, input: { clientName: string; clientEmail: string; items: InvoiceItem[]; issueDate: string | null; dueDate: string | null; note: string; doc: InvoiceDoc; number?: string }): Promise<Invoice | null> {
+  const res = await db
+    .prepare("UPDATE invoices SET number = COALESCE(?, number), client_name = ?, client_email = ?, items_json = ?, total_cents = ?, issue_date = COALESCE(?, issue_date), due_date = ?, note = ?, doc_json = ?, revised_at = CASE WHEN status = 'sent' THEN ? ELSE revised_at END WHERE id = ? AND user_id = ? AND status IN ('draft', 'sent')")
+    .bind(input.number ?? null, input.clientName, input.clientEmail, JSON.stringify(input.items), totalOf(input.items, input.doc), input.issueDate, input.dueDate, input.note, JSON.stringify(input.doc), nowIso(), invoiceId, userId)
+    .run();
+  if (!res.meta.changes) return null;
+  const row = await db.prepare(`${INV_SELECT} WHERE i.id = ?`).bind(invoiceId).first<InvRow>();
+  return row ? toInvoice(row) : null;
+}
+
+/** Changes an invoice's status. Marking one paid books the income; taking a paid one back out removes it. Null when it is not the person's. */
+export async function setInvoiceStatus(db: D1Database, userId: string, invoiceId: string, wanted: unknown): Promise<Invoice | null> {
+  const prev = await db.prepare(`${INV_SELECT} WHERE i.id = ? AND i.user_id = ?`).bind(invoiceId, userId).first<InvRow>();
+  if (!prev) return null;
+  const status = oneOf(wanted, INVOICE_STATUSES, prev.status);
+  const now = nowIso();
+  const stmts = [db.prepare('UPDATE invoices SET status = ?, paid_at = CASE WHEN ? = \'paid\' THEN COALESCE(paid_at, ?) ELSE paid_at END WHERE id = ?').bind(status, status, now, prev.id)];
+  if (status === 'paid' && prev.status !== 'paid') {
+    stmts.push(
+      db
+        .prepare("INSERT INTO finance_transactions (id, user_id, kind, amount_cents, currency, category, note, date, source, ref, created_at) VALUES (?, ?, 'income', ?, ?, 'Brand deal', ?, ?, 'invoice', ?, ?)")
+        .bind(newId(), userId, prev.total_cents, prev.currency, `Invoice ${prev.number}, ${prev.client_name}`, now.slice(0, 10), prev.id, now),
+    );
+  }
+  if (status !== 'paid' && prev.status === 'paid') stmts.push(db.prepare("DELETE FROM finance_transactions WHERE user_id = ? AND source = 'invoice' AND ref = ?").bind(userId, prev.id));
+  await db.batch(stmts);
+  const row = await db.prepare(`${INV_SELECT} WHERE i.id = ?`).bind(prev.id).first<InvRow>();
+  return row ? toInvoice(row) : null;
+}
+
 finance.post('/invoices', async (c) => {
-  const db = c.env.DB;
   const user = c.get('user');
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
   const clientName = str(body.clientName, 120);
@@ -344,41 +426,16 @@ finance.post('/invoices', async (c) => {
     .filter((x) => x.description)
     .slice(0, 30);
   if (items.length === 0) return c.json({ error: 'at least one line' }, 400);
-  const total = items.reduce((a, i) => a + i.quantity * i.unitCents, 0);
-  const year = new Date().getFullYear();
-  const count = await db.prepare('SELECT COUNT(*) AS n FROM invoices WHERE user_id = ? AND number LIKE ?').bind(user.id, `INV-${year}-%`).first<{ n: number }>();
-  const number = `INV-${year}-${String((count?.n ?? 0) + 1).padStart(3, '0')}`;
-  const id = newId();
   const dueDate = typeof body.dueDate === 'string' && DATE_RE.test(body.dueDate) ? body.dueDate : null;
-  await db
-    .prepare("INSERT INTO invoices (id, user_id, number, client_name, client_email, items_json, total_cents, currency, status, issue_date, due_date, note, token, paid_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, NULL, ?)")
-    .bind(id, user.id, number, clientName, str(body.clientEmail, 120), JSON.stringify(items), total, str(body.currency, 3, 'INR').toUpperCase() || 'INR', new Date().toISOString().slice(0, 10), dueDate, str(body.note, 500), randomCode(12), nowIso())
-    .run();
-  const row = await db.prepare(`${INV_SELECT} WHERE i.id = ?`).bind(id).first<InvRow>();
-  return c.json({ invoice: row ? toInvoice(row) : null }, 201);
+  const invoice = await createInvoice(c.env.DB, user.id, { clientName, clientEmail: str(body.clientEmail, 120), items, dueDate, note: str(body.note, 500), currency: str(body.currency, 3, 'INR').toUpperCase() || 'INR' });
+  return c.json({ invoice }, 201);
 });
 
 // Marking an invoice paid books the income; voiding a paid one takes it back out.
 finance.patch('/invoices/:id', async (c) => {
-  const db = c.env.DB;
-  const user = c.get('user');
-  const prev = await db.prepare(`${INV_SELECT} WHERE i.id = ? AND i.user_id = ?`).bind(c.req.param('id'), user.id).first<InvRow>();
-  if (!prev) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<{ status?: string }>().catch(() => ({}) as { status?: string });
-  const status = oneOf(body.status, INVOICE_STATUSES, prev.status);
-  const now = nowIso();
-  const stmts = [db.prepare('UPDATE invoices SET status = ?, paid_at = CASE WHEN ? = \'paid\' THEN COALESCE(paid_at, ?) ELSE paid_at END WHERE id = ?').bind(status, status, now, prev.id)];
-  if (status === 'paid' && prev.status !== 'paid') {
-    stmts.push(
-      db
-        .prepare("INSERT INTO finance_transactions (id, user_id, kind, amount_cents, currency, category, note, date, source, ref, created_at) VALUES (?, ?, 'income', ?, ?, 'Brand deal', ?, ?, 'invoice', ?, ?)")
-        .bind(newId(), user.id, prev.total_cents, prev.currency, `Invoice ${prev.number}, ${prev.client_name}`, now.slice(0, 10), prev.id, now),
-    );
-  }
-  if (status !== 'paid' && prev.status === 'paid') stmts.push(db.prepare("DELETE FROM finance_transactions WHERE user_id = ? AND source = 'invoice' AND ref = ?").bind(user.id, prev.id));
-  await db.batch(stmts);
-  const row = await db.prepare(`${INV_SELECT} WHERE i.id = ?`).bind(prev.id).first<InvRow>();
-  return c.json({ invoice: row ? toInvoice(row) : null });
+  const invoice = await setInvoiceStatus(c.env.DB, c.get('user').id, c.req.param('id'), body.status);
+  return invoice ? c.json({ invoice }) : c.json({ error: 'not found' }, 404);
 });
 
 finance.delete('/invoices/:id', async (c) => {
@@ -390,7 +447,34 @@ finance.delete('/invoices/:id', async (c) => {
 /** Public: the client opens /i/<token>. Mounted at /public/invoices. */
 export const publicInvoices = new Hono<AppEnv>();
 publicInvoices.get('/:token', async (c) => {
-  const row = await c.env.DB.prepare(`${INV_SELECT} WHERE i.token = ? AND i.status != 'draft'`).bind(c.req.param('token').toUpperCase()).first<InvRow>();
+  const db = c.env.DB;
+  const row = await db.prepare(`${INV_SELECT} WHERE i.token = ? AND i.status != 'draft'`).bind(c.req.param('token').toUpperCase()).first<InvRow>();
   if (!row) return c.json({ error: 'no invoice at this link' }, 404);
-  return c.json({ invoice: toInvoice(row) });
+  const full = toInvoice(row);
+  // An invoice made in Agency carries the owner's switches: what is off is removed here, before it leaves the server.
+  if (!row.agency_client_id) return c.json({ invoice: full, canComment: false, canDownload: true, comments: [] });
+  const comments = full.doc.show.comments
+    ? await db.prepare("SELECT id, author, body, created_at FROM agency_doc_comments WHERE doc_type = 'invoice' AND doc_id = ? ORDER BY created_at LIMIT 100").bind(row.id).all<{ id: string; author: 'me' | 'client'; body: string; created_at: string }>()
+    : { results: [] as { id: string; author: 'me' | 'client'; body: string; created_at: string }[] };
+  return c.json({
+    invoice: invoiceForClient(full),
+    canComment: full.doc.show.comments && full.status !== 'void',
+    canDownload: full.doc.show.download,
+    comments: comments.results.map((r) => ({ id: r.id, author: r.author, body: r.body, createdAt: r.created_at })),
+  });
+});
+
+// The client asks for a change. It is a note on the invoice, and the person is told; the invoice itself does not change.
+publicInvoices.post('/:token/comments', async (c) => {
+  const db = c.env.DB;
+  const row = await db.prepare(`${INV_SELECT} WHERE i.token = ? AND i.status IN ('sent', 'paid')`).bind(c.req.param('token').toUpperCase()).first<InvRow>();
+  if (!row || !row.agency_client_id) return c.json({ error: 'no invoice at this link' }, 404);
+  const inv = toInvoice(row);
+  if (!inv.doc.show.comments) return c.json({ error: 'comments are switched off on this invoice' }, 403);
+  const body = await c.req.json<{ body?: string }>().catch(() => ({}) as { body?: string });
+  const text = str(body.body, DOC_COMMENT_MAX);
+  if (!text) return c.json({ error: 'write something' }, 400);
+  await db.prepare("INSERT INTO agency_doc_comments (id, user_id, doc_type, doc_id, author, body, created_at) VALUES (?, ?, 'invoice', ?, 'client', ?, ?)").bind(newId(), row.user_id, row.id, text, nowIso()).run();
+  await notify(db, row.user_id, 'agency', `${row.client_name} wrote on invoice ${row.number}`, text.slice(0, 160), `/agency/invoices/${row.id}`);
+  return c.json({ ok: true }, 201);
 });

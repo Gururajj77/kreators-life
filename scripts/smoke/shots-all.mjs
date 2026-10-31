@@ -70,12 +70,50 @@ const chat = await api('POST', '/bond/chats', { userId: S.user.id }, M.token);
 const resources = await api('GET', '/resources', undefined, M.token);
 const resourceId = resources.resources?.[0]?.id ?? null;
 
+const site = [];
+
+// Agency: a client with a pipeline, time, an invoice, an agreement and a client link, so every Agency page has real data.
+await api('PATCH', '/me/modules', { key: 'agency', on: true }, M.token);
+await api('PUT', '/agency/settings', { currency: 'INR', weeklyHours: 30, profile: { from: { name: 'Studio Example', line: 'Prop. Sample for Studio Example', taxIds: [{ label: 'PAN', value: 'ABCDE1234F' }], address: '1 Example Road, Bengaluru', email: 'hello@example.test', phone: '+91 90000 00000' }, bank: { bankName: 'Example Bank', holder: 'Sample Person', account: '00112233', ifsc: 'EXMP0000001', upi: 'sample@upi' }, invoicePrefix: 'EX', payDays: 10, gstBps: 1800, signerName: 'Sample Person', signerTitle: 'Founder', jurisdiction: 'Bengaluru, Karnataka' } }, M.token);
+const agClient = await api('POST', '/agency/clients', { name: 'Acme Foods', contactName: 'Asha Rao', contactEmail: 'asha@acme.test', retainerCents: 5000000, piecesPerMonth: 8, hoursPerMonth: 20, channels: ['YouTube', 'Instagram'], renewalDate: new Date(Date.now() + 9 * 86_400_000).toISOString().slice(0, 10) }, M.token);
+await api('POST', '/agency/clients', { name: 'Bloom Skincare', retainerCents: 3000000, piecesPerMonth: 4, status: 'lead' }, M.token);
+await api('POST', '/agency/clients', { name: 'North Studio', retainerCents: 1500000, status: 'paused', health: 'amber' }, M.token);
+let agencyPaths = [];
+if (agClient.id) {
+  const day = (n) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+  const mkItem = (b) => api('POST', '/agency/items', { clientId: agClient.id, ...b }, M.token);
+  await mkItem({ title: 'Founder story reel', kind: 'short', platform: 'Instagram', stage: 'published', dueDate: day(-3), feeCents: 400000 });
+  const waiting = await mkItem({ title: 'Launch video', kind: 'video', platform: 'YouTube', stage: 'review', dueDate: day(2), publishDate: day(4), link: 'https://example.com/launch' });
+  await mkItem({ title: 'Customer voices, part 1', kind: 'short', platform: 'Instagram', stage: 'making', dueDate: day(-1) });
+  await mkItem({ title: 'Weekly newsletter', kind: 'newsletter', platform: 'Newsletter', stage: 'script', dueDate: day(5) });
+  await mkItem({ title: 'Recipe carousel', kind: 'carousel', platform: 'Instagram', stage: 'idea' });
+  await mkItem({ title: 'Approved teaser', kind: 'short', platform: 'YouTube', stage: 'approved', publishDate: day(6) });
+  if (waiting.id) {
+    await api('POST', `/agency/items/${waiting.id}/notes`, { body: 'Cut is attached, ready for a look.', shared: true }, M.token);
+    await api('POST', `/agency/items/${waiting.id}/notes`, { body: 'They usually ask for a longer intro.', shared: false }, M.token);
+  }
+  await api('POST', '/agency/time', { clientId: agClient.id, day: today, minutes: 150, billable: true, note: 'Editing' }, M.token);
+  const inv = await api('POST', '/agency/invoices', { clientId: agClient.id, items: [{ description: 'Monthly retainer', quantity: 1, unitCents: 5000000 }, { description: 'Founder story reel', quantity: 1, unitCents: 400000 }] }, M.token);
+  if (inv.invoice?.id) await api('PATCH', `/agency/invoices/${inv.invoice.id}`, { status: 'sent' }, M.token);
+  const kc = await api('POST', '/agency/contracts', { templateKey: 'trial', clientId: agClient.id }, M.token);
+  let contractToken = null;
+  if (kc.id) contractToken = (await api('PATCH', `/agency/contracts/${kc.id}`, { status: 'sent' }, M.token)).contract?.token ?? null;
+  const portal = await api('POST', `/agency/clients/${agClient.id}/portal`, { on: true, show: { hours: true, invoices: true, contracts: true } }, M.token);
+  await api('PUT', '/reviews/kpis/settings', { enabled: true }, M.token);
+  await api('POST', '/reviews/kpis', { name: 'Pieces published', source: 'published', cadence: 'month', target: 8 }, M.token);
+  await api('POST', '/reviews/kpis', { name: 'Sales calls', unit: 'number', direction: 'up', cadence: 'month', target: 20 }, M.token);
+  agencyPaths = ['/agency', '/agency?tab=pipeline', '/agency?tab=clients', '/agency?tab=clients&cview=list', '/agency?tab=invoices', '/agency?tab=agreements', '/agency?tab=settings', `/agency/${agClient.id}`, inv.invoice?.id ? `/agency/invoices/${inv.invoice.id}` : null, kc.id ? `/agency/contracts/${kc.id}` : null, '/reviews?kind=month'];
+  if (portal.portalToken) site.push(`/a/${portal.portalToken}`);
+  if (inv.invoice?.token) site.push(`/i/${inv.invoice.token}`);
+  if (contractToken) site.push(`/k/${contractToken}`);
+}
+
 const stateDir = path.join(path.dirname(new URL(import.meta.url).pathname), 'state');
 fs.mkdirSync(stateDir, { recursive: true });
 fs.writeFileSync(path.join(stateDir, 'shoot-token'), M.token);
 
-const site = ['/', '/explore', '/features/school', '/c/nope', '/i/nope', '/terms', '/privacy', '/refunds', '/contact', '/pricing', '/start', '/signin', '/forgot', '/signin/reset?token=nope', '/signup', `/u/sell${stamp}`.slice(0, 24), `/people/${S.user.id}`, sold.product?.id ? `/p/${sold.product.id}` : null];
-const app = ['/onboarding', '/session', '/vibe-check', '/home', '/today', '/tower', '/realm/self', '/apps', '/you', '/search', '/profile', '/help', '/inbox', '/leaderboard', '/rewards', '/school', '/school/coh-editing-open', '/work', opp.id ? `/work/${opp.id}` : null, '/army', camp.id ? `/army/${camp.id}` : null, '/win', reward.id ? `/win/${reward.id}` : null, '/party', event.event?.id ?? event.id ? `/party/${event.event?.id ?? event.id}` : null, '/run', club.club?.id ?? club.id ? `/run/clubs/${club.club?.id ?? club.id}` : null, '/run?tab=tracking', '/run?tab=collabs', '/community', '/club', '/bond', chat.chat?.id ?? chat.id ? `/bond/chats/${chat.chat?.id ?? chat.id}` : null, '/circles', groupId ? `/circles/${groupId}` : null, '/life', '/reviews', '/wellbeing', '/mood', '/sleep', '/stress', '/mindful', '/journal', '/companion', '/knowledge', resourceId ? `/knowledge/${resourceId}` : null, '/tools', '/tv', '/fund', '/sessions', '/library', sold.product?.id ? `/library/${sold.product.id}` : null, '/shop', '/store', mine.product?.id ? `/shop/products/${mine.product.id}` : null, '/shop/page', '/shop/bookings', '/shop/testimonials', '/shop/audience', '/shop/content', '/shop/automations', '/shop/customers', '/shop/dm', '/finance', '/internal/observability', '/manage', '/admin', '/nowhere-at-all'];
+site.unshift('/', '/explore', '/features/school', '/c/nope', '/i/nope', '/terms', '/privacy', '/refunds', '/contact', '/pricing', '/start', '/signin', '/forgot', '/signin/reset?token=nope', '/signup', `/u/sell${stamp}`.slice(0, 24), `/people/${S.user.id}`, sold.product?.id ? `/p/${sold.product.id}` : null);
+const app = [...agencyPaths, '/onboarding', '/session', '/vibe-check', '/home', '/today', '/tower', '/realm/self', '/apps', '/you', '/search', '/profile', '/help', '/inbox', '/leaderboard', '/rewards', '/school', '/school/coh-editing-open', '/work', opp.id ? `/work/${opp.id}` : null, '/army', camp.id ? `/army/${camp.id}` : null, '/win', reward.id ? `/win/${reward.id}` : null, '/party', event.event?.id ?? event.id ? `/party/${event.event?.id ?? event.id}` : null, '/run', club.club?.id ?? club.id ? `/run/clubs/${club.club?.id ?? club.id}` : null, '/run?tab=tracking', '/run?tab=collabs', '/community', '/club', '/bond', chat.chat?.id ?? chat.id ? `/bond/chats/${chat.chat?.id ?? chat.id}` : null, '/circles', groupId ? `/circles/${groupId}` : null, '/life', '/reviews', '/wellbeing', '/mood', '/sleep', '/stress', '/mindful', '/journal', '/companion', '/knowledge', resourceId ? `/knowledge/${resourceId}` : null, '/tools', '/tv', '/fund', '/sessions', '/library', sold.product?.id ? `/library/${sold.product.id}` : null, '/shop', '/store', mine.product?.id ? `/shop/products/${mine.product.id}` : null, '/shop/page', '/shop/bookings', '/shop/testimonials', '/shop/audience', '/shop/content', '/shop/automations', '/shop/customers', '/shop/dm', '/finance', '/internal/observability', '/manage', '/admin', '/nowhere-at-all'];
 const shots = [...site.filter(Boolean).map((p) => ({ path: p, name: `all-${p.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'site'}` })), ...app.filter(Boolean).map((p) => ({ path: p, needsSession: true, name: `all-${p.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')}` }))];
 process.stdout.write(JSON.stringify(shots, null, 1));
 console.error(`${shots.length} shots; token in ${path.join(stateDir, 'shoot-token')}`);

@@ -44,6 +44,12 @@ export const FEATURES: Record<string, FeatureCopy> = {
     relationships: ['servant_leader'],
     listing: 'campaign',
   },
+  agency: {
+    tagline: 'Run your clients like a studio.',
+    pitch: 'For a content agency or a freelance creator. Every client has a dashboard: what is waiting, what is coming, what went live. Move each deliverable from idea to published on a list or a board, log your time, make invoices and agreements, and share a page where the client approves their work. You choose what they see.',
+    steps: ['Add a client, then the deliverables you owe them.', 'Share their page. They approve or send back, with a note.', 'Invoice the month and see the numbers in Reviews.'],
+    relationships: ['servant_leader'],
+  },
   win: {
     tagline: 'Get paid for views that are real.',
     pitch: 'Content rewards: a brand funds a pool and sets a rate per thousand verified views. You post, the views are checked, a reviewer confirms, and finance pays. No follower count needed.',
@@ -251,7 +257,7 @@ export function featuresForRelationship(key: RelationshipKey): AppModule[] {
 /** The five areas of life, and which apps serve each. Another way to read the same seven relationships. */
 export const LIFE_AREA_FEATURES: Record<LifeAreaKey, string[]> = {
   physical: ['run', 'wellbeing', 'sleep', 'mindful', 'life', 'store'],
-  financial: ['finance', 'shop', 'work', 'army', 'win', 'fund', 'store', 'audience', 'content'],
+  financial: ['finance', 'shop', 'work', 'army', 'agency', 'win', 'fund', 'store', 'audience', 'content'],
   emotional: ['mood', 'journal', 'companion', 'discover', 'coaching', 'bond', 'community', 'party', 'circles', 'cards', 'profile'],
   mental: ['stress', 'school', 'knowledge', 'library', 'tools', 'reviews', 'tv'],
   spiritual: ['today', 'tower', 'mindful', 'club', 'leaderboard', 'rewards'],

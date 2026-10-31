@@ -279,6 +279,16 @@ me.get('/export', async (c) => {
     ['reminderPrefs', 'SELECT * FROM reminder_prefs WHERE user_id = ?'],
     ['focusPrefs', 'SELECT * FROM focus_prefs WHERE user_id = ?'],
     ['customReminders', 'SELECT * FROM custom_reminders WHERE user_id = ?'],
+    ['agencySettings', 'SELECT * FROM agency_settings WHERE user_id = ?'],
+    ['agencyClients', 'SELECT * FROM agency_clients WHERE user_id = ?'],
+    ['agencyItems', 'SELECT * FROM agency_items WHERE user_id = ?'],
+    ['agencyNotes', 'SELECT * FROM agency_notes WHERE user_id = ?'],
+    ['agencyTime', 'SELECT * FROM agency_time WHERE user_id = ?'],
+    ['agencyContracts', 'SELECT * FROM agency_contracts WHERE user_id = ?'],
+    ['agencyDocComments', 'SELECT * FROM agency_doc_comments WHERE user_id = ?'],
+    ['kpiPrefs', 'SELECT * FROM kpi_prefs WHERE user_id = ?'],
+    ['kpis', 'SELECT * FROM kpis WHERE user_id = ?'],
+    ['kpiValues', 'SELECT v.* FROM kpi_values v JOIN kpis k ON k.id = v.kpi_id WHERE k.user_id = ?'],
   ];
   const out: Record<string, unknown> = { exportedAt: nowIso(), user: toUser(user) };
   for (const [name, sql] of tables) {

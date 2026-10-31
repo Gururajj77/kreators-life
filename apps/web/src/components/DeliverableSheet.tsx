@@ -1,0 +1,422 @@
+import {
+  AGENCY_AUTHOR_NAME,
+  AGENCY_CHANNELS,
+  AGENCY_MAX_MINUTES,
+  AGENCY_NOTE_MAX,
+  AGENCY_NOTES_MAX,
+  AGENCY_TITLE_MAX,
+  DELIVERABLE_KINDS,
+  DELIVERABLE_KIND_NAME,
+  DELIVERABLE_STAGES,
+  DELIVERABLE_STAGE_META,
+  type AgencyClient,
+  type AgencyDeliverable,
+  type AgencyNote,
+  type DeliverableKind,
+  type DeliverableStage,
+  type TagTone,
+} from '@kreators/shared';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react';
+import { api } from '../lib/api';
+import { prettyDate, todayLocal } from '../lib/date';
+import { useAuthed } from '../lib/queries';
+import { Button } from './Button';
+import { Inert } from './Inert';
+import { Sheet } from './Sheet';
+import { StatusTag } from './StatusTag';
+import { Toggle } from './Toggle';
+
+const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
+
+const COPY = {
+  addTitle: 'Add a deliverable',
+  editTitle: 'Deliverable',
+  pickClient: 'Pick a client first.',
+  linkHint: 'A link to the work, starting with https.',
+  feeHint: 'What you charge for this one, if it has its own fee. Type whole units, like 4000.',
+  notesHint: 'Only you see this. It is the brief and your reminders.',
+  threadLede: 'Notes go back and forth here. Tick "Share with the client" to show one at their link.',
+  timeLede: 'Type minutes, or hours and minutes like 1:30.',
+  removeAsk: 'This removes the deliverable and its notes. It cannot be undone.',
+  armyLede: 'This one answers a deliverable in an Army campaign.',
+} as const;
+
+const ARMY_TAG: Record<string, { tone: TagTone; name: string }> = {
+  open: { tone: 'neutral', name: 'Open in Army' },
+  submitted: { tone: 'info', name: 'Sent to the brand' },
+  approved: { tone: 'good', name: 'Brand approved' },
+  changes: { tone: 'warn', name: 'Brand asked for changes' },
+};
+const AUTHOR_TONE: Record<AgencyNote['author'], TagTone> = { me: 'neutral', client: 'info', brand: 'warn' };
+
+const toMajor = (cents: number): string => (cents === 0 ? '' : cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2));
+const toCents = (v: string): number => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : 0;
+};
+/** "90" is minutes, "1:30" and "1h30" are an hour and a half, "1.5h" is the same. */
+export function parseMinutes(v: string): number {
+  const t = v.trim().toLowerCase();
+  if (!t) return 0;
+  const colon = /^(\d+):(\d{1,2})$/.exec(t) ?? /^(\d+)h\s*(\d{1,2})m?$/.exec(t);
+  if (colon) return Number(colon[1]) * 60 + Number(colon[2]);
+  const hours = /^(\d+(?:\.\d+)?)\s*h$/.exec(t);
+  if (hours) return Math.round(Number(hours[1]) * 60);
+  const n = Math.round(Number(t.replace(/m$/, '')));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+  return (
+    <label className="mt-sm block text-[14px] font-bold">
+      {label}
+      {children}
+      {hint && <span className="mt-xs block text-[12px] font-semibold text-ink-soft">{hint}</span>}
+    </label>
+  );
+}
+
+/** One deliverable: its details, stage, notes thread, time, and the Army send and sync when it is linked. `item` null with `clientId` adds one. */
+export function DeliverableSheet({ open, item, clientId, clients, onClose }: { open: boolean; item: AgencyDeliverable | null; clientId?: string; clients: AgencyClient[]; onClose: () => void }) {
+  return (
+    <Sheet open={open} onClose={onClose} title={item ? COPY.editTitle : COPY.addTitle}>
+      <Form item={item} clientId={clientId} clients={clients} onClose={onClose} />
+    </Sheet>
+  );
+}
+
+function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | null; clientId?: string; clients: AgencyClient[]; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [client, setClient] = useState(item?.clientId ?? clientId ?? (clients.length === 1 ? (clients[0]?.id ?? '') : ''));
+  const [title, setTitle] = useState(item?.title ?? '');
+  const [kind, setKind] = useState<DeliverableKind>(item?.kind ?? 'video');
+  const [platform, setPlatform] = useState(item?.platform ?? '');
+  const [stage, setStage] = useState<DeliverableStage>(item?.stage ?? 'idea');
+  const [due, setDue] = useState(item?.dueDate ?? '');
+  const [publish, setPublish] = useState(item?.publishDate ?? '');
+  const [link, setLink] = useState(item?.link ?? '');
+  const [notes, setNotes] = useState(item?.notes ?? '');
+  const [fee, setFee] = useState(toMajor(item?.feeCents ?? 0));
+  const [confirm, setConfirm] = useState(false);
+  const listId = useId();
+
+  // The stage moves from outside too (the brand's answer in Army, a drag on the board), so the form follows it.
+  useEffect(() => {
+    if (item) setStage(item.stage);
+  }, [item?.stage]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const chosen = clients.find((c) => c.id === client);
+  const channelOptions = Array.from(new Set([...(chosen?.channels ?? []), ...AGENCY_CHANNELS]));
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['agency'] });
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const body = { title: title.trim(), kind, platform: platform.trim(), stage, dueDate: due || null, publishDate: publish || null, link: link.trim(), notes, feeCents: toCents(fee) };
+      if (item) await api.agencyItemUpdate(item.id, body);
+      else await api.agencyItemAdd({ ...body, clientId: client });
+    },
+    onSuccess: () => {
+      invalidate();
+      onClose();
+    },
+  });
+  const remove = useMutation({
+    mutationFn: () => api.agencyItemRemove(item!.id),
+    onSuccess: () => {
+      invalidate();
+      onClose();
+    },
+  });
+
+  return (
+    <div>
+      <form
+        onSubmit={(e: FormEvent) => {
+          e.preventDefault();
+          if (title.trim() && client) save.mutate();
+        }}
+      >
+        {!item && !clientId && (
+          <Field label="Client">
+            <select value={client} onChange={(e) => setClient(e.target.value)} required className={field}>
+              <option value="">{COPY.pickClient}</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        {item && <p className="m-0 text-[14px] font-bold text-ink-soft">For {item.clientName}</p>}
+        <Field label="What is it called?">
+          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={AGENCY_TITLE_MAX} required className={field} />
+        </Field>
+        <div className="grid gap-sm md:grid-cols-2">
+          <Field label="Kind">
+            <select value={kind} onChange={(e) => setKind(e.target.value as DeliverableKind)} className={field}>
+              {DELIVERABLE_KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {DELIVERABLE_KIND_NAME[k]}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Channel">
+            <input list={listId} value={platform} onChange={(e) => setPlatform(e.target.value)} maxLength={30} className={field} />
+            <datalist id={listId}>
+              {channelOptions.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+          </Field>
+        </div>
+        <Field label="Stage">
+          <select value={stage} onChange={(e) => setStage(e.target.value as DeliverableStage)} className={field}>
+            {DELIVERABLE_STAGES.map((s) => (
+              <option key={s} value={s}>
+                {DELIVERABLE_STAGE_META[s].name}, {DELIVERABLE_STAGE_META[s].blurb}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <div className="grid gap-sm md:grid-cols-2">
+          <Field label="Due on">
+            <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className={field} />
+          </Field>
+          <Field label="Goes live on">
+            <input type="date" value={publish} onChange={(e) => setPublish(e.target.value)} className={field} />
+          </Field>
+        </div>
+        <Field label="Link" hint={COPY.linkHint}>
+          <input type="url" value={link} onChange={(e) => setLink(e.target.value)} maxLength={500} placeholder="https://" className={field} />
+        </Field>
+        <Field label="Fee" hint={COPY.feeHint}>
+          <input inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} className={field} />
+        </Field>
+        <Field label="Notes, only for you" hint={COPY.notesHint}>
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={AGENCY_NOTES_MAX} className={field} />
+        </Field>
+        {save.isError && (
+          <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+            {(save.error as Error).message || 'That did not save.'}
+          </p>
+        )}
+        <div className="mt-md flex flex-wrap items-center gap-xs">
+          <Button type="submit" disabled={save.isPending || !title.trim() || !client}>
+            {save.isPending ? 'Saving' : item ? 'Save changes' : 'Add it'}
+          </Button>
+          {item &&
+            (confirm ? (
+              <>
+                <Button variant="outline" onClick={() => remove.mutate()} disabled={remove.isPending}>
+                  Yes, remove it
+                </Button>
+                <Button variant="ghost" onClick={() => setConfirm(false)}>
+                  Keep it
+                </Button>
+                <p className="m-0 basis-full text-[14px] font-semibold text-ink-soft">{COPY.removeAsk}</p>
+              </>
+            ) : (
+              <Button variant="outline" onClick={() => setConfirm(true)}>
+                Remove
+              </Button>
+            ))}
+        </div>
+      </form>
+
+      {item && <Army item={item} link={link} onDone={invalidate} />}
+      {item && <Thread itemId={item.id} onDone={invalidate} />}
+      {item && <TimeLog item={item} onDone={invalidate} />}
+    </div>
+  );
+}
+
+/** The Army link: the brand's status, send a version, take its answer back. */
+function Army({ item, link, onDone }: { item: AgencyDeliverable; link: string; onDone: () => void }) {
+  const [said, setSaid] = useState('');
+  const send = useMutation({
+    mutationFn: () => api.agencyArmySend(item.id, link.trim() ? { url: link.trim() } : {}),
+    onSuccess: () => {
+      setSaid('Sent to the brand. It is in review now.');
+      onDone();
+    },
+  });
+  const sync = useMutation({
+    mutationFn: () => api.agencyArmySync(item.id),
+    onSuccess: (r) => {
+      setSaid(r.moved === 'approved' ? 'The brand approved it. It moved to Approved.' : r.moved === 'making' ? 'The brand asked for changes. It moved back to Making, and the words are in the notes.' : 'Nothing new from the brand yet.');
+      onDone();
+    },
+  });
+  if (!item.armyDeliverableId) return null;
+  const tag = item.army ? (ARMY_TAG[item.army.status] ?? { tone: 'neutral' as TagTone, name: item.army.status }) : null;
+  const err = (send.error ?? sync.error) as Error | null;
+  return (
+    <section className="mt-md rounded-tile bg-paper p-sm" aria-label="Army">
+      <div className="flex flex-wrap items-center gap-xs">
+        <h3 className="m-0 text-[18px]">Army</h3>
+        {tag && <StatusTag tone={tag.tone}>{tag.name}</StatusTag>}
+      </div>
+      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{COPY.armyLede}</p>
+      {item.army?.feedback && (
+        <p className="mt-xs m-0 whitespace-pre-wrap rounded-tile bg-card p-sm text-[14px] font-semibold">
+          <Inert text={item.army.feedback} />
+        </p>
+      )}
+      <div className="mt-xs flex flex-wrap gap-xs">
+        <Button variant="outline" size="sm" onClick={() => send.mutate()} disabled={send.isPending || (!link.trim() && !item.link)}>
+          Send this version to Army
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => sync.mutate()} disabled={sync.isPending}>
+          Take the brand&apos;s answer
+        </Button>
+      </div>
+      {said && (
+        <p role="status" className="mt-xs m-0 text-[14px] font-bold">
+          {said}
+        </p>
+      )}
+      {err && (
+        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+          {err.message}
+        </p>
+      )}
+    </section>
+  );
+}
+
+/** The thread on a deliverable: yours, the client's and the brand's. */
+function Thread({ itemId, onDone }: { itemId: string; onDone: () => void }) {
+  const qc = useQueryClient();
+  const q = useAuthed(['agency', 'notes', itemId], () => api.agencyNotes(itemId));
+  const [text, setText] = useState('');
+  const [shared, setShared] = useState(false);
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['agency', 'notes', itemId] });
+    onDone();
+  };
+  const add = useMutation({
+    mutationFn: () => api.agencyNoteAdd(itemId, text.trim(), shared),
+    onSuccess: () => {
+      setText('');
+      refresh();
+    },
+  });
+  const del = useMutation({ mutationFn: (id: string) => api.agencyNoteRemove(id), onSuccess: refresh });
+  const notes = q.data?.notes ?? [];
+  return (
+    <section className="mt-md" aria-labelledby={`thread-${itemId}`}>
+      <h3 id={`thread-${itemId}`} className="m-0 text-[18px]">
+        Notes
+      </h3>
+      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{COPY.threadLede}</p>
+      <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+        {notes.map((n) => (
+          <li key={n.id} className="rounded-tile bg-paper p-sm">
+            <div className="flex flex-wrap items-center gap-xs">
+              <StatusTag tone={AUTHOR_TONE[n.author]}>{AGENCY_AUTHOR_NAME[n.author]}</StatusTag>
+              {n.author === 'me' && <span className="text-[12px] font-bold text-ink-soft">{n.shared ? 'Shared with the client' : 'Private'}</span>}
+              <span className="text-[12px] font-semibold text-ink-mute">{prettyDate(n.createdAt.slice(0, 10))}</span>
+              {n.author === 'me' && (
+                <button type="button" onClick={() => del.mutate(n.id)} className="ml-auto min-h-[44px] px-xs text-[12px] font-bold text-ink-soft underline-offset-4 hover:text-ink hover:underline">
+                  Remove
+                </button>
+              )}
+            </div>
+            <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold">
+              <Inert text={n.body} />
+            </p>
+          </li>
+        ))}
+        {notes.length === 0 && !q.isPending && <li className="text-[14px] font-semibold text-ink-mute">No notes yet.</li>}
+      </ul>
+      <form
+        className="mt-xs"
+        onSubmit={(e: FormEvent) => {
+          e.preventDefault();
+          if (text.trim()) add.mutate();
+        }}
+      >
+        <label className="block text-[14px] font-bold">
+          Write a note
+          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={AGENCY_NOTE_MAX} className={field} />
+        </label>
+        <Toggle compact on={shared} onChange={setShared} label="Share with the client" />
+        {add.isError && (
+          <p role="alert" className="m-0 text-[14px] font-bold">
+            That did not save. Try again.
+          </p>
+        )}
+        <div className="mt-xs">
+          <Button type="submit" size="sm" disabled={add.isPending || !text.trim()}>
+            Add the note
+          </Button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+/** A quick way to log time against this deliverable. */
+function TimeLog({ item, onDone }: { item: AgencyDeliverable; onDone: () => void }) {
+  const [amount, setAmount] = useState('');
+  const [day, setDay] = useState(todayLocal());
+  const [billable, setBillable] = useState(true);
+  const [note, setNote] = useState('');
+  const [said, setSaid] = useState('');
+  const minutes = parseMinutes(amount);
+  const log = useMutation({
+    mutationFn: () => api.agencyTimeAdd({ clientId: item.clientId, itemId: item.id, day, minutes, billable, note: note.trim() }),
+    onSuccess: () => {
+      setSaid(`Logged ${minutes} minutes.`);
+      setAmount('');
+      setNote('');
+      onDone();
+    },
+  });
+  return (
+    <section className="mt-md" aria-labelledby={`time-${item.id}`}>
+      <h3 id={`time-${item.id}`} className="m-0 text-[18px]">
+        Time
+      </h3>
+      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{COPY.timeLede}</p>
+      <form
+        onSubmit={(e: FormEvent) => {
+          e.preventDefault();
+          setSaid('');
+          if (minutes > 0 && minutes <= AGENCY_MAX_MINUTES) log.mutate();
+        }}
+      >
+        <div className="grid gap-sm md:grid-cols-2">
+          <Field label="How long?">
+            <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="text" placeholder="1:30" className={field} />
+          </Field>
+          <Field label="Day">
+            <input type="date" value={day} max={todayLocal()} onChange={(e) => setDay(e.target.value)} className={field} />
+          </Field>
+        </div>
+        <Field label="What was it?">
+          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} className={field} />
+        </Field>
+        <Toggle compact on={billable} onChange={setBillable} label="Counts as billable" />
+        {log.isError && (
+          <p role="alert" className="m-0 text-[14px] font-bold">
+            That did not save. Try again.
+          </p>
+        )}
+        {said && (
+          <p role="status" className="m-0 text-[14px] font-bold">
+            {said}
+          </p>
+        )}
+        <div className="mt-xs">
+          <Button type="submit" size="sm" disabled={log.isPending || minutes < 1 || minutes > AGENCY_MAX_MINUTES}>
+            Log the time
+          </Button>
+        </div>
+      </form>
+    </section>
+  );
+}

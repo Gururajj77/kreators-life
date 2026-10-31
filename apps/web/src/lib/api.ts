@@ -1,4 +1,5 @@
 import type { Page, Unlock } from '@kreators/shared';
+import { todayLocal } from './date';
 import type { AdminAttendeeCode, AttendeeCodeHost, AttendeeCodeView } from '@kreators/shared';
 import type { AssistantContext, AssistantReceipt, AssistantReply, AssistantStatus, AssistantTurn, CreditEntry, CreditsResponse, PlanKey } from '@kreators/shared';
 import type { Brand, BrandDetail, BrandPiece, BrandSource, PieceKind, ResearchKind, ResearchRun } from '@kreators/shared';
@@ -13,6 +14,7 @@ import type { DailyBrief, GettingStarted, InboxShow, InboxTab, ReactionKind } fr
 import type { AdminCoachAsk, AdminCoachLink, CoachDirectoryEntry, CoachHub, CoachLink, CoachLogEntry, CoachProfile, CoachShare, CoachStudentView, CoachTaskInput, MyCoachResponse } from '@kreators/shared';
 import type { CustomReminder, RemindersResponse, WaterState, BlockedPerson, EventApp, EventExtras, LinkBlock, MediaItem, MediaOwner } from '@kreators/shared';
 import type { ObservabilityResponse } from '@kreators/shared';
+import type { AgencyClient, AgencyClientPage, AgencyContract, AgencyDeliverable, AgencyNote, AgencyOverview, AgencySettings, BoardColumn, BusinessProfile, ContractAnswer, ContractDoc, ContractListItem, DeliverableStage, DocComment, DocType, InvoiceDoc, InvoiceParty, Kpi, KpisResponse, Page as AgencyPage, PortalShow, PortalView, PublicContract } from '@kreators/shared';
 import type {
   HomeResponse,
   PublicSettings,
@@ -308,6 +310,54 @@ export const api = {
   reviewTemplateAdd: (body: { kind: PeriodKind; name: string; prompts: string[] }) => post<{ template: ReviewTemplate }>('/reviews/templates', body),
   reviewTemplateUpdate: (id: string, body: { name: string; prompts: string[] }) => patch<{ template: ReviewTemplate }>(`/reviews/templates/${id}`, body),
   reviewTemplateRemove: (id: string) => del<{ ok: true }>(`/reviews/templates/${id}`),
+
+  // agency: clients, deliverables, time, invoices, agreements. The day always comes from the device.
+  agency: (q = '') => request<AgencyOverview>(withQ(`/agency?day=${todayLocal()}`, q)),
+  agencySettings: (body: Partial<{ currency: string; weeklyHours: number; profile: BusinessProfile }>) => put<{ settings: AgencySettings }>('/agency/settings', body),
+  agencyClient: (id: string) => request<AgencyClientPage>(`/agency/clients/${id}?day=${todayLocal()}`),
+  agencyClientAdd: (body: Partial<AgencyClient>) => post<{ id: string }>('/agency/clients', body),
+  agencyClientUpdate: (id: string, body: Partial<AgencyClient> & { campaignId?: string | null }) => patch<{ ok: true }>(`/agency/clients/${id}`, body),
+  agencyClientRemove: (id: string) => del<{ ok: true }>(`/agency/clients/${id}`),
+  agencyPortal: (id: string, body: { on?: boolean; fresh?: boolean; show?: Partial<PortalShow> }) => post<{ portalToken: string | null; portal: PortalShow }>(`/agency/clients/${id}/portal`, body),
+  agencyArmyImport: (id: string) => post<{ added: number }>(`/agency/clients/${id}/army-import`),
+  agencyItems: (q = '') => request<{ page: AgencyPage; items: AgencyDeliverable[]; counts: Record<DeliverableStage, number> }>(withQ(`/agency/items?day=${todayLocal()}`, q)),
+  agencyBoard: (q = '') => request<{ columns: BoardColumn<AgencyDeliverable>[] }>(withQ(`/agency/board?day=${todayLocal()}`, q)),
+  agencyItemAdd: (body: Partial<AgencyDeliverable> & { clientId: string }) => post<{ id: string }>(`/agency/items?day=${todayLocal()}`, body),
+  agencyItemUpdate: (id: string, body: Partial<AgencyDeliverable>) => patch<{ ok: true }>(`/agency/items/${id}?day=${todayLocal()}`, body),
+  agencyItemRemove: (id: string) => del<{ ok: true }>(`/agency/items/${id}`),
+  agencyNotes: (id: string) => request<{ notes: AgencyNote[] }>(`/agency/items/${id}/notes`),
+  agencyNoteAdd: (id: string, body: string, shared: boolean) => post<{ id: string }>(`/agency/items/${id}/notes`, { body, shared }),
+  agencyNoteRemove: (id: string) => del<{ ok: true }>(`/agency/notes/${id}`),
+  agencyArmySend: (id: string, body: { url?: string; note?: string } = {}) => post<{ ok: true }>(`/agency/items/${id}/army/send?day=${todayLocal()}`, body),
+  agencyArmySync: (id: string) => post<{ moved: DeliverableStage | null }>(`/agency/items/${id}/army/sync?day=${todayLocal()}`),
+  agencyTimeAdd: (body: { clientId: string; itemId?: string | null; day: string; minutes: number; billable: boolean; note?: string }) => post<{ id: string }>('/agency/time', body),
+  agencyTimeRemove: (id: string) => del<{ ok: true }>(`/agency/time/${id}`),
+  agencyInvoices: (q = '') => request<{ page: AgencyPage; invoices: Invoice[]; counts: { status: string; n: number; cents: number }[] }>(withQ('/agency/invoices', q)),
+  agencyInvoiceBoard: (q = '') => request<{ columns: (BoardColumn<Invoice> & { cents: number })[] }>(withQ('/agency/invoices/board', q)),
+  agencyInvoice: (id: string) => request<{ invoice: Invoice }>(`/agency/invoices/${id}`),
+  agencyInvoiceAdd: (body: { clientId: string; items: InvoiceItem[]; doc?: Partial<InvoiceDoc>; dueDate?: string | null; issueDate?: string | null; note?: string }) => post<{ invoice: Invoice }>(`/agency/invoices?day=${todayLocal()}`, body),
+  agencyInvoiceFromClient: (clientId: string, month?: string) => post<{ invoice: Invoice }>(`/agency/clients/${clientId}/invoice?day=${todayLocal()}`, month ? { month } : {}),
+  agencyInvoiceUpdate: (id: string, body: { items?: InvoiceItem[]; doc?: Partial<InvoiceDoc> & { from?: InvoiceParty; to?: InvoiceParty }; dueDate?: string | null; issueDate?: string | null; note?: string; number?: string; status?: Invoice['status'] }) => patch<{ invoice: Invoice }>(`/agency/invoices/${id}`, body),
+  agencyInvoiceDuplicate: (id: string, body: { issueDate?: string; dueDate?: string | null; number?: string; bumpMonths?: boolean } = {}) => post<{ invoice: Invoice }>(`/agency/invoices/${id}/duplicate?day=${todayLocal()}`, body),
+  agencyInvoiceRemove: (id: string) => del<{ ok: true }>(`/agency/invoices/${id}`),
+  agencyContracts: (q = '') => request<{ page: AgencyPage; contracts: ContractListItem[]; counts: { status: string; n: number }[] }>(withQ('/agency/contracts', q)),
+  agencyContractBoard: (q = '') => request<{ columns: BoardColumn<ContractListItem>[] }>(withQ('/agency/contracts/board', q)),
+  agencyContract: (id: string) => request<{ contract: AgencyContract }>(`/agency/contracts/${id}`),
+  agencyContractAdd: (body: { templateKey: string; clientId?: string | null }) => post<{ id: string }>('/agency/contracts', body),
+  agencyContractUpdate: (id: string, body: { doc?: ContractDoc; clientId?: string | null; status?: 'draft' | 'sent' | 'void' }) => patch<{ contract: AgencyContract }>(`/agency/contracts/${id}`, body),
+  agencyContractDuplicate: (id: string) => post<{ id: string }>(`/agency/contracts/${id}/duplicate`),
+  agencyContractRemove: (id: string) => del<{ ok: true }>(`/agency/contracts/${id}`),
+  agencyComments: (type: DocType, id: string) => request<{ comments: DocComment[] }>(`/agency/comments/${type}/${id}`),
+  agencyCommentAdd: (type: DocType, id: string, body: string) => post<{ ok: true }>(`/agency/comments/${type}/${id}`, { body }),
+  agencyCommentRemove: (id: string) => del<{ ok: true }>(`/agency/comments/${id}`),
+
+  // business metrics in Reviews: only for people who switched them on
+  kpis: (kind: PeriodKind, date: string) => request<KpisResponse>(`/reviews/kpis?kind=${kind}&date=${date}&day=${todayLocal()}`),
+  kpiSwitch: (enabled: boolean) => put<{ enabled: boolean }>('/reviews/kpis/settings', { enabled }),
+  kpiAdd: (body: Partial<Kpi>) => post<{ id: string }>('/reviews/kpis', body),
+  kpiUpdate: (id: string, body: Partial<Kpi>) => patch<{ ok: true }>(`/reviews/kpis/${id}`, body),
+  kpiRemove: (id: string) => del<{ ok: true }>(`/reviews/kpis/${id}`),
+  kpiValue: (id: string, body: { date: string; value: number | null; note?: string }) => put<{ ok: true }>(`/reviews/kpis/${id}/value?day=${todayLocal()}`, body),
   spark: (date: string) => post<{ awarded: number; relationship: RelationshipKey; alreadyDone: boolean }>('/today/spark', { date }),
 
   // rank and rewards
@@ -795,12 +845,35 @@ async function publicRequest<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+async function publicSend<T>(method: 'POST', path: string, body: unknown): Promise<T> {
+  const res = await fetch(`/api/public${path}`, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) {
+    const b = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new ApiError(b.error ?? res.statusText, res.status);
+  }
+  return (await res.json()) as T;
+}
+
+/** What the client sees on an invoice link: the invoice with what was switched off removed, and its thread. */
+export interface PublicInvoice {
+  invoice: Invoice;
+  canComment: boolean;
+  canDownload: boolean;
+  comments: DocComment[];
+}
+
 export const publicApi = {
+  portal: (token: string) => publicRequest<PortalView>(`/agency/${encodeURIComponent(token)}`),
+  portalDecide: (token: string, id: string, body: { decision: 'approve' | 'changes' | 'comment'; note?: string }) => publicSend<{ ok: true }>('POST', `/agency/${encodeURIComponent(token)}/items/${id}`, body),
+  contract: (token: string) => publicRequest<PublicContract>(`/contracts/${encodeURIComponent(token)}`),
+  contractAccept: (token: string, body: { name: string; title: string; agree: boolean; answers: Record<string, ContractAnswer> }) => publicSend<{ ok: true }>('POST', `/contracts/${encodeURIComponent(token)}/accept`, body),
+  contractComment: (token: string, text: string) => publicSend<{ ok: true }>('POST', `/contracts/${encodeURIComponent(token)}/comments`, { body: text }),
+  invoiceComment: (token: string, text: string) => publicSend<{ ok: true }>('POST', `/invoices/${encodeURIComponent(token)}/comments`, { body: text }),
   explore: (opts: { q?: string; type?: ListingType; featured?: boolean; limit?: number } = {}) =>
     publicRequest<{ listings: Listing[] }>(`/explore?${new URLSearchParams({ ...(opts.q ? { q: opts.q } : {}), ...(opts.type ? { type: opts.type } : {}), ...(opts.featured ? { featured: '1' } : {}), ...(opts.limit ? { limit: String(opts.limit) } : {}) })}`),
   listing: (type: ListingType, id: string) => publicRequest<{ listing: Listing }>(`/explore/${type}/${id}`),
   stats: () => publicRequest<PublicStats>('/explore/stats'),
   certificate: (code: string) => publicRequest<{ certificate: Certificate }>(`/certificates/${encodeURIComponent(code)}`),
-  invoice: (token: string) => publicRequest<{ invoice: Invoice }>(`/invoices/${encodeURIComponent(token)}`),
+  invoice: (token: string) => publicRequest<PublicInvoice>(`/invoices/${encodeURIComponent(token)}`),
   config: () => publicRequest<PaymentsConfig>('/config'),
 };

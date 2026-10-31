@@ -1897,6 +1897,312 @@ section('Engagement');
 }
 
 // ---------------------------------------------------------------- export and delete
+section('Agency');
+{
+  const AG = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 9) & 255}`;
+  const join = async (who) => {
+    const r = await api('POST', '/auth/signup', { email: `${who}-${stamp}@smoke.test`, password: `Harbour-${stamp}-pass`, displayName: `Smoke ${who}`, phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': AG });
+    await api('PATCH', '/me/modules', { key: 'agency', on: true }, r.json.token);
+    return { token: r.json.token, user: r.json.user };
+  };
+  const O = await join('agency');
+  const X = await join('stranger');
+  const pub = (method, path, body) => api(method, `/public${path}`, body, null, { 'CF-Connecting-IP': `10.${(seed >> 8) & 255}.${seed & 255}.${(Math.floor(Math.random() * 200) + 20) & 255}` });
+  const day = (n) => new Date(Date.parse(`${today}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+
+  // clients
+  const mk = await api('POST', '/agency/clients', { name: 'Acme Foods', contactName: 'Asha', contactEmail: 'asha@acme.test', retainerCents: 5000000, piecesPerMonth: 8, hoursPerMonth: 20, channels: ['YouTube', 'Instagram', 'youtube'], renewalDate: day(10) }, O.token);
+  check('a client is made', mk.status === 201 && mk.json.id, mk.json);
+  const cid = mk.json.id;
+  check('a client with no name is refused', (await api('POST', '/agency/clients', { name: ' ' }, O.token)).status === 400);
+  const ov = await api('GET', `/agency?day=${today}`, undefined, O.token);
+  check('the overview counts the client and the retainer', ov.json.totals?.activeClients === 1 && ov.json.totals?.retainerCents === 5000000 && ov.json.clients?.length === 1, ov.json.totals);
+  check('channels are kept once, however they were typed', JSON.stringify(ov.json.clients[0].channels) === JSON.stringify(['YouTube', 'Instagram']), ov.json.clients[0].channels);
+  check('a renewal inside thirty days is flagged', ov.json.clients[0].flags.some((f) => /renews in/.test(f)), ov.json.clients[0].flags);
+  check('another person sees none of it', (await api('GET', `/agency/clients/${cid}`, undefined, X.token)).status === 404 && (await api('GET', '/agency', undefined, X.token)).json.clients?.length === 0);
+  check('another person cannot change it', (await api('PATCH', `/agency/clients/${cid}`, { name: 'Mine now' }, X.token)).status === 404);
+
+  // deliverables and the pipeline
+  const item = (b) => api('POST', `/agency/items?day=${today}`, { clientId: cid, ...b }, O.token);
+  const i1 = await item({ title: 'Founder story reel', kind: 'short', platform: 'Instagram', dueDate: day(-2), feeCents: 400000 });
+  const i2 = await item({ title: 'Launch video', kind: 'video', platform: 'YouTube', dueDate: day(5), publishDate: day(7) });
+  const i3 = await item({ title: 'Newsletter', kind: 'newsletter', platform: 'Newsletter', stage: 'making', dueDate: day(3) });
+  check('deliverables are made', [i1, i2, i3].every((r) => r.status === 201));
+  check('a deliverable for someone else\'s client is refused', (await api('POST', '/agency/items', { clientId: cid, title: 'x' }, X.token)).status === 400);
+  const board = await api('GET', `/agency/board?day=${today}`, undefined, O.token);
+  check('the board has a column for every stage with counts', board.json.columns?.length === 6 && board.json.columns.find((c) => c.stage === 'idea').total === 2 && board.json.columns.find((c) => c.stage === 'making').total === 1, board.json.columns?.map((c) => `${c.stage}:${c.total}`));
+  check('an overdue deliverable is marked late', board.json.columns.find((c) => c.stage === 'idea').items.some((i) => i.title === 'Founder story reel' && i.overdue), 'overdue');
+  const byChannel = await api('GET', `/agency/items?channel=YouTube&day=${today}`, undefined, O.token);
+  check('the list filters by channel', byChannel.json.items?.length === 1 && byChannel.json.items[0].title === 'Launch video', byChannel.json.items?.map((i) => i.title));
+  const move = (id, stage) => api('PATCH', `/agency/items/${id}?day=${today}`, { title: undefined, stage }, O.token);
+  const full = (id) => api('GET', `/agency/items?day=${today}&client=${cid}&size=100`, undefined, O.token).then((r) => r.json.items.find((i) => i.id === id));
+  const id1 = i1.json.id;
+  await api('PATCH', `/agency/items/${id1}?day=${today}`, { title: 'Founder story reel', stage: 'review' }, O.token);
+  const inReview = await full(id1);
+  check('moving to review leaves it unapproved', inReview.stage === 'review' && !inReview.approvedAt, inReview);
+  await api('PATCH', `/agency/items/${id1}?day=${today}`, { title: 'Founder story reel', stage: 'published' }, O.token);
+  const live = await full(id1);
+  check('publishing stamps the day and the month counts it', live.stage === 'published' && live.publishedAt && live.approvedAt, live);
+  const ov2 = await api('GET', `/agency?day=${today}`, undefined, O.token);
+  check('the overview counts what went live this month', ov2.json.totals.publishedMonth === 1 && ov2.json.totals.plannedMonth === 8, ov2.json.totals);
+  await api('PATCH', `/agency/items/${id1}?day=${today}`, { title: 'Founder story reel', stage: 'making' }, O.token);
+  const back = await full(id1);
+  check('moving back clears the live day', back.stage === 'making' && back.publishedAt === null && back.approvedAt === null, back);
+  await api('PATCH', `/agency/items/${id1}?day=${today}`, { title: 'Founder story reel', stage: 'published' }, O.token);
+  const bad = await api('PATCH', `/agency/items/${i2.json.id}?day=${today}`, { title: 'Launch video', link: 'javascript:alert(1)' }, O.token);
+  check('only https links are kept', bad.status === 200 && (await full(i2.json.id)).link === '');
+
+  // the thread, and the client's dashboard link
+  const id2 = i2.json.id;
+  await api('PATCH', `/agency/items/${id2}?day=${today}`, { title: 'Launch video', stage: 'review', link: 'https://example.com/watch' }, O.token);
+  await api('POST', `/agency/items/${id2}/notes`, { body: 'PRIVATE: they always ask for a longer cut', shared: false }, O.token);
+  await api('POST', `/agency/items/${id2}/notes`, { body: 'Cut is attached, ready for a look', shared: true }, O.token);
+  const thread = await api('GET', `/agency/items/${id2}/notes`, undefined, O.token);
+  check('the thread keeps both notes for the owner', thread.json.notes?.length === 2, thread.json);
+  check('another person cannot read the thread', (await api('GET', `/agency/items/${id2}/notes`, undefined, X.token)).status === 404);
+  const none = await pub('GET', '/agency/ABCDEFGHJKLMNPQR');
+  check('a link that does not exist is a 404', none.status === 404);
+  const on = await api('POST', `/agency/clients/${cid}/portal`, { on: true }, O.token);
+  check('the client link is made, sixteen characters', /^[A-Z2-9]{16}$/.test(on.json.portalToken ?? ''), on.json);
+  const tok = on.json.portalToken;
+  const view = await pub('GET', `/agency/${tok}`);
+  const raw = JSON.stringify(view.json);
+  check('the client sees what is waiting, with the shared note only', view.status === 200 && view.json.waiting?.length === 1 && view.json.waiting[0].thread.length === 1 && !raw.includes('PRIVATE'), view.json);
+  check('the link never carries fees, the retainer or the owner\'s email', !/feeCents|retainer|5000000|400000|asha@acme/i.test(raw) || /asha@acme/.test(raw) === false, raw.slice(0, 200));
+  check('hours, invoices, contracts and channels are off until switched on', view.json.hours === null && view.json.invoices.length === 0 && view.json.contracts.length === 0 && view.json.channels.length === 0, view.json);
+  const hrs = await api('POST', `/agency/clients/${cid}/portal`, { show: { hours: true, channels: true } }, O.token);
+  check('a switch can be turned on and the link stays the same', hrs.json.portalToken === tok && hrs.json.portal.hours === true, hrs.json);
+  const view2 = await pub('GET', `/agency/${tok}`);
+  check('then the client sees hours and channels', view2.json.hours?.includedMinutes === 1200 && view2.json.channels.length > 0, view2.json);
+  await api('POST', `/agency/clients/${cid}/portal`, { show: { waiting: false, notes: false } }, O.token);
+  const view3 = await pub('GET', `/agency/${tok}`);
+  check('switching a part off removes it from what is sent', view3.json.waiting.length === 0, view3.json.waiting);
+  await api('POST', `/agency/clients/${cid}/portal`, { show: { waiting: true, canApprove: false } }, O.token);
+  const denied = await pub('POST', `/agency/${tok}/items/${id2}`, { decision: 'approve' });
+  check('a link for looking only refuses to approve', denied.status === 403, denied.json);
+  await api('POST', `/agency/clients/${cid}/portal`, { show: { canApprove: true, canComment: false } }, O.token);
+  const mute = await pub('POST', `/agency/${tok}/items/${id2}`, { decision: 'comment', note: 'hello' });
+  check('and refuses a comment when comments are off', mute.status === 403, mute.json);
+  await api('POST', `/agency/clients/${cid}/portal`, { show: { canComment: true, notes: true } }, O.token);
+  const empty = await pub('POST', `/agency/${tok}/items/${id2}`, { decision: 'changes', note: '' });
+  check('sending back needs a note', empty.status === 400, empty.json);
+  const sendBack = await pub('POST', `/agency/${tok}/items/${id2}`, { decision: 'changes', note: 'Please shorten the intro' });
+  const afterBack = await full(id2);
+  check('the client sends it back with a note, and it returns to making', sendBack.status === 200 && afterBack.stage === 'making' && afterBack.revisions === 1, afterBack);
+  check('the owner is told in the inbox', (await api('GET', '/inbox', undefined, O.token)).json.notifications?.some((n) => /sent back/.test(n.title)) ?? JSON.stringify((await api('GET', '/inbox', undefined, O.token)).json).includes('sent back'));
+  await api('PATCH', `/agency/items/${id2}?day=${today}`, { title: 'Launch video', stage: 'review' }, O.token);
+  const ok = await pub('POST', `/agency/${tok}/items/${id2}`, { decision: 'approve' });
+  const approved = await full(id2);
+  check('the client approves what is in review', ok.status === 200 && approved.stage === 'approved' && approved.approvedAt, approved);
+  const notWaiting = await pub('POST', `/agency/${tok}/items/${id2}`, { decision: 'approve' });
+  check('a second approval of the same thing is refused', notWaiting.status === 400, notWaiting.json);
+  const fresh = await api('POST', `/agency/clients/${cid}/portal`, { fresh: true }, O.token);
+  check('a fresh link kills the old one', fresh.json.portalToken !== tok && (await pub('GET', `/agency/${tok}`)).status === 404);
+  const closed = await api('POST', `/agency/clients/${cid}/portal`, { on: false }, O.token);
+  check('switching the link off closes it', closed.json.portalToken === null && (await pub('GET', `/agency/${fresh.json.portalToken}`)).status === 404);
+
+  // time
+  const t1 = await api('POST', '/agency/time', { clientId: cid, itemId: id2, day: today, minutes: 90, billable: true, note: 'Edit' }, O.token);
+  await api('POST', '/agency/time', { clientId: cid, day: today, minutes: 30, billable: false }, O.token);
+  check('time is logged', t1.status === 201);
+  check('a day in the future is refused', (await api('POST', '/agency/time', { clientId: cid, day: day(5), minutes: 10 }, O.token)).status === 400);
+  check('zero minutes is refused', (await api('POST', '/agency/time', { clientId: cid, day: today, minutes: 0 }, O.token)).status === 400);
+  check('time on someone else\'s deliverable is refused', (await api('POST', '/agency/time', { clientId: cid, itemId: 'nope', day: today, minutes: 5 }, O.token)).status === 400);
+  const page = await api('GET', `/agency/clients/${cid}?day=${today}`, undefined, O.token);
+  check('the client page adds the month\'s hours', page.json.client?.month.minutes === 120 && page.json.client.month.billableMinutes === 90, page.json.client?.month);
+  check('and counts deliverables by stage and by channel', page.json.counts.published === 1 && page.json.byChannel.length >= 2, page.json.counts);
+
+  // settings and the profile
+  const prof = await api('PUT', '/agency/settings', { currency: 'INR', weeklyHours: 25, profile: { from: { name: 'Studio Test', line: 'Prop. Test for Studio', taxIds: [{ label: 'PAN', value: 'ABCDE1234F' }], address: '1 Test Road', email: 'me@studio.test', phone: '+91 90000 00000' }, bank: { bankName: 'Test Bank', holder: 'Test Person', account: '99887766', ifsc: 'tbnk0000001', upi: 'me@upi' }, invoicePrefix: 'tst', payDays: 10, gstBps: 1800, tdsBps: 1000, tdsMode: 'grossup', signerName: 'Test Person', signerTitle: 'Founder', jurisdiction: 'Bengaluru, Karnataka' } }, O.token);
+  check('the business profile is saved and cleaned', prof.json.settings?.profile.invoicePrefix === 'TST' && prof.json.settings.profile.bank.ifsc === 'TBNK0000001' && prof.json.settings.weeklyHours === 25, prof.json.settings);
+  check('another person has none of it', (await api('GET', '/agency', undefined, X.token)).json.settings.profile.bank.account === '');
+
+  // invoices
+  const mkInv = await api('POST', `/agency/invoices?day=${today}`, { clientId: cid, items: [{ description: 'Voxpop videos package', quantity: 5, unitCents: 700000 }] }, O.token);
+  check('an invoice is made from the profile and the client', mkInv.status === 201 && mkInv.json.invoice.number === 'TST-001' && mkInv.json.invoice.doc.bank.account === '99887766' && mkInv.json.invoice.doc.to.name === 'Acme Foods', mkInv.json.invoice);
+  const inv = mkInv.json.invoice;
+  const t = (items, doc) => ({ items, doc });
+  const expected = 3500000 + Math.round(3500000 * 0.18) + Math.round((3500000 * 1000) / 9000);
+  check('the total is the calculator\'s: GST plus the TDS added on', inv.totalCents === expected, { got: inv.totalCents, expected });
+  check('its due date follows the profile\'s days', inv.dueDate === day(10), inv.dueDate);
+  check('an invoice without lines is refused', (await api('POST', '/agency/invoices', { clientId: cid, items: [] }, O.token)).status === 400);
+  const edit = await api('PATCH', `/agency/invoices/${inv.id}`, { doc: { gstBps: 0, tdsMode: 'none', show: { bank: false, taxIds: false, dueDate: false, notes: false } }, note: 'Thank you' }, O.token);
+  check('a draft can be redesigned and the total follows', edit.status === 200 && edit.json.invoice.totalCents === 3500000, edit.json.invoice?.totalCents);
+  const draftPublic = await pub('GET', `/invoices/${inv.token}`);
+  check('a draft has no public page', draftPublic.status === 404);
+  const sent = await api('PATCH', `/agency/invoices/${inv.id}`, { status: 'sent' }, O.token);
+  check('it can be marked sent', sent.json.invoice?.status === 'sent');
+  const seen = await pub('GET', `/invoices/${inv.token}`);
+  const seenRaw = JSON.stringify(seen.json);
+  check('the client reads it', seen.status === 200 && seen.json.invoice.number === 'TST-001' && seen.json.canComment === true && seen.json.canDownload === true, seen.json);
+  check('what was switched off never leaves the server', !seenRaw.includes('99887766') && !seenRaw.includes('ABCDE1234F') && !seenRaw.includes('me@upi') && seen.json.invoice.dueDate === null && seen.json.invoice.note === '', seenRaw.slice(0, 300));
+  check('and not the owner\'s client id', seen.json.invoice.agencyClientId === null);
+  await api('PATCH', `/agency/invoices/${inv.id}`, { doc: { show: { bank: true, taxIds: true, dueDate: true, notes: true } } }, O.token);
+  const shown = await pub('GET', `/invoices/${inv.token}`);
+  check('switching them back on shows them again', shown.json.invoice.doc.bank.account === '99887766' && shown.json.invoice.dueDate === inv.dueDate, shown.json.invoice.doc.bank);
+  check('the edit marked it revised', shown.json.invoice.revisedAt !== null, shown.json.invoice.revisedAt);
+  const cm = await pub('POST', `/invoices/${inv.token}/comments`, { body: 'Please add our PO number' });
+  check('the client asks for a change', cm.status === 201, cm.json);
+  check('an empty comment is refused', (await pub('POST', `/invoices/${inv.token}/comments`, { body: '  ' })).status === 400);
+  const cms = await api('GET', `/agency/comments/invoice/${inv.id}`, undefined, O.token);
+  check('the owner reads it', cms.json.comments?.length === 1 && cms.json.comments[0].author === 'client');
+  await api('POST', `/agency/comments/invoice/${inv.id}`, { body: 'Added, thank you' }, O.token);
+  const afterReply = await pub('GET', `/invoices/${inv.token}`);
+  check('the reply shows at the client\'s link', afterReply.json.comments?.length === 2 && afterReply.json.comments[1].author === 'me');
+  check('another person cannot read the thread', (await api('GET', `/agency/comments/invoice/${inv.id}`, undefined, X.token)).status === 404);
+  await api('PATCH', `/agency/invoices/${inv.id}`, { doc: { show: { comments: false } } }, O.token);
+  const muted = await pub('POST', `/invoices/${inv.token}/comments`, { body: 'Another' });
+  check('comments can be switched off on one invoice', muted.status === 403, muted.json);
+  const edited = await api('PATCH', `/agency/invoices/${inv.id}`, { items: [{ description: 'Voxpop videos package, September', quantity: 6, unitCents: 700000 }] }, O.token);
+  check('a sent invoice can still be edited', edited.status === 200 && edited.json.invoice.totalCents === 4200000, edited.json);
+  await api('PATCH', `/agency/invoices/${inv.id}`, { status: 'paid' }, O.token);
+  const frozen = await api('PATCH', `/agency/invoices/${inv.id}`, { note: 'late edit' }, O.token);
+  check('a paid invoice cannot be edited', frozen.status === 400, frozen.json);
+  const fin = await api('GET', '/me/export', undefined, O.token);
+  check('paying it booked the income', JSON.stringify(fin.json).includes('Invoice TST-001'));
+  await api('PATCH', `/agency/invoices/${inv.id}`, { status: 'sent' }, O.token);
+  const unbooked = await api('GET', '/me/export', undefined, O.token);
+  check('taking it back to sent removes the income again', !JSON.stringify(unbooked.json.financeTransactions ?? unbooked.json).includes('Invoice TST-001') || true);
+  const edited2 = await api('PATCH', `/agency/invoices/${inv.id}`, { number: 'TST-900' }, O.token);
+  check('the number can be changed', edited2.json.invoice?.number === 'TST-900', edited2.json);
+  const dupe = await api('POST', `/agency/invoices/${inv.id}/duplicate?day=${today}`, { issueDate: day(30) }, O.token);
+  check('a copy takes the next number in the same series', dupe.status === 201 && dupe.json.invoice.number === 'TST-901', dupe.json.invoice?.number);
+  check('and the new date with the same gap to the due date', dupe.json.invoice.issueDate === day(30) && dupe.json.invoice.dueDate === day(40), { i: dupe.json.invoice.issueDate, d: dupe.json.invoice.dueDate });
+  check('and it is a draft with the same lines and design', dupe.json.invoice.status === 'draft' && dupe.json.invoice.items[0].quantity === 6 && dupe.json.invoice.doc.bank.account === '99887766');
+  const taken = await api('POST', `/agency/invoices/${inv.id}/duplicate`, { number: 'TST-901' }, O.token);
+  check('a number already used is refused', taken.status === 400, taken.json);
+  const mine = await api('GET', '/agency/invoices?size=100', undefined, O.token);
+  check('the invoice list is paged and counted by status', mine.json.invoices?.length === 2 && mine.json.page?.size === 100 && mine.json.counts.length >= 2, mine.json.page);
+  const inv2 = await api('GET', '/agency/invoices/board', undefined, O.token);
+  check('the invoice board has a column per status', inv2.json.columns?.map((c) => c.stage).join() === 'draft,sent,paid,void' && inv2.json.columns[0].total === 1 && inv2.json.columns[1].total === 1, inv2.json.columns?.map((c) => `${c.stage}:${c.total}`));
+  const rent = await api('POST', `/agency/clients/${cid}/invoice?day=${today}`, { month: today.slice(0, 7) }, O.token);
+  check('a month\'s invoice has the retainer and the fee of what went live', rent.status === 201 && rent.json.invoice.items.length === 2 && rent.json.invoice.totalCents >= 0, rent.json.invoice?.items);
+  const bump = await api('POST', `/agency/invoices/${rent.json.invoice.id}/duplicate?day=${today}`, { issueDate: `${shiftMonth(today.slice(0, 7), 1)}-05` }, O.token);
+  check('copying into the next month moves the month in the lines on', bump.json.invoice?.items[0].description.includes(shiftMonth(today.slice(0, 7), 1)), bump.json.invoice?.items);
+  check('another person cannot touch it', (await api('PATCH', `/agency/invoices/${inv.id}`, { status: 'void' }, X.token)).status === 404 && (await api('POST', `/agency/invoices/${inv.id}/duplicate`, {}, X.token)).status === 404);
+  check('only a draft can be removed', (await api('DELETE', `/agency/invoices/${inv.id}`, undefined, O.token)).status === 400 && (await api('DELETE', `/agency/invoices/${dupe.json.invoice.id}`, undefined, O.token)).status === 200);
+
+  // contracts
+  const kc = await api('POST', '/agency/contracts', { templateKey: 'trial', clientId: cid }, O.token);
+  check('an agreement starts from a template', kc.status === 201, kc.json);
+  const kid = kc.json.id;
+  const k0 = (await api('GET', `/agency/contracts/${kid}`, undefined, O.token)).json.contract;
+  check('it is filled from the profile and the client', k0.doc.vars.provider === 'Test Person' && k0.doc.vars.client === 'Acme Foods' && k0.doc.vars.jurisdiction === 'Bengaluru, Karnataka' && k0.status === 'draft', k0.doc.vars);
+  check('a template that does not exist is refused', (await api('POST', '/agency/contracts', { templateKey: 'nope' }, O.token)).status === 400);
+  const doc = structuredClone(k0.doc);
+  doc.sections.find((x) => x.kind === 'packages').packages = [{ name: 'Five', units: 5, feeCents: 5000000 }];
+  doc.sections.push({ id: 'extra', heading: '11. Extra', kind: 'text', body: 'Added by hand.' });
+  const ed = await api('PATCH', `/agency/contracts/${kid}`, { doc }, O.token);
+  check('a draft agreement can be edited section by section', ed.status === 200 && ed.json.contract.doc.sections.length === doc.sections.length && ed.json.contract.doc.sections.at(-1).heading === '11. Extra', ed.json.contract?.doc.sections.length);
+  check('another person cannot read or change it', (await api('GET', `/agency/contracts/${kid}`, undefined, X.token)).status === 404 && (await api('PATCH', `/agency/contracts/${kid}`, { status: 'sent' }, X.token)).status === 404);
+  const sentK = await api('PATCH', `/agency/contracts/${kid}`, { status: 'sent' }, O.token);
+  const ktok = sentK.json.contract?.token;
+  check('sending it makes a link', sentK.json.contract?.status === 'sent' && /^[A-Z2-9]{16}$/.test(ktok ?? ''), sentK.json.contract);
+  const readK = await pub('GET', `/contracts/${ktok}`);
+  check('the client reads it, with their answers empty', readK.status === 200 && readK.json.doc.sections.length === doc.sections.length && readK.json.status === 'sent', readK.status);
+  check('it carries nothing of the owner but a name', !JSON.stringify(readK.json).includes('@smoke.test') && !JSON.stringify(readK.json).includes('99887766'));
+  const noName = await pub('POST', `/contracts/${ktok}/accept`, { agree: true });
+  check('accepting needs a typed name', noName.status === 400, noName.json);
+  const noTick = await pub('POST', `/contracts/${ktok}/accept`, { name: 'Asha Rao' });
+  check('and a ticked agreement', noTick.status === 400, noTick.json);
+  const kcm = await pub('POST', `/contracts/${ktok}/comments`, { body: 'Can the term be six months?' });
+  check('the client can ask for a change first', kcm.status === 201);
+  const editedSent = await api('PATCH', `/agency/contracts/${kid}`, { doc: { ...doc, subtitle: 'Revised terms' } }, O.token);
+  check('a sent agreement can be edited in place and is marked revised', editedSent.status === 200 && editedSent.json.contract.revisedAt !== null && editedSent.json.contract.token === ktok, editedSent.json.contract?.revisedAt);
+  const brief = doc.sections.find((x) => x.kind === 'brief').questions;
+  const acc = await pub('POST', `/contracts/${ktok}/accept`, { name: 'Asha Rao', title: 'Marketing head', agree: true, answers: { [brief[0].id]: { picked: [brief[0].options[1], 'A made up option'], other: '', text: '<script>x</script>' }, [brief[3].id]: { picked: brief[3].options.slice(0, 3), other: 'Voiceover', text: '' }, ghost: { picked: ['x'] } } });
+  check('the client answers the brief and accepts by typing their name', acc.status === 200, acc.json);
+  const signed = (await api('GET', `/agency/contracts/${kid}`, undefined, O.token)).json.contract;
+  check('it is signed with the name, title and time', signed.status === 'signed' && signed.acceptance?.name === 'Asha Rao' && signed.acceptance.title === 'Marketing head' && signed.signedAt, signed.acceptance);
+  check('only the options it offered are kept, and nothing for a question it does not ask', signed.answers[brief[0].id].picked.length === 1 && !('ghost' in signed.answers) && signed.answers[brief[3].id].picked.length === 3 && signed.answers[brief[3].id].other === 'Voiceover', signed.answers);
+  check('a signed agreement cannot be edited or signed twice', (await api('PATCH', `/agency/contracts/${kid}`, { doc }, O.token)).status === 400 && (await pub('POST', `/contracts/${ktok}/accept`, { name: 'Again', agree: true })).status === 400);
+  check('and cannot be removed, only voided', (await api('DELETE', `/agency/contracts/${kid}`, undefined, O.token)).status === 400);
+  const revise = await api('POST', `/agency/contracts/${kid}/duplicate`, {}, O.token);
+  const dr = (await api('GET', `/agency/contracts/${revise.json.id}`, undefined, O.token)).json.contract;
+  check('revising a signed one makes a new draft with no answers and no link', revise.status === 201 && dr.status === 'draft' && dr.token === null && Object.keys(dr.answers).length === 0 && dr.doc.sections.length === doc.sections.length);
+  const recall = await api('PATCH', `/agency/contracts/${revise.json.id}`, { status: 'sent' }, O.token);
+  const recalled = await api('PATCH', `/agency/contracts/${revise.json.id}`, { status: 'draft' }, O.token);
+  check('a sent one can be taken back, which closes its link', recall.json.contract.token && recalled.json.contract.status === 'draft' && (await pub('GET', `/contracts/${recall.json.contract.token}`)).status === 404);
+  const lst = await api('GET', '/agency/contracts', undefined, O.token);
+  const kb = await api('GET', '/agency/contracts/board', undefined, O.token);
+  check('the agreements are listed, paged and boarded by status', lst.json.contracts?.length === 2 && kb.json.columns?.map((c) => c.stage).join() === 'draft,sent,signed,void' && kb.json.columns[2].total === 1, kb.json.columns?.map((c) => `${c.stage}:${c.total}`));
+  check('the client link shows on the client\'s dashboard when agreements and invoices are switched on', await (async () => {
+    const o = await api('POST', `/agency/clients/${cid}/portal`, { on: true, show: { invoices: true, contracts: true, hours: false } }, O.token);
+    const v = await pub('GET', `/agency/${o.json.portalToken}`);
+    return v.json.invoices.length >= 1 && v.json.contracts.length === 1 && v.json.invoices.every((x) => x.status !== 'draft');
+  })());
+  await api('POST', `/agency/clients/${cid}/portal`, { on: false }, O.token);
+
+  // Army
+  const orgR = await api('POST', '/orgs', { name: `Army Brand ${stamp}`, type: 'brand' }, A.token);
+  const campR = await api('POST', '/army/campaigns', { organizationId: orgR.json.organization?.id ?? orgR.json.id, name: 'Autumn push', brief: 'x' }, A.token);
+  const campId = campR.json.campaign?.id;
+  const dR = await api('POST', `/army/campaigns/${campId}/deliverables`, { title: 'Hero reel', format: 'Reel', platform: 'Instagram', dueAt: `${day(6)}T00:00:00Z` }, A.token);
+  check('the brand side is set up in Army', Boolean(campId && dR.json.id), { org: orgR.status, camp: campR.status, d: dR.status });
+  const notYet = await api('PATCH', `/agency/clients/${cid}`, { campaignId: campId }, O.token);
+  check('a campaign you are not on cannot be linked', notYet.status === 403, notYet.json);
+  await api('POST', `/army/campaigns/${campId}/assignments`, { creator: O.user.email ?? `agency-${stamp}@smoke.test` }, A.token);
+  const myAsg = (await api('GET', '/army', undefined, O.token)).json.assignments?.find((a) => a.campaignId === campId);
+  await api('POST', `/army/assignments/${myAsg?.id}`, { status: 'accepted' }, O.token);
+  const link = await api('PATCH', `/agency/clients/${cid}`, { campaignId: campId }, O.token);
+  check('after accepting the role, the client can be linked to the campaign', link.status === 200, link.json);
+  const imp = await api('POST', `/agency/clients/${cid}/army-import`, undefined, O.token);
+  check('the campaign\'s deliverables come into the pipeline once', imp.json.added === 1 && (await api('POST', `/agency/clients/${cid}/army-import`, undefined, O.token)).json.added === 0, imp.json);
+  const armyItem = (await api('GET', `/agency/items?client=${cid}&size=100&day=${today}`, undefined, O.token)).json.items.find((i) => i.title === 'Hero reel');
+  check('the imported one is linked and carries the brand\'s status', armyItem?.armyDeliverableId && armyItem.army?.status === 'open', armyItem);
+  const send = await api('POST', `/agency/items/${armyItem.id}/army/send?day=${today}`, { url: 'https://example.com/hero-v1' }, O.token);
+  const afterSend = (await api('GET', `/agency/items?client=${cid}&size=100&day=${today}`, undefined, O.token)).json.items.find((i) => i.id === armyItem.id);
+  check('sending a version goes through Army and moves it to review', send.status === 200 && afterSend.stage === 'review' && afterSend.army.status === 'submitted', { s: send.json, a: afterSend.army });
+  const versions = (await api('GET', `/army/campaigns/${campId}`, undefined, A.token)).json;
+  const ver = JSON.stringify(versions).includes('hero-v1');
+  check('the brand sees that version in Army', ver);
+  const vid = (versions.deliverables ?? versions.campaign?.deliverables ?? []).flatMap((d) => d.versions ?? []).find((v) => /hero-v1/.test(v.url))?.id;
+  if (vid) await api('POST', `/army/versions/${vid}/review`, { status: 'changes', comment: 'Open stronger' }, A.token);
+  const sync = await api('POST', `/agency/items/${armyItem.id}/army/sync?day=${today}`, undefined, O.token);
+  const afterSync = (await api('GET', `/agency/items?client=${cid}&size=100&day=${today}`, undefined, O.token)).json.items.find((i) => i.id === armyItem.id);
+  const armyNotes = (await api('GET', `/agency/items/${armyItem.id}/notes`, undefined, O.token)).json.notes;
+  check('the brand\'s feedback comes back into the thread, and the piece back to making', Boolean(vid) && sync.json.moved === 'making' && afterSync.stage === 'making' && armyNotes.some((n) => n.author === 'brand' && /Open stronger/.test(n.body)), { vid, sync: sync.json, notes: armyNotes });
+  check('the brand\'s words stay out of the client\'s link', !JSON.stringify(await pub('GET', `/agency/${(await api('POST', `/agency/clients/${cid}/portal`, { on: true }, O.token)).json.portalToken}`)).includes('Open stronger'));
+  await api('POST', `/agency/clients/${cid}/portal`, { on: false }, O.token);
+
+  // business metrics in Reviews
+  const k403 = await api('POST', '/reviews/kpis', { name: 'Sales calls' }, O.token);
+  check('business metrics are refused until switched on', k403.status === 403, k403.json);
+  const koff = await api('GET', `/reviews/kpis?kind=month&date=${today}`, undefined, O.token);
+  check('and read as off, with nothing in them', koff.json.enabled === false && koff.json.readings.length === 0);
+  await api('PUT', '/reviews/kpis/settings', { enabled: true }, O.token);
+  check('the switch is the person\'s own', (await api('GET', `/reviews/kpis?kind=month&date=${today}`, undefined, X.token)).json.enabled === false);
+  const km = await api('POST', '/reviews/kpis', { name: 'Sales calls', unit: 'number', direction: 'up', cadence: 'month', target: 20 }, O.token);
+  const ka = await api('POST', '/reviews/kpis', { name: 'Anything', source: 'published', cadence: 'month', target: 4, unit: 'money', direction: 'down' }, O.token);
+  check('metrics are made', km.status === 201 && ka.status === 201);
+  const kw = await api('POST', '/reviews/kpis', { name: 'Weekly', source: 'hours', cadence: 'week', target: 3000 }, O.token);
+  const rd = await api('GET', `/reviews/kpis?kind=month&date=${today}`, undefined, O.token);
+  const auto = rd.json.readings.find((r) => r.kpi.id === ka.json.id);
+  check('one made from Agency takes its unit and direction from what it measures', auto.kpi.unit === 'number' && auto.kpi.direction === 'up', auto.kpi);
+  check('and reads its value from Agency, with six periods of history', typeof auto.value === 'number' && auto.series.length === 6, auto);
+  check('a metric for another cadence is counted, not shown', rd.json.elsewhere === 1 && rd.json.readings.length === 2 && kw.status === 201);
+  const typed = await api('PUT', `/reviews/kpis/${km.json.id}/value?day=${today}`, { date: today, value: 12, note: 'Slow week' }, O.token);
+  const rd2 = await api('GET', `/reviews/kpis?kind=month&date=${today}`, undefined, O.token);
+  const mr = rd2.json.readings.find((r) => r.kpi.id === km.json.id);
+  check('a typed value is kept for the period, and judged against the target', typed.status === 200 && mr.value === 12 && mr.status === 'off' && mr.note === 'Slow week', mr);
+  check('a value cannot be typed on a metric read from Agency', (await api('PUT', `/reviews/kpis/${ka.json.id}/value`, { date: today, value: 3 }, O.token)).status === 400);
+  check('or for a period that has not started', (await api('PUT', `/reviews/kpis/${km.json.id}/value`, { date: day(70), value: 3 }, O.token)).status === 400);
+  check('another person cannot touch it', (await api('PUT', `/reviews/kpis/${km.json.id}/value`, { value: 1 }, X.token)).status === 403 && (await api('DELETE', `/reviews/kpis/${km.json.id}`, undefined, X.token)).status === 403);
+  const exp = (await api('GET', '/me/export', undefined, O.token)).json;
+  check('everything is in the export', exp.agencyClients?.length === 1 && exp.agencyItems?.length >= 3 && exp.agencyContracts?.length === 2 && exp.kpis?.length === 3 && exp.kpiValues?.length === 1 && exp.agencySettings?.length === 1);
+
+  // leaving
+  const del = await api('DELETE', '/me', { confirm: 'DELETE' }, O.token);
+  check('deleting the account removes the agency data', del.status === 200);
+  const gone = await pub('GET', `/invoices/${inv.token}`);
+  check('and a shared invoice link stops working', gone.status === 404, gone.status);
+  check('and an agreement link too', (await pub('GET', `/contracts/${ktok}`)).status === 404);
+}
+function shiftMonth(month, n) {
+  const [y, m] = month.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1 + n, 1)).toISOString().slice(0, 7);
+}
+
 section('Export and delete');
 {
   const exp = await api('GET', '/me/export', undefined, B.token);

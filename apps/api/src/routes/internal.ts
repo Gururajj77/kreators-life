@@ -52,7 +52,7 @@ internal.get('/observability', async (c) => {
   }
   const since24 = new Date(Date.now() - 86_400_000).toISOString();
   const since30 = new Date(Date.now() - 30 * 86_400_000).toISOString();
-  const [unlocks, dz, dset, grantRows, logRows, extraRows] = await Promise.all([
+  const [unlocks, dz, dset, grantRows, logRows, extraRows, ag] = await Promise.all([
     db.prepare('SELECT game_key, COUNT(*) AS n FROM card_unlocks GROUP BY game_key').all<{ game_key: string; n: number }>(),
     db.prepare("SELECT COUNT(*) AS results, COUNT(DISTINCT user_id) AS people, COALESCE(SUM(CASE WHEN result_json LIKE '%\"eq\":{%' THEN 1 ELSE 0 END), 0) AS with_eq FROM discover_results").first<{ results: number; people: number; with_eq: number }>(),
     db.prepare('SELECT COALESCE(SUM(assistant), 0) AS assistant_on, COALESCE(SUM(CASE WHEN steps = 0 THEN 1 ELSE 0 END), 0) AS steps_off, COALESCE(SUM(mind), 0) AS mind_on FROM discover_settings').first<{ assistant_on: number; steps_off: number; mind_on: number }>(),
@@ -60,6 +60,19 @@ internal.get('/observability', async (c) => {
     db.prepare('SELECT level, COUNT(*) AS n FROM app_logs WHERE at >= ? GROUP BY level').bind(since24).all<{ level: string; n: number }>(),
     // How many people finished each Discover add-on: counts only, never an answer or a result.
     db.prepare('SELECT kind, COUNT(*) AS n FROM discover_extras WHERE result_json IS NOT NULL GROUP BY kind').all<{ kind: string; n: number }>(),
+    // Agency: how much it is used, as counts. Never a client, a name or an amount.
+    db
+      .prepare(
+        `SELECT (SELECT COUNT(DISTINCT user_id) FROM agency_clients) AS people,
+          (SELECT COUNT(*) FROM agency_clients) AS clients,
+          (SELECT COUNT(*) FROM agency_items) AS deliverables,
+          (SELECT COUNT(*) FROM agency_items WHERE stage = 'published') AS published,
+          (SELECT COUNT(*) FROM invoices WHERE agency_client_id IS NOT NULL) AS invoices,
+          (SELECT COUNT(*) FROM agency_contracts WHERE status = 'signed') AS signed,
+          (SELECT COUNT(*) FROM agency_clients WHERE portal_token IS NOT NULL) AS links,
+          (SELECT COUNT(*) FROM kpi_prefs WHERE enabled = 1) AS metrics`,
+      )
+      .first<{ people: number; clients: number; deliverables: number; published: number; invoices: number; signed: number; links: number; metrics: number }>(),
   ]);
   const grant = (a: string) => grantRows.results.find((r) => r.action === a)?.n ?? 0;
   const extra = (k: string) => extraRows.results.find((r) => r.kind === k)?.n ?? 0;
@@ -67,6 +80,7 @@ internal.get('/observability', async (c) => {
   const additions: ObservedAdditions = {
     games: CARD_GAMES.map((g) => ({ key: g.key, name: g.name, emoji: g.emoji, unlocked: unlocks.results.find((r) => r.game_key === g.key)?.n ?? 0 })),
     discover: { results: dz?.results ?? 0, people: dz?.people ?? 0, withEq: dz?.with_eq ?? 0, assistantOn: dset?.assistant_on ?? 0, stepsOff: dset?.steps_off ?? 0, addons: { type: extra('type'), love: extra('love'), mind: extra('mind'), design: extra('design') }, mindOn: dset?.mind_on ?? 0 },
+    agency: { people: ag?.people ?? 0, clients: ag?.clients ?? 0, deliverables: ag?.deliverables ?? 0, published: ag?.published ?? 0, invoices: ag?.invoices ?? 0, agreementsSigned: ag?.signed ?? 0, clientLinksOn: ag?.links ?? 0, metricsOn: ag?.metrics ?? 0 },
     grants: { xp: grant('user.xp'), badges: grant('user.badge'), points: grant('user.points'), honors: grant('user.honor') },
     logs: { errors: lg('error'), warnings: lg('warn'), changes: lg('info') },
   };

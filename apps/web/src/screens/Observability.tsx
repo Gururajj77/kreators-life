@@ -122,6 +122,21 @@ export function Observability() {
             </div>
           </Section>
 
+          <Section id="obs-agency" title="Agency" lede="How much it is used. Counts only: no client names, no amounts, no notes.">
+            <div className="grid grid-cols-2 gap-xs md:grid-cols-3">
+              {[
+                { label: "People", value: data.additions.agency.people, hint: "have a client" },
+                { label: "Clients", value: data.additions.agency.clients, hint: `${data.additions.agency.clientLinksOn} with a client link on` },
+                { label: "Deliverables", value: data.additions.agency.deliverables, hint: `${data.additions.agency.published} published` },
+                { label: "Invoices", value: data.additions.agency.invoices, hint: "made in Agency" },
+                { label: "Agreements signed", value: data.additions.agency.agreementsSigned, hint: "accepted by a client" },
+                { label: "Business metrics on", value: data.additions.agency.metricsOn, hint: "switched on in Reviews" },
+              ].map((t, i, all) => (
+                <StatTile key={t.label} label={t.label} value={t.value} hint={t.hint} className={bento(i, all.length, 2, 3)} />
+              ))}
+            </div>
+          </Section>
+
           <Section id="obs-log" title="The log, last 24 hours" lede="Changes people made, requests that were refused and errors, from the app's own log.">
             <div className="grid grid-cols-3 gap-xs">
               <StatTile label="Errors" value={data.additions.logs.errors} hint="server and browser" />
