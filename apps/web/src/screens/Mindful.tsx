@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { FocusDashboard } from '../components/FocusDashboard';
 import { FocusRounds } from '../components/FocusRounds';
+import { Fold } from '../components/Fold';
 import { SoundControls } from '../components/SoundControls';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { Button } from '../components/Button';
@@ -118,14 +119,11 @@ export function Mindful() {
             >
               Start
             </Button>
-            <details className="mt-sm rounded-tile bg-card p-sm text-left">
-              <summary className="toy flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-sm text-[14px] font-extrabold">
-                <span>Sounds{prefs.sound && prefs.ambient !== 'off' ? `: ${prefs.ambient}` : prefs.sound ? '' : ': off'}</span>
-              </summary>
-              <div className="mt-xs">
+            <Fold className="mt-sm text-left" title="Sounds" hint={prefs.sound ? (prefs.ambient !== 'off' ? prefs.ambient : '') : 'off'}>
+              <div className="rounded-tile bg-card p-sm">
                 <SoundControls settings={prefs} onChange={setPrefs} />
               </div>
-            </details>
+            </Fold>
           </>
         ) : (
           <Button variant="outline" full className="mt-md" onClick={() => setLeft(null)}>

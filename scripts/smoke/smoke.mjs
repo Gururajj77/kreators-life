@@ -2133,6 +2133,45 @@ section('Agency');
   })());
   await api('POST', `/agency/clients/${cid}/portal`, { on: false }, O.token);
 
+  // templates: the person's own starting points
+  const bloom = await api('POST', '/agency/clients', { name: 'Bloom Skincare', contactName: 'Ira', billing: { name: 'Bloom', line: 'Bloom Skincare Pvt Ltd' } }, O.token);
+  await api('PATCH', `/agency/clients/${bloom.json.id}`, { name: 'Bloom Skincare', billing: { name: 'Bloom Skincare', line: 'Bloom Skincare Pvt Ltd', taxIds: [{ label: 'GSTIN', value: '29ABCDE1234F1Z5' }] } }, O.token);
+  const srcInv = await api('POST', `/agency/invoices?day=${today}`, { clientId: cid, items: [{ description: 'Founder reel package', quantity: 3, unitCents: 250000 }], doc: { title: 'Advance invoice', design: 'teal', gstBps: 1800, footnote: 'TDS note' } }, O.token);
+  const tnoName = await api('POST', '/agency/templates', { kind: 'invoice', name: ' ', fromId: srcInv.json.invoice.id }, O.token);
+  check('a template needs a name', tnoName.status === 400, tnoName.json);
+  const tmk = await api('POST', '/agency/templates', { kind: 'invoice', name: 'Advance, teal', fromId: srcInv.json.invoice.id }, O.token);
+  check('an invoice is saved as a template', tmk.status === 201 && tmk.json.id, tmk.json);
+  check('a template cannot be made from someone else\'s invoice', (await api('POST', '/agency/templates', { kind: 'invoice', name: 'Mine now', fromId: srcInv.json.invoice.id }, X.token)).status === 400);
+  const tlist = await api('GET', '/agency/templates?kind=invoice', undefined, O.token);
+  check('it is listed with a plain summary', tlist.json.templates?.length === 1 && /1 line, GST 18%/.test(tlist.json.templates[0].summary), tlist.json.templates);
+  check('another person sees none', (await api('GET', '/agency/templates', undefined, X.token)).json.templates?.length === 0);
+  const fromT = await api('POST', `/agency/invoices?day=${today}`, { clientId: bloom.json.id, templateId: tmk.json.id }, O.token);
+  const ti = fromT.json.invoice;
+  check('a new invoice starts from it: the look, the lines, the title', fromT.status === 201 && ti.doc.design === 'teal' && ti.doc.title === 'Advance invoice' && ti.items[0].description === 'Founder reel package' && ti.items[0].quantity === 3 && ti.totalCents === 750000 + Math.round(750000 * 0.18) + Math.round((750000 * 1000) / 9000), ti);
+  check('but never who the first one was billed to: it takes the new client\'s details', ti.doc.to.name === 'Bloom Skincare' && ti.doc.to.taxIds[0]?.value === '29ABCDE1234F1Z5' && !JSON.stringify(ti.doc.to).includes('Acme'), ti.doc.to);
+  const stored = JSON.stringify((await api('GET', '/me/export', undefined, O.token)).json.agencyTemplates);
+  check('what is stored has no client in it', !stored.includes('Acme Foods') && !stored.includes('asha@acme'), stored.slice(0, 200));
+  const st = await api('POST', `/agency/invoices?day=${today}`, { clientId: bloom.json.id, starter: 'advance' }, O.token);
+  check('a built-in starting point sets the title and the footnote', st.json.invoice?.doc.title === 'Advance invoice' && /TDS/.test(st.json.invoice.doc.footnote) && st.json.invoice.items.length === 1, st.json);
+  check('a template that is not yours is refused', (await api('POST', `/agency/invoices?day=${today}`, { clientId: bloom.json.id, templateId: tmk.json.id }, X.token)).status === 400);
+  const ren = await api('PATCH', `/agency/templates/${tmk.json.id}`, { name: 'Advance teal v2' }, O.token);
+  check('a template can be renamed', ren.status === 200 && (await api('GET', '/agency/templates?kind=invoice', undefined, O.token)).json.templates[0].name === 'Advance teal v2');
+  const rep = await api('PATCH', `/agency/templates/${tmk.json.id}`, { fromId: st.json.invoice.id }, O.token);
+  check('or its contents replaced from another invoice', rep.status === 200 && (await api('GET', '/agency/templates?kind=invoice', undefined, O.token)).json.templates[0].summary.startsWith('1 line'), rep.json);
+  check('another person cannot rename or remove it', (await api('PATCH', `/agency/templates/${tmk.json.id}`, { name: 'x' }, X.token)).status === 404 && (await api('DELETE', `/agency/templates/${tmk.json.id}`, undefined, X.token)).status === 404);
+
+  const kSrc = (await api('GET', `/agency/contracts/${kid}`, undefined, O.token)).json.contract;
+  const kt = await api('POST', '/agency/templates', { kind: 'contract', name: 'My trial terms', fromId: kid }, O.token);
+  check('an agreement is saved as a template', kt.status === 201, kt.json);
+  const ktl = await api('GET', '/agency/templates?kind=contract', undefined, O.token);
+  check('with its sections counted', ktl.json.templates?.[0].summary === `${kSrc.doc.sections.length} sections`, ktl.json.templates);
+  const kn = await api('POST', '/agency/contracts', { templateId: kt.json.id, clientId: bloom.json.id }, O.token);
+  const kd = (await api('GET', `/agency/contracts/${kn.json.id}`, undefined, O.token)).json.contract;
+  check('a new agreement starts from it with the same sections, filled for the new client', kn.status === 201 && kd.doc.sections.length === kSrc.doc.sections.length && kd.doc.vars.client === 'Bloom Skincare' && kd.doc.vars.provider === 'Test Person' && kd.status === 'draft', kd.doc.vars);
+  check('and keeps what the person changed in the sections', kd.doc.sections.some((x) => x.heading === '11. Extra') && kd.doc.sections.find((x) => x.kind === 'packages').packages[0].feeCents === 5000000);
+  check('an invoice template cannot start an agreement, nor the reverse', (await api('POST', '/agency/contracts', { templateId: tmk.json.id }, O.token)).status === 400 && (await api('POST', `/agency/invoices?day=${today}`, { clientId: bloom.json.id, templateId: kt.json.id }, O.token)).status === 400);
+  check('a template can be removed', (await api('DELETE', `/agency/templates/${kt.json.id}`, undefined, O.token)).status === 200 && (await api('GET', '/agency/templates?kind=contract', undefined, O.token)).json.templates.length === 0);
+
   // Army
   const orgR = await api('POST', '/orgs', { name: `Army Brand ${stamp}`, type: 'brand' }, A.token);
   const campR = await api('POST', '/army/campaigns', { organizationId: orgR.json.organization?.id ?? orgR.json.id, name: 'Autumn push', brief: 'x' }, A.token);
@@ -2189,7 +2228,7 @@ section('Agency');
   check('or for a period that has not started', (await api('PUT', `/reviews/kpis/${km.json.id}/value`, { date: day(70), value: 3 }, O.token)).status === 400);
   check('another person cannot touch it', (await api('PUT', `/reviews/kpis/${km.json.id}/value`, { value: 1 }, X.token)).status === 403 && (await api('DELETE', `/reviews/kpis/${km.json.id}`, undefined, X.token)).status === 403);
   const exp = (await api('GET', '/me/export', undefined, O.token)).json;
-  check('everything is in the export', exp.agencyClients?.length === 1 && exp.agencyItems?.length >= 3 && exp.agencyContracts?.length === 2 && exp.kpis?.length === 3 && exp.kpiValues?.length === 1 && exp.agencySettings?.length === 1);
+  check('everything is in the export', exp.agencyClients?.length === 2 && exp.agencyTemplates?.length === 1 && exp.agencyItems?.length >= 3 && exp.agencyContracts?.length === 3 && exp.kpis?.length === 3 && exp.kpiValues?.length === 1 && exp.agencySettings?.length === 1);
 
   // leaving
   const del = await api('DELETE', '/me', { confirm: 'DELETE' }, O.token);

@@ -11,6 +11,7 @@ import {
   type InvoiceTotals,
 } from '@kreators/shared';
 import type { ReactNode } from 'react';
+import { Button } from './Button';
 import { Inert } from './Inert';
 import { Toggle } from './Toggle';
 
@@ -303,5 +304,23 @@ export function Chips<T extends string | number>({ label, options, value, onChan
         </button>
       ))}
     </div>
+  );
+}
+
+/**
+ * One part of a document, in a line or two, with a small Edit button that opens only that part's form in a sheet.
+ * The page stays short: the document on top, then these cards.
+ */
+export function SummaryCard({ title, summary, onEdit, editLabel = 'Edit', disabled = false }: { title: string; summary: ReactNode; onEdit: () => void; editLabel?: string; disabled?: boolean }) {
+  return (
+    <li className="flex items-start justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+      <div className="min-w-0">
+        <h3 className="m-0 text-[16px] font-extrabold">{title}</h3>
+        <div className="mt-xs text-[14px] font-semibold text-ink-soft">{summary}</div>
+      </div>
+      <Button variant="outline" size="sm" onClick={onEdit} disabled={disabled} aria-label={`${editLabel} ${title.toLowerCase()}`}>
+        {editLabel}
+      </Button>
+    </li>
   );
 }

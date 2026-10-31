@@ -286,6 +286,7 @@ me.get('/export', async (c) => {
     ['agencyTime', 'SELECT * FROM agency_time WHERE user_id = ?'],
     ['agencyContracts', 'SELECT * FROM agency_contracts WHERE user_id = ?'],
     ['agencyDocComments', 'SELECT * FROM agency_doc_comments WHERE user_id = ?'],
+    ['agencyTemplates', 'SELECT * FROM agency_templates WHERE user_id = ?'],
     ['kpiPrefs', 'SELECT * FROM kpi_prefs WHERE user_id = ?'],
     ['kpis', 'SELECT * FROM kpis WHERE user_id = ?'],
     ['kpiValues', 'SELECT v.* FROM kpi_values v JOIN kpis k ON k.id = v.kpi_id WHERE k.user_id = ?'],

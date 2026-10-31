@@ -3,6 +3,7 @@ import {
   GST_RATES_BPS,
   INVOICE_DESIGN_META,
   INVOICE_DESIGNS,
+  INVOICE_SHOW_PARTS,
   INVOICE_STATUS_NAME,
   INVOICE_STATUS_TONE,
   INVOICE_TITLES,
@@ -25,7 +26,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useNavigate, useParams } from 'react-router';
-import { BankFields, Chips, Field, FIELD, InvoiceView, LABEL, PartyFields, ShowSwitches, invoiceDate } from '../components/InvoiceView';
+import { BankFields, Chips, Field, FIELD, InvoiceView, LABEL, PartyFields, ShowSwitches, SummaryCard, invoiceDate } from '../components/InvoiceView';
 import { Button } from '../components/Button';
 import { Inert } from '../components/Inert';
 import { BackLink } from '../components/PageHeader';
@@ -37,6 +38,9 @@ import { Toggle } from '../components/Toggle';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { useAuthed } from '../lib/queries';
+
+/** The parts of an invoice that open in their own sheet. */
+type Part = 'details' | 'from' | 'to' | 'lines' | 'calc' | 'bank' | 'design' | 'show' | 'comments';
 
 interface Row {
   description: string;
@@ -128,6 +132,8 @@ export function AgencyInvoice() {
   const [copyNote, setCopyNote] = useState('');
   const [sure, setSure] = useState(false);
   const [dupOpen, setDupOpen] = useState(false);
+  const [part, setPart] = useState<Part | null>(null);
+  const [tplOpen, setTplOpen] = useState(false);
   const stamp = inv ? `${inv.id}:${inv.status}:${inv.revisedAt}:${inv.totalCents}:${inv.number}` : '';
   useEffect(() => {
     if (inv) setForm(fromInvoice(inv));
@@ -246,6 +252,19 @@ export function AgencyInvoice() {
 
   const setLine = (i: number, patch: Partial<Row>) => set({ rows: form.rows.map((r, j) => (j === i ? { ...r, ...patch } : r)) });
   const card = 'rounded-card bg-card p-md shadow-toy-soft';
+  const close = () => setPart(null);
+  const done = (
+    <div className="mt-md">
+      <Button onClick={close}>Done</Button>
+    </div>
+  );
+  const shown = INVOICE_SHOW_PARTS.filter((p) => form.show[p.key]).length;
+  const bankTail = form.bank.account.replace(/\s/g, '').slice(-4);
+  const latest = (comments.data?.comments ?? []).at(-1);
+  const gstText = form.gstBps > 0 ? `GST ${form.gstBps / 100}%${form.gstSplit ? ' (CGST and SGST)' : ''}` : 'no GST';
+  const tdsText = form.tdsBps > 0 && form.tdsMode !== 'none' ? `TDS ${form.tdsBps / 100}%` : 'no TDS';
+  const discountText = totals.discount > 0 ? `, ${money(totals.discount, inv.currency)} off` : '';
+  const partyText = (p: InvoiceParty) => (p.name ? (p.line ? `${p.name}, ${p.line}` : p.name) : 'Not filled in yet');
 
   return (
     <Screen howTo={false}>
@@ -258,7 +277,7 @@ export function AgencyInvoice() {
           {dirty && <StatusTag tone="warn">Not saved yet</StatusTag>}
         </div>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          For <Inert text={inv.clientName} />. Change anything below and the invoice on the right updates as you type.
+          For <Inert text={inv.clientName} />. Tap Edit on a part to change it. The invoice below updates at once.
         </p>
         <div className="mt-md flex flex-wrap gap-xs">
           <Button onClick={() => save.mutate()} disabled={!editable || !dirty || save.isPending}>
@@ -287,6 +306,9 @@ export function AgencyInvoice() {
           <Button variant="outline" onClick={() => setDupOpen(true)}>
             Duplicate
           </Button>
+          <Button variant="outline" onClick={() => setTplOpen(true)}>
+            Save as template
+          </Button>
           <Button variant="outline" onClick={print}>
             Download PDF
           </Button>
@@ -314,6 +336,14 @@ export function AgencyInvoice() {
         {inv.status === 'sent' && (
           <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Your client can already see this invoice. A change shows there at once, marked as revised.</p>
         )}
+        {dirty && editable && (
+          <p role="status" className="mt-sm m-0 flex flex-wrap items-center justify-between gap-sm rounded-tile p-sm text-[14px] font-bold" style={{ background: 'var(--tint-yellow)' }}>
+            You have changes that are not saved.
+            <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
+              {save.isPending ? 'Saving' : 'Save now'}
+            </Button>
+          </p>
+        )}
         {(note || copyNote) && (
           <p role="status" className="mt-sm m-0 text-[14px] font-bold">
             {note} {copyNote}
@@ -326,211 +356,242 @@ export function AgencyInvoice() {
       </Section>
 
       <div className="no-print">
-        <Section id="details" title="Details">
-          <div className={`${card} grid gap-sm md:grid-cols-2`}>
-            <div className="min-w-0">
-              <label htmlFor="inv-title" className={LABEL}>
-                Title
-              </label>
-              <select id="inv-title" value={(INVOICE_TITLES as readonly string[]).includes(form.title) ? form.title : '__own'} onChange={(e) => set({ title: e.target.value === '__own' ? '' : e.target.value })} className={FIELD}>
-                {INVOICE_TITLES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-                <option value="__own">Write my own</option>
-              </select>
-              {!(INVOICE_TITLES as readonly string[]).includes(form.title) && <input aria-label="Your own title" value={form.title} maxLength={40} placeholder="Retainer invoice" onChange={(e) => set({ title: e.target.value })} className={FIELD} />}
-            </div>
-            <Field id="inv-number" label="Invoice number" value={form.number} onChange={(v) => set({ number: v })} max={30} />
-            <Field id="inv-issue" label="Date" type="date" value={form.issueDate} onChange={(v) => set({ issueDate: v })} />
-            <Field id="inv-due" label="Payment due by" type="date" value={form.dueDate} onChange={(v) => set({ dueDate: v })} />
-            <div className="min-w-0 md:col-span-2">
-              <label htmlFor="inv-note" className={LABEL}>
-                Note to your client
-              </label>
-              <textarea id="inv-note" rows={2} maxLength={500} value={form.note} onChange={(e) => set({ note: e.target.value })} className={FIELD} />
-            </div>
-          </div>
-        </Section>
-
-        <Section id="from" title="From">
-          <div className={card}>
-            <PartyFields idp="from" value={form.from} onChange={(p) => set({ from: p })} nameLabel="Name or brand" lineLabel="Line under the name" lineHint="Prop. Your name for Your brand" />
-          </div>
-        </Section>
-
-        <Section id="to" title="Billed to">
-          <div className={card}>
-            <PartyFields idp="to" value={form.to} onChange={(p) => set({ to: p })} nameLabel="Client brand" lineLabel="Legal name" lineHint="The company's full name" />
-          </div>
-        </Section>
-
-        <Section id="lines" title="Lines" lede="What you are charging for. Unit cost is in whole currency, like 7000 or 7000.50.">
-          <div className={card}>
-            <ul className="m-0 flex list-none flex-col gap-sm p-0">
-              {form.rows.map((r, i) => {
-                const lineTotal = wholeQty(r.qty) * cents(r.unit);
-                return (
-                  <li key={i} className="rounded-tile bg-paper p-sm">
-                    <label htmlFor={`line-${i}`} className={LABEL}>
-                      Description
-                    </label>
-                    <input id={`line-${i}`} value={r.description} maxLength={200} onChange={(e) => setLine(i, { description: e.target.value })} className={FIELD} />
-                    <div className="mt-xs grid grid-cols-2 gap-sm md:grid-cols-[1fr_1fr_auto]">
-                      <Field id={`unit-${i}`} label="Unit cost" inputMode="decimal" value={r.unit} onChange={(v) => setLine(i, { unit: v })} />
-                      <Field id={`qty-${i}`} label="Quantity" inputMode="numeric" value={r.qty} onChange={(v) => setLine(i, { qty: v })} />
-                      <div className="col-span-2 flex items-end justify-between gap-sm md:col-span-1">
-                        <p className="m-0 text-[16px] font-extrabold">{money(lineTotal, inv.currency)}</p>
-                        {form.rows.length > 1 && (
-                          <Button variant="outline" size="sm" onClick={() => set({ rows: form.rows.filter((_, j) => j !== i) })}>
-                            Remove line
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-            {form.rows.length < MAX_INVOICE_LINES && (
-              <div className="mt-sm">
-                <Button variant="outline" onClick={() => set({ rows: [...form.rows, { description: '', unit: '', qty: '1' }] })}>
-                  Add a line
-                </Button>
-              </div>
-            )}
-          </div>
-        </Section>
-
-        <Section id="calc" title="Calculator" lede="Discount, GST and TDS. Every sum is in whole paise, so it adds up to the paisa.">
-          <div className={card}>
-            <span className={LABEL}>Discount</span>
-            <Chips
-              label="Discount"
-              value={form.discountMode}
-              onChange={(v) => set({ discountMode: v, discountValue: v === 'none' ? '' : form.discountValue })}
-              options={[
-                { value: 'none', name: 'None' },
-                { value: 'flat', name: 'A flat amount' },
-                { value: 'percent', name: 'A percent' },
-              ]}
+        <Section id="parts" title="Change a part" lede="Each one opens on its own. Nothing is sent until you save.">
+          <ul className="m-0 flex list-none flex-col gap-xs p-0" aria-label="Parts of this invoice">
+            <SummaryCard title="Details" disabled={!editable} onEdit={() => setPart('details')} summary={<>{form.title || 'Invoice'}, {form.number}, {invoiceDate(form.issueDate)}{form.dueDate ? `, due ${invoiceDate(form.dueDate)}` : ''}</>} />
+            <SummaryCard title="From" disabled={!editable} onEdit={() => setPart('from')} summary={<Inert text={partyText(form.from)} />} />
+            <SummaryCard title="Billed to" disabled={!editable} onEdit={() => setPart('to')} summary={<Inert text={partyText(form.to)} />} />
+            <SummaryCard title="Lines" disabled={!editable} onEdit={() => setPart('lines')} summary={`${items.length} ${items.length === 1 ? 'line' : 'lines'}, subtotal ${money(totals.subtotal, inv.currency)}`} />
+            <SummaryCard title="Calculator" disabled={!editable} onEdit={() => setPart('calc')} summary={`${gstText}, ${tdsText}${discountText}, total ${money(totals.total, inv.currency)}`} />
+            <SummaryCard title="Bank details" disabled={!editable} onEdit={() => setPart('bank')} summary={form.bank.bankName || bankTail ? <Inert text={`${form.bank.bankName || 'Bank'}${bankTail ? `, ends ${bankTail}` : ''}`} /> : 'Not filled in yet'} />
+            <SummaryCard title="Design" disabled={!editable} onEdit={() => setPart('design')} summary={`${INVOICE_DESIGN_META[form.design].name} look`} />
+            <SummaryCard title="What the client sees" disabled={!editable} onEdit={() => setPart('show')} summary={`${shown} of ${INVOICE_SHOW_PARTS.length} shown`} />
+            <SummaryCard
+              title="Comments"
+              editLabel="Open"
+              onEdit={() => setPart('comments')}
+              summary={
+                latest ? (
+                  <>
+                    {(comments.data?.comments ?? []).length} {(comments.data?.comments ?? []).length === 1 ? 'comment' : 'comments'}. Latest: <Inert text={latest.body.length > 70 ? `${latest.body.slice(0, 70)}…` : latest.body} />
+                  </>
+                ) : (
+                  'None yet. Your client can write from their link.'
+                )
+              }
             />
-            {form.discountMode !== 'none' && <Field id="inv-discount" label={form.discountMode === 'percent' ? 'Percent off' : 'Amount off'} inputMode="decimal" value={form.discountValue} onChange={(v) => set({ discountValue: v })} />}
-            <p className="mt-md mb-0 text-[14px] font-bold">GST rate</p>
-            <Chips label="GST rate" options={GST_OPTIONS} value={form.gstBps} onChange={(v) => set({ gstBps: v })} />
-            {form.gstBps > 0 && (
-              <div className="mt-xs">
-                <Toggle compact on={form.gstSplit} onChange={(on) => set({ gstSplit: on })} label="Show it as CGST and SGST" />
-              </div>
-            )}
-            <p className="mt-md mb-0 text-[14px] font-bold">TDS rate</p>
-            <Chips label="TDS rate" options={TDS_OPTIONS} value={(TDS_RATES_BPS as readonly number[]).includes(form.tdsBps) ? form.tdsBps : -1} onChange={(v) => set({ tdsBps: v })} />
-            <div className="mt-xs max-w-[240px]">
-              <Field id="inv-tds" label="Or another rate, in percent" inputMode="decimal" value={(TDS_RATES_BPS as readonly number[]).includes(form.tdsBps) ? '' : plain(form.tdsBps / 100)} onChange={(v) => set({ tdsBps: Math.max(0, Math.min(3000, Math.round((Number.parseFloat(v) || 0) * 100))) })} />
-            </div>
-            <label htmlFor="inv-tdsmode" className={`${LABEL} mt-md`}>
-              How to treat TDS
-            </label>
-            <select id="inv-tdsmode" value={form.tdsMode} onChange={(e) => set({ tdsMode: e.target.value as TdsMode })} className={FIELD}>
-              {TDS_MODES.map((m) => (
-                <option key={m} value={m}>
-                  {TDS_MODE_NAME[m]}
-                </option>
-              ))}
-            </select>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{TDS_SENTENCE[form.tdsMode]}</p>
-
-            <dl className="mt-md grid grid-cols-[1fr_auto] gap-x-md gap-y-xs rounded-tile bg-paper p-sm text-[14px] font-semibold" aria-label="Results">
-              {(
-                [
-                  ['Subtotal', money(totals.subtotal, inv.currency)],
-                  ['Discount', `-${money(totals.discount, inv.currency)}`],
-                  ['Taxable amount', money(totals.taxable, inv.currency)],
-                  ['GST', money(totals.gst, inv.currency)],
-                  ['TDS added to the total', money(totals.tdsAdjusted, inv.currency)],
-                ] as const
-              ).map(([k, v]) => (
-                <div key={k} className="contents">
-                  <dt className="text-ink-soft">{k}</dt>
-                  <dd className="m-0 text-right">{v}</dd>
-                </div>
-              ))}
-              <dt className="font-extrabold">Total</dt>
-              <dd className="m-0 text-right font-display text-[22px] font-extrabold leading-none">{money(totals.total, inv.currency)}</dd>
-              <dt className="text-ink-soft">TDS your client will take off</dt>
-              <dd className="m-0 text-right">{money(totals.tdsDeducted, inv.currency)}</dd>
-              <dt className="font-extrabold">You receive</dt>
-              <dd className="m-0 text-right font-extrabold">{money(totals.netReceivable, inv.currency)}</dd>
-              <dt className="col-span-2 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">Total in words</dt>
-              <dd className="col-span-2 m-0 text-[14px] font-extrabold">{amountInWords(totals.total, inv.currency)}</dd>
-            </dl>
-          </div>
-        </Section>
-
-        <Section id="bank" title="Bank details" lede="Shown on the invoice so your client knows where to pay. You can hide them below.">
-          <div className={card}>
-            <BankFields value={form.bank} onChange={(b) => set({ bank: b })} />
-          </div>
-        </Section>
-
-        <Section id="design" title="Design" lede="Pick a look. The colours follow your theme.">
-          <div role="group" aria-label="Design" className="grid gap-xs md:grid-cols-4">
-            {INVOICE_DESIGNS.map((d) => (
-              <button key={d} type="button" aria-pressed={form.design === d} onClick={() => set({ design: d })} className={`toy rounded-tile border-2 p-sm text-left ${form.design === d ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
-                <span className="block text-[16px] font-extrabold">{INVOICE_DESIGN_META[d].name}</span>
-                <span className="mt-xs block text-[14px] font-semibold text-ink-soft">{INVOICE_DESIGN_META[d].blurb}</span>
-              </button>
-            ))}
-          </div>
-          <div className={`${card} mt-sm grid gap-sm`}>
-            <div>
-              <label htmlFor="inv-footnote" className={LABEL}>
-                Line under the totals
-              </label>
-              <textarea id="inv-footnote" rows={2} maxLength={300} value={form.footnote} onChange={(e) => set({ footnote: e.target.value })} className={FIELD} />
-            </div>
-            <div>
-              <label htmlFor="inv-footer" className={LABEL}>
-                Line at the foot of the page
-              </label>
-              <textarea id="inv-footer" rows={2} maxLength={300} value={form.footer} onChange={(e) => set({ footer: e.target.value })} className={FIELD} />
-            </div>
-          </div>
-        </Section>
-
-        <Section id="shows" title="What the client sees" lede="A switch for each part. What is off is never sent to your client's browser.">
-          <ShowSwitches value={form.show} onChange={(s) => set({ show: s })} />
-        </Section>
-
-        <Section id="comments" title="Comments" lede="Your client can write here from their link to ask for a change. Only you see this thread.">
-          <div className={card}>
-            {(comments.data?.comments ?? []).length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">Nothing yet.</p>}
-            <ul className="m-0 flex list-none flex-col gap-xs p-0">
-              {(comments.data?.comments ?? []).map((c) => (
-                <li key={c.id} className={`rounded-tile p-sm ${c.author === 'client' ? 'bg-paper' : 'bg-card-strong'}`}>
-                  <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
-                    {c.author === 'client' ? 'Client' : 'You'}, {prettyShort(c.createdAt)}
-                  </p>
-                  <p className="m-0 whitespace-pre-wrap text-[14px] font-semibold">
-                    <Inert text={c.body} />
-                  </p>
-                </li>
-              ))}
-            </ul>
-            <label htmlFor="inv-reply" className={`${LABEL} mt-sm`}>
-              Reply
-            </label>
-            <textarea id="inv-reply" rows={2} maxLength={600} value={reply} onChange={(e) => setReply(e.target.value)} className={FIELD} />
-            <div className="mt-xs">
-              <Button variant="outline" onClick={() => sendReply.mutate()} disabled={!reply.trim() || sendReply.isPending}>
-                Send reply
-              </Button>
-            </div>
-          </div>
+          </ul>
         </Section>
       </div>
 
+      <Sheet open={part === 'details'} onClose={close} title="Details">
+        <div className="grid gap-sm md:grid-cols-2">
+          <div className="min-w-0">
+            <label htmlFor="inv-title" className={LABEL}>
+              Title
+            </label>
+            <select id="inv-title" value={(INVOICE_TITLES as readonly string[]).includes(form.title) ? form.title : '__own'} onChange={(e) => set({ title: e.target.value === '__own' ? '' : e.target.value })} className={FIELD}>
+              {INVOICE_TITLES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+              <option value="__own">Write my own</option>
+            </select>
+            {!(INVOICE_TITLES as readonly string[]).includes(form.title) && <input aria-label="Your own title" value={form.title} maxLength={40} placeholder="Retainer invoice" onChange={(e) => set({ title: e.target.value })} className={FIELD} />}
+          </div>
+          <Field id="inv-number" label="Invoice number" value={form.number} onChange={(v) => set({ number: v })} max={30} />
+          <Field id="inv-issue" label="Date" type="date" value={form.issueDate} onChange={(v) => set({ issueDate: v })} />
+          <Field id="inv-due" label="Payment due by" type="date" value={form.dueDate} onChange={(v) => set({ dueDate: v })} />
+          <div className="min-w-0 md:col-span-2">
+            <label htmlFor="inv-note" className={LABEL}>
+              Note to your client
+            </label>
+            <textarea id="inv-note" rows={2} maxLength={500} value={form.note} onChange={(e) => set({ note: e.target.value })} className={FIELD} />
+          </div>
+        </div>
+        {done}
+      </Sheet>
+
+      <Sheet open={part === 'from'} onClose={close} title="From">
+        <PartyFields idp="from" value={form.from} onChange={(p) => set({ from: p })} nameLabel="Name or brand" lineLabel="Line under the name" lineHint="Prop. Your name for Your brand" />
+        {done}
+      </Sheet>
+
+      <Sheet open={part === 'to'} onClose={close} title="Billed to">
+        <PartyFields idp="to" value={form.to} onChange={(p) => set({ to: p })} nameLabel="Client brand" lineLabel="Legal name" lineHint="The company's full name" />
+        {done}
+      </Sheet>
+
+      <Sheet open={part === 'lines'} onClose={close} title="Lines">
+        <p className="mt-0 mb-sm text-[14px] font-semibold text-ink-soft">What you are charging for. Unit cost is in whole currency, like 7000 or 7000.50.</p>
+        <ul className="m-0 flex list-none flex-col gap-sm p-0">
+          {form.rows.map((r, i) => {
+            const lineTotal = wholeQty(r.qty) * cents(r.unit);
+            return (
+              <li key={i} className="rounded-tile bg-paper p-sm">
+                <label htmlFor={`line-${i}`} className={LABEL}>
+                  Description
+                </label>
+                <input id={`line-${i}`} value={r.description} maxLength={200} onChange={(e) => setLine(i, { description: e.target.value })} className={FIELD} />
+                <div className="mt-xs grid grid-cols-2 gap-sm">
+                  <Field id={`unit-${i}`} label="Unit cost" inputMode="decimal" value={r.unit} onChange={(v) => setLine(i, { unit: v })} />
+                  <Field id={`qty-${i}`} label="Quantity" inputMode="numeric" value={r.qty} onChange={(v) => setLine(i, { qty: v })} />
+                </div>
+                <div className="mt-xs flex items-center justify-between gap-sm">
+                  <p className="m-0 text-[16px] font-extrabold">{money(lineTotal, inv.currency)}</p>
+                  {form.rows.length > 1 && (
+                    <Button variant="outline" size="sm" onClick={() => set({ rows: form.rows.filter((_, j) => j !== i) })}>
+                      Remove line
+                    </Button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+        {form.rows.length < MAX_INVOICE_LINES && (
+          <div className="mt-sm">
+            <Button variant="outline" onClick={() => set({ rows: [...form.rows, { description: '', unit: '', qty: '1' }] })}>
+              Add a line
+            </Button>
+          </div>
+        )}
+        {done}
+      </Sheet>
+
+      <Sheet open={part === 'calc'} onClose={close} title="Calculator">
+        <p className="mt-0 mb-sm text-[14px] font-semibold text-ink-soft">Discount, GST and TDS. Every sum is in whole paise, so it adds up to the paisa.</p>
+        <span className={LABEL}>Discount</span>
+        <Chips
+          label="Discount"
+          value={form.discountMode}
+          onChange={(v) => set({ discountMode: v, discountValue: v === 'none' ? '' : form.discountValue })}
+          options={[
+            { value: 'none', name: 'None' },
+            { value: 'flat', name: 'A flat amount' },
+            { value: 'percent', name: 'A percent' },
+          ]}
+        />
+        {form.discountMode !== 'none' && <Field id="inv-discount" label={form.discountMode === 'percent' ? 'Percent off' : 'Amount off'} inputMode="decimal" value={form.discountValue} onChange={(v) => set({ discountValue: v })} />}
+        <p className="mt-md mb-0 text-[14px] font-bold">GST rate</p>
+        <Chips label="GST rate" options={GST_OPTIONS} value={form.gstBps} onChange={(v) => set({ gstBps: v })} />
+        {form.gstBps > 0 && (
+          <div className="mt-xs">
+            <Toggle compact on={form.gstSplit} onChange={(on) => set({ gstSplit: on })} label="Show it as CGST and SGST" />
+          </div>
+        )}
+        <p className="mt-md mb-0 text-[14px] font-bold">TDS rate</p>
+        <Chips label="TDS rate" options={TDS_OPTIONS} value={(TDS_RATES_BPS as readonly number[]).includes(form.tdsBps) ? form.tdsBps : -1} onChange={(v) => set({ tdsBps: v })} />
+        <div className="mt-xs max-w-[240px]">
+          <Field id="inv-tds" label="Or another rate, in percent" inputMode="decimal" value={(TDS_RATES_BPS as readonly number[]).includes(form.tdsBps) ? '' : plain(form.tdsBps / 100)} onChange={(v) => set({ tdsBps: Math.max(0, Math.min(3000, Math.round((Number.parseFloat(v) || 0) * 100))) })} />
+        </div>
+        <label htmlFor="inv-tdsmode" className={`${LABEL} mt-md`}>
+          How to treat TDS
+        </label>
+        <select id="inv-tdsmode" value={form.tdsMode} onChange={(e) => set({ tdsMode: e.target.value as TdsMode })} className={FIELD}>
+          {TDS_MODES.map((m) => (
+            <option key={m} value={m}>
+              {TDS_MODE_NAME[m]}
+            </option>
+          ))}
+        </select>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{TDS_SENTENCE[form.tdsMode]}</p>
+
+        <dl className="mt-md grid grid-cols-[1fr_auto] gap-x-md gap-y-xs rounded-tile bg-paper p-sm text-[14px] font-semibold" aria-label="Results">
+          {(
+            [
+              ['Subtotal', money(totals.subtotal, inv.currency)],
+              ['Discount', `-${money(totals.discount, inv.currency)}`],
+              ['Taxable amount', money(totals.taxable, inv.currency)],
+              ['GST', money(totals.gst, inv.currency)],
+              ['TDS added to the total', money(totals.tdsAdjusted, inv.currency)],
+            ] as const
+          ).map(([k, v]) => (
+            <div key={k} className="contents">
+              <dt className="text-ink-soft">{k}</dt>
+              <dd className="m-0 text-right">{v}</dd>
+            </div>
+          ))}
+          <dt className="font-extrabold">Total</dt>
+          <dd className="m-0 text-right font-display text-[22px] font-extrabold leading-none">{money(totals.total, inv.currency)}</dd>
+          <dt className="text-ink-soft">TDS your client will take off</dt>
+          <dd className="m-0 text-right">{money(totals.tdsDeducted, inv.currency)}</dd>
+          <dt className="font-extrabold">You receive</dt>
+          <dd className="m-0 text-right font-extrabold">{money(totals.netReceivable, inv.currency)}</dd>
+          <dt className="col-span-2 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">Total in words</dt>
+          <dd className="col-span-2 m-0 text-[14px] font-extrabold">{amountInWords(totals.total, inv.currency)}</dd>
+        </dl>
+        {done}
+      </Sheet>
+
+      <Sheet open={part === 'bank'} onClose={close} title="Bank details">
+        <p className="mt-0 mb-sm text-[14px] font-semibold text-ink-soft">Shown on the invoice so your client knows where to pay. You can hide them under What the client sees.</p>
+        <BankFields value={form.bank} onChange={(b) => set({ bank: b })} />
+        {done}
+      </Sheet>
+
+      <Sheet open={part === 'design'} onClose={close} title="Design">
+        <p className="mt-0 mb-sm text-[14px] font-semibold text-ink-soft">Pick a look. The colours follow your theme.</p>
+        <div role="group" aria-label="Design" className="grid gap-xs md:grid-cols-2">
+          {INVOICE_DESIGNS.map((d) => (
+            <button key={d} type="button" aria-pressed={form.design === d} onClick={() => set({ design: d })} className={`toy rounded-tile border-2 p-sm text-left ${form.design === d ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
+              <span className="block text-[16px] font-extrabold">{INVOICE_DESIGN_META[d].name}</span>
+              <span className="mt-xs block text-[14px] font-semibold text-ink-soft">{INVOICE_DESIGN_META[d].blurb}</span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-sm grid gap-sm">
+          <div>
+            <label htmlFor="inv-footnote" className={LABEL}>
+              Line under the totals
+            </label>
+            <textarea id="inv-footnote" rows={2} maxLength={300} value={form.footnote} onChange={(e) => set({ footnote: e.target.value })} className={FIELD} />
+          </div>
+          <div>
+            <label htmlFor="inv-footer" className={LABEL}>
+              Line at the foot of the page
+            </label>
+            <textarea id="inv-footer" rows={2} maxLength={300} value={form.footer} onChange={(e) => set({ footer: e.target.value })} className={FIELD} />
+          </div>
+        </div>
+        {done}
+      </Sheet>
+
+      <Sheet open={part === 'show'} onClose={close} title="What the client sees">
+        <p className="mt-0 mb-sm text-[14px] font-semibold text-ink-soft">A switch for each part. What is off is never sent to your client's browser.</p>
+        <ShowSwitches value={form.show} onChange={(s) => set({ show: s })} />
+        {done}
+      </Sheet>
+
+      <Sheet open={part === 'comments'} onClose={close} title="Comments">
+        <p className="mt-0 mb-sm text-[14px] font-semibold text-ink-soft">Your client can write here from their link to ask for a change. Only you see this thread.</p>
+        {(comments.data?.comments ?? []).length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">Nothing yet.</p>}
+        <ul className="m-0 flex list-none flex-col gap-xs p-0">
+          {(comments.data?.comments ?? []).map((c) => (
+            <li key={c.id} className={`rounded-tile p-sm ${c.author === 'client' ? 'bg-paper' : 'bg-card-strong'}`}>
+              <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
+                {c.author === 'client' ? 'Client' : 'You'}, {prettyShort(c.createdAt)}
+              </p>
+              <p className="m-0 whitespace-pre-wrap text-[14px] font-semibold">
+                <Inert text={c.body} />
+              </p>
+            </li>
+          ))}
+        </ul>
+        <label htmlFor="inv-reply" className={`${LABEL} mt-sm`}>
+          Reply
+        </label>
+        <textarea id="inv-reply" rows={2} maxLength={600} value={reply} onChange={(e) => setReply(e.target.value)} className={FIELD} />
+        <div className="mt-xs flex flex-wrap gap-xs">
+          <Button variant="outline" onClick={() => sendReply.mutate()} disabled={!reply.trim() || sendReply.isPending}>
+            Send reply
+          </Button>
+          <Button onClick={close}>Done</Button>
+        </div>
+      </Sheet>
+
+      <TemplateSheet open={tplOpen} onClose={() => setTplOpen(false)} inv={inv} dirty={dirty && editable} saveFirst={() => save.mutateAsync()} />
       <DuplicateSheet open={dupOpen} onClose={() => setDupOpen(false)} inv={inv} />
     </Screen>
   );
@@ -575,6 +636,52 @@ function DuplicateSheet({ open, onClose, inv }: { open: boolean; onClose: () => 
         )}
         <Button onClick={() => make.mutate()} disabled={!issue || make.isPending}>
           {make.isPending ? 'Making the copy' : 'Make the copy'}
+        </Button>
+      </div>
+    </Sheet>
+  );
+}
+
+/** Keep this invoice as a template: its look, sender, bank, tax and lines, never who it is billed to. The same name replaces what a template holds. */
+function TemplateSheet({ open, onClose, inv, dirty, saveFirst }: { open: boolean; onClose: () => void; inv: Invoice; dirty: boolean; saveFirst: () => Promise<unknown> }) {
+  const qc = useQueryClient();
+  const list = useAuthed(['agency', 'templates', 'invoice'], () => api.agencyTemplates('invoice'), open);
+  const [name, setName] = useState('');
+  const [msg, setMsg] = useState('');
+  useEffect(() => {
+    if (open) {
+      setName(`${inv.doc.title || 'Invoice'}, ${inv.clientName}`.slice(0, 60));
+      setMsg('');
+    }
+    // The suggested name is made each time the sheet opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  const same = (list.data?.templates ?? []).find((t) => t.name.trim().toLowerCase() === name.trim().toLowerCase());
+  const keep = useMutation({
+    mutationFn: async () => {
+      if (dirty) await saveFirst();
+      if (same) await api.agencyTemplateUpdate(same.id, { fromId: inv.id });
+      else await api.agencyTemplateAdd({ kind: 'invoice', name: name.trim(), fromId: inv.id });
+    },
+    onSuccess: async () => {
+      setMsg(same ? 'The template now holds this invoice.' : 'Saved as a template.');
+      await qc.invalidateQueries({ queryKey: ['agency'] });
+    },
+    onError: (e: Error) => setMsg(e.message),
+  });
+  return (
+    <Sheet open={open} onClose={onClose} title="Save as a template">
+      <div className="grid gap-sm pb-xl">
+        <p className="m-0 text-[14px] font-semibold text-ink-soft">A template keeps the look, who it is from, the bank, GST, TDS and the lines. It never keeps who it is billed to. Start a new invoice from it any time.</p>
+        <Field id="tpl-name" label="Template name" value={name} onChange={setName} max={60} />
+        {same && <p className="m-0 text-[14px] font-bold">You already have a template with this name. Saving will replace what it holds.</p>}
+        {msg && (
+          <p role="status" className="m-0 text-[14px] font-bold">
+            {msg}
+          </p>
+        )}
+        <Button onClick={() => keep.mutate()} disabled={!name.trim() || keep.isPending}>
+          {keep.isPending ? 'Saving' : same ? 'Replace the template' : 'Save the template'}
         </Button>
       </div>
     </Sheet>

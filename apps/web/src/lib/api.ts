@@ -14,7 +14,7 @@ import type { DailyBrief, GettingStarted, InboxShow, InboxTab, ReactionKind } fr
 import type { AdminCoachAsk, AdminCoachLink, CoachDirectoryEntry, CoachHub, CoachLink, CoachLogEntry, CoachProfile, CoachShare, CoachStudentView, CoachTaskInput, MyCoachResponse } from '@kreators/shared';
 import type { CustomReminder, RemindersResponse, WaterState, BlockedPerson, EventApp, EventExtras, LinkBlock, MediaItem, MediaOwner } from '@kreators/shared';
 import type { ObservabilityResponse } from '@kreators/shared';
-import type { AgencyClient, AgencyClientPage, AgencyContract, AgencyDeliverable, AgencyNote, AgencyOverview, AgencySettings, BoardColumn, BusinessProfile, ContractAnswer, ContractDoc, ContractListItem, DeliverableStage, DocComment, DocType, InvoiceDoc, InvoiceParty, Kpi, KpisResponse, Page as AgencyPage, PortalShow, PortalView, PublicContract } from '@kreators/shared';
+import type { AgencyTemplate, TemplateKind, AgencyClient, AgencyClientPage, AgencyContract, AgencyDeliverable, AgencyNote, AgencyOverview, AgencySettings, BoardColumn, BusinessProfile, ContractAnswer, ContractDoc, ContractListItem, DeliverableStage, DocComment, DocType, InvoiceDoc, InvoiceParty, Kpi, KpisResponse, Page as AgencyPage, PortalShow, PortalView, PublicContract } from '@kreators/shared';
 import type {
   HomeResponse,
   PublicSettings,
@@ -332,10 +332,14 @@ export const api = {
   agencyArmySync: (id: string) => post<{ moved: DeliverableStage | null }>(`/agency/items/${id}/army/sync?day=${todayLocal()}`),
   agencyTimeAdd: (body: { clientId: string; itemId?: string | null; day: string; minutes: number; billable: boolean; note?: string }) => post<{ id: string }>('/agency/time', body),
   agencyTimeRemove: (id: string) => del<{ ok: true }>(`/agency/time/${id}`),
+  agencyTemplates: (kind?: TemplateKind) => request<{ templates: AgencyTemplate[] }>(`/agency/templates${kind ? `?kind=${kind}` : ''}`),
+  agencyTemplateAdd: (body: { kind: TemplateKind; name: string; fromId: string }) => post<{ id: string }>('/agency/templates', body),
+  agencyTemplateUpdate: (id: string, body: { name?: string; fromId?: string }) => patch<{ ok: true }>(`/agency/templates/${id}`, body),
+  agencyTemplateRemove: (id: string) => del<{ ok: true }>(`/agency/templates/${id}`),
   agencyInvoices: (q = '') => request<{ page: AgencyPage; invoices: Invoice[]; counts: { status: string; n: number; cents: number }[] }>(withQ('/agency/invoices', q)),
   agencyInvoiceBoard: (q = '') => request<{ columns: (BoardColumn<Invoice> & { cents: number })[] }>(withQ('/agency/invoices/board', q)),
   agencyInvoice: (id: string) => request<{ invoice: Invoice }>(`/agency/invoices/${id}`),
-  agencyInvoiceAdd: (body: { clientId: string; items: InvoiceItem[]; doc?: Partial<InvoiceDoc>; dueDate?: string | null; issueDate?: string | null; note?: string }) => post<{ invoice: Invoice }>(`/agency/invoices?day=${todayLocal()}`, body),
+  agencyInvoiceAdd: (body: { clientId: string; templateId?: string; starter?: string; items?: InvoiceItem[]; doc?: Partial<InvoiceDoc>; dueDate?: string | null; issueDate?: string | null; note?: string }) => post<{ invoice: Invoice }>(`/agency/invoices?day=${todayLocal()}`, body),
   agencyInvoiceFromClient: (clientId: string, month?: string) => post<{ invoice: Invoice }>(`/agency/clients/${clientId}/invoice?day=${todayLocal()}`, month ? { month } : {}),
   agencyInvoiceUpdate: (id: string, body: { items?: InvoiceItem[]; doc?: Partial<InvoiceDoc> & { from?: InvoiceParty; to?: InvoiceParty }; dueDate?: string | null; issueDate?: string | null; note?: string; number?: string; status?: Invoice['status'] }) => patch<{ invoice: Invoice }>(`/agency/invoices/${id}`, body),
   agencyInvoiceDuplicate: (id: string, body: { issueDate?: string; dueDate?: string | null; number?: string; bumpMonths?: boolean } = {}) => post<{ invoice: Invoice }>(`/agency/invoices/${id}/duplicate?day=${todayLocal()}`, body),
@@ -343,7 +347,7 @@ export const api = {
   agencyContracts: (q = '') => request<{ page: AgencyPage; contracts: ContractListItem[]; counts: { status: string; n: number }[] }>(withQ('/agency/contracts', q)),
   agencyContractBoard: (q = '') => request<{ columns: BoardColumn<ContractListItem>[] }>(withQ('/agency/contracts/board', q)),
   agencyContract: (id: string) => request<{ contract: AgencyContract }>(`/agency/contracts/${id}`),
-  agencyContractAdd: (body: { templateKey: string; clientId?: string | null }) => post<{ id: string }>('/agency/contracts', body),
+  agencyContractAdd: (body: { templateKey?: string; templateId?: string; clientId?: string | null }) => post<{ id: string }>('/agency/contracts', body),
   agencyContractUpdate: (id: string, body: { doc?: ContractDoc; clientId?: string | null; status?: 'draft' | 'sent' | 'void' }) => patch<{ contract: AgencyContract }>(`/agency/contracts/${id}`, body),
   agencyContractDuplicate: (id: string) => post<{ id: string }>(`/agency/contracts/${id}/duplicate`),
   agencyContractRemove: (id: string) => del<{ ok: true }>(`/agency/contracts/${id}`),

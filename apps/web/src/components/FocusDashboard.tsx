@@ -32,7 +32,9 @@ export function FocusDashboard() {
 
   return (
     <Section id="focus-dashboard" title="How productive you were" lede={`Focus time and tasks ticked. ${spec.blurb}`}>
-      <div className="flex gap-xs" role="group" aria-label="Show by">
+      {/* One line on a laptop: the periods on the left, the unit at the right. A phone wraps the unit to its own line, still at the right. */}
+      <div className="flex flex-wrap items-center gap-xs">
+        <div className="flex gap-xs" role="group" aria-label="Show by">
         {FOCUS_VIEWS.map((v) => (
           <button key={v.key} type="button" aria-pressed={view === v.key} onClick={() => setView(v.key)} className={`toy min-h-[44px] rounded-pill border-2 px-md text-[14px] font-bold ${view === v.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
             {v.name}
@@ -40,12 +42,13 @@ export function FocusDashboard() {
         ))}
       </div>
 
-      <div className="mt-xs flex gap-xs" role="group" aria-label="Show focus time in">
+        <div className="ml-auto flex gap-xs" role="group" aria-label="Show focus time in">
         {(['min', 'hours'] as const).map((u) => (
           <button key={u} type="button" aria-pressed={unit === u} onClick={() => setUnit(u)} className={`toy min-h-[44px] rounded-pill border-2 px-md text-[14px] font-bold ${unit === u ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
             {u === 'min' ? 'Minutes' : 'Hours'}
           </button>
         ))}
+        </div>
       </div>
 
       {q.isPending && (

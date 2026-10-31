@@ -23,7 +23,7 @@ const COPY = {
 } as const;
 const bare = (t: string) => t.replace(/\.$/, '');
 
-/** A short taste of a background sound, so a person can choose by ear. It stops by itself. */
+/** A short taste of a background sound, so a person can choose by ear. It stops by itself, and it follows the controls while it plays. */
 function useTaste() {
   const live = useRef<{ node: Ambient; timer: number } | null>(null);
   const [on, setOn] = useState<AmbientKind | null>(null);
@@ -43,7 +43,8 @@ function useTaste() {
     live.current = { node, timer: window.setTimeout(stop, 7000) };
     setOn(kind);
   };
-  return { on, taste, stop };
+  const setVolume = (v: number) => live.current?.node.setVolume(v);
+  return { on, taste, stop, setVolume };
 }
 
 /**
@@ -54,6 +55,16 @@ function useTaste() {
 export function SoundControls({ settings, onChange, breaks = false }: { settings: FocusSettings; onChange: (s: FocusSettings) => void; breaks?: boolean }) {
   const off = !settings.sound;
   const t = useTaste();
+  // The preview follows the controls: the master switch silences it, the slider changes it, and another sound ends it.
+  useEffect(() => {
+    if (!settings.sound) t.stop();
+  }, [settings.sound]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    t.setVolume(settings.ambientVolume);
+  }, [settings.ambientVolume]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    t.stop();
+  }, [settings.ambient]); // eslint-disable-line react-hooks/exhaustive-deps
   const set = (patch: Partial<FocusSettings>) => onChange({ ...settings, ...patch });
   return (
     <div className="flex flex-col gap-xs text-left">

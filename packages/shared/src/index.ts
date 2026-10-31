@@ -11275,3 +11275,60 @@ export interface PublicContract {
   answers: Record<string, ContractAnswer>;
   acceptance: { name: string; title: string; at: string } | null;
 }
+
+// ---------------------------------------------------------------------------
+// Templates: built-in starting points, and the person's own
+// ---------------------------------------------------------------------------
+
+export const TEMPLATE_KINDS = ['invoice', 'contract'] as const;
+export type TemplateKind = (typeof TEMPLATE_KINDS)[number];
+/** Up to this many of their own, for each kind. */
+export const MAX_TEMPLATES = 30;
+export const TEMPLATE_NAME_MAX = 60;
+
+/** A person's own template, as the screen reads it. */
+export interface AgencyTemplate {
+  id: string;
+  kind: TemplateKind;
+  name: string;
+  /** One plain line on what is in it: "3 lines, GST 18%" or "9 sections". */
+  summary: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Built-in starting points for an invoice. A person's own saved ones sit beside them. */
+export const INVOICE_STARTERS: readonly { key: string; name: string; blurb: string; title: string; footnote: string; items: InvoiceItem[] }[] = [
+  { key: 'standard', name: 'Standard invoice', blurb: 'One line to fill in.', title: 'Invoice', footnote: '', items: [{ description: 'Services', quantity: 1, unitCents: 0 }] },
+  {
+    key: 'advance',
+    name: 'Advance invoice',
+    blurb: 'Paid before the work starts, with a line on TDS.',
+    title: 'Advance invoice',
+    footnote: '*Additional % adjusted on the total invoice amount applies for TDS deducted, to be borne by the company as per the agreement terms.',
+    items: [{ description: 'Package', quantity: 1, unitCents: 0 }],
+  },
+  { key: 'retainer', name: 'Monthly retainer', blurb: 'A fixed fee for the month.', title: 'Invoice', footnote: '', items: [{ description: 'Monthly retainer', quantity: 1, unitCents: 0 }] },
+  { key: 'per-piece', name: 'Per piece', blurb: 'A price for each deliverable, and how many.', title: 'Invoice', footnote: '', items: [{ description: 'Videos', quantity: 5, unitCents: 0 }] },
+];
+export const INVOICE_STARTER_BY_KEY: Record<string, (typeof INVOICE_STARTERS)[number]> = Object.fromEntries(INVOICE_STARTERS.map((t) => [t.key, t]));
+
+/** What an invoice keeps when it becomes a template: everything but who it is billed to. */
+export function invoiceTemplateDoc(doc: InvoiceDoc): InvoiceDoc {
+  return { ...doc, to: emptyParty() };
+}
+/** What an agreement keeps when it becomes a template: the sections, not the names filled in. */
+export function contractTemplateDoc(doc: ContractDoc): ContractDoc {
+  return { ...doc, vars: {} };
+}
+export function templateSummary(kind: TemplateKind, doc: InvoiceDoc | ContractDoc, items: readonly InvoiceItem[]): string {
+  if (kind === 'invoice') {
+    const d = doc as InvoiceDoc;
+    const bits = [`${items.length} ${items.length === 1 ? 'line' : 'lines'}`];
+    if (d.gstBps > 0) bits.push(`GST ${d.gstBps / 100}%`);
+    if (d.tdsBps > 0 && d.tdsMode !== 'none') bits.push(`TDS ${d.tdsBps / 100}%`);
+    return bits.join(', ');
+  }
+  const n = (doc as ContractDoc).sections.length;
+  return `${n} ${n === 1 ? 'section' : 'sections'}`;
+}

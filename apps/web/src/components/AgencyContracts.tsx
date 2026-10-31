@@ -1,4 +1,4 @@
-import { CONTRACT_STATUSES, CONTRACT_STATUS_NAME, CONTRACT_STATUS_TONE, CONTRACT_TEMPLATES, type BoardColumn, type ContractListItem, type ContractStatus } from '@kreators/shared';
+import { CONTRACT_STATUSES, CONTRACT_STATUS_NAME, CONTRACT_STATUS_TONE, CONTRACT_TEMPLATES, type AgencyTemplate, type BoardColumn, type ContractListItem, type ContractStatus } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -7,6 +7,7 @@ import { useAuthed } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
 import { tie } from '../lib/text';
 import { Button } from './Button';
+import { Fold } from './Fold';
 import { KanbanBoard } from './KanbanBoard';
 import { Pager, usePage } from './Pager';
 import { Sheet } from './Sheet';
@@ -38,7 +39,8 @@ export function AgencyContracts({ clientId }: { clientId?: string }) {
   const [status, setStatus] = useParamState('agstatus', 'all');
   const pg = usePage('ag');
   const [adding, setAdding] = useState(false);
-  const [template, setTemplate] = useState<string>(CONTRACT_TEMPLATES[0]?.key ?? 'trial');
+  // What the new agreement starts from: a built-in template ('key:trial') or one of the person's own ('own:<id>').
+  const [template, setTemplate] = useState<string>(`key:${CONTRACT_TEMPLATES[0]?.key ?? 'trial'}`);
   const [pickClient, setPickClient] = useState('');
   const [note, setNote] = useState('');
 
@@ -47,6 +49,8 @@ export function AgencyContracts({ clientId }: { clientId?: string }) {
   const listQuery = `page=${pg.page}&size=${pg.size}${status !== 'all' ? `&status=${status}` : ''}${clientQ}`;
   const list = useAuthed(['agency', 'contracts', 'list', clientId ?? '', status, pg.page, pg.size], () => api.agencyContracts(listQuery), view === 'list');
   const clients = useAuthed(['agency', 'clients-pick'], () => api.agency('csize=100'), adding && !clientId);
+  const templates = useAuthed(['agency', 'templates', 'contract'], () => api.agencyTemplates('contract'));
+  const mine = templates.data?.templates ?? [];
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['agency'] });
   const move = useMutation({
@@ -58,7 +62,10 @@ export function AgencyContracts({ clientId }: { clientId?: string }) {
     onError: (e) => setNote(e instanceof ApiError ? e.message : 'That did not move. Try again.'),
   });
   const create = useMutation({
-    mutationFn: () => api.agencyContractAdd({ templateKey: template, clientId: clientId ?? (pickClient || null) }),
+    mutationFn: () => {
+      const body = template.startsWith('own:') ? { templateId: template.slice(4) } : { templateKey: template.slice(4) };
+      return api.agencyContractAdd({ ...body, clientId: clientId ?? (pickClient || null) });
+    },
     onSuccess: (r) => {
       void invalidate();
       setAdding(false);
@@ -81,11 +88,7 @@ export function AgencyContracts({ clientId }: { clientId?: string }) {
   return (
     <section aria-labelledby="agreements-heading">
       <div className="flex flex-wrap items-center justify-between gap-sm">
-        {clientId ? <span /> : (
-          <h2 id="agreements-heading" className="text-[24px]">
-            Agreements
-          </h2>
-        )}
+        <span />
         <div className="flex flex-wrap items-center gap-xs">
           <ViewToggle view={view} onChange={setView} label="How to see agreements" />
           <Button size="sm" onClick={() => setAdding(true)}>
@@ -161,24 +164,10 @@ export function AgencyContracts({ clientId }: { clientId?: string }) {
         </div>
       )}
 
+      <TemplatesFold templates={mine} />
+
       <Sheet open={adding} onClose={() => setAdding(false)} title="New agreement">
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">Pick a template. Your details and the client's fill in for you, and every part can be changed.</p>
-        <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0" role="radiogroup" aria-label="Template">
-          {CONTRACT_TEMPLATES.map((t) => (
-            <li key={t.key}>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={template === t.key}
-                onClick={() => setTemplate(t.key)}
-                className={`toy w-full rounded-tile border-2 p-sm text-left ${template === t.key ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}
-              >
-                <span className="block text-[16px] font-extrabold">{t.name}</span>
-                <span className="block text-[14px] font-semibold text-ink-soft">{t.blurb}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <p className="m-0 text-[14px] font-semibold text-ink-soft">Pick a place to start. Your details and the client's fill in for you, and every part can be changed.</p>
         {!clientId && (
           <label className="mt-sm block text-[14px] font-bold" htmlFor="new-agreement-client">
             For which client
@@ -191,6 +180,26 @@ export function AgencyContracts({ clientId }: { clientId?: string }) {
               ))}
             </select>
           </label>
+        )}
+        <h3 className="mt-md text-[16px]">Built in</h3>
+        <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0" role="radiogroup" aria-label="Built-in templates">
+          {CONTRACT_TEMPLATES.map((t) => (
+            <li key={t.key}>
+              <Choice on={template === `key:${t.key}`} onPick={() => setTemplate(`key:${t.key}`)} name={t.name} blurb={t.blurb} />
+            </li>
+          ))}
+        </ul>
+        <h3 className="mt-md text-[16px]">Your templates</h3>
+        {mine.length === 0 ? (
+          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">None yet. Open any agreement and tap "Save as template" to keep it as a starting point.</p>
+        ) : (
+          <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0" role="radiogroup" aria-label="Your templates">
+            {mine.map((t) => (
+              <li key={t.id}>
+                <Choice on={template === `own:${t.id}`} onPick={() => setTemplate(`own:${t.id}`)} name={t.name} blurb={t.summary} />
+              </li>
+            ))}
+          </ul>
         )}
         {create.isError && (
           <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
@@ -207,6 +216,93 @@ export function AgencyContracts({ clientId }: { clientId?: string }) {
         </div>
       </Sheet>
     </section>
+  );
+}
+
+/** One pickable starting point. */
+function Choice({ on, onPick, name, blurb }: { on: boolean; onPick: () => void; name: string; blurb: string }) {
+  return (
+    <button type="button" role="radio" aria-checked={on} onClick={onPick} className={`toy w-full rounded-tile border-2 p-sm text-left ${on ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
+      <span className="block text-[16px] font-extrabold">{tie(name)}</span>
+      <span className="block text-[14px] font-semibold text-ink-soft">{blurb}</span>
+    </button>
+  );
+}
+
+/** The person's own agreement templates: rename or remove. They are made from any agreement with "Save as template". */
+function TemplatesFold({ templates }: { templates: AgencyTemplate[] }) {
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [armed, setArmed] = useState<string | null>(null);
+  const done = () => qc.invalidateQueries({ queryKey: ['agency'] });
+  const rename = useMutation({
+    mutationFn: ({ id, to }: { id: string; to: string }) => api.agencyTemplateUpdate(id, { name: to }),
+    onSuccess: () => {
+      setEditing(null);
+      void done();
+    },
+  });
+  const remove = useMutation({ mutationFn: (id: string) => api.agencyTemplateRemove(id), onSuccess: () => void done() });
+  const armRemove = (id: string) => {
+    if (armed === id) {
+      setArmed(null);
+      remove.mutate(id);
+      return;
+    }
+    setArmed(id);
+    window.setTimeout(() => setArmed((a) => (a === id ? null : a)), 4000);
+  };
+  return (
+    <Fold className="mt-md" title="Your agreement templates" hint={String(templates.length)}>
+      <p className="m-0 text-[14px] font-semibold text-ink-soft">Make one from any agreement: open it and tap "Save as template". It keeps the sections, not the names filled in.</p>
+      {templates.length === 0 && <p className="mt-xs m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft shadow-toy-soft">No templates of your own yet.</p>}
+      <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+        {templates.map((t) => (
+          <li key={t.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
+            {editing === t.id ? (
+              <form
+                className="flex flex-wrap items-center gap-xs"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (name.trim()) rename.mutate({ id: t.id, to: name.trim() });
+                }}
+              >
+                <input value={name} maxLength={60} onChange={(e) => setName(e.target.value)} aria-label="Template name" className="min-h-[44px] min-w-0 flex-1 rounded-pill border-2 border-line bg-paper px-sm text-[16px]" />
+                <Button type="submit" size="sm" disabled={rename.isPending || !name.trim()}>
+                  Save
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
+                  Cancel
+                </Button>
+              </form>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-xs">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[16px] font-extrabold">{tie(t.name)}</span>
+                  <span className="block text-[14px] font-semibold text-ink-soft">{t.summary}</span>
+                </span>
+                <span className="flex gap-xs">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditing(t.id);
+                      setName(t.name);
+                    }}
+                  >
+                    Rename
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => armRemove(t.id)}>
+                    {armed === t.id ? 'Tap again to remove' : 'Remove'}
+                  </Button>
+                </span>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Fold>
   );
 }
 

@@ -97,8 +97,7 @@ const slow = (c: AudioContext, hz: number, depth: number, target: AudioParam) =>
   lfo.frequency.value = hz;
   amount.gain.value = depth;
   lfo.connect(amount).connect(target);
-  lfo.start();
-  return lfo;
+  return lfo; // started by `play`, once. A second start throws and would leave the other sources playing.
 };
 
 /** Start a background sound. `volume` is 0 to 100. Returns null where there is no audio. Fades in, and fades out when stopped. */
@@ -112,96 +111,114 @@ export function startAmbient(kind: Exclude<AmbientKind, 'off'>, volume: number):
   out.gain.setValueAtTime(0.0001, c.currentTime);
   out.gain.linearRampToValueAtTime(Math.max(0.0001, level(volume)), c.currentTime + 1.8);
   const stoppers: (() => void)[] = [];
-  const play = (s: AudioScheduledSourceNode) => {
-    s.start();
-    stoppers.push(() => {
-      try {
-        s.stop();
-      } catch {
-        // already stopped
+  try {
+    const play = (s: AudioScheduledSourceNode) => {
+      s.start();
+      stoppers.push(() => {
+        try {
+          s.stop();
+        } catch {
+          // already stopped
+        }
+      });
+    };
+    if (kind === 'rain') {
+      const a = noise(c, 'white');
+      const hp = c.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 1100;
+      const lp = c.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 7500;
+      const g = c.createGain();
+      g.gain.value = 0.55;
+      a.connect(hp).connect(lp).connect(g).connect(out);
+      play(a);
+      const b = noise(c, 'pink');
+      const bp = c.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 2600;
+      bp.Q.value = 0.6;
+      const g2 = c.createGain();
+      g2.gain.value = 0.3;
+      b.connect(bp).connect(g2).connect(out);
+      play(b);
+      play(slow(c, 0.13, 0.12, g2.gain));
+    } else if (kind === 'ocean') {
+      const a = noise(c, 'brown');
+      const lp = c.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 650;
+      const g = c.createGain();
+      g.gain.value = 0.55;
+      a.connect(lp).connect(g).connect(out);
+      play(a);
+      play(slow(c, 0.085, 0.4, g.gain));
+      const b = noise(c, 'pink');
+      const bp = c.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 1400;
+      bp.Q.value = 0.5;
+      const g2 = c.createGain();
+      g2.gain.value = 0.12;
+      b.connect(bp).connect(g2).connect(out);
+      play(b);
+      play(slow(c, 0.085, 0.1, g2.gain));
+    } else if (kind === 'wind') {
+      const a = noise(c, 'pink');
+      const bp = c.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 520;
+      bp.Q.value = 1.1;
+      const g = c.createGain();
+      g.gain.value = 0.7;
+      a.connect(bp).connect(g).connect(out);
+      play(a);
+      play(slow(c, 0.06, 280, bp.frequency));
+      play(slow(c, 0.11, 0.25, g.gain));
+    } else {
+      // A low, warm hum: three sines, a fifth and an octave apart, breathing slowly.
+      const g = c.createGain();
+      g.gain.value = 0.5;
+      g.connect(out);
+      for (const [hz, level] of [[110, 0.5], [164.8, 0.22], [220.4, 0.28]] as const) {
+        const osc = c.createOscillator();
+        const og = c.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = hz;
+        og.gain.value = level;
+        osc.connect(og).connect(g);
+        play(osc);
       }
-    });
-  };
-  if (kind === 'rain') {
-    const a = noise(c, 'white');
-    const hp = c.createBiquadFilter();
-    hp.type = 'highpass';
-    hp.frequency.value = 1100;
-    const lp = c.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = 7500;
-    const g = c.createGain();
-    g.gain.value = 0.55;
-    a.connect(hp).connect(lp).connect(g).connect(out);
-    play(a);
-    const b = noise(c, 'pink');
-    const bp = c.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.frequency.value = 2600;
-    bp.Q.value = 0.6;
-    const g2 = c.createGain();
-    g2.gain.value = 0.3;
-    b.connect(bp).connect(g2).connect(out);
-    play(b);
-    play(slow(c, 0.13, 0.12, g2.gain));
-  } else if (kind === 'ocean') {
-    const a = noise(c, 'brown');
-    const lp = c.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = 650;
-    const g = c.createGain();
-    g.gain.value = 0.55;
-    a.connect(lp).connect(g).connect(out);
-    play(a);
-    play(slow(c, 0.085, 0.4, g.gain));
-    const b = noise(c, 'pink');
-    const bp = c.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.frequency.value = 1400;
-    bp.Q.value = 0.5;
-    const g2 = c.createGain();
-    g2.gain.value = 0.12;
-    b.connect(bp).connect(g2).connect(out);
-    play(b);
-    play(slow(c, 0.085, 0.1, g2.gain));
-  } else if (kind === 'wind') {
-    const a = noise(c, 'pink');
-    const bp = c.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.frequency.value = 520;
-    bp.Q.value = 1.1;
-    const g = c.createGain();
-    g.gain.value = 0.7;
-    a.connect(bp).connect(g).connect(out);
-    play(a);
-    play(slow(c, 0.06, 280, bp.frequency));
-    play(slow(c, 0.11, 0.25, g.gain));
-  } else {
-    // A low, warm hum: three sines, a fifth and an octave apart, breathing slowly.
-    const g = c.createGain();
-    g.gain.value = 0.5;
-    g.connect(out);
-    for (const [hz, level] of [[110, 0.5], [164.8, 0.22], [220.4, 0.28]] as const) {
-      const osc = c.createOscillator();
-      const og = c.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = hz;
-      og.gain.value = level;
-      osc.connect(og).connect(g);
-      play(osc);
+      play(slow(c, 0.17, 0.18, g.gain));
     }
-    play(slow(c, 0.17, 0.18, g.gain));
+  } catch {
+    // Whatever started is stopped again, so a sound that could not be built never plays on with nothing to stop it.
+    stoppers.forEach((st) => st());
+    out.disconnect();
+    return null;
   }
+  // A new level starts from where the sound is now, and drops what was still scheduled (such as the fade-in), so the change is heard at once.
+  const glide = (to: number, seconds: number) => {
+    const now = c.currentTime;
+    const here = Math.max(0.0001, out.gain.value);
+    out.gain.cancelScheduledValues(now);
+    out.gain.setValueAtTime(here, now);
+    out.gain.linearRampToValueAtTime(Math.max(0.0001, to), now + seconds);
+  };
+  let stopped = false;
   return {
-    setVolume: (v) => out.gain.linearRampToValueAtTime(Math.max(0.0001, level(v)), c.currentTime + 0.3),
+    setVolume: (v) => {
+      if (!stopped) glide(level(v), 0.2);
+    },
     stop: () => {
-      out.gain.cancelScheduledValues(c.currentTime);
-      out.gain.setValueAtTime(Math.max(0.0001, out.gain.value), c.currentTime);
-      out.gain.linearRampToValueAtTime(0.0001, c.currentTime + 1.0);
+      if (stopped) return;
+      stopped = true;
+      glide(0.0001, 0.35);
       window.setTimeout(() => {
         stoppers.forEach((s) => s());
         out.disconnect();
-      }, 1100);
+      }, 450);
     },
   };
 }

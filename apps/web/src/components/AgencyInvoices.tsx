@@ -1,4 +1,4 @@
-import { INVOICE_STATUS_NAME, INVOICE_STATUS_TONE, INVOICE_STATUSES, money, pageQuery, type Invoice } from '@kreators/shared';
+import { INVOICE_STARTERS, INVOICE_STATUS_NAME, INVOICE_STATUS_TONE, INVOICE_STATUSES, money, pageQuery, TEMPLATE_NAME_MAX, type AgencyTemplate, type Invoice } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -7,8 +7,9 @@ import { useAuthed } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
 import { tie } from '../lib/text';
 import { Button } from './Button';
+import { Fold } from './Fold';
 import { Inert } from './Inert';
-import { invoiceDate } from './InvoiceView';
+import { Field, invoiceDate } from './InvoiceView';
 import { KanbanBoard } from './KanbanBoard';
 import { Pager, usePage } from './Pager';
 import { Sheet } from './Sheet';
@@ -145,6 +146,10 @@ export function AgencyInvoices({ clientId }: { clientId?: string }) {
         </div>
       )}
 
+      <Fold className="mt-md" title="Your invoice templates" hint="starting points">
+        <TemplateList />
+      </Fold>
+
       <NewInvoice
         open={adding}
         clientId={clientId}
@@ -159,18 +164,20 @@ export function AgencyInvoices({ clientId }: { clientId?: string }) {
   );
 }
 
-/** Start an invoice: pick the client (when it is not already known) and a first line, then open it in the designer. */
+/** Start an invoice: pick the client (when it is not already known) and a starting point, then open it in the designer. */
 function NewInvoice({ open, clientId, onClose, onMade }: { open: boolean; clientId?: string; onClose: () => void; onMade: (id: string) => void }) {
   const clients = useAuthed(['agency', 'clients', 'all'], () => api.agency(`${pageQuery(1, 100, 'c')}`), open && !clientId);
+  const mine = useAuthed(['agency', 'templates', 'invoice'], () => api.agencyTemplates('invoice'), open);
   const [pick, setPick] = useState('');
-  const [what, setWhat] = useState('');
   const [err, setErr] = useState('');
   const id = clientId ?? pick;
   const make = useMutation({
-    mutationFn: () => api.agencyInvoiceAdd({ clientId: id, items: [{ description: what.trim() || 'Services', quantity: 1, unitCents: 0 }] }),
+    mutationFn: (start: { starter?: string; templateId?: string }) =>
+      api.agencyInvoiceAdd({ clientId: id, ...start, ...(start.starter || start.templateId ? {} : { items: [{ description: 'Services', quantity: 1, unitCents: 0 }] }) }),
     onSuccess: (r) => onMade(r.invoice.id),
     onError: (e: Error) => setErr(e.message),
   });
+  const card = 'toy toy-soft rounded-tile border-2 border-line bg-card p-sm text-left disabled:opacity-50';
   return (
     <Sheet open={open} onClose={onClose} title="New invoice">
       <div className="grid gap-sm pb-xl">
@@ -190,22 +197,129 @@ function NewInvoice({ open, clientId, onClose, onMade }: { open: boolean; client
             {clients.data && clients.data.clients.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Add a client first, then make an invoice for them.</p>}
           </div>
         )}
-        <div>
-          <label htmlFor="new-inv-what" className="block text-[14px] font-bold">
-            First line
-          </label>
-          <input id="new-inv-what" value={what} maxLength={200} placeholder="What you are charging for" onChange={(e) => setWhat(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+        <p className="m-0 text-[14px] font-semibold text-ink-soft">Pick a starting point. Every one starts from your business details, and you set the amounts in the designer.</p>
+        <div role="group" aria-label="Starting points" className="grid gap-xs md:grid-cols-2">
+          <button type="button" disabled={!id || make.isPending} onClick={() => make.mutate({})} className={card}>
+            <span className="block text-[16px] font-extrabold">Blank</span>
+            <span className="mt-xs block text-[14px] font-semibold text-ink-soft">One line, from your profile.</span>
+          </button>
+          {INVOICE_STARTERS.map((t) => (
+            <button key={t.key} type="button" disabled={!id || make.isPending} onClick={() => make.mutate({ starter: t.key })} className={card}>
+              <span className="block text-[16px] font-extrabold">{t.name}</span>
+              <span className="mt-xs block text-[14px] font-semibold text-ink-soft">{t.blurb}</span>
+            </button>
+          ))}
         </div>
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">It starts from your business details in Settings. You set the amounts in the designer.</p>
+        <h3 className="m-0 mt-xs text-[16px] font-extrabold">Your templates</h3>
+        {mine.data && mine.data.templates.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">None yet. Open any invoice and tap Save as template to keep it as a starting point.</p>}
+        <div role="group" aria-label="Your templates" className="grid gap-xs md:grid-cols-2">
+          {(mine.data?.templates ?? []).map((t) => (
+            <button key={t.id} type="button" disabled={!id || make.isPending} onClick={() => make.mutate({ templateId: t.id })} className={card}>
+              <span className="block text-[16px] font-extrabold">{t.name}</span>
+              <span className="mt-xs block text-[14px] font-semibold text-ink-soft">{t.summary}</span>
+            </button>
+          ))}
+        </div>
+        {!id && !clientId && <p className="m-0 text-[14px] font-bold">Choose a client first.</p>}
+        {make.isPending && (
+          <p role="status" className="m-0 text-[14px] font-bold">
+            Making it
+          </p>
+        )}
         {err && (
           <p role="alert" className="m-0 text-[14px] font-bold">
             {err}
           </p>
         )}
-        <Button onClick={() => make.mutate()} disabled={!id || make.isPending}>
-          {make.isPending ? 'Making it' : 'Make the invoice'}
-        </Button>
       </div>
     </Sheet>
+  );
+}
+
+/** The person's own invoice templates: rename in two steps, remove with two taps. They are made from an invoice with Save as template. */
+function TemplateList() {
+  const qc = useQueryClient();
+  const q = useAuthed(['agency', 'templates', 'invoice'], () => api.agencyTemplates('invoice'));
+  const [renaming, setRenaming] = useState<AgencyTemplate | null>(null);
+  const [name, setName] = useState('');
+  const [sure, setSure] = useState('');
+  const [msg, setMsg] = useState('');
+  const refresh = () => qc.invalidateQueries({ queryKey: ['agency'] });
+  const rename = useMutation({
+    mutationFn: () => api.agencyTemplateUpdate(renaming!.id, { name: name.trim() }),
+    onSuccess: async () => {
+      setRenaming(null);
+      setMsg('Renamed.');
+      await refresh();
+    },
+    onError: (e: Error) => setMsg(e.message),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => api.agencyTemplateRemove(id),
+    onSuccess: async () => {
+      setSure('');
+      setMsg('Removed.');
+      await refresh();
+    },
+    onError: (e: Error) => setMsg(e.message),
+  });
+  const list = q.data?.templates ?? [];
+  return (
+    <div className="rounded-tile bg-card p-sm">
+      <p className="m-0 text-[14px] font-semibold text-ink-soft">Open any invoice and tap Save as template to keep it here. A template keeps the look, the bank, the tax and the lines, never who it was for.</p>
+      {q.isError && (
+        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+          Could not load your templates. Try again.
+        </p>
+      )}
+      {q.data && list.length === 0 && <p className="mt-xs m-0 text-[14px] font-bold">You have none yet.</p>}
+      <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+        {list.map((t) => (
+          <li key={t.id} className="rounded-tile bg-paper p-sm">
+            {renaming?.id === t.id ? (
+              <div className="grid gap-xs">
+                <Field id={`tpl-rename-${t.id}`} label="New name" value={name} onChange={setName} max={TEMPLATE_NAME_MAX} />
+                <div className="flex flex-wrap gap-xs">
+                  <Button size="sm" onClick={() => rename.mutate()} disabled={!name.trim() || rename.isPending}>
+                    Save name
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setRenaming(null)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-sm">
+                <div className="min-w-0">
+                  <p className="m-0 text-[16px] font-extrabold">{t.name}</p>
+                  <p className="m-0 text-[14px] font-semibold text-ink-soft">{t.summary}</p>
+                </div>
+                <div className="flex gap-xs">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setRenaming(t);
+                      setName(t.name);
+                      setSure('');
+                    }}
+                  >
+                    Rename
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => (sure === t.id ? remove.mutate(t.id) : setSure(t.id))} disabled={remove.isPending}>
+                    {sure === t.id ? 'Tap again to remove' : 'Remove'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+      {msg && (
+        <p role="status" className="mt-xs m-0 text-[14px] font-bold">
+          {msg}
+        </p>
+      )}
+    </div>
   );
 }
