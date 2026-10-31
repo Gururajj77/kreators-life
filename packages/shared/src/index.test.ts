@@ -1,3 +1,4 @@
+import { FOCUS_DEFAULTS, parseFocusSettings, AMBIENT_SOUNDS, BREAK_BEATS } from './index';
 import { parseFaq, MAX_FAQ } from './index';
 import { lineForDay, DAILY_LINE_COUNT } from './index';
 import { numberValue, computeNumerology, personalCycle, numerologyInsights, nameWords, NUMBER_READINGS, KARMIC_DEBTS, YEAR_THEMES, type NumerologyContext } from './index';
@@ -1351,5 +1352,29 @@ describe('product questions and answers', () => {
     expect(parseFaq('not json')).toEqual([]);
     expect(parseFaq({ q: 'a', a: 'b' })).toEqual([]);
     expect(parseFaq([{ q: 'q'.repeat(300), a: 'a'.repeat(900) }])[0]!.q).toHaveLength(120);
+  });
+});
+
+describe('the timer settings a person keeps', () => {
+  it('starts with focus sessions counted, breaks not counted, and the next part never started by itself', () => {
+    const d = parseFocusSettings(undefined);
+    expect(d).toEqual(FOCUS_DEFAULTS);
+    expect(d.logFocus).toBe(true);
+    expect(d.logBreaks).toBe(false);
+    expect(d.auto).toBe(false);
+    expect(d.sound).toBe(true);
+    expect(d.ambient).toBe('off');
+  });
+  it('keeps what was chosen and drops what is unclean', () => {
+    const s = parseFocusSettings({ focus: 50, short: 999, every: 0, cycles: 3, auto: true, logFocus: false, logBreaks: true, sound: false, soundShort: false, vibrate: false, ambient: 'ocean', ambientVolume: 250, extra: 'x' });
+    expect(s).toMatchObject({ focus: 50, short: 60, every: 1, cycles: 3, auto: true, logFocus: false, logBreaks: true, sound: false, soundShort: false, soundLong: true, vibrate: false, ambient: 'ocean', ambientVolume: 100 });
+    expect(parseFocusSettings({ ambient: 'thunder', logFocus: 'yes', focus: 'abc' })).toMatchObject({ ambient: 'off', logFocus: true, focus: 25 });
+    expect(parseFocusSettings(JSON.stringify({ focus: 40 })).focus).toBe(40);
+    expect(parseFocusSettings('not json')).toEqual(FOCUS_DEFAULTS);
+    expect('extra' in s).toBe(false);
+  });
+  it('marks a mini break with one beat and the long break with three, and has serene sounds to pick from', () => {
+    expect(BREAK_BEATS).toEqual({ short: 1, long: 3 });
+    expect(AMBIENT_SOUNDS.map((a) => a.key)).toEqual(['off', 'rain', 'ocean', 'wind', 'hum']);
   });
 });

@@ -5531,11 +5531,11 @@ export const HOW_TO: Record<string, HowTo> = {
   },
   mindful: {
     steps: [
-      'Pick a length and breathe with the circle.',
-      'Or work in focus sessions. The classic is 25 minutes of focus and a 5 minute mini break, four times, then a 30 minute long break. Change any length, how many sessions come before the long break, and how many times it runs, even while it runs. Point a session at one of your tasks. The clock keeps time even when the tab is in the background.',
-      'The minutes log themselves when the timer ends. A finished break counts as mindful minutes, and a focus session counts only if you switch that on. A chart shows your focus time and tasks ticked by day, week or month.',
+      'Pick a length and breathe with the circle. The timer can play a background sound, such as rain, ocean, wind or a soft hum, that fades out when it stops.',
+      'Or work in focus sessions. The classic is 25 minutes of focus and a 5 minute mini break, four times, then a 30 minute long break. Change any length, how many sessions come before the long break, and how many times it runs, even while it runs. Point a session at one of your tasks.',
+      'The minutes log themselves when the timer ends. A finished focus session counts as mindful minutes, and a finished break counts only if you switch that on. Starting the next part by itself is off until you switch it on. A chart shows your focus time and tasks ticked by day, week or month, in minutes or hours.',
+      'Sounds: one soft beat marks a mini break and three mark the long break. One switch turns every sound and alarm off at once, and your other choices are kept. All your timer choices are saved on your account, so they follow you to every device.',
       'Sixty minutes a week scores full marks. The minutes count in Life twice: as breath under physical and as stillness under spiritual.',
-      'The line shows thirty days.',
     ],
     terms: ['focus session'],
   },
@@ -6167,6 +6167,7 @@ export const HELP_FAQ = [
   { q: 'What is Discover?', a: 'A quiz about how you think, feel and act, with puzzles and real situations. It shows your top strengths across the seven relationships, a detailed read on five personality traits and on your reasoning, and, if you add it, your emotional intelligence. It is a self-check, not an IQ test or a diagnosis.' },
   { q: 'What are the type, love languages and mind self-checks in Discover?', a: 'Three short self-checks under More ways to know yourself. 16 personality types, in the style of Myers-Briggs (MBTI), gives four letters out of sixteen, with what each side means for you. Love languages shows how you like to be shown love and how you show it, which can differ. How your mind works shows how often attention, energy and impulse, and patterns and senses show up for you. It is not a test for ADHD or autism, and only a trained professional can say what is going on.' },
   { q: 'What is Human design in Discover, and how exact is it?', a: 'Human design is a system for self-reflection, not science. Enter your birth date, time and the time zone of your birthplace. The app works out where thirteen bodies stood at your birth and when the Sun stood 88 degrees earlier, then shows your type, strategy, authority, profile and channels, in the tropical zodiac and in the sidereal one (Fagan-Bradley), in three layers: body, mind and purpose. Positions are good to a few arc minutes, a little less for the outer planets, and a line that sits right on an edge is marked. Each part of the reading becomes a goal you can add as a task.' },
+  { q: 'Can I turn the timer sounds off?', a: 'Yes. In Mindful minutes, the first switch under Sounds and alarms turns off every beat, chime, background sound and buzz at once. Your other choices stay saved. Otherwise you can choose a soft beat for the mini break (one beat) and the long break (three beats), a background sound with its volume, and whether a phone buzzes. These follow your account to every device.' },
   { q: 'How many devices can I use at once?', a: 'Three. Your account can be signed in on three devices at the same time, such as a phone, a laptop and a tablet. When you sign in on a fourth, the one that has been signed in the longest is signed out to make room, and it tells you why when you open it. Your progress is kept on your account, so signing in again brings everything back. Changing your password signs out every other device at once.' },
   { q: 'What does numerology in Discover work out?', a: 'It sits beside the body, mind and purpose layers of Human design. From your birth date it gives your life path, birthday number and attitude. From the full name on your birth record it adds your expression, soul urge, personality and maturity, and the numbers your name is missing. It shows where you are in your personal year, month and day, keeps the master numbers 11, 22 and 33 whole, and points out the turning point 10 and the karmic numbers 13, 14, 16 and 19. Then it sets your numbers next to your Discover answers: where they agree, where they stretch you, and how they fit your Human design. Numerology is a system for reflection, not science.' },
   { q: 'How much will a reward pay me?', a: 'Open the reward and use What could I earn. Type the number of views your post might get and it shows the points. Nothing is paid under the minimum views, a post stops earning at the most one post can pay, and a reviewer must confirm the views first. The pool also has to have points left.' },
@@ -10168,3 +10169,100 @@ export function lineForDay(day: string): DailyLine & { round: number; position: 
   const idx = order[position]!;
   return idx < PHILOSOPHER_LINES.length ? { text: PHILOSOPHER_LINES[idx]![0], by: PHILOSOPHER_LINES[idx]![1], own: false, round, position } : { text: APP_LINES[idx - PHILOSOPHER_LINES.length]!, by: '', own: true, round, position };
 }
+
+// ---- Mindful minutes timers: what a person chose, kept on their account ----
+
+export type AmbientKind = 'off' | 'rain' | 'ocean' | 'wind' | 'hum';
+/** Serene background sounds, made in the browser (no files to download), played while a timer runs. */
+export const AMBIENT_SOUNDS: readonly { key: AmbientKind; name: string; blurb: string; emoji: string }[] = [
+  { key: 'off', name: 'Off', blurb: 'Quiet.', emoji: '🔇' },
+  { key: 'rain', name: 'Rain', blurb: 'Soft rain on leaves.', emoji: '🌧️' },
+  { key: 'ocean', name: 'Ocean', blurb: 'Slow waves, in and out.', emoji: '🌊' },
+  { key: 'wind', name: 'Wind', blurb: 'Wind that rises and falls.', emoji: '🍃' },
+  { key: 'hum', name: 'Soft hum', blurb: 'A low, warm hum, like a singing bowl.', emoji: '🔔' },
+];
+export const isAmbientKind = (v: unknown): v is AmbientKind => AMBIENT_SOUNDS.some((s) => s.key === v);
+
+export interface FocusSettings {
+  /** Minutes of focus in a round, of a mini break, and of the long break. */
+  focus: number;
+  short: number;
+  long: number;
+  /** Rounds of focus before the long break. The mini breaks between them are one fewer. */
+  every: number;
+  /** How many times the whole run goes round before it stops. Zero means until you stop. */
+  cycles: number;
+  /** Start the next part by itself. Off until the person says. */
+  auto: boolean;
+  /** A finished break counts as mindful minutes. Off until the person says. */
+  logBreaks: boolean;
+  /** A finished focus round counts as mindful minutes. On to start with. */
+  logFocus: boolean;
+  /** Every sound and alarm, in one switch. Off means the timers are silent, whatever the options below say. */
+  sound: boolean;
+  /** One soft beat when a mini break starts, and three when the long break starts. */
+  soundShort: boolean;
+  soundLong: boolean;
+  /** A buzz on a phone when a part ends. */
+  vibrate: boolean;
+  /** A background sound while a timer runs, and how loud, 0 to 100. */
+  ambient: AmbientKind;
+  ambientVolume: number;
+}
+export const FOCUS_PRESETS: readonly { name: string; focus: number; short: number; long: number; every: number }[] = [
+  { name: 'Classic', focus: 25, short: 5, long: 30, every: 4 },
+  { name: 'Deep', focus: 50, short: 10, long: 30, every: 3 },
+  { name: 'Light', focus: 15, short: 3, long: 15, every: 4 },
+];
+export const FOCUS_DEFAULTS: FocusSettings = {
+  focus: FOCUS_PRESETS[0]!.focus,
+  short: FOCUS_PRESETS[0]!.short,
+  long: FOCUS_PRESETS[0]!.long,
+  every: FOCUS_PRESETS[0]!.every,
+  cycles: 0,
+  auto: false,
+  logBreaks: false,
+  logFocus: true,
+  sound: true,
+  soundShort: true,
+  soundLong: true,
+  vibrate: true,
+  ambient: 'off',
+  ambientVolume: 40,
+};
+const clampWhole = (v: unknown, lo: number, hi: number, fallback: number): number => {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback;
+};
+/** The one reader for a person's timer settings, from the browser or a column. Anything missing or unclean takes its default. */
+export function parseFocusSettings(raw: unknown): FocusSettings {
+  let v = raw;
+  if (typeof v === 'string') {
+    try {
+      v = JSON.parse(v);
+    } catch {
+      v = {};
+    }
+  }
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  const flag = (k: keyof FocusSettings, d: boolean) => (typeof o[k] === 'boolean' ? (o[k] as boolean) : d);
+  const d = FOCUS_DEFAULTS;
+  return {
+    focus: clampWhole(o.focus, 1, 120, d.focus),
+    short: clampWhole(o.short, 1, 60, d.short),
+    long: clampWhole(o.long, 1, 120, d.long),
+    every: clampWhole(o.every, 1, 12, d.every),
+    cycles: clampWhole(o.cycles, 0, 12, d.cycles),
+    auto: flag('auto', d.auto),
+    logBreaks: flag('logBreaks', d.logBreaks),
+    logFocus: flag('logFocus', d.logFocus),
+    sound: flag('sound', d.sound),
+    soundShort: flag('soundShort', d.soundShort),
+    soundLong: flag('soundLong', d.soundLong),
+    vibrate: flag('vibrate', d.vibrate),
+    ambient: isAmbientKind(o.ambient) ? o.ambient : d.ambient,
+    ambientVolume: clampWhole(o.ambientVolume, 0, 100, d.ambientVolume),
+  };
+}
+/** How many soft beats mark the start of a break: one for a mini break, three for the long one. */
+export const BREAK_BEATS = { short: 1, long: 3 } as const;

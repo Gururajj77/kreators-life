@@ -1693,6 +1693,18 @@ section('Engagement');
   const dvSecond = await api('GET', '/me', undefined, dvTokens[1]);
   check('the next one pushes out the next oldest, never a newer one', dvSecond.status === 401 && (await api('GET', '/me', undefined, dv3)).status === 200 && (await api('GET', '/me', undefined, dv4)).status === 200, dvSecond.status);
 
+  // Timer settings: kept on the account, owner only, with the defaults the person asked for.
+  const fsNone = await api('GET', '/wellbeing/focus-settings', undefined, R.token);
+  check('a new account has no saved timer settings yet', fsNone.status === 200 && fsNone.json.settings === null, fsNone.json);
+  const fsPut = await api('PUT', '/wellbeing/focus-settings', { settings: { focus: 50, short: 999, ambient: 'ocean', ambientVolume: 250, sound: false, bogus: 1 } }, R.token);
+  check('saving keeps what is clean and clamps the rest, and fills in the defaults', fsPut.status === 200 && fsPut.json.settings?.focus === 50 && fsPut.json.settings?.short === 60 && fsPut.json.settings?.ambient === 'ocean' && fsPut.json.settings?.ambientVolume === 100 && fsPut.json.settings?.sound === false && fsPut.json.settings?.logFocus === true && fsPut.json.settings?.logBreaks === false && fsPut.json.settings?.auto === false && !('bogus' in fsPut.json.settings), fsPut.json.settings);
+  const fsGet = await api('GET', '/wellbeing/focus-settings', undefined, R.token);
+  check('and they come back on any device', fsGet.json.settings?.focus === 50 && fsGet.json.settings?.ambient === 'ocean', fsGet.json.settings);
+  const fsOther = await api('GET', '/wellbeing/focus-settings', undefined, P.token);
+  check('nobody else sees them', fsOther.json.settings === null, fsOther.json);
+  const fsExport = JSON.stringify((await api('GET', '/me/export', undefined, R.token)).json);
+  check('they are in the export', fsExport.includes('focusPrefs') && fsExport.includes('ocean'), '');
+
   // Discover add-ons: a 16-type self-check, love languages and how the mind works. Own routes, owner only, the mind part behind its own switch.
   const xm0 = await api('GET', '/discover/more', undefined, R.token);
   check('the add-ons start empty', xm0.status === 200 && ['type', 'love', 'mind'].every((k) => xm0.json.extras?.[k]?.result === null && xm0.json.extras[k].progress.done === 0), xm0.json);

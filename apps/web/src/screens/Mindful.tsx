@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { FocusDashboard } from '../components/FocusDashboard';
 import { FocusRounds } from '../components/FocusRounds';
+import { SoundControls } from '../components/SoundControls';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { Button } from '../components/Button';
 import { AreaLine, Donut, Legend } from '../components/Charts';
@@ -12,6 +13,8 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { lastDays, shortDay, todayLocal } from '../lib/date';
+import { useFocusPrefs } from '../lib/focusPrefs';
+import { playChime, unlockAudio, useAmbient } from '../lib/sound';
 import { useLogs, useRefreshAll, useWellbeing } from '../lib/queries';
 
 const LENGTHS = [1, 3, 5, 10];
@@ -23,6 +26,7 @@ export function Mindful() {
   const reduce = useReducedMotion();
   const wb = useWellbeing();
   const logs = useLogs('mindful', 30);
+  const { settings: prefs, set: setPrefs } = useFocusPrefs();
   const [minutes, setMinutes] = useState(3);
   const [left, setLeft] = useState<number | null>(null);
   const timer = useRef<number | null>(null);
@@ -39,6 +43,16 @@ export function Mindful() {
     if (left <= 0) {
       setLeft(null);
       save.mutate(minutes);
+      if (prefs.sound) {
+        playChime();
+        if (prefs.vibrate) {
+          try {
+            navigator.vibrate?.([200, 100, 200]);
+          } catch {
+            // no vibration here
+          }
+        }
+      }
       return;
     }
     timer.current = window.setTimeout(() => setLeft((l) => (l === null ? null : l - 1)), 1000);
@@ -49,6 +63,8 @@ export function Mindful() {
   }, [left]);
 
   const running = left !== null;
+  // The background sound the person chose plays while the breathing timer runs, and fades out when it stops.
+  useAmbient(running && prefs.sound, prefs.ambient, prefs.ambientVolume);
   const total = wb.data?.parts.find((p) => p.kind === 'mindful')?.latest ?? 0;
   const buckets = [
     { label: 'One minute', color: 'var(--color-r3)', test: (m: number) => m <= 1 },
@@ -91,9 +107,25 @@ export function Mindful() {
                 </button>
               ))}
             </div>
-            <Button full size="lg" className="mt-md" onClick={() => setLeft(minutes * 60)}>
+            <Button
+              full
+              size="lg"
+              className="mt-md"
+              onClick={() => {
+                unlockAudio();
+                setLeft(minutes * 60);
+              }}
+            >
               Start
             </Button>
+            <details className="mt-sm rounded-tile bg-card p-sm text-left">
+              <summary className="toy flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-sm text-[14px] font-extrabold">
+                <span>Sounds{prefs.sound && prefs.ambient !== 'off' ? `: ${prefs.ambient}` : prefs.sound ? '' : ': off'}</span>
+              </summary>
+              <div className="mt-xs">
+                <SoundControls settings={prefs} onChange={setPrefs} />
+              </div>
+            </details>
           </>
         ) : (
           <Button variant="outline" full className="mt-md" onClick={() => setLeft(null)}>

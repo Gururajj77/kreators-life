@@ -1,36 +1,21 @@
-import { RELATIONSHIP_BY_KEY } from '@kreators/shared';
+import { BREAK_BEATS, FOCUS_PRESETS, RELATIONSHIP_BY_KEY, type FocusSettings } from '@kreators/shared';
 import { useQuery } from '@tanstack/react-query';
 import { motion, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { api } from '../lib/api';
+import { bento } from '../lib/bento';
 import { todayLocal } from '../lib/date';
+import { useFocusPrefs } from '../lib/focusPrefs';
+import { playBeats, playChime, unlockAudio, useAmbient } from '../lib/sound';
 import { useSession } from '../lib/store';
 import { Button } from './Button';
+import { SoundControls } from './SoundControls';
 import { Toggle } from './Toggle';
 
 type Phase = 'focus' | 'short' | 'long';
-interface Settings {
-  /** Minutes of focus in a round, of a mini break, and of the long break. */
-  focus: number;
-  short: number;
-  long: number;
-  /** Rounds of focus before the long break. The mini breaks between them are one fewer. */
-  every: number;
-  /** How many times the whole run (the rounds, then the long break) goes round before it stops. Zero means until you stop. */
-  cycles: number;
-  auto: boolean;
-  logBreaks: boolean;
-  logFocus: boolean;
-}
-const PRESETS: { name: string; focus: number; short: number; long: number; every: number }[] = [
-  { name: 'Classic', focus: 25, short: 5, long: 30, every: 4 },
-  { name: 'Deep', focus: 50, short: 10, long: 30, every: 3 },
-  { name: 'Light', focus: 15, short: 3, long: 15, every: 4 },
-];
-const DEFAULTS: Settings = { ...PRESETS[0]!, cycles: 0, auto: false, logBreaks: true, logFocus: false };
+type Settings = FocusSettings;
 const LABEL: Record<Phase, string> = { focus: 'Focus', short: 'Mini break', long: 'Long break' };
-const SETTINGS_KEY = 'kreators.focusRounds.settings';
 const DAY_KEY = 'kreators.focusRounds.day';
 const MAX_PART_MIN = 180;
 
@@ -38,23 +23,6 @@ const clampInt = (v: unknown, lo: number, hi: number, fallback: number) => {
   const n = Math.round(Number(v));
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback;
 };
-function readSettings(): Settings {
-  try {
-    const raw = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as Partial<Settings>;
-    return {
-      focus: clampInt(raw.focus, 1, 120, DEFAULTS.focus),
-      short: clampInt(raw.short, 1, 60, DEFAULTS.short),
-      long: clampInt(raw.long, 1, 120, DEFAULTS.long),
-      every: clampInt(raw.every, 1, 12, DEFAULTS.every),
-      cycles: clampInt(raw.cycles, 0, 12, DEFAULTS.cycles),
-      auto: raw.auto === true,
-      logBreaks: raw.logBreaks !== false,
-      logFocus: raw.logFocus === true,
-    };
-  } catch {
-    return DEFAULTS;
-  }
-}
 /** Today's rounds, kept on this device. A new day starts from nothing. */
 function readDay(): { day: string; rounds: number; minutes: number } {
   const day = todayLocal();
@@ -65,29 +33,6 @@ function readDay(): { day: string; rounds: number; minutes: number } {
     // start fresh
   }
   return { day, rounds: 0, minutes: 0 };
-}
-
-/** A soft two-note chime. Silent where the browser has no audio. */
-function chime() {
-  try {
-    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = new Ctx();
-    [660, 880].forEach((hz, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.frequency.value = hz;
-      gain.gain.setValueAtTime(0.0001, ctx.currentTime + i * 0.28);
-      gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + i * 0.28 + 0.03);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i * 0.28 + 0.6);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(ctx.currentTime + i * 0.28);
-      osc.stop(ctx.currentTime + i * 0.28 + 0.65);
-    });
-    window.setTimeout(() => void ctx.close(), 1500);
-  } catch {
-    // no sound here
-  }
 }
 
 const mmss = (ms: number) => {
@@ -104,9 +49,9 @@ export function planLine(s: Settings): string {
   return `${run}. ${s.cycles > 0 ? `${s.cycles} ${s.cycles === 1 ? 'time' : 'times'}, ${hoursMin(cycle * s.cycles - s.long)} before the last long break.` : `That is ${hoursMin(cycle)} for one go, and it carries on until you stop.`}`;
 }
 
-function Stepper({ label, value, min, max, onChange, unit = '', hint }: { label: string; value: number; min: number; max: number; onChange: (v: number) => void; unit?: string; hint?: string }) {
+function Stepper({ label, value, min, max, onChange, unit = '', hint, className = '' }: { label: string; value: number; min: number; max: number; onChange: (v: number) => void; unit?: string; hint?: string; className?: string }) {
   return (
-    <div className="rounded-tile bg-card p-xs">
+    <div className={`rounded-tile bg-card p-xs ${className}`}>
       <span className="block text-[12px] font-extrabold text-ink-soft">{label}</span>
       <div className="mt-xs flex items-center justify-between gap-xs">
         <button type="button" aria-label={`Less ${label.toLowerCase()}`} disabled={value <= min} onClick={() => onChange(value - 1)} className="toy toy-soft flex size-[44px] items-center justify-center rounded-pill border border-line bg-card-strong text-[20px] font-extrabold disabled:opacity-40">
@@ -135,7 +80,8 @@ function Stepper({ label, value, min, max, onChange, unit = '', hint }: { label:
 export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind: 'break' | 'focus') => void; onRound: (minutes: number, nodeId: string | null) => void }) {
   const reduce = useReducedMotion();
   const token = useSession((s) => s.token);
-  const [settings, setSettings] = useState<Settings>(readSettings);
+  const { settings, set: setPrefs, ready } = useFocusPrefs();
+  const fromUrl = useRef(false);
   const [phase, setPhase] = useState<Phase>('focus');
   const [round, setRound] = useState(1);
   const [cycle, setCycle] = useState(1);
@@ -158,6 +104,7 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
     const m = clampInt(params.get('min'), 0, MAX_PART_MIN, 0);
     if (t) setTaskId(t);
     if (m > 0) {
+      fromUrl.current = true;
       setPhase('focus');
       setPartMs(m * 60_000);
       setLeftMs(m * 60_000);
@@ -185,12 +132,7 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
   const save = (next: Settings) => {
     const key = phase === 'focus' ? 'focus' : phase === 'short' ? 'short' : 'long';
     const delta = (next[key] - settings[key]) * 60_000;
-    setSettings(next);
-    try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
-    } catch {
-      // not kept, still works
-    }
+    setPrefs(next);
     if (finished && next.cycles !== settings.cycles) setFinished(false);
     if (delta === 0) return;
     if (idleAtFull) {
@@ -198,6 +140,20 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
       setLeftMs(length(phase, next));
     } else nudge(delta);
   };
+
+  // The person's saved lengths arrive from their account a moment after the page opens: an idle timer picks them up.
+  useEffect(() => {
+    if (fromUrl.current || running || leftMs < partMs - 500) return;
+    const ms = length(phase, settings);
+    if (ms !== partMs) {
+      setPartMs(ms);
+      setLeftMs(ms);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.focus, settings.short, settings.long, ready]);
+
+  // A background sound plays while a timer runs, when sounds are on.
+  useAmbient(running && settings.sound, settings.ambient, settings.ambientVolume);
 
   // Keep the screen awake while a round runs, where the browser allows it.
   useEffect(() => {
@@ -223,11 +179,19 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
       const wasFocus = phase === 'focus';
       const minutes = Math.max(1, Math.round(partMs / 60_000));
       if (counted) {
-        chime();
-        try {
-          navigator.vibrate?.([200, 100, 200]);
-        } catch {
-          // no vibration here
+        if (settings.sound) {
+          // A soft beat when a mini break starts, three when the long break starts, and a chime when a break gives way to focus.
+          const to: Phase | null = wasFocus ? (round >= settings.every ? 'long' : 'short') : null;
+          if (to) {
+            if (to === 'long' ? settings.soundLong : settings.soundShort) playBeats(BREAK_BEATS[to]);
+          } else if (phase === 'long' ? settings.soundLong : settings.soundShort) playChime();
+          if (settings.vibrate) {
+            try {
+              navigator.vibrate?.([200, 100, 200]);
+            } catch {
+              // no vibration here
+            }
+          }
         }
         if (wasFocus) {
           const next = { day: todayLocal(), rounds: day.rounds + 1, minutes: day.minutes + minutes };
@@ -288,6 +252,7 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
   }, [running, leftMs, phase]);
 
   const start = () => {
+    unlockAudio();
     setFinished(false);
     endsAt.current = Date.now() + leftMs;
     setRunning(true);
@@ -401,7 +366,7 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
       <div className="mt-md text-left">
         <p className="m-0 text-[14px] font-extrabold">Your plan</p>
         <div className="scroll-row mt-xs flex gap-xs" role="group" aria-label="Plans to start from">
-          {PRESETS.map((p) => {
+          {FOCUS_PRESETS.map((p) => {
             const on = settings.focus === p.focus && settings.short === p.short && settings.long === p.long && settings.every === p.every;
             return (
               <button key={p.name} type="button" aria-pressed={on} onClick={() => save({ ...settings, ...p })} className={`toy min-h-[44px] shrink-0 rounded-pill border-2 px-sm text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
@@ -411,19 +376,22 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
           })}
         </div>
         <div className="mt-xs grid grid-cols-2 gap-xs">
-          <Stepper label="Focus session" value={settings.focus} min={1} max={120} unit="min" onChange={(v) => save({ ...settings, focus: v })} />
-          <Stepper label="Mini break" value={settings.short} min={1} max={60} unit="min" onChange={(v) => save({ ...settings, short: v })} />
-          <Stepper label="Sessions before the long break" value={settings.every} min={1} max={12} hint={settings.every > 1 ? `${settings.every - 1} mini ${settings.every - 1 === 1 ? 'break' : 'breaks'} between them` : 'No mini breaks'} onChange={(v) => save({ ...settings, every: v })} />
-          <Stepper label="Long break" value={settings.long} min={1} max={120} unit="min" onChange={(v) => save({ ...settings, long: v })} />
-          <Stepper label="Runs, then stop (0 is until I stop)" value={settings.cycles} min={0} max={12} hint={settings.cycles === 0 ? 'Carries on until you stop' : `${settings.cycles} long ${settings.cycles === 1 ? 'break' : 'breaks'} in all`} onChange={(v) => save({ ...settings, cycles: v })} />
+          <Stepper className={bento(0, 5, 2, 2)} label="Focus session" value={settings.focus} min={1} max={120} unit="min" onChange={(v) => save({ ...settings, focus: v })} />
+          <Stepper className={bento(1, 5, 2, 2)} label="Mini break" value={settings.short} min={1} max={60} unit="min" onChange={(v) => save({ ...settings, short: v })} />
+          <Stepper className={bento(2, 5, 2, 2)} label="Sessions before the long break" value={settings.every} min={1} max={12} hint={settings.every > 1 ? `${settings.every - 1} mini ${settings.every - 1 === 1 ? 'break' : 'breaks'} between them` : 'No mini breaks'} onChange={(v) => save({ ...settings, every: v })} />
+          <Stepper className={bento(3, 5, 2, 2)} label="Long break" value={settings.long} min={1} max={120} unit="min" onChange={(v) => save({ ...settings, long: v })} />
+          <Stepper className={bento(4, 5, 2, 2)} label="Runs, then stop (0 is until I stop)" value={settings.cycles} min={0} max={12} hint={settings.cycles === 0 ? 'Carries on until you stop' : `${settings.cycles} long ${settings.cycles === 1 ? 'break' : 'breaks'} in all`} onChange={(v) => save({ ...settings, cycles: v })} />
         </div>
         <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{planLine(settings)}</p>
       </div>
 
       <div className="mt-sm flex flex-col gap-xs text-left">
-        <Toggle compact on={settings.auto} onChange={(v) => save({ ...settings, auto: v })} label="Start the next part by itself" />
+        <Toggle compact on={settings.logFocus} onChange={(v) => save({ ...settings, logFocus: v })} label="Count finished focus sessions as mindful minutes" />
         <Toggle compact on={settings.logBreaks} onChange={(v) => save({ ...settings, logBreaks: v })} label="Count finished breaks as mindful minutes" />
-        <Toggle compact on={settings.logFocus} onChange={(v) => save({ ...settings, logFocus: v })} label="Count finished focus sessions as mindful minutes too" />
+        <Toggle compact on={settings.auto} onChange={(v) => save({ ...settings, auto: v })} label="Start the next part by itself" />
+      </div>
+      <div className="mt-md border-t border-line pt-sm">
+        <SoundControls settings={settings} onChange={save} breaks />
       </div>
       <p className="sr-only" role="status" aria-live="polite">
         {said}

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { FOCUS_MAX_MINUTES, FOCUS_VIEWS, isFocusView, weekStart, wellbeingLabel, type FocusBucket, type FocusResponse, type FocusTask, type FocusView, type LogKind, type RelationshipKey, type WellbeingLog, type WellbeingSummary } from '@kreators/shared';
+import { FOCUS_MAX_MINUTES, FOCUS_VIEWS, isFocusView, weekStart, wellbeingLabel, type FocusBucket, type FocusResponse, type FocusTask, type FocusView, type LogKind, type RelationshipKey, type WellbeingLog, type WellbeingSummary, parseFocusSettings } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { DATE_RE, dateNearToday, newId, nowIso, shiftDate } from '../db';
 
@@ -81,6 +81,21 @@ export async function summaryFor(db: D1Database, userId: string, today: string, 
 // ---- Focus rounds. Registered first so "focus" is never read as a kind of log.
 
 /** The tasks a round can be pointed at: the person's own, still to do, the nearest due first. */
+// The timer settings a person chose, kept on their account so every device has them. Owner only.
+wellbeing.get('/focus-settings', async (c) => {
+  const row = await c.env.DB.prepare('SELECT settings_json FROM focus_prefs WHERE user_id = ?').bind(c.get('user').id).first<{ settings_json: string }>();
+  return c.json({ settings: row ? parseFocusSettings(row.settings_json) : null });
+});
+
+wellbeing.put('/focus-settings', async (c) => {
+  const body = await c.req.json<{ settings?: unknown }>().catch(() => ({}) as { settings?: unknown });
+  const settings = parseFocusSettings(body.settings);
+  await c.env.DB.prepare('INSERT INTO focus_prefs (user_id, settings_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET settings_json = excluded.settings_json, updated_at = excluded.updated_at')
+    .bind(c.get('user').id, JSON.stringify(settings), nowIso())
+    .run();
+  return c.json({ settings });
+});
+
 wellbeing.get('/focus/tasks', async (c) => {
   const rows = await c.env.DB.prepare("SELECT id, title, relationship, COALESCE(do_date, due_date) AS due_date FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' ORDER BY COALESCE(do_date, due_date) IS NULL, COALESCE(do_date, due_date) ASC, created_at DESC LIMIT 60").bind(c.get('user').id).all<{ id: string; title: string; relationship: RelationshipKey; due_date: string | null }>();
   const tasks: FocusTask[] = rows.results.map((r) => ({ id: r.id, title: r.title, relationship: r.relationship, dueDate: r.due_date }));

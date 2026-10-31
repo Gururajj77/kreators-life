@@ -277,6 +277,7 @@ me.get('/export', async (c) => {
     ['blocks', 'SELECT * FROM blocks WHERE blocker_id = ?'],
     ['waterLogs', 'SELECT * FROM water_logs WHERE user_id = ?'],
     ['reminderPrefs', 'SELECT * FROM reminder_prefs WHERE user_id = ?'],
+    ['focusPrefs', 'SELECT * FROM focus_prefs WHERE user_id = ?'],
     ['customReminders', 'SELECT * FROM custom_reminders WHERE user_id = ?'],
   ];
   const out: Record<string, unknown> = { exportedAt: nowIso(), user: toUser(user) };

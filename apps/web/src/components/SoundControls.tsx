@@ -1,0 +1,113 @@
+import { AMBIENT_SOUNDS, BREAK_BEATS, type AmbientKind, type FocusSettings } from '@kreators/shared';
+import { useEffect, useRef, useState } from 'react';
+import { bento } from '../lib/bento';
+import { playBeats, startAmbient, unlockAudio, type Ambient } from '../lib/sound';
+import { Toggle } from './Toggle';
+
+/** The words on this panel, in short plain sentences. */
+const COPY = {
+  master: 'Sounds and alarms.',
+  silent: 'Every timer is silent. No beats. No chime. No background sound. No buzz. Your choices below are kept.',
+  covers: 'This covers beats, chimes, background sound and the buzz. Switch it off to keep every timer silent.',
+  oneBeat: 'One soft beat when a mini break starts.',
+  threeBeats: 'Three soft beats when the long break starts.',
+  hearOne: 'Hear one beat.',
+  hearThree: 'Hear three beats.',
+  buzz: 'Buzz a phone when a part ends.',
+  background: 'Background sound.',
+  background2: 'It plays softly while a timer runs. It fades out when the timer stops.',
+  volume: 'Volume.',
+  volumeLabel: 'Volume of the background sound.',
+  taste: 'Hear it for a few seconds.',
+  stopTaste: 'Stop the preview.',
+} as const;
+const bare = (t: string) => t.replace(/\.$/, '');
+
+/** A short taste of a background sound, so a person can choose by ear. It stops by itself. */
+function useTaste() {
+  const live = useRef<{ node: Ambient; timer: number } | null>(null);
+  const [on, setOn] = useState<AmbientKind | null>(null);
+  const stop = () => {
+    if (!live.current) return;
+    window.clearTimeout(live.current.timer);
+    live.current.node.stop();
+    live.current = null;
+    setOn(null);
+  };
+  useEffect(() => stop, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const taste = (kind: Exclude<AmbientKind, 'off'>, volume: number) => {
+    stop();
+    unlockAudio();
+    const node = startAmbient(kind, volume);
+    if (!node) return;
+    live.current = { node, timer: window.setTimeout(stop, 7000) };
+    setOn(kind);
+  };
+  return { on, taste, stop };
+}
+
+/**
+ * Every sound and alarm of the Mindful minutes timers, in one place. The first switch turns them all off at once (the options under it grey
+ * out and are kept); under it, with `breaks`, a soft beat for a mini break and three for the long one, and a buzz; and a background sound
+ * with its volume. Used by the focus sessions and by the breathing timer, which share one set of choices on the person's account.
+ */
+export function SoundControls({ settings, onChange, breaks = false }: { settings: FocusSettings; onChange: (s: FocusSettings) => void; breaks?: boolean }) {
+  const off = !settings.sound;
+  const t = useTaste();
+  const set = (patch: Partial<FocusSettings>) => onChange({ ...settings, ...patch });
+  return (
+    <div className="flex flex-col gap-xs text-left">
+      <Toggle compact on={settings.sound} onChange={(v) => set({ sound: v })} label={bare(COPY.master)} />
+      <p className="m-0 text-[12px] font-semibold text-ink-soft">{off ? COPY.silent : COPY.covers}</p>
+      {breaks && (
+        <div className={`flex flex-col gap-xs ${off ? 'opacity-50' : ''}`}>
+          <Toggle compact disabled={off} on={settings.soundShort} onChange={(v) => set({ soundShort: v })} label={bare(COPY.oneBeat)} />
+          <Toggle compact disabled={off} on={settings.soundLong} onChange={(v) => set({ soundLong: v })} label={bare(COPY.threeBeats)} />
+          <div className="flex flex-wrap gap-xs">
+            <button type="button" disabled={off} onClick={() => playBeats(BREAK_BEATS.short)} className="toy toy-soft min-h-[44px] rounded-pill border border-line bg-card-strong px-sm text-[14px] font-bold disabled:opacity-60">
+              {bare(COPY.hearOne)}
+            </button>
+            <button type="button" disabled={off} onClick={() => playBeats(BREAK_BEATS.long)} className="toy toy-soft min-h-[44px] rounded-pill border border-line bg-card-strong px-sm text-[14px] font-bold disabled:opacity-60">
+              {bare(COPY.hearThree)}
+            </button>
+          </div>
+          <Toggle compact disabled={off} on={settings.vibrate} onChange={(v) => set({ vibrate: v })} label={bare(COPY.buzz)} />
+        </div>
+      )}
+      <div className={off ? 'opacity-50' : ''}>
+        <p className="m-0 text-[14px] font-extrabold">{bare(COPY.background)}</p>
+        <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{COPY.background2}</p>
+        <div className="mt-xs grid grid-cols-3 gap-xs md:grid-cols-5" role="group" aria-label={bare(COPY.background)}>
+          {AMBIENT_SOUNDS.map((s, i) => (
+            <button
+              key={s.key}
+              type="button"
+              disabled={off}
+              aria-pressed={settings.ambient === s.key}
+              onClick={() => set({ ambient: s.key })}
+              className={`toy flex min-h-[64px] flex-col items-center justify-center gap-xs rounded-tile border-2 p-xs text-[14px] font-bold disabled:opacity-60 ${bento(i, AMBIENT_SOUNDS.length, 3, 5)} ${settings.ambient === s.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+            >
+              <span aria-hidden="true" className="text-[20px] leading-none">
+                {s.emoji}
+              </span>
+              {s.name}
+            </button>
+          ))}
+        </div>
+        {settings.ambient !== 'off' && (
+          <>
+            <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{AMBIENT_SOUNDS.find((s) => s.key === settings.ambient)!.blurb}</p>
+            <label className="mt-xs flex items-center gap-sm">
+              <span className="shrink-0 text-[12px] font-extrabold text-ink-soft">{bare(COPY.volume)}</span>
+              <input type="range" min={0} max={100} step={5} disabled={off} value={settings.ambientVolume} onChange={(e) => set({ ambientVolume: Number(e.target.value) })} aria-label={bare(COPY.volumeLabel)} className="min-w-0 flex-1" />
+              <span className="w-[40px] shrink-0 text-right text-[12px] font-bold text-ink-soft">{settings.ambientVolume}</span>
+            </label>
+            <button type="button" disabled={off} onClick={() => (t.on ? t.stop() : t.taste(settings.ambient as Exclude<AmbientKind, 'off'>, settings.ambientVolume))} className="toy toy-soft mt-xs min-h-[44px] rounded-pill border border-line bg-card-strong px-sm text-[14px] font-bold disabled:opacity-60">
+              {bare(t.on ? COPY.stopTaste : COPY.taste)}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -15,6 +15,7 @@ export async function deleteAccount(db: D1Database, userId: string): Promise<voi
     db.prepare('DELETE FROM media_files WHERE owner_id = ?').bind(userId),
     db.prepare('DELETE FROM water_logs WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM reminder_prefs WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM focus_prefs WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM custom_reminders WHERE user_id = ?').bind(userId),
     db.prepare("DELETE FROM media_items WHERE added_by = ? AND url LIKE '/api/public/media/%'").bind(userId),
     db.prepare('DELETE FROM event_messages WHERE user_id = ?').bind(userId),
