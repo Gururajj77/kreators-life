@@ -73,7 +73,11 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
         </div>
       </header>
       <main className={`mx-auto ${wide ? 'max-w-[1080px]' : 'max-w-[720px]'} px-md md:px-lg lg:px-xl pb-2xl`}>{children}</main>
-      <footer className="relative mt-xl overflow-hidden rounded-t-card bg-card shadow-toy-soft" style={{ backgroundImage: 'linear-gradient(160deg, color-mix(in oklab, var(--color-r6) 10%, transparent), transparent 55%, color-mix(in oklab, var(--color-r4) 9%, transparent))' }}>
+      <footer
+        className="relative mt-xl overflow-hidden rounded-t-card bg-card shadow-toy-soft"
+        // Like land under a dusk sky: indigo and sky blue above, then green, then the brown earth at the bottom, so the page ends on something solid.
+        style={{ backgroundImage: 'linear-gradient(180deg, color-mix(in oklab, var(--color-r6) 14%, transparent), color-mix(in oklab, var(--color-r5) 12%, transparent) 30%, color-mix(in oklab, var(--color-r4) 12%, transparent) 62%, color-mix(in oklab, var(--color-earth) 20%, transparent))' }}
+      >
         <Posy tone="ink" kind="lotus" className="right-0 bottom-0" />
         <div className={`relative mx-auto flex ${wide ? 'max-w-[1080px]' : 'max-w-[720px]'} flex-col gap-md px-md py-lg md:flex-row md:items-start md:justify-between`}>
           <div>
@@ -137,6 +141,12 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
             BrandingBum
           </a>
         </p>
+        <div className="relative flex h-[8px]" aria-hidden="true" data-footer-ground>
+          <span className="flex-1" style={{ background: 'var(--color-r6)' }} />
+          <span className="flex-1" style={{ background: 'var(--color-r5)' }} />
+          <span className="flex-1" style={{ background: 'var(--color-r4)' }} />
+          <span className="flex-1" style={{ background: 'var(--color-earth)' }} />
+        </div>
       </footer>
     </div>
   );

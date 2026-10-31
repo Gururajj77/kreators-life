@@ -37,8 +37,10 @@
   --color-r2: #f08a4b; /* Empathy Orange 40 */
   --color-r3: #f3cf5a; /* Zen Yellow 40 */
   --color-r4: #6f9b74; /* Serenity Green 50 */
-  --color-r5: #8c6a57; /* Mindful Brown 60 */
-  --color-r6: #7b5bd6; /* Kind Purple 60 */
+  --color-r5: #3f8fd2; /* Sky Blue 50: With yourself */
+  --color-r6: #4c57c7; /* Indigo 60: With the guru */
+  /* The earth: the brown the pillars used to wear. It grounds the public footer with the green, and is no pillar's colour. */
+  --color-earth: #8c6a57; /* Mindful Brown 60 */
   --color-r7: #5a3fa6; /* Kind Purple 80 */
   /* The scale of consciousness (ConsciousnessMap): the funnel's colours that the seven do not have. Fixed in both modes. */
   --color-scale-silver: #e6e6ea;
@@ -123,21 +125,25 @@
   --tint-yellow: #fbf3cf;
   --tint-green: #e6f2e4;
   --tint-brown: #ece3de;
+  --tint-sky: #dcebf8;
+  --tint-indigo: #e1e4fa;
   --tint-purple: #ece8fb;
   --tint-purple-deep: #dcd5f7;
   --soft-servant_leader: #fde8ee;
   --soft-friendship: #fdeee0;
   --soft-parent_child: #fbf3cf;
   --soft-lover_partner: #e6f2e4;
-  --soft-self: #ece3de;
-  --soft-guru: #ece8fb;
+  --soft-self: #dcebf8;
+  --soft-guru: #e1e4fa;
+  --soft-earth: #ece3de;
   --soft-divine: #dcd5f7;
   --deep-servant_leader: #9f1239;
   --deep-friendship: #c2410c;
   --deep-parent_child: #a16207;
   --deep-lover_partner: #4f6a3c;
-  --deep-self: #4f3422;
-  --deep-guru: #5a3fa6;
+  --deep-self: #1f5f94;
+  --deep-guru: #323c9a;
+  --deep-earth: #4f3422;
   --deep-divine: #2e1065;
 }
 
@@ -172,21 +178,25 @@
     --tint-yellow: #35301a;
     --tint-green: #1b2c25;
     --tint-brown: #2e2622;
+    --tint-sky: #14283a;
+    --tint-indigo: #1d2350;
     --tint-purple: #2a2350;
     --tint-purple-deep: #3a3070;
     --soft-servant_leader: #3a1626;
     --soft-friendship: #3a2416;
     --soft-parent_child: #35301a;
     --soft-lover_partner: #1b2c25;
-    --soft-self: #2e2622;
-    --soft-guru: #2a2350;
+    --soft-self: #14283a;
+    --soft-guru: #1d2350;
+    --soft-earth: #2e2622;
     --soft-divine: #3a3070;
     --deep-servant_leader: #fda4af;
     --deep-friendship: #fdba74;
     --deep-parent_child: #fde047;
     --deep-lover_partner: #cfd9b5;
-    --deep-self: #d6c2b8;
-    --deep-guru: #c4b5fd;
+    --deep-self: #9ccdf2;
+    --deep-guru: #b4baf5;
+    --deep-earth: #d6c2b8;
     --deep-divine: #ddd6fe;
   }
 }
@@ -218,21 +228,25 @@
   --tint-yellow: #35301a;
   --tint-green: #1b2c25;
   --tint-brown: #2e2622;
+  --tint-sky: #14283a;
+  --tint-indigo: #1d2350;
   --tint-purple: #2a2350;
   --tint-purple-deep: #3a3070;
   --soft-servant_leader: #3a1626;
   --soft-friendship: #3a2416;
   --soft-parent_child: #35301a;
   --soft-lover_partner: #1b2c25;
-  --soft-self: #2e2622;
-  --soft-guru: #2a2350;
+  --soft-self: #14283a;
+  --soft-guru: #1d2350;
+    --soft-earth: #2e2622;
   --soft-divine: #3a3070;
   --deep-servant_leader: #fda4af;
   --deep-friendship: #fdba74;
   --deep-parent_child: #fde047;
   --deep-lover_partner: #cfd9b5;
-  --deep-self: #d6c2b8;
-  --deep-guru: #c4b5fd;
+  --deep-self: #9ccdf2;
+  --deep-guru: #b4baf5;
+  --deep-earth: #d6c2b8;
   --deep-divine: #ddd6fe;
 }
 

@@ -54,7 +54,7 @@ export const LIMITS = {
   /** A broken screen reporting itself, per address. */
   clientError: { max: 20, windowSec: 600 },
   /** Finishing the Discover quiz: each one is scored and kept. */
-  discover: { max: 10, windowSec: 3600 },
+  discover: { max: 30, windowSec: 3600 },
 } as const;
 
 export type LimitName = keyof typeof LIMITS;
@@ -104,6 +104,7 @@ export const ROUTE_LIMITS: readonly { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE
   { method: 'POST', path: '/coach/ask/:coachId', limit: 'coachAsk' },
   { method: 'POST', path: '/coach/apply', limit: 'coachAsk' },
   { method: 'POST', path: '/discover/submit', limit: 'discover' },
+  { method: 'POST', path: '/discover/more/:kind/submit', limit: 'discover' },
   { method: 'POST', path: '/public/client-error', limit: 'clientError' },
   { method: 'POST', path: '/coach/students/:id/notes', limit: 'coachWrite' },
   { method: 'POST', path: '/coach/students/:id/tasks', limit: 'coachWrite' },

@@ -1,4 +1,4 @@
-import { birthDateProblem, MIN_AGE, passwordProblem, phoneProblem } from '@kreators/shared';
+import { birthDateProblem, MAX_DEVICES, MIN_AGE, passwordProblem, phoneProblem } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
@@ -32,6 +32,38 @@ function PasswordField({ label, value, onChange, autoComplete, hint }: { label: 
  * Sign in or create an account with an email and a password. Sign-up asks for the password twice and
  * checks it against the same rule the server uses, so the form says what is wrong before it is sent.
  */
+/** Why this device was signed out, when it was pushed out by a fourth device. */
+function SignedOutNote() {
+  const [shown, setShown] = useState(() => {
+    try {
+      return localStorage.getItem('kreators.signedOutNote') === 'devices';
+    } catch {
+      return false;
+    }
+  });
+  if (!shown) return null;
+  return (
+    <p role="status" className="mt-md m-0 flex items-start justify-between gap-sm rounded-tile bg-card p-sm text-[14px] font-semibold shadow-toy-soft">
+      <span>You were signed out here because your account was signed in on {MAX_DEVICES} other devices. An account can be signed in on {MAX_DEVICES} at a time, and the oldest one gives way. Sign in again to carry on.</span>
+      <button
+        type="button"
+        aria-label="Dismiss"
+        className="min-h-[44px] min-w-[44px] shrink-0 text-[18px] font-bold text-ink-soft hover:text-ink"
+        onClick={() => {
+          try {
+            localStorage.removeItem('kreators.signedOutNote');
+          } catch {
+            // nothing to clear
+          }
+          setShown(false);
+        }}
+      >
+        ×
+      </button>
+    </p>
+  );
+}
+
 export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
   const nav = useNavigate();
   const loc = useLocation();
@@ -51,6 +83,11 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
   const go = useMutation({
     mutationFn: () => (mode === 'signup' ? api.signup({ email, password, displayName: name, phone, birthDate }) : api.signin({ email, password })),
     onSuccess: async (r) => {
+      try {
+        localStorage.removeItem('kreators.signedOutNote');
+      } catch {
+        // nothing to clear
+      }
       setToken(r.token);
       await refresh();
       // A new or unfinished account starts with the setup chat at /onboarding; the strategy session waits in Pillars.
@@ -72,6 +109,7 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
           {mode === 'signup' ? (hasSession ? 'Everything on this phone comes with you. Add an email so it survives a new phone.' : `An email, a password, a phone number and your date of birth. You need to be ${MIN_AGE} or older.`) : 'Sign in to pick up where you left off.'}
         </p>
       </div>
+      {mode === 'signin' && <SignedOutNote />}
       <form
         className="mt-lg flex flex-col gap-md"
         onSubmit={(e) => {

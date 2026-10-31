@@ -10,6 +10,7 @@ import { Screen } from '../components/Screen';
 import { Section } from '../components/Section';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
+import { bento } from '../lib/bento';
 import { useAuthed, useMe } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { BuildMap } from '../components/BuildMap';
@@ -104,12 +105,20 @@ export function Observability() {
           </Section>
 
           <Section id="obs-discover" title="Discover" lede="Quizzes taken and what people allowed. Counts only: no answers, no results, no names.">
-            <div className="grid grid-cols-2 gap-xs md:grid-cols-5">
-              <StatTile label="Quizzes" value={data.additions.discover.results} hint={`${data.additions.discover.people} ${data.additions.discover.people === 1 ? 'person' : 'people'}`} />
-              <StatTile label="With EQ" value={data.additions.discover.withEq} hint="emotional intelligence added" />
-              <StatTile label="Assistant on" value={data.additions.discover.assistantOn} hint="allowed a short summary" />
-              <StatTile label="Steps off" value={data.additions.discover.stepsOff} hint="switched next steps off" />
-              <StatTile label="Given by hand" value={data.additions.grants.xp + data.additions.grants.badges + data.additions.grants.points + data.additions.grants.honors} hint={`last 30 days: ${data.additions.grants.xp} xp, ${data.additions.grants.points} points, ${data.additions.grants.badges} badges, ${data.additions.grants.honors} honors`} />
+            <div className="grid grid-cols-2 gap-xs md:grid-cols-3">
+              {[
+                { label: "Quizzes", value: data.additions.discover.results, hint: `${data.additions.discover.people} ${data.additions.discover.people === 1 ? 'person' : 'people'}` },
+                { label: "With EQ", value: data.additions.discover.withEq, hint: "emotional intelligence added" },
+                { label: "Assistant on", value: data.additions.discover.assistantOn, hint: "allowed a short summary" },
+                { label: "Steps off", value: data.additions.discover.stepsOff, hint: "switched next steps off" },
+                { label: "16 types", value: data.additions.discover.addons.type, hint: "people who finished it" },
+                { label: "Love languages", value: data.additions.discover.addons.love, hint: "people who finished it" },
+                { label: "Human design", value: data.additions.discover.addons.design, hint: "charts worked out" },
+                { label: "How the mind works", value: data.additions.discover.addons.mind, hint: `${data.additions.discover.mindOn} switched it on for next steps` },
+                { label: "Given by hand", value: data.additions.grants.xp + data.additions.grants.badges + data.additions.grants.points + data.additions.grants.honors, hint: `last 30 days: ${data.additions.grants.xp} xp, ${data.additions.grants.points} points, ${data.additions.grants.badges} badges, ${data.additions.grants.honors} honors` },
+              ].map((t, i, all) => (
+                <StatTile key={t.label} label={t.label} value={t.value} hint={t.hint} className={bento(i, all.length, 2, 3)} />
+              ))}
             </div>
           </Section>
 

@@ -282,6 +282,24 @@ export function ProductPage() {
             </section>
           )}
 
+          {p.faq && p.faq.length > 0 && (
+            <section className="mt-lg" aria-labelledby="faq-heading">
+              <h2 id="faq-heading" className="text-[24px]">
+                Questions people ask
+              </h2>
+              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+                {p.faq.map((f) => (
+                  <li key={f.q}>
+                    <details className="rounded-tile bg-card p-sm shadow-toy-soft">
+                      <summary className="toy flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-sm text-[16px] font-bold">{f.q}</summary>
+                      <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold text-ink-soft">{f.a}</p>
+                    </details>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {d.testimonials.length > 0 && (
             <section className="mt-lg" aria-labelledby="rev-heading">
               <h2 id="rev-heading" className="text-[24px]">

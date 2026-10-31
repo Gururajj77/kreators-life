@@ -97,7 +97,11 @@ app.use('*', async (c, next) => {
   const user = await c.env.DB.prepare('SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ?')
     .bind(token)
     .first<UserRow>();
-  if (!user) return c.json({ error: 'unauthorized' }, 401);
+  if (!user) {
+    // A token that was signed out to make room for a newer device says so, so that device can explain it.
+    const gone = await c.env.DB.prepare('SELECT 1 AS x FROM session_evictions WHERE token = ?').bind(token).first();
+    return c.json(gone ? { error: 'unauthorized', reason: 'devices' } : { error: 'unauthorized' }, 401);
+  }
   c.set('user', user);
   await next();
 });
@@ -194,6 +198,7 @@ export default {
           // A quiet run leaves no line; one that did something says what, and the old lines are tidied away.
           if (did) await writeLog(env.DB, { level: 'info', area: 'cron', message: did });
           await pruneLogs(env.DB);
+          await env.DB.prepare('DELETE FROM session_evictions WHERE created_at < ?').bind(new Date(Date.now() - 30 * 86_400_000).toISOString()).run();
         })
         .catch((err) => writeLog(env.DB, { level: 'error', area: 'cron', message: err instanceof Error ? `${err.name}: ${err.message}` : String(err) })),
     );

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { AFFILIATE_SHARE, PRODUCT_KIND_META, PRODUCT_KINDS, type Availability, type AvailabilityOverride, type Booking, type Coupon, type Lead, type Lesson, type Order, type Product, type ProductKind, type QuizQuestion, type StudioAnalytics, type Testimonial } from '@kreators/shared';
+import { AFFILIATE_SHARE, PRODUCT_KIND_META, PRODUCT_KINDS, type Availability, type AvailabilityOverride, type Booking, type Coupon, type Lead, type Lesson, type Order, type Product, type ProductKind, type QuizQuestion, type StudioAnalytics, type Testimonial, parseFaq } from '@kreators/shared';
 import { isBadgeKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { nameOf, newId, notify, nowIso, parseList, pageOf, paged } from '../db';
@@ -36,6 +36,7 @@ export interface ProductRow {
   replay_points: number;
   bundle_json: string;
   locked_body: string;
+  faq_json?: string;
   response_days: number | null;
   lead_magnet: number;
   min_points: number;
@@ -57,6 +58,7 @@ export const PRODUCT_SELECT = `SELECT p.*, u.display_name AS owner_name, u.handl
 export const toProduct = (r: ProductRow, reveal = false): Product => ({
   pwyw: r.pwyw === 1,
   intake: parseList(r.intake_json),
+  faq: parseFaq(r.faq_json),
   replayUrl: reveal ? r.replay_url : null,
   replayPoints: r.replay_points,
   bundleIds: parseList(r.bundle_json),
@@ -282,6 +284,7 @@ studio.post('/products', async (c) => {
     )
     .run();
   if (int(body.minXp, 0, 0)) await db.prepare('UPDATE products SET min_xp = ? WHERE id = ?').bind(int(body.minXp, 0, 0), id).run();
+  if (parseFaq(body.faq).length > 0) await db.prepare('UPDATE products SET faq_json = ? WHERE id = ?').bind(JSON.stringify(parseFaq(body.faq)), id).run();
   await track(db, user.id, 'product_created', { kind, pricePoints: int(body.pricePoints, 0) ?? 0 });
   const row = await ownProduct(db, user.id, id);
   return c.json({ product: row ? toProduct(row) : null }, 201);
@@ -326,6 +329,7 @@ studio.patch('/products/:id', async (c) => {
     )
     .run();
   if ('minXp' in body) await db.prepare('UPDATE products SET min_xp = ? WHERE id = ?').bind(int(body.minXp, 0, 0) ?? 0, prev.id).run();
+  if ('faq' in body) await db.prepare('UPDATE products SET faq_json = ? WHERE id = ?').bind(JSON.stringify(parseFaq(body.faq)), prev.id).run();
   const row = await ownProduct(db, user.id, prev.id);
   return c.json({ product: row ? toProduct(row, true) : null });
 });

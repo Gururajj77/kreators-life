@@ -132,6 +132,7 @@ import type {
   SearchResults,
   StudioAnalytics,
   Testimonial,
+  ExtraKind,
   Priority,
   Repeat,
   Subtask,
@@ -166,7 +167,18 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       ...(init.headers ?? {}),
     },
   });
-  if (res.status === 401 && !path.startsWith('/auth/')) useSession.getState().setToken(null);
+  if (res.status === 401 && !path.startsWith('/auth/')) {
+    // A session pushed out by a fourth device says so, so the sign-in screen can explain it.
+    const why = (await res.clone().json().catch(() => ({}))) as { reason?: string };
+    if (why.reason === 'devices') {
+      try {
+        localStorage.setItem('kreators.signedOutNote', 'devices');
+      } catch {
+        // not kept, the sign-in screen just does not explain
+      }
+    }
+    useSession.getState().setToken(null);
+  }
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     throw new ApiError(body.error ?? res.statusText, res.status, body);
@@ -177,6 +189,14 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 const post = <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body: body === undefined ? '{}' : JSON.stringify(body) });
 const patch = <T>(path: string, body: unknown) => request<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
 const del = <T>(path: string) => request<T>(path, { method: 'DELETE' });
+
+/** One Discover add-on as the server keeps it: the draft so far, how far along, and the latest result. */
+export interface ExtraState {
+  draft: unknown;
+  progress: { done: number; total: number };
+  result: unknown | null;
+  takenAt: string | null;
+}
 
 /** What a task can be planned with. Each field is optional on a change; null clears it. */
 export interface TaskPlanBody {
@@ -299,8 +319,12 @@ export const api = {
   logFocus: (minutes: number, nodeId: string | null, date: string) => post<{ ok: true; id: string }>('/wellbeing/focus', { minutes, date, ...(nodeId ? { nodeId } : {}) }),
   focusDashboard: (view: FocusView, date: string) => request<FocusResponse>(`/wellbeing/focus?view=${view}&date=${date}`),
   appLogs: (params: string, paging: string) => request<LogsResponse>(withQ(`/internal/logs?${params}`, paging)),
-  discover: () => request<{ answers: DiscoverAnswers; progress: { done: number; total: number; parts: { key: string; done: number; count: number }[] }; latest: { id: string; createdAt: string; result: DiscoverResult } | null; history: { id: string; createdAt: string; result: DiscoverResult }[]; settings: { steps: boolean; assistant: boolean } }>('/discover'),
-  discoverSettings: (body: { steps?: boolean; assistant?: boolean }) => put<{ settings: { steps: boolean; assistant: boolean } }>('/discover/settings', body),
+  discover: () => request<{ answers: DiscoverAnswers; progress: { done: number; total: number; parts: { key: string; done: number; count: number }[] }; latest: { id: string; createdAt: string; result: DiscoverResult } | null; history: { id: string; createdAt: string; result: DiscoverResult }[]; settings: { steps: boolean; assistant: boolean; mind: boolean } }>('/discover'),
+  discoverMore: () => request<{ extras: Record<ExtraKind, ExtraState> }>('/discover/more'),
+  saveExtra: (kind: ExtraKind, answers: unknown) => put<{ ok: true }>(`/discover/more/${kind}/draft`, { answers }),
+  submitExtra: (kind: ExtraKind, answers: unknown) => post<{ kind: ExtraKind; takenAt: string; result: unknown }>(`/discover/more/${kind}/submit`, { answers }),
+  deleteExtra: (kind: ExtraKind) => del<{ ok: true }>(`/discover/more/${kind}`),
+  discoverSettings: (body: { steps?: boolean; assistant?: boolean; mind?: boolean }) => put<{ settings: { steps: boolean; assistant: boolean; mind: boolean } }>('/discover/settings', body),
   saveDiscover: (answers: DiscoverAnswers) => put<{ ok: true }>('/discover/draft', { answers }),
   submitDiscover: (answers: DiscoverAnswers) => post<{ id: string; createdAt: string; result: DiscoverResult }>('/discover/submit', { answers }),
   dropDiscoverDraft: () => del<{ ok: true }>('/discover/draft'),

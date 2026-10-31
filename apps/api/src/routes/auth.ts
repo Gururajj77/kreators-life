@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { birthDateProblem, normalizePhone, passwordProblem, phoneProblem, RELATIONSHIPS } from '@kreators/shared';
+import { birthDateProblem, normalizePhone, passwordProblem, phoneProblem, RELATIONSHIPS, MAX_DEVICES } from '@kreators/shared';
 import { limited, sendEmail, track } from '../ops';
 import { promoteBootstrapAdmin } from '../admins';
 import { LIMITS } from '../limits';
@@ -35,7 +35,21 @@ const DECOY_SALT = 'decoy-salt-for-unknown-emails';
 
 async function newSession(db: D1Database, userId: string): Promise<string> {
   const token = `${newId()}${newId().replace(/-/g, '')}`;
-  await db.prepare('INSERT INTO sessions (token, user_id, created_at) VALUES (?, ?, ?)').bind(token, userId, nowIso()).run();
+  const now = nowIso();
+  await db.prepare('INSERT INTO sessions (token, user_id, created_at) VALUES (?, ?, ?)').bind(token, userId, now).run();
+  // At most MAX_DEVICES at once: the oldest give way. Their tokens are kept for a while so that device can be told why it was signed out.
+  const extra = await db
+    .prepare('SELECT token FROM sessions WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT -1 OFFSET ?')
+    .bind(userId, MAX_DEVICES)
+    .all<{ token: string }>();
+  if (extra.results.length > 0) {
+    await db.batch(
+      extra.results.flatMap((r) => [
+        db.prepare('INSERT OR IGNORE INTO session_evictions (token, user_id, created_at) VALUES (?, ?, ?)').bind(r.token, userId, now),
+        db.prepare('DELETE FROM sessions WHERE token = ? AND user_id = ?').bind(r.token, userId),
+      ]),
+    );
+  }
   return token;
 }
 

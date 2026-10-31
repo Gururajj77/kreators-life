@@ -16,6 +16,8 @@ import {
   DISCOVER_WORDS,
   RELATIONSHIP_BY_KEY,
   TRAITS,
+  isExtraKind,
+  type ExtraKind,
   discoverProgress,
   emptyDiscoverAnswers,
   type DiscoverAnswers,
@@ -38,6 +40,7 @@ import { Toggle } from '../components/Toggle';
 import { useParamState } from '../lib/useParamState';
 import { api } from '../lib/api';
 import { useDiscover, useRefreshAll } from '../lib/queries';
+import { MoreScreen, MoreSection } from '../components/DiscoverMore';
 
 /** Every step of the quiz in order, with where its answer lives. */
 interface Step {
@@ -510,6 +513,7 @@ const TABS: [string, string][] = [
   ['personality', 'Personality'],
   ['reasoning', 'Reasoning'],
   ['eq', 'Emotional intelligence'],
+  ['more', '16 types, love, mind'],
   ['use', 'Use my results'],
 ];
 
@@ -673,18 +677,19 @@ function ReasoningTab({ result }: { result: DiscoverResult }) {
   );
 }
 
-function UseTab({ settings, onChange }: { settings: { steps: boolean; assistant: boolean }; onChange: (s: Partial<{ steps: boolean; assistant: boolean }>) => void }) {
+function UseTab({ settings, onChange }: { settings: { steps: boolean; assistant: boolean; mind: boolean }; onChange: (s: Partial<{ steps: boolean; assistant: boolean; mind: boolean }>) => void }) {
   return (
     <Section id="use-results" title="Let your results help" lede="Both are your call, and you can change them any time. Your answers are never shared. Only a short summary is used: your strengths, how each trait reads and your reasoning level.">
       <div className="flex flex-col gap-xs">
         <Toggle on={settings.steps} onChange={(v) => onChange({ steps: v })} label="Shape my next steps" hint="Home’s daily brief picks steps that fit you, such as one small task if you start many things. Plain rules, no AI." />
+        <Toggle on={settings.mind} onChange={(v) => onChange({ mind: v })} label="Include how my mind works" hint="Off until you switch it on. It then shapes next steps and, if the assistant is allowed, helps it pace things for you. It never names a condition. Only matters if you took that self-check." />
         <Toggle on={settings.assistant} onChange={(v) => onChange({ assistant: v })} label="Let the assistant learn from them" hint="The assistant uses the summary to choose its tone and the size of a step. Only a model that keeps no data can read it." />
       </div>
     </Section>
   );
 }
 
-function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, deleting }: { id: string; at: string; result: DiscoverResult; settings: { steps: boolean; assistant: boolean }; onSettings: (s: Partial<{ steps: boolean; assistant: boolean }>) => void; onRetake: () => void; onDelete: (id: string) => void; deleting: boolean }) {
+function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, deleting, onOpenMore }: { onOpenMore: (k: ExtraKind) => void; id: string; at: string; result: DiscoverResult; settings: { steps: boolean; assistant: boolean; mind: boolean }; onSettings: (s: Partial<{ steps: boolean; assistant: boolean; mind: boolean }>) => void; onRetake: () => void; onDelete: (id: string) => void; deleting: boolean }) {
   const [tabAsked, setTab] = useParamState('tab', 'strengths');
   // A link to the emotional intelligence tab only works when that part was taken.
   const tab = tabAsked === 'eq' && !result.eq ? 'strengths' : tabAsked;
@@ -703,6 +708,7 @@ function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, 
       {tab === 'personality' && <PersonalityTab result={result} />}
       {tab === 'eq' && <EqTab result={result} />}
       {tab === 'reasoning' && <ReasoningTab result={result} />}
+      {tab === 'more' && <MoreSection onOpen={onOpenMore} />}
       {tab === 'use' && <UseTab settings={settings} onChange={onSettings} />}
       {tab === 'strengths' && (
         <>
@@ -817,6 +823,8 @@ function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, 
 }
 
 export function Discover() {
+  const [moreAsked, setMore] = useParamState('more', '');
+  const more = isExtraKind(moreAsked) ? moreAsked : null;
   const q = useDiscover();
   const refresh = useRefreshAll();
   const [mode, setMode] = useState<'home' | 'quiz' | 'result'>('home');
@@ -853,7 +861,7 @@ export function Discover() {
     },
     onError: (e) => setError(e instanceof Error ? e.message : 'Could not finish.'),
   });
-  const saveSettings = useMutation({ mutationFn: (v: Partial<{ steps: boolean; assistant: boolean }>) => api.discoverSettings(v), onSuccess: () => refresh() });
+  const saveSettings = useMutation({ mutationFn: (v: Partial<{ steps: boolean; assistant: boolean; mind: boolean }>) => api.discoverSettings(v), onSuccess: () => refresh() });
   const remove = useMutation({
     mutationFn: (id: string) => api.deleteDiscoverResult(id),
     onSuccess: () => {
@@ -866,6 +874,14 @@ export function Discover() {
   const prog = useMemo(() => discoverProgress(answers ?? emptyDiscoverAnswers()), [answers]);
   const data = q.data;
   const result = shown ?? data?.latest ?? null;
+
+  if (more) {
+    return (
+      <Screen howTo={false} className="focus-scope">
+        <MoreScreen kind={more} onBack={() => setMore('')} />
+      </Screen>
+    );
+  }
 
   if (mode === 'quiz' && answers) {
     return (
@@ -898,7 +914,7 @@ export function Discover() {
       )}
 
       {data && mode === 'result' && result && (
-        <ResultView id={result.id} at={result.createdAt} result={result.result} settings={data.settings} onSettings={(v) => saveSettings.mutate(v)} onRetake={() => { setAnswersState(emptyDiscoverAnswers()); dirty.current = true; setMode('quiz'); }} onDelete={(id) => remove.mutate(id)} deleting={remove.isPending} />
+        <ResultView onOpenMore={(k) => setMore(k)} id={result.id} at={result.createdAt} result={result.result} settings={data.settings} onSettings={(v) => saveSettings.mutate(v)} onRetake={() => { setAnswersState(emptyDiscoverAnswers()); dirty.current = true; setMode('quiz'); }} onDelete={(id) => remove.mutate(id)} deleting={remove.isPending} />
       )}
 
       {data && mode !== 'result' && (
@@ -923,6 +939,8 @@ export function Discover() {
               )}
             </div>
           </section>
+
+          <MoreSection onOpen={(k) => setMore(k)} />
 
           <Section id="parts" title="The parts">
             <ol className="m-0 flex list-none flex-col gap-xs p-0">

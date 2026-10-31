@@ -75,9 +75,9 @@ export function Logs() {
       {data && (
         <>
           <div className="mt-md grid grid-cols-3 gap-xs">
-            <StatTile label="Errors" value={data.last24h.error} hint="last 24 hours" />
-            <StatTile label="Refused" value={data.last24h.warn} hint="last 24 hours" />
-            <StatTile label="Changes" value={data.last24h.info} hint="last 24 hours" />
+            <StatTile label="Errors" value={data.last24h.error} hint="last 24 hours, tap to see them" onClick={() => { setLevel(level === 'error' ? '' : 'error'); pg.reset(); }} pressed={level === 'error'} />
+            <StatTile label="Refused" value={data.last24h.warn} hint="last 24 hours, tap to see them" onClick={() => { setLevel(level === 'warn' ? '' : 'warn'); pg.reset(); }} pressed={level === 'warn'} />
+            <StatTile label="Changes" value={data.last24h.info} hint="last 24 hours, tap to see them" onClick={() => { setLevel(level === 'info' ? '' : 'info'); pg.reset(); }} pressed={level === 'info'} />
           </div>
 
           <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">Newest first. Pick a kind or a person. Tap a name to see only that person. Tap Look now for new lines.</p>

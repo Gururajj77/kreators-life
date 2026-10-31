@@ -657,6 +657,39 @@ function MySubmission({ s, onDone }: { s: BountySubmission; onDone: () => void }
   );
 }
 
+/** A live answer to "what could I earn?": type a view count (or tap one) and see the payout, with where it starts and where it stops growing. */
+function EarnCalc({ b }: { b: Rule }) {
+  const [views, setViews] = useState('10000');
+  const v = Math.max(0, Math.floor(Number(views) || 0));
+  const pay = bountyPayout(v, b);
+  const capViews = b.maxPayoutPoints > 0 && b.ratePerThousand > 0 ? Math.ceil(b.maxPayoutPoints / b.ratePerThousand) * 1000 : null;
+  return (
+    <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft" role="group" aria-label="What could I earn?">
+      <p className="m-0 text-[14px] font-extrabold">What could I earn?</p>
+      <label className="mt-xs block">
+        <span className="block text-[12px] font-bold text-ink-soft">If my post gets this many views</span>
+        <input type="number" min={0} inputMode="numeric" value={views} onChange={(e) => setViews(e.target.value)} className={field} />
+      </label>
+      <div className="mt-xs flex flex-wrap gap-xs">
+        {[1000, 10000, 100000, 1000000].map((x) => (
+          <button key={x} type="button" aria-pressed={v === x} onClick={() => setViews(String(x))} className={`toy min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${v === x ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            {n(x)}
+          </button>
+        ))}
+      </div>
+      <p className="mt-sm m-0 font-display text-[32px] font-extrabold leading-none" aria-live="polite">
+        {n(pay)} pts
+      </p>
+      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+        {v < b.minViews ? `Nothing is paid under ${n(b.minViews)} views. You need ${n(b.minViews - v)} more.` : capViews !== null && v >= capViews ? 'You have reached the most one post can earn here.' : 'Paid for each full 1,000 views, once a reviewer confirms the numbers.'}
+      </p>
+      <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+        Starts at {n(b.minViews)} views{capViews !== null ? `. Stops growing at ${n(capViews)} views (${n(b.maxPayoutPoints)} pts).` : '. There is no cap per post.'} The pool must still have points left.
+      </p>
+    </div>
+  );
+}
+
 export function Reward() {
   const { id = '' } = useParams();
   const q = useAuthed(['bounty', id], () => api.bounty(id));
@@ -753,16 +786,7 @@ export function Reward() {
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
           {rateLine(b)}. Nothing is paid under {n(b.minViews)} views. A reviewer confirms the numbers, then finance pays from the pool.
         </p>
-        {b.ratePerThousand > 0 && (
-          <ul className="mt-sm grid list-none grid-cols-3 gap-xs p-0 m-0">
-            {[1000, 10000, 100000].map((v) => (
-              <li key={v} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <p className="m-0 font-display text-[20px] font-extrabold leading-none">{n(bountyPayout(v, b))} pts</p>
-                <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">at {n(v)} views</p>
-              </li>
-            ))}
-          </ul>
-        )}
+        {b.ratePerThousand > 0 && <EarnCalc b={b} />}
       </section>
 
       <section className="mt-lg" aria-labelledby="entry-heading">

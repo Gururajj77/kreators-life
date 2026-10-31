@@ -52,18 +52,21 @@ internal.get('/observability', async (c) => {
   }
   const since24 = new Date(Date.now() - 86_400_000).toISOString();
   const since30 = new Date(Date.now() - 30 * 86_400_000).toISOString();
-  const [unlocks, dz, dset, grantRows, logRows] = await Promise.all([
+  const [unlocks, dz, dset, grantRows, logRows, extraRows] = await Promise.all([
     db.prepare('SELECT game_key, COUNT(*) AS n FROM card_unlocks GROUP BY game_key').all<{ game_key: string; n: number }>(),
     db.prepare("SELECT COUNT(*) AS results, COUNT(DISTINCT user_id) AS people, COALESCE(SUM(CASE WHEN result_json LIKE '%\"eq\":{%' THEN 1 ELSE 0 END), 0) AS with_eq FROM discover_results").first<{ results: number; people: number; with_eq: number }>(),
-    db.prepare('SELECT COALESCE(SUM(assistant), 0) AS assistant_on, COALESCE(SUM(CASE WHEN steps = 0 THEN 1 ELSE 0 END), 0) AS steps_off FROM discover_settings').first<{ assistant_on: number; steps_off: number }>(),
+    db.prepare('SELECT COALESCE(SUM(assistant), 0) AS assistant_on, COALESCE(SUM(CASE WHEN steps = 0 THEN 1 ELSE 0 END), 0) AS steps_off, COALESCE(SUM(mind), 0) AS mind_on FROM discover_settings').first<{ assistant_on: number; steps_off: number; mind_on: number }>(),
     db.prepare("SELECT action, COUNT(*) AS n FROM audit_logs WHERE action IN ('user.xp', 'user.badge', 'user.points', 'user.honor') AND created_at >= ? GROUP BY action").bind(since30).all<{ action: string; n: number }>(),
     db.prepare('SELECT level, COUNT(*) AS n FROM app_logs WHERE at >= ? GROUP BY level').bind(since24).all<{ level: string; n: number }>(),
+    // How many people finished each Discover add-on: counts only, never an answer or a result.
+    db.prepare('SELECT kind, COUNT(*) AS n FROM discover_extras WHERE result_json IS NOT NULL GROUP BY kind').all<{ kind: string; n: number }>(),
   ]);
   const grant = (a: string) => grantRows.results.find((r) => r.action === a)?.n ?? 0;
+  const extra = (k: string) => extraRows.results.find((r) => r.kind === k)?.n ?? 0;
   const lg = (l: string) => logRows.results.find((r) => r.level === l)?.n ?? 0;
   const additions: ObservedAdditions = {
     games: CARD_GAMES.map((g) => ({ key: g.key, name: g.name, emoji: g.emoji, unlocked: unlocks.results.find((r) => r.game_key === g.key)?.n ?? 0 })),
-    discover: { results: dz?.results ?? 0, people: dz?.people ?? 0, withEq: dz?.with_eq ?? 0, assistantOn: dset?.assistant_on ?? 0, stepsOff: dset?.steps_off ?? 0 },
+    discover: { results: dz?.results ?? 0, people: dz?.people ?? 0, withEq: dz?.with_eq ?? 0, assistantOn: dset?.assistant_on ?? 0, stepsOff: dset?.steps_off ?? 0, addons: { type: extra('type'), love: extra('love'), mind: extra('mind'), design: extra('design') }, mindOn: dset?.mind_on ?? 0 },
     grants: { xp: grant('user.xp'), badges: grant('user.badge'), points: grant('user.points'), honors: grant('user.honor') },
     logs: { errors: lg('error'), warnings: lg('warn'), changes: lg('info') },
   };

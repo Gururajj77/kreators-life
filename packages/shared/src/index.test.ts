@@ -1,3 +1,9 @@
+import { parseFaq, MAX_FAQ } from './index';
+import { lineForDay, DAILY_LINE_COUNT } from './index';
+import { numberValue, computeNumerology, personalCycle, numerologyInsights, nameWords, NUMBER_READINGS, KARMIC_DEBTS, YEAR_THEMES, type NumerologyContext } from './index';
+import { MAX_DEVICES } from './index';
+import { GATE_WHEEL, GATE_NAMES, DESIGN_CENTERS, DESIGN_CHANNELS, DESIGN_TYPES, DESIGN_AUTHORITIES, DESIGN_PROFILES, ZODIACS, bodyLongitudes, sunLongitude, moonLongitude, centuriesOf, designMoment, faganBradleyAyanamsa, gateAt, signOf, computeDesign, designChart, analyseDesign, designCompare, designProfile, designInputProblem, parseDesignInput, emptyDesignInput, centerOfGate, type DesignType } from './index';
+import { LOVE_KEYS, LOVE_LANGUAGES, LOVE_PAIRS, MIND_SCREENS, TYPE_NAMES, TYPE_SCREENS, analyseLove, analyseMind, analyseType, emptyLoveAnswers, extraComplete, extraHints, extraProgress, extrasForAssistant, extrasProfile, learnedForAssistant, loveRanked, lovePairLines, loveTop, mindBand, parseLoveAnswers, parseMindAnswers, parseTypeAnswers, scoreLove, scoreMind, scoreType, briefFor } from './index';
 import { nextOccurrence, openDay, parsePriority, parseRepeat, priorityTag, repeatLabel, isTaskSort, sortTasks, type Priority, type Repeat, type RepeatKind } from './index';
 import { BADGES as ALL_BADGES, HOW_TO, kmLabel, MODULES as MODS, paceLabel, RUN_BADGES, runEntryState, TERMS, termGroups, weekStart, weekStreak } from './index';
 import { earningGuide, nextBadge, unlockFor } from './index';
@@ -986,5 +992,364 @@ describe('task dates, repeating, priority and sorting', () => {
     for (const word of ['do date', 'due date', 'priority', 'habit', 'subtask', 'remember', 'not scheduled']) expect(TERMS[word]).toBeTruthy();
     expect(HOW_TO.today?.steps.length).toBeLessThanOrEqual(5);
     for (const w of HOW_TO.today?.terms ?? []) expect(TERMS[w]).toBeTruthy();
+  });
+});
+
+describe('discover add-ons: type, love languages, how your mind works', () => {
+  const rateAll = (screens: readonly (readonly unknown[])[], f: (i: number, k: number) => number) => screens.map((sc, i) => sc.map((_, k) => f(i, k)));
+  it('names sixteen types and every screen has one line from each pair', () => {
+    expect(Object.keys(TYPE_NAMES)).toHaveLength(16);
+    for (const sc of TYPE_SCREENS) expect(sc.map((x) => x.axis)).toEqual(['ei', 'sn', 'tf', 'jp']);
+    for (const ax of ['ei', 'sn', 'tf', 'jp']) {
+      const poles = TYPE_SCREENS.flat().filter((x) => x.axis === ax).map((x) => x.pole);
+      expect(new Set(poles).size).toBe(2);
+      expect(poles.filter((p) => p === poles[0]).length).toBe(3);
+    }
+  });
+  it('gives a four-letter type from the leaning of each pair, and says when it is close', () => {
+    // Agree with every line: the first-letter lines pull to the first letter and the others to the second, so it lands in the middle.
+    const middle = scoreType(rateAll(TYPE_SCREENS, () => 4));
+    expect(Object.values(middle.axes).every((a) => a.strength === 'slight')).toBe(true);
+    // Agree only with lines that lean to the first letter of each pair.
+    const first = scoreType(TYPE_SCREENS.map((sc, i) => sc.map((it) => ((it.pole === 'E' || it.pole === 'S' || it.pole === 'T' || it.pole === 'J') ? 4 : 0) + 0 * i)));
+    expect(first.code).toBe('ESTJ');
+    expect(Object.values(first.axes).every((a) => a.strength === 'clear')).toBe(true);
+    const second = scoreType(TYPE_SCREENS.map((sc) => sc.map((it) => ((it.pole === 'I' || it.pole === 'N' || it.pole === 'F' || it.pole === 'P') ? 4 : 0))));
+    expect(second.code).toBe('INFP');
+    const a = analyseType(second);
+    expect(a.name).toBe(TYPE_NAMES.INFP!.name);
+    expect(a.axes.map((x) => x.letter).join('')).toBe('INFP');
+  });
+  it('keeps only clean type and mind answers', () => {
+    expect(parseTypeAnswers([[0, 1, 2, 3], [9, 1, 2, 3], 'x'])[1]).toBeNull();
+    expect(parseTypeAnswers([[0, 1, 2, 3]])[0]).toEqual([0, 1, 2, 3]);
+    expect(parseMindAnswers([[4, 4, 4]])[0]).toBeNull();
+    expect(extraProgress('type', [[0, 1, 2, 3]])).toEqual({ done: 1, total: 6 });
+  });
+  it('builds twenty love questions and shows each language four times with its own line', () => {
+    expect(LOVE_PAIRS).toHaveLength(10);
+    for (const k of LOVE_KEYS) expect(LOVE_PAIRS.filter((p) => p.includes(k))).toHaveLength(4);
+    for (const dir of ['receive', 'give'] as const) {
+      for (const k of LOVE_KEYS) expect(new Set(LOVE_LINES_FOR(dir, k)).size).toBe(4);
+    }
+    const [a, b] = lovePairLines('receive', 9);
+    expect(a).not.toBe(b);
+  });
+  it('counts wins and keeps ties in a fixed order', () => {
+    const allFirst = emptyLoveAnswers();
+    allFirst.receive = LOVE_PAIRS.map(() => 0);
+    allFirst.give = LOVE_PAIRS.map(() => 1);
+    const r = scoreLove(allFirst);
+    expect(r.receive).toEqual({ words: 4, time: 3, gifts: 2, acts: 1, touch: 0 });
+    expect(r.give).toEqual({ words: 0, time: 1, gifts: 2, acts: 3, touch: 4 });
+    expect(loveRanked(r.receive)[0]).toBe('words');
+    expect(loveTop(r.give)).toEqual(['touch']);
+    const a = analyseLove(r);
+    expect(a.match).toBe(false);
+    expect(a.gapLine).toMatch(/Words of affirmation|words of affirmation/);
+    expect(parseLoveAnswers({ receive: [0, 1, 2, null], give: 'no' }).receive.slice(0, 4)).toEqual([0, 1, null, null]);
+    expect(extraComplete('love', allFirst)).toBe(true);
+    for (const k of LOVE_KEYS) expect(LOVE_LANGUAGES[k].ask.length).toBeGreaterThan(10);
+  });
+  it('scores how often each area is true, in bands, and never calls it a diagnosis', () => {
+    expect(MIND_SCREENS.flat().filter((x) => x.area === 'att')).toHaveLength(8);
+    expect(MIND_SCREENS.flat().filter((x) => x.area === 'ene')).toHaveLength(8);
+    expect(MIND_SCREENS.flat().filter((x) => x.area === 'pat')).toHaveLength(8);
+    expect(mindBand(39)).toBe('few');
+    expect(mindBand(40)).toBe('some');
+    expect(mindBand(65)).toBe('many');
+    const none = scoreMind(rateAll(MIND_SCREENS, () => 0));
+    expect(Object.values(none.areas).every((x) => x.score === 0 && x.band === 'few')).toBe(true);
+    const lots = analyseMind(scoreMind(rateAll(MIND_SCREENS, () => 4)));
+    expect(lots.talkToSomeone).toBe(true);
+    expect(lots.note).toMatch(/not a test for ADHD/);
+    expect(JSON.stringify(lots)).not.toMatch(/\bdiagnos(e|ed|is)\b.*you have/i);
+  });
+  it('lets the assistant and the brief see how the mind works only when the person allowed it', () => {
+    const mind = scoreMind(rateAll(MIND_SCREENS, () => 4));
+    const type = scoreType(rateAll(TYPE_SCREENS, () => 4));
+    const love = scoreLove(allWinsFirst());
+    const closed = extrasProfile({ type, love, mind }, false)!;
+    expect(closed.mind).toBeUndefined();
+    expect(extrasForAssistant(closed)).not.toMatch(/mind works/);
+    const open = extrasProfile({ type, love, mind }, true)!;
+    expect(open.mind).toEqual({ att: 'many', ene: 'many', pat: 'many' });
+    const text = extrasForAssistant(open);
+    expect(text).toMatch(/never a diagnosis, never name a condition/);
+    expect(extraHints(open).join(' ')).not.toMatch(/ADHD|autis/i);
+    expect(learnedForAssistant(null, null)).toBeNull();
+    expect(learnedForAssistant(null, closed)).toMatch(/self-checks/);
+    expect(extrasProfile({}, true)).toBeNull();
+  });
+  it('turns the add-ons into next steps, and never the mind ones unless it was allowed', () => {
+    const mind = scoreMind(rateAll(MIND_SCREENS, () => 4));
+    const love = scoreLove(allWinsFirst());
+    const facts = { hour: 20, checkedIn: true, streak: 12, bestStreak: 12, level: 4, xpToNext: 80, tasksDue: 0, tasksOverdue: 0, doneWeek: 3, doneWeekBefore: 8, smallActDone: true, notToDoSlipped: 0, routineWeek: null, contractDays: null, sleepAvg: 6, sleepAvgBefore: 7.2, moodAvg: null, moodAvgBefore: null, stressAvg: null, nextEvent: null, coachNotes: 0, coachAsks: 0, reviewDue: false, apps: ['discover', 'mindful', 'circles', 'journal'], };
+    const keys = (x: ReturnType<typeof extrasProfile>) => briefFor({ ...facts, discover: { taken: false, profile: null, extras: x } }).actions.map((l) => l.key);
+    expect(keys(extrasProfile({ mind, love }, true))).toContain('mind-att');
+    expect(keys(extrasProfile({ mind, love }, false))).not.toContain('mind-att');
+    const design = computeDesign({ date: '1990-05-15', time: '14:30', zone: 'Asia/Kolkata', place: '', name: '' });
+    const withDesign = extrasProfile({ design }, false)!;
+    expect(withDesign.design?.strategy).toBeTruthy();
+    expect(JSON.stringify(withDesign)).not.toMatch(/1990|14:30|Kolkata/);
+    expect(extrasForAssistant(withDesign)).toMatch(/not science/);
+    expect(briefFor({ ...facts, discover: { taken: false, profile: null, extras: withDesign } }).actions.map((l) => l.key)).toContain('design-strategy');
+    const none = briefFor({ ...facts, discover: { taken: false, profile: null, extras: extrasProfile({ love }, false) } }).actions.map((l) => l.key);
+    expect(none.some((k) => k.startsWith('mind-'))).toBe(false);
+  });
+});
+
+function allWinsFirst() {
+  const a = emptyLoveAnswers();
+  a.receive = LOVE_PAIRS.map(() => 0);
+  a.give = LOVE_PAIRS.map(() => 0);
+  return a;
+}
+function LOVE_LINES_FOR(dir: 'receive' | 'give', k: (typeof LOVE_KEYS)[number]) {
+  return LOVE_PAIRS.map((_, p) => lovePairLines(dir, p)).flatMap((pair, p) => LOVE_PAIRS[p]!.map((lang, side) => (lang === k ? pair[side]! : null)).filter((x): x is string => x !== null));
+}
+
+describe('human design: the chart and its astronomy', () => {
+  it('finds the Sun and Moon where the published examples put them', () => {
+    // Meeus 25.a and 47.a, which give 199.90895 for the Sun and 133.167265 for the Moon.
+    expect(sunLongitude((2448908.5 - 2451545.0) / 36525)).toBeCloseTo(199.909, 2);
+    expect(moonLongitude((2448724.5 - 2451545.0) / 36525)).toBeCloseTo(133.1673, 2);
+  });
+  it('puts the planets near where an almanac has them at the start of 2000', () => {
+    const b = bodyLongitudes(Date.UTC(2000, 0, 1, 12, 0, 0));
+    expect(b.sun).toBeCloseTo(280.37, 1);
+    expect(Math.abs(b.mercury - 271.9)).toBeLessThan(0.1);
+    expect(Math.abs(b.venus - 241.6)).toBeLessThan(0.1);
+    expect(Math.abs(b.mars - 327.97)).toBeLessThan(0.1);
+    expect(Math.abs(b.uranus - 314.8)).toBeLessThan(0.1);
+    expect(Math.abs(b.pluto - 251.5)).toBeLessThan(0.2);
+    expect((b.earth - b.sun + 360) % 360).toBeCloseTo(180, 5);
+    expect((b.snode - b.nnode + 360) % 360).toBeCloseTo(180, 5);
+  });
+  it('has Jupiter and Saturn meet at about 0 degrees 29 of Aquarius on 21 December 2020', () => {
+    const b = bodyLongitudes(Date.UTC(2020, 11, 21, 18, 20));
+    expect(Math.abs(b.jupiter - 300.48)).toBeLessThan(0.1);
+    expect(Math.abs(b.saturn - b.jupiter)).toBeLessThan(0.1);
+  });
+  it('finds the design moment, 88 degrees of the Sun earlier, about 88 days before', () => {
+    const ms = Date.UTC(1990, 4, 15, 9, 0, 0);
+    const d = designMoment(ms);
+    const diff = (sunLongitude(centuriesOf(ms)) - sunLongitude(centuriesOf(d)) + 360) % 360;
+    expect(diff).toBeCloseTo(88, 4);
+    expect((ms - d) / 86_400_000).toBeGreaterThan(86);
+    expect((ms - d) / 86_400_000).toBeLessThan(91);
+  });
+  it('shifts the zodiac by the Fagan-Bradley amount', () => {
+    expect(faganBradleyAyanamsa(Date.UTC(1950, 0, 1))).toBeCloseTo(24.042, 2);
+    expect(faganBradleyAyanamsa(Date.UTC(2000, 0, 1, 12))).toBeCloseTo(24.74, 2);
+    expect(signOf(0).text).toBe('Aries 0°00′');
+    expect(signOf(302.5).sign).toBe('Aquarius');
+  });
+  it('lays the sixty-four gates round the wheel from 2 degrees of Aquarius', () => {
+    expect([...GATE_WHEEL].sort((a, b) => a - b)).toEqual(Array.from({ length: 64 }, (_, i) => i + 1));
+    expect(GATE_NAMES).toHaveLength(64);
+    expect(gateAt(302)).toMatchObject({ gate: 41, line: 1 });
+    expect(gateAt(358.25)).toMatchObject({ gate: 25, line: 1 });
+    expect(gateAt(0)).toMatchObject({ gate: 25, line: 2 });
+    expect(gateAt(3.9)).toMatchObject({ gate: 17, line: 1 });
+    expect(gateAt(301.99).gate).toBe(60);
+  });
+  it('gives every gate one center, and every channel two different centers', () => {
+    expect(DESIGN_CENTERS.reduce((n, c) => n + c.gates.length, 0)).toBe(64);
+    expect(new Set(DESIGN_CENTERS.flatMap((c) => c.gates)).size).toBe(64);
+    expect(DESIGN_CHANNELS).toHaveLength(36);
+    for (const ch of DESIGN_CHANNELS) expect(centerOfGate(ch.a)).not.toBe(centerOfGate(ch.b));
+  });
+  it('reads a birth record, and says what is missing', () => {
+    expect(designInputProblem(emptyDesignInput())).toMatch(/birth date/);
+    expect(designInputProblem(parseDesignInput({ date: '1990-05-15' }))).toMatch(/birth time/);
+    expect(designInputProblem(parseDesignInput({ date: '1990-05-15', time: '14:30', zone: 'Nowhere/Land' }))).toMatch(/time zone/);
+    expect(designInputProblem(parseDesignInput({ date: '1890-01-01', time: '10:00', zone: 'UTC' }))).toMatch(/1900/);
+    expect(designInputProblem(parseDesignInput({ date: '1990-05-15', time: '14:30', zone: 'Asia/Kolkata' }))).toBeNull();
+    expect(parseDesignInput({ date: 'x', time: '25:00', zone: 5 })).toEqual(emptyDesignInput());
+  });
+  it('works out a chart in both zodiacs that agrees with itself', () => {
+    const r = computeDesign({ date: '1990-05-15', time: '14:30', zone: 'Asia/Kolkata', place: 'Mumbai', name: '' });
+    expect(r.birthUtc).toBe('1990-05-15T09:00:00.000Z');
+    const t = designChart(r, 'tropical');
+    const f = designChart(r, 'fagan');
+    for (const c of [t, f]) {
+      expect(c.personality).toHaveLength(13);
+      expect(c.design).toHaveLength(13);
+      expect(c.defined.length + c.open.length).toBe(9);
+      expect(Object.keys(DESIGN_TYPES)).toContain(c.type);
+      expect(Object.keys(DESIGN_AUTHORITIES)).toContain(c.authority);
+      expect(DESIGN_PROFILES[c.profile.text]).toBeTruthy();
+      // The Earth is opposite the Sun: 32 gates away on the wheel.
+      expect(Math.abs(GATE_WHEEL.indexOf(c.personality[0]!.gate) - GATE_WHEEL.indexOf(c.personality[1]!.gate))).toBe(32);
+    }
+    expect(f.personality[0]!.lon).toBeCloseTo((t.personality[0]!.lon - r.ayanamsa.personality + 360) % 360, 4);
+    const a = analyseDesign(t);
+    expect(a.goals.length).toBeGreaterThanOrEqual(6);
+    expect(new Set(a.goals.map((g) => g.pillar)).size).toBeGreaterThanOrEqual(5);
+    for (const g of a.goals) {
+      expect(g.step.length).toBeGreaterThan(20);
+      expect(g.proof.length).toBeGreaterThan(8);
+    }
+    for (const d of ['3d', '5d', '7d'] as const) expect(a.depths[d].length).toBeGreaterThan(2);
+    expect(designCompare(r).lines).toHaveLength(4);
+    expect(designProfile(r)).toEqual({ type: t.type, strategy: DESIGN_TYPES[t.type].strategy, authority: t.authority, profile: t.profile.text, lifePath: 3, expression: null });
+    expect(ZODIACS.map((z) => z.key)).toEqual(['tropical', 'fagan']);
+  });
+  it('gives each type about the share the system itself claims, over many births', () => {
+    let seed = 99;
+    const rnd = () => ((seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296);
+    const n = 1500;
+    const count: Record<DesignType, number> = { generator: 0, mg: 0, manifestor: 0, projector: 0, reflector: 0 };
+    for (let i = 0; i < n; i += 1) {
+      const d = new Date(Date.UTC(1950, 0, 1) + rnd() * (Date.UTC(2005, 0, 1) - Date.UTC(1950, 0, 1)));
+      const c = designChart(computeDesign({ date: d.toISOString().slice(0, 10), time: d.toISOString().slice(11, 16), zone: 'UTC', place: '', name: '' }), 'tropical');
+      count[c.type] += 1;
+    }
+    const pct = (k: DesignType) => (count[k] / n) * 100;
+    expect(pct('generator')).toBeGreaterThan(32);
+    expect(pct('generator')).toBeLessThan(44);
+    expect(pct('mg')).toBeGreaterThan(27);
+    expect(pct('mg')).toBeLessThan(39);
+    expect(pct('manifestor')).toBeGreaterThan(5);
+    expect(pct('manifestor')).toBeLessThan(13);
+    expect(pct('projector')).toBeGreaterThan(15);
+    expect(pct('projector')).toBeLessThan(26);
+    expect(pct('reflector')).toBeLessThan(3);
+  });
+});
+
+describe('devices', () => {
+  it('lets an account be signed in on three at once', () => {
+    expect(MAX_DEVICES).toBe(3);
+  });
+});
+
+describe('numerology: the numbers, the master numbers and the insights', () => {
+  it('reduces to 1 to 9 and keeps 11, 22 and 33, with the sums on the way', () => {
+    expect(numberValue(7)).toMatchObject({ value: 7, chain: [7], master: false });
+    expect(numberValue(10)).toMatchObject({ value: 1, chain: [10, 1] });
+    expect(numberValue(12)).toMatchObject({ value: 3, chain: [12, 3] });
+    expect(numberValue(29)).toMatchObject({ value: 11, master: true, base: 2, chain: [29, 11] });
+    expect(numberValue(22)).toMatchObject({ value: 22, master: true, base: 4 });
+    expect(numberValue(33)).toMatchObject({ value: 33, master: true, base: 6 });
+    expect(numberValue(44)).toMatchObject({ value: 8 });
+  });
+  it('notices the karmic debts 13, 14, 16 and 19 on the way down', () => {
+    expect(numberValue(13)).toMatchObject({ value: 4, karmic: 13, chain: [13, 4] });
+    expect(numberValue(14)).toMatchObject({ value: 5, karmic: 14 });
+    expect(numberValue(16)).toMatchObject({ value: 7, karmic: 16 });
+    expect(numberValue(19)).toMatchObject({ value: 1, karmic: 19, chain: [19, 10, 1] });
+    expect(numberValue(15).karmic).toBeNull();
+  });
+  it('has a reading for 1 to 9, for the turning point 10 and for the master numbers', () => {
+    for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 22, 33]) {
+      const r = NUMBER_READINGS[n]!;
+      expect(r.name.length, String(n)).toBeGreaterThan(3);
+      expect(r.tryThis.length).toBeGreaterThan(20);
+    }
+    for (const d of [13, 14, 16, 19] as const) expect(KARMIC_DEBTS[d]).toBeTruthy();
+    for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 22, 33]) expect(YEAR_THEMES[n]).toBeTruthy();
+  });
+  it('works out the life path from month, day and year, each reduced alone', () => {
+    // 5 + 6 (15) + 1 (1990 -> 19 -> 10 -> 1) = 12 -> 3
+    expect(computeNumerology('1990-05-15').lifePath).toMatchObject({ value: 3, chain: [12, 3] });
+    // 11 + 11 (29) + 22 (1975) = 44 -> 8
+    expect(computeNumerology('1975-11-29').lifePath.value).toBe(8);
+    // 1 + 2 + 8 (1 + 9 + 8 + 2 = 20 -> 2): 1 + 2 + 2 = 5
+    expect(computeNumerology('1982-01-02').lifePath.value).toBe(5);
+    const master = computeNumerology('1966-11-29');
+    expect(master.birthday).toMatchObject({ value: 11, master: true });
+    // Attitude is day plus month: 6 (15) + 5 = 11, kept whole as a master number.
+    expect(computeNumerology('1990-05-15').attitude).toMatchObject({ value: 11, master: true, base: 2 });
+  });
+  it('reads a name with Pythagorean letters, with Y as a vowel only when it is the only one', () => {
+    const a = computeNumerology('1990-05-15', 'Ann');
+    expect(a.expression).toMatchObject({ value: 11, master: true });
+    expect(a.soulUrge?.value).toBe(1);
+    expect(a.personality).toMatchObject({ value: 1, chain: [10, 1] });
+    expect(a.maturity?.value).toBe(5);
+    expect(a.lessons).toEqual([2, 3, 4, 6, 7, 8, 9]);
+    expect(computeNumerology('1990-05-15', 'Lynn').soulUrge?.value).toBe(7);
+    expect(computeNumerology('1990-05-15', 'Mary').soulUrge?.value).toBe(1);
+    expect(computeNumerology('1990-05-15', 'José').expression).toMatchObject({ value: 4, karmic: 13 });
+    expect(nameWords("Mary-Anne O'Neil")).toEqual(['MARY', 'ANNE', 'O', 'NEIL']);
+    expect(computeNumerology('1990-05-15').expression).toBeNull();
+  });
+  it('finds the personal year, month and day from the birthday and today', () => {
+    const c = personalCycle('1990-05-15', '2026-10-31');
+    expect(c.year.value).toBe(3);
+    expect(c.month).toMatchObject({ value: 4, karmic: 13 });
+    expect(c.day.value).toBe(8);
+  });
+  it('sets the numbers next to what Discover learned: where they agree, where they stretch, and how they combine', () => {
+    const n = computeNumerology('1966-11-29', 'Ann');
+    const cycle = personalCycle('1966-11-29', '2026-10-31');
+    const ctx: NumerologyContext = { traits: { o: 'high', c: 'low', e: 'mid', a: 'high', s: 'low' }, top: ['divine'], growth: 'servant_leader', design: { type: 'projector', strategy: 'Wait for the invitation', authority: 'emotional', profile: '6/2', lifePath: 8, expression: 11 }, love: { receive: ['time'], give: ['acts'] } };
+    const out = numerologyInsights(n, cycle, ctx);
+    expect(out.some((x) => x.kind === 'agree')).toBe(true);
+    expect(out.some((x) => x.kind === 'combo' && /Wait for the invitation|wait for the invitation/.test(x.text))).toBe(true);
+    for (const x of out) expect(x.step.length).toBeGreaterThan(10);
+    expect(numerologyInsights(n, cycle, {})).toEqual([]);
+    expect(out.filter((x) => x.kind === 'agree').length).toBeLessThanOrEqual(4);
+  });
+});
+
+describe('the line of the day', () => {
+  const addDays = (day: string, n: number) => new Date(Date.parse(`${day}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+  it('gives the same line to everyone on the same day, and a different one the next', () => {
+    expect(lineForDay('2026-11-01')).toEqual(lineForDay('2026-11-01'));
+    expect(lineForDay('2026-11-01').text).not.toBe(lineForDay('2026-11-02').text);
+  });
+  it('shows every line once before any comes back, which is about a year', () => {
+    expect(DAILY_LINE_COUNT).toBeGreaterThanOrEqual(366);
+    const seen = new Set<string>();
+    for (let i = 0; i < DAILY_LINE_COUNT; i += 1) seen.add(lineForDay(addDays('2026-01-01', i)).text);
+    expect(seen.size).toBe(DAILY_LINE_COUNT);
+  });
+  it('mixes a philosopher and the app, one after the other', () => {
+    const own = Array.from({ length: 40 }, (_, i) => lineForDay(addDays('2026-03-01', i)).own);
+    expect(own.slice(1).every((v, i) => v !== own[i])).toBe(true);
+    const days = Array.from({ length: DAILY_LINE_COUNT }, (_, i) => lineForDay(addDays('2026-01-01', i)));
+    expect(days.filter((l) => l.own).length).toBeGreaterThan(100);
+    expect(days.filter((l) => !l.own).length).toBeGreaterThan(100);
+    // The app's own lines carry no name, and the philosophers' lines always do.
+    expect(days.filter((l) => l.own).every((l) => l.by === '')).toBe(true);
+    expect(days.filter((l) => !l.own).every((l) => l.by.length > 2)).toBe(true);
+    for (const l of days) {
+      expect(l.text.length).toBeGreaterThan(8);
+      expect(l.text.length).toBeLessThanOrEqual(160);
+      expect(l.by.length > 2 || l.own).toBe(true);
+    }
+  });
+  it('never starts a new round with the line the last round ended on', () => {
+    for (let r = 0; r < 12; r += 1) {
+      const lastDay = addDays('2026-01-01', (r + 1) * DAILY_LINE_COUNT - 1);
+      const nextDay = addDays('2026-01-01', (r + 1) * DAILY_LINE_COUNT);
+      expect(lineForDay(lastDay).text).not.toBe(lineForDay(nextDay).text);
+      expect(lineForDay(nextDay).position).toBe(0);
+    }
+  });
+  it('shuffles each round afresh, and works for days before the start', () => {
+    expect(lineForDay('2026-01-01').text).not.toBe(lineForDay(addDays('2026-01-01', DAILY_LINE_COUNT)).text);
+    expect(lineForDay('2024-06-01').text.length).toBeGreaterThan(8);
+  });
+  it('keeps the app lines in the app’s own plain words', () => {
+    const lines = Array.from({ length: DAILY_LINE_COUNT }, (_, i) => lineForDay(addDays('2026-01-01', i))).filter((l) => l.own);
+    for (const l of lines) {
+      expect(l.text).not.toMatch(/\bspark\b|\btower\b|Kreators Life|\bhabits\b.*not-to-do/i);
+      expect(l.by).toBe('');
+    }
+  });
+});
+
+describe('product questions and answers', () => {
+  it('keeps clean pairs, trims them and stops at six', () => {
+    expect(parseFaq([{ q: ' Who is it for? ', a: ' Anyone. ' }, { q: '', a: 'x' }, { q: 'y', a: '  ' }, 5, null])).toEqual([{ q: 'Who is it for?', a: 'Anyone.' }]);
+    expect(parseFaq(Array.from({ length: 12 }, (_, i) => ({ q: `Q${i}`, a: `A${i}` })))).toHaveLength(MAX_FAQ);
+    expect(parseFaq(JSON.stringify([{ q: 'a', a: 'b' }]))).toEqual([{ q: 'a', a: 'b' }]);
+    expect(parseFaq('not json')).toEqual([]);
+    expect(parseFaq({ q: 'a', a: 'b' })).toEqual([]);
+    expect(parseFaq([{ q: 'q'.repeat(300), a: 'a'.repeat(900) }])[0]!.q).toHaveLength(120);
   });
 });

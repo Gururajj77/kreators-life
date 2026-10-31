@@ -89,9 +89,9 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     name: 'With yourself',
     character: 'Dew',
     role: 'guide to yourself',
-    color: '#8C6A57',
-    soft: '#E8DDD9',
-    deep: '#4F3422',
+    color: '#3F8FD2',
+    soft: '#DCEBF8',
+    deep: '#1F5F94',
     text: '#FFFFFF',
     greeting: "I'm Dew. One drop, very clear. How are you really?",
     question: 'Did you rest, move, breathe?',
@@ -102,9 +102,9 @@ export const RELATIONSHIPS: readonly Relationship[] = [
     name: 'With the guru',
     character: 'Sage',
     role: 'guide to teachers',
-    color: '#7B5BD6',
-    soft: '#EDE9FE',
-    deep: '#5A3FA6',
+    color: '#4C57C7',
+    soft: '#E1E4FA',
+    deep: '#323C9A',
     text: '#FFFFFF',
     greeting: "I'm Sage. Everyone you admire had a teacher. Who's yours?",
     question: 'What did you learn on purpose?',
@@ -919,7 +919,7 @@ export interface AppUsage {
 export interface ObservedAdditions {
   /** How many people unlocked each game. */
   games: { key: string; name: string; emoji: string; unlocked: number }[];
-  discover: { results: number; people: number; withEq: number; assistantOn: number; stepsOff: number };
+  discover: { results: number; people: number; withEq: number; assistantOn: number; stepsOff: number; addons: { type: number; love: number; mind: number; design: number }; mindOn: number };
   /** What super admins gave by hand in the last thirty days. */
   grants: { xp: number; badges: number; points: number; honors: number };
   /** The app's own log, last 24 hours. */
@@ -2716,6 +2716,40 @@ export interface SessionResponse {
 // ---------------------------------------------------------------------------
 
 export const MAX_BRANDS = 20;
+
+/** A question buyers ask and the creator's answer, shown at the foot of a product's page. */
+export interface ProductFaq {
+  q: string;
+  a: string;
+}
+export const MAX_FAQ = 6;
+export const FAQ_Q_MAX = 120;
+export const FAQ_A_MAX = 500;
+/** The one reader for a creator's FAQ, from the browser or a column: only clean, non-empty pairs, trimmed and capped. */
+export function parseFaq(raw: unknown): ProductFaq[] {
+  let v = raw;
+  if (typeof v === 'string') {
+    try {
+      v = JSON.parse(v);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(v)) return [];
+  const out: ProductFaq[] = [];
+  for (const item of v) {
+    if (!item || typeof item !== 'object') continue;
+    const o = item as { q?: unknown; a?: unknown };
+    const q = typeof o.q === 'string' ? o.q.trim().slice(0, FAQ_Q_MAX) : '';
+    const a = typeof o.a === 'string' ? o.a.trim().slice(0, FAQ_A_MAX) : '';
+    if (q && a) out.push({ q, a });
+    if (out.length >= MAX_FAQ) break;
+  }
+  return out;
+}
+
+/** How many devices one account can be signed in on at once. A fourth sign-in signs the oldest one out. */
+export const MAX_DEVICES = 3;
 export const MAX_BRAND_SOURCES = 40;
 export const BRAND_NAME_MAX = 80;
 export const BRIEF_MAX = 4000;
@@ -3018,6 +3052,8 @@ export interface Product {
   pwyw: boolean;
   /** Questions a buyer answers when booking a session or at checkout. */
   intake: string[];
+  /** Questions and answers the creator shows on the product's page, up to MAX_FAQ. */
+  faq: ProductFaq[];
   /** Events: a recording buyers can watch afterwards, and a price for people who missed it. */
   replayUrl: string | null;
   replayPoints: number;
@@ -5195,6 +5231,15 @@ export const TERMS: Record<string, string> = {
   kit: 'What to buy at a stage, within a budget: new and pre-owned pieces added up.',
   offer: 'Your price for a pre-owned piece. The seller accepts or declines.',
   unlock: 'Some things ask for a points balance, a badge, or both before you can buy them. A card game is unlocked once with points and then yours for good.',
+  'personality type': 'Your 16 personality types result: four letters from a self-check in the style of Myers-Briggs (MBTI), one from each of four pairs: outward or inward, hands-on or big picture, head or heart, planned or open. One of sixteen types. It is not the official MBTI®, and no type is better than another.',
+  'love language': 'A way of feeling cared for or showing care: words, time, gifts, help or touch. Discover shows how you like to receive love and how you give it. They can differ.',
+  'human design': 'A system for self-reflection, not science. From the date, time and place of your birth it draws a chart of your type, strategy, authority and profile. The app uses it as a set of prompts, and turns them into goals.',
+  numerology: 'A system for reflection, not science, that reads the numbers in your birth date and your name. Discover works out your life path, your birthday number, your attitude and, from your full birth name, your expression, soul urge, personality and maturity, and where you are in your personal year, month and day.',
+  'master number': 'In numerology, 11, 22 and 33 are kept whole instead of being added down to 2, 4 and 6. They are read as a bigger version of the number under them, and as a heavier load. 10 is a turning point that settles down to 1, and 13, 14, 16 and 19 are called karmic debts.',
+  gate: 'One of sixty-four slices of the zodiac, each with a keynote, such as Gate 25, the spirit of the self. Each gate has six lines. Your chart is the gates the planets were in when you were born, and 88 degrees of the Sun before.',
+  channel: 'Two gates that are both on in your chart, which join two centers. A channel is a steady skill or way of being. Thirty-six are possible.',
+  sidereal: 'A zodiac measured against the fixed stars, not the seasons. Discover uses the Fagan-Bradley shift, about 24.7 degrees back from the tropical zodiac, which is the one Human design is drawn in.',
+  signs: 'In How your mind works, how often things like losing track of time or needing routines are true for you. Signs are not a diagnosis. Only a trained professional can say what is going on.',
   strength: 'One of seven things you are good at in Discover, one for each relationship, such as Connecting or Getting it done. It comes from your answers, not from a comparison with other people.',
   'focus session': 'A stretch of work with a timer, followed by a mini break. After a few sessions comes a longer break. Finished sessions are kept for your own chart.',
   'focus mode': 'A view that hides the menu and the assistant so one screen has all the room. On a game table it is the icon with four corner brackets. Press Escape or tap it again to leave.',
@@ -5247,7 +5292,7 @@ export const isAutoHandle = (handle: string | null | undefined): boolean => !han
 export const TERM_GROUPS: { name: string; terms: string[] }[] = [
   { name: 'Pillars and pyramids', terms: ['pillar', 'pyramid', 'foundation', 'guiding principle', 'value goal', 'goal outcome', 'project', 'task', 'ripple', 'map', 'life map', 'strategy session', 'routine', 'contract', 'core', 'floor'] },
   { name: 'Daily and progress', terms: ['small act', 'check-in', 'daily three', 'do date', 'due date', 'priority', 'habit', 'subtask', 'remember', 'not scheduled', 'daily brief', 'not-to-do', 'kept day', 'streak', 'xp', 'points', 'level', 'who you are becoming', 'life score', 'five areas of life', 'period', 'review', 'season'] },
-  { name: 'You and your page', terms: ['strength', 'username', 'identity tag', 'setup chat', 'public page', 'badge', 'honor', 'trust', 'unlock'] },
+  { name: 'You and your page', terms: ['strength', 'personality type', 'love language', 'signs', 'human design', 'gate', 'channel', 'sidereal', 'numerology', 'master number', 'username', 'identity tag', 'setup chat', 'public page', 'badge', 'honor', 'trust', 'unlock'] },
   { name: 'Friends and community', terms: ['friend code', 'alias', 'circle', 'reaction', 'mention', 'guide', 'life coach', 'student', 'change log', 'run club', 'start code', 'attendee code', 'deck', 'focus mode', 'focus session'] },
   { name: 'Learn and earn', terms: ['cohort', 'campaign', 'bounty', 'Club', 'collab', 'giveaway'] },
   { name: 'Shop and store', terms: ['featured', 'partner link', 'pre-owned', 'kit', 'offer'] },
@@ -5286,7 +5331,7 @@ export const HOW_TO: Record<string, HowTo> = {
   },
   home: {
     steps: [
-      'Home opens after sign-in and answers “how am I doing” before “what do I do”. Your daily brief comes first: three things that changed and three next steps, from your own numbers. In your first two weeks a Getting started list sits under it and ticks itself as you go.',
+      'Home opens after sign-in and answers “how am I doing” before “what do I do”. Under Water and reminders sits a line of the day, from a philosopher or from us, a new one every day. Your daily brief comes first: three things that changed and three next steps, from your own numbers. In your first two weeks a Getting started list sits under it and ticks itself as you go.',
       'Under them sits what moves those numbers: the three boxes on Daily, your trackers, and your money and shop when those apps are on.',
       'Up next lists the events, runs, sessions and circles you are booked into, soonest first.',
       'Pick a period at the bottom to see the same numbers by week, month, quarter or half year, next to the period before.',
@@ -5642,11 +5687,12 @@ export const HOW_TO: Record<string, HowTo> = {
   discover: {
     steps: [
       'Take the quiz in five parts: pick the statements most and least like you, solve pattern puzzles that get harder or easier as you go, choose words that describe you and judge real situations. Then, if you like, add emotional intelligence. It saves as you go, so you can stop and come back.',
-      'You get your top three strengths out of seven, one for each relationship, a detailed read on five personality traits, your reasoning puzzles and, if you add it, your emotional intelligence, in your own words and numbers. The reasoning part is not an IQ test.',
-      'Every number is you against your own scale, never against other people. A strength is not a verdict: use it, watch for its other side, and try the small thing it suggests.',
-      'Only you see it. It never reaches brands, staff, the leaderboard or a life coach. You choose whether it shapes your next steps (on by default, plain rules) and whether the assistant may learn from a short summary (off until you say). You can retake it or delete a result any time.',
+      'You get your top three strengths out of seven, one for each relationship, a detailed read on five personality traits, your reasoning puzzles and, if you add it, your emotional intelligence. The reasoning part is not an IQ test.',
+      'Under More ways to know yourself are four self-checks you can take on their own: your 16 personality type, in the style of Myers-Briggs, your love languages (how you like to be shown love and how you show it), how your mind works (never a diagnosis), and Human design. Human design works out your chart from your birth date, time and zone, reads it in the tropical and the sidereal zodiac and in three layers, and turns it into goals you can do and count. Numerology sits beside the three layers, with the master numbers 11, 22 and 33, and sets your numbers next to what Discover learned about you. They are systems for reflection, not science.',
+      'Every number is you against your own scale, never against other people. A result is not a verdict: use it, watch for its other side, and try the small thing it suggests.',
+      'Only you see it. It never reaches brands, staff, the leaderboard or a life coach. You choose whether it shapes your next steps (on by default, plain rules) and whether the assistant may learn from a short summary (off until you say). How your mind works has its own switch, off until you say. You can retake any part or delete it.',
     ],
-    terms: ['strength'],
+    terms: ['strength', 'personality type', 'love language', 'signs', 'human design', 'gate', 'channel', 'sidereal', 'numerology', 'master number'],
   },
   cards: {
     steps: [
@@ -6119,6 +6165,13 @@ export const HELP_FAQ = [
   { q: 'What are Games?', a: 'Nine card games you unlock once with points in Rewards, then play in the app. You shuffle, draw, flip and drag cards around a table. Nothing is posted to you. Games switches on when you unlock your first one.' },
   { q: 'What is focus mode?', a: 'On a game table, the icon with four corner brackets hides the menu, the assistant and everything else, so the table has the whole screen. Press Escape or tap the icon again to leave.' },
   { q: 'What is Discover?', a: 'A quiz about how you think, feel and act, with puzzles and real situations. It shows your top strengths across the seven relationships, a detailed read on five personality traits and on your reasoning, and, if you add it, your emotional intelligence. It is a self-check, not an IQ test or a diagnosis.' },
+  { q: 'What are the type, love languages and mind self-checks in Discover?', a: 'Three short self-checks under More ways to know yourself. 16 personality types, in the style of Myers-Briggs (MBTI), gives four letters out of sixteen, with what each side means for you. Love languages shows how you like to be shown love and how you show it, which can differ. How your mind works shows how often attention, energy and impulse, and patterns and senses show up for you. It is not a test for ADHD or autism, and only a trained professional can say what is going on.' },
+  { q: 'What is Human design in Discover, and how exact is it?', a: 'Human design is a system for self-reflection, not science. Enter your birth date, time and the time zone of your birthplace. The app works out where thirteen bodies stood at your birth and when the Sun stood 88 degrees earlier, then shows your type, strategy, authority, profile and channels, in the tropical zodiac and in the sidereal one (Fagan-Bradley), in three layers: body, mind and purpose. Positions are good to a few arc minutes, a little less for the outer planets, and a line that sits right on an edge is marked. Each part of the reading becomes a goal you can add as a task.' },
+  { q: 'How many devices can I use at once?', a: 'Three. Your account can be signed in on three devices at the same time, such as a phone, a laptop and a tablet. When you sign in on a fourth, the one that has been signed in the longest is signed out to make room, and it tells you why when you open it. Your progress is kept on your account, so signing in again brings everything back. Changing your password signs out every other device at once.' },
+  { q: 'What does numerology in Discover work out?', a: 'It sits beside the body, mind and purpose layers of Human design. From your birth date it gives your life path, birthday number and attitude. From the full name on your birth record it adds your expression, soul urge, personality and maturity, and the numbers your name is missing. It shows where you are in your personal year, month and day, keeps the master numbers 11, 22 and 33 whole, and points out the turning point 10 and the karmic numbers 13, 14, 16 and 19. Then it sets your numbers next to your Discover answers: where they agree, where they stretch you, and how they fit your Human design. Numerology is a system for reflection, not science.' },
+  { q: 'How much will a reward pay me?', a: 'Open the reward and use What could I earn. Type the number of views your post might get and it shows the points. Nothing is paid under the minimum views, a post stops earning at the most one post can pay, and a reviewer must confirm the views first. The pool also has to have points left.' },
+  { q: 'Can I answer buyers’ questions on my product page?', a: 'Yes. In the product editor, add up to six questions and answers, such as who it is for and how long it takes. They show as a fold-out list at the foot of the page.' },
+  { q: 'What is the line of the day on Home?', a: 'One line under Water and reminders, from a philosopher or written for this app, in turn. It changes every day, and every line is shown once before any comes back, which takes about a year. Nothing is saved about you, and the same day shows the same line to everyone.' },
   { q: 'Who sees my Discover results?', a: 'Only you. They never reach brands, staff, the leaderboard or a life coach. You choose whether they shape your next steps on Home, and whether the assistant may read a short summary. You can delete a result any time.' },
   { q: 'Why are my apps in this order?', a: 'Lists put the apps that matter most to you first: the ones that are on, then the ones that fit what you told the setup chat, then the ones you open most on this device. The order catches up the next time you open the app.' },
   { q: 'Where is the water button?', a: 'On a laptop, a small Water bubble sits at the left of Daily and Journal, and a Water button sits above a game table. On a phone, the Water section is inside Home, Daily and Journal.' },
@@ -6332,7 +6385,7 @@ export interface BriefFacts {
   /** The apps that are on, so a step never points at one that is off. */
   apps: readonly string[];
   /** What Discover taught the app, when the person took it and allows next steps to use it. profile is null when they have not, or switched it off. */
-  discover?: { taken: boolean; profile: DiscoverProfile | null };
+  discover?: { taken: boolean; profile: DiscoverProfile | null; extras?: ExtrasProfile | null };
 }
 
 const BRIEF_SIZE = 3;
@@ -6391,6 +6444,32 @@ export function briefFor(f: BriefFacts): { signals: BriefLine[]; actions: BriefL
     if (p.eq?.m === 'low' && on('mindful')) act(63, 'eq-calm', 'Before you answer a message that stung, take five slow breaths.', '/mindful');
     if (p.eq?.e === 'low') act(51, 'eq-ask', 'Ask one person how they are today, then listen without fixing.', null);
     sig(30, 'strength', 'good', `Your strongest strength is ${DISCOVER_STRENGTHS[p.top[0]!].name}. Use it today.`, STRENGTH_PATH[p.top[0]!]);
+  }
+  // And from the self-checks: the four letters of a type, how they give and receive love, and (only when they switched it on) how their mind works.
+  const x = d?.extras;
+  if (x) {
+    if (x.type?.includes('I')) act(49, 'type-quiet', 'Block one quiet hour for your hardest task, with no messages.', '/today');
+    if (x.type?.includes('J')) act(47, 'type-plan', 'Plan tomorrow’s three tasks tonight, so you can relax.', '/today');
+    if (x.type?.includes('P')) act(47, 'type-finish', 'Pick one task and give it a finish time. Open days need one fixed point.', '/today');
+    if (x.type?.includes('N')) act(46, 'type-steps', 'Turn one big idea into three small steps in Pillars.', '/tower');
+    if (x.design) act(48, 'design-strategy', `Today’s practice from your Human design: ${DESIGN_TYPES[x.design.type].strategy.charAt(0).toLowerCase()}${DESIGN_TYPES[x.design.type].strategy.slice(1)}.`, '/discover?more=design');
+    if (x.love) {
+      const give = x.love.give[0]!;
+      const GIVE: Record<LoveKey, string> = {
+        words: 'Send one kind message to someone today and say what you like about them.',
+        time: 'Give one person ten minutes of full attention today, phone away.',
+        gifts: 'Do one small kind thing for someone: a note, a treat or a photo that made you think of them.',
+        acts: 'Do one favour for someone today without being asked.',
+        touch: 'Give someone a hug today, if they like those.',
+      };
+      act(45, 'love-give', GIVE[give], null);
+      if (!x.love.receive.some((k) => x.love!.give.includes(k))) act(44, 'love-ask', `Tell one person how you feel most cared for: ${LOVE_LANGUAGES[x.love.receive[0]!].name.toLowerCase()}. They cannot guess it.`, null);
+    }
+    if (x.mind) {
+      if (x.mind.att !== 'few') act(62, 'mind-att', 'Break one task into three subtasks, then run one 15 minute focus round on the first.', on('mindful') ? '/mindful' : '/today');
+      if (x.mind.ene !== 'few') act(53, 'mind-ene', 'Stand up and move for two minutes before a long task.', null);
+      if (x.mind.pat !== 'few') act(53, 'mind-pat', 'Plan tomorrow tonight, so a change of plan feels smaller.', '/today');
+    }
   }
   act(20, 'pillar', 'Add a task to the pillar you want to grow.', '/tower');
   if (on('journal')) act(15, 'journal', 'Write one line in your journal about today.', '/journal');
@@ -8103,6 +8182,1300 @@ export function analyseDiscover(result: DiscoverResult): DiscoverAnalysis {
 
 // ---- what the app learns from Discover, kept small: used for next steps and, if the person allows it, by the assistant ----
 
+// ---- more ways to know yourself: a 16-type self-check, love languages (given and received) and how your mind works ----
+// Our own items and our own scoring. The type check is not the official MBTI®, and "how your mind works" is not a test for ADHD or
+// autism: each is a self-check that points to what may help. Each can be taken alone, is kept apart from the main quiz (`discover_extras`),
+// and is owner only like the journal.
+
+export type ExtraKind = 'type' | 'love' | 'mind' | 'design';
+export const EXTRA_KINDS: readonly { key: ExtraKind; name: string; blurb: string; emoji: string; steps: number }[] = [
+  { key: 'type', name: '16 personality types', blurb: 'A free check in the style of the Myers-Briggs (MBTI) test. Twenty-four lines to rate give a four-letter type from sixteen, such as INFP or ESTJ, with how clear each side is and what it means for you.', emoji: '🧩', steps: 6 },
+  { key: 'love', name: 'Love languages', blurb: 'Twenty choices between two lines: ten about how you like to be shown love, ten about how you show it. They can differ, and the gap is useful.', emoji: '💞', steps: 20 },
+  { key: 'design', name: 'Human design', blurb: 'Enter your birth date, time and zone. It works out your chart in the tropical and the sidereal zodiac, reads it in three layers (body, mind, purpose) and turns it into goals you can do and count. A system for reflection, not science.', emoji: '🪐', steps: 1 },
+  { key: 'mind', name: 'How your mind works', blurb: 'Twenty-four lines on how often something is true: attention, energy and impulse, and patterns and senses. A self-check, never a diagnosis.', emoji: '🧠', steps: 6 },
+];
+export const isExtraKind = (v: unknown): v is ExtraKind => EXTRA_KINDS.some((k) => k.key === v);
+
+/** Rate each line from "not like me" to "very like me" (type) or from "never" to "very often" (mind). */
+export const RATE_FREQUENCY = ['Never', 'Rarely', 'Sometimes', 'Often', 'Very often'] as const;
+
+// -- the sixteen types: four pairs --
+
+export type TypeAxis = 'ei' | 'sn' | 'tf' | 'jp';
+export type TypeLetter = 'E' | 'I' | 'S' | 'N' | 'T' | 'F' | 'J' | 'P';
+export const TYPE_AXES: readonly { key: TypeAxis; first: TypeLetter; second: TypeLetter; name: string; blurb: string }[] = [
+  { key: 'ei', first: 'E', second: 'I', name: 'Where your energy comes from', blurb: 'Outward (E) is people and action. Inward (I) is quiet and depth.' },
+  { key: 'sn', first: 'S', second: 'N', name: 'How you take things in', blurb: 'Hands-on (S) is facts and what you can see. Big picture (N) is patterns and what could be.' },
+  { key: 'tf', first: 'T', second: 'F', name: 'How you decide', blurb: 'Head (T) is logic and fair rules. Heart (F) is what matters to people.' },
+  { key: 'jp', first: 'J', second: 'P', name: 'How you live day to day', blurb: 'Planned (J) is a list and a finish line. Open (P) is options and going with the flow.' },
+];
+/** Six screens of four lines, one line from each pair on every screen. Half of each pair's lines lean to each side, so saying yes to everything cancels out. */
+export const TYPE_SCREENS: readonly (readonly { axis: TypeAxis; pole: TypeLetter; text: string }[])[] = [
+  [
+    { axis: 'ei', pole: 'E', text: 'I feel more awake after time with a group.' },
+    { axis: 'sn', pole: 'S', text: 'I trust facts and what I can see more than hunches.' },
+    { axis: 'tf', pole: 'T', text: 'When I decide, I put logic before feelings.' },
+    { axis: 'jp', pole: 'J', text: 'I like a plan and I like to stick to it.' },
+  ],
+  [
+    { axis: 'ei', pole: 'I', text: 'I need time alone to recharge after a busy day.' },
+    { axis: 'sn', pole: 'N', text: 'I enjoy thinking about what could be, not only what is.' },
+    { axis: 'tf', pole: 'F', text: 'When I decide, I think first about how people will feel.' },
+    { axis: 'jp', pole: 'P', text: 'I like to keep my options open and decide late.' },
+  ],
+  [
+    { axis: 'ei', pole: 'E', text: 'I think best when I talk things through out loud.' },
+    { axis: 'sn', pole: 'S', text: 'I like clear steps and ways of doing things that are proven.' },
+    { axis: 'tf', pole: 'T', text: 'I would rather be honest than gentle if it helps.' },
+    { axis: 'jp', pole: 'J', text: 'A finished list makes me feel calm.' },
+  ],
+  [
+    { axis: 'ei', pole: 'I', text: 'I think things through quietly before I speak.' },
+    { axis: 'sn', pole: 'N', text: 'I get bored when I do the same thing the same way.' },
+    { axis: 'tf', pole: 'F', text: 'I find it hard to say things that might hurt someone.' },
+    { axis: 'jp', pole: 'P', text: 'I work well in bursts, close to the deadline.' },
+  ],
+  [
+    { axis: 'ei', pole: 'E', text: 'I find it easy to start a chat with someone new.' },
+    { axis: 'sn', pole: 'S', text: 'I notice small details that other people miss.' },
+    { axis: 'tf', pole: 'T', text: 'I like to find the flaw in an idea before I back it.' },
+    { axis: 'jp', pole: 'J', text: 'I like to settle things early so I can relax.' },
+  ],
+  [
+    { axis: 'ei', pole: 'I', text: 'I prefer a few close friends to a big circle.' },
+    { axis: 'sn', pole: 'N', text: 'I often see links between things that seem unrelated.' },
+    { axis: 'tf', pole: 'F', text: 'I often sense what others feel before they say it.' },
+    { axis: 'jp', pole: 'P', text: 'I am happy to change the plan when something better comes up.' },
+  ],
+];
+
+export const TYPE_LETTERS: Record<TypeLetter, { name: string; line: string; best: string; watch: string; people: string; tryThis: string; hint: string }> = {
+  E: { name: 'Outward', line: 'You get energy from people and action.', best: 'You start conversations, rally a group and think out loud.', watch: 'Talking before you have thought it through, and running out of quiet time.', people: 'Say what you need. People cannot guess it as well as you think.', tryThis: 'Plan one thing with another person today.', hint: 'People-based steps suit them, such as a friend, a circle or a run.' },
+  I: { name: 'Inward', line: 'You get energy from quiet time and a few people.', best: 'You listen well, think deeply and go far on one thing.', watch: 'Keeping good ideas to yourself, and going quiet when you need help.', people: 'Say what you need before you are tired. A short text is enough.', tryThis: 'Share one idea with someone you trust today.', hint: 'Quiet, solo steps suit them. Keep messages short and do not push social plans.' },
+  S: { name: 'Hands-on', line: 'You trust what you can see, touch and test.', best: 'You notice details, stay practical and finish what you start.', watch: 'Missing the bigger picture when you are deep in the details.', people: 'Give people clear, concrete help, not only kind words.', tryThis: 'Write down one detail you usually skip.', hint: 'Give clear, concrete, ordered steps.' },
+  N: { name: 'Big picture', line: 'You look for patterns and what could be.', best: 'You come up with new ideas and see where things are heading.', watch: 'Skipping the dull steps that make an idea real.', people: 'Check that others can follow your leaps. Give the plain version too.', tryThis: 'Turn one idea into three small steps.', hint: 'Give the why and the big picture first, then the step.' },
+  T: { name: 'Head', line: 'You decide with logic and fair rules.', best: 'You stay clear when others are upset, and you spot weak points.', watch: 'Sounding cold when you only mean to be honest.', people: 'Say the kind part out loud. People cannot see it in your head.', tryThis: 'Before you give feedback, name one thing that is good.', hint: 'Be direct and give reasons.' },
+  F: { name: 'Heart', line: 'You decide by what matters to people.', best: 'You build trust, sense moods and keep a group together.', watch: 'Taking things personally and putting off hard talks.', people: 'Say the hard thing kindly. It helps more than silence.', tryThis: 'Have one honest talk you have been putting off.', hint: 'Open with warmth, then give the step.' },
+  J: { name: 'Planned', line: 'You like a plan and a finished list.', best: 'You keep your word, meet deadlines and make order.', watch: 'Getting stiff when plans change.', people: 'Leave room for others to surprise you.', tryThis: 'Leave one hour today with no plan.', hint: 'Give a plan with a finish line.' },
+  P: { name: 'Open', line: 'You like to keep options open and see what comes.', best: 'You adapt fast, stay relaxed and spot new chances.', watch: 'Leaving things to the last minute, or starting more than you finish.', people: 'Tell people early when plans may change.', tryThis: 'Pick one thing and set a finish time for it.', hint: 'Keep it flexible: offer choices and short bursts.' },
+};
+
+/** A name and a line for each of the sixteen four-letter types. Our own names, not the official ones. */
+export const TYPE_NAMES: Record<string, { name: string; line: string }> = {
+  ISTJ: { name: 'The Steady Keeper', line: 'You keep promises and keep things running.' },
+  ISFJ: { name: 'The Quiet Carer', line: 'You look after people in small, steady ways.' },
+  INFJ: { name: 'The Deep Guide', line: 'You see what people need and where they could grow.' },
+  INTJ: { name: 'The Long Planner', line: 'You make a plan for the future and work it.' },
+  ISTP: { name: 'The Calm Fixer', line: 'You stay cool and work out how things work.' },
+  ISFP: { name: 'The Gentle Maker', line: 'You follow your own taste and make things with care.' },
+  INFP: { name: 'The Quiet Dreamer', line: 'You live by your values and see the good in people.' },
+  INTP: { name: 'The Curious Thinker', line: 'You love ideas and taking them apart.' },
+  ESTP: { name: 'The Quick Mover', line: 'You act fast and enjoy the moment.' },
+  ESFP: { name: 'The Lively Friend', line: 'You bring fun and warmth wherever you go.' },
+  ENFP: { name: 'The Idea Starter', line: 'You light up a room and start new things.' },
+  ENTP: { name: 'The Bold Debater', line: 'You love a good argument and a fresh angle.' },
+  ESTJ: { name: 'The Natural Organiser', line: 'You like clear rules and getting it done.' },
+  ESFJ: { name: 'The Warm Host', line: 'You bring people together and look after them.' },
+  ENFJ: { name: 'The Encouraging Leader', line: 'You help people see what they can do.' },
+  ENTJ: { name: 'The Bold Planner', line: 'You set a goal and lead people to it.' },
+};
+
+export type TypeAnswers = (number[] | null)[];
+export interface TypeAxisResult {
+  /** 0 to 100 toward the first letter of the pair. */
+  toward: number;
+  letter: TypeLetter;
+  strength: 'slight' | 'moderate' | 'clear';
+}
+export interface TypeResult {
+  code: string;
+  axes: Record<TypeAxis, TypeAxisResult>;
+}
+export const emptyTypeAnswers = (): TypeAnswers => TYPE_SCREENS.map(() => null);
+export function parseTypeAnswers(raw: unknown): TypeAnswers {
+  const out = emptyTypeAnswers();
+  (Array.isArray(raw) ? raw : []).slice(0, out.length).forEach((v, i) => {
+    if (Array.isArray(v) && v.length === TYPE_SCREENS[i]!.length && v.every((x) => intIn(x, 5))) out[i] = v as number[];
+  });
+  return out;
+}
+export function scoreType(a: TypeAnswers): TypeResult {
+  const axes = {} as Record<TypeAxis, TypeAxisResult>;
+  for (const ax of TYPE_AXES) {
+    const vals: number[] = [];
+    TYPE_SCREENS.forEach((screen, i) =>
+      screen.forEach((item, k) => {
+        const v = a[i]?.[k];
+        if (item.axis === ax.key && v !== undefined) vals.push(item.pole === ax.first ? v : 4 - v);
+      }),
+    );
+    const toward = clamp100((mean(vals) / 4) * 100);
+    const away = Math.abs(toward - 50);
+    axes[ax.key] = { toward, letter: toward >= 50 ? ax.first : ax.second, strength: away < 10 ? 'slight' : away < 25 ? 'moderate' : 'clear' };
+  }
+  return { code: TYPE_AXES.map((ax) => axes[ax.key].letter).join(''), axes };
+}
+
+export interface TypeAnalysis {
+  code: string;
+  name: string;
+  line: string;
+  axes: { key: TypeAxis; name: string; letter: TypeLetter; letterName: string; other: TypeLetter; toward: number; leaning: number; strength: TypeAxisResult['strength']; reading: (typeof TYPE_LETTERS)[TypeLetter] }[];
+  /** Pairs that sit near the middle, where either letter could be you. */
+  close: TypeAxis[];
+  /** Where to work on it in the app. */
+  tryFirst: string;
+}
+export function analyseType(r: TypeResult): TypeAnalysis {
+  const axes = TYPE_AXES.map((ax) => {
+    const v = r.axes[ax.key];
+    return { key: ax.key, name: ax.name, letter: v.letter, letterName: TYPE_LETTERS[v.letter].name, other: v.letter === ax.first ? ax.second : ax.first, toward: v.toward, leaning: v.letter === ax.first ? v.toward : 100 - v.toward, strength: v.strength, reading: TYPE_LETTERS[v.letter] };
+  });
+  const t = TYPE_NAMES[r.code] ?? { name: 'Your type', line: '' };
+  return { code: r.code, name: t.name, line: t.line, axes, close: axes.filter((x) => x.strength === 'slight').map((x) => x.key), tryFirst: axes[0]!.reading.tryThis };
+}
+
+// -- love languages: given and received --
+
+export type LoveKey = 'words' | 'time' | 'gifts' | 'acts' | 'touch';
+export const LOVE_KEYS: readonly LoveKey[] = ['words', 'time', 'gifts', 'acts', 'touch'];
+export const LOVE_LANGUAGES: Record<LoveKey, { name: string; emoji: string; blurb: string; ask: string; give: string; watch: string; helps: RelationshipKey }> = {
+  words: { name: 'Words of affirmation', emoji: '💬', blurb: 'Kind, clear words tell you that you matter.', ask: 'Say: “It means a lot when you tell me what you like about me.”', give: 'Be specific. “Thank you for staying late, it helped me” lands better than “good job”.', watch: 'Harsh words cut deeper for you, and silence can feel like a no.', helps: 'friendship' },
+  time: { name: 'Quality time', emoji: '⏳', blurb: 'Full attention is how you feel close to someone.', ask: 'Say: “I would love an hour with just the two of us, phones away.”', give: 'Put the phone down and look at them. Ten full minutes beat a distracted evening.', watch: 'Cancelled plans and half-listening hurt more than people know.', helps: 'lover_partner' },
+  gifts: { name: 'Thoughtful gifts', emoji: '🎁', blurb: 'A small thing that shows someone thought of you means a lot.', ask: 'Say: “A little surprise that shows you thought of me makes my week.”', give: 'It is the thought, not the price. A note, a snack or a photo is enough.', watch: 'A forgotten day that matters to you can sting.', helps: 'parent_child' },
+  acts: { name: 'Acts of service', emoji: '🛠️', blurb: 'Help with a real job tells you someone cares.', ask: 'Say: “It would mean a lot if you took one job off my plate this week.”', give: 'Do the job they dread, without being asked, and do not keep score.', watch: 'Broken promises to help, or being left with everything, feel like neglect.', helps: 'servant_leader' },
+  touch: { name: 'Physical touch', emoji: '🤝', blurb: 'A hug, a hand or sitting close helps you feel safe and loved.', ask: 'Say: “A long hug really helps me when I am having a hard day.”', give: 'Ask or watch what they like. A hug, a hand on the shoulder or sitting close, only if it is welcome.', watch: 'Distance can feel like coldness. Always check what feels right to the other person.', helps: 'lover_partner' },
+};
+/** Ten pairs: every language against every other once. Each language shows up four times, so a score runs from 0 to 4. */
+export const LOVE_PAIRS: readonly (readonly [LoveKey, LoveKey])[] = [
+  ['words', 'time'], ['words', 'gifts'], ['words', 'acts'], ['words', 'touch'],
+  ['time', 'gifts'], ['time', 'acts'], ['time', 'touch'],
+  ['gifts', 'acts'], ['gifts', 'touch'],
+  ['acts', 'touch'],
+];
+export type LoveDirection = 'receive' | 'give';
+/** Four lines for each language and direction, one for each time it appears. */
+export const LOVE_LINES: Record<LoveDirection, Record<LoveKey, readonly string[]>> = {
+  receive: {
+    words: ['Someone tells me they are proud of me.', 'I get a kind message out of the blue.', 'Someone thanks me and says what I did well.', 'A person says “I love you” and means it.'],
+    time: ['Someone gives me their full attention, phone away.', 'We spend a whole evening together with no rush.', 'A friend plans time just for the two of us.', 'Someone sits with me while I talk and does not hurry.'],
+    gifts: ['I get a small present that shows they know me.', 'Someone brings me something because they thought of me.', 'I get a handwritten note or a keepsake.', 'A person remembers a day that matters to me and marks it.'],
+    acts: ['Someone does a job I was dreading.', 'A person helps without being asked.', 'Someone makes me a meal when I am worn out.', 'A person fixes something that was bothering me.'],
+    touch: ['I get a long hug when I need one.', 'Someone holds my hand or sits close to me.', 'I get a pat on the back or a squeeze of the shoulder.', 'Someone leans on me while we sit together.'],
+  },
+  give: {
+    words: ['I tell people what I like about them.', 'I send a kind message to cheer someone up.', 'I say thank you and say why.', 'I say “I love you” or “I am proud of you” often.'],
+    time: ['I give someone my full attention.', 'I make time to be with a person, with no rush.', 'I plan a day just for the two of us.', 'I sit and listen as long as they need.'],
+    gifts: ['I buy small things that make me think of someone.', 'I bring someone a treat for no reason.', 'I keep notes and keepsakes for people.', 'I remember birthdays and mark them well.'],
+    acts: ['I do a job for someone to lighten their load.', 'I help before I am asked.', 'I cook or fix things for the people I love.', 'I run an errand so that someone can rest.'],
+    touch: ['I hug people hello and goodbye.', 'I hold a hand or sit close.', 'I give a pat on the back to cheer someone on.', 'I like to lean on the person I love.'],
+  },
+};
+/** The two lines of pair `p` for one direction. */
+export function lovePairLines(dir: LoveDirection, p: number): [string, string] {
+  const pair = LOVE_PAIRS[p]!;
+  const line = (lang: LoveKey) => LOVE_LINES[dir][lang][LOVE_PAIRS.slice(0, p).filter((q) => q.includes(lang)).length]!;
+  return [line(pair[0]), line(pair[1])];
+}
+export interface LoveAnswers {
+  /** For each pair: 0 for the first line, 1 for the second. */
+  receive: (0 | 1 | null)[];
+  give: (0 | 1 | null)[];
+}
+export const emptyLoveAnswers = (): LoveAnswers => ({ receive: LOVE_PAIRS.map(() => null), give: LOVE_PAIRS.map(() => null) });
+export function parseLoveAnswers(raw: unknown): LoveAnswers {
+  const out = emptyLoveAnswers();
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  for (const dir of ['receive', 'give'] as const) (Array.isArray(o[dir]) ? (o[dir] as unknown[]) : []).slice(0, out[dir].length).forEach((v, i) => (out[dir][i] = v === 0 || v === 1 ? v : null));
+  return out;
+}
+export interface LoveResult {
+  /** How often each language won its four pairs, 0 to 4. */
+  receive: Record<LoveKey, number>;
+  give: Record<LoveKey, number>;
+}
+export function scoreLove(a: LoveAnswers): LoveResult {
+  const tally = (picks: (0 | 1 | null)[]) => {
+    const t = Object.fromEntries(LOVE_KEYS.map((k) => [k, 0])) as Record<LoveKey, number>;
+    picks.forEach((v, i) => {
+      if (v !== null) t[LOVE_PAIRS[i]![v]] += 1;
+    });
+    return t;
+  };
+  return { receive: tally(a.receive), give: tally(a.give) };
+}
+/** The languages in order, best first; ties keep the order of the list. */
+export const loveRanked = (t: Record<LoveKey, number>): LoveKey[] => [...LOVE_KEYS].sort((x, y) => t[y] - t[x] || LOVE_KEYS.indexOf(x) - LOVE_KEYS.indexOf(y));
+/** Every language tied for the top score. */
+export const loveTop = (t: Record<LoveKey, number>): LoveKey[] => LOVE_KEYS.filter((k) => t[k] === Math.max(...LOVE_KEYS.map((x) => t[x])));
+export interface LoveAnalysis {
+  receive: { key: LoveKey; score: number }[];
+  give: { key: LoveKey; score: number }[];
+  topReceive: LoveKey[];
+  topGive: LoveKey[];
+  /** True when the top language you give is also one you like to receive. */
+  match: boolean;
+  /** A plain line on how the two sides line up. */
+  gapLine: string;
+}
+export function analyseLove(r: LoveResult): LoveAnalysis {
+  const topReceive = loveTop(r.receive);
+  const topGive = loveTop(r.give);
+  const match = topReceive.some((k) => topGive.includes(k));
+  const names = (ks: LoveKey[]) => ks.map((k) => LOVE_LANGUAGES[k].name.toLowerCase()).join(' and ');
+  const gapLine = match
+    ? `You show love the way you like to feel it: ${names(topGive)}. That makes it easy to know what to give, but do not assume the people close to you want the same.`
+    : `You show love through ${names(topGive)}, but you feel it most through ${names(topReceive)}. People may be giving you what they would like to get. Tell them what works for you, and ask what works for them.`;
+  return { receive: loveRanked(r.receive).map((key) => ({ key, score: r.receive[key] })), give: loveRanked(r.give).map((key) => ({ key, score: r.give[key] })), topReceive, topGive, match, gapLine };
+}
+
+// -- how your mind works: attention, energy and impulse, patterns and senses --
+
+export type MindArea = 'att' | 'ene' | 'pat';
+export type MindBand = 'few' | 'some' | 'many';
+export const MIND_AREAS: readonly { key: MindArea; name: string; blurb: string; helps: string[] }[] = [
+  { key: 'att', name: 'Attention', blurb: 'Starting, staying with and finishing things, and keeping track of what you need.', helps: ['Cut a task into subtasks, so the first step is tiny.', 'Run a short focus round (15 minutes) with Start focus, then a break.', 'Keep one list and let new ideas wait in Not scheduled yet.'] },
+  { key: 'ene', name: 'Energy and impulse', blurb: 'Feeling restless, acting quickly and finding it hard to wait.', helps: ['Move before you sit: a two-minute walk or stretch before a long task.', 'Use short rounds with a stand-up break.', 'Count to ten before you say yes to something new.'] },
+  { key: 'pat', name: 'Patterns and senses', blurb: 'Needing routines, noticing detail, strong interests, and being easily worn out by noise, light or people.', helps: ['Keep a steady routine on Daily and plan tomorrow tonight.', 'Warn yourself about changes, and give yourself time to land.', 'Build quiet breaks into the day and ask for what your senses need.'] },
+];
+/** Six screens of four lines. Say how often each is true for you. */
+export const MIND_SCREENS: readonly (readonly { area: MindArea; text: string }[])[] = [
+  [
+    { area: 'att', text: 'I put off starting tasks, even ones I care about.' },
+    { area: 'ene', text: 'I feel restless when I have to sit still.' },
+    { area: 'pat', text: 'Loud noise, bright light or certain textures bother me a lot.' },
+    { area: 'att', text: 'My mind drifts when I read or listen for a while.' },
+  ],
+  [
+    { area: 'ene', text: 'I fidget, tap or move my legs when I am sitting.' },
+    { area: 'pat', text: 'A change of plan upsets me more than it seems to upset others.' },
+    { area: 'att', text: 'I lose things I need, like keys, my phone or my notes.' },
+    { area: 'ene', text: 'I finish other people’s sentences or talk over them.' },
+  ],
+  [
+    { area: 'pat', text: 'I can dive into an interest for hours and forget everything else.' },
+    { area: 'att', text: 'I leave tasks half done and jump to something else.' },
+    { area: 'ene', text: 'I act first and think later.' },
+    { area: 'pat', text: 'I need my routines to feel okay.' },
+  ],
+  [
+    { area: 'att', text: 'I forget plans, bills or replies unless I write them down.' },
+    { area: 'ene', text: 'I find waiting in a line hard.' },
+    { area: 'pat', text: 'I rehearse conversations in my head before I have them.' },
+    { area: 'att', text: 'I lose track of time and run late.' },
+  ],
+  [
+    { area: 'ene', text: 'I feel driven, as if I am always on the go.' },
+    { area: 'pat', text: 'Being around people for long leaves me drained.' },
+    { area: 'att', text: 'I find it hard to keep my space or my files in order.' },
+    { area: 'ene', text: 'I take on too much because a new thing looks exciting.' },
+  ],
+  [
+    { area: 'pat', text: 'I notice small details and patterns that others miss.' },
+    { area: 'att', text: 'Small noises or passing thoughts pull me off a task.' },
+    { area: 'ene', text: 'I blurt out things I wish I had kept in.' },
+    { area: 'pat', text: 'I take words literally and sometimes miss hints or jokes.' },
+  ],
+];
+export type MindAnswers = (number[] | null)[];
+export interface MindResult {
+  /** 0 to 100 for each area: how often the lines are true for you. */
+  areas: Record<MindArea, { score: number; band: MindBand }>;
+}
+export const mindBand = (score: number): MindBand => (score < 40 ? 'few' : score < 65 ? 'some' : 'many');
+export const emptyMindAnswers = (): MindAnswers => MIND_SCREENS.map(() => null);
+export function parseMindAnswers(raw: unknown): MindAnswers {
+  const out = emptyMindAnswers();
+  (Array.isArray(raw) ? raw : []).slice(0, out.length).forEach((v, i) => {
+    if (Array.isArray(v) && v.length === MIND_SCREENS[i]!.length && v.every((x) => intIn(x, 5))) out[i] = v as number[];
+  });
+  return out;
+}
+export function scoreMind(a: MindAnswers): MindResult {
+  const areas = {} as MindResult['areas'];
+  for (const ar of MIND_AREAS) {
+    const vals: number[] = [];
+    MIND_SCREENS.forEach((screen, i) => screen.forEach((item, k) => (item.area === ar.key && a[i]?.[k] !== undefined ? vals.push(a[i]![k]!) : null)));
+    const score = clamp100((mean(vals) / 4) * 100);
+    areas[ar.key] = { score, band: mindBand(score) };
+  }
+  return { areas };
+}
+export const MIND_READINGS: Record<MindArea, Record<MindBand, string>> = {
+  att: {
+    few: 'Few signs. Starting and finishing things is mostly steady for you.',
+    some: 'Some signs. Starting or finishing can be hard on some days, especially with long or dull tasks.',
+    many: 'Many signs. Starting, staying on track and keeping track of things is often hard. That is common, and there are good tools for it.',
+  },
+  ene: {
+    few: 'Few signs. You can usually sit, wait and think before you act.',
+    some: 'Some signs. You feel restless or act fast now and then, mostly when you are bored or stressed.',
+    many: 'Many signs. Restlessness or acting before you think shows up often. Movement and short bursts can help a lot.',
+  },
+  pat: {
+    few: 'Few signs. Change, noise and crowds usually do not throw you.',
+    some: 'Some signs. You like your routines and can be worn out by noise or people, mostly on busy days.',
+    many: 'Many signs. Routines, strong interests and sensitive senses shape your days a lot. Plan for them and they become strengths.',
+  },
+};
+export interface MindAnalysis {
+  areas: { key: MindArea; name: string; blurb: string; score: number; band: MindBand; reading: string; helps: string[] }[];
+  /** True when two areas read many, or any area scores 75 or more. This is only a pointer, never a finding. */
+  talkToSomeone: boolean;
+  note: string;
+}
+export const MIND_NOTE = 'This is a self-check, not a test for ADHD, autism or anything else. Only a trained professional can say what is going on. Many people have some of these signs, and stress, poor sleep or low mood can cause the same ones.';
+export function analyseMind(r: MindResult): MindAnalysis {
+  const areas = MIND_AREAS.map((ar) => ({ key: ar.key, name: ar.name, blurb: ar.blurb, score: r.areas[ar.key].score, band: r.areas[ar.key].band, reading: MIND_READINGS[ar.key][r.areas[ar.key].band], helps: ar.helps }));
+  const many = areas.filter((a) => a.band === 'many').length;
+  return { areas, talkToSomeone: many >= 2 || areas.some((a) => a.score >= 75), note: MIND_NOTE };
+}
+
+// ---- Human design: where the planets were. Our own low-precision astronomy (Meeus, and the JPL approximate orbits), good to a few arc minutes
+// for the years people are born in, which is far finer than a gate (5.625 degrees) and fine enough for a line (0.9375 degrees) except right on its edge. ----
+
+const RAD = Math.PI / 180;
+const norm360 = (x: number) => ((x % 360) + 360) % 360;
+const sinD = (d: number) => Math.sin(d * RAD);
+const cosD = (d: number) => Math.cos(d * RAD);
+
+export type DesignBody = 'sun' | 'earth' | 'moon' | 'nnode' | 'snode' | 'mercury' | 'venus' | 'mars' | 'jupiter' | 'saturn' | 'uranus' | 'neptune' | 'pluto';
+export const DESIGN_BODIES: readonly { key: DesignBody; name: string; glyph: string }[] = [
+  { key: 'sun', name: 'Sun', glyph: '☉' },
+  { key: 'earth', name: 'Earth', glyph: '⊕' },
+  { key: 'moon', name: 'Moon', glyph: '☽' },
+  { key: 'nnode', name: 'North node', glyph: '☊' },
+  { key: 'snode', name: 'South node', glyph: '☋' },
+  { key: 'mercury', name: 'Mercury', glyph: '☿' },
+  { key: 'venus', name: 'Venus', glyph: '♀' },
+  { key: 'mars', name: 'Mars', glyph: '♂' },
+  { key: 'jupiter', name: 'Jupiter', glyph: '♃' },
+  { key: 'saturn', name: 'Saturn', glyph: '♄' },
+  { key: 'uranus', name: 'Uranus', glyph: '♅' },
+  { key: 'neptune', name: 'Neptune', glyph: '♆' },
+  { key: 'pluto', name: 'Pluto', glyph: '♇' },
+];
+
+/** The Julian day of an instant (milliseconds since 1970, UTC). */
+export const julianDay = (ms: number): number => ms / 86_400_000 + 2440587.5;
+
+/** Dynamical time minus universal time, in seconds (Espenak and Meeus fits, 1900 to 2050). */
+export function deltaTSeconds(year: number): number {
+  if (year < 1900) return -2.79;
+  if (year < 1920) {
+    const t = year - 1900;
+    return -2.79 + 1.494119 * t - 0.0598939 * t ** 2 + 0.0061966 * t ** 3 - 0.000197 * t ** 4;
+  }
+  if (year < 1941) {
+    const t = year - 1920;
+    return 21.2 + 0.84493 * t - 0.0761 * t ** 2 + 0.0020936 * t ** 3;
+  }
+  if (year < 1961) {
+    const t = year - 1950;
+    return 29.07 + 0.407 * t - t ** 2 / 233 + t ** 3 / 2547;
+  }
+  if (year < 1986) {
+    const t = year - 1975;
+    return 45.45 + 1.067 * t - t ** 2 / 260 - t ** 3 / 718;
+  }
+  if (year < 2005) {
+    const t = year - 2000;
+    return 63.86 + 0.3345 * t - 0.060374 * t ** 2 + 0.0017275 * t ** 3 + 0.000651814 * t ** 4 + 0.00002373599 * t ** 5;
+  }
+  const t = year - 2000;
+  return 62.92 + 0.32217 * t + 0.005589 * t ** 2;
+}
+
+/** Julian centuries of dynamical time since J2000, for an instant in UTC milliseconds. */
+export function centuriesOf(ms: number): number {
+  const year = 1970 + ms / 31_556_952_000;
+  return (julianDay(ms) + deltaTSeconds(year) / 86400 - 2451545.0) / 36525;
+}
+
+/** The small wobble of the equinox in longitude, in degrees. */
+function nutationLongitude(T: number): number {
+  const omega = 125.04452 - 1934.136261 * T;
+  const L = 280.4665 + 36000.7698 * T;
+  const Lm = 218.3165 + 481267.8813 * T;
+  return (-17.2 * sinD(omega) - 1.32 * sinD(2 * L) - 0.23 * sinD(2 * Lm) + 0.21 * sinD(2 * omega)) / 3600;
+}
+
+/** The Sun's apparent longitude (Meeus, chapter 25), in degrees. */
+export function sunLongitude(T: number): number {
+  const L0 = 280.46646 + 36000.76983 * T + 0.0003032 * T * T;
+  const M = 357.52911 + 35999.05029 * T - 0.0001537 * T * T;
+  const C = (1.914602 - 0.004817 * T - 0.000014 * T * T) * sinD(M) + (0.019993 - 0.000101 * T) * sinD(2 * M) + 0.000289 * sinD(3 * M);
+  const omega = 125.04 - 1934.136 * T;
+  return norm360(L0 + C - 0.00569 - 0.00478 * sinD(omega));
+}
+
+// Meeus table 47.A, longitude terms: [D, M, M', F, coefficient in millionths of a degree].
+const MOON_TERMS: readonly (readonly [number, number, number, number, number])[] = [
+  [0, 0, 1, 0, 6288774], [2, 0, -1, 0, 1274027], [2, 0, 0, 0, 658314], [0, 0, 2, 0, 213618], [0, 1, 0, 0, -185116], [0, 0, 0, 2, -114332],
+  [2, 0, -2, 0, 58793], [2, -1, -1, 0, 57066], [2, 0, 1, 0, 53322], [2, -1, 0, 0, 45758], [0, 1, -1, 0, -40923], [1, 0, 0, 0, -34720],
+  [0, 1, 1, 0, -30383], [2, 0, 0, -2, 15327], [0, 0, 1, 2, -12528], [0, 0, 1, -2, 10980], [4, 0, -1, 0, 10675], [0, 0, 3, 0, 10034],
+  [4, 0, -2, 0, 8548], [2, 1, -1, 0, -7888], [2, 1, 0, 0, -6766], [1, 0, -1, 0, -5163], [1, 1, 0, 0, 4987], [2, -1, 1, 0, 4036],
+  [2, 0, 2, 0, 3994], [4, 0, 0, 0, 3861], [2, 0, -3, 0, 3665], [0, 1, -2, 0, -2689], [2, 0, -1, 2, -2602], [2, -1, -2, 0, 2390],
+  [1, 0, 1, 0, -2348], [2, -2, 0, 0, 2236], [0, 1, 2, 0, -2120], [0, 2, 0, 0, -2069], [2, -2, -1, 0, 2048], [2, 0, 1, -2, -1773],
+  [2, 0, 0, 2, -1595], [4, -1, -1, 0, 1215], [0, 0, 2, 2, -1110], [3, 0, -1, 0, -892], [2, 1, 1, 0, -810], [4, -1, -2, 0, 759],
+  [0, 2, -1, 0, -713], [2, 2, -1, 0, -700], [2, 1, -2, 0, 691], [2, -1, 0, -2, 596], [4, 0, 1, 0, 549], [0, 0, 4, 0, 537],
+  [4, -1, 0, 0, 520], [1, 0, -2, 0, -487], [2, 1, 0, -2, -399], [0, 0, 2, -2, -381], [1, 1, 1, 0, 351], [3, 0, -2, 0, -340],
+  [4, 0, -3, 0, 330], [2, -1, 2, 0, 327], [0, 2, 1, 0, -323], [1, 1, -1, 0, 299], [2, 0, 3, 0, 294],
+];
+
+/** The arguments the Moon's series and the node share (Meeus, chapter 47). */
+function lunarArgs(T: number) {
+  const T2 = T * T;
+  const T3 = T2 * T;
+  const T4 = T3 * T;
+  return {
+    Lp: 218.3164477 + 481267.88123421 * T - 0.0015786 * T2 + T3 / 538841 - T4 / 65194000,
+    D: 297.8501921 + 445267.1114034 * T - 0.0018819 * T2 + T3 / 545868 - T4 / 113065000,
+    M: 357.5291092 + 35999.0502909 * T - 0.0001536 * T2 + T3 / 24490000,
+    Mp: 134.9633964 + 477198.8675055 * T + 0.0087414 * T2 + T3 / 69699 - T4 / 14712000,
+    F: 93.272095 + 483202.0175233 * T - 0.0036539 * T2 - T3 / 3526000 + T4 / 863310000,
+  };
+}
+
+/** The Moon's longitude (Meeus, chapter 47, longitude terms), with the equinox wobble added. */
+export function moonLongitude(T: number): number {
+  const { Lp, D, M, Mp, F } = lunarArgs(T);
+  const E = 1 - 0.002516 * T - 0.0000074 * T * T;
+  let sum = 0;
+  for (const [d, m, mp, f, c] of MOON_TERMS) sum += c * (Math.abs(m) === 1 ? E : Math.abs(m) === 2 ? E * E : 1) * sinD(d * D + m * M + mp * Mp + f * F);
+  const A1 = 119.75 + 131.849 * T;
+  const A2 = 53.09 + 479264.29 * T;
+  sum += 3958 * sinD(A1) + 1962 * sinD(Lp - F) + 318 * sinD(A2);
+  return norm360(Lp + sum / 1e6 + nutationLongitude(T));
+}
+
+/** The true north node of the Moon, in degrees. */
+export function trueNodeLongitude(T: number): number {
+  const { D, M, Mp, F } = lunarArgs(T);
+  const T2 = T * T;
+  const mean = 125.0445479 - 1934.1362891 * T + 0.0020754 * T2 + (T2 * T) / 467441 - (T2 * T2) / 60616000;
+  const corr = -1.4979 * sinD(2 * (D - F)) - 0.15 * sinD(M) - 0.1226 * sinD(2 * D) + 0.1176 * sinD(2 * F) - 0.0801 * sinD(2 * (Mp - F));
+  return norm360(mean + corr + nutationLongitude(T));
+}
+
+// The JPL approximate orbits (1800 to 2050): a, e, I, L, long. of perihelion, long. of node, each with its rate per century.
+type Orbit = readonly [number, number, number, number, number, number, number, number, number, number, number, number];
+const ORBITS: Record<string, Orbit> = {
+  mercury: [0.38709927, 0.00000037, 0.20563593, 0.00001906, 7.00497902, -0.00594749, 252.2503235, 149472.67411175, 77.45779628, 0.16047689, 48.33076593, -0.12534081],
+  venus: [0.72333566, 0.0000039, 0.00677672, -0.00004107, 3.39467605, -0.0007889, 181.9790995, 58517.81538729, 131.60246718, 0.00268329, 76.67984255, -0.27769418],
+  earth: [1.00000261, 0.00000562, 0.01671123, -0.00004392, -0.00001531, -0.01294668, 100.46457166, 35999.37244981, 102.93768193, 0.32327364, 0, 0],
+  mars: [1.52371034, 0.00001847, 0.0933941, 0.00007882, 1.84969142, -0.00813131, -4.55343205, 19140.30268499, -23.94362959, 0.44441088, 49.55953891, -0.29257343],
+  jupiter: [5.202887, -0.00011607, 0.04838624, -0.00013253, 1.30439695, -0.00183714, 34.39644051, 3034.74612775, 14.72847983, 0.21252668, 100.47390909, 0.20469106],
+  saturn: [9.53667594, -0.0012506, 0.05386179, -0.00050991, 2.48599187, 0.00193609, 49.95424423, 1222.49362201, 92.59887831, -0.41897216, 113.66242448, -0.28867794],
+  uranus: [19.18916464, -0.00196176, 0.04725744, -0.00004397, 0.77263783, -0.00242939, 313.23810451, 428.48202785, 170.9542763, 0.40805281, 74.01692503, 0.04240589],
+  neptune: [30.06992276, 0.00026291, 0.00859048, 0.00005105, 1.77004347, 0.00035372, -55.12002969, 218.45945325, 44.96476227, -0.32241464, 131.78422574, -0.00508664],
+  pluto: [39.48211675, -0.00031596, 0.2488273, 0.0000517, 17.14001206, 0.00004818, 238.92903833, 145.20780515, 224.06891629, -0.04062942, 110.30393684, -0.01183482],
+};
+
+/** Heliocentric position on the J2000 ecliptic, in AU. */
+function orbitPosition(name: string, T: number): [number, number, number] {
+  const o = ORBITS[name]!;
+  const a = o[0] + o[1] * T;
+  const e = o[2] + o[3] * T;
+  const I = o[4] + o[5] * T;
+  const L = o[6] + o[7] * T;
+  const w = o[8] + o[9] * T;
+  const node = o[10] + o[11] * T;
+  const peri = w - node;
+  let M = ((L - w) % 360) * RAD;
+  if (M > Math.PI) M -= 2 * Math.PI;
+  if (M < -Math.PI) M += 2 * Math.PI;
+  let E = M + e * Math.sin(M);
+  for (let i = 0; i < 12; i += 1) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+  const xp = a * (Math.cos(E) - e);
+  const yp = a * Math.sqrt(1 - e * e) * Math.sin(E);
+  const cw = cosD(peri);
+  const sw = sinD(peri);
+  const cO = cosD(node);
+  const sO = sinD(node);
+  const cI = cosD(I);
+  const sI = sinD(I);
+  return [(cw * cO - sw * sO * cI) * xp + (-sw * cO - cw * sO * cI) * yp, (cw * sO + sw * cO * cI) * xp + (-sw * sO + cw * cO * cI) * yp, sw * sI * xp + cw * sI * yp];
+}
+
+/** A planet's longitude as seen from the Earth, of the date, in degrees. */
+export function planetLongitude(name: 'mercury' | 'venus' | 'mars' | 'jupiter' | 'saturn' | 'uranus' | 'neptune' | 'pluto', T: number): number {
+  const p = orbitPosition(name, T);
+  const e = orbitPosition('earth', T);
+  const lon = Math.atan2(p[1] - e[1], p[0] - e[0]) / RAD;
+  const precession = 1.396971 * T + 0.0003086 * T * T;
+  return norm360(lon + precession + nutationLongitude(T));
+}
+
+/** The ecliptic longitude of each of the thirteen bodies, tropical, in degrees, for an instant in UTC milliseconds. */
+export function bodyLongitudes(ms: number): Record<DesignBody, number> {
+  const T = centuriesOf(ms);
+  const sun = sunLongitude(T);
+  const node = trueNodeLongitude(T);
+  return {
+    sun,
+    earth: norm360(sun + 180),
+    moon: moonLongitude(T),
+    nnode: node,
+    snode: norm360(node + 180),
+    mercury: planetLongitude('mercury', T),
+    venus: planetLongitude('venus', T),
+    mars: planetLongitude('mars', T),
+    jupiter: planetLongitude('jupiter', T),
+    saturn: planetLongitude('saturn', T),
+    uranus: planetLongitude('uranus', T),
+    neptune: planetLongitude('neptune', T),
+    pluto: planetLongitude('pluto', T),
+  };
+}
+
+/** The instant (UTC milliseconds) when the Sun stood 88 degrees of longitude before where it stood at `ms`: the design moment. */
+export function designMoment(ms: number): number {
+  const target = norm360(sunLongitude(centuriesOf(ms)) - 88);
+  let t = ms - 88.3 * 86_400_000;
+  for (let i = 0; i < 20; i += 1) {
+    const diff = ((sunLongitude(centuriesOf(t)) - target + 540) % 360) - 180;
+    if (Math.abs(diff) < 1e-6) break;
+    t -= (diff / 0.9856) * 86_400_000;
+  }
+  return Math.round(t);
+}
+
+/** The Fagan-Bradley ayanamsa: the gap between the tropical and the sidereal zodiac, in degrees (24 02' 31" on 1 Jan 1950, growing about 50.26" a year). */
+export function faganBradleyAyanamsa(ms: number): number {
+  const years = (julianDay(ms) - 2433282.4235) / 365.2425;
+  return 24.042044 + (50.2564 / 3600) * years;
+}
+
+// ---- Human design: the chart, in either zodiac ----
+// Human design is a system for self-reflection, not science. The app uses it as a set of prompts, and turns each one into a small step you can do and count.
+
+export type Zodiac = 'tropical' | 'fagan';
+export const ZODIACS: readonly { key: Zodiac; name: string; blurb: string }[] = [
+  { key: 'tropical', name: 'Tropical', blurb: 'The zodiac of the seasons, and the one Human design is usually drawn in. Zero degrees Aries is the March equinox.' },
+  { key: 'fagan', name: 'Sidereal (Fagan-Bradley)', blurb: 'The zodiac measured against the fixed stars, using the Fagan-Bradley shift, about 24.7 degrees back from tropical today.' },
+];
+export const SIGNS = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'] as const;
+/** A longitude as a sign and a position in it: "Pisces 3°12′". */
+export function signOf(lon: number): { sign: string; deg: number; min: number; text: string } {
+  const x = norm360(lon);
+  const s = Math.floor(x / 30);
+  const within = x - s * 30;
+  const deg = Math.floor(within);
+  const min = Math.floor((within - deg) * 60);
+  return { sign: SIGNS[s]!, deg, min, text: `${SIGNS[s]} ${deg}°${String(min).padStart(2, '0')}′` };
+}
+
+/** The sixty-four gates in the order they run round the wheel, from 2 degrees of Aquarius (302 degrees) on. */
+export const GATE_WHEEL: readonly number[] = [
+  41, 19, 13, 49, 30, 55, 37, 63, 22, 36, 25, 17, 21, 51, 42, 3, 27, 24, 2, 23, 8, 20, 16, 35, 45, 12, 15, 52, 39, 53, 62, 56, 31, 33, 7, 4, 29, 59, 40, 64, 47, 6, 46, 18, 48, 57,
+  32, 50, 28, 44, 1, 43, 14, 34, 9, 5, 26, 11, 10, 58, 38, 54, 61, 60,
+];
+const GATE_SPAN = 360 / 64;
+const LINE_SPAN = GATE_SPAN / 6;
+export function gateAt(lon: number): { gate: number; line: number; edge: number } {
+  const x = norm360(lon - 302);
+  const idx = Math.min(63, Math.floor(x / GATE_SPAN));
+  const within = x - idx * GATE_SPAN;
+  const line = Math.min(6, Math.floor(within / LINE_SPAN) + 1);
+  const into = within - (line - 1) * LINE_SPAN;
+  return { gate: GATE_WHEEL[idx]!, line, edge: Math.min(into, LINE_SPAN - into) };
+}
+
+/** The keynote of each gate, 1 to 64. */
+export const GATE_NAMES: readonly string[] = [
+  'Self-expression', 'Direction of the self', 'Ordering', 'Formulizing', 'Fixed rhythms', 'Friction', 'The role of the self', 'Contribution', 'Focus', 'Behavior of the self',
+  'Ideas', 'Caution', 'The listener', 'Power skills', 'Extremes', 'Skills', 'Opinions', 'Correction', 'Wanting', 'The now',
+  'Control', 'Grace', 'Assimilation', 'Rationalizing', 'The spirit of the self', 'The egoist', 'Caring', 'The game player', 'Perseverance', 'Feelings',
+  'Influence', 'Continuity', 'Privacy', 'Power', 'Change', 'Crisis', 'Friendship', 'The fighter', 'Provocation', 'Aloneness',
+  'Contraction', 'Growth', 'Insight', 'Alertness', 'The gatherer', 'Determination of the self', 'Realization', 'Depth', 'Principles', 'Values',
+  'Shock', 'Stillness', 'Beginnings', 'Ambition', 'Spirit', 'Stimulation', 'Intuitive clarity', 'Vitality', 'Sexuality', 'Acceptance',
+  'Mystery', 'Details', 'Doubt', 'Confusion',
+];
+
+export type DesignCenter = 'head' | 'ajna' | 'throat' | 'g' | 'heart' | 'spleen' | 'solar' | 'sacral' | 'root';
+export const DESIGN_CENTERS: readonly { key: DesignCenter; name: string; motor: boolean; gates: readonly number[]; defined: string; open: string }[] = [
+  { key: 'head', name: 'Head', motor: false, gates: [64, 61, 63], defined: 'A steady pull to think about big questions and ideas.', open: 'You take in other people’s questions. Not every question is yours to answer.' },
+  { key: 'ajna', name: 'Ajna', motor: false, gates: [47, 24, 4, 17, 43, 11], defined: 'A set way of making sense of things, which you use again and again.', open: 'A flexible mind that sees many sides. You may feel pressure to look certain when you are not.' },
+  { key: 'throat', name: 'Throat', motor: false, gates: [62, 23, 56, 35, 12, 45, 33, 8, 31, 20, 16], defined: 'A steady way to speak and to make things happen.', open: 'Your voice changes with the room. Speak when it is truly your turn, and you need not fill the silence.' },
+  { key: 'g', name: 'Identity (G)', motor: false, gates: [1, 13, 25, 46, 2, 15, 10, 7], defined: 'A steady sense of who you are and where you are heading.', open: 'Your sense of direction shifts with the place and the people. The right places and people matter a lot.' },
+  { key: 'heart', name: 'Heart (Ego)', motor: true, gates: [21, 40, 26, 51], defined: 'Steady willpower. You can keep promises to yourself.', open: 'You may feel you have something to prove. You do not. Promise less, and keep it.' },
+  { key: 'spleen', name: 'Spleen', motor: false, gates: [48, 57, 44, 50, 32, 28, 18], defined: 'A steady gut sense for what is safe and healthy, which speaks once and quietly.', open: 'You can hold on to people, habits and places past their time. Practise letting go.' },
+  { key: 'solar', name: 'Solar plexus', motor: true, gates: [36, 22, 37, 6, 49, 55, 30], defined: 'Your mood moves in waves. Clarity comes with time, not in the moment.', open: 'You take in other people’s feelings and may avoid conflict. Notice which feelings are yours.' },
+  { key: 'sacral', name: 'Sacral', motor: true, gates: [34, 5, 14, 29, 59, 9, 3, 42, 27], defined: 'Steady life force. Your energy is there when the work fits you.', open: 'Your energy is borrowed. Rest before you are tired, and learn when you have done enough.' },
+  { key: 'root', name: 'Root', motor: true, gates: [53, 60, 52, 19, 39, 41, 58, 38, 54], defined: 'Steady drive and pressure to get things done.', open: 'You take in stress and hurry. Do not rush to be free of pressure.' },
+];
+const CENTER_OF: Record<number, DesignCenter> = Object.fromEntries(DESIGN_CENTERS.flatMap((c) => c.gates.map((g) => [g, c.key]))) as Record<number, DesignCenter>;
+export const centerOfGate = (g: number): DesignCenter => CENTER_OF[g]!;
+
+/** The thirty-six channels: two gates that, when both are on, join two centers. */
+export const DESIGN_CHANNELS: readonly { a: number; b: number; name: string }[] = [
+  { a: 64, b: 47, name: 'Abstraction' }, { a: 61, b: 24, name: 'Awareness' }, { a: 63, b: 4, name: 'Logic' }, { a: 17, b: 62, name: 'Acceptance' },
+  { a: 43, b: 23, name: 'Structuring' }, { a: 11, b: 56, name: 'Curiosity' }, { a: 31, b: 7, name: 'The alpha' }, { a: 8, b: 1, name: 'Inspiration' },
+  { a: 33, b: 13, name: 'The prodigal' }, { a: 20, b: 10, name: 'Awakening' }, { a: 45, b: 21, name: 'Money' }, { a: 16, b: 48, name: 'The wavelength' },
+  { a: 20, b: 57, name: 'The brainwave' }, { a: 35, b: 36, name: 'Transitoriness' }, { a: 12, b: 22, name: 'Openness' }, { a: 20, b: 34, name: 'Charisma' },
+  { a: 25, b: 51, name: 'Initiation' }, { a: 15, b: 5, name: 'Rhythm' }, { a: 2, b: 14, name: 'The beat' }, { a: 46, b: 29, name: 'Discovery' },
+  { a: 10, b: 34, name: 'Exploration' }, { a: 10, b: 57, name: 'Perfected form' }, { a: 26, b: 44, name: 'Surrender' }, { a: 40, b: 37, name: 'Community' },
+  { a: 27, b: 50, name: 'Preservation' }, { a: 57, b: 34, name: 'Power' }, { a: 59, b: 6, name: 'Intimacy' }, { a: 9, b: 52, name: 'Concentration' },
+  { a: 3, b: 60, name: 'Mutation' }, { a: 42, b: 53, name: 'Maturation' }, { a: 18, b: 58, name: 'Judgment' }, { a: 28, b: 38, name: 'Struggle' },
+  { a: 32, b: 54, name: 'Transformation' }, { a: 19, b: 49, name: 'Synthesis' }, { a: 39, b: 55, name: 'Emoting' }, { a: 41, b: 30, name: 'Recognition' },
+];
+
+export type DesignType = 'generator' | 'mg' | 'manifestor' | 'projector' | 'reflector';
+export const DESIGN_TYPES: Record<DesignType, { name: string; share: string; strategy: string; signature: string; notSelf: string; line: string; aura: string }> = {
+  generator: { name: 'Generator', share: 'about 37 in 100 people', strategy: 'Wait to respond', signature: 'Satisfaction', notSelf: 'Frustration', aura: 'Open and drawing, it invites people in.', line: 'You are built to work at what lights you up. Life asks, and your gut answers with a clear yes or no.' },
+  mg: { name: 'Manifesting Generator', share: 'about 33 in 100 people', strategy: 'Wait to respond, then tell people before you act', signature: 'Satisfaction and peace', notSelf: 'Frustration and anger', aura: 'Open and drawing, and quick to move.', line: 'You are a fast builder with many passions. You can skip steps, change course and still finish.' },
+  manifestor: { name: 'Manifestor', share: 'about 9 in 100 people', strategy: 'Tell people before you act', signature: 'Peace', notSelf: 'Anger', aura: 'Closed and strong, and it keeps people at a distance.', line: 'You are here to start things. People push back less when you tell them first.' },
+  projector: { name: 'Projector', share: 'about 20 in 100 people', strategy: 'Wait for the invitation', signature: 'Success', notSelf: 'Bitterness', aura: 'Focused and deep, it sees the person in front of you.', line: 'You see people and systems clearly and guide them. You do your best work when you are asked, and you need more rest than most.' },
+  reflector: { name: 'Reflector', share: 'about 1 in 100 people', strategy: 'Wait about 28 days before big decisions', signature: 'Surprise', notSelf: 'Disappointment', aura: 'Open and sampling, it mirrors the room.', line: 'You mirror the health of the places and people around you. Choose both with care.' },
+};
+export type DesignAuthority = 'emotional' | 'sacral' | 'splenic' | 'ego' | 'self' | 'mental' | 'lunar';
+export const DESIGN_AUTHORITIES: Record<DesignAuthority, { name: string; line: string }> = {
+  emotional: { name: 'Emotional', line: 'Do not decide in the moment. Ride the wave and wait for clarity. That is often a night or more.' },
+  sacral: { name: 'Sacral', line: 'Your gut answers in the moment, with a yes or a no. Ask yourself questions that can be answered that way.' },
+  splenic: { name: 'Splenic', line: 'A quiet, quick hunch that speaks once. Act on it the first time you notice it.' },
+  ego: { name: 'Ego (Heart)', line: 'Ask: what do I want, and what is worth my effort? Only commit to what you have the will for.' },
+  self: { name: 'Self-projected', line: 'Talk it out loud with people you trust, and listen to what you hear yourself say.' },
+  mental: { name: 'Mental (no inner authority)', line: 'Talk it through with a few people, in a few different places, and see which answer stays clear.' },
+  lunar: { name: 'Lunar', line: 'Wait about 28 days, and talk the choice over with different people on the way.' },
+};
+export const DESIGN_LINES: readonly { name: string; line: string }[] = [
+  { name: 'Investigator', line: 'You need a solid base. You dig in until you feel safe.' },
+  { name: 'Hermit', line: 'You have natural talent that others see before you do, and you need time alone.' },
+  { name: 'Experimenter', line: 'You learn by trying. Mistakes are how you find what works.' },
+  { name: 'Networker', line: 'You grow through a few close ties, and your circle opens doors.' },
+  { name: 'Problem solver', line: 'People hope you will fix things. Promise less than you can do.' },
+  { name: 'Role model', line: 'Life comes in three stages: you try things, step back, then lead by example.' },
+];
+export const DESIGN_PROFILES: Record<string, string> = {
+  '1/3': 'Investigator and Experimenter', '1/4': 'Investigator and Networker', '2/4': 'Hermit and Networker', '2/5': 'Hermit and Problem solver', '3/5': 'Experimenter and Problem solver', '3/6': 'Experimenter and Role model',
+  '4/6': 'Networker and Role model', '4/1': 'Networker and Investigator', '5/1': 'Problem solver and Investigator', '5/2': 'Problem solver and Hermit', '6/2': 'Role model and Hermit', '6/3': 'Role model and Experimenter',
+};
+export type DesignAngle = 'right' | 'juxtaposition' | 'left';
+export const DESIGN_ANGLES: Record<DesignAngle, { name: string; line: string }> = {
+  right: { name: 'Right angle', line: 'A personal path: your life is about your own story, and the people who come into it.' },
+  juxtaposition: { name: 'Juxtaposition', line: 'A fixed path with a strong focus. Your way of seeing stays steady all your life.' },
+  left: { name: 'Left angle', line: 'A path through other people: your work shows in how you touch groups and teams.' },
+};
+
+export interface DesignActivation {
+  body: DesignBody;
+  /** In the zodiac asked for, degrees. */
+  lon: number;
+  gate: number;
+  line: number;
+  /** How far inside its line the position sits, in degrees. Near zero means another program might call it the next line. */
+  edge: number;
+}
+export interface DesignChannel {
+  a: number;
+  b: number;
+  name: string;
+  centers: [DesignCenter, DesignCenter];
+  /** Which side switched on both gates: the conscious side, the unconscious side, or both. */
+  from: 'personality' | 'design' | 'both';
+}
+export interface DesignChart {
+  zodiac: Zodiac;
+  personality: DesignActivation[];
+  design: DesignActivation[];
+  channels: DesignChannel[];
+  defined: DesignCenter[];
+  open: DesignCenter[];
+  type: DesignType;
+  authority: DesignAuthority;
+  profile: { p: number; d: number; text: string };
+  definition: 'none' | 'single' | 'split' | 'triple' | 'quadruple';
+  cross: { angle: DesignAngle; pSun: number; pEarth: number; dSun: number; dEarth: number };
+}
+
+export interface DesignInput {
+  /** Birth date, YYYY-MM-DD, as written on the birth record. */
+  date: string;
+  /** Birth time, HH:MM, 24-hour. */
+  time: string;
+  /** The IANA zone of the birthplace, such as Asia/Kolkata, so a summer-time or an old offset comes out right. */
+  zone: string;
+  /** The place, as the person writes it. For their own page only. */
+  place: string;
+  /** The full name on the birth record, for numerology. Optional. */
+  name: string;
+}
+export interface DesignResult {
+  input: DesignInput;
+  birthUtc: string;
+  designUtc: string;
+  /** The Fagan-Bradley shift at each of the two moments, in degrees. */
+  ayanamsa: { personality: number; design: number };
+  /** Tropical longitudes, in degrees, for each of the thirteen bodies. */
+  personality: Record<DesignBody, number>;
+  design: Record<DesignBody, number>;
+}
+
+const isZone = (zone: string): boolean => {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: zone });
+    return zone.length > 0 && zone.length <= 64;
+  } catch {
+    return false;
+  }
+};
+export const emptyDesignInput = (): DesignInput => ({ date: '', time: '', zone: '', place: '', name: '' });
+/** The one reader for a birth record from the browser or a column. Anything unclean is left empty. */
+export function parseDesignInput(raw: unknown): DesignInput {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const str = (k: string, max: number) => (typeof o[k] === 'string' ? (o[k] as string).trim().slice(0, max) : '');
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(str('date', 10)) ? str('date', 10) : '';
+  const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(str('time', 5)) ? str('time', 5) : '';
+  const zone = isZone(str('zone', 64)) ? str('zone', 64) : '';
+  // A name is letters, spaces and the marks inside names.
+  const name = str('name', 80).replace(/[^\p{L}\p{M} '’.-]/gu, '').replace(/\s+/g, ' ').trim();
+  return { date, time, zone, place: str('place', 80), name };
+}
+export function designInputProblem(i: DesignInput, today = new Date().toISOString().slice(0, 10)): string | null {
+  if (!i.date || Number.isNaN(Date.parse(`${i.date}T00:00:00Z`))) return 'Enter your birth date.';
+  if (i.date > today) return 'That day has not happened yet.';
+  if (i.date < '1900-01-01') return 'The chart works for births from 1900 on.';
+  if (!i.time) return 'Enter your birth time, as the hours and minutes on your birth record.';
+  if (!i.zone) return 'Pick the time zone of the place you were born.';
+  return null;
+}
+/** The chart's raw numbers for a birth record. Everything else is worked out from these, in either zodiac. */
+export function computeDesign(input: DesignInput): DesignResult {
+  const [h, m] = input.time.split(':').map(Number);
+  const birth = zonedToUtc(input.date, (h ?? 0) * 60 + (m ?? 0), input.zone).getTime();
+  const design = designMoment(birth);
+  const round = (r: Record<DesignBody, number>) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, Math.round(v * 10000) / 10000])) as Record<DesignBody, number>;
+  return {
+    input,
+    birthUtc: new Date(birth).toISOString(),
+    designUtc: new Date(design).toISOString(),
+    ayanamsa: { personality: Math.round(faganBradleyAyanamsa(birth) * 10000) / 10000, design: Math.round(faganBradleyAyanamsa(design) * 10000) / 10000 },
+    personality: round(bodyLongitudes(birth)),
+    design: round(bodyLongitudes(design)),
+  };
+}
+
+const EDGE_LIMIT: Partial<Record<DesignBody, number>> = { jupiter: 0.12, saturn: 0.12, uranus: 0.12, neptune: 0.12, pluto: 0.12 };
+/** The chart as read in one zodiac: gates and lines, channels, centers, type, authority, profile and cross. */
+export function designChart(r: DesignResult, zodiac: Zodiac): DesignChart {
+  const side = (lons: Record<DesignBody, number>, shift: number): DesignActivation[] =>
+    DESIGN_BODIES.map((b) => {
+      const lon = norm360(lons[b.key] - (zodiac === 'fagan' ? shift : 0));
+      const g = gateAt(lon);
+      return { body: b.key, lon, gate: g.gate, line: g.line, edge: g.edge };
+    });
+  const personality = side(r.personality, r.ayanamsa.personality);
+  const design = side(r.design, r.ayanamsa.design);
+  const on = { p: new Set(personality.map((x) => x.gate)), d: new Set(design.map((x) => x.gate)) };
+  const channels: DesignChannel[] = [];
+  for (const c of DESIGN_CHANNELS) {
+    const pa = on.p.has(c.a);
+    const pb = on.p.has(c.b);
+    const da = on.d.has(c.a);
+    const db = on.d.has(c.b);
+    if (!((pa || da) && (pb || db))) continue;
+    const from = pa && pb ? 'personality' : da && db ? 'design' : 'both';
+    channels.push({ a: c.a, b: c.b, name: c.name, centers: [centerOfGate(c.a), centerOfGate(c.b)], from });
+  }
+  const defined = DESIGN_CENTERS.map((c) => c.key).filter((k) => channels.some((c) => c.centers.includes(k)));
+  const open = DESIGN_CENTERS.map((c) => c.key).filter((k) => !defined.includes(k));
+  // Which defined centers touch each other through channels: the groups that make up definition.
+  const parent = new Map<DesignCenter, DesignCenter>(defined.map((c) => [c, c]));
+  const find = (c: DesignCenter): DesignCenter => (parent.get(c) === c ? c : find(parent.get(c)!));
+  for (const ch of channels) parent.set(find(ch.centers[0]), find(ch.centers[1]));
+  const groupOf = (c: DesignCenter) => (defined.includes(c) ? find(c) : null);
+  const groups = new Set(defined.map(find)).size;
+  const definition = (['none', 'single', 'split', 'triple', 'quadruple'] as const)[Math.min(4, groups)]!;
+  const isOn = (c: DesignCenter) => defined.includes(c);
+  const throatGroup = groupOf('throat');
+  const motorToThroat = throatGroup !== null && DESIGN_CENTERS.some((c) => c.motor && isOn(c.key) && groupOf(c.key) === throatGroup);
+  const type: DesignType = defined.length === 0 ? 'reflector' : isOn('sacral') ? (motorToThroat ? 'mg' : 'generator') : motorToThroat ? 'manifestor' : 'projector';
+  const authority: DesignAuthority =
+    type === 'reflector' ? 'lunar' : isOn('solar') ? 'emotional' : isOn('sacral') ? 'sacral' : isOn('spleen') ? 'splenic' : isOn('heart') ? 'ego' : isOn('g') && throatGroup !== null && groupOf('g') === throatGroup ? 'self' : 'mental';
+  const pSun = personality[0]!;
+  const dSun = design[0]!;
+  const key = `${pSun.line}/${dSun.line}`;
+  const angle: DesignAngle = key === '4/1' ? 'juxtaposition' : ['5/1', '5/2', '6/2', '6/3'].includes(key) ? 'left' : 'right';
+  return {
+    zodiac,
+    personality,
+    design,
+    channels,
+    defined,
+    open,
+    type,
+    authority,
+    profile: { p: pSun.line, d: dSun.line, text: key },
+    definition,
+    cross: { angle, pSun: pSun.gate, pEarth: personality[1]!.gate, dSun: dSun.gate, dEarth: design[1]!.gate },
+  };
+}
+
+// ---- Human design: the reading, in three layers, and what to do about it ----
+
+/** The app's own way to group a reading, by the dimensions on its map of consciousness: 3D for the body and the day, 5D for the mind and other people, 7D for purpose. */
+export const DESIGN_DEPTHS: readonly { key: '3d' | '5d' | '7d' | 'num'; name: string; blurb: string }[] = [
+  { key: '3d', name: '3D · Body and day', blurb: 'How you are built to work, decide and rest. The practical layer: your type, strategy, authority and energy.' },
+  { key: '5d', name: '5D · Mind and people', blurb: 'How you learn, relate and think. Your profile, your channels, and what you take in from others.' },
+  { key: '7d', name: '7D · Purpose', blurb: 'What you are here to give. Your cross, the gates of your Sun, Earth and nodes, and what stands out between the two zodiacs.' },
+  { key: 'num', name: 'Numerology', blurb: 'The numbers in your birth date and your name, with the master numbers 11, 22 and 33 and the turning point 10, set beside what Discover learned about you.' },
+];
+export interface DesignBlock {
+  title: string;
+  text: string;
+  items?: string[];
+}
+export interface DesignGoal {
+  pillar: RelationshipKey;
+  title: string;
+  /** Why the chart suggests it. */
+  why: string;
+  /** The first small step. */
+  step: string;
+  /** How you will know it happened: something to count. */
+  proof: string;
+}
+export interface DesignAnalysis {
+  headline: string;
+  depths: Record<'3d' | '5d' | '7d', DesignBlock[]>;
+  goals: DesignGoal[];
+  /** Positions that sit so near the edge of a line that another program may read the next line. */
+  edges: string[];
+}
+const listNames = (g: number[]) => g.map((n) => `${n} ${GATE_NAMES[n - 1]}`).join(', ');
+const centerName = (k: DesignCenter) => DESIGN_CENTERS.find((c) => c.key === k)!.name;
+
+const TYPE_GOAL: Record<DesignType, { title: string; step: string; proof: string }> = {
+  generator: { title: 'Say yes only to what lights you up', step: 'Before you agree to anything this week, ask yourself a yes or no question and notice how your body answers.', proof: 'Count your gut yeses. Aim for five this week.' },
+  mg: { title: 'Respond first, then tell people your plan', step: 'When something comes up, wait for your gut to answer. If it is a yes, say what you will do before you do it.', proof: 'Tell someone your plan first on five days this week.' },
+  manifestor: { title: 'Tell people before you act', step: 'Before a move that touches other people, send one line: what you are about to do.', proof: 'Send five heads-up messages this week.' },
+  projector: { title: 'Wait to be asked, and rest well', step: 'Share advice only when someone asks. If you see something useful, say you have a thought and ask if they want it.', proof: 'Get asked, or invited, three times this month. Sleep eight hours on five nights this week.' },
+  reflector: { title: 'Sleep on every big choice', step: 'Write the choice in your journal today, talk it over with three different people, and decide in about 28 days.', proof: 'One big decision logged and decided on its day.' },
+};
+const AUTH_GOAL: Record<DesignAuthority, { title: string; step: string; proof: string }> = {
+  emotional: { title: 'Never decide a money or work matter in the moment', step: 'For any big yes, say, “Let me sleep on it.” Come back after a night, then after three, and see if the answer holds.', proof: 'Three big decisions delayed by a night this month.' },
+  sacral: { title: 'Make work choices with a yes or no gut check', step: 'Turn each choice into a yes or no question. Say it aloud and notice the first answer in your body.', proof: 'Five work choices made this way this week.' },
+  splenic: { title: 'Act on the first quiet hunch', step: 'When a quiet hunch speaks, write it down and act on it before you talk yourself out of it.', proof: 'Three hunches noted and acted on this week.' },
+  ego: { title: 'Promise only what you want to do', step: 'Before you commit, ask: do I want this, and is it worth my effort? Write down what you promise.', proof: 'Keep every promise you make this week, and make fewer.' },
+  self: { title: 'Decide by talking it out', step: 'Pick one trusted person for each big choice. Say what you think out loud and listen to yourself.', proof: 'Two big choices talked through before you decide this month.' },
+  mental: { title: 'Talk it through in different places', step: 'Take each big choice to two people and to two different places, such as a walk and a cafe. See which answer stays clear.', proof: 'Three decisions made this way this month.' },
+  lunar: { title: 'Give big choices a moon', step: 'Log the choice, then check in on it each week for four weeks with a different person.', proof: 'One big decision followed through four weeks.' },
+};
+const LINE_LEARN: readonly { title: string; step: string; proof: string }[] = [
+  { title: 'Study one thing deeply before you share it', step: 'Pick one topic. Spend four weeks reading and testing before you teach or post about it.', proof: 'Thirty minutes a day on five days a week, for four weeks.' },
+  { title: 'Make room for your natural talent', step: 'Block two free afternoons a week with no plan, and notice what you do without being asked.', proof: 'Two free blocks kept each week for a month.' },
+  { title: 'Run three small experiments', step: 'Try three small things. After each, write what did not work and what you learned. Mistakes count as results.', proof: 'Three experiments with three written lessons this month.' },
+  { title: 'Share what you learn with three people', step: 'Pick three people you know. Tell each one a thing you learned this week.', proof: 'Three conversations a week for four weeks.' },
+  { title: 'Solve one real problem for someone', step: 'Ask a person what is stuck. Offer one small fix, and under-promise.', proof: 'One problem solved and one thank-you received this month.' },
+  { title: 'Learn by trying, then lead by example', step: 'For thirty days, be a student of one skill. After that, show someone else the first steps.', proof: 'Thirty days logged, then one lesson given.' },
+];
+const OPEN_GOAL: Partial<Record<DesignCenter, { title: string; step: string; proof: string }>> = {
+  heart: { title: 'Stop proving yourself at home', step: 'This week, do one thing for your family with no promise attached and nothing to show for it.', proof: 'Three small things done quietly.' },
+  solar: { title: 'Pause before you answer a heated message', step: 'Before you reply to a message that stirs you, wait an hour and ask whose feeling it is.', proof: 'Five replies delayed an hour.' },
+  sacral: { title: 'Rest before you are tired', step: 'Pick a fixed bedtime and keep it. Stop work when your day’s work is done, not when you are empty.', proof: 'Bedtime kept seven nights in a row.' },
+  root: { title: 'Do not rush to be free of pressure', step: 'Pick one task you feel hurried about. Do it at an even pace for twenty minutes, then stop.', proof: 'Five calm twenty-minute blocks this week.' },
+  spleen: { title: 'Let one old thing go', step: 'Name one habit, thing or tie that has outlived its use. Take one step to let it go.', proof: 'One thing let go this month.' },
+  g: { title: 'Choose your places and people', step: 'List where you feel most like yourself. Spend your next free evening in one of those places.', proof: 'Three evenings in places that feel right.' },
+  throat: { title: 'Speak when it is truly your turn', step: 'In a group, wait until you are asked or until the point is clearly yours, then say it plainly.', proof: 'Three times you waited and then spoke.' },
+  ajna: { title: 'Say “I am not sure yet”', step: 'Once a day, let a question stay open instead of pretending to be certain.', proof: 'Five open questions kept open this week.' },
+  head: { title: 'Pick which questions are yours', step: 'Write the questions on your mind. Cross out the ones other people put there.', proof: 'One list written and cut down to three.' },
+};
+const CROSS_GOAL: Record<DesignAngle, string> = {
+  right: 'Write one page on your own path: where you want to be in a year and what you will build to get there.',
+  juxtaposition: 'Write down the one thing you keep returning to, and give it a fixed hour every week.',
+  left: 'Choose one group or team and plan one thing to give them each month.',
+};
+
+/** The chart, read in three layers, with goals you can do and count. */
+export function analyseDesign(c: DesignChart): DesignAnalysis {
+  const t = DESIGN_TYPES[c.type];
+  const au = DESIGN_AUTHORITIES[c.authority];
+  const pl = DESIGN_LINES[c.profile.p - 1]!;
+  const dl = DESIGN_LINES[c.profile.d - 1]!;
+  const all = [...c.personality, ...c.design];
+  const edges = all
+    .filter((a) => a.edge < (EDGE_LIMIT[a.body] ?? 0.04))
+    .map((a) => `${DESIGN_BODIES.find((b) => b.key === a.body)!.name}, ${all.indexOf(a) < 13 ? 'conscious' : 'unconscious'}: gate ${a.gate} line ${a.line}`);
+  const sunP = c.personality[0]!;
+  const earthP = c.personality[1]!;
+  const sunD = c.design[0]!;
+  const earthD = c.design[1]!;
+
+  const d3: DesignBlock[] = [
+    { title: `${t.name}`, text: `${t.line} Strategy: ${t.strategy}. When it works you feel ${t.signature.toLowerCase()}. When it does not, you feel ${t.notSelf.toLowerCase()}.`, items: [`How common: ${t.share}`, `Aura: ${t.aura}`] },
+    { title: `${au.name} authority`, text: au.line },
+    { title: 'Definition', text: c.definition === 'none' ? 'No centers are defined: you take in the world and reflect it.' : c.definition === 'single' ? 'Single: all your defined centers join, so you feel self-contained and make sense on your own.' : c.definition === 'split' ? 'Split: two groups of centers with a gap. You may like people who bridge the gap for you.' : c.definition === 'triple' ? 'Triple split: three groups. You do well with a variety of people around you, and you need time to join the dots.' : 'Quadruple split: four groups. You need time, and the right people, for things to come together.' },
+    { title: `Defined centers (${c.defined.length})`, text: c.defined.length ? 'These work the same way every day. They are your steady energy.' : 'You have none. Your whole chart is open.', items: c.defined.map((k) => `${centerName(k)}: ${DESIGN_CENTERS.find((x) => x.key === k)!.defined}`) },
+    { title: `Open centers (${c.open.length})`, text: c.open.length ? 'These take in the world around you. They are where you learn and where you can be pushed around.' : 'You have none open.', items: c.open.map((k) => `${centerName(k)}: ${DESIGN_CENTERS.find((x) => x.key === k)!.open}`) },
+  ];
+  const d5: DesignBlock[] = [
+    { title: `Profile ${c.profile.text}`, text: `${DESIGN_PROFILES[c.profile.text] ?? ''}. The first number is how you show up and the second is the part of you that works underneath.`, items: [`Line ${c.profile.p}, ${pl.name}: ${pl.line}`, `Line ${c.profile.d}, ${dl.name}: ${dl.line}`] },
+    { title: `Channels (${c.channels.length})`, text: c.channels.length ? 'A channel joins two centers. It is a skill or a way of being you can count on.' : 'You have no whole channels. You have single gates, which are like themes you can use but do not always have.', items: c.channels.map((ch) => `${ch.a}-${ch.b} ${ch.name}: ${centerName(ch.centers[0])} to ${centerName(ch.centers[1])}, ${ch.from === 'both' ? 'from both sides' : ch.from === 'personality' ? 'conscious' : 'unconscious'}`) },
+    { title: 'Conscious and unconscious', text: 'Conscious gates are the ones you know you have. Unconscious gates show up in your body and in how others see you before you do.', items: [`Conscious Sun: gate ${sunP.gate}.${sunP.line}, ${GATE_NAMES[sunP.gate - 1]}`, `Unconscious Sun: gate ${sunD.gate}.${sunD.line}, ${GATE_NAMES[sunD.gate - 1]}`, `Conscious Moon: gate ${c.personality[2]!.gate}.${c.personality[2]!.line}, ${GATE_NAMES[c.personality[2]!.gate - 1]}`] },
+    { title: 'With other people', text: `Tell the people close to you your strategy: “${t.strategy}.” Then ask for theirs. Your open centers are where you take on their energy, so notice what is yours.` },
+  ];
+  const d7: DesignBlock[] = [
+    { title: `${DESIGN_ANGLES[c.cross.angle].name} cross`, text: `${DESIGN_ANGLES[c.cross.angle].line} Your cross is made of four gates: the Sun and Earth of your conscious side and of your unconscious side.`, items: [`Conscious Sun: ${c.cross.pSun} ${GATE_NAMES[c.cross.pSun - 1]}`, `Conscious Earth: ${c.cross.pEarth} ${GATE_NAMES[c.cross.pEarth - 1]}`, `Unconscious Sun: ${c.cross.dSun} ${GATE_NAMES[c.cross.dSun - 1]}`, `Unconscious Earth: ${c.cross.dEarth} ${GATE_NAMES[c.cross.dEarth - 1]}`] },
+    { title: 'Your nodes', text: 'The nodes point to where you are headed and what you grow out of.', items: [`North node, conscious: ${listNames([c.personality[3]!.gate])}`, `South node, conscious: ${listNames([c.personality[4]!.gate])}`, `North node, unconscious: ${listNames([c.design[3]!.gate])}`, `South node, unconscious: ${listNames([c.design[4]!.gate])}`] },
+    { title: 'What you give', text: `Your Sun gate is ${sunP.gate}, ${GATE_NAMES[sunP.gate - 1]}, and your Earth gate is ${earthP.gate}, ${GATE_NAMES[earthP.gate - 1]}. The Sun is what lights you up and the Earth is what keeps you grounded. Underneath, ${sunD.gate} ${GATE_NAMES[sunD.gate - 1]} and ${earthD.gate} ${GATE_NAMES[earthD.gate - 1]} work without you trying.` },
+  ];
+
+  const g: DesignGoal[] = [];
+  const typeGoal = TYPE_GOAL[c.type];
+  g.push({ pillar: 'self', title: typeGoal.title, why: `Your type is ${t.name}, and your strategy is “${t.strategy}.”`, step: typeGoal.step, proof: typeGoal.proof });
+  const au2 = AUTH_GOAL[c.authority];
+  g.push({ pillar: 'servant_leader', title: au2.title, why: `Your authority is ${au.name.toLowerCase()}.`, step: au2.step, proof: au2.proof });
+  const learn = LINE_LEARN[c.profile.p - 1]!;
+  g.push({ pillar: 'guru', title: learn.title, why: `The first number of your profile is ${c.profile.p}, the ${pl.name.toLowerCase()}.`, step: learn.step, proof: learn.proof });
+  const friendLine = DESIGN_LINES[c.profile.d - 1]!;
+  g.push({ pillar: 'friendship', title: `Meet people the way a ${friendLine.name.toLowerCase()} does`, why: `The second number of your profile is ${c.profile.d}: ${friendLine.line}`, step: c.profile.d === 4 ? 'Pick three people you already like and book a coffee with each.' : c.profile.d === 2 ? 'Keep one hour a week for being alone, and answer when friends reach out.' : c.profile.d === 3 ? 'Try one new group or event this month. If it is not for you, that is a result.' : c.profile.d === 5 ? 'Ask a friend what is stuck, and offer one small, honest fix.' : c.profile.d === 6 ? 'Say one honest thing about how you live, to one friend who can use it.' : 'Pick one friend and spend an unhurried evening with them.', proof: 'Three friend moments this month.' });
+  const openFirst = (['heart', 'solar', 'sacral', 'root', 'spleen', 'g', 'throat', 'ajna', 'head'] as const).find((k) => c.open.includes(k) && OPEN_GOAL[k]);
+  if (openFirst) {
+    const o = OPEN_GOAL[openFirst]!;
+    g.push({ pillar: openFirst === 'heart' || openFirst === 'solar' ? 'parent_child' : 'self', title: o.title, why: `Your ${centerName(openFirst)} center is open: ${DESIGN_CENTERS.find((x) => x.key === openFirst)!.open}`, step: o.step, proof: o.proof });
+  }
+  g.push({ pillar: 'lover_partner', title: 'Share how you work with someone close', why: `Your strategy and authority only help if the people you love know them.`, step: `Tell your partner or a close friend: “I do best when I ${t.strategy.charAt(0).toLowerCase()}${t.strategy.slice(1)}, and I decide by ${au.name.toLowerCase()} authority.” Then ask for theirs.`, proof: 'One honest talk, with their answer written down.' });
+  g.push({ pillar: 'divine', title: 'Write what your cross says about what you give', why: `Your cross is ${c.cross.pSun}, ${c.cross.pEarth}, ${c.cross.dSun} and ${c.cross.dEarth}, a ${DESIGN_ANGLES[c.cross.angle].name.toLowerCase()} cross.`, step: CROSS_GOAL[c.cross.angle], proof: 'One page written by Sunday.' });
+  return { headline: `${t.name} ${c.profile.text}, ${au.name.toLowerCase()} authority`, depths: { '3d': d3, '5d': d5, '7d': d7 }, goals: g, edges };
+}
+
+/** Where the two zodiacs agree and where they do not. */
+export function designCompare(r: DesignResult): { same: boolean; lines: string[] } {
+  const a = designChart(r, 'tropical');
+  const b = designChart(r, 'fagan');
+  const ta = DESIGN_TYPES[a.type].name;
+  const tb = DESIGN_TYPES[b.type].name;
+  const lines: string[] = [];
+  lines.push(ta === tb ? `Type: ${ta} in both.` : `Type: ${ta} in the tropical zodiac, ${tb} in the sidereal.`);
+  lines.push(a.authority === b.authority ? `Authority: ${DESIGN_AUTHORITIES[a.authority].name} in both.` : `Authority: ${DESIGN_AUTHORITIES[a.authority].name} (tropical), ${DESIGN_AUTHORITIES[b.authority].name} (sidereal).`);
+  lines.push(a.profile.text === b.profile.text ? `Profile: ${a.profile.text} in both.` : `Profile: ${a.profile.text} (tropical), ${b.profile.text} (sidereal).`);
+  const gates = (c: DesignChart) => new Set([...c.personality, ...c.design].map((x) => x.gate));
+  const ga = gates(a);
+  const gb = gates(b);
+  const shared = [...ga].filter((x) => gb.has(x)).length;
+  lines.push(`${shared} of ${ga.size} gates are the same in both.`);
+  return { same: ta === tb && a.authority === b.authority && a.profile.text === b.profile.text, lines };
+}
+
+/** A short line on the chart for the assistant. Never the birth record. */
+export interface DesignProfile {
+  type: DesignType;
+  strategy: string;
+  authority: DesignAuthority;
+  profile: string;
+  /** Numerology: the life path, and the expression when a name was given. Never the name or the date. */
+  lifePath: number;
+  expression: number | null;
+}
+export const designProfile = (r: DesignResult): DesignProfile => {
+  const c = designChart(r, 'tropical');
+  const n = computeNumerology(r.input.date, r.input.name);
+  return { type: c.type, strategy: DESIGN_TYPES[c.type].strategy, authority: c.authority, profile: c.profile.text, lifePath: n.lifePath.value, expression: n.expression?.value ?? null };
+};
+
+
+// ---- Numerology: the numbers in a birth date and a name, and what they say next to what Discover learned ----
+// Numerology is a system for reflection, not science. Pythagorean letters (A=1 to I=9, then round again), master numbers 11, 22 and 33 kept whole,
+// and the compound 10 and the karmic debts 13, 14, 16 and 19 noticed on the way down.
+
+export interface NumberValue {
+  /** The number it settles on: 1 to 9, or a master number 11, 22 or 33. */
+  value: number;
+  /** The sums on the way down, such as [19, 10, 1]. */
+  chain: number[];
+  master: boolean;
+  /** The single digit under it: 11 is 2 underneath, 22 is 4, 33 is 6. */
+  base: number;
+  /** 13, 14, 16 or 19 when the sums passed through one of the karmic debts. */
+  karmic: 13 | 14 | 16 | 19 | null;
+}
+const digitSum = (n: number): number => String(Math.abs(n)).split('').reduce((s, d) => s + Number(d), 0);
+const MASTERS = [11, 22, 33];
+export function numberValue(sum: number): NumberValue {
+  const chain = [sum];
+  let n = sum;
+  while (n > 9 && !MASTERS.includes(n)) {
+    n = digitSum(n);
+    chain.push(n);
+  }
+  const karmic = chain.find((c) => c === 13 || c === 14 || c === 16 || c === 19) as 13 | 14 | 16 | 19 | undefined;
+  const master = MASTERS.includes(n);
+  return { value: n, chain, master, base: master ? digitSum(n) : n, karmic: karmic ?? null };
+}
+const reduced = (n: number): number => numberValue(n).value;
+
+const PYTHAGOREAN = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const letterValue = (ch: string): number => ((PYTHAGOREAN.indexOf(ch) % 9) + 1);
+/** The letters of a name, upper case, with accents taken off and anything else dropped. */
+export const nameWords = (name: string): string[] =>
+  name
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toUpperCase()
+    .split(/[^A-Z]+/)
+    .filter(Boolean);
+/** A word's vowels: A E I O U, and Y when the word has no other vowel. */
+const vowelsOf = (word: string): string[] => {
+  const v = word.split('').filter((c) => 'AEIOU'.includes(c));
+  return v.length ? v : word.split('').filter((c) => c === 'Y');
+};
+
+export interface NumerologyResult {
+  lifePath: NumberValue;
+  birthday: NumberValue;
+  attitude: NumberValue;
+  /** From the full name: all letters, the vowels, the consonants. Null without a name. */
+  expression: NumberValue | null;
+  soulUrge: NumberValue | null;
+  personality: NumberValue | null;
+  /** The life path and the expression together. */
+  maturity: NumberValue | null;
+  /** Numbers from 1 to 9 that no letter of the name carries. */
+  lessons: number[];
+}
+/** The numbers in a birth date (YYYY-MM-DD, as written on the record) and, if given, a full name. */
+export function computeNumerology(date: string, name = ''): NumerologyResult {
+  const y = Number(date.slice(0, 4));
+  const m = Number(date.slice(5, 7));
+  const d = Number(date.slice(8, 10));
+  const lifePath = numberValue(reduced(m) + reduced(d) + reduced(y));
+  const words = nameWords(name);
+  const letters = words.join('').split('');
+  let expression: NumberValue | null = null;
+  let soulUrge: NumberValue | null = null;
+  let personality: NumberValue | null = null;
+  let maturity: NumberValue | null = null;
+  let lessons: number[] = [];
+  if (letters.length > 0) {
+    const sum = (cs: string[]) => cs.reduce((s, c) => s + letterValue(c), 0);
+    const vowels = words.flatMap(vowelsOf);
+    const vowelSet = new Set<string>();
+    const consonants: string[] = [];
+    for (const w of words) {
+      const v = vowelsOf(w);
+      w.split('').forEach((c, i) => (v.includes(c) && !(c === 'Y' && !v.every((x) => x === 'Y') ) ? vowelSet.add(`${w}${i}`) : consonants.push(c)));
+    }
+    expression = numberValue(sum(letters));
+    soulUrge = vowels.length ? numberValue(sum(vowels)) : null;
+    personality = consonants.length ? numberValue(sum(consonants)) : null;
+    maturity = numberValue(lifePath.value + expression.value);
+    const have = new Set(letters.map(letterValue));
+    lessons = [1, 2, 3, 4, 5, 6, 7, 8, 9].filter((n) => !have.has(n));
+  }
+  return { lifePath, birthday: numberValue(d), attitude: numberValue(reduced(d) + reduced(m)), expression, soulUrge, personality, maturity, lessons };
+}
+/** The year, the month and the day you are in, from the birthday and today's date. The year turns over on 1 January. */
+export function personalCycle(date: string, today: string): { year: NumberValue; month: NumberValue; day: NumberValue } {
+  const m = Number(date.slice(5, 7));
+  const d = Number(date.slice(8, 10));
+  const year = numberValue(reduced(m) + reduced(d) + reduced(Number(today.slice(0, 4))));
+  const month = numberValue(year.base + Number(today.slice(5, 7)));
+  const day = numberValue(month.base + Number(today.slice(8, 10)));
+  return { year, month, day };
+}
+
+export const NUMBER_LABELS: Record<'lifePath' | 'birthday' | 'attitude' | 'expression' | 'soulUrge' | 'personality' | 'maturity', { name: string; line: string }> = {
+  lifePath: { name: 'Life path', line: 'The road you walk. The biggest number.' },
+  birthday: { name: 'Birthday number', line: 'A gift you carry from the day you were born.' },
+  attitude: { name: 'Attitude', line: 'How you meet the world at first.' },
+  expression: { name: 'Expression', line: 'What you are here to do, from your full name.' },
+  soulUrge: { name: 'Soul urge', line: 'What you want deep down, from the vowels of your name.' },
+  personality: { name: 'Personality', line: 'How others see you, from the consonants of your name.' },
+  maturity: { name: 'Maturity', line: 'Who you grow into later in life: life path and expression together.' },
+};
+export interface NumberReading {
+  name: string;
+  line: string;
+  gift: string;
+  shadow: string;
+  tryThis: string;
+  /** Which of the five Discover traits this number leans on. */
+  leans: Partial<Record<Trait, 'high' | 'low'>>;
+  /** The pillar it calls on. */
+  pillar: RelationshipKey;
+}
+export const NUMBER_READINGS: Record<number, NumberReading> = {
+  1: { name: 'The starter', line: 'You are here to begin things and to stand on your own.', gift: 'Courage, drive and the will to go first.', shadow: 'Going it alone, pushing too hard, or waiting to be told.', tryThis: 'Start one small thing this week without waiting for anyone’s okay.', leans: { c: 'high', a: 'low' }, pillar: 'servant_leader' },
+  2: { name: 'The peacemaker', line: 'You are here to join people together and keep the peace.', gift: 'Listening, patience and tact.', shadow: 'Putting yourself last, or dodging a hard talk.', tryThis: 'Ask for one thing you need, kindly and plainly.', leans: { a: 'high', e: 'low' }, pillar: 'lover_partner' },
+  3: { name: 'The voice', line: 'You are here to express yourself and bring joy.', gift: 'Words, humour and an easy way with people.', shadow: 'Scattering your energy, or hiding hurt behind a joke.', tryThis: 'Share something you made or wrote with one person.', leans: { e: 'high', o: 'high' }, pillar: 'friendship' },
+  4: { name: 'The builder', line: 'You are here to build something solid and lasting.', gift: 'Discipline, order and reliability.', shadow: 'Rigidity, and worry about change.', tryThis: 'Pick one foundation habit and keep it for 21 days.', leans: { c: 'high', o: 'low' }, pillar: 'servant_leader' },
+  5: { name: 'The explorer', line: 'You are here to change, to move and to learn by doing.', gift: 'Curiosity, freedom and quick adapting.', shadow: 'Restlessness, and starting more than you finish.', tryThis: 'Try one new thing this week, and finish one old thing.', leans: { o: 'high', c: 'low' }, pillar: 'guru' },
+  6: { name: 'The carer', line: 'You are here to care for people and make a home.', gift: 'Warmth, responsibility and a love of beauty.', shadow: 'Taking on everyone’s load, or trying to control.', tryThis: 'Do one kind thing for family, then one for yourself.', leans: { a: 'high', s: 'high' }, pillar: 'parent_child' },
+  7: { name: 'The seeker', line: 'You are here to look deeper and find the truth.', gift: 'Insight, focus and a quiet mind.', shadow: 'Pulling away, doubt and overthinking.', tryThis: 'Give one question twenty quiet minutes a day, then write one line.', leans: { o: 'high', e: 'low' }, pillar: 'divine' },
+  8: { name: 'The achiever', line: 'You are here to build power, money and results, and to use them well.', gift: 'Drive, judgment and a head for business.', shadow: 'Chasing status, or working too much.', tryThis: 'Set one money or work goal with a number and a date.', leans: { c: 'high', s: 'high' }, pillar: 'servant_leader' },
+  9: { name: 'The giver', line: 'You are here to finish things and to serve something larger.', gift: 'Compassion, wisdom and a wide view.', shadow: 'Holding on to the past, or giving until you are empty.', tryThis: 'Finish one thing you left open, then give something away.', leans: { a: 'high', o: 'high' }, pillar: 'divine' },
+  10: { name: 'The wheel', line: 'Ten is a turning point: an ending and a fresh start in one number. It settles down to a 1.', gift: 'A chance to begin again with what you learned.', shadow: 'Clinging to what is over.', tryThis: 'Name one thing that is done. Close it, and take the first small step on the next.', leans: {}, pillar: 'self' },
+  11: { name: 'The messenger', line: 'A master number, a high 2: you pick up what others miss and can light the way.', gift: 'Intuition, inspiration and sensitivity.', shadow: 'Nervous tension, and doubt about your own gift.', tryThis: 'Write down one hunch a day for a week, then act on one.', leans: { o: 'high', s: 'low' }, pillar: 'divine' },
+  22: { name: 'The master builder', line: 'A master number, a high 4: you can turn a big vision into something real.', gift: 'Practical vision, and the patience to build at scale.', shadow: 'Feeling crushed by the size of your own vision.', tryThis: 'Break your biggest goal into ten steps and do the first one today.', leans: { c: 'high', o: 'high' }, pillar: 'servant_leader' },
+  33: { name: 'The master teacher', line: 'A master number, a high 6: you are here to lift others through care.', gift: 'Healing, teaching and warm leadership.', shadow: 'Giving yourself away until you burn out.', tryThis: 'Teach one thing you know to one person, and stop when you are tired.', leans: { a: 'high', s: 'high' }, pillar: 'parent_child' },
+};
+export const KARMIC_DEBTS: Record<13 | 14 | 16 | 19, string> = {
+  13: 'A debt around effort: work steadily, because shortcuts cost you more later. It settles into a 4.',
+  14: 'A debt around freedom: keep a balance, because freedom works best with limits. It settles into a 5.',
+  16: 'A debt around ego: let pride go, because a fall can be a clean start. It settles into a 7.',
+  19: 'A debt around power: ask for help and share, and do not carry it all alone. It settles into a 1.',
+};
+export const YEAR_THEMES: Record<number, { theme: string; step: string }> = {
+  1: { theme: 'A year to start. Plant seeds.', step: 'Start the one thing you have been putting off.' },
+  2: { theme: 'A year to partner and be patient.', step: 'Make one connection stronger.' },
+  3: { theme: 'A year to express and enjoy.', step: 'Share your work, and say yes to joy.' },
+  4: { theme: 'A year to build a base.', step: 'Pick one foundation and work on it every week.' },
+  5: { theme: 'A year of change and freedom.', step: 'Say yes to one change, and plan for it.' },
+  6: { theme: 'A year of home and care.', step: 'Look after the people and the place close to you.' },
+  7: { theme: 'A year to look inward.', step: 'Rest, study and think. Do less and see more clearly.' },
+  8: { theme: 'A year of power and results.', step: 'Aim at one clear goal with a number.' },
+  9: { theme: 'A year to finish and let go.', step: 'Close what is done, and clear space.' },
+  11: { theme: 'A year of insight.', step: 'Listen for the hunch, and act on one.' },
+  22: { theme: 'A year to build something big.', step: 'Take the first real step on a long plan.' },
+  33: { theme: 'A year to teach and to heal.', step: 'Give your time to one person who needs it.' },
+};
+const TRAIT_STEP: Record<Trait, { high: string; low: string }> = {
+  o: { high: 'Try one new thing in your pillars today, even a small one.', low: 'Keep the routine that works, and change only one thing in it.' },
+  c: { high: 'Plan the day the night before, and give each task a finish line.', low: 'Pick one task and finish only that today. Small and done beats big and open.' },
+  e: { high: 'Do one step with another person today: a friend, a circle or a run.', low: 'Keep a quiet hour in your day, and do your hardest task in it.' },
+  a: { high: 'Put one of your own needs on today’s list, and keep it.', low: 'Say one kind, plain thing to someone today before you give your view.' },
+  s: { high: 'Use your steadiness: take the one task others are avoiding.', low: 'Take two minutes with the breathing timer before your hardest task.' },
+};
+const TYPE_ACTION: Record<DesignType, string> = {
+  generator: 'let the year bring things to you to respond to, and say yes only to what lights you up',
+  mg: 'respond first, then tell the people involved your plan before you move',
+  manifestor: 'start what the year asks for, and tell the people it touches before you act',
+  projector: 'wait for the invitation that fits the year, and rest well',
+  reflector: 'give each big choice a moon, about 28 days, before you commit',
+};
+export interface NumerologyContext {
+  /** How each of the five traits reads, from the main Discover result. */
+  traits?: Record<Trait, TraitBand> | null;
+  top?: RelationshipKey[];
+  growth?: RelationshipKey | null;
+  design?: DesignProfile | null;
+  love?: { receive: LoveKey[]; give: LoveKey[] } | null;
+}
+export interface NumerologyInsight {
+  kind: 'agree' | 'stretch' | 'combo';
+  title: string;
+  text: string;
+  /** A small thing to do about it. */
+  step: string;
+  pillar?: RelationshipKey;
+}
+/** What the numbers say next to what the person's own answers said: where they agree, where they stretch, and how they combine with the chart. */
+export function numerologyInsights(n: NumerologyResult, cycle: ReturnType<typeof personalCycle>, ctx: NumerologyContext): NumerologyInsight[] {
+  const out: NumerologyInsight[] = [];
+  const core: [string, NumberValue | null][] = [
+    ['Life path', n.lifePath],
+    ['Expression', n.expression],
+    ['Soul urge', n.soulUrge],
+  ];
+  const traitName = (t: Trait) => TRAITS.find((x) => x.key === t)!.name.toLowerCase();
+  let agree = 0;
+  let stretch = 0;
+  for (const [label, v] of core) {
+    if (!v) continue;
+    const r = NUMBER_READINGS[v.value]!;
+    const tag = `${label} ${v.value}${v.master ? `/${v.base}` : ''}`;
+    for (const [trait, dir] of Object.entries(r.leans) as [Trait, 'high' | 'low'][]) {
+      const band = ctx.traits?.[trait];
+      if (!band || band === 'mid') continue;
+      if (band === dir && agree < 3) {
+        agree += 1;
+        out.push({ kind: 'agree', title: `${tag} and your ${traitName(trait)}`, text: `Your ${tag}, ${r.name.toLowerCase()}, leans ${dir === 'high' ? 'high' : 'low'} on ${traitName(trait)}, and your Discover answers read ${band}. They point the same way, so this is a strength to lean on. ${r.gift}`, step: r.tryThis, pillar: r.pillar });
+      } else if (band !== dir && stretch < 3) {
+        stretch += 1;
+        out.push({ kind: 'stretch', title: `${tag} and your ${traitName(trait)}`, text: `Your ${tag}, ${r.name.toLowerCase()}, leans ${dir} on ${traitName(trait)}, but your Discover answers read ${band}. That is a place to grow, not a flaw: a number says what you are here to build, not what you have built so far.`, step: TRAIT_STEP[trait][dir], pillar: r.pillar });
+      }
+    }
+  }
+  const lp = NUMBER_READINGS[n.lifePath.value]!;
+  if (ctx.top?.includes(lp.pillar)) out.push({ kind: 'agree', title: 'Your life path and your top strengths', text: `Your life path calls on ${RELATIONSHIP_BY_KEY[lp.pillar].name.toLowerCase()}, and ${DISCOVER_STRENGTHS[lp.pillar].name} is one of your top three strengths in Discover. The road and the strength match.`, step: lp.tryThis, pillar: lp.pillar });
+  else if (ctx.growth === lp.pillar) out.push({ kind: 'stretch', title: 'Your life path and your quietest strength', text: `Your life path calls on ${RELATIONSHIP_BY_KEY[lp.pillar].name.toLowerCase()}, but ${DISCOVER_STRENGTHS[lp.pillar].name} is your quietest strength in Discover. It is the easiest place to start a small habit.`, step: DISCOVER_STRENGTHS[lp.pillar].tryThis, pillar: lp.pillar });
+  const yr = YEAR_THEMES[cycle.year.value] ?? YEAR_THEMES[cycle.year.base]!;
+  if (ctx.design) {
+    out.push({ kind: 'combo', title: `Personal year ${cycle.year.value} and your strategy`, text: `${yr.theme} Your Human design strategy is “${ctx.design.strategy.charAt(0).toLowerCase()}${ctx.design.strategy.slice(1)}”, so this year, ${TYPE_ACTION[ctx.design.type]}.`, step: yr.step });
+  }
+  if (ctx.love && [2, 6, 33].includes(n.lifePath.value)) {
+    out.push({ kind: 'combo', title: 'A care number and how you show love', text: `Your life path ${n.lifePath.value} is about care, and you show love through ${ctx.love.give.map((k) => LOVE_LANGUAGES[k].name.toLowerCase()).join(' and ')}. Put the two together in one act.`, step: LOVE_LANGUAGES[ctx.love.give[0]!].give, pillar: 'lover_partner' });
+  }
+  return out;
+}
+
+/** Progress through one add-on. */
+export function extraProgress(kind: ExtraKind, raw: unknown): { done: number; total: number } {
+  if (kind === 'design') return { done: designInputProblem(parseDesignInput(raw)) === null ? 1 : 0, total: 1 };
+  if (kind === 'type') return { done: parseTypeAnswers(raw).filter(Boolean).length, total: TYPE_SCREENS.length };
+  if (kind === 'mind') return { done: parseMindAnswers(raw).filter(Boolean).length, total: MIND_SCREENS.length };
+  const a = parseLoveAnswers(raw);
+  return { done: a.receive.filter((v) => v !== null).length + a.give.filter((v) => v !== null).length, total: LOVE_PAIRS.length * 2 };
+}
+export const extraComplete = (kind: ExtraKind, raw: unknown): boolean => {
+  const p = extraProgress(kind, raw);
+  return p.done === p.total;
+};
+export const emptyExtra = (kind: ExtraKind): unknown => (kind === 'type' ? emptyTypeAnswers() : kind === 'mind' ? emptyMindAnswers() : kind === 'design' ? emptyDesignInput() : emptyLoveAnswers());
+export const parseExtra = (kind: ExtraKind, raw: unknown): unknown => (kind === 'type' ? parseTypeAnswers(raw) : kind === 'mind' ? parseMindAnswers(raw) : kind === 'design' ? parseDesignInput(raw) : parseLoveAnswers(raw));
+export function scoreExtra(kind: ExtraKind, answers: unknown): TypeResult | LoveResult | MindResult | DesignResult {
+  return kind === 'type' ? scoreType(answers as TypeAnswers) : kind === 'mind' ? scoreMind(answers as MindAnswers) : kind === 'design' ? computeDesign(answers as DesignInput) : scoreLove(answers as LoveAnswers);
+}
+
+/** A short summary of the add-ons taken. Never the answers or the scores. The mind part only travels when the person switched it on. */
+export interface ExtrasProfile {
+  type?: string;
+  love?: { receive: LoveKey[]; give: LoveKey[] };
+  mind?: Record<MindArea, MindBand>;
+  /** Human design: the type, strategy, authority and profile only. Never the birth date, time or place. */
+  design?: DesignProfile;
+}
+export function extrasProfile(x: { type?: TypeResult | null; love?: LoveResult | null; mind?: MindResult | null; design?: DesignResult | null }, allowMind: boolean): ExtrasProfile | null {
+  const out: ExtrasProfile = {};
+  if (x.type) out.type = x.type.code;
+  if (x.design) out.design = designProfile(x.design);
+  if (x.love) out.love = { receive: loveTop(x.love.receive), give: loveTop(x.love.give) };
+  if (x.mind && allowMind) out.mind = Object.fromEntries(MIND_AREAS.map((a) => [a.key, x.mind!.areas[a.key].band])) as Record<MindArea, MindBand>;
+  return Object.keys(out).length ? out : null;
+}
+/** How to help, from the add-ons. Never names a condition. */
+export function extraHints(x: ExtrasProfile): string[] {
+  const out: string[] = [];
+  if (x.type) for (const l of x.type.split('')) if (l in TYPE_LETTERS) out.push(TYPE_LETTERS[l as TypeLetter].hint);
+  if (x.love) {
+    out.push(`They feel cared for through ${x.love.receive.map((k) => LOVE_LANGUAGES[k].name.toLowerCase()).join(' and ')}, and show care through ${x.love.give.map((k) => LOVE_LANGUAGES[k].name.toLowerCase()).join(' and ')}. For a step about a person, suggest that kind of gesture.`);
+  }
+  if (x.design) {
+    const h: Record<DesignType, string> = {
+      generator: 'Let them respond: ask a clear question that can be answered with a yes or a no, rather than pushing a plan.',
+      mg: 'Let them respond first, then help them tell the people involved before they move. They like to try several things.',
+      manifestor: 'Do not hold them up with questions. Suggest telling the people involved before they act.',
+      projector: 'Wait to be asked before you advise, and ask whether they would like your view first. Remind them to rest.',
+      reflector: 'Do not rush big choices. Suggest giving them time and talking them over with a few people.',
+    };
+    out.push(h[x.design.type]);
+    out.push(`Decisions suit their ${DESIGN_AUTHORITIES[x.design.authority].name.toLowerCase()} authority: ${DESIGN_AUTHORITIES[x.design.authority].line}`);
+  }
+  if (x.mind) {
+    if (x.mind.att !== 'few') out.push('Offer one small step at a time and a short focus round. Use plain checklists and remind them kindly, never with blame.');
+    if (x.mind.ene !== 'few') out.push('Keep steps short and active, and suggest a movement break between them.');
+    if (x.mind.pat !== 'few') out.push('Keep things predictable. Say what is coming and warn them before a change. Be clear and literal.');
+  }
+  return out;
+}
+export function extrasForAssistant(x: ExtrasProfile): string {
+  const bits: string[] = [];
+  if (x.type) bits.push(`Four-letter type from a self-check: ${x.type} (${TYPE_NAMES[x.type]?.name ?? 'a type'}).`);
+  if (x.love) bits.push(`Love languages: receives best through ${x.love.receive.map((k) => LOVE_LANGUAGES[k].name).join(' and ')}; shows love through ${x.love.give.map((k) => LOVE_LANGUAGES[k].name).join(' and ')}.`);
+  if (x.design) bits.push(`Human design (a system for reflection, not science, so never state it as fact): ${DESIGN_TYPES[x.design.type].name}, strategy “${x.design.strategy}”, ${DESIGN_AUTHORITIES[x.design.authority].name.toLowerCase()} authority, profile ${x.design.profile}. Numerology, another reflection tool: life path ${x.design.lifePath} (${NUMBER_READINGS[x.design.lifePath]?.name.toLowerCase() ?? ''})${x.design.expression ? `, expression ${x.design.expression}` : ''}.`);
+  if (x.mind) bits.push(`How their mind works, as self-reported signs (never a diagnosis, never name a condition, never suggest they have one): ${MIND_AREAS.map((a) => `${a.name.toLowerCase()}: ${x.mind![a.key]} signs`).join('; ')}. Use this only to pace and shape steps.`);
+  return bits.join(' ');
+}
+/** The one paragraph the assistant reads: the main quiz and the add-ons together, either may be missing. */
+export function learnedForAssistant(p: DiscoverProfile | null, x: ExtrasProfile | null): string | null {
+  if (!p && !x) return null;
+  if (p && !x) return profileForAssistant(p);
+  const extra = `${extrasForAssistant(x!)} How to help: ${extraHints(x!).join(' ')}`;
+  if (p) return `${profileForAssistant(p)} Self-checks too. ${extra}`;
+  return `They took short self-checks in Discover. They are not diagnoses, so never state them back as facts about the person and never use them to label them. Use them only to pick your tone and the size of a step. ${extra}`;
+}
+
 /** A short summary of the latest result. Never the answers, and nothing a person could not read on their own Discover page. */
 export interface DiscoverProfile {
   takenAt: string;
@@ -8354,3 +9727,444 @@ export function sortTasks<T extends { doDate: string | null; dueDate: string | n
   return list.map((t, i) => ({ t, i })).sort((x, y) => cmp(x.t, y.t) || x.i - y.i).map((x) => x.t);
 }
 
+// ---- The line of the day: a thought from a philosopher or from the app, one a day, none back until all have been shown ----
+
+/** Lines from philosophers and thinkers, each with who said it. Translations vary; these are the common English renderings. */
+const PHILOSOPHER_LINES: readonly (readonly [string, string])[] = [
+  ['The soul becomes dyed with the color of its thoughts.', 'Marcus Aurelius'],
+  ['If it is not right, do not do it; if it is not true, do not say it.', 'Marcus Aurelius'],
+  ['What stands in the way becomes the way.', 'Marcus Aurelius'],
+  ['Waste no more time arguing about what a good man should be. Be one.', 'Marcus Aurelius'],
+  ['Very little is needed to make a happy life; it is all within yourself, in your way of thinking.', 'Marcus Aurelius'],
+  ['Do every act of your life as though it were your last.', 'Marcus Aurelius'],
+  ['Our life is what our thoughts make it.', 'Marcus Aurelius'],
+  ['Loss is nothing else but change, and change is nature’s delight.', 'Marcus Aurelius'],
+  ['Accept the things to which fate binds you, and love the people with whom fate brings you together, but do so with all your heart.', 'Marcus Aurelius'],
+  ['Never esteem anything as of advantage to you that will make you break your word or lose your self-respect.', 'Marcus Aurelius'],
+  ['Look well into thyself; there is a source of strength which will always spring up if thou wilt always look.', 'Marcus Aurelius'],
+  ['We suffer more often in imagination than in reality.', 'Seneca'],
+  ['It is not that we have a short time to live, but that we waste much of it.', 'Seneca'],
+  ['While we are postponing, life speeds by.', 'Seneca'],
+  ['No man was ever wise by chance.', 'Seneca'],
+  ['Difficulties strengthen the mind, as labor does the body.', 'Seneca'],
+  ['If a man knows not to which port he sails, no wind is favorable.', 'Seneca'],
+  ['Begin at once to live, and count each separate day as a separate life.', 'Seneca'],
+  ['He suffers more than necessary who suffers before it is necessary.', 'Seneca'],
+  ['Life is long if you know how to use it.', 'Seneca'],
+  ['True happiness is to enjoy the present, without anxious dependence upon the future.', 'Seneca'],
+  ['Associate with people who are likely to improve you.', 'Seneca'],
+  ['It is a rough road that leads to the heights of greatness.', 'Seneca'],
+  ['Sometimes even to live is an act of courage.', 'Seneca'],
+  ['Men are disturbed not by things, but by the views they take of them.', 'Epictetus'],
+  ['First say to yourself what you would be; and then do what you have to do.', 'Epictetus'],
+  ['No man is free who is not master of himself.', 'Epictetus'],
+  ['Wealth consists not in having great possessions, but in having few wants.', 'Epictetus'],
+  ['It is impossible for a man to learn what he thinks he already knows.', 'Epictetus'],
+  ['If you want to improve, be content to be thought foolish and stupid.', 'Epictetus'],
+  ['Make the best use of what is in your power, and take the rest as it happens.', 'Epictetus'],
+  ['How long will you wait before you demand the best for yourself?', 'Epictetus'],
+  ['Only the educated are free.', 'Epictetus'],
+  ['A journey of a thousand miles begins with a single step.', 'Lao Tzu'],
+  ['Knowing others is intelligence; knowing yourself is true wisdom.', 'Lao Tzu'],
+  ['He who knows he has enough is rich.', 'Lao Tzu'],
+  ['Nature does not hurry, yet everything is accomplished.', 'Lao Tzu'],
+  ['The softest things in the world overcome the hardest things in the world.', 'Lao Tzu'],
+  ['Mastering others is strength; mastering yourself is true power.', 'Lao Tzu'],
+  ['The best of people is like water.', 'Lao Tzu'],
+  ['Do the difficult things while they are easy, and do the great things while they are small.', 'Lao Tzu'],
+  ['It does not matter how slowly you go as long as you do not stop.', 'Confucius'],
+  ['To know what you know and what you do not know, that is true knowledge.', 'Confucius'],
+  ['The man who moves a mountain begins by carrying away small stones.', 'Confucius'],
+  ['Everything has beauty, but not everyone sees it.', 'Confucius'],
+  ['He who learns but does not think is lost; he who thinks but does not learn is in great danger.', 'Confucius'],
+  ['Wherever you go, go with all your heart.', 'Confucius'],
+  ['The gem cannot be polished without friction, nor man perfected without trials.', 'Confucius'],
+  ['We are what we repeatedly do. Excellence, then, is not an act but a habit.', 'Will Durant, on Aristotle'],
+  ['Happiness depends upon ourselves.', 'Aristotle'],
+  ['The roots of education are bitter, but the fruit is sweet.', 'Aristotle'],
+  ['Pleasure in the job puts perfection in the work.', 'Aristotle'],
+  ['Well begun is half done.', 'Aristotle'],
+  ['Hope is a waking dream.', 'Aristotle'],
+  ['The aim of the wise is not to secure pleasure, but to avoid pain.', 'Aristotle'],
+  ['Friendship is a single soul dwelling in two bodies.', 'Aristotle'],
+  ['In all things of nature there is something of the marvelous.', 'Aristotle'],
+  ['The unexamined life is not worth living.', 'Socrates'],
+  ['I neither know nor think that I know.', 'Socrates'],
+  ['Know thyself.', 'Socrates'],
+  ['Be as you wish to seem.', 'Socrates'],
+  ['The beginning is the most important part of the work.', 'Plato'],
+  ['Courage is knowing what not to fear.', 'Plato'],
+  ['Wonder is the feeling of a philosopher, and philosophy begins in wonder.', 'Plato'],
+  ['No man ever steps in the same river twice.', 'Heraclitus'],
+  ['Character is destiny.', 'Heraclitus'],
+  ['Change is the only constant.', 'Heraclitus'],
+  ['All that we are is the result of what we have thought.', 'The Buddha'],
+  ['Better than a thousand hollow words is one word that brings peace.', 'The Buddha'],
+  ['Hatred does not cease by hatred, but only by love.', 'The Buddha'],
+  ['Three things cannot be long hidden: the sun, the moon and the truth.', 'The Buddha'],
+  ['Do not dwell in the past, do not dream of the future, concentrate the mind on the present moment.', 'The Buddha'],
+  ['Happiness is the absence of the striving for happiness.', 'Zhuangzi'],
+  ['The fish trap exists because of the fish. Once you have the fish, you can forget the trap.', 'Zhuangzi'],
+  ['Nothing great was ever achieved without enthusiasm.', 'Ralph Waldo Emerson'],
+  ['Every wall is a door.', 'Ralph Waldo Emerson'],
+  ['Trust thyself: every heart vibrates to that iron string.', 'Ralph Waldo Emerson'],
+  ['It is not length of life, but depth of life.', 'Ralph Waldo Emerson'],
+  ['Go confidently in the direction of your dreams. Live the life you have imagined.', 'Henry David Thoreau'],
+  ['It is not what you look at that matters, it is what you see.', 'Henry David Thoreau'],
+  ['The man who goes alone can start today; but he who travels with another must wait till that other is ready.', 'Henry David Thoreau'],
+  ['Our life is frittered away by detail. Simplify, simplify.', 'Henry David Thoreau'],
+  ['He who has a why to live can bear almost any how.', 'Friedrich Nietzsche'],
+  ['You must have chaos within you to give birth to a dancing star.', 'Friedrich Nietzsche'],
+  ['Without music, life would be a mistake.', 'Friedrich Nietzsche'],
+  ['There are no facts, only interpretations.', 'Friedrich Nietzsche'],
+  ['Become who you are.', 'Friedrich Nietzsche'],
+  ['Life can only be understood backwards; but it must be lived forwards.', 'Søren Kierkegaard'],
+  ['Anxiety is the dizziness of freedom.', 'Søren Kierkegaard'],
+  ['To dare is to lose one’s footing momentarily. Not to dare is to lose oneself.', 'Søren Kierkegaard'],
+  ['My life has been full of terrible misfortunes, most of which never happened.', 'Michel de Montaigne'],
+  ['The greatest thing in the world is to know how to belong to oneself.', 'Michel de Montaigne'],
+  ['All of humanity’s problems stem from man’s inability to sit quietly in a room alone.', 'Blaise Pascal'],
+  ['Do not weep; do not wax indignant. Understand.', 'Baruch Spinoza'],
+  ['Peace is not an absence of war, it is a virtue, a state of mind, a disposition for benevolence, confidence and justice.', 'Baruch Spinoza'],
+  ['Not what we have but what we enjoy constitutes our abundance.', 'Epicurus'],
+  ['Do not spoil what you have by desiring what you have not.', 'Epicurus'],
+  ['Of all the things wisdom provides to make life happy, the greatest by far is friendship.', 'Epicurus'],
+  ['The wound is the place where the light enters you.', 'Rumi'],
+  ['Yesterday I was clever, so I wanted to change the world. Today I am wise, so I am changing myself.', 'Rumi'],
+  ['What you seek is seeking you.', 'Rumi'],
+  ['Act only according to that maxim whereby you can at the same time will that it should become a universal law.', 'Immanuel Kant'],
+  ['The greatest weapon against stress is our ability to choose one thought over another.', 'William James'],
+  ['Act as if what you do makes a difference. It does.', 'William James'],
+  ['My experience is what I agree to attend to.', 'William James'],
+  ['Talent hits a target no one else can hit; genius hits a target no one else can see.', 'Arthur Schopenhauer'],
+  ['The limits of my language mean the limits of my world.', 'Ludwig Wittgenstein'],
+  ['If you have a garden and a library, you have everything you need.', 'Cicero'],
+  ['While there is life, there is hope.', 'Cicero'],
+  ['I am a citizen of the world.', 'Diogenes'],
+  ['The mind is not a vessel to be filled but a fire to be kindled.', 'Plutarch'],
+  ['Attention is the rarest and purest form of generosity.', 'Simone Weil'],
+  ['When we are no longer able to change a situation, we are challenged to change ourselves.', 'Viktor Frankl'],
+  ['In the midst of winter, I found there was, within me, an invincible summer.', 'Albert Camus'],
+  ['The struggle itself toward the heights is enough to fill a man’s heart.', 'Albert Camus'],
+  ['Man is condemned to be free.', 'Jean-Paul Sartre'],
+  ['Commitment is an act, not a word.', 'Jean-Paul Sartre'],
+  ['The only way to make sense out of change is to plunge into it, move with it, and join the dance.', 'Alan Watts'],
+  ['The good life is one inspired by love and guided by knowledge.', 'Bertrand Russell'],
+  ['It is better to be a human being dissatisfied than a pig satisfied.', 'John Stuart Mill'],
+  ['Smile, breathe and go slowly.', 'Thich Nhat Hanh'],
+  ['The present moment is the only moment available to us, and it is the door to all moments.', 'Thich Nhat Hanh'],
+  ['Be a philosopher; but, amidst all your philosophy, be still a man.', 'David Hume'],
+  ['Doubt is not a pleasant condition, but certainty is absurd.', 'Voltaire'],
+  ['It is not enough to have a good mind; the main thing is to use it well.', 'René Descartes'],
+  ['Man conquers the world by conquering himself.', 'Zeno of Citium'],
+  ['Knowledge itself is power.', 'Francis Bacon'],
+  ['Read not to contradict and confute; nor to believe and take for granted; but to weigh and consider.', 'Francis Bacon'],
+  ['You have a right to your actions, but never to your actions’ fruits.', 'The Bhagavad Gita'],
+  ['Set thy heart upon thy work, but never on its reward.', 'The Bhagavad Gita'],
+  ['Arise, awake, and stop not till the goal is reached.', 'Swami Vivekananda'],
+];
+
+const APP_LINES: readonly string[] = [
+  "You are not late. You are exactly on the only schedule your life has ever had.",
+  "Time is the one thing you spend every day without ever seeing a receipt.",
+  "Nobody is watching as closely as you think. That is the good news.",
+  "The person you will be in five years is being decided in the next five minutes.",
+  "You will never find time. You can only decide what the time you have is for.",
+  "Busy is not a measure of importance. It is often a way to avoid the one hard thing.",
+  "A year from now you will wish you had started today. So start today.",
+  "Today is the oldest you have ever been and the youngest you will ever be again.",
+  "The days feel long and the years feel short because the days are where you decide.",
+  "Your future self is a stranger you are building a home for. Be a good host.",
+  "You are always one hour away from a different day.",
+  "Waiting for the right moment is a moment spent.",
+  "There is no later. There is only a pile of nows you did not use.",
+  "Five minutes a day is thirty hours a year. Ask what thirty hours could build.",
+  "The clock does not care how you feel. That is why a small plan beats a strong mood.",
+  "You do not rise to the level of your goals. You fall to the level of your daily acts.",
+  "Motivation is a visitor. A routine is a resident. Build for the resident.",
+  "A goal is a wish with a deadline. A system is a wish with a Tuesday.",
+  "Big change is small changes that nobody clapped for.",
+  "What you do once is an event. What you do daily is who you are.",
+  "You are always practising something. The question is what.",
+  "The hardest part of any task is the thirty seconds before it.",
+  "If you can do it badly, you can do it. Do it badly first.",
+  "Perfect is a way of never starting that sounds like a standard.",
+  "Most of life is decided in the first step you almost did not take.",
+  "A small win each day is an unfair advantage.",
+  "Slow progress is still the only kind of progress there is.",
+  "Effort feels like hard work. It is also what building feels like from the inside.",
+  "The pain of starting lasts a minute. The pain of never starting lasts years.",
+  "You can only be consistent with something that is small enough to do on a bad day.",
+  "Do not trust a plan that needs you to feel great.",
+  "Done is a skill, and it is learned only by finishing.",
+  "The thing you keep postponing is usually the thing you most need.",
+  "Progress hides. Look back, not at your feet.",
+  "You are one habit away from a different life, and one excuse away from the same one.",
+  "What gets measured gets attention. What gets attention gets better.",
+  "You become what you rehearse.",
+  "Growth is not a feeling. It is a result you notice later.",
+  "Wherever your attention goes for a year is where your life goes.",
+  "You are the only person who has ever heard every thought you have had. Be careful what you say to yourself.",
+  "A mind in a hurry sees little. A mind at rest sees what matters.",
+  "What you pay attention to grows. Choose what you water.",
+  "Most worries are rehearsals for plays that never open.",
+  "You have been practising your mood for years. Practise another one.",
+  "A thought is not a fact. It is a weather report from a very small corner of you.",
+  "You cannot think your way out of a feeling, but you can walk your way out.",
+  "Your phone is a window or a mirror. Notice which one you are using.",
+  "If your attention is the product, you are the thing being sold. Take it back for an hour.",
+  "The mind is a brilliant servant and a terrible master.",
+  "Silence is not empty. It is where the answers wait.",
+  "Boredom is the doorway to an idea. Stop shutting it.",
+  "You are not your anxious thought. You are the one who hears it.",
+  "Notice that you can notice. That is the part of you that is free.",
+  "Most arguments are won in the first sentence, and lost in the second.",
+  "If a thought makes you smaller, question it. If it makes you honest, follow it.",
+  "Changing your mind is not weakness. It is the proof that you are still learning.",
+  "Certainty feels like knowledge. It is usually only comfort.",
+  "The brain that worries is the brain that cares. Teach it where to put that care.",
+  "Fear is a compass pointing at what matters. Follow it carefully, not blindly.",
+  "Courage is not feeling fear. It is the work you do while feeling it.",
+  "What you avoid grows teeth. What you face grows smaller.",
+  "The cost of safety is a smaller life.",
+  "One brave minute can change the shape of a week.",
+  "You are not stuck. You are standing in front of a decision you have not made.",
+  "What would you do if you knew you could not fail? Now do a small version, knowing you might.",
+  "Regret is mostly about what we did not try.",
+  "Discomfort is the sound of your edges stretching.",
+  "Nobody feels ready. The ready ones simply began.",
+  "The first draft of anything is a brave act.",
+  "Be willing to be a beginner. It is the only door to the next level.",
+  "Say the thing you have been rehearsing in your head. It will be shorter out loud.",
+  "Doubt is a sign you are near something that matters.",
+  "You have survived every bad day so far. That is a perfect record.",
+  "Rich is a number. Enough is a feeling. Know which one you are chasing.",
+  "Money is stored time. Spend it like it is.",
+  "Pay yourself first, and your future self will pay you back.",
+  "Your work is a gift only if it is given. Ship it.",
+  "Nobody has ever been moved by a perfect plan. They are moved by a finished thing.",
+  "Make something this week that you would be proud to be known for.",
+  "The best marketing is a person who can finally do what they could not do last month.",
+  "A career is the sum of small hours nobody saw.",
+  "If you want to be good at your work, be useful before you are visible.",
+  "You do not need an audience to start. You need one person you can help.",
+  "Make it good, make it kind, make it again.",
+  "What would you make if no one was going to rate it?",
+  "The best idea you have is the one you finish.",
+  "Learn in public. Everyone is more patient than you fear.",
+  "Price your work by what it gives, not by what it costs you in hours.",
+  "A deadline is a friend that tells the truth about time.",
+  "Do work that makes tomorrow easier for someone.",
+  "Ask what the work needs, not what you feel like doing.",
+  "You are allowed to be paid for what comes easily to you. It does not come easily to everyone.",
+  "A creative life is built on boring mornings.",
+  "The people you are closest to are quietly writing your next chapter.",
+  "Most people are not waiting to judge you. They are waiting to be noticed by you.",
+  "A friend is someone who remembers the question you did not ask.",
+  "Listening is the cheapest gift and the rarest.",
+  "You teach people how to treat you by what you quietly allow.",
+  "Love is not a feeling you wait for. It is a series of small decisions made at inconvenient times.",
+  "The way you speak when you are tired is who you are.",
+  "Call the person you keep meaning to call. The window does close.",
+  "Parents were once as unsure as you are now. Be gentle with them, and with yourself.",
+  "Your family has a story about you. You are allowed to write the next page.",
+  "You cannot pour from an empty cup, but you can ask someone for a refill.",
+  "Most conflicts are two people defending a hurt. Ask about the hurt.",
+  "Keep your promises to people who will never find out. That is character.",
+  "The kindest thing is often the plain thing, said early.",
+  "People remember how you made them feel, and how you made them wait.",
+  "Be the person who makes the room a little more honest.",
+  "The quality of your life is the quality of your closest relationships, multiplied by your attention to them.",
+  "Show up for the small things in other people’s lives. That is where trust lives.",
+  "Forgiveness is a door you open for yourself.",
+  "Say I love you in a way they can feel, not only in a way you would like.",
+  "Rest is not the reward for finishing. It is part of what makes finishing possible.",
+  "Your body keeps the minutes you do not. Treat it like a partner in the work.",
+  "Sleep is the cheapest performance tool you will ever be given.",
+  "Walk before you decide. Your thoughts will be easier to carry.",
+  "You do not get a spare body or a spare life. Maintenance is love.",
+  "If you would not say it to a friend, do not say it to yourself.",
+  "Water, sleep and sunlight fix more problems than they get credit for.",
+  "Burnout is what happens when you give your future away to pay for today.",
+  "A day with nothing in it is not wasted. It is rest doing its work.",
+  "You are not a machine, and a good plan accounts for that.",
+  "Take care of the person you are going to be at sixty. They are counting on you.",
+  "A tired mind lies. Do not trust your worst hour.",
+  "The best version of you is rested, fed and unhurried. Protect that version.",
+  "Boundaries are how you love people for longer.",
+  "There is no finish line for self-care. That is the point of it.",
+  "Everyone you admire had a teacher. Go and find yours.",
+  "The best way to learn something is to explain it to a child, or to a wall.",
+  "You do not need to know everything. You need to know who to ask and how to keep going.",
+  "Read one page of something that disagrees with you.",
+  "A good question is worth ten answers.",
+  "The expert was once the person who did not give up on being confused.",
+  "You learn most from the people who make you slightly uncomfortable.",
+  "Your teachers are not only in classrooms. They are in anyone who knows a little more than you about one thing.",
+  "Teaching is the fastest way to find the holes in your own understanding.",
+  "Be a student for long enough that you stop being embarrassed by it.",
+  "What you learn is only yours when you use it.",
+  "The point of knowledge is not to be right. It is to be useful.",
+  "Curiosity is a muscle. Use it daily or lose it quietly.",
+  "The more you know, the more you see what you do not. That is progress, not failure.",
+  "Ask one more question than you are comfortable with.",
+  "What would still matter to you if no one ever knew you did it?",
+  "The meaning of a life is rarely found. It is built, one choice at a time.",
+  "You are small, and the universe is vast, and your kindness still counts.",
+  "Ask not what the world owes you, but what you want to leave in it.",
+  "A good life is less about what you gather and more about what you give away.",
+  "Gratitude is the only feeling that makes you richer without taking from anyone.",
+  "Awe is free. Look at a tree for a full minute.",
+  "Faith is not knowing. It is acting well while you do not know.",
+  "What you worship is what you organise your day around. Look at your day.",
+  "The question is not whether you will die. It is what you will do with the days before.",
+  "Everything you have is on loan, including your time.",
+  "Some things only make sense when you stop trying to make them make sense.",
+  "If your life were a letter to the world, what would today’s line say?",
+  "You are part of something larger than your list. Remember that, and then do the list.",
+  "Silence, prayer, or a walk: pick a way to ask what it is all for.",
+  "Be the reason someone breathes a little easier today.",
+  "A kind act is a prayer with hands.",
+  "At the end, nobody counts their likes. They count who sat by the bed.",
+  "What would a wise old you tell you today?",
+  "If you could only do one thing today that mattered, which would it be?",
+  "You are not who you were. You are not yet who you will be. Today you get to choose which way to lean.",
+  "Every day you vote for a type of person. Cast a good vote.",
+  "You are the author, and you keep forgetting you are holding the pen.",
+  "The story you tell about yourself is the one you will live. Edit it kindly.",
+  "Do not wait to become confident. Act, and confidence will catch up.",
+  "Your identity is a habit of choosing. Choose slightly differently today.",
+  "Become the person who would find your goals easy.",
+  "You are not behind. You are not ahead. You are on your road, and comparing it to others is like comparing two maps.",
+  "Strong people are not hard on themselves. They are honest with themselves.",
+  "A small change in who you think you are changes a hundred small choices.",
+  "You can be proud of who you are and still be curious about who you could be.",
+  "Your past is a place you visit. It is not a place you live.",
+  "Today’s version of you is a draft. Drafts are meant to be improved.",
+  "You are never too late to become what you intend to become.",
+  "Act like the person you are becoming, a little at a time.",
+  "The fastest way to feel less busy is to finish one thing.",
+  "The more you chase certainty, the less you live.",
+  "You cannot get ahead by looking behind, and you cannot learn without it.",
+  "Sometimes the most productive thing you can do is stop.",
+  "You often get what you want by first being willing not to get it.",
+  "The things you own end up owning your time.",
+  "If you only do what you are comfortable with, you will be comfortable and stuck.",
+  "The harder you push on a stuck door, the less likely you are to notice that it opens the other way.",
+  "Everything you have ever wanted is on the other side of a little fear and a lot of ordinary days.",
+  "Less is often the answer, and we keep asking for more.",
+  "You are not what you do, and what you do is how you become who you are.",
+  "Say no to the good so you have room for the great.",
+  "A closed door is a kind of map.",
+  "What you resist persists, and what you accept can change.",
+  "You can be very busy and make no progress at all, and you can do almost nothing and move mountains.",
+  "Choosing one thing means letting go of a hundred others. That is the price, and the point.",
+  "Other people’s opinions of you are mostly about them.",
+  "You can only lose what you were afraid to use.",
+  "The opposite of fear is not courage. It is curiosity.",
+  "Doing nothing is also a decision, and it is one that gets made for you.",
+  "Your biggest limit is usually a story you have told so often you stopped checking it.",
+  "Your best ideas arrive when you stop forcing them, which is why you need to leave space.",
+  "The best way to be heard is to listen first.",
+  "If you cannot find the right words, the right thing is often silence and a hand on the shoulder.",
+  "What you call luck is mostly preparation meeting a door you remembered to open.",
+  "The smallest unit of change is a single honest decision.",
+  "If everything is important, nothing is. Pick the one.",
+  "You are surrounded by the people and things you have been choosing, whether you noticed or not.",
+  "Ask not what you are good at, but what you are willing to be bad at for long enough.",
+  "The map is not the road. Start walking and the map will update.",
+  "Be gentle. You are doing something hard, which is being a person.",
+  "The world needs the version of you that does not give up quietly.",
+  "Look at what you carried yesterday and notice that you are still here.",
+  "Small and steady wins the long game.",
+  "Let the day be ordinary and do one thing well.",
+  "Finish the day with one honest line to yourself: what mattered?",
+  "Whatever you did today, you can begin again tomorrow.",
+  "A good day is a day you can look back on without flinching.",
+  "You do not have to be extraordinary to do something extraordinary. You have to keep going.",
+  "The next small step is enough.",
+  "Most people overestimate what they can do in a day and underestimate what they can do in a year.",
+  "The gap between who you are and who you want to be is closed one ordinary Tuesday at a time.",
+  "If you are tired of starting over, stop quitting in the middle.",
+  "A decision made with calm will outlast a decision made with heat.",
+  "Ask yourself: will this matter in ten days, ten months, ten years? Spend your worry accordingly.",
+  "You are allowed to outgrow a place, a plan or a version of yourself.",
+  "The most honest thing you will do all day is look at your schedule and see what you really value.",
+  "Pay attention to what energises you after you have done it, not before.",
+  "A good question asked kindly can change a whole conversation.",
+  "Compare yourself to who you were last year, and be fair about it.",
+  "What you repeat in private becomes what you are in public.",
+  "You will never feel completely ready, and you will do it anyway. So do it now.",
+  "Everything difficult becomes ordinary with enough ordinary days.",
+  "The quiet work you do when no one thanks you is the work that builds you.",
+  "A life is made of Tuesdays. Make them count.",
+  "One honest hour beats ten distracted ones.",
+  "Do not confuse movement with progress. Check the direction first.",
+  "The things you cannot control are not your job today. The next step is.",
+  "Remember that the kind person you are looking for is also you.",
+  "Some days the biggest thing you can do is the smallest thing, done on purpose.",
+  "You do not owe anyone a perfect version of yourself. You owe yourself an honest one.",
+  "Care about the work, and care about the people the work is for.",
+  "If it is worth doing, it is worth doing slowly enough to do well.",
+  "Every master was once a beginner who kept showing up on the days that felt pointless.",
+  "The best time to be kind to yourself is when you least feel like it.",
+];
+
+/** A small seeded shuffle, so every person sees the same order on the same day. */
+function seededShuffle<T>(list: readonly T[], seed: number): T[] {
+  const out = [...list];
+  let a = (seed * 2654435761) >>> 0;
+  const rnd = () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  for (let i = out.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(rnd() * (i + 1));
+    [out[i], out[j]] = [out[j]!, out[i]!];
+  }
+  return out;
+}
+export interface DailyLine {
+  text: string;
+  /** Who said it: a philosopher. Empty for a line written for the app, which carries no name. */
+  by: string;
+  /** True for a line written for the app. */
+  own: boolean;
+}
+export const DAILY_LINE_COUNT = PHILOSOPHER_LINES.length + APP_LINES.length;
+/** The order of one round: every line once, a philosopher and then the app and so on, shuffled afresh each round. */
+function lineOrder(round: number): number[] {
+  const p = seededShuffle(PHILOSOPHER_LINES.map((_, i) => i), round * 2 + 11);
+  const a = seededShuffle(APP_LINES.map((_, i) => PHILOSOPHER_LINES.length + i), round * 2 + 12);
+  const out: number[] = [];
+  let first = round % 2 === 0 ? p : a;
+  let second = round % 2 === 0 ? a : p;
+  while (first.length || second.length) {
+    if (first.length) out.push(first.shift()!);
+    if (second.length) out.push(second.shift()!);
+  }
+  return out;
+}
+/**
+ * The line for a day (YYYY-MM-DD, the person's own day). Every line is shown once before any is shown again, so none comes back for as many days as
+ * there are lines (about a year); the lines alternate between a philosopher and the app, and each round is shuffled anew. The first line of a round
+ * is never the last of the one before. Nothing is stored: the same day always gives the same line.
+ */
+export function lineForDay(day: string): DailyLine & { round: number; position: number } {
+  const [y, m, d] = day.split('-').map(Number);
+  const n = Math.floor(Date.UTC(y ?? 2026, (m ?? 1) - 1, d ?? 1) / 86_400_000) - Math.floor(Date.UTC(2026, 0, 1) / 86_400_000);
+  const size = DAILY_LINE_COUNT;
+  const round = Math.floor(n / size);
+  const position = n - round * size;
+  const order = lineOrder(round);
+  // The round must not start with the line the last round ended on.
+  if (position <= 1 && round > -1000000) {
+    const lastBefore = lineOrder(round - 1)[size - 1]!;
+    if (order[0] === lastBefore) [order[0], order[1]] = [order[1]!, order[0]!];
+  }
+  const idx = order[position]!;
+  return idx < PHILOSOPHER_LINES.length ? { text: PHILOSOPHER_LINES[idx]![0], by: PHILOSOPHER_LINES[idx]![1], own: false, round, position } : { text: APP_LINES[idx - PHILOSOPHER_LINES.length]!, by: '', own: true, round, position };
+}

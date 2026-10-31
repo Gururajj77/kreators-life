@@ -593,7 +593,7 @@ export function PillChain({ items }: { items: { text: string; color: string; tex
 }
 
 /** One number with its name, and a hint on what moved it. Tap to go where it comes from. */
-export function StatTile({ label, value, hint, tone, to, children, className = '' }: { label: string; value: ReactNode; hint?: ReactNode; tone?: string; to?: string; children?: ReactNode; className?: string }) {
+export function StatTile({ label, value, hint, tone, to, children, className = '', onClick, pressed }: { label: string; value: ReactNode; hint?: ReactNode; tone?: string; to?: string; children?: ReactNode; className?: string; onClick?: () => void; pressed?: boolean }) {
   const inner = (
     <>
       <span className="block text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{label}</span>
@@ -604,6 +604,12 @@ export function StatTile({ label, value, hint, tone, to, children, className = '
   );
   const cls = `block min-h-[96px] rounded-tile p-sm text-ink ${className}`;
   const style = { background: tone ?? 'var(--color-card)' };
+  if (onClick)
+    return (
+      <button type="button" onClick={onClick} aria-pressed={pressed} className={`${cls} toy toy-soft w-full text-left ${pressed ? 'ring-2 ring-ink' : ''}`} style={style}>
+        {inner}
+      </button>
+    );
   return to ? (
     <Link to={to} className={`${cls} toy toy-soft`} style={style}>
       {inner}

@@ -260,6 +260,7 @@ me.get('/export', async (c) => {
     ['discoverDraft', 'SELECT * FROM discover_drafts WHERE user_id = ?'],
     ['discoverSettings', 'SELECT * FROM discover_settings WHERE user_id = ?'],
     ['discoverResults', 'SELECT * FROM discover_results WHERE user_id = ?'],
+    ['discoverExtras', 'SELECT * FROM discover_extras WHERE user_id = ?'],
     // Coaching, on either side: the links, the notes, the change log, and a coach's own line.
     ['coachLinks', 'SELECT * FROM coach_links WHERE coach_id = ? OR student_id = ?'],
     ['coachNotes', 'SELECT * FROM coach_notes WHERE coach_id = ? OR student_id = ?'],
@@ -344,6 +345,7 @@ me.post('/reset', async (c) => {
     db.prepare('DELETE FROM focus_rounds WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM discover_settings WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM discover_results WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM discover_extras WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM points_ledger WHERE user_id = ?').bind(user.id),
     db.prepare("DELETE FROM redemptions WHERE user_id = ? AND status = 'reserved'").bind(user.id),
     db.prepare('UPDATE relationship_scores SET score = 0, xp = 0 WHERE user_id = ?').bind(user.id),

@@ -1,6 +1,6 @@
 // The smoke checks. Run through blueprint.sh, which starts the server this talks to.
 // Node imports the shared model straight from TypeScript (--experimental-strip-types).
-import { DISCOVER_CORE_STEPS, DISCOVER_SCENES, DISCOVER_STEPS, EQ_FEELINGS, EQ_PEOPLE, EQ_READING, PUZZLES_SHOWN, puzzleAt, RELATIONSHIPS, QUESTIONS, XP, POINTS, WAIT, RUN_REWARD, SOCIAL_REWARDS, MAX_NOT_TO_DO, MODULES, FEATURE_FEE_POINTS, matchSetup, parseSetup, setupSwitchable } from '../../packages/shared/src/index.ts';
+import { LOVE_PAIRS, MIND_SCREENS, TYPE_NAMES, TYPE_SCREENS, DISCOVER_CORE_STEPS, DISCOVER_SCENES, DISCOVER_STEPS, EQ_FEELINGS, EQ_PEOPLE, EQ_READING, PUZZLES_SHOWN, puzzleAt, RELATIONSHIPS, QUESTIONS, XP, POINTS, WAIT, RUN_REWARD, SOCIAL_REWARDS, MAX_NOT_TO_DO, MODULES, FEATURE_FEE_POINTS, matchSetup, parseSetup, setupSwitchable } from '../../packages/shared/src/index.ts';
 import { LIMITS } from '../../apps/api/src/limits.ts';
 import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, PLANS } from '../../packages/shared/src/index.ts';
 import http from 'node:http';
@@ -473,6 +473,11 @@ section('Shop');
 {
   const free = await api('POST', '/studio/products', { kind: 'digital', title: `Smoke free download ${stamp}`, pricePoints: 0, status: 'live', url: 'https://example.com/file' }, C.token);
   check('a seller can make a live product', free.status === 201 && free.json.product?.id, free.json);
+  const faqSet = [{ q: 'Who is it for?', a: 'Anyone starting out.' }, { q: '  ', a: 'No question, dropped' }, { q: 'How long?', a: '' }, ...Array.from({ length: 8 }, (_, i) => ({ q: `Extra ${i}`, a: `Answer ${i}` }))];
+  const withFaq = await api('POST', '/studio/products', { kind: 'digital', title: `Smoke faq ${stamp}`, pricePoints: 0, status: 'live', url: 'https://example.com/faq', faq: faqSet }, C.token);
+  check('a product keeps up to six clean questions and answers, and drops the rest', withFaq.status === 201 && withFaq.json.product?.faq?.length === 6 && withFaq.json.product.faq[0].q === 'Who is it for?' && withFaq.json.product.faq.every((f) => f.q && f.a), withFaq.json.product?.faq);
+  const faqEdit = await api('PATCH', `/studio/products/${withFaq.json.product?.id}`, { faq: [{ q: 'Is there a refund?', a: 'Yes, within a week.' }] }, C.token);
+  check('the questions can be changed and cleared', faqEdit.json.product?.faq?.length === 1 && (await api('PATCH', `/studio/products/${withFaq.json.product?.id}`, { faq: [] }, C.token)).json.product?.faq?.length === 0, faqEdit.json.product?.faq);
   const priced = await api('POST', '/studio/products', { kind: 'digital', title: `Smoke priced ${stamp}`, pricePoints: 5, status: 'live' }, C.token);
   const dear = await api('POST', '/studio/products', { kind: 'digital', title: `Smoke dear ${stamp}`, pricePoints: 100000, status: 'live' }, C.token);
   const gated = await api('POST', '/studio/products', { kind: 'digital', title: `Smoke gated ${stamp}`, pricePoints: 0, status: 'live', minPoints: 1000, badge: 'ten_tasks' }, C.token);
@@ -1668,6 +1673,88 @@ section('Engagement');
   check('and nobody else sees it', dzOther.json.latest === null, dzOther.json.latest);
   const dzGone = await api('DELETE', `/discover/results/${dzDone.json.id}`, undefined, R.token);
   check('the owner can delete a result', dzGone.status === 200 && (await api('GET', '/discover', undefined, R.token)).json.latest === null, dzGone.status);
+
+  // Devices: three at once. The fourth sign-in signs the oldest out, and that device is told why.
+  const dvEmail = `devices-${stamp}@smoke.test`;
+  const dvPass = `Quartz-${stamp}-dev`;
+  const dv0 = await signup(dvEmail, dvPass, 'Smoke devices');
+  const dvIn = async () => (await api('POST', '/auth/signin', { email: dvEmail, password: dvPass })).json.token;
+  const dvTokens = [dv0.token, await dvIn(), await dvIn()];
+  const dvUp = await Promise.all(dvTokens.map((t) => api('GET', '/me', undefined, t)));
+  check('three devices can be signed in at once', dvUp.every((r) => r.status === 200), dvUp.map((r) => r.status));
+  const dv3 = await dvIn();
+  const dvOld = await api('GET', '/me', undefined, dvTokens[0]);
+  check('a fourth sign-in signs the oldest device out, and says why', dvOld.status === 401 && dvOld.json.reason === 'devices', dvOld.json);
+  const dvRest = await Promise.all([dvTokens[1], dvTokens[2], dv3].map((t) => api('GET', '/me', undefined, t)));
+  check('and the other three keep working', dvRest.every((r) => r.status === 200), dvRest.map((r) => r.status));
+  const dvUnknown = await api('GET', '/me', undefined, 'not-a-real-token');
+  check('an unknown token is a plain 401 with no reason', dvUnknown.status === 401 && dvUnknown.json.reason === undefined, dvUnknown.json);
+  const dv4 = await dvIn();
+  const dvSecond = await api('GET', '/me', undefined, dvTokens[1]);
+  check('the next one pushes out the next oldest, never a newer one', dvSecond.status === 401 && (await api('GET', '/me', undefined, dv3)).status === 200 && (await api('GET', '/me', undefined, dv4)).status === 200, dvSecond.status);
+
+  // Discover add-ons: a 16-type self-check, love languages and how the mind works. Own routes, owner only, the mind part behind its own switch.
+  const xm0 = await api('GET', '/discover/more', undefined, R.token);
+  check('the add-ons start empty', xm0.status === 200 && ['type', 'love', 'mind'].every((k) => xm0.json.extras?.[k]?.result === null && xm0.json.extras[k].progress.done === 0), xm0.json);
+  check('an unknown add-on is not found', (await api('PUT', '/discover/more/horoscope/draft', { answers: [] }, R.token)).status === 404, '');
+  const typeAll = (pole) => TYPE_SCREENS.map((sc) => sc.map((it) => (['E', 'S', 'T', 'J'].includes(it.pole) === (pole === 'first') ? 4 : 0)));
+  const xmPart = await api('PUT', '/discover/more/type/draft', { answers: [typeAll('first')[0], [9, 9, 9, 9]] }, R.token);
+  check('a draft keeps only clean answers', xmPart.status === 200 && xmPart.json.progress?.done === 1, xmPart.json);
+  const xmEarly = await api('POST', '/discover/more/type/submit', {}, R.token);
+  check('a half-finished self-check is not scored', xmEarly.status === 400 && /still open/.test(xmEarly.json.error ?? ''), xmEarly.json);
+  const xmType = await api('POST', '/discover/more/type/submit', { answers: typeAll('second') }, R.token);
+  check('the type is scored on the server, four letters with how clear each is', xmType.status === 201 && xmType.json.result?.code === 'INFP' && xmType.json.analysis?.name === TYPE_NAMES.INFP.name && Object.values(xmType.json.result.axes).every((a) => a.strength === 'clear'), xmType.json);
+  const loveAns = { receive: LOVE_PAIRS.map(() => 0), give: LOVE_PAIRS.map(() => 1) };
+  const xmLove = await api('POST', '/discover/more/love/submit', { answers: loveAns }, R.token);
+  check('love languages are scored for receiving and giving apart', xmLove.status === 201 && xmLove.json.result?.receive?.words === 4 && xmLove.json.result?.give?.touch === 4 && xmLove.json.analysis?.match === false, xmLove.json);
+  const mindAns = MIND_SCREENS.map((sc) => sc.map(() => 4));
+  const xmMind = await api('POST', '/discover/more/mind/submit', { answers: mindAns }, R.token);
+  check('how the mind works is scored in bands, with a plain note that it is not a test', xmMind.status === 201 && xmMind.json.result?.areas?.att?.band === 'many' && xmMind.json.analysis?.talkToSomeone === true && /not a test for ADHD/.test(xmMind.json.analysis?.note ?? ''), xmMind.json.analysis?.note);
+  const xmBack = await api('GET', '/discover/more', undefined, R.token);
+  check('the results are kept', ['type', 'love', 'mind'].every((k) => xmBack.json.extras?.[k]?.result), Object.keys(xmBack.json.extras ?? {}));
+  const xmOther = await api('GET', '/discover/more', undefined, P.token);
+  check('and nobody else sees them', ['type', 'love', 'mind'].every((k) => xmOther.json.extras?.[k]?.result === null), xmOther.json);
+
+  const xmSet0 = await api('GET', '/discover', undefined, R.token);
+  check('the mind switch starts off', xmSet0.json.settings?.mind === false, xmSet0.json.settings);
+  await api('PUT', '/discover/settings', { assistant: true, steps: true }, R.token);
+  const xmProf1 = await api('GET', '/discover/profile', undefined, R.token);
+  check('the assistant reads type and love languages but not the mind part while that switch is off', xmProf1.status === 200 && xmProf1.json.extras?.type === 'INFP' && xmProf1.json.extras?.love?.give?.[0] === 'touch' && xmProf1.json.extras?.mind === undefined && !/mind works/.test(xmProf1.json.summary ?? ''), xmProf1.json.extras);
+  const dayStr = new Date().toISOString().slice(0, 10);
+  const xmBrief0 = await api('GET', `/home/brief?date=${dayStr}&hour=10`, undefined, R.token);
+  const xmKeys0 = (xmBrief0.json.brief?.actions ?? xmBrief0.json.actions ?? []).map((x) => x.key);
+  check('next steps do not use the mind part while it is off', !xmKeys0.some((k) => k.startsWith('mind-')), xmKeys0);
+  await api('PUT', '/discover/settings', { mind: true }, R.token);
+  const xmProf2 = await api('GET', '/discover/profile', undefined, R.token);
+  check('with the mind switch on the assistant gets a pacing hint and never a condition', xmProf2.json.extras?.mind?.att === 'many' && /never name a condition/.test(xmProf2.json.summary ?? '') && !/ADHD|autis/i.test(JSON.stringify(xmProf2.json.howToHelp ?? [])), xmProf2.json.howToHelp);
+  const xmBrief1 = await api('GET', `/home/brief?date=${dayStr}&hour=10`, undefined, R.token);
+  const xmKeys1 = (xmBrief1.json.brief?.actions ?? xmBrief1.json.actions ?? []).map((x) => x.key);
+  check('and next steps then pick up a step to pace the day', xmKeys1.some((k) => k.startsWith('mind-')), xmKeys1);
+  // Human design: a chart from the birth details, worked out on the server, in both zodiacs, private to the person.
+  const hdIn = { date: '1990-05-15', time: '14:30', zone: 'Asia/Kolkata', place: 'Mumbai' };
+  const hdEarly = await api('POST', '/discover/more/design/submit', { answers: { ...hdIn, time: '' } }, R.token);
+  check('a chart needs the birth time', hdEarly.status === 400, hdEarly.json);
+  const hdBadZone = await api('POST', '/discover/more/design/submit', { answers: { ...hdIn, zone: 'Nowhere/Land' } }, R.token);
+  check('and a real time zone', hdBadZone.status === 400, hdBadZone.json);
+  const hd = await api('POST', '/discover/more/design/submit', { answers: hdIn }, R.token);
+  check('the chart is worked out on the server, for both zodiacs, with goals', hd.status === 201 && hd.json.result?.birthUtc === '1990-05-15T09:00:00.000Z' && hd.json.analysis?.tropical?.goals?.length >= 6 && hd.json.analysis?.fagan?.goals?.length >= 6 && hd.json.analysis?.compare?.lines?.length === 4 && ['3d', '5d', '7d'].every((k) => hd.json.analysis.tropical.depths[k].length > 2), hd.json.analysis?.tropical?.headline);
+  const hdN = await api('POST', '/discover/more/design/submit', { answers: { ...hdIn, name: 'Asha Rao 123' } }, R.token);
+  check('a birth name keeps only letters, for numerology', hdN.status === 201 && hdN.json.result?.input?.name === 'Asha Rao', hdN.json.result?.input);
+  const hdOther = await api('GET', '/discover/more', undefined, P.token);
+  check('nobody else sees the chart or the birth details', hdOther.json.extras?.design?.result === null && !JSON.stringify(hdOther.json).includes('Mumbai'), '');
+  const hdProf = await api('GET', '/discover/profile', undefined, R.token);
+  check('the assistant gets the type, strategy, authority and profile, never the birth details', hdProf.json.extras?.design?.type && hdProf.json.extras?.design?.profile && /not science/.test(hdProf.json.summary ?? '') && !/1990|14:30|Kolkata|Mumbai|Asha/.test(JSON.stringify(hdProf.json)) && hdProf.json.extras?.design?.lifePath === 3 && hdProf.json.extras?.design?.expression >= 1 && /Numerology/.test(hdProf.json.summary ?? ''), hdProf.json.extras?.design);
+  const hdExport = JSON.stringify((await api('GET', '/me/export', undefined, R.token)).json);
+  check('the chart is in the export', hdExport.includes('Asia/Kolkata'), '');
+  const hdDel = await api('DELETE', '/discover/more/design', undefined, R.token);
+  check('and can be deleted on its own', hdDel.status === 200 && (await api('GET', '/discover/more', undefined, R.token)).json.extras?.design?.result === null, hdDel.status);
+
+  const xmExport = JSON.stringify((await api('GET', '/me/export', undefined, R.token)).json);
+  check('the add-ons are in the export', xmExport.includes('discoverExtras') && xmExport.includes('INFP'), '');
+  const xmDel = await api('DELETE', '/discover/more/mind', undefined, R.token);
+  const xmAfter = await api('GET', '/discover/more', undefined, R.token);
+  check('one add-on can be deleted on its own', xmDel.status === 200 && xmAfter.json.extras?.mind?.result === null && xmAfter.json.extras?.type?.result !== null, xmAfter.json.extras?.mind);
+  await api('PUT', '/discover/settings', { assistant: false, mind: false, steps: false }, R.token);
 
   // Super admin gives xp and badges by hand: audited, floored at zero, and counted for unlocks.
   const gxBefore = (await api('GET', '/me', undefined, R.token)).json.user.xp;

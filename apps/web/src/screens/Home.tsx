@@ -1,3 +1,4 @@
+import { QuoteOfTheDay } from '../components/QuoteOfTheDay';
 import { RemindersSection } from '../components/Reminders';
 import { badgeRoleOf, greetingFor, LIFE_AREAS, MODULE_GROUPS, money, MOODS, RELATIONSHIP_BY_KEY, STRESS_LEVELS, type HomeResponse, type ModuleGroup } from '@kreators/shared';
 import type { CSSProperties, ReactNode } from 'react';
@@ -125,6 +126,7 @@ export function Home() {
       </header>
 
       <RemindersSection always />
+      <QuoteOfTheDay date={date} />
       <DailyBrief date={date} hour={hour} />
 
 

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { latestProfile, settingsOf } from './discover';
+import { latestExtras, latestProfile, settingsOf } from './discover';
 import { briefFor, gettingStarted, isAutoHandle, levelProgress, nudgeFor, parseCoachShare, periodFor, RELATIONSHIPS, type BriefLine, type DailyBrief, type HomeFloor, type HomeResponse, type HomeUpNext, type RelationshipKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { can, nameOf, nowIso, parseList, shiftDate } from '../db';
@@ -263,7 +263,7 @@ home.get('/brief', async (c) => {
   const dSet = await settingsOf(db, user.id);
   const dProfile = await latestProfile(db, user.id);
   const base = briefFor({
-    discover: { taken: Boolean(dProfile), profile: dSet.steps ? dProfile : null },
+    discover: { taken: Boolean(dProfile), profile: dSet.steps ? dProfile : null, extras: dSet.steps ? await latestExtras(db, user.id, dSet.mind) : null },
     hour,
     checkedIn: user.last_checkin === date,
     streak: user.streak,

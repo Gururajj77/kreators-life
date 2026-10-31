@@ -1,4 +1,4 @@
-import { PRODUCT_KIND_META, type CourseDraft, type Lesson, type QuizQuestion , BADGES, HONORS} from '@kreators/shared';
+import { PRODUCT_KIND_META, type CourseDraft, type Lesson, type QuizQuestion , BADGES, HONORS, FAQ_A_MAX, FAQ_Q_MAX, MAX_FAQ, type ProductFaq } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -32,6 +32,7 @@ export function StudioProduct() {
   const [cover, setCover] = useState('');
   const [pwyw, setPwyw] = useState(false);
   const [intake, setIntake] = useState<string[]>([]);
+  const [faq, setFaq] = useState<ProductFaq[]>([]);
   const [replayUrl, setReplayUrl] = useState('');
   const [replayPoints, setReplayPoints] = useState('0');
   const [bundleIds, setBundleIds] = useState<string[]>([]);
@@ -65,6 +66,7 @@ export function StudioProduct() {
     setCover(p.cover);
     setPwyw(p.pwyw);
     setIntake(p.intake);
+    setFaq(p.faq ?? []);
     setReplayUrl(p.replayUrl ?? '');
     setReplayPoints(String(p.replayPoints));
     setBundleIds(p.bundleIds);
@@ -96,6 +98,7 @@ export function StudioProduct() {
         cover,
         pwyw,
         intake: intake.map((s) => s.trim()).filter(Boolean),
+        faq: faq.map((f) => ({ q: f.q.trim(), a: f.a.trim() })).filter((f) => f.q && f.a),
         replayUrl: replayUrl || null,
         replayPoints: Number(replayPoints) || 0,
         bundleIds,
@@ -339,6 +342,26 @@ export function StudioProduct() {
             <span className="mt-xs block text-[12px] font-bold text-ink-soft">When it runs out the member sees a Renew button and buys again.</span>
           </label>
         )}
+        <fieldset className="m-0 border-0 p-0">
+          <legend className="text-[14px] font-bold">Questions buyers ask (shown on the page)</legend>
+          <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Answer the doubts that stop people buying: who it is for, what they get, how long it takes. Up to {MAX_FAQ}.</p>
+          <div className="mt-xs flex flex-col gap-xs">
+            {faq.map((f, i) => (
+              <div key={i} className="flex flex-col gap-xs rounded-tile bg-paper p-sm">
+                <input value={f.q} onChange={(e) => setFaq((list) => list.map((x, j) => (j === i ? { ...x, q: e.target.value } : x)))} maxLength={FAQ_Q_MAX} aria-label={`Question ${i + 1}`} placeholder="A question a buyer asks" className="rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]" />
+                <textarea value={f.a} onChange={(e) => setFaq((list) => list.map((x, j) => (j === i ? { ...x, a: e.target.value } : x)))} maxLength={FAQ_A_MAX} rows={3} aria-label={`Answer ${i + 1}`} placeholder="Your answer, in plain words" className="rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]" />
+                <Button variant="ghost" onClick={() => setFaq((list) => list.filter((_, j) => j !== i))} aria-label={`Remove question ${i + 1}`}>
+                  Remove
+                </Button>
+              </div>
+            ))}
+          </div>
+          {faq.length < MAX_FAQ && (
+            <Button variant="outline" className="mt-xs" onClick={() => setFaq((list) => [...list, { q: '', a: '' }])}>
+              Add a question
+            </Button>
+          )}
+        </fieldset>
         {(p.kind === 'session' || p.kind === 'dm') && (
           <fieldset className="m-0 border-0 p-0">
             <legend className="text-[14px] font-bold">{p.kind === 'session' ? 'Questions to answer when booking' : 'Questions to answer at checkout'}</legend>

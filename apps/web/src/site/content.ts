@@ -216,8 +216,8 @@ export const FEATURES: Record<string, FeatureCopy> = {
   },
   discover: {
     tagline: 'Find out what you are good at.',
-    pitch: 'A quiz about how you think, feel and act. Pick what is most and least like you, solve pattern puzzles that get harder or easier as you go, choose words that fit you and judge real situations. Add emotional intelligence if you like. You get your top three strengths across the seven relationships, a detailed read on five personality traits and on your reasoning (it is not an IQ test), and one small thing to try. Only you see it.',
-    steps: ['Answer in short parts. It saves as you go.', 'Add emotional intelligence if you like.', 'See your strengths and a detailed read, and let your next steps on Home start to fit you.'],
+    pitch: 'A quiz about how you think, feel and act. Pick what is most and least like you, solve pattern puzzles that get harder or easier as you go, choose words that fit you and judge real situations. Add emotional intelligence if you like. You get your top three strengths across the seven relationships, a detailed read on five personality traits and on your reasoning (it is not an IQ test), and one small thing to try. Four self-checks sit beside it: your four-letter type from sixteen (in the style of Myers-Briggs), your love languages for giving and for receiving love, how your mind works (attention, energy and patterns, as signs and never a diagnosis), and Human design, which works out your chart from your birth details in the tropical and the sidereal zodiac and turns it into goals. Only you see it, and you choose what the assistant and your next steps may learn.',
+    steps: ['Answer in short parts. It saves as you go.', 'Add emotional intelligence, your 16 personality type (MBTI-style), your love languages, how your mind works or your Human design, if you like.', 'See your strengths and a detailed read, and let your next steps on Home start to fit you.'],
     relationships: ['self', 'guru', 'divine', 'lover_partner', 'servant_leader', 'friendship', 'parent_child'],
   },
   cards: {

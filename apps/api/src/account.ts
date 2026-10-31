@@ -9,6 +9,7 @@ export async function deleteAccount(db: D1Database, userId: string): Promise<voi
   await db.batch([
     db.prepare("UPDATE users SET display_name = 'Deleted member', email = NULL, phone = '', birth_date = '', password_hash = NULL, password_salt = NULL, handle = NULL, bio = '', avatar_url = '', socials_json = '{}', skills = '[]', categories = '[]', goals = '[]', interests = '[]', identities = '[]', intake_json = '{}', city = '', area = '', lat = NULL, lng = NULL, location = '', reminder_time = NULL, open_to_intros = 0, permissions = '[]', friend_code = NULL, leaderboard_opt_in = 0 WHERE id = ?").bind(userId),
     db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM session_evictions WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM subtasks WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM nodes WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM media_files WHERE owner_id = ?').bind(userId),
@@ -56,6 +57,7 @@ export async function deleteAccount(db: D1Database, userId: string): Promise<voi
     db.prepare('DELETE FROM discover_drafts WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM discover_settings WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM discover_results WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM discover_extras WHERE user_id = ?').bind(userId),
     // Coaching ends with the account, on either side, and its notes, change log and coach line go with it.
     db.prepare("UPDATE coach_links SET status = 'ended', ended_at = ?, ended_by = ? WHERE (coach_id = ? OR student_id = ?) AND status IN ('pending','active')").bind(nowIso(), userId, userId, userId),
     db.prepare('DELETE FROM coach_notes WHERE coach_id = ? OR student_id = ?').bind(userId, userId),

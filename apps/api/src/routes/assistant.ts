@@ -12,14 +12,14 @@ import {
   type AssistantReply,
   type AssistantStatus,
   type AssistantTurn,
-  profileForAssistant,
+  learnedForAssistant,
 } from '@kreators/shared';
 import type { AppEnv, Env } from '../env';
 import { resolveAccess } from '../access';
 import { accountOf, creditAccount, spend, usedToday } from '../credits';
 import { DATE_RE, dateNearToday, newId, nowIso, shiftDate } from '../db';
 import { caller, ToolError, type Req } from '../assistant/dispatch';
-import { latestProfile, settingsOf } from './discover';
+import { latestExtras, latestProfile, settingsOf } from './discover';
 import { checkArgs, TOOL_BY_NAME, TOOLS, type Args, type Tool, type ToolIO } from '../assistant/tools';
 import { chat, MAX_OUT, ModelError, modelOf, tokensOf, tokensOfMessages, type Message, type ToolCall, type ToolSpec } from '../assistant/model';
 
@@ -224,7 +224,8 @@ export function assistantRoutes(appFetch: AppFetch) {
     const byName = new Map(tools.map((t) => [t.name, t]));
     const specs: ToolSpec[] = tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.risk === 'confirm' ? `${t.description} It waits for the person to tap Confirm.` : t.description, parameters: t.params } }));
     // What the person let the assistant learn from Discover: only when they switched it on and the model keeps nothing.
-    const learned = cfg.private && (await settingsOf(db, user.id)).assistant ? await latestProfile(db, user.id).then((p) => (p ? profileForAssistant(p) : null)) : null;
+    const dset = cfg.private ? await settingsOf(db, user.id) : null;
+    const learned = dset?.assistant ? learnedForAssistant(await latestProfile(db, user.id), await latestExtras(db, user.id, dset.mind)) : null;
     const system = systemPrompt({ learned, name: user.display_name, date, weekday: new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' }), timeZone, screen: screenOf(path) });
     const fixed = tokensOf(system) + tokensOf(JSON.stringify(specs));
     const messages: Message[] = [{ role: 'system', content: system }, ...fit(turns, limit.contextTokens - fixed - MAX_OUT)];

@@ -13,6 +13,7 @@ export const keys = {
   rewards: ['rewards'] as const,
   cards: ['cards'] as const,
   discover: ['discover'] as const,
+  discoverMore: ['discover', 'more'] as const,
 };
 
 /** A query that only runs once there is a session. */
@@ -39,6 +40,7 @@ export function useLeaderboard(by: LeaderboardSort, scope: LeaderboardScope = 'a
 }
 
 export const useDiscover = () => useAuthed(keys.discover, api.discover);
+export const useDiscoverMore = () => useAuthed(keys.discoverMore, api.discoverMore);
 export const useCardGames = () => useAuthed(keys.cards, api.cardGames);
 export const useCardGame = (key: string) => useAuthed([...keys.cards, key] as const, () => api.cardGame(key), Boolean(key));
 
