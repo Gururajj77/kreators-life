@@ -245,6 +245,22 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
   const pileY = 16;
   const left = piles[deck.key]?.length ?? 0;
 
+  // When the table changes size (focus mode on or off, a phone turning, a window resized) every card is brought back onto it. Positions are
+  // scaled to the new size, so the cards keep their arrangement and none is left outside the edge.
+  const lastBox = useRef({ w: box.w, h: box.h, size, height });
+  useEffect(() => {
+    const prev = lastBox.current;
+    lastBox.current = { w: box.w, h: box.h, size, height };
+    const oldMaxX = Math.max(1, prev.w - prev.size - 8);
+    const oldMaxY = Math.max(1, prev.h - prev.height - 8);
+    const maxX = Math.max(0, box.w - size - 8);
+    const maxY = Math.max(0, box.h - height - 8);
+    if (oldMaxX === maxX && oldMaxY === maxY) return;
+    setTable((cur) =>
+      cur.map((t) => ({ ...t, x: Math.min(maxX, Math.max(0, Math.round((t.x * maxX) / oldMaxX))), y: Math.min(maxY, Math.max(0, Math.round((t.y * maxY) / oldMaxY))) })),
+    );
+  }, [box.w, box.h, size, height]);
+
   const draw = useCallback(() => {
     const pile = piles[deck.key] ?? [];
     const idx = pile[pile.length - 1];
