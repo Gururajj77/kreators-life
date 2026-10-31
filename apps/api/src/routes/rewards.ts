@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-import { REWARD_BY_KEY, REWARDS, type Redemption, type RewardsResponse } from '@kreators/shared';
+import { CARD_GAME_BY_KEY, REWARD_BY_KEY, REWARDS, unlockFor, type Redemption, type RewardsResponse } from '@kreators/shared';
+import { haveFor } from '../unlocks';
 import type { AppEnv } from '../env';
 import { getUser, newId, nowIso, parseModules } from '../db';
 
@@ -39,11 +40,17 @@ rewards.post('/:key/redeem', async (c) => {
   const reward = REWARD_BY_KEY[c.req.param('key')];
   if (!reward) return c.json({ error: 'no such reward' }, 404);
   if (reward.game && (await db.prepare('SELECT 1 AS x FROM card_unlocks WHERE user_id = ? AND game_key = ?').bind(user.id, reward.game).first())) return c.json({ error: 'you already have this game' }, 409);
+  // A game can ask for more than points: an xp floor and a badge. A super admin is never locked out.
+  if (reward.game && CARD_GAME_BY_KEY[reward.game]) {
+    const g = CARD_GAME_BY_KEY[reward.game]!;
+    const gate = unlockFor({ minPoints: 0, minXp: g.minXp, badge: g.badge ?? '' }, await haveFor(db, user));
+    if (!gate.ok) return c.json({ error: gate.why, unlock: gate }, 403);
+  }
   if (user.points < reward.cost) return c.json({ error: `you need ${reward.cost - user.points} more points` }, 400);
 
   const now = nowIso();
   const id = newId();
-  // A card game is not posted to anyone: it opens in the app for good, right away. It also switches the Card games app on.
+  // A card game is not posted to anyone: it opens in the app for good, right away. It also switches the Games app on.
   if (reward.kind === 'unlock' && reward.game) {
     const mine = parseModules(user.modules);
     mine.cards = true;

@@ -8,7 +8,7 @@ import { Screen } from '../components/Screen';
 import { SearchBox } from '../components/SearchBox';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
-import { useModules, type ModuleView } from '../lib/modules';
+import { useGroupOrder, useModules, type ModuleView } from '../lib/modules';
 import { useMe, useRefreshAll } from '../lib/queries';
 
 const ORDER: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'core', 'manage'];
@@ -21,6 +21,7 @@ const ORDER: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'core
 export function Apps() {
   const me = useMe();
   const { modules } = useModules();
+  const groupOrder = useGroupOrder(ORDER);
   const refresh = useRefreshAll();
   const unread = me.data?.unread ?? 0;
   const [asking, setAsking] = useState<ModuleView | null>(null);
@@ -40,7 +41,7 @@ export function Apps() {
       <header className="pt-lg">
         <h1 className="text-[30px]">Apps</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          {listed.length} on. Tap one to open it.
+          {listed.length} on. Tap one to open it. The ones that matter most to you come first.
         </p>
         <Link to="/you#features" className="toy mt-md flex items-center gap-sm rounded-card bg-ink p-md text-on-ink" style={{ '--toy-color': 'var(--color-ink)' } as CSSProperties}>
           <span className="flex size-[48px] shrink-0 items-center justify-center rounded-pill bg-on-ink/15 text-[24px]" aria-hidden="true">
@@ -59,7 +60,7 @@ export function Apps() {
         </div>
       </header>
 
-      {ORDER.map((g) => {
+      {groupOrder.map((g) => {
         const list = listed.filter((m) => m.group === g);
         if (list.length === 0) return null;
         const rel = RELATIONSHIP_BY_KEY[MODULE_GROUP_ACCENT[g]];

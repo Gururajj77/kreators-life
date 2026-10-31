@@ -17,8 +17,9 @@ import { SearchBox } from '../components/SearchBox';
 import { DailyBrief } from '../components/DailyBrief';
 import { Section, SeeAll } from '../components/Section';
 import { api } from '../lib/api';
+import { bento } from '../lib/bento';
 import { prettyDate, todayLocal } from '../lib/date';
-import { useModules } from '../lib/modules';
+import { useGroupOrder, useModules } from '../lib/modules';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
 import { useMutation } from '@tanstack/react-query';
 
@@ -51,8 +52,12 @@ export function Home() {
   const hour = new Date().getHours();
   const q = useAuthed(['home', date], () => api.home(date, hour));
   const { modules } = useModules();
+  const shortcutGroups = useGroupOrder(SHORTCUT_ORDER);
   const refreshAll = useRefreshAll();
   const d = q.data;
+  // The three half-width extras pair up in two columns; when one is left over it takes the whole row, so nothing stands alone.
+  const extras = d ? ([d.life ? 'life' : null, d.resources.length > 0 ? 'reads' : null, d.money ? 'money' : null].filter(Boolean) as string[]) : [];
+  const lastOptional = extras.length % 2 === 1 ? extras[extras.length - 1] : null;
   const user = me.data?.user;
   const firstName = user?.displayName?.split(' ')[0] ?? '';
   const identity = me.data?.identity ?? null;
@@ -432,25 +437,6 @@ export function Home() {
             </div>
           </Section>
 
-          {d.resources.length > 0 && (
-            <Section id="home-reads" title="Knowledge" action={<SeeAll to="/knowledge">See all</SeeAll>}>
-              <ul className="grid list-none grid-cols-2 gap-xs p-0 m-0">
-                {d.resources.map((r) => (
-                  <li key={r.id}>
-                    <Link to={`/knowledge/${r.id}`} className="toy toy-soft flex min-h-[160px] flex-col rounded-card bg-card p-sm text-ink">
-                      <span className="flex size-[48px] items-center justify-center rounded-pill bg-r4 text-[22px]" aria-hidden="true">
-                        {KIND_EMOJI[r.kind] ?? '📄'}
-                      </span>
-                      {r.tag && <span className="mt-xs inline-flex w-fit rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[22px] text-ink-soft">{r.tag}</span>}
-                      <span className="clamp-2 mt-xs block text-[16px] font-bold leading-snug">{r.title}</span>
-                      <span className="mt-xs block text-[12px] font-bold text-ink-soft">{r.kind}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          )}
-
           <Section id="home-trend" title="Last 14 days" lede="Xp per day. A green dot under a day means a task was ticked." action={<SeeAll to="/today">Daily</SeeAll>}>
             <div className="rounded-card bg-card p-md shadow-toy-soft">
               <AreaLine values={d.days.map((x) => x.xp)} max={Math.max(60, ...d.days.map((x) => x.xp))} labels={d.days.map((x) => weekday(x.date))} color="var(--color-r4)" height={160} empty="No xp in the last two weeks" label={`Xp per day for the last fourteen days, ${d.xp.week} this week`} />
@@ -480,7 +466,7 @@ export function Home() {
           </Section>
 
           {d.life && (
-            <Section id="home-life" title="Life" lede={`${d.life.overall} of 100, ${d.life.label.toLowerCase()}. Only you see this.`} action={<SeeAll to="/life">Open</SeeAll>}>
+            <Section id="home-life" title="Life" lede={`${d.life.overall} of 100, ${d.life.label.toLowerCase()}. Only you see this.`} action={<SeeAll to="/life">Open</SeeAll>} span={lastOptional === 'life'}>
               <Link to="/life" className="toy toy-soft block rounded-card bg-card p-md text-ink">
                 <ul className="flex list-none justify-between gap-xs p-0 m-0">
                   {d.life.areas.map((a) => {
@@ -506,7 +492,37 @@ export function Home() {
             </Section>
           )}
 
-          <Section id="home-tower" title="Your pillars" lede="Seven pillars of your life. The bar shows how far each one has come." action={<SeeAll to="/tower">Open</SeeAll>}>
+          {d.resources.length > 0 && (
+            <Section id="home-reads" title="Knowledge" action={<SeeAll to="/knowledge">See all</SeeAll>} span={lastOptional === 'reads'}>
+              <ul className={`grid list-none grid-cols-2 gap-xs p-0 m-0 ${lastOptional === 'reads' ? 'md:grid-cols-4' : ''}`}>
+                {d.resources.map((r, i) => (
+                  <li key={r.id} className={bento(i, d.resources.length, 2, lastOptional === 'reads' ? 4 : 2)}>
+                    <Link to={`/knowledge/${r.id}`} className="toy toy-soft flex min-h-[160px] flex-col rounded-card bg-card p-sm text-ink">
+                      <span className="flex size-[48px] items-center justify-center rounded-pill bg-r4 text-[22px]" aria-hidden="true">
+                        {KIND_EMOJI[r.kind] ?? '📄'}
+                      </span>
+                      {r.tag && <span className="mt-xs inline-flex w-fit rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[22px] text-ink-soft">{r.tag}</span>}
+                      <span className="clamp-2 mt-xs block text-[16px] font-bold leading-snug">{r.title}</span>
+                      <span className="mt-xs block text-[12px] font-bold text-ink-soft">{r.kind}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
+          {d.money && (
+            <Section id="home-money" title="Money this month" lede="From Finance. Only you see this." action={<SeeAll to="/finance">Open</SeeAll>} span={lastOptional === 'money'}>
+              <div className="grid grid-cols-2 gap-xs">
+                <KitTile to="/finance" tone="bg-r4" icon="↓" value={money(d.money.incomeCents, d.money.currency)} label="in" />
+                <KitTile to="/finance" tone="bg-r2" icon="↑" value={money(d.money.expenseCents, d.money.currency)} label="out" />
+                <KitTile to="/finance" tone="bg-card" plain icon="🤝" value={money(d.money.owedToMeCents, d.money.currency)} label="owed to you" hint={d.money.overdueInvoices > 0 ? `${d.money.overdueInvoices} overdue ${d.money.overdueInvoices === 1 ? 'invoice' : 'invoices'}` : 'no overdue invoices'} />
+                <KitTile to="/finance" tone="bg-card" plain icon="📅" value={money(d.money.iOweCents, d.money.currency)} label="you owe" hint={d.money.dueSoon > 0 ? `${d.money.dueSoon} due within a week` : 'nothing due this week'} />
+              </div>
+            </Section>
+          )}
+
+          <Section id="home-tower" title="Your pillars" span lede="Seven pillars of your life. The bar shows how far each one has come." action={<SeeAll to="/tower">Open</SeeAll>}>
             <Link to="/tower" className="toy toy-soft block rounded-card bg-card p-md text-ink">
               <HBars
                 label="Pillar levels"
@@ -525,17 +541,6 @@ export function Home() {
             </Link>
           </Section>
 
-          {d.money && (
-            <Section id="home-money" title="Money this month" lede="From Finance. Only you see this." action={<SeeAll to="/finance">Open</SeeAll>}>
-              <div className="grid grid-cols-2 gap-xs">
-                <KitTile to="/finance" tone="bg-r4" icon="↓" value={money(d.money.incomeCents, d.money.currency)} label="in" />
-                <KitTile to="/finance" tone="bg-r2" icon="↑" value={money(d.money.expenseCents, d.money.currency)} label="out" />
-                <KitTile to="/finance" tone="bg-card" plain icon="🤝" value={money(d.money.owedToMeCents, d.money.currency)} label="owed to you" hint={d.money.overdueInvoices > 0 ? `${d.money.overdueInvoices} overdue ${d.money.overdueInvoices === 1 ? 'invoice' : 'invoices'}` : 'no overdue invoices'} />
-                <KitTile to="/finance" tone="bg-card" plain icon="📅" value={money(d.money.iOweCents, d.money.currency)} label="you owe" hint={d.money.dueSoon > 0 ? `${d.money.dueSoon} due within a week` : 'nothing due this week'} />
-              </div>
-            </Section>
-          )}
-
           {d.shop && (
             <Section id="home-shop" title="Shop this month" lede={`${d.shop.products} ${d.shop.products === 1 ? 'product' : 'products'} live or in draft.`} action={<SeeAll to="/shop">Open</SeeAll>} span>
               <div className="rounded-card bg-card p-md shadow-toy-soft">
@@ -552,15 +557,15 @@ export function Home() {
           )}
 
           <Section id="home-go" title="Go to" lede="Every app you have switched on." action={<SeeAll to="/apps">All apps</SeeAll>} span>
-            {SHORTCUT_ORDER.map((g) => {
+            {shortcutGroups.map((g) => {
               const list = modules.filter((m) => m.on && m.group === g);
               if (list.length === 0) return null;
               return (
                 <div key={g} className="mt-sm first:mt-0">
                   <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{MODULE_GROUPS[g]}</p>
                   <ul className="mt-xs grid list-none grid-cols-3 gap-xs p-0 m-0 md:grid-cols-6">
-                    {list.map((m) => (
-                      <li key={m.key}>
+                    {list.map((m, i) => (
+                      <li key={m.key} className={bento(i, list.length, 3, 6)}>
                         <Link to={m.path} className="toy toy-soft flex min-h-[72px] flex-col items-center justify-center gap-xs rounded-tile bg-card p-xs text-center text-ink">
                           <span className="text-[24px] leading-none" aria-hidden="true">
                             {m.emoji}

@@ -33,7 +33,7 @@ async function factsFor(c: Context<AppEnv>): Promise<Facts> {
   const today = new Date().toISOString().slice(0, 10);
   const weak = await db.prepare('SELECT relationship FROM relationship_scores WHERE user_id = ? ORDER BY score ASC, xp ASC LIMIT 1').bind(user.id).first<{ relationship: RelationshipKey }>();
   const rel = weak ? RELATIONSHIP_BY_KEY[weak.relationship] : null;
-  const tasks = await db.prepare("SELECT title FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' ORDER BY due_date IS NULL, due_date ASC LIMIT 5").bind(user.id).all<{ title: string }>();
+  const tasks = await db.prepare("SELECT title FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' ORDER BY COALESCE(do_date, due_date) IS NULL, COALESCE(do_date, due_date) ASC LIMIT 5").bind(user.id).all<{ title: string }>();
   const summary = await summaryFor(db, user.id, today, user.streak);
   const mood = summary.parts.find((p) => p.kind === 'mood')?.latest ?? null;
   const sleep = summary.parts.find((p) => p.kind === 'sleep')?.latest ?? null;

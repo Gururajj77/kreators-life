@@ -1,4 +1,4 @@
-import { anonAliasFrom, pageSizeOf, parseIdentities, parseIntake, parseLinkBlocks, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
+import { anonAliasFrom, pageSizeOf, parseIdentities, parseRepeat, parsePriority, parseIntake, parseLinkBlocks, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
 import { BADGES, EMPTY_SOCIALS, parsePublicSettings, HONORS, isStaffFor, levelFromXp, PERMISSIONS, RELATIONSHIPS, roleRank, RUN_BADGES, taskReadyAt, timeHonors, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
 import type { Context, Next } from 'hono';
 import type { AppEnv } from './env';
@@ -16,6 +16,12 @@ export interface NodeRow {
   xp: number;
   due_date: string | null;
   due_time: string | null;
+  priority?: number | null;
+  origin?: string | null;
+  remind?: number;
+  do_date?: string | null;
+  repeat_json?: string | null;
+  spawned_from?: string | null;
   estimate_min: number | null;
   completed_at: string | null;
   ready_at: string | null;
@@ -233,6 +239,22 @@ export function randomCode(len = 8): string {
   return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
 }
 
+/** Puts the size of each task's checklist on the tasks in a list, in one query. */
+export async function withSubtasks(db: D1Database, userId: string, list: Node[]): Promise<Node[]> {
+  const ids = list.filter((n) => n.kind === 'task').map((n) => n.id);
+  if (ids.length === 0) return list;
+  const counts = new Map<string, { total: number; done: number }>();
+  for (let i = 0; i < ids.length; i += 80) {
+    const part = ids.slice(i, i + 80);
+    const rows = await db
+      .prepare(`SELECT task_id, COUNT(*) AS total, SUM(CASE WHEN done_at IS NULL THEN 0 ELSE 1 END) AS done FROM subtasks WHERE user_id = ? AND task_id IN (${part.map(() => '?').join(',')}) GROUP BY task_id`)
+      .bind(userId, ...part)
+      .all<{ task_id: string; total: number; done: number }>();
+    for (const r of rows.results) counts.set(r.task_id, { total: r.total, done: r.done ?? 0 });
+  }
+  return list.map((n) => (n.kind === 'task' ? { ...n, subtaskTotal: counts.get(n.id)?.total ?? 0, subtaskDone: counts.get(n.id)?.done ?? 0 } : n));
+}
+
 export function toNode(r: NodeRow, gate?: TaskGate): Node {
   return {
     id: r.id,
@@ -244,6 +266,11 @@ export function toNode(r: NodeRow, gate?: TaskGate): Node {
     status: r.status,
     xp: r.xp,
     dueDate: r.due_date,
+    doDate: r.do_date ?? null,
+    repeat: parseRepeat(r.repeat_json),
+    priority: parsePriority(r.priority),
+    fromPillar: r.origin === 'build',
+    remind: (r.remind ?? 0) === 1,
     dueTime: r.due_time ?? null,
     estimateMin: r.estimate_min ?? null,
     completedAt: r.completed_at,
@@ -354,10 +381,21 @@ export function computeBadges(user: { xp: number; best_streak: number }, stats: 
   return BADGES.map((b) => b.key).filter((k) => earned.has(k));
 }
 
+/** Badges a super admin gave by hand. */
+export async function grantedBadges(db: D1Database, userId: string): Promise<string[]> {
+  const rows = await db.prepare('SELECT badge_key FROM badge_grants WHERE user_id = ?').bind(userId).all<{ badge_key: string }>();
+  return rows.results.map((r) => r.badge_key);
+}
+/** The badges the app counts plus the ones given by hand, in catalog order. */
+export const withGranted = (earned: readonly string[], granted: readonly string[]): string[] => {
+  const have = new Set([...earned, ...granted]);
+  return BADGES.map((b) => b.key).filter((k) => have.has(k));
+};
+
 export async function badgesNow(db: D1Database, userId: string): Promise<string[]> {
   const user = await getUser(db, userId);
   if (!user) return [];
-  return computeBadges(user, await getStats(db, userId));
+  return withGranted(computeBadges(user, await getStats(db, userId)), await grantedBadges(db, userId));
 }
 
 /** Honors stored by an admin plus the ones time has unlocked, in catalog order. */

@@ -1,5 +1,6 @@
 import { BADGE_META, COACH_NOTE_MAX, COACH_SHARE_META, COACH_SHARE_PARTS, type CoachShare, type CoachSharePart, KIND_META, levelFromXp, PENALTIES, RELATIONSHIP_BY_KEY, RELATIONSHIPS, SCORE_LABEL, SCORECARD, weightWord, type Node, type NodeKind } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
+import { Inert } from '../components/Inert';
 import gsap from 'gsap';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
@@ -494,7 +495,7 @@ export function CoachStudent() {
         <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
           {d.notes.map((n) => (
             <li key={n.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <p className="m-0 whitespace-pre-wrap text-[16px] font-semibold">{n.body}</p>
+              <p className="m-0 whitespace-pre-wrap text-[16px] font-semibold"><Inert text={n.body} /></p>
               <div className="mt-xs flex flex-wrap items-center justify-between gap-xs">
                 <span className="text-[12px] font-bold text-ink-soft">{when(n.createdAt)}</span>
                 {n.mine && (

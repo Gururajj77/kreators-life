@@ -15,7 +15,7 @@ import {
   type RelationshipState,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { computeBadges, getStats, getUser, honorKeys, newId, nowIso, parseModules, randomCode, str, toUser, publicOf } from '../db';
+import { computeBadges, getStats, getUser, grantedBadges, honorKeys, withGranted, newId, nowIso, parseModules, randomCode, str, toUser, publicOf } from '../db';
 import { resolveAccess } from '../access';
 import { hashPassword, randomHex } from './auth';
 import { logEvent, track } from '../ops';
@@ -83,7 +83,7 @@ me.get('/', async (c) => {
   const body: MeResponse = {
     user: toUser(user),
     relationships,
-    badges: computeBadges(user, stats),
+    badges: withGranted(computeBadges(user, stats), await grantedBadges(db, user.id)),
     honors,
     identity: evolutionFor(IDENTITY_STAGES, user.xp, daysSince(user.created_at)),
     moduleSettings: resolved.settings,
@@ -225,6 +225,7 @@ me.get('/export', async (c) => {
   const user = c.get('user');
   const tables: [string, string][] = [
     ['nodes', 'SELECT * FROM nodes WHERE user_id = ?'],
+    ['subtasks', 'SELECT * FROM subtasks WHERE user_id = ?'],
     ['wellbeing', 'SELECT * FROM wellbeing_logs WHERE user_id = ?'],
     ['journal', 'SELECT * FROM journal_entries WHERE user_id = ?'],
     ['orders', 'SELECT * FROM orders WHERE buyer_id = ? OR owner_id = ?'],
@@ -254,6 +255,8 @@ me.get('/export', async (c) => {
     ['creditLedger', 'SELECT * FROM credit_ledger WHERE user_id = ?'],
     ['attendeeClaims', 'SELECT * FROM attendee_claims WHERE user_id = ?'],
     ['cardUnlocks', 'SELECT * FROM card_unlocks WHERE user_id = ?'],
+    ['badgeGrants', 'SELECT * FROM badge_grants WHERE user_id = ?'],
+    ['focusRounds', 'SELECT * FROM focus_rounds WHERE user_id = ?'],
     ['discoverDraft', 'SELECT * FROM discover_drafts WHERE user_id = ?'],
     ['discoverSettings', 'SELECT * FROM discover_settings WHERE user_id = ?'],
     ['discoverResults', 'SELECT * FROM discover_results WHERE user_id = ?'],
@@ -338,6 +341,7 @@ me.post('/reset', async (c) => {
     db.prepare('DELETE FROM assistant_actions WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM assistant_runs WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM discover_drafts WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM focus_rounds WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM discover_settings WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM discover_results WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM points_ledger WHERE user_id = ?').bind(user.id),

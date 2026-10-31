@@ -1,5 +1,6 @@
 import { canMute, communityRankOf, FEED_FILTER_META, FEED_FILTERS, FEED_SORT_META, FEED_SORTS, MAX_PINNED, POST_CATEGORIES, REACTION_META, REACTIONS, SOCIAL_REWARDS, type CommunityPost, type CommunityReply, type FeedFilter, type FeedSort, type ReactionCounts, type ReactionKind, DEFAULT_PAGE_SIZE, pageQuery, type PageSize } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
+import { Inert } from '../components/Inert';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Button } from '../components/Button';
@@ -109,7 +110,7 @@ function HeldPosts() {
               <p className="m-0 text-[12px] font-bold text-ink-soft">
                 {p.authorName}, {p.category}
               </p>
-              <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold">{p.body}</p>
+              <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold"><Inert text={p.body} /></p>
               <Button size="sm" className="mt-xs" disabled={approve.isPending} onClick={() => approve.mutate(p.id)}>
                 Say okay
               </Button>
@@ -253,7 +254,7 @@ export function Community() {
                 </button>
               )}
             </div>
-            <p className="mt-sm m-0 whitespace-pre-wrap text-[16px] font-semibold leading-relaxed">{p.body}</p>
+            <p className="mt-sm m-0 whitespace-pre-wrap text-[16px] font-semibold leading-relaxed"><Inert text={p.body} /></p>
             <div className="mt-sm flex flex-wrap items-center gap-xs">
               {!p.held && <Reactions counts={p.reactions} mine={p.myReaction} busy={like.isPending} onPick={(kind) => like.mutate({ id: p.id, kind })} />}
               {!p.held && (
@@ -394,7 +395,7 @@ function RepliesSheet({ post, onClose, onSaved }: { post: CommunityPost | null; 
         <>
           <p className="m-0 rounded-tile bg-paper p-sm text-[14px] font-semibold">
             <span className="block text-[12px] font-extrabold text-ink-soft">{post.authorName}{post.anonymous ? ' (anonymous)' : ''}</span>
-            {post.body}
+            <Inert text={post.body} />
           </p>
           <ul className="mt-md flex list-none flex-col gap-xs p-0 m-0">
             {visible.map((r) => {
@@ -406,7 +407,7 @@ function RepliesSheet({ post, onClose, onSaved }: { post: CommunityPost | null; 
                     {r.anonymous && <span className="ml-xs rounded-pill bg-line px-xs text-[11px] font-extrabold leading-[18px] text-ink-soft">Anonymous{r.mine ? ', you' : ''}</span>}{' '}
                     <span className="font-semibold text-ink-soft">{new Date(r.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                   </p>
-                  <p className="mt-xs m-0 text-[16px] font-semibold">{r.body}</p>
+                  <p className="mt-xs m-0 text-[16px] font-semibold"><Inert text={r.body} /></p>
                   <div className="mt-xs flex flex-wrap items-center gap-xs">
                     <Reactions counts={r.reactions} mine={r.myReaction} busy={react.isPending} onPick={(kind) => react.mutate({ id: r.id, kind })} />
                     <Button variant="ghost" size="sm" onClick={() => setTo(r)}>
@@ -437,7 +438,7 @@ function RepliesSheet({ post, onClose, onSaved }: { post: CommunityPost | null; 
           >
             {to && (
               <p className="m-0 flex items-center justify-between gap-xs rounded-tile bg-paper p-xs text-[12px] font-bold text-ink-soft">
-                <span className="min-w-0 truncate">Replying to {to.authorName}: {to.body}</span>
+                <span className="min-w-0 truncate">Replying to {to.authorName}: <Inert text={to.body} /></span>
                 <Button variant="ghost" size="sm" onClick={() => setTo(null)}>
                   Cancel
                 </Button>

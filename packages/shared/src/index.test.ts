@@ -1,3 +1,4 @@
+import { nextOccurrence, openDay, parsePriority, parseRepeat, priorityTag, repeatLabel, isTaskSort, sortTasks, type Priority, type Repeat, type RepeatKind } from './index';
 import { BADGES as ALL_BADGES, HOW_TO, kmLabel, MODULES as MODS, paceLabel, RUN_BADGES, runEntryState, TERMS, termGroups, weekStart, weekStreak } from './index';
 import { earningGuide, nextBadge, unlockFor } from './index';
 import { ageOn, birthDateProblem, MIN_AGE, normalizePhone, phoneProblem } from './index';
@@ -6,7 +7,7 @@ import { BAND_STATEMENTS, MAP_LEVELS, pickFocus, placementFlags, rampTime, routi
 import { characterHello, characterTitle, INSECURITY_WEIGHTS, mantraLine, scoreOfStars, STAR_WORDS, starsOf, weightWord } from './index';
 import { blockMinutes, minutesLabel, parseRoutineBlocks, stepsMinutes } from './index';
 import type { Placement } from './index';
-import { CARD_GAMES, analyseDiscover, discoverProfile, profileForAssistant, styleHints, DISCOVER_BANK, DISCOVER_CORE_STEPS, DISCOVER_SCENES, EQ_FEELINGS, EQ_PEOPLE, EQ_READING, PUZZLES_SHOWN, discoverComplete, eqComplete, puzzleAt, puzzleSequence, scoreEq, analyseEq, DISCOVER_STATEMENTS, DISCOVER_STEPS, DISCOVER_TRIADS, DISCOVER_WEIGHTS, DISCOVER_WORDS, REWARDS, REWARD_GROUPS, SOCIAL_REWARDS, discoverProgress, emptyDiscoverAnswers, parseDiscoverAnswers, scoreDiscover, trustScore } from './index';
+import { CARD_GAMES, analyseDiscover, discoverProfile, profileForAssistant, styleHints, DISCOVER_BANK, DISCOVER_CORE_STEPS, DISCOVER_SCENES, EQ_FEELINGS, EQ_PEOPLE, EQ_READING, PUZZLES_SHOWN, discoverComplete, eqComplete, puzzleAt, puzzleSequence, scoreEq, analyseEq, DISCOVER_STATEMENTS, DISCOVER_STEPS, DISCOVER_TRIADS, DISCOVER_WEIGHTS, DISCOVER_WORDS, REWARDS, REWARD_GROUPS, SOCIAL_REWARDS, discoverProgress, emptyDiscoverAnswers, parseDiscoverAnswers, scoreDiscover, trustScore, unlockAt } from './index';
 import { FEATURE_FEE_POINTS, isFeatured, parseImageUrls, STORE_STAGE_META, PREOWNED_CONDITION_META } from './index';
 import { builtInTemplate, parseReviewPrompts, periodDays, periodFor, periodLabel, periodShift } from './index';
 import { MAX_NOT_TO_DO, notToDoStreak, notToDoWeek, shiftDay } from './index';
@@ -446,6 +447,13 @@ describe('unlocks and the earning guide', () => {
     expect(unlockFor({ minPoints: 200, badge: '' }, { points: 40, badges: [] }).why).toBe('Needs 200 points, you have 40.');
     expect(unlockFor({ minPoints: 200, badge: 'first_task' }, { points: 250, badges: [] }).why).toBe('Needs the First tick badge.');
     expect(unlockFor({ minPoints: 200, badge: 'first_task' }, { points: 250, badges: ['first_task'] }).ok).toBe(true);
+    // An xp floor joins points and badges, and a super admin is never locked out.
+    expect(unlockFor({ minPoints: 0, minXp: 500, badge: '' }, { points: 0, xp: 120, badges: [] }).why).toBe('Needs 500 xp, you have 120.');
+    expect(unlockFor({ minPoints: 2000, minXp: 500, badge: 'first_task' }, { points: 10, xp: 120, badges: [] }).why).toBe('Needs 500 xp, you have 120, 2000 points, you have 10 and the First tick badge.');
+    expect(unlockFor({ minPoints: 2000, minXp: 500, badge: 'first_task' }, { points: 2000, xp: 500, badges: ['first_task'] }).ok).toBe(true);
+    expect(unlockFor({ minPoints: 2000, minXp: 500, badge: 'first_task' }, { points: 0, xp: 0, badges: [], superAdmin: true }).ok).toBe(true);
+    expect(unlockAt({ minPoints: 2000, minXp: 500, badge: 'first_task' })).toBe('Unlocks at 500 xp, 2000 points and the First tick badge');
+    expect(unlockAt({ minPoints: 0, minXp: 0, badge: '' })).toBe('');
     expect(nextBadge([])?.key).toBe('first_task');
     expect(nextBadge(['first_task'])?.key).toBe('streak_3');
     expect(earningGuide().length).toBeGreaterThanOrEqual(4);
@@ -924,5 +932,59 @@ describe('threads, anonymous names and the strategy path', () => {
     expect(none.every((x) => !x.done)).toBe(true);
     const some = strategyPath({ niche: 'phones', voice: 'warm' }, { runs: { channels: 1 }, pieces: { playbook: 2 } });
     expect(some.filter((x) => x.done).map((x) => x.key)).toEqual(['say', 'channels', 'playbook']);
+  });
+});
+
+describe('task dates, repeating, priority and sorting', () => {
+  const rule = (kind: RepeatKind, over: Partial<Repeat> = {}): Repeat => ({ kind, every: 1, days: [], until: null, ...over });
+  it('finds the next day a rule falls on', () => {
+    expect(nextOccurrence(rule('daily'), '2026-11-02', '2026-11-02')).toBe('2026-11-03');
+    expect(nextOccurrence(rule('daily', { every: 3 }), '2026-11-02', '2026-11-02')).toBe('2026-11-05');
+    // Friday 2026-11-06 to Monday.
+    expect(nextOccurrence(rule('weekdays'), '2026-11-06', '2026-11-06')).toBe('2026-11-09');
+    expect(nextOccurrence(rule('weekly', { days: [1, 4] }), '2026-11-02', '2026-11-02')).toBe('2026-11-05');
+    expect(nextOccurrence(rule('weekly', { days: [1, 4] }), '2026-11-02', '2026-11-05')).toBe('2026-11-09');
+  });
+  it('clamps a month end and a leap day', () => {
+    expect(nextOccurrence(rule('monthly'), '2026-01-31', '2026-01-31')).toBe('2026-02-28');
+    expect(nextOccurrence(rule('yearly'), '2028-02-29', '2028-02-29')).toBe('2029-02-28');
+  });
+  it('stops after the end day', () => {
+    expect(nextOccurrence(rule('daily', { until: '2026-11-03' }), '2026-11-03', '2026-11-03')).toBeNull();
+  });
+  it('reads a rule, and nothing else, as a rule', () => {
+    expect(parseRepeat({ kind: 'weekly', every: 2, days: [4, 1, 1, 9], until: null })).toEqual(rule('weekly', { every: 2, days: [1, 4] }));
+    expect(parseRepeat({ kind: 'sometimes' })).toBeNull();
+    expect(parseRepeat(null)).toBeNull();
+    expect(parseRepeat(JSON.stringify(rule('daily')))).toEqual(rule('daily'));
+    expect(repeatLabel(rule('weekly', { days: [1, 4] }))).toBe('Every week on Mon and Thu');
+  });
+  it('reads P0 to P3 in any common spelling', () => {
+    expect(parsePriority('P0')).toBe(0);
+    expect(parsePriority('p3')).toBe(3);
+    expect(parsePriority(2)).toBe(2);
+    expect(parsePriority('P4')).toBeNull();
+    expect(parsePriority(null)).toBeNull();
+    expect(priorityTag(1)).toBe('P1');
+    expect(priorityTag(null)).toBe('');
+  });
+  const t = (id: string, doDate: string | null, dueDate: string | null, priority: Priority | null, dueTime: string | null = null) => ({ id, doDate, dueDate, priority, dueTime });
+  it('sorts by day, by priority and by due date, keeping ties in order', () => {
+    const list = [t('a', '2026-11-03', null, 2), t('b', '2026-11-02', '2026-11-09', null), t('c', '2026-11-02', '2026-11-05', 0), t('d', null, null, 1), t('e', '2026-11-02', null, 0, '08:00')];
+    expect(sortTasks(list, 'day').map((x) => x.id)).toEqual(['e', 'c', 'b', 'a', 'd']);
+    expect(sortTasks(list, 'priority').map((x) => x.id)).toEqual(['e', 'c', 'd', 'a', 'b']);
+    expect(sortTasks(list, 'due').map((x) => x.id)).toEqual(['c', 'b', 'e', 'd', 'a']);
+    expect(isTaskSort('priority')).toBe(true);
+    expect(isTaskSort('random')).toBe(false);
+  });
+  it('opens a task on its do date, or its due date when it has no do date', () => {
+    expect(openDay({ doDate: '2026-11-02', dueDate: '2026-11-09' })).toBe('2026-11-02');
+    expect(openDay({ doDate: null, dueDate: '2026-11-09' })).toBe('2026-11-09');
+    expect(openDay({ doDate: null, dueDate: null })).toBeNull();
+  });
+  it('teaches the new words where the Daily screen explains itself', () => {
+    for (const word of ['do date', 'due date', 'priority', 'habit', 'subtask', 'remember', 'not scheduled']) expect(TERMS[word]).toBeTruthy();
+    expect(HOW_TO.today?.steps.length).toBeLessThanOrEqual(5);
+    for (const w of HOW_TO.today?.terms ?? []) expect(TERMS[w]).toBeTruthy();
   });
 });

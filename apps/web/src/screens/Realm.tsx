@@ -25,6 +25,7 @@ import { Pyramid } from '../components/Pyramid';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { TaskRow } from '../components/TaskRow';
+import { StartFocus, Subtasks, TaskPlanFields, planBody, planOf, planProblem, type Plan } from '../components/TaskPlan';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { useAuthed, useMe, useNodes, useRefreshAll } from '../lib/queries';
@@ -322,18 +323,14 @@ function AddSheet({ kind, relationship, nodes, today, onClose }: { kind: NodeKin
   const refresh = useRefreshAll();
   const [title, setTitle] = useState('');
   const [parentId, setParentId] = useState('');
-  const [due, setDue] = useState(today);
-  const [time, setTime] = useState('');
-  const [minutes, setMinutes] = useState('');
+  const [plan, setPlan] = useState<Plan>(() => planOf(null, today));
   const meta = kind ? KIND_META[kind] : null;
   const parent = kind ? parentKind(kind) : null;
   const parents = parent ? nodes.filter((n) => n.kind === parent && n.status === 'active') : [];
 
   useEffect(() => {
     setTitle('');
-    setDue(today);
-    setTime('');
-    setMinutes('');
+    setPlan(planOf(null, today));
     setParentId(parents[0]?.id ?? '');
     // Reset the form each time a rung's add button opens the sheet.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -342,7 +339,7 @@ function AddSheet({ kind, relationship, nodes, today, onClose }: { kind: NodeKin
   const create = useMutation({
     mutationFn: () => {
       if (!kind) throw new Error('no kind');
-      return api.createNode({ kind, parentId: parent ? parentId : null, relationship, title: title.trim(), dueDate: kind === 'task' ? due || null : null, dueTime: kind === 'task' ? time || null : null, estimateMin: kind === 'task' && Number(minutes) > 0 ? Number(minutes) : null });
+      return api.createNode({ kind, parentId: parent ? parentId : null, relationship, title: title.trim(), ...(kind === 'task' ? planBody(plan) : {}) });
     },
     onSuccess: () => {
       refresh();
@@ -386,21 +383,8 @@ function AddSheet({ kind, relationship, nodes, today, onClose }: { kind: NodeKin
           )}
           {kind === 'task' && (
             <>
-              <label className="block">
-                <span className="block text-[14px] font-bold">Due</span>
-                <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
-              </label>
-              <div className="grid grid-cols-2 gap-xs">
-                <label className="block">
-                  <span className="block text-[14px] font-bold">Time (optional)</span>
-                  <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
-                </label>
-                <label className="block">
-                  <span className="block text-[14px] font-bold">Minutes (optional)</span>
-                  <input type="number" min={5} max={600} step={5} value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="20" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
-                </label>
-              </div>
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">A time and a length put the task on your day plan. A new task can be ticked ten minutes after you write it. Go do it first.</p>
+              <TaskPlanFields plan={plan} onChange={setPlan} today={today} />
+              <p className="m-0 text-[14px] font-semibold text-ink-soft">Leave the do date empty and the task waits in the not scheduled list on Daily until you pick a day. A new task can be ticked ten minutes after you write it. Go do it first.</p>
             </>
           )}
           {create.isError && (
@@ -408,7 +392,7 @@ function AddSheet({ kind, relationship, nodes, today, onClose }: { kind: NodeKin
               {create.error instanceof Error ? create.error.message : 'Could not add it. Try again.'}
             </p>
           )}
-          <Button type="submit" size="lg" full disabled={create.isPending || !title.trim()}>
+          <Button type="submit" size="lg" full disabled={create.isPending || !title.trim() || (kind === 'task' && planProblem(plan) !== null)}>
             Add {meta.label.toLowerCase()}
           </Button>
         </form>
@@ -421,22 +405,18 @@ function EditSheet({ node, onClose }: { node: Node | null; onClose: () => void }
   const refresh = useRefreshAll();
   const [title, setTitle] = useState('');
   const [note, setNote] = useState('');
-  const [due, setDue] = useState('');
-  const [time, setTime] = useState('');
-  const [minutes, setMinutes] = useState('');
+  const [plan, setPlan] = useState<Plan>(() => planOf(null));
 
   useEffect(() => {
     setTitle(node?.title ?? '');
     setNote(node?.note ?? '');
-    setDue(node?.dueDate ?? '');
-    setTime(node?.dueTime ?? '');
-    setMinutes(node?.estimateMin ? String(node.estimateMin) : '');
+    setPlan(planOf(node));
   }, [node]);
 
   const save = useMutation({
     mutationFn: () => {
       if (!node) throw new Error('no node');
-      return api.updateNode(node.id, { title: title.trim(), note, dueDate: node.kind === 'task' ? due || null : undefined, dueTime: node.kind === 'task' ? time || null : undefined, estimateMin: node.kind === 'task' ? (Number(minutes) > 0 ? Number(minutes) : null) : undefined });
+      return api.updateNode(node.id, { title: title.trim(), note, ...(node.kind === 'task' ? planBody(plan) : {}) });
     },
     onSuccess: () => {
       refresh();
@@ -475,26 +455,15 @@ function EditSheet({ node, onClose }: { node: Node | null; onClose: () => void }
           </label>
           {node.kind === 'task' && (
             <>
-              <label className="block">
-                <span className="block text-[14px] font-bold">Due</span>
-                <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
-              </label>
-              <div className="grid grid-cols-2 gap-xs">
-                <label className="block">
-                  <span className="block text-[14px] font-bold">Time (optional)</span>
-                  <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
-                </label>
-                <label className="block">
-                  <span className="block text-[14px] font-bold">Minutes (optional)</span>
-                  <input type="number" min={5} max={600} step={5} value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="20" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
-                </label>
-              </div>
+              <TaskPlanFields plan={plan} onChange={setPlan} today={todayLocal()} />
+              <Subtasks task={node} />
+              <StartFocus task={{ ...node, estimateMin: Number(plan.minutes) > 0 ? Number(plan.minutes) : node.estimateMin }} />
             </>
           )}
           <p className="m-0 text-[14px] font-semibold text-ink-soft">
             {node.xp} xp earned here. {node.kind === 'task' ? 'Changing the title makes it a new task, so the ten-minute wait starts again.' : 'Removing it also removes everything it holds up.'}
           </p>
-          <Button type="submit" size="lg" full disabled={save.isPending || !title.trim()}>
+          <Button type="submit" size="lg" full disabled={save.isPending || !title.trim() || (node.kind === 'task' && planProblem(plan) !== null)}>
             Save changes
           </Button>
           <Button

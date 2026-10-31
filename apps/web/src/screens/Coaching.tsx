@@ -1,5 +1,6 @@
 import { BADGE_META, COACH_ABOUT_MAX, COACH_SHARE_META, COACH_SHARE_PARTS, RELATIONSHIP_BY_KEY, type CoachHub, type CoachLink, type CoachRosterRow } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
+import { Inert } from '../components/Inert';
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
@@ -227,7 +228,7 @@ function CoachNotes() {
       <ul className="m-0 flex list-none flex-col gap-xs p-0">
         {notes.map((n) => (
           <li key={n.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-            <p className="m-0 whitespace-pre-wrap text-[16px] font-semibold">{n.body}</p>
+            <p className="m-0 whitespace-pre-wrap text-[16px] font-semibold"><Inert text={n.body} /></p>
             <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
               {n.coachName}, {when(n.createdAt)}
             </p>

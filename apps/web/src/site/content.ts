@@ -13,8 +13,8 @@ export interface FeatureCopy {
 export const FEATURES: Record<string, FeatureCopy> = {
   today: {
     tagline: 'Three small boxes. One better day.',
-    pitch: 'Check in, do one small act, tick one task. That is the whole daily ask. Every tick pays xp, and the check-in pays points you can spend. Under the tasks, a not-to-do list keeps a streak for each thing you are staying away from.',
-    steps: ['Open the app and check in.', 'Do the small act for your weakest pillar.', 'Tick one task. Watch the pyramid light up.'],
+    pitch: 'Check in, do one small act, tick one task. That is the whole daily ask. Every tick pays xp, and the check-in pays points you can spend. Every task has a do date and an optional due date, a priority from P0 (do now) to P3 (whenever), each in its own colour, and can repeat, hold subtasks, remind you and start a focus timer. Tasks with no date wait in a list until you pick one. Under the tasks, a not-to-do list keeps a streak for each thing you are staying away from.',
+    steps: ['Open the app and check in.', 'Do the small act for your weakest pillar.', 'Plan a task: pick its day, its priority and how long it takes. Tick it on its day and watch the pyramid light up.'],
     relationships: ['servant_leader', 'friendship', 'parent_child', 'lover_partner', 'self', 'guru', 'divine'],
   },
   tower: {
@@ -204,8 +204,8 @@ export const FEATURES: Record<string, FeatureCopy> = {
   },
   rewards: {
     tagline: 'Points for real things.',
-    pitch: 'Points come from showing up. Spend them on rewards, on creators’ products, or on event tickets.',
-    steps: ['Check in daily.', 'Points add up.', 'Trade them in.'],
+    pitch: 'Points come from showing up. Spend them on gear, three books, a meetup ticket, a call with a mentor or creators’ products. Or unlock one of nine games and play it in the app for good.',
+    steps: ['Check in daily.', 'Points add up.', 'Reserve gear, or unlock a game and play it at once.'],
     relationships: ['self', 'parent_child'],
   },
   help: {
@@ -216,14 +216,14 @@ export const FEATURES: Record<string, FeatureCopy> = {
   },
   discover: {
     tagline: 'Find out what you are good at.',
-    pitch: 'A quiz with picks, pattern puzzles that adjust to you, descriptor words and real situations, and an optional emotional intelligence part. It names your top three strengths across the seven relationships, reads five traits in your own numbers and gives you one small thing to try. Only you see it.',
-    steps: ['Answer in five short parts. It saves as you go.', 'See your top three strengths and your five traits.', 'Try the small thing each strength suggests.'],
+    pitch: 'A quiz about how you think, feel and act. Pick what is most and least like you, solve pattern puzzles that get harder or easier as you go, choose words that fit you and judge real situations. Add emotional intelligence if you like. You get your top three strengths across the seven relationships, a detailed read on five personality traits and on your reasoning (it is not an IQ test), and one small thing to try. Only you see it.',
+    steps: ['Answer in short parts. It saves as you go.', 'Add emotional intelligence if you like.', 'See your strengths and a detailed read, and let your next steps on Home start to fit you.'],
     relationships: ['self', 'guru', 'divine', 'lover_partner', 'servant_leader', 'friendship', 'parent_child'],
   },
   cards: {
     tagline: 'Games for the people you are with.',
-    pitch: 'Card games about dating, family, friends, work and your inner self. Unlock a game once with points, then shuffle, draw and flip cards on a table, and drag them around. Nothing is posted to you.',
-    steps: ['Unlock a game in Rewards with points.', 'Pick a deck, shuffle, and tap the pile to draw.', 'Flip a card for its other side, and pass the phone round.'],
+    pitch: 'Nine card games for dating, family, friends and teams, work, and a quiet look at your hidden self. Unlock a game once with points, then play it in the app: shuffle, draw, flip and drag cards around a table. Turn on focus mode and everything else steps aside, so the table is all you see. Nothing is posted to you.',
+    steps: ['Unlock a game in Rewards with points.', 'Pick a deck, shuffle, and tap the pile to draw.', 'Flip a card for its other side, and turn on focus mode when you want the whole screen.'],
     relationships: ['friendship', 'lover_partner', 'parent_child', 'self', 'servant_leader'],
   },
   coaching: {
@@ -270,9 +270,10 @@ export const BRAND_PITCH = {
 export const SITE_FAQ: { q: string; a: string }[] = [
   { q: 'What’s the catch?', a: 'Fair question. The daily game and every app are free to start and free to stay. Two things cost money. Typing to the assistant needs a plan, because the model costs us money; plans are not on sale yet. The Shop takes 5% of each sale. Partner links in the Store may earn us a share, and every card says so.' },
   { q: 'I don’t have time for another app.', a: 'That is the point of it. The daily ask is three moves: check in, do one small act, tick one task. It takes a few minutes. The rest is there when you want it, and switched off when you don’t.' },
+  { q: 'Who sees my Discover results?', a: 'Only you. Your answers never reach brands, staff, the leaderboard or a life coach. You choose whether your results shape your next steps and whether the assistant may read a short summary. It is not an IQ test or a diagnosis: it is a self-discovery quiz that compares you only with your own scale.' },
   { q: 'Who sees my journal?', a: 'Only you. Your journal and wellbeing numbers never reach brands, staff, the leaderboard or Club selection. The assistant reads the journal only when you ask it to, and only through models that keep nothing. A life coach never sees it.' },
   { q: 'I’m not a creator. Is it for me?', a: 'Yes, if you are 18 or over. The seven relationships are for everyone: work, friends, family, love, yourself, teachers and faith. The creator apps, like the Shop and Win, stay off until you want them.' },
-  { q: 'Apps like this never stick for me.', a: 'That isn’t you. Most apps track one part of life and forget the other six. Here each tick climbs a pillar you chose, toward a foundation you wrote. And a task with a date can only be ticked on its day, so the plan stays honest.' },
+  { q: 'Apps like this never stick for me.', a: 'That isn’t you. Most apps track one part of life and forget the other six. Here each tick climbs a pillar you chose, toward a foundation you wrote. And a task can only be ticked from its do date, so the plan stays honest.' },
   { q: 'Won’t it be too many apps?', a: 'Only a few are on at the start. A short chat asks what you want and switches on up to five more that fit you. You can switch any of them on or off later, under the Profile tab.' },
   { q: 'Is the pay real?', a: 'It is real, and it is careful. Win pays per verified view, not per follower, and a reviewer checks before anything pays. Everything that pays out has a wait or a person who checks it. Points work today; money checkout turns on when payments go live.' },
   { q: 'Will I be on my own?', a: 'No. Bumling, the app’s own guide, and seven characters walk with you. Every app ends with a How it works section, Help answers questions, and you can work with a life coach if you want one.' },

@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
-import { isNodeKind, isRelationshipKey, parentKind, taskReadyAt, WAIT, XP, type CompleteResponse, type RippleEvent } from '@kreators/shared';
+import { addDays, daysBetween, isNodeKind, isRelationshipKey, nextOccurrence, parentKind, parsePriority, parseRepeat, taskReadyAt, WAIT, XP, type CompleteResponse, type RippleEvent } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { TIME_RE } from '@kreators/shared';
-import { ancestorsOf, badgesNow, DATE_RE, diffBadges, getNode, newId, nowIso, readyFromNow, toNode, type NodeRow, taskGate, readyAtFor } from '../db';
+import { ancestorsOf, badgesNow, DATE_RE, diffBadges, getNode, newId, nowIso, readyFromNow, toNode, type NodeRow, taskGate, readyAtFor, withSubtasks } from '../db';
 import { dateNearToday, shiftDate } from '../db';
 
 export const nodes = new Hono<AppEnv>();
@@ -29,7 +29,7 @@ nodes.get('/', async (c) => {
     .prepare(`SELECT * FROM nodes WHERE ${clauses.join(' AND ')} ORDER BY sort_order ASC, created_at ASC`)
     .bind(...binds)
     .all<NodeRow>();
-  return c.json({ nodes: rows.results.map((r) => toNode(r, gate)) });
+  return c.json({ nodes: await withSubtasks(db, user.id, rows.results.map((r) => toNode(r, gate))) });
 });
 
 /** What a layer is made from, as sent: checked here, whoever sends it. */
@@ -40,11 +40,18 @@ export interface NodeBody {
   title?: unknown;
   note?: unknown;
   dueDate?: unknown;
+  doDate?: unknown;
+  repeat?: unknown;
+  priority?: unknown;
+  remind?: unknown;
   dueTime?: unknown;
   estimateMin?: unknown;
   status?: unknown;
 }
 type Refused = { error: string; status: 400 | 404 };
+
+/** The do date is the day it will be done, the due date is the day it has to be done before: the first cannot come after the second. */
+export const DATES_PROBLEM = 'Do it on or before the day it is due.';
 
 /**
  * Add a layer to someone's pyramid. The one rule for it: the person's own tap, and a life coach adding a task to a
@@ -83,6 +90,14 @@ export async function createNode(db: D1Database, ownerId: string, body: NodeBody
     )
     .bind(id, ownerId, kind, parentId, body.relationship, title, note, dueDate, kind === 'task' ? readyFromNow() : null, sortRow?.next ?? 0, now, now, dueTime, estimateMin, addedBy)
     .run();
+  // A task can also carry a do date and a rule for coming back. A rule needs a day to count from.
+  const doDate = kind === 'task' && typeof body.doDate === 'string' && DATE_RE.test(body.doDate) ? body.doDate : null;
+  const repeat = kind === 'task' ? parseRepeat(body.repeat) : null;
+  if (doDate && dueDate && doDate > dueDate) return { error: DATES_PROBLEM, status: 400 };
+  if (repeat && !doDate && !dueDate) return { error: 'Pick a do date or a due date for it to repeat from.', status: 400 };
+  const priority = kind === 'task' ? parsePriority(body.priority) : null;
+  const remind = kind === 'task' && body.remind === true && (doDate || dueDate) ? 1 : 0;
+  if (doDate || repeat || priority !== null || remind) await db.prepare('UPDATE nodes SET do_date = ?, repeat_json = ?, priority = ?, remind = ? WHERE id = ?').bind(doDate, repeat ? JSON.stringify(repeat) : null, priority, remind, id).run();
   const row = await getNode(db, ownerId, id);
   return row ? { row } : { error: 'not found', status: 404 };
 }
@@ -108,7 +123,58 @@ export async function editNode(db: D1Database, row: NodeRow, body: NodeBody): Pr
     .prepare('UPDATE nodes SET title = ?, note = ?, due_date = ?, status = ?, ready_at = ?, updated_at = ?, due_time = ?, estimate_min = ? WHERE id = ?')
     .bind(title, note, dueDate, status, readyAt, nowIso(), dueTime, estimateMin, row.id)
     .run();
+  if (row.kind === 'task' && ('doDate' in body || 'repeat' in body)) {
+    const doDate = body.doDate === null ? null : typeof body.doDate === 'string' && DATE_RE.test(body.doDate) ? body.doDate : (row.do_date ?? null);
+    let repeat = 'repeat' in body ? (body.repeat === null ? null : (parseRepeat(body.repeat) ?? parseRepeat(row.repeat_json))) : parseRepeat(row.repeat_json);
+    // A rule with no day to count from is no rule.
+    if (!doDate && !dueDate) repeat = null;
+    await db.prepare('UPDATE nodes SET do_date = ?, repeat_json = ? WHERE id = ?').bind(doDate, repeat ? JSON.stringify(repeat) : null, row.id).run();
+  }
+  if (row.kind === 'task' && ('priority' in body || 'remind' in body)) {
+    const priority = 'priority' in body ? parsePriority(body.priority) : parsePriority(row.priority);
+    const fresh = await getNode(db, row.user_id, row.id);
+    // A reminder needs a day to go off on.
+    const remind = 'remind' in body ? body.remind === true : (row.remind ?? 0) === 1;
+    const day = fresh ? (fresh.do_date ?? fresh.due_date) : null;
+    await db.prepare('UPDATE nodes SET priority = ?, remind = ? WHERE id = ?').bind(priority, remind && day ? 1 : 0, row.id).run();
+  }
   return (await getNode(db, row.user_id, row.id)) ?? row;
+}
+
+/**
+ * A repeating task that was just ticked makes the next one: same place in the pyramid, same words, the rule carried on, the dates moved to
+ * the next day the rule falls on after today (or after its own day, if that is later). The do date and due date keep the same gap. Only
+ * one next task is ever made from one tick, and it remembers where it came from.
+ */
+async function spawnNext(db: D1Database, row: NodeRow, today: string): Promise<NodeRow | null> {
+  const rule = parseRepeat(row.repeat_json);
+  if (!rule || row.kind !== 'task') return null;
+  const base = row.do_date ?? row.due_date;
+  if (!base) return null;
+  const after = base > today ? base : today;
+  const next = nextOccurrence(rule, base, after);
+  if (!next) return null;
+  const made = await db.prepare('SELECT 1 AS x FROM nodes WHERE spawned_from = ? AND user_id = ?').bind(row.id, row.user_id).first();
+  if (made) return null;
+  const gap = row.do_date && row.due_date ? daysBetween(row.do_date, row.due_date) : 0;
+  const doDate = row.do_date ? next : null;
+  const dueDate = row.due_date ? (row.do_date ? addDays(next, gap) : next) : null;
+  const id = newId();
+  const now = nowIso();
+  const sortRow = await db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM nodes WHERE user_id = ? AND kind = ? AND relationship = ?').bind(row.user_id, 'task', row.relationship).first<{ next: number }>();
+  await db
+    .prepare(
+      `INSERT INTO nodes (id, user_id, kind, parent_id, relationship, title, note, status, xp, due_date, completed_at, ready_at, sort_order, created_at, updated_at, due_time, estimate_min, added_by, do_date, repeat_json, spawned_from, priority, remind)
+       VALUES (?, ?, 'task', ?, ?, ?, ?, 'active', 0, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(id, row.user_id, row.parent_id, row.relationship, row.title, row.note, dueDate, readyFromNow(), sortRow?.next ?? 0, now, now, row.due_time, row.estimate_min, row.added_by ?? null, doDate, row.repeat_json, row.id, row.priority ?? null, row.remind ?? 0)
+    .run();
+  // The checklist comes back too, all unticked.
+  await db
+    .prepare('INSERT INTO subtasks (id, user_id, task_id, title, done_at, sort_order, created_at) SELECT lower(hex(randomblob(16))), user_id, ?, title, NULL, sort_order, ? FROM subtasks WHERE task_id = ? AND user_id = ?')
+    .bind(id, now, row.id, row.user_id)
+    .run();
+  return getNode(db, row.user_id, id);
 }
 
 nodes.post('/', async (c) => {
@@ -124,7 +190,59 @@ nodes.patch('/:id', async (c) => {
   const row = await getNode(db, user.id, c.req.param('id'));
   if (!row) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<NodeBody>().catch(() => ({}) as NodeBody);
+  if (row.kind === 'task') {
+    const doNext = body.doDate === null ? null : typeof body.doDate === 'string' && DATE_RE.test(body.doDate) ? body.doDate : (row.do_date ?? null);
+    const dueNext = body.dueDate === null ? null : typeof body.dueDate === 'string' && DATE_RE.test(body.dueDate) ? body.dueDate : row.due_date;
+    if (doNext && dueNext && doNext > dueNext) return c.json({ error: DATES_PROBLEM }, 400);
+    if (body.repeat && !parseRepeat(body.repeat)) return c.json({ error: 'That is not a way to repeat.' }, 400);
+    if (body.remind === true && !doNext && !dueNext) return c.json({ error: 'Pick a do date or a due date to be reminded on.' }, 400);
+    if (body.priority !== undefined && body.priority !== null && parsePriority(body.priority) === null) return c.json({ error: 'A priority is P0, P1, P2 or P3.' }, 400);
+    if (body.repeat && !doNext && !dueNext) return c.json({ error: 'Pick a do date or a due date for it to repeat from.' }, 400);
+  }
   return c.json({ node: toNode(await editNode(db, row, body)) });
+});
+
+/** A task's checklist. Owner only; it pays nothing and never blocks ticking the task. */
+export const MAX_SUBTASKS = 20;
+
+nodes.get('/:id/subtasks', async (c) => {
+  const user = c.get('user');
+  const row = await getNode(c.env.DB, user.id, c.req.param('id'));
+  if (!row || row.kind !== 'task') return c.json({ error: 'not found' }, 404);
+  const list = await c.env.DB.prepare('SELECT id, title, done_at, sort_order FROM subtasks WHERE task_id = ? AND user_id = ? ORDER BY sort_order ASC, created_at ASC').bind(row.id, user.id).all<{ id: string; title: string; done_at: string | null; sort_order: number }>();
+  return c.json({ subtasks: list.results.map((s) => ({ id: s.id, title: s.title, done: s.done_at !== null })) });
+});
+
+nodes.post('/:id/subtasks', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await getNode(db, user.id, c.req.param('id'));
+  if (!row || row.kind !== 'task') return c.json({ error: 'not found' }, 404);
+  const body = await c.req.json<{ title?: unknown }>().catch(() => ({}) as { title?: unknown });
+  const title = typeof body.title === 'string' ? body.title.trim().slice(0, 140) : '';
+  if (!title) return c.json({ error: 'title required' }, 400);
+  const have = await db.prepare('SELECT COUNT(*) AS n, COALESCE(MAX(sort_order), -1) + 1 AS next FROM subtasks WHERE task_id = ? AND user_id = ?').bind(row.id, user.id).first<{ n: number; next: number }>();
+  if ((have?.n ?? 0) >= MAX_SUBTASKS) return c.json({ error: `A task holds up to ${MAX_SUBTASKS} subtasks.` }, 400);
+  const id = newId();
+  await db.prepare('INSERT INTO subtasks (id, user_id, task_id, title, done_at, sort_order, created_at) VALUES (?, ?, ?, ?, NULL, ?, ?)').bind(id, user.id, row.id, title, have?.next ?? 0, nowIso()).run();
+  return c.json({ subtask: { id, title, done: false } }, 201);
+});
+
+nodes.patch('/subtasks/:sid', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const cur = await db.prepare('SELECT id, title, done_at FROM subtasks WHERE id = ? AND user_id = ?').bind(c.req.param('sid'), user.id).first<{ id: string; title: string; done_at: string | null }>();
+  if (!cur) return c.json({ error: 'not found' }, 404);
+  const body = await c.req.json<{ title?: unknown; done?: unknown }>().catch(() => ({}) as { title?: unknown; done?: unknown });
+  const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim().slice(0, 140) : cur.title;
+  const doneAt = typeof body.done === 'boolean' ? (body.done ? (cur.done_at ?? nowIso()) : null) : cur.done_at;
+  await db.prepare('UPDATE subtasks SET title = ?, done_at = ? WHERE id = ? AND user_id = ?').bind(title, doneAt, cur.id, user.id).run();
+  return c.json({ subtask: { id: cur.id, title, done: doneAt !== null } });
+});
+
+nodes.delete('/subtasks/:sid', async (c) => {
+  await c.env.DB.prepare('DELETE FROM subtasks WHERE id = ? AND user_id = ?').bind(c.req.param('sid'), c.get('user').id).run();
+  return c.json({ ok: true });
 });
 
 nodes.delete('/:id', async (c) => {
@@ -162,7 +280,8 @@ nodes.post('/:id/complete', async (c) => {
   // The app sends the person's own date. Without one, the server's UTC day gets a day of slack, since a person east of UTC is already on tomorrow.
   const sent = Boolean(body.date && dateNearToday(body.date));
   const today = sent ? body.date! : shiftDate(new Date().toISOString().slice(0, 10), 1);
-  if (row.due_date && row.due_date > today) return c.json({ error: `Due ${row.due_date}. Tick it on the day.`, dueDate: row.due_date }, 400);
+  // Only the do date holds a task back: the due date is a deadline, and finishing early is fine.
+  if (row.do_date && row.do_date > today) return c.json({ error: `Planned for ${row.do_date}. Tick it on the day.`, dueDate: row.do_date }, 400);
 
   // Wait time: the first few ticks are free; after that a task has to exist for a while and sit a
   // gap after the previous tick, so writing and ticking in the same breath, or ticking back to back, earns nothing.
@@ -200,6 +319,8 @@ nodes.post('/:id/complete', async (c) => {
     return c.json({ error: 'already done', node: fresh ? toNode(fresh) : null }, 409);
   }
 
+  // A repeating task makes its next one now, so a project that held only this task does not clear.
+  const nextTask = await spawnNext(db, row, today);
   const ancestors = await ancestorsOf(db, user.id, row);
   const ripple: RippleEvent[] = [];
   let total = 0;
@@ -270,6 +391,7 @@ nodes.post('/:id/complete', async (c) => {
     totalXp: total,
     newBadges: diffBadges(before, after),
     capped,
+    next: nextTask ? toNode(nextTask) : null,
   };
   return c.json(res);
 });
@@ -293,6 +415,8 @@ nodes.post('/:id/uncomplete', async (c) => {
     return c.json({ error: 'already not done', node: fresh ? toNode(fresh) : null }, 409);
   }
 
+  // Un-ticking a repeating task takes back the next one it made, as long as nobody has touched it.
+  await db.prepare("DELETE FROM nodes WHERE spawned_from = ? AND user_id = ? AND status = 'active' AND xp = 0").bind(row.id, user.id).run();
   const ancestors = await ancestorsOf(db, user.id, row);
 
   // Take back the task's xp only if its last tick actually paid. A tick past

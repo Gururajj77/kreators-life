@@ -8,10 +8,12 @@ import { useCelebrate } from '../components/Celebration';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
-import { useRefreshAll, useRewards } from '../lib/queries';
+import { useCardGames, useRefreshAll, useRewards } from '../lib/queries';
+import { LockedButton } from '../components/LockedButton';
 
 export function Rewards() {
   const q = useRewards();
+  const gamesQ = useCardGames();
   const refresh = useRefreshAll();
   const celebrate = useCelebrate();
   const [error, setError] = useState<string | null>(null);
@@ -118,6 +120,8 @@ export function Rewards() {
                             <Link to={`/cards/${r.game}`} className={`toy inline-flex min-h-[48px] shrink-0 items-center justify-center rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink ${tile ? 'w-full' : ''}`}>
                               Play
                             </Link>
+                          ) : r.game && gamesQ.data?.games.find((x) => x.key === r.game && !x.unlock.ok) ? (
+                            <LockedButton unlock={gamesQ.data.games.find((x) => x.key === r.game)!.unlock} full={false} className="shrink-0" />
                           ) : (
                             <Button
                               variant={can ? 'primary' : 'outline'}

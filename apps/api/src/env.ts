@@ -99,5 +99,5 @@ export interface UserRow {
 
 export type AppEnv = {
   Bindings: Env;
-  Variables: { user: UserRow };
+  Variables: { user: UserRow; logNote?: string };
 };

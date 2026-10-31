@@ -1,8 +1,9 @@
-import { PRODUCT_KIND_META , badgeName } from '@kreators/shared';
+import { PRODUCT_KIND_META, unlockAt } from '@kreators/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { Button } from '../components/Button';
+import { LockedButton } from '../components/LockedButton';
 import { TrustBadge } from '../components/TrustBadge';
 import { useCelebrate } from '../components/Celebration';
 import { BackLink } from '../components/PageHeader';
@@ -182,9 +183,9 @@ export function ProductPage() {
               <TrustBadge trust={d.seller.trust} size="sm" />
               <span className="text-[12px] font-bold text-ink-soft">The seller's trust, from what they earned here.</span>
             </div>
-            {(d.unlock.minPoints > 0 || d.unlock.badge) && (
+            {(d.unlock.minPoints > 0 || d.unlock.minXp > 0 || d.unlock.badge) && (
               <p className={`mt-sm m-0 rounded-tile px-sm py-xs text-[14px] font-bold ${d.unlock.ok ? 'bg-paper text-ink-soft' : 'bg-r1/15'}`}>
-                {d.unlock.ok ? `For people who earned it: ${d.unlock.minPoints > 0 ? `${d.unlock.minPoints} points` : ''}${d.unlock.minPoints > 0 && d.unlock.badge ? ' and ' : ''}${d.unlock.badge ? `the ${badgeName(d.unlock.badge)} badge` : ''}. You have.` : d.unlock.why}
+                {d.unlock.ok ? `For people who earned it. ${unlockAt(d.unlock)}. You have it.` : `${unlockAt(d.unlock)}. ${d.unlock.why}`}
               </p>
             )}
             {p.description && <p className="mt-sm m-0 whitespace-pre-wrap text-[16px] font-semibold leading-relaxed">{p.description}</p>}
@@ -262,13 +263,15 @@ export function ProductPage() {
                 <Button full size="lg" className="mt-md" onClick={() => buy.mutate({ pay: 'points', replay: true })} disabled={busy}>
                   Buy the replay for {p.replayPoints} points
                 </Button>
+              ) : !d.unlock.ok ? (
+                <LockedButton unlock={d.unlock} className="mt-md" />
               ) : (
-                <Button full size="lg" className="mt-md" onClick={() => buy.mutate({ pay: 'points' })} disabled={busy || !ready || !d.unlock.ok}>
+                <Button full size="lg" className="mt-md" onClick={() => buy.mutate({ pay: 'points' })} disabled={busy || !ready}>
                   {buyLabel(meta.buy)}
                 </Button>
               )}
               <p className="mt-xs m-0 text-center text-[12px] font-bold text-ink-soft">You have {points} points.</p>
-              {p.priceCents > 0 && !replayForSale && (
+              {p.priceCents > 0 && !replayForSale && d.unlock.ok && (
                 <>
                   <Button variant="outline" full className="mt-sm" onClick={() => buy.mutate({ pay: 'money' })} disabled={busy || !ready || !d.unlock.ok}>
                     {live ? `Pay ${moneyLabel}` : `Record a money order (test), ${moneyLabel}`}

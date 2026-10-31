@@ -1,10 +1,11 @@
 import { Hono, type Context } from 'hono';
 import { rewardSocial, trustFor } from '../rewards';
 import { unlockFor } from '@kreators/shared';
+import { haveFor } from '../unlocks';
 import { badgesNow, pageOf, paged } from '../db';
 import { AFFILIATE_SHARE, levelFromXp, type Lesson, type PublicPage } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { DATE_RE, nameOf, newId, notify, nowIso, parseList, parseSocials, sessionUser, publicOf, getStats, computeBadges, honorKeys, linksOf } from '../db';
+import { DATE_RE, nameOf, newId, notify, nowIso, parseList, parseSocials, sessionUser, publicOf, getStats, computeBadges, grantedBadges, honorKeys, linksOf, withGranted } from '../db';
 import { slotsFor, type AvailabilityOverride } from '@kreators/shared';
 import { paymentsConfig, providerFor } from '../payments';
 import { logEvent, sendEmail, track } from '../ops';
@@ -103,7 +104,7 @@ async function pageFor(c: Context<AppEnv>, owner: UserRow): Promise<PublicPage> 
     allowChats: open && ps.allowChats,
     posts: posts.results.map((p) => ({ id: p.id, category: p.category, body: p.body, likes: p.likes, replies: p.replies, createdAt: p.created_at })),
     activity: stats && shows.activity ? { level: levelFromXp(owner.xp), streak: owner.streak, areasSetUp: stats.relationshipsWithPillars, memberSince: owner.created_at } : null,
-    badges: stats && shows.badges ? computeBadges(owner, stats) : [],
+    badges: stats && shows.badges ? withGranted(computeBadges(owner, stats), await grantedBadges(db, owner.id)) : [],
     honors,
     links: shows.blocks ? linksOf(owner).filter((b) => b.on) : [],
   };
@@ -147,8 +148,8 @@ publicPage.get('/products/:id', async (c) => {
   ]);
   const viewer = await sessionUser(c);
   const owned = viewer ? await db.prepare("SELECT 1 FROM orders WHERE buyer_id = ? AND product_id = ? AND status IN ('paid','test')").bind(viewer.id, row.id).first() : null;
-  const have = viewer ? { points: viewer.points, badges: [...(await badgesNow(db, viewer.id)), ...(await honorKeys(db, viewer))] } : null;
-  return c.json({ product: toProduct(row), lessonCount: lessons?.n ?? 0, testimonials: testimonials.results.map(toTestimonial), owned: Boolean(owned) || viewer?.id === row.owner_id, seller: { trust: await trustFor(db, row.owner_id) }, unlock: unlockFor({ minPoints: row.min_points, badge: row.badge }, have) });
+  const have = viewer ? await haveFor(db, viewer) : null;
+  return c.json({ product: toProduct(row), lessonCount: lessons?.n ?? 0, testimonials: testimonials.results.map(toTestimonial), owned: Boolean(owned) || viewer?.id === row.owner_id, seller: { trust: await trustFor(db, row.owner_id) }, unlock: unlockFor({ minPoints: row.min_points, minXp: row.min_xp, badge: row.badge }, have) });
 });
 
 /** Buyer side: needs a session. */
@@ -186,8 +187,8 @@ store.post('/:productId/checkout', async (c) => {
   if (!product) return c.json({ error: 'not found' }, 404);
   if (product.owner_id === user.id) return c.json({ error: 'that is your own product' }, 400);
   // Some things are for people who have earned their way: a points balance, a badge, or both.
-  if (product.min_points > 0 || product.badge) {
-    const gate = unlockFor({ minPoints: product.min_points, badge: product.badge }, { points: user.points, badges: [...(await badgesNow(db, user.id)), ...(await honorKeys(db, user))] });
+  if (product.min_points > 0 || product.min_xp > 0 || product.badge) {
+    const gate = unlockFor({ minPoints: product.min_points, minXp: product.min_xp, badge: product.badge }, await haveFor(db, user));
     if (!gate.ok) return c.json({ error: gate.why, unlock: gate }, 403);
   }
   const body = await c.req.json<{ coupon?: string; affiliate?: string; pay?: string; points?: number; question?: string; intake?: unknown; replay?: boolean; click?: string; src?: string }>().catch(() => ({}) as Record<string, never>);

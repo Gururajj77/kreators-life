@@ -1,4 +1,6 @@
-import { RELATIONSHIP_BY_KEY } from '@kreators/shared';
+import { RELATIONSHIP_BY_KEY, TASK_SORTS, addDays, isTaskSort, sortTasks, type Node } from '@kreators/shared';
+import { useMutation } from '@tanstack/react-query';
+import { useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Link } from 'react-router';
 import { Avatar } from '../components/Avatar';
@@ -14,10 +16,63 @@ import { RoutineSection } from '../components/RoutineSection';
 import { Screen } from '../components/Screen';
 import { RemindersSection } from '../components/Reminders';
 import { TaskRow } from '../components/TaskRow';
+import { TaskPanel } from '../components/TaskPlan';
 import { api } from '../lib/api';
 import { prettyDate } from '../lib/date';
 import { useMe, useRefreshAll, useToday } from '../lib/queries';
 import { useActionQueue } from '../lib/useActionQueue';
+import { useParamState } from '../lib/useParamState';
+
+/** A task on Daily with its plan panel one tap away. */
+function DailyTask({ t, date, queue, onToggle, subtitle }: { t: Node; date: string; queue: ReturnType<typeof useActionQueue>; onToggle: () => void; subtitle: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <TaskRow
+      task={t}
+      today={date}
+      subtitle={subtitle}
+      busy={queue.isPending(t.id)}
+      hint={queue.hint(t.id)}
+      onToggle={onToggle}
+      onEdit={() => setOpen((v) => !v)}
+      editLabel={open ? 'Close the plan for' : 'Plan'}
+      panel={open ? <TaskPanel task={t} today={date} /> : null}
+    />
+  );
+}
+
+/** A task with no day yet: pick one and it moves up into Tasks. */
+function BacklogTask({ t, date, queue }: { t: Node; date: string; queue: ReturnType<typeof useActionQueue> }) {
+  const refresh = useRefreshAll();
+  const [open, setOpen] = useState(false);
+  const pick = useMutation({ mutationFn: (day: string) => api.updateNode(t.id, { doDate: day }), onSuccess: () => refresh() });
+  return (
+    <TaskRow
+      task={t}
+      today={date}
+      subtitle={`${RELATIONSHIP_BY_KEY[t.relationship].name}, no day yet`}
+      busy={queue.isPending(t.id) || pick.isPending}
+      onToggle={() => setOpen(true)}
+      hint="Pick a day first. Then it moves up into Tasks."
+      onEdit={() => setOpen((v) => !v)}
+      editLabel={open ? 'Close the plan for' : 'Plan'}
+      panel={
+        <>
+          <div className="mt-xs flex flex-wrap items-center gap-xs" role="group" aria-label={`Pick a day for ${t.title}`}>
+            <button type="button" onClick={() => pick.mutate(date)} className="toy toy-soft min-h-[44px] rounded-pill border-2 border-line bg-card px-sm text-[14px] font-bold">
+              Today
+            </button>
+            <button type="button" onClick={() => pick.mutate(addDays(date, 1))} className="toy toy-soft min-h-[44px] rounded-pill border-2 border-line bg-card px-sm text-[14px] font-bold">
+              Tomorrow
+            </button>
+            <input type="date" aria-label={`Do date for ${t.title}`} min={date} onChange={(e) => e.target.value && pick.mutate(e.target.value)} className="min-h-[44px] rounded-pill border-2 border-line bg-paper px-sm text-[14px] font-bold" />
+          </div>
+          {open && <TaskPanel task={t} today={date} />}
+        </>
+      }
+    />
+  );
+}
 
 export function Today() {
   const { date, data, isPending, isError, refetch } = useToday();
@@ -59,7 +114,10 @@ export function Today() {
     });
 
   const rel = data ? RELATIONSHIP_BY_KEY[data.spark.relationship] : null;
-  const tasks = data?.tasks ?? [];
+  const [sortRaw, setSort] = useParamState('taskSort', 'day');
+  const sort = isTaskSort(sortRaw) ? sortRaw : 'day';
+  const tasks = sortTasks(data?.tasks ?? [], sort);
+  const backlog = sortTasks(data?.backlog ?? [], sort === 'day' ? 'priority' : sort);
   const done = data?.done ?? [];
   const doneAt = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '');
   const taskDone = Boolean(data && data.doneRecently > 0);
@@ -179,6 +237,16 @@ export function Today() {
               </h2>
               {tasks.length > 0 && <span className="text-[14px] font-bold text-ink-soft">{tasks.length} waiting</span>}
             </div>
+            {(tasks.length > 1 || backlog.length > 1) && (
+              <div className="mt-xs flex flex-wrap items-center gap-xs" role="group" aria-label="Sort tasks by">
+                <span className="text-[14px] font-bold text-ink-soft">Sort by</span>
+                {TASK_SORTS.map((s) => (
+                  <button key={s.key} type="button" aria-pressed={sort === s.key} title={s.blurb} onClick={() => setSort(s.key)} className={`toy min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${sort === s.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            )}
             {data.timePlan.plannedMin + data.timePlan.doneMin > 0 && (
               <div className="mt-xs rounded-tile bg-card p-sm shadow-toy-soft" aria-label="Time plan">
                 <div className="flex items-baseline justify-between gap-sm">
@@ -196,15 +264,7 @@ export function Today() {
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                 <AnimatePresence initial={false}>
                   {tasks.map((t) => (
-                    <TaskRow
-                      key={t.id}
-                      task={t}
-                      today={date}
-                      subtitle={RELATIONSHIP_BY_KEY[t.relationship].name}
-                      busy={queue.isPending(t.id)}
-                      hint={queue.hint(t.id)}
-                      onToggle={() => tick(t.id)}
-                    />
+                    <DailyTask key={t.id} t={t} date={date} queue={queue} onToggle={() => tick(t.id)} subtitle={RELATIONSHIP_BY_KEY[t.relationship].name} />
                   ))}
                 </AnimatePresence>
               </ul>
@@ -217,6 +277,21 @@ export function Today() {
                   {taskDone ? 'Set up another pillar' : 'Set up a pillar'}
                 </Link>
               </div>
+            )}
+            {data.backlogTotal > 0 && (
+              <details className="mt-md rounded-card bg-card p-sm shadow-toy-soft">
+                <summary className="toy flex min-h-[48px] cursor-pointer list-none items-center justify-between gap-sm text-[16px] font-bold">
+                  <span>Not scheduled yet</span>
+                  <span className="text-[14px] text-ink-soft">{data.backlogTotal}</span>
+                </summary>
+                <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">These have no date yet. They stay out of Tasks until you pick a do date or a due date; then one moves up.</p>
+                <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+                  {backlog.map((t) => (
+                    <BacklogTask key={t.id} t={t} date={date} queue={queue} />
+                  ))}
+                </ul>
+                {data.backlogTotal > backlog.length && <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Showing {backlog.length} of {data.backlogTotal}. Pillars lists the rest.</p>}
+              </details>
             )}
             {done.length > 0 && (
               <div role="group" className="mt-md" aria-labelledby="done-heading">

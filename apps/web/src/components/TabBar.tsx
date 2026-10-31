@@ -1,7 +1,7 @@
 import { BADGE_META, badgeRoleOf, MODULE_GROUPS, type ModuleGroup } from '@kreators/shared';
 import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router';
-import { useModules } from '../lib/modules';
+import { useGroupOrder, useModules } from '../lib/modules';
 import { useMe } from '../lib/queries';
 import { BrandMark } from './BrandMark';
 import { RoleBadge } from './RoleBadge';
@@ -74,6 +74,7 @@ export function TabBar() {
   const me = useMe();
   const unread = me.data?.unread ?? 0;
   const { modules } = useModules();
+  const groupOrder = useGroupOrder(SIDEBAR_GROUPS);
   const loc = useLocation();
   const sidebarApps = modules.filter((m) => m.on && !m.locked);
   // Phone: the sidebar's app groups live behind a menu button at the top right.
@@ -140,7 +141,7 @@ export function TabBar() {
           </p>
         )}
         {sidebarApps.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing switched on yet. Pick apps under Apps.</p>}
-        {SIDEBAR_GROUPS.map((g) => {
+        {groupOrder.map((g) => {
           const list = sidebarApps.filter((m) => m.group === g);
           if (list.length === 0) return null;
           return (
@@ -203,7 +204,7 @@ export function TabBar() {
         </ul>
         {/* The apps that are on, under their category, folded away until you open one or step inside it. Switch more on from Apps. */}
         <div className="mt-md flex flex-col gap-sm">
-          {SIDEBAR_GROUPS.map((g) => {
+          {groupOrder.map((g) => {
             const list = sidebarApps.filter((m) => m.group === g);
             if (list.length === 0) return null;
             return (

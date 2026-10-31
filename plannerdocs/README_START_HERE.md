@@ -8,7 +8,7 @@ Where the truth lives:
 - `CLAUDE.md` at the repo root is the rulebook. Its "Non-negotiable rules" and "Done means" override anything here.
 - `README.md` is the long-form description of every part of the app.
 - `docs/DECISIONS.md` is the dated history: one line per decision that changed the plan.
-- `docs/build-map.html` is the map of where things live, embedded under Internal, Observability.
+- `apps/web/src/lib/buildMap.ts` is the map of what is built and where things live, shown under Operations, Observability.
 - The code: `packages/shared/src/index.ts` (the domain model), `apps/api/src` (the Worker), `apps/web/src` (the app and the public site), `apps/api/migrations` (the schema).
 
 ## What kreators.app is

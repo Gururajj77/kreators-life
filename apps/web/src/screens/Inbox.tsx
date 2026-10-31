@@ -1,5 +1,6 @@
 import { INBOX_TAB_META, isInboxTab, type InboxShow, type InboxTab } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
+import { Inert } from '../components/Inert';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
@@ -119,7 +120,7 @@ export function Inbox() {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className={`block text-[16px] ${n.readAt ? 'font-semibold' : 'font-extrabold'}`}>{n.title}</span>
-                  {n.body && <span className="block text-[14px] font-semibold text-ink-soft">{n.body}</span>}
+                  {n.body && <span className="block text-[14px] font-semibold text-ink-soft"><Inert text={n.body} /></span>}
                   <span className="block text-[12px] font-bold text-ink-mute">{new Date(n.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
                 </span>
                 {!n.readAt && <span className="size-[10px] shrink-0 rounded-pill bg-r1" aria-label="Unread" />}

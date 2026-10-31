@@ -12,7 +12,7 @@ import { SignOut } from '../components/SignOut';
 import { EvolutionReveal } from '../components/EvolutionReveal';
 import { useGuide } from '../components/Guide';
 import { Toggle } from '../components/Toggle';
-import { useModules } from '../lib/modules';
+import { useGroupOrder, useModules } from '../lib/modules';
 import { useSession } from '../lib/store';
 import { useTheme, type ThemeMode } from '../lib/theme';
 import { Screen } from '../components/Screen';
@@ -44,6 +44,7 @@ function YouView({ data }: { data: MeResponse }) {
   const guide = useGuide();
   const setToken = useSession((s) => s.setToken);
   const { modules } = useModules();
+  const featureGroups = useGroupOrder(['earn', 'creator', 'community', 'wellbeing', 'core', 'manage']);
   const themeMode = useTheme((s) => s.mode);
   const setThemeMode = useTheme((s) => s.setMode);
   const toggle = useMutation({ mutationFn: ({ key, on }: { key: string; on: boolean }) => api.setModule(key, on), onSuccess: () => refresh() });
@@ -202,7 +203,7 @@ function YouView({ data }: { data: MeResponse }) {
           Features
         </h2>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">This is the one place an app can be switched off. Off means it goes grey on the Apps screen; nothing is deleted.</p>
-        {(['earn', 'creator', 'community', 'wellbeing', 'core', 'manage'] as ModuleGroup[]).map((g) => {
+        {featureGroups.map((g) => {
           const list = modules.filter((m) => m.group === g && m.available && !m.locked);
           if (list.length === 0) return null;
           const rel = RELATIONSHIP_BY_KEY[MODULE_GROUP_ACCENT[g]];

@@ -60,13 +60,22 @@ import { coach, myCoach } from './routes/coach';
 import { media, mediaPublic } from './routes/media';
 import { reminders } from './routes/reminders';
 import { connect } from './routes/connect';
+import { logger, pruneLogs, writeClientError, writeLog } from './logs';
 
 const app = new Hono<AppEnv>().basePath('/api');
 
 app.use('*', cors());
 app.use('*', secureHeaders());
+// The app's own log of what changed, what was refused and what broke. See logs.ts.
+app.use('*', logger());
 
 app.get('/health', (c) => c.json({ ok: true, at: new Date().toISOString() }));
+// A screen that broke in someone's browser says so here: a short message and where, never who. Limited per address.
+app.post('/public/client-error', async (c) => {
+  const body = await c.req.json<{ message?: unknown; path?: unknown }>().catch(() => ({}) as { message?: unknown; path?: unknown });
+  await writeClientError(c, body);
+  return c.json({ ok: true });
+});
 // Abuse limits on the doors that take no session, per address. The numbers live in limits.ts.
 for (const r of ROUTE_LIMITS) if (isOpenDoor(r.path)) app.on(r.method, r.path, rateLimit(r.limit));
 app.route('/auth', auth);
@@ -165,6 +174,7 @@ app.route('/coach', coach);
 app.notFound((c) => c.json({ error: 'not found' }, 404));
 app.onError((err, c) => {
   console.error(err);
+  c.set('logNote', (err instanceof Error ? `${err.name}: ${err.message}` : String(err)).slice(0, 300));
   return c.json({ error: 'something broke on our side' }, 500);
 });
 
@@ -176,6 +186,16 @@ root.route('/', app);
 export default {
   fetch: root.fetch,
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(runScheduled(env).then((r) => console.log('scheduled', JSON.stringify(r))));
+    ctx.waitUntil(
+      runScheduled(env)
+        .then(async (r) => {
+          console.log('scheduled', JSON.stringify(r));
+          const did = Object.entries(r).filter(([, n]) => n > 0).map(([k, n]) => `${k} ${n}`).join(', ');
+          // A quiet run leaves no line; one that did something says what, and the old lines are tidied away.
+          if (did) await writeLog(env.DB, { level: 'info', area: 'cron', message: did });
+          await pruneLogs(env.DB);
+        })
+        .catch((err) => writeLog(env.DB, { level: 'error', area: 'cron', message: err instanceof Error ? `${err.name}: ${err.message}` : String(err) })),
+    );
   },
 };

@@ -1,5 +1,6 @@
 import { MAX_EVENT_MESSAGE, type EventApp, type EventMessage, type EventPerson } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Inert } from './Inert';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { useSession } from '../lib/store';
@@ -123,7 +124,7 @@ export function EventPanel({ app, id }: { app: EventApp; id: string }) {
                 </span>
                 <span className={`text-[12px] font-bold ${m.mine ? 'text-on-ink/70' : 'text-ink-soft'}`}>{when(m.createdAt)}</span>
               </span>
-              <span className="block whitespace-pre-wrap font-semibold">{m.body}</span>
+              <span className="block whitespace-pre-wrap font-semibold"><Inert text={m.body} /></span>
               <button type="button" onClick={() => setTo(m)} className={`mt-xs mr-sm min-h-[32px] text-[12px] font-bold underline underline-offset-4 ${m.mine ? 'text-on-ink/80' : 'text-ink-soft'}`}>
                 Reply
               </button>
@@ -138,7 +139,7 @@ export function EventPanel({ app, id }: { app: EventApp; id: string }) {
         </ul>
         {to && (
           <p className="mt-sm m-0 flex items-center justify-between gap-xs rounded-tile bg-paper p-xs text-[12px] font-bold text-ink-soft">
-            <span className="min-w-0 truncate">Replying to {to.mine ? 'yourself' : to.name}: {to.body}</span>
+            <span className="min-w-0 truncate">Replying to {to.mine ? 'yourself' : to.name}: <Inert text={to.body} /></span>
             <Button variant="ghost" size="sm" onClick={() => setTo(null)}>Cancel</Button>
           </p>
         )}

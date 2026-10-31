@@ -915,8 +915,44 @@ export interface AppUsage {
   on: number;
 }
 
+/** Numbers for the newer apps. Counts only: never a person, never what they wrote or answered. */
+export interface ObservedAdditions {
+  /** How many people unlocked each game. */
+  games: { key: string; name: string; emoji: string; unlocked: number }[];
+  discover: { results: number; people: number; withEq: number; assistantOn: number; stepsOff: number };
+  /** What super admins gave by hand in the last thirty days. */
+  grants: { xp: number; badges: number; points: number; honors: number };
+  /** The app's own log, last 24 hours. */
+  logs: { errors: number; warnings: number; changes: number };
+}
+
+export interface LogEntry {
+  id: number;
+  at: string;
+  level: 'info' | 'warn' | 'error';
+  area: string;
+  method: string;
+  path: string;
+  status: number;
+  ms: number;
+  actorId: string | null;
+  actorName: string | null;
+  message: string;
+}
+export interface LogsResponse {
+  logs: LogEntry[];
+  page: Page;
+  /** Counts for the last 24 hours, whatever the filter. */
+  last24h: { info: number; warn: number; error: number };
+  /** The areas seen in the last week, to filter by. */
+  areas: string[];
+  /** The people with lines in the last week, busiest first, to filter by. */
+  actors: { id: string; name: string; count: number }[];
+}
+
 export interface ObservabilityResponse {
   totals: { users: number; onboarded: number; staff: number; admins: number; newThisWeek: number };
+  additions: ObservedAdditions;
   roles: Record<Role, number>;
   apps: AppUsage[];
   users: ObservedUser[];
@@ -951,7 +987,21 @@ export interface Node {
   note: string;
   status: 'active' | 'done' | 'archived';
   xp: number;
+  /** The deadline: finish by this day. */
   dueDate: string | null;
+  /** Tasks only: the day to do it. A task with a do date opens on it, and cannot be ticked before. */
+  doDate: string | null;
+  /** Tasks only: how often it comes back. Ticking it makes the next one. */
+  repeat: Repeat | null;
+  /** Tasks only: 0 to 3 for P0 to P3, or null for none. Sorts and tags a task; it never changes what a tick pays. */
+  priority: Priority | null;
+  /** Tasks only: the strategy session or the vibe check made it from a pillar, rather than the person adding it. */
+  fromPillar?: boolean;
+  /** Tasks only: the small checklist inside it. Counted, never paid. */
+  subtaskTotal?: number;
+  subtaskDone?: number;
+  /** Tasks only: send an inbox reminder on the task's day, at its time (09:00 when it has none). */
+  remind: boolean;
   /** Tasks only, optional: a time of day (HH:MM) and how long it should take, to plan the day. */
   dueTime: string | null;
   estimateMin: number | null;
@@ -973,6 +1023,8 @@ export interface RippleEvent {
 }
 
 export interface CompleteResponse {
+  /** The next task a repeating one made when it was ticked. */
+  next?: Node | null;
   node: Node;
   ripple: RippleEvent[];
   projectCleared: Node | null;
@@ -986,7 +1038,11 @@ export interface TodayResponse {
   date: string;
   checkedIn: boolean;
   streak: number;
+  /** The main list: tasks whose do date (or due date, when there is no do date) has come, late ones included. */
   tasks: Node[];
+  /** Tasks with no do date and no deadline within reach, waiting until one is picked. Not part of the main list. */
+  backlog: Node[];
+  backlogTotal: number;
   /** Tasks ticked on the person's day (in their zone), newest first, so a tick stays in sight and can be undone. */
   done: Node[];
   /** Tasks ticked in the last day, so Today can say the routine is done. */
@@ -1382,18 +1438,22 @@ export interface CardGameInfo {
   accent: RelationshipKey;
   /** Points to unlock it for good. */
   cost: number;
+  /** An xp floor before it can be unlocked, on top of the points. Zero means none. */
+  minXp: number;
+  /** A badge to hold first, when the game asks for one. */
+  badge?: string;
 }
 
 export const CARD_GAMES: readonly CardGameInfo[] = [
-  { key: 'ulta_seedha', name: 'Ulta Seedha', tagline: 'A game to help you overcome approach anxiety.', emoji: '🙃', accent: 'friendship', cost: 2000 },
-  { key: 'dateflow_connect', name: 'DateFlow Connect', tagline: 'A game for better dating experiences.', emoji: '💞', accent: 'lover_partner', cost: 2000 },
-  { key: 'date_guru', name: 'DateGuru', tagline: 'Fifty-two lessons for better dating experiences.', emoji: '🧭', accent: 'lover_partner', cost: 1500 },
-  { key: 'healflow', name: 'HealFlow', tagline: 'For mindful families who want to heal, bond and connect over fun, therapeutic activities.', emoji: '🌿', accent: 'parent_child', cost: 1500 },
-  { key: 'funflow', name: 'FunFlow', tagline: 'For friends and teams who want to bond and grow together.', emoji: '🎉', accent: 'friendship', cost: 1500 },
-  { key: 'relationship_method', name: 'The Relationship Method Challenge', tagline: 'One small daily challenge for each of the seven relationships.', emoji: '🌈', accent: 'self', cost: 1000 },
-  { key: 'roast_or_flirt', name: 'Roast or Flirt', tagline: 'Build better self-esteem with your relationships power.', emoji: '🔥', accent: 'friendship', cost: 2000 },
-  { key: 'shadowflow', name: 'ShadowFlow', tagline: 'Use ShadowFlow to learn more about your hidden self.', emoji: '🌙', accent: 'divine', cost: 1500 },
-  { key: 'workflow', name: 'WorkFlow', tagline: 'Reveal the hidden secrets of office culture.', emoji: '💼', accent: 'servant_leader', cost: 1500 },
+  { key: 'ulta_seedha', name: 'Ulta Seedha', tagline: 'A game to help you overcome approach anxiety.', emoji: '🙃', accent: 'friendship', cost: 2000, minXp: 500 },
+  { key: 'dateflow_connect', name: 'DateFlow Connect', tagline: 'A game for better dating experiences.', emoji: '💞', accent: 'lover_partner', cost: 2000, minXp: 500 },
+  { key: 'date_guru', name: 'DateGuru', tagline: 'Fifty-two lessons for better dating experiences.', emoji: '🧭', accent: 'lover_partner', cost: 1500, minXp: 100 },
+  { key: 'healflow', name: 'HealFlow', tagline: 'For mindful families who want to heal, bond and connect over fun, therapeutic activities.', emoji: '🌿', accent: 'parent_child', cost: 1500, minXp: 100 },
+  { key: 'funflow', name: 'FunFlow', tagline: 'For friends and teams who want to bond and grow together.', emoji: '🎉', accent: 'friendship', cost: 1500, minXp: 100 },
+  { key: 'relationship_method', name: 'The Relationship Method Challenge', tagline: 'One small daily challenge for each of the seven relationships.', emoji: '🌈', accent: 'self', cost: 1000, minXp: 0 },
+  { key: 'roast_or_flirt', name: 'Roast or Flirt', tagline: 'Build better self-esteem with your relationships power.', emoji: '🔥', accent: 'friendship', cost: 2000, minXp: 500 },
+  { key: 'shadowflow', name: 'ShadowFlow', tagline: 'Use ShadowFlow to learn more about your hidden self.', emoji: '🌙', accent: 'divine', cost: 1500, minXp: 250 },
+  { key: 'workflow', name: 'WorkFlow', tagline: 'Reveal the hidden secrets of office culture.', emoji: '💼', accent: 'servant_leader', cost: 1500, minXp: 250 },
 ];
 
 export const CARD_GAME_BY_KEY: Record<string, CardGameInfo> = Object.fromEntries(CARD_GAMES.map((g) => [g.key, g]));
@@ -1424,6 +1484,8 @@ export interface PlayDeck {
 /** What the game list shows for each game. */
 export interface CardGameCard extends CardGameInfo {
   unlocked: boolean;
+  /** What stands between this person and the game: xp, points and a badge, in plain words. Open when they have it all. */
+  unlock: Unlock;
   decks: { key: string; name: string; count: number }[];
   total: number;
 }
@@ -1477,7 +1539,7 @@ export interface Reward {
 /** The shelves of the catalog, in the order they are shown. */
 export const REWARD_GROUPS: readonly { key: RewardGroup; name: string; emoji: string; blurb: string }[] = [
   { key: 'books', name: 'Books', emoji: '📚', blurb: 'Three books by Shubham Aggarwal, who builds kreators.app.' },
-  { key: 'games', name: 'Card games', emoji: '🃏', blurb: 'Unlock a game once with points and play it in the app: shuffle, flip and draw. Nothing is posted to you.' },
+  { key: 'games', name: 'Games', emoji: '🃏', blurb: 'Unlock a game once with points and play it in the app: shuffle, flip and draw. Nothing is posted to you.' },
   { key: 'apparel', name: 'Apparel and wearables', emoji: '👕', blurb: 'Wear it, and people ask what it is.' },
   { key: 'tech', name: 'Tech accessories', emoji: '📱', blurb: 'Small things you use every day.' },
   { key: 'drinkware', name: 'Drinkware', emoji: '☕', blurb: 'Keep a drink with you, again and again.' },
@@ -1668,6 +1730,8 @@ export interface AdminUser {
   isPro: boolean;
   createdAt: string;
   honors: string[];
+  /** Badges a super admin gave by hand, on top of the ones the person earned. */
+  grantedBadges: string[];
   role: Role;
   email: string | null;
   handle: string | null;
@@ -1793,7 +1857,7 @@ export const MODULES: readonly AppModule[] = [
   // On for everyone. People still only appear after they opt in under Profile, and journal and wellbeing never count.
   { key: 'leaderboard', name: 'Leaderboard', blurb: 'See where you stand by goal, pillar, city and more. Boards for each goal, filters, and a monthly season.', emoji: '🏆', group: 'core', path: '/leaderboard', defaultOn: true, minRole: 'user' },
   // Off on a new account; unlocking a game in Rewards switches it on.
-  { key: 'cards', name: 'Card games', blurb: 'Unlock a game once with points, then shuffle, flip and play it with the people you are with.', emoji: '🃏', group: 'community', path: '/cards', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  { key: 'cards', name: 'Games', blurb: 'Unlock a game once with points, then shuffle, flip and play it with the people you are with.', emoji: '🃏', group: 'community', path: '/cards', defaultOn: false, minRole: 'user', accent: 'friendship' },
   // Off on a new account. Owner only, like the journal: never shown to brands, staff, the leaderboard, a coach or the assistant.
   { key: 'discover', name: 'Discover', blurb: 'A quiz about how you think, feel and act, with puzzles and real situations. It gives a detailed read on your personality, your reasoning and your emotional intelligence, and your strengths across the seven relationships.', emoji: '🔭', group: 'wellbeing', path: '/discover', defaultOn: false, minRole: 'user', accent: 'self' },
   { key: 'notifications', name: 'Inbox', blurb: 'What happened while you were away, and daily reminders.', emoji: '🔔', group: 'core', path: '/inbox', defaultOn: true, minRole: 'user' },
@@ -2973,8 +3037,9 @@ export interface Product {
   maxDaysAhead: number;
   /** Memberships: how many months one purchase lasts. Null means it never ends. */
   periodMonths: number | null;
-  /** Who can buy: a points balance to reach, a badge to hold, or both. Zero and empty mean anyone. */
+  /** Who can buy: a points balance to reach, an xp floor, a badge to hold, or any mix. Zero and empty mean anyone. */
   minPoints: number;
+  minXp: number;
   badge: string;
 }
 
@@ -4686,6 +4751,7 @@ export interface Tool {
   /** Taps on the partner link so far. */
   clicks: number;
   minPoints: number;
+  minXp: number;
   badge: string;
   unlock: Unlock;
 }
@@ -4770,6 +4836,8 @@ export function trustScore(i: TrustInput): TrustScore {
 /** What a product, store item or tool asks for, and whether this viewer meets it. */
 export interface Unlock {
   minPoints: number;
+  /** An xp floor, on top of points and a badge. Zero means none. */
+  minXp: number;
   badge: string;
   ok: boolean;
   /** Plain words for the lock, empty when open. */
@@ -4779,16 +4847,35 @@ export function badgeName(key: string): string {
   return BADGES.find((b) => b.key === key)?.name ?? HONORS.find((h) => h.key === key)?.name ?? key;
 }
 export const isBadgeKey = (key: string): boolean => BADGES.some((b) => b.key === key) || HONORS.some((h) => h.key === key);
-/** The one unlock rule: the points balance has to reach the floor, and the badge has to be held. */
-export function unlockFor(ask: { minPoints: number; badge: string }, have: { points: number; badges: readonly string[] } | null): Unlock {
+/** The viewer, for the unlock rule. A super admin (role admin) is never locked out of anything. */
+export interface UnlockHave {
+  points: number;
+  xp?: number;
+  badges: readonly string[];
+  superAdmin?: boolean;
+}
+const joinWords = (xs: string[]) => (xs.length < 2 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+/** The one unlock rule: the points balance and xp have to reach their floors, and the badge has to be held. A super admin always passes. */
+export function unlockFor(ask: { minPoints: number; minXp?: number; badge: string }, have: UnlockHave | null): Unlock {
+  const minXp = ask.minXp ?? 0;
   const needsPoints = ask.minPoints > 0;
+  const needsXp = minXp > 0;
   const needsBadge = Boolean(ask.badge);
-  if (!needsPoints && !needsBadge) return { minPoints: 0, badge: '', ok: true, why: '' };
-  if (!have) return { minPoints: ask.minPoints, badge: ask.badge, ok: false, why: `Sign in to open this. It asks for ${[needsPoints ? `${ask.minPoints} points` : '', needsBadge ? `the ${badgeName(ask.badge)} badge` : ''].filter(Boolean).join(' and ')}.` };
+  const open = { minPoints: ask.minPoints, minXp, badge: ask.badge, ok: true, why: '' };
+  if (!needsPoints && !needsXp && !needsBadge) return { ...open, minPoints: 0, minXp: 0, badge: '' };
+  if (have?.superAdmin) return open;
+  const asks = [needsXp ? `${minXp} xp` : '', needsPoints ? `${ask.minPoints} points` : '', needsBadge ? `the ${badgeName(ask.badge)} badge` : ''].filter(Boolean);
+  if (!have) return { ...open, ok: false, why: `Sign in to open this. It asks for ${joinWords(asks)}.` };
   const short: string[] = [];
+  if (needsXp && (have.xp ?? 0) < minXp) short.push(`${minXp} xp, you have ${have.xp ?? 0}`);
   if (needsPoints && have.points < ask.minPoints) short.push(`${ask.minPoints} points, you have ${have.points}`);
   if (needsBadge && !have.badges.includes(ask.badge)) short.push(`the ${badgeName(ask.badge)} badge`);
-  return { minPoints: ask.minPoints, badge: ask.badge, ok: short.length === 0, why: short.length ? `Needs ${short.join(' and ')}.` : '' };
+  return { ...open, ok: short.length === 0, why: short.length ? `Needs ${joinWords(short)}.` : '' };
+}
+/** What a locked button says: "Unlocks at 500 xp, 2000 points and the First tick badge". Empty when there is nothing to reach. */
+export function unlockAt(u: Pick<Unlock, 'minPoints' | 'minXp' | 'badge'>): string {
+  const asks = [u.minXp > 0 ? `${u.minXp} xp` : '', u.minPoints > 0 ? `${u.minPoints} points` : '', u.badge ? `the ${badgeName(u.badge)} badge` : ''].filter(Boolean);
+  return asks.length ? `Unlocks at ${joinWords(asks)}` : '';
 }
 
 /** The next badge to go for, by the order they are listed. */
@@ -5086,6 +5173,13 @@ export const TERMS: Record<string, string> = {
   honor: 'A badge the team gives, or time unlocks.',
   ripple: 'Xp that runs up from a ticked task to every layer above it.',
   bumling: 'The app’s own guide. Bumling helps you set things up and runs the chats about the whole app, not one relationship.',
+  'do date': 'The day you will do a task. It shows on Daily from that day, and cannot be ticked before it.',
+  'due date': 'The day a task must be done by. After it the task says Overdue, but you can still tick it.',
+  priority: 'A tag from P0 to P3 on a task. P0 is do now, P1 important, P2 normal and P3 whenever. It helps you choose and sort, and never changes what a tick pays.',
+  habit: 'A task that repeats every day, week, month or year. When you tick it, the next one appears.',
+  subtask: 'A small step inside a task. It has its own tick box, pays nothing, and never stops you ticking the task.',
+  remember: 'A tag that sends a note to your inbox on the task’s day, at its time, or at nine in the morning if it has none.',
+  'not scheduled': 'Tasks with no do date and no due date. They wait in a list under Tasks until you pick one.',
   'daily three': 'Check in, the small act, one task.',
   'not-to-do': 'Things you stay away from, each with its own streak of kept days.',
   'kept day': 'A day you ticked a not-to-do: you stayed away from it.',
@@ -5102,6 +5196,8 @@ export const TERMS: Record<string, string> = {
   offer: 'Your price for a pre-owned piece. The seller accepts or declines.',
   unlock: 'Some things ask for a points balance, a badge, or both before you can buy them. A card game is unlocked once with points and then yours for good.',
   strength: 'One of seven things you are good at in Discover, one for each relationship, such as Connecting or Getting it done. It comes from your answers, not from a comparison with other people.',
+  'focus session': 'A stretch of work with a timer, followed by a mini break. After a few sessions comes a longer break. Finished sessions are kept for your own chart.',
+  'focus mode': 'A view that hides the menu and the assistant so one screen has all the room. On a game table it is the icon with four corner brackets. Press Escape or tap it again to leave.',
   deck: 'A pile of cards in a card game. A game has one deck or several, and you pick which to draw from.',
   Pro: 'A paid plan that gives credits for typing to the assistant, and the Pro mark.',
   Club: 'A curated membership the team reviews you into.',
@@ -5150,9 +5246,9 @@ export const isAutoHandle = (handle: string | null | undefined): boolean => !han
 /** The glossary's categories, in the order they are shown. Every word in TERMS is in exactly one; the words inside each are sorted A to Z by `termGroups`. */
 export const TERM_GROUPS: { name: string; terms: string[] }[] = [
   { name: 'Pillars and pyramids', terms: ['pillar', 'pyramid', 'foundation', 'guiding principle', 'value goal', 'goal outcome', 'project', 'task', 'ripple', 'map', 'life map', 'strategy session', 'routine', 'contract', 'core', 'floor'] },
-  { name: 'Daily and progress', terms: ['small act', 'check-in', 'daily three', 'daily brief', 'not-to-do', 'kept day', 'streak', 'xp', 'points', 'level', 'who you are becoming', 'life score', 'five areas of life', 'period', 'review', 'season'] },
+  { name: 'Daily and progress', terms: ['small act', 'check-in', 'daily three', 'do date', 'due date', 'priority', 'habit', 'subtask', 'remember', 'not scheduled', 'daily brief', 'not-to-do', 'kept day', 'streak', 'xp', 'points', 'level', 'who you are becoming', 'life score', 'five areas of life', 'period', 'review', 'season'] },
   { name: 'You and your page', terms: ['strength', 'username', 'identity tag', 'setup chat', 'public page', 'badge', 'honor', 'trust', 'unlock'] },
-  { name: 'Friends and community', terms: ['friend code', 'alias', 'circle', 'reaction', 'mention', 'guide', 'life coach', 'student', 'change log', 'run club', 'start code', 'attendee code', 'deck'] },
+  { name: 'Friends and community', terms: ['friend code', 'alias', 'circle', 'reaction', 'mention', 'guide', 'life coach', 'student', 'change log', 'run club', 'start code', 'attendee code', 'deck', 'focus mode', 'focus session'] },
   { name: 'Learn and earn', terms: ['cohort', 'campaign', 'bounty', 'Club', 'collab', 'giveaway'] },
   { name: 'Shop and store', terms: ['featured', 'partner link', 'pre-owned', 'kit', 'offer'] },
   { name: 'Content', terms: ['brand folder', 'outlier', 'hook', 'piece'] },
@@ -5200,13 +5296,13 @@ export const HOW_TO: Record<string, HowTo> = {
   },
   today: {
     steps: [
-      'Daily is three boxes a day: check in, do the small act, tick one task. Checking in pays 10 xp and 10 points and keeps your streak; every seventh day in a row pays 50 points more. Your routine from the strategy session sits under the first box.',
-      'The small act is a two-minute thing for your weakest pillar, picked for you each day. It pays 15 xp.',
-      'Tasks come from the pillars you set up. Each pays 20 xp and sends a ripple up its pyramid. A task with a date waits for that day, and a new task waits ten minutes before it can be ticked.',
-      'Under the tasks, the not-to-do list holds up to seven things you are staying away from. Tick one to say you kept it today: a kept day pays 5 xp and grows that item’s streak. A slip or a missed day starts the streak over.',
-      'At the bottom, who you are becoming shows the figure your xp is filling in, and how far away the next form is.',
+      'Daily is three boxes a day: check in, do the small act, tick one task. Checking in pays 10 xp and 10 points and keeps your streak; every seventh day in a row pays 50 points more. The small act is a two-minute thing for your weakest pillar and pays 15 xp. Your routine from the strategy session sits under the first box.',
+      'Tasks come from the pillars you set up. Each pays 20 xp and sends a ripple up its pyramid. A task has a do date, the day you will do it, and can have a due date, the deadline. It shows here from its do date and cannot be ticked before it. After its due date it says Overdue, but you can still tick it. A new task waits ten minutes before it can be ticked.',
+      'Tap the pencil on a task to plan it. Tag it P0 (do now), P1, P2 or P3 (whenever), in red, orange, purple and grey, and sort the list by day, priority or due date. Make it repeat every day, week, month or year, and the next one appears when you tick it; that makes it a habit. Add subtasks, say how many minutes it takes, tag it Remember for a note in your inbox on its day, and start a focus session on it.',
+      'A task with no date waits under Not scheduled yet. It stays out of Tasks until you pick a do date or a due date, and then it moves up.',
+      'Under the tasks, the not-to-do list holds up to seven things you are staying away from. Tick one to say you kept it today: a kept day pays 5 xp and grows that item’s streak. At the bottom, who you are becoming shows the figure your xp is filling in.',
     ],
-    terms: ['daily three', 'check-in', 'small act', 'task', 'not-to-do', 'kept day', 'who you are becoming', 'routine', 'assistant'],
+    terms: ['daily three', 'check-in', 'small act', 'task', 'do date', 'due date', 'priority', 'habit', 'subtask', 'remember', 'not scheduled', 'not-to-do', 'kept day', 'who you are becoming', 'routine', 'assistant'],
   },
   tower: {
     steps: [
@@ -5391,11 +5487,12 @@ export const HOW_TO: Record<string, HowTo> = {
   mindful: {
     steps: [
       'Pick a length and breathe with the circle.',
-      'The minutes log themselves when the timer ends.',
+      'Or work in focus sessions. The classic is 25 minutes of focus and a 5 minute mini break, four times, then a 30 minute long break. Change any length, how many sessions come before the long break, and how many times it runs, even while it runs. Point a session at one of your tasks. The clock keeps time even when the tab is in the background.',
+      'The minutes log themselves when the timer ends. A finished break counts as mindful minutes, and a focus session counts only if you switch that on. A chart shows your focus time and tasks ticked by day, week or month.',
       'Sixty minutes a week scores full marks. The minutes count in Life twice: as breath under physical and as stillness under spiritual.',
       'The line shows thirty days.',
     ],
-    terms: [],
+    terms: ['focus session'],
   },
   journal: {
     steps: [
@@ -5557,12 +5654,13 @@ export const HOW_TO: Record<string, HowTo> = {
       'Open a game, pick a deck and tap Shuffle. Tap the pile to draw a card onto the table.',
       'Tap a card to flip it. Some cards have two sides, like Truth and Dare or Roast and Flirt. Drag cards around the table; the one you touch comes to the front.',
       'Special cards and house rules, where a game has them, are one tap away. Play with the people you are with: pass the phone round or put it in the middle.',
+      'Tap the icon with four corner brackets for focus mode. The menu and the assistant step aside, and the table fills the screen.',
     ],
-    terms: ['unlock', 'deck', 'points'],
+    terms: ['unlock', 'deck', 'points', 'focus mode'],
   },
   rewards: {
     steps: [
-      'Points buy rewards from the catalog: gear, books, a meetup ticket, a call with a mentor, and card games you unlock and play in the app.',
+      'Points buy rewards from the catalog: gear, books, a meetup ticket, a call with a mentor, and games you unlock and play in the app.',
       'Gear is a reservation until it ships; cancel any time and the points come back. A card game opens at once and is yours for good.',
       'Points also buy creators’ products, event tickets and featured spots.',
     ],
@@ -5870,6 +5968,7 @@ export interface StoreItem {
   clicks: number;
   createdAt: string;
   minPoints: number;
+  minXp: number;
   badge: string;
   /** Whether the viewer can open it, and why not. The link is blank while locked. */
   unlock: Unlock;
@@ -6005,12 +6104,24 @@ export const HELP_FAQ = [
   { q: 'What are the daily three?', a: 'Check in, do the small act, tick one task. They are on Daily. Each one you tick pays xp. The check-in pays points too.' },
   { q: 'What are the seven pillars?', a: 'The seven relationships that make a life, one pillar each. Each pillar has a pyramid: a foundation at the top, then a guiding principle, a value goal, a goal outcome, a project, and tasks at the point at the bottom. Tick a task and its xp runs up through every layer above it.' },
   { q: 'What is a small act?', a: 'One quick thing for your weakest pillar, picked for you each day. It takes two minutes and pays fifteen xp.' },
-  { q: 'Why can I not tick a task yet?', a: 'A task needs ten minutes after being written or renamed before it can be ticked. Only six ticks a day pay xp; the rest still count as done.' },
+  { q: 'Why can I not tick a task yet?', a: 'A task needs ten minutes after being written or renamed before it can be ticked, and it cannot be ticked before its do date. Only six ticks a day pay xp; the rest still count as done.' },
+  { q: 'What is the difference between a do date and a due date?', a: 'The do date is the day you will do the task. It shows on Daily from that day and cannot be ticked before it. The due date is the deadline. After it the task says Overdue, but you can still tick it. The do date cannot come after the due date.' },
+  { q: 'What do P0, P1, P2 and P3 mean?', a: 'They are priority tags. P0 (red) is do now, P1 (orange) is important, P2 (purple) is normal and P3 (grey) is whenever. Pick one on a task, then sort Daily by priority. A tag never changes what a tick pays.' },
+  { q: 'How do I make a task repeat?', a: 'Tap the pencil on a task and pick Repeat: every day, on weekdays, every week on days you choose, every month or every year, every one or more of them, with an end day if you like. It needs a do date or a due date. When you tick it, the next one is made. A repeating task shows a Habit tag.' },
+  { q: 'Where did my task with no date go?', a: 'Under Not scheduled yet, below Tasks on Daily. It stays there until you pick a do date or a due date. Then it moves up into Tasks on that day.' },
+  { q: 'What are subtasks, and what does Remember do?', a: 'Subtasks are a small checklist inside a task. They pay no xp. Remember sends a note to your inbox on the task’s day, at its time (9:00 when it has none). Tasks the strategy session made for you carry a From pillar tag, and tasks that repeat carry a Habit tag.' },
+  { q: 'How do I focus on one task?', a: 'Tap the pencil on a task, add how many minutes it takes, then tap Start focus. Mindful minutes opens with that task picked and that many minutes on the timer. The Focus dashboard there can show your time in minutes or hours.' },
   { q: 'Points versus xp?', a: 'Xp levels you and your pillars up. Points come from showing up. You can trade points for rewards, for things people sell, and for events.' },
   { q: 'How do I sell something?', a: 'Switch Shop on from Apps. Make a product, publish it, and share your Profile page.' },
   { q: 'How do I get work?', a: 'Work lists opportunities from brands and the team. Apply once per opportunity and follow its status in Work.' },
   { q: 'Is the Companion a therapist?', a: 'No. It reflects and asks questions. If you are in danger, contact your local emergency number. In India, Tele-MANAS is 14416.' },
   { q: 'Who can see my journal?', a: 'Only you. Journal entries and wellbeing scores are never shown to brands, staff, the leaderboard or Club selection.' },
+  { q: 'What are Games?', a: 'Nine card games you unlock once with points in Rewards, then play in the app. You shuffle, draw, flip and drag cards around a table. Nothing is posted to you. Games switches on when you unlock your first one.' },
+  { q: 'What is focus mode?', a: 'On a game table, the icon with four corner brackets hides the menu, the assistant and everything else, so the table has the whole screen. Press Escape or tap the icon again to leave.' },
+  { q: 'What is Discover?', a: 'A quiz about how you think, feel and act, with puzzles and real situations. It shows your top strengths across the seven relationships, a detailed read on five personality traits and on your reasoning, and, if you add it, your emotional intelligence. It is a self-check, not an IQ test or a diagnosis.' },
+  { q: 'Who sees my Discover results?', a: 'Only you. They never reach brands, staff, the leaderboard or a life coach. You choose whether they shape your next steps on Home, and whether the assistant may read a short summary. You can delete a result any time.' },
+  { q: 'Why are my apps in this order?', a: 'Lists put the apps that matter most to you first: the ones that are on, then the ones that fit what you told the setup chat, then the ones you open most on this device. The order catches up the next time you open the app.' },
+  { q: 'Where is the water button?', a: 'On a laptop, a small Water bubble sits at the left of Daily and Journal, and a Water button sits above a game table. On a phone, the Water section is inside Home, Daily and Journal.' },
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -6862,7 +6973,7 @@ export const SETUP_APP_LINES: Readonly<Record<string, string>> = {
   reviews: 'A short look back each week.',
   companion: 'A chat about how you are doing. Not a therapist.',
   coaching: 'Work with a life coach, or coach your students.',
-  cards: 'Card games to play with the people you are with.',
+  cards: 'Card games to play with the people you are with, shuffled and flipped on a table.',
   discover: 'A quiz on your personality, reasoning and strengths.',
   profile: 'Your page: links, work and shop.',
   shop: 'Sell courses, downloads and sessions.',
@@ -8041,3 +8152,205 @@ export function profileForAssistant(p: DiscoverProfile): string {
 
 /** Where each strength is worked on in the app. */
 export const STRENGTH_PATH: Record<RelationshipKey, string> = Object.fromEntries((Object.keys(DISCOVER_STRENGTHS) as RelationshipKey[]).map((k) => [k, `/realm/${k}`])) as Record<RelationshipKey, string>;
+
+// ---- focus rounds: pomodoro-style work in Mindful minutes, with a dashboard of how the time went ----
+
+export type FocusView = 'day' | 'week' | 'month';
+export const FOCUS_VIEWS: readonly { key: FocusView; name: string; count: number; blurb: string }[] = [
+  { key: 'day', name: 'Days', count: 14, blurb: 'The last two weeks, day by day.' },
+  { key: 'week', name: 'Weeks', count: 8, blurb: 'The last eight weeks, Monday to Sunday.' },
+  { key: 'month', name: 'Months', count: 6, blurb: 'The last six months.' },
+];
+export const isFocusView = (v: unknown): v is FocusView => v === 'day' || v === 'week' || v === 'month';
+export const FOCUS_MAX_MINUTES = 120;
+
+export interface FocusTask {
+  id: string;
+  title: string;
+  relationship: RelationshipKey;
+  dueDate: string | null;
+}
+export interface FocusBucket {
+  /** The first day of the bucket: a day, a Monday, or the first of a month. */
+  key: string;
+  label: string;
+  minutes: number;
+  rounds: number;
+  /** Tasks ticked in the bucket. */
+  tasksDone: number;
+}
+export interface FocusResponse {
+  view: FocusView;
+  buckets: FocusBucket[];
+  totals: { minutes: number; rounds: number; tasksDone: number; activeBuckets: number };
+  /** Where the time went in this stretch, most first. */
+  tasks: { nodeId: string | null; title: string; minutes: number; rounds: number }[];
+  best: { key: string; label: string; minutes: number } | null;
+  /** A plain line on how this stretch compares with the one before it. */
+  trend: string;
+}
+
+// ---- repeating tasks: daily, on weekdays, weekly on chosen days, monthly, yearly; every N of them; until a day, or for ever ----
+
+export type RepeatKind = 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly';
+export interface Repeat {
+  kind: RepeatKind;
+  /** Every this many days, weeks, months or years. 1 to 52. Weekdays ignores it. */
+  every: number;
+  /** Weekly only: the days, 1 for Monday to 7 for Sunday. Empty means the day the task is on. */
+  days: number[];
+  /** The last day it may come back on, or null for no end. */
+  until: string | null;
+}
+export const REPEAT_KINDS: readonly { key: RepeatKind; name: string; unit: string }[] = [
+  { key: 'daily', name: 'Every day', unit: 'day' },
+  { key: 'weekdays', name: 'Weekdays', unit: 'weekday' },
+  { key: 'weekly', name: 'Every week', unit: 'week' },
+  { key: 'monthly', name: 'Every month', unit: 'month' },
+  { key: 'yearly', name: 'Every year', unit: 'year' },
+];
+export const MAX_REPEAT_EVERY = 52;
+
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const asDay = (d: string) => Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, Number(d.slice(8, 10)));
+const fromDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+const DAY_MS = 86_400_000;
+export const addDays = (d: string, n: number): string => fromDay(asDay(d) + n * DAY_MS);
+/** 1 for Monday to 7 for Sunday. */
+export const isoWeekday = (d: string): number => ((new Date(asDay(d)).getUTCDay() + 6) % 7) + 1;
+const daysInMonth = (y: number, m: number) => new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+export const daysBetween = (a: string, b: string): number => Math.round((asDay(b) - asDay(a)) / DAY_MS);
+
+/** The one reader for a repeat rule, from the browser or from a column: anything that is not a clean rule is no rule. */
+export function parseRepeat(raw: unknown): Repeat | null {
+  let v = raw;
+  if (typeof v === 'string') {
+    try {
+      v = JSON.parse(v);
+    } catch {
+      return null;
+    }
+  }
+  if (!v || typeof v !== 'object') return null;
+  const o = v as Record<string, unknown>;
+  const kind = REPEAT_KINDS.find((k) => k.key === o.kind)?.key;
+  if (!kind) return null;
+  const every = Math.min(MAX_REPEAT_EVERY, Math.max(1, Math.round(Number(o.every) || 1)));
+  const days = Array.isArray(o.days) ? [...new Set(o.days.map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 7))].sort((a, b) => a - b) : [];
+  const until = typeof o.until === 'string' && DATE_PATTERN.test(o.until) ? o.until : null;
+  return { kind, every: kind === 'weekdays' ? 1 : every, days: kind === 'weekly' ? days : [], until };
+}
+
+/**
+ * The first day after `after` on which the rule falls, counting from `base` (the day the task was on): daily and weekly steps are
+ * counted from the base, a month keeps the same day of the month (the 31st lands on the last day of a short month) and a year the same
+ * day of the year (29 February lands on 28 February in a year without one). Null when the rule has ended.
+ */
+export function nextOccurrence(rule: Repeat, base: string, after: string): string | null {
+  const pick = (d: string | null): string | null => (d && (!rule.until || d <= rule.until) ? d : null);
+  if (rule.kind === 'daily') {
+    const gap = daysBetween(base, after);
+    const k = gap < 0 ? 0 : Math.floor(gap / rule.every) + 1;
+    return pick(addDays(base, k * rule.every));
+  }
+  if (rule.kind === 'weekdays') {
+    let d = addDays(after, 1);
+    while (isoWeekday(d) > 5) d = addDays(d, 1);
+    return pick(d);
+  }
+  if (rule.kind === 'weekly') {
+    const days = rule.days.length ? rule.days : [isoWeekday(base)];
+    const weekOf = (d: string) => addDays(d, -(isoWeekday(d) - 1));
+    for (let i = 1; i <= 7 * rule.every + 7; i += 1) {
+      const d = addDays(after, i);
+      if (days.includes(isoWeekday(d)) && (daysBetween(weekOf(base), weekOf(d)) / 7) % rule.every === 0) return pick(d);
+    }
+    return null;
+  }
+  const y0 = Number(base.slice(0, 4));
+  const m0 = Number(base.slice(5, 7)) - 1;
+  const day = Number(base.slice(8, 10));
+  for (let k = 0; k < 800; k += 1) {
+    const total = rule.kind === 'monthly' ? m0 + k * rule.every : m0 + k * rule.every * 12;
+    const y = y0 + Math.floor(total / 12);
+    const m = ((total % 12) + 12) % 12;
+    const d = fromDay(Date.UTC(y, m, Math.min(day, daysInMonth(y, m))));
+    if (d > after) return pick(d);
+  }
+  return null;
+}
+
+const ORDINAL = (n: number) => {
+  const t = n % 100;
+  if (t >= 11 && t <= 13) return `${n}th`;
+  return `${n}${({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th'}`;
+};
+const WEEKDAY_NAMES_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+/** The rule in plain words: "Every day", "Every 2 weeks on Mon and Thu", "Every month on the 15th until 2027-03-01". */
+export function repeatLabel(rule: Repeat, base: string | null = null): string {
+  const n = rule.every;
+  const days = rule.days.length ? rule.days : base ? [isoWeekday(base)] : [];
+  const list = days.map((d) => WEEKDAY_NAMES_SHORT[d - 1]!);
+  const on = list.length ? ` on ${list.length > 1 ? `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}` : list[0]}` : '';
+  const head =
+    rule.kind === 'daily'
+      ? n === 1 ? 'Every day' : `Every ${n} days`
+      : rule.kind === 'weekdays'
+        ? 'On weekdays'
+        : rule.kind === 'weekly'
+          ? `${n === 1 ? 'Every week' : `Every ${n} weeks`}${on}`
+          : rule.kind === 'monthly'
+            ? `${n === 1 ? 'Every month' : `Every ${n} months`}${base ? ` on the ${ORDINAL(Number(base.slice(8, 10)))}` : ''}`
+            : n === 1 ? 'Every year' : `Every ${n} years`;
+  return rule.until ? `${head}, until ${rule.until}` : head;
+}
+/** The day a task opens: its do date, else its due date. Null for a task with no date. */
+export const openDay = (t: { doDate: string | null; dueDate: string | null }): string | null => t.doDate ?? t.dueDate;
+
+/** One line in a task's checklist. */
+export interface Subtask {
+  id: string;
+  title: string;
+  done: boolean;
+}
+
+/** Priority tags, P0 the most pressing. A tag helps a person choose; it never changes what a tick pays. */
+export type Priority = 0 | 1 | 2 | 3;
+export const PRIORITIES: { value: Priority; tag: string; name: string; blurb: string }[] = [
+  { value: 0, tag: 'P0', name: 'Do now', blurb: 'Urgent and it matters. Drop other things for it.' },
+  { value: 1, tag: 'P1', name: 'Important', blurb: 'Matters this week. Do it before the normal ones.' },
+  { value: 2, tag: 'P2', name: 'Normal', blurb: 'Part of the plan. Do it in its turn.' },
+  { value: 3, tag: 'P3', name: 'Whenever', blurb: 'Nice to do. Fine to wait.' },
+];
+export function parsePriority(raw: unknown): Priority | null {
+  if (typeof raw === 'string') {
+    const m = /^p?([0-3])$/i.exec(raw.trim());
+    return m ? (Number(m[1]) as Priority) : null;
+  }
+  return typeof raw === 'number' && Number.isInteger(raw) && raw >= 0 && raw <= 3 ? (raw as Priority) : null;
+}
+export const priorityTag = (p: Priority | null): string => (p === null ? '' : `P${p}`);
+
+/** How a list of tasks can be ordered. */
+export const TASK_SORTS = [
+  { key: 'day', name: 'Day', blurb: 'The day to do it first, then priority.' },
+  { key: 'priority', name: 'Priority', blurb: 'P0 first, then the day.' },
+  { key: 'due', name: 'Due date', blurb: 'The soonest deadline first; no deadline last.' },
+] as const;
+export type TaskSort = (typeof TASK_SORTS)[number]['key'];
+export const isTaskSort = (v: unknown): v is TaskSort => TASK_SORTS.some((s) => s.key === v);
+
+/** The one ordering for a list of tasks. Stable: ties keep the order given. A task with no priority sorts after P3. */
+export function sortTasks<T extends { doDate: string | null; dueDate: string | null; dueTime: string | null; priority: Priority | null }>(list: T[], by: TaskSort): T[] {
+  const pri = (t: T) => (t.priority === null ? 4 : t.priority);
+  const day = (t: T) => t.doDate ?? t.dueDate ?? '9999-99-99';
+  const due = (t: T) => t.dueDate ?? '9999-99-99';
+  const time = (t: T) => t.dueTime ?? '99:99';
+  const cmp = (a: T, b: T): number => {
+    if (by === 'priority') return pri(a) - pri(b) || day(a).localeCompare(day(b)) || time(a).localeCompare(time(b));
+    if (by === 'due') return due(a).localeCompare(due(b)) || pri(a) - pri(b) || day(a).localeCompare(day(b));
+    return day(a).localeCompare(day(b)) || time(a).localeCompare(time(b)) || pri(a) - pri(b);
+  };
+  return list.map((t, i) => ({ t, i })).sort((x, y) => cmp(x.t, y.t) || x.i - y.i).map((x) => x.t);
+}
+

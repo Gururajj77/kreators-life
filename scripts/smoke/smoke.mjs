@@ -219,8 +219,8 @@ let ladderTasks = [];
   check('the person\'s own project wording is kept', project?.title === 'Smoke project of my own', project?.title);
   const ownFoundation = (built.json.nodes ?? []).find((n) => n.kind === 'pillar' && n.relationship === 'friendship');
   check('a foundation in the person\'s own words is kept', ownFoundation?.title === 'A friend call every Sunday', ownFoundation?.title);
-  ladderTasks = (built.json.nodes ?? []).filter((n) => n.kind === 'task' && n.relationship === 'self').sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''));
-  check('tasks carry dates two days apart', ladderTasks.length >= 2 && ladderTasks[0].dueDate === today && ladderTasks[1].dueDate > today, ladderTasks.map((t) => t.dueDate));
+  ladderTasks = (built.json.nodes ?? []).filter((n) => n.kind === 'task' && n.relationship === 'self').sort((a, b) => (a.doDate ?? '').localeCompare(b.doDate ?? ''));
+  check('tasks carry do dates two days apart, and a pillar task says where it came from', ladderTasks.length >= 2 && ladderTasks[0].doDate === today && ladderTasks[1].doDate > today && ladderTasks.every((t) => t.dueDate === null && t.fromPillar === true), ladderTasks.map((t) => [t.doDate, t.dueDate, t.fromPillar]));
   const again = await api('POST', '/onboarding/build', { relationships: ['self'], date: today }, B.token);
   check('the same pyramid is not built twice', again.status === 201 && again.json.skipped?.includes('self'), again.json?.skipped);
   const bad = await api('POST', '/nodes', { kind: 'task', parentId: project.id, relationship: 'friendship', title: 'wrong pillar' }, B.token);
@@ -294,6 +294,81 @@ section('Tasks');
   check('nodes list answers', list.status === 200, list.status);
   const todayRes = await api('GET', `/today?date=${today}`, undefined, B.token);
   check('today answers with tasks and a small act', todayRes.status === 200 && Array.isArray(todayRes.json.tasks), Object.keys(todayRes.json ?? {}));
+}
+
+
+// ---------------------------------------------------------------- tasks: do date, due date, priority, repeat, subtasks, remember, not scheduled
+section('Task plan');
+{
+  const F = await signup(`planner-${stamp}@smoke.test`, `Quartz-${stamp}-pass`, 'Smoke planner');
+  const answers = QUESTIONS.filter((q) => q.relationship === 'self').map((q) => ({ questionId: q.id, value: 1 }));
+  await api('POST', '/onboarding', { answers, displayName: 'Smoke planner' }, F.token);
+  const built = await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: {} } }, F.token);
+  const proj = (built.json.nodes ?? []).find((n) => n.kind === 'project');
+  const day = (n) => new Date(Date.parse(`${today}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+  const add = (body) => api('POST', '/nodes', { kind: 'task', parentId: proj.id, relationship: 'self', ...body }, F.token);
+
+  const backwards = await add({ title: 'Backwards', doDate: day(5), dueDate: day(2) });
+  check('a do date after the due date is refused', backwards.status === 400 && /on or before/.test(backwards.json.error ?? ''), backwards.json);
+  const lonely = await add({ title: 'Repeats from nothing', repeat: { kind: 'daily', every: 1, days: [], until: null } });
+  check('a repeat needs a day to count from', lonely.status === 400, lonely.json);
+  const badP = await api('PATCH', `/nodes/${proj.id}`, { priority: 'P9' }, F.token);
+  check('a project takes no priority, and nothing breaks', badP.status === 200 && badP.json.node?.priority === null, badP.json);
+
+  const loose = await add({ title: 'No date yet' });
+  const d1 = await api('GET', `/today?date=${today}`, undefined, F.token);
+  check('a task with no dates waits in Not scheduled, not in Tasks', loose.status === 201 && d1.json.backlog?.some((t) => t.id === loose.json.node.id) && !d1.json.tasks?.some((t) => t.id === loose.json.node.id) && d1.json.backlogTotal >= 1, { backlog: d1.json.backlog?.length, total: d1.json.backlogTotal });
+  const dued = await api('PATCH', `/nodes/${loose.json.node.id}`, { dueDate: day(3) }, F.token);
+  const d2 = await api('GET', `/today?date=${today}`, undefined, F.token);
+  check('picking a due date takes it out of Not scheduled', dued.status === 200 && !d2.json.backlog?.some((t) => t.id === loose.json.node.id), d2.json.backlog?.map((t) => t.title));
+  const d3 = await api('GET', `/today?date=${day(3)}`, undefined, F.token);
+  check('and it opens on its due date', d3.json.tasks?.some((t) => t.id === loose.json.node.id), d3.json.tasks?.map((t) => t.title));
+  const picked = await api('PATCH', `/nodes/${loose.json.node.id}`, { doDate: today }, F.token);
+  const d4 = await api('GET', `/today?date=${today}`, undefined, F.token);
+  check('a do date opens it on that day', picked.status === 200 && d4.json.tasks?.some((t) => t.id === loose.json.node.id), picked.json);
+
+  const future = await add({ title: 'Do later', doDate: day(4), dueDate: day(6) });
+  const early = await api('POST', `/nodes/${future.json.node.id}/complete`, { date: today }, F.token);
+  check('the do date holds a tick back', early.status === 400 && /Tick it on the day/.test(early.json.error ?? ''), early.json);
+  const overdue = await add({ title: 'Past its deadline', dueDate: day(-1) });
+  check('a deadline in the past never locks the tick', overdue.status === 201, overdue.json);
+  const late = await api('POST', `/nodes/${overdue.json.node.id}/complete`, { date: today }, F.token);
+  check('so an overdue task can still be ticked', late.status === 200, late.json);
+
+  const tagged = await add({ title: 'Tagged', doDate: today, priority: 'P0', remind: true, estimateMin: 25 });
+  check('a task keeps its priority, its Remember tag and its length', tagged.json.node?.priority === 0 && tagged.json.node?.remind === true && tagged.json.node?.estimateMin === 25, tagged.json.node);
+  const noDay = await add({ title: 'Remember without a day', remind: true });
+  check('Remember needs a day to go off on', noDay.json.node?.remind === false, noDay.json.node);
+  const cleared = await api('PATCH', `/nodes/${tagged.json.node.id}`, { priority: null, remind: false }, F.token);
+  check('a priority and a reminder can be cleared', cleared.json.node?.priority === null && cleared.json.node?.remind === false, cleared.json.node);
+  const wrong = await api('PATCH', `/nodes/${tagged.json.node.id}`, { priority: 'P7' }, F.token);
+  check('a priority is P0 to P3 only', wrong.status === 400, wrong.json);
+
+  const sub1 = await api('POST', `/nodes/${tagged.json.node.id}/subtasks`, { title: 'First step' }, F.token);
+  const sub2 = await api('POST', `/nodes/${tagged.json.node.id}/subtasks`, { title: 'Second step' }, F.token);
+  const tickedSub = await api('PATCH', `/nodes/subtasks/${sub1.json.subtask?.id}`, { done: true }, F.token);
+  const withCounts = (await api('GET', '/nodes', undefined, F.token)).json.nodes?.find((n) => n.id === tagged.json.node.id);
+  check('a task holds subtasks and the list counts them', sub1.status === 201 && sub2.status === 201 && tickedSub.json.subtask?.done === true && withCounts?.subtaskTotal === 2 && withCounts?.subtaskDone === 1, withCounts);
+  const stranger = await api('GET', `/nodes/${tagged.json.node.id}/subtasks`, undefined, B.token);
+  check('someone else cannot read them', stranger.status === 404, stranger.status);
+  const strangerEdit = await api('PATCH', `/nodes/subtasks/${sub2.json.subtask?.id}`, { done: true }, B.token);
+  check('or tick them', strangerEdit.status === 404, strangerEdit.status);
+
+  const habit = await add({ title: 'Stretch', doDate: today, dueDate: day(1), priority: 'P1', repeat: { kind: 'daily', every: 1, days: [], until: null } });
+  await api('POST', `/nodes/${habit.json.node.id}/subtasks`, { title: 'Hamstrings' }, F.token);
+  const ticked = await api('POST', `/nodes/${habit.json.node.id}/complete`, { date: today }, F.token);
+  const next = ticked.json.next;
+  check('ticking a repeating task makes the next one a day later, keeping the gap', ticked.status === 200 && next?.doDate === day(1) && next?.dueDate === day(2) && next?.priority === 1 && next?.repeat?.kind === 'daily', next);
+  const nextSubs = await api('GET', `/nodes/${next?.id}/subtasks`, undefined, F.token);
+  check('its subtasks come back unticked', nextSubs.json.subtasks?.length === 1 && nextSubs.json.subtasks[0].done === false, nextSubs.json);
+  const undone = await api('POST', `/nodes/${habit.json.node.id}/uncomplete`, {}, F.token);
+  const gone = (await api('GET', '/nodes', undefined, F.token)).json.nodes?.some((n) => n.id === next?.id);
+  check('unticking it takes the made task away again', undone.status === 200 && gone === false, undone.json);
+
+  const search = await api('GET', `/nodes?relationship=self&kind=task`, undefined, F.token);
+  check('nodes carry the new fields', search.json.nodes?.every((n) => 'doDate' in n && 'priority' in n && 'remind' in n && 'repeat' in n), search.json.nodes?.[0]);
+  const exported = await api('GET', '/me/export', undefined, F.token);
+  check('subtasks are in the export', JSON.stringify(exported.json).includes('First step'), '');
 }
 
 // ---------------------------------------------------------------- daily: check-in, small act, not to do
@@ -937,7 +1012,7 @@ section('Assistant and credits');
     const answers = QUESTIONS.filter((q) => q.relationship === 'self').map((q) => ({ questionId: q.id, value: 1 }));
     await api('POST', '/onboarding', { answers, displayName: 'Smoke assistant' }, E.token);
     const built = await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: {} } }, E.token);
-    const mine = (built.json.nodes ?? []).filter((n) => n.kind === 'task').sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''));
+    const mine = (built.json.nodes ?? []).filter((n) => n.kind === 'task').sort((a, b) => (a.doDate ?? '').localeCompare(b.doDate ?? ''));
     const say = (text, token = E.token) => api('POST', '/assistant', { messages: [{ role: 'user', text }], context: { path: '/today', date: today, timeZone: 'UTC' } }, token);
     const DO = (...calls) => `DO ${JSON.stringify(calls)}`;
     const nodeOf = async (id, token = E.token) => (await api('GET', '/nodes', undefined, token)).json.nodes?.find((n) => n.id === id);
@@ -1515,9 +1590,15 @@ section('Engagement');
   check('Roast or Flirt has an English and a Hinglish deck of a hundred', roast.json.game?.decks?.map((d) => d.cards.length).join() === '100,100', roast.json.game?.decks?.map((d) => d.cards.length));
   const lockedGame = await api('GET', '/cards/date_guru', undefined, R.token);
   check('a game that is not unlocked is refused, with its price', lockedGame.status === 403 && lockedGame.json.locked === true && lockedGame.json.cost === 1500, lockedGame.json);
-  const brokeBuy = await api('POST', '/rewards/game_date_guru/redeem', undefined, R.token);
+  const brokeBuy = await api('POST', '/rewards/game_relationship_method/redeem', undefined, R.token);
   check('unlocking needs the points', brokeBuy.status === 400 && /more points/.test(brokeBuy.json.error ?? ''), brokeBuy.json);
   await admin('POST', `/admin/users/${R.user.id}/points`, { amount: 2000, note: 'smoke card games' });
+  const gameList = await api('GET', '/cards', undefined, R.token);
+  const guruGate = gameList.json.games?.find((g) => g.key === 'date_guru')?.unlock;
+  check('a game that asks for xp shows what is missing, as a lock', guruGate?.ok === false && guruGate.minXp === 100 && /xp/.test(guruGate.why ?? ''), guruGate);
+  const noXp = await api('POST', '/rewards/game_date_guru/redeem', undefined, R.token);
+  check('with the points but not the xp, a game stays locked on the server too', noXp.status === 403 && noXp.json.unlock?.ok === false, noXp.json);
+  await admin('POST', `/admin/users/${R.user.id}/xp`, { amount: 500, note: 'smoke card games' });
   const buy = await api('POST', '/rewards/game_date_guru/redeem', undefined, R.token);
   check('unlocking a game opens it at once and takes its points', buy.status === 201 && buy.json.game === 'date_guru' && buy.json.redemption?.status === 'fulfilled' && buy.json.points === 500, buy.json);
   const opened = await api('GET', '/cards/date_guru', undefined, R.token);
@@ -1587,6 +1668,61 @@ section('Engagement');
   check('and nobody else sees it', dzOther.json.latest === null, dzOther.json.latest);
   const dzGone = await api('DELETE', `/discover/results/${dzDone.json.id}`, undefined, R.token);
   check('the owner can delete a result', dzGone.status === 200 && (await api('GET', '/discover', undefined, R.token)).json.latest === null, dzGone.status);
+
+  // Super admin gives xp and badges by hand: audited, floored at zero, and counted for unlocks.
+  const gxBefore = (await api('GET', '/me', undefined, R.token)).json.user.xp;
+  const gxUp = await admin('POST', `/admin/users/${R.user.id}/xp`, { amount: 250, note: 'smoke xp' });
+  check('a super admin adds xp, and it shows on the person', gxUp.status === 200 && gxUp.json.user?.xp === gxBefore + 250 && (await api('GET', '/me', undefined, R.token)).json.user.xp === gxBefore + 250, gxUp.json.user?.xp);
+  const gxDown = await admin('POST', `/admin/users/${R.user.id}/xp`, { amount: -100000, note: 'smoke take it back' });
+  check('and takes it away, never below zero', gxDown.status === 200 && gxDown.json.user?.xp === 0, gxDown.json.user?.xp);
+  const gxZero = await admin('POST', `/admin/users/${R.user.id}/xp`, { amount: 0 });
+  check('a zero amount is refused', gxZero.status === 400, gxZero.status);
+  const gbOne = await admin('POST', `/admin/users/${R.user.id}/badges`, { key: 'streak_7', note: 'smoke badge' });
+  check('a super admin gives a badge by hand', gbOne.status === 200 && gbOne.json.user?.grantedBadges?.includes('streak_7') && (await api('GET', '/me', undefined, R.token)).json.badges?.includes('streak_7'), gbOne.json.user?.grantedBadges);
+  const gbBad = await admin('POST', `/admin/users/${R.user.id}/badges`, { key: 'not_a_badge' });
+  check('only a real badge can be given', gbBad.status === 400, gbBad.status);
+  const gbDel = await admin('DELETE', `/admin/users/${R.user.id}/badges/streak_7`);
+  check('and taken back', gbDel.status === 200 && !gbDel.json.user?.grantedBadges?.includes('streak_7') && !(await api('GET', '/me', undefined, R.token)).json.badges?.includes('streak_7'), gbDel.json.user?.grantedBadges);
+
+  // The app's own log: what changed, where and by whom. Super admins only; never a body, never a private area.
+  const mark = `smoke-mark-${stamp}`;
+  await api('POST', '/public/client-error', { message: `Boom ${mark}`, path: '/home?secret=1#x' });
+  await api('POST', '/journal', { title: `private ${mark}`, body: `private ${mark}` }, R.token);
+  const logsAdmin = await api('GET', `/internal/logs?q=${mark}`, undefined, A.token);
+  check('a super admin reads the logs, and a browser error is in them without a query string', logsAdmin.status === 200 && logsAdmin.json.logs?.some((l) => l.area === 'client' && l.level === 'error' && l.path === '/home' && l.message.includes(mark)), logsAdmin.json.logs?.slice(0, 2));
+  const byWho = await api('GET', `/internal/logs?actor=${A.user.id}`, undefined, A.token);
+  check('the logs filter by person, and list the people seen', byWho.status === 200 && byWho.json.logs?.length > 0 && byWho.json.logs.every((l) => l.actorId === A.user.id) && byWho.json.actors?.some((x) => x.id === A.user.id && x.count > 0), [byWho.json.logs?.length, byWho.json.actors?.length]);
+  const logsNo = await api('GET', '/internal/logs', undefined, R.token);
+  check('nobody else reads the logs', logsNo.status === 403, logsNo.status);
+  const changes = await api('GET', '/internal/logs?area=community', undefined, A.token);
+  check('a change is logged by area, with who made it and no ids in the path', changes.status === 200 && changes.json.logs?.some((l) => l.actorName && /^\/community/.test(l.path) && !/[0-9a-f]{8}-[0-9a-f]{4}-/.test(l.path)), changes.json.logs?.slice(0, 2));
+  const privateLogs = await api('GET', '/internal/logs?area=journal', undefined, A.token);
+  check('the journal leaves no line in the logs', privateLogs.status === 200 && privateLogs.json.logs?.length === 0 && !JSON.stringify((await api('GET', `/internal/logs?q=private`, undefined, A.token)).json).includes('private ' + mark), privateLogs.json.logs?.length);
+  const obs = await api('GET', '/internal/observability', undefined, A.token);
+  check('observability counts the newer apps: games, Discover, hand-given xp and badges, and the logs', obs.status === 200 && obs.json.additions?.games?.length === 9 && obs.json.additions?.discover?.results >= 0 && obs.json.additions?.grants?.xp >= 1 && obs.json.additions?.grants?.badges >= 1 && obs.json.additions?.logs?.errors >= 1, obs.json.additions);
+
+  // Focus rounds in Mindful minutes: kept per person, charted by day, week and month.
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const fr0 = await api('POST', '/wellbeing/focus', { minutes: 0, date: todayStr }, R.token);
+  const fr1 = await api('POST', '/wellbeing/focus', { minutes: 500, date: todayStr }, R.token);
+  check('a focus round is 1 to 120 minutes', fr0.status === 400 && fr1.status === 400, [fr0.status, fr1.status]);
+  const frOld = await api('POST', '/wellbeing/focus', { minutes: 25, date: '2020-01-01' }, R.token);
+  check('and counts for today or yesterday only', frOld.status === 400, frOld.status);
+  const frGhost = await api('POST', '/wellbeing/focus', { minutes: 25, date: todayStr, nodeId: 'not-a-real-task' }, R.token);
+  check('a round can only point at your own task', frGhost.status === 404, frGhost.status);
+  const frA = await api('POST', '/wellbeing/focus', { minutes: 25, date: todayStr }, R.token);
+  const frB = await api('POST', '/wellbeing/focus', { minutes: 50, date: todayStr }, R.token);
+  check('finished rounds are kept', frA.status === 201 && frB.status === 201, [frA.status, frB.status]);
+  const frDay = await api('GET', `/wellbeing/focus?view=day&date=${todayStr}`, undefined, R.token);
+  check('the day view is fourteen days and shows today', frDay.status === 200 && frDay.json.buckets?.length === 14 && frDay.json.buckets.at(-1).minutes === 75 && frDay.json.buckets.at(-1).rounds === 2 && frDay.json.totals?.minutes === 75, frDay.json.buckets?.at(-1));
+  const frWeek = await api('GET', `/wellbeing/focus?view=week&date=${todayStr}`, undefined, R.token);
+  const frMonth = await api('GET', `/wellbeing/focus?view=month&date=${todayStr}`, undefined, R.token);
+  check('the week view is eight weeks and the month view six months, each holding the same minutes', frWeek.json.buckets?.length === 8 && frWeek.json.totals?.minutes === 75 && frMonth.json.buckets?.length === 6 && frMonth.json.totals?.minutes === 75, [frWeek.json.buckets?.length, frMonth.json.buckets?.length]);
+  check('and says where the time went and how it compares', frDay.json.tasks?.[0]?.minutes === 75 && /first stretch|more than|fewer than/.test(frDay.json.trend ?? ''), [frDay.json.tasks, frDay.json.trend]);
+  const frOther = await api('GET', `/wellbeing/focus?view=day&date=${todayStr}`, undefined, P.token);
+  check("nobody sees someone else's rounds", frOther.json.totals?.minutes === 0, frOther.json.totals);
+  const frTasks = await api('GET', '/wellbeing/focus/tasks', undefined, R.token);
+  check('the tasks to pick from come with the answer', frTasks.status === 200 && Array.isArray(frTasks.json.tasks), frTasks.status);
   const team = await api('GET', '/inbox?tab=team', undefined, W.token);
   check('the Team tab is only for the team', team.json.tab === 'all' && !team.json.tabs?.some((t) => t.tab === 'team'), team.json.tab);
 

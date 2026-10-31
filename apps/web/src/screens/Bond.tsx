@@ -1,5 +1,6 @@
 import type { BondChat, Friend, Introduction } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
+import { Inert } from '../components/Inert';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
@@ -368,7 +369,7 @@ export function BondChatScreen() {
         {d.messages.map((m) => (
           <div key={m.id} className={`max-w-[85%] rounded-card p-sm text-[14px] font-semibold leading-snug ${m.mine ? 'self-end rounded-br-[8px] bg-ink text-on-ink' : 'self-start rounded-bl-[8px] bg-card shadow-toy-soft'}`}>
             {!m.mine && <span className="block text-[12px] font-extrabold text-ink-mute">{m.alias}</span>}
-            {m.body}
+            <Inert text={m.body} />
           </div>
         ))}
         <div ref={endRef} />

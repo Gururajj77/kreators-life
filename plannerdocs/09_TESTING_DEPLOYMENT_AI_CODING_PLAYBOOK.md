@@ -15,7 +15,7 @@ CLAUDE.md                 the rulebook
 README.md                 the long description
 SPEC.md                   the founder's original asks, ticked
 docs/DECISIONS.md         dated decisions, newest at the bottom
-docs/build-map.html       where things live (embedded under Observability)
+apps/web/src/lib/buildMap.ts   where things live (shown under Observability, Build map)
 plannerdocs/              these docs
 design/figma-tokens.json  the kit's values, frozen
 apps/web/src              App.tsx, app.css, components/, screens/, site/, lib/

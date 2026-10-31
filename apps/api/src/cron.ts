@@ -10,7 +10,7 @@ import { zonedToUtc } from '@kreators/shared';
 /** Every fifteen minutes: sequence messages, then fresh numbers for posts and reward submissions where a platform lets us read them. */
 export async function runScheduled(env: Env): Promise<{ sequences: number; recurring: number; circles: number; weekly: number; content: number; submissions: number; reminders: number; events: number; season: number }> {
   const db = env.DB;
-  const reminders = (await sendReminders(db)) + (await sendWaterAndCustom(db));
+  const reminders = (await sendReminders(db)) + (await sendWaterAndCustom(db)) + (await sendTaskReminders(db));
   const events = await sendEventReminders(db);
   const season = await closeSeason(db);
   const sequences = await runSequences(db);
@@ -114,6 +114,45 @@ export async function sendWaterAndCustom(db: D1Database): Promise<number> {
     await notice(r.user_id, r.title, 'Your own reminder.');
     await db.prepare('UPDATE custom_reminders SET last_sent_day = ? WHERE id = ?').bind(at.day, r.id).run();
     sent += 1;
+  }
+  return sent;
+}
+
+/**
+ * Tasks tagged Remember: one inbox line on the task's day (its do date, or its due date when it has none), at the task's time
+ * (09:00 when it has none), within the hour after, in the person's zone. One per task per day (the id says so), never for a task
+ * that is done or put away. The line names the task and its priority; nothing else leaves the pyramid.
+ */
+export async function sendTaskReminders(db: D1Database): Promise<number> {
+  const now = new Date();
+  const rows = await db
+    .prepare(
+      `SELECT n.id, n.user_id, n.title, n.priority, n.do_date, n.due_date, n.due_time, u.timezone
+       FROM nodes n JOIN users u ON u.id = n.user_id
+       WHERE n.kind = 'task' AND n.status = 'active' AND n.remind = 1 AND COALESCE(n.do_date, n.due_date) IS NOT NULL
+       LIMIT 500`,
+    )
+    .all<{ id: string; user_id: string; title: string; priority: number | null; do_date: string | null; due_date: string | null; due_time: string | null; timezone: string }>();
+  let sent = 0;
+  for (const t of rows.results) {
+    let parts;
+    try {
+      parts = new Intl.DateTimeFormat('en-CA', { timeZone: t.timezone || 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now);
+    } catch {
+      continue;
+    }
+    const get = (k: string) => parts.find((p) => p.type === k)?.value ?? '';
+    const day = `${get('year')}-${get('month')}-${get('day')}`;
+    if ((t.do_date ?? t.due_date) !== day) continue;
+    const at = t.due_time ?? '09:00';
+    const since = Number(get('hour')) * 60 + Number(get('minute')) - (Number(at.slice(0, 2)) * 60 + Number(at.slice(3, 5)));
+    if (since < 0 || since > 60) continue;
+    const tag = t.priority === null ? '' : `P${t.priority} `;
+    const res = await db
+      .prepare("INSERT OR IGNORE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', ?, ?, '/today', NULL, ?)")
+      .bind(`task-${t.id}-${day}`, t.user_id, `Remember: ${t.title}`.slice(0, 160), `${tag}Planned for today${t.due_date && t.do_date ? `, due ${t.due_date}` : ''}. Tap to open Daily.`.trim(), nowIso())
+      .run();
+    if (res.meta.changes) sent += 1;
   }
   return sent;
 }

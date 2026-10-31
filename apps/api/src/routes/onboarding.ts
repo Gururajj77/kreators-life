@@ -117,7 +117,9 @@ function ladderRows(userId: string, ladder: DerivedLadder, date: string): NodeRo
     note: '',
     status: 'active',
     xp: 0,
-    due_date,
+    due_date: null,
+    do_date: kind === 'task' ? due_date : null,
+    origin: kind === 'task' ? 'build' : null,
     completed_at: null,
     ready_at: kind === 'task' ? readyFromNow() : null,
     sort_order: sort,
@@ -145,12 +147,12 @@ async function buildLadder(db: D1Database, userId: string, ladder: DerivedLadder
     rows.map((r) =>
       db
         .prepare(
-          `INSERT INTO nodes (id, user_id, kind, parent_id, relationship, title, note, status, xp, due_date, completed_at, ready_at, sort_order, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO nodes (id, user_id, kind, parent_id, relationship, title, note, status, xp, due_date, completed_at, ready_at, sort_order, created_at, updated_at, do_date, origin)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           r.id, r.user_id, r.kind, r.parent_id, r.relationship, r.title, r.note, r.status, r.xp,
-          r.due_date, r.completed_at, r.ready_at, r.sort_order, r.created_at, r.updated_at,
+          r.due_date, r.completed_at, r.ready_at, r.sort_order, r.created_at, r.updated_at, r.do_date ?? null, r.origin ?? null,
         ),
     ),
   );

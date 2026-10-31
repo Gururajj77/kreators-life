@@ -38,6 +38,10 @@ echo "colour: literal white on the ink fill (use the on-ink tokens)"
 out=$(grep -rnE "bg-ink[^\"']*(text-white|bg-white)|(text-white|bg-white)[^\"']*bg-ink" screens site components || true)
 if [ -n "$out" ]; then echo "$out"; hits=$((hits + $(echo "$out" | wc -l | tr -d ' '))); fi
 
+echo "links: nothing injects raw HTML (words people write never become links; see components/Inert.tsx)"
+out=$(grep -rn "dangerouslySetInnerHTML" screens site components App.tsx || true)
+if [ -n "$out" ]; then echo "$out"; hits=$((hits + $(echo "$out" | wc -l | tr -d ' '))); fi
+
 echo "wording: the old names that must not come back"
 out=$(grep -rnwiE "Kreators Life" screens site components ../index.html ../../api/src 2>/dev/null | grep -v "kreators-life" || true)
 if [ -n "$out" ]; then echo "$out"; hits=$((hits + $(echo "$out" | wc -l | tr -d ' '))); fi

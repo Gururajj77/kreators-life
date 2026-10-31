@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, notToDoStreak, notToDoWeek, POINTS, RELATIONSHIPS, sparkFor, XP, zonedToUtc, type CheckinResponse, type NotToDo, type NotToDoStatus, type RelationshipKey, type TodayResponse } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { DATE_RE, dateNearToday, getUser, newId, notify, nowIso, shiftDate, toNode, type NodeRow, taskGate } from '../db';
+import { DATE_RE, dateNearToday, getUser, newId, notify, nowIso, shiftDate, toNode, type NodeRow, taskGate, withSubtasks } from '../db';
 
 export const today = new Hono<AppEnv>();
 
@@ -76,8 +76,8 @@ today.get('/', async (c) => {
 
   const due = await db
     .prepare(
-      `SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND due_date IS NOT NULL AND due_date <= ?
-       ORDER BY due_date ASC, CASE WHEN due_time IS NULL THEN 1 ELSE 0 END, due_time ASC, created_at ASC LIMIT 6`,
+      `SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) IS NOT NULL AND COALESCE(do_date, due_date) <= ?
+       ORDER BY COALESCE(do_date, due_date) ASC, CASE WHEN due_time IS NULL THEN 1 ELSE 0 END, due_time ASC, created_at ASC LIMIT 6`,
     )
     .bind(user.id, date)
     .all<NodeRow>();
@@ -85,23 +85,25 @@ today.get('/', async (c) => {
   const plan = await db
     .prepare(
       `SELECT
-        (SELECT COALESCE(SUM(estimate_min), 0) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND due_date <= ?2 AND estimate_min IS NOT NULL) AS planned,
+        (SELECT COALESCE(SUM(estimate_min), 0) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) <= ?2 AND estimate_min IS NOT NULL) AS planned,
         (SELECT COALESCE(SUM(estimate_min), 0) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'done' AND completed_at LIKE ?3 AND estimate_min IS NOT NULL) AS done,
-        (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND due_date <= ?2 AND due_time IS NOT NULL) AS timed`,
+        (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) <= ?2 AND due_time IS NOT NULL) AS timed`,
     )
     .bind(user.id, date, `${date}%`)
     .first<{ planned: number; done: number; timed: number }>();
-  let tasks = due.results;
-  if (tasks.length < 3) {
-    const fill = await db
-      .prepare(
-        `SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND due_date IS NULL
-         ORDER BY created_at ASC LIMIT ?`,
-      )
-      .bind(user.id, 6 - tasks.length)
-      .all<NodeRow>();
-    tasks = [...tasks, ...fill.results];
-  }
+  // The main list is only what has a day that has come. A task with no date at all (no do date and no due date) waits in the not scheduled list below it until either is picked.
+  const tasks = due.results;
+  const back = await db
+    .prepare(
+      `SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND do_date IS NULL AND due_date IS NULL
+       ORDER BY created_at DESC LIMIT 60`,
+    )
+    .bind(user.id)
+    .all<NodeRow>();
+  const backTotal = await db
+    .prepare("SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND do_date IS NULL AND due_date IS NULL")
+    .bind(user.id)
+    .first<{ n: number }>();
 
   // What was ticked today stays in sight under the tasks still waiting, so a tick can be seen and undone.
   const [dayStart, dayEnd] = dayBounds(date, user.timezone);
@@ -133,8 +135,10 @@ today.get('/', async (c) => {
     date,
     checkedIn: user.last_checkin === date,
     streak: user.streak,
-    tasks: tasks.map((t) => toNode(t, gate)),
-    done: doneToday.results.map((t) => toNode(t, gate)),
+    tasks: await withSubtasks(db, user.id, tasks.map((t) => toNode(t, gate))),
+    backlog: await withSubtasks(db, user.id, back.results.map((t) => toNode(t, gate))),
+    backlogTotal: backTotal?.n ?? 0,
+    done: await withSubtasks(db, user.id, doneToday.results.map((t) => toNode(t, gate))),
     doneRecently: recent?.n ?? 0,
     timePlan: { plannedMin: plan?.planned ?? 0, doneMin: plan?.done ?? 0, timed: plan?.timed ?? 0 },
     spark: {

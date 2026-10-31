@@ -1,5 +1,6 @@
 import { PRODUCT_KIND_META, BADGES, HONORS, RELATIONSHIPS } from '@kreators/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { Inert } from '../components/Inert';
 import { useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
@@ -210,7 +211,7 @@ export function Public() {
                     <p className="m-0 text-[12px] font-bold text-ink-soft">
                       {p.category}, {new Date(p.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                     </p>
-                    <p className="mt-xs m-0 whitespace-pre-wrap text-[16px] font-semibold leading-relaxed">{p.body}</p>
+                    <p className="mt-xs m-0 whitespace-pre-wrap text-[16px] font-semibold leading-relaxed"><Inert text={p.body} /></p>
                     <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
                       {p.likes} {p.likes === 1 ? 'like' : 'likes'}, {p.replies} {p.replies === 1 ? 'reply' : 'replies'}
                     </p>

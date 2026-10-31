@@ -2,6 +2,7 @@ import { BADGES, isFeatured, TOOL_CATEGORIES, type Tool } from '@kreators/shared
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button } from '../components/Button';
+import { LockedButton } from '../components/LockedButton';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
@@ -40,13 +41,11 @@ function ToolRow({ t, reviewer, onChange }: { t: Tool; reviewer: boolean; onChan
             {t.verified ? 'Verified by the team' : `Suggested by ${t.suggestedByName}, waiting for review`}
             {t.affiliate ? '. Partner link: kreators.app may earn a share.' : ''}
             {t.clicks > 0 ? ` · ${t.clicks} ${t.clicks === 1 ? 'tap' : 'taps'}` : ''}
-            {!t.unlock.ok ? ` · ${t.unlock.why}` : t.minPoints > 0 || t.badge ? ' · Earned: it asks for what you already have.' : ''}
+            {t.unlock.ok && (t.minPoints > 0 || t.minXp > 0 || t.badge) ? ' · Earned: it asks for what you already have.' : ''}
           </span>
         </span>
         {!t.unlock.ok ? (
-          <span className="shrink-0 rounded-pill bg-paper px-sm text-[12px] font-extrabold leading-[32px] text-ink-soft" title={t.unlock.why}>
-            Locked
-          </span>
+          <LockedButton unlock={t.unlock} full={false} className="w-[200px] shrink-0" />
         ) : t.affiliate && t.verified ? (
           <a href={`/out/tool/${t.id}`} target="_blank" rel="noreferrer" className="toy inline-flex min-h-[44px] shrink-0 items-center rounded-pill bg-ink px-md text-[14px] font-bold text-on-ink">
             Get it
@@ -168,13 +167,14 @@ export function Tools() {
 
 function SuggestSheet({ open, onClose, onDone, categories, reviewer }: { open: boolean; onClose: () => void; onDone: () => void; categories: readonly string[]; reviewer: boolean }) {
   const [minPoints, setMinPoints] = useState('0');
+  const [minXp, setMinXp] = useState('0');
   const [badge, setBadge] = useState('');
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [category, setCategory] = useState<string>(categories[0] ?? 'Editing');
   const [description, setDescription] = useState('');
   const suggest = useMutation({
-    mutationFn: () => api.suggestTool({ name, url, category, description, ...(reviewer ? { minPoints: Number(minPoints) || 0, badge } : {}) }),
+    mutationFn: () => api.suggestTool({ name, url, category, description, ...(reviewer ? { minPoints: Number(minPoints) || 0, minXp: Number(minXp) || 0, badge } : {}) }),
     onSuccess: () => {
       setName('');
       setUrl('');
@@ -216,6 +216,10 @@ function SuggestSheet({ open, onClose, onDone, categories, reviewer }: { open: b
         </label>
         {reviewer && (
           <div className="grid grid-cols-2 gap-xs">
+            <label className="block">
+              <span className="block text-[14px] font-bold">Xp of at least</span>
+              <input type="number" min={0} value={minXp} onChange={(e) => setMinXp(e.target.value)} className={field} />
+            </label>
             <label className="block">
               <span className="block text-[14px] font-bold">Points balance of at least</span>
               <input type="number" min={0} value={minPoints} onChange={(e) => setMinPoints(e.target.value)} className={field} />

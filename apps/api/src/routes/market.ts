@@ -24,7 +24,7 @@ import {
 import type { AppEnv, UserRow } from '../env';
 import { nameOf, newId, notify, nowIso, num, oneOf, str, pageOf, paged } from '../db';
 import { trustForMany } from '../rewards';
-import { badgesNow, honorKeys } from '../db';
+import { haveFor } from '../unlocks';
 import { isBadgeKey, unlockFor } from '@kreators/shared';
 import { trustScore, type TrustScore } from '@kreators/shared';
 
@@ -35,7 +35,7 @@ const isStaff = (u: UserRow) => u.role === 'admin' || u.role === 'sub_admin';
 export const featureUntil = () => new Date(Date.now() + FEATURE_DAYS * 86_400_000).toISOString();
 const https = (v: unknown) => (typeof v === 'string' && /^https?:\/\/\S+$/.test(v.trim()) ? v.trim().slice(0, 500) : '');
 
-interface ItemRow { id: string; title: string; category: string; description: string; price_cents: number; currency: string; url: string; image_url: string; stage: StoreStage; featured_until: string | null; status: 'live' | 'hidden'; created_at: string; clicks: number; min_points: number; badge: string }
+interface ItemRow { id: string; title: string; category: string; description: string; price_cents: number; currency: string; url: string; image_url: string; stage: StoreStage; featured_until: string | null; status: 'live' | 'hidden'; created_at: string; clicks: number; min_points: number; min_xp: number; badge: string }
 type Have = { points: number; badges: readonly string[] } | null;
 interface KitRow { id: string; title: string; description: string; stage: StoreStage; budget_cents: number; currency: string; items_json: string; featured_until: string | null; status: 'live' | 'hidden'; created_at: string }
 interface ListingRow { id: string; seller_id: string; seller_name: string; seller_handle: string | null; title: string; category: string; description: string; condition: PreownedListing['condition']; price_cents: number; original_cents: number | null; currency: string; purchase_year: number | null; includes: string; images_json: string; is_kit: number; city: string; status: PreownedListing['status']; sold_cents: number | null; buyer_id: string | null; featured_until: string | null; created_at: string; open_offers: number }
@@ -47,12 +47,9 @@ const LISTING_SELECT = "SELECT l.*, u.display_name AS seller_name, u.handle AS s
 const OFFER_SELECT = 'SELECT o.*, u.display_name AS buyer_name, l.title AS listing_title FROM preowned_offers o JOIN users u ON u.id = o.buyer_id JOIN preowned_listings l ON l.id = o.listing_id';
 
 const toItem = (r: ItemRow, have: Have = null): StoreItem => {
-  const unlock = unlockFor({ minPoints: r.min_points, badge: r.badge }, have);
-  return { id: r.id, title: r.title, category: r.category, description: r.description, priceCents: r.price_cents, currency: r.currency, url: unlock.ok ? r.url : '', imageUrl: r.image_url, stage: r.stage, featuredUntil: r.featured_until, status: r.status, clicks: r.clicks, createdAt: r.created_at, minPoints: r.min_points, badge: r.badge, unlock };
+  const unlock = unlockFor({ minPoints: r.min_points, minXp: r.min_xp, badge: r.badge }, have);
+  return { id: r.id, title: r.title, category: r.category, description: r.description, priceCents: r.price_cents, currency: r.currency, url: unlock.ok ? r.url : '', imageUrl: r.image_url, stage: r.stage, featuredUntil: r.featured_until, status: r.status, clicks: r.clicks, createdAt: r.created_at, minPoints: r.min_points, minXp: r.min_xp, badge: r.badge, unlock };
 };
-async function haveFor(db: D1Database, user: UserRow): Promise<Have> {
-  return { points: user.points, badges: [...(await badgesNow(db, user.id)), ...(await honorKeys(db, user))] };
-}
 const NO_TRUST: TrustScore = trustScore({ xp: 0, pointsEarned: 0, bestStreak: 0, daysHere: 0, sold: 0, rating: null, honors: 0 });
 const toListing = (r: ListingRow, me: string, trust: Map<string, TrustScore> = new Map()): PreownedListing => ({
   id: r.id,
@@ -160,6 +157,7 @@ market.post('/items', async (c) => {
   await c.env.DB.prepare('INSERT INTO store_items (id, title, category, description, price_cents, currency, url, image_url, stage, featured_until, status, created_by, created_at, updated_at, min_points, badge) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)')
     .bind(id, title, oneOf(body.category, STORE_CATEGORIES, 'Other'), str(body.description, 2000), num(body.priceCents, 0, 0) ?? 0, str(body.currency, 3, 'INR').toUpperCase(), url, https(body.imageUrl), oneOf(body.stage, STORE_STAGES, 'any'), body.hidden === true ? 'hidden' : 'live', user.id, now, now, num(body.minPoints, 0, 0) ?? 0, isBadgeKey(str(body.badge, 40)) ? str(body.badge, 40) : '')
     .run();
+  if (num(body.minXp, 0, 0)) await c.env.DB.prepare('UPDATE store_items SET min_xp = ? WHERE id = ?').bind(num(body.minXp, 0, 0), id).run();
   const row = await c.env.DB.prepare(`${ITEM_SELECT} WHERE i.id = ?`).bind(id).first<ItemRow>();
   return c.json({ item: row ? toItem(row, await haveFor(c.env.DB, user)) : null }, 201);
 });
@@ -177,6 +175,7 @@ market.patch('/items/:id', async (c) => {
     .prepare('UPDATE store_items SET title = ?, category = ?, description = ?, price_cents = ?, url = ?, image_url = ?, stage = ?, status = ?, updated_at = ?, min_points = ?, badge = ? WHERE id = ?')
     .bind(title, oneOf(body.category, STORE_CATEGORIES, row.category as (typeof STORE_CATEGORIES)[number]), body.description === undefined ? row.description : str(body.description, 2000), body.priceCents === undefined ? row.price_cents : (num(body.priceCents, row.price_cents, 0) ?? row.price_cents), url, body.imageUrl === undefined ? row.image_url : https(body.imageUrl), oneOf(body.stage, STORE_STAGES, row.stage), body.hidden === undefined ? row.status : body.hidden ? 'hidden' : 'live', nowIso(), body.minPoints === undefined ? row.min_points : (num(body.minPoints, row.min_points, 0) ?? row.min_points), body.badge === undefined ? row.badge : isBadgeKey(str(body.badge, 40)) ? str(body.badge, 40) : '', row.id)
     .run();
+  if (body.minXp !== undefined) await db.prepare('UPDATE store_items SET min_xp = ? WHERE id = ?').bind(num(body.minXp, 0, 0) ?? 0, row.id).run();
   const fresh = await db.prepare(`${ITEM_SELECT} WHERE i.id = ?`).bind(row.id).first<ItemRow>();
   return c.json({ item: fresh ? toItem(fresh, await haveFor(db, user)) : null });
 });

@@ -1,6 +1,8 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
+import { FocusDashboard } from '../components/FocusDashboard';
+import { FocusRounds } from '../components/FocusRounds';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { Button } from '../components/Button';
 import { AreaLine, Donut, Legend } from '../components/Charts';
@@ -16,6 +18,7 @@ const LENGTHS = [1, 3, 5, 10];
 
 export function Mindful() {
   const refresh = useRefreshAll();
+  const qc = useQueryClient();
   const celebrate = useCelebrate();
   const reduce = useReducedMotion();
   const wb = useWellbeing();
@@ -60,7 +63,7 @@ export function Mindful() {
       <header className="pt-lg">
         <BackLink to="/wellbeing">Wellbeing</BackLink>
         <h1 className="text-[30px]">Mindful minutes</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{total} minutes this week. Breathe with the circle: in as it grows, out as it shrinks.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{total} minutes this week. Breathe with the circle: in as it grows, out as it shrinks. Or work in focus sessions, with breaks to breathe.</p>
       </header>
 
       {wb.data && (
@@ -98,6 +101,18 @@ export function Mindful() {
           </Button>
         )}
       </section>
+
+      <FocusRounds
+        onRound={(m, nodeId) => void api.logFocus(m, nodeId, todayLocal()).then(() => qc.invalidateQueries({ queryKey: ['focus'] })).catch(() => undefined)}
+        onLog={(m, kind) =>
+          void api.log('mindful', { date: todayLocal(), value: m, extra: { kind } }).then(() => {
+            refresh();
+            celebrate({ title: `${m} mindful ${m === 1 ? 'minute' : 'minutes'} logged`, color: '#9BB068' });
+          })
+        }
+      />
+
+      <FocusDashboard />
 
       <PeriodPanel id="mindful-period" parts={['wellbeing']} />
       <section className="mt-lg" aria-labelledby="thirty-heading">

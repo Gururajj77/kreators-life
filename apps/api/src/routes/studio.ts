@@ -39,6 +39,7 @@ export interface ProductRow {
   response_days: number | null;
   lead_magnet: number;
   min_points: number;
+  min_xp: number;
   badge: string;
   certificate: number;
   buffer_min: number;
@@ -63,6 +64,7 @@ export const toProduct = (r: ProductRow, reveal = false): Product => ({
   responseDays: r.response_days,
   leadMagnet: r.lead_magnet === 1,
   minPoints: r.min_points,
+  minXp: r.min_xp,
   badge: r.badge,
   certificate: r.certificate === 1,
   bufferMin: r.buffer_min ?? 0,
@@ -279,6 +281,7 @@ studio.post('/products', async (c) => {
       int(body.minPoints, 0, 0) ?? 0, isBadgeKey(str(body.badge, 40)) ? str(body.badge, 40) : '',
     )
     .run();
+  if (int(body.minXp, 0, 0)) await db.prepare('UPDATE products SET min_xp = ? WHERE id = ?').bind(int(body.minXp, 0, 0), id).run();
   await track(db, user.id, 'product_created', { kind, pricePoints: int(body.pricePoints, 0) ?? 0 });
   const row = await ownProduct(db, user.id, id);
   return c.json({ product: row ? toProduct(row) : null }, 201);
@@ -322,6 +325,7 @@ studio.patch('/products/:id', async (c) => {
       'minPoints' in body ? (int(body.minPoints, prev.min_points, 0) ?? prev.min_points) : prev.min_points, 'badge' in body ? (isBadgeKey(str(body.badge, 40)) ? str(body.badge, 40) : '') : prev.badge, prev.id,
     )
     .run();
+  if ('minXp' in body) await db.prepare('UPDATE products SET min_xp = ? WHERE id = ?').bind(int(body.minXp, 0, 0) ?? 0, prev.id).run();
   const row = await ownProduct(db, user.id, prev.id);
   return c.json({ product: row ? toProduct(row, true) : null });
 });

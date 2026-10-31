@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { useSession } from '../lib/store';
 import { Button } from './Button';
+import { Sheet } from './Sheet';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'That did not work. Try again.');
@@ -304,5 +305,34 @@ export function ReminderBubble() {
         Water {w ? `${w.glasses}/${w.goalGlasses}` : ''}
       </button>
     </div>
+  );
+}
+
+/**
+ * A small button for a screen with no room for the bubble, such as the card table in focus mode: the water so far today, and
+ * the same panel as the bubble (a glass, the goal, the reminders) in a sheet. Laptop and up only; a phone has the section in the screen.
+ */
+export function WaterButton() {
+  const [open, setOpen] = useState(false);
+  const { q } = useReminders();
+  const w = q.data?.water;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        aria-label={w ? `Water and reminders, ${w.glasses} of ${w.goalGlasses} glasses` : 'Water and reminders'}
+        className="toy toy-soft hidden min-h-[44px] items-center gap-xs rounded-pill border border-line bg-card-strong px-sm text-[14px] font-bold text-ink md:flex"
+      >
+        <span className="text-r4">
+          <Drop size={20} />
+        </span>
+        Water {w ? `${w.glasses}/${w.goalGlasses}` : ''}
+      </button>
+      <Sheet open={open} onClose={() => setOpen(false)} title="Water and reminders">
+        <RemindersPanel />
+      </Sheet>
+    </>
   );
 }

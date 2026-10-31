@@ -7,6 +7,7 @@ import { useAuthed } from '../lib/queries';
 import { StatTile } from './Charts';
 import { MoodFace } from './MoodFace';
 import { PeriodFilter } from './PeriodFilter';
+import { bento } from '../lib/bento';
 import { Section } from './Section';
 
 export type SummaryPart = 'daily' | 'notToDo' | 'wellbeing' | 'journal' | 'finance' | 'shop' | 'school' | 'work' | 'people';
@@ -100,8 +101,8 @@ export function SummaryTiles({ summary, parts }: { summary: ReviewSummary; parts
   }
   return (
     <div className="grid grid-cols-2 gap-xs md:grid-cols-4">
-      {tiles.map((t) => (
-        <StatTile key={t.label} label={t.label} value={t.value} hint={t.hint} to={t.to} />
+      {tiles.map((t, i) => (
+        <StatTile key={t.label} label={t.label} value={t.value} hint={t.hint} to={t.to} className={bento(i, tiles.length, 2, 4)} />
       ))}
     </div>
   );

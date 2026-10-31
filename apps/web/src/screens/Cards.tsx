@@ -5,6 +5,7 @@ import { Link } from 'react-router';
 import { Button } from '../components/Button';
 import { useCelebrate } from '../components/Celebration';
 import { HeroBlobs } from '../components/Hero';
+import { LockedButton } from '../components/LockedButton';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
@@ -49,7 +50,7 @@ export function Cards() {
     <Screen>
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Card games</h1>
+        <h1 className="text-[30px]">Games</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Unlock a game once with points, then play it for good. Shuffle, draw and flip the cards on a table, and drag them around. Nothing is posted to you.</p>
       </header>
 
@@ -87,17 +88,18 @@ export function Cards() {
                     <Link to={`/cards/${g.key}`} aria-label={`Play ${g.name}`} className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink">
                       Play
                     </Link>
-                  ) : (
+                  ) : g.unlock.ok ? (
                     <Button
-                      variant={can ? 'primary' : 'outline'}
-                      disabled={!can || unlock.isPending}
+                      disabled={unlock.isPending}
                       aria-label={`Unlock ${g.name} for ${g.cost} points`}
                       onClick={() => {
                         if (window.confirm(`Unlock ${g.name} for ${g.cost} points? It is yours for good.`)) unlock.mutate(g.key);
                       }}
                     >
-                      {can ? `Unlock for ${g.cost} pts` : `${g.cost - data.points} more points to unlock`}
+                      Unlock for {g.cost} pts
                     </Button>
+                  ) : (
+                    <LockedButton unlock={g.unlock} />
                   )}
                 </li>
               );

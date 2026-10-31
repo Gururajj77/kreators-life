@@ -8,7 +8,7 @@ import type { ListingDetail, MarketResponse, PreownedListing, PreownedMessage, P
 import type { PeriodKind, Review, ReviewSummary, ReviewTemplate, ReviewsResponse } from '@kreators/shared';
 import type { NotToDo, NotToDoStatus } from '@kreators/shared';
 import type { SetupMatch } from '@kreators/shared';
-import type { CardGamePlay, CardGamesResponse, DiscoverAnswers, DiscoverResult } from '@kreators/shared';
+import type { CardGamePlay, CardGamesResponse, DiscoverAnswers, DiscoverResult, FocusResponse, FocusTask, FocusView, LogsResponse } from '@kreators/shared';
 import type { DailyBrief, GettingStarted, InboxShow, InboxTab, ReactionKind } from '@kreators/shared';
 import type { AdminCoachAsk, AdminCoachLink, CoachDirectoryEntry, CoachHub, CoachLink, CoachLogEntry, CoachProfile, CoachShare, CoachStudentView, CoachTaskInput, MyCoachResponse } from '@kreators/shared';
 import type { CustomReminder, RemindersResponse, WaterState, BlockedPerson, EventApp, EventExtras, LinkBlock, MediaItem, MediaOwner } from '@kreators/shared';
@@ -132,6 +132,9 @@ import type {
   SearchResults,
   StudioAnalytics,
   Testimonial,
+  Priority,
+  Repeat,
+  Subtask,
   TodayResponse,
   User,
   WellbeingLog,
@@ -174,6 +177,17 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 const post = <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body: body === undefined ? '{}' : JSON.stringify(body) });
 const patch = <T>(path: string, body: unknown) => request<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
 const del = <T>(path: string) => request<T>(path, { method: 'DELETE' });
+
+/** What a task can be planned with. Each field is optional on a change; null clears it. */
+export interface TaskPlanBody {
+  dueDate?: string | null;
+  doDate?: string | null;
+  repeat?: Repeat | null;
+  priority?: Priority | null;
+  remind?: boolean;
+  dueTime?: string | null;
+  estimateMin?: number | null;
+}
 const put = <T>(path: string, body: unknown) => request<T>(path, { method: 'PUT', body: JSON.stringify(body) });
 /** What an attendee code change asks for: a new xp (before the event starts), the host's own code, or a fresh random one. */
 type CodeChange = { xp?: number; code?: string; fresh?: boolean };
@@ -249,8 +263,12 @@ export const api = {
   build: (relationships: RelationshipKey[], date: string, picks?: LadderPicks) => post<{ nodes: Node[]; skipped: RelationshipKey[] }>('/onboarding/build', { relationships, date, picks }),
   acceptQuest: (relationship: RelationshipKey, date: string, picks?: LadderPicks) => post<{ nodes: Node[] }>('/onboarding/accept-quest', { relationship, date, picks }),
   nodes: (relationship?: RelationshipKey) => request<{ nodes: Node[] }>(`/nodes${relationship ? `?relationship=${relationship}` : ''}`),
-  createNode: (body: { kind: NodeKind; parentId: string | null; relationship: RelationshipKey; title: string; note?: string; dueDate?: string | null; dueTime?: string | null; estimateMin?: number | null }) => post<{ node: Node }>('/nodes', body),
-  updateNode: (id: string, body: { title?: string; note?: string; dueDate?: string | null; status?: 'active' | 'archived'; dueTime?: string | null; estimateMin?: number | null }) => patch<{ node: Node }>(`/nodes/${id}`, body),
+  createNode: (body: { kind: NodeKind; parentId: string | null; relationship: RelationshipKey; title: string; note?: string } & TaskPlanBody) => post<{ node: Node }>('/nodes', body),
+  updateNode: (id: string, body: { title?: string; note?: string; status?: 'active' | 'archived' } & TaskPlanBody) => patch<{ node: Node }>(`/nodes/${id}`, body),
+  subtasks: (id: string) => request<{ subtasks: Subtask[] }>(`/nodes/${id}/subtasks`),
+  addSubtask: (id: string, title: string) => post<{ subtask: Subtask }>(`/nodes/${id}/subtasks`, { title }),
+  editSubtask: (sid: string, body: { title?: string; done?: boolean }) => patch<{ subtask: Subtask }>(`/nodes/subtasks/${sid}`, body),
+  deleteSubtask: (sid: string) => del<{ ok: boolean }>(`/nodes/subtasks/${sid}`),
   deleteNode: (id: string) => del<{ ok: true }>(`/nodes/${id}`),
   complete: (id: string, date?: string) => post<CompleteResponse>(`/nodes/${id}/complete`, date ? { date } : undefined),
   uncomplete: (id: string) => post<{ node: Node }>(`/nodes/${id}/uncomplete`),
@@ -277,6 +295,10 @@ export const api = {
   leaderboardBlocks: () => request<{ blocks: LeaderboardBlock[] }>('/leaderboard/blocks'),
   rewards: () => request<RewardsResponse>('/rewards'),
   redeem: (key: string) => post<{ redemption: Redemption; points: number; game?: string }>(`/rewards/${key}/redeem`),
+  focusTasks: () => request<{ tasks: FocusTask[] }>('/wellbeing/focus/tasks'),
+  logFocus: (minutes: number, nodeId: string | null, date: string) => post<{ ok: true; id: string }>('/wellbeing/focus', { minutes, date, ...(nodeId ? { nodeId } : {}) }),
+  focusDashboard: (view: FocusView, date: string) => request<FocusResponse>(`/wellbeing/focus?view=${view}&date=${date}`),
+  appLogs: (params: string, paging: string) => request<LogsResponse>(withQ(`/internal/logs?${params}`, paging)),
   discover: () => request<{ answers: DiscoverAnswers; progress: { done: number; total: number; parts: { key: string; done: number; count: number }[] }; latest: { id: string; createdAt: string; result: DiscoverResult } | null; history: { id: string; createdAt: string; result: DiscoverResult }[]; settings: { steps: boolean; assistant: boolean } }>('/discover'),
   discoverSettings: (body: { steps?: boolean; assistant?: boolean }) => put<{ settings: { steps: boolean; assistant: boolean } }>('/discover/settings', body),
   saveDiscover: (answers: DiscoverAnswers) => put<{ ok: true }>('/discover/draft', { answers }),
@@ -525,8 +547,8 @@ export const api = {
 
   // tools
   tools: (pq = '') => request<{ page: Page; tools: Tool[]; categories: readonly string[]; reviewer: boolean }>(withQ('/tools', pq)),
-  suggestTool: (body: { name: string; url: string; category?: string; description?: string; affiliate?: boolean; minPoints?: number; badge?: string }) => post<{ ok: true; id: string; verified: boolean }>('/tools', body),
-  setTool: (id: string, body: { verified?: boolean; affiliate?: boolean; featured?: boolean; minPoints?: number; badge?: string }) => post<{ ok: true }>(`/tools/${id}`, body),
+  suggestTool: (body: { name: string; url: string; category?: string; description?: string; affiliate?: boolean; minPoints?: number; minXp?: number; badge?: string }) => post<{ ok: true; id: string; verified: boolean }>('/tools', body),
+  setTool: (id: string, body: { verified?: boolean; affiliate?: boolean; featured?: boolean; minPoints?: number; minXp?: number; badge?: string }) => post<{ ok: true }>(`/tools/${id}`, body),
   market: (pq = '') => request<MarketResponse>(withQ('/market', pq)),
   marketListing: (id: string) => request<ListingDetail>(`/market/listings/${id}`),
   marketSell: (body: Record<string, unknown>) => post<{ listing: PreownedListing }>('/market/listings', body),
@@ -697,6 +719,9 @@ export const adminApi = {
   setRole: (key: string, id: string, role: Role) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/role`, { method: 'POST', body: JSON.stringify({ role }) }),
   grantHonor: (key: string, id: string, honor: string, note: string) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/honors`, { method: 'POST', body: JSON.stringify({ key: honor, note }) }),
   revokeHonor: (key: string, id: string, honor: string) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/honors/${honor}`, { method: 'DELETE' }),
+  addXp: (key: string, id: string, amount: number, note: string) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/xp`, { method: 'POST', body: JSON.stringify({ amount, note }) }),
+  grantBadge: (key: string, id: string, badge: string, note: string) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/badges`, { method: 'POST', body: JSON.stringify({ key: badge, note }) }),
+  revokeBadge: (key: string, id: string, badge: string) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/badges/${badge}`, { method: 'DELETE' }),
   addPoints: (key: string, id: string, amount: number, note: string) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/points`, { method: 'POST', body: JSON.stringify({ amount, note }) }),
   setPlan: (key: string, id: string, plan: PlanKey, days: number) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/plan`, { method: 'POST', body: JSON.stringify({ plan, days }) }),
   attendeeCodes: (key: string, app: string, q: string, pq = '') => adminRequest<{ page: Page; codes: AdminAttendeeCode[] }>(key, withQ(`/attendee-codes?app=${encodeURIComponent(app)}&q=${encodeURIComponent(q)}`, pq)),

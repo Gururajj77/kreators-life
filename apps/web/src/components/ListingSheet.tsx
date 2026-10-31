@@ -1,5 +1,6 @@
 import { PREOWNED_CONDITION_META, type PreownedOffer } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Inert } from './Inert';
 import { useState, type FormEvent } from 'react';
 import { api } from '../lib/api';
 import { prettyDate } from '../lib/date';
@@ -251,7 +252,7 @@ function Chat({ messages, text, setText, onSend, busy, error, title }: { message
         {messages.length === 0 && <li className="text-[14px] font-semibold text-ink-soft">Nothing said yet. Ask about the condition or the handover.</li>}
         {messages.map((m) => (
           <li key={m.id} className={`max-w-[85%] rounded-tile px-sm py-xs ${m.mine ? 'self-end bg-ink text-on-ink' : 'self-start bg-paper'}`}>
-            <span className="block text-[14px] font-semibold">{m.body}</span>
+            <span className="block text-[14px] font-semibold"><Inert text={m.body} /></span>
             <span className={`block text-[12px] font-bold ${m.mine ? 'text-on-ink/70' : 'text-ink-soft'}`}>
               {m.mine ? 'You' : m.senderName} · {prettyDate(m.createdAt.slice(0, 10))}
             </span>

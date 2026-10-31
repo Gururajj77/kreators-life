@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { attendeeXpLocked, type AdminCoachAsk, type AdminCoachLink, EVENT_TYPES, HONOR_BY_KEY, isPaidPlan, type AdminAttendeeCode, type AttendeeCodeApp, isRole, MAX_CREDIT_GRANT, PLAN_DAYS, LISTING_TYPES, MODULE_BY_KEY, MODULES, OPPORTUNITY_TYPES, PERMISSIONS, TOOL_CATEGORIES, type AdminRedemption, type AdminUser, type AuditLog, type FlagOverride, type Listing, type ListingType, type ModuleSetting, type Permission } from '@kreators/shared';
+import { attendeeXpLocked, BADGES, type AdminCoachAsk, type AdminCoachLink, EVENT_TYPES, HONOR_BY_KEY, isPaidPlan, type AdminAttendeeCode, type AttendeeCodeApp, isRole, MAX_CREDIT_GRANT, PLAN_DAYS, LISTING_TYPES, MODULE_BY_KEY, MODULES, OPPORTUNITY_TYPES, PERMISSIONS, TOOL_CATEGORIES, type AdminRedemption, type AdminUser, type AuditLog, type FlagOverride, type Listing, type ListingType, type ModuleSetting, type Permission } from '@kreators/shared';
 import { resolveAccess } from '../access';
 import { listingsFor } from './explore';
 import { deleteAccount } from '../account';
@@ -14,7 +14,7 @@ import { notify, pageOf, paged } from '../db';
 import type { AdminFunnel, AdminKyc, AdminOrder, OrderEvent, OutboxEmail, WebhookEvent } from '@kreators/shared';
 import type { Context } from 'hono';
 import type { AppEnv, UserRow } from '../env';
-import { audit, can, getUser, nameOf, newId, nowIso, num, oneOf, parseList, sessionUser, str } from '../db';
+import { audit, badgesNow, can, getUser, nameOf, newId, nowIso, num, oneOf, parseList, sessionUser, str } from '../db';
 import { accountOf, addCredits, setPlan } from '../credits';
 import { setEventCode, setRunCode } from '../attendee';
 import { endLink, LINK, linkById, logCoach, type LinkRow } from '../coaching';
@@ -55,6 +55,7 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 interface UserListRow extends UserRow {
   honor_keys: string | null;
+  granted_badges: string | null;
   coach_asked_at: string | null;
   ca_plan: string | null;
   ca_plan_until: string | null;
@@ -74,6 +75,7 @@ function toAdminUser(r: UserListRow): AdminUser {
     isPro: r.is_pro === 1,
     createdAt: r.created_at,
     honors: r.honor_keys ? r.honor_keys.split(',') : [],
+    grantedBadges: r.granted_badges ? r.granted_badges.split(',') : [],
     role: r.role,
     email: r.email,
     handle: r.handle,
@@ -556,7 +558,7 @@ admin.patch('/listings/:type/:id', async (c) => {
   return c.json({ listing });
 });
 
-const USER_SELECT = `SELECT u.*, (SELECT GROUP_CONCAT(honor_key) FROM honors h WHERE h.user_id = u.id) AS honor_keys,
+const USER_SELECT = `SELECT u.*, (SELECT GROUP_CONCAT(honor_key) FROM honors h WHERE h.user_id = u.id) AS honor_keys, (SELECT GROUP_CONCAT(badge_key) FROM badge_grants g WHERE g.user_id = u.id) AS granted_badges,
   (SELECT cp.asked_at FROM coach_profiles cp WHERE cp.user_id = u.id) AS coach_asked_at,
   ca.plan AS ca_plan, ca.plan_until AS ca_plan_until, ca.plan_credits AS ca_plan_credits, ca.extra_credits AS ca_extra_credits
   FROM users u LEFT JOIN credit_accounts ca ON ca.user_id = u.id`;
@@ -681,6 +683,53 @@ admin.post('/users/:id/points', async (c) => {
   await audit(db, actorOf(c), 'user.points', 'user', user.id, user.points, { amount, note });
   const fresh = await loadUser(db, user.id);
   return c.json({ user: fresh ? toAdminUser(fresh) : null });
+});
+
+// Give or take xp by hand. It moves the person's level and the leaderboard, and the reason is kept in the audit log and the xp history.
+admin.post('/users/:id/xp', async (c) => {
+  const db = c.env.DB;
+  const user = await getUser(db, c.req.param('id'));
+  if (!user) return c.json({ error: 'not found' }, 404);
+  const body = await c.req.json<{ amount?: number; note?: string }>().catch(() => ({}) as { amount?: number; note?: string });
+  const amount = Math.trunc(Number(body.amount));
+  if (!Number.isFinite(amount) || amount === 0) return c.json({ error: 'amount must be a non-zero whole number' }, 400);
+  if (Math.abs(amount) > 100_000) return c.json({ error: 'at most 100000 at a time' }, 400);
+  const note = typeof body.note === 'string' ? body.note.trim().slice(0, 200) : '';
+  // The history never says more than the person actually moved: taking away more than they have only takes what is there.
+  const moved = amount < 0 ? -Math.min(-amount, user.xp) : amount;
+  await db.batch([
+    db.prepare('UPDATE users SET xp = MAX(0, xp + ?) WHERE id = ?').bind(amount, user.id),
+    db.prepare('INSERT INTO xp_events (user_id, relationship, source, source_id, amount, created_at) VALUES (?, NULL, ?, ?, ?, ?)').bind(user.id, 'admin', note || null, moved, nowIso()),
+  ]);
+  await audit(db, actorOf(c), 'user.xp', 'user', user.id, user.xp, { amount: moved, note });
+  const fresh = await loadUser(db, user.id);
+  return c.json({ user: fresh ? toAdminUser(fresh) : null });
+});
+
+// Give a badge by hand: any of the app's own badges, on top of the ones the person earned.
+admin.post('/users/:id/badges', async (c) => {
+  const db = c.env.DB;
+  const user = await getUser(db, c.req.param('id'));
+  if (!user) return c.json({ error: 'not found' }, 404);
+  const body = await c.req.json<{ key?: string; note?: string }>().catch(() => ({}) as { key?: string; note?: string });
+  const badge = BADGES.find((b) => b.key === body.key);
+  if (!badge) return c.json({ error: 'not a badge' }, 400);
+  if ((await badgesNow(db, user.id)).includes(badge.key)) return c.json({ error: 'they already have that badge' }, 409);
+  const note = typeof body.note === 'string' ? body.note.trim().slice(0, 200) : '';
+  await db.prepare('INSERT OR REPLACE INTO badge_grants (user_id, badge_key, note, awarded_at) VALUES (?, ?, ?, ?)').bind(user.id, badge.key, note, nowIso()).run();
+  await audit(db, actorOf(c), 'user.badge', 'user', user.id, '', { badge: badge.key, note });
+  const fresh = await loadUser(db, user.id);
+  return c.json({ user: fresh ? toAdminUser(fresh) : null });
+});
+
+// Take back a badge that was given by hand. A badge the person earned themselves is not touched.
+admin.delete('/users/:id/badges/:key', async (c) => {
+  const db = c.env.DB;
+  await db.prepare('DELETE FROM badge_grants WHERE user_id = ? AND badge_key = ?').bind(c.req.param('id'), c.req.param('key')).run();
+  await audit(db, actorOf(c), 'user.badge.revoke', 'user', c.req.param('id'), c.req.param('key'), {});
+  const fresh = await loadUser(db, c.req.param('id'));
+  if (!fresh) return c.json({ error: 'not found' }, 404);
+  return c.json({ user: toAdminUser(fresh) });
 });
 
 // ---- attendee codes: every event with guests, across Party, Run and Circles, recent and upcoming

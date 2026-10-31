@@ -10,6 +10,7 @@ import { Screen } from '../components/Screen';
 import { Section } from '../components/Section';
 import { Sheet } from '../components/Sheet';
 import { useCardGame } from '../lib/queries';
+import { WaterButton } from '../components/Reminders';
 import { useFocus } from '../lib/store';
 
 const reduced = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -202,7 +203,7 @@ function FocusButton({ on, onClick }: { on: boolean; onClick: () => void }) {
       aria-pressed={on}
       aria-label={on ? 'Leave focus mode' : 'Focus mode: hide the menu and the assistant'}
       title={on ? 'Leave focus mode (Esc)' : 'Focus mode'}
-      className="toy toy-soft ml-auto flex min-h-[44px] min-w-[44px] items-center justify-center gap-xs rounded-pill border border-line bg-card-strong px-sm text-[14px] font-bold text-ink"
+      className="toy toy-soft flex min-h-[44px] min-w-[44px] items-center justify-center gap-xs rounded-pill border border-line bg-card-strong px-sm text-[14px] font-bold text-ink"
     >
       <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
         <path d={on ? ICON_EXIT : ICON_ENTER} />
@@ -335,7 +336,10 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
           Clear table
         </Button>
         <span className="text-[14px] font-bold text-ink-soft">{left} left in {deck.name}</span>
-        <FocusButton on={focus} onClick={() => onFocus(!focus)} />
+        <div className="ml-auto flex items-center gap-xs">
+          <WaterButton />
+          <FocusButton on={focus} onClick={() => onFocus(!focus)} />
+        </div>
       </div>
       <p className="sr-only" role="status" aria-live="polite">{said}</p>
 
@@ -466,7 +470,7 @@ export function CardTable() {
   return (
     <Screen howTo={false} tabs={!focus} wide={focus} className="focus-scope">
       <header className={`focus-dimmable pt-lg ${focus ? 'hidden' : ''}`}>
-        <BackLink to="/cards">Card games</BackLink>
+        <BackLink to="/cards">Games</BackLink>
         <h1 className="text-[30px]">
           <span aria-hidden="true">{info?.emoji} </span>
           {info?.name ?? 'Card game'}

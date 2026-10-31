@@ -7,6 +7,8 @@ import {
   MOODS,
   NOT_TO_DO_TITLE_MAX,
   parentKind,
+  parsePriority,
+  parseRepeat,
   PERIOD_KINDS,
   PERIOD_META,
   periodFor,
@@ -14,6 +16,7 @@ import {
   periodShift,
   RELATIONSHIP_BY_KEY,
   RELATIONSHIPS,
+  repeatLabel,
   REVIEW_ANSWER_MAX,
   REVIEW_HIGHLIGHT_MAX,
   STRESS_LEVELS,
@@ -218,6 +221,12 @@ const shift = (date: string, days: number) => {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 };
+/** A repeat rule from the words a model gives: a kind and how often. Anything unclear is no rule. */
+function repeatArg(kind: unknown, every: unknown): ReturnType<typeof parseRepeat> {
+  if (!kind) return null;
+  return parseRepeat({ kind: str(kind).toLowerCase(), every: Number(every) || 1, days: [], until: null });
+}
+
 /** "today", "tomorrow" or YYYY-MM-DD to a date; "none" to null (clear it); nothing to undefined. */
 function dateArg(v: unknown, io: ToolIO): string | null | undefined {
   const s = str(v).toLowerCase();
@@ -282,9 +291,10 @@ export const TOOLS: readonly Tool[] = [
           smallAct: { text: t.spark.text, pillar: pillarName(t.spark.relationship), done: t.spark.done },
           tasks: t.tasks.map((n) => {
             const wait = n.readyAt ? Math.ceil((Date.parse(n.readyAt) - now) / 60_000) : 0;
-            const later = Boolean(n.dueDate && n.dueDate > io.date);
-            return { id: n.id, title: n.title, pillar: pillarName(n.relationship), due: n.dueDate, time: n.dueTime, minutes: n.estimateMin, canTickNow: !later && wait <= 0, ...(later ? { waitsForDay: n.dueDate } : wait > 0 ? { readyInMinutes: wait } : {}) };
+            const later = Boolean(n.doDate && n.doDate > io.date);
+            return { id: n.id, title: n.title, pillar: pillarName(n.relationship), doDate: n.doDate, due: n.dueDate, priority: n.priority === null ? null : `P${n.priority}`, remember: n.remind, repeats: n.repeat ? repeatLabel(n.repeat, n.doDate ?? n.dueDate) : null, time: n.dueTime, minutes: n.estimateMin, canTickNow: !later && wait <= 0, ...(later ? { waitsForDay: n.doDate } : wait > 0 ? { readyInMinutes: wait } : {}) };
           }),
+          notScheduled: t.backlogTotal,
           notToDo: t.notToDo.map((i) => ({ id: i.id, title: i.title, today: i.today, yesterday: i.week[5] ?? null, streak: i.streak })),
           doneToday: t.done.map((n) => ({ id: n.id, title: n.title, pillar: pillarName(n.relationship) })),
         },
@@ -602,7 +612,7 @@ export const TOOLS: readonly Tool[] = [
     needs: null,
     refresh: R.layers,
     title: 'Add to a pyramid',
-    description: `Add one layer to a pillar's pyramid. Each layer hangs under the one before: a guiding principle under a foundation, a value goal under a guiding principle, a goal outcome under a value goal, a project under a goal outcome, a task under a project. Give under (the parent's id) when the pillar has more than one; with just one it is found. A task is due today unless a date is given, and can be ticked ${WAIT.taskMinAgeMinutes} minutes after it is written.`,
+    description: `Add one layer to a pillar's pyramid. Each layer hangs under the one before: a guiding principle under a foundation, a value goal under a guiding principle, a goal outcome under a value goal, a project under a goal outcome, a task under a project. Give under (the parent's id) when the pillar has more than one; with just one it is found. A task is for today unless a do date is given (doDate is the day it will be done; dueDate is the deadline, never before the do date; doDate "none" leaves it unscheduled, in the list on Daily until a day is picked), and can be ticked ${WAIT.taskMinAgeMinutes} minutes after it is written. A task can have a priority P0 (do now), P1, P2 or P3, can repeat, and can be tagged to remember (an inbox note on its day).`,
     params: {
       type: 'object',
       properties: {
@@ -610,7 +620,12 @@ export const TOOLS: readonly Tool[] = [
         layer: { type: 'string', enum: Object.keys(LAYERS) },
         title: { type: 'string', maxLength: 140 },
         under: id('parent layer'),
-        dueDate: { type: 'string', description: 'Tasks only: YYYY-MM-DD, today or tomorrow.' },
+        doDate: { type: 'string', description: 'Tasks only: the day to do it. YYYY-MM-DD, today, tomorrow or none.' },
+        dueDate: { type: 'string', description: 'Tasks only: the deadline. YYYY-MM-DD, today or tomorrow.' },
+        priority: { type: 'string', enum: ['P0', 'P1', 'P2', 'P3'], description: 'Tasks only.' },
+        repeat: { type: 'string', enum: ['daily', 'weekdays', 'weekly', 'monthly', 'yearly'], description: 'Tasks only: how it comes back. Needs a do date or a due date.' },
+        every: { type: 'integer', minimum: 1, maximum: 52, description: 'With repeat: every this many days, weeks, months or years.' },
+        remember: { type: 'boolean', description: 'Tasks only: send an inbox note on its day. Needs a do date or a due date.' },
         dueTime: { type: 'string', description: 'Tasks only: HH:MM, 24-hour.' },
         minutes: { type: 'integer', minimum: 5, maximum: 600, description: 'Tasks only: how long it should take.' },
         note: { type: 'string', maxLength: 500 },
@@ -634,19 +649,38 @@ export const TOOLS: readonly Tool[] = [
         }
       }
       const task = kind === 'task';
+      const doDay = task ? dateArg(a.doDate, io) : null;
+      const dueDay = task ? dateArg(a.dueDate, io) : null;
       const dueTime = str(a.dueTime);
       if (task && dueTime && !TIME_RE.test(dueTime)) throw new ToolError('A time is HH:MM, like 07:30.');
       const r = must(
         await io.call({
           method: 'POST',
           path: '/nodes',
-          body: { kind, parentId, relationship: pillar, title: str(a.title), note: str(a.note), dueDate: task ? (dateArg(a.dueDate, io) ?? io.date) : null, dueTime: task && dueTime ? dueTime : null, estimateMin: task && a.minutes ? Number(a.minutes) : null },
+          body: {
+            kind,
+            parentId,
+            relationship: pillar,
+            title: str(a.title),
+            note: str(a.note),
+            ...(task
+              ? {
+                  doDate: doDay === undefined ? (dueDay ? null : io.date) : doDay,
+                  dueDate: dueDay ?? null,
+                  priority: parsePriority(a.priority),
+                  repeat: repeatArg(a.repeat, a.every),
+                  remind: a.remember === true,
+                  dueTime: dueTime || null,
+                  estimateMin: a.minutes ? Number(a.minutes) : null,
+                }
+              : {}),
+          },
         }),
       ) as { node: Node };
       return {
         label: `Added the ${layerName(kind)} ${quote(r.node.title)} to ${pillarName(pillar)}`,
         undo: { method: 'DELETE', path: `/nodes/${seg(r.node.id)}` },
-        data: { id: r.node.id, layer: layerKey(kind), title: r.node.title, pillar: pillarName(pillar), due: r.node.dueDate },
+        data: { id: r.node.id, layer: layerKey(kind), title: r.node.title, pillar: pillarName(pillar), doDate: r.node.doDate, due: r.node.dueDate, priority: r.node.priority === null ? null : `P${r.node.priority}` },
       };
     },
   },
@@ -656,14 +690,19 @@ export const TOOLS: readonly Tool[] = [
     needs: null,
     refresh: R.layers,
     title: 'Change something in a pyramid',
-    description: 'Change a layer or a task: its title, its note, and for a task its date, time and minutes. Renaming a task starts its wait again. Use "none" to clear a date or a time.',
+    description: 'Change a layer or a task: its title, its note, and for a task its do date, due date, priority (P0 to P3, or none), how it repeats (or none), remember, time and minutes. Renaming a task starts its wait again. Use "none" to clear a date, a time, a priority or a repeat.',
     params: {
       type: 'object',
       properties: {
         itemId: id('layer or task'),
         title: { type: 'string', maxLength: 140 },
         note: { type: 'string', maxLength: 500 },
-        dueDate: { type: 'string', description: 'YYYY-MM-DD, today, tomorrow or none.' },
+        doDate: { type: 'string', description: 'The day to do it: YYYY-MM-DD, today, tomorrow or none.' },
+        dueDate: { type: 'string', description: 'The deadline: YYYY-MM-DD, today, tomorrow or none.' },
+        priority: { type: 'string', enum: ['P0', 'P1', 'P2', 'P3', 'none'] },
+        repeat: { type: 'string', enum: ['daily', 'weekdays', 'weekly', 'monthly', 'yearly', 'none'] },
+        every: { type: 'integer', minimum: 1, maximum: 52 },
+        remember: { type: 'boolean' },
         dueTime: { type: 'string', description: 'HH:MM or none.' },
         minutes: { type: 'integer', minimum: 5, maximum: 600 },
       },
@@ -677,6 +716,17 @@ export const TOOLS: readonly Tool[] = [
       if (prev.kind === 'task') {
         const due = dateArg(a.dueDate, io);
         if (due !== undefined) body.dueDate = due;
+        const doDay = dateArg(a.doDate, io);
+        if (doDay !== undefined) body.doDate = doDay;
+        const pri = str(a.priority).toLowerCase();
+        if (pri === 'none') body.priority = null;
+        else if (pri) {
+          if (parsePriority(pri) === null) throw new ToolError('A priority is P0, P1, P2 or P3.');
+          body.priority = parsePriority(pri);
+        }
+        if (str(a.repeat).toLowerCase() === 'none') body.repeat = null;
+        else if (a.repeat) body.repeat = repeatArg(a.repeat, a.every);
+        if (typeof a.remember === 'boolean') body.remind = a.remember;
         const time = str(a.dueTime).toLowerCase();
         if (time === 'none') body.dueTime = null;
         else if (time) {
@@ -689,8 +739,8 @@ export const TOOLS: readonly Tool[] = [
       const r = must(await io.call({ method: 'PATCH', path: `/nodes/${prev.id}`, body })) as { node: Node };
       return {
         label: `Changed ${quote(r.node.title)}`,
-        undo: { method: 'PATCH', path: `/nodes/${prev.id}`, body: { title: prev.title, note: prev.note, dueDate: prev.dueDate, dueTime: prev.dueTime, estimateMin: prev.estimateMin } },
-        data: { title: r.node.title, due: r.node.dueDate, time: r.node.dueTime, minutes: r.node.estimateMin },
+        undo: { method: 'PATCH', path: `/nodes/${prev.id}`, body: { title: prev.title, note: prev.note, ...(prev.kind === 'task' ? { doDate: prev.doDate, dueDate: prev.dueDate, repeat: prev.repeat, priority: prev.priority, remind: prev.remind } : { dueDate: prev.dueDate }), dueTime: prev.dueTime, estimateMin: prev.estimateMin } },
+        data: { title: r.node.title, doDate: r.node.doDate, due: r.node.dueDate, priority: r.node.priority === null ? null : `P${r.node.priority}`, time: r.node.dueTime, minutes: r.node.estimateMin },
       };
     },
   },

@@ -1,20 +1,19 @@
 import { Hono } from 'hono';
-import { isBadgeKey, TOOL_CATEGORIES, unlockFor, type Tool } from '@kreators/shared';
+import { isBadgeKey, TOOL_CATEGORIES, unlockFor, type Tool, type UnlockHave } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { badgesNow, can, honorKeys, nameOf, newId, nowIso, num, oneOf, str, pageOf, paged } from '../db';
-import type { UserRow } from '../env';
+import { can, nameOf, newId, nowIso, num, oneOf, str, pageOf, paged } from '../db';
+import { haveFor } from '../unlocks';
 import { featureUntil } from './market';
 
 export const tools = new Hono<AppEnv>();
 
-interface Row { id: string; name: string; category: string; url: string; description: string; affiliate: number; verified: number; suggested_by_name: string | null; created_at: string; featured_until: string | null; clicks: number; min_points: number; badge: string }
+interface Row { id: string; name: string; category: string; url: string; description: string; affiliate: number; verified: number; suggested_by_name: string | null; created_at: string; featured_until: string | null; clicks: number; min_points: number; min_xp: number; badge: string }
 const SELECT = "SELECT t.*, u.display_name AS suggested_by_name, (SELECT COUNT(*) FROM outbound_clicks c WHERE c.kind = 'tool' AND c.target_id = t.id) AS clicks FROM tools t LEFT JOIN users u ON u.id = t.suggested_by";
-type Have = { points: number; badges: readonly string[] };
+type Have = UnlockHave;
 const toT = (r: Row, have: Have): Tool => {
-  const unlock = unlockFor({ minPoints: r.min_points, badge: r.badge }, have);
-  return { id: r.id, name: r.name, category: r.category, url: unlock.ok ? r.url : '', description: r.description, affiliate: r.affiliate === 1, verified: r.verified === 1, suggestedByName: r.suggested_by_name ? nameOf({ display_name: r.suggested_by_name }) : 'kreators.app', createdAt: r.created_at, featuredUntil: r.featured_until, clicks: r.clicks, minPoints: r.min_points, badge: r.badge, unlock };
+  const unlock = unlockFor({ minPoints: r.min_points, minXp: r.min_xp, badge: r.badge }, have);
+  return { id: r.id, name: r.name, category: r.category, url: unlock.ok ? r.url : '', description: r.description, affiliate: r.affiliate === 1, verified: r.verified === 1, suggestedByName: r.suggested_by_name ? nameOf({ display_name: r.suggested_by_name }) : 'kreators.app', createdAt: r.created_at, featuredUntil: r.featured_until, clicks: r.clicks, minPoints: r.min_points, minXp: r.min_xp, badge: r.badge, unlock };
 };
-const haveFor = async (db: D1Database, user: UserRow): Promise<Have> => ({ points: user.points, badges: [...(await badgesNow(db, user.id)), ...(await honorKeys(db, user))] });
 
 tools.get('/', async (c) => {
   const user = c.get('user');
@@ -38,13 +37,14 @@ tools.post('/', async (c) => {
   const id = newId();
   const staff = can(user, 'review');
   await db.prepare('INSERT INTO tools (id, name, category, url, description, affiliate, verified, suggested_by, created_at, min_points, badge) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id, name, oneOf(body.category, TOOL_CATEGORIES, 'Editing'), url, str(body.description, 500), body.affiliate === true ? 1 : 0, staff ? 1 : 0, user.id, nowIso(), staff ? (num(body.minPoints, 0, 0) ?? 0) : 0, staff && isBadgeKey(str(body.badge, 40)) ? str(body.badge, 40) : '').run();
+  if (can(user, 'review') && num(body.minXp, 0, 0)) await db.prepare('UPDATE tools SET min_xp = ? WHERE id = ?').bind(num(body.minXp, 0, 0), id).run();
   return c.json({ ok: true, id, verified: can(user, 'review') }, 201);
 });
 
 tools.post('/:id', async (c) => {
   const user = c.get('user');
   if (!can(user, 'review')) return c.json({ error: 'you do not have access to that' }, 403);
-  type Body = { verified?: boolean; affiliate?: boolean; featured?: boolean; minPoints?: number; badge?: string };
+  type Body = { verified?: boolean; affiliate?: boolean; featured?: boolean; minPoints?: number; minXp?: number; badge?: string };
   const body = await c.req.json<Body>().catch(() => ({}) as Body);
   const sets: string[] = [];
   const binds: unknown[] = [];
@@ -63,6 +63,10 @@ tools.post('/:id', async (c) => {
   if (body.minPoints !== undefined) {
     sets.push('min_points = ?');
     binds.push(num(body.minPoints, 0, 0) ?? 0);
+  }
+  if (body.minXp !== undefined) {
+    sets.push('min_xp = ?');
+    binds.push(num(body.minXp, 0, 0) ?? 0);
   }
   if (body.badge !== undefined) {
     sets.push('badge = ?');

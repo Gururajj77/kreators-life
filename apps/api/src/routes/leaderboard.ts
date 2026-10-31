@@ -19,6 +19,7 @@ interface Row {
   rels_with_pillars: number;
   sparks_done: number;
   admin_honors: number;
+  admin_badges: number;
   season_xp: number;
 }
 
@@ -81,6 +82,7 @@ leaderboard.get('/', async (c) => {
         (SELECT COUNT(DISTINCT relationship) FROM nodes n WHERE n.user_id = u.id AND n.kind = 'pillar' AND n.status != 'archived') AS rels_with_pillars,
         (SELECT COUNT(*) FROM spark_completions s WHERE s.user_id = u.id) AS sparks_done,
         (SELECT COUNT(*) FROM honors h WHERE h.user_id = u.id) AS admin_honors,
+        (SELECT COUNT(*) FROM badge_grants b WHERE b.user_id = u.id) AS admin_badges,
         (SELECT COALESCE(SUM(x.amount), 0) FROM xp_events x WHERE x.user_id = u.id AND x.created_at >= ?1 ${scope === 'pillar' ? 'AND x.relationship = ?2' : ''}) AS season_xp
        FROM users u ${sc.join}
        WHERE u.leaderboard_opt_in = 1 AND u.onboarded_at IS NOT NULL AND u.display_name != 'Deleted member' ${sc.where} ${NOT_BLOCKED}
@@ -107,7 +109,7 @@ leaderboard.get('/', async (c) => {
       xp: r.xp,
       level: levelFromXp(r.xp),
       streak: r.streak,
-      badgeCount: badges + r.admin_honors + timeHonors(r.created_at).length,
+      badgeCount: badges + r.admin_honors + r.admin_badges + timeHonors(r.created_at).length,
       isPro: r.is_pro === 1,
       stage: evolutionFor(IDENTITY_STAGES, r.xp, daysSince(r.created_at)).stage.stage,
       isMe: r.id === user.id,

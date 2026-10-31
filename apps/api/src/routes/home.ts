@@ -35,7 +35,7 @@ home.get('/', async (c) => {
     db.prepare('SELECT relationship, xp FROM relationship_scores WHERE user_id = ?').bind(user.id).all<{ relationship: RelationshipKey; xp: number }>(),
     db.prepare("SELECT relationship, COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'pillar' AND status = 'active' GROUP BY relationship").bind(user.id).all<{ relationship: RelationshipKey; n: number }>(),
     db.prepare('SELECT relationship FROM spark_completions WHERE user_id = ? AND date = ?').bind(user.id, date).first<{ relationship: RelationshipKey }>(),
-    db.prepare("SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND (due_date IS NULL OR due_date <= ?)").bind(user.id, date).first<{ n: number }>(),
+    db.prepare("SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND (do_date IS NULL OR do_date <= ?)").bind(user.id, date).first<{ n: number }>(),
     db.prepare("SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ?").bind(user.id, new Date(Date.now() - 86_400_000).toISOString()).first<{ n: number }>(),
     db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL').bind(user.id).first<{ n: number }>(),
     db.prepare('SELECT kind, currency, SUM(amount_cents) AS cents, COUNT(*) AS n FROM finance_transactions WHERE user_id = ? AND date LIKE ? GROUP BY kind, currency').bind(user.id, `${month}%`).all<{ kind: 'income' | 'expense'; currency: string; cents: number; n: number }>(),
@@ -217,8 +217,8 @@ home.get('/brief', async (c) => {
     db
       .prepare(
         `SELECT
-          (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND due_date = ?2) AS due,
-          (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND due_date < ?2) AS overdue,
+          (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) = ?2) AS due,
+          (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND (COALESCE(do_date, due_date) < ?2 OR due_date < ?2)) AS overdue,
           (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'done' AND completed_at >= ?3) AS done_week,
           (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'done' AND completed_at >= ?4 AND completed_at < ?3) AS done_before,
           (SELECT COUNT(*) FROM spark_completions WHERE user_id = ?1 AND date = ?2) AS act,

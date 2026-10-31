@@ -9,6 +9,7 @@ export async function deleteAccount(db: D1Database, userId: string): Promise<voi
   await db.batch([
     db.prepare("UPDATE users SET display_name = 'Deleted member', email = NULL, phone = '', birth_date = '', password_hash = NULL, password_salt = NULL, handle = NULL, bio = '', avatar_url = '', socials_json = '{}', skills = '[]', categories = '[]', goals = '[]', interests = '[]', identities = '[]', intake_json = '{}', city = '', area = '', lat = NULL, lng = NULL, location = '', reminder_time = NULL, open_to_intros = 0, permissions = '[]', friend_code = NULL, leaderboard_opt_in = 0 WHERE id = ?").bind(userId),
     db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM subtasks WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM nodes WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM media_files WHERE owner_id = ?').bind(userId),
     db.prepare('DELETE FROM water_logs WHERE user_id = ?').bind(userId),
@@ -49,6 +50,9 @@ export async function deleteAccount(db: D1Database, userId: string): Promise<voi
     db.prepare('DELETE FROM assistant_runs WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM attendee_claims WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM card_unlocks WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM badge_grants WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM focus_rounds WHERE user_id = ?').bind(userId),
+    db.prepare("UPDATE app_logs SET actor_id = NULL, actor_name = 'Deleted member' WHERE actor_id = ?").bind(userId),
     db.prepare('DELETE FROM discover_drafts WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM discover_settings WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM discover_results WHERE user_id = ?').bind(userId),

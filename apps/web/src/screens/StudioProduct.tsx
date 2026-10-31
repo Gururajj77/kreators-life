@@ -44,6 +44,7 @@ export function StudioProduct() {
   const [maxDaysAhead, setMaxDaysAhead] = useState('30');
   const [periodMonths, setPeriodMonths] = useState('');
   const [minPoints, setMinPoints] = useState('0');
+  const [minXp, setMinXp] = useState('0');
   const [badge, setBadge] = useState('');
   const [drafting, setDrafting] = useState(false);
   const [lesson, setLesson] = useState<Lesson | 'new' | null>(null);
@@ -76,6 +77,7 @@ export function StudioProduct() {
     setMaxDaysAhead(String(p.maxDaysAhead));
     setPeriodMonths(p.periodMonths ? String(p.periodMonths) : '');
     setMinPoints(String(p.minPoints));
+    setMinXp(String(p.minXp ?? 0));
     setBadge(p.badge);
   }, [p]);
 
@@ -106,6 +108,7 @@ export function StudioProduct() {
         maxDaysAhead: Number(maxDaysAhead) || 30,
         periodMonths: periodMonths ? Number(periodMonths) : null,
         minPoints: Number(minPoints) || 0,
+        minXp: Number(minXp) || 0,
         badge,
         ...(status ? { status } : {}),
       }),
@@ -196,8 +199,12 @@ export function StudioProduct() {
         )}
         <fieldset className="m-0 rounded-tile border-2 border-line p-sm">
           <legend className="px-xs text-[14px] font-bold">Who can buy</legend>
-          <p className="m-0 text-[12px] font-bold text-ink-soft">Leave both empty and anyone can. Set a points floor, a badge, or both, and only people who earned them can.</p>
+          <p className="m-0 text-[12px] font-bold text-ink-soft">Leave them empty and anyone can. Set an xp floor, a points floor, a badge, or any mix, and only people who earned them can. A super admin is never locked out.</p>
           <div className="mt-xs grid grid-cols-2 gap-xs">
+            <label className="block">
+              <span className="block text-[14px] font-bold">Xp of at least</span>
+              <input type="number" min={0} value={minXp} onChange={(e) => setMinXp(e.target.value)} className={field} />
+            </label>
             <label className="block">
               <span className="block text-[14px] font-bold">Points balance of at least</span>
               <input type="number" min={0} value={minPoints} onChange={(e) => setMinPoints(e.target.value)} className={field} />

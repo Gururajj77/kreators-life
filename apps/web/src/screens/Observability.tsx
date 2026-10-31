@@ -1,6 +1,7 @@
 import { MODULE_GROUP_ACCENT, MODULE_GROUPS, MODULE_BY_KEY, RELATIONSHIP_BY_KEY, ROLE_META, ROLES, type ObservedUser, type Role } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { Button } from '../components/Button';
 import { HBars, StatTile } from '../components/Charts';
 import { PageHeader } from '../components/PageHeader';
@@ -11,14 +12,16 @@ import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
-import buildMap from '../../../../docs/build-map.html?raw';
+import { BuildMap } from '../components/BuildMap';
 
 const field = 'w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px] font-semibold';
 const since = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
 /**
  * Internal observability, for the team: who is here, which apps they have on, who holds which role,
- * and the build map, so the whole picture lives on one screen. Numbers first, then the people, then the map.
+ * and numbers for the newer apps, and the build map shown as data in the page (it reads lib/buildMap.ts, no longer a page in another tab),
+ * so the whole picture lives on one screen. Numbers first, then the people, then the map. The log of what is happening lives on its own
+ * page, Logs, for super admins.
  * Staff can look; only an admin changes a role. Journal and wellbeing never appear here.
  */
 export function Observability() {
@@ -43,9 +46,6 @@ export function Observability() {
       setAsking(null);
     },
   });
-  // The build map opens in its own tab from the same text, so there is one copy of the truth.
-  const mapUrl = useMemo(() => URL.createObjectURL(new Blob([buildMap], { type: 'text/html' })), []);
-  useEffect(() => () => URL.revokeObjectURL(mapUrl), [mapUrl]);
   const data = d.data;
   const appRows = data
     ? [...data.apps]
@@ -64,7 +64,7 @@ export function Observability() {
 
   return (
     <Screen>
-      <PageHeader back={{ to: '/apps', label: 'Apps' }} eyebrow={MODULE_GROUPS.manage} title="Observability" lede="Who is here, which apps they have on, and who holds which role. Only the team sees this. Journals and wellbeing never appear." />
+      <PageHeader back={{ to: '/apps', label: 'Apps' }} eyebrow={MODULE_GROUPS.manage} aside={isAdmin ? <Link to="/internal/logs" className="toy toy-soft inline-flex min-h-[44px] items-center rounded-pill border border-line bg-card-strong px-md text-[14px] font-bold">Logs</Link> : undefined} title="Observability" lede="Who is here, which apps they have on, and who holds which role. Only the team sees this. Journals and wellbeing never appear." />
 
       {d.isPending && (
         <p className="mt-md m-0 text-[14px] font-bold text-ink-soft" role="status">
@@ -92,6 +92,40 @@ export function Observability() {
             <div className="rounded-card bg-card p-md shadow-toy-soft">
               <HBars rows={appRows} label="People per app" />
             </div>
+          </Section>
+
+          <Section id="obs-games" title="Games" lede="How many people unlocked each game. Counts only, never who played what.">
+            <div className="rounded-card bg-card p-md shadow-toy-soft">
+              <HBars
+                rows={data.additions.games.map((g) => ({ key: g.key, label: `${g.emoji} ${g.name}`, value: data.totals.users ? g.unlocked / data.totals.users : 0, text: `${g.unlocked} ${g.unlocked === 1 ? 'person' : 'people'}`, color: RELATIONSHIP_BY_KEY.friendship.color }))}
+                label="People per game"
+              />
+            </div>
+          </Section>
+
+          <Section id="obs-discover" title="Discover" lede="Quizzes taken and what people allowed. Counts only: no answers, no results, no names.">
+            <div className="grid grid-cols-2 gap-xs md:grid-cols-5">
+              <StatTile label="Quizzes" value={data.additions.discover.results} hint={`${data.additions.discover.people} ${data.additions.discover.people === 1 ? 'person' : 'people'}`} />
+              <StatTile label="With EQ" value={data.additions.discover.withEq} hint="emotional intelligence added" />
+              <StatTile label="Assistant on" value={data.additions.discover.assistantOn} hint="allowed a short summary" />
+              <StatTile label="Steps off" value={data.additions.discover.stepsOff} hint="switched next steps off" />
+              <StatTile label="Given by hand" value={data.additions.grants.xp + data.additions.grants.badges + data.additions.grants.points + data.additions.grants.honors} hint={`last 30 days: ${data.additions.grants.xp} xp, ${data.additions.grants.points} points, ${data.additions.grants.badges} badges, ${data.additions.grants.honors} honors`} />
+            </div>
+          </Section>
+
+          <Section id="obs-log" title="The log, last 24 hours" lede="Changes people made, requests that were refused and errors, from the app's own log.">
+            <div className="grid grid-cols-3 gap-xs">
+              <StatTile label="Errors" value={data.additions.logs.errors} hint="server and browser" />
+              <StatTile label="Refused" value={data.additions.logs.warnings} hint="400s and rate limits" />
+              <StatTile label="Changes" value={data.additions.logs.changes} hint="things people changed" />
+            </div>
+            {isAdmin ? (
+              <Link to="/internal/logs" className="toy mt-sm inline-flex min-h-[48px] items-center justify-center rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink">
+                Open the logs
+              </Link>
+            ) : (
+              <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">The lines themselves name people, so only a super admin reads them.</p>
+            )}
           </Section>
 
           <Section id="obs-people" title="People" lede={`${data.total} ${data.total === 1 ? 'account' : 'accounts'}, newest first, with the apps each one has on.${isAdmin ? ' Change a role from the menu on a row.' : ' Only an admin changes roles.'}`}>
@@ -153,21 +187,10 @@ export function Observability() {
             {data.users.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nobody matches "{query}".</p>}
             <Pager page={data.page} label="accounts" />
           </Section>
-
-          <Section
-            id="obs-map"
-            title="Build map"
-            lede="The living map of what is built, from docs/build-map.html. The same file, so it is tracked here."
-            action={
-              <a href={mapUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-[44px] items-center text-[14px] font-bold text-ink-mute underline-offset-4 hover:text-ink hover:underline">
-                Open in a new tab
-              </a>
-            }
-          >
-            <iframe srcDoc={buildMap} title="Build map" sandbox="allow-scripts allow-same-origin" className="w-full rounded-card border-2 border-line bg-card" style={{ height: '75vh' }} />
-          </Section>
         </>
       )}
+
+      <BuildMap />
 
       <Sheet open={Boolean(asking)} onClose={() => setAsking(null)} title={asking ? `Make ${asking.user.name} ${ROLE_META[asking.role].name === 'Admin' ? 'an' : 'a'} ${ROLE_META[asking.role].name.toLowerCase()}?` : 'Change role'}>
         {asking && (

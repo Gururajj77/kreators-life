@@ -924,7 +924,7 @@ export function Discover() {
             </div>
           </section>
 
-          <Section id="parts" title="The five parts">
+          <Section id="parts" title="The parts">
             <ol className="m-0 flex list-none flex-col gap-xs p-0">
               {DISCOVER_SECTIONS.map((s, k) => {
                 const p = prog.parts[k]!;

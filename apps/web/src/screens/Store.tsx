@@ -2,6 +2,7 @@ import { BADGES, isFeatured, PREOWNED_CONDITION_META, PREOWNED_CONDITIONS, STORE
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { Button } from '../components/Button';
+import { LockedButton } from '../components/LockedButton';
 import { ListingSheet } from '../components/ListingSheet';
 import { BackLink } from '../components/PageHeader';
 import { money } from '../components/PeriodPanel';
@@ -258,15 +259,10 @@ function ItemBody({ item }: { item: StoreItem }) {
           <a href={`/out/item/${item.id}`} target="_blank" rel="noreferrer" className="toy inline-flex min-h-[44px] shrink-0 items-center rounded-pill bg-ink px-md text-[14px] font-bold text-on-ink">
             Get it
           </a>
-        ) : (
-          <span className="rounded-pill bg-paper px-sm text-[12px] font-extrabold leading-[32px] text-ink-soft">Locked</span>
-        )}
+        ) : null}
       </div>
-      {item.unlock.ok ? (
-        <span className="block text-[12px] font-bold text-ink-mute">Partner link. kreators.app may earn a share.{item.minPoints > 0 || item.badge ? ' Earned: it asks for what you already have.' : ''}</span>
-      ) : (
-        <span className="block text-[12px] font-bold text-ink-soft">{item.unlock.why}</span>
-      )}
+      {!item.unlock.ok && <LockedButton unlock={item.unlock} />}
+      {item.unlock.ok && <span className="block text-[12px] font-bold text-ink-mute">Partner link. kreators.app may earn a share.{item.minPoints > 0 || item.minXp > 0 || item.badge ? ' Earned: it asks for what you already have.' : ''}</span>}
     </div>
   );
 }
@@ -477,9 +473,10 @@ function ItemSheet({ open, onClose, onSaved }: { open: boolean; onClose: () => v
   const [image, setImage] = useState('');
   const [description, setDescription] = useState('');
   const [minPoints, setMinPoints] = useState('0');
+  const [minXp, setMinXp] = useState('0');
   const [badge, setBadge] = useState('');
   const save = useMutation({
-    mutationFn: () => api.marketAddItem({ title, category, stage, priceCents: Math.round(Number(price) * 100), url, imageUrl: image, description, minPoints: Number(minPoints) || 0, badge }),
+    mutationFn: () => api.marketAddItem({ title, category, stage, priceCents: Math.round(Number(price) * 100), url, imageUrl: image, description, minPoints: Number(minPoints) || 0, minXp: Number(minXp) || 0, badge }),
     onSuccess: () => {
       setTitle('');
       setPrice('');
@@ -537,6 +534,9 @@ function ItemSheet({ open, onClose, onSaved }: { open: boolean; onClose: () => v
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={2000} className={field} />
         </Field>
         <div className="grid grid-cols-2 gap-xs">
+          <Field label="Xp of at least">
+            <input type="number" min={0} value={minXp} onChange={(e) => setMinXp(e.target.value)} className={field} />
+          </Field>
           <Field label="Points balance of at least">
             <input type="number" min={0} value={minPoints} onChange={(e) => setMinPoints(e.target.value)} className={field} />
           </Field>

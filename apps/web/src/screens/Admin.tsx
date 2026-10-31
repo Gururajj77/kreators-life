@@ -3,6 +3,7 @@ import { MAX_CREDIT_GRANT, PAID_PLANS, PLAN_DAYS, planName, type PlanKey } from 
 import { ATTENDEE_XP_MAX, codeProblem, normalizeCode, type AdminAttendeeCode } from '@kreators/shared';
 import { MAX_COACHES, type AdminCoachAsk, type AdminCoachLink } from '@kreators/shared';
 import {
+  BADGES,
   EVENT_TYPES,
   HONORS,
   HONOR_BY_KEY,
@@ -123,6 +124,8 @@ export function Admin() {
   const [honor, setHonor] = useState(ADMIN_HONORS[0]?.key ?? 'founder');
   const [note, setNote] = useState('');
   const [amount, setAmount] = useState('100');
+  const [xpAmount, setXpAmount] = useState('100');
+  const [badgeKey, setBadgeKey] = useState(BADGES[0]?.key ?? 'first_task');
   const [plan, setPlan] = useState<PlanKey>('pro');
   const [planDays, setPlanDays] = useState(String(PLAN_DAYS));
   const [grant, setGrant] = useState('1000');
@@ -536,6 +539,38 @@ export function Admin() {
                     <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Amount" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
                     <Button variant="outline" disabled={busy || !Number(amount)} onClick={() => run(async () => applyUser((await adminApi.addPoints(key, selected.id, Number(amount), note)).user))}>
                       Add
+                    </Button>
+                  </div>
+
+                  <p className="mt-md m-0 text-[14px] font-bold">XP</p>
+                  <p className="m-0 text-[12px] font-semibold text-ink-soft">Moves their level and the leaderboard. A minus takes some away, down to zero. The note and your name are kept in the audit log.</p>
+                  <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
+                    <input type="number" value={xpAmount} onChange={(e) => setXpAmount(e.target.value)} aria-label="XP amount" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+                    <Button variant="outline" disabled={busy || !Number(xpAmount)} onClick={() => run(async () => applyUser((await adminApi.addXp(key, selected.id, Number(xpAmount), note)).user))}>
+                      Add
+                    </Button>
+                  </div>
+
+                  <p className="mt-md m-0 text-[14px] font-bold">Badges given by hand</p>
+                  <p className="m-0 text-[12px] font-semibold text-ink-soft">They count for unlocks, the profile and the leaderboard. A badge the person earned is never taken away here.</p>
+                  <div className="mt-xs flex flex-wrap gap-xs">
+                    {selected.grantedBadges.length === 0 && <span className="text-[14px] font-semibold text-ink-soft">None given.</span>}
+                    {selected.grantedBadges.map((b) => (
+                      <button key={b} type="button" disabled={busy} onClick={() => run(async () => applyUser((await adminApi.revokeBadge(key, selected.id, b)).user))} className="toy toy-soft rounded-pill bg-paper px-sm py-xs text-[14px] font-bold">
+                        {BADGES.find((x) => x.key === b)?.emoji} {BADGES.find((x) => x.key === b)?.name ?? b} ×
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
+                    <select value={badgeKey} onChange={(e) => setBadgeKey(e.target.value)} aria-label="Badge" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]">
+                      {BADGES.map((b) => (
+                        <option key={b.key} value={b.key}>
+                          {b.emoji} {b.name}
+                        </option>
+                      ))}
+                    </select>
+                    <Button variant="outline" disabled={busy || selected.grantedBadges.includes(badgeKey)} onClick={() => run(async () => applyUser((await adminApi.grantBadge(key, selected.id, badgeKey, note)).user))}>
+                      Give
                     </Button>
                   </div>
 

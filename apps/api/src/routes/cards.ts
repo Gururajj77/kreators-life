@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-import { CARD_GAMES, CARD_GAME_BY_KEY, roleRank, type CardGameCard, type CardGamePlay, type CardGamesResponse, type PlayCard, type PlayDeck } from '@kreators/shared';
+import { CARD_GAMES, CARD_GAME_BY_KEY, roleRank, unlockFor, type CardGameCard, type CardGamePlay, type CardGamesResponse, type PlayCard, type PlayDeck } from '@kreators/shared';
+import { haveFor } from '../unlocks';
 import type { AppEnv } from '../env';
 
 export const cards = new Hono<AppEnv>();
@@ -32,16 +33,19 @@ export async function unlockedGames(db: D1Database, userId: string, role: string
 cards.get('/', async (c) => {
   const user = c.get('user');
   const db = c.env.DB;
-  const [mine, decks, counts] = await Promise.all([
+  const [mine, decks, counts, have] = await Promise.all([
     unlockedGames(db, user.id, user.role),
     db.prepare('SELECT game_key, deck_key, name FROM card_decks ORDER BY game_key, position').all<{ game_key: string; deck_key: string; name: string }>(),
     db.prepare('SELECT game_key, deck_key, COUNT(*) AS n FROM cards GROUP BY game_key, deck_key').all<{ game_key: string; deck_key: string; n: number }>(),
+    haveFor(db, user),
   ]);
   const games: CardGameCard[] = CARD_GAMES.map((g) => {
     const list = decks.results
       .filter((d) => d.game_key === g.key)
       .map((d) => ({ key: d.deck_key, name: d.name, count: counts.results.find((x) => x.game_key === g.key && x.deck_key === d.deck_key)?.n ?? 0 }));
-    return { ...g, unlocked: mine.has(g.key), decks: list, total: list.reduce((a, d) => a + d.count, 0) };
+    // What stands between this person and the game: its xp floor, its price in points and a badge, if it asks for one. A super admin has them all.
+    const unlock = unlockFor({ minPoints: g.cost, minXp: g.minXp, badge: g.badge ?? '' }, have);
+    return { ...g, unlocked: mine.has(g.key), unlock: mine.has(g.key) ? { ...unlock, ok: true, why: '' } : unlock, decks: list, total: list.reduce((a, d) => a + d.count, 0) };
   });
   const res: CardGamesResponse = { points: user.points, games };
   return c.json(res);

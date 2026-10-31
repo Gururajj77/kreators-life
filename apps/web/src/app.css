@@ -838,3 +838,18 @@ input[type='radio'] {
 .wash {
   background-image: linear-gradient(145deg, color-mix(in oklab, var(--wash) 18%, transparent), color-mix(in oklab, var(--wash) 6%, transparent) 60%, transparent);
 }
+
+/* Priority tags, P0 the most pressing: red, orange, purple, then the quiet grey. Each sets --pri; the chip and the ring read it. */
+.pri-0 { --pri: var(--color-r1); }
+.pri-1 { --pri: var(--color-r2); }
+.pri-2 { --pri: var(--color-r6); }
+.pri-3 { --pri: var(--color-ink-mute); }
+.pri-chip {
+  border: 1.5px solid var(--pri);
+  background-color: color-mix(in oklab, var(--pri) 18%, var(--color-card-strong));
+  color: var(--color-ink);
+}
+.pri-chip[aria-pressed='true'] {
+  background-color: var(--pri);
+  color: var(--color-on-fill);
+}

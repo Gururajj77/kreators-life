@@ -21,7 +21,7 @@ export function Section({ id, title, lede, action, span = false, className = '',
           <h2 id={id} className="text-[24px]">
             {title}
           </h2>
-          {lede && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{lede}</p>}
+          {lede && <p className="mt-xs m-0 text-pretty text-[14px] font-semibold text-ink-soft">{lede}</p>}
         </div>
         {action && <div className="shrink-0 pb-xs">{action}</div>}
       </div>

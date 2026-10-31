@@ -1,5 +1,5 @@
 import { RELATIONSHIPS } from '@kreators/shared';
-import type { ReactNode } from 'react';
+import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { createBrowserRouter, Navigate, Outlet, RouterProvider, ScrollRestoration, useLocation } from 'react-router';
 import { Avatar } from './components/Avatar';
 import { Button } from './components/Button';
@@ -12,7 +12,7 @@ import { ReminderBubble } from './components/Reminders';
 import { useMe } from './lib/queries';
 import { useApplyTheme } from './lib/theme';
 import { useFocus, useSession } from './lib/store';
-import { Admin } from './screens/Admin';
+import { noteVisit } from './lib/context';
 import { Apps } from './screens/Apps';
 import { Army, Campaign } from './screens/Army';
 import { Auth, Forgot, ResetPassword } from './screens/Auth';
@@ -40,10 +40,8 @@ import { Life } from './screens/Life';
 import { Reviews } from './screens/Reviews';
 import { Run, RunClubPage } from './screens/Run';
 import { Store } from './screens/Store';
-import { Manage } from './screens/Manage';
 import { Mindful } from './screens/Mindful';
 import { Mood } from './screens/Mood';
-import { Observability } from './screens/Observability';
 import { Opportunity, Work } from './screens/Work';
 import { ProductPage } from './screens/ProductPage';
 import { Profile } from './screens/Profile';
@@ -85,6 +83,13 @@ import { Home } from './site/Home';
 import { Features } from './site/Features';
 import { SevenRP } from './site/SevenRP';
 
+// The team's screens are big and few people open them, so they load only when asked for. This keeps the first download, and the offline copy, small.
+const Admin = lazy(() => import('./screens/Admin').then((m) => ({ default: m.Admin })));
+const Manage = lazy(() => import('./screens/Manage').then((m) => ({ default: m.Manage })));
+const Observability = lazy(() => import('./screens/Observability').then((m) => ({ default: m.Observability })));
+const Logs = lazy(() => import('./screens/Logs').then((m) => ({ default: m.Logs })));
+const later = (el: ReactNode) => <Suspense fallback={<Loading />}>{el}</Suspense>;
+
 function Loading() {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-md px-md" role="status">
@@ -113,6 +118,9 @@ function RequireSession() {
 
 function Shell() {
   const focus = useFocus((s) => s.on);
+  const where = useLocation().pathname;
+  // Remember which apps get opened, on this device only, so the lists can put them nearer the top next time.
+  useEffect(() => noteVisit(where), [where]);
   const token = useSession((s) => s.token);
   const me = useMe();
   const loc = useLocation();
@@ -200,7 +208,7 @@ const router = createBrowserRouter([
       { path: '/u/:handle', element: <Public /> },
       { path: '/people/:id', element: <Public /> },
       { path: '/p/:id', element: <ProductPage /> },
-      { path: '/admin', element: <Admin /> },
+      { path: '/admin', element: later(<Admin />) },
       {
         element: <RequireSession />,
         children: [{ path: '/vibe-check', element: <VibeCheck /> }],
@@ -293,9 +301,10 @@ const router = createBrowserRouter([
       { path: '/shop/dm', element: gated('shop', <DmInbox />) },
       { path: '/finance', element: gated('finance', <Finance />) },
       // internal: tracking for the team, shown only to staff and admins
-      { path: '/internal/observability', element: gated('observability', <Observability />) },
+      { path: '/internal/observability', element: gated('observability', later(<Observability />)) },
+      { path: '/internal/logs', element: gated('observability', later(<Logs />)) },
       // team
-      { path: '/manage', element: gated('manage', <Manage />) },
+      { path: '/manage', element: gated('manage', later(<Manage />)) },
     ],
   },
   // Old addresses keep working.

@@ -101,6 +101,14 @@ The strategy session is the pillars' own onboarding, opened from Pillars: one co
 
 Only school, work, army, journal, life and shop (plus profile and the core tabs) start on. The Apps page lists the apps that are on, grouped, each group in its relationship colour with its character; apps that are off are not shown. One highlighted card at the top, Turn apps on or off, leads to Profile, Features, which carries the same group colours and every switch. Enabled apps appear in the laptop sidebar under collapsible category headings. Rank and Rewards are part of the game, not apps, and live under You. Every app screen opens with a back button. In dark mode each app's pages take a deep shade of its relationship's hue rather than plain brown (`data-accent` on the document, set by the module gate).
 
+## Games and Discover
+
+Games (`cards`, Connection) holds nine card games from the founder's print files. Each is unlocked once with points in Rewards (a reward of kind unlock, never posted) and played in the app on a table: shuffle, draw, flip, drag, with a focus mode that hides the menu and the assistant. The card text lives in D1 (migration 0042) and is served only to someone who unlocked the game.
+
+Discover (`discover`, Reflection) is a self-discovery quiz: statements to rank, adjusting pattern puzzles, descriptor words, real situations, and an optional emotional intelligence part. It is scored on the server, shown as strengths across the seven relationships plus detailed personality, reasoning and emotional intelligence reads, and is private to the person. They choose whether it shapes their next steps and whether the assistant may read a short summary of it. The reasoning part is not an IQ test.
+
+Every list of apps (sidebar, phone menu, Apps, Home, Features) is ordered by context: what is on, then what fits the setup chat's answers, then what the person opens most on their device (`useModules`, `useGroupOrder`).
+
 ## Bond: friends and anonymous chats
 
 Every person has a public page (`/u/<handle>` or `/people/<id>` from the community feed). What it shows is the owner's choice, set under Public page: one switch for the whole page, then links, portfolio, what they sell, their community posts, their activity (level, streak, pillars set up, badges; never journal or wellbeing), friend requests, and chats. The server enforces every switch, including on friend requests and chat openings; a switched-off page returns only the name. Bond lists friends, friend requests, and anonymous one-to-one chats: both sides keep an alias for good, whether the chat started from a friend, a person you met at an event, or someone at your circle table (opened by alias, so the id never reaches the browser). Circles have no reveal at all.
@@ -141,7 +149,7 @@ Money in and out with a category, who it was with, and optional splits (someone 
 
 ## How the game works
 
-A branching vibe check derives your ladders. Every day: check in, do the spark, tick a task. Tasks can carry a time and a length so Today shows the day's plan. Waits stop farming: ten minutes before a new task can be ticked, six rewarded ticks a day, server-checked dates, time-gated evolution. XP ripples up the ladder; points come from showing up and can be spent on rewards, products and tickets.
+A branching vibe check derives your ladders. Every day: check in, do the spark, tick a task. Tasks carry a do date (the day to do it) and an optional due date (the deadline), a priority from P0 to P3, a time and a length so Daily shows the day's plan, and can repeat, hold subtasks, remind you (Remember) and start a focus timer; tasks with no date wait in a Not scheduled list. Waits stop farming: ten minutes before a new task can be ticked, six rewarded ticks a day, server-checked dates, time-gated evolution. XP ripples up the ladder; points come from showing up and can be spent on rewards, products and tickets.
 
 ## Admin
 

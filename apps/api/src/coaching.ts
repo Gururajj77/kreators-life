@@ -246,7 +246,7 @@ export async function studentView(db: D1Database, link: LinkRow, student: UserRo
     const [checkins, ticks, due, done, act, ntd] = await Promise.all([
       db.prepare("SELECT source_id AS d FROM xp_events WHERE user_id = ? AND source = 'checkin' AND source_id >= ? AND source_id <= ?").bind(id, from, date).all<{ d: string }>(),
       db.prepare("SELECT substr(completed_at, 1, 10) AS d, COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? GROUP BY d").bind(id, `${from}T00:00:00`).all<{ d: string; n: number }>(),
-      db.prepare("SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND due_date IS NOT NULL AND due_date <= ? ORDER BY due_date ASC, CASE WHEN due_time IS NULL THEN 1 ELSE 0 END, due_time ASC LIMIT 20").bind(id, date).all<NodeRow>(),
+      db.prepare("SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) IS NOT NULL AND COALESCE(do_date, due_date) <= ? ORDER BY COALESCE(do_date, due_date) ASC, CASE WHEN due_time IS NULL THEN 1 ELSE 0 END, due_time ASC LIMIT 20").bind(id, date).all<NodeRow>(),
       db.prepare("SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? AND completed_at < ? ORDER BY completed_at DESC LIMIT 20").bind(id, dayStart, dayEnd).all<NodeRow>(),
       db.prepare('SELECT relationship FROM spark_completions WHERE user_id = ? AND date = ?').bind(id, date).first<{ relationship: RelationshipKey }>(),
       notToDoList(db, id, date),
