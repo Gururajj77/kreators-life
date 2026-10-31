@@ -308,10 +308,13 @@ section('Task plan');
   const day = (n) => new Date(Date.parse(`${today}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
   const add = (body) => api('POST', '/nodes', { kind: 'task', parentId: proj.id, relationship: 'self', ...body }, F.token);
 
+  const before = (await api('GET', '/nodes?relationship=self&kind=task', undefined, F.token)).json.nodes?.length ?? 0;
   const backwards = await add({ title: 'Backwards', doDate: day(5), dueDate: day(2) });
   check('a do date after the due date is refused', backwards.status === 400 && /on or before/.test(backwards.json.error ?? ''), backwards.json);
   const lonely = await add({ title: 'Repeats from nothing', repeat: { kind: 'daily', every: 1, days: [], until: null } });
   check('a repeat needs a day to count from', lonely.status === 400, lonely.json);
+  const afterRefused = (await api('GET', '/nodes?relationship=self&kind=task', undefined, F.token)).json.nodes?.length ?? 0;
+  check('a refused task leaves nothing behind', afterRefused === before, { before, afterRefused });
   const badP = await api('PATCH', `/nodes/${proj.id}`, { priority: 'P9' }, F.token);
   check('a project takes no priority, and nothing breaks', badP.status === 200 && badP.json.node?.priority === null, badP.json);
 
@@ -338,7 +341,11 @@ section('Task plan');
   const tagged = await add({ title: 'Tagged', doDate: today, priority: 'P0', remind: true, estimateMin: 25 });
   check('a task keeps its priority, its Remember tag and its length', tagged.json.node?.priority === 0 && tagged.json.node?.remind === true && tagged.json.node?.estimateMin === 25, tagged.json.node);
   const noDay = await add({ title: 'Remember without a day', remind: true });
-  check('Remember needs a day to go off on', noDay.json.node?.remind === false, noDay.json.node);
+  check('Remember works with no day: it is a tag', noDay.status === 201 && noDay.json.node?.remind === true && noDay.json.node?.doDate === null && noDay.json.node?.dueDate === null, noDay.json.node);
+  const dRem = await api('GET', `/today?date=${today}`, undefined, F.token);
+  check('and it waits in Not scheduled yet, first in line', dRem.json.backlog?.[0]?.id === noDay.json.node?.id && dRem.json.backlog[0].remind === true, dRem.json.backlog?.map((t) => [t.title, t.remind]));
+  const remPatch = await api('PATCH', `/nodes/${noDay.json.node.id}`, { remind: false }, F.token);
+  check('the tag can be taken off again', remPatch.status === 200 && remPatch.json.node?.remind === false, remPatch.json);
   const cleared = await api('PATCH', `/nodes/${tagged.json.node.id}`, { priority: null, remind: false }, F.token);
   check('a priority and a reminder can be cleared', cleared.json.node?.priority === null && cleared.json.node?.remind === false, cleared.json.node);
   const wrong = await api('PATCH', `/nodes/${tagged.json.node.id}`, { priority: 'P7' }, F.token);

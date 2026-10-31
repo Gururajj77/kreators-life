@@ -81,7 +81,7 @@ export const planBody = (p: Plan): TaskPlanBody => {
     dueDate: p.dueDate || null,
     repeat: dated ? p.repeat : null,
     priority: p.priority,
-    remind: p.remind && dated,
+    remind: p.remind,
     dueTime: p.time || null,
     estimateMin: Number(p.minutes) > 0 ? Number(p.minutes) : null,
   };
@@ -179,11 +179,10 @@ export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange
       </div>
 
       <Toggle
-        on={plan.remind && dated}
-        disabled={!dated}
+        on={plan.remind}
         onChange={(remind) => set({ remind })}
         label="Remember"
-        hint={dated ? 'A note lands in your inbox on the day, at its time (9:00 when it has none).' : 'Pick a do date or a due date first.'}
+        hint={dated ? 'Tagged to remember, and a note lands in your inbox on the day, at its time (9:00 when it has none).' : 'Tagged to remember. With no date it waits in To remember on Daily, and gets an inbox note once you pick a day.'}
         compact
       />
 

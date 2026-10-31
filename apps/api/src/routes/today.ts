@@ -96,7 +96,7 @@ today.get('/', async (c) => {
   const back = await db
     .prepare(
       `SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND do_date IS NULL AND due_date IS NULL
-       ORDER BY created_at DESC LIMIT 60`,
+       ORDER BY remind DESC, created_at DESC LIMIT 60`,
     )
     .bind(user.id)
     .all<NodeRow>();

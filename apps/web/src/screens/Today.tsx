@@ -117,7 +117,11 @@ export function Today() {
   const [sortRaw, setSort] = useParamState('taskSort', 'day');
   const sort = isTaskSort(sortRaw) ? sortRaw : 'day';
   const tasks = sortTasks(data?.tasks ?? [], sort);
-  const backlog = sortTasks(data?.backlog ?? [], sort === 'day' ? 'priority' : sort);
+  const backlogAll = sortTasks(data?.backlog ?? [], sort === 'day' ? 'priority' : sort);
+  // Things tagged Remember with no day: kept in plain sight, not folded away.
+  const remembered = backlogAll.filter((t) => t.remind);
+  const backlog = backlogAll.filter((t) => !t.remind);
+  const waiting = Math.max(0, (data?.backlogTotal ?? 0) - remembered.length);
   const done = data?.done ?? [];
   const doneAt = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '');
   const taskDone = Boolean(data && data.doneRecently > 0);
@@ -278,11 +282,27 @@ export function Today() {
                 </Link>
               </div>
             )}
-            {data.backlogTotal > 0 && (
+            {remembered.length > 0 && (
+              <div role="group" className="mt-md" aria-labelledby="remember-heading">
+                <div className="flex items-baseline justify-between gap-sm">
+                  <h3 id="remember-heading" className="text-[16px]">
+                    To remember
+                  </h3>
+                  <span className="text-[14px] font-bold text-ink-soft">{remembered.length}</span>
+                </div>
+                <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Tagged Remember, with no day yet. Pick a day to move one up into Tasks and get a note in your inbox.</p>
+                <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+                  {remembered.map((t) => (
+                    <BacklogTask key={t.id} t={t} date={date} queue={queue} />
+                  ))}
+                </ul>
+              </div>
+            )}
+            {waiting > 0 && (
               <details className="mt-md rounded-card bg-card p-sm shadow-toy-soft">
                 <summary className="toy flex min-h-[48px] cursor-pointer list-none items-center justify-between gap-sm text-[16px] font-bold">
                   <span>Not scheduled yet</span>
-                  <span className="text-[14px] text-ink-soft">{data.backlogTotal}</span>
+                  <span className="text-[14px] text-ink-soft">{waiting}</span>
                 </summary>
                 <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">These have no date yet. They stay out of Tasks until you pick a do date or a due date; then one moves up.</p>
                 <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
@@ -290,7 +310,7 @@ export function Today() {
                     <BacklogTask key={t.id} t={t} date={date} queue={queue} />
                   ))}
                 </ul>
-                {data.backlogTotal > backlog.length && <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Showing {backlog.length} of {data.backlogTotal}. Pillars lists the rest.</p>}
+                {waiting > backlog.length && <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Showing {backlog.length} of {waiting}. Pillars lists the rest.</p>}
               </details>
             )}
             {done.length > 0 && (

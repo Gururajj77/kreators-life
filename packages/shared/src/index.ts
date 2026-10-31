@@ -1000,7 +1000,7 @@ export interface Node {
   /** Tasks only: the small checklist inside it. Counted, never paid. */
   subtaskTotal?: number;
   subtaskDone?: number;
-  /** Tasks only: send an inbox reminder on the task's day, at its time (09:00 when it has none). */
+  /** Tasks only: the Remember tag. With a day it also sends an inbox note on that day, at its time (09:00 when it has none). */
   remind: boolean;
   /** Tasks only, optional: a time of day (HH:MM) and how long it should take, to plan the day. */
   dueTime: string | null;
@@ -5214,7 +5214,7 @@ export const TERMS: Record<string, string> = {
   priority: 'A tag from P0 to P3 on a task. P0 is do now, P1 important, P2 normal and P3 whenever. It helps you choose and sort, and never changes what a tick pays.',
   habit: 'A task that repeats every day, week, month or year. When you tick it, the next one appears.',
   subtask: 'A small step inside a task. It has its own tick box, pays nothing, and never stops you ticking the task.',
-  remember: 'A tag that sends a note to your inbox on the task’s day, at its time, or at nine in the morning if it has none.',
+  remember: 'A tag for things you want to keep in mind. With a day, it also sends a note to your inbox on that day, at the task’s time or at nine in the morning. With no day, it waits in the To remember list on Daily.',
   'not scheduled': 'Tasks with no do date and no due date. They wait in a list under Tasks until you pick one.',
   'daily three': 'Check in, the small act, one task.',
   'not-to-do': 'Things you stay away from, each with its own streak of kept days.',
@@ -5343,7 +5343,7 @@ export const HOW_TO: Record<string, HowTo> = {
     steps: [
       'Daily is three boxes a day: check in, do the small act, tick one task. Checking in pays 10 xp and 10 points and keeps your streak; every seventh day in a row pays 50 points more. The small act is a two-minute thing for your weakest pillar and pays 15 xp. Your routine from the strategy session sits under the first box.',
       'Tasks come from the pillars you set up. Each pays 20 xp and sends a ripple up its pyramid. A task has a do date, the day you will do it, and can have a due date, the deadline. It shows here from its do date and cannot be ticked before it. After its due date it says Overdue, but you can still tick it. A new task waits ten minutes before it can be ticked.',
-      'Tap the pencil on a task to plan it. Tag it P0 (do now), P1, P2 or P3 (whenever), in red, orange, purple and grey, and sort the list by day, priority or due date. Make it repeat every day, week, month or year, and the next one appears when you tick it; that makes it a habit. Add subtasks, say how many minutes it takes, tag it Remember for a note in your inbox on its day, and start a focus session on it.',
+      'Tap the pencil on a task to plan it. Tag it P0 (do now), P1, P2 or P3 (whenever), in red, orange, purple and grey, and sort the list by day, priority or due date. Make it repeat every day, week, month or year, and the next one appears when you tick it; that makes it a habit. Add subtasks, say how many minutes it takes, tag it Remember, and start a focus session on it. Remember tasks with no day wait in a To remember list on Daily, and with a day they also send a note to your inbox.',
       'A task with no date waits under Not scheduled yet. It stays out of Tasks until you pick a do date or a due date, and then it moves up.',
       'Under the tasks, the not-to-do list holds up to seven things you are staying away from. Tick one to say you kept it today: a kept day pays 5 xp and grows that item’s streak. At the bottom, who you are becoming shows the figure your xp is filling in.',
     ],
@@ -6155,7 +6155,7 @@ export const HELP_FAQ = [
   { q: 'What do P0, P1, P2 and P3 mean?', a: 'They are priority tags. P0 (red) is do now, P1 (orange) is important, P2 (purple) is normal and P3 (grey) is whenever. Pick one on a task, then sort Daily by priority. A tag never changes what a tick pays.' },
   { q: 'How do I make a task repeat?', a: 'Tap the pencil on a task and pick Repeat: every day, on weekdays, every week on days you choose, every month or every year, every one or more of them, with an end day if you like. It needs a do date or a due date. When you tick it, the next one is made. A repeating task shows a Habit tag.' },
   { q: 'Where did my task with no date go?', a: 'Under Not scheduled yet, below Tasks on Daily. It stays there until you pick a do date or a due date. Then it moves up into Tasks on that day.' },
-  { q: 'What are subtasks, and what does Remember do?', a: 'Subtasks are a small checklist inside a task. They pay no xp. Remember sends a note to your inbox on the task’s day, at its time (9:00 when it has none). Tasks the strategy session made for you carry a From pillar tag, and tasks that repeat carry a Habit tag.' },
+  { q: 'What are subtasks, and what does Remember do?', a: 'Subtasks are a small checklist inside a task. They pay no xp. Remember is a tag for things to keep in mind. With a day, it also sends a note to your inbox on that day, at its time (9:00 when it has none). With no day, it waits in To remember on Daily. Tasks the strategy session made for you carry a From pillar tag, and tasks that repeat carry a Habit tag.' },
   { q: 'How do I focus on one task?', a: 'Tap the pencil on a task, add how many minutes it takes, then tap Start focus. Mindful minutes opens with that task picked and that many minutes on the timer. The Focus dashboard there can show your time in minutes or hours.' },
   { q: 'Points versus xp?', a: 'Xp levels you and your pillars up. Points come from showing up. You can trade points for rewards, for things people sell, and for events.' },
   { q: 'How do I sell something?', a: 'Switch Shop on from Apps. Make a product, publish it, and share your Profile page.' },

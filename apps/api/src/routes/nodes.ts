@@ -77,6 +77,12 @@ export async function createNode(db: D1Database, ownerId: string, body: NodeBody
     parentId = parent.id;
   }
 
+  // A task can also carry a do date and a rule for coming back. A rule needs a day to count from. All of it is checked before anything is written, so a refused task leaves nothing behind.
+  const doDate = kind === 'task' && typeof body.doDate === 'string' && DATE_RE.test(body.doDate) ? body.doDate : null;
+  const repeat = kind === 'task' ? parseRepeat(body.repeat) : null;
+  if (doDate && dueDate && doDate > dueDate) return { error: DATES_PROBLEM, status: 400 };
+  if (repeat && !doDate && !dueDate) return { error: 'Pick a do date or a due date for it to repeat from.', status: 400 };
+
   const now = nowIso();
   const id = newId();
   const sortRow = await db
@@ -90,13 +96,8 @@ export async function createNode(db: D1Database, ownerId: string, body: NodeBody
     )
     .bind(id, ownerId, kind, parentId, body.relationship, title, note, dueDate, kind === 'task' ? readyFromNow() : null, sortRow?.next ?? 0, now, now, dueTime, estimateMin, addedBy)
     .run();
-  // A task can also carry a do date and a rule for coming back. A rule needs a day to count from.
-  const doDate = kind === 'task' && typeof body.doDate === 'string' && DATE_RE.test(body.doDate) ? body.doDate : null;
-  const repeat = kind === 'task' ? parseRepeat(body.repeat) : null;
-  if (doDate && dueDate && doDate > dueDate) return { error: DATES_PROBLEM, status: 400 };
-  if (repeat && !doDate && !dueDate) return { error: 'Pick a do date or a due date for it to repeat from.', status: 400 };
   const priority = kind === 'task' ? parsePriority(body.priority) : null;
-  const remind = kind === 'task' && body.remind === true && (doDate || dueDate) ? 1 : 0;
+  const remind = kind === 'task' && body.remind === true ? 1 : 0;
   if (doDate || repeat || priority !== null || remind) await db.prepare('UPDATE nodes SET do_date = ?, repeat_json = ?, priority = ?, remind = ? WHERE id = ?').bind(doDate, repeat ? JSON.stringify(repeat) : null, priority, remind, id).run();
   const row = await getNode(db, ownerId, id);
   return row ? { row } : { error: 'not found', status: 404 };
@@ -132,11 +133,9 @@ export async function editNode(db: D1Database, row: NodeRow, body: NodeBody): Pr
   }
   if (row.kind === 'task' && ('priority' in body || 'remind' in body)) {
     const priority = 'priority' in body ? parsePriority(body.priority) : parsePriority(row.priority);
-    const fresh = await getNode(db, row.user_id, row.id);
-    // A reminder needs a day to go off on.
+    // Remember is a tag. With a day it also sends an inbox note on that day; without one it waits in the To remember list on Daily.
     const remind = 'remind' in body ? body.remind === true : (row.remind ?? 0) === 1;
-    const day = fresh ? (fresh.do_date ?? fresh.due_date) : null;
-    await db.prepare('UPDATE nodes SET priority = ?, remind = ? WHERE id = ?').bind(priority, remind && day ? 1 : 0, row.id).run();
+    await db.prepare('UPDATE nodes SET priority = ?, remind = ? WHERE id = ?').bind(priority, remind ? 1 : 0, row.id).run();
   }
   return (await getNode(db, row.user_id, row.id)) ?? row;
 }
@@ -195,7 +194,6 @@ nodes.patch('/:id', async (c) => {
     const dueNext = body.dueDate === null ? null : typeof body.dueDate === 'string' && DATE_RE.test(body.dueDate) ? body.dueDate : row.due_date;
     if (doNext && dueNext && doNext > dueNext) return c.json({ error: DATES_PROBLEM }, 400);
     if (body.repeat && !parseRepeat(body.repeat)) return c.json({ error: 'That is not a way to repeat.' }, 400);
-    if (body.remind === true && !doNext && !dueNext) return c.json({ error: 'Pick a do date or a due date to be reminded on.' }, 400);
     if (body.priority !== undefined && body.priority !== null && parsePriority(body.priority) === null) return c.json({ error: 'A priority is P0, P1, P2 or P3.' }, 400);
     if (body.repeat && !doNext && !dueNext) return c.json({ error: 'Pick a do date or a due date for it to repeat from.' }, 400);
   }

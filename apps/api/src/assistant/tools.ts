@@ -625,7 +625,7 @@ export const TOOLS: readonly Tool[] = [
         priority: { type: 'string', enum: ['P0', 'P1', 'P2', 'P3'], description: 'Tasks only.' },
         repeat: { type: 'string', enum: ['daily', 'weekdays', 'weekly', 'monthly', 'yearly'], description: 'Tasks only: how it comes back. Needs a do date or a due date.' },
         every: { type: 'integer', minimum: 1, maximum: 52, description: 'With repeat: every this many days, weeks, months or years.' },
-        remember: { type: 'boolean', description: 'Tasks only: send an inbox note on its day. Needs a do date or a due date.' },
+        remember: { type: 'boolean', description: 'Tasks only: tag it Remember. With a do date or a due date it also sends an inbox note on that day; with none it waits in the To remember list.' },
         dueTime: { type: 'string', description: 'Tasks only: HH:MM, 24-hour.' },
         minutes: { type: 'integer', minimum: 5, maximum: 600, description: 'Tasks only: how long it should take.' },
         note: { type: 'string', maxLength: 500 },
