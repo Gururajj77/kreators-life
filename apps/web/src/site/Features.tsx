@@ -44,7 +44,7 @@ export function Features() {
                       {m.emoji}
                     </span>
                     <span className="mt-xs block text-[18px] font-extrabold leading-tight tracking-tight">{m.name}</span>
-                    <span className="block text-pretty text-[14px] font-semibold leading-snug text-ink-soft">{FEATURES[m.key]?.tagline ?? m.blurb}</span>
+                    <span className="block text-balance text-[14px] font-semibold leading-snug text-ink-soft">{FEATURES[m.key]?.tagline ?? m.blurb}</span>
                   </Link>
                 </motion.li>
               ))}

@@ -108,5 +108,5 @@ export function Markdown({ text, className = '' }: { text: string; className?: s
       </p>,
     );
   }
-  return <div className={className}>{out}</div>;
+  return <div className={`prose-long ${className}`}>{out}</div>;
 }

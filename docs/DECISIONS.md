@@ -174,3 +174,5 @@ One line per decision that changed the plan, with the date. Newest at the bottom
 
 - 2026-11-01: Studied Whop (notes and the list of what was left out in `docs/whop-study.md`). Took two things that change nothing about how money moves: a live earnings calculator on reward pages, and creator-written questions and answers on product pages. Left the flat bonus, campaign types and funding step for a design of their own, since payout rules sit under finance review. Observability now counts the Discover add-ons.
 
+- 2026-11-01: Orphan words are killed in the stylesheet, not by hand, and measured: `text-wrap: balance` on the whole page, `pretty` for long reading text, plus a probe (`scripts/smoke/orphan-probe.js`). With text-wrap off the probe found 41 orphans on 28 laptop pages and 106 on the phone; with the fix it finds 0 on the laptop and 1 on the phone. The pricing page's three plans were squeezed into columns about 100px wide, which caused many of them, so it now uses the wide layout with three equal columns.
+

@@ -139,7 +139,7 @@ function AppRow({ m, color, tint, unread, onAsk }: { m: ModuleView; color: strin
           {m.name}
           {unread > 0 && m.on && <span className="rounded-pill bg-r1 px-xs text-[11px] font-extrabold leading-[18px] text-on-fill">{unread}</span>}
         </span>
-        <span className={`mt-xs block text-[14px] font-semibold leading-snug ${m.on ? 'text-ink-soft' : 'text-ink-mute'}`}>{m.blurb}</span>
+        <span className={`prose-long mt-xs block text-[14px] font-semibold leading-snug ${m.on ? 'text-ink-soft' : 'text-ink-mute'}`}>{m.blurb}</span>
       </span>
       {m.on ? (
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-ink-mute">

@@ -130,8 +130,8 @@ export function Home() {
                 {v.emoji}
               </p>
               <h3 className="mt-sm m-0 text-[22px] text-balance">{v.name}</h3>
-              <p className="mt-xs m-0 text-pretty text-[16px] font-semibold">{v.does}</p>
-              <p className="mt-sm m-0 text-pretty text-[14px] font-extrabold text-ink-soft">What it costs: {v.costs}</p>
+              <p className="mt-xs m-0 text-balance text-[16px] font-semibold">{v.does}</p>
+              <p className="mt-sm m-0 text-balance text-[14px] font-extrabold text-ink-soft">What it costs: {v.costs}</p>
             </motion.li>
           ))}
         </ul>
@@ -174,7 +174,7 @@ export function Home() {
                   0{i + 1}
                 </p>
                 <h3 className="mt-sm m-0 text-[20px] text-balance">{t}</h3>
-                <p className="mt-xs m-0 text-pretty text-[14px] font-semibold text-ink-soft">{d}</p>
+                <p className="mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">{d}</p>
               </li>
             ))}
           </ol>
@@ -196,7 +196,7 @@ export function Home() {
           {FIVE_WS.map((x, i) => (
             <motion.div key={x.w} {...rise} className={`rounded-card bg-card p-md shadow-toy-soft ${i === 0 || i === 3 || i === 4 ? 'bento-w2' : ''} ${i === 0 ? 'bento-feature' : ''}`}>
               <dt className="type-hook text-[28px]">{x.w}</dt>
-              <dd className="mt-xs m-0 text-pretty text-[14px] font-semibold text-ink-soft">{x.text}</dd>
+              <dd className="mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">{x.text}</dd>
             </motion.div>
           ))}
         </dl>
@@ -231,8 +231,8 @@ export function Home() {
                   <h3 className="mt-xs m-0 text-[20px] text-balance">Against {v.name}</h3>
                 </div>
                 <div>
-                  <p className="m-0 text-pretty text-[16px] font-semibold">{a.how}</p>
-                  <p className="mt-xs m-0 text-pretty text-[16px] font-extrabold">{a.benefit}</p>
+                  <p className="m-0 text-balance text-[16px] font-semibold">{a.how}</p>
+                  <p className="mt-xs m-0 text-balance text-[16px] font-extrabold">{a.benefit}</p>
                   <ul className="mt-sm flex list-none flex-wrap gap-xs p-0 m-0">
                     {a.apps
                       .filter((k) => FEATURES[k] && MODULE_BY_KEY[k])
@@ -312,13 +312,13 @@ export function Home() {
               </li>
             ))}
           </ul>
-          <p className="type-measure mt-md m-0 text-pretty text-[14px] font-semibold text-ink-soft">
+          <p className="type-measure mt-md m-0 text-balance text-[14px] font-semibold text-ink-soft">
             Two things cost money, and we say so up front. Typing to the assistant, so it does things for you, needs a plan from US${PLANS.pro.priceCents / 100} for {PLAN_DAYS} days{PAYMENTS_LIVE ? '' : '; plans are not on sale yet, so nothing is charged'}. The Shop takes 5% of each sale you make.{' '}
             <Link to="/pricing" className="font-bold underline underline-offset-4">
               See pricing
             </Link>
           </p>
-          <p className="type-measure mt-xs m-0 text-pretty text-[14px] font-semibold text-ink-soft">You can always switch any app off, export your data, erase your progress or delete your account, from the Profile tab.</p>
+          <p className="type-measure mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">You can always switch any app off, export your data, erase your progress or delete your account, from the Profile tab.</p>
         </motion.div>
       </section>
 
@@ -329,7 +329,7 @@ export function Home() {
             <h2 id="brands-heading" className="type-hook mt-xs text-[clamp(28px,5vw,40px)]">
               Pay for views that are checked, <em>not claimed</em>
             </h2>
-            <p className="mt-sm m-0 text-pretty text-[16px] font-semibold text-ink-soft">{BRAND_PITCH.pitch}</p>
+            <p className="mt-sm m-0 text-balance text-[16px] font-semibold text-ink-soft">{BRAND_PITCH.pitch}</p>
             <div className="mt-md flex flex-wrap gap-sm">
               <Link to="/start" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
                 Post a brief
@@ -363,7 +363,7 @@ export function Home() {
                   </svg>
                 </span>
               </summary>
-              <p className="m-0 px-sm pb-sm text-pretty text-[14px] font-semibold text-ink-soft">{f.a}</p>
+              <p className="m-0 px-sm pb-sm text-balance text-[14px] font-semibold text-ink-soft">{f.a}</p>
             </details>
           ))}
         </div>

@@ -36,7 +36,7 @@ export function Life() {
               </Gauge>
               <div className="min-w-0">
                 <p className="m-0 font-display text-[28px] font-extrabold leading-tight">{d.label}</p>
-                <p className="mt-xs m-0 text-[14px] font-semibold opacity-90">The average of the five areas. Parts with nothing logged do not count against you.</p>
+                <p className="prose-long mt-xs m-0 text-[14px] font-semibold opacity-90">The average of the five areas. Parts with nothing logged do not count against you.</p>
               </div>
             </div>
           </Hero>

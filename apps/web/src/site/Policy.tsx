@@ -17,14 +17,14 @@ function H({ children }: { children: ReactNode }) {
   return <h2 className="mt-lg text-[24px]">{children}</h2>;
 }
 function P({ children }: { children: ReactNode }) {
-  return <p className="mt-xs m-0 text-[16px] font-semibold leading-relaxed text-ink-soft">{children}</p>;
+  return <p className="mt-xs m-0 text-pretty text-[16px] font-semibold leading-relaxed text-ink-soft">{children}</p>;
 }
 
 /** Policy and information pages the payment provider and the app stores ask for before launch. */
 export function Policy({ kind }: { kind: Kind }) {
   const t = TITLES[kind];
   return (
-    <SiteLayout wide={false}>
+    <SiteLayout wide={kind === 'pricing'}>
       <header className="pt-lg">
         <p className="m-0 type-eyebrow text-ink-mute">kreators.app</p>
         <h1 className="type-hook mt-sm text-[clamp(40px,8vw,64px)]">{t.title}</h1>
@@ -114,14 +114,14 @@ export function Policy({ kind }: { kind: Kind }) {
 
       {kind === 'pricing' && (
         <section>
-          <div className="bento mt-lg">
+          <div className="mt-lg grid gap-sm md:grid-cols-3">
             {[
               ['Play', 'Free', 'The daily game, your seven pillars, every app you switch on, circles, events and learning. Free to start, free to stay.'],
               ['Sell', '5% of each sale', 'Downloads, courses, sessions, memberships and everything in the shop. The fee is taken from each sale; nothing up front. Creators who refer others earn a share of ' + Math.round(AFFILIATE_SHARE * 100) + '% on referred sales.'],
               ['Assistant', `From US$${PLANS.pro.priceCents / 100}`, `Typing to the assistant, so it does things for you, needs a plan: ${PAID_PLANS.map((k) => `${PLANS[k].name} US$${PLANS[k].priceCents / 100}`).join(', ')}, each for ${PLAN_DAYS} days. Credits do not carry over. Its tap flows stay free.${PAYMENTS_LIVE ? '' : ' Plans are not on sale yet, so nothing is charged.'}`],
               ['Brands', 'Per campaign', 'Campaign scoping and content-reward pools are priced per brief. Write to brandingbum@gmail.com.'],
             ].map(([name, price, blurb], i) => (
-              <div key={name} className={`rounded-card bg-card p-md shadow-toy-soft ${i === 0 ? 'bento-w2' : i === 3 ? 'bento-w4' : ''}`}>
+              <div key={name} className={`rounded-card bg-card p-md shadow-toy-soft ${i === 3 ? 'md:col-span-3' : ''}`}>
                 <p className="m-0 type-eyebrow text-ink-mute">{name}</p>
                 <p className="mt-xs m-0 type-hook text-[36px]">{price}</p>
                 <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{blurb}</p>

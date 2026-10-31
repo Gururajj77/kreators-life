@@ -13,7 +13,7 @@ export function QuoteOfTheDay({ date }: { date: string }) {
       <figure className="tip-card relative m-0 rounded-tile border border-line p-sm shadow-toy-soft">
         <figcaption className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">Line of the day</figcaption>
         <blockquote className="m-0 mt-xs">
-          <p className="m-0 text-pretty text-[16px] font-semibold leading-snug">“{line.text}”</p>
+          <p className="m-0 text-balance text-[16px] font-semibold leading-snug">“{line.text}”</p>
           {line.by && <footer className="mt-xs text-[14px] font-bold text-ink-soft">{line.by}</footer>}
         </blockquote>
       </figure>

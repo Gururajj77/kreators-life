@@ -504,7 +504,7 @@ export function Home() {
                         {KIND_EMOJI[r.kind] ?? '📄'}
                       </span>
                       {r.tag && <span className="mt-xs inline-flex w-fit rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[22px] text-ink-soft">{r.tag}</span>}
-                      <span className="clamp-2 mt-xs block text-[16px] font-bold leading-snug">{r.title}</span>
+                      <span className="mt-xs block text-[16px] font-bold leading-snug">{r.title}</span>
                       <span className="mt-xs block text-[12px] font-bold text-ink-soft">{r.kind}</span>
                     </Link>
                   </li>

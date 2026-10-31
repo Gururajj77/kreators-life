@@ -69,8 +69,8 @@ function FloorSection({ r, onActive }: { r: Relationship; onActive: (k: Relation
         </div>
         <div>
           <h2 className="type-hook m-0 text-[clamp(32px,6vw,48px)]">{r.name}</h2>
-          <p className="mt-xs m-0 text-pretty text-[18px] font-bold leading-snug">“{r.greeting}”</p>
-          <p className="mt-xs m-0 text-pretty text-[16px] font-semibold text-ink-soft">
+          <p className="mt-xs m-0 text-balance text-[18px] font-bold leading-snug">“{r.greeting}”</p>
+          <p className="mt-xs m-0 text-balance text-[16px] font-semibold text-ink-soft">
             The question {r.character}, your {r.role}, keeps asking: <span className="text-ink">{r.question}</span>
           </p>
           {features.length > 0 && (
@@ -107,7 +107,7 @@ function LifeAreaSection({ k }: { k: LifeAreaKey }) {
       </div>
       <div>
         <h2 className="type-hook m-0 text-[clamp(32px,6vw,48px)]">{meta.name}</h2>
-        <p className="mt-xs m-0 text-pretty text-[16px] font-semibold text-ink-soft">{meta.blurb}</p>
+        <p className="mt-xs m-0 text-balance text-[16px] font-semibold text-ink-soft">{meta.blurb}</p>
         <ul className="mt-md flex list-none flex-wrap gap-xs p-0 m-0">
           {features.map((m) => (
             <li key={m.key}>
@@ -139,7 +139,7 @@ export function SevenRP() {
         <div>
           <p className="m-0 type-eyebrow text-ink-mute">7RP: the seven relationships</p>
           <h1 className="type-hook mt-sm text-[clamp(40px,9vw,80px)]">Seven relationships <em>make a life</em></h1>
-          <p className="mt-md m-0 max-w-[520px] text-pretty text-[18px] font-semibold leading-snug text-ink-soft">
+          <p className="mt-md m-0 max-w-[520px] text-balance text-[18px] font-semibold leading-snug text-ink-soft">
             Work and money, friends, family, a partner, yourself, your teachers and your faith. In kreators.app each one is a pillar with its own guide, and every app serves at least one of them.
           </p>
           <div role="group" aria-label="View" className="mt-md flex flex-wrap gap-xs">
@@ -156,7 +156,7 @@ export function SevenRP() {
       </Zone>
 
       <div className="mt-xl">
-        <p className="m-0 max-w-[640px] text-pretty text-[16px] font-semibold text-ink-soft">
+        <p className="m-0 max-w-[640px] text-balance text-[16px] font-semibold text-ink-soft">
           {view === 'seven' ? 'Red at the bottom, violet at the top. Each pillar has its own character, and each part of the app serves at least one pillar.' : 'Physical, financial, emotional, mental and spiritual: the same seven relationships, read the way a life is usually read. Each one lists the apps that serve it.'}
         </p>
         <div className="mt-md flex flex-col gap-md">
@@ -167,7 +167,7 @@ export function SevenRP() {
       <Zone value={null} onActive={setActive} className="mt-2xl text-center">
         <motion.div {...rise} className="rounded-card bg-ink p-lg text-on-ink">
           <h2 className="type-hook text-[clamp(32px,6vw,56px)] text-on-ink">Find out where <em>yours stand</em></h2>
-          <p className="mt-xs m-0 text-pretty text-[16px] font-semibold text-on-ink/80">A short chat places all seven, then builds a pillar for the ones that need you most.</p>
+          <p className="mt-xs m-0 text-balance text-[16px] font-semibold text-on-ink/80">A short chat places all seven, then builds a pillar for the ones that need you most.</p>
           <Link to={entry === '/home' ? '/home' : '/start'} className="toy mt-md inline-flex min-h-[56px] items-center rounded-pill bg-card px-lg text-[18px] font-bold text-ink">
             Start free
           </Link>

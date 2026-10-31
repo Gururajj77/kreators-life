@@ -135,7 +135,7 @@ export function Help() {
         <h2 id="words-heading" className="text-[24px]">
           Words we use
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Every word the app made up, in plain ones. The "How it works" section at the bottom of each app shows the ones it leans on.</p>
+        <p className="prose-long mt-xs m-0 text-[14px] font-semibold text-ink-soft">Every word the app made up, in plain ones. The "How it works" section at the bottom of each app shows the ones it leans on.</p>
         <nav aria-label="Word categories" className="mt-sm flex flex-wrap gap-xs">
           {termGroups().map((g) => (
             <a key={g.name} href={`#words-${g.name.toLowerCase().replace(/[^a-z]+/g, '-')}`} className="toy toy-flat inline-flex min-h-[44px] items-center rounded-pill bg-card px-md text-[14px] font-bold">
@@ -148,7 +148,7 @@ export function Help() {
             <h3 className="m-0 text-[16px] font-extrabold">{g.name}</h3>
             <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
               {g.terms.map(([term, meaning]) => (
-                <li key={term} className="rounded-tile bg-card p-sm text-[14px] shadow-toy-soft">
+                <li key={term} className="prose-long rounded-tile bg-card p-sm text-[14px] shadow-toy-soft">
                   <span className="font-bold">{term}</span>
                   <span className="font-semibold text-ink-soft"> {meaning}</span>
                 </li>
@@ -174,7 +174,7 @@ export function Help() {
                     </svg>
                   </span>
                 </summary>
-                <p className="m-0 px-sm pb-sm text-[16px] font-semibold leading-relaxed text-ink-soft">{f.a}</p>
+                <p className="prose-long m-0 px-sm pb-sm text-[16px] font-semibold leading-relaxed text-ink-soft">{f.a}</p>
               </details>
             </li>
           ))}
