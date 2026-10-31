@@ -2,6 +2,7 @@ import { MOODS, STRESSORS, type JournalEntry } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { PeriodPanel } from '../components/PeriodPanel';
+import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { CalendarGrid } from '../components/Charts';
 import { Hero } from '../components/Hero';
@@ -44,9 +45,15 @@ export function Journal() {
       <RemindersSection />
 
       {stats && (
-        <Hero color="var(--color-r5)" deep="var(--deep-self)" className="mt-md" character="self" mood={stats.thisMonth > 0 ? "happy" : "sleepy"}>
-          <p className="m-0 font-display text-[60px] font-extrabold leading-none">{stats.total}</p>
-          <p className="mt-xs m-0 text-[16px] font-bold">{stats.total === 1 ? 'entry' : 'entries'} so far, {stats.thisMonth} this month</p>
+        <Hero color="var(--color-r5)" deep="var(--deep-self)" className="mt-md">
+          {/* The dew drop stands in front of the flower in the corner, so the calendar below can use the whole width, on a phone too. */}
+          <span className="absolute top-0 right-0 z-10" aria-hidden="true">
+            <Avatar relationship="self" size={72} mood={stats.thisMonth > 0 ? 'happy' : 'sleepy'} decorative />
+          </span>
+          <div className="pr-xl">
+            <p className="m-0 font-display text-[60px] font-extrabold leading-none">{stats.total}</p>
+            <p className="mt-xs m-0 text-[16px] font-bold">{stats.total === 1 ? 'entry' : 'entries'} so far, {stats.thisMonth} this month</p>
+          </div>
           <div className="mt-md flex gap-xs">
             <span className="inline-flex items-center gap-xs rounded-pill bg-card px-sm py-xs text-[14px] font-extrabold text-ink">
               <span className="block size-[10px] rounded-pill bg-r4" aria-hidden="true" />
