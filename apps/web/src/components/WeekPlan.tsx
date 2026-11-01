@@ -374,16 +374,15 @@ function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: number,
                     </p>
                   </div>
                 </div>
-                <label className="block w-[148px] shrink-0 text-right text-[12px] font-bold text-ink-soft">
-                  Day
-                  <select value={day[s.id]} onChange={(e) => setDay((d) => ({ ...d, [s.id]: e.target.value }))} className={`mt-xs text-left ${selectClass}`}>
+                <div className="w-[148px] shrink-0">
+                  <select value={day[s.id]} onChange={(e) => setDay((d) => ({ ...d, [s.id]: e.target.value }))} aria-label={`Day for ${s.title}`} className={selectClass}>
                     {plan.days.map((d) => (
                       <option key={d.date} value={d.date}>
                         {dayOption(d.date)}
                       </option>
                     ))}
                   </select>
-                </label>
+                </div>
               </li>
             ))}
           </ul>

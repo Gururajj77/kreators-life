@@ -11,6 +11,10 @@ const day = (n) => new Date(Date.parse(`${today}T00:00:00Z`) + n * 86_400_000).t
 const proj = ((await api('GET', '/nodes?relationship=self&kind=project')).nodes ?? [])[0];
 const mk = (b) => api('POST', '/nodes', { kind: 'task', parentId: proj.id, relationship: proj.relationship, ...b });
 const stamp = Date.now().toString(36).slice(-4);
+// Earlier runs leave their tasks behind, and the plan lists at most twelve with no estimate, so sweep them first and again at the end.
+const MINE = ['Reply to the brand ', 'Plan the next shoot ', 'Spend a full day with a friend, screens off ', 'Read the whole book on slow'];
+const sweep = async () => { for (const q of MINE) for (const t of (await api('GET', `/wellbeing/focus/tasks?q=${encodeURIComponent(q)}`)).tasks ?? []) if (t.title.startsWith(q)) await api('DELETE', `/nodes/${t.id}`); };
+await sweep();
 const lateTask = (await mk({ title: `Spend a full day with a friend, screens off ${stamp}`, dueDate: day(-3) })).node;
 const unsized = (await mk({ title: `Reply to the brand ${stamp}`, doDate: day(2) })).node;
 const picked = (await mk({ title: `Plan the next shoot ${stamp}`, doDate: day(6), estimateMin: 20 })).node;
@@ -66,6 +70,7 @@ const u = (await api('GET', `/nodes/${unsized.id}`)).node;
 const pk = (await api('GET', `/nodes/${picked.id}`)).node;
 note('the server has the 45 minute estimate', u.estimateMin === 45, `estimate ${u.estimateMin}`);
 note('and the picked task is still on its day with its own data', pk.doDate && pk.id === picked.id, `doDate ${pk.doDate}, estimate ${pk.estimateMin}`);
+await sweep();
 console.log('page errors:', errors);
 console.log(ok ? 'ALL OK' : 'SOME FAILED');
 await browser.close();
