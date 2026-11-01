@@ -7,7 +7,7 @@ import { PeriodPanel } from '../components/PeriodPanel';
 import { Nudge } from '../components/Nudge';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
-import { AreaLine, Donut, Gauge, HBars, Legend, MultiLine, PillBars, Segments, Sparkline } from '../components/Charts';
+import { AreaLine, Donut, Gauge, HBars, Legend, MultiLine, Segments, Sparkline } from '../components/Charts';
 import { HeroBlobs } from '../components/Hero';
 import { MoodFace } from '../components/MoodFace';
 import { Person } from '../components/Person';
@@ -21,8 +21,7 @@ import { api } from '../lib/api';
 import { bento } from '../lib/bento';
 import { prettyDate, todayLocal } from '../lib/date';
 import { useGroupOrder, useModules } from '../lib/modules';
-import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
-import { useMutation } from '@tanstack/react-query';
+import { useAuthed, useMe } from '../lib/queries';
 
 const SHORTCUT_ORDER: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'manage'];
 const weekday = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' });
@@ -54,7 +53,6 @@ export function Home() {
   const q = useAuthed(['home', date], () => api.home(date, hour));
   const { modules } = useModules();
   const shortcutGroups = useGroupOrder(SHORTCUT_ORDER);
-  const refreshAll = useRefreshAll();
   const d = q.data;
   // The three half-width extras pair up in two columns; when one is left over it takes the whole row, so nothing stands alone.
   const extras = d ? ([d.life ? 'life' : null, d.resources.length > 0 ? 'reads' : null, d.money ? 'money' : null].filter(Boolean) as string[]) : [];

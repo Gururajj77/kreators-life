@@ -204,9 +204,9 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
           {columns
             .filter((c) => c.filter)
             .map((c) => (
-              <label key={c.key} className="flex min-w-[160px] flex-1 items-center gap-xs sm:flex-none">
+              <label key={c.key} className="flex min-w-[min(100%,220px)] max-w-full flex-1 items-center gap-xs sm:flex-none">
                 <span className="shrink-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{c.label}</span>
-                <Select value={filters[c.key] ?? ''} aria-label={`Filter by ${c.label}`} onChange={(e) => setFilters((f) => ({ ...f, [c.key]: e.target.value }))} className="min-w-[140px] flex-1 sm:flex-none" selectClass="rounded-pill bg-card">
+                <Select value={filters[c.key] ?? ''} aria-label={`Filter by ${c.label}`} onChange={(e) => setFilters((f) => ({ ...f, [c.key]: e.target.value }))} className="min-w-0 flex-1 sm:min-w-[140px] sm:flex-none" selectClass="rounded-pill bg-card">
                   <option value="">All</option>
                   {(options[c.key] ?? []).map((o) => (
                     <option key={o} value={o}>

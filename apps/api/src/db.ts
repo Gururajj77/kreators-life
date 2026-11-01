@@ -19,6 +19,7 @@ export interface NodeRow {
   priority?: number | null;
   origin?: string | null;
   remind?: number;
+  for_review?: number;
   do_date?: string | null;
   repeat_json?: string | null;
   spawned_from?: string | null;
@@ -164,15 +165,6 @@ export function can(user: UserRow, perm: Permission): boolean {
   return isStaffFor({ role: user.role, permissions: parseList(user.permissions) }, perm);
 }
 
-/** Middleware: requires a staff permission. */
-export function requirePermission(perm: Permission) {
-  return async (c: Context<AppEnv>, next: Next) => {
-    const user = c.get('user');
-    if (!user || !can(user, perm)) return c.json({ error: 'you do not have access to that' }, 403);
-    await next();
-  };
-}
-
 export async function audit(db: D1Database, actorId: string | null, action: string, resourceType: string, resourceId: string | null, before: unknown = '', after: unknown = ''): Promise<void> {
   const str = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v ?? '')).slice(0, 2000);
   await db
@@ -277,6 +269,7 @@ export function toNode(r: NodeRow, gate?: TaskGate): Node {
     priority: parsePriority(r.priority),
     fromPillar: r.origin === 'build',
     remind: (r.remind ?? 0) === 1,
+    forReview: (r.for_review ?? 0) === 1,
     dueTime: r.due_time ?? null,
     estimateMin: r.estimate_min ?? null,
     completedAt: r.completed_at,

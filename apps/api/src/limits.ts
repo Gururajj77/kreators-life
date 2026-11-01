@@ -137,6 +137,8 @@ export const ROUTE_LIMITS: readonly { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE
   { method: 'POST', path: '/agency/clients/:id/invoice', limit: 'create' },
   { method: 'POST', path: '/agency/invoices', limit: 'create' },
   { method: 'POST', path: '/agency/invoices/:id/duplicate', limit: 'create' },
+  { method: 'POST', path: '/reviews/schedule', limit: 'create' },
+  { method: 'PATCH', path: '/reviews/schedule/:id', limit: 'prefs' },
   { method: 'POST', path: '/agency/templates', limit: 'create' },
   { method: 'POST', path: '/agency/contracts', limit: 'create' },
   { method: 'POST', path: '/agency/contracts/:id/duplicate', limit: 'create' },

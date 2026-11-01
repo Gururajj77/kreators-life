@@ -2313,6 +2313,61 @@ section('Week plan, focus quality and the calendar link');
   check('switching it off closes it', (await fetch(`${ORIGIN}/api/public/calendar/${fresh.json.token}.ics`)).status === 404 && (await api('GET', '/me/calendar', undefined, W.token)).json.enabled === false);
   const ex = (await api('GET', '/me/export', undefined, W.token)).json;
   check('the calendar switch is in the export, without the secret', ex.calendarFeed?.length === 1 && !JSON.stringify(ex.calendarFeed).includes(fresh.json.token));
+
+  // reviews on a calendar: scheduled days, repeat, the reminder, and tasks brought to a review
+  const rv = (path, init) => api(init?.method ?? 'GET', `/reviews${path}`, init?.body, W.token);
+  const monthNow = today.slice(0, 7);
+  const sch0 = await rv(`/schedule?month=${monthNow}&day=${today}`);
+  check('the review calendar starts empty', sch0.status === 200 && sch0.json.schedules.length === 0 && Object.keys(sch0.json.days).length === 0, sch0.json);
+  check('a review needs a day', (await rv('/schedule', { method: 'POST', body: { kind: 'week' } })).status === 400);
+  check('and a day that is on the calendar', (await rv('/schedule', { method: 'POST', body: { kind: 'week', anchor: '2026-11-31' } })).status === 400);
+  check('and a way to repeat that exists', (await rv('/schedule', { method: 'POST', body: { kind: 'week', anchor: day(1), repeat: { kind: 'sometimes' } } })).status === 400);
+  const once = await rv(`/schedule?day=${today}`, { method: 'POST', body: { kind: 'month', anchor: day(3), time: '18:30', name: 'Close the month' } });
+  const weekly = await rv(`/schedule?day=${today}`, { method: 'POST', body: { kind: 'week', anchor: day(0), time: '09:00', repeat: { kind: 'weekly', every: 1, days: [1, 5], until: null } } });
+  check('a review is scheduled once, and one repeats on chosen weekdays', once.status === 201 && weekly.status === 201);
+  const monthly = await rv(`/schedule?day=${today}`, { method: 'POST', body: { kind: 'quarter', anchor: '2026-08-31', repeat: { kind: 'monthly', every: 1, days: [], until: null } } });
+  const cal = await rv(`/schedule?month=${monthNow}&day=${today}`);
+  const flat = Object.entries(cal.json.days).flatMap(([d, v]) => v.scheduled.map((x) => ({ d, ...x })));
+  check('the calendar lists the one-off day with its time and name', flat.some((x) => x.d === day(3) && x.time === '18:30' && x.name === 'Close the month'), flat.slice(0, 4));
+  const wdays = flat.filter((x) => x.kind === 'week').map((x) => x.d);
+  check('a weekly review falls only on the weekdays chosen', wdays.length >= 2 && wdays.every((d) => [1, 5].includes(((new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7) + 1)), wdays);
+  const mdays = flat.filter((x) => x.kind === 'quarter').map((x) => x.d);
+  check('a monthly one on the 31st falls on the last day of a shorter month', mdays.length >= 1 && mdays.every((d) => d.slice(8) === String(new Date(Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)), 0)).getUTCDate())), mdays);
+  check('each schedule reads back in plain words', cal.json.schedules.find((x) => x.id === weekly.json.id)?.label.includes('Mon') && cal.json.schedules.find((x) => x.id === once.json.id)?.label === 'Once', cal.json.schedules.map((x) => x.label));
+  check('another person sees none of it', (await api('GET', `/reviews/schedule?month=${monthNow}`, undefined, A.token)).json.schedules.length === 0);
+  check('nor can they change it', (await api('PATCH', `/reviews/schedule/${once.json.id}`, { name: 'x' }, A.token)).status === 404 && (await api('DELETE', `/reviews/schedule/${once.json.id}`, undefined, A.token)).status === 404);
+  const saved = await api('PUT', '/reviews', { kind: 'week', date: day(-7), templateId: null, answers: ['a', 'b', 'c', 'd'], rating: 4, highlight: 'x' }, W.token);
+  const cal2 = await rv(`/schedule?month=${day(-7).slice(0, 7)}&day=${today}`);
+  check('a review that was written shows on the day its period ended', saved.status === 200 && Object.values(cal2.json.days).some((v) => v.written.some((w) => w.kind === 'week')), saved.status);
+  await rv(`/schedule/${once.json.id}?day=${today}`, { method: 'PATCH', body: { enabled: false } });
+  check('a switched-off review leaves the calendar', !Object.values((await rv(`/schedule?month=${monthNow}&day=${today}`)).json.days).some((v) => v.scheduled.some((x) => x.id === once.json.id)));
+  const ics2 = await (async () => { const t = await api('POST', '/me/calendar', { on: true }, W.token); const r = await fetch(`${ORIGIN}/api/public/calendar/${t.json.token}.ics`); return r.text(); })();
+  check('the private calendar carries scheduled reviews too', ics2.includes('SUMMARY:Weekly review') && ics2.includes('CATEGORIES:Reviews') && !ics2.includes('Close the month'), ics2.slice(0, 200));
+  await api('POST', '/me/calendar', { on: false }, W.token);
+
+  // a task brought to the review
+  const brought = await add({ title: 'Ship the newsletter', forReview: true, doDate: today });
+  const other = await add({ title: 'Not for the review', doDate: today });
+  check('a task can be created with the flag', brought.json.node.forReview === true && other.json.node.forReview === false, brought.json.node);
+  const flip = await api('PATCH', `/nodes/${other.json.node.id}`, { forReview: true }, W.token);
+  check('and flagged afterwards, and unflagged', flip.json.node.forReview === true && (await api('PATCH', `/nodes/${other.json.node.id}`, { forReview: false }, W.token)).json.node.forReview === false);
+  const sum = await rv(`/summary?kind=week&date=${today}`);
+  check('the review lists the flagged task that is planned in it, and not the unflagged one', sum.json.flagged.some((f) => f.title === 'Ship the newsletter' && f.status === 'open') && !sum.json.flagged.some((f) => f.title === 'Not for the review'), sum.json.flagged);
+  const lastWeek = await rv(`/summary?kind=week&date=${day(-14)}`);
+  check('a period it did not fall in does not list it', !lastWeek.json.flagged.some((f) => f.title === 'Ship the newsletter'));
+  check('a person sees only their own flagged tasks', !JSON.stringify((await api('GET', `/reviews/summary?kind=week&date=${today}`, undefined, A.token)).json.flagged).includes('Ship the newsletter'));
+
+  // the reminder: the cron sends one inbox note on the day, at the time, once, and moves the schedule on
+  const hhmm = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
+  const dueRv = await rv(`/schedule?day=${today}`, { method: 'POST', body: { kind: 'week', anchor: today, time: hhmm, name: 'Friday look back', repeat: { kind: 'weekly', every: 1, days: [], until: null } } });
+  await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+  await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+  const inboxJson = JSON.stringify((await api('GET', '/inbox', undefined, W.token)).json);
+  check('the reminder arrives once, however often the cron runs', (inboxJson.match(/Friday look back is due/g) ?? []).length === 1, inboxJson.slice(0, 200));
+  check('it opens the review for that period and says how many tasks were brought to it', /\/reviews\?kind=week&date=\d{4}-\d{2}-\d{2}/.test(inboxJson) && /task is waiting in it/.test(inboxJson), inboxJson.slice(0, 300));
+  const after = (await rv(`/schedule?month=${monthNow}&day=${today}`)).json.schedules.find((x) => x.id === dueRv.json.id);
+  check('the schedule moves on to its next day', after.nextOn > today, after);
+  check('and another person got no note', !JSON.stringify((await api('GET', '/inbox', undefined, A.token)).json).includes('Friday look back'));
   void timed;
   void preloaded;
 }

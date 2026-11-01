@@ -6,6 +6,7 @@ import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
+import { tie } from '../lib/text';
 
 const PERMISSION_META: Record<Permission, { name: string; blurb: string; to: string; emoji: string; queue?: (q: Queues) => number }> = {
   talent: { name: 'Talent', blurb: 'Campaign briefs, shortlists, assignments', to: '/army', emoji: '🎬', queue: (q) => q.campaigns },
@@ -56,7 +57,7 @@ export function Manage() {
                       {m.emoji}
                     </span>
                     <span className="mt-xs block text-[16px] font-bold leading-tight">{m.name}</span>
-                    <span className="block text-[14px] font-semibold leading-snug text-ink-soft">{m.blurb}</span>
+                    <span className="block text-[14px] font-semibold leading-snug text-ink-soft">{tie(m.blurb)}</span>
                     {n > 0 && <span className="absolute top-sm right-sm rounded-pill bg-r1 px-xs text-[12px] font-extrabold leading-[20px] text-white">{n}</span>}
                   </Link>
                 </li>
@@ -112,10 +113,12 @@ export function Manage() {
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {members.data?.members.map((m) => (
             <li key={m.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <p className="m-0 text-[16px] font-bold">
-                {m.name}
-                {m.handle ? <span className="font-semibold text-ink-soft"> @{m.handle}</span> : ''}
-                {m.role !== 'user' && <span className="ml-xs rounded-pill bg-r6 px-xs text-[11px] font-extrabold leading-[18px] text-white">{ROLE_META[m.role].name}</span>}
+              <p className="m-0 flex flex-wrap items-center gap-x-xs text-[16px] font-bold">
+                <span className="min-w-0">
+                  {m.name}
+                  {m.handle ? <span className="font-semibold text-ink-soft"> @{m.handle}</span> : ''}
+                </span>
+                {m.role !== 'user' && <span className="rounded-pill bg-r6 px-xs text-[11px] font-extrabold leading-[18px] text-white">{ROLE_META[m.role].name}</span>}
               </p>
               <p className="m-0 text-[14px] font-semibold text-ink-soft">
                 {m.xp} xp, streak {m.streak}, joined {new Date(m.createdAt).toLocaleDateString()}

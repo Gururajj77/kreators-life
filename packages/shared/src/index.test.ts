@@ -1723,3 +1723,95 @@ describe('the private calendar', () => {
     expect(f).not.toMatch(/NOTE|journal|mood/i);
   });
 });
+
+import { nextOnOrAfter, occurrencesBetween, reviewPeriodFor } from './index';
+
+describe('scheduled reviews', () => {
+  it('opens the period that just ended on the first day of a period, and the one the day is in otherwise', () => {
+    expect(reviewPeriodFor('week', '2026-11-02')).toMatchObject({ start: '2026-10-26', end: '2026-11-01' });
+    expect(reviewPeriodFor('week', '2026-11-04')).toMatchObject({ start: '2026-11-02', end: '2026-11-08' });
+    expect(reviewPeriodFor('month', '2026-12-01')).toMatchObject({ start: '2026-11-01', end: '2026-11-30' });
+    expect(reviewPeriodFor('month', '2026-11-30')).toMatchObject({ start: '2026-11-01', end: '2026-11-30' });
+  });
+  it('lists the days a weekly rule falls on, choosing the weekdays', () => {
+    const rule = { kind: 'weekly', every: 1, days: [1, 5], until: null } as const;
+    expect(occurrencesBetween('2026-11-02', rule, '2026-11-01', '2026-11-15')).toEqual(['2026-11-02', '2026-11-06', '2026-11-09', '2026-11-13']);
+  });
+  it('lists a monthly rule on its day, and a day past the end of a short month falls on its last day', () => {
+    const rule = { kind: 'monthly', every: 1, days: [], until: null } as const;
+    expect(occurrencesBetween('2026-01-31', rule, '2026-02-01', '2026-04-30')).toEqual(['2026-02-28', '2026-03-31', '2026-04-30']);
+  });
+  it('lists one day for a review that does not repeat, only when it is in range', () => {
+    expect(occurrencesBetween('2026-11-20', null, '2026-11-01', '2026-11-30')).toEqual(['2026-11-20']);
+    expect(occurrencesBetween('2026-12-20', null, '2026-11-01', '2026-11-30')).toEqual([]);
+  });
+  it('stops at the end day of a rule, and never lists a day before it began', () => {
+    const rule = { kind: 'weekly', every: 1, days: [], until: '2026-11-16' } as const;
+    expect(occurrencesBetween('2026-11-09', rule, '2026-11-01', '2026-12-31')).toEqual(['2026-11-09', '2026-11-16']);
+  });
+  it('does not fire on the first date when a weekly rule names other weekdays', () => {
+    const mondays = { kind: 'weekly', every: 1, days: [1], until: null } as const;
+    expect(occurrencesBetween('2026-11-01', mondays, '2026-11-01', '2026-11-20')).toEqual(['2026-11-02', '2026-11-09', '2026-11-16']);
+    expect(nextOnOrAfter('2026-11-01', mondays, '2026-11-01')).toBe('2026-11-02');
+  });
+  it('finds the next day on or after a day', () => {
+    const rule = { kind: 'monthly', every: 1, days: [], until: null } as const;
+    expect(nextOnOrAfter('2026-09-15', rule, '2026-11-02')).toBe('2026-11-15');
+    expect(nextOnOrAfter('2026-11-15', rule, '2026-11-15')).toBe('2026-11-15');
+    expect(nextOnOrAfter('2026-09-15', null, '2026-11-02')).toBeNull();
+    expect(nextOnOrAfter('2026-09-15', { kind: 'weekly', every: 1, days: [], until: '2026-10-01' }, '2026-11-02')).toBeNull();
+  });
+});
+
+describe('setup: agencies, clients and planning', () => {
+  it('gives an agency owner the Agency app whatever else they came for', () => {
+    for (const g of SETUP_GOALS) {
+      const keys = matchSetup({ identities: ['agency_owner'], goals: [g.key], blockers: [] }).apps.map((a) => a.key);
+      expect(keys, g.key).toContain('agency');
+    }
+  });
+  it('says why in the person\'s own words, for each pair that matters', () => {
+    const why = (identities: string[], goals: string[], app: string) => matchSetup({ identities, goals, blockers: [] }).apps.find((a) => a.key === app)?.why;
+    expect(why(['agency_owner'], ['clients'], 'agency')).toBe('Because you run an agency and want all your client work in one place.');
+    expect(why(['freelancer'], ['clients'], 'agency')).toBe('Because you work for clients and want their work, time and invoices in one place.');
+    expect(why(['creator'], ['clients'], 'agency')).toBe('Because you make content for brands and want their work and invoices in one place.');
+    expect(why(['founder'], ['plan'], 'reviews')).toBe('Because you run a business and can track its numbers in each review.');
+    expect(matchSetup({ identities: [], goals: ['plan'], blockers: [] }).apps.map((a) => a.key)).toContain('reviews');
+  });
+  it('offers the goals in their groups, and tells what Plan my week is on the goal\'s own card', () => {
+    const plan = SETUP_GOALS.find((g) => g.key === 'plan')!;
+    expect(plan.blurb).toMatch(/Plan my week/);
+    expect(plan.blurb).toMatch(/Daily/);
+    expect(SETUP_GOAL_GROUPS.flatMap((g) => g.keys)).toEqual(expect.arrayContaining(['clients', 'plan']));
+  });
+  it('reads an agency owner and their goal from their own words, and leaves a brand owner alone', () => {
+    const r = readAbout('I run a content agency and want to manage my clients and invoices.');
+    expect(r.identities).toContain('agency_owner');
+    expect(r.goals).toContain('clients');
+    expect(readAbout('I run a content agency.').identities).toEqual(['agency_owner']);
+    expect(readAbout('I run a small skincare brand and want to sell more online.').identities).toEqual(['founder']);
+    expect(readAbout('I want to plan my week and stay organised').goals).toEqual(['plan']);
+  });
+  it('says who they are in one line', () => {
+    expect(identityLine({ identities: ['agency_owner'], goals: ['clients'], blockers: [] })).toBe('An agency or studio owner, here to manage your clients and invoices.');
+    expect(identityLine({ identities: ['freelancer', 'editor'], goals: ['plan'], blockers: [] })).toBe('A freelance video editor, here to plan your week and stay on track.');
+  });
+  it('describes the apps that changed in words that are still true', () => {
+    expect(SETUP_APP_LINES.agency).toMatch(/clients/);
+    expect(SETUP_APP_LINES.agency).toMatch(/invoices/);
+    expect(SETUP_APP_LINES.reviews).toMatch(/reminders/);
+    expect(SETUP_APP_LINES.mindful).toMatch(/lo-fi/i);
+    expect(SETUP_APP_LINES.coaching).toMatch(/choose what/);
+  });
+  it('keeps the apps a role gets distinct enough across every goal, with the new role and goals in', () => {
+    const roles = IDENTITIES.filter((i) => i.kind === 'role');
+    const sets = new Set<string>();
+    let pairs = 0;
+    for (const r of roles) for (const g of SETUP_GOALS) {
+      sets.add(matchSetup({ identities: [r.key], goals: [g.key], blockers: [] }).apps.map((a) => a.key).sort().join());
+      pairs += 1;
+    }
+    expect(roles.some((r) => r.key === 'agency_owner')).toBe(true);
+    expect(sets.size / pairs).toBeGreaterThan(0.9);
+  });
+});

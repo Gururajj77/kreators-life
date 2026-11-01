@@ -5,12 +5,13 @@ import { runRecurring } from './routes/finance';
 import { matchDueCircles, rollWeeklyCircles } from './routes/circles';
 import { fetchMetrics } from './social';
 import { closeSeason, sendEventReminders } from './engage';
-import { zonedToUtc } from '@kreators/shared';
+import { nextOccurrence, nextOnOrAfter, parseRepeat, PERIOD_META, reviewPeriodFor, zonedToUtc, type PeriodKind } from '@kreators/shared';
+import { flaggedFor } from './routes/reviews';
 
 /** Every fifteen minutes: sequence messages, then fresh numbers for posts and reward submissions where a platform lets us read them. */
 export async function runScheduled(env: Env): Promise<{ sequences: number; recurring: number; circles: number; weekly: number; content: number; submissions: number; reminders: number; events: number; season: number }> {
   const db = env.DB;
-  const reminders = (await sendReminders(db)) + (await sendWaterAndCustom(db)) + (await sendTaskReminders(db));
+  const reminders = (await sendReminders(db)) + (await sendWaterAndCustom(db)) + (await sendTaskReminders(db)) + (await sendReviewReminders(db));
   const events = await sendEventReminders(db);
   const season = await closeSeason(db);
   const sequences = await runSequences(db);
@@ -179,6 +180,60 @@ export async function sendReminders(db: D1Database): Promise<number> {
     if (already) continue;
     await db.prepare("INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', ?, ?, '/today', NULL, ?)").bind(crypto.randomUUID(), u.id, 'Time to check in', 'Three boxes on Daily. The first one keeps your streak.', nowIso()).run();
     sent += 1;
+  }
+  return sent;
+}
+
+/**
+ * Scheduled reviews: on the day and at the time a person chose, in their own zone, one inbox note says it is time, links to the period it
+ * covers (the one that just ended on the first day of a period) and says how many tasks they brought to it. `next_on` is moved on to the next
+ * day the rule falls on, so each day is sent once. A day that was missed while nothing ran is skipped, never sent late.
+ */
+export async function sendReviewReminders(db: D1Database): Promise<number> {
+  const now = new Date();
+  const soon = new Date(now.getTime() + 2 * 86_400_000).toISOString().slice(0, 10);
+  const rows = await db
+    .prepare(
+      `SELECT s.id, s.user_id, s.kind, s.name, s.anchor, s.time, s.repeat_json, s.next_on, u.timezone
+       FROM review_schedules s JOIN users u ON u.id = s.user_id
+       WHERE s.enabled = 1 AND s.next_on IS NOT NULL AND s.next_on <= ? LIMIT 500`,
+    )
+    .bind(soon)
+    .all<{ id: string; user_id: string; kind: PeriodKind; name: string; anchor: string; time: string; repeat_json: string | null; next_on: string; timezone: string }>();
+  let sent = 0;
+  for (const r of rows.results) {
+    let parts;
+    try {
+      parts = new Intl.DateTimeFormat('en-CA', { timeZone: r.timezone || 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now);
+    } catch {
+      continue;
+    }
+    const get = (k: string) => parts.find((p) => p.type === k)?.value ?? '';
+    const day = `${get('year')}-${get('month')}-${get('day')}`;
+    const repeat = parseRepeat(r.repeat_json);
+    const advance = async (from: string) => {
+      const next = repeat ? nextOccurrence(repeat, r.anchor, from) : null;
+      await db.prepare('UPDATE review_schedules SET next_on = ? WHERE id = ?').bind(next, r.id).run();
+    };
+    if (r.next_on < day) {
+      // Missed while nothing ran: move on to the next one without sending it late.
+      await db.prepare('UPDATE review_schedules SET next_on = ? WHERE id = ?').bind(nextOnOrAfter(r.anchor, repeat, day), r.id).run();
+      continue;
+    }
+    if (r.next_on !== day) continue;
+    const since = Number(get('hour')) * 60 + Number(get('minute')) - (Number(r.time.slice(0, 2)) * 60 + Number(r.time.slice(3, 5)));
+    if (since < 0) continue;
+    if (since <= 60) {
+      const period = reviewPeriodFor(r.kind, day);
+      const waiting = (await flaggedFor(db, r.user_id, period)).length;
+      const name = PERIOD_META[r.kind].name;
+      const res = await db
+        .prepare("INSERT OR IGNORE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', ?, ?, ?, NULL, ?)")
+        .bind(`review-${r.id}-${day}`, r.user_id, `${r.name || name} is due`.slice(0, 160), `${waiting > 0 ? `${waiting} ${waiting === 1 ? 'task is' : 'tasks are'} waiting in it. ` : ''}Tap to look back and write it.`, `/reviews?kind=${r.kind}&date=${period.start}`, nowIso())
+        .run();
+      if (res.meta.changes) sent += 1;
+    }
+    await advance(day);
   }
   return sent;
 }

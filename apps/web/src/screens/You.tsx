@@ -1,4 +1,4 @@
-import { BADGES, FOCUS_OPTIONS, HONORS, IDENTITY_BY_KEY, IDENTITY_STAGES, identityLabel, identityLine, levelFromXp, matchSetup, passwordProblem, MODULE_GROUP_ACCENT, MODULE_GROUP_BLURB, MODULE_GROUPS, POINTS, RELATIONSHIP_BY_KEY, RELATIONSHIPS, BADGE_META, badgeRoleOf, setupSwitchable, type MeResponse, type ModuleGroup , nextBadge } from '@kreators/shared';
+import { BADGES, FOCUS_OPTIONS, HONORS, IDENTITY_BY_KEY, IDENTITY_STAGES, identityLabel, identityLine, levelFromXp, matchSetup, passwordProblem, MODULE_GROUP_ACCENT, MODULE_GROUP_BLURB, MODULE_GROUPS, POINTS, RELATIONSHIP_BY_KEY, RELATIONSHIPS, BADGE_META, badgeRoleOf, setupSwitchable, type MeResponse, nextBadge } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -18,8 +18,9 @@ import { useTheme, type ThemeMode } from '../lib/theme';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
-import { todayLocal } from '../lib/date';
 import { useMe, useRefreshAll } from '../lib/queries';
+import { tie } from '../lib/text';
+import { CalendarLink } from '../components/CalendarLink';
 
 
 export function You() {
@@ -243,11 +244,11 @@ function YouView({ data }: { data: MeResponse }) {
                       hint={
                         fits.has(m.key) ? (
                           <>
-                            {m.blurb}
+                            {tie(m.blurb)}
                             <span className="mt-xs block text-[12px] font-bold">{fits.get(m.key)}</span>
                           </>
                         ) : (
-                          m.blurb
+                          tie(m.blurb)
                         )
                       }
                       disabled={toggle.isPending}
@@ -260,6 +261,8 @@ function YouView({ data }: { data: MeResponse }) {
           );
         })}
       </section>
+
+      <CalendarLink />
 
       <section className="mt-lg" aria-labelledby="account-heading">
         <h2 id="account-heading" className="text-[24px]">

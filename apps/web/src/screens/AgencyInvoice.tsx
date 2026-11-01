@@ -251,7 +251,6 @@ export function AgencyInvoice() {
   }
 
   const setLine = (i: number, patch: Partial<Row>) => set({ rows: form.rows.map((r, j) => (j === i ? { ...r, ...patch } : r)) });
-  const card = 'rounded-card bg-card p-md shadow-toy-soft';
   const close = () => setPart(null);
   const done = (
     <div className="mt-md">

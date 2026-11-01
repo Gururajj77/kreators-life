@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { analyseDiscover, discoverComplete, discoverProfile, discoverProgress, emptyDiscoverAnswers, parseDiscoverAnswers, profileForAssistant, scoreDiscover, styleHints, type DiscoverAnswers, type DiscoverProfile, type DiscoverResult, EXTRA_KINDS, extraHints, learnedForAssistant, analyseLove, analyseMind, analyseType, emptyExtra, extraComplete, extraProgress, extrasProfile, isExtraKind, parseExtra, scoreExtra, type ExtraKind, type ExtrasProfile, type LoveResult, type MindResult, type TypeResult, type DesignResult, analyseDesign, designChart, designCompare } from '@kreators/shared';
+import { analyseDiscover, discoverComplete, discoverProfile, discoverProgress, emptyDiscoverAnswers, parseDiscoverAnswers, scoreDiscover, styleHints, type DiscoverAnswers, type DiscoverProfile, type DiscoverResult, EXTRA_KINDS, extraHints, learnedForAssistant, analyseLove, analyseMind, analyseType, emptyExtra, extraComplete, extraProgress, extrasProfile, isExtraKind, parseExtra, scoreExtra, type ExtraKind, type ExtrasProfile, type LoveResult, type MindResult, type TypeResult, type DesignResult, analyseDesign, designChart, designCompare } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { newId, nowIso } from '../db';
 

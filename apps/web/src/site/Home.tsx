@@ -29,16 +29,16 @@ const VILLAINS = [
 
 /** How the app beats each villain: what it does (a rule the code keeps), what you get, and the apps that do it. */
 const ANSWERS: { villain: (typeof VILLAINS)[number]['key']; how: string; benefit: string; apps: string[] }[] = [
-  { villain: 'grind', how: 'A routine built from your real day, with a wake time that moves thirty minutes a week. Trackers for sleep, mood and stress feed a daily brief that tells you when sleep starts to dip.', benefit: 'You keep your energy, so your best work lasts.', apps: ['today', 'life', 'sleep', 'mindful'] },
-  { villain: 'scatter', how: 'Learning, paid work, brand campaigns, your shop and your money in one app. Only a few apps are on to start, the setup chat picks up to five more that fit, and you can switch any of them off.', benefit: 'One place and one login, so nothing slips past you.', apps: ['school', 'work', 'shop', 'finance'] },
+  { villain: 'grind', how: 'A routine built from your real day, with a wake time that moves thirty minutes a week. Trackers for sleep, mood and stress feed a daily brief that tells you when sleep starts to dip. Focus sessions come with breaks and a quiet sound, and you rate how focused you were.', benefit: 'You keep your energy, so your best work lasts.', apps: ['today', 'life', 'sleep', 'mindful'] },
+  { villain: 'scatter', how: 'Learning, paid work, brand campaigns, your clients, your shop and your money in one app. Only a few apps are on to start, the setup chat picks up to five more that fit, and you can switch any of them off.', benefit: 'One place and one login, so nothing slips past you.', apps: ['school', 'work', 'agency', 'shop', 'finance'] },
   { villain: 'silence', how: 'Small circles near you, run clubs, events and a kind community. A life coach too, if you want one, who sees only what you switch on and never your journal. And card games to play with the people you are with, so a first meeting never starts with silence.', benefit: 'People in your corner, every week.', apps: ['circles', 'run', 'party', 'community', 'cards', 'coaching'] },
-  { villain: 'drift', how: 'Seven pillars, each a pyramid from a foundation you will not let break down to the task for today. A task can only be ticked from its do date, and it can carry a priority, a deadline and subtasks, or repeat as a habit. Reviews each week and month show what moved. A quiz shows your strengths, and your next steps on Home start to fit you.', benefit: 'A big goal becomes one box you can tick today.', apps: ['tower', 'discover', 'reviews', 'journal'] },
-  { villain: 'squeeze', how: 'Paid gigs and brand campaigns. Win pays for every verified view, once a reviewer checks it. Your own shop takes 5% of a sale and nothing up front, and all your money sits in one picture.', benefit: 'You see every way in, and everything that comes in.', apps: ['army', 'win', 'shop', 'finance'] },
+  { villain: 'drift', how: 'Seven pillars, each a pyramid from a foundation you will not let break down to the task for today. A task can only be ticked from its do date, and it can carry a priority, a deadline and subtasks, or repeat as a habit. Plan my week spreads your tasks over seven days and shows how strong the plan is. Reviews each week and month show what moved, and you can plan the next one on a calendar and get a reminder. A quiz shows your strengths, and your next steps on Home start to fit you.', benefit: 'A big goal becomes one box you can tick today.', apps: ['tower', 'discover', 'reviews', 'journal'] },
+  { villain: 'squeeze', how: 'Paid gigs and brand campaigns. Win pays for every verified view, once a reviewer checks it. Your own shop takes 5% of a sale and nothing up front. For client work, Agency designs the invoice, works out GST and TDS, and keeps the agreement and the approvals with it. All your money sits in one picture.', benefit: 'You see every way in, and everything that comes in.', apps: ['army', 'win', 'agency', 'shop', 'finance'] },
 ];
 
 const FIVE_WS = [
-  { w: 'Who', text: 'Anyone 18 or over building something of their own: creators, freelancers, students. The creator apps are there if you want them.' },
-  { w: 'What', text: 'A daily game for the seven relationships in your life, with the apps a creator needs built in: learn, earn, meet people, sell and stay well.' },
+  { w: 'Who', text: 'Anyone 18 or over building something of their own: creators, freelancers, small agencies and students. The creator apps are there if you want them.' },
+  { w: 'What', text: 'A daily game for the seven relationships in your life, with the apps a creator needs built in: learn, earn, run client work, meet people, sell and stay well.' },
   { w: 'When', text: 'A few minutes a day. Check in, do one small act, tick one task. Then a short look back each week and month.' },
   { w: 'Where', text: 'On your phone or laptop, in the browser. Nothing to install, and you can add it to your home screen. Add an email and your progress follows you.' },
   { w: 'Why', text: 'A career built on burnout does not last. When the seven relationships are strong, the work gets better too.' },
@@ -47,7 +47,7 @@ const FIVE_WS = [
 const BEFORE = ['Up at three in the morning, editing again', 'Goals in a note you never open', 'Ten apps and no plan', 'Nobody to check in with', 'Money you cannot see coming'];
 const AFTER = ['A routine that fits your real day', 'Today’s task moves a big goal', 'One app with only what you use', 'Circles, clubs and a coach who check in', 'All your money in and out, in one place'];
 
-const FREE = ['The daily game: check in, a small act, a task', 'Your seven pillars and the strategy session', 'Every app you switch on, from School to the Shop', 'The assistant’s tap flows, and help any time'];
+const FREE = ['The daily game: check in, a small act, a task', 'Your seven pillars and the strategy session', 'Every app you switch on, from School to Agency and the Shop', 'The assistant’s tap flows, and help any time'];
 
 /** The one line that says what it is and what it costs. Word for word in the hero, the offer and the last button. */
 export const TOUCHSTONE = 'One small act a day, for all seven. Free to start, free to stay.';
@@ -77,7 +77,7 @@ export function Home() {
       <section className="relative grid gap-lg pt-lg md:grid-cols-2 md:items-center md:pt-xl">
         <HeroBlobs tone="ink" kind="blossom" />
         <div className="@container">
-          <p className={eyebrow}>For creators, freelancers and students, 18 and up</p>
+          <p className={eyebrow}>For creators, freelancers, small agencies and students, 18 and up</p>
           {/* Sized from the column width so each line stays whole. */}
           <h1 className="type-hook mt-sm text-[clamp(40px,13cqw,84px)]">
             Grow your work <em>without losing your life</em>
@@ -231,7 +231,7 @@ export function Home() {
                   <h3 className="mt-xs m-0 text-[20px] text-balance">Against {v.name}</h3>
                 </div>
                 <div>
-                  <p className="m-0 text-balance text-[16px] font-semibold">{a.how}</p>
+                  <p className="prose-long m-0 text-[16px] font-semibold">{a.how}</p>
                   <p className="mt-xs m-0 text-balance text-[16px] font-extrabold">{a.benefit}</p>
                   <ul className="mt-sm flex list-none flex-wrap gap-xs p-0 m-0">
                     {a.apps
@@ -259,7 +259,7 @@ export function Home() {
           <h2 id="change-heading" className={h2}>
             What changes
           </h2>
-          <p className="type-context mt-sm m-0 text-[16px] text-ink-soft">Today, a tick. On Sunday, your first week review. Each month and each quarter, a look back with the numbers next to the period before.</p>
+          <p className="type-context mt-sm m-0 text-[16px] text-ink-soft">Today, a tick. On Sunday, your first week review, planned on a calendar with a reminder. Each month and each quarter, a look back with the numbers next to the period before.</p>
         </motion.div>
         <div className="bento mt-md">
           <motion.div {...rise} className="bento-w2 rounded-card bg-card p-md shadow-toy-soft">
@@ -337,6 +337,9 @@ export function Home() {
               <Link to="/features/win" className="toy toy-ink inline-flex min-h-[48px] items-center rounded-pill border-2 border-ink bg-card px-md font-bold">
                 How content rewards pay
               </Link>
+              <Link to="/features/agency" className="toy toy-ink inline-flex min-h-[48px] items-center rounded-pill border-2 border-ink bg-card px-md font-bold">
+                Run an agency or client work
+              </Link>
             </div>
           </div>
           <div className="flex justify-center" aria-hidden="true">
@@ -363,7 +366,7 @@ export function Home() {
                   </svg>
                 </span>
               </summary>
-              <p className="m-0 px-sm pb-sm text-balance text-[14px] font-semibold text-ink-soft">{f.a}</p>
+              <p className="prose-long m-0 px-sm pb-sm text-[14px] font-semibold text-ink-soft">{f.a}</p>
             </details>
           ))}
         </div>

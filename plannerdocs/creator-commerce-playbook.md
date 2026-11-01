@@ -1027,3 +1027,20 @@ Golden rule: if a bug touches money or time, the fix ships with a test that woul
 - [TagMango homepage (features)](https://tagmango.com/)
 - [TagMango plans (third-party pricing tracker)](https://getpulsesignal.com/compare/tagmango-vs-teachable)
 - [Community platforms compared (TagMango commission and positioning)](https://businessabc.net/top-community-platforms-for-paid-memberships-compared)
+
+---
+
+## How this was used (2026-11-01)
+
+This playbook is research from 24 October 2026 and stays as it was written. Where it went, in the product that is called kreators.app:
+
+- **The three tiers** (parity, a few differentiators, skip) were adopted on 24 October 2026 (`docs/DECISIONS.md`). Parity was built plainly: a creator's public page and link blocks, products priced in points or money, coupons, memberships, sessions with booking, payment links, orders and refunds, and a money checkout that only marks an order paid in a webhook whose signature checked out.
+- **The differentiator** became Content (a tracked link at `/go/<code>` for every post, so the dashboard shows clicks, sales and revenue per post), Audience and Auto-DM. Content was later rebuilt as a strategist, from a look at another product (decision of 27 October 2026).
+- **Skipped on purpose:** a white-label app, instalments, and a marketplace. The "no marketplace" line was partly reversed on 25 October 2026 for the Store: partner links and creator-to-creator pre-owned gear, with no money moving through kreators.app.
+- **Not taken from it:** the codename "Booth", its data model (superseded by `plannerdocs/04_DATA_MODEL.md`) and its `CLAUDE.md` (the real one is at the repo root and overrides anything here).
+- **Competitor pricing** is as of 24 October 2026. The product does not compete on fees: the daily game and every app are free to start, and typing to the assistant is the one paid thing.
+
+Two later studies work the same way and say what was taken and what was left out:
+
+- `docs/whop-study.md`: a storefront and content-rewards product. Took a live earnings calculator on reward pages and creator-written questions and answers on product pages.
+- `docs/superfocus-study.md`: a planning and focus product. Took Plan my week and plan strength, time blocks, a project's pace, focus quality, a Lo-fi sound and a private calendar link; left app blocking and two-way calendar sync, which a web app cannot do.

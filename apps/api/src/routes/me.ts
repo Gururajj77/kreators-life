@@ -18,7 +18,7 @@ import type { AppEnv } from '../env';
 import { computeBadges, getStats, getUser, grantedBadges, honorKeys, withGranted, newId, nowIso, parseModules, randomCode, str, toUser, publicOf } from '../db';
 import { resolveAccess } from '../access';
 import { hashPassword, randomHex } from './auth';
-import { logEvent, track } from '../ops';
+import { track } from '../ops';
 import { deleteAccount } from '../account';
 import { parseSocials } from '../db';
 import { isAutoHandle, MAX_INTERESTS, parseIdentities, parseLinkBlocks, passwordProblem, TRACKED_EVENTS, type TrackedEvent } from '@kreators/shared';
@@ -238,6 +238,7 @@ me.get('/export', async (c) => {
     ['notToDoDays', 'SELECT * FROM not_to_do_days WHERE user_id = ?'],
     ['reviews', 'SELECT * FROM reviews WHERE user_id = ?'],
     ['reviewTemplates', 'SELECT * FROM review_templates WHERE user_id = ?'],
+    ['reviewSchedules', 'SELECT * FROM review_schedules WHERE user_id = ?'],
     ['listings', 'SELECT * FROM preowned_listings WHERE seller_id = ?'],
     ['offers', 'SELECT * FROM preowned_offers WHERE buyer_id = ?'],
     ['runEntries', 'SELECT * FROM run_entries WHERE user_id = ?'],

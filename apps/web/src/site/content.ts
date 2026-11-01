@@ -11,15 +11,27 @@ export interface FeatureCopy {
 }
 
 export const FEATURES: Record<string, FeatureCopy> = {
+  home: {
+    tagline: 'Your numbers, your day, and a door into everything.',
+    pitch: 'Home opens with a short brief: three signals and three next steps, worked out by plain rules, not an AI, so it costs nothing. Under it sit your numbers, water and reminders, and one line for the day: a thought from a philosopher, then a line written for the app, never repeating for about a year. Every number links to the app it comes from.',
+    steps: ['Open Home and read the brief.', 'Take the next step it suggests, or open any number.', 'Come back tomorrow for a new line.'],
+    relationships: ['servant_leader', 'friendship', 'parent_child', 'lover_partner', 'self', 'guru', 'divine'],
+  },
+  assistant: {
+    tagline: 'Say what you did. It is done.',
+    pitch: 'Bumling, the app’s own guide, sits at the corner of every screen. Its tap flows are free: log a mood, add a task, tick a box. With a plan you can type instead, and it does the job in the app as you, then shows what it changed, each with Undo. It asks before it removes anything. Plans cost money because the model does.',
+    steps: ['Tap the button, or type a line if you have a plan.', 'It does it in the app and lists what changed.', 'Undo anything with one tap.'],
+    relationships: ['self', 'servant_leader'],
+  },
   today: {
     tagline: 'Three small boxes. One better day.',
-    pitch: 'Check in, do one small act, tick one task. That is the whole daily ask. Every tick pays xp, and the check-in pays points you can spend. Every task has a do date and an optional due date, a priority from P0 (do now) to P3 (whenever), each in its own colour, and can repeat, hold subtasks, remind you and start a focus timer. Tasks with no date wait in a list until you pick one. Under the tasks, a not-to-do list keeps a streak for each thing you are staying away from.',
+    pitch: 'Check in, do one small act, tick one task. That is the whole daily ask. Every tick pays xp, and the check-in pays points you can spend. A task has a do date, an optional due date and a priority from P0 (do now) to P3 (whenever). It can have a time and a length, repeat, hold subtasks, remind you and start a focus timer. Plan my week suggests a day for each task that has none, spread so no day is overloaded, and says how strong the week looks. Nothing changes until you keep it. Tasks with a time show as blocks, with the free time between. Flag a task to bring it to your next review. A private link can show your tasks in your own calendar. A not-to-do list keeps a streak for each thing you stay away from.',
     steps: ['Open the app and check in.', 'Do the small act for your weakest pillar.', 'Plan a task, or the whole week: pick days and times, and let Plan my week suggest the rest. Tick each on its day and watch the pyramid light up.'],
     relationships: ['servant_leader', 'friendship', 'parent_child', 'lover_partner', 'self', 'guru', 'divine'],
   },
   tower: {
     tagline: 'Seven pillars, one life.',
-    pitch: 'Each relationship is a pillar of your life. Each pillar is a pyramid: a foundation you will not let break, a guiding principle you live by, a value goal for how you want to feel, a goal outcome you would see when it is real, a project, and tasks at the tip. Tick a task and the whole pyramid grows.',
+    pitch: 'Each relationship is a pillar of your life. Each pillar is a pyramid: a foundation you will not let break, a guiding principle you live by, a value goal for how you want to feel, a goal outcome you would see when it is real, a project, and tasks at the tip. Tick a task and the whole pyramid grows. Give a project a due day and it shows its pace: on track, slipping or behind.',
     steps: ['Answer a short vibe check. Each answer picks the next question.', 'We build your pyramids. You never fill in a form.', 'Tick a little every day and watch your characters grow.'],
     relationships: ['servant_leader', 'friendship', 'parent_child', 'lover_partner', 'self', 'guru', 'divine'],
   },
@@ -39,15 +51,15 @@ export const FEATURES: Record<string, FeatureCopy> = {
   },
   army: {
     tagline: 'Campaigns, run properly.',
-    pitch: 'Brands write a brief, the team shortlists, the brand approves, creators produce, everyone reviews versions in one thread. Usage rights and exclusivity are written down before anyone shoots.',
+    pitch: 'Brands write a brief, the team shortlists, the brand approves, creators produce, everyone reviews versions in one thread. Usage rights and exclusivity are written down before anyone shoots. A creator on a campaign can bring its deliverables into Agency, send a version to the brand from there, and see the brand’s answer come back.',
     steps: ['A brand submits a brief and a budget.', 'The team scopes it and shortlists creators who fit.', 'Versions, feedback and approvals live on the campaign.'],
     relationships: ['servant_leader'],
     listing: 'campaign',
   },
   agency: {
     tagline: 'Run your clients like a studio.',
-    pitch: 'For a content agency or a freelance creator. Every client has a dashboard: what is waiting, what is coming, what went live. Move each deliverable from idea to published on a list or a board, log your time, make invoices and agreements, and share a page where the client approves their work. You choose what they see.',
-    steps: ['Add a client, then the deliverables you owe them.', 'Share their page. They approve or send back, with a note.', 'Invoice the month and see the numbers in Reviews.'],
+    pitch: 'For a content agency or a freelance creator. Each client has a dashboard: what is waiting, what is coming, what went live. Move every deliverable from idea to published, on a list or on a board. Log your time. Design invoices with a calculator for GST and TDS, and write agreements from templates, or from your own. Share one page with each client. You choose what they see and whether they can approve or send back. They never see your fees or your private notes. Invoices and agreements save as a PDF, and a client can comment to ask for a change.',
+    steps: ['Add a client, then the deliverables you owe them.', 'Share their page. You choose what they see, and they approve or send back with a note.', 'Invoice the month, send the agreement, and look back in Reviews.'],
     relationships: ['servant_leader'],
   },
   win: {
@@ -110,7 +122,12 @@ export const FEATURES: Record<string, FeatureCopy> = {
   mood: { tagline: 'How are you, really?', pitch: 'Pick a face. See the week. That is it.', steps: ['Open Mood.', 'Pick a face.', 'See the pattern.'], relationships: ['self', 'parent_child', 'lover_partner'] },
   sleep: { tagline: 'Hours and quality.', pitch: 'Log last night in a few seconds and see how your sleep lines up with everything else.', steps: ['Log hours.', 'Rate the quality.', 'Watch the week.'], relationships: ['self', 'parent_child', 'lover_partner'] },
   stress: { tagline: 'Level, and what is behind it.', pitch: 'Name the stress and the cause. Patterns show up faster than you expect.', steps: ['Set the level.', 'Name a cause.', 'See what repeats.'], relationships: ['self', 'servant_leader', 'parent_child', 'lover_partner'] },
-  mindful: { tagline: 'Breathe, and log the minutes.', pitch: 'A breathing timer that counts toward your wellbeing score.', steps: ['Pick a length.', 'Breathe with the circle.', 'Minutes are logged.'], relationships: ['self', 'lover_partner', 'divine'] },
+  mindful: {
+    tagline: 'Breathe, focus, and see how it went.',
+    pitch: 'A breathing timer, and focus sessions with breaks: work for 25 minutes, rest for five, and take a longer break after four. The minutes count toward your wellbeing score. After a focus session, rate how focused you felt, from scattered to deep, and see the average on your dashboard. Pick a background sound: rain, ocean, wind, a soft hum or slow lo-fi chords, all made in your browser. One switch turns every sound off, and the volume is yours. Your choices follow you to every device.',
+    steps: ['Pick a length, or start a focus session.', 'Breathe with the circle, or work and rest in rounds. Add a sound if you like.', 'Rate how focused you were, and watch the week.'],
+    relationships: ['self', 'lover_partner', 'divine'],
+  },
   journal: {
     tagline: 'Write it down.',
     pitch: 'Entries with an emotion and a stress level. Nobody else sees them: not brands, not staff, not the leaderboard.',
@@ -119,8 +136,8 @@ export const FEATURES: Record<string, FeatureCopy> = {
   },
   reviews: {
     tagline: 'Look back, by week, month, quarter or half year.',
-    pitch: 'The numbers from every app for the period you pick, next to the one before: check-ins, tasks, xp by area, kept days, mood, sleep, money, sales, lessons, people. Then a few questions, a face for how it went, and one line to remember. Saved with the numbers as they were.',
-    steps: ['Pick a week, a month, a quarter or half a year.', 'Read the numbers, each next to the period before.', 'Answer the questions, rate it, keep one line.'],
+    pitch: 'The numbers from every app for the period you pick, next to the one before: check-ins, tasks, xp by area, kept days, mood, sleep, money, sales, lessons, people. Tasks you brought to the review sit in a list, and a tap puts one in your answer. Then a few questions, a face for how it went, and one line to remember. A calendar shows the reviews you wrote and the ones you planned. Pick a day and a time, repeat it weekly on days you choose or monthly on a day, and get a reminder in your inbox. If you run a business, one switch adds business metrics, for your eyes only.',
+    steps: ['Pick a period, or plan the next review on the calendar and repeat it.', 'Read the numbers, and the tasks you brought to it.', 'Answer the questions, rate it, keep one line.'],
     relationships: ['self', 'parent_child', 'lover_partner', 'guru', 'divine'],
   },
   companion: {
@@ -167,7 +184,7 @@ export const FEATURES: Record<string, FeatureCopy> = {
   },
   finance: {
     tagline: 'See your money clearly.',
-    pitch: 'Money in, money out, by category and by month. Track what you are owed and what repeats, set budgets and goals, and see what the platform paid you alongside everything else. Yours alone to see.',
+    pitch: 'Money in, money out, by category and by month. Track what you are owed and what repeats, set budgets and goals, and see what the platform paid you alongside everything else. Invoices for clients are made in Agency. Yours alone to see.',
     steps: ['Log what came in and what went out.', 'Track dues and monthly repeats; settle them with a tap.', 'Watch the month, keep budgets and goals honest.'],
     relationships: ['self', 'servant_leader', 'parent_child'],
   },
@@ -204,8 +221,8 @@ export const FEATURES: Record<string, FeatureCopy> = {
   },
   leaderboard: {
     tagline: 'Climb on effort, not followers.',
-    pitch: 'Opt in and see where you stand on experience, streaks and honors. Never on follower counts.',
-    steps: ['Opt in under Profile.', 'Climb.', 'See the top twenty.'],
+    pitch: 'Opt in and see where you stand on experience, streaks and badges. Pick a board: everyone, your goal, a pillar, your city, your tag or your level. Never follower counts, and never your journal or your wellbeing.',
+    steps: ['Opt in under Profile.', 'Pick a board: everyone, your goal, a pillar or your city.', 'Rank by xp, this month, streak or badges.'],
     relationships: ['friendship', 'servant_leader', 'self'],
   },
   rewards: {
@@ -223,7 +240,7 @@ export const FEATURES: Record<string, FeatureCopy> = {
   discover: {
     tagline: 'Find out what you are good at.',
     pitch: 'A quiz about how you think, feel and act. Pick what is most and least like you, solve pattern puzzles that get harder or easier as you go, choose words that fit you and judge real situations. Add emotional intelligence if you like. You get your top three strengths across the seven relationships, a detailed read on five personality traits and on your reasoning (it is not an IQ test), and one small thing to try. Four self-checks sit beside it: your four-letter type from sixteen (in the style of Myers-Briggs), your love languages for giving and for receiving love, how your mind works (attention, energy and patterns, as signs and never a diagnosis), and Human design, which works out your chart from your birth details in the tropical and the sidereal zodiac and turns it into goals. Only you see it, and you choose what the assistant and your next steps may learn.',
-    steps: ['Answer in short parts. It saves as you go.', 'Add emotional intelligence, your 16 personality type (MBTI-style), your love languages, how your mind works or your Human design, if you like.', 'See your strengths and a detailed read, and let your next steps on Home start to fit you.'],
+    steps: ['Answer in short parts. It saves as you go.', 'Add emotional intelligence, your 16 personality type (MBTI-style), your love languages, how your mind works your Human design or your numerology, if you like.', 'See your strengths and a detailed read, and let your next steps on Home start to fit you.'],
     relationships: ['self', 'guru', 'divine', 'lover_partner', 'servant_leader', 'friendship', 'parent_child'],
   },
   cards: {
@@ -251,7 +268,7 @@ export function featureFor(key: string): { module: AppModule; copy: FeatureCopy 
 
 /** Features that serve a relationship, for the seven floors section. */
 export function featuresForRelationship(key: RelationshipKey): AppModule[] {
-  return SITE_FEATURES.filter((m) => FEATURES[m.key]?.relationships.includes(key) && !['today', 'tower', 'help'].includes(m.key));
+  return SITE_FEATURES.filter((m) => FEATURES[m.key]?.relationships.includes(key) && !['home', 'today', 'tower', 'help'].includes(m.key));
 }
 
 /** The five areas of life, and which apps serve each. Another way to read the same seven relationships. */
@@ -268,13 +285,18 @@ export function featuresForLifeArea(key: LifeAreaKey): AppModule[] {
 
 export const BRAND_PITCH = {
   tagline: 'For brands and agencies',
-  pitch: 'Write a brief, approve a shortlist and review every version in one thread. Or fund a content reward that pays creators per verified view, and only after a reviewer checks. Usage rights are written down before anyone shoots.',
+  pitch: 'Write a brief, approve a shortlist and review every version in one thread. Or fund a content reward that pays creators per verified view, and only after a reviewer checks. Usage rights are written down before anyone shoots. If you run an agency or freelance for clients, Agency keeps your clients, deliverables, invoices and approvals in one place.',
   steps: ['Create your brand and invite your team.', 'Write a brief or launch a content reward.', 'Approve, review, and see every version and view count.'],
 };
 
 /** The doubts a first-time visitor has, most common first. Each answer accepts the worry, then answers it. */
 export const SITE_FAQ: { q: string; a: string }[] = [
-  { q: 'What’s the catch?', a: 'Fair question. The daily game and every app are free to start and free to stay. Two things cost money. Typing to the assistant needs a plan, because the model costs us money; plans are not on sale yet. The Shop takes 5% of each sale. Partner links in the Store may earn us a share, and every card says so.' },
+  { q: 'What’s the catch?', a: 'Fair question. The daily game and every app are free to start and free to stay, Agency included: we take nothing from what you invoice. Two things cost money. Typing to the assistant needs a plan, because the model costs us money; plans are not on sale yet. The Shop takes 5% of each sale. Partner links in the Store may earn us a share, and every card says so.' },
+  { q: 'I run a small agency. Is this for me?', a: 'Yes. Agency is for a content agency or a freelance creator. Each client gets a dashboard with their deliverables moving from idea to published, your time, invoices and agreements. You can share one page with a client, and they can approve or send back what is waiting. It is switched off until you want it.' },
+  { q: 'What can my client see?', a: 'Only what you switch on. You pick the parts (what is waiting, what is coming, what is live, the month so far) and whether they can approve, send back or write a note. They never see your fees, your private notes, your time line by line or your other clients. You can preview the page first, and a fresh link closes the old one.' },
+  { q: 'Can I see my tasks in my own calendar?', a: 'Yes. Under Profile, switch on the calendar link and subscribe to it in Google, Apple or Outlook Calendar. It shows each open task that has a day, and the reviews you planned. It carries only a title, a pillar and a priority, never your notes or your journal. It shows your tasks there; it does not change them.' },
+  { q: 'Can it block other apps while I focus?', a: 'No. A web app cannot block other apps. It can time your focus sessions, play a quiet sound and let you rate how focused you were. Use your phone’s own focus mode beside it.' },
+  { q: 'Can I use it on my phone and my laptop?', a: 'Yes. One account can be signed in on up to three devices at once. A fourth signs out the oldest, and it tells that device why.' },
   { q: 'I don’t have time for another app.', a: 'That is the point of it. The daily ask is three moves: check in, do one small act, tick one task. It takes a few minutes. The rest is there when you want it, and switched off when you don’t.' },
   { q: 'Who sees my Discover results?', a: 'Only you. Your answers never reach brands, staff, the leaderboard or a life coach. You choose whether your results shape your next steps and whether the assistant may read a short summary. It is not an IQ test or a diagnosis: it is a self-discovery quiz that compares you only with your own scale.' },
   { q: 'Who sees my journal?', a: 'Only you. Your journal and wellbeing numbers never reach brands, staff, the leaderboard or Club selection. The assistant reads the journal only when you ask it to, and only through models that keep nothing. A life coach never sees it.' },

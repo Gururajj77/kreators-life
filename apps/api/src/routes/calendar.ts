@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { buildCalendar, type IcsTask, type Priority, type RelationshipKey } from '@kreators/shared';
+import { buildCalendar, occurrencesBetween, parseRepeat, PERIOD_META, type IcsTask, type PeriodKind, type Priority, type RelationshipKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { nowIso, randomCode, shiftDate } from '../db';
 
@@ -49,8 +49,13 @@ calendarPublic.get('/:file', async (c) => {
     )
     .bind(owner.id, shiftDate(today, -14), shiftDate(today, 180))
     .all<{ id: string; title: string; relationship: RelationshipKey; day: string; due_time: string | null; estimate_min: number | null; priority: number | null }>();
+  // The reviews the person scheduled show too, on their days and at their times, so a calendar says when to look back.
+  const scheduled = await db.prepare('SELECT id, kind, name, anchor, time, repeat_json FROM review_schedules WHERE user_id = ? AND enabled = 1 LIMIT 20').bind(owner.id).all<{ id: string; kind: PeriodKind; name: string; anchor: string; time: string; repeat_json: string | null }>();
+  const reviews: IcsTask[] = scheduled.results.flatMap((r) =>
+    occurrencesBetween(r.anchor, parseRepeat(r.repeat_json), shiftDate(today, -14), shiftDate(today, 180), 80).map((day) => ({ id: `review-${r.id}-${day}`, title: r.name || PERIOD_META[r.kind].name, relationship: null, category: 'Reviews', day, dueTime: r.time, estimateMin: 30, priority: null })),
+  );
   const tasks: IcsTask[] = rows.results.map((r) => ({ id: r.id, title: r.title, relationship: r.relationship, day: r.day, dueTime: r.due_time, estimateMin: r.estimate_min, priority: (r.priority as Priority | null) ?? null }));
-  return new Response(buildCalendar(tasks, owner.timezone || 'Asia/Kolkata', new Date()), {
+  return new Response(buildCalendar([...tasks, ...reviews], owner.timezone || 'Asia/Kolkata', new Date()), {
     headers: { 'Content-Type': 'text/calendar; charset=utf-8', 'Cache-Control': 'private, max-age=300', 'Content-Disposition': 'inline; filename="kreators-tasks.ics"' },
   });
 });

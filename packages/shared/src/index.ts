@@ -245,11 +245,6 @@ export function parentKind(kind: NodeKind): NodeKind | null {
   return i <= 0 ? null : KINDS[i - 1]!;
 }
 
-export function childKind(kind: NodeKind): NodeKind | null {
-  const i = KINDS.indexOf(kind);
-  return i < 0 || i === KINDS.length - 1 ? null : KINDS[i + 1]!;
-}
-
 export function isNodeKind(v: unknown): v is NodeKind {
   return typeof v === 'string' && (KINDS as readonly string[]).includes(v);
 }
@@ -329,7 +324,6 @@ export interface Question {
   no?: { points: number; next: string | null };
 }
 
-export const MAX_POINTS_PER_QUESTION = 4;
 /** Gauge plus probe. */
 export const MAX_POINTS_PER_RELATIONSHIP = 8;
 /** Scale answers at or below this many points take the low branch. */
@@ -512,12 +506,6 @@ export function nextQuestionId(q: Question, value: number): string | null {
   }
   if (q.format === 'pick') return q.options?.[value]?.next ?? null;
   return value ? (q.yes?.next ?? null) : (q.no?.next ?? null);
-}
-
-/** The floor after this one in the flow, or null after the top floor. */
-export function nextRelationship(relationship: RelationshipKey): RelationshipKey | null {
-  const i = RELATIONSHIPS.findIndex((r) => r.key === relationship);
-  return RELATIONSHIPS[i + 1]?.key ?? null;
 }
 
 export type Answers = Record<string, number>;
@@ -1004,6 +992,8 @@ export interface Node {
   subtaskDone?: number;
   /** Tasks only: the Remember tag. With a day it also sends an inbox note on that day, at its time (09:00 when it has none). */
   remind: boolean;
+  /** Tasks only: brought to the review for its period. The review lists it, and a tap puts it into an answer. */
+  forReview: boolean;
   /** Tasks only, optional: a time of day (HH:MM) and how long it should take, to plan the day. */
   dueTime: string | null;
   estimateMin: number | null;
@@ -1164,8 +1154,6 @@ export function periodDays(p: Period): string[] {
   return out;
 }
 
-export const periodKey = (p: Period) => `${p.kind}:${p.start}`;
-
 /** The prompts every review starts from. A person can add templates of their own on top. */
 export const REVIEW_PROMPTS: Record<PeriodKind, string[]> = {
   week: ['What went well this week?', 'What got in the way?', 'Which pillar needs you most next week?', 'One thing to do differently next week.'],
@@ -1247,7 +1235,19 @@ export interface ReviewSummary {
   series: { date: string; xp: number; tasks: number }[];
   xpByArea: Partial<Record<RelationshipKey, number>>;
   currency: string;
+  /** The tasks brought to this review: ticked in the period, or still open and planned in it. Kept with the review when it is saved. */
+  flagged: ReviewFlagged[];
 }
+export interface ReviewFlagged {
+  id: string;
+  title: string;
+  relationship: RelationshipKey;
+  status: 'done' | 'open';
+  /** The day it was ticked, or the day it is planned for; null when it has none yet. */
+  day: string | null;
+  priority: Priority | null;
+}
+export const MAX_REVIEW_FLAGGED = 40;
 
 export interface Review {
   id: string;
@@ -1801,10 +1801,6 @@ export const PERMISSION_META: Record<Permission, { name: string; blurb: string }
   mentor: { name: 'Mentor', blurb: 'Gives feedback on assignments. Can be held by a creator.' },
   coach: { name: 'Life coach', blurb: 'Coaches students who said yes: sees what they share, leaves notes, adds tasks. Never their journal. Can be held by a creator.' },
 };
-
-export function hasPermission(user: { role: Role; permissions: readonly string[] }, perm: Permission): boolean {
-  return user.role === 'admin' || user.permissions.includes(perm);
-}
 
 /**
  * Staff-level: admin or staff holding the permission. Mentor and Life coach are the permissions a creator can hold,
@@ -2401,8 +2397,6 @@ export const COURAGE = 200;
 export const ACCEPTANCE = 350;
 export const VOLATILE_GAP = 150;
 export const levelByValue = (v: number): MapLevel | undefined => MAP_LEVELS.find((l) => l.value === v);
-export const levelsInBand = (band: MapBand): MapLevel[] => MAP_LEVELS.filter((l) => l.band === band);
-export const bandOfLevel = (v: number): MapBand => (v >= 400 ? 'realization' : v >= COURAGE ? 'empowerment' : 'victim');
 
 /** The statement for each band, per relationship. Health sits inside Self; work and wealth inside Servant leader. */
 export const BAND_STATEMENTS: Record<RelationshipKey, Record<MapBand, string>> = {
@@ -5795,7 +5789,6 @@ export const HOW_TO: Record<string, HowTo> = {
 // ---------------------------------------------------------------------------
 
 export const STORE_CATEGORIES = ['Camera', 'Audio', 'Lighting', 'Computer', 'Phone', 'Software', 'Desk', 'Other'] as const;
-export type StoreCategory = (typeof STORE_CATEGORIES)[number];
 export const STORE_STAGES = ['starting', 'growing', 'pro', 'any'] as const;
 export type StoreStage = (typeof STORE_STAGES)[number];
 export const STORE_STAGE_META: Record<StoreStage, { name: string; blurb: string }> = {
@@ -6592,11 +6585,12 @@ export interface IdentityOption {
 
 export const IDENTITIES: readonly IdentityOption[] = [
   // Who you are right now: the first card.
-  { key: 'creator', label: 'Creator', emoji: '🎬', kind: 'role', blurb: 'I make content', because: 'you make content', words: ['creator', 'content creator', 'influencer', 'youtuber', 'instagrammer', 'vlogger', 'make content', 'create content', 'post content', 'make videos', 'my channel', 'my page', 'my followers', 'my subscribers'], focus: 'Creating', apps: { profile: 2, army: 2, win: 2, work: 1, content: 1, tools: 1 } },
-  { key: 'freelancer', label: 'Freelancer', emoji: '🧳', kind: 'role', blurb: 'I freelance for clients', because: 'you make things for clients', words: ['freelance', 'freelancer', 'freelancing', 'clients', 'my clients', 'client work', 'fiverr', 'upwork', 'agency'], focus: 'Creating', apps: { work: 3, profile: 2, army: 1, finance: 1 } },
+  { key: 'creator', label: 'Creator', emoji: '🎬', kind: 'role', blurb: 'I make content', because: 'you make content', words: ['creator', 'content creator', 'influencer', 'youtuber', 'instagrammer', 'vlogger', 'make content', 'create content', 'post content', 'make videos', 'my channel', 'my page', 'my followers', 'my subscribers'], focus: 'Creating', apps: { profile: 2, army: 2, win: 2, work: 1, content: 1, tools: 1, agency: 1 } },
+  { key: 'freelancer', label: 'Freelancer', emoji: '🧳', kind: 'role', blurb: 'I freelance for clients', because: 'you make things for clients', words: ['freelance', 'freelancer', 'freelancing', 'clients', 'my clients', 'client work', 'fiverr', 'upwork'], focus: 'Creating', apps: { work: 3, profile: 2, agency: 2, army: 1, finance: 1 } },
   { key: 'student', label: 'Student', emoji: '🎓', kind: 'role', blurb: "I'm a student", because: 'you are studying', words: ['student', 'studying', 'college', 'university', 'uni', 'school', 'exams', 'semester', 'degree', 'final year', 'class 12'], focus: 'Study', apps: { school: 3, work: 1, knowledge: 1, circles: 1 } },
   { key: 'employee', label: 'Employee', emoji: '💼', kind: 'role', blurb: 'I have a job', because: 'you have a job', words: ['my job', 'day job', 'full time job', 'i have a job', 'office', 'employee', 'corporate', 'salaried', 'working professional', '9 to 5', '9-5', 'nine to five', 'i work at', 'i work in'], focus: 'Work', apps: { reviews: 2, finance: 2, journal: 1, school: 1 } },
   { key: 'founder', label: 'Founder', emoji: '🚀', kind: 'role', blurb: 'I run a business', because: 'you run a business', words: ['founder', 'co-founder', 'cofounder', 'my business', 'own business', 'small business', 'startup', 'my brand', 'brand owner', 'business owner', 'shop owner', 'store owner', 'entrepreneur', 'my shop', 'my store', 'my company', 'run a business', 'run a brand', 'run a company', 'run a shop', 'run a store', 'run a startup', 'run a small', 'own a business', 'own a shop', 'own brand', 'd2c'], focus: 'Business', apps: { shop: 2, finance: 3, audience: 2, content: 2, automations: 1 } },
+  { key: 'agency_owner', label: 'Agency or studio owner', emoji: '🗂️', kind: 'role', blurb: 'I run a content agency or studio', because: 'you run a content agency or studio', words: ['agency owner', 'own an agency', 'run an agency', 'run a content agency', 'my agency', 'content agency', 'creative agency', 'video agency', 'marketing agency', 'social media agency', 'production house', 'my studio', 'studio owner', 'retainer', 'retainers'], focus: 'Business', apps: { agency: 3, finance: 2, profile: 2, reviews: 1, army: 1 } },
   { key: 'explorer', label: 'Explorer', emoji: '🧭', kind: 'role', blurb: "I'm between things", because: 'you are working out what is next', words: ['between jobs', 'unemployed', 'jobless', 'gap year', 'figuring out', 'figuring it out', 'career change', 'quit my job', 'looking for a job', 'looking for work', 'fresh start', 'what is next'], focus: 'Other', apps: { work: 3, school: 2, knowledge: 1, journal: 1 } },
   { key: 'coach', label: 'Life coach', emoji: '🎯', kind: 'role', blurb: "I'm a life coach", because: 'you coach people', words: ["i'm a life coach", 'i am a life coach', 'im a life coach', "i'm a coach", 'i am a coach', 'im a coach', 'work as a coach', 'work as a life coach', 'certified coach', 'certified life coach', 'i coach people', 'coach for a living'], focus: 'Work', apps: { coaching: 3, shop: 2, profile: 1 } },
   { key: 'parent', label: 'Parent or carer', emoji: '👪', kind: 'role', blurb: 'I look after family', because: 'you look after family', words: ['parent', 'mom', 'mum', 'mother', 'dad', 'father', 'my kids', 'my son', 'my daughter', 'children', 'my baby', 'carer', 'caregiver', 'looking after'], focus: 'Family', interest: 'Parenting', apps: { sleep: 2, stress: 2, journal: 1, mood: 1, finance: 1 } },
@@ -6672,6 +6666,8 @@ export const SETUP_GOALS: readonly SetupGoal[] = [
   { key: 'health', label: 'Feel better day to day', emoji: '🌿', blurb: 'Mood, sleep, stress and calm, on one score.', because: 'you want to feel better day to day', to: 'feel better day to day', words: ['feel better', 'mood', 'mental health', 'calm', 'peace', 'health', 'healthy', 'happier', 'sleep better'], profileGoal: 'Get healthier habits', apps: { wellbeing: 3, mood: 2, sleep: 2, stress: 2, mindful: 2, life: 1 } },
   { key: 'move', label: 'Move more', emoji: '👟', blurb: 'Run clubs, movement minutes and a body score.', because: 'you want to move more', to: 'move more', words: ['fitness', 'get fit', 'lose weight', 'weight loss', 'exercise', 'run more', 'move more', 'workout', 'be active'], profileGoal: 'Get healthier habits', apps: { run: 3, life: 2, wellbeing: 1 } },
   { key: 'life', label: 'Work on myself', emoji: '🏰', blurb: 'The deeper path: your seven relationships, a routine and a plan.', because: 'you want to work on yourself', to: 'work on yourself', words: ['my life', 'life together', 'purpose', 'discipline', 'self improvement', 'self-improvement', 'better person', 'habits', 'routine', 'relationships', 'grow as a person'], apps: { journal: 2, reviews: 2, life: 2, mindful: 1, discover: 2 } },
+  { key: 'clients', label: 'Manage my clients and invoices', emoji: '🗂️', blurb: 'Clients, deliverables, time, invoices and approvals, in Agency.', because: 'you want your client work in one place', to: 'manage your clients and invoices', words: ['manage clients', 'manage my clients', 'client management', 'invoice', 'invoices', 'invoicing', 'send invoices', 'bill clients', 'client approvals', 'client portal'], apps: { agency: 3, finance: 2, shop: 1 } },
+  { key: 'plan', label: 'Plan my week and stay on track', emoji: '🗓️', blurb: 'Plan my week on Daily is always on. Reviews adds a calendar and reminders for looking back.', because: 'you want to plan your week and stay on track', to: 'plan your week and stay on track', words: ['plan my week', 'plan my day', 'plan my time', 'stay on track', 'stay organized', 'stay organised', 'time management', 'manage my time', 'be more productive', 'to-do list', 'to do list'], apps: { reviews: 3, mindful: 1, journal: 1, life: 1 } },
   { key: 'find_coach', label: 'Work with a life coach', emoji: '🙋', blurb: 'A coach the team checked sees what you share and helps you keep going.', because: 'you want a coach in your corner', to: 'work with a life coach', words: ['need a life coach', 'want a life coach', 'find a life coach', 'get a life coach', 'need a coach', 'want a coach', 'find a coach', 'get a coach', 'my coach', 'accountability', 'keep me accountable', 'hold me accountable'], apps: { coaching: 3, life: 1, reviews: 1 } },
 ];
 
@@ -6743,6 +6739,18 @@ export const SETUP_COMBOS: readonly SetupCombo[] = [
   { when: ['freelancer', 'work'], apps: { work: 2, profile: 1 }, because: 'your page is your portfolio for the gigs you apply to' },
   { when: ['freelancer', 'money'], apps: { finance: 2 }, because: 'client money comes in bits, so it helps to see it in one place' },
   { when: ['freelancer', 'grow'], apps: { profile: 1, content: 1 }, because: 'you work for clients and want more of them to find you' },
+  { when: ['agency_owner', 'earn'], apps: { agency: 2, finance: 1 }, because: 'you run an agency, and invoices and approvals decide how fast it earns' },
+  { when: ['agency_owner', 'work'], apps: { work: 2, army: 1 }, because: 'you run an agency and want briefs and gigs coming in' },
+  { when: ['agency_owner', 'money'], apps: { finance: 2, reviews: 1 }, because: 'an agency needs its money and its numbers in one place' },
+  { when: ['agency_owner', 'clients'], apps: { agency: 3 }, because: 'you run an agency and want all your client work in one place' },
+  { when: ['agency_owner', 'grow'], apps: { content: 1, audience: 1 }, because: 'you run an agency and want more people to find it' },
+  { when: ['agency_owner', 'plan'], apps: { reviews: 2 }, because: 'you run an agency and can track its numbers in each review' },
+  { when: ['freelancer', 'clients'], apps: { agency: 3, finance: 1 }, because: 'you work for clients and want their work, time and invoices in one place' },
+  { when: ['creator', 'clients'], apps: { agency: 2, finance: 1 }, because: 'you make content for brands and want their work and invoices in one place' },
+  { when: ['social', 'clients'], apps: { agency: 2 }, because: 'you run pages for brands and want their posts and approvals in one place' },
+  { when: ['editor', 'clients'], apps: { agency: 2 }, because: 'you edit for clients and want their pieces and approvals in one place' },
+  { when: ['founder', 'plan'], apps: { reviews: 2 }, because: 'you run a business and can track its numbers in each review' },
+  { when: ['plan', 'focus'], apps: { mindful: 2, reviews: 1 }, because: 'you want to stay on track and focus is hard, so short focus sessions help' },
   { when: ['founder', 'sell'], apps: { shop: 2, automations: 1 }, because: 'you run a business and want to sell more' },
   { when: ['founder', 'grow'], apps: { audience: 2, content: 1 }, because: 'you run a business and want more people to know it' },
   { when: ['founder', 'money'], apps: { finance: 2, reviews: 1 }, because: 'a business needs its money in one place' },
@@ -7053,13 +7061,13 @@ export interface ChoiceGroup {
 }
 
 export const SETUP_GOAL_GROUPS: readonly ChoiceGroup[] = [
-  { label: 'Money and work', emoji: '💸', keys: ['earn', 'work', 'sell', 'money'] },
-  { label: 'Grow', emoji: '🌱', keys: ['learn', 'grow', 'people'] },
+  { label: 'Money and work', emoji: '💸', keys: ['earn', 'work', 'sell', 'clients', 'money'] },
+  { label: 'Grow', emoji: '🌱', keys: ['learn', 'grow', 'people', 'plan'] },
   { label: 'You', emoji: '🌿', keys: ['health', 'move', 'life', 'find_coach'] },
 ];
 
 export const SETUP_ROLE_GROUPS: readonly ChoiceGroup[] = [
-  { label: 'What you do', emoji: '🛠️', keys: ['creator', 'freelancer', 'employee', 'founder', 'coach'] },
+  { label: 'What you do', emoji: '🛠️', keys: ['creator', 'freelancer', 'agency_owner', 'employee', 'founder', 'coach'] },
   { label: 'Where you are in life', emoji: '🧭', keys: ['student', 'explorer', 'parent'] },
 ];
 
@@ -7075,30 +7083,30 @@ export const SETUP_APP_LINES: Readonly<Record<string, string>> = {
   work: 'Paid gigs from brands.',
   army: 'Brand campaigns you can join.',
   win: 'Get paid for views on brand videos.',
-  agency: 'Clients, content pieces and approvals in one place.',
+  agency: 'For content agencies and freelancers: clients, deliverables, invoices and approvals.',
   party: 'Meetups and events near you.',
   run: 'Run clubs near you. Runs earn points.',
   community: 'Post, ask and cheer each other on.',
   club: 'A members club with perks.',
   bond: 'Stay friends with people you meet.',
   circles: 'A small group that meets each week.',
-  life: 'Your body, money, mood, mind and faith.',
-  wellbeing: 'One score for how you are doing.',
+  life: 'Five areas of your life on one dashboard: body, money, mood, mind and faith.',
+  wellbeing: 'One score from your mood, sleep, stress and calm.',
   mood: 'Tap a face each day.',
   sleep: 'Log your nights, sleep better.',
   stress: 'Note your stress and what causes it.',
-  mindful: 'A timer for calm breathing.',
+  mindful: 'Calm breathing and focus sessions, with sounds, lo-fi music and a rating for each.',
   journal: 'Write it down, with how you felt.',
-  reviews: 'A short look back each week.',
+  reviews: 'Look back each week, with reminders. Business numbers too, once you switch them on.',
   companion: 'A chat about how you are doing. Not a therapist.',
-  coaching: 'Work with a life coach, or coach your students.',
-  cards: 'Card games to play with the people you are with, shuffled and flipped on a table.',
-  discover: 'A quiz on your personality, reasoning and strengths.',
+  coaching: 'Work with a life coach, or coach your students. You choose what they see.',
+  cards: 'Unlock card games with points, then shuffle, flip and play them with the people you are with.',
+  discover: 'Quizzes on your strengths, personality and love languages. Private to you.',
   profile: 'Your page: links, work and shop.',
-  shop: 'Sell courses, downloads and sessions.',
-  store: 'Gear, new or second hand.',
+  shop: 'Sell courses, downloads, sessions and memberships.',
+  store: 'Gear new from partners, or second hand with offers and chat.',
   audience: 'See who follows you, send them news.',
-  content: 'Ideas, hooks and scripts for posts.',
+  content: 'Research who is winning, then write hooks, scripts and a month of posts.',
   automations: 'Auto DM a link when people comment.',
   finance: 'Money in and out, and your goals.',
   library: 'Everything you bought, in one place.',
@@ -10336,7 +10344,6 @@ export const DELIVERABLE_STAGE_META: Record<DeliverableStage, { name: string; bl
   approved: { name: 'Approved', blurb: 'The client said yes.', next: 'Mark published' },
   published: { name: 'Published', blurb: 'Live.', next: null },
 };
-export const nextDeliverableStage = (s: DeliverableStage): DeliverableStage | null => DELIVERABLE_STAGES[DELIVERABLE_STAGES.indexOf(s) + 1] ?? null;
 
 /** One column of a pipeline board: its stage, how many are in it in all, and the first cards. */
 export interface BoardColumn<T> {
@@ -10578,15 +10585,6 @@ export function deliverableOverdue(stage: DeliverableStage, dueDate: string | nu
   if (stage === 'published') return false;
   const day = stage === 'approved' ? (publishDate ?? dueDate) : dueDate;
   return Boolean(day && day < today);
-}
-
-/** The invoice lines for a month: the retainer, then each piece published that month that has its own fee. */
-export function invoiceLinesFor(clientName: string, month: string, retainerCents: number, fees: { title: string; feeCents: number }[]): InvoiceItem[] {
-  const lines: InvoiceItem[] = [];
-  if (retainerCents > 0) lines.push({ description: `Monthly retainer, ${month}`, quantity: 1, unitCents: retainerCents });
-  for (const f of fees) if (f.feeCents > 0) lines.push({ description: f.title, quantity: 1, unitCents: f.feeCents });
-  void clientName;
-  return lines.slice(0, 30);
 }
 
 // ---- Business metrics in Reviews: only for people who switch them on
@@ -11031,7 +11029,6 @@ export const CONTRACT_VARS = [
   { key: 'brands', label: 'Brand or brands', from: 'typed' },
   { key: 'jurisdiction', label: 'Courts of', from: 'profile' },
 ] as const;
-export type ContractVarKey = (typeof CONTRACT_VARS)[number]['key'];
 
 const uid = (p: string, i: number) => `${p}${i + 1}`;
 const text = (id: string, heading: string, body: string): ContractSection => ({ id, heading, kind: 'text', body });
@@ -11603,7 +11600,10 @@ export function projectPace(created: string, dueDate: string | null, done: numbe
 export interface IcsTask {
   id: string;
   title: string;
-  relationship: RelationshipKey;
+  /** The pillar it belongs to, or null for something that is not a task (a scheduled review). */
+  relationship: RelationshipKey | null;
+  /** Used instead of the pillar's name as the calendar category, when there is no pillar. */
+  category?: string;
   /** The day it opens (do date, else due date), YYYY-MM-DD. */
   day: string;
   dueTime: string | null;
@@ -11629,7 +11629,7 @@ const icsDay = (day: string): string => day.replace(/-/g, '');
 export function buildCalendar(tasks: readonly IcsTask[], zone: string, now: Date): string {
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//kreators.app//Tasks//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:kreators.app tasks', 'REFRESH-INTERVAL;VALUE=DURATION:PT1H'];
   for (const t of tasks) {
-    const pillar = RELATIONSHIP_BY_KEY[t.relationship]?.name ?? '';
+    const pillar = t.relationship ? (RELATIONSHIP_BY_KEY[t.relationship]?.name ?? '') : '';
     lines.push('BEGIN:VEVENT', `UID:${t.id}@kreators.app`, `DTSTAMP:${icsStamp(now)}`);
     const m = t.dueTime ? /^([01]\d|2[0-3]):([0-5]\d)$/.exec(t.dueTime) : null;
     if (m) {
@@ -11641,9 +11641,80 @@ export function buildCalendar(tasks: readonly IcsTask[], zone: string, now: Date
     }
     lines.push(`SUMMARY:${icsEscape(t.title)}`);
     if (pillar) lines.push(`CATEGORIES:${icsEscape(pillar)}`, `DESCRIPTION:${icsEscape(`From your ${pillar} pillar`)}`);
+    else if (t.category) lines.push(`CATEGORIES:${icsEscape(t.category)}`, `DESCRIPTION:${icsEscape('A review you scheduled in kreators.app')}`);
     if (t.priority !== null) lines.push(`PRIORITY:${t.priority === 0 ? 1 : t.priority === 1 ? 3 : t.priority === 2 ? 5 : 9}`);
     lines.push('END:VEVENT');
   }
   lines.push('END:VCALENDAR');
   return `${lines.map(icsFold).join('\r\n')}\r\n`;
+}
+
+
+// ---------------------------------------------------------------------------
+// Scheduled reviews: pick a day (and a time), repeat it the way a task repeats, get a reminder in the inbox
+// ---------------------------------------------------------------------------
+
+export const MAX_REVIEW_SCHEDULES = 20;
+export const REVIEW_SCHEDULE_NAME_MAX = 60;
+export const REVIEW_REMINDER_TIME = '09:00';
+
+export interface ReviewSchedule {
+  id: string;
+  /** Which review it is for: a week, a month, a quarter or a half year. */
+  kind: PeriodKind;
+  name: string;
+  /** The first day, and the time of day to be reminded (HH:MM, in the person's zone). */
+  anchor: string;
+  time: string;
+  repeat: Repeat | null;
+  enabled: boolean;
+  /** The next day the reminder falls on, or null when there is none left. */
+  nextOn: string | null;
+  /** The repeat in plain words, or "Once". */
+  label: string;
+}
+/** One day on the Reviews calendar: reminders that fall on it, and reviews that were written for a period that ends on it. */
+export interface ReviewCalendarDay {
+  scheduled: { id: string; kind: PeriodKind; time: string; name: string }[];
+  written: { kind: PeriodKind; start: string; end: string }[];
+}
+export interface ReviewCalendarResponse {
+  month: string;
+  schedules: ReviewSchedule[];
+  days: Record<string, ReviewCalendarDay>;
+}
+
+/**
+ * The period a reminder on `day` opens. On the first day of a period (a Monday, the 1st, the start of a quarter or half) the review is of the
+ * one that just ended, since that is when someone looks back; on any other day it is the period the day falls in.
+ */
+export function reviewPeriodFor(kind: PeriodKind, day: string): Period {
+  const here = periodFor(kind, day);
+  return here.start === day ? periodShift(here, -1) : here;
+}
+
+/** The first day a rule really falls on: the day it starts on, unless a weekly rule names weekdays and that day is not one of them. */
+function firstDay(anchor: string, rule: Repeat): string | null {
+  if (rule.kind === 'weekly' && rule.days.length > 0 && !rule.days.includes(isoWeekday(anchor))) return nextOccurrence(rule, anchor, anchor);
+  return !rule.until || anchor <= rule.until ? anchor : null;
+}
+/** Every day a repeating rule falls on between two days (both included), from the first day it started on. At most `cap`. */
+export function occurrencesBetween(anchor: string, rule: Repeat | null, from: string, to: string, cap = 62): string[] {
+  const out: string[] = [];
+  if (!rule) return anchor >= from && anchor <= to ? [anchor] : [];
+  const first = firstDay(anchor, rule);
+  let d: string | null = first && first >= from ? first : first ? nextOccurrence(rule, anchor, addDays(from, -1)) : null;
+  if (d && first && d < first) d = first;
+  while (d && d <= to && out.length < cap) {
+    out.push(d);
+    d = nextOccurrence(rule, anchor, d);
+  }
+  return out;
+}
+/** The first day on or after `day` that a rule falls on, or null when it has ended (or never repeats and has passed). */
+export function nextOnOrAfter(anchor: string, rule: Repeat | null, day: string): string | null {
+  if (!rule) return anchor >= day ? anchor : null;
+  const first = firstDay(anchor, rule);
+  if (!first) return null;
+  return first >= day ? first : nextOccurrence(rule, anchor, addDays(day, -1));
 }

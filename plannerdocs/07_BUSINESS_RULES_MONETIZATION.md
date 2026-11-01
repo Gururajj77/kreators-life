@@ -1,8 +1,10 @@
 # 07 — Business rules and monetization
 
+**Last updated:** 2026-11-01
+
 **Product:** kreators.app
-**Version:** 0.3, reconciled with the app on 26 October 2026
-**Source of truth:** the constants in `packages/shared/src/index.ts` (`XP`, `POINTS`, `WAIT`, `REWARDS`, `SOCIAL_REWARDS`, `RUN_REWARD`, `FEATURE_FEE_POINTS`, `AFFILIATE_SHARE`, `trustScore`, `bountyPayout`, `unlockFor`, `earningGuide`), `apps/api/src/payments.ts`, `apps/api/src/rewards.ts`, the policy pages at `/terms`, `/privacy`, `/refunds`, `/pricing`.
+**Version:** 0.4, reconciled with the app on 1 November 2026 (0.3 was 26 October 2026)
+**Source of truth:** the constants in `packages/shared/src/index.ts` (`XP`, `POINTS`, `WAIT`, `REWARDS`, `REWARD_GROUPS`, `CARD_GAMES`, `SOCIAL_REWARDS`, `RUN_REWARD`, `FEATURE_FEE_POINTS`, `AFFILIATE_SHARE`, `PLANS`, `TOPUP_PACKS`, `AGENT_LIMITS`, `PAYMENTS_LIVE`, `trustScore`, `bountyPayout`, `unlockFor`, `earningGuide`, `invoiceTotals`), `apps/api/src/payments.ts`, `rewards.ts`, `credits.ts`, `routes/finance.ts`, `routes/agencyDocs.ts`, the policy pages at `/terms`, `/privacy`, `/refunds`, `/pricing`, and `docs/DECISIONS.md`.
 
 ## 1. Purpose
 
@@ -12,7 +14,13 @@ Every number that pays, charges or gates, as the app applies it today. The v0.1 
 
 Points are the only unit that moves inside the app. The terms page says it plainly: points are earned by showing up and can be spent inside kreators.app; they are not money, cannot be cashed out and have no value outside the app. Xp is never spent. There is no stored-value balance, no transfer between people, and no "Kreators Cash" (decision of 24 October 2026).
 
-Money exists in two places only: a creator's own Shop (a buyer pays a creator through the payment provider; kreators.app takes a platform fee in points) and a creator's own Finance tracker (a private ledger of their business). kreators.app never holds goods or money for the Store.
+Money exists in three places only:
+
+- A creator's own **Shop**: a buyer pays a creator through the payment provider; kreators.app takes a platform fee in points.
+- A creator's own **Finance** tracker: a private ledger of their business.
+- A creator's own **invoices** (Agency, and the older invoice API under Finance): a document and a status. The money moves between the creator and their client, outside the app. kreators.app takes nothing from an invoice and never moves the money; marking one paid books it as income in the creator's own ledger, and taking that back removes it.
+
+kreators.app never holds goods or money for the Store. Paying for a plan or a top-up (13) is the one place the app itself would charge, and nothing is charged until payments are switched on.
 
 ## 3. The game's pay table
 
@@ -29,8 +37,10 @@ Money exists in two places only: a creator's own Shop (a buyer pays a creator th
 | Character stages | | Spark 0 xp, Glow 150 xp and 2 days, Blaze 500 and 10 days, Beacon 1200 and 30 days. Days are a floor however much xp there is. |
 | Identity stages | | Seed 0, Sprout 300 and 3 days, Climber 900 and 14, Steady hand 2000 and 45, Luminary 4000 and 120. |
 | Badges | a badge on your page | Computed from counts, never stored: First tick, Three in a row, Full week, All seven, Ripple maker (ten tasks), Project cleared, Level five, Good hands (five small acts), Club member, First run, Ten runs, Hundred k. |
-| Honors | | Given by the team (Pro, Founding member, Community star, Team player) or unlocked by time here (7, 30, 90, 365 days). |
-| Rewards | cost points | Sticker pack 600, meetup ticket 1500, kreators.app tee 2500, a forty-minute mentor call 4000. A redemption is a reservation until it ships; cancelling returns the points. |
+| Honors | | Given by the team (Pro, Founding member, Community star, Team player), unlocked by time here (7, 30, 90, 365 days), or won: the monthly leaderboard's top three get `season_top` when the cron closes the month. |
+| Planning and tags | pays nothing | A priority (P0 to P3), Remember, Bring it to my review, subtasks, Plan my week and its plan strength, time blocks, a project's pace, a focus-quality rating, water and a scheduled review never change what a tick pays. |
+| Rewards | cost points | 41 items on nine shelves (books, card games, apparel, tech, drinkware, stationery, lifestyle, novelty, experiences), every cost whole points, from 400 (stickers, a lip balm) to 4,500 (the hoodie). The three books are the founder's own, 2,000 each; the merch brand is "Kreators" (the Kreators tee is 2,500); a meetup ticket is 1,500 and a one-to-one call 4,000. Gear is a reservation until a drop ships; cancelling returns the points. Rewards are not an app. |
+| A card game | 1,000 to 2,000 points, and an xp floor | Nine games (`CARD_GAMES`), each a reward of kind `unlock`: redeeming one opens it at once and for good (`card_unlocks`, kept through an erase, never cancelled) and switches Games on. The xp floors are 0, 100, 250 or 500, and a super admin is never locked out. |
 
 Everything that pays has a wait or a reviewer. An undo takes the xp back.
 
@@ -57,8 +67,8 @@ Each pays once per thing (`source_id` or `ref`), so unliking and liking again ne
 - **Memberships** carry a period in months; entitlement checks the order's expiry; buying again renews.
 - **Sessions:** availability in the creator's zone with overrides, a buffer, minimum notice and a horizon; one booking per slot by a unique index; a buyer can move a booking up to two hours before.
 - **Payout details:** legal name, PAN (hash and last four), bank (last four), IFSC and address, submitted from Customers and reviewed under Admin, KYC. Bank payouts themselves happen outside the app.
-- **Pro** is a flag an admin sets plus the Pro honor; it is not billed inside the app.
-- **Unlocks:** a product, a store item or a tool can ask for a points balance, a badge, or both. `unlockFor` is the one rule and the one wording ("Needs 500 points, you have 120 and the Full week badge."). A gated checkout is a 403; a locked item's link is blanked.
+- **Pro** is a paid plan (13): a plan starts the Pro mark (`is_pro` and the `pro` honor follow it), and ending the plan ends the mark. Until payments are live only an admin starts one.
+- **Unlocks:** a product, a store item, a tool or a game can ask for a points balance, an xp floor, a badge, or any mix (`min_points`, `min_xp`, `badge`). `unlockFor` is the one rule and the one wording ("Needs 500 points, you have 120 and the Full week badge."). A gated checkout is a 403; a locked item's link is blanked; a super admin is never locked out. A creator can add up to six questions and answers to a product's page (`MAX_FAQ`), and a reward page shows a live "What could I earn?" worked out by the same `bountyPayout` the reviewer uses.
 
 ## 6. Army and Work
 
@@ -99,7 +109,51 @@ A campaign records usage rights, exclusivity terms, brand restrictions and the a
 - A placement fee on Work.
 - Bank payouts inside the app. KYC is collected; payment happens outside.
 
+## 13. Plans, credits and the assistant
+
+Typing to the assistant is the one paid thing in the app. It costs credits because a language model costs money; the assistant's tap flows, and every other app, never spend credits.
+
+- **A credit** is a tenth of a US cent of model use, worked out from the tokens with whole numbers only (`creditsFor`). Prices per million tokens are in `MODEL_PRICES` or `ASSISTANT_PRICE_IN` and `ASSISTANT_PRICE_OUT`; a model with no price is charged `FALLBACK_PRICE`, high on purpose. A free model costs nothing, so it spends no credits, but a plan is still needed to type.
+- **The three plans** (`PLANS`), each for 30 days (`PLAN_DAYS`), whose credits do not carry over:
+
+| Plan | Price | Credits a month |
+| --- | --- | --- |
+| Pro | US$15 | 10,000 |
+| Pro Max | US$125 | 100,000 |
+| Ultra | US$500 | 400,000 |
+
+- **Top-ups** (`TOPUP_PACKS`) are extra credits that stay until used and are spent after the plan's: US$10 for 8,000, US$25 for 20,000, US$50 for 40,000.
+- **Limits per plan** (`AGENT_LIMITS`, for the assistant): tokens read per message 16,000 / 64,000 / 128,000; credits per message 60 / 250 / 600; credits per 24 hours 1,000 / 8,000 / 30,000; steps per message 6 / 10 / 12.
+- **The ledger** (`apps/api/src/credits.ts`, tables `credit_accounts` and `credit_ledger`): every grant, every use with its tokens, every expiry. A message is refused with a paywall (402 `plan` or `credits`, 429 `day`), stopped before a model call that could pass what it may spend, and charged once at the end, plan credits first, never below zero.
+- **Not live yet:** `PAYMENTS_LIVE` is false. Plans and top-ups are shown and picked on `/plans`, but `POST /credits/checkout` answers that nothing was charged. Only an admin starts a plan (`POST /admin/users/:id/plan`) or adds credits (`POST /admin/users/:id/credits`, up to `MAX_CREDIT_GRANT`); both are audited.
+
+## 14. Agency: clients, invoices and agreements
+
+Agency (Contribution, off by default) is for a content agency or a freelance creator. It is free, and kreators.app takes nothing from what a creator invoices.
+
+- **Billing reuses the `invoices` table** and the helpers shared with Finance, so Agency needs no Finance switch. The numbers come from one rule, `invoiceTotals`, in whole cents and basis points: the discount comes off first, GST goes on what is left (optionally shown as half CGST and half SGST), and TDS is worked on the taxable amount. A person can add the TDS to the total (the extra is taxable × rate ÷ (1 − rate), so that after the client deducts the rate the creator keeps the taxable amount), or only show what the client will deduct. `total_cents` is always that answer, and the total in words is written with lakh and crore for rupees.
+- **Whose details:** the sender, tax numbers, bank and UPI, the look, the prefix, days to pay, GST and TDS defaults, and the signer are the person's own business profile, saved once on their account. Nothing of anyone's is written in the code or seeded.
+- **A sent invoice** can be changed (the client then sees it marked Revised); a paid one must be marked sent again first, so the books stay true; marking it paid books the income and taking that back removes it. A copy takes the next number in its series. Deleting the account keeps an invoice for the books with its totals and removes who it was for, the lines, the bank and its link.
+- **Agreements** start from a built-in template (trial and pilot, monthly retainer, one-off project) or one of the person's own, filled from their profile and the client. The packages table is the person's own prices; none ship with fees. A client accepts by typing their name, which is typed acceptance and not a certified e-signature, and says so on the screen. The templates say they are a starting point and not legal advice. A signed agreement is never edited, only revised into a new draft.
+- **Templates** are the person's own, up to `MAX_TEMPLATES` of each kind. An invoice template keeps the look, sender, bank, GST and TDS and the lines but never who it was billed to.
+- **Limits:** up to 60 clients (`AGENCY_MAX_CLIENTS`) and 2,000 deliverables; the rate limits `agency` and `portal` guard the writes.
+- **Business metrics** in Reviews are for people who run a business: off until switched on, typed in each period or read from Agency (pieces published, approved first time, published on time, billable hours, utilisation, invoiced, paid, new clients), up to 12 (`MAX_KPIS`).
+
+## 15. What is free, and what costs
+
+- **Free to use:** the daily game, every app, the leaderboard, the planning tools (Plan my week, time blocks, a project's pace), focus sessions and their sounds, scheduled reviews and reminders, the private calendar link, Agency (clients, pipeline, invoice designer and calculator, agreements, templates, client links), Discover and its add-ons, the daily brief, the Companion.
+- **Costs credits:** typing to the assistant, on a plan (13). Nothing else spends credits.
+- **Costs points:** a platform fee on a Shop sale (set per creator in basis points), a seller's featured spot (200 points), a ticket to a paid event, rewards and card games.
+- **Costs money, through the provider:** a creator's own products, when a buyer pays by money checkout (live only with Razorpay keys), and plans and top-ups once `PAYMENTS_LIVE` is switched on.
+- **Taken from no one:** invoices, agreements, the client link and the calendar link; Store gear sales between people.
+
 ## Known gaps
 
 - Rights and consent beyond the campaign fields are legal text, not product.
 - No reconciliation of provider settlements against orders exists beyond the webhook log and replay.
+- Plans and top-ups cannot be paid for yet (`PAYMENTS_LIVE` is false).
+- Whether a client's own tax rules (GST place of supply, TDS sections) are right for a given invoice is the creator's call; the calculator only does the arithmetic.
+
+## What changed since this was written (2026-11-01)
+
+Since 26 October 2026: plans, credits and top-ups for the assistant (13); the rewards catalog grew from four items to 41 on nine shelves, with nine card games that unlock for good; unlocks gained an xp floor; the monthly leaderboard's top three win an honor; Agency arrived with its invoice calculator (GST, TDS, total in words), templates, agreements and client links (14); business metrics in Reviews; planning and focus tools that pay nothing (Plan my week, time blocks, pace, focus quality); a product page can carry questions and answers and a reward page a live earnings calculator (from `docs/whop-study.md`); and Pro became a plan instead of a flag. Section 15 lists what is free and what costs.

@@ -1,14 +1,14 @@
-import { PRIORITIES, REPEAT_KINDS, addDays, priorityTag, repeatLabel, type Node, type Priority, type Repeat, type RepeatKind } from '@kreators/shared';
+import { PRIORITIES, addDays, priorityTag, repeatLabel, type Node, type Priority, type Repeat } from '@kreators/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { api, type TaskPlanBody } from '../lib/api';
 import { useRefreshAll } from '../lib/queries';
+import { RepeatPicker } from './RepeatPicker';
 import { Toggle } from './Toggle';
 
 const FIELD = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const CHIP = 'rounded-pill px-xs text-[12px] font-extrabold leading-[20px]';
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const ESTIMATES = [15, 25, 45, 60, 90];
 
 /** A priority tag in its colour: P0 red, P1 orange, P2 purple, P3 grey. */
@@ -31,6 +31,7 @@ export function TaskTags({ task }: { task: Node }) {
     <>
       <PriorityChip priority={task.priority} />
       {task.remind && <span className={plain}>🔔 Remember</span>}
+      {task.forReview && <span className={plain}>📝 For review</span>}
       {task.repeat && <span className={plain} title={repeatLabel(task.repeat, task.doDate ?? task.dueDate)}>🔁 Habit</span>}
       {task.fromPillar && <span className={plain}>🏛 From pillar</span>}
       {task.fromCoach && <span className={plain}>From your coach</span>}
@@ -62,6 +63,7 @@ export interface Plan {
   repeat: Repeat | null;
   priority: Priority | null;
   remind: boolean;
+  forReview: boolean;
   time: string;
   minutes: string;
 }
@@ -71,6 +73,7 @@ export const planOf = (n?: Node | null, doDate = ''): Plan => ({
   repeat: n?.repeat ?? null,
   priority: n?.priority ?? null,
   remind: n?.remind ?? false,
+  forReview: n?.forReview ?? false,
   time: n?.dueTime ?? '',
   minutes: n?.estimateMin ? String(n.estimateMin) : '',
 });
@@ -82,6 +85,7 @@ export const planBody = (p: Plan): TaskPlanBody => {
     repeat: dated ? p.repeat : null,
     priority: p.priority,
     remind: p.remind,
+    forReview: p.forReview,
     dueTime: p.time || null,
     estimateMin: Number(p.minutes) > 0 ? Number(p.minutes) : null,
   };
@@ -94,8 +98,6 @@ export const planProblem = (p: Plan): string | null =>
 export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange: (p: Plan) => void; today: string }) {
   const set = (patch: Partial<Plan>) => onChange({ ...plan, ...patch });
   const dated = Boolean(plan.doDate || plan.dueDate);
-  const rule = plan.repeat;
-  const setRule = (patch: Partial<Repeat>) => rule && set({ repeat: { ...rule, ...patch } });
   const problem = planProblem(plan);
   return (
     <div className="flex flex-col gap-md">
@@ -128,55 +130,13 @@ export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange
 
       <PriorityPicker value={plan.priority} onChange={(priority) => set({ priority })} />
 
-      <div>
-        <label className="block">
-          <span className="block text-[14px] font-bold">Repeat</span>
-          <select
-            value={rule?.kind ?? 'none'}
-            onChange={(e) => set({ repeat: e.target.value === 'none' ? null : { kind: e.target.value as RepeatKind, every: rule?.every ?? 1, days: [], until: rule?.until ?? null } })}
-            className={FIELD}
-          >
-            <option value="none">Does not repeat</option>
-            {REPEAT_KINDS.map((k) => (
-              <option key={k.key} value={k.key}>
-                {k.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        {rule && (
-          <div className="mt-xs flex flex-col gap-xs">
-            {rule.kind !== 'weekdays' && (
-              <label className="flex items-center gap-xs text-[14px] font-bold">
-                Every
-                <input type="number" min={1} max={52} value={rule.every} onChange={(e) => setRule({ every: Math.min(52, Math.max(1, Math.round(Number(e.target.value)) || 1)) })} className="w-[72px] rounded-tile border-2 border-line bg-paper px-sm py-xs text-[16px]" />
-                {REPEAT_KINDS.find((k) => k.key === rule.kind)?.unit}
-                {rule.every === 1 ? '' : 's'}
-              </label>
-            )}
-            {rule.kind === 'weekly' && (
-              <div className="flex flex-wrap gap-xs" role="group" aria-label="Days of the week">
-                {WEEKDAYS.map((d, i) => {
-                  const n = i + 1;
-                  const on = rule.days.includes(n);
-                  return (
-                    <button key={d} type="button" aria-pressed={on} onClick={() => setRule({ days: on ? rule.days.filter((x) => x !== n) : [...rule.days, n].sort() })} className={`toy min-h-[44px] min-w-[44px] rounded-pill border-2 px-xs text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-                      {d}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            <label className="block">
-              <span className="block text-[14px] font-bold">Stop after (optional)</span>
-              <input type="date" value={rule.until ?? ''} onChange={(e) => setRule({ until: e.target.value || null })} className={FIELD} />
-            </label>
-            <p className="m-0 text-[12px] font-semibold text-ink-soft">
-              {repeatLabel(rule, plan.doDate || plan.dueDate || null)}. Tick it and the next one is made for you. A repeating task is a habit.
-            </p>
-          </div>
-        )}
-      </div>
+      <RepeatPicker
+        value={plan.repeat}
+        anchor={plan.doDate || plan.dueDate}
+        onChange={(repeat) => set({ repeat })}
+        onAnchor={plan.doDate || plan.dueDate ? (day) => (plan.doDate || !plan.dueDate ? set({ doDate: day }) : set({ dueDate: day })) : undefined}
+        note="Tick it and the next one is made for you. A repeating task is a habit."
+      />
 
       <Toggle
         on={plan.remind}
@@ -185,6 +145,7 @@ export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange
         hint={dated ? 'Tagged to remember, and a note lands in your inbox on the day, at its time (9:00 when it has none).' : 'Tagged to remember. With no date it waits in To remember on Daily, and gets an inbox note once you pick a day.'}
         compact
       />
+      <Toggle on={plan.forReview} onChange={(forReview) => set({ forReview })} label="Bring it to my review" hint="The review for its week, month or quarter lists it, so you can put it into your answers." compact />
 
       <div className="grid grid-cols-2 gap-xs">
         <label className="block">

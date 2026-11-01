@@ -11,7 +11,7 @@ import { audit, can, newId, nowIso, orgRole, str } from '../db';
 export const mediaPublic = new Hono<AppEnv>();
 export const media = new Hono<AppEnv>();
 
-/** The most files one person keeps. A file nobody uses any more is cleaned out by `tidyMedia`. */
+/** The most files one person keeps. */
 const MAX_FILES_PER_PERSON = 60;
 
 const isOwner = (t: string): t is MediaOwner => (MEDIA_OWNERS as readonly string[]).includes(t);

@@ -44,6 +44,7 @@ export interface NodeBody {
   repeat?: unknown;
   priority?: unknown;
   remind?: unknown;
+  forReview?: unknown;
   dueTime?: unknown;
   estimateMin?: unknown;
   status?: unknown;
@@ -98,7 +99,8 @@ export async function createNode(db: D1Database, ownerId: string, body: NodeBody
     .run();
   const priority = kind === 'task' ? parsePriority(body.priority) : null;
   const remind = kind === 'task' && body.remind === true ? 1 : 0;
-  if (doDate || repeat || priority !== null || remind) await db.prepare('UPDATE nodes SET do_date = ?, repeat_json = ?, priority = ?, remind = ? WHERE id = ?').bind(doDate, repeat ? JSON.stringify(repeat) : null, priority, remind, id).run();
+  const forReview = kind === 'task' && body.forReview === true ? 1 : 0;
+  if (doDate || repeat || priority !== null || remind || forReview) await db.prepare('UPDATE nodes SET do_date = ?, repeat_json = ?, priority = ?, remind = ?, for_review = ? WHERE id = ?').bind(doDate, repeat ? JSON.stringify(repeat) : null, priority, remind, forReview, id).run();
   const row = await getNode(db, ownerId, id);
   return row ? { row } : { error: 'not found', status: 404 };
 }
@@ -137,6 +139,8 @@ export async function editNode(db: D1Database, row: NodeRow, body: NodeBody): Pr
     const remind = 'remind' in body ? body.remind === true : (row.remind ?? 0) === 1;
     await db.prepare('UPDATE nodes SET priority = ?, remind = ? WHERE id = ?').bind(priority, remind ? 1 : 0, row.id).run();
   }
+  // For review is a flag: the review for the period lists the task, and a tap puts it into an answer.
+  if (row.kind === 'task' && 'forReview' in body) await db.prepare('UPDATE nodes SET for_review = ? WHERE id = ?').bind(body.forReview === true ? 1 : 0, row.id).run();
   return (await getNode(db, row.user_id, row.id)) ?? row;
 }
 
@@ -163,10 +167,10 @@ async function spawnNext(db: D1Database, row: NodeRow, today: string): Promise<N
   const sortRow = await db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM nodes WHERE user_id = ? AND kind = ? AND relationship = ?').bind(row.user_id, 'task', row.relationship).first<{ next: number }>();
   await db
     .prepare(
-      `INSERT INTO nodes (id, user_id, kind, parent_id, relationship, title, note, status, xp, due_date, completed_at, ready_at, sort_order, created_at, updated_at, due_time, estimate_min, added_by, do_date, repeat_json, spawned_from, priority, remind)
-       VALUES (?, ?, 'task', ?, ?, ?, ?, 'active', 0, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO nodes (id, user_id, kind, parent_id, relationship, title, note, status, xp, due_date, completed_at, ready_at, sort_order, created_at, updated_at, due_time, estimate_min, added_by, do_date, repeat_json, spawned_from, priority, remind, for_review)
+       VALUES (?, ?, 'task', ?, ?, ?, ?, 'active', 0, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(id, row.user_id, row.parent_id, row.relationship, row.title, row.note, dueDate, readyFromNow(), sortRow?.next ?? 0, now, now, row.due_time, row.estimate_min, row.added_by ?? null, doDate, row.repeat_json, row.id, row.priority ?? null, row.remind ?? 0)
+    .bind(id, row.user_id, row.parent_id, row.relationship, row.title, row.note, dueDate, readyFromNow(), sortRow?.next ?? 0, now, now, row.due_time, row.estimate_min, row.added_by ?? null, doDate, row.repeat_json, row.id, row.priority ?? null, row.remind ?? 0, row.for_review ?? 0)
     .run();
   // The checklist comes back too, all unticked.
   await db

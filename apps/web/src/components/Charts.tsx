@@ -516,7 +516,7 @@ export function CalendarGrid({
             <span
               className="flex size-[28px] items-center justify-center rounded-pill text-[12px] font-extrabold"
               style={{
-                background: mark ? mark.color : onFill ? 'rgba(255,255,255,0.18)' : 'var(--color-paper)',
+                background: mark ? mark.color : onFill ? 'rgba(0,0,0,0.2)' : 'var(--color-paper)',
                 color: mark ? 'white' : onFill ? 'white' : 'var(--color-ink-soft)',
                 ...ring(key),
               }}

@@ -2,7 +2,7 @@ import { Hono, type Context } from 'hono';
 import { rewardSocial, trustFor } from '../rewards';
 import { unlockFor } from '@kreators/shared';
 import { haveFor } from '../unlocks';
-import { badgesNow, pageOf, paged } from '../db';
+import { pageOf, paged } from '../db';
 import { AFFILIATE_SHARE, levelFromXp, type Lesson, type PublicPage } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
 import { DATE_RE, nameOf, newId, notify, nowIso, parseList, parseSocials, sessionUser, publicOf, getStats, computeBadges, grantedBadges, honorKeys, linksOf, withGranted } from '../db';

@@ -39,6 +39,7 @@ export async function deleteAccount(db: D1Database, userId: string): Promise<voi
     db.prepare('DELETE FROM not_to_do WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM reviews WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM review_templates WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM review_schedules WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM preowned_listings WHERE seller_id = ?').bind(userId),
     db.prepare('DELETE FROM preowned_offers WHERE buyer_id = ?').bind(userId),
     db.prepare('DELETE FROM run_entries WHERE user_id = ?').bind(userId),

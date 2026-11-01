@@ -6,7 +6,7 @@ import type { Brand, BrandDetail, BrandPiece, BrandSource, PieceKind, ResearchKi
 import type { Contract, DayType, Fear, Insecurity, Placement, Practices, RealDay, RoutineBlock, Scores, SessionResponse } from '@kreators/shared';
 import type { FeedFilter, FeedSort, SocialAward, TrustScore } from '@kreators/shared';
 import type { ListingDetail, MarketResponse, PreownedListing, PreownedMessage, PreownedOffer, StoreItem, StoreKit } from '@kreators/shared';
-import type { PeriodKind, Review, ReviewSummary, ReviewTemplate, ReviewsResponse } from '@kreators/shared';
+import type { PeriodKind, Review, ReviewCalendarResponse, ReviewSummary, ReviewTemplate, ReviewsResponse } from '@kreators/shared';
 import type { NotToDo, NotToDoStatus } from '@kreators/shared';
 import type { SetupMatch } from '@kreators/shared';
 import type { CardGamePlay, CardGamesResponse, DiscoverAnswers, DiscoverResult, FocusResponse, FocusTask, FocusView, LogsResponse } from '@kreators/shared';
@@ -66,7 +66,6 @@ import type {
   Enrollment,
   EventRegistration,
   FinanceDue,
-  FinanceGoal,
   FinanceRecurring,
   FinanceSplit,
   FinanceSummary,
@@ -208,8 +207,18 @@ export interface TaskPlanBody {
   repeat?: Repeat | null;
   priority?: Priority | null;
   remind?: boolean;
+  forReview?: boolean;
   dueTime?: string | null;
   estimateMin?: number | null;
+}
+/** A scheduled review: which one, its first day, the time of the reminder, how it repeats, and an optional name. */
+export interface ReviewScheduleBody {
+  kind: PeriodKind;
+  anchor: string;
+  time: string;
+  repeat: Repeat | null;
+  name: string;
+  enabled?: boolean;
 }
 const put = <T>(path: string, body: unknown) => request<T>(path, { method: 'PUT', body: JSON.stringify(body) });
 /** What an attendee code change asks for: a new xp (before the event starts), the host's own code, or a fresh random one. */
@@ -310,6 +319,10 @@ export const api = {
   reviewTemplateAdd: (body: { kind: PeriodKind; name: string; prompts: string[] }) => post<{ template: ReviewTemplate }>('/reviews/templates', body),
   reviewTemplateUpdate: (id: string, body: { name: string; prompts: string[] }) => patch<{ template: ReviewTemplate }>(`/reviews/templates/${id}`, body),
   reviewTemplateRemove: (id: string) => del<{ ok: true }>(`/reviews/templates/${id}`),
+  reviewSchedule: (month: string) => request<ReviewCalendarResponse>(`/reviews/schedule?month=${month}&day=${todayLocal()}`),
+  reviewScheduleAdd: (body: ReviewScheduleBody) => post<{ id: string }>(`/reviews/schedule?day=${todayLocal()}`, body),
+  reviewScheduleUpdate: (id: string, body: Partial<ReviewScheduleBody>) => patch<{ ok: true }>(`/reviews/schedule/${id}?day=${todayLocal()}`, body),
+  reviewScheduleRemove: (id: string) => del<{ ok: true }>(`/reviews/schedule/${id}`),
 
   // agency: clients, deliverables, time, invoices, agreements. The day always comes from the device.
   agency: (q = '') => request<AgencyOverview>(withQ(`/agency?day=${todayLocal()}`, q)),

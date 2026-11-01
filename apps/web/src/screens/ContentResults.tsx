@@ -2,7 +2,6 @@ import { CONTENT_KINDS, LINK_SOURCES, SOCIAL_PLATFORM_META, type ContentItem, ty
 import { useMutation } from '@tanstack/react-query';
 import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
 import { Button } from '../components/Button';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';

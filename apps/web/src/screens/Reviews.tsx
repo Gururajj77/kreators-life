@@ -1,13 +1,17 @@
-import { MOODS, PERIOD_KINDS, PERIOD_META, periodFor, periodLabel, RELATIONSHIP_BY_KEY, RELATIONSHIPS, REVIEW_ANSWER_MAX, REVIEW_HIGHLIGHT_MAX, REVIEW_NAME_MAX, type Period, type PeriodKind, type ReviewTemplate } from '@kreators/shared';
+import { MOODS, PERIOD_KINDS, PERIOD_META, periodFor, periodLabel, RELATIONSHIP_BY_KEY, RELATIONSHIPS, REVIEW_ANSWER_MAX, REVIEW_HIGHLIGHT_MAX, REVIEW_NAME_MAX, type Period, type PeriodKind, type ReviewFlagged, type ReviewTemplate } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router';
 import { BusinessMetrics } from '../components/BusinessMetrics';
 import { Button } from '../components/Button';
 import { AreaLine, Donut, Legend } from '../components/Charts';
 import { Hero } from '../components/Hero';
+import { Inert } from '../components/Inert';
 import { MoodFace } from '../components/MoodFace';
 import { BackLink } from '../components/PageHeader';
 import { PeriodFilter } from '../components/PeriodFilter';
+import { ReviewCalendar } from '../components/ReviewCalendar';
+import { StatusTag } from '../components/StatusTag';
 import { SummaryTiles, type SummaryPart } from '../components/PeriodPanel';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
@@ -21,7 +25,13 @@ const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-
 /** Weekly, monthly, quarterly and mid-year reviews: the numbers from every app for the period, and what you make of them. */
 export function Reviews() {
   const today = todayLocal();
-  const [period, setPeriod] = useState<Period>(() => periodFor('week', today));
+  // A reminder opens a period by its kind and first day in the address; after that the period lives here.
+  const [params] = useSearchParams();
+  const [period, setPeriod] = useState<Period>(() => {
+    const kind = params.get('kind');
+    const date = params.get('date');
+    return kind && (PERIOD_KINDS as readonly string[]).includes(kind) && date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? periodFor(kind as PeriodKind, date) : periodFor('week', today);
+  });
   const qc = useQueryClient();
   const q = useAuthed(['reviews', period.kind, period.start], () => api.reviews(period.kind, period.start));
   const d = q.data;
@@ -52,6 +62,20 @@ export function Reviews() {
   const template = d?.templates.find((t) => t.id === templateId) ?? d?.templates[0] ?? null;
   // A saved review keeps its own prompts even after its template changed or went.
   const prompts = d?.review && d.review.templateId === (template?.builtIn ? null : template?.id) ? d.review.prompts : (template?.prompts ?? []);
+  // A task brought to this review. A saved review keeps the list it was saved with; one saved before this existed shows the live list.
+  const flagged: ReviewFlagged[] = d?.review?.snapshot?.flagged ?? d?.summary.flagged ?? [];
+  const lineFor = (f: ReviewFlagged) => `${f.status === 'done' ? 'Done' : 'Still open'}: ${f.title}`;
+  const slotFor = (f: ReviewFlagged) => Math.min(f.status === 'done' ? 0 : 1, Math.max(0, prompts.length - 1));
+  const bring = (f: ReviewFlagged) => {
+    if (prompts.length === 0) return;
+    const at = slotFor(f);
+    const line = lineFor(f);
+    setAnswers((a) => prompts.map((_, j) => (j === at ? [a[j] ?? '', line].filter(Boolean).join('\n').slice(0, REVIEW_ANSWER_MAX) : (a[j] ?? ''))));
+  };
+  const openReview = (p: Period) => {
+    setPeriod(p);
+    window.setTimeout(() => document.getElementById('review-heading')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 400);
+  };
   const save = useMutation({
     mutationFn: () => api.saveReview({ kind: period.kind, date: period.start, templateId: template && !template.builtIn ? template.id : null, answers, rating, highlight }),
     onSuccess: invalidate,
@@ -103,6 +127,8 @@ export function Reviews() {
         </p>
       )}
 
+      <ReviewCalendar today={today} onOpenPeriod={openReview} />
+
       {s && (
         <>
           <section className="mt-lg" aria-labelledby="numbers-heading">
@@ -114,6 +140,37 @@ export function Reviews() {
               <SummaryTiles summary={s} parts={PARTS} />
             </div>
           </section>
+
+          {flagged.length > 0 && (
+            <section className="mt-lg" aria-labelledby="brought-heading">
+              <h2 id="brought-heading" className="text-[24px]">
+                Tasks you brought
+              </h2>
+              <p className="mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">Tick &quot;Bring it to my review&quot; on a task in Daily and it shows up here.</p>
+              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+                {flagged.map((f) => {
+                  const added = Boolean(prompts.length) && (answers[slotFor(f)] ?? '').includes(lineFor(f));
+                  return (
+                    <li key={f.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+                      <span aria-hidden="true" className="size-[12px] shrink-0 rounded-pill" style={{ background: RELATIONSHIP_BY_KEY[f.relationship]?.color }} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[16px] font-bold">
+                          <Inert text={f.title} />
+                        </span>
+                        <span className="mt-xs flex flex-wrap items-center gap-xs text-[12px] font-bold text-ink-soft">
+                          <StatusTag tone={f.status === 'done' ? 'good' : 'warn'}>{f.status === 'done' ? 'Done' : 'Open'}</StatusTag>
+                          {f.day ? prettyDate(f.day) : 'No day yet'}
+                        </span>
+                      </span>
+                      <Button variant="outline" size="sm" disabled={added || prompts.length === 0} onClick={() => bring(f)}>
+                        {added ? 'Added' : 'Add to my answer'}
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
 
           <BusinessMetrics kind={period.kind} date={period.start} />
 

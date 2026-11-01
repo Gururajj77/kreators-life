@@ -3,7 +3,6 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
-import { CalendarLink } from '../components/CalendarLink';
 import { InterestPicker } from '../components/InterestPicker';
 import { LinksEditor } from '../components/LinksEditor';
 import { BackLink } from '../components/PageHeader';
@@ -259,8 +258,6 @@ function ProfileView({ user }: { user: User }) {
       </form>
 
       <Portfolio />
-
-      <CalendarLink />
 
       <section className="mt-lg" aria-labelledby="links-heading">
         <h2 id="links-heading" className="text-[24px]">

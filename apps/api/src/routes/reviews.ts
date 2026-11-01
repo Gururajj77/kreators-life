@@ -1,5 +1,18 @@
 import { Hono } from 'hono';
 import {
+  MAX_REVIEW_FLAGGED,
+  type Priority,
+  type ReviewFlagged,
+  MAX_REVIEW_SCHEDULES,
+  nextOnOrAfter,
+  occurrencesBetween,
+  parseRepeat,
+  repeatLabel,
+  REVIEW_REMINDER_TIME,
+  REVIEW_SCHEDULE_NAME_MAX,
+  type ReviewCalendarDay,
+  type ReviewCalendarResponse,
+  type ReviewSchedule,
   builtInTemplate,
   MAX_REVIEW_TEMPLATES,
   parseReviewPrompts,
@@ -21,7 +34,7 @@ import {
   type ReviewsResponse,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { DATE_RE, newId, nowIso, shiftDate } from '../db';
+import { DATE_RE, dayFromDevice, newId, nowIso, shiftDate, str } from '../db';
 
 /** Reviews: the numbers for a period from every app, and the review a person writes about it. */
 export const reviews = new Hono<AppEnv>();
@@ -147,23 +160,44 @@ async function numbersFor(db: D1Database, userId: string, p: Period): Promise<Pe
   };
 }
 
+/** The tasks brought to a review: ticked in the period, or still open and planned in it, and open ones with no day while the period is the current one. */
+export async function flaggedFor(db: D1Database, userId: string, p: Period): Promise<ReviewFlagged[]> {
+  const fromTs = `${p.start}T00:00:00`;
+  const toTs = `${shiftDate(p.end, 1)}T00:00:00`;
+  const today = new Date().toISOString().slice(0, 10);
+  const current = p.start <= today && today <= p.end;
+  const rows = await db
+    .prepare(
+      `SELECT id, title, relationship, status, completed_at, do_date, due_date, priority FROM nodes
+       WHERE user_id = ?1 AND kind = 'task' AND for_review = 1 AND (
+         (status = 'done' AND completed_at >= ?2 AND completed_at < ?3)
+         OR (status = 'active' AND COALESCE(do_date, due_date) >= ?4 AND COALESCE(do_date, due_date) <= ?5)
+         OR (?6 = 1 AND status = 'active' AND do_date IS NULL AND due_date IS NULL))
+       ORDER BY CASE status WHEN 'done' THEN 0 ELSE 1 END, COALESCE(completed_at, do_date, due_date, '9999') LIMIT ?7`,
+    )
+    .bind(userId, fromTs, toTs, p.start, p.end, current ? 1 : 0, MAX_REVIEW_FLAGGED)
+    .all<{ id: string; title: string; relationship: RelationshipKey; status: 'done' | 'active'; completed_at: string | null; do_date: string | null; due_date: string | null; priority: number | null }>();
+  return rows.results.map((r) => ({ id: r.id, title: r.title, relationship: r.relationship, status: r.status === 'done' ? 'done' : 'open', day: r.status === 'done' ? (r.completed_at?.slice(0, 10) ?? null) : (r.do_date ?? r.due_date), priority: (r.priority as Priority | null) ?? null }));
+}
+
 export async function summaryFor(db: D1Database, userId: string, p: Period): Promise<ReviewSummary> {
   const previous = periodShift(p, -1);
   const fromTs = `${p.start}T00:00:00`;
   const toTs = `${shiftDate(p.end, 1)}T00:00:00`;
-  const [now, before, xpByDay, tasksByDay, byArea, cur] = await Promise.all([
+  const [now, before, xpByDay, tasksByDay, byArea, cur, flagged] = await Promise.all([
     numbersFor(db, userId, p),
     numbersFor(db, userId, previous),
     db.prepare('SELECT substr(created_at, 1, 10) AS d, SUM(amount) AS xp FROM xp_events WHERE user_id = ? AND created_at >= ? AND created_at < ? GROUP BY d').bind(userId, fromTs, toTs).all<{ d: string; xp: number }>(),
     db.prepare("SELECT substr(completed_at, 1, 10) AS d, COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? AND completed_at < ? GROUP BY d").bind(userId, fromTs, toTs).all<{ d: string; n: number }>(),
     db.prepare('SELECT relationship, SUM(amount) AS xp FROM xp_events WHERE user_id = ? AND relationship IS NOT NULL AND created_at >= ? AND created_at < ? GROUP BY relationship').bind(userId, fromTs, toTs).all<{ relationship: RelationshipKey; xp: number }>(),
     db.prepare('SELECT currency FROM finance_transactions WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date DESC LIMIT 1').bind(userId, p.start, p.end).first<{ currency: string }>(),
+    flaggedFor(db, userId, p),
   ]);
   const xpMap = new Map(xpByDay.results.map((r) => [r.d, r.xp]));
   const taskMap = new Map(tasksByDay.results.map((r) => [r.d, r.n]));
   const xpByArea: Partial<Record<RelationshipKey, number>> = {};
   for (const r of byArea.results) xpByArea[r.relationship] = r.xp;
-  return { period: p, previous, now, before, series: periodDays(p).map((d) => ({ date: d, xp: xpMap.get(d) ?? 0, tasks: taskMap.get(d) ?? 0 })), xpByArea, currency: cur?.currency ?? 'INR' };
+  return { period: p, previous, now, before, series: periodDays(p).map((d) => ({ date: d, xp: xpMap.get(d) ?? 0, tasks: taskMap.get(d) ?? 0 })), xpByArea, currency: cur?.currency ?? 'INR', flagged };
 }
 
 async function templatesFor(db: D1Database, userId: string, kind: PeriodKind): Promise<ReviewTemplate[]> {
@@ -269,6 +303,91 @@ reviews.patch('/templates/:id', async (c) => {
 reviews.delete('/templates/:id', async (c) => {
   const r = await c.env.DB.prepare('DELETE FROM review_templates WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
   if (!r.meta.changes) return c.json({ error: 'not found' }, 404);
+  return c.json({ ok: true });
+});
+
+// ---- the review calendar: reminders on chosen days, and the reviews already written
+
+interface ScheduleRow { id: string; kind: PeriodKind; name: string; anchor: string; time: string; repeat_json: string | null; enabled: number; next_on: string | null }
+const TIME_OK = /^([01]\d|2[0-3]):[0-5]\d$/;
+const toSchedule = (r: ScheduleRow): ReviewSchedule => {
+  const repeat = parseRepeat(r.repeat_json);
+  return { id: r.id, kind: r.kind, name: r.name, anchor: r.anchor, time: r.time, repeat, enabled: r.enabled === 1, nextOn: r.next_on, label: repeat ? repeatLabel(repeat, r.anchor) : 'Once' };
+};
+
+// One month for the calendar: every reminder that falls in it, and every review written for a period that touches it.
+reviews.get('/schedule', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const monthQ = c.req.query('month');
+  const month = monthQ && /^\d{4}-(0[1-9]|1[0-2])$/.test(monthQ) ? monthQ : dayFromDevice(c.req.query('day')).slice(0, 7);
+  const from = `${month}-01`;
+  const to = shiftDate(`${shiftMonth(month, 1)}-01`, -1);
+  const [rows, written] = await Promise.all([
+    db.prepare('SELECT id, kind, name, anchor, time, repeat_json, enabled, next_on FROM review_schedules WHERE user_id = ? ORDER BY created_at LIMIT ?').bind(user.id, MAX_REVIEW_SCHEDULES).all<ScheduleRow>(),
+    db.prepare('SELECT kind, period_start, period_end FROM reviews WHERE user_id = ? AND period_end >= ? AND period_end <= ?').bind(user.id, from, to).all<{ kind: PeriodKind; period_start: string; period_end: string }>(),
+  ]);
+  const days: Record<string, ReviewCalendarDay> = {};
+  const at = (d: string) => (days[d] ??= { scheduled: [], written: [] });
+  const schedules = rows.results.map(toSchedule);
+  for (const sc of schedules) {
+    if (!sc.enabled) continue;
+    for (const d of occurrencesBetween(sc.anchor, sc.repeat, from, to)) at(d).scheduled.push({ id: sc.id, kind: sc.kind, time: sc.time, name: sc.name });
+  }
+  for (const w of written.results) at(w.period_end).written.push({ kind: w.kind, start: w.period_start, end: w.period_end });
+  const body: ReviewCalendarResponse = { month, schedules, days };
+  return c.json(body);
+});
+
+function scheduleFields(body: Record<string, unknown>, prev?: ScheduleRow) {
+  const kind = kindOf(typeof body.kind === 'string' ? body.kind : prev?.kind) ?? 'week';
+  // A real day on the calendar: 2026-11-31 has the right shape but is not one.
+  const realDay = (v: unknown): v is string => typeof v === 'string' && DATE_RE.test(v) && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v;
+  const anchor = realDay(body.anchor) ? body.anchor : (prev?.anchor ?? '');
+  const time = typeof body.time === 'string' && TIME_OK.test(body.time) ? body.time : (prev?.time ?? REVIEW_REMINDER_TIME);
+  const repeat = 'repeat' in body ? parseRepeat(body.repeat) : parseRepeat(prev?.repeat_json ?? null);
+  return { kind, anchor, time, repeat, name: str(body.name, REVIEW_SCHEDULE_NAME_MAX, prev?.name ?? ''), enabled: 'enabled' in body ? body.enabled !== false : (prev ? prev.enabled === 1 : true) };
+}
+function shiftMonth(month: string, n: number): string {
+  const [y, m] = month.split('-').map(Number);
+  return new Date(Date.UTC(y ?? 2026, (m ?? 1) - 1 + n, 1)).toISOString().slice(0, 7);
+}
+
+reviews.post('/schedule', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const f = scheduleFields(body);
+  if (!f.anchor) return c.json({ error: 'pick a day' }, 400);
+  if (body.repeat && !f.repeat) return c.json({ error: 'That is not a way to repeat.' }, 400);
+  const n = await db.prepare('SELECT COUNT(*) AS n FROM review_schedules WHERE user_id = ?').bind(user.id).first<{ n: number }>();
+  if ((n?.n ?? 0) >= MAX_REVIEW_SCHEDULES) return c.json({ error: `up to ${MAX_REVIEW_SCHEDULES} scheduled reviews` }, 400);
+  const id = newId();
+  await db
+    .prepare('INSERT INTO review_schedules (id, user_id, kind, name, anchor, time, repeat_json, enabled, next_on, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, user.id, f.kind, f.name, f.anchor, f.time, f.repeat ? JSON.stringify(f.repeat) : null, f.enabled ? 1 : 0, nextOnOrAfter(f.anchor, f.repeat, dayFromDevice(c.req.query('day'))), nowIso())
+    .run();
+  return c.json({ id }, 201);
+});
+
+reviews.patch('/schedule/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const prev = await db.prepare('SELECT id, kind, name, anchor, time, repeat_json, enabled, next_on FROM review_schedules WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).first<ScheduleRow>();
+  if (!prev) return c.json({ error: 'not found' }, 404);
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const f = scheduleFields(body, prev);
+  if (body.repeat && !f.repeat) return c.json({ error: 'That is not a way to repeat.' }, 400);
+  await db
+    .prepare('UPDATE review_schedules SET kind = ?, name = ?, anchor = ?, time = ?, repeat_json = ?, enabled = ?, next_on = ? WHERE id = ? AND user_id = ?')
+    .bind(f.kind, f.name, f.anchor, f.time, f.repeat ? JSON.stringify(f.repeat) : null, f.enabled ? 1 : 0, nextOnOrAfter(f.anchor, f.repeat, dayFromDevice(c.req.query('day'))), prev.id, user.id)
+    .run();
+  return c.json({ ok: true });
+});
+
+reviews.delete('/schedule/:id', async (c) => {
+  const res = await c.env.DB.prepare('DELETE FROM review_schedules WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
   return c.json({ ok: true });
 });
 

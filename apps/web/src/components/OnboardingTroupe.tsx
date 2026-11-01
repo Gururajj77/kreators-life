@@ -1,4 +1,4 @@
-import { RELATIONSHIP_BY_KEY, type RelationshipKey, characterTitle } from '@kreators/shared';
+import { type RelationshipKey, characterTitle } from '@kreators/shared';
 import gsap from 'gsap';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { Avatar } from './Avatar';

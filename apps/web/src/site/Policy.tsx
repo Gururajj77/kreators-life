@@ -2,6 +2,7 @@ import { AFFILIATE_SHARE, PAID_PLANS, PAYMENTS_LIVE, PLAN_DAYS, PLANS } from '@k
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { SiteLayout } from './SiteLayout';
+import { tie } from '../lib/text';
 
 type Kind = 'terms' | 'privacy' | 'refunds' | 'contact' | 'pricing';
 
@@ -27,20 +28,22 @@ export function Policy({ kind }: { kind: Kind }) {
     <SiteLayout wide={kind === 'pricing'}>
       <header className="pt-lg">
         <p className="m-0 type-eyebrow text-ink-mute">kreators.app</p>
-        <h1 className="type-hook mt-sm text-[clamp(40px,8vw,64px)]">{t.title}</h1>
+        <h1 className="type-hook mt-sm text-[clamp(40px,8vw,64px)]">{tie(t.title)}</h1>
         <P>{t.lede}</P>
       </header>
 
       {kind === 'terms' && (
         <section>
           <H>What kreators.app is</H>
-          <P>A daily game for the seven relationships of a life, with tools for people who make things: learning, paid work, brand campaigns, content rewards, events, run clubs, a shop, finance and meetups. You need to be eighteen or older. Sign-up asks for your date of birth and a phone number, and an account for anyone younger is refused.</P>
+          <P>A daily game for the seven relationships of a life, with tools for people who make things: learning, paid work, brand campaigns, content rewards, client work with invoices and agreements, events, run clubs, a shop, finance and meetups. You need to be eighteen or older. Sign-up asks for your date of birth and a phone number, and an account for anyone younger is refused.</P>
           <H>Your account</H>
           <P>You start with a session on your device and may add an email. Keep your password private. You are responsible for what happens under your account, and one person has one account.</P>
           <H>Points, rewards and money</H>
           <P>Points are earned by showing up and can be spent inside kreators.app. They are not money, cannot be cashed out, and have no value outside the app. Content rewards are paid in points after a reviewer confirms views; the pool and the rules on each reward are the whole deal. Money paid to creators through the shop goes through a payment provider under its own terms.</P>
           <H>What you make and sell</H>
           <P>You keep the rights to what you make. By selling through the shop you promise it is yours to sell, is not unlawful or hateful, and does not promise financial returns. Brands and creators agree usage rights on each campaign in writing before anything is produced.</P>
+          <H>Invoices and agreements</H>
+          <P>Agency lets you make invoices and agreements for your own clients. They are your documents, not ours, and you are responsible for what is in them and for the tax on them. The agreement templates are a starting point, not legal advice: have a lawyer read one before you rely on it. When a client types their name to accept, that is typed acceptance, not a certified electronic signature. We take no part of what you invoice.</P>
           <H>Fair play</H>
           <P>No farming points, no fake views, no scraping, no impersonation. We may remove content, hold payouts for review, or close accounts that break these rules, and we tell you why.</P>
           <H>Liability</H>
@@ -53,10 +56,14 @@ export function Policy({ kind }: { kind: Kind }) {
       {kind === 'privacy' && (
         <section>
           <H>What we keep</H>
-          <P>Your profile (name, page name, bio, skills, interests, city), your pillars and daily logs, wellbeing and journal entries, orders, bookings, finance entries, messages in circles, and the events your device sends while you use the app.</P>
+          <P>Your profile (name, page name, bio, skills, interests, city), your pillars and daily logs, wellbeing and journal entries, orders, bookings, finance entries, the clients, deliverables, time, invoices and agreements you keep in Agency, the reviews you write and plan, messages in circles, and the events your device sends while you use the app.</P>
           <H>Who sees what</H>
           <P>Your journal and wellbeing numbers are never shown to brands, staff, the leaderboard or Club selection. Your public page shows only what you put on it. Staff see what their permission covers. A circle sees your alias until you choose to reveal.</P>
           <P>Your Discover answers and results are private to you. They never reach brands, staff, the leaderboard or a life coach. You choose whether they shape your next steps on Home (plain rules, no AI, on until you switch it off), and whether the assistant may read a short summary of them (off until you switch it on, and only a model that keeps no data can read it). You can delete a result at any time.</P>
+          <H>Agency and your clients</H>
+          <P>What you keep about your clients is yours, and only you see it. A client sees only the page you share with them, and only the parts you switch on. Their page never carries your fees, your private notes, your time line by line or your other clients, whatever you switch on. A client can type a comment, an answer to a brief and their name to accept; those are kept with that invoice or agreement and shown to you. An invoice or an agreement opens only from its own long link, which a fresh link replaces. Your bank and tax details live on your own account and appear only on an invoice you choose to send, where you can switch them off. If you delete your account, your clients and agreements go, and an invoice stays for the books with its totals, but not who it was for, its lines, your bank details or its link. Business metrics in Reviews are for your eyes only.</P>
+          <H>The calendar link</H>
+          <P>If you switch on the private calendar link, anyone with that address can read the title, pillar and priority of your open tasks that have a day, and the reviews you planned, with their times. It never carries notes, your journal, your mood or anything from a tracker. It only shows your tasks; nothing changes them from a calendar. Make a fresh link or switch it off and the old address stops at once.</P>
           <H>Life coaches</H>
           <P>A life coach is someone our team chose. A coach sees nothing of yours until you say yes, and then only the parts you switch on: daily check-ins and tasks, your pillars, your routine and contract, your life map answers, and your wellbeing numbers and saved reviews. A coach never sees your journal, the notes you add to your trackers, your money or your Companion chats. You can switch a part off or end the coaching at any time, from your Profile tab, and the coach loses sight of it at once. Every ask, note and task a coach adds is kept in a change log you can read. It all comes with your export and goes with your account.</P>
           <H>Position</H>
@@ -116,7 +123,7 @@ export function Policy({ kind }: { kind: Kind }) {
         <section>
           <div className="mt-lg grid gap-sm md:grid-cols-3">
             {[
-              ['Play', 'Free', 'The daily game, your seven pillars, every app you switch on, circles, events and learning. Free to start, free to stay.'],
+              ['Play', 'Free', 'The daily game, your seven pillars, every app you switch on, Agency for your clients, circles, events and learning. Free to start, free to stay.'],
               ['Sell', '5% of each sale', 'Downloads, courses, sessions, memberships and everything in the shop. The fee is taken from each sale; nothing up front. Creators who refer others earn a share of ' + Math.round(AFFILIATE_SHARE * 100) + '% on referred sales.'],
               ['Assistant', `From US$${PLANS.pro.priceCents / 100}`, `Typing to the assistant, so it does things for you, needs a plan: ${PAID_PLANS.map((k) => `${PLANS[k].name} US$${PLANS[k].priceCents / 100}`).join(', ')}, each for ${PLAN_DAYS} days. Credits do not carry over. Its tap flows stay free.${PAYMENTS_LIVE ? '' : ' Plans are not on sale yet, so nothing is charged.'}`],
               ['Brands', 'Per campaign', 'Campaign scoping and content-reward pools are priced per brief. Write to brandingbum@gmail.com.'],
@@ -128,7 +135,7 @@ export function Policy({ kind }: { kind: Kind }) {
               </div>
             ))}
           </div>
-          <P>Money checkout runs in test mode until payments are switched on; points work today. Taxes on our fee are shown on every creator invoice.</P>
+          <P>Money checkout runs in test mode until payments are switched on; points work today. Taxes on our fee are shown on every creator invoice. Agency is free, and we take nothing from the invoices you make in it.</P>
         </section>
       )}
     </SiteLayout>

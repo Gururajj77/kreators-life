@@ -50,7 +50,7 @@ function Card({ card, color }: { card: BuildCard; color: string }) {
         <Ring value={percentOf(all)} color={color} />
         <div className="min-w-0">
           <h3 className="text-[18px] leading-tight">{card.title}</h3>
-          {card.route && <p className="m-0 break-words font-mono text-[12px] font-bold text-ink-mute">{card.route}</p>}
+          {card.route && <p className="m-0 flex flex-col break-words font-mono text-[12px] font-bold text-ink-mute">{card.route.split(", ").map((r) => <span key={r}>{r}</span>)}</p>}
         </div>
       </div>
       {pipe ? (
@@ -130,7 +130,7 @@ export function BuildMap() {
           {tower.map(({ s, all }) => {
             const p = percentOf(all);
             return (
-              <a key={s.id} href={`#build-${s.id}`} className="toy relative flex min-h-[44px] items-center justify-between gap-sm overflow-hidden rounded-pill px-md text-[14px] font-extrabold text-on-fill" style={{ width: `${46 + (7 - s.floor) * 8}%`, background: colorOf(s.floor) }}>
+              <a key={s.id} href={`#build-${s.id}`} className={`toy relative flex min-h-[44px] items-center justify-between gap-sm overflow-hidden rounded-pill px-md text-[14px] font-extrabold ${RELATIONSHIPS[s.floor - 1]!.key === 'parent_child' ? 'text-on-yellow' : 'text-on-fill'}`} style={{ width: `${46 + (7 - s.floor) * 8}%`, background: colorOf(s.floor) }}>
                 <span className="absolute inset-y-0 left-0 bg-white/25" style={{ width: `${p}%` }} aria-hidden="true" />
                 <span className="relative">{s.short}</span>
                 <span className="relative">{p}%</span>

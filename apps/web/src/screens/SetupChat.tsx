@@ -71,7 +71,7 @@ const listed = (items: string[]) => (items.length <= 1 ? (items[0] ?? '') : `${i
 const said = (labels: string[]) => listed(labels.map((l, i) => (i === 0 || /^I\b|^I'/.test(l) ? l : l.charAt(0).toLowerCase() + l.slice(1))));
 const kindOf = (k: string): IdentityKind | 'own' => IDENTITY_BY_KEY[k]?.kind ?? 'own';
 const uniq = <T,>(xs: T[]) => [...new Set(xs)];
-const makes = (a: SetupAnswers) => a.identities.includes('creator') || a.identities.includes('freelancer');
+const makes = (a: SetupAnswers) => a.identities.includes('creator') || a.identities.includes('freelancer') || a.identities.includes('agency_owner');
 /** "I'm a student" said back: "you're a student". */
 const youSay = (k: string) => (IDENTITY_BY_KEY[k]?.blurb ?? k).replace(/^I'm /, "you're ").replace(/^I /, 'you ');
 
@@ -248,7 +248,7 @@ export function SetupChat() {
       answers: a,
       asked,
       picks: a.goals,
-      ask: { kind: 'groups', groups: groupsOf(SETUP_GOAL_GROUPS, goalChoice), max: MAX_SETUP_GOALS, done: 'Next', more: 'Your answers decide which apps you get. If you want to earn, you get the apps that pay you. If you want to feel better, you get the trackers for mood, sleep and stress. “Work on myself” also adds the strategy session, a deeper setup for the seven relationships in your life.' },
+      ask: { kind: 'groups', groups: groupsOf(SETUP_GOAL_GROUPS, goalChoice), max: MAX_SETUP_GOALS, done: 'Next', more: 'Your answers decide which apps you get. If you want to earn, you get the apps that pay you. If you work for clients, you get Agency, for their work, time, invoices and approvals. If you want to plan your week, Reviews adds a calendar and reminders, and Plan my week on Daily is always there. If you want to feel better, you get the trackers for mood, sleep and stress. “Work on myself” also adds the strategy session, a deeper setup for the seven relationships in your life.' },
     });
 
   const askWho = (a: SetupAnswers, asked: Question[], lead: Line[]) =>
@@ -257,17 +257,20 @@ export function SetupChat() {
       answers: a,
       asked,
       picks: a.identities.filter((k) => kindOf(k) === 'role'),
-      ask: { kind: 'groups', groups: groupsOf(SETUP_ROLE_GROUPS, tagChoice), done: 'Next', skip: 'None of these', more: 'This helps me suggest apps that fit your life. A student who edits videos needs different apps than a parent who wants to save money. You can pick more than one, or describe yourself in your own words in the box below.' },
+      ask: { kind: 'groups', groups: groupsOf(SETUP_ROLE_GROUPS, tagChoice), done: 'Next', skip: 'None of these', more: 'This helps me suggest apps that fit your life. A student who edits videos needs different apps than an agency owner or a parent who wants to save money. You can pick more than one, or describe yourself in your own words in the box below.' },
     });
 
   const askWork = (a: SetupAnswers, asked: Question[], lead: Line[]) => {
     const creator = a.identities.includes('creator');
-    const freelance = a.identities.includes('freelancer');
+    const agency = a.identities.includes('agency_owner');
+    const freelance = a.identities.includes('freelancer') || agency;
     const groups: ChatChoiceGroup[] = [
       ...(creator ? [{ label: 'Your own content', emoji: '🎬', choices: identitiesOf('craft').map((i) => tagChoice(i.key)) }] : []),
       ...(freelance ? [{ label: 'For clients', emoji: '🧳', choices: identitiesOf('service').map((i) => tagChoice(i.key)) }] : []),
     ];
-    const q = creator && freelance ? 'You make things, so tell me more: what do you make, for yourself or for clients? Pick all that fit, then tap Next.' : creator ? 'You make content, so tell me more: what kind? Pick all that fit, then tap Next.' : 'You work for clients, so tell me more: what do you do for them? Pick all that fit, then tap Next.';
+    const q = creator && freelance ? 'You make things, so tell me more: what do you make, for yourself or for clients? Pick all that fit, then tap Next.' : creator ? 'You make content, so tell me more: what kind? Pick all that fit, then tap Next.' : agency && !a.identities.includes('freelancer')
+          ? 'Your agency works for clients, so tell me more: what does it make for them? Pick all that fit, then tap Next.'
+          : 'You work for clients, so tell me more: what do you do for them? Pick all that fit, then tap Next.';
     say([...lead, q], {
       part: 'work',
       answers: a,
@@ -329,7 +332,9 @@ export function SetupChat() {
       [
         `All set! 🎉 ${on.length === 1 ? "I've switched on your app." : `I've switched on your ${on.length} apps.`}`,
         'Five tabs are always there: Home, Daily, Pillars, Apps and Profile.',
-        'Daily gives you three small things to do each day. Pillars is where you work on the seven relationships in your life: with yourself, your family, your friends, a partner, your work, your teachers and your faith.',
+        'Daily gives you three small things to do each day, and Plan my week suggests a day for each task. Pillars is where you work on the seven relationships in your life: with yourself, your family, your friends, a partner, your work, your teachers and your faith.',
+        ...(on.includes('agency') ? ['Agency is on. Add your first client, then move each deliverable from idea to published. A page you can share lets the client approve their work.'] : []),
+        ...(on.includes('reviews') ? ['Reviews is on. Pick a day for your first look back, and you get a reminder.'] : []),
         ...(coachLine ? [coachLine] : []),
         session,
         'Or start with Discover. It is a quiz with puzzles, personality and real situations. It shows your strengths and makes your next steps fit you.',

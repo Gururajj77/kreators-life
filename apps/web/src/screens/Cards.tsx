@@ -80,7 +80,6 @@ export function Cards() {
           </p>
           <ul className="mt-sm grid list-none grid-cols-1 gap-sm p-0 m-0 md:grid-cols-3">
             {data.games.map((g) => {
-              const can = data.points >= g.cost;
               return (
                 <li key={g.key} className="flex flex-col gap-xs">
                   <GameCover game={g} className="flex-1" />
