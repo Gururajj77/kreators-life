@@ -8,6 +8,9 @@ import { closeSeason, sendEventReminders } from './engage';
 import { nextOccurrence, nextOnOrAfter, parseRepeat, PERIOD_META, reviewPeriodFor, zonedToUtc, type PeriodKind } from '@kreators/shared';
 import { flaggedFor } from './routes/reviews';
 
+/** The cron runs every fifteen minutes, so 23:45 is the last tick of a day: a reminder set for 23:46 to 23:59 goes out then and not at 00:00, when its day has already turned over. */
+const LAST_TICK = 23 * 60 + 45;
+
 /** Every fifteen minutes: sequence messages, then fresh numbers for posts and reward submissions where a platform lets us read them. */
 export async function runScheduled(env: Env): Promise<{ sequences: number; recurring: number; circles: number; weekly: number; content: number; submissions: number; reminders: number; events: number; season: number }> {
   const db = env.DB;
@@ -85,7 +88,7 @@ export async function sendWaterAndCustom(db: D1Database): Promise<number> {
     // One water line per person per day: later reminders rewrite it (new count, back to unread, newest first) instead of piling up.
     await db
       .prepare(
-        "INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', 'Time for some water', ?, '/today', NULL, ?) ON CONFLICT(id) DO UPDATE SET body = excluded.body, created_at = excluded.created_at, read_at = NULL",
+        "INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', 'Time for some water', ?, '/today', NULL, ?) ON CONFLICT(id) DO UPDATE SET body = excluded.body, created_at = excluded.created_at, read_at = NULL, archived_at = NULL",
       )
       .bind(`water-${w.user_id}-${at.day}`, w.user_id, `${Math.floor(drunk / w.water_glass_ml)} of ${Math.ceil(w.water_goal_ml / w.water_glass_ml)} glasses so far today. Tap to log one.`, nowIso())
       .run();
@@ -110,7 +113,7 @@ export async function sendWaterAndCustom(db: D1Database): Promise<number> {
     } catch {
       continue;
     }
-    const since = at.minutes - mins(r.time);
+    const since = at.minutes - Math.min(mins(r.time), LAST_TICK);
     if (!days.includes(at.weekday) || since < 0 || since > 60) continue;
     await notice(r.user_id, r.title, 'Your own reminder.');
     await db.prepare('UPDATE custom_reminders SET last_sent_day = ? WHERE id = ?').bind(at.day, r.id).run();
@@ -130,9 +133,10 @@ export async function sendTaskReminders(db: D1Database): Promise<number> {
     .prepare(
       `SELECT n.id, n.user_id, n.title, n.priority, n.do_date, n.due_date, n.due_time, u.timezone
        FROM nodes n JOIN users u ON u.id = n.user_id
-       WHERE n.kind = 'task' AND n.status = 'active' AND n.remind = 1 AND COALESCE(n.do_date, n.due_date) IS NOT NULL
-       LIMIT 500`,
+       WHERE n.kind = 'task' AND n.status = 'active' AND n.remind = 1 AND COALESCE(n.do_date, n.due_date) BETWEEN ? AND ?
+       LIMIT 2000`,
     )
+    .bind(new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10), new Date(now.getTime() + 86_400_000).toISOString().slice(0, 10))
     .all<{ id: string; user_id: string; title: string; priority: number | null; do_date: string | null; due_date: string | null; due_time: string | null; timezone: string }>();
   let sent = 0;
   for (const t of rows.results) {
@@ -146,7 +150,7 @@ export async function sendTaskReminders(db: D1Database): Promise<number> {
     const day = `${get('year')}-${get('month')}-${get('day')}`;
     if ((t.do_date ?? t.due_date) !== day) continue;
     const at = t.due_time ?? '09:00';
-    const since = Number(get('hour')) * 60 + Number(get('minute')) - (Number(at.slice(0, 2)) * 60 + Number(at.slice(3, 5)));
+    const since = Number(get('hour')) * 60 + Number(get('minute')) - Math.min(Number(at.slice(0, 2)) * 60 + Number(at.slice(3, 5)), LAST_TICK);
     if (since < 0 || since > 60) continue;
     const tag = t.priority === null ? '' : `P${t.priority} `;
     const res = await db
@@ -173,7 +177,7 @@ export async function sendReminders(db: D1Database): Promise<number> {
       continue;
     }
     if (u.last_checkin === localDay) continue;
-    const due = zonedToUtc(localDay, (h ?? 0) * 60 + (m ?? 0), zone);
+    const due = zonedToUtc(localDay, Math.min((h ?? 0) * 60 + (m ?? 0), LAST_TICK), zone);
     const since = now.getTime() - due.getTime();
     if (since < 0 || since > 60 * 60_000) continue;
     const already = await db.prepare("SELECT 1 FROM notifications WHERE user_id = ? AND kind = 'reminder' AND created_at >= ?").bind(u.id, due.toISOString()).first();
@@ -221,7 +225,7 @@ export async function sendReviewReminders(db: D1Database): Promise<number> {
       continue;
     }
     if (r.next_on !== day) continue;
-    const since = Number(get('hour')) * 60 + Number(get('minute')) - (Number(r.time.slice(0, 2)) * 60 + Number(r.time.slice(3, 5)));
+    const since = Number(get('hour')) * 60 + Number(get('minute')) - Math.min(Number(r.time.slice(0, 2)) * 60 + Number(r.time.slice(3, 5)), LAST_TICK);
     if (since < 0) continue;
     if (since <= 60) {
       const period = reviewPeriodFor(r.kind, day);

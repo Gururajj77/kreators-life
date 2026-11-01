@@ -170,6 +170,8 @@ async function spawnNext(db: D1Database, row: NodeRow, today: string): Promise<N
   if (!next) return null;
   const made = await db.prepare('SELECT 1 AS x FROM nodes WHERE spawned_from = ? AND user_id = ?').bind(row.id, row.user_id).first();
   if (made) return null;
+  // A month or year rule remembers the day it started on, so a short month's clamp is not kept for good.
+  const carried = rule.kind === 'monthly' || rule.kind === 'yearly' ? JSON.stringify({ ...rule, anchor: rule.anchor ?? base }) : row.repeat_json;
   const gap = row.do_date && row.due_date ? daysBetween(row.do_date, row.due_date) : 0;
   const doDate = row.do_date ? next : null;
   const dueDate = row.due_date ? (row.do_date ? addDays(next, gap) : next) : null;
@@ -181,7 +183,7 @@ async function spawnNext(db: D1Database, row: NodeRow, today: string): Promise<N
       `INSERT INTO nodes (id, user_id, kind, parent_id, relationship, title, note, status, xp, due_date, completed_at, ready_at, sort_order, created_at, updated_at, due_time, estimate_min, added_by, do_date, repeat_json, spawned_from, priority, remind, for_review)
        VALUES (?, ?, 'task', ?, ?, ?, ?, 'active', 0, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(id, row.user_id, row.parent_id, row.relationship, row.title, row.note, dueDate, readyFromNow(), sortRow?.next ?? 0, now, now, row.due_time, row.estimate_min, row.added_by ?? null, doDate, row.repeat_json, row.id, row.priority ?? null, row.remind ?? 0, row.for_review ?? 0)
+    .bind(id, row.user_id, row.parent_id, row.relationship, row.title, row.note, dueDate, readyFromNow(), sortRow?.next ?? 0, now, now, row.due_time, row.estimate_min, row.added_by ?? null, doDate, carried, row.id, row.priority ?? null, row.remind ?? 0, row.for_review ?? 0)
     .run();
   // The checklist comes back too, all unticked.
   await db

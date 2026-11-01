@@ -1,4 +1,4 @@
-import { BADGES, isFeatured, PREOWNED_CONDITION_META, PREOWNED_CONDITIONS, STORE_CATEGORIES, STORE_STAGE_META, STORE_STAGES, type MarketCard, type PreownedListing, type StoreItem, type StoreKit, type StoreStage } from '@kreators/shared';
+import { BADGES, typedCents, isFeatured, PREOWNED_CONDITION_META, PREOWNED_CONDITIONS, STORE_CATEGORIES, STORE_STAGE_META, STORE_STAGES, type MarketCard, type PreownedListing, type StoreItem, type StoreKit, type StoreStage } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { Button } from '../components/Button';
@@ -370,8 +370,8 @@ function SellSheet({ open, onClose, onSaved, city }: { open: boolean; onClose: (
         title,
         category,
         condition,
-        priceCents: Math.round(Number(price) * 100),
-        originalCents: original ? Math.round(Number(original) * 100) : null,
+        priceCents: typedCents(price),
+        originalCents: original ? typedCents(original) : null,
         purchaseYear: year ? Number(year) : null,
         includes,
         description,
@@ -476,7 +476,7 @@ function ItemSheet({ open, onClose, onSaved }: { open: boolean; onClose: () => v
   const [minXp, setMinXp] = useState('0');
   const [badge, setBadge] = useState('');
   const save = useMutation({
-    mutationFn: () => api.marketAddItem({ title, category, stage, priceCents: Math.round(Number(price) * 100), url, imageUrl: image, description, minPoints: Number(minPoints) || 0, minXp: Number(minXp) || 0, badge }),
+    mutationFn: () => api.marketAddItem({ title, category, stage, priceCents: typedCents(price), url, imageUrl: image, description, minPoints: Number(minPoints) || 0, minXp: Number(minXp) || 0, badge }),
     onSuccess: () => {
       setTitle('');
       setPrice('');
@@ -570,7 +570,7 @@ function KitSheet({ open, onClose, onSaved, items, listings }: { open: boolean; 
   const toggle = (type: 'item' | 'listing', id: string) => setPicked((p) => (has(type, id) ? p.filter((x) => !(x.type === type && x.id === id)) : [...p, { type, id }]));
   const total = picked.reduce((s, p) => s + (p.type === 'item' ? (items.find((i) => i.id === p.id)?.priceCents ?? 0) : (listings.find((l) => l.id === p.id)?.priceCents ?? 0)), 0);
   const save = useMutation({
-    mutationFn: () => api.marketAddKit({ title, stage, budgetCents: Math.round(Number(budget) * 100), description, items: picked }),
+    mutationFn: () => api.marketAddKit({ title, stage, budgetCents: typedCents(budget), description, items: picked }),
     onSuccess: () => {
       setTitle('');
       setBudget('');

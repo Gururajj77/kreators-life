@@ -2026,6 +2026,21 @@ section('Agency');
   check('the total is the calculator\'s: GST plus the TDS added on', inv.totalCents === expected, { got: inv.totalCents, expected });
   check('its due date follows the profile\'s days', inv.dueDate === day(10), inv.dueDate);
   check('an invoice without lines is refused', (await api('POST', '/agency/invoices', { clientId: cid, items: [] }, O.token)).status === 400);
+  // Found in the bug sweep: a key that is a name every object has, and a day that has the shape but is not on the calendar, were 500s.
+  check('a starter named like an object method is just no starter', (await api('POST', '/agency/invoices', { clientId: cid, starter: 'constructor' }, O.token)).status === 400);
+  check('a day that is not on the calendar is not a 500', (await api('GET', '/agency?day=2026-00-00', undefined, O.token)).status === 200);
+  check('nor on the daily list', (await api('GET', '/today?date=2026-99-99', undefined, O.token)).status === 200);
+  // Two taps at once must not spend or refund the same points twice.
+  const pointsOf = async () => (await api('GET', '/me', undefined, O.token)).json.user?.points ?? (await api('GET', '/me', undefined, O.token)).json.points;
+  const p0 = await pointsOf();
+  await admin('POST', `/admin/users/${O.user.id}/points`, { amount: 2000, note: 'smoke race' });
+  const taps = await Promise.all([1, 2, 3].map(() => api('POST', '/rewards/book_relationship_method/redeem', undefined, O.token)));
+  const won = taps.filter((r) => r.status === 201);
+  check('three redeems at once spend one balance once', won.length === 1 && taps.filter((r) => r.status === 400).length === 2, taps.map((r) => r.status));
+  check('and the balance is not below where it began', (await pointsOf()) === p0, await pointsOf());
+  const cancels = await Promise.all([1, 2, 3].map(() => api('POST', `/rewards/redemptions/${won[0]?.json.redemption?.id}/cancel`, undefined, O.token)));
+  check('three cancels at once refund once', cancels.filter((r) => r.status === 200).length === 1, cancels.map((r) => r.status));
+  check('so the points are back and no more', (await pointsOf()) === p0 + 2000, await pointsOf());
   const edit = await api('PATCH', `/agency/invoices/${inv.id}`, { doc: { gstBps: 0, tdsMode: 'none', show: { bank: false, taxIds: false, dueDate: false, notes: false } }, note: 'Thank you' }, O.token);
   check('a draft can be redesigned and the total follows', edit.status === 200 && edit.json.invoice.totalCents === 3500000, edit.json.invoice?.totalCents);
   const draftPublic = await pub('GET', `/invoices/${inv.token}`);

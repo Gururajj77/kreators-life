@@ -631,14 +631,6 @@ details[open] > summary {
   background-color: var(--color-paper);
 }
 
-/* Multi-line text that must stay short on a tile. */
-.clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
 /* Dark mode wears each app's colour in the glow behind the glass: the wash leans toward that app's hue, and the cards stay frosted. */
 :root[data-theme='dark'][data-accent='servant_leader'] {
   --glow-2: color-mix(in oklab, var(--deep-servant_leader) 30%, transparent);
@@ -922,7 +914,6 @@ input[type='radio'] {
 @media print {
   .no-print,
   nav,
-  .tab-bar,
   [data-assistant],
   [data-reminders] {
     display: none !important;

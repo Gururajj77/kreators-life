@@ -48,18 +48,23 @@ export function nextMonthly(from: string, dayOfMonth: number): string {
 }
 
 /** Post every recurring entry whose date has come. Called by the cron. */
-export async function runRecurring(db: D1Database): Promise<number> {
+export async function runRecurring(db: D1Database, onlyUser?: string): Promise<number> {
   const today = new Date().toISOString().slice(0, 10);
-  const due = await db.prepare('SELECT * FROM finance_recurring WHERE active = 1 AND next_date <= ? LIMIT 200').bind(today).all<RecRow & { user_id: string }>();
+  const due = onlyUser
+    ? await db.prepare('SELECT * FROM finance_recurring WHERE active = 1 AND next_date <= ? AND user_id = ? LIMIT 200').bind(today, onlyUser).all<RecRow & { user_id: string }>()
+    : await db.prepare('SELECT * FROM finance_recurring WHERE active = 1 AND next_date <= ? LIMIT 200').bind(today).all<RecRow & { user_id: string }>();
+  let posted = 0;
   for (const r of due.results) {
-    await db.batch([
-      db
-        .prepare("INSERT INTO finance_transactions (id, user_id, kind, amount_cents, currency, category, counterparty, note, date, source, ref, splits_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'recurring', ?, '[]', ?)")
-        .bind(newId(), r.user_id, r.kind, r.amount_cents, r.currency, r.category, r.counterparty, r.note || 'Monthly', r.next_date, r.id, nowIso()),
-      db.prepare('UPDATE finance_recurring SET next_date = ? WHERE id = ?').bind(nextMonthly(r.next_date, r.day_of_month), r.id),
-    ]);
+    // The date moves first and only from the date that was read, so a second run at the same time posts nothing twice.
+    const moved = await db.prepare('UPDATE finance_recurring SET next_date = ? WHERE id = ? AND next_date = ?').bind(nextMonthly(r.next_date, r.day_of_month), r.id, r.next_date).run();
+    if (moved.meta.changes !== 1) continue;
+    await db
+      .prepare("INSERT INTO finance_transactions (id, user_id, kind, amount_cents, currency, category, counterparty, note, date, source, ref, splits_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'recurring', ?, '[]', ?)")
+      .bind(newId(), r.user_id, r.kind, r.amount_cents, r.currency, r.category, r.counterparty, r.note || 'Monthly', r.next_date, r.id, nowIso())
+      .run();
+    posted += 1;
   }
-  return due.results.length;
+  return posted;
 }
 
 export interface InvRow { id: string; user_id: string; owner_name: string; owner_handle: string | null; number: string; client_name: string; client_email: string; items_json: string; total_cents: number; currency: string; status: Invoice['status']; issue_date: string; due_date: string | null; note: string; token: string; paid_at: string | null; created_at: string; doc_json?: string; agency_client_id?: string | null; revised_at?: string | null }
@@ -280,7 +285,7 @@ finance.delete('/recurring/:id', async (c) => {
 
 // Run what is due now, so a person never waits for the clock.
 finance.post('/recurring/run', async (c) => {
-  const n = await runRecurring(c.env.DB);
+  const n = await runRecurring(c.env.DB, c.get('user').id);
   return c.json({ posted: n });
 });
 

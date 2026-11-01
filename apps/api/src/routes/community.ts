@@ -206,6 +206,16 @@ community.post('/', async (c) => {
   return c.json({ post: await presentPost(c, row), awarded, held }, 201);
 });
 
+/** A post in a members-only feed is seen, reacted to and answered only by the product's owner and the people who bought it; any other post is open. */
+async function canSeePost(db: D1Database, userId: string, postId: string): Promise<boolean> {
+  return Boolean(
+    await db
+      .prepare(`SELECT 1 FROM community_posts p WHERE p.id = ? AND (p.product_id IS NULL OR EXISTS (SELECT 1 FROM products pr WHERE pr.id = p.product_id AND (pr.owner_id = ? OR EXISTS (SELECT 1 FROM orders o WHERE o.product_id = pr.id AND o.buyer_id = ? AND o.status IN ('paid','test')))))`)
+      .bind(postId, userId, userId)
+      .first(),
+  );
+}
+
 // React to a post: six kinds. The first reaction is the like that pays (the reacter a little xp, the author a point,
 // each once per post); changing it pays nothing more, and the same reaction again takes it back.
 community.post('/:id/like', async (c) => {
@@ -213,7 +223,7 @@ community.post('/:id/like', async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
   const post = await db.prepare('SELECT id, user_id FROM community_posts WHERE id = ? AND hidden_at IS NULL AND held_at IS NULL').bind(id).first<{ id: string; user_id: string }>();
-  if (!post) return c.json({ error: 'not found' }, 404);
+  if (!post || !(await canSeePost(db, user.id, id))) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<{ kind?: unknown }>().catch(() => ({}) as { kind?: unknown });
   const kind = isReaction(body.kind) ? body.kind : null;
   const had = await db.prepare('SELECT kind FROM community_likes WHERE post_id = ? AND user_id = ?').bind(id, user.id).first<{ kind: string }>();
@@ -289,6 +299,7 @@ async function presentReplies(c: Context<AppEnv>, rows: ReplyRow[]): Promise<Com
 // The replies to a post, in reading order: each one under what it answers. Hidden ones and anyone blocked either way are left out.
 community.get('/:id/replies', async (c) => {
   const ask = pageOf(c);
+  if (!(await canSeePost(c.env.DB, c.get('user').id, c.req.param('id')))) return c.json({ error: 'not found' }, 404);
   const rows = await c.env.DB.prepare(`${REPLY_SELECT} WHERE r.post_id = ?2 AND r.hidden_at IS NULL AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ?1 AND b.blocked_id = r.user_id) OR (b.blocker_id = r.user_id AND b.blocked_id = ?1)) ORDER BY r.created_at ASC LIMIT 500`)
     .bind(c.get('user').id, c.req.param('id'))
     .all<ReplyRow>();
@@ -301,7 +312,7 @@ community.post('/:id/replies', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const post = await db.prepare('SELECT id, user_id, body, anonymous FROM community_posts WHERE id = ? AND hidden_at IS NULL AND held_at IS NULL').bind(c.req.param('id')).first<{ id: string; user_id: string; body: string; anonymous: number }>();
-  if (!post) return c.json({ error: 'not found' }, 404);
+  if (!post || !(await canSeePost(db, user.id, c.req.param('id')))) return c.json({ error: 'not found' }, 404);
   if (await db.prepare('SELECT 1 FROM community_mutes WHERE user_id = ?').bind(user.id).first()) return c.json({ error: 'You are muted in Community for now. A guide or admin can lift it.' }, 403);
   const body = await c.req.json<{ body?: string; anonymous?: boolean; parentId?: string | null }>().catch(() => ({}) as { body?: string; anonymous?: boolean; parentId?: string | null });
   const text = typeof body.body === 'string' ? body.body.trim().slice(0, 1000) : '';

@@ -67,7 +67,7 @@ function BacklogTask({ t, date, queue }: { t: Node; date: string; queue: ReturnT
             <button type="button" onClick={() => pick.mutate(addDays(date, 1))} className="toy toy-soft min-h-[44px] rounded-pill border-2 border-line bg-card px-sm text-[14px] font-bold">
               Tomorrow
             </button>
-            <input type="date" aria-label={`Do date for ${t.title}`} min={date} onChange={(e) => e.target.value && pick.mutate(e.target.value)} className="min-h-[44px] rounded-pill border-2 border-line bg-paper px-sm text-[14px] font-bold" />
+            <input type="date" aria-label={`Do date for ${t.title}`} min={date} onChange={(e) => /^\d{4}-\d{2}-\d{2}$/.test(e.target.value) && e.target.value >= '2000-01-01' && pick.mutate(e.target.value)} className="min-h-[44px] rounded-pill border-2 border-line bg-paper px-sm text-[14px] font-bold" />
           </div>
           {open && <TaskPanel task={t} today={date} />}
         </>

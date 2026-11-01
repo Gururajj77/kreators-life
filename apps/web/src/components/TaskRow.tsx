@@ -35,7 +35,7 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
   const when = [task.dueTime ? timeLabel(task.dueTime) : null, task.estimateMin ? `${task.estimateMin} min` : null].filter(Boolean).join(' · ');
   const timeChip = when && !done ? <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">{when}</span> : null;
   // A task a life coach added says so; it ticks and pays like any other.
-  const hasMarks = task.priority !== null || task.remind || Boolean(task.repeat) || Boolean(task.fromPillar) || Boolean(task.fromCoach);
+  const hasMarks = task.priority !== null || task.remind || Boolean(task.repeat) || Boolean(task.fromPillar) || Boolean(task.fromCoach) || Boolean(task.forReview);
   const badge =
     wait > 0 ? (
       <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">Ready in {wait} min</span>

@@ -21,6 +21,7 @@ import {
   type InvoiceParty,
   type InvoiceShow,
   type TdsMode,
+  typedCents,
 } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
@@ -69,7 +70,7 @@ interface Form {
   footer: string;
 }
 
-const cents = (s: string) => Math.max(0, Math.round((Number.parseFloat(s) || 0) * 100));
+const cents = (s: string) => Math.max(0, typedCents(s) || 0);
 const wholeQty = (s: string) => Math.max(1, Math.round(Number.parseFloat(s) || 1));
 const plain = (n: number) => String(Math.round(n * 100) / 100);
 

@@ -399,7 +399,10 @@ export async function refundOrder(db: D1Database, env: Env, o: OrderRow & { plat
       return e instanceof Error ? e.message : 'the provider refused the refund';
     }
   }
-  const stmts = [db.prepare("UPDATE orders SET status = 'refunded', refunded_at = ?, refund_reason = ? WHERE id = ? AND status != 'refunded'").bind(now, reason, o.id)];
+  // The order moves to refunded first, so two refunds at once credit the buyer once.
+  const flipped = await db.prepare("UPDATE orders SET status = 'refunded', refunded_at = ?, refund_reason = ? WHERE id = ? AND status != 'refunded'").bind(now, reason, o.id).run();
+  if (flipped.meta.changes !== 1) return 'already refunded';
+  const stmts: D1PreparedStatement[] = [];
   if (o.points > 0) {
     const affiliate = o.affiliate_code ? await db.prepare('SELECT id FROM users WHERE referral_code = ?').bind(o.affiliate_code).first<{ id: string }>() : null;
     const share = affiliate ? Math.round(o.points * 0.2) : 0;

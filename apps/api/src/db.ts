@@ -57,7 +57,14 @@ export function paged<T>(rows: readonly T[], ask: PageAsk): { items: T[]; page: 
   return { items: rows.slice(0, ask.size), page: { page: ask.page, size: ask.size, more: rows.length > ask.size } };
 }
 
-export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** A day as YYYY-MM-DD that is on the calendar: 2026-11-31 and 2026-00-00 have the shape but are refused, so nothing downstream does arithmetic on an Invalid Date. */
+export const DATE_RE = {
+  test: (v: string): boolean => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+    const t = Date.parse(`${v}T00:00:00Z`);
+    return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === v;
+  },
+};
 
 /** The person's own day, sent by their device as `?day=`. A day more than one day ahead of UTC is not a real "today", so it falls back to the UTC date. */
 export function dayFromDevice(v: string | undefined | null): string {

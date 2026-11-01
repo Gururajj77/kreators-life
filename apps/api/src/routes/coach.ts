@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import { COACH_ABOUT_MAX, COACH_ASK_AGAIN_DAYS, COACH_NOTE_MAX, COACH_SHARE_PARTS, MAX_COACH_ASKS, MAX_COACHES, normalizeCode, parentKind, parseCoachShare, type CoachDirectoryEntry, type CoachHub, type CoachLinkStatus, type CoachProfile, type MyCoachResponse } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { getNode, nameOf, newId, notify, nowIso, pageOf, paged, str, toNode } from '../db';
+import { DATE_RE, getNode, nameOf, newId, notify, nowIso, pageOf, paged, str, toNode } from '../db';
 import { activeLink, askToCoach, endLink, isCoach, LINK, linkById, logCoach, logPage, notePage, rosterRow, shareChange, studentView, toLink, toPerson, type LinkRow } from '../coaching';
-import { createNode, editNode, type NodeBody } from './nodes';
+import { createNode, DATES_PROBLEM, editNode, type NodeBody } from './nodes';
 
 /**
  * Coaching, the coach's side: the roster, the directory, asking someone to be a student, and what a coach does for
@@ -268,6 +268,8 @@ coach.patch('/students/:id/tasks/:taskId', async (c) => {
   if (!row || row.kind !== 'task') return c.json({ error: 'not found' }, 404);
   if (row.status !== 'active') return c.json({ error: 'Only open tasks can be changed.' }, 400);
   const body = await c.req.json<NodeBody>().catch(() => ({}) as NodeBody);
+  // The student's do date cannot end up after the deadline a coach sets.
+  if (typeof body.dueDate === 'string' && row.do_date && DATE_RE.test(body.dueDate) && body.dueDate < row.do_date) return c.json({ error: DATES_PROBLEM }, 400);
   const fresh = await editNode(db, row, { title: body.title, note: body.note, dueDate: body.dueDate, dueTime: body.dueTime, estimateMin: body.estimateMin });
   const changes = [
     fresh.title !== row.title ? `the title to “${fresh.title}”` : '',

@@ -57,7 +57,7 @@ orgs.post('/:id/members', async (c) => {
   const email = str(body.email, 120).toLowerCase();
   const person = await db.prepare('SELECT id, display_name FROM users WHERE email = ?').bind(email).first<{ id: string; display_name: string }>();
   if (!person) return c.json({ error: 'no account with that email yet. Ask them to sign up first.' }, 404);
-  await db.prepare("INSERT OR REPLACE INTO organization_members (organization_id, user_id, role, status, created_at) VALUES (?, ?, 'member', 'active', ?)").bind(id, person.id, nowIso()).run();
+  await db.prepare("INSERT OR IGNORE INTO organization_members (organization_id, user_id, role, status, created_at) VALUES (?, ?, 'member', 'active', ?)").bind(id, person.id, nowIso()).run();
   const org = await db.prepare('SELECT name FROM organizations WHERE id = ?').bind(id).first<{ name: string }>();
   await notify(db, person.id, 'org', `You were added to ${org?.name ?? 'a brand'}`, 'Open Army to see its campaigns.', '/army');
   return c.json({ ok: true }, 201);

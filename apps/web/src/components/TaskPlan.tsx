@@ -240,7 +240,14 @@ export function TaskPanel({ task, today }: { task: Node; today: string }) {
   const save = useMutation({ mutationFn: () => api.updateNode(task.id, planBody(plan)), onSuccess: () => refresh() });
   return (
     <div className="mt-xs flex flex-col gap-md rounded-card bg-card p-md shadow-toy-soft">
-      <TaskPlanFields plan={plan} onChange={setPlan} today={today} />
+      <TaskPlanFields
+        plan={plan}
+        onChange={(next) => {
+          save.reset();
+          setPlan(next);
+        }}
+        today={today}
+      />
       {save.isError && (
         <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
           {save.error instanceof Error ? save.error.message : 'Could not save. Try again.'}

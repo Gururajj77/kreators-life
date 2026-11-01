@@ -107,7 +107,8 @@ school.post('/cohorts/:id/enroll', async (c) => {
   if (!prog || prog.published !== 1) return c.json({ error: 'this program is not open' }, 400);
   if (k.status === 'finished' || k.status === 'cancelled') return c.json({ error: 'this cohort is closed' }, 400);
   const body = await c.req.json<{ pay?: string }>().catch(() => ({}) as { pay?: string });
-  const pay = body.pay === 'test' ? 'test' : prog.price_points > 0 ? 'points' : 'free';
+  // Test mode is for a program with a money price; a program priced in points always takes the points.
+  const pay = body.pay === 'test' && prog.price_cents > 0 && prog.price_points === 0 ? 'test' : prog.price_points > 0 ? 'points' : 'free';
   if (pay === 'points' && user.points < prog.price_points) return c.json({ error: `you need ${prog.price_points - user.points} more points` }, 400);
   const id = newId();
   const now = nowIso();

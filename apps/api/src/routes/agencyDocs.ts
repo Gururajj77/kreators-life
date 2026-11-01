@@ -519,11 +519,12 @@ agencyDocs.patch('/contracts/:id', async (c) => {
         clientId = cl.id;
       }
     }
-    await db.prepare("UPDATE agency_contracts SET doc_json = ?, title = ?, client_id = ?, revised_at = CASE WHEN status = 'sent' THEN ? ELSE revised_at END, updated_at = ? WHERE id = ? AND user_id = ?").bind(JSON.stringify(doc), doc.title, clientId, now, now, row.id, user.id).run();
+    await db.prepare("UPDATE agency_contracts SET doc_json = ?, title = ?, client_id = ?, revised_at = CASE WHEN status = 'sent' THEN ? ELSE revised_at END, updated_at = ? WHERE id = ? AND user_id = ? AND status IN ('draft', 'sent')").bind(JSON.stringify(doc), doc.title, clientId, now, now, row.id, user.id).run();
   }
   if (typeof body.status === 'string') {
     const next = oneOf(body.status, ['draft', 'sent', 'void'] as const, row.status === 'signed' ? 'draft' : (row.status as 'draft' | 'sent' | 'void'));
     if (row.status === 'signed' && next !== 'void') return c.json({ error: 'a signed agreement can only be voided' }, 400);
+    if (row.status === 'void' && next !== 'void') return c.json({ error: 'a voided agreement cannot be sent again; make a copy' }, 400);
     if (next === 'sent' && row.status !== 'sent') {
       const doc = docOf(row.doc_json);
       if (doc.sections.length === 0) return c.json({ error: 'an agreement needs at least one section' }, 400);

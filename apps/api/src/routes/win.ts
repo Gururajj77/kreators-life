@@ -140,6 +140,9 @@ win.post('/:id/submit', async (c) => {
   const platform = detectPlatform(url);
   if (b.platform && b.platform.toLowerCase() !== 'any' && !b.platform.toLowerCase().includes(platform)) return c.json({ error: `this reward wants ${b.platform} posts` }, 400);
   const now = nowIso();
+  // A paid post is paid for good: sending it again would reset it to submitted and pay it twice.
+  const before = await db.prepare('SELECT status FROM bounty_submissions WHERE bounty_id = ? AND user_id = ?').bind(b.id, user.id).first<{ status: string }>();
+  if (before?.status === 'paid') return c.json({ error: 'this post was already paid' }, 400);
   await db
     .prepare("INSERT INTO bounty_submissions (id, bounty_id, user_id, url, platform, status, latest_views, latest_engagement, evidence_views, evidence_note, payout_points, reviewer_id, dispute_note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'submitted', 0, 0, NULL, '', 0, NULL, '', ?, ?) ON CONFLICT(bounty_id, user_id) DO UPDATE SET url = excluded.url, platform = excluded.platform, status = 'submitted', updated_at = excluded.updated_at")
     .bind(newId(), b.id, user.id, url, platform, now, now)
@@ -212,8 +215,10 @@ win.post('/submissions/:id/review', async (c) => {
     const left = b.budget_points > 0 ? b.budget_points - b.paid_points : Number.MAX_SAFE_INTEGER;
     if (points > left) return c.json({ error: `only ${Math.max(0, left)} points are left in this pool` }, 400);
     const now = nowIso();
+    // The status moves first and only from verified, so two finance taps at once pay once.
+    const moved = await db.prepare("UPDATE bounty_submissions SET status = 'paid', payout_points = ?, reviewer_id = ?, updated_at = ? WHERE id = ? AND status = 'verified'").bind(points, user.id, now, s.id).run();
+    if (moved.meta.changes !== 1) return c.json({ error: 'verify it first' }, 400);
     await db.batch([
-      db.prepare("UPDATE bounty_submissions SET status = 'paid', payout_points = ?, reviewer_id = ?, updated_at = ? WHERE id = ? AND status = 'verified'").bind(points, user.id, now, s.id),
       db.prepare('UPDATE users SET points = points + ? WHERE id = ?').bind(points, s.user_id),
       db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(s.user_id, points, 'bounty', s.id, now),
     ]);

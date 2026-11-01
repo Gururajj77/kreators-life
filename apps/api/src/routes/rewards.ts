@@ -54,11 +54,13 @@ rewards.post('/:key/redeem', async (c) => {
   if (reward.kind === 'unlock' && reward.game) {
     const mine = parseModules(user.modules);
     mine.cards = true;
+    // The points come off first and only if they are there: two taps at once cannot both spend the same balance.
+    const took = await db.prepare('UPDATE users SET points = points - ?, modules = ? WHERE id = ? AND points >= ?').bind(reward.cost, JSON.stringify(mine), user.id, reward.cost).run();
+    if (took.meta.changes !== 1) return c.json({ error: `you need ${reward.cost} points` }, 400);
     await db.batch([
       db
         .prepare('INSERT INTO redemptions (id, user_id, reward_key, points, status, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
         .bind(id, user.id, reward.key, reward.cost, 'fulfilled', 'Unlocked', now, now),
-      db.prepare('UPDATE users SET points = points - ?, modules = ? WHERE id = ? AND points >= ?').bind(reward.cost, JSON.stringify(mine), user.id, reward.cost),
       db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(user.id, -reward.cost, 'redeem', id, now),
       db.prepare('INSERT INTO card_unlocks (user_id, game_key, redemption_id, unlocked_at) VALUES (?, ?, ?, ?)').bind(user.id, reward.game, id, now),
     ]);
@@ -66,11 +68,12 @@ rewards.post('/:key/redeem', async (c) => {
     const row = await db.prepare('SELECT * FROM redemptions WHERE id = ?').bind(id).first<RedemptionRow>();
     return c.json({ redemption: row ? toRedemption(row) : null, points: fresh?.points ?? user.points, game: reward.game }, 201);
   }
+  const took = await db.prepare('UPDATE users SET points = points - ? WHERE id = ? AND points >= ?').bind(reward.cost, user.id, reward.cost).run();
+  if (took.meta.changes !== 1) return c.json({ error: `you need ${reward.cost} points` }, 400);
   await db.batch([
     db
       .prepare('INSERT INTO redemptions (id, user_id, reward_key, points, status, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
       .bind(id, user.id, reward.key, reward.cost, 'reserved', '', now, now),
-    db.prepare('UPDATE users SET points = points - ? WHERE id = ? AND points >= ?').bind(reward.cost, user.id, reward.cost),
     db
       .prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)')
       .bind(user.id, -reward.cost, 'redeem', id, now),
@@ -90,8 +93,10 @@ rewards.post('/redemptions/:id/cancel', async (c) => {
   if (!row) return c.json({ error: 'not found' }, 404);
   if (row.status !== 'reserved') return c.json({ error: 'only reserved rewards can be cancelled' }, 400);
   const now = nowIso();
+  // The status moves first and only from reserved, so two cancels at once refund once.
+  const moved = await db.prepare("UPDATE redemptions SET status = 'cancelled', updated_at = ? WHERE id = ? AND status = 'reserved'").bind(now, row.id).run();
+  if (moved.meta.changes !== 1) return c.json({ error: 'only reserved rewards can be cancelled' }, 400);
   await db.batch([
-    db.prepare("UPDATE redemptions SET status = 'cancelled', updated_at = ? WHERE id = ?").bind(now, row.id),
     db.prepare('UPDATE users SET points = points + ? WHERE id = ?').bind(row.points, user.id),
     db
       .prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)')

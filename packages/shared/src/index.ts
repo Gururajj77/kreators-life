@@ -124,7 +124,11 @@ export const RELATIONSHIPS: readonly Relationship[] = [
   },
 ] as const;
 
-export const RELATIONSHIP_BY_KEY: Record<RelationshipKey, Relationship> = Object.fromEntries(
+/** A lookup by key with no prototype, so a key a person typed ("constructor", "toString") finds nothing instead of an inherited function. */
+function byKey<R>(entries: Iterable<readonly [string, unknown]>): R {
+  return Object.assign(Object.create(null), Object.fromEntries(entries)) as R;
+}
+export const RELATIONSHIP_BY_KEY: Record<RelationshipKey, Relationship> = byKey(
   RELATIONSHIPS.map((r) => [r.key, r]),
 ) as Record<RelationshipKey, Relationship>;
 
@@ -484,7 +488,7 @@ export const QUESTIONS: readonly Question[] = [
   ]),
 ];
 
-export const QUESTION_BY_ID: Record<string, Question> = Object.fromEntries(QUESTIONS.map((q) => [q.id, q]));
+export const QUESTION_BY_ID: Record<string, Question> = byKey(QUESTIONS.map((q) => [q.id, q]));
 
 export function firstQuestionId(relationship: RelationshipKey): string {
   return `${relationship}.g`;
@@ -1413,7 +1417,7 @@ export const HONORS: readonly Honor[] = [
   { key: 'season_top', name: 'Season top three', emoji: '🏅', source: 'season', how: 'Finished a monthly season in the top three on the leaderboard' },
 ];
 
-export const HONOR_BY_KEY: Record<string, Honor> = Object.fromEntries(HONORS.map((h) => [h.key, h]));
+export const HONOR_BY_KEY: Record<string, Honor> = byKey(HONORS.map((h) => [h.key, h]));
 
 export function timeHonors(createdAt: string, now: Date = new Date()): string[] {
   const started = new Date(createdAt).getTime();
@@ -1458,7 +1462,7 @@ export const CARD_GAMES: readonly CardGameInfo[] = [
   { key: 'workflow', name: 'WorkFlow', tagline: 'Reveal the hidden secrets of office culture.', emoji: '💼', accent: 'servant_leader', cost: 1500, minXp: 250 },
 ];
 
-export const CARD_GAME_BY_KEY: Record<string, CardGameInfo> = Object.fromEntries(CARD_GAMES.map((g) => [g.key, g]));
+export const CARD_GAME_BY_KEY: Record<string, CardGameInfo> = byKey(CARD_GAMES.map((g) => [g.key, g]));
 
 /** A game's unlock is a reward with this key. */
 export const gameRewardKey = (gameKey: string) => `game_${gameKey}`;
@@ -1594,7 +1598,7 @@ export const REWARDS: readonly Reward[] = [
   { key: 'coaching', name: 'One-to-one call', kind: 'event', emoji: '🎯', group: 'experiences', cost: 4000, blurb: 'Forty minutes with a mentor.' },
 ];
 
-export const REWARD_BY_KEY: Record<string, Reward> = Object.fromEntries(REWARDS.map((r) => [r.key, r]));
+export const REWARD_BY_KEY: Record<string, Reward> = byKey(REWARDS.map((r) => [r.key, r]));
 
 export type RedemptionStatus = 'reserved' | 'fulfilled' | 'cancelled';
 
@@ -1907,7 +1911,7 @@ export const MODULES: readonly AppModule[] = [
   { key: 'observability', name: 'Observability', blurb: 'Who is here, which apps they have on, who holds which role, and the build map.', emoji: '📡', group: 'manage', path: '/internal/observability', defaultOn: true, minRole: 'sub_admin' },
 ];
 
-export const MODULE_BY_KEY: Record<string, AppModule> = Object.fromEntries(MODULES.map((m) => [m.key, m]));
+export const MODULE_BY_KEY: Record<string, AppModule> = byKey(MODULES.map((m) => [m.key, m]));
 
 export const MODULE_GROUPS: Record<ModuleGroup, string> = {
   earn: 'Contribution',
@@ -2294,7 +2298,7 @@ export const LINK_BLOCK_META: Record<LinkBlockType, { name: string; emoji: strin
   carousel: { name: 'Carousel', emoji: '🎠', blurb: 'Cards people swipe through, each with a link.' },
 };
 
-const httpsUrl = (v: unknown): string => (typeof v === 'string' && /^https:\/\/\S{1,500}$/.test(v.trim()) ? v.trim() : '');
+const httpsUrl = (v: unknown): string => (typeof v === 'string' && /^https:\/\/[^\s\u0000-\u001f\u007f]{1,500}$/.test(v.trim()) ? v.trim() : '');
 const shortText = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
 /** Keeps only what a block may hold: https links, short text, a bounded carousel. Empty or unknown blocks are dropped. */
@@ -2315,7 +2319,9 @@ export function parseLinkBlocks(raw: unknown): LinkBlock[] {
           })
           .filter((it) => it.title || it.image)
       : [];
-    const block: LinkBlock = { id: shortText(r.id, 40), type, title: shortText(r.title, 120), url: httpsUrl(r.url), image: httpsUrl(r.image), text: shortText(r.text, 600), featured: r.featured === true, on: r.on !== false, items: type === 'carousel' ? items : [] };
+    let id = shortText(r.id, 40) || `b${out.length + 1}`;
+    while (out.some((o) => o.id === id)) id = `${id.slice(0, 36)}-${out.length + 1}`;
+    const block: LinkBlock = { id, type, title: shortText(r.title, 120), url: httpsUrl(r.url), image: httpsUrl(r.image), text: shortText(r.text, 600), featured: r.featured === true, on: r.on !== false, items: type === 'carousel' ? items : [] };
     if (type === 'link' && !block.url) continue;
     if (type === 'header' && !block.title) continue;
     if (type === 'text' && !block.text) continue;
@@ -2549,17 +2555,14 @@ const toHHMM = (min: number) => {
   const m = ((min % (24 * 60)) + 24 * 60) % (24 * 60);
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 };
-/** Thirty minutes a week from the real time toward the target, never past it. Sleep counts past midnight as late. */
+/** Thirty minutes a week from the real time toward the target, never past it. A time already earlier than the target stays where it is. */
 export function rampTime(real: string, target: string, weeksCompliant: number, direction: 'earlier'): string {
-  const r = toMin(real);
-  const t = toMin(target);
-  // Times after 20:00 are "last night"; treat them as before midnight for the arithmetic.
-  const late = (v: number) => (v < 12 * 60 ? v + 24 * 60 : v);
-  const rr = late(r);
-  const tt = late(t);
-  const moved = rr - RAMP_MINUTES * Math.max(0, weeksCompliant);
   void direction;
-  return toHHMM(Math.max(tt, moved));
+  const day = 24 * 60;
+  // How far earlier the target is than the real time, going back round the clock; more than half a day means the person is already earlier.
+  const gap = (((toMin(real) - toMin(target)) % day) + day) % day;
+  if (gap > day / 2) return toHHMM(toMin(real));
+  return toHHMM(toMin(target) + Math.max(0, gap - RAMP_MINUTES * Math.max(0, weeksCompliant)));
 }
 /** The routine from the coach's template, ramped from the person's real day. Pure, so it can be tested. */
 export function routineFor(day: RealDay, weeksCompliant: number, focus: RelationshipKey[], placements: Placement[]): Routine {
@@ -3535,6 +3538,19 @@ export interface FinanceSummary {
 }
 
 /** Whole currency units with two decimals, e.g. 1234.50. */
+/**
+ * An amount typed in whole units ("1,250.50", "1.005") as integer cents, read from the digits and never through a float, so 1.005 is 101 and
+ * not 100. Anything that is not a plain decimal is NaN, and an empty field is 0. A third decimal rounds half up.
+ */
+export function typedCents(typed: string | number): number {
+  const t = String(typed).trim().replace(/[\s,₹$€£]/g, '');
+  if (t === '') return 0;
+  const m = /^(-?)(\d*)(?:\.(\d*))?$/.exec(t);
+  if (!m || (m[2] === '' && !m[3])) return Number.NaN;
+  const frac = (m[3] ?? '').padEnd(3, '0');
+  const whole = Number(m[2] || '0') * 100 + Number(frac.slice(0, 2)) + (Number(frac[2]) >= 5 ? 1 : 0);
+  return m[1] ? -whole : whole;
+}
 export function money(cents: number, currency = 'INR'): string {
   const symbol = currency === 'INR' ? '₹' : currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : `${currency} `;
   const abs = Math.abs(cents) / 100;
@@ -3837,7 +3853,11 @@ export function zonedToUtc(date: string, minutes: number, zone: string): Date {
   const fixed = new Date(guess.getTime() - offset * 60_000);
   // A second pass catches the rare case where the offset changes between guess and answer.
   const offset2 = zoneOffsetMinutes(zone, fixed);
-  return offset2 === offset ? fixed : new Date(guess.getTime() - offset2 * 60_000);
+  if (offset2 === offset) return fixed;
+  const second = new Date(guess.getTime() - offset2 * 60_000);
+  if (zoneOffsetMinutes(zone, second) === offset2) return second;
+  // A local time that does not exist (the clocks jumped over it) lands on the later of the two readings, an hour after the gap opens.
+  return new Date(Math.max(fixed.getTime(), second.getTime()));
 }
 
 export interface SlotInput {
@@ -6628,7 +6648,7 @@ export const IDENTITIES: readonly IdentityOption[] = [
   { key: 'volunteer', label: 'Volunteer', emoji: '🤝', kind: 'life', blurb: 'I give my time', because: 'you give your time', words: ['volunteer', 'volunteering', 'ngo', 'charity', 'social work'], interest: 'Volunteering', apps: { community: 2, party: 1 } },
 ];
 
-export const IDENTITY_BY_KEY: Record<string, IdentityOption> = Object.fromEntries(IDENTITIES.map((i) => [i.key, i]));
+export const IDENTITY_BY_KEY: Record<string, IdentityOption> = byKey(IDENTITIES.map((i) => [i.key, i]));
 
 /** The known tags of one kind, in order: the roles on the first card, a creator's crafts, a freelancer's services, the stages, the rest of life. */
 export function identitiesOf(kind: IdentityKind): IdentityOption[] {
@@ -6671,7 +6691,7 @@ export const SETUP_GOALS: readonly SetupGoal[] = [
   { key: 'find_coach', label: 'Work with a life coach', emoji: '🙋', blurb: 'A coach the team checked sees what you share and helps you keep going.', because: 'you want a coach in your corner', to: 'work with a life coach', words: ['need a life coach', 'want a life coach', 'find a life coach', 'get a life coach', 'need a coach', 'want a coach', 'find a coach', 'get a coach', 'my coach', 'accountability', 'keep me accountable', 'hold me accountable'], apps: { coaching: 3, life: 1, reviews: 1 } },
 ];
 
-export const SETUP_GOAL_BY_KEY: Record<string, SetupGoal> = Object.fromEntries(SETUP_GOALS.map((g) => [g.key, g]));
+export const SETUP_GOAL_BY_KEY: Record<string, SetupGoal> = byKey(SETUP_GOALS.map((g) => [g.key, g]));
 /** Three goals at most: a setup that wants everything matches nothing. */
 export const MAX_SETUP_GOALS = 3;
 
@@ -6697,7 +6717,7 @@ export const SETUP_BLOCKERS: readonly SetupBlocker[] = [
   { key: 'sleep', label: 'Bad sleep', emoji: '🌙', because: 'sleep is off', words: ['bad sleep', 'insomnia', "can't sleep", 'cant sleep', 'sleep badly', 'no sleep', 'sleep at 4', 'sleep at 3'], apps: { sleep: 3 } },
 ];
 
-export const SETUP_BLOCKER_BY_KEY: Record<string, SetupBlocker> = Object.fromEntries(SETUP_BLOCKERS.map((b) => [b.key, b]));
+export const SETUP_BLOCKER_BY_KEY: Record<string, SetupBlocker> = byKey(SETUP_BLOCKERS.map((b) => [b.key, b]));
 
 /** Two answers that mean more together than apart. Each pair adds its own weight and gives its own reason. */
 export interface SetupCombo {
@@ -7182,7 +7202,7 @@ export const ASSISTANT_MODELS: readonly AssistantModel[] = [
   { id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', name: 'Nemotron 3 Nano Omni', by: 'NVIDIA', private: false },
   { id: 'liquid/lfm-2.5-2.6b:free', name: 'LFM2.5 2.6B', by: 'Liquid', private: false, thinks: true },
 ];
-export const ASSISTANT_MODEL_BY_ID: Readonly<Record<string, AssistantModel>> = Object.fromEntries(ASSISTANT_MODELS.map((m) => [m.id, m]));
+export const ASSISTANT_MODEL_BY_ID: Readonly<Record<string, AssistantModel>> = byKey(ASSISTANT_MODELS.map((m) => [m.id, m]));
 
 /** "0.5415" (US dollars per million tokens) to 541500 micro-dollars, read as text so no float is involved. */
 export function microsFrom(input: string): number | null {
@@ -9622,6 +9642,8 @@ export interface Repeat {
   days: number[];
   /** The last day it may come back on, or null for no end. */
   until: string | null;
+  /** Monthly and yearly only: the first day it was on, so a short month's clamp (the 31st on the 28th) does not become the day it keeps. */
+  anchor?: string;
 }
 export const REPEAT_KINDS: readonly { key: RepeatKind; name: string; unit: string }[] = [
   { key: 'daily', name: 'Every day', unit: 'day' },
@@ -9658,8 +9680,11 @@ export function parseRepeat(raw: unknown): Repeat | null {
   if (!kind) return null;
   const every = Math.min(MAX_REPEAT_EVERY, Math.max(1, Math.round(Number(o.every) || 1)));
   const days = Array.isArray(o.days) ? [...new Set(o.days.map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 7))].sort((a, b) => a - b) : [];
-  const until = typeof o.until === 'string' && DATE_PATTERN.test(o.until) ? o.until : null;
-  return { kind, every: kind === 'weekdays' ? 1 : every, days: kind === 'weekly' ? days : [], until };
+  const real = (d: unknown): d is string => typeof d === 'string' && DATE_PATTERN.test(d) && fromDay(asDay(d)) === d;
+  const until = real(o.until) ? o.until : null;
+  const rule: Repeat = { kind, every: kind === 'weekdays' ? 1 : every, days: kind === 'weekly' ? days : [], until };
+  if ((kind === 'monthly' || kind === 'yearly') && real(o.anchor)) rule.anchor = o.anchor;
+  return rule;
 }
 
 /**
@@ -9690,7 +9715,10 @@ export function nextOccurrence(rule: Repeat, base: string, after: string): strin
   }
   const y0 = Number(base.slice(0, 4));
   const m0 = Number(base.slice(5, 7)) - 1;
-  const day = Number(base.slice(8, 10));
+  let day = Number(base.slice(8, 10));
+  // A base that was clamped to a short month's last day goes back to the day it started on.
+  const started = rule.anchor ? Number(rule.anchor.slice(8, 10)) : 0;
+  if (started > day && day === daysInMonth(y0, m0)) day = started;
   for (let k = 0; k < 800; k += 1) {
     const total = rule.kind === 'monthly' ? m0 + k * rule.every : m0 + k * rule.every * 12;
     const y = y0 + Math.floor(total / 12);
@@ -10608,7 +10636,7 @@ export const KPI_AUTO = [
   { key: 'new_clients', name: 'New clients', unit: 'number', direction: 'up' },
 ] as const satisfies readonly { key: string; name: string; unit: KpiUnit; direction: 'up' | 'down' }[];
 export type KpiAutoKey = (typeof KPI_AUTO)[number]['key'];
-export const KPI_AUTO_BY_KEY: Record<string, (typeof KPI_AUTO)[number]> = Object.fromEntries(KPI_AUTO.map((a) => [a.key, a]));
+export const KPI_AUTO_BY_KEY: Record<string, (typeof KPI_AUTO)[number]> = byKey(KPI_AUTO.map((a) => [a.key, a]));
 
 export type KpiStatus = 'on' | 'near' | 'off' | 'none';
 
@@ -10661,7 +10689,7 @@ export function kpiShown(unit: KpiUnit, value: number, currency: string): string
 /** What a person types for a unit becomes the stored whole number: money to cents, hours to minutes. */
 export function kpiFromInput(unit: KpiUnit, typed: number): number {
   if (!Number.isFinite(typed) || typed < 0) return 0;
-  if (unit === 'money') return Math.round(typed * 100);
+  if (unit === 'money') return typedCents(typed) || 0;
   if (unit === 'hours') return Math.round(typed * 60);
   return Math.round(typed);
 }
@@ -11154,7 +11182,7 @@ export const CONTRACT_TEMPLATES: readonly ContractTemplate[] = [
     },
   },
 ];
-export const CONTRACT_TEMPLATE_BY_KEY: Record<string, ContractTemplate> = Object.fromEntries(CONTRACT_TEMPLATES.map((t) => [t.key, t]));
+export const CONTRACT_TEMPLATE_BY_KEY: Record<string, ContractTemplate> = byKey(CONTRACT_TEMPLATES.map((t) => [t.key, t]));
 
 const BLANK = '__________';
 /** Fills {{name}} from the variables; a missing one becomes a blank line to write on. */
@@ -11314,7 +11342,7 @@ export const INVOICE_STARTERS: readonly { key: string; name: string; blurb: stri
   { key: 'retainer', name: 'Monthly retainer', blurb: 'A fixed fee for the month.', title: 'Invoice', footnote: '', items: [{ description: 'Monthly retainer', quantity: 1, unitCents: 0 }] },
   { key: 'per-piece', name: 'Per piece', blurb: 'A price for each deliverable, and how many.', title: 'Invoice', footnote: '', items: [{ description: 'Videos', quantity: 5, unitCents: 0 }] },
 ];
-export const INVOICE_STARTER_BY_KEY: Record<string, (typeof INVOICE_STARTERS)[number]> = Object.fromEntries(INVOICE_STARTERS.map((t) => [t.key, t]));
+export const INVOICE_STARTER_BY_KEY: Record<string, (typeof INVOICE_STARTERS)[number]> = byKey(INVOICE_STARTERS.map((t) => [t.key, t]));
 
 /** What an invoice keeps when it becomes a template: everything but who it is billed to. */
 export function invoiceTemplateDoc(doc: InvoiceDoc): InvoiceDoc {
@@ -11634,12 +11662,25 @@ export interface IcsTask {
   priority: Priority | null;
 }
 /** Text for a calendar file: backslash, semicolon, comma and line breaks escaped. */
-export const icsEscape = (t: string): string => t.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
-/** A line folded at 70 characters, each continuation starting with one space, as the calendar format asks. */
+export const icsEscape = (t: string): string => t.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r\n|\r|\n/g, '\\n');
+/** A line folded before 75 bytes, each continuation starting with one space, as the calendar format asks. A character is never split. */
 export function icsFold(line: string): string {
+  const utf8 = (ch: string) => { const c = ch.codePointAt(0) ?? 0; return c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4; };
   const parts: string[] = [];
-  const chars = Array.from(line);
-  for (let i = 0; i < chars.length; i += i === 0 ? 70 : 69) parts.push(chars.slice(i, i + (i === 0 ? 70 : 69)).join(''));
+  let cur = '';
+  let bytes = 0;
+  for (const ch of line) {
+    const n = utf8(ch);
+    // The continuation's leading space counts toward its 75 bytes.
+    if (bytes + n > (parts.length === 0 ? 75 : 74)) {
+      parts.push(cur);
+      cur = '';
+      bytes = 0;
+    }
+    cur += ch;
+    bytes += n;
+  }
+  parts.push(cur);
   return parts.join('\r\n ');
 }
 const icsStamp = (d: Date): string => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');

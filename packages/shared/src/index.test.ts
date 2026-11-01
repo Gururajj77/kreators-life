@@ -1713,7 +1713,7 @@ describe('the private calendar', () => {
   it('escapes what would break the file, and folds long lines', () => {
     expect(icsEscape('a, b; c\\d\ne')).toBe('a\\, b\\; c\\\\d\\ne');
     const long = icsFold(`SUMMARY:${'x'.repeat(200)}`);
-    for (const line of long.split('\r\n')) expect(line.length).toBeLessThanOrEqual(71);
+    for (const line of long.split('\r\n')) expect(line.length).toBeLessThanOrEqual(75);
   });
   it('carries the title, the pillar and the priority and nothing else', () => {
     const f = buildCalendar([t({ priority: 0 })], 'UTC', now);
@@ -1838,5 +1838,96 @@ describe('what is worth a look in the week plan', () => {
     const room = planWeek(today, many, 240).attention.find((a) => a.kind === 'noRoom')!;
     expect(room.tasks.length).toBe(12);
     expect(room.tasks.every((x) => x.day === null)).toBe(true);
+  });
+});
+
+import { icsEscape, icsFold, parseLinkBlocks, zonedToUtc } from './index';
+import { describe as describeFixes, expect as expectFix, it as itFixes } from 'vitest';
+
+describeFixes('repeats, times and calendar text found in the bug sweep', () => {
+  itFixes('a monthly task that fell on a short month goes back to its own day', () => {
+    const rule = parseRepeat({ kind: 'monthly', every: 1 })!;
+    // Each tick spawns the next from the day the last one was on, carrying the day it started on.
+    let base = '2026-01-31';
+    let carried = rule;
+    const chain: string[] = [base];
+    for (let i = 0; i < 4; i += 1) {
+      const next = nextOccurrence(carried, base, base)!;
+      carried = parseRepeat({ ...carried, anchor: carried.anchor ?? chain[0] })!;
+      base = next;
+      chain.push(next);
+    }
+    expectFix(chain).toEqual(['2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30', '2026-05-31']);
+  });
+  itFixes('a leap day comes back on the 29th in the next leap year', () => {
+    let rule = parseRepeat({ kind: 'yearly', every: 1 })!;
+    let base = '2028-02-29';
+    const seen: string[] = [];
+    for (let i = 0; i < 4; i += 1) {
+      const next = nextOccurrence(rule, base, base)!;
+      rule = parseRepeat({ ...rule, anchor: rule.anchor ?? '2028-02-29' })!;
+      base = next;
+      seen.push(next);
+    }
+    expectFix(seen).toEqual(['2029-02-28', '2030-02-28', '2031-02-28', '2032-02-29']);
+  });
+  itFixes('a repeat that ends on a day that does not exist has no end', () => {
+    expectFix(parseRepeat({ kind: 'daily', every: 1, until: '2026-13-45' })!.until).toBeNull();
+    expectFix(parseRepeat({ kind: 'daily', every: 1, until: '2026-02-30' })!.until).toBeNull();
+    expectFix(parseRepeat({ kind: 'daily', every: 1, until: '2026-02-28' })!.until).toBe('2026-02-28');
+  });
+  itFixes('the wake and sleep ramp never moves someone later, and works for any hour', () => {
+    expectFix(rampTime('05:00', '06:30', 0, 'earlier')).toBe('05:00');
+    expectFix(rampTime('22:00', '23:30', 0, 'earlier')).toBe('22:00');
+    expectFix(rampTime('13:00', '06:30', 0, 'earlier')).toBe('13:00');
+    expectFix(rampTime('13:00', '06:30', 2, 'earlier')).toBe('12:00');
+    expectFix(rampTime('08:30', '06:30', 2, 'earlier')).toBe('07:30');
+    expectFix(rampTime('08:30', '06:30', 9, 'earlier')).toBe('06:30');
+    expectFix(rampTime('01:30', '23:30', 1, 'earlier')).toBe('01:00');
+  });
+  itFixes('a lone carriage return in a title cannot break a calendar line', () => {
+    expectFix(icsEscape('a\rb')).toBe('a\\nb');
+    expectFix(icsEscape('a\r\nb')).toBe('a\\nb');
+  });
+  itFixes('a calendar line is folded before 75 bytes and never inside a character', () => {
+    const enc = new TextEncoder();
+    const deva = 'SUMMARY:' + 'क'.repeat(60);
+    const folded = icsFold(deva);
+    for (const part of folded.split('\r\n')) expectFix(enc.encode(part).length).toBeLessThanOrEqual(75);
+    expectFix(folded.split('\r\n').map((p, i) => (i === 0 ? p : p.slice(1))).join('')).toBe(deva);
+    expectFix(icsFold('SUMMARY:short')).toBe('SUMMARY:short');
+  });
+  itFixes('a time inside the spring-forward gap lands an hour later, not earlier', () => {
+    expectFix(zonedToUtc('2026-03-08', 2 * 60 + 30, 'America/New_York').toISOString()).toBe('2026-03-08T07:30:00.000Z');
+    expectFix(zonedToUtc('2026-03-29', 2 * 60 + 30, 'Europe/Berlin').toISOString()).toBe('2026-03-29T01:30:00.000Z');
+    expectFix(zonedToUtc('2026-07-01', 9 * 60, 'Asia/Kolkata').toISOString()).toBe('2026-07-01T03:30:00.000Z');
+    expectFix(zonedToUtc('2026-11-01', 1 * 60 + 30, 'America/New_York').getTime()).toBeGreaterThan(0);
+  });
+  itFixes('link blocks keep https links without control characters, and every block has its own id', () => {
+    const blocks = parseLinkBlocks([
+      { type: 'link', title: 'a', url: 'https://example.com/\u0000' },
+      { type: 'link', id: 'x', title: 'b', url: 'https://example.com/b' },
+      { type: 'link', id: 'x', title: 'c', url: 'https://example.com/c' },
+      { type: 'link', title: 'd', url: 'https://example.com/d' },
+    ]);
+    expectFix(blocks.map((b) => b.title)).toEqual(['b', 'c', 'd']);
+    expectFix(new Set(blocks.map((b) => b.id)).size).toBe(blocks.length);
+    expectFix(blocks.every((b) => b.id.length > 0)).toBe(true);
+  });
+});
+
+import { typedCents, kpiFromInput } from './index';
+describeFixes('typed money becomes cents without a float', () => {
+  itFixes('reads the digits', () => {
+    expectFix(typedCents('1.005')).toBe(101);
+    expectFix(typedCents('1,250.50')).toBe(125050);
+    expectFix(typedCents('0.1')).toBe(10);
+    expectFix(typedCents('19.99')).toBe(1999);
+    expectFix(typedCents('.5')).toBe(50);
+    expectFix(typedCents('')).toBe(0);
+    expectFix(typedCents(8.675)).toBe(868);
+    expectFix(Number.isNaN(typedCents('abc'))).toBe(true);
+    expectFix(Number.isNaN(typedCents('1e21'))).toBe(true);
+    expectFix(kpiFromInput('money', 1.005)).toBe(101);
   });
 });

@@ -225,7 +225,7 @@ wellbeing.get('/summary', async (c) => {
 wellbeing.get('/:kind', async (c) => {
   const kind = c.req.param('kind');
   if (!isKind(kind)) return c.json({ error: 'unknown log' }, 404);
-  const days = Math.min(365, Math.max(1, Number(c.req.query('days') ?? 30)));
+  const days = Math.min(365, Math.max(1, Math.round(Number(c.req.query('days') ?? 30)) || 30));
   const from = shiftDate(new Date().toISOString().slice(0, 10), -days);
   const rows = await c.env.DB.prepare('SELECT * FROM wellbeing_logs WHERE user_id = ? AND kind = ? AND date >= ? ORDER BY date DESC, created_at DESC LIMIT 400')
     .bind(c.get('user').id, kind, from)

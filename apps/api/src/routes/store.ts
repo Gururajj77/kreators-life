@@ -238,7 +238,8 @@ store.post('/:productId/checkout', async (c) => {
     couponCode = code;
     await db.prepare('UPDATE coupons SET uses = uses + 1 WHERE id = ?').bind(coupon.id).run();
   }
-  const wantsMoney = body.pay === 'test' || body.pay === 'money';
+  // Money is only asked for when the product has a money price; a product priced in points only is never free through the test path.
+  const wantsMoney = (body.pay === 'test' || body.pay === 'money') && cents > 0;
   const provider = providerFor(c.env);
   // With provider keys, money orders wait for the provider's webhook; without them the order is recorded and nothing is charged.
   const live = wantsMoney && provider.name === 'razorpay' && cents > 0;

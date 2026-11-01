@@ -206,6 +206,7 @@ admin.post('/users/:id/role', async (c) => {
   const db = c.env.DB;
   const body = await c.req.json<{ role?: string }>().catch(() => ({}) as { role?: string });
   if (!isRole(body.role)) return c.json({ error: 'role must be user, sub_admin or admin' }, 400);
+  if (c.get('user')?.id === c.req.param('id')) return c.json({ error: 'you cannot change your own role' }, 400);
   const before = await getUser(db, c.req.param('id'));
   await db.prepare('UPDATE users SET role = ? WHERE id = ?').bind(body.role, c.req.param('id')).run();
   await audit(db, actorOf(c), 'user.role', 'user', c.req.param('id'), before?.role ?? '', body.role);

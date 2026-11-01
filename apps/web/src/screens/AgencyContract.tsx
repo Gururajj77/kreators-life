@@ -13,6 +13,7 @@ import {
   type ContractPackage,
   type ContractQuestion,
   type ContractSection,
+  typedCents,
 } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
@@ -57,7 +58,7 @@ function useTwoTap(): [string | null, (key: string, run: () => void) => void] {
 function MoneyField({ cents, onChange, label }: { cents: number; onChange: (cents: number) => void; label: string }) {
   const [txt, setTxt] = useState(cents ? String(cents / 100) : '');
   useEffect(() => {
-    const cur = Math.round(Number.parseFloat(txt || '0') * 100);
+    const cur = typedCents(txt || '0');
     if (!Number.isFinite(cur) || cur !== cents) setTxt(cents ? String(cents / 100) : '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cents]);
@@ -69,7 +70,7 @@ function MoneyField({ cents, onChange, label }: { cents: number; onChange: (cent
       onChange={(e) => {
         const v = e.target.value;
         setTxt(v);
-        const n = Math.round(Number.parseFloat(v) * 100);
+        const n = typedCents(v);
         if (v === '') onChange(0);
         else if (Number.isFinite(n) && n >= 0) onChange(n);
       }}

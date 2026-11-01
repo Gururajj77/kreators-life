@@ -47,7 +47,7 @@ export function AgencyInvoices({ clientId }: { clientId?: string }) {
   const nav = useNavigate();
   const [per, setPer] = useState(PER_STEP);
   const [status, setStatus] = useParamState('invstatus', 'all');
-  const { page, size } = usePage('inv');
+  const { page, size, reset } = usePage('inv');
   const [msg, setMsg] = useState('');
   const [adding, setAdding] = useState(false);
   const clientQ = clientId ? `client=${clientId}` : '';
@@ -111,7 +111,10 @@ export function AgencyInvoices({ clientId }: { clientId?: string }) {
         <div className="mt-sm">
           <div role="group" aria-label="Invoice status" className="scroll-row flex gap-xs">
             {[{ key: 'all', name: 'All', n: total }, ...INVOICE_STATUSES.map((s) => ({ key: s as string, name: INVOICE_STATUS_NAME[s], n: counts.get(s) ?? 0 }))].map((s) => (
-              <button key={s.key} type="button" aria-pressed={status === s.key} onClick={() => setStatus(s.key)} className={`toy min-h-[44px] shrink-0 rounded-pill border-2 px-md text-[14px] font-bold ${status === s.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+              <button key={s.key} type="button" aria-pressed={status === s.key} onClick={() => {
+                setStatus(s.key);
+                reset();
+              }} className={`toy min-h-[44px] shrink-0 rounded-pill border-2 px-md text-[14px] font-bold ${status === s.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                 {s.name} {s.n}
               </button>
             ))}

@@ -335,7 +335,16 @@ studio.patch('/products/:id', async (c) => {
 });
 
 studio.delete('/products/:id', async (c) => {
-  const res = await c.env.DB.prepare('DELETE FROM products WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  const db = c.env.DB;
+  const id = c.req.param('id');
+  // A product that has been sold is kept: deleting it would take the paid orders and the buyers' access with it. It is archived instead.
+  const sold = await db.prepare('SELECT 1 FROM orders o JOIN products p ON p.id = o.product_id WHERE o.product_id = ? AND p.owner_id = ? LIMIT 1').bind(id, c.get('user').id).first();
+  if (sold) {
+    const res = await db.prepare("UPDATE products SET status = 'archived' WHERE id = ? AND owner_id = ?").bind(id, c.get('user').id).run();
+    if (res.meta.changes === 0) return c.json({ error: 'not found' }, 404);
+    return c.json({ ok: true, archived: true });
+  }
+  const res = await db.prepare('DELETE FROM products WHERE id = ? AND owner_id = ?').bind(id, c.get('user').id).run();
   if (res.meta.changes === 0) return c.json({ error: 'not found' }, 404);
   return c.json({ ok: true });
 });

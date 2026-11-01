@@ -62,7 +62,7 @@ export function Pager({ page, prefix = '', label }: { page: Page | undefined; pr
             else next.set(`${prefix}size`, String(s));
             return next;
           },
-          { replace: true },
+          { replace: true, preventScrollReset: true },
         )
       }
     />
