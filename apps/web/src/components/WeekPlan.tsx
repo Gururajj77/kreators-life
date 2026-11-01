@@ -400,8 +400,8 @@ function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: number,
               const done = handled(a, i);
               return (
                 <li key={`${a.kind}${i}`} className="rounded-tile bg-paper p-sm">
-                  <div className="flex items-start gap-sm">
-                    <input type="checkbox" checked={done} onChange={(e) => setChecked((c) => ({ ...c, [i]: e.target.checked }))} aria-label={`${COPY.handled}: ${a.text}`} className="mt-xs size-[24px] shrink-0" />
+                  <div className="flex items-center gap-sm">
+                    <input type="checkbox" checked={done} onChange={(e) => setChecked((c) => ({ ...c, [i]: e.target.checked }))} aria-label={`${COPY.handled}: ${a.text}`} className="size-[24px] shrink-0" />
                     <p className={`m-0 min-w-0 flex-1 text-[14px] font-semibold ${done ? 'text-ink-soft line-through' : ''}`}>{tie(a.text)}</p>
                     {fixable && (
                       <button type="button" aria-expanded={openLine === i} onClick={() => setOpenLine(openLine === i ? null : i)} className="toy toy-flat min-h-[44px] shrink-0 rounded-pill border border-line bg-card-strong px-sm text-[14px] font-bold">
