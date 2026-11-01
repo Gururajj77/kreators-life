@@ -359,22 +359,24 @@ function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: number,
         ) : (
           <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
             {plan.suggestions.map((s: WeekPlanSuggestion) => (
-              <li key={s.id} className="flex items-start gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+              <li key={s.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <input type="checkbox" checked={on[s.id] ?? false} onChange={(e) => setOn((o) => ({ ...o, [s.id]: e.target.checked }))} aria-label={`Keep ${s.title}`} className="size-[24px] shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <p className="m-0 flex items-center gap-xs text-[16px] font-bold leading-snug">
-                    <span className="inline-block size-[10px] shrink-0 rounded-pill" style={{ background: RELATIONSHIP_BY_KEY[s.relationship].color }} aria-hidden="true" />
-                    <span className="min-w-0">
+                <div className="flex min-w-0 flex-1 items-start gap-xs">
+                  <span className="flex h-[22px] shrink-0 items-center">
+                    <span className="inline-block size-[10px] rounded-pill" style={{ background: RELATIONSHIP_BY_KEY[s.relationship].color }} aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="m-0 text-[16px] font-bold leading-snug">
                       <Inert text={s.title} />
-                    </span>
-                  </p>
-                  <p className="m-0 text-[12px] font-semibold text-ink-soft">
-                    {minutesLabel2(s.estimateMin)}, {s.reason.toLowerCase()}
-                  </p>
+                    </p>
+                    <p className="m-0 text-[12px] font-semibold text-ink-soft">
+                      {minutesLabel2(s.estimateMin)}, {s.reason.toLowerCase()}
+                    </p>
+                  </div>
                 </div>
-                <label className="block w-[148px] shrink-0 text-[12px] font-bold text-ink-soft">
+                <label className="block w-[148px] shrink-0 text-right text-[12px] font-bold text-ink-soft">
                   Day
-                  <select value={day[s.id]} onChange={(e) => setDay((d) => ({ ...d, [s.id]: e.target.value }))} className={`mt-xs ${selectClass}`}>
+                  <select value={day[s.id]} onChange={(e) => setDay((d) => ({ ...d, [s.id]: e.target.value }))} className={`mt-xs text-left ${selectClass}`}>
                     {plan.days.map((d) => (
                       <option key={d.date} value={d.date}>
                         {dayOption(d.date)}
