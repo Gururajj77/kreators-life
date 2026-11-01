@@ -5,7 +5,7 @@ import { runRecurring } from './routes/finance';
 import { matchDueCircles, rollWeeklyCircles } from './routes/circles';
 import { fetchMetrics } from './social';
 import { closeSeason, sendEventReminders } from './engage';
-import { nextOccurrence, nextOnOrAfter, parseRepeat, PERIOD_META, reviewPeriodFor, zonedToUtc, type PeriodKind } from '@kreators/shared';
+import { nextOccurrence, nextOnOrAfter, parseRepeat, pastWaterNote, PERIOD_META, reviewPeriodFor, zonedToUtc, type PeriodKind } from '@kreators/shared';
 import { flaggedFor } from './routes/reviews';
 
 /** The cron runs every fifteen minutes, so 23:45 is the last tick of a day: a reminder set for 23:46 to 23:59 goes out then and not at 00:00, when its day has already turned over. */
@@ -15,6 +15,7 @@ const LAST_TICK = 23 * 60 + 45;
 export async function runScheduled(env: Env): Promise<{ sequences: number; recurring: number; circles: number; weekly: number; content: number; submissions: number; reminders: number; events: number; season: number }> {
   const db = env.DB;
   const reminders = (await sendReminders(db)) + (await sendWaterAndCustom(db)) + (await sendTaskReminders(db)) + (await sendReviewReminders(db));
+  await clearPastWaterNotes(db);
   const events = await sendEventReminders(db);
   const season = await closeSeason(db);
   const sequences = await runSequences(db);
@@ -46,6 +47,30 @@ export async function runScheduled(env: Env): Promise<{ sequences: number; recur
     submissions += 1;
   }
   return { sequences, recurring, circles, weekly, content, submissions, reminders, events, season };
+}
+
+/** Water reminders from a day that is over are deleted from the inbox, read or not: each person's own day decides, so nobody's note goes early or lingers. */
+export async function clearPastWaterNotes(db: D1Database): Promise<number> {
+  const rows = await db.prepare("SELECT n.id, u.timezone FROM notifications n JOIN users u ON u.id = n.user_id WHERE n.id LIKE 'water-%'").all<{ id: string; timezone: string | null }>();
+  const days = new Map<string, string | null>();
+  const dayIn = (zone: string) => {
+    if (!days.has(zone)) {
+      try {
+        days.set(zone, new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()));
+      } catch {
+        days.set(zone, null);
+      }
+    }
+    return days.get(zone) ?? null;
+  };
+  const gone = rows.results.filter((r) => {
+    const today = dayIn(r.timezone || 'Asia/Kolkata');
+    return today !== null && pastWaterNote(r.id, today);
+  });
+  for (let i = 0; i < gone.length; i += 50) {
+    await db.batch(gone.slice(i, i + 50).map((r) => db.prepare('DELETE FROM notifications WHERE id = ?').bind(r.id)));
+  }
+  return gone.length;
 }
 
 /**

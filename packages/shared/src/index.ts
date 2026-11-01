@@ -5992,6 +5992,11 @@ export const WATER_GLASS_MIN = 50;
 export const WATER_GLASS_MAX = 1000;
 /** The most one tap can add, and the most a day can hold, so a slip of the thumb cannot ruin a day's number. */
 export const WATER_DAY_MAX = 10_000;
+/** The inbox line a water reminder rewrites is `water-<person>-<their day>`. Once that day is over the line is no use: a reminder to drink for a day that has gone. */
+export function pastWaterNote(id: string, today: string): boolean {
+  const m = /^water-.+-(\d{4}-\d{2}-\d{2})$/.exec(id);
+  return Boolean(m && m[1]! < today);
+}
 export const MAX_CUSTOM_REMINDERS = 12;
 export const REMINDER_TITLE_MAX = 60;
 export const WEEKDAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;

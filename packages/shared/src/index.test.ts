@@ -1931,3 +1931,14 @@ describeFixes('typed money becomes cents without a float', () => {
     expectFix(kpiFromInput('money', 1.005)).toBe(101);
   });
 });
+
+import { pastWaterNote } from './index';
+describeFixes('water reminders from a day that is over', () => {
+  itFixes('only a line from an earlier day is past', () => {
+    expectFix(pastWaterNote('water-abc-123-2026-10-31', '2026-11-01')).toBe(true);
+    expectFix(pastWaterNote('water-abc-123-2026-11-01', '2026-11-01')).toBe(false);
+    expectFix(pastWaterNote('water-abc-123-2026-11-02', '2026-11-01')).toBe(false);
+    expectFix(pastWaterNote('task-abc-2026-10-31', '2026-11-01')).toBe(false);
+    expectFix(pastWaterNote('water-bad', '2026-11-01')).toBe(false);
+  });
+});
