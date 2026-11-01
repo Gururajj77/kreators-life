@@ -222,6 +222,19 @@ export async function notify(db: D1Database, userId: string, kind: string, title
     .run();
 }
 
+/** The same note for many people: one round trip per fifty, not one per person. Same rows `notify` would write. */
+export async function notifyMany(db: D1Database, userIds: readonly string[], kind: string, title: string, body = '', link: string | null = null): Promise<void> {
+  const ids = [...new Set(userIds)];
+  const now = nowIso();
+  for (let i = 0; i < ids.length; i += 50) {
+    await db.batch(
+      ids
+        .slice(i, i + 50)
+        .map((uid) => db.prepare('INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)').bind(newId(), uid, kind, title, body, link, now)),
+    );
+  }
+}
+
 /** The made-up name someone writes under in one conversation (`scope`): the same all through it, different in the next, and not reversible without the salt. */
 export async function anonAlias(env: { CLICK_SALT?: string }, userId: string, scope: string): Promise<string> {
   const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${env.CLICK_SALT ?? 'kreators-local'}:anon:${scope}:${userId}`)));
@@ -249,14 +262,17 @@ export async function withSubtasks(db: D1Database, userId: string, list: Node[])
   const ids = list.filter((n) => n.kind === 'task').map((n) => n.id);
   if (ids.length === 0) return list;
   const counts = new Map<string, { total: number; done: number }>();
-  for (let i = 0; i < ids.length; i += 80) {
-    const part = ids.slice(i, i + 80);
-    const rows = await db
-      .prepare(`SELECT task_id, COUNT(*) AS total, SUM(CASE WHEN done_at IS NULL THEN 0 ELSE 1 END) AS done FROM subtasks WHERE user_id = ? AND task_id IN (${part.map(() => '?').join(',')}) GROUP BY task_id`)
-      .bind(userId, ...part)
-      .all<{ task_id: string; total: number; done: number }>();
-    for (const r of rows.results) counts.set(r.task_id, { total: r.total, done: r.done ?? 0 });
-  }
+  // One batch for every chunk of 80: a single round trip however long the list is.
+  const parts: string[][] = [];
+  for (let i = 0; i < ids.length; i += 80) parts.push(ids.slice(i, i + 80));
+  const found = await db.batch<{ task_id: string; total: number; done: number }>(
+    parts.map((part) =>
+      db
+        .prepare(`SELECT task_id, COUNT(*) AS total, SUM(CASE WHEN done_at IS NULL THEN 0 ELSE 1 END) AS done FROM subtasks WHERE user_id = ? AND task_id IN (${part.map(() => '?').join(',')}) GROUP BY task_id`)
+        .bind(userId, ...part),
+    ),
+  );
+  for (const rows of found) for (const r of rows.results) counts.set(r.task_id, { total: r.total, done: r.done ?? 0 });
   return list.map((n) => (n.kind === 'task' ? { ...n, subtaskTotal: counts.get(n.id)?.total ?? 0, subtaskDone: counts.get(n.id)?.done ?? 0 } : n));
 }
 
@@ -401,7 +417,8 @@ export const withGranted = (earned: readonly string[], granted: readonly string[
 export async function badgesNow(db: D1Database, userId: string): Promise<string[]> {
   const user = await getUser(db, userId);
   if (!user) return [];
-  return withGranted(computeBadges(user, await getStats(db, userId)), await grantedBadges(db, userId));
+  const [stats, granted] = await Promise.all([getStats(db, userId), grantedBadges(db, userId)]);
+  return withGranted(computeBadges(user, stats), granted);
 }
 
 /** Honors stored by an admin plus the ones time has unlocked, in catalog order. */
@@ -432,4 +449,10 @@ export function publicOf(r: { public_json?: string | null }): ReturnType<typeof 
   } catch {
     return parsePublicSettings({});
   }
+}
+
+/** A link a person types for a meeting, a replay, a video or an event: http or https only, up to `max` characters, else empty. javascript: and data: never get stored. */
+export function httpUrl(v: unknown, max = 500): string {
+  const t = typeof v === 'string' ? v.trim().slice(0, max) : '';
+  return /^https?:\/\/\S+$/i.test(t) ? t : '';
 }

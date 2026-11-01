@@ -58,8 +58,8 @@ export function ListingSheet({ id, onClose, feature }: Props) {
         <div className="flex flex-col gap-md pb-xl">
           {l.images.length > 0 && (
             <div className="-mx-xs flex gap-xs overflow-x-auto px-xs scrollbar-none">
-              {l.images.map((src) => (
-                <img key={src} src={src} alt="" loading="lazy" className="h-[180px] w-[240px] shrink-0 rounded-tile bg-paper object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
+              {l.images.map((src, n) => (
+                <img key={src} src={src} alt={`${l.title}, picture ${n + 1} of ${l.images.length}`} loading="lazy" decoding="async" className="h-[180px] w-[240px] shrink-0 rounded-tile bg-paper object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
               ))}
             </div>
           )}

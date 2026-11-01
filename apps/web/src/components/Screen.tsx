@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { HowItWorks } from './HowTo';
+import { SkipLink } from './SkipLink';
 
 interface Props {
   children: ReactNode;
@@ -22,9 +23,13 @@ interface Props {
 export function Screen({ children, tabs = true, columns = false, wide = false, howTo = true, className = '' }: Props) {
   const width = tabs ? 'max-w-[480px] md:ml-[240px] md:max-w-[1040px] lg:mx-auto lg:pl-[240px]' : wide ? 'max-w-[480px] md:max-w-[1200px]' : 'max-w-[480px] md:max-w-[640px]';
   return (
-    <main className={`safe-top screen mx-auto w-full px-md md:w-auto md:px-lg ${width} ${tabs ? 'pb-2xl md:pb-lg' : 'pb-lg'} ${columns ? 'screen-columns' : ''} ${className}`}>
-      {children}
-      {howTo && <HowItWorks />}
-    </main>
+    <>
+      <SkipLink />
+      {/* tabIndex -1 lets the skip link land here; the page itself is not a control, so it draws no ring when it is focused. */}
+      <main id="main" tabIndex={-1} className={`safe-top screen focus-visible:outline-none mx-auto w-full px-md md:w-auto md:px-lg ${width} ${tabs ? 'pb-2xl md:pb-lg' : 'pb-lg'} ${columns ? 'screen-columns' : ''} ${className}`}>
+        {children}
+        {howTo && <HowItWorks />}
+      </main>
+    </>
   );
 }

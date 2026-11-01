@@ -1,4 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk';
+// The SDK is about 1 MB of the Worker; it is loaded the first time a piece is written with Claude, not on every cold start.
+import type Anthropic from '@anthropic-ai/sdk';
+import { isTimeout, TIMEOUT, withTimeout } from './http';
 import { PIECE_META, type BrandPiece, type PieceKind, type ResearchItem } from '@kreators/shared';
 import type { Env } from './env';
 
@@ -68,7 +70,9 @@ const ASK: Record<PieceKind, string> = {
 };
 
 async function withClaude(env: Env, kind: PieceKind, brief: string, ctx: Context): Promise<string> {
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  // The SDK's own clock per request; its retry behaviour is left as it was.
+  const { default: Claude } = await import('@anthropic-ai/sdk');
+  const client = new Claude({ apiKey: env.ANTHROPIC_API_KEY, timeout: TIMEOUT.strategist });
   const stream = client.beta.messages.stream({
     model: env.ANTHROPIC_MODEL || 'claude-opus-5-5',
     max_tokens: 8000,
@@ -80,7 +84,21 @@ async function withClaude(env: Env, kind: PieceKind, brief: string, ctx: Context
       { role: 'user', content: `${digest(ctx)}\n\n# The ask\n${ASK[kind]}\n\n# The brief from the owner\n${brief || '(none)'}` },
     ],
   });
-  const message = await stream.finalMessage();
+  let message: Awaited<ReturnType<typeof stream.finalMessage>>;
+  try {
+    message = await withTimeout(stream.finalMessage(), TIMEOUT.strategist, 'The writer');
+  } catch (e) {
+    // A clock that ran out is a short, plain error; the route answers it as a 502 the way it answers any writer failure.
+    if (isTimeout(e) || (e instanceof Error && /timed out/i.test(e.message))) {
+      try {
+        stream.abort();
+      } catch {
+        // already finished
+      }
+      throw new Error('The writer took too long. Try again, or make the brief shorter.');
+    }
+    throw e;
+  }
   if (message.stop_reason === 'refusal') throw new Error('The writer declined this one. Change the brief and try again.');
   return message.content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text')
@@ -90,7 +108,7 @@ async function withClaude(env: Env, kind: PieceKind, brief: string, ctx: Context
 }
 
 async function withWorkersAi(ai: Ai, kind: PieceKind, brief: string, ctx: Context): Promise<string> {
-  const res = (await ai.run('@cf/meta/llama-3.1-8b-instruct' as never, { messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: `${digest(ctx, 20_000)}\n\n# The ask\n${ASK[kind]}\n\n# The brief\n${brief || '(none)'}` }], max_tokens: 2048 } as never)) as { response?: string };
+  const res = (await withTimeout(ai.run('@cf/meta/llama-3.1-8b-instruct' as never, { messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: `${digest(ctx, 20_000)}\n\n# The ask\n${ASK[kind]}\n\n# The brief\n${brief || '(none)'}` }], max_tokens: 2048 } as never) as Promise<{ response?: string }>, TIMEOUT.assistant, 'The writer')) as { response?: string };
   return (res.response ?? '').trim();
 }
 

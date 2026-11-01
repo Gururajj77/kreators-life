@@ -1,9 +1,12 @@
 // A probeFile for shoot.mjs (SHOOT_PROBE=scripts/smoke/contrast-probe.js).
-// Evaluated in the page: walks every visible text node, composites its colour onto the real
-// background behind it (walking up through translucent layers), and returns everything under 2.2:1.
-// The only accepted hits in this app are white captions on the green fill and greyed unearned badges.
+// Evaluated in the page: walks every visible text node and every placeholder, composites its colour onto the real
+// background behind it (walking up through translucent layers, then onto the page's own wash of glows, at the
+// worst place that text can scroll to), and returns everything under WCAG 2.2 AA: 4.5:1 for text under 24px (or
+// under 18.66px bold), 3:1 for larger text. A disabled control is exempt in WCAG; it is listed only under 3:1 so it stays legible.
+// Anything fixed or sticky that carries text on a fill thinner than 88% is listed too.
 (() => {
-  const LIMIT = 2.2;
+  const AA = 4.5;
+  const AA_LARGE = 3;
   // A canvas turns any colour the browser can draw (color(), oklab, color-mix) into plain rgba.
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 1;
@@ -61,11 +64,43 @@
     }
     return parts.join(' > ');
   };
-  // Background behind an element: its own background colour over everything above it, until opaque.
-  const backgroundOf = (el) => {
+  // The page is a wash: four radial glows and a linear base, fixed to the screen (body::before in app.css). A glass card is translucent
+  // over it, so text on a card is judged against the wash too. Text scrolls through the whole viewport, so the worst place counts.
+  const rootStyle = getComputedStyle(document.documentElement);
+  const token = (name) => parse(rootStyle.getPropertyValue(name).trim());
+  const GLOWS = [
+    { c: token('--glow-1'), x: 0.06, y: -0.06, rx: 60, ry: 42 },
+    { c: token('--glow-3'), x: 1.04, y: 0.06, rx: 52, ry: 40 },
+    { c: token('--glow-2'), x: 0.82, y: 1.08, rx: 56, ry: 44 },
+    { c: token('--glow-4'), x: -0.04, y: 0.96, rx: 44, ry: 36 },
+  ];
+  const baseA = token('--page-base-a') ?? { r: 255, g: 255, b: 255, a: 1 };
+  const baseB = token('--page-base-b') ?? baseA;
+  const remPx = parseFloat(rootStyle.fontSize) || 16;
+  const washAt = (x, y) => {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    // 165deg linear base: mostly top to bottom, a little left to right.
+    const t = Math.min(1, Math.max(0, (y / H) * 0.9 + (x / W) * 0.1));
+    let acc = { r: baseA.r + (baseB.r - baseA.r) * t, g: baseA.g + (baseB.g - baseA.g) * t, b: baseA.b + (baseB.b - baseA.b) * t, a: 1 };
+    // Painted first to last on top of each other, the last glow in the list is the bottom layer.
+    for (const g of [...GLOWS].reverse()) {
+      if (!g.c) continue;
+      const dx = (x - g.x * W) / (g.rx * remPx);
+      const dy = (y - g.y * H) / (g.ry * remPx);
+      const d = Math.hypot(dx, dy) / 0.62;
+      if (d >= 1) continue;
+      acc = over({ ...g.c, a: g.c.a * (1 - d) }, acc);
+    }
+    return acc;
+  };
+  // Background behind an element: its own background colour over everything above it, until opaque. Returns the translucent
+  // stack (so it can be laid over several places on the wash) and whether an image sits in it.
+  const stackOf = (el) => {
     let acc = { r: 0, g: 0, b: 0, a: 0 };
     let images = false;
-    for (let e = el; e; e = e.parentElement) {
+    for (let e = el; e && e !== document.documentElement; e = e.parentElement) {
+      // html carries only the base colour the wash is drawn over, so it stops the walk: the wash itself is worked out in washAt.
       const cs = getComputedStyle(e);
       let bg = parse(cs.backgroundColor);
       if (cs.backgroundImage && cs.backgroundImage !== 'none') {
@@ -85,13 +120,49 @@
       }
       if (bg && bg.a > 0) {
         acc = over(acc, bg);
-        if (acc.a >= 0.999) return { color: acc, images };
+        if (acc.a >= 0.999) return { stack: acc, images };
       }
-      if (e === document.documentElement) break;
     }
-    // The paper colour sits on html in this app (body is transparent), so read both before falling back to white.
-    const paper = [getComputedStyle(document.documentElement).backgroundColor, getComputedStyle(document.body).backgroundColor].map(parse).find((c) => c && c.a > 0) ?? { r: 255, g: 255, b: 255, a: 1 };
-    return { color: over(acc, paper), images };
+    return { stack: acc, images };
+  };
+  const opacityOf = (el) => {
+    let o = 1;
+    for (let e = el; e && e !== document.documentElement; e = e.parentElement) o *= Number(getComputedStyle(e).opacity);
+    return o;
+  };
+  // Text inside a drawn chart is scaled by its viewBox, so its size on screen is the font size times the scale.
+  const sizeOf = (el, cs) => {
+    const px = parseFloat(cs.fontSize);
+    if (el instanceof SVGElement && typeof el.getScreenCTM === 'function') {
+      const m = el.getScreenCTM();
+      if (m) return px * Math.hypot(m.a, m.b);
+    }
+    return px;
+  };
+  const isLarge = (el, cs) => {
+    const px = sizeOf(el, cs);
+    const bold = Number(cs.fontWeight) >= 700;
+    return px >= 24 || (px >= 18.66 && bold);
+  };
+  // The worst ratio of this colour over this stack, across the places the text can sit on the wash.
+  const worst = (fg, el, stack, rect) => {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    if (stack.a >= 0.999) {
+      const f = fg.a < 1 ? over(fg, stack) : fg;
+      return { ratio: ratio(f, stack), bg: stack, fg: f };
+    }
+    let out = null;
+    const xs = [Math.max(0, rect.left), Math.min(W, Math.max(0, rect.left + rect.width / 2)), Math.min(W, rect.right)];
+    for (const x of xs) {
+      for (const y of [0.05 * H, 0.3 * H, 0.55 * H, 0.8 * H, 0.97 * H]) {
+        const bg = over(stack, washAt(x, y));
+        const f = fg.a < 1 ? over(fg, bg) : fg;
+        const r = ratio(f, bg);
+        if (!out || r < out.ratio) out = { ratio: r, bg, fg: f };
+      }
+    }
+    return out;
   };
   const hits = [];
   const seen = new Set();
@@ -104,28 +175,62 @@
     const bg = parse(cs.backgroundColor);
     const image = cs.backgroundImage && cs.backgroundImage !== 'none';
     // A fade or a wrapper with no fill of its own is fine when its children carry the fill; flag a fill that is there but thin.
-    if (bg && bg.a > 0.02 && bg.a < 0.88 && !image) hits.push({ text: (el.textContent ?? '').trim().slice(0, 60), color: 'chrome', background: `alpha ${Math.round(bg.a * 100)}%`, ratio: 1, where: where(el) });
+    if (bg && bg.a > 0.02 && bg.a < 0.88 && !image) hits.push({ text: (el.textContent ?? '').trim().slice(0, 60), color: 'chrome', background: `alpha ${Math.round(bg.a * 100)}%`, ratio: 1, where: where(el), line: `1:1 need chrome [chrome] "${(el.textContent ?? '').trim().slice(0, 50)}"  fill alpha ${Math.round(bg.a * 100)}%  ${where(el)}` });
   }
+  const judge = (el, text, kind) => {
+    const cs = getComputedStyle(el);
+    if (cs.visibility === 'hidden' || cs.display === 'none') return;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    const op = opacityOf(el);
+    if (op === 0) return;
+    const colorCss = kind === 'placeholder' ? getComputedStyle(el, '::placeholder').color : el instanceof SVGElement ? cs.fill : cs.color;
+    const fg0 = parse(colorCss);
+    if (!fg0 || fg0.a === 0) return;
+    const fg = { ...fg0, a: fg0.a * op };
+    let { stack, images } = stackOf(el);
+    // Text drawn inside a chart sits on the shapes under it, not on a CSS background: bring it into view and read the shape beneath.
+    if (el instanceof SVGElement && typeof document.elementsFromPoint === 'function') {
+      el.scrollIntoView({ block: 'center', inline: 'center' });
+      const r2 = el.getBoundingClientRect();
+      for (const u of document.elementsFromPoint(r2.left + r2.width / 2, r2.top + r2.height / 2)) {
+        if (u === el || u.contains(el) || !(u instanceof SVGGeometryElement)) continue;
+        const ucs = getComputedStyle(u);
+        const f = parse(ucs.fill);
+        if (f && f.a > 0) {
+          stack = over({ ...f, a: f.a * Number(ucs.fillOpacity) * Number(ucs.opacity) }, stack);
+          break;
+        }
+      }
+    }
+    const disabled = el.matches(':disabled') || el.closest('[aria-disabled="true"], :disabled, fieldset:disabled') !== null;
+    const large = isLarge(el, cs);
+    const need = disabled ? AA_LARGE : large ? AA_LARGE : AA;
+    const w = worst(fg, el, stack, rect);
+    if (w.ratio < need) {
+      const r = Math.round(w.ratio * 100) / 100;
+      const k = disabled ? 'disabled' : kind;
+      const size = `${Math.round(sizeOf(el, cs))}px/${cs.fontWeight}`;
+      const bgHex = hex(w.bg) + (images ? ' (over an image)' : '');
+      // shoot.mjs prints `line` as it is: the ratio, what was needed, the kind, the size, the words, the colour pair and where.
+      hits.push({ text: text.slice(0, 60), color: hex(w.fg), background: bgHex, ratio: r, need, kind: k, size, where: where(el), line: `${r}:1 need ${need} [${k}] ${size} "${text.slice(0, 50)}"  ${hex(w.fg)} on ${bgHex}  ${where(el)}` });
+    }
+  };
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const text = (node.textContent ?? '').replace(/\s+/g, ' ').trim();
     // Emoji and symbols draw in their own colours, so only text with letters or digits is judged.
     if (!text || !/[\p{L}\p{N}]/u.test(text)) continue;
     const el = node.parentElement;
-    if (!el || seen.has(el)) continue;
-    const cs = getComputedStyle(el);
-    if (cs.visibility === 'hidden' || cs.display === 'none' || Number(cs.opacity) === 0) continue;
-    const rect = el.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) continue;
-    const fg = parse(cs.color);
-    if (!fg || fg.a === 0) continue;
-    const { color: bg, images } = backgroundOf(el);
-    const fgOnBg = fg.a < 1 ? over(fg, bg) : fg;
-    const r = ratio(fgOnBg, bg);
-    if (r < LIMIT) {
-      seen.add(el);
-      hits.push({ text: text.slice(0, 60), color: hex(fgOnBg), background: hex(bg) + (images ? ' (over an image)' : ''), ratio: Math.round(r * 100) / 100, where: where(el) });
-    }
+    if (!el || seen.has(el) || el.closest('script, style, noscript, title, desc')) continue;
+    seen.add(el);
+    judge(el, text, 'text');
+  }
+  // Placeholders count: they are drawn by the field, not by a text node.
+  for (const el of document.querySelectorAll('input[placeholder], textarea[placeholder]')) {
+    if (el.value) continue;
+    if (el instanceof HTMLInputElement && ['checkbox', 'radio', 'range', 'color', 'file', 'hidden'].includes(el.type)) continue;
+    judge(el, el.getAttribute('placeholder') ?? '', 'placeholder');
   }
   return hits;
 })()

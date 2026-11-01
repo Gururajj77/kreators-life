@@ -18,7 +18,7 @@ import {
 } from '@kreators/shared';
 import type { Context } from 'hono';
 import type { AppEnv, UserRow } from './env';
-import { can, nameOf, newId, notify, nowIso, pageOf, paged, parseList, shiftDate, taskGate, toNode, type NodeRow } from './db';
+import { can, nameOf, newId, notify, notifyMany, nowIso, pageOf, paged, parseList, shiftDate, taskGate, toNode, type NodeRow } from './db';
 import { toReview, type ReviewRow } from './routes/reviews';
 import { latest } from './routes/session';
 import { dayBounds, notToDoList } from './routes/today';
@@ -160,7 +160,7 @@ export async function endLink(db: D1Database, link: LinkRow, actor: { id: string
 /** The admins to tell when someone asks to be made a life coach. */
 export async function tellAdmins(db: D1Database, title: string, body: string): Promise<void> {
   const admins = await db.prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY created_at LIMIT 20").all<{ id: string }>();
-  for (const a of admins.results) await notify(db, a.id, 'team', title, body, '/admin?tab=coaches');
+  await notifyMany(db, admins.results.map((a) => a.id), 'team', title, body, '/admin?tab=coaches');
 }
 
 /**

@@ -22,6 +22,7 @@ import { bento } from '../lib/bento';
 import { prettyDate, todayLocal } from '../lib/date';
 import { useGroupOrder, useModules } from '../lib/modules';
 import { useAuthed, useMe } from '../lib/queries';
+import { SkeletonList } from '../components/Skeleton';
 
 const SHORTCUT_ORDER: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'manage'];
 const weekday = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' });
@@ -129,9 +130,9 @@ export function Home() {
 
 
       {q.isPending && (
-        <p className="span-all mt-md m-0 text-[14px] font-bold text-ink-soft" role="status">
-          Adding up your week
-        </p>
+        <div className="span-all mt-md">
+          <SkeletonList count={2} lines={3} label="Adding up your week" />
+        </div>
       )}
       {q.isError && (
         <div className="span-all mt-md rounded-card bg-card p-md shadow-toy-soft" role="alert">
@@ -238,7 +239,7 @@ export function Home() {
                     [`${RELATIONSHIP_BY_KEY[d.today.sparkRelationship].character}'s small act`, d.today.sparkDone],
                     [d.today.taskDone ? 'A task' : d.today.tasksWaiting > 0 ? `${d.today.tasksWaiting} ${d.today.tasksWaiting === 1 ? 'task' : 'tasks'} waiting` : 'No task due', d.today.taskDone],
                   ].map(([text, done]) => (
-                    <li key={String(text)} className={`inline-flex min-h-[32px] items-center gap-xs rounded-pill px-sm text-[12px] font-extrabold ${done ? 'bg-card text-ink' : 'bg-white/25 text-on-fill'}`}>
+                    <li key={String(text)} className={`inline-flex min-h-[32px] items-center gap-xs rounded-pill px-sm text-[12px] font-extrabold ${done ? 'bg-card text-ink' : 'bg-ink-fixed/20 text-on-fill'}`}>
                       {done ? (
                         <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M5 12.5l4.5 4.5L19 7.5" />
@@ -250,7 +251,7 @@ export function Home() {
                     </li>
                   ))}
                 </ul>
-                <div className="mt-sm rounded-tile bg-white/25 p-sm">
+                <div className="mt-sm rounded-tile bg-ink-fixed/20 p-sm">
                   <p className="m-0 font-display text-[18px] font-extrabold leading-tight">{d.nudge.lead}</p>
                   <p className="mt-xs m-0 text-[14px] font-semibold opacity-95">{d.nudge.body}</p>
                 </div>

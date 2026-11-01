@@ -8,7 +8,7 @@ const STATE: Record<BuildState, { name: string; glyph: string; bg: string; edge:
   test: { name: 'Test mode or not tried live', glyph: '~', bg: 'var(--tint-orange)', edge: 'var(--color-r2)' },
   off: { name: 'Not built', glyph: '', bg: 'transparent', edge: 'var(--color-line)' },
 };
-const colorOf = (floor: number) => RELATIONSHIPS[floor - 1]!.color;
+const colorOf = (floor: number) => `var(--color-r${floor})`;
 
 function Ring({ value, color }: { value: number; color: string }) {
   const r = 24;

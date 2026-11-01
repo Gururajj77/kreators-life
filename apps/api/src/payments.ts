@@ -1,5 +1,6 @@
 import type { PaymentsConfig } from '@kreators/shared';
 import type { Env } from './env';
+import { fetchT, isTimeout, TIMEOUT } from './http';
 
 /**
  * The payment provider sits behind this interface so Stripe or a creator's own keys can be added
@@ -43,19 +44,29 @@ export class RazorpayProvider implements PaymentProvider {
     return `Basic ${btoa(`${this.keyId}:${this.keySecret}`)}`;
   }
   async createOrder(input: { amountCents: number; currency: string; receipt: string; notes?: Record<string, string> }) {
-    const res = await fetch('https://api.razorpay.com/v1/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: this.auth },
-      body: JSON.stringify({ amount: input.amountCents, currency: input.currency, receipt: input.receipt.slice(0, 40), notes: input.notes ?? {} }),
-    });
-    if (!res.ok) throw new Error(`Razorpay refused the order (${res.status})`);
-    const data = (await res.json()) as { id: string };
-    return { providerOrderId: data.id };
+    // One try, never repeated: a second order for the same buy is worse than telling the person to tap again.
+    try {
+      const res = await fetchT('https://api.razorpay.com/v1/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: this.auth },
+        body: JSON.stringify({ amount: input.amountCents, currency: input.currency, receipt: input.receipt.slice(0, 40), notes: input.notes ?? {} }),
+      }, TIMEOUT.payments);
+      if (!res.ok) throw new Error(`Razorpay refused the order (${res.status})`);
+      const data = (await res.json()) as { id: string };
+      return { providerOrderId: data.id };
+    } catch (e) {
+      if (isTimeout(e)) throw new Error('The payment provider took too long to answer. Nothing was charged; try again in a moment.');
+      throw e;
+    }
   }
   async verifyWebhook(rawBody: string, signature: string) {
     if (!this.webhookSecret || !signature) return false;
     const expected = await hmacHex(this.webhookSecret, rawBody);
-    return expected.length === signature.length && expected === signature;
+    // Compared without stopping at the first different character, so the time it takes says nothing about the signature.
+    if (expected.length !== signature.length) return false;
+    let diff = 0;
+    for (let i = 0; i < expected.length; i += 1) diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
+    return diff === 0;
   }
   parseWebhook(json: unknown) {
     const j = json as { event?: string; payload?: { payment?: { entity?: { id?: string; order_id?: string; amount?: number } }; refund?: { entity?: { payment_id?: string; amount?: number } } } };
@@ -64,14 +75,20 @@ export class RazorpayProvider implements PaymentProvider {
     return { type: j.event ?? 'unknown', providerOrderId: p?.order_id ?? null, providerPaymentId: p?.id ?? r?.payment_id ?? null, amountCents: p?.amount ?? r?.amount ?? null, eventId: null };
   }
   async refund(providerPaymentId: string, amountCents: number) {
-    const res = await fetch(`https://api.razorpay.com/v1/payments/${encodeURIComponent(providerPaymentId)}/refund`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: this.auth },
-      body: JSON.stringify({ amount: amountCents }),
-    });
-    if (!res.ok) throw new Error(`Razorpay refused the refund (${res.status})`);
-    const data = (await res.json()) as { id: string };
-    return { refundId: data.id };
+    // Never repeated here. If the clock runs out the refund may still have gone through, so the message says to check first.
+    try {
+      const res = await fetchT(`https://api.razorpay.com/v1/payments/${encodeURIComponent(providerPaymentId)}/refund`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: this.auth },
+        body: JSON.stringify({ amount: amountCents }),
+      }, TIMEOUT.payments);
+      if (!res.ok) throw new Error(`Razorpay refused the refund (${res.status})`);
+      const data = (await res.json()) as { id: string };
+      return { refundId: data.id };
+    } catch (e) {
+      if (isTimeout(e)) throw new Error('The payment provider took too long to answer. The refund may still have gone through: check the Razorpay dashboard before trying again.');
+      throw e;
+    }
   }
 }
 

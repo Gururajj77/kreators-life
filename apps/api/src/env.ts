@@ -17,6 +17,19 @@ export interface Env {
   RAZORPAY_KEY_ID?: string;
   RAZORPAY_KEY_SECRET?: string;
   RAZORPAY_WEBHOOK_SECRET?: string;
+  /** The business that runs kreators.app, shown on the contact page and used in marketing mail. Set as Worker variables; never written in code. */
+  /** The site's own address, for links in mail (https://kreators.app). */
+  PUBLIC_URL?: string;
+  BUSINESS_NAME?: string;
+  BUSINESS_ADDRESS?: string;
+  BUSINESS_EMAIL?: string;
+  BUSINESS_REG?: string;
+  BUSINESS_VAT?: string;
+  /** Who receives copyright notices (the business unless set), and "yes" once the agent is listed with the US Copyright Office. */
+  DMCA_AGENT?: string;
+  DMCA_ADDRESS?: string;
+  DMCA_EMAIL?: string;
+  DMCA_REGISTERED?: string;
   /** Optional Resend key for transactional email; the outbox keeps every message either way. */
   RESEND_API_KEY?: string;
   EMAIL_FROM?: string;
@@ -99,5 +112,5 @@ export interface UserRow {
 
 export type AppEnv = {
   Bindings: Env;
-  Variables: { user: UserRow; logNote?: string };
+  Variables: { user: UserRow; logNote?: string; requestId?: string };
 };

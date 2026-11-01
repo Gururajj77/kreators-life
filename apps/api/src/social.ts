@@ -1,4 +1,5 @@
 import { detectPlatform, type SocialPlatform } from '@kreators/shared';
+import { fetchT, isTimeout, TIMEOUT } from './http';
 
 export interface Reading {
   views: number;
@@ -15,14 +16,14 @@ export async function fetchMetrics(url: string, env: { YOUTUBE_API_KEY?: string 
     const id = youtubeId(url);
     if (!id) return { platform, reading: null, why: 'could not find a video id in that link' };
     try {
-      const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${encodeURIComponent(id)}&key=${env.YOUTUBE_API_KEY}`);
+      const res = await fetchT(`https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${encodeURIComponent(id)}&key=${env.YOUTUBE_API_KEY}`, undefined, TIMEOUT.quick);
       if (!res.ok) return { platform, reading: null, why: `YouTube answered ${res.status}` };
       const data = (await res.json()) as { items?: { statistics?: { viewCount?: string; likeCount?: string; commentCount?: string } }[] };
       const st = data.items?.[0]?.statistics;
       if (!st) return { platform, reading: null, why: 'YouTube returned no statistics for that video' };
       return { platform, reading: { views: Number(st.viewCount ?? 0), likes: Number(st.likeCount ?? 0), comments: Number(st.commentCount ?? 0), shares: 0 }, why: 'read from YouTube' };
-    } catch {
-      return { platform, reading: null, why: 'could not reach YouTube' };
+    } catch (e) {
+      return { platform, reading: null, why: isTimeout(e) ? 'YouTube took too long to answer' : 'could not reach YouTube' };
     }
   }
   // Instagram, TikTok, X and the rest only expose numbers through partner APIs.

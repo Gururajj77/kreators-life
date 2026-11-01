@@ -6,6 +6,7 @@ import { Link } from 'react-router';
 import { Button } from '../components/Button';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
+import { SkeletonList } from '../components/Skeleton';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useInbox, useMe, useRefreshAll } from '../lib/queries';
@@ -110,7 +111,8 @@ export function Inbox() {
             </Button>
           )}
         </div>
-        {list.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{show === 'archived' ? 'Nothing archived here.' : show === 'unread' ? 'All caught up.' : 'Nothing yet. This is where replies, orders, bookings and team notes land.'}</p>}
+        {q.isPending && <SkeletonList className="mt-sm" count={4} lines={2} label="Loading your inbox" />}
+        {!q.isPending && list.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{show === 'archived' ? 'Nothing archived here.' : show === 'unread' ? 'All caught up.' : 'Nothing yet. This is where replies, orders, bookings and team notes land.'}</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {list.map((n) => {
             const inner = (

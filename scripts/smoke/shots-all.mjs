@@ -19,7 +19,7 @@ async function api(method, p, body, token, headers = {}) {
 }
 const admin = (method, p, body) => api(method, p, body, null, { 'X-Admin-Key': ADMIN_KEY });
 async function account(name) {
-  const r = await api('POST', '/auth/signup', { email: `${name}-${stamp}@smoke.test`, password: `Camera-${stamp}-pass`, displayName: name, phone: '+91 98765 43210', birthDate: '1990-05-20' });
+  const r = await api('POST', '/auth/signup', { email: `${name}-${stamp}@smoke.test`, password: `Camera-${stamp}-pass`, displayName: name, acceptTerms: true, phone: '+91 98765 43210', birthDate: '1990-05-20' });
   return { token: r.token, user: r.user };
 }
 const today = new Date().toISOString().slice(0, 10);

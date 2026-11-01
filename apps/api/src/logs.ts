@@ -9,6 +9,8 @@ import type { AppEnv } from './env';
 export type LogLevel = 'info' | 'warn' | 'error';
 const PRIVATE_AREAS = new Set(['journal', 'wellbeing', 'companion', 'discover', 'assistant']);
 const KEEP_DAYS = 30;
+/** A plain read that takes longer than this is logged as a warning ("slow read"), so slow screens show up in Logs with their time. */
+export const SLOW_READ_MS = 1500;
 
 export interface LogLine {
   level: LogLevel;
@@ -52,7 +54,7 @@ export async function pruneLogs(db: D1Database): Promise<number> {
 
 /**
  * Wraps every API call. A change (anything but a read), a refusal, a failure: a line. A plain read that worked: nothing, so the log stays
- * readable. Sign-in failures count (they show who is trying), a missing session does not (it is every signed-out visitor).
+ * readable, unless it took SLOW_READ_MS or more (then a warning with its time). Sign-in failures count (they show who is trying), a missing session does not (it is every signed-out visitor).
  */
 export const logger = (): MiddlewareHandler<AppEnv> => async (c, next) => {
   const started = Date.now();
@@ -60,13 +62,20 @@ export const logger = (): MiddlewareHandler<AppEnv> => async (c, next) => {
   const method = c.req.method;
   if (method === 'OPTIONS') return;
   const clean = cleanPath(new URL(c.req.url).pathname);
-  if (clean === '/health' || clean.startsWith('/internal/logs') || clean === '/public/client-error') return;
+  if (clean === '/health' || clean.startsWith('/internal/logs') || clean === '/public/client-error' || clean === '/public/vitals') return;
   const status = c.res.status;
   const area = areaOf(clean);
   const user = c.get('user') as { id: string; display_name: string } | undefined;
   const note = (c.get('logNote') as string | undefined) ?? '';
-  const level: LogLevel = status >= 500 ? 'error' : status >= 400 ? 'warn' : 'info';
-  if (level === 'info' && method === 'GET') return;
+  const took = Date.now() - started;
+  let level: LogLevel = status >= 500 ? 'error' : status >= 400 ? 'warn' : 'info';
+  let message = note;
+  if (level === 'info' && method === 'GET') {
+    // A read that worked is not a line, unless it was slow.
+    if (took < SLOW_READ_MS) return;
+    level = 'warn';
+    message = note || 'slow read';
+  }
   if (status === 401 && !clean.startsWith('/auth/')) return;
   const run = (p: Promise<void>) => {
     try {
@@ -79,7 +88,7 @@ export const logger = (): MiddlewareHandler<AppEnv> => async (c, next) => {
     if (level === 'error') run(writeLog(c.env.DB, { level, area: 'private', status, ms: Date.now() - started, message: 'a server error in a private area' }));
     return;
   }
-  run(writeLog(c.env.DB, { level, area, method, path: clean, status, ms: Date.now() - started, actorId: user?.id ?? null, actorName: user?.display_name ?? null, message: note }));
+  run(writeLog(c.env.DB, { level, area, method, path: clean, status, ms: took, actorId: user?.id ?? null, actorName: user?.display_name ?? null, message }));
 };
 
 /** What the browser reports when a screen breaks. No person, no body: a short message and the screen it happened on. */

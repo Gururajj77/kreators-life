@@ -10,6 +10,7 @@ import { MoodFace } from '../components/MoodFace';
 import { BackLink } from '../components/PageHeader';
 import { RemindersSection } from '../components/Reminders';
 import { Screen } from '../components/Screen';
+import { SkeletonList } from '../components/Skeleton';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
@@ -64,7 +65,7 @@ export function Journal() {
               {stats.negative} heavy
             </span>
           </div>
-          <div className="mt-md rounded-tile bg-white/20 p-sm">
+          <div className="mt-md rounded-tile bg-ink-fixed/20 p-sm">
             <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">This month</p>
             <div className="mt-xs">
               <CalendarGrid onFill month={month} today={todayLocal()} maxDate={todayLocal()} selected={day} onMonth={setMonth} onPick={setDay} marks={marks} label="Journal calendar. Tap a day to read, add or change its entries." />
@@ -81,7 +82,8 @@ export function Journal() {
         <h2 id="entries-heading" className="text-[24px]">
           My journals
         </h2>
-        {entries.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Nothing written yet. This page is only for you. Write what is on your mind.</p>}
+        {q.isPending && <SkeletonList className="mt-sm" count={3} lines={2} label="Opening your journal" />}
+        {!q.isPending && entries.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Nothing written yet. This page is only for you. Write what is on your mind.</p>}
         <ol className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {entries.map((e) => {
             const m = e.emotion ? MOODS.find((x) => x.value === e.emotion) : null;
@@ -149,7 +151,7 @@ function DaySheet({ date, onClose, onOpen, onNew }: { date: string | null; onClo
   return (
     <Sheet open={date !== null} onClose={onClose} title={pretty}>
       <div className="flex flex-col gap-sm pb-xl">
-        {q.isPending && <p className="m-0 text-[14px] font-bold text-ink-soft" role="status">Opening</p>}
+        {q.isPending && <SkeletonList count={1} lines={2} label="Opening" />}
         {q.data && entries.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">Nothing written on this day yet.</p>}
         <ul className="m-0 flex list-none flex-col gap-xs p-0">
           {entries.map((e) => {

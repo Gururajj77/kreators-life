@@ -5,6 +5,12 @@ dist
 *.log
 .DS_Store
 .env
+.env.*
+!.env.example
+.dev.vars.*
+!.dev.vars.example
+*.pem
+*.key
 # The smoke server's database, log and screenshots live beside its scripts.
 scripts/smoke/state
 scripts/smoke/shots

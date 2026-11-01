@@ -1,3 +1,4 @@
+import type { ConsentChoices } from '@kreators/shared';
 import type { Page, Unlock } from '@kreators/shared';
 import { todayLocal } from './date';
 import type { AdminAttendeeCode, AttendeeCodeHost, AttendeeCodeView } from '@kreators/shared';
@@ -188,6 +189,15 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await res.json()) as T;
 }
 
+/** What a person has agreed to and chosen, from GET /me/legal. */
+export interface LegalState {
+  legalVersion: string;
+  acceptedAt: Record<string, string | null>;
+  needsAcceptance: boolean;
+  consent: ConsentChoices;
+  decided: boolean;
+  bannerVersion: number;
+}
 const post = <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body: body === undefined ? '{}' : JSON.stringify(body) });
 const patch = <T>(path: string, body: unknown) => request<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
 const del = <T>(path: string) => request<T>(path, { method: 'DELETE' });
@@ -227,7 +237,7 @@ type CodeChange = { xp?: number; code?: string; fresh?: boolean };
 export const api = {
   // accounts
   anon: (ref?: string | null) => post<{ token: string; user: User }>('/auth/anon', { ref }),
-  signup: (body: { email: string; password: string; displayName?: string; phone: string; birthDate: string }) => post<{ token: string; user: User }>('/auth/signup', body),
+  signup: (body: { email: string; password: string; displayName?: string; phone: string; birthDate: string; acceptTerms: boolean }) => post<{ token: string; user: User }>('/auth/signup', body),
   signin: (body: { email: string; password: string }) => post<{ token: string; user: User }>('/auth/signin', body),
   signout: () => post<{ ok: true }>('/auth/signout'),
   /** Forgot the password: the answer is the same for any email. */
@@ -608,6 +618,10 @@ export const api = {
   friends: () => request<{ friends: Friend[] }>('/bond/friends'),
   addFriend: (userId: string) => post<{ ok: true; status: 'sent' | 'friends' }>('/bond/friends', { userId }),
   reminders: (day: string) => request<RemindersResponse>(`/reminders?day=${day}`),
+  legal: () => request<LegalState>('/me/legal'),
+  saveConsent: (choices: ConsentChoices, source: 'popup' | 'profile') => put<LegalState>('/me/legal/consent', { choices, source }),
+  acceptTerms: () => post<LegalState>('/me/legal/accept'),
+  unsubscribe: (token: string) => post<{ ok: boolean }>(`/public/unsubscribe/${encodeURIComponent(token)}`),
   drinkWater: (day: string, ml?: number) => post<{ water: WaterState }>('/reminders/water', { day, ...(ml ? { ml } : {}) }),
   undoWater: (day: string) => del<{ water: WaterState }>(`/reminders/water?day=${day}`),
   waterSettings: (day: string, s: Partial<{ on: boolean; goalMl: number; glassMl: number; everyMin: number; from: string; to: string }>) => put<{ water: WaterState }>('/reminders/water/settings', { day, ...s }),

@@ -15,6 +15,7 @@ import { Nudge } from '../components/Nudge';
 import { Person } from '../components/Person';
 import { RoutineSection } from '../components/RoutineSection';
 import { Screen } from '../components/Screen';
+import { SkeletonList } from '../components/Skeleton';
 import { RemindersSection } from '../components/Reminders';
 import { TaskRow } from '../components/TaskRow';
 import { TaskPanel } from '../components/TaskPlan';
@@ -163,9 +164,7 @@ export function Today() {
       {!guide.seen && <GuideCard onDismiss={guide.dismiss} />}
 
       {isPending && (
-        <p className="mt-md text-[14px] font-bold text-ink-soft" role="status">
-          Loading your day
-        </p>
+        <SkeletonList className="mt-md" count={3} lines={3} label="Loading your day" />
       )}
       {isError && (
         <div className="mt-md rounded-card bg-card p-md shadow-toy-soft" role="alert">

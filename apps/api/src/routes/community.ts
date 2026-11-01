@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { canMute, communityRankOf, FEED_FILTERS, MAX_REPLY_DEPTH, threadOrder, FEED_SORTS, isReaction, MAX_PINNED, mentionsIn, POST_CATEGORIES, roleRank, type CommunityPost, type CommunityReply, type FeedFilter, type FeedSort, type ReactionCounts, type ReactionKind } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { anonAlias, audit, nameOf, newId, notify, nowIso, oneOf, parseList, requireRole, pageOf, paged } from '../db';
+import { anonAlias, audit, nameOf, newId, notify, notifyMany, nowIso, oneOf, parseList, requireRole, pageOf, paged } from '../db';
 import { rewardSocial } from '../rewards';
 
 export const community = new Hono<AppEnv>();
@@ -123,10 +123,8 @@ async function tellMentioned(db: D1Database, writer: UserRow, text: string, post
     )
     .bind(...handles, writer.id, writer.id, writer.id)
     .all<{ id: string }>();
-  for (const r of rows.results) {
-    await notify(db, r.id, 'mention', `${label} mentioned you`, text.slice(0, 120), `/community?post=${postId}`);
-    told.add(r.id);
-  }
+  await notifyMany(db, rows.results.map((r) => r.id), 'mention', `${label} mentioned you`, text.slice(0, 120), `/community?post=${postId}`);
+  for (const r of rows.results) told.add(r.id);
   return told;
 }
 
@@ -170,9 +168,12 @@ community.get('/', async (c) => {
   // Inside one category, its pinned posts come first whatever the sort.
   const order = category ? `(p.pinned_at IS NOT NULL) DESC, p.pinned_at DESC, ${by}` : by;
   const ask = pageOf(c);
-  const rows = await db.prepare(`${POST_SELECT} WHERE ${clauses.join(' AND ')} ORDER BY ${order} LIMIT ? OFFSET ?`).bind(...binds, ask.limit, ask.offset).all<PostRow>();
+  const [rows, mutedRow] = await Promise.all([
+    db.prepare(`${POST_SELECT} WHERE ${clauses.join(' AND ')} ORDER BY ${order} LIMIT ? OFFSET ?`).bind(...binds, ask.limit, ask.offset).all<PostRow>(),
+    db.prepare('SELECT 1 FROM community_mutes WHERE user_id = ?').bind(user.id).first(),
+  ]);
   const pg = paged(rows.results, ask);
-  const muted = Boolean(await db.prepare('SELECT 1 FROM community_mutes WHERE user_id = ?').bind(user.id).first());
+  const muted = Boolean(mutedRow);
   return c.json({ page: pg.page, posts: await presentPosts(c, pg.items), categories: POST_CATEGORIES, sort, filter, muted });
 });
 
@@ -338,7 +339,7 @@ community.post('/:id/replies', async (c) => {
     told.add(parent.user_id);
   }
   const followers = await db.prepare('SELECT user_id FROM community_post_follows WHERE post_id = ? AND user_id != ? AND user_id != ? LIMIT 200').bind(post.id, user.id, post.user_id).all<{ user_id: string }>();
-  for (const f of followers.results) if (!told.has(f.user_id)) await notify(db, f.user_id, 'thread', 'New reply on a post you follow', `${label}: ${text.slice(0, 100)}`, `/community?post=${post.id}`);
+  await notifyMany(db, followers.results.filter((f) => !told.has(f.user_id)).map((f) => f.user_id), 'thread', 'New reply on a post you follow', `${label}: ${text.slice(0, 100)}`, `/community?post=${post.id}`);
   await follow(db, post.id, user.id);
   const awarded = await rewardSocial(db, user.id, 'reply', id);
   const row = await db.prepare(`${REPLY_SELECT} WHERE r.id = ?2`).bind(user.id, id).first<ReplyRow>();

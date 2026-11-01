@@ -457,7 +457,7 @@ function Owned({ id }: { id: string }) {
                     </button>
                   ))}
                 </div>
-                <textarea value={reviewText} onChange={(e) => setReviewText(e.target.value)} rows={3} maxLength={600} placeholder="A few honest words" className="w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+                <textarea value={reviewText} onChange={(e) => setReviewText(e.target.value)} rows={3} maxLength={600} aria-label="Your review" placeholder="A few honest words" className="w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
                 {review.isError && <p className="m-0 text-[14px] font-bold">{err(review.error, 'Could not send.')}</p>}
                 <Button type="submit" full disabled={review.isPending || !reviewText.trim()}>
                   Send review

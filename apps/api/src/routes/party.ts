@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { EVENT_TYPE_META, EVENT_TYPES, type EventRegistration, type PartyEvent } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { audit, can, nameOf, newId, notify, nowIso, num, oneOf, str, isClubMember, pageOf, paged } from '../db';
+import { audit, can, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, str, isClubMember, pageOf, paged, httpUrl } from '../db';
 import { claimEventCode, codeOf, guestView, hostView, setEventCode } from '../attendee';
 
 export const party = new Hono<AppEnv>();
@@ -46,7 +46,7 @@ party.post('/events', async (c) => {
   const id = newId();
   await db
     .prepare("INSERT INTO events (id, title, description, event_type, host_user_id, venue, online_url, timezone, starts_at, ends_at, capacity, price_points, visibility, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?)")
-    .bind(id, title, str(body.description, 3000), type, user.id, str(body.venue, 200), str(body.onlineUrl, 500) || null, str(body.timezone, 60, 'UTC') || 'UTC', start.toISOString(), new Date(start.getTime() + minutes * 60_000).toISOString(), num(body.capacity, null, 1, 100000), num(body.pricePoints, 0, 0) ?? 0, oneOf(body.visibility, ['public', 'private', 'club'] as const, 'public'), nowIso())
+    .bind(id, title, str(body.description, 3000), type, user.id, str(body.venue, 200), httpUrl(body.onlineUrl, 500) || null, str(body.timezone, 60, 'UTC') || 'UTC', start.toISOString(), new Date(start.getTime() + minutes * 60_000).toISOString(), num(body.capacity, null, 1, 100000), num(body.pricePoints, 0, 0) ?? 0, oneOf(body.visibility, ['public', 'private', 'club'] as const, 'public'), nowIso())
     .run();
   await audit(db, user.id, 'event.create', 'event', id, '', title);
   // An attendee code from the start, when the host set xp for the guests. A bad xp or code is said, and the event stays.
@@ -69,7 +69,7 @@ party.get('/events/:id', async (c) => {
   const mineRow = await db.prepare('SELECT r.*, u.display_name AS name FROM event_registrations r JOIN users u ON u.id = r.user_id WHERE r.event_id = ? AND r.user_id = ?').bind(row.id, user.id).first<RegRow>();
   if (!host && !mineRow && row.visibility === 'private') return c.json({ error: 'not found' }, 404);
   if (!host && !mineRow && row.visibility === 'club' && !(await clubMember(db, user.id))) return c.json({ error: 'club members only' }, 403);
-  const regs = host ? await db.prepare('SELECT r.*, u.display_name AS name FROM event_registrations r JOIN users u ON u.id = r.user_id WHERE r.event_id = ? ORDER BY r.registered_at').bind(row.id).all<RegRow>() : { results: [] as RegRow[] };
+  const regs = host ? await db.prepare('SELECT r.*, u.display_name AS name FROM event_registrations r JOIN users u ON u.id = r.user_id WHERE r.event_id = ? ORDER BY r.registered_at LIMIT 1000').bind(row.id).all<RegRow>() : { results: [] as RegRow[] };
   const fb = await db.prepare('SELECT AVG(rating) AS avg, COUNT(*) AS n FROM event_feedback WHERE event_id = ?').bind(row.id).first<{ avg: number | null; n: number }>();
   // The code goes to the host and events staff only; a guest sees the xp, whether they claimed it, and when it works.
   const code = await codeOf(db, 'party', row.id);
@@ -242,7 +242,7 @@ party.patch('/events/:id', async (c) => {
   await audit(db, user.id, 'event.status', 'event', row.id, row.status, status);
   if (status === 'cancelled') {
     const regs = await db.prepare("SELECT user_id FROM event_registrations WHERE event_id = ? AND status IN ('registered','waitlisted')").bind(row.id).all<{ user_id: string }>();
-    for (const r of regs.results) await notify(db, r.user_id, 'party', `Cancelled: ${row.title}`, 'Any points you paid are back in your balance.', '/party');
+    await notifyMany(db, regs.results.map((r) => r.user_id), 'party', `Cancelled: ${row.title}`, 'Any points you paid are back in your balance.', '/party');
     await db.prepare("UPDATE event_registrations SET status = 'cancelled' WHERE event_id = ?").bind(row.id).run();
   }
   return c.json({ ok: true });

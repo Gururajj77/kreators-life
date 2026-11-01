@@ -1,5 +1,6 @@
 import type { RelationshipKey } from '@kreators/shared';
 import type { CSSProperties, ReactNode } from 'react';
+import { fillFor } from '../lib/relFill';
 import { Avatar, type Mood } from './Avatar';
 
 /**
@@ -8,8 +9,10 @@ import { Avatar, type Mood } from './Avatar';
  * white with dark text (see Button "light").
  */
 export function Hero({ color, deep, children, className = '', yellow = false, character, mood = 'happy', characterSize = 80 }: { color: string; deep?: string; children: ReactNode; className?: string; yellow?: boolean; character?: RelationshipKey; mood?: Mood; characterSize?: number }) {
+  // The fill is the theme token for the colour, so a relationship's hero always has the contrast the token is tuned for.
+  const fill = fillFor(color);
   return (
-    <section className={`relative overflow-hidden rounded-card p-md ${yellow ? 'text-on-yellow' : 'text-on-fill'} ${className}`} style={{ background: `linear-gradient(135deg, ${color}, color-mix(in oklab, ${color} 72%, var(--fill-shade)))`, '--toy-color': deep ?? 'var(--color-shadow)' } as CSSProperties}>
+    <section className={`relative overflow-hidden rounded-card p-md ${yellow ? 'text-on-yellow' : 'text-on-fill'} ${className}`} style={{ background: `linear-gradient(135deg, ${fill}, color-mix(in oklab, ${fill} 72%, var(--fill-shade)))`, '--toy-color': deep ?? 'var(--color-shadow)' } as CSSProperties}>
       <HeroBlobs seed={color} />
       <div className="relative flex items-center gap-sm">
         <div className="min-w-0 flex-1">{children}</div>

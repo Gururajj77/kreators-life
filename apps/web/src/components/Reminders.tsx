@@ -1,10 +1,11 @@
 import { MAX_CUSTOM_REMINDERS, REMINDER_TIME, REMINDER_TITLE_MAX, WATER_EVERY_CHOICES, WEEKDAY_NAMES, weekdaysLabel, type CustomReminder, type WaterState } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { useSession } from '../lib/store';
+import { useDialogFocus } from '../lib/useDialogFocus';
 import { Button } from './Button';
 import { Sheet } from './Sheet';
 
@@ -371,19 +372,16 @@ export function ReminderBubble() {
   const here = loc.pathname === '/today' || loc.pathname.startsWith('/journal');
   const [open, setOpen] = useState(false);
   const { q } = useReminders();
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+  // Focus moves into the panel when it opens, Tab wraps at its ends, Escape closes it, and focus goes back to the Water button.
+  const panel = useRef<HTMLDivElement>(null);
+  useDialogFocus(panel, open && here, { modal: false, onEscape: () => setOpen(false) });
   useEffect(() => setOpen(false), [loc.pathname]);
   if (!here) return null;
   const w = q.data?.water;
   return (
     <div className="fixed bottom-md left-[calc(240px+var(--spacing-md))] z-40 hidden md:block">
       {open && (
-        <div className="mb-sm max-h-[70vh] w-[340px] overflow-y-auto rounded-card border border-line bg-card p-md shadow-toy-soft" role="dialog" aria-label="Water and reminders">
+        <div ref={panel} className="mb-sm max-h-[70vh] w-[340px] overflow-y-auto rounded-card border border-line bg-card p-md shadow-toy-soft" role="dialog" aria-label="Water and reminders">
           <div className="mb-sm flex items-center justify-between">
             <h2 className="m-0 text-[18px]">Water and reminders</h2>
             <Button variant="ghost" size="sm" onClick={() => setOpen(false)} aria-label="Close water and reminders">

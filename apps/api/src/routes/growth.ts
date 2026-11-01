@@ -3,6 +3,7 @@ import { CONTENT_KINDS, LINK_SOURCES, detectPlatform, type ContentItem, type Cus
 import type { AppEnv, Env } from '../env';
 import { nameOf, newId, notify, nowIso, num, oneOf, parseList, randomCode, str, pageOf, paged } from '../db';
 import { fetchMetrics } from '../social';
+import { fetchT, isTimeout, TIMEOUT } from '../http';
 import { providerFor } from '../payments';
 import { logEvent, sendEmail, track } from '../ops';
 import { ORDER_SELECT, toOrder, type OrderRow } from './studio';
@@ -209,19 +210,20 @@ export async function handleComment(db: D1Database, env: Env, ownerId: string | 
     if (env.META_ACCESS_TOKEN && comment.id && !comment.id.startsWith('sim_')) {
       // A private reply to the comment, which is what Meta allows for comment triggers.
       try {
-        const res = await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(comment.id)}/private_replies`, {
+        // One try: a second private reply could message the same person twice.
+        const res = await fetchT(`https://graph.facebook.com/v21.0/${encodeURIComponent(comment.id)}/private_replies`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: `${a.dm_message}\n${link}`, access_token: env.META_ACCESS_TOKEN }),
-        });
+        }, TIMEOUT.quick);
         if (res.ok) status = 'sent';
         else {
           status = 'failed';
           error = `Meta answered ${res.status}`;
         }
-      } catch {
+      } catch (e) {
         status = 'failed';
-        error = 'could not reach Meta';
+        error = isTimeout(e) ? 'Meta took too long to answer; check before sending it again' : 'could not reach Meta';
       }
     } else if (!env.META_ACCESS_TOKEN) error = 'no Meta token on the server; send it by hand';
     try {

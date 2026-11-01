@@ -1,8 +1,9 @@
 import { KIND_META, PRODUCT_KIND_META, RELATIONSHIP_BY_KEY , HELP_FAQ, MODULES, PREOWNED_CONDITION_META, type PreownedCondition} from '@kreators/shared';
-import { useEffect, useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { Link } from 'react-router';
 import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
+import { useDebounced } from '../lib/useDebounced';
 
 /**
  * Search that answers under itself as you type. No new page: results land in a card right below
@@ -11,11 +12,7 @@ import { useAuthed } from '../lib/queries';
 export function SearchBox({ placeholder = 'Search anything', autoFocus = false, onDark = false }: { placeholder?: string; autoFocus?: boolean; onDark?: boolean }) {
   const id = useId();
   const [q, setQ] = useState('');
-  const [query, setQuery] = useState('');
-  useEffect(() => {
-    const t = window.setTimeout(() => setQuery(q.trim()), 250);
-    return () => window.clearTimeout(t);
-  }, [q]);
+  const query = useDebounced(q.trim(), 300);
   const live = query.length >= 2;
   const res = useAuthed(['search', query], () => api.search(query), live);
   const d = res.data;

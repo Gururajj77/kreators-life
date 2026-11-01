@@ -18,7 +18,7 @@ import type { AppEnv } from '../env';
 import { computeBadges, getStats, getUser, grantedBadges, honorKeys, withGranted, newId, nowIso, parseModules, randomCode, str, toUser, publicOf } from '../db';
 import { resolveAccess } from '../access';
 import { hashPassword, randomHex } from './auth';
-import { track } from '../ops';
+import { sendEmail, track } from '../ops';
 import { deleteAccount } from '../account';
 import { parseSocials } from '../db';
 import { isAutoHandle, MAX_INTERESTS, parseIdentities, parseLinkBlocks, passwordProblem, TRACKED_EVENTS, type TrackedEvent } from '@kreators/shared';
@@ -33,7 +33,7 @@ me.get('/', async (c) => {
     await db.prepare('UPDATE users SET referral_code = ? WHERE id = ? AND referral_code IS NULL').bind(randomCode(), user.id).run();
     user = (await getUser(db, user.id)) ?? user;
   }
-  const [scores, counts, stats, honors, resolved, unread, orgs] = await Promise.all([
+  const [scores, counts, stats, honors, resolved, unread, orgs, answeredRows, granted] = await Promise.all([
     db
       .prepare('SELECT relationship, score, xp FROM relationship_scores WHERE user_id = ?')
       .bind(user.id)
@@ -54,11 +54,12 @@ me.get('/', async (c) => {
     resolveAccess(db, user),
     db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL').bind(user.id).first<{ n: number }>(),
     db.prepare("SELECT o.*, m.role AS my_role FROM organizations o JOIN organization_members m ON m.organization_id = o.id WHERE m.user_id = ? AND m.status = 'active' ORDER BY o.name").bind(user.id).all<{ id: string; name: string; type: Organization['type']; status: Organization['status']; created_at: string; my_role: 'owner' | 'member' }>(),
+    db.prepare('SELECT DISTINCT relationship FROM onboarding_answers WHERE user_id = ?').bind(user.id).all<{ relationship: string }>(),
+    grantedBadges(db, user.id),
   ]);
 
   const scoreBy = new Map(scores.results.map((s) => [s.relationship, s]));
   const countBy = new Map(counts.results.map((s) => [s.relationship, s]));
-  const answeredRows = await db.prepare('SELECT DISTINCT relationship FROM onboarding_answers WHERE user_id = ?').bind(user.id).all<{ relationship: string }>();
   const answered = new Set(answeredRows.results.map((r) => r.relationship));
 
   const relationships: RelationshipState[] = RELATIONSHIPS.map((r) => {
@@ -83,7 +84,7 @@ me.get('/', async (c) => {
   const body: MeResponse = {
     user: toUser(user),
     relationships,
-    badges: withGranted(computeBadges(user, stats), await grantedBadges(db, user.id)),
+    badges: withGranted(computeBadges(user, stats), granted),
     honors,
     identity: evolutionFor(IDENTITY_STAGES, user.xp, daysSince(user.created_at)),
     moduleSettings: resolved.settings,
@@ -121,6 +122,8 @@ me.post('/password', async (c) => {
     db.prepare('UPDATE users SET password_hash = ?, password_salt = ? WHERE id = ?').bind(await hashPassword(password, salt), salt, user.id),
     db.prepare('DELETE FROM sessions WHERE user_id = ? AND token != ?').bind(user.id, token),
   ]);
+  // A short note that the password changed, so a change nobody asked for is noticed. A failed mail never stops the change.
+  await sendEmail(db, c.env, { userId: user.id, to: user.email, subject: 'Your kreators.app password was changed', body: 'Your password was just changed and your other devices were signed out.\n\nIf this was you, there is nothing to do. If it was not, reset your password from the sign-in page and write to us.' }).catch(() => undefined);
   return c.json({ ok: true });
 });
 
@@ -223,6 +226,7 @@ me.delete('/portfolio/:id', async (c) => {
 me.get('/export', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
+  const asked = nowIso();
   const tables: [string, string][] = [
     ['nodes', 'SELECT * FROM nodes WHERE user_id = ?'],
     ['subtasks', 'SELECT * FROM subtasks WHERE user_id = ?'],
@@ -292,12 +296,36 @@ me.get('/export', async (c) => {
     ['kpiPrefs', 'SELECT * FROM kpi_prefs WHERE user_id = ?'],
     ['kpis', 'SELECT * FROM kpis WHERE user_id = ?'],
     ['kpiValues', 'SELECT v.* FROM kpi_values v JOIN kpis k ON k.id = v.kpi_id WHERE k.user_id = ?'],
+    // What you agreed to and chose, and the rest of what you wrote or earned.
+    ['termsAcceptances', 'SELECT * FROM terms_acceptances WHERE user_id = ?'],
+    ['privacyChoices', 'SELECT * FROM user_consents WHERE user_id = ?'],
+    ['privacyChoiceLog', 'SELECT * FROM consent_records WHERE user_id = ?'],
+    ['companionChat', 'SELECT * FROM chat_messages WHERE user_id = ?'],
+    ['portfolio', 'SELECT * FROM portfolio_items WHERE user_id = ?'],
+    ['payoutDetails', 'SELECT user_id, status, legal_name, pan_last4, bank_last4, ifsc, address, submitted_at, decided_at FROM kyc_profiles WHERE user_id = ?'],
+    ['posts', 'SELECT * FROM community_posts WHERE user_id = ?'],
+    ['replies', 'SELECT * FROM community_replies WHERE user_id = ?'],
+    ['bondMessages', 'SELECT * FROM bond_messages WHERE user_id = ?'],
+    ['circleMessages', 'SELECT * FROM circle_messages WHERE user_id = ?'],
+    ['listingMessages', 'SELECT * FROM preowned_messages WHERE sender_id = ?'],
+    ['supportTickets', 'SELECT * FROM support_tickets WHERE user_id = ?'],
+    ['financeDues', 'SELECT * FROM finance_dues WHERE user_id = ?'],
+    ['financeGoals', 'SELECT * FROM finance_goals WHERE user_id = ?'],
+    ['financeRecurring', 'SELECT * FROM finance_recurring WHERE user_id = ?'],
+    ['financeBudgets', 'SELECT * FROM finance_budgets WHERE user_id = ?'],
+    ['xpEvents', 'SELECT * FROM xp_events WHERE user_id = ?'],
+    ['pillarScores', 'SELECT * FROM relationship_scores WHERE user_id = ?'],
   ];
   const out: Record<string, unknown> = { exportedAt: nowIso(), user: toUser(user) };
-  for (const [name, sql] of tables) {
-    const binds = (sql.match(/\?/g) ?? []).map(() => user.id);
-    out[name] = (await db.prepare(sql).bind(...binds).all()).results;
+  // Every table in a few batches (one round trip each) instead of one trip per table.
+  for (let i = 0; i < tables.length; i += 30) {
+    const part = tables.slice(i, i + 30);
+    const got = await db.batch(part.map(([, sql]) => db.prepare(sql).bind(...(sql.match(/\?/g) ?? []).map(() => user.id))));
+    part.forEach(([name], j) => {
+      out[name] = got[j]?.results ?? [];
+    });
   }
+  await db.prepare("INSERT INTO data_requests (id, kind, requested_at, completed_at, outcome) VALUES (?, 'export', ?, ?, 'sent')").bind(newId(), asked, nowIso()).run();
   return c.json(out);
 });
 
@@ -307,7 +335,11 @@ me.delete('/', async (c) => {
   const user = c.get('user');
   const body = await c.req.json<{ confirm?: string }>().catch(() => ({}) as { confirm?: string });
   if (body.confirm !== 'DELETE') return c.json({ error: 'send confirm: DELETE' }, 400);
+  // The request is logged without a name: the date, and that it was done.
+  const requestId = newId();
+  const asked = nowIso();
   await deleteAccount(db, user.id);
+  await db.prepare("INSERT INTO data_requests (id, kind, requested_at, completed_at, outcome) VALUES (?, 'delete', ?, ?, 'account deleted')").bind(requestId, asked, nowIso()).run();
   return c.json({ ok: true });
 });
 

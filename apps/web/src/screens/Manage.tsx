@@ -5,6 +5,7 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
+import { useDebounced } from '../lib/useDebounced';
 import { Pager, usePage } from '../components/Pager';
 import { tie } from '../lib/text';
 
@@ -26,7 +27,9 @@ export function Manage() {
   const overview = useAuthed(['manage-overview'], api.manageOverview);
   const [q, setQ] = useState('');
   const pg = usePage();
-  const members = useAuthed(['members', q, pg.query], () => api.members(q, pg.query));
+  // The box updates at once; the server is asked once typing pauses.
+  const asked = useDebounced(q.trim(), 300);
+  const members = useAuthed(['members', asked, pg.query], () => api.members(asked, pg.query));
   const o = overview.data;
   const role = me.data?.user.role ?? 'user';
   return (

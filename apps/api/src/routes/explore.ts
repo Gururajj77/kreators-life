@@ -3,9 +3,14 @@ import { EVENT_TYPE_META, LISTING_TYPES, type Listing, type ListingType, type Pu
 import type { AppEnv } from '../env';
 import { nameOf } from '../db';
 import { mediaForListings } from './media';
+import { cache } from '../cachecontrol';
 
 /** The public side of every module: what is on offer, with no account needed. */
 export const explore = new Hono<AppEnv>();
+
+// Nothing here depends on who asks (no viewer is read), so every answer is the same for everyone: kept a minute in the
+// browser, five at a shared cache, and a minute in this data centre's Workers cache for readers without a session.
+explore.use('*', cache('public', { edgeSeconds: 60 }));
 
 interface Opts {
   q?: string;
@@ -24,124 +29,159 @@ export async function listingsFor(db: D1Database, o: Opts): Promise<Listing[]> {
   const today = now.slice(0, 10);
   const q = (o.q ?? '').trim().toLowerCase();
   const types = o.type ? [o.type] : LISTING_TYPES;
-  const out: Listing[] = [];
   const idClause = (col: string) => (o.id ? ` AND ${col} = '${o.id.replace(/'/g, '')}'` : '');
 
-  if (types.includes('reward')) {
-    const rows = await db
-      .prepare(`SELECT b.*, o.name AS organization_name, (SELECT COUNT(*) FROM bounty_submissions s WHERE s.bounty_id = b.id) AS submissions FROM bounties b LEFT JOIN organizations o ON o.id = b.organization_id WHERE 1=1 ${o.includeHidden ? '' : `AND b.status = 'open' AND b.ends_at >= '${now}'`}${idClause('b.id')} ORDER BY b.featured DESC, b.ends_at LIMIT 200`)
-      .all<{ id: string; title: string; brief: string; brand_name: string; organization_name: string | null; deliverable: string; rate_per_thousand: number; max_payout_points: number; min_views: number; platform: string; ends_at: string; status: string; featured: number; created_at: string; submissions: number }>();
-    for (const r of rows.results) {
-      out.push({
-        type: 'reward',
-        id: r.id,
-        title: r.title,
-        by: r.brand_name || r.organization_name || 'Kreators',
-        blurb: r.brief,
-        facts: [r.deliverable, r.platform || 'Any platform', r.rate_per_thousand > 0 ? `${r.rate_per_thousand} pts per 1k views` : 'Fixed reward', r.max_payout_points > 0 ? `up to ${r.max_payout_points} pts` : '', `closes ${when(r.ends_at)}`].filter(Boolean),
-        path: `/win/${r.id}`,
-        featured: r.featured === 1,
-        live: r.status === 'open' && r.ends_at >= now,
-        endsAt: r.ends_at,
-        createdAt: r.created_at,
-      });
-    }
-  }
-  if (types.includes('opportunity')) {
-    const rows = await db
-      .prepare(`SELECT o.*, org.name AS organization_name FROM opportunities o LEFT JOIN organizations org ON org.id = o.organization_id WHERE 1=1 ${o.includeHidden ? '' : `AND o.status = 'published' AND o.club_only = 0 AND (o.deadline IS NULL OR o.deadline >= '${today}')`}${idClause('o.id')} ORDER BY o.featured DESC, o.published_at DESC LIMIT 200`)
-      .all<{ id: string; title: string; description: string; organization_name: string | null; opportunity_type: string; location_mode: string; location_text: string; compensation_min: number | null; compensation_max: number | null; currency: string; deadline: string | null; status: string; featured: number; created_at: string }>();
-    for (const r of rows.results) {
-      const pay = money(r.compensation_min, r.compensation_max, r.currency);
-      out.push({
-        type: 'opportunity',
-        id: r.id,
-        title: r.title,
-        by: r.organization_name ?? 'Kreators',
-        blurb: r.description,
-        facts: [r.opportunity_type.replace('_', ' '), r.location_mode === 'remote' ? 'Remote' : r.location_text || r.location_mode.replace('_', ' '), pay ?? '', r.deadline ? `apply by ${when(r.deadline)}` : ''].filter(Boolean),
-        path: `/work/${r.id}`,
-        featured: r.featured === 1,
-        live: r.status === 'published' && (!r.deadline || r.deadline >= today),
-        endsAt: r.deadline,
-        createdAt: r.created_at,
-      });
-    }
-  }
-  if (types.includes('event')) {
-    const rows = await db
-      .prepare(`SELECT e.*, u.display_name AS host_name FROM events e JOIN users u ON u.id = e.host_user_id WHERE e.visibility = 'public' ${o.includeHidden ? '' : `AND e.status = 'published' AND e.ends_at >= '${now}'`}${idClause('e.id')} ORDER BY e.featured DESC, e.starts_at LIMIT 200`)
-      .all<{ id: string; title: string; description: string; host_name: string; event_type: keyof typeof EVENT_TYPE_META; venue: string; online_url: string | null; starts_at: string; ends_at: string; price_points: number; status: string; featured: number; created_at: string }>();
-    for (const r of rows.results) {
-      out.push({
-        type: 'event',
-        id: r.id,
-        title: r.title,
-        by: nameOf({ display_name: r.host_name }),
-        blurb: r.description,
-        facts: [EVENT_TYPE_META[r.event_type]?.name ?? r.event_type, new Date(r.starts_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), r.online_url ? 'Online' : r.venue || '', r.price_points > 0 ? `${r.price_points} pts` : 'Free'].filter(Boolean),
-        path: `/party/${r.id}`,
-        featured: r.featured === 1,
-        live: r.status === 'published' && r.ends_at >= now,
-        endsAt: r.ends_at,
-        createdAt: r.created_at,
-      });
-    }
-  }
-  if (types.includes('program')) {
-    const rows = await db
-      .prepare(`SELECT p.*, (SELECT COUNT(*) FROM cohorts k WHERE k.program_id = p.id AND k.status IN ('upcoming','running')) AS cohorts FROM programs p WHERE 1=1 ${o.includeHidden ? '' : 'AND p.published = 1'}${idClause('p.id')} ORDER BY p.featured DESC, p.created_at DESC LIMIT 200`)
-      .all<{ id: string; name: string; description: string; price_points: number; price_cents: number; currency: string; delivery_mode: string; published: number; featured: number; created_at: string; cohorts: number }>();
-    for (const r of rows.results) {
-      out.push({
-        type: 'program',
-        id: r.id,
-        title: r.name,
-        by: 'Kreators School',
-        blurb: r.description,
-        facts: [r.delivery_mode.replace('_', ' '), r.price_points > 0 ? `${r.price_points} pts` : r.price_cents > 0 ? `${r.currency} ${(r.price_cents / 100).toFixed(0)}` : 'Free', r.cohorts > 0 ? `${r.cohorts} cohort${r.cohorts === 1 ? '' : 's'} open` : 'cohort dates soon'].filter(Boolean),
-        path: `/school`,
-        featured: r.featured === 1,
-        live: r.published === 1,
-        endsAt: null,
-        createdAt: r.created_at,
-      });
-    }
-  }
-  if (types.includes('tool')) {
-    const rows = await db.prepare(`SELECT * FROM tools WHERE 1=1 ${o.includeHidden ? '' : 'AND verified = 1'}${idClause('id')} ORDER BY name LIMIT 200`).all<{ id: string; name: string; category: string; url: string; description: string; affiliate: number; verified: number; created_at: string }>();
-    for (const r of rows.results) {
-      out.push({ type: 'tool', id: r.id, title: r.name, by: r.category, blurb: r.description, facts: [r.category, r.affiliate === 1 ? 'partner link' : 'verified'].filter(Boolean), path: '/tools', featured: false, live: r.verified === 1, endsAt: null, createdAt: r.created_at });
-    }
-  }
-  if (types.includes('campaign')) {
-    const rows = await db
-      .prepare(`SELECT c.*, o.name AS organization_name FROM campaigns c JOIN organizations o ON o.id = c.organization_id WHERE 1=1 ${o.includeHidden ? '' : "AND c.public = 1 AND c.status IN ('brief','shortlist','approved')"}${idClause('c.id')} ORDER BY c.updated_at DESC LIMIT 100`)
-      .all<{ id: string; name: string; brief: string; organization_name: string; status: string; due_date: string | null; public: number; created_at: string }>();
-    for (const r of rows.results) {
-      out.push({ type: 'campaign', id: r.id, title: r.name, by: r.organization_name, blurb: r.brief, facts: [r.status, r.due_date ? `due ${when(r.due_date)}` : ''].filter(Boolean), path: `/army/${r.id}`, featured: false, live: r.public === 1 && ['brief', 'shortlist', 'approved'].includes(r.status), endsAt: r.due_date, createdAt: r.created_at });
-    }
-  }
-  if (types.includes('circle')) {
-    const rows = await db
-      .prepare(`SELECT e.*, (SELECT COUNT(*) FROM circle_signups s WHERE s.event_id = e.id) AS signups FROM circle_events e WHERE 1=1 ${o.includeHidden ? '' : `AND e.status = 'open' AND e.starts_at >= '${now}'`}${idClause('e.id')} ORDER BY e.starts_at LIMIT 200`)
-      .all<{ id: string; title: string; city: string; area: string; starts_at: string; venue_hint: string; group_size: number; status: string; repeat: string; created_at: string; signups: number }>();
-    for (const r of rows.results) {
-      out.push({
-        type: 'circle',
-        id: r.id,
-        title: r.title,
-        by: [r.area, r.city].filter(Boolean).join(', '),
-        blurb: `Anonymous group of ${r.group_size}, matched by interests that fit. Red if single, white if committed. Names stay hidden; the chat opens a day before.${r.venue_hint ? ` ${r.venue_hint}` : ''}`,
-        facts: [new Date(r.starts_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), ...(r.repeat === 'weekly' ? ['every week'] : []), `${r.signups} signed up`, `tables of ${r.group_size}`],
-        path: '/circles',
-        featured: false,
-        live: r.status === 'open' && r.starts_at >= now,
-        endsAt: r.starts_at,
-        createdAt: r.created_at,
-      });
-    }
-  }
+  // Each kind is its own query and none waits on another: they run together, then join in this order.
+  const kind_reward = types.includes('reward')
+    ? (async () => {
+        const out: Listing[] = [];
+        const rows = await db
+          .prepare(`SELECT b.id, b.title, b.brief, b.brand_name, b.deliverable, b.rate_per_thousand, b.max_payout_points, b.min_views, b.platform, b.ends_at, b.status, b.featured, b.created_at, o.name AS organization_name, (SELECT COUNT(*) FROM bounty_submissions s WHERE s.bounty_id = b.id) AS submissions FROM bounties b LEFT JOIN organizations o ON o.id = b.organization_id WHERE 1=1 ${o.includeHidden ? '' : `AND b.status = 'open' AND b.ends_at >= '${now}'`}${idClause('b.id')} ORDER BY b.featured DESC, b.ends_at LIMIT 200`)
+          .all<{ id: string; title: string; brief: string; brand_name: string; organization_name: string | null; deliverable: string; rate_per_thousand: number; max_payout_points: number; min_views: number; platform: string; ends_at: string; status: string; featured: number; created_at: string; submissions: number }>();
+        for (const r of rows.results) {
+          out.push({
+            type: 'reward',
+            id: r.id,
+            title: r.title,
+            by: r.brand_name || r.organization_name || 'Kreators',
+            blurb: r.brief,
+            facts: [r.deliverable, r.platform || 'Any platform', r.rate_per_thousand > 0 ? `${r.rate_per_thousand} pts per 1k views` : 'Fixed reward', r.max_payout_points > 0 ? `up to ${r.max_payout_points} pts` : '', `closes ${when(r.ends_at)}`].filter(Boolean),
+            path: `/win/${r.id}`,
+            featured: r.featured === 1,
+            live: r.status === 'open' && r.ends_at >= now,
+            endsAt: r.ends_at,
+            createdAt: r.created_at,
+          });
+        }
+        return out;
+      })()
+    : Promise.resolve<Listing[]>([]);
+  // Each kind is its own query and none waits on another: they run together, then join in this order.
+  const kind_opportunity = types.includes('opportunity')
+    ? (async () => {
+        const out: Listing[] = [];
+        const rows = await db
+          .prepare(`SELECT o.id, o.title, o.description, o.opportunity_type, o.location_mode, o.location_text, o.compensation_min, o.compensation_max, o.currency, o.deadline, o.status, o.featured, o.created_at, org.name AS organization_name FROM opportunities o LEFT JOIN organizations org ON org.id = o.organization_id WHERE 1=1 ${o.includeHidden ? '' : `AND o.status = 'published' AND o.club_only = 0 AND (o.deadline IS NULL OR o.deadline >= '${today}')`}${idClause('o.id')} ORDER BY o.featured DESC, o.published_at DESC LIMIT 200`)
+          .all<{ id: string; title: string; description: string; organization_name: string | null; opportunity_type: string; location_mode: string; location_text: string; compensation_min: number | null; compensation_max: number | null; currency: string; deadline: string | null; status: string; featured: number; created_at: string }>();
+        for (const r of rows.results) {
+          const pay = money(r.compensation_min, r.compensation_max, r.currency);
+          out.push({
+            type: 'opportunity',
+            id: r.id,
+            title: r.title,
+            by: r.organization_name ?? 'Kreators',
+            blurb: r.description,
+            facts: [r.opportunity_type.replace('_', ' '), r.location_mode === 'remote' ? 'Remote' : r.location_text || r.location_mode.replace('_', ' '), pay ?? '', r.deadline ? `apply by ${when(r.deadline)}` : ''].filter(Boolean),
+            path: `/work/${r.id}`,
+            featured: r.featured === 1,
+            live: r.status === 'published' && (!r.deadline || r.deadline >= today),
+            endsAt: r.deadline,
+            createdAt: r.created_at,
+          });
+        }
+        return out;
+      })()
+    : Promise.resolve<Listing[]>([]);
+  // Each kind is its own query and none waits on another: they run together, then join in this order.
+  const kind_event = types.includes('event')
+    ? (async () => {
+        const out: Listing[] = [];
+        const rows = await db
+          .prepare(`SELECT e.id, e.title, e.description, e.event_type, e.venue, e.online_url, e.starts_at, e.ends_at, e.price_points, e.status, e.featured, e.created_at, u.display_name AS host_name FROM events e JOIN users u ON u.id = e.host_user_id WHERE e.visibility = 'public' ${o.includeHidden ? '' : `AND e.status = 'published' AND e.ends_at >= '${now}'`}${idClause('e.id')} ORDER BY e.featured DESC, e.starts_at LIMIT 200`)
+          .all<{ id: string; title: string; description: string; host_name: string; event_type: keyof typeof EVENT_TYPE_META; venue: string; online_url: string | null; starts_at: string; ends_at: string; price_points: number; status: string; featured: number; created_at: string }>();
+        for (const r of rows.results) {
+          out.push({
+            type: 'event',
+            id: r.id,
+            title: r.title,
+            by: nameOf({ display_name: r.host_name }),
+            blurb: r.description,
+            facts: [EVENT_TYPE_META[r.event_type]?.name ?? r.event_type, new Date(r.starts_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), r.online_url ? 'Online' : r.venue || '', r.price_points > 0 ? `${r.price_points} pts` : 'Free'].filter(Boolean),
+            path: `/party/${r.id}`,
+            featured: r.featured === 1,
+            live: r.status === 'published' && r.ends_at >= now,
+            endsAt: r.ends_at,
+            createdAt: r.created_at,
+          });
+        }
+        return out;
+      })()
+    : Promise.resolve<Listing[]>([]);
+  // Each kind is its own query and none waits on another: they run together, then join in this order.
+  const kind_program = types.includes('program')
+    ? (async () => {
+        const out: Listing[] = [];
+        const rows = await db
+          .prepare(`SELECT p.id, p.name, p.description, p.price_points, p.price_cents, p.currency, p.delivery_mode, p.published, p.featured, p.created_at, (SELECT COUNT(*) FROM cohorts k WHERE k.program_id = p.id AND k.status IN ('upcoming','running')) AS cohorts FROM programs p WHERE 1=1 ${o.includeHidden ? '' : 'AND p.published = 1'}${idClause('p.id')} ORDER BY p.featured DESC, p.created_at DESC LIMIT 200`)
+          .all<{ id: string; name: string; description: string; price_points: number; price_cents: number; currency: string; delivery_mode: string; published: number; featured: number; created_at: string; cohorts: number }>();
+        for (const r of rows.results) {
+          out.push({
+            type: 'program',
+            id: r.id,
+            title: r.name,
+            by: 'Kreators School',
+            blurb: r.description,
+            facts: [r.delivery_mode.replace('_', ' '), r.price_points > 0 ? `${r.price_points} pts` : r.price_cents > 0 ? `${r.currency} ${(r.price_cents / 100).toFixed(0)}` : 'Free', r.cohorts > 0 ? `${r.cohorts} cohort${r.cohorts === 1 ? '' : 's'} open` : 'cohort dates soon'].filter(Boolean),
+            path: `/school`,
+            featured: r.featured === 1,
+            live: r.published === 1,
+            endsAt: null,
+            createdAt: r.created_at,
+          });
+        }
+        return out;
+      })()
+    : Promise.resolve<Listing[]>([]);
+  // Each kind is its own query and none waits on another: they run together, then join in this order.
+  const kind_tool = types.includes('tool')
+    ? (async () => {
+        const out: Listing[] = [];
+        const rows = await db.prepare(`SELECT id, name, category, url, description, affiliate, verified, created_at FROM tools WHERE 1=1 ${o.includeHidden ? '' : 'AND verified = 1'}${idClause('id')} ORDER BY name LIMIT 200`).all<{ id: string; name: string; category: string; url: string; description: string; affiliate: number; verified: number; created_at: string }>();
+        for (const r of rows.results) {
+          out.push({ type: 'tool', id: r.id, title: r.name, by: r.category, blurb: r.description, facts: [r.category, r.affiliate === 1 ? 'partner link' : 'verified'].filter(Boolean), path: '/tools', featured: false, live: r.verified === 1, endsAt: null, createdAt: r.created_at });
+        }
+        return out;
+      })()
+    : Promise.resolve<Listing[]>([]);
+  // Each kind is its own query and none waits on another: they run together, then join in this order.
+  const kind_campaign = types.includes('campaign')
+    ? (async () => {
+        const out: Listing[] = [];
+        const rows = await db
+          .prepare(`SELECT c.id, c.name, c.brief, c.status, c.due_date, c.public, c.created_at, o.name AS organization_name FROM campaigns c JOIN organizations o ON o.id = c.organization_id WHERE 1=1 ${o.includeHidden ? '' : "AND c.public = 1 AND c.status IN ('brief','shortlist','approved')"}${idClause('c.id')} ORDER BY c.updated_at DESC LIMIT 100`)
+          .all<{ id: string; name: string; brief: string; organization_name: string; status: string; due_date: string | null; public: number; created_at: string }>();
+        for (const r of rows.results) {
+          out.push({ type: 'campaign', id: r.id, title: r.name, by: r.organization_name, blurb: r.brief, facts: [r.status, r.due_date ? `due ${when(r.due_date)}` : ''].filter(Boolean), path: `/army/${r.id}`, featured: false, live: r.public === 1 && ['brief', 'shortlist', 'approved'].includes(r.status), endsAt: r.due_date, createdAt: r.created_at });
+        }
+        return out;
+      })()
+    : Promise.resolve<Listing[]>([]);
+  // Each kind is its own query and none waits on another: they run together, then join in this order.
+  const kind_circle = types.includes('circle')
+    ? (async () => {
+        const out: Listing[] = [];
+        const rows = await db
+          .prepare(`SELECT e.id, e.title, e.city, e.area, e.starts_at, e.venue_hint, e.group_size, e.status, e.repeat, e.created_at, (SELECT COUNT(*) FROM circle_signups s WHERE s.event_id = e.id) AS signups FROM circle_events e WHERE 1=1 ${o.includeHidden ? '' : `AND e.status = 'open' AND e.starts_at >= '${now}'`}${idClause('e.id')} ORDER BY e.starts_at LIMIT 200`)
+          .all<{ id: string; title: string; city: string; area: string; starts_at: string; venue_hint: string; group_size: number; status: string; repeat: string; created_at: string; signups: number }>();
+        for (const r of rows.results) {
+          out.push({
+            type: 'circle',
+            id: r.id,
+            title: r.title,
+            by: [r.area, r.city].filter(Boolean).join(', '),
+            blurb: `Anonymous group of ${r.group_size}, matched by interests that fit. Red if single, white if committed. Names stay hidden; the chat opens a day before.${r.venue_hint ? ` ${r.venue_hint}` : ''}`,
+            facts: [new Date(r.starts_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), ...(r.repeat === 'weekly' ? ['every week'] : []), `${r.signups} signed up`, `tables of ${r.group_size}`],
+            path: '/circles',
+            featured: false,
+            live: r.status === 'open' && r.starts_at >= now,
+            endsAt: r.starts_at,
+            createdAt: r.created_at,
+          });
+        }
+        return out;
+      })()
+    : Promise.resolve<Listing[]>([]);
+  const out = (await Promise.all([kind_reward, kind_opportunity, kind_event, kind_program, kind_tool, kind_campaign, kind_circle])).flat();
   let list = out;
   if (q) list = list.filter((l) => [l.title, l.by, l.blurb, ...l.facts].join(' ').toLowerCase().includes(q));
   if (o.featuredOnly) list = list.filter((l) => l.featured);

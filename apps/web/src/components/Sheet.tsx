@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useId, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useDialogFocus } from '../lib/useDialogFocus';
 
 interface Props {
   open: boolean;
@@ -10,20 +11,19 @@ interface Props {
 
 export function Sheet({ open, onClose, title, children }: Props) {
   const id = useId();
+  const dialog = useRef<HTMLDivElement>(null);
+  // Focus moves in when it opens, Tab stays inside, Escape closes it (the top one only), and focus returns to what opened it.
+  // The dialog node appears with `open`, so the hook runs after it is in the page.
+  useDialogFocus(dialog, open, { onEscape: onClose });
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
-      window.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
     };
-  }, [open, onClose]);
+  }, [open]);
 
   return (
     <AnimatePresence>
@@ -32,6 +32,7 @@ export function Sheet({ open, onClose, title, children }: Props) {
           <motion.button
             type="button"
             aria-label="Close"
+            tabIndex={-1}
             className="fixed inset-0 z-40 bg-ink/50"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -39,6 +40,7 @@ export function Sheet({ open, onClose, title, children }: Props) {
             onClick={onClose}
           />
           <motion.div
+            ref={dialog}
             role="dialog"
             aria-modal="true"
             aria-labelledby={id}

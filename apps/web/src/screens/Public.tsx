@@ -78,7 +78,7 @@ export function Public() {
         <>
           <section className="mt-md rounded-card bg-ink p-md text-on-ink">
             {d.avatarUrl ? (
-              <img src={d.avatarUrl} alt="" width={64} height={64} className="size-[64px] rounded-pill bg-paper object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
+              <img src={d.avatarUrl} alt={`${d.name}, profile picture`} width={64} height={64} fetchPriority="high" decoding="async" className="size-[64px] rounded-pill bg-paper object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
             ) : (
               <span className="flex size-[64px] items-center justify-center rounded-pill bg-r2 font-display text-[30px] font-extrabold text-on-fill" aria-hidden="true">
                 {d.name.slice(0, 1).toUpperCase()}

@@ -380,6 +380,9 @@ interface ContractRow {
   acceptance_json: string | null; sent_at: string | null; signed_at: string | null; revised_at: string | null; created_at: string; updated_at: string;
 }
 const CONTRACT_SELECT = 'SELECT k.*, (SELECT name FROM agency_clients c WHERE c.id = k.client_id) AS client_name FROM agency_contracts k';
+/** The list and the board show a title and a status, so they leave out the document itself, the answers and the acceptance (the heavy columns). */
+const CONTRACT_LIST_SELECT = 'SELECT k.id, k.user_id, k.client_id, k.title, k.template_key, k.status, k.sent_at, k.signed_at, k.revised_at, k.created_at, k.updated_at, (SELECT name FROM agency_clients c WHERE c.id = k.client_id) AS client_name FROM agency_contracts k';
+type ContractListRow = Pick<ContractRow, 'id' | 'user_id' | 'client_id' | 'client_name' | 'title' | 'template_key' | 'status' | 'sent_at' | 'signed_at' | 'revised_at' | 'created_at' | 'updated_at'>;
 
 function jsonOr<T>(raw: string | null, fallback: T): T {
   try {
@@ -406,7 +409,7 @@ const toContract = (r: ContractRow): AgencyContract => ({
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });
-const toListItem = (r: ContractRow): ContractListItem => ({ id: r.id, clientId: r.client_id, clientName: r.client_name ?? '', title: r.title, templateKey: r.template_key, status: r.status, sentAt: r.sent_at, signedAt: r.signed_at, updatedAt: r.updated_at });
+const toListItem = (r: ContractListRow): ContractListItem => ({ id: r.id, clientId: r.client_id, clientName: r.client_name ?? '', title: r.title, templateKey: r.template_key, status: r.status, sentAt: r.sent_at, signedAt: r.signed_at, updatedAt: r.updated_at });
 
 agencyDocs.get('/contracts', async (c) => {
   const db = c.env.DB;
@@ -425,7 +428,7 @@ agencyDocs.get('/contracts', async (c) => {
     binds.push(client);
   }
   const [rows, counts] = await Promise.all([
-    db.prepare(`${CONTRACT_SELECT} WHERE ${where.join(' AND ')} ORDER BY k.updated_at DESC LIMIT ? OFFSET ?`).bind(...binds, ask.limit, ask.offset).all<ContractRow>(),
+    db.prepare(`${CONTRACT_LIST_SELECT} WHERE ${where.join(' AND ')} ORDER BY k.updated_at DESC LIMIT ? OFFSET ?`).bind(...binds, ask.limit, ask.offset).all<ContractListRow>(),
     db.prepare('SELECT status, COUNT(*) AS n FROM agency_contracts WHERE user_id = ? GROUP BY status').bind(user.id).all<{ status: string; n: number }>(),
   ]);
   const pg = paged(rows.results, ask);
@@ -441,7 +444,7 @@ agencyDocs.get('/contracts/board', async (c) => {
   const columns = await Promise.all(
     CONTRACT_STATUSES.map(async (stage) => {
       const [rows, total] = await Promise.all([
-        db.prepare(`${CONTRACT_SELECT} WHERE k.user_id = ? AND k.status = ?${extra} ORDER BY k.updated_at DESC LIMIT ?`).bind(user.id, stage, ...(client ? [client] : []), per).all<ContractRow>(),
+        db.prepare(`${CONTRACT_LIST_SELECT} WHERE k.user_id = ? AND k.status = ?${extra} ORDER BY k.updated_at DESC LIMIT ?`).bind(user.id, stage, ...(client ? [client] : []), per).all<ContractListRow>(),
         db.prepare(`SELECT COUNT(*) AS n FROM agency_contracts k WHERE k.user_id = ? AND k.status = ?${extra}`).bind(user.id, stage, ...(client ? [client] : [])).first<{ n: number }>(),
       ]);
       return { stage, total: total?.n ?? 0, items: rows.results.map(toListItem) };

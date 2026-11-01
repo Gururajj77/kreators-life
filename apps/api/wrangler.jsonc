@@ -5,6 +5,8 @@
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // Smart placement runs the Worker near the database, since nearly every request makes several round trips to it.
+  "placement": { "mode": "smart" },
   // Every fifteen minutes: post-purchase sequences, content and reward view refreshes.
   "triggers": { "crons": ["*/15 * * * *", "0 */2 * * *"] },
   // The built web app is served as static assets by the same Worker.
@@ -14,7 +16,17 @@
     "directory": "../web/dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/", "/api/*", "/go/*", "/out/*", "/__scheduled", "/sitemap.xml"]
+    // The second list sends paths that should hold nothing (hidden files, backups, dumps, config) to the Worker, which answers 404
+    // instead of the app shell (see blockedPath in src/headers.ts, the real rule; keep the two in step). /.well-known/ is left alone.
+    "run_worker_first": [
+      "/", "/api/*", "/go/*", "/out/*", "/__scheduled", "/sitemap.xml",
+      "!/.well-known/*",
+      "/.*", "/*/.*", "/*.map", "/*.sql", "/*.bak", "/*.zip", "/*.tar", "/*.tar.gz", "/*.tgz", "/*.php", "/*.log", "/*.pem", "/*.key", "/*.env",
+      "/backup*", "/db.*", "/dump.*", "/database.*", "/config.*", "/configuration.*", "/settings.json", "/secret*", "/credentials.*",
+      "/package.json", "/package-lock.json", "/pnpm-lock.yaml", "/yarn.lock", "/composer.*", "/tsconfig.json", "/vite.config.*", "/wrangler.*",
+      "/docker-compose.*", "/Dockerfile", "/Makefile", "/wp-*", "/phpmyadmin*", "/cgi-bin/*", "/node_modules/*", "/id_rsa*", "/server-status*",
+      "/src/*", "/logs/*", "/tmp/*", "/temp/*"
+    ]
   },
   "d1_databases": [
     {

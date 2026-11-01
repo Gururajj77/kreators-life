@@ -19,7 +19,7 @@ export function Ring({ value, size = 56, stroke = 6, color, track = 'rgba(38,38,
   const offset = c * (1 - Math.max(0, Math.min(1, value)));
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={label} className="-rotate-90">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role={label ? 'img' : undefined} aria-label={label || undefined} aria-hidden={label ? undefined : true} className="-rotate-90">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={track} strokeWidth={stroke} />
         <motion.circle
           cx={size / 2}

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { bountyPayout, detectPlatform, type Bounty, type BountySubmission, type SocialMetric } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { audit, can, nameOf, newId, notify, nowIso, num, oneOf, str, pageOf, paged } from '../db';
+import { audit, can, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, str, pageOf, paged } from '../db';
 import { fetchMetrics } from '../social';
 
 /** Win: content rewards. A brand funds a pool; creators post videos; verified views turn into points. */
@@ -30,8 +30,11 @@ const toB = (r: BRow, mine: BountySubmission | null): Bounty => ({
 
 async function metricsFor(db: D1Database, submissionIds: string[]): Promise<MRow[]> {
   if (submissionIds.length === 0) return [];
-  const rows = await db.prepare(`SELECT * FROM social_metrics WHERE submission_id IN (${submissionIds.map(() => '?').join(',')}) ORDER BY fetched_at`).bind(...submissionIds).all<MRow>();
-  return rows.results;
+  // A query takes at most 100 bound values, so a long list goes in chunks of 80, all in one batch (one round trip).
+  const chunks: string[][] = [];
+  for (let i = 0; i < submissionIds.length; i += 80) chunks.push(submissionIds.slice(i, i + 80));
+  const found = await db.batch<MRow>(chunks.map((ids) => db.prepare(`SELECT * FROM social_metrics WHERE submission_id IN (${ids.map(() => '?').join(',')}) ORDER BY fetched_at`).bind(...ids)));
+  return found.flatMap((r) => r.results);
 }
 
 win.get('/', async (c) => {
@@ -43,7 +46,7 @@ win.get('/', async (c) => {
   const [bs, mine, queue] = await Promise.all([
     db.prepare(`${SELECT} WHERE b.status = 'open' OR b.id IN (SELECT bounty_id FROM bounty_submissions WHERE user_id = ?) ORDER BY b.featured DESC, b.ends_at LIMIT ? OFFSET ?`).bind(user.id, ask.limit, ask.offset).all<BRow>(),
     db.prepare(`${S_SELECT} WHERE s.user_id = ? ORDER BY s.created_at DESC`).bind(user.id).all<SRow>(),
-    reviewer || finance ? db.prepare(`${S_SELECT} WHERE s.status IN ('submitted','verified','disputed') ORDER BY s.created_at`).all<SRow>() : Promise.resolve({ results: [] as SRow[] }),
+    reviewer || finance ? db.prepare(`${S_SELECT} WHERE s.status IN ('submitted','verified','disputed') ORDER BY s.created_at LIMIT 500`).all<SRow>() : Promise.resolve({ results: [] as SRow[] }),
   ]);
   const metrics = await metricsFor(db, [...mine.results, ...queue.results].map((s) => s.id));
   const byB = new Map(mine.results.map((s) => [s.bounty_id, toS(s, metrics)]));
@@ -57,13 +60,15 @@ win.get('/:id', async (c) => {
   const user = c.get('user');
   const b = await db.prepare(`${SELECT} WHERE b.id = ?`).bind(c.req.param('id')).first<BRow>();
   if (!b) return c.json({ error: 'not found' }, 404);
-  const mine = await db.prepare(`${S_SELECT} WHERE s.bounty_id = ? AND s.user_id = ?`).bind(b.id, user.id).first<SRow>();
-  const metrics = await metricsFor(db, mine ? [mine.id] : []);
   const staff = can(user, 'review') || can(user, 'finance');
-  const all = staff ? await db.prepare(`${S_SELECT} WHERE s.bounty_id = ? ORDER BY s.latest_views DESC`).bind(b.id).all<SRow>() : { results: [] as SRow[] };
-  const allMetrics = staff ? await metricsFor(db, all.results.map((s) => s.id)) : [];
-  // The leaderboard of this reward shows names and views only, never payouts.
-  const board = await db.prepare('SELECT u.display_name, s.latest_views, s.status FROM bounty_submissions s JOIN users u ON u.id = s.user_id WHERE s.bounty_id = ? AND s.status != \'rejected\' ORDER BY s.latest_views DESC LIMIT 10').bind(b.id).all<{ display_name: string; latest_views: number; status: string }>();
+  // The person's own entry, everyone's entries (staff only) and this reward's board do not depend on each other: read together.
+  const [mine, all, board] = await Promise.all([
+    db.prepare(`${S_SELECT} WHERE s.bounty_id = ? AND s.user_id = ?`).bind(b.id, user.id).first<SRow>(),
+    staff ? db.prepare(`${S_SELECT} WHERE s.bounty_id = ? ORDER BY s.latest_views DESC LIMIT 500`).bind(b.id).all<SRow>() : Promise.resolve({ results: [] as SRow[] }),
+    // The leaderboard of this reward shows names and views only, never payouts.
+    db.prepare('SELECT u.display_name, s.latest_views, s.status FROM bounty_submissions s JOIN users u ON u.id = s.user_id WHERE s.bounty_id = ? AND s.status != \'rejected\' ORDER BY s.latest_views DESC LIMIT 10').bind(b.id).all<{ display_name: string; latest_views: number; status: string }>(),
+  ]);
+  const [metrics, allMetrics] = await Promise.all([metricsFor(db, mine ? [mine.id] : []), staff ? metricsFor(db, all.results.map((s) => s.id)) : Promise.resolve([])]);
   return c.json({ bounty: toB(b, mine ? toS(mine, metrics) : null), submissions: all.results.map((s) => toS(s, allMetrics)), board: board.results.map((r) => ({ name: nameOf(r), views: r.latest_views, status: r.status })) });
 });
 
@@ -123,7 +128,7 @@ win.patch('/:id', async (c) => {
   await audit(db, user.id, 'bounty.edit', 'bounty', b.id, `v${b.version}`, `v${version}: ${what}`);
   // Everyone who entered hears about it, once per change.
   const entrants = await db.prepare('SELECT DISTINCT user_id FROM bounty_submissions WHERE bounty_id = ?').bind(b.id).all<{ user_id: string }>();
-  for (const e of entrants.results) await notify(db, e.user_id, 'win', `${next.title} changed (version ${version})`, `Changed: ${what}. Read the reward again before you post.`, `/win/${b.id}`);
+  await notifyMany(db, entrants.results.map((e) => e.user_id), 'win', `${next.title} changed (version ${version})`, `Changed: ${what}. Read the reward again before you post.`, `/win/${b.id}`);
   return c.json({ ok: true, version, changed: changed.map((k) => labels[k]) });
 });
 

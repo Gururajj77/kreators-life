@@ -6,6 +6,7 @@
     "dev": "pnpm -r --parallel --stream dev",
     "typecheck": "pnpm -r typecheck",
     "build": "pnpm --filter @kreators/web build",
+    "perf:budget": "node scripts/perf-budget.mjs",
     "db:migrate:local": "pnpm --filter @kreators/api db:migrate:local",
     "cf:login": "pnpm --filter @kreators/api exec wrangler login",
     "cf:logout": "pnpm --filter @kreators/api exec wrangler logout",

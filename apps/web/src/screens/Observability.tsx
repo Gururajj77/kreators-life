@@ -198,7 +198,7 @@ export function Observability() {
                       const m = MODULE_BY_KEY[k];
                       if (!m) return null;
                       return (
-                        <span key={k} className="inline-flex min-h-[24px] items-center gap-xs rounded-pill bg-paper px-xs" style={{ color: `var(--deep-${MODULE_GROUP_ACCENT[m.group]})` }}>
+                        <span key={k} className="inline-flex min-h-[24px] items-center gap-xs rounded-pill bg-card-strong px-xs" style={{ color: `var(--deep-${MODULE_GROUP_ACCENT[m.group]})` }}>
                           <span aria-hidden="true">{m.emoji}</span>
                           {m.name}
                         </span>

@@ -88,16 +88,23 @@ async function kitItems(db: D1Database, raw: string): Promise<StoreKitItem[]> {
   } catch {
     refs = [];
   }
+  // One batch for the whole kit (one round trip), in the kit's own order, instead of one query per piece.
+  const picked = refs.slice(0, MAX_KIT_ITEMS);
+  if (picked.length === 0) return [];
+  const found = await db.batch<{ id: string; title: string; price_cents: number; status?: string }>(
+    picked.map((ref) =>
+      ref.type === 'item'
+        ? db.prepare('SELECT id, title, price_cents FROM store_items WHERE id = ?').bind(ref.id)
+        : db.prepare('SELECT id, title, price_cents, status FROM preowned_listings WHERE id = ?').bind(ref.id),
+    ),
+  );
   const out: StoreKitItem[] = [];
-  for (const ref of refs.slice(0, MAX_KIT_ITEMS)) {
-    if (ref.type === 'item') {
-      const r = await db.prepare('SELECT id, title, price_cents FROM store_items WHERE id = ?').bind(ref.id).first<{ id: string; title: string; price_cents: number }>();
-      if (r) out.push({ type: 'item', id: r.id, title: r.title, priceCents: r.price_cents, status: null });
-    } else {
-      const r = await db.prepare('SELECT id, title, price_cents, status FROM preowned_listings WHERE id = ?').bind(ref.id).first<{ id: string; title: string; price_cents: number; status: string }>();
-      if (r) out.push({ type: 'listing', id: r.id, title: r.title, priceCents: r.price_cents, status: r.status });
-    }
-  }
+  picked.forEach((ref, i) => {
+    const r = found[i]?.results[0];
+    if (!r) return;
+    if (ref.type === 'item') out.push({ type: 'item', id: r.id, title: r.title, priceCents: r.price_cents, status: null });
+    else out.push({ type: 'listing', id: r.id, title: r.title, priceCents: r.price_cents, status: r.status ?? '' });
+  });
   return out;
 }
 async function toKit(db: D1Database, r: KitRow): Promise<StoreKit> {

@@ -11,7 +11,7 @@ export function ListingCard({ listing, showFeature = true }: { listing: Listing;
   const to = token ? listing.path : `/signin?next=${encodeURIComponent(listing.path)}`;
   return (
     <li className="flex flex-col rounded-tile bg-card p-md shadow-toy-soft">
-      <MediaCover items={listing.media} />
+      <MediaCover items={listing.media} title={listing.title} />
       <div className="flex items-start gap-sm">
         <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-[22px]" aria-hidden="true">
           {meta.emoji}

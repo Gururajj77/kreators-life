@@ -12,7 +12,6 @@ nodes.get('/', async (c) => {
   const user = c.get('user');
   const relationship = c.req.query('relationship');
   const kind = c.req.query('kind');
-  const gate = await taskGate(db, user.id);
   const clauses = ['user_id = ?', "status != 'archived'"];
   const binds: unknown[] = [user.id];
   if (relationship) {
@@ -25,10 +24,14 @@ nodes.get('/', async (c) => {
     clauses.push('kind = ?');
     binds.push(kind);
   }
-  const rows = await db
-    .prepare(`SELECT * FROM nodes WHERE ${clauses.join(' AND ')} ORDER BY sort_order ASC, created_at ASC`)
-    .bind(...binds)
-    .all<NodeRow>();
+  // The tick gate and the rows do not depend on each other: read together.
+  const [gate, rows] = await Promise.all([
+    taskGate(db, user.id),
+    db
+      .prepare(`SELECT * FROM nodes WHERE ${clauses.join(' AND ')} ORDER BY sort_order ASC, created_at ASC`)
+      .bind(...binds)
+      .all<NodeRow>(),
+  ]);
   return c.json({ nodes: await withSubtasks(db, user.id, rows.results.map((r) => toNode(r, gate))) });
 });
 
@@ -36,9 +39,8 @@ nodes.get('/', async (c) => {
 nodes.get('/:id', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const row = await getNode(db, user.id, c.req.param('id'));
+  const [row, gate] = await Promise.all([getNode(db, user.id, c.req.param('id')), taskGate(db, user.id)]);
   if (!row) return c.json({ error: 'not found' }, 404);
-  const gate = await taskGate(db, user.id);
   const [node] = await withSubtasks(db, user.id, [toNode(row, gate)]);
   return c.json({ node });
 });
@@ -300,7 +302,19 @@ nodes.post('/:id/complete', async (c) => {
 
   // Wait time: the first few ticks are free; after that a task has to exist for a while and sit a
   // gap after the previous tick, so writing and ticking in the same breath, or ticking back to back, earns nothing.
-  const gate = await taskGate(db, user.id);
+  // The gate, today's paid-task count and the badges before the tick are three independent reads: together they cost one wait.
+  const since = new Date(Date.now() - 86_400_000).toISOString();
+  const [gate, rewarded, before] = await Promise.all([
+    taskGate(db, user.id),
+    db
+      .prepare(
+        `SELECT COUNT(DISTINCT e.source_id) AS n FROM xp_events e JOIN nodes n ON n.id = e.source_id
+       WHERE e.user_id = ? AND e.source = 'task' AND e.created_at >= ? AND n.status = 'done'`,
+      )
+      .bind(user.id, since)
+      .first<{ n: number }>(),
+    badgesNow(db, user.id),
+  ]);
   const leftMs = new Date(readyAtFor(row, gate)).getTime() - Date.now();
   if (leftMs > 0) {
     const wait = Math.max(1, Math.ceil(leftMs / 60_000));
@@ -310,17 +324,8 @@ nodes.post('/:id/complete', async (c) => {
 
   // Daily cap: only a handful of tasks per rolling day pay xp. A task counts
   // once however often it is ticked, and stops counting if it is unticked.
-  const since = new Date(Date.now() - 86_400_000).toISOString();
-  const rewarded = await db
-    .prepare(
-      `SELECT COUNT(DISTINCT e.source_id) AS n FROM xp_events e JOIN nodes n ON n.id = e.source_id
-       WHERE e.user_id = ? AND e.source = 'task' AND e.created_at >= ? AND n.status = 'done'`,
-    )
-    .bind(user.id, since)
-    .first<{ n: number }>();
   const capped = (rewarded?.n ?? 0) >= WAIT.dailyRewardedTasks;
 
-  const before = await badgesNow(db, user.id);
   const now = nowIso();
 
   // Claim the task. Only one request can move it from active to done, so two

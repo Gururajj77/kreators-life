@@ -7,6 +7,7 @@ import { Button } from '../components/Button';
 import { useCelebrate } from '../components/Celebration';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
+import { SkeletonList } from '../components/Skeleton';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useParamState } from '../lib/useParamState';
@@ -221,6 +222,7 @@ export function Community() {
         </label>
       )}
       {q.isError && <p className="mt-md font-bold">{q.error instanceof Error ? q.error.message : 'Could not load.'}</p>}
+      {q.isPending && <SkeletonList className="mt-md" count={3} lines={3} label="Loading posts" />}
       {posts.length === 0 && q.data && <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">{filter === 'following' ? 'Nobody you follow has posted yet. Follow people from their posts.' : filter === 'mine' ? 'You have not posted yet.' : 'No posts here yet. Start the conversation.'}</p>}
       <ul className="mt-md flex list-none flex-col gap-sm p-0 m-0">
         {posts.map((p) => (

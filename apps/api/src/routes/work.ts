@@ -68,7 +68,7 @@ work.get('/opportunities/:id', async (c) => {
   if (row.status !== 'published' && !owner) return c.json({ error: 'not found' }, 404);
   if (row.club_only === 1 && !owner && !(await isClubMember(db, user.id))) return c.json({ error: 'Club members only. Apply under Club for the first look.' }, 403);
   const mine = await db.prepare(`${APP_SELECT} WHERE a.opportunity_id = ? AND a.creator_user_id = ?`).bind(row.id, user.id).first<AppRow>();
-  const apps = owner ? await db.prepare(`${APP_SELECT} WHERE a.opportunity_id = ? ORDER BY a.submitted_at DESC`).bind(row.id).all<AppRow>() : { results: [] as AppRow[] };
+  const apps = owner ? await db.prepare(`${APP_SELECT} WHERE a.opportunity_id = ? ORDER BY a.submitted_at DESC LIMIT 500`).bind(row.id).all<AppRow>() : { results: [] as AppRow[] };
   return c.json({ opportunity: toOpp(row, mine ? toApp(mine) : null), applications: apps.results.map(toApp), owner });
 });
 

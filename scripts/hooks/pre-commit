@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Refuses a commit whose staged changes add something that looks like a secret, or add a secrets file.
+# Install once:  cp scripts/hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+# (or: git config core.hooksPath scripts/hooks). To skip it for one commit you are sure about: git commit --no-verify
+set -u
+
+# Files that must never be committed (the example file is fine).
+bad_files=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '(^|/)(\.env(\..*)?|\.dev\.vars(\..*)?|id_rsa|id_ed25519)$|\.(pem|key|p12|pfx)$' | grep -vE '\.(example|sample)$' || true)
+
+# Added lines only, with their values never printed.
+patterns='sk_live_[A-Za-z0-9]{8,}|sk_test_[A-Za-z0-9]{8,}|rk_live_[A-Za-z0-9]{8,}|sk-ant-[A-Za-z0-9_-]{10,}|sk-or-[A-Za-z0-9_-]{10,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[bapr]-[0-9A-Za-z-]{10,}|AIza[0-9A-Za-z_-]{30,}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|rzp_live_[A-Za-z0-9]{8,}|service_role|(RAZORPAY_KEY_SECRET|RAZORPAY_WEBHOOK_SECRET|ADMIN_KEY|RESEND_API_KEY|ANTHROPIC_API_KEY|ASSISTANT_API_KEY|REACH_KEY|META_APP_SECRET|META_ACCESS_TOKEN)=[A-Za-z0-9_./+-]{12,}'
+hits=$(git diff --cached -U0 --no-color | grep -E '^\+[^+]' | grep -E "$patterns" | grep -vE 'smoke-admin-key|dev-admin-key' | sed -E 's/^\+//' | cut -c1-60 || true)
+
+status=0
+if [ -n "$bad_files" ]; then
+  echo "pre-commit: these files must not be committed:"
+  echo "$bad_files" | sed 's/^/  /'
+  status=1
+fi
+if [ -n "$hits" ]; then
+  count=$(echo "$hits" | wc -l | tr -d ' ')
+  echo "pre-commit: $count staged line(s) look like a secret (values not shown). Find them with:"
+  echo "  git diff --cached -U0 | grep -nE '^\\+' | grep -E 'sk_live_|sk-ant-|sk-or-|AKIA|ghp_|PRIVATE KEY|_API_KEY=|_SECRET=|ADMIN_KEY='"
+  status=1
+fi
+[ "$status" -ne 0 ] && echo "Nothing was committed. Move the value to a Cloudflare secret (pnpm cf:secret NAME), then commit again."
+exit $status

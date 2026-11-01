@@ -93,7 +93,7 @@ export function MediaSection({ type, id, title = 'Pictures and videos' }: { type
                   {kindOf(d.url) === 'video' ? (
                     <span className="flex size-[56px] shrink-0 items-center justify-center rounded-tile bg-card text-[22px]" aria-hidden="true">▶</span>
                   ) : (
-                    <img src={d.url} alt="" className="size-[56px] shrink-0 rounded-tile bg-card object-cover" />
+                    <img src={d.url} alt={d.caption || `${kindOf(d.url) === 'gif' ? 'GIF' : 'Picture'} ${i + 1}${i === 0 ? ', the cover' : ''}`} width={56} height={56} loading="lazy" decoding="async" className="size-[56px] shrink-0 rounded-tile bg-card object-cover" />
                   )}
                   <span className="min-w-0 flex-1 truncate text-[12px] font-bold text-ink-soft">{kindOf(d.url) === 'video' ? 'Video' : kindOf(d.url) === 'gif' ? 'GIF' : 'Picture'}{i === 0 ? ' · cover' : ''}</span>
                   <Button variant="ghost" size="sm" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up">↑</Button>

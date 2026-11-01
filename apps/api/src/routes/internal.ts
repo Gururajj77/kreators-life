@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { accessFor, loadAccessContext } from '../access';
 import { audit, getUser, pageOf, paged } from '../db';
 import type { AppEnv, UserRow } from '../env';
+import { vitalsSummary } from './vitals';
 
 /**
  * Internal observability for the team: who is here, which apps they have on, who holds which role.
@@ -20,6 +21,9 @@ internal.use('*', async (c, next) => {
 });
 
 type LightRow = Pick<UserRow, 'id' | 'display_name' | 'handle' | 'role' | 'modules' | 'created_at' | 'onboarded_at'>;
+
+// How fast the app is for real visitors: the 75th percentile of each page's loading, responsiveness and stability, by device. No names, no addresses.
+internal.get('/vitals', async (c) => c.json(await vitalsSummary(c.env.DB, Math.min(90, Math.max(1, Number(c.req.query('days')) || 7)))));
 
 internal.get('/observability', async (c) => {
   const db = c.env.DB;

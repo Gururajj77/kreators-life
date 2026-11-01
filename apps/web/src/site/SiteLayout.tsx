@@ -117,6 +117,18 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
             <Link to="/contact" className="min-h-[32px] hover:text-ink">
               Contact
             </Link>
+            <Link to="/subprocessors" className="min-h-[32px] hover:text-ink">
+              Subprocessors
+            </Link>
+            <Link to="/copyright" className="min-h-[32px] hover:text-ink">
+              Copyright
+            </Link>
+            <Link to="/licences" className="min-h-[32px] hover:text-ink">
+              Licences
+            </Link>
+            <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kreators:open-consent'))} className="min-h-[32px] text-left hover:text-ink">
+              Privacy choices
+            </button>
           </nav>
           <div className="flex gap-xs" role="group" aria-label="Theme">
             {(

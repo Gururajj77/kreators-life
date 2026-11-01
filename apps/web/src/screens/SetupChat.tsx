@@ -381,7 +381,7 @@ export function SetupChat() {
     const first = chatRef.current.signIn ?? {};
     say([], { ask: { kind: 'wait', text: 'Making your account…' } });
     api
-      .signup({ email: first.email ?? '', password: first.password ?? '', displayName: first.name || undefined, phone: rec.phone ?? '', birthDate: rec.birthDate ?? '' })
+      .signup({ email: first.email ?? '', password: first.password ?? '', displayName: first.name || undefined, phone: rec.phone ?? '', birthDate: rec.birthDate ?? '', acceptTerms: rec.acceptTerms === 'yes' })
       .then(async (r) => {
         setChat((c) => ({ ...c, signIn: undefined }));
         setToken(r.token);

@@ -48,7 +48,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let run = 0;
 async function prepare() {
 run += 1;
-const { token, user } = must(await api('POST', '/auth/signup', { email: `eval-${stamp}-${run}@smoke.test`, password: `Lantern-${stamp}-eval`, displayName: 'Eval', phone: '+91 98765 43210', birthDate: '1990-05-20' }), 'sign up');
+const { token, user } = must(await api('POST', '/auth/signup', { email: `eval-${stamp}-${run}@smoke.test`, password: `Lantern-${stamp}-eval`, displayName: 'Eval', acceptTerms: true, phone: '+91 98765 43210', birthDate: '1990-05-20' }), 'sign up');
 const server = must(await api('GET', '/assistant', undefined, token), 'status');
 if (!server.connected || server.model === 'smoke-mock') {
   console.log(`The server on ${ORIGIN} has ${server.model ?? 'no model'}. Stop it, then run: SMOKE_MODEL=real SMOKE_RUN=eval ASSISTANT_API_KEY=... bash scripts/smoke/blueprint.sh`);

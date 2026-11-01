@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { MAX_RUN_METRES, MAX_RUN_MINUTES, normalizeCode, RUN_CODE_WINDOW, RUN_PACES, RUN_REWARD, runEntryState, weekStreak, type Run, type RunClub, type RunClubDetail, type RunCollab, type RunCollabApplication, type RunCollabsResponse, type RunEntry, type RunResponse, type RunTracking } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
 import { newRunCode, setRunCode } from '../attendee';
-import { audit, badgesNow, can, diffBadges, nameOf, newId, notify, nowIso, num, oneOf, orgIdsOf, orgRole, str, pageOf, paged } from '../db';
+import { audit, badgesNow, can, diffBadges, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, orgIdsOf, orgRole, str, pageOf, paged } from '../db';
 
 /**
  * Kreators Run: run clubs like meetups, with one difference that makes the points honest. Every run has a start code
@@ -237,7 +237,7 @@ run.post('/clubs/:id/runs', async (c) => {
     .run();
   await audit(db, user.id, 'attendee_code.set', 'run', id, '', { xp: set.xp });
   const members = await db.prepare("SELECT user_id FROM run_members WHERE club_id = ? AND status = 'member' AND user_id != ?").bind(club.id, user.id).all<{ user_id: string }>();
-  for (const m of members.results) await notify(db, m.user_id, 'run', `New run: ${title}`, `${club.name}, ${new Date(start).toUTCString()}`, `/run/clubs/${club.id}`);
+  await notifyMany(db, members.results.map((m) => m.user_id), 'run', `New run: ${title}`, `${club.name}, ${new Date(start).toUTCString()}`, `/run/clubs/${club.id}`);
   const row = await db.prepare(`${RUN} WHERE r.id = ?`).bind(id).first<RunRow>();
   return c.json({ run: row ? toRun(row, null, true) : null, codeError: set.note }, 201);
 });
@@ -277,7 +277,7 @@ run.patch('/runs/:id', async (c) => {
   await db.prepare('UPDATE runs SET status = ? WHERE id = ?').bind(status, found.r.id).run();
   if (status === 'cancelled') {
     const members = await db.prepare("SELECT user_id FROM run_members WHERE club_id = ? AND status = 'member'").bind(found.club.id).all<{ user_id: string }>();
-    for (const m of members.results) await notify(db, m.user_id, 'run', `Cancelled: ${found.r.title}`, found.club.name, `/run/clubs/${found.club.id}`);
+    await notifyMany(db, members.results.map((m) => m.user_id), 'run', `Cancelled: ${found.r.title}`, found.club.name, `/run/clubs/${found.club.id}`);
   }
   return c.json({ ok: true });
 });

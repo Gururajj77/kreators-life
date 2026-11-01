@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { AFFILIATE_SHARE, PRODUCT_KIND_META, PRODUCT_KINDS, type Availability, type AvailabilityOverride, type Booking, type Coupon, type Lead, type Lesson, type Order, type Product, type ProductKind, type QuizQuestion, type StudioAnalytics, type Testimonial, parseFaq } from '@kreators/shared';
 import { isBadgeKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { nameOf, newId, notify, nowIso, parseList, pageOf, paged } from '../db';
+import { nameOf, newId, notify, nowIso, parseList, pageOf, paged, httpUrl } from '../db';
 import { logEvent, sendEmail, track } from '../ops';
 import { parseQuiz } from './buyer';
 
@@ -277,8 +277,8 @@ studio.post('/products', async (c) => {
     .bind(
       id, user.id, kind, title, str(body.description, 2000), int(body.pricePoints, 0) ?? 0, int(body.priceCents, 0) ?? 0, str(body.currency, 3, 'INR').toUpperCase() || 'INR',
       str(body.url, 500) || null, str(body.startsAt, 40) || null, int(body.durationMin, kind === 'session' ? 30 : null, 5, 600), int(body.capacity, null, 1),
-      str(body.meetingUrl, 500) || null, body.status === 'live' ? 'live' : 'draft', str(body.cover, 8, PRODUCT_KIND_META[kind].emoji), 0, now, now,
-      body.pwyw === true ? 1 : 0, JSON.stringify(list(body.intake, 8, 200)), str(body.replayUrl, 500) || null, int(body.replayPoints, 0) ?? 0, JSON.stringify(await ownedIds(db, user.id, body.bundleIds)), str(body.lockedBody, 20000), int(body.responseDays, kind === 'dm' ? 3 : null, 1, 30), body.leadMagnet === true ? 1 : 0, body.certificate === true ? 1 : 0,
+      httpUrl(body.meetingUrl, 500) || null, body.status === 'live' ? 'live' : 'draft', str(body.cover, 8, PRODUCT_KIND_META[kind].emoji), 0, now, now,
+      body.pwyw === true ? 1 : 0, JSON.stringify(list(body.intake, 8, 200)), httpUrl(body.replayUrl, 500) || null, int(body.replayPoints, 0) ?? 0, JSON.stringify(await ownedIds(db, user.id, body.bundleIds)), str(body.lockedBody, 20000), int(body.responseDays, kind === 'dm' ? 3 : null, 1, 30), body.leadMagnet === true ? 1 : 0, body.certificate === true ? 1 : 0,
       int(body.bufferMin, 0, 0, 120) ?? 0, int(body.noticeHours, 2, 0, 720) ?? 2, int(body.maxDaysAhead, 30, 1, 365) ?? 30, kind === 'membership' ? int(body.periodMonths, null, 1, 36) : null,
       int(body.minPoints, 0, 0) ?? 0, isBadgeKey(str(body.badge, 40)) ? str(body.badge, 40) : '',
     )
@@ -320,8 +320,8 @@ studio.patch('/products/:id', async (c) => {
       str(body.title, 120, prev.title) || prev.title, str(body.description, 2000, prev.description), int(body.pricePoints, prev.price_points) ?? prev.price_points, int(body.priceCents, prev.price_cents) ?? prev.price_cents,
       str(body.currency, 3, prev.currency).toUpperCase() || prev.currency, 'url' in body ? str(body.url, 500) || null : prev.url, 'startsAt' in body ? str(body.startsAt, 40) || null : prev.starts_at,
       'durationMin' in body ? int(body.durationMin, prev.duration_min, 5, 600) : prev.duration_min, 'capacity' in body ? int(body.capacity, prev.capacity, 1) : prev.capacity,
-      'meetingUrl' in body ? str(body.meetingUrl, 500) || null : prev.meeting_url, status, str(body.cover, 8, prev.cover) || prev.cover, int(body.sortOrder, prev.sort_order) ?? prev.sort_order, nowIso(),
-      typeof body.pwyw === 'boolean' ? (body.pwyw ? 1 : 0) : prev.pwyw, 'intake' in body ? JSON.stringify(list(body.intake, 8, 200)) : prev.intake_json, 'replayUrl' in body ? str(body.replayUrl, 500) || null : prev.replay_url, int(body.replayPoints, prev.replay_points) ?? prev.replay_points,
+      'meetingUrl' in body ? httpUrl(body.meetingUrl, 500) || null : prev.meeting_url, status, str(body.cover, 8, prev.cover) || prev.cover, int(body.sortOrder, prev.sort_order) ?? prev.sort_order, nowIso(),
+      typeof body.pwyw === 'boolean' ? (body.pwyw ? 1 : 0) : prev.pwyw, 'intake' in body ? JSON.stringify(list(body.intake, 8, 200)) : prev.intake_json, 'replayUrl' in body ? httpUrl(body.replayUrl, 500) || null : prev.replay_url, int(body.replayPoints, prev.replay_points) ?? prev.replay_points,
       'bundleIds' in body ? JSON.stringify(await ownedIds(db, user.id, body.bundleIds)) : prev.bundle_json, 'lockedBody' in body ? str(body.lockedBody, 20000) : prev.locked_body, 'responseDays' in body ? int(body.responseDays, prev.response_days, 1, 30) : prev.response_days,
       typeof body.leadMagnet === 'boolean' ? (body.leadMagnet ? 1 : 0) : prev.lead_magnet, typeof body.certificate === 'boolean' ? (body.certificate ? 1 : 0) : prev.certificate,
       int(body.bufferMin, prev.buffer_min, 0, 120) ?? prev.buffer_min, int(body.noticeHours, prev.notice_hours, 0, 720) ?? prev.notice_hours, int(body.maxDaysAhead, prev.max_days_ahead, 1, 365) ?? prev.max_days_ahead, 'periodMonths' in body ? int(body.periodMonths, prev.period_months, 1, 36) : prev.period_months,
@@ -361,7 +361,7 @@ studio.post('/products/:id/lessons', async (c) => {
   const next = await db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM lessons WHERE product_id = ?').bind(product.id).first<{ n: number }>();
   const id = newId();
   await db.prepare('INSERT INTO lessons (id, product_id, title, body, video_url, sort_order, drip_days, created_at, quiz_json, pass_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(id, product.id, title, str(body.body, 20000), str(body.videoUrl, 500) || null, next?.n ?? 0, int(body.dripDays, 0, 0, 365) ?? 0, nowIso(), JSON.stringify(cleanQuiz(body.quiz)), int(body.passScore, 0, 0, 100) ?? 0)
+    .bind(id, product.id, title, str(body.body, 20000), httpUrl(body.videoUrl, 500) || null, next?.n ?? 0, int(body.dripDays, 0, 0, 365) ?? 0, nowIso(), JSON.stringify(cleanQuiz(body.quiz)), int(body.passScore, 0, 0, 100) ?? 0)
     .run();
   const row = await db.prepare('SELECT * FROM lessons WHERE id = ?').bind(id).first<LessonRow>();
   return c.json({ lesson: row ? toLesson(row) : null }, 201);
@@ -374,7 +374,7 @@ studio.patch('/lessons/:id', async (c) => {
   if (!prev) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
   await db.prepare('UPDATE lessons SET title = ?, body = ?, video_url = ?, sort_order = ?, drip_days = ?, quiz_json = ?, pass_score = ? WHERE id = ?')
-    .bind(str(body.title, 140, prev.title) || prev.title, str(body.body, 20000, prev.body), 'videoUrl' in body ? str(body.videoUrl, 500) || null : prev.video_url, int(body.sortOrder, prev.sort_order) ?? prev.sort_order, int(body.dripDays, prev.drip_days, 0, 365) ?? prev.drip_days, 'quiz' in body ? JSON.stringify(cleanQuiz(body.quiz)) : prev.quiz_json, int(body.passScore, prev.pass_score, 0, 100) ?? prev.pass_score, prev.id)
+    .bind(str(body.title, 140, prev.title) || prev.title, str(body.body, 20000, prev.body), 'videoUrl' in body ? httpUrl(body.videoUrl, 500) || null : prev.video_url, int(body.sortOrder, prev.sort_order) ?? prev.sort_order, int(body.dripDays, prev.drip_days, 0, 365) ?? prev.drip_days, 'quiz' in body ? JSON.stringify(cleanQuiz(body.quiz)) : prev.quiz_json, int(body.passScore, prev.pass_score, 0, 100) ?? prev.pass_score, prev.id)
     .run();
   const row = await db.prepare('SELECT * FROM lessons WHERE id = ?').bind(prev.id).first<LessonRow>();
   return c.json({ lesson: row ? toLesson(row) : null });
@@ -532,7 +532,7 @@ studio.post('/bookings/:id', async (c) => {
   if (!prev) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<{ status?: string; meetingUrl?: string }>().catch(() => ({}) as { status?: string; meetingUrl?: string });
   const status = body.status === 'confirmed' || body.status === 'cancelled' || body.status === 'done' ? body.status : prev.status;
-  const meetingUrl = typeof body.meetingUrl === 'string' ? body.meetingUrl.trim().slice(0, 500) || null : prev.meeting_url;
+  const meetingUrl = typeof body.meetingUrl === 'string' ? httpUrl(body.meetingUrl, 500) || null : prev.meeting_url;
   await db.prepare('UPDATE bookings SET status = ?, meeting_url = ? WHERE id = ?').bind(status, meetingUrl, prev.id).run();
   if (status !== prev.status) {
     const when = new Date(prev.starts_at).toUTCString();

@@ -33,6 +33,8 @@ if (process.env.DRIVE_START === 'welcome') {
     for (let i = 0; i < 100 && !document.querySelector(`[data-answer] input[autocomplete="${fields[0][0]}"]`); i++) await s(100);
     let n = 0;
     for (const [ac, v] of fields) for (const el of document.querySelectorAll(`[data-answer] input[autocomplete="${ac}"]`)) { set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); n += 1; }
+    // The box beside the button that agrees to the terms and privacy policy, when this card has one.
+    for (const box of document.querySelectorAll('[data-answer] input[type="checkbox"]')) if (!box.checked) box.click();
     await s(200);
     const b = [...document.querySelectorAll('[data-answer] button')].find((x) => x.textContent.includes(button));
     if (b && !b.disabled) { b.click(); return `sent (${n} fields)`; }
@@ -56,6 +58,10 @@ for (const p of pws) { await p.click({ clickCount: 3 }); await p.type(`Camera-${
 await typeInto('input[type="tel"]', '+91 98765 43210');
 await page.$eval('input[type="date"]', (el) => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(el, '1990-05-20'); el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); });
 await page.screenshot({ path: path.join(OUT, '1-form.png') });
+// The privacy choices card sits over the bottom left on a first visit: answer it first, like a person would.
+await page.evaluate(() => [...document.querySelectorAll('[role="dialog"] button')].find((x) => /Reject all/.test(x.textContent))?.click());
+await new Promise((r) => setTimeout(r, 600));
+for (const box of await page.$$('form input[type="checkbox"]')) await box.click();
 const btn = await page.$('button[type="submit"]');
 console.log('submit disabled?', await btn.evaluate((b) => b.disabled));
 await btn.click();

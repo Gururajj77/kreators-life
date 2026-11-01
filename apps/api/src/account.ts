@@ -7,6 +7,8 @@ import { logEvent } from './ops';
  */
 export async function deleteAccount(db: D1Database, userId: string): Promise<void> {
   await db.batch([
+    // First, while the address is still on the account: the outbox keeps no mail for someone who is gone.
+    db.prepare('DELETE FROM email_outbox WHERE user_id = ? OR to_email = (SELECT email FROM users WHERE id = ?)').bind(userId, userId),
     db.prepare("UPDATE users SET display_name = 'Deleted member', email = NULL, phone = '', birth_date = '', password_hash = NULL, password_salt = NULL, handle = NULL, bio = '', avatar_url = '', socials_json = '{}', skills = '[]', categories = '[]', goals = '[]', interests = '[]', identities = '[]', intake_json = '{}', city = '', area = '', lat = NULL, lng = NULL, location = '', reminder_time = NULL, open_to_intros = 0, permissions = '[]', friend_code = NULL, leaderboard_opt_in = 0 WHERE id = ?").bind(userId),
     db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM session_evictions WHERE user_id = ?').bind(userId),
@@ -82,6 +84,19 @@ export async function deleteAccount(db: D1Database, userId: string): Promise<voi
     db.prepare('DELETE FROM community_post_follows WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM community_reply_reactions WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM event_reminders WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM terms_acceptances WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM user_consents WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM consent_records WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM community_replies WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM community_posts WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM bond_messages WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM circle_messages WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM preowned_messages WHERE sender_id = ?').bind(userId),
+    db.prepare('DELETE FROM support_tickets WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM finance_dues WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM finance_goals WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM finance_recurring WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM finance_budgets WHERE user_id = ?').bind(userId),
     db.prepare("UPDATE products SET status = 'archived' WHERE owner_id = ?").bind(userId),
   ]);
   await logEvent(db, 'user', userId, 'account.deleted');

@@ -8,6 +8,7 @@ import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useRefreshAll } from '../lib/queries';
 import { useSession } from '../lib/store';
+import { TermsBox } from '../components/TermsBox';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]';
 
@@ -80,8 +81,9 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [birthDate, setBirthDate] = useState('');
+  const [agree, setAgree] = useState(false);
   const go = useMutation({
-    mutationFn: () => (mode === 'signup' ? api.signup({ email, password, displayName: name, phone, birthDate }) : api.signin({ email, password })),
+    mutationFn: () => (mode === 'signup' ? api.signup({ email, password, displayName: name, phone, birthDate, acceptTerms: agree }) : api.signin({ email, password })),
     onSuccess: async (r) => {
       try {
         localStorage.removeItem('kreators.signedOutNote');
@@ -99,7 +101,7 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
   const mismatch = mode === 'signup' && confirm.length > 0 && confirm !== password;
   const phoneBad = mode === 'signup' && phone ? phoneProblem(phone) : null;
   const ageBad = mode === 'signup' && birthDate ? birthDateProblem(birthDate) : null;
-  const ready = mode === 'signin' ? email.length > 0 && password.length > 0 : email.length > 0 && password.length > 0 && !weak && confirm === password && phone.length > 0 && !phoneBad && birthDate.length > 0 && !ageBad;
+  const ready = mode === 'signin' ? email.length > 0 && password.length > 0 : email.length > 0 && password.length > 0 && !weak && confirm === password && phone.length > 0 && !phoneBad && birthDate.length > 0 && !ageBad && agree;
   return (
     <Screen tabs={false}>
       <div className="pt-xl">
@@ -143,6 +145,7 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
             <span className="mt-xs block text-[12px] font-bold text-ink-soft">{ageBad ?? `We ask so everyone here is ${MIN_AGE} or older. Nobody else sees it.`}</span>
           </label>
         )}
+        {mode === 'signup' && <TermsBox checked={agree} onChange={setAgree} />}
         {go.isError && (
           <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
             {go.error instanceof Error ? go.error.message : 'That did not work. Check your connection and try again.'}

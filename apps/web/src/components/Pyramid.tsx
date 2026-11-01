@@ -1,6 +1,7 @@
 import { KIND_META, KINDS, RELATIONSHIP_BY_KEY, type NodeKind, type RelationshipKey } from '@kreators/shared';
 import gsap from 'gsap';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { fillVar, ON_FILL } from '../lib/relFill';
 import { Avatar } from './Avatar';
 
 /** The six layers, top down: the foundation is the wide top, the task the point at the bottom. */
@@ -94,7 +95,8 @@ export function Pyramid({ relationship, words = {}, autoplay = false, compact = 
         {LAYERS.map((k, i) => {
           const meta = KIND_META[k];
           const width = 100 - i * 9.6; // the foundation 100% at the top, the task 52% at the point
-          const strength = 0.5 + i * 0.1;
+          // Four pale layers (dark ink on them) and two strong ones at the point (white, or the dark ink on yellow and orange): nothing sits in the middle, where neither reads.
+          const strength = [0.3, 0.4, 0.5, 0.6, 0.95, 1][i] ?? 1;
           const on = active === k || selected === k;
           const Tag = onSelect ? 'button' : 'div';
           return (
@@ -108,10 +110,10 @@ export function Pyramid({ relationship, words = {}, autoplay = false, compact = 
               style={
                 {
                   width: `${width}%`,
-                  background: `color-mix(in oklab, ${rel.color} ${Math.round(strength * 100)}%, white)`,
+                  background: `color-mix(in oklab, ${fillVar(rel)} ${Math.round(strength * 100)}%, white)`,
                   // The two strong fills at the point take the pillar's own text colour (white, or the dark ink on yellow);
                   // the paler layers above them take the dark ink, so every word reads.
-                  color: strength >= 0.9 ? rel.text : 'var(--color-ink-fixed)',
+                  color: strength >= 0.9 ? ON_FILL : 'var(--color-ink-fixed)',
                   outline: on ? '3px solid var(--color-ink)' : 'none',
                   outlineOffset: 2,
                 } as CSSProperties
@@ -146,7 +148,7 @@ export function Pyramid({ relationship, words = {}, autoplay = false, compact = 
             const on = active === k;
             return (
               <li key={k} className={`flex items-start gap-sm rounded-tile p-sm transition-colors ${on ? 'bg-card shadow-toy-soft' : ''}`}>
-                <span className="flex size-[28px] shrink-0 items-center justify-center rounded-pill text-[12px] font-extrabold" style={{ background: rel.color, color: rel.text }} aria-hidden="true">
+                <span className="flex size-[28px] shrink-0 items-center justify-center rounded-pill text-[12px] font-extrabold" style={{ background: fillVar(rel), color: ON_FILL }} aria-hidden="true">
                   {meta.rung}
                 </span>
                 <span className="min-w-0">

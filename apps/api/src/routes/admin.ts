@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { attendeeXpLocked, BADGES, type AdminCoachAsk, type AdminCoachLink, EVENT_TYPES, HONOR_BY_KEY, isPaidPlan, type AdminAttendeeCode, type AttendeeCodeApp, isRole, MAX_CREDIT_GRANT, PLAN_DAYS, LISTING_TYPES, MODULE_BY_KEY, MODULES, OPPORTUNITY_TYPES, PERMISSIONS, TOOL_CATEGORIES, type AdminRedemption, type AdminUser, type AuditLog, type FlagOverride, type ListingType, type ModuleSetting, type Permission } from '@kreators/shared';
-import { resolveAccess } from '../access';
+import { forgetAccessContext, resolveAccess } from '../access';
 import { listingsFor } from './explore';
 import { deleteAccount } from '../account';
 import { ORDER_SELECT, toOrder, type OrderRow } from './studio';
@@ -10,7 +10,7 @@ import { handleComment } from './growth';
 import { providerFor } from '../payments';
 import { toKyc, type KycRow } from './kyc';
 import { logEvent, sendEmail, track } from '../ops';
-import { notify, pageOf, paged } from '../db';
+import { notify, pageOf, paged, httpUrl } from '../db';
 import type { AdminFunnel, AdminKyc, AdminOrder, OrderEvent, OutboxEmail, WebhookEvent } from '@kreators/shared';
 import type { Context } from 'hono';
 import type { AppEnv, UserRow } from '../env';
@@ -247,6 +247,7 @@ async function setFlag(c: Context<AppEnv>) {
   const minRole = isRole(body.minRole) ? body.minRole : prev && isRole(prev.min_role) ? prev.min_role : m.minRole;
   const rollout = num(body.rollout, prev?.rollout ?? 100, 0, 100) ?? 100;
   await db.prepare('INSERT OR REPLACE INTO module_settings (key, enabled, min_role, rollout) VALUES (?, ?, ?, ?)').bind(key, enabled ? 1 : 0, minRole, rollout).run();
+  forgetAccessContext();
   const setting: ModuleSetting = { key, enabled, minRole, rollout };
   await audit(db, actorOf(c), 'flag.set', 'module', key, prev ?? '', setting);
   return c.json({ setting });
@@ -270,6 +271,7 @@ admin.post('/flags/:key/overrides', async (c) => {
     .prepare('INSERT INTO flag_overrides (id, flag_key, subject_type, subject_id, enabled, expires_at, reason, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
     .bind(id, key, subjectType, subjectId, body.enabled === false ? 0 : 1, expiresAt, str(body.reason, 200), actorOf(c), nowIso())
     .run();
+  forgetAccessContext();
   await audit(db, actorOf(c), 'flag.override', 'module', key, '', { subjectType, subjectId, enabled: body.enabled !== false, expiresAt });
   const row = await db.prepare('SELECT * FROM flag_overrides WHERE id = ?').bind(id).first<OverrideRow>();
   return c.json({ override: row ? toOverride(row) : null }, 201);
@@ -280,6 +282,7 @@ admin.delete('/flags/overrides/:id', async (c) => {
   const prev = await db.prepare('SELECT * FROM flag_overrides WHERE id = ?').bind(c.req.param('id')).first<OverrideRow>();
   if (!prev) return c.json({ error: 'not found' }, 404);
   await db.prepare('DELETE FROM flag_overrides WHERE id = ?').bind(prev.id).run();
+  forgetAccessContext();
   await audit(db, actorOf(c), 'flag.override.remove', 'module', prev.flag_key, toOverride(prev), '');
   return c.json({ ok: true });
 });
@@ -502,7 +505,7 @@ admin.post('/listings', async (c) => {
     if (Number.isNaN(start.getTime())) return c.json({ error: 'a valid start time' }, 400);
     await db
       .prepare('INSERT INTO events (id, title, description, event_type, host_user_id, venue, online_url, timezone, starts_at, ends_at, capacity, price_points, visibility, status, created_at, featured) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, title, str(body.description, 3000), oneOf(body.eventType, EVENT_TYPES, 'meetup'), author, str(body.venue, 200), str(body.onlineUrl, 500) || null, str(body.timezone, 60, 'UTC') || 'UTC', start.toISOString(), new Date(start.getTime() + (num(body.minutes, 120, 15, 7 * 24 * 60) ?? 120) * 60_000).toISOString(), num(body.capacity, null, 1, 100000), num(body.pricePoints, 0, 0) ?? 0, 'public', publish ? 'published' : 'draft', now, body.featured === true ? 1 : 0)
+      .bind(id, title, str(body.description, 3000), oneOf(body.eventType, EVENT_TYPES, 'meetup'), author, str(body.venue, 200), httpUrl(body.onlineUrl, 500) || null, str(body.timezone, 60, 'UTC') || 'UTC', start.toISOString(), new Date(start.getTime() + (num(body.minutes, 120, 15, 7 * 24 * 60) ?? 120) * 60_000).toISOString(), num(body.capacity, null, 1, 100000), num(body.pricePoints, 0, 0) ?? 0, 'public', publish ? 'published' : 'draft', now, body.featured === true ? 1 : 0)
       .run();
   } else if (type === 'program') {
     await db

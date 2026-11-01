@@ -1,0 +1,19 @@
+# Headers for every static file the Worker serves (Cloudflare Workers static assets).
+# The Worker's own pages (the site home, short links, 404s) get the same set from apps/api/src/headers.ts; a smoke check compares the two.
+# Keep the policy in step with CSP in apps/api/src/headers.ts.
+
+# --- Security: every page and file ---
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://checkout.razorpay.com https://cdn.razorpay.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' https: blob:; connect-src 'self' https://checkout.razorpay.com https://api.razorpay.com https://lumberjack.razorpay.com; frame-src https://www.youtube-nocookie.com https://player.vimeo.com https://api.razorpay.com https://checkout.razorpay.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  Strict-Transport-Security: max-age=63072000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(self)
+  Cross-Origin-Opener-Policy: same-origin-allow-popups
+
+# --- The password reset page: its link carries a one-time token, so the address is never sent on to anyone ---
+/signin/reset
+  Referrer-Policy: no-referrer
+
+# --- Caching (the web-performance work adds its lines for hashed files here) ---

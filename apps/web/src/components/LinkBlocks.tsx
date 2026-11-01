@@ -1,4 +1,5 @@
 import { youtubeId, type LinkBlock } from '@kreators/shared';
+import { EmbedGate } from './EmbedGate';
 
 /**
  * The link blocks on a public page, the way the creator stacked them: buttons, headers, text,
@@ -32,10 +33,10 @@ export function LinkBlocks({ blocks, onOpen }: { blocks: LinkBlock[]; onOpen?: (
               <figure className="m-0 overflow-hidden rounded-card bg-card shadow-toy-soft">
                 {b.url ? (
                   <a href={b.url} target="_blank" rel="noreferrer" onClick={open(b.id)} className="block">
-                    <img src={b.image} alt={b.title} loading="lazy" onError={hide} className="block max-h-[320px] w-full object-cover" />
+                    <img src={b.image} alt={b.title} loading="lazy" decoding="async" onError={hide} className="block max-h-[320px] w-full object-cover" />
                   </a>
                 ) : (
-                  <img src={b.image} alt={b.title} loading="lazy" onError={hide} className="block max-h-[320px] w-full object-cover" />
+                  <img src={b.image} alt={b.title} loading="lazy" decoding="async" onError={hide} className="block max-h-[320px] w-full object-cover" />
                 )}
                 {b.title && <figcaption className="p-sm text-center text-[14px] font-semibold">{b.title}</figcaption>}
               </figure>
@@ -43,7 +44,9 @@ export function LinkBlocks({ blocks, onOpen }: { blocks: LinkBlock[]; onOpen?: (
             {b.type === 'video' &&
               (youtubeId(b.url) ? (
                 <div className="overflow-hidden rounded-card bg-ink shadow-toy-soft">
-                  <iframe src={`https://www.youtube-nocookie.com/embed/${youtubeId(b.url)}`} title={b.title || 'Video'} className="aspect-video w-full border-0" allow="accelerometer; encrypted-media; picture-in-picture" allowFullScreen loading="lazy" />
+                  <EmbedGate url={b.url} title={b.title || 'Video'} className="rounded-none">
+                    <iframe src={`https://www.youtube-nocookie.com/embed/${youtubeId(b.url)}`} title={b.title || 'Video'} className="aspect-video w-full border-0" allow="accelerometer; encrypted-media; picture-in-picture" allowFullScreen loading="lazy" />
+                  </EmbedGate>
                   {b.title && <p className="m-0 p-sm text-center text-[14px] font-bold text-on-ink">{b.title}</p>}
                 </div>
               ) : (
@@ -60,7 +63,7 @@ export function LinkBlocks({ blocks, onOpen }: { blocks: LinkBlock[]; onOpen?: (
                   {b.items.map((it) => {
                     const card = (
                       <>
-                        {it.image ? <img src={it.image} alt={it.title} loading="lazy" onError={hide} className="block aspect-[4/5] w-full object-cover" /> : <span className="flex aspect-[4/5] w-full items-center justify-center bg-paper text-[32px]" aria-hidden="true">🎠</span>}
+                        {it.image ? <img src={it.image} alt={it.title} loading="lazy" decoding="async" onError={hide} className="block aspect-[4/5] w-full object-cover" /> : <span className="flex aspect-[4/5] w-full items-center justify-center bg-paper text-[32px]" aria-hidden="true">🎠</span>}
                         {it.title && <span className="block p-sm text-[14px] font-bold">{it.title}</span>}
                       </>
                     );

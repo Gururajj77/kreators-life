@@ -21,6 +21,7 @@ import { api } from '../lib/api';
 import { useMe, useRefreshAll } from '../lib/queries';
 import { tie } from '../lib/text';
 import { CalendarLink } from '../components/CalendarLink';
+import { PrivacyChoices } from '../components/PrivacyChoices';
 
 
 export function You() {
@@ -263,6 +264,7 @@ function YouView({ data }: { data: MeResponse }) {
       </section>
 
       <CalendarLink />
+      <PrivacyChoices />
 
       <section className="mt-lg" aria-labelledby="account-heading">
         <h2 id="account-heading" className="text-[24px]">
@@ -444,7 +446,7 @@ function YouView({ data }: { data: MeResponse }) {
           {BADGES.map((b) => {
             const on = earned.has(b.key);
             return (
-              <li key={b.key} className={`rounded-tile bg-card p-sm shadow-toy-soft ${on ? '' : 'opacity-50'}`}>
+              <li key={b.key} className={`rounded-tile bg-card p-sm shadow-toy-soft ${on ? '' : 'badge-locked'}`}>
                 <p className="m-0 text-[24px]" aria-hidden="true">
                   {b.emoji}
                 </p>
@@ -460,7 +462,7 @@ function YouView({ data }: { data: MeResponse }) {
           {HONORS.map((h) => {
             const on = awarded.has(h.key);
             return (
-              <li key={h.key} className={`rounded-tile bg-card p-sm shadow-toy-soft ${on ? '' : 'opacity-50'}`}>
+              <li key={h.key} className={`rounded-tile bg-card p-sm shadow-toy-soft ${on ? '' : 'badge-locked'}`}>
                 <p className="m-0 text-[24px]" aria-hidden="true">
                   {h.emoji}
                 </p>

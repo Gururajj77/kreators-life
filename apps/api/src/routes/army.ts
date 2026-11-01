@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { CAMPAIGN_STATUSES, type Campaign, type CampaignAssignment, type CampaignEvent, type Deliverable, type DeliverableVersion } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { audit, can, nameOf, newId, notify, nowIso, num, oneOf, orgIdsOf, orgRole, str, pageOf, paged } from '../db';
+import { audit, can, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, orgIdsOf, orgRole, str, pageOf, paged } from '../db';
 
 export const army = new Hono<AppEnv>();
 
@@ -124,7 +124,7 @@ army.patch('/campaigns/:id', async (c) => {
     await logEvent(db, prev.id, user.id, 'status', `${prev.status} to ${status}`);
     await audit(db, user.id, 'campaign.status', 'campaign', prev.id, prev.status, status);
     const members = await db.prepare("SELECT user_id FROM organization_members WHERE organization_id = ? AND status = 'active'").bind(prev.organization_id).all<{ user_id: string }>();
-    for (const m of members.results) if (m.user_id !== user.id) await notify(db, m.user_id, 'campaign', `${prev.name}: ${status.replace('_', ' ')}`, '', `/army/${prev.id}`);
+    await notifyMany(db, members.results.filter((m) => m.user_id !== user.id).map((m) => m.user_id), 'campaign', `${prev.name}: ${status.replace('_', ' ')}`, '', `/army/${prev.id}`);
   }
   const row = await db.prepare(`${SELECT} WHERE c.id = ?`).bind(prev.id).first<CampaignRow>();
   return c.json({ campaign: row ? toCampaign(row) : null });

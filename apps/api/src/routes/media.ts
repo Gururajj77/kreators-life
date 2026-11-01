@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { MAX_MEDIA_CAPTION, MAX_MEDIA_ITEMS, MAX_UPLOAD_BYTES, MEDIA_OWNERS, mediaFromLink, OWN_MEDIA_PREFIX, UPLOAD_TYPES, type MediaItem, type MediaOwner } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
 import { audit, can, newId, nowIso, orgRole, str } from '../db';
+import { cache } from '../cachecontrol';
 
 /**
  * Pictures, GIFs and videos on listings and lessons. Uploaded files are small (the browser shrinks
@@ -42,7 +43,8 @@ mediaPublic.get('/for/:type/:id', async (c) => {
   return c.json({ items: await itemsOf(c.env.DB, type, c.req.param('id')) });
 });
 
-mediaPublic.get('/:id', async (c) => {
+// A file's bytes are written once with its id and never changed, so the browser keeps it for a year (an error is never kept).
+mediaPublic.get('/:id', cache('immutable'), async (c) => {
   const row = await c.env.DB.prepare('SELECT mime, data FROM media_files WHERE id = ?').bind(c.req.param('id')).first<{ mime: string; data: string }>();
   if (!row) return c.json({ error: 'not found' }, 404);
   const bin = atob(row.data);
@@ -59,13 +61,16 @@ export async function itemsOf(db: D1Database, type: MediaOwner, id: string): Pro
 /** The media for many listings at once, by id, for the cards. Chunked: a query takes at most 100 values. */
 export async function mediaForListings(db: D1Database, items: { type: MediaOwner; id: string }[]): Promise<Map<string, MediaItem[]>> {
   const out = new Map<string, MediaItem[]>();
-  for (let i = 0; i < items.length; i += 80) {
-    const chunk = items.slice(i, i + 80);
-    if (chunk.length === 0) continue;
-    const rows = await db
-      .prepare(`SELECT owner_type, owner_id, id, kind, url, caption FROM media_items WHERE owner_id IN (${chunk.map(() => '?').join(',')}) ORDER BY position, created_at`)
-      .bind(...chunk.map((x) => x.id))
-      .all<{ owner_type: string; owner_id: string; id: string; kind: MediaItem['kind']; url: string; caption: string }>();
+  const chunks: { type: MediaOwner; id: string }[][] = [];
+  for (let i = 0; i < items.length; i += 80) chunks.push(items.slice(i, i + 80));
+  if (chunks.length === 0) return out;
+  // Every chunk in one batch (one round trip), read in order so each owner's pictures keep their position.
+  const got = await db.batch<{ owner_type: string; owner_id: string; id: string; kind: MediaItem['kind']; url: string; caption: string }>(
+    chunks.map((chunk) =>
+      db.prepare(`SELECT owner_type, owner_id, id, kind, url, caption FROM media_items WHERE owner_id IN (${chunk.map(() => '?').join(',')}) ORDER BY position, created_at`).bind(...chunk.map((x) => x.id)),
+    ),
+  );
+  for (const rows of got) {
     for (const r of rows.results) {
       const key = `${r.owner_type}:${r.owner_id}`;
       out.set(key, [...(out.get(key) ?? []), { id: r.id, kind: r.kind, url: r.url, caption: r.caption }]);

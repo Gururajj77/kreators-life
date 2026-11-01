@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { birthDateProblem, normalizePhone, passwordProblem, phoneProblem, RELATIONSHIPS, MAX_DEVICES } from '@kreators/shared';
 import { limited, sendEmail, track } from '../ops';
+import { recordAcceptance } from './legal';
 import { promoteBootstrapAdmin } from '../admins';
 import { LIMITS } from '../limits';
 import type { AppEnv, UserRow } from '../env';
@@ -75,10 +76,12 @@ auth.post('/anon', async (c) => {
 // survives a new phone. Without a session, it creates a fresh account.
 auth.post('/signup', async (c) => {
   const db = c.env.DB;
-  const body = await c.req.json<{ email?: string; password?: string; displayName?: string; phone?: string; birthDate?: string }>().catch(() => ({}) as Record<string, never>);
+  const body = await c.req.json<{ email?: string; password?: string; displayName?: string; phone?: string; birthDate?: string; acceptTerms?: boolean }>().catch(() => ({}) as Record<string, never>);
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   const password = typeof body.password === 'string' ? body.password : '';
   if (!EMAIL_RE.test(email) || email.length > EMAIL_MAX) return c.json({ error: 'that email does not look right' }, 400);
+  // The box next to the button: the terms are agreed to on purpose, never by default.
+  if (body.acceptTerms !== true) return c.json({ error: 'tick the box to agree to the terms of use and the privacy policy' }, 400);
   const weak = passwordProblem(password, email);
   if (weak) return c.json({ error: weak.charAt(0).toLowerCase() + weak.slice(1) }, 400);
   // A phone number and a date of birth, both required; nobody under MIN_AGE gets an account.
@@ -119,6 +122,7 @@ auth.post('/signup', async (c) => {
     token = await newSession(db, id);
   }
   if (user) await promoteBootstrapAdmin(db, c.env, { ...user, email });
+  if (user) await recordAcceptance(db, user.id, 'signup');
   const fresh = user ? await getUser(db, user.id) : null;
   if (user) await track(c.env.DB, user.id, 'creator_signed_up', { method: 'email' });
   return c.json({ token, user: fresh ? toUser(fresh) : null }, 201);
@@ -169,8 +173,10 @@ auth.post('/forgot', async (c) => {
       db.prepare('UPDATE password_resets SET used_at = ? WHERE user_id = ? AND used_at IS NULL').bind(now.toISOString(), user.id),
       db.prepare('INSERT INTO password_resets (id, user_id, token_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?)').bind(newId(), user.id, await sha256Hex(token), now.toISOString(), new Date(now.getTime() + RESET_MINUTES * 60_000).toISOString()),
     ]);
-    const link = `${new URL(c.req.url).origin}/signin/reset?token=${token}`;
+    // The link is built from the site's own configured address, never from the Host header of the request. (Without PUBLIC_URL, as in local development, the request's own origin is the only choice left.)
+    const link = `${(c.env.PUBLIC_URL ?? '').trim().replace(/\/+$/, '') || new URL(c.req.url).origin}/signin/reset?token=${token}`;
     await sendEmail(db, c.env, {
+      private: true,
       userId: user.id,
       to: email,
       subject: 'Reset your kreators.app password',
@@ -203,6 +209,8 @@ auth.post('/reset', async (c) => {
     db.prepare('UPDATE users SET password_hash = ?, password_salt = ? WHERE id = ?').bind(await hashPassword(password, salt), salt, user.id),
     db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id),
   ]);
+  // A short note that the password changed, so a change nobody asked for is noticed. A failed mail never stops the reset.
+  await sendEmail(db, c.env, { userId: user.id, to: user.email, subject: 'Your kreators.app password was changed', body: 'Your password was just changed and every device was signed out.\n\nIf this was you, there is nothing to do. If it was not, reset your password again from the sign-in page and write to us.' }).catch(() => undefined);
   const token = await newSession(db, user.id);
   const fresh = await getUser(db, user.id);
   return c.json({ token, user: fresh ? toUser(fresh) : null });

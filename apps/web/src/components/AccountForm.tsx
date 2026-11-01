@@ -1,6 +1,7 @@
 import { birthDateProblem, passwordProblem, phoneProblem } from '@kreators/shared';
 import { useState } from 'react';
 import { ChatActions } from './Chat';
+import { TermsBox } from './TermsBox';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 
@@ -10,11 +11,12 @@ const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-
  */
 export function AccountForm({ initialName, onSend }: { initialName: string; onSend: (value: Record<string, string>, label: string) => void }) {
   const [v, setV] = useState({ name: initialName, email: '', password: '', confirm: '', phone: '', birthDate: '' });
+  const [agree, setAgree] = useState(false);
   const weak = v.password ? passwordProblem(v.password, v.email) : null;
   const mismatch = v.confirm.length > 0 && v.confirm !== v.password;
   const badPhone = v.phone ? phoneProblem(v.phone) : null;
   const badBirth = v.birthDate ? birthDateProblem(v.birthDate) : null;
-  const ready = v.email.includes('@') && v.password.length > 0 && !weak && v.confirm === v.password && v.phone.length > 0 && !badPhone && v.birthDate.length > 0 && !badBirth;
+  const ready = v.email.includes('@') && v.password.length > 0 && !weak && v.confirm === v.password && v.phone.length > 0 && !badPhone && v.birthDate.length > 0 && !badBirth && agree;
   const set = (k: keyof typeof v) => (e: { target: { value: string } }) => setV({ ...v, [k]: e.target.value });
   const hint = (t: string | null) => (t ? <span className="mt-xs block text-[12px] font-bold text-ink-soft">{t}</span> : null);
   return (
@@ -49,7 +51,8 @@ export function AccountForm({ initialName, onSend }: { initialName: string; onSe
           {hint(badBirth ?? 'Eighteen or over. Never shown to anyone.')}
         </label>
       </div>
-      <ChatActions full next="Make my account" ready={ready} onNext={() => onSend({ name: v.name.trim(), email: v.email.trim(), password: v.password, phone: v.phone.trim(), birthDate: v.birthDate }, `Account made for ${v.email.trim()}`)} />
+      <TermsBox checked={agree} onChange={setAgree} />
+      <ChatActions full next="Make my account" ready={ready} onNext={() => onSend({ name: v.name.trim(), email: v.email.trim(), password: v.password, phone: v.phone.trim(), birthDate: v.birthDate, acceptTerms: 'yes' }, `Account made for ${v.email.trim()}`)} />
     </div>
   );
 }
@@ -100,9 +103,10 @@ export function SignInCard({ initialName, onSend }: { initialName: string; onSen
 
 export function PrivateCard({ onSend }: { onSend: (value: Record<string, string>, label: string) => void }) {
   const [v, setV] = useState({ phone: '', birthDate: '' });
+  const [agree, setAgree] = useState(false);
   const badPhone = v.phone ? phoneProblem(v.phone) : null;
   const badBirth = v.birthDate ? birthDateProblem(v.birthDate) : null;
-  const ready = v.phone.length > 0 && !badPhone && v.birthDate.length > 0 && !badBirth;
+  const ready = v.phone.length > 0 && !badPhone && v.birthDate.length > 0 && !badBirth && agree;
   const set = (k: keyof typeof v) => (e: { target: { value: string } }) => setV({ ...v, [k]: e.target.value });
   const hint = (t: string | null) => (t ? <span className="mt-xs block text-[12px] font-bold text-ink-soft">{t}</span> : null);
   return (
@@ -110,7 +114,7 @@ export function PrivateCard({ onSend }: { onSend: (value: Record<string, string>
       className="rounded-tile bg-card p-sm shadow-toy-soft"
       onSubmit={(e) => {
         e.preventDefault();
-        if (ready) onSend({ phone: v.phone.trim(), birthDate: v.birthDate }, 'Phone and birthday added');
+        if (ready) onSend({ phone: v.phone.trim(), birthDate: v.birthDate, acceptTerms: 'yes' }, 'Phone and birthday added');
       }}
     >
       <div className="grid gap-xs md:grid-cols-2">
@@ -125,6 +129,7 @@ export function PrivateCard({ onSend }: { onSend: (value: Record<string, string>
           {hint(badBirth)}
         </label>
       </div>
+      <TermsBox checked={agree} onChange={setAgree} />
       <ChatActions next="Make my account" ready={ready} submit />
     </form>
   );

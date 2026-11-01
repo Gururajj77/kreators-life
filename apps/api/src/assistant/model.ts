@@ -1,5 +1,6 @@
 import { ASSISTANT_MODEL_BY_ID, ASSISTANT_MODELS, microsFrom, priceOf, type ModelPrice } from '@kreators/shared';
 import type { Env } from '../env';
+import { fetchT, isTimeout, TIMEOUT } from '../http';
 
 /**
  * The assistant's model, provider neutral: any endpoint that speaks the OpenAI chat completions shape with tools.
@@ -96,16 +97,21 @@ export async function chat(cfg: ModelConfig, messages: Message[], tools: ToolSpe
   };
   let res: Response;
   try {
-    res = await fetch(`${cfg.baseUrl}/chat/completions`, {
+    res = await fetchT(`${cfg.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${cfg.apiKey}`, 'Content-Type': 'application/json', ...(cfg.openRouter ? { 'HTTP-Referer': 'https://kreators.app', 'X-Title': 'kreators.app' } : {}) },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(60_000),
-    });
-  } catch {
-    throw new ModelError('Could not reach the model. Try again in a moment.');
+    }, TIMEOUT.assistant);
+  } catch (e) {
+    throw new ModelError(isTimeout(e) ? 'The model took too long to answer. Try again, or pick another model.' : 'Could not reach the model. Try again in a moment.');
   }
-  const json = (await res.json().catch(() => null)) as Completion | null;
+  // The clock also covers reading the body: a model that sends headers and then stalls ends here, as a ModelError, not a 500.
+  let stalled = false;
+  const json = (await res.json().catch((e) => {
+    stalled = isTimeout(e);
+    return null;
+  })) as Completion | null;
+  if (stalled) throw new ModelError('The model took too long to answer. Try again, or pick another model.');
   const choice = json?.choices?.[0];
   const message = choice?.message;
   if (!res.ok || !message) {

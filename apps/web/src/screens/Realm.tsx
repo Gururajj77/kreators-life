@@ -29,6 +29,7 @@ import { TaskRow } from '../components/TaskRow';
 import { StartFocus, Subtasks, TaskPlanFields, planBody, planOf, planProblem, type Plan } from '../components/TaskPlan';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
+import { fillVar, ON_FILL } from '../lib/relFill';
 import { useAuthed, useMe, useNodes, useRefreshAll } from '../lib/queries';
 import { placementLine } from '../components/LifeMap';
 import { Link } from 'react-router';
@@ -96,7 +97,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
   return (
     <>
       {/* A calm wash instead of a flat block: the pillar's colour with a soft light at the top left, deepening toward the bottom. */}
-      <div className="relative overflow-hidden rounded-b-card" style={{ background: `radial-gradient(70% 55% at 12% 0%, rgba(255, 255, 255, 0.22), transparent 70%), linear-gradient(165deg, ${rel.color}, color-mix(in oklab, ${rel.color} 62%, var(--fill-shade)))`, color: rel.text }}>
+      <div className="relative overflow-hidden rounded-b-card" style={{ background: `radial-gradient(70% 55% at 12% 0%, rgba(255, 255, 255, 0.22), transparent 70%), linear-gradient(165deg, ${fillVar(rel)}, color-mix(in oklab, ${fillVar(rel)} 62%, var(--fill-shade)))`, color: ON_FILL }}>
         <HeroBlobs kind={PILLAR_FLOWER[relationship]} />
         <div className="safe-top relative mx-auto w-full max-w-[480px] px-md pb-lg pt-md md:ml-[240px] md:max-w-[1040px] md:px-lg lg:mx-auto lg:pl-[240px]">
           {/* On a phone the brand and the corner buttons float over the top 56px, so the way back starts below them. */}
@@ -156,7 +157,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
               <p className="m-0 text-[16px] font-semibold">
                 {rel.character} built a pyramid from your answers: the foundation you picked, then a guiding principle, a value goal, a goal outcome, a project and three tasks. One tap and they show up on Daily.
               </p>
-              <Button variant="color" color={rel.color} deep={`var(--deep-${rel.key})`} full className="mt-md" style={{ color: rel.text }} onClick={() => acceptQuest.mutate()} disabled={acceptQuest.isPending}>
+              <Button variant="color" color={fillVar(rel)} deep={`var(--deep-${rel.key})`} full className="mt-md" style={{ color: ON_FILL }} onClick={() => acceptQuest.mutate()} disabled={acceptQuest.isPending}>
                 Set up {rel.character}&rsquo;s pyramid
               </Button>
               <Button variant="ghost" full className="mt-xs" onClick={() => setAdding('pillar')}>
@@ -230,7 +231,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                         <summary className="flex items-center gap-sm p-sm">
                           <span
                             className="flex size-[32px] shrink-0 items-center justify-center rounded-pill font-display text-[14px] font-extrabold"
-                            style={locked ? { background: 'var(--color-line)', color: 'var(--color-ink-soft)' } : { background: rel.color, color: rel.text }}
+                            style={locked ? { background: 'var(--color-line)', color: 'var(--color-ink-soft)' } : { background: fillVar(rel), color: ON_FILL }}
                             aria-hidden="true"
                           >
                             {meta.rung}

@@ -212,7 +212,7 @@ home.get('/brief', async (c) => {
   const now = nowIso();
   const soon = new Date(Date.now() + 48 * 3600_000).toISOString();
   const lastWeek = periodFor('week', shiftDate(periodFor('week', date).start, -1));
-  const [{ access }, counts, wb, next, contract, firsts] = await Promise.all([
+  const [{ access }, counts, wb, next, contract, firsts, dSet, dProfile] = await Promise.all([
     resolveAccess(db, user),
     db
       .prepare(
@@ -252,6 +252,9 @@ home.get('/brief', async (c) => {
       )
       .bind(user.id)
       .first<{ tasks: number; acts: number; sessions: number; people: number }>(),
+    // What Discover taught the app: read with the rest, since neither waits on the others.
+    settingsOf(db, user.id),
+    latestProfile(db, user.id),
   ]);
   const apps = Object.entries(access)
     .filter(([, a]) => a.on)
@@ -260,8 +263,6 @@ home.get('/brief', async (c) => {
   const when = next ? new Date(next.starts_at) : null;
   const hoursAway = when ? Math.round((when.getTime() - Date.now()) / 3600_000) : 0;
   // What Discover taught the app: only the person's own latest result, and only while their next-steps switch is on.
-  const dSet = await settingsOf(db, user.id);
-  const dProfile = await latestProfile(db, user.id);
   const base = briefFor({
     discover: { taken: Boolean(dProfile), profile: dSet.steps ? dProfile : null, extras: dSet.steps ? await latestExtras(db, user.id, dSet.mind) : null },
     hour,

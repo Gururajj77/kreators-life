@@ -12,6 +12,7 @@ import { LifeMapPanel } from '../components/LifeMapPanel';
 import { NotToDoBlock } from '../components/NotToDoList';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
+import { fillVar, ON_FILL } from '../lib/relFill';
 import { useAuthed, useMe } from '../lib/queries';
 
 /** One pillar card. With a strategy session behind it, the card carries the pillar's map line: floor to core, the Courage mark, and a focus tag. */
@@ -35,7 +36,7 @@ function Floor({ r, state, delay, placement, focus }: { r: Relationship; state: 
       <Link
         to={asked ? `/realm/${r.key}` : `/vibe-check?floor=${r.key}`}
         className="toy block rounded-tile p-sm"
-        style={{ background: `linear-gradient(135deg, ${r.color}, color-mix(in oklab, ${r.color} 78%, var(--fill-shade)))`, color: r.text, '--toy-color': `var(--deep-${r.key})` } as CSSProperties}
+        style={{ background: `linear-gradient(135deg, ${fillVar(r)}, color-mix(in oklab, ${fillVar(r)} 78%, var(--fill-shade)))`, color: ON_FILL, '--toy-color': `var(--deep-${r.key})` } as CSSProperties}
       >
         <span className="flex items-center gap-sm">
           <Avatar relationship={r.key} size={52} mood={built ? 'happy' : 'sleepy'} stage={state?.stage ?? 1} still decorative className="avatar-hop" />
@@ -46,7 +47,7 @@ function Floor({ r, state, delay, placement, focus }: { r: Relationship; state: 
             </span>
             <span className="block text-[14px] font-bold">{line}</span>
           </span>
-          <Ring value={lp.pct} size={48} stroke={5} color={r.text} track="rgba(0,0,0,0.18)" label={`${r.name} level ${lp.level}`}>
+          <Ring value={lp.pct} size={48} stroke={5} color={ON_FILL} track="rgba(0,0,0,0.18)" label={`${r.name} level ${lp.level}`}>
             <span className="font-display text-[14px] font-extrabold">{lp.level}</span>
           </Ring>
         </span>

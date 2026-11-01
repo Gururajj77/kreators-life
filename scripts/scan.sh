@@ -42,6 +42,14 @@ echo "links: nothing injects raw HTML (words people write never become links; se
 out=$(grep -rn "dangerouslySetInnerHTML" screens site components App.tsx || true)
 if [ -n "$out" ]; then echo "$out"; hits=$((hits + $(echo "$out" | wc -l | tr -d ' '))); fi
 
+echo "accessibility: every <img> has an alt (a picture that means something says what it is; a decorative one has alt=\"\")"
+out=$(grep -rn --include='*.tsx' "<img\b" screens site components App.tsx | while IFS=: read -r f n rest; do
+  # The tag may run over several lines: read from its first line to the one that closes it.
+  tag=$(awk -v s="$n" 'NR>=s { print; if ($0 ~ /\/>/ || $0 ~ /<\/img>/) exit }' "$f")
+  if ! printf '%s' "$tag" | grep -qE "[[:space:]]alt="; then echo "$f:$n: <img> without alt"; fi
+done || true)
+if [ -n "$out" ]; then echo "$out"; hits=$((hits + $(echo "$out" | wc -l | tr -d ' '))); fi
+
 echo "wording: the old names that must not come back"
 out=$(grep -rnwiE "Kreators Life" screens site components ../index.html ../../api/src 2>/dev/null | grep -v "kreators-life" || true)
 if [ -n "$out" ]; then echo "$out"; hits=$((hits + $(echo "$out" | wc -l | tr -d ' '))); fi

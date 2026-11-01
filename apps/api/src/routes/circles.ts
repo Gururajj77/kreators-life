@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { ALIAS_WORDS, attendeeXpLocked, CIRCLE_MINUTES, codeWindow, isCircleStatus, matchCircles, nextWeek, RELATIONSHIPS, RUN_CODE_WINDOW, type CircleEvent, type CircleGroup, type CircleMember, type CircleMessage, type CircleStatus, type MatchCandidate, type RelationshipKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { audit, can, newId, notify, nowIso, num, pageOf, paged, parseList, randomCode, str } from '../db';
+import { audit, can, newId, notify, notifyMany, nowIso, num, pageOf, paged, parseList, randomCode, str } from '../db';
 import { claimEventCode, codeOf, guestView, hostView, setEventCode } from '../attendee';
 
 /**
@@ -206,9 +206,9 @@ export async function matchEvent(db: D1Database, eventId: string): Promise<{ gro
       stmts.push(db.prepare('INSERT INTO circle_members (group_id, user_id, alias, character, revealed, status) VALUES (?, ?, ?, ?, 0, ?)').bind(gid, uid, alias, character.key, statusOf.get(uid) ?? ''));
     });
     await db.batch(stmts);
-    for (const uid of ids) await notify(db, uid, 'circle', `Your table for ${ev.title} is set`, `You are at a table of ${ids.length}. The chat opens a day before.`, `/circles/${gid}`);
+    await notifyMany(db, ids, 'circle', `Your table for ${ev.title} is set`, `You are at a table of ${ids.length}. The chat opens a day before.`, `/circles/${gid}`);
   }
-  for (const uid of result.unmatched) await notify(db, uid, 'circle', `No table this time for ${ev.title}`, 'Too few people nearby signed up. You are first in line next time.', '/circles');
+  await notifyMany(db, result.unmatched, 'circle', `No table this time for ${ev.title}`, 'Too few people nearby signed up. You are first in line next time.', '/circles');
   await db.prepare("UPDATE circle_events SET status = 'matched' WHERE id = ?").bind(ev.id).run();
   return { groups: result.groups.length, unmatched: result.unmatched.length };
 }

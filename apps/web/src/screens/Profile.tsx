@@ -147,7 +147,7 @@ function ProfileView({ user }: { user: User }) {
         <label className="block">
           <span className="block text-[14px] font-bold">Photo link</span>
           <div className="mt-xs flex items-center gap-sm">
-            {avatarUrl && <img src={avatarUrl} alt="" width={64} height={64} className="size-[64px] shrink-0 rounded-pill object-cover" />}
+            {avatarUrl && <img src={avatarUrl} alt="Your profile picture, as it will show" width={64} height={64} decoding="async" className="size-[64px] shrink-0 rounded-pill object-cover" />}
             <input type="url" value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} maxLength={500} placeholder="https://… a square image" className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
           </div>
           <span className="mt-xs block text-[12px] font-bold text-ink-soft">Shown on your page in place of the first letter of your name.</span>

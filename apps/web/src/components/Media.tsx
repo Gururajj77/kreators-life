@@ -1,4 +1,5 @@
 import { videoEmbed, type MediaItem } from '@kreators/shared';
+import { EmbedGate } from './EmbedGate';
 
 /** One picture, GIF or video, sized to its column. Videos play in their own player; a picture that fails to load drops out. */
 export function MediaTile({ item, className = '' }: { item: MediaItem; className?: string }) {
@@ -8,15 +9,17 @@ export function MediaTile({ item, className = '' }: { item: MediaItem; className
     return (
       <figure className={`m-0 ${className}`}>
         {frame.type === 'frame' ? (
-          <iframe
-            src={frame.src}
-            title={item.caption || 'Video'}
-            loading="lazy"
-            allow="encrypted-media; picture-in-picture; fullscreen"
-            allowFullScreen
-            referrerPolicy="strict-origin-when-cross-origin"
-            className="aspect-video w-full rounded-tile border-0 bg-paper"
-          />
+          <EmbedGate url={frame.src} title={item.caption || 'Video'}>
+            <iframe
+              src={frame.src}
+              title={item.caption || 'Video'}
+              loading="lazy"
+              allow="encrypted-media; picture-in-picture; fullscreen"
+              allowFullScreen
+              referrerPolicy="strict-origin-when-cross-origin"
+              className="aspect-video w-full rounded-tile border-0 bg-paper"
+            />
+          </EmbedGate>
         ) : (
           <video src={frame.src} controls preload="metadata" playsInline className="aspect-video w-full rounded-tile bg-paper" aria-label={item.caption || 'Video'} />
         )}
@@ -26,7 +29,7 @@ export function MediaTile({ item, className = '' }: { item: MediaItem; className
   }
   return (
     <figure className={`m-0 ${className}`}>
-      <img src={item.url} alt={item.caption} loading="lazy" referrerPolicy="no-referrer" className="w-full rounded-tile bg-paper object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
+      <img src={item.url} alt={item.caption} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="w-full rounded-tile bg-paper object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
       {item.caption && <figcaption className="mt-xs text-[12px] font-bold text-ink-soft">{item.caption}</figcaption>}
     </figure>
   );
@@ -51,10 +54,10 @@ export function MediaGallery({ items }: { items: MediaItem[] }) {
 }
 
 /** The cover of a card: the first picture or GIF, or a video's play mark. Nothing when there is none. */
-export function MediaCover({ items }: { items?: MediaItem[] }) {
+export function MediaCover({ items, title }: { items?: MediaItem[]; title?: string }) {
   const pic = items?.find((m) => m.kind !== 'video');
   const video = items?.find((m) => m.kind === 'video');
-  if (pic) return <img src={pic.url} alt="" loading="lazy" referrerPolicy="no-referrer" className="mb-sm h-[160px] w-full rounded-tile bg-paper object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />;
-  if (video) return <div className="mb-sm flex h-[160px] w-full items-center justify-center rounded-tile bg-paper text-[32px]" aria-label="Has a video" role="img">▶</div>;
+  if (pic) return <img src={pic.url} alt={pic.caption || title || ''} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="mb-sm h-[160px] w-full rounded-tile bg-paper object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />;
+  if (video) return <div className="mb-sm flex h-[160px] w-full items-center justify-center rounded-tile bg-paper text-[32px]" aria-label={title ? `${title}: has a video` : 'Has a video'} role="img">▶</div>;
   return null;
 }

@@ -7,6 +7,7 @@ import { ListingSheet } from '../components/ListingSheet';
 import { BackLink } from '../components/PageHeader';
 import { money } from '../components/PeriodPanel';
 import { Screen } from '../components/Screen';
+import { SkeletonList } from '../components/Skeleton';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useParamState } from '../lib/useParamState';
@@ -127,6 +128,8 @@ export function Store() {
         </p>
       )}
 
+      {q.isPending && <SkeletonList className="mt-lg" count={3} lines={3} label="Loading the store" />}
+
       {d && d.featured.length > 0 && (
         <section className="mt-lg" aria-labelledby="featured-heading">
           <h2 id="featured-heading" className="text-[24px]">
@@ -245,7 +248,7 @@ function Price({ cents, original, currency }: { cents: number; original?: number
 function ItemBody({ item }: { item: StoreItem }) {
   return (
     <div className="flex flex-col gap-xs">
-      {item.imageUrl && <img src={item.imageUrl} alt="" loading="lazy" className="aspect-video w-full rounded-tile bg-paper object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />}
+      {item.imageUrl && <img src={item.imageUrl} alt={item.title} loading="lazy" decoding="async" className="aspect-video w-full rounded-tile bg-paper object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />}
       <div className="flex flex-wrap items-center gap-xs">
         {isFeatured(item.featuredUntil) && <FeaturedTag />}
         <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">{item.category}</span>
@@ -301,7 +304,7 @@ function ListingButton({ l, onOpen }: { l: PreownedListing; onOpen: (id: string)
   return (
     <button type="button" onClick={() => onOpen(l.id)} className={`toy w-full text-left text-ink ${cardClass(isFeatured(l.featuredUntil) && l.status === 'live')}`}>
       <span className="flex gap-sm">
-        {l.images[0] && <img src={l.images[0]} alt="" loading="lazy" className="size-[80px] shrink-0 rounded-tile bg-paper object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />}
+        {l.images[0] && <img src={l.images[0]} alt={l.title} loading="lazy" decoding="async" className="size-[80px] shrink-0 rounded-tile bg-paper object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />}
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-xs">
             {isFeatured(l.featuredUntil) && l.status === 'live' && <FeaturedTag />}

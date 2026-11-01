@@ -29,3 +29,26 @@ ASSISTANT_PRICE_OUT=
 # For a model that is not on the free list: zero-retention providers only, on by default because the assistant can read
 # the journal when asked. "off" drops that ask for a model with no zero-retention host, and the journal and tracker reads go with it.
 ASSISTANT_ZDR=
+# The site's own address, used for links in mail (the password reset link included; it is never built from the request).
+# Locally http://localhost:5173. In production set it as a Worker variable: https://kreators.app
+PUBLIC_URL=
+# Salt for hashing click addresses and anonymous aliases. A long random value in production (a secret).
+CLICK_SALT=
+# Razorpay. Without them checkout stays in test mode.
+RAZORPAY_KEY_ID=
+RAZORPAY_KEY_SECRET=
+RAZORPAY_WEBHOOK_SECRET=
+# Meta (Auto-DM). Without them the webhook is off.
+META_APP_SECRET=
+META_VERIFY_TOKEN=
+META_ACCESS_TOKEN=
+# The business shown on the contact page and in mail footers (Worker variables).
+BUSINESS_NAME=
+BUSINESS_ADDRESS=
+BUSINESS_EMAIL=
+BUSINESS_REG=
+BUSINESS_VAT=
+DMCA_AGENT=
+DMCA_ADDRESS=
+DMCA_EMAIL=
+DMCA_REGISTERED=

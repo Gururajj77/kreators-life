@@ -5,8 +5,9 @@ import { runRecurring } from './routes/finance';
 import { matchDueCircles, rollWeeklyCircles } from './routes/circles';
 import { fetchMetrics } from './social';
 import { closeSeason, sendEventReminders } from './engage';
-import { nextOccurrence, nextOnOrAfter, parseRepeat, pastWaterNote, PERIOD_META, reviewPeriodFor, zonedToUtc, type PeriodKind } from '@kreators/shared';
+import { RETENTION_DAYS, nextOccurrence, nextOnOrAfter, parseRepeat, pastWaterNote, PERIOD_META, reviewPeriodFor, zonedToUtc, type PeriodKind } from '@kreators/shared';
 import { flaggedFor } from './routes/reviews';
+import { securityAlerts } from './alerts';
 
 /** The cron runs every fifteen minutes, so 23:45 is the last tick of a day: a reminder set for 23:46 to 23:59 goes out then and not at 00:00, when its day has already turned over. */
 const LAST_TICK = 23 * 60 + 45;
@@ -25,6 +26,8 @@ export async function runScheduled(env: Env, cron: string = ''): Promise<{ seque
   }
   const reminders = (await sendReminders(db)) + (await sendWaterAndCustom(db, { water: cron !== MAIN_CRON, custom: true })) + (await sendTaskReminders(db)) + (await sendReviewReminders(db));
   await clearPastWaterNotes(db);
+  await tidyOld(db);
+  await securityAlerts(db).catch(() => 0);
   const events = await sendEventReminders(db);
   const season = await closeSeason(db);
   const sequences = await runSequences(db);
@@ -58,9 +61,25 @@ export async function runScheduled(env: Env, cron: string = ''): Promise<{ seque
   return { sequences, recurring, circles, weekly, content, submissions, reminders, events, season };
 }
 
+/**
+ * The daily tidy-up, from the retention list in shared (`RETENTION`, `RETENTION_DAYS`): old outbox mail, spent password links, the raw text of
+ * old payment messages, old tracked-link clicks, and the records of data requests and copyright notices once their time is up.
+ */
+export async function tidyOld(db: D1Database): Promise<void> {
+  const ago = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+  await db.batch([
+    db.prepare('DELETE FROM email_outbox WHERE created_at < ?').bind(ago(RETENTION_DAYS.outbox)),
+    db.prepare('DELETE FROM password_resets WHERE (used_at IS NOT NULL AND used_at < ?) OR expires_at < ?').bind(ago(RETENTION_DAYS.resets), ago(RETENTION_DAYS.resets)),
+    db.prepare("UPDATE webhook_events SET payload = '' WHERE received_at < ? AND payload != ''").bind(ago(RETENTION_DAYS.webhooks)),
+    db.prepare('DELETE FROM link_clicks WHERE created_at < ?').bind(ago(RETENTION_DAYS.clicks)),
+    db.prepare('DELETE FROM data_requests WHERE requested_at < ?').bind(ago(RETENTION_DAYS.requests)),
+    db.prepare("DELETE FROM copyright_notices WHERE status != 'new' AND COALESCE(resolved_at, created_at) < ?").bind(ago(RETENTION_DAYS.notices)),
+  ]);
+}
+
 /** Water reminders from a day that is over are deleted from the inbox, read or not: each person's own day decides, so nobody's note goes early or lingers. */
 export async function clearPastWaterNotes(db: D1Database): Promise<number> {
-  const rows = await db.prepare("SELECT n.id, u.timezone FROM notifications n JOIN users u ON u.id = n.user_id WHERE n.id LIKE 'water-%'").all<{ id: string; timezone: string | null }>();
+  const rows = await db.prepare("SELECT n.id, u.timezone FROM notifications n JOIN users u ON u.id = n.user_id WHERE n.id >= 'water-' AND n.id < 'water.'").all<{ id: string; timezone: string | null }>();
   const days = new Map<string, string | null>();
   const dayIn = (zone: string) => {
     if (!days.has(zone)) {

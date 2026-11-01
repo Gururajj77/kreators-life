@@ -1,5 +1,5 @@
 import { RELATIONSHIPS } from '@kreators/shared';
-import { lazy, Suspense, useEffect, type ReactNode } from 'react';
+import { Suspense, useEffect, type ReactNode } from 'react';
 import { createBrowserRouter, Navigate, Outlet, RouterProvider, ScrollRestoration, useLocation } from 'react-router';
 import { Avatar } from './components/Avatar';
 import { Button } from './components/Button';
@@ -9,92 +9,105 @@ import { HowTo } from './components/HowTo';
 import { TabBar } from './components/TabBar';
 import { Assistant } from './components/Assistant';
 import { ReminderBubble } from './components/Reminders';
+import { ConsentPopup } from './components/ConsentPopup';
+import { RouteFallback } from './components/RouteFallback';
+import { lazyNamed } from './lib/lazy';
 import { useMe } from './lib/queries';
 import { useApplyTheme } from './lib/theme';
 import { useFocus, useSession } from './lib/store';
 import { noteVisit } from './lib/context';
-import { Apps } from './screens/Apps';
-import { Army, Campaign } from './screens/Army';
 import { Auth, Forgot, ResetPassword } from './screens/Auth';
-import { Automations } from './screens/Automations';
-import { Bond, BondChatScreen } from './screens/Bond';
-import { CircleGroup, Circles } from './screens/Circles';
-import { Club } from './screens/Club';
-import { Cohort } from './screens/Cohort';
-import { Community } from './screens/Community';
-import { Companion } from './screens/Companion';
-import { Content } from './screens/Content';
-import { ContentResults } from './screens/ContentResults';
-import { Brand } from './screens/Brand';
-import { Customers } from './screens/Customers';
-import { Finance } from './screens/Finance';
-import { DmInbox } from './screens/DmInbox';
-import { EventPage, Party } from './screens/Party';
-import { Help } from './screens/Help';
 import { Home as Dashboard } from './screens/Home';
-import { Inbox } from './screens/Inbox';
-import { Journal } from './screens/Journal';
-import { Leaderboard } from './screens/Leaderboard';
-import { Library } from './screens/Library';
-import { Life } from './screens/Life';
-import { Reviews } from './screens/Reviews';
-import { Agency } from './screens/Agency';
-import { AgencyClient } from './screens/AgencyClient';
-import { AgencyInvoice } from './screens/AgencyInvoice';
-import { AgencyContract } from './screens/AgencyContract';
-import { ClientPortal } from './site/ClientPortal';
-import { ContractPublic } from './site/ContractPublic';
-import { Run, RunClubPage } from './screens/Run';
-import { Store } from './screens/Store';
-import { Mindful } from './screens/Mindful';
-import { Mood } from './screens/Mood';
-import { Opportunity, Work } from './screens/Work';
-import { ProductPage } from './screens/ProductPage';
-import { Profile } from './screens/Profile';
-import { Proposals } from './screens/Proposals';
-import { Public } from './screens/Public';
-import { Realm } from './screens/Realm';
-import { Resources } from './screens/Resources';
-import { Rewards } from './screens/Rewards';
-import { Cards } from './screens/Cards';
-import { Discover } from './screens/Discover';
-import { CardTable } from './screens/CardTable';
-import { Plans } from './screens/Plans';
-import { Coaching } from './screens/Coaching';
-import { CoachStudent } from './screens/CoachStudent';
-import { School } from './screens/School';
-import { Search } from './screens/Search';
-import { Sessions } from './screens/Sessions';
-import { Sleep } from './screens/Sleep';
-import { Stress } from './screens/Stress';
-import { Studio } from './screens/Studio';
-import { StudioAudience } from './screens/StudioAudience';
-import { StudioProduct } from './screens/StudioProduct';
 import { Today } from './screens/Today';
-import { Tools } from './screens/Tools';
-import { Tower } from './screens/Tower';
-import { VibeCheck } from './screens/VibeCheck';
-import { SessionChat } from './screens/SessionChat';
 import { SetupChat } from './screens/SetupChat';
 import { Welcome } from './screens/Welcome';
-import { Wellbeing } from './screens/Wellbeing';
-import { Reward, Win } from './screens/Win';
-import { You } from './screens/You';
-import { CertificatePage } from './site/CertificatePage';
-import { InvoicePage } from './site/InvoicePage';
-import { Policy } from './site/Policy';
-import { Explore } from './site/Explore';
-import { Feature } from './site/Feature';
 import { Home } from './site/Home';
-import { Features } from './site/Features';
 import { SevenRP } from './site/SevenRP';
 
-// The team's screens are big and few people open them, so they load only when asked for. This keeps the first download, and the offline copy, small.
-const Admin = lazy(() => import('./screens/Admin').then((m) => ({ default: m.Admin })));
-const Manage = lazy(() => import('./screens/Manage').then((m) => ({ default: m.Manage })));
-const Observability = lazy(() => import('./screens/Observability').then((m) => ({ default: m.Observability })));
-const Logs = lazy(() => import('./screens/Logs').then((m) => ({ default: m.Logs })));
-const later = (el: ReactNode) => <Suspense fallback={<Loading />}>{el}</Suspense>;
+const Admin = lazyNamed(() => import('./screens/Admin'), 'Admin');
+const Manage = lazyNamed(() => import('./screens/Manage'), 'Manage');
+const Observability = lazyNamed(() => import('./screens/Observability'), 'Observability');
+const Logs = lazyNamed(() => import('./screens/Logs'), 'Logs');
+const Unsubscribe = lazyNamed(() => import('./screens/Unsubscribe'), 'Unsubscribe');
+// Every other screen downloads when it is first opened (lib/lazy.ts), so the first download, and the first paint, stay small. The offline copy still has every file.
+const Apps = lazyNamed(() => import('./screens/Apps'), 'Apps');
+const Army = lazyNamed(() => import('./screens/Army'), 'Army');
+const Campaign = lazyNamed(() => import('./screens/Army'), 'Campaign');
+const Automations = lazyNamed(() => import('./screens/Automations'), 'Automations');
+const Bond = lazyNamed(() => import('./screens/Bond'), 'Bond');
+const BondChatScreen = lazyNamed(() => import('./screens/Bond'), 'BondChatScreen');
+const CircleGroup = lazyNamed(() => import('./screens/Circles'), 'CircleGroup');
+const Circles = lazyNamed(() => import('./screens/Circles'), 'Circles');
+const Club = lazyNamed(() => import('./screens/Club'), 'Club');
+const Cohort = lazyNamed(() => import('./screens/Cohort'), 'Cohort');
+const Community = lazyNamed(() => import('./screens/Community'), 'Community');
+const Companion = lazyNamed(() => import('./screens/Companion'), 'Companion');
+const Content = lazyNamed(() => import('./screens/Content'), 'Content');
+const ContentResults = lazyNamed(() => import('./screens/ContentResults'), 'ContentResults');
+const Brand = lazyNamed(() => import('./screens/Brand'), 'Brand');
+const Customers = lazyNamed(() => import('./screens/Customers'), 'Customers');
+const Finance = lazyNamed(() => import('./screens/Finance'), 'Finance');
+const DmInbox = lazyNamed(() => import('./screens/DmInbox'), 'DmInbox');
+const EventPage = lazyNamed(() => import('./screens/Party'), 'EventPage');
+const Party = lazyNamed(() => import('./screens/Party'), 'Party');
+const Help = lazyNamed(() => import('./screens/Help'), 'Help');
+const Inbox = lazyNamed(() => import('./screens/Inbox'), 'Inbox');
+const Journal = lazyNamed(() => import('./screens/Journal'), 'Journal');
+const Leaderboard = lazyNamed(() => import('./screens/Leaderboard'), 'Leaderboard');
+const Library = lazyNamed(() => import('./screens/Library'), 'Library');
+const Life = lazyNamed(() => import('./screens/Life'), 'Life');
+const Reviews = lazyNamed(() => import('./screens/Reviews'), 'Reviews');
+const Agency = lazyNamed(() => import('./screens/Agency'), 'Agency');
+const AgencyClient = lazyNamed(() => import('./screens/AgencyClient'), 'AgencyClient');
+const AgencyInvoice = lazyNamed(() => import('./screens/AgencyInvoice'), 'AgencyInvoice');
+const AgencyContract = lazyNamed(() => import('./screens/AgencyContract'), 'AgencyContract');
+const ClientPortal = lazyNamed(() => import('./site/ClientPortal'), 'ClientPortal');
+const ContractPublic = lazyNamed(() => import('./site/ContractPublic'), 'ContractPublic');
+const Run = lazyNamed(() => import('./screens/Run'), 'Run');
+const RunClubPage = lazyNamed(() => import('./screens/Run'), 'RunClubPage');
+const Store = lazyNamed(() => import('./screens/Store'), 'Store');
+const Mindful = lazyNamed(() => import('./screens/Mindful'), 'Mindful');
+const Mood = lazyNamed(() => import('./screens/Mood'), 'Mood');
+const Opportunity = lazyNamed(() => import('./screens/Work'), 'Opportunity');
+const Work = lazyNamed(() => import('./screens/Work'), 'Work');
+const ProductPage = lazyNamed(() => import('./screens/ProductPage'), 'ProductPage');
+const Profile = lazyNamed(() => import('./screens/Profile'), 'Profile');
+const Proposals = lazyNamed(() => import('./screens/Proposals'), 'Proposals');
+const Public = lazyNamed(() => import('./screens/Public'), 'Public');
+const Realm = lazyNamed(() => import('./screens/Realm'), 'Realm');
+const Resources = lazyNamed(() => import('./screens/Resources'), 'Resources');
+const Rewards = lazyNamed(() => import('./screens/Rewards'), 'Rewards');
+const Cards = lazyNamed(() => import('./screens/Cards'), 'Cards');
+const Discover = lazyNamed(() => import('./screens/Discover'), 'Discover');
+const CardTable = lazyNamed(() => import('./screens/CardTable'), 'CardTable');
+const Plans = lazyNamed(() => import('./screens/Plans'), 'Plans');
+const Coaching = lazyNamed(() => import('./screens/Coaching'), 'Coaching');
+const CoachStudent = lazyNamed(() => import('./screens/CoachStudent'), 'CoachStudent');
+const School = lazyNamed(() => import('./screens/School'), 'School');
+const Search = lazyNamed(() => import('./screens/Search'), 'Search');
+const Sessions = lazyNamed(() => import('./screens/Sessions'), 'Sessions');
+const Sleep = lazyNamed(() => import('./screens/Sleep'), 'Sleep');
+const Stress = lazyNamed(() => import('./screens/Stress'), 'Stress');
+const Studio = lazyNamed(() => import('./screens/Studio'), 'Studio');
+const StudioAudience = lazyNamed(() => import('./screens/StudioAudience'), 'StudioAudience');
+const StudioProduct = lazyNamed(() => import('./screens/StudioProduct'), 'StudioProduct');
+const Tools = lazyNamed(() => import('./screens/Tools'), 'Tools');
+const Tower = lazyNamed(() => import('./screens/Tower'), 'Tower');
+const VibeCheck = lazyNamed(() => import('./screens/VibeCheck'), 'VibeCheck');
+const SessionChat = lazyNamed(() => import('./screens/SessionChat'), 'SessionChat');
+const Wellbeing = lazyNamed(() => import('./screens/Wellbeing'), 'Wellbeing');
+const Reward = lazyNamed(() => import('./screens/Win'), 'Reward');
+const Win = lazyNamed(() => import('./screens/Win'), 'Win');
+const You = lazyNamed(() => import('./screens/You'), 'You');
+const CertificatePage = lazyNamed(() => import('./site/CertificatePage'), 'CertificatePage');
+const InvoicePage = lazyNamed(() => import('./site/InvoicePage'), 'InvoicePage');
+const Policy = lazyNamed(() => import('./site/Policy'), 'Policy');
+const Copyright = lazyNamed(() => import('./site/Copyright'), 'Copyright');
+const Licences = lazyNamed(() => import('./site/Licences'), 'Licences');
+const Subprocessors = lazyNamed(() => import('./site/Subprocessors'), 'Subprocessors');
+const Explore = lazyNamed(() => import('./site/Explore'), 'Explore');
+const Feature = lazyNamed(() => import('./site/Feature'), 'Feature');
+const Features = lazyNamed(() => import('./site/Features'), 'Features');
 
 function Loading() {
   return (
@@ -106,6 +119,18 @@ function Loading() {
       </div>
       <p className="m-0 text-[14px] font-bold text-ink-soft">Setting things up</p>
     </div>
+  );
+}
+
+/**
+ * Where a screen that is still downloading shows its skeleton. Each layout (the root, the standalone pages and the
+ * app shell) has one, so the tab bar and the theme switch stay put while the page under them arrives.
+ */
+function Page({ tabs }: { tabs: boolean }) {
+  return (
+    <Suspense fallback={<RouteFallback tabs={tabs} />}>
+      <Outlet />
+    </Suspense>
   );
 }
 
@@ -145,7 +170,7 @@ function Shell() {
   if (!me.data.user.onboardedAt) return <Navigate to="/onboarding" replace />;
   return (
     <>
-      <Outlet />
+      <Page tabs />
       {!focus && (
         <div className="contents no-print">
           <TabBar />
@@ -171,7 +196,8 @@ function Root() {
   return (
     <>
       <ScrollRestoration />
-      <Outlet />
+      <Page tabs={false} />
+      <ConsentPopup />
     </>
   );
 }
@@ -181,7 +207,7 @@ function Standalone() {
   return (
     <>
       <ThemeToggle floating />
-      <Outlet />
+      <Page tabs={false} />
     </>
   );
 }
@@ -200,11 +226,15 @@ const router = createBrowserRouter([
   { path: '/i/:token', element: <InvoicePage /> },
   { path: '/a/:token', element: <ClientPortal /> },
   { path: '/k/:token', element: <ContractPublic /> },
+  { path: '/unsubscribe/:token', element: <Unsubscribe /> },
   { path: '/terms', element: <Policy kind="terms" /> },
   { path: '/privacy', element: <Policy kind="privacy" /> },
   { path: '/refunds', element: <Policy kind="refunds" /> },
   { path: '/contact', element: <Policy kind="contact" /> },
   { path: '/pricing', element: <Policy kind="pricing" /> },
+  { path: '/subprocessors', element: <Subprocessors /> },
+  { path: '/copyright', element: <Copyright /> },
+  { path: '/licences', element: <Licences /> },
   {
     element: <Standalone />,
     children: [
@@ -216,7 +246,7 @@ const router = createBrowserRouter([
       { path: '/u/:handle', element: <Public /> },
       { path: '/people/:id', element: <Public /> },
       { path: '/p/:id', element: <ProductPage /> },
-      { path: '/admin', element: later(<Admin />) },
+      { path: '/admin', element: <Admin /> },
       {
         element: <RequireSession />,
         children: [{ path: '/vibe-check', element: <VibeCheck /> }],
@@ -313,10 +343,10 @@ const router = createBrowserRouter([
       { path: '/shop/dm', element: gated('shop', <DmInbox />) },
       { path: '/finance', element: gated('finance', <Finance />) },
       // internal: tracking for the team, shown only to staff and admins
-      { path: '/internal/observability', element: gated('observability', later(<Observability />)) },
-      { path: '/internal/logs', element: gated('observability', later(<Logs />)) },
+      { path: '/internal/observability', element: gated('observability', <Observability />) },
+      { path: '/internal/logs', element: gated('observability', <Logs />) },
       // team
-      { path: '/manage', element: gated('manage', later(<Manage />)) },
+      { path: '/manage', element: gated('manage', <Manage />) },
     ],
   },
   // Old addresses keep working.
@@ -332,6 +362,12 @@ const router = createBrowserRouter([
 function OldPath({ from, to }: { from: string; to: string }) {
   const loc = useLocation();
   return <Navigate to={`${to}${loc.pathname.slice(from.length)}${loc.search}`} replace />;
+}
+
+/** The matched route's pattern, such as /store/:id, never the real address. Used by the page-speed notes (lib/vitals.ts). */
+export function routePattern(): string {
+  const last = router.state.matches[router.state.matches.length - 1];
+  return last?.route.path ?? '/';
 }
 
 export function App() {

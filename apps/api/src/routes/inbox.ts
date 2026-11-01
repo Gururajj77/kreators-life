@@ -35,9 +35,11 @@ inbox.get('/', async (c) => {
   const ask = pageOf(c);
   const t = tabWhere(tab);
   const state = show === 'archived' ? ' AND archived_at IS NOT NULL' : show === 'unread' ? ' AND archived_at IS NULL AND read_at IS NULL' : ' AND archived_at IS NULL';
-  const rows = await db.prepare(`SELECT * FROM notifications WHERE user_id = ?${t.sql}${state} ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(user.id, ...t.binds, ask.limit, ask.offset).all<Row>();
-  // Unread per tab, so each tab can say how many wait in it.
-  const unreadRows = await db.prepare('SELECT kind, COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL AND archived_at IS NULL GROUP BY kind').bind(user.id).all<{ kind: string; n: number }>();
+  // The page and the unread count per tab (so each tab can say how many wait in it) do not depend on each other: read together.
+  const [rows, unreadRows] = await Promise.all([
+    db.prepare(`SELECT * FROM notifications WHERE user_id = ?${t.sql}${state} ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(user.id, ...t.binds, ask.limit, ask.offset).all<Row>(),
+    db.prepare('SELECT kind, COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL AND archived_at IS NULL GROUP BY kind').bind(user.id).all<{ kind: string; n: number }>(),
+  ]);
   const tabs = INBOX_TABS.filter((k) => k !== 'team' || staff).map((k) => {
     const kinds = INBOX_TAB_META[k].kinds;
     return { tab: k, unread: unreadRows.results.filter((r) => kinds.length === 0 || kinds.includes(r.kind)).reduce((a, r) => a + r.n, 0) };

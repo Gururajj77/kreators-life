@@ -61,10 +61,8 @@ async function pageFor(c: Context<AppEnv>, owner: UserRow): Promise<PublicPage> 
     viewer ? db.prepare('SELECT 1 FROM follows WHERE owner_id = ? AND follower_id = ?').bind(owner.id, viewer.id).first() : Promise.resolve(null),
     db.prepare("SELECT * FROM portfolio_items WHERE user_id = ? AND visibility = 'public' ORDER BY created_at DESC LIMIT 30").bind(owner.id).all<{ id: string; title: string; description: string; url: string; visibility: 'public' | 'private'; created_at: string }>(),
   ]);
-  if (!mine && open) {
-    await db.prepare("INSERT INTO page_events (owner_id, kind, ref, created_at) VALUES (?, 'view', NULL, ?)").bind(owner.id, nowIso()).run();
-  }
-  const [posts, stats] = await Promise.all([
+  // None of these depends on another (the page view is only a count), so they go out together.
+  const [posts, stats, honors, friend, trust, granted] = await Promise.all([
     shows.posts
       ? db
           .prepare('SELECT p.id, p.category, p.body, p.created_at, (SELECT COUNT(*) FROM community_likes l WHERE l.post_id = p.id) AS likes, (SELECT COUNT(*) FROM community_replies r WHERE r.post_id = p.id AND r.hidden_at IS NULL) AS replies FROM community_posts p WHERE p.user_id = ? AND p.anonymous = 0 AND p.hidden_at IS NULL AND p.product_id IS NULL ORDER BY p.created_at DESC LIMIT 10')
@@ -72,9 +70,12 @@ async function pageFor(c: Context<AppEnv>, owner: UserRow): Promise<PublicPage> 
           .all<{ id: string; category: string; body: string; created_at: string; likes: number; replies: number }>()
       : Promise.resolve({ results: [] }),
     shows.activity || shows.badges ? getStats(db, owner.id) : Promise.resolve(null),
+    shows.badges ? honorKeys(db, owner) : Promise.resolve([] as string[]),
+    viewer && viewer.id !== owner.id ? db.prepare('SELECT id, requester_id, status FROM friendships WHERE (requester_id = ?1 AND recipient_id = ?2) OR (requester_id = ?2 AND recipient_id = ?1)').bind(viewer.id, owner.id).first<{ id: string; requester_id: string; status: string }>() : Promise.resolve(null),
+    trustFor(db, owner.id),
+    shows.badges ? grantedBadges(db, owner.id) : Promise.resolve([] as string[]),
+    !mine && open ? db.prepare("INSERT INTO page_events (owner_id, kind, ref, created_at) VALUES (?, 'view', NULL, ?)").bind(owner.id, nowIso()).run() : Promise.resolve(null),
   ]);
-  const honors = shows.badges ? await honorKeys(db, owner) : [];
-  const friend = viewer && viewer.id !== owner.id ? await db.prepare('SELECT id, requester_id, status FROM friendships WHERE (requester_id = ?1 AND recipient_id = ?2) OR (requester_id = ?2 AND recipient_id = ?1)').bind(viewer.id, owner.id).first<{ id: string; requester_id: string; status: string }>() : null;
   const page: PublicPage = {
     id: owner.id,
     handle: owner.handle ?? '',
@@ -93,7 +94,7 @@ async function pageFor(c: Context<AppEnv>, owner: UserRow): Promise<PublicPage> 
     timezone: owner.timezone || 'Asia/Kolkata',
     isPro: owner.is_pro === 1,
     followers: followers?.n ?? 0,
-    trust: await trustFor(db, owner.id),
+    trust,
     following: Boolean(following),
     products: shows.products ? products.results.map((r) => toProduct(r)) : [],
     testimonials: open ? testimonials.results.map(toTestimonial) : [],
@@ -104,7 +105,7 @@ async function pageFor(c: Context<AppEnv>, owner: UserRow): Promise<PublicPage> 
     allowChats: open && ps.allowChats,
     posts: posts.results.map((p) => ({ id: p.id, category: p.category, body: p.body, likes: p.likes, replies: p.replies, createdAt: p.created_at })),
     activity: stats && shows.activity ? { level: levelFromXp(owner.xp), streak: owner.streak, areasSetUp: stats.relationshipsWithPillars, memberSince: owner.created_at } : null,
-    badges: stats && shows.badges ? withGranted(computeBadges(owner, stats), await grantedBadges(db, owner.id)) : [],
+    badges: stats && shows.badges ? withGranted(computeBadges(owner, stats), granted) : [],
     honors,
     links: shows.blocks ? linksOf(owner).filter((b) => b.on) : [],
   };

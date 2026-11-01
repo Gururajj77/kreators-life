@@ -3,6 +3,7 @@ import type { Context, Next } from 'hono';
 import { LIMITS, type LimitName } from './limits';
 import type { AppEnv, Env } from './env';
 import { newId, nowIso } from './db';
+import { fetchT, TIMEOUT } from './http';
 
 /**
  * The operator's plumbing: transactional email through an outbox, an event timeline per order or booking,
@@ -10,19 +11,35 @@ import { newId, nowIso } from './db';
  */
 
 /** Queue an email. Sent through Resend when RESEND_API_KEY is set; otherwise kept in the outbox so the admin can see it. */
-export async function sendEmail(db: D1Database, env: Env, msg: { userId?: string | null; to: string | null | undefined; subject: string; body: string }): Promise<void> {
+export async function sendEmail(db: D1Database, env: Env, msg: { userId?: string | null; to: string | null | undefined; subject: string; body: string; marketing?: boolean; /** The words hold a live link (a password reset): the outbox keeps a note, not the link. */ private?: boolean }): Promise<void> {
   if (!msg.to) return;
   const id = newId();
   const now = nowIso();
   let status: 'sent' | 'failed' | 'skipped' = 'skipped';
   let error = '';
-  if (env.RESEND_API_KEY) {
+  let body = msg.body;
+  let headers: Record<string, string> | undefined;
+  // Marketing mail is never sent without a yes the person gave on their own, and always carries a postal address and a one-click way out.
+  // Receipts and password resets are not marketing and are not affected by that choice.
+  let blocked = '';
+  if (msg.marketing) {
+    const said = msg.userId ? await db.prepare("SELECT granted FROM user_consents WHERE user_id = ? AND purpose = 'marketing'").bind(msg.userId).first<{ granted: number }>() : null;
+    if (!msg.userId || said?.granted !== 1) blocked = 'no yes to marketing mail from this person';
+    else if (!env.BUSINESS_ADDRESS?.trim()) blocked = 'no business address is set for the footer';
+    else {
+      const link = `${env.PUBLIC_URL ?? ''}/unsubscribe/${await unsubscribeToken(env, msg.userId)}`;
+      body = `${msg.body}\n\n--\nYou get this because you said yes to news and offers. Unsubscribe: ${link}\n${env.BUSINESS_NAME ?? 'kreators.app'}, ${env.BUSINESS_ADDRESS}`;
+      headers = { 'List-Unsubscribe': `<${link}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' };
+    }
+  }
+  if (blocked) error = blocked;
+  else if (env.RESEND_API_KEY) {
     try {
-      const res = await fetch('https://api.resend.com/emails', {
+      const res = await fetchT('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.RESEND_API_KEY}` },
-        body: JSON.stringify({ from: env.EMAIL_FROM ?? 'kreators.app <hello@kreators.life>', to: [msg.to], subject: msg.subject, text: msg.body }),
-      });
+        body: JSON.stringify({ from: env.EMAIL_FROM ?? 'kreators.app <hello@kreators.life>', to: [msg.to], subject: msg.subject, text: body, ...(headers ? { headers } : {}) }),
+      }, TIMEOUT.quick);
       if (res.ok) status = 'sent';
       else {
         status = 'failed';
@@ -35,7 +52,7 @@ export async function sendEmail(db: D1Database, env: Env, msg: { userId?: string
   } else error = 'no RESEND_API_KEY on the server';
   await db
     .prepare('INSERT INTO email_outbox (id, user_id, to_email, subject, body, status, error, created_at, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(id, msg.userId ?? null, msg.to, msg.subject.slice(0, 200), msg.body.slice(0, 5000), status, error, now, status === 'sent' ? now : null)
+    .bind(id, msg.userId ?? null, msg.to, msg.subject.slice(0, 200), msg.private ? '(the link in this mail is not kept)' : body.slice(0, 5000), status, error, now, status === 'sent' ? now : null)
     .run();
 }
 
@@ -72,4 +89,15 @@ export function rateLimit(name: LimitName) {
     if (await limited(c.env.DB, `${name}:${who}`, max, windowSec)) return c.json({ error: 'too many tries, wait a minute' }, 429);
     await next();
   };
+}
+
+/** SHA-256 as hex, for salted hashes. */
+export async function sha(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** The token in an unsubscribe link: the person's id and a hash only this server can make. */
+export async function unsubscribeToken(env: Env, userId: string): Promise<string> {
+  return `${userId}.${(await sha(`${env.CLICK_SALT ?? 'kreators-local'}:unsubscribe:${userId}`)).slice(0, 24)}`;
 }

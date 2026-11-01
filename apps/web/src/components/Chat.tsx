@@ -204,6 +204,7 @@ export function ChatComposer({
         rows={1}
         maxLength={maxLength}
         enterKeyHint="send"
+        data-autofocus
         aria-label={placeholder}
         placeholder={placeholder}
         className="min-h-[48px] flex-1 resize-none rounded-card border-2 border-line bg-card px-md py-sm text-[16px] font-semibold leading-snug"

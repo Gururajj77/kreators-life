@@ -1,5 +1,57 @@
 @import 'tailwindcss';
 
+/* The three faces are served from this site (public/fonts, SIL Open Font License 1.1, see LICENSE.txt there), so no third party sees a
+   visitor on page load. Each family is one variable file per subset: latin first for the common case, latin-ext for the rest. */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 500 800;
+  font-display: swap;
+  src: url('/fonts/fraunces-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 500 800;
+  font-display: swap;
+  src: url('/fonts/fraunces-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Urbanist';
+  font-style: normal;
+  font-weight: 500 900;
+  font-display: swap;
+  src: url('/fonts/urbanist-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Urbanist';
+  font-style: normal;
+  font-weight: 500 900;
+  font-display: swap;
+  src: url('/fonts/urbanist-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+
 /* md and lg need height as well as width: a phone on its side is wide but short,
    and keeps the phone layout (bottom tabs, one column). Tablets and laptops pass both. */
 @custom-variant md (@media (width >= 48rem) and (height >= 30rem));
@@ -33,11 +85,11 @@
   --color-line: var(--line);
   --color-shadow: var(--shadow);
 
-  --color-r1: #d6456b; /* Present Red 60 */
+  --color-r1: #c2375b; /* Present Red 60, a step deeper so white text on it holds 4.5:1 (even faded to 90%) */
   --color-r2: #f08a4b; /* Empathy Orange 40 */
   --color-r3: #f3cf5a; /* Zen Yellow 40 */
-  --color-r4: #6f9b74; /* Serenity Green 50 */
-  --color-r5: #3f8fd2; /* Sky Blue 50: With yourself */
+  --color-r4: #42714a; /* Serenity Green 50, a step deeper so white text on it holds 4.5:1 (even faded to 90%) */
+  --color-r5: #2a6faa; /* Sky Blue 50, a step deeper so white text on it holds 4.5:1 (even faded to 90%): With yourself */
   --color-r6: #4c57c7; /* Indigo 60: With the guru */
   /* The earth: the brown the pillars used to wear. It grounds the public footer with the green, and is no pillar's colour. */
   --color-earth: #8c6a57; /* Mindful Brown 60 */
@@ -99,8 +151,9 @@
 :root {
   color-scheme: light;
   --ink: #25293a; /* a slate that leans blue, so the page feels quiet */
-  --ink-soft: #565c72;
-  --ink-mute: #737890;
+  /* Ink on the page and on glass, tuned for WCAG AA (4.5:1) over the lightest and the darkest place the wash reaches: ink-soft 6.2:1 or better, ink-mute 4.6:1 or better. */
+  --ink-soft: #444a5f;
+  --ink-mute: #565c72;
   --on-ink: #ffffff;
   /* The page is a gradient (see `body`), so paper and card are glass over it: translucent white. */
   --paper: rgba(255, 255, 255, 0.5);
@@ -139,7 +192,7 @@
   --soft-divine: #dcd5f7;
   --deep-servant_leader: #9f1239;
   --deep-friendship: #c2410c;
-  --deep-parent_child: #a16207;
+  --deep-parent_child: #96590a;
   --deep-lover_partner: #4f6a3c;
   --deep-self: #1f5f94;
   --deep-guru: #323c9a;
@@ -154,8 +207,8 @@
   :root:not([data-theme='light']) {
     color-scheme: dark;
     --ink: #eef0f8;
-    --ink-soft: #bcc2d6;
-    --ink-mute: #8f96ad;
+    --ink-soft: #d6dbe9;
+    --ink-mute: #c0c7db;
     --on-ink: #10131f;
     --paper: rgba(255, 255, 255, 0.05);
     --card: rgba(255, 255, 255, 0.075);
@@ -169,10 +222,11 @@
     --shade-2: rgba(0, 0, 0, 0.5);
     --page-base-a: #0e1220;
     --page-base-b: #101c26;
-    --glow-1: rgba(104, 116, 232, 0.42);
-    --glow-2: rgba(58, 170, 170, 0.3);
-    --glow-3: rgba(214, 110, 150, 0.24);
-    --glow-4: rgba(130, 100, 220, 0.34);
+    /* Dimmed from .42/.30/.24/.34 (to .26/.20/.16/.22) so the lightest place on the wash stays dark enough for the ink tokens to hold 4.5:1. */
+    --glow-1: rgba(104, 116, 232, 0.26);
+    --glow-2: rgba(58, 170, 170, 0.2);
+    --glow-3: rgba(214, 110, 150, 0.16);
+    --glow-4: rgba(130, 100, 220, 0.22);
 --tint-red: #3a1626;
     --tint-orange: #3a2416;
     --tint-yellow: #35301a;
@@ -204,8 +258,8 @@
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f2f2f2' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   color-scheme: dark;
   --ink: #eef0f8;
-  --ink-soft: #bcc2d6;
-  --ink-mute: #8f96ad;
+  --ink-soft: #d6dbe9;
+  --ink-mute: #c0c7db;
   --on-ink: #10131f;
   --paper: rgba(255, 255, 255, 0.05);
   --card: rgba(255, 255, 255, 0.075);
@@ -219,10 +273,10 @@
   --shade-2: rgba(0, 0, 0, 0.5);
   --page-base-a: #0e1220;
   --page-base-b: #101c26;
-  --glow-1: rgba(104, 116, 232, 0.42);
-  --glow-2: rgba(58, 170, 170, 0.3);
-  --glow-3: rgba(214, 110, 150, 0.24);
-  --glow-4: rgba(130, 100, 220, 0.34);
+  --glow-1: rgba(104, 116, 232, 0.26);
+  --glow-2: rgba(58, 170, 170, 0.2);
+  --glow-3: rgba(214, 110, 150, 0.16);
+  --glow-4: rgba(130, 100, 220, 0.22);
 --tint-red: #3a1626;
   --tint-orange: #3a2416;
   --tint-yellow: #35301a;
@@ -262,7 +316,7 @@
     padding-right: 32px;
   }
   select:disabled {
-    opacity: 0.5;
+    opacity: 0.7;
   }
   html {
     font-family: var(--font-body);
@@ -342,10 +396,21 @@
     font: inherit;
     color: inherit;
   }
+  /* The ring every control shows when the keyboard is on it: ink-soft is 3:1 or better on the page, on a card and on a coloured fill,
+     in both modes. The corners are the control's own. */
   :focus-visible {
-    outline: 3px solid var(--color-ink-mute);
+    outline: 3px solid var(--color-ink-soft);
     outline-offset: 3px;
-    border-radius: 8px;
+  }
+  /* The tab bar (72px), the assistant's button (above it) and the sticky chrome never cover a control the keyboard scrolls to. */
+  html {
+    scroll-padding-top: 80px;
+    scroll-padding-bottom: 120px;
+  }
+  /* A placeholder is text: it takes the quiet ink, which holds 4.5:1 on a field in both modes. */
+  ::placeholder {
+    color: var(--color-ink-mute);
+    opacity: 1;
   }
 }
 
@@ -605,6 +670,12 @@
   }
 }
 
+/* A disabled control is exempt from the contrast rule, but it stays legible: never thinner than 70%, whatever disabled:opacity-* says. */
+:is(button, input, select, textarea, [role='button'], [aria-disabled='true']):disabled,
+[aria-disabled='true'] {
+  opacity: 0.7;
+}
+
 /* Collapsible rungs on the realm screen. */
 summary {
   list-style: none;
@@ -633,59 +704,59 @@ details[open] > summary {
 
 /* Dark mode wears each app's colour in the glow behind the glass: the wash leans toward that app's hue, and the cards stay frosted. */
 :root[data-theme='dark'][data-accent='servant_leader'] {
-  --glow-2: color-mix(in oklab, var(--deep-servant_leader) 30%, transparent);
+  --glow-2: color-mix(in oklab, var(--deep-servant_leader) 14%, transparent);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light'])[data-accent='servant_leader'] {
-    --glow-2: color-mix(in oklab, var(--deep-servant_leader) 30%, transparent);
+    --glow-2: color-mix(in oklab, var(--deep-servant_leader) 14%, transparent);
   }
 }
 :root[data-theme='dark'][data-accent='friendship'] {
-  --glow-2: color-mix(in oklab, var(--deep-friendship) 30%, transparent);
+  --glow-2: color-mix(in oklab, var(--deep-friendship) 14%, transparent);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light'])[data-accent='friendship'] {
-    --glow-2: color-mix(in oklab, var(--deep-friendship) 30%, transparent);
+    --glow-2: color-mix(in oklab, var(--deep-friendship) 14%, transparent);
   }
 }
 :root[data-theme='dark'][data-accent='parent_child'] {
-  --glow-2: color-mix(in oklab, var(--deep-parent_child) 30%, transparent);
+  --glow-2: color-mix(in oklab, var(--deep-parent_child) 14%, transparent);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light'])[data-accent='parent_child'] {
-    --glow-2: color-mix(in oklab, var(--deep-parent_child) 30%, transparent);
+    --glow-2: color-mix(in oklab, var(--deep-parent_child) 14%, transparent);
   }
 }
 :root[data-theme='dark'][data-accent='lover_partner'] {
-  --glow-2: color-mix(in oklab, var(--deep-lover_partner) 30%, transparent);
+  --glow-2: color-mix(in oklab, var(--deep-lover_partner) 14%, transparent);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light'])[data-accent='lover_partner'] {
-    --glow-2: color-mix(in oklab, var(--deep-lover_partner) 30%, transparent);
+    --glow-2: color-mix(in oklab, var(--deep-lover_partner) 14%, transparent);
   }
 }
 :root[data-theme='dark'][data-accent='self'] {
-  --glow-2: color-mix(in oklab, var(--deep-self) 30%, transparent);
+  --glow-2: color-mix(in oklab, var(--deep-self) 14%, transparent);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light'])[data-accent='self'] {
-    --glow-2: color-mix(in oklab, var(--deep-self) 30%, transparent);
+    --glow-2: color-mix(in oklab, var(--deep-self) 14%, transparent);
   }
 }
 :root[data-theme='dark'][data-accent='guru'] {
-  --glow-2: color-mix(in oklab, var(--deep-guru) 30%, transparent);
+  --glow-2: color-mix(in oklab, var(--deep-guru) 14%, transparent);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light'])[data-accent='guru'] {
-    --glow-2: color-mix(in oklab, var(--deep-guru) 30%, transparent);
+    --glow-2: color-mix(in oklab, var(--deep-guru) 14%, transparent);
   }
 }
 :root[data-theme='dark'][data-accent='divine'] {
-  --glow-2: color-mix(in oklab, var(--deep-divine) 30%, transparent);
+  --glow-2: color-mix(in oklab, var(--deep-divine) 14%, transparent);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light'])[data-accent='divine'] {
-    --glow-2: color-mix(in oklab, var(--deep-divine) 30%, transparent);
+    --glow-2: color-mix(in oklab, var(--deep-divine) 14%, transparent);
   }
 }
 
@@ -815,6 +886,43 @@ nav {
   background-image: linear-gradient(140deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 55%, rgba(30, 30, 60, 0.1));
 }
 
+/* White is 2.5:1 on the orange fill, so on orange the foreground is the dark slate (5.8:1), the way yellow already is. Everything on it
+   that reads var(--color-on-fill) (text-on-fill, rings, lines, bg-on-fill/20) turns with it. The class, a fill set inline from the token
+   (var(--color-r2)) and one set from the colour the shared model carries (#F08A4B, which the browser writes as rgb(240, 138, 75)) all count. */
+.bg-r2,
+[style*='var(--color-r2)'],
+[style*='rgb(240, 138, 75)'] {
+  --color-on-fill: var(--color-ink-fixed);
+}
+.bg-r3,
+[style*='var(--color-r3)'] {
+  --color-on-fill: var(--color-on-yellow);
+}
+
+/* Red text on the light page: the fill red is 4.4:1 on glass, so text in it takes the deep red (8:1). */
+:root:not([data-theme='dark']) :is(.text-r1, .hover\:text-r1:hover) { color: var(--deep-servant_leader); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) :is(.text-r1, .hover\:text-r1:hover) { color: var(--deep-servant_leader); }
+}
+
+/* Coloured text on the page: the deeper fills are for fills; on the dark page text in a relationship colour takes the light end of its own family. */
+:root[data-theme='dark'] :is(.text-r1, .hover\:text-r1:hover) { color: var(--deep-servant_leader); }
+:root[data-theme='dark'] :is(.text-r2, .hover\:text-r2:hover) { color: var(--deep-friendship); }
+:root[data-theme='dark'] :is(.text-r3, .hover\:text-r3:hover) { color: var(--deep-parent_child); }
+:root[data-theme='dark'] :is(.text-r4, .hover\:text-r4:hover) { color: var(--deep-lover_partner); }
+:root[data-theme='dark'] :is(.text-r5, .hover\:text-r5:hover) { color: var(--deep-self); }
+:root[data-theme='dark'] :is(.text-r6, .hover\:text-r6:hover) { color: var(--deep-guru); }
+:root[data-theme='dark'] :is(.text-r7, .hover\:text-r7:hover) { color: var(--deep-divine); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) :is(.text-r1, .hover\:text-r1:hover) { color: var(--deep-servant_leader); }
+  :root:not([data-theme='light']) :is(.text-r2, .hover\:text-r2:hover) { color: var(--deep-friendship); }
+  :root:not([data-theme='light']) :is(.text-r3, .hover\:text-r3:hover) { color: var(--deep-parent_child); }
+  :root:not([data-theme='light']) :is(.text-r4, .hover\:text-r4:hover) { color: var(--deep-lover_partner); }
+  :root:not([data-theme='light']) :is(.text-r5, .hover\:text-r5:hover) { color: var(--deep-self); }
+  :root:not([data-theme='light']) :is(.text-r6, .hover\:text-r6:hover) { color: var(--deep-guru); }
+  :root:not([data-theme='light']) :is(.text-r7, .hover\:text-r7:hover) { color: var(--deep-divine); }
+}
+
 /* Bento: one gap, one radius, and size that says what matters. Cells span columns and rows by their class;
    on a phone everything stacks, but a wide cell keeps its extra height so the order of importance still reads. */
 .bento {
@@ -861,10 +969,12 @@ nav {
    scrolls under it, so it is never the thin glass: it takes the strong fill and keeps a visible edge. */
 .fixed.bg-paper,
 .sticky.bg-paper,
+[class*='sticky'].bg-paper,
 [role='dialog'].bg-paper,
 .fixed.bg-card,
 .fixed .bg-card,
 .sticky.bg-card,
+[class*='sticky'].bg-card,
 .sticky .bg-card,
 nav .bg-card {
   background-color: var(--card-strong);
@@ -936,4 +1046,9 @@ input[type='radio'] {
   @page {
     margin: 12mm;
   }
+}
+
+/* A badge not earned yet: the picture fades, the words stay at full strength so they can be read. */
+.badge-locked > :first-child {
+  opacity: 0.5;
 }

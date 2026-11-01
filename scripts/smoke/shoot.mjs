@@ -51,7 +51,7 @@ const DEFAULT_SHOTS = [
 const stamp = Date.now().toString(36);
 async function session() {
   // A fresh account on the server, so the app screens have something to show.
-  const res = await fetch(`${ORIGIN}/api/auth/signup`, { method: 'POST', headers: { 'content-type': 'application/json', 'CF-Connecting-IP': `10.99.${Date.now() % 255}.${(Date.now() >> 8) % 255}` }, body: JSON.stringify({ email: `shoot-${stamp}@smoke.test`, password: `Camera-${stamp}-pass`, displayName: 'Screenshot', phone: '+91 98765 43210', birthDate: '1990-05-20' }) });
+  const res = await fetch(`${ORIGIN}/api/auth/signup`, { method: 'POST', headers: { 'content-type': 'application/json', 'CF-Connecting-IP': `10.99.${Date.now() % 255}.${(Date.now() >> 8) % 255}` }, body: JSON.stringify({ email: `shoot-${stamp}@smoke.test`, password: `Camera-${stamp}-pass`, displayName: 'Screenshot', acceptTerms: true, phone: '+91 98765 43210', birthDate: '1990-05-20' }) });
   if (!res.ok) throw new Error(`could not sign up on ${ORIGIN}: ${res.status}`);
   const { token } = await res.json();
   const h = { 'content-type': 'application/json', authorization: `Bearer ${token}` };

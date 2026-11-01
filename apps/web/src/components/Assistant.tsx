@@ -51,6 +51,7 @@ import { useModule, useModules } from '../lib/modules';
 import { forgetKept, useKept, useKeptRef } from '../lib/kept';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
 import { useAssistantModel } from '../lib/store';
+import { useDialogFocus } from '../lib/useDialogFocus';
 import { Avatar } from './Avatar';
 import { Markdown } from './Markdown';
 import { StartOver } from './StartOver';
@@ -710,10 +711,12 @@ function PlanCard({ reason }: { reason: AssistantPaywall }) {
 // The panel.
 // ---------------------------------------------------------------------------
 
-function AssistantPanel({ onClose }: { onClose: () => void }) {
+function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focusIn: boolean }) {
   const nav = useNavigate();
   const loc = useLocation();
   const panel = useRef<HTMLElement>(null);
+  // Keyboard: focus goes to the typing box when the person opens it, Tab wraps at its ends, Escape folds it away. The page beside it stays usable.
+  useDialogFocus(panel, true, { modal: false, focusIn, onEscape: onClose });
   const box = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
   const refresh = useRefreshAll();
@@ -1531,9 +1534,6 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
     <section
       ref={panel}
       aria-label={`Bumling AI assistant, with ${who(host)}`}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') onClose();
-      }}
       className="fixed inset-x-sm bottom-[calc(var(--spacing-xl)+var(--spacing-md)+env(safe-area-inset-bottom))] z-40 flex h-[max(50dvh,320px)] flex-col overflow-hidden rounded-card border-2 border-line bg-card-strong shadow-toy-soft md:left-auto md:right-md md:bottom-md md:h-[min(640px,calc(100dvh-32px))] md:w-[400px]"
     >
       <header className="flex items-center gap-xs border-b-2 border-line py-xs pr-sm pl-md">
@@ -1589,10 +1589,19 @@ export function Assistant() {
   const mod = useModule('assistant');
   const [open, setOpen] = useKept(`assistant-open:${me.data?.user.id ?? 'none'}`, 'open', false);
   const button = useRef<HTMLButtonElement>(null);
+  // Opened with the button: focus goes into the panel, and comes back to the button when it folds away.
+  const byButton = useRef(false);
   const body = useRef<HTMLSpanElement>(null);
   const tip = useRef<HTMLSpanElement>(null);
   const [eager, setEager] = useState(false);
   const reduce = useReducedMotion();
+
+  // When the panel folds away after the button opened it, focus goes back to the button.
+  useEffect(() => {
+    if (open || !byButton.current) return;
+    byButton.current = false;
+    button.current?.focus({ preventScroll: true });
+  }, [open]);
 
   // He pops in, then every few seconds gives a little hop and a wiggle, so the button reads as someone to talk to.
   useLayoutEffect(() => {
@@ -1634,7 +1643,7 @@ export function Assistant() {
 
   // The bubble and the jump belong to a mouse pointing at the button (or the keyboard reaching it). A phone never gets them on its own: that space is the page's.
   if (!mod?.available || loc.pathname.startsWith('/companion')) return null;
-  if (open) return <AssistantPanel onClose={() => setOpen(false)} />;
+  if (open) return <AssistantPanel onClose={() => setOpen(false)} focusIn={byButton.current} />;
   return (
     <div className="fixed right-md bottom-[calc(var(--spacing-xl)+var(--spacing-lg)+env(safe-area-inset-bottom))] z-40 md:bottom-md">
       <span
@@ -1650,7 +1659,10 @@ export function Assistant() {
       <button
         ref={button}
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          byButton.current = true;
+          setOpen(true);
+        }}
         onPointerEnter={(e) => e.pointerType !== 'touch' && point(true)}
         onPointerLeave={() => point(false)}
         onFocus={(e) => e.currentTarget.matches(':focus-visible') && point(true)}

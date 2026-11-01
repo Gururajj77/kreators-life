@@ -13,7 +13,7 @@ support.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const mine = await db.prepare(`${SELECT} WHERE t.user_id = ? ORDER BY t.created_at DESC`).bind(user.id).all<Row>();
-  const queue = can(user, 'support') ? await db.prepare(`${SELECT} WHERE t.status = 'open' ORDER BY t.created_at`).all<Row>() : { results: [] as Row[] };
+  const queue = can(user, 'support') ? await db.prepare(`${SELECT} WHERE t.status = 'open' ORDER BY t.created_at LIMIT 500`).all<Row>() : { results: [] as Row[] };
   return c.json({ tickets: mine.results.map(toT), queue: queue.results.map(toT), agent: can(user, 'support') });
 });
 

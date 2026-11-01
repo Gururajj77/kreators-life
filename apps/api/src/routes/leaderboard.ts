@@ -74,23 +74,29 @@ leaderboard.get('/', async (c) => {
   // The pool is the top LEADERBOARD_POOL climbers who opted in, by all-time xp (or this pillar's xp), then ranked by the sort chosen.
   // Badge counts need the same stats the profile uses, so they are computed here rather than stored.
   const season = seasonOf(new Date().toISOString());
-  const rows = await db
-    .prepare(
-      `SELECT u.id, u.display_name, ${sc.xp} AS xp, u.streak, u.best_streak, u.is_pro, u.created_at,
-        (SELECT COUNT(*) FROM nodes n WHERE n.user_id = u.id AND n.kind = 'task' AND n.status = 'done') AS tasks_done,
-        (SELECT COUNT(*) FROM nodes n WHERE n.user_id = u.id AND n.kind = 'project' AND n.status = 'done') AS projects_cleared,
-        (SELECT COUNT(DISTINCT relationship) FROM nodes n WHERE n.user_id = u.id AND n.kind = 'pillar' AND n.status != 'archived') AS rels_with_pillars,
-        (SELECT COUNT(*) FROM spark_completions s WHERE s.user_id = u.id) AS sparks_done,
-        (SELECT COUNT(*) FROM honors h WHERE h.user_id = u.id) AS admin_honors,
-        (SELECT COUNT(*) FROM badge_grants b WHERE b.user_id = u.id) AS admin_badges,
-        (SELECT COALESCE(SUM(x.amount), 0) FROM xp_events x WHERE x.user_id = u.id AND x.created_at >= ?1 ${scope === 'pillar' ? 'AND x.relationship = ?2' : ''}) AS season_xp
-       FROM users u ${sc.join}
-       WHERE u.leaderboard_opt_in = 1 AND u.onboarded_at IS NOT NULL AND u.display_name != 'Deleted member' ${sc.where} ${NOT_BLOCKED}
-       ORDER BY ${by === 'season' ? 'season_xp DESC,' : ''} ${sc.xp} DESC, u.created_at ASC
-       LIMIT ${LEADERBOARD_POOL}`,
-    )
-    .bind(seasonStart(season), value, user.id)
-    .all<Row>();
+  const [rows, closed] = await Promise.all([
+    db
+      .prepare(
+        `SELECT u.id, u.display_name, ${sc.xp} AS xp, u.streak, u.best_streak, u.is_pro, u.created_at,
+          (SELECT COUNT(*) FROM nodes n WHERE n.user_id = u.id AND n.kind = 'task' AND n.status = 'done') AS tasks_done,
+          (SELECT COUNT(*) FROM nodes n WHERE n.user_id = u.id AND n.kind = 'project' AND n.status = 'done') AS projects_cleared,
+          (SELECT COUNT(DISTINCT relationship) FROM nodes n WHERE n.user_id = u.id AND n.kind = 'pillar' AND n.status != 'archived') AS rels_with_pillars,
+          (SELECT COUNT(*) FROM spark_completions s WHERE s.user_id = u.id) AS sparks_done,
+          (SELECT COUNT(*) FROM honors h WHERE h.user_id = u.id) AS admin_honors,
+          (SELECT COUNT(*) FROM badge_grants b WHERE b.user_id = u.id) AS admin_badges,
+          (SELECT COALESCE(SUM(x.amount), 0) FROM xp_events x WHERE x.user_id = u.id AND x.created_at >= ?1 ${scope === 'pillar' ? 'AND x.relationship = ?2' : ''}) AS season_xp
+         FROM users u ${sc.join}
+         WHERE u.leaderboard_opt_in = 1 AND u.onboarded_at IS NOT NULL AND u.display_name != 'Deleted member' ${sc.where} ${NOT_BLOCKED}
+         ORDER BY ${by === 'season' ? 'season_xp DESC,' : ''} ${sc.xp} DESC, u.created_at ASC
+         LIMIT ${LEADERBOARD_POOL}`,
+      )
+      .bind(seasonStart(season), value, user.id)
+      .all<Row>(),
+    // The last three closed seasons and their top three: independent of the board above, so read together.
+    db
+      .prepare('SELECT r.season, r.place, r.xp, r.user_id, u.display_name FROM season_results r JOIN users u ON u.id = r.user_id WHERE r.season IN (SELECT season FROM seasons ORDER BY season DESC LIMIT 3) ORDER BY r.season DESC, r.place ASC')
+      .all<{ season: string; place: number; xp: number; user_id: string; display_name: string }>(),
+  ]);
 
   const entries: LeaderboardEntry[] = rows.results.map((r) => {
     const badges = computeBadges(r, {
@@ -121,10 +127,6 @@ leaderboard.get('/', async (c) => {
   entries.sort((a, b) => b[key] - a[key] || b.xp - a.xp);
   entries.forEach((e, i) => (e.rank = i + 1));
 
-  // The last three closed seasons and their top three.
-  const closed = await db
-    .prepare('SELECT r.season, r.place, r.xp, r.user_id, u.display_name FROM season_results r JOIN users u ON u.id = r.user_id WHERE r.season IN (SELECT season FROM seasons ORDER BY season DESC LIMIT 3) ORDER BY r.season DESC, r.place ASC')
-    .all<{ season: string; place: number; xp: number; user_id: string; display_name: string }>();
   const past: SeasonResult[] = [];
   for (const r of closed.results) {
     let s = past.find((p) => p.season === r.season);

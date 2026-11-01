@@ -80,8 +80,27 @@ export interface AccessContext {
   overrides: OverrideRow[];
 }
 
+/**
+ * The flags and overrides are the same for everyone and change only when an admin saves one, yet the module gate reads them on
+ * every gated request. This worker instance keeps the last read for a few seconds, and the admin routes that write a flag or an
+ * override drop it at once (`forgetAccessContext`), so a change shows on the next request here and within ACCESS_TTL_MS elsewhere.
+ */
+export const ACCESS_TTL_MS = 5_000;
+let kept: { at: number; ctx: AccessContext } | null = null;
+/** Call after writing module_settings or flag_overrides. */
+export function forgetAccessContext(): void {
+  kept = null;
+}
+
 /** The global flags and live overrides, read once. The same context scores one person or every account. */
 export async function loadAccessContext(db: D1Database): Promise<AccessContext> {
+  if (kept && Date.now() - kept.at < ACCESS_TTL_MS) return kept.ctx;
+  const ctx = await readAccessContext(db);
+  kept = { at: Date.now(), ctx };
+  return ctx;
+}
+
+async function readAccessContext(db: D1Database): Promise<AccessContext> {
   const [rows, ovs] = await Promise.all([
     db.prepare('SELECT * FROM module_settings').all<SettingRow>(),
     db.prepare('SELECT flag_key, subject_type, subject_id, enabled, expires_at FROM flag_overrides WHERE expires_at IS NULL OR expires_at > ?').bind(new Date().toISOString()).all<OverrideRow>(),

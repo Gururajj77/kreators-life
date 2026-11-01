@@ -40,8 +40,10 @@ export function CelebrationProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [active]);
 
+  // One object for as long as `celebrate` is the same, so showing or hiding the overlay does not re-render every screen that asks for it.
+  const value = useMemo(() => ({ celebrate }), [celebrate]);
   return (
-    <Ctx.Provider value={{ celebrate }}>
+    <Ctx.Provider value={value}>
       {children}
       <AnimatePresence>{active && <Overlay key={active.seq} c={active} />}</AnimatePresence>
     </Ctx.Provider>

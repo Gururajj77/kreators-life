@@ -1,8 +1,23 @@
 import { MAX_UPLOAD_BYTES } from '@kreators/shared';
 
+let webpOk: Promise<boolean> | undefined;
+/** Whether this browser can really save WebP. When it cannot, canvas quietly hands back a PNG, so check the type that comes back. */
+function canWebp(): Promise<boolean> {
+  webpOk ??= new Promise<boolean>((done) => {
+    try {
+      const c = document.createElement('canvas');
+      c.width = c.height = 1;
+      c.toBlob((b) => done(b?.type === 'image/webp'), 'image/webp', 0.8);
+    } catch {
+      done(false);
+    }
+  });
+  return webpOk;
+}
+
 /**
  * A picture ready to upload: GIFs go as they are (and must fit), anything else is drawn smaller on a canvas and
- * saved as WebP until it fits under the limit. A video is never uploaded; it is linked.
+ * saved as WebP (JPEG, or PNG for a PNG, where the browser cannot) until it fits under the limit. A video is never uploaded; it is linked.
  */
 export async function shrinkImage(file: File): Promise<Blob> {
   if (!file.type.startsWith('image/')) throw new Error('Pick a picture or a GIF. Link a video instead.');
@@ -12,13 +27,14 @@ export async function shrinkImage(file: File): Promise<Blob> {
   }
   const bitmap = await createImageBitmap(file).catch(() => null);
   if (!bitmap) throw new Error('That picture could not be read.');
+  const type = (await canWebp()) ? 'image/webp' : file.type === 'image/png' ? 'image/png' : 'image/jpeg';
   let scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
   for (let attempt = 0; attempt < 5; attempt++) {
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
     canvas.height = Math.max(1, Math.round(bitmap.height * scale));
     canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>((ok) => canvas.toBlob(ok, 'image/webp', 0.82 - attempt * 0.08));
+    const blob = await new Promise<Blob | null>((ok) => canvas.toBlob(ok, type, 0.82 - attempt * 0.08));
     if (blob && blob.size <= MAX_UPLOAD_BYTES) return blob;
     scale *= 0.75;
   }

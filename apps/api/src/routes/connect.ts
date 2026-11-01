@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { EVENT_APPS, MAX_EVENT_MESSAGE, MAX_REPLY_DEPTH, photoLinkProblem, threadOrder, type EventApp, type EventExtras, type EventMessage, type EventPerson } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { anonAlias, can, nameOf, newId, notify, nowIso, publicOf, str } from '../db';
+import { anonAlias, can, nameOf, newId, notify, notifyMany, nowIso, publicOf, str } from '../db';
 import { requestFriend } from './bond';
 
 /**
@@ -189,7 +189,7 @@ connect.put('/:app/:id/photos', async (c) => {
     .bind(g.ev.app, g.ev.id, url, str(body.note, 200), user.id, nowIso())
     .run();
   // Everyone on the list hears once when the folder first appears, and again if the link changes.
-  if (!prev || prev.url !== url) for (const gid of (await g.ev.guestIds()).filter((x) => x !== user.id)) await notify(db, gid, g.ev.app, `Photos from ${g.ev.title}`, 'The host shared a folder. Open the event to get yours.', g.ev.path);
+  if (!prev || prev.url !== url) await notifyMany(db, (await g.ev.guestIds()).filter((x) => x !== user.id), g.ev.app, `Photos from ${g.ev.title}`, 'The host shared a folder. Open the event to get yours.', g.ev.path);
   return c.json({ ok: true });
 });
 

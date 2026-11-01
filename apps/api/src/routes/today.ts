@@ -74,71 +74,75 @@ today.get('/', async (c) => {
   const user = c.get('user');
   const date = dateParam(c.req.query('date'));
 
-  const due = await db
-    .prepare(
-      `SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) IS NOT NULL AND COALESCE(do_date, due_date) <= ?
+  // None of these reads waits on another, so they run together: one round trip of waiting instead of a dozen.
+  const [dayStart, dayEnd] = dayBounds(date, user.timezone);
+  const [due, plan, back, backTotal, doneToday, recent, gate, relationship, sparkDone, notToDo] = await Promise.all([
+    db
+      .prepare(
+        `SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) IS NOT NULL AND COALESCE(do_date, due_date) <= ?
        ORDER BY COALESCE(do_date, due_date) ASC, CASE WHEN due_time IS NULL THEN 1 ELSE 0 END, due_time ASC, created_at ASC LIMIT 6`,
-    )
-    .bind(user.id, date)
-    .all<NodeRow>();
-  // The day's time plan counts every timed task due today, not just the six shown.
-  const plan = await db
-    .prepare(
-      `SELECT
+      )
+      .bind(user.id, date)
+      .all<NodeRow>(),
+    // The day's time plan counts every timed task due today, not just the six shown.
+    db
+      .prepare(
+        `SELECT
         (SELECT COALESCE(SUM(estimate_min), 0) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) <= ?2 AND estimate_min IS NOT NULL) AS planned,
         (SELECT COALESCE(SUM(estimate_min), 0) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'done' AND completed_at LIKE ?3 AND estimate_min IS NOT NULL) AS done,
         (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) <= ?2 AND due_time IS NOT NULL) AS timed`,
-    )
-    .bind(user.id, date, `${date}%`)
-    .first<{ planned: number; done: number; timed: number }>();
-  // The main list is only what has a day that has come. A task with no date at all (no do date and no due date) waits in the not scheduled list below it until either is picked.
-  const tasks = due.results;
-  const back = await db
-    .prepare(
-      `SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND do_date IS NULL AND due_date IS NULL
+      )
+      .bind(user.id, date, `${date}%`)
+      .first<{ planned: number; done: number; timed: number }>(),
+    // The main list is only what has a day that has come. A task with no date at all (no do date and no due date) waits in the not scheduled list below it until either is picked.
+    db
+      .prepare(
+        `SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND do_date IS NULL AND due_date IS NULL
        ORDER BY remind DESC, created_at DESC LIMIT 60`,
-    )
-    .bind(user.id)
-    .all<NodeRow>();
-  const backTotal = await db
-    .prepare("SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND do_date IS NULL AND due_date IS NULL")
-    .bind(user.id)
-    .first<{ n: number }>();
+      )
+      .bind(user.id)
+      .all<NodeRow>(),
+    db
+      .prepare("SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND do_date IS NULL AND due_date IS NULL")
+      .bind(user.id)
+      .first<{ n: number }>(),
+    // What was ticked today stays in sight under the tasks still waiting, so a tick can be seen and undone.
+    db
+      .prepare("SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? AND completed_at < ? ORDER BY completed_at DESC LIMIT 20")
+      .bind(user.id, dayStart, dayEnd)
+      .all<NodeRow>(),
+    db
+      .prepare("SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ?")
+      .bind(user.id, new Date(Date.now() - 86_400_000).toISOString())
+      .first<{ n: number }>(),
+    taskGate(db, user.id),
+    weakestRelationship(db, user.id),
+    db
+      .prepare('SELECT relationship FROM spark_completions WHERE user_id = ? AND date = ?')
+      .bind(user.id, date)
+      .first<{ relationship: RelationshipKey }>(),
+    notToDoList(db, user.id, date),
+    // A gentle nudge in the inbox, once a day, when a reminder time is set and
+    // the day's check-in has not happened yet.
+    (async () => {
+      if (user.reminder_time && user.last_checkin !== date) {
+        const already = await db.prepare("SELECT 1 FROM notifications WHERE user_id = ? AND kind = 'reminder' AND created_at >= ?").bind(user.id, `${date}T00:00:00`).first();
+        if (!already) await notify(db, user.id, 'reminder', 'Your daily three are waiting', 'Check in, do your small act, tick a task.', '/today');
+      }
+    })(),
+  ]);
+  const tasks = due.results;
 
-  // What was ticked today stays in sight under the tasks still waiting, so a tick can be seen and undone.
-  const [dayStart, dayEnd] = dayBounds(date, user.timezone);
-  const doneToday = await db
-    .prepare("SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? AND completed_at < ? ORDER BY completed_at DESC LIMIT 20")
-    .bind(user.id, dayStart, dayEnd)
-    .all<NodeRow>();
-
-  const recent = await db
-    .prepare("SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ?")
-    .bind(user.id, new Date(Date.now() - 86_400_000).toISOString())
-    .first<{ n: number }>();
-
-  // A gentle nudge in the inbox, once a day, when a reminder time is set and
-  // the day's check-in has not happened yet.
-  if (user.reminder_time && user.last_checkin !== date) {
-    const already = await db.prepare("SELECT 1 FROM notifications WHERE user_id = ? AND kind = 'reminder' AND created_at >= ?").bind(user.id, `${date}T00:00:00`).first();
-    if (!already) await notify(db, user.id, 'reminder', 'Your daily three are waiting', 'Check in, do your small act, tick a task.', '/today');
-  }
-
-  const gate = await taskGate(db, user.id);
-  const relationship = await weakestRelationship(db, user.id);
-  const sparkDone = await db
-    .prepare('SELECT relationship FROM spark_completions WHERE user_id = ? AND date = ?')
-    .bind(user.id, date)
-    .first<{ relationship: RelationshipKey }>();
-
+  // The three lists share one subtask count query (the lists never hold the same task twice).
+  const shown = await withSubtasks(db, user.id, [...tasks, ...back.results, ...doneToday.results].map((t) => toNode(t, gate)));
   const res: TodayResponse = {
     date,
     checkedIn: user.last_checkin === date,
     streak: user.streak,
-    tasks: await withSubtasks(db, user.id, tasks.map((t) => toNode(t, gate))),
-    backlog: await withSubtasks(db, user.id, back.results.map((t) => toNode(t, gate))),
+    tasks: shown.slice(0, tasks.length),
+    backlog: shown.slice(tasks.length, tasks.length + back.results.length),
     backlogTotal: backTotal?.n ?? 0,
-    done: await withSubtasks(db, user.id, doneToday.results.map((t) => toNode(t, gate))),
+    done: shown.slice(tasks.length + back.results.length),
     doneRecently: recent?.n ?? 0,
     timePlan: { plannedMin: plan?.planned ?? 0, doneMin: plan?.done ?? 0, timed: plan?.timed ?? 0 },
     spark: {
@@ -146,7 +150,7 @@ today.get('/', async (c) => {
       text: sparkFor(sparkDone?.relationship ?? relationship, date),
       done: Boolean(sparkDone),
     },
-    notToDo: await notToDoList(db, user.id, date),
+    notToDo,
   };
   return c.json(res);
 });

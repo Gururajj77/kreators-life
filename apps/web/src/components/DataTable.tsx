@@ -281,7 +281,21 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
               const k = rowKey(r);
               const isActive = activeKey === k;
               return (
-                <tr key={k} onClick={onRowClick ? () => onRowClick(r) : undefined} className={`border-t border-line align-middle ${onRowClick ? 'cursor-pointer hover:bg-paper' : ''} ${isActive ? 'bg-paper' : ''}`}>
+                <tr
+                  key={k}
+                  onClick={onRowClick ? () => onRowClick(r) : undefined}
+                  // A clickable row is reachable and opens with Enter or Space, like the mouse does (only when the row itself has focus, not a control inside it).
+                  tabIndex={onRowClick ? 0 : undefined}
+                  onKeyDown={
+                    onRowClick
+                      ? (e) => {
+                          if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return;
+                          e.preventDefault();
+                          onRowClick(r);
+                        }
+                      : undefined
+                  }
+                  className={`border-t border-line align-middle ${onRowClick ? 'cursor-pointer hover:bg-paper' : ''} ${isActive ? 'bg-paper' : ''}`}>
                   {selectable && (
                     <td className="px-sm py-sm" onClick={(e) => e.stopPropagation()}>
                       <input

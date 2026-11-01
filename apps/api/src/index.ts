@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { cors } from 'hono/cors';
+import { HTTPException } from 'hono/http-exception';
 import type { AppEnv, Env, UserRow } from './env';
 import { auth } from './routes/auth';
 import { me } from './routes/me';
@@ -42,6 +42,8 @@ import { builder } from './routes/builder';
 import { secureHeaders } from 'hono/secure-headers';
 import { rateLimit } from './ops';
 import { isOpenDoor, ROUTE_LIMITS } from './limits';
+import { legalPublic, meLegal } from './routes/legal';
+import { pruneVitals, vitalsPublic } from './routes/vitals';
 import { modulesForPath, resolveAccess } from './access';
 import { MODULE_BY_KEY } from '@kreators/shared';
 import { finance, publicInvoices } from './routes/finance';
@@ -65,26 +67,69 @@ import { calendarMe, calendarPublic } from './routes/calendar';
 import { agencyDocs, contractsPublic } from './routes/agencyDocs';
 import { connect } from './routes/connect';
 import { logger, pruneLogs, writeClientError, writeLog } from './logs';
+import { blockedPath, originAllowed, PAGE_HEADERS } from './headers';
 
 const app = new Hono<AppEnv>().basePath('/api');
 
-app.use('*', cors());
-app.use('*', secureHeaders());
+// No CORS: the app and its API are one origin (the Worker serves both), so no other site is ever allowed to read an answer from a browser.
+// A short id for every request. It goes back in X-Request-Id, in the body of a server error and in the log line, so a report can be traced.
+app.use('*', async (c, next) => {
+  c.set('requestId', Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) => b.toString(16).padStart(2, '0')).join(''));
+  await next();
+  try {
+    c.res.headers.set('X-Request-Id', c.get('requestId') ?? '');
+  } catch {
+    // a response with fixed headers keeps none
+  }
+});
+// Defence in depth for a write: if a browser says which page it comes from, the page must be this site. Auth is a Bearer header, so a
+// foreign page could not act as the person anyway. No Origin (scripts, webhooks, the smoke tests) passes; webhooks check their own signature.
+app.use('*', async (c, next) => {
+  if (c.req.method === 'GET' || c.req.method === 'HEAD' || c.req.method === 'OPTIONS') return next();
+  const origin = c.req.header('Origin');
+  if (!origin || new URL(c.req.url).pathname.startsWith('/api/webhooks/')) return next();
+  if (originAllowed(origin, c.req.url, c.env.PUBLIC_URL)) return next();
+  return c.json({ error: 'wrong origin' }, 403);
+});
+app.use(
+  '*',
+  secureHeaders({
+    contentSecurityPolicy: { defaultSrc: ["'none'"], frameAncestors: ["'none'"], baseUri: ["'none'"], formAction: ["'none'"] },
+    strictTransportSecurity: 'max-age=63072000; includeSubDomains',
+    xFrameOptions: 'DENY',
+    referrerPolicy: 'strict-origin-when-cross-origin',
+    permissionsPolicy: { camera: [], microphone: [], geolocation: [] },
+  }),
+);
+// Nothing a signed-in person is shown is kept by a browser or a proxy. Public answers keep whatever cache line their route set (media, calendar).
+app.use('*', async (c, next) => {
+  await next();
+  const path = new URL(c.req.url).pathname;
+  const sensitive = path.startsWith('/api/auth/') || path.startsWith('/api/me/') || path === '/api/me';
+  if (!sensitive && (path.startsWith('/api/public/') || c.res.headers.has('Cache-Control'))) return;
+  try {
+    c.res.headers.set('Cache-Control', 'no-store');
+  } catch {
+    // a response with fixed headers keeps its own
+  }
+});
 // The app's own log of what changed, what was refused and what broke. See logs.ts.
 app.use('*', logger());
 
 app.get('/health', (c) => c.json({ ok: true, at: new Date().toISOString() }));
+// Abuse limits on the doors that take no session, per address. The numbers live in limits.ts. They are registered first, so a limit runs before the door it guards.
+for (const r of ROUTE_LIMITS) if (isOpenDoor(r.path)) app.on(r.method, r.path, rateLimit(r.limit));
 // A screen that broke in someone's browser says so here: a short message and where, never who. Limited per address.
 app.post('/public/client-error', async (c) => {
   const body = await c.req.json<{ message?: unknown; path?: unknown }>().catch(() => ({}) as { message?: unknown; path?: unknown });
   await writeClientError(c, body);
   return c.json({ ok: true });
 });
-// Abuse limits on the doors that take no session, per address. The numbers live in limits.ts.
-for (const r of ROUTE_LIMITS) if (isOpenDoor(r.path)) app.on(r.method, r.path, rateLimit(r.limit));
 app.route('/auth', auth);
 // Admin uses its own key, or an admin's session. Public pages need no session.
 app.route('/admin', admin);
+app.route('/public', legalPublic);
+app.route('/public', vitalsPublic);
 app.route('/public/explore', explore);
 app.route('/public/media', mediaPublic);
 app.route('/public/certificates', certificates);
@@ -130,6 +175,7 @@ for (const r of ROUTE_LIMITS) if (!isOpenDoor(r.path)) app.on(r.method, r.path, 
 // The student's side of coaching is core, so it is mounted before the rest of /me and never gated.
 app.route('/me/coach', myCoach);
 app.route('/me/calendar', calendarMe);
+app.route('/me/legal', meLegal);
 app.route('/me', me);
 app.route('/onboarding', onboarding);
 app.route('/session', session);
@@ -188,18 +234,49 @@ app.route('/coach', coach);
 
 app.notFound((c) => c.json({ error: 'not found' }, 404));
 app.onError((err, c) => {
-  console.error(err);
-  c.set('logNote', (err instanceof Error ? `${err.name}: ${err.message}` : String(err)).slice(0, 300));
-  return c.json({ error: 'something broke on our side' }, 500);
+  const requestId = c.get('requestId') ?? '';
+  if (err instanceof HTTPException) return err.getResponse();
+  // A body that is not JSON is the sender's mistake, not ours. Its message can quote the start of the body, so it is neither logged nor sent back.
+  if (err instanceof SyntaxError) {
+    c.set('logNote', `[${requestId}] SyntaxError: a body that is not valid JSON`);
+    return c.json({ error: 'that request was not valid JSON', requestId }, 400);
+  }
+  console.error(requestId, err);
+  c.set('logNote', `[${requestId}] ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`.slice(0, 300));
+  // The answer never carries the error's text, a stack or a query: only a plain line and the id to quote.
+  return c.json({ error: 'something broke on our side', requestId }, 500);
 });
 
 // /go/:code lives outside /api so links stay short. The Worker runs first for /api/* and /go/*.
 const root = new Hono<AppEnv>();
 root.route('/', go);
 root.route('/', app);
+// A route that does not exist answers with one plain JSON line, like the rest of the API (the sub-app's own notFound is not inherited when it is mounted).
+root.notFound((c) => c.json({ error: 'not found' }, 404));
+
+/** The words the Worker itself answers with for a page (not an API answer): the same headers as the static files get from _headers. */
+function withPageHeaders(res: Response): Response {
+  const out = new Response(res.body, res);
+  for (const [k, v] of Object.entries(PAGE_HEADERS)) out.headers.set(k, v);
+  return out;
+}
+const GO_PATHS = /^\/(?:go\/|out\/|__scheduled)|^\/$|^\/sitemap\.xml$/;
+
+/**
+ * Everything the Worker sees. /api/* is the API (its own headers). A path that holds nothing (hidden files, backups, dumps, config) answers 404
+ * and never the app shell. The short links and the site home are the Worker's own pages. Anything else that reached the Worker only because
+ * of a "run first" pattern is handed on to the static files.
+ */
+async function handle(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const { pathname } = new URL(req.url);
+  if (pathname === '/api' || pathname.startsWith('/api/')) return root.fetch(req, env, ctx);
+  if (blockedPath(pathname)) return withPageHeaders(new Response('not found', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' } }));
+  if (!GO_PATHS.test(pathname) && env.ASSETS) return withPageHeaders(await env.ASSETS.fetch(req));
+  return withPageHeaders(await root.fetch(req, env, ctx));
+}
 
 export default {
-  fetch: root.fetch,
+  fetch: handle,
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(
       runScheduled(env, event.cron)
@@ -209,6 +286,7 @@ export default {
           // A quiet run leaves no line; one that did something says what, and the old lines are tidied away.
           if (did) await writeLog(env.DB, { level: 'info', area: 'cron', message: did });
           await pruneLogs(env.DB);
+          await pruneVitals(env.DB);
           await env.DB.prepare('DELETE FROM session_evictions WHERE created_at < ?').bind(new Date(Date.now() - 30 * 86_400_000).toISOString()).run();
         })
         .catch((err) => writeLog(env.DB, { level: 'error', area: 'cron', message: err instanceof Error ? `${err.name}: ${err.message}` : String(err) })),

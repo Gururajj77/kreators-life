@@ -2,6 +2,7 @@
 // Node imports the shared model straight from TypeScript (--experimental-strip-types).
 import { LOVE_PAIRS, MIND_SCREENS, TYPE_NAMES, TYPE_SCREENS, DISCOVER_CORE_STEPS, DISCOVER_SCENES, DISCOVER_STEPS, EQ_FEELINGS, EQ_PEOPLE, EQ_READING, PUZZLES_SHOWN, puzzleAt, RELATIONSHIPS, QUESTIONS, XP, POINTS, WAIT, RUN_REWARD, SOCIAL_REWARDS, MAX_NOT_TO_DO, MODULES, FEATURE_FEE_POINTS, matchSetup, parseSetup, setupSwitchable } from '../../packages/shared/src/index.ts';
 import { LIMITS } from '../../apps/api/src/limits.ts';
+import { LEGAL_VERSION } from '../../packages/shared/src/index.ts';
 import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, PLANS } from '../../packages/shared/src/index.ts';
 import http from 'node:http';
 
@@ -36,7 +37,8 @@ async function api(method, path, body, token, headers = {}) {
   const res = await fetch(`${API}${path}`, {
     method,
     headers: { 'content-type': 'application/json', 'CF-Connecting-IP': ADDRESS, ...(token ? { authorization: `Bearer ${token}` } : {}), ...headers },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    // Every sign-up ticks the terms box, unless a check says otherwise.
+    body: body === undefined ? undefined : JSON.stringify(path === '/auth/signup' && body && body.acceptTerms === undefined ? { acceptTerms: true, ...body } : body),
   });
   const text = await res.text();
   let json = null;
@@ -2405,6 +2407,151 @@ section('Week plan, focus quality and the calendar link');
   void preloaded;
 }
 
+section('Legal: terms, privacy choices, notices');
+{
+  const crypto = await import('node:crypto');
+  const noBox = await api('POST', '/auth/signup', { email: `nobox-${stamp}@smoke.test`, password: `Kettle-${stamp}-pass`, phone: PHONE, birthDate: GROWN, acceptTerms: false });
+  check('an account is not made until the terms box is ticked', noBox.status === 400 && /agree/.test(noBox.json.error ?? ''), noBox.json);
+  const L = await signup(`legal-${stamp}@smoke.test`, `Kettle-${stamp}-pass`, 'Smoke legal');
+  const st0 = await api('GET', '/me/legal', undefined, L.token);
+  check('the terms and privacy policy are on record from sign-up, at this version', st0.status === 200 && Boolean(st0.json.acceptedAt?.terms) && Boolean(st0.json.acceptedAt?.privacy) && st0.json.needsAcceptance === false && st0.json.legalVersion === LEGAL_VERSION, st0.json);
+  check('nothing is chosen yet, so the popup asks once, and every choice starts off', st0.json.decided === false && Object.values(st0.json.consent).every((v) => v === false), st0.json.consent);
+  const again = await api('POST', '/me/legal/accept', undefined, L.token);
+  const exp0 = await api('GET', '/me/export', undefined, L.token);
+  check('accepting again adds nothing: one line per document and version', again.status === 200 && exp0.json.termsAcceptances?.length === 2, exp0.json.termsAcceptances?.length);
+  const pick = await api('PUT', '/me/legal/consent', { choices: { attribution: true, embeds: false, marketing: true, rubbish: true }, source: 'popup' }, L.token);
+  check('the answer is kept on the account, and an unknown choice is ignored', pick.status === 200 && pick.json.decided === true && pick.json.consent.attribution === true && pick.json.consent.marketing === true && pick.json.consent.embeds === false && !('rubbish' in pick.json.consent), pick.json);
+  const back = await api('GET', '/me/legal', undefined, L.token);
+  check('and it is there the next time, so the popup is not shown again', back.json.decided === true && back.json.consent.marketing === true, back.json);
+  await api('PUT', '/me/legal/consent', { choices: { attribution: true, embeds: false, marketing: false }, source: 'profile' }, L.token);
+  const exp1 = await api('GET', '/me/export', undefined, L.token);
+  const log = exp1.json.privacyChoiceLog ?? [];
+  check('every choice is logged with where it was made', log.length >= 4 && log.some((r) => r.source === 'popup') && log.some((r) => r.source === 'profile' && r.purpose === 'marketing' && r.granted === 0), log.map((r) => `${r.purpose}:${r.granted}:${r.source}`));
+  const others = await api('GET', '/me/legal', undefined, B.token);
+  check('nobody else sees them', others.json.decided === false, others.json.decided);
+
+  const biz = await api('GET', '/public/business');
+  check('the business details come from the server, empty until the owner sets them', biz.status === 200 && biz.json.business && typeof biz.json.business.name === 'string' && biz.json.business.dmcaRegistered === false, biz.json);
+  const badNotice = await api('POST', '/public/copyright-notice', { name: 'A', email: 'nope' });
+  check('a copyright notice needs a real email, the work and a signature', badNotice.status === 400, badNotice.json);
+  const notice = await api('POST', '/public/copyright-notice', { kind: 'notice', name: 'Rights Holder', email: 'rights@smoke.test', work: 'My photo', urls: 'https://kreators.app/p/example', statement: 'I believe this is not allowed.', signature: 'Rights Holder' });
+  check('a notice is taken, with a reference, and the admins are told', notice.status === 201 && Boolean(notice.json.reference), notice.json);
+  const adminNote = JSON.stringify((await api('GET', '/inbox', undefined, A.token)).json);
+  check('the founder has the notice in the inbox', adminNote.includes('Copyright notice'), adminNote.slice(0, 120));
+
+  const token = `${L.user.id}.${crypto.createHash('sha256').update(`smoke-salt:unsubscribe:${L.user.id}`).digest('hex').slice(0, 24)}`;
+  await api('PUT', '/me/legal/consent', { choices: { attribution: true, embeds: true, marketing: true }, source: 'profile' }, L.token);
+  check('a made-up unsubscribe link is refused', (await api('POST', `/public/unsubscribe/${L.user.id}.${'0'.repeat(24)}`)).status === 404);
+  const unsub = await api('POST', `/public/unsubscribe/${token}`);
+  const after = await api('GET', '/me/legal', undefined, L.token);
+  check('the unsubscribe link turns off marketing mail and nothing else', unsub.status === 200 && after.json.consent.marketing === false && after.json.consent.attribution === true && after.json.consent.embeds === true, after.json.consent);
+
+  // The tracked-link cookie follows the choice: waits for a yes in the EU, is set elsewhere unless a no or Global Privacy Control says otherwise.
+  const lk = await api('POST', '/studio/links', { label: 'smoke legal' }, A.token);
+  const code = lk.json.link?.code ?? lk.json.code;
+  const hit = async (headers) => (await fetch(`${ORIGIN}/go/${code}`, { redirect: 'manual', headers: { 'CF-Connecting-IP': ADDRESS, ...headers } })).headers.get('set-cookie') ?? '';
+  check('in Germany the cookie waits for a yes', code && !(await hit({ 'CF-IPCountry': 'DE' })).includes('kl_click'));
+  check('in Germany a yes lets it be set', (await hit({ 'CF-IPCountry': 'DE', Cookie: 'kc_attr=1' })).includes('kl_click'));
+  check('in India it is set unless they said no', (await hit({ 'CF-IPCountry': 'IN' })).includes('kl_click') && !(await hit({ 'CF-IPCountry': 'IN', Cookie: 'kc_attr=0' })).includes('kl_click'));
+  check('a browser that sends Global Privacy Control gets no cookie', !(await hit({ 'CF-IPCountry': 'IN', 'Sec-GPC': '1' })).includes('kl_click'));
+}
+
+section('Security: headers, origin, exposed files, errors, addresses, alerts');
+{
+  const { publicHttpsUrl } = await import('../../apps/api/src/safeurl.ts');
+  const { CSP, PAGE_HEADERS, blockedPath, originAllowed } = await import('../../apps/api/src/headers.ts');
+  const { alertsFor } = await import('../../apps/api/src/alerts.ts');
+  const { readFileSync } = await import('node:fs');
+  const lower = (h) => Object.fromEntries([...h.entries()].map(([k, v]) => [k.toLowerCase(), v]));
+
+  // Headers on the site home (the Worker's own page) and on a static page and an API answer.
+  const home = lower((await fetch(`${ORIGIN}/`)).headers);
+  const shell = lower((await fetch(`${ORIGIN}/today`)).headers);
+  for (const [label, h] of [['the site home', home], ['a page of the app', shell]]) {
+    check(`${label} carries a Content-Security-Policy (enforcing or report-only)`, Boolean(h['content-security-policy'] || h['content-security-policy-report-only']));
+    check(`${label} carries HSTS for two years without preload`, h['strict-transport-security'] === 'max-age=63072000; includeSubDomains', h['strict-transport-security']);
+    check(`${label} carries nosniff, DENY and the referrer policy`, h['x-content-type-options'] === 'nosniff' && h['x-frame-options'] === 'DENY' && h['referrer-policy'] === 'strict-origin-when-cross-origin', [h['x-content-type-options'], h['x-frame-options'], h['referrer-policy']]);
+    check(`${label} limits camera, microphone and position, and keeps popups for payment`, h['permissions-policy'] === PAGE_HEADERS['Permissions-Policy'] && h['cross-origin-opener-policy'] === 'same-origin-allow-popups', [h['permissions-policy'], h['cross-origin-opener-policy']]);
+  }
+  const policy = shell['content-security-policy'] ?? shell['content-security-policy-report-only'] ?? '';
+  check('the policy served for static files is the one written in code', policy === CSP, policy.slice(0, 120));
+  const fileHeaders = readFileSync(new URL('../../apps/web/public/_headers', import.meta.url), 'utf8');
+  check('the _headers file and the Worker send the same policy line', fileHeaders.includes(CSP));
+  check('the policy has no script-src wildcard, no unsafe-inline for scripts and no object or frame-ancestors gap', !/script-src[^;]*(\*|unsafe-inline|unsafe-eval)/.test(CSP) && CSP.includes("object-src 'none'") && CSP.includes("frame-ancestors 'none'"));
+  check('the reset page is sent without a referrer', fileHeaders.includes('/signin/reset') && fileHeaders.includes('Referrer-Policy: no-referrer'));
+  const hz = await fetch(`${API}/health`);
+  const hh = lower(hz.headers);
+  check('API answers carry the full set and no-store', hh['x-frame-options'] === 'DENY' && hh['x-content-type-options'] === 'nosniff' && hh['strict-transport-security'] === 'max-age=63072000; includeSubDomains' && hh['cache-control'] === 'no-store', hh);
+  check('every API answer carries a request id', /^[0-9a-f]{8}$/.test(hh['x-request-id'] ?? ''), hh['x-request-id']);
+  const meH = await api('GET', '/me', undefined, A.token);
+  check('a signed-in answer is never cached', lower(meH.headers)['cache-control'] === 'no-store', lower(meH.headers)['cache-control']);
+
+  // CORS: nobody else's page may read an answer.
+  const evil = 'https://evil.example';
+  // Sign-in probes come from an address of their own, so they never use up the main one's sign-in allowance.
+  const SEC = { 'CF-Connecting-IP': `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 7) & 255}` };
+  const cors1 = await fetch(`${API}/health`, { headers: { Origin: evil } });
+  const cors2 = await fetch(`${API}/me`, { headers: { Origin: evil, authorization: `Bearer ${A.token}` } });
+  const pre = await fetch(`${API}/me`, { method: 'OPTIONS', headers: { Origin: evil, 'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'authorization' } });
+  check('an unknown origin gets no Access-Control-Allow-Origin on /api/health, /api/me or a preflight', !cors1.headers.get('access-control-allow-origin') && !cors2.headers.get('access-control-allow-origin') && !pre.headers.get('access-control-allow-origin'), [cors1.headers.get('access-control-allow-origin'), cors2.headers.get('access-control-allow-origin'), pre.headers.get('access-control-allow-origin')]);
+
+  // A write from a foreign page is refused; the same site, no origin, and a webhook are not.
+  const foreign = await api('POST', '/auth/signin', { email: 'nobody@smoke.test', password: 'x' }, undefined, { ...SEC, Origin: evil });
+  check('a write that says it comes from another site is refused with 403', foreign.status === 403 && foreign.json.error === 'wrong origin', foreign);
+  const putForeign = await api('PATCH', '/me', { displayName: 'x' }, A.token, { Origin: evil });
+  check('a signed-in write from another site changes nothing', putForeign.status === 403 && (await api('GET', '/me', undefined, A.token)).json.user?.displayName !== 'x', putForeign.status);
+  const own = await api('POST', '/auth/signin', { email: 'nobody@smoke.test', password: 'x' }, undefined, { ...SEC, Origin: ORIGIN });
+  check('a write from the site itself goes through to the sign-in door', own.status === 401, own.status);
+  const none = await api('POST', '/auth/signin', { email: 'nobody@smoke.test', password: 'x' }, undefined, SEC);
+  check('a write with no origin (a script, the app tests) goes through', none.status === 401, none.status);
+  const hook = await api('POST', '/webhooks/razorpay', {}, undefined, { Origin: evil });
+  check('a webhook is checked by its signature, not by origin', hook.json.error !== 'wrong origin', hook);
+  check('originAllowed: own host, PUBLIC_URL and loopback in development pass; others and "null" do not', originAllowed('https://kreators.app', 'https://kreators.app/api/x') && originAllowed('https://kreators.app', 'https://kreators-life.workers.dev/api/x', 'https://kreators.app') && originAllowed('http://localhost:5173', 'http://localhost:8787/api/x') && !originAllowed('http://localhost:5173', 'https://kreators.app/api/x') && !originAllowed('https://evil.example', 'https://kreators.app/api/x') && !originAllowed('null', 'https://kreators.app/api/x'));
+
+  // Files that must not exist for a visitor answer 404, never the app shell; files the site ships still answer.
+  const hidden = ['/.env', '/.env.local', '/.git/config', '/.git/HEAD', '/.gitignore', '/.DS_Store', '/.dev.vars', '/backup.zip', '/backup.sql', '/db.sql', '/dump.sql', '/database.sql', '/site.zip', '/config.json', '/package.json', '/wrangler.jsonc', '/docker-compose.yml', '/assets/index.js.map', '/wp-admin/', '/wp-config.php', '/phpmyadmin/', '/id_rsa', '/id_rsa.pub', '/configuration.json', '/tsconfig.json', '/pnpm-lock.yaml', '/src/main.tsx', '/server-status', '/logs/'];
+  const codes = await Promise.all(hidden.map(async (p) => [p, (await fetch(`${ORIGIN}${p}`)).status]));
+  const notHidden = codes.filter(([, s]) => s !== 404);
+  check('hidden, backup, dump, config and map files answer 404', notHidden.length === 0, notHidden);
+  const shipped = ['/sw.js', '/manifest.webmanifest', '/licences.json', '/icon.svg', '/og.png', '/registerSW.js'];
+  const shippedCodes = await Promise.all(shipped.map(async (p) => [p, (await fetch(`${ORIGIN}${p}`)).status]));
+  check('the files the site ships still answer 200', shippedCodes.every(([, s]) => s === 200), shippedCodes);
+  const wrangler = readFileSync(new URL('../../apps/api/wrangler.jsonc', import.meta.url), 'utf8');
+  const { BLOCKED_PATTERNS } = await import('../../apps/api/src/headers.ts');
+  check('wrangler sends every blocked pattern to the Worker and leaves /.well-known alone', BLOCKED_PATTERNS.every((x) => wrangler.includes(`"${x}"`)) && wrangler.includes('"!/.well-known/*"'), BLOCKED_PATTERNS.filter((x) => !wrangler.includes(`"${x}"`)));
+  check('app screens and /.well-known are not caught by the hidden-file rule', ['/admin', '/settings', '/signin/reset', '/today', '/.well-known/security.txt', '/assets/index-abc.js', '/fonts/urbanist-latin.woff2', '/resources/x.md', '/u/someone.name'].every((p) => !blockedPath(p)) && blockedPath('/.env') && blockedPath('/a/.git/config') && blockedPath('/%2eenv'));
+
+  // Errors: a body that is not JSON and a path that does not exist answer plainly.
+  const bad = await fetch(`${API}/auth/signin`, { method: 'POST', headers: { 'content-type': 'application/json', ...SEC }, body: '{"email": "a@b.co", "password": "hunter2-secret' });
+  const badText = await bad.text();
+  check('a body that is not JSON answers 4xx with no stack, no parser text and nothing of the body', bad.status >= 400 && bad.status < 500 && !/SyntaxError|at \w+ \(|node_modules|hunter2|Unexpected/.test(badText), [bad.status, badText.slice(0, 160)]);
+  const bad2 = await fetch(`${API}/nodes`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${A.token}` }, body: '{"title": "x", "password": "hunter2-secret' });
+  const bad2Text = await bad2.text();
+  check('a signed-in route with a body that is not JSON also stays clean and keeps the secret out', bad2.status >= 400 && bad2.status < 500 && !/SyntaxError|at \w+ \(|node_modules|hunter2|Unexpected/.test(bad2Text), [bad2.status, bad2Text.slice(0, 160)]);
+  const none404 = await api('GET', '/this/route/does/not/exist', undefined, A.token);
+  check('an unknown API route answers 404 with one plain line', none404.status === 404 && none404.json.error === 'not found' && Object.keys(none404.json).length === 1, none404);
+  const dir = await fetch(`${API}/public/..%2f..%2fwrangler.jsonc`);
+  check('a path walk in the API finds nothing', dir.status === 404 || dir.status === 400, dir.status);
+
+  // Addresses a person gives: only public https is ever fetched by the Worker.
+  const refused = ['http://example.com/a', 'https://127.0.0.1/a', 'https://127.1/', 'https://0x7f000001/', 'https://2130706433/', 'https://169.254.169.254/latest/meta-data/', 'https://[::1]/', 'https://[fe80::1]/', 'https://localhost/a', 'https://app.localhost/', 'https://printer.local/', 'https://metadata.google.internal/', 'https://db.internal/', 'https://intranet/', 'https://user:pass@example.com/', 'https://user@example.com/', 'https://example.com:8443/', 'https://example.com:80/', 'ftp://example.com/', 'javascript:alert(1)', 'file:///etc/passwd', '//example.com/a', 'https://10.0.0.1/', 'https://192.168.1.1/', 'https://127.0.0.1.nip.io/', '', 'not a url'];
+  const let_through = refused.filter((u) => publicHttpsUrl(u) !== null);
+  check('publicHttpsUrl refuses http, IP numbers, localhost, internal names, logins, odd ports and other schemes', let_through.length === 0, let_through);
+  check('publicHttpsUrl accepts https://example.com/a and a normal :443 address', publicHttpsUrl('https://example.com/a')?.href === 'https://example.com/a' && publicHttpsUrl('https://www.youtube.com:443/watch?v=abc')?.hostname === 'www.youtube.com');
+
+  // Alerts: the rules, on counts alone.
+  const quiet = alertsFor({ failedSignins: 19, refusals: 50, tooMany: 99, serverErrors: 19, roleChanges: 0 });
+  const loud = alertsFor({ failedSignins: 20, refusals: 300, tooMany: 100, serverErrors: 20, roleChanges: 1 });
+  check('below the levels no alert is made; at the levels each one is', quiet.length === 0 && loud.map((a) => a.kind).sort().join() === 'errors,limits,roles,signins', [quiet, loud.map((a) => a.kind)]);
+  check('an alert holds counts only, no name, address or request', loud.every((a) => !/@|Bearer|\d+\.\d+\.\d+\.\d+/.test(a.body)));
+  // A role change is in the audit trail by now (the Admin section changed roles in the last minutes), so the cron tells the admins once.
+  await fetch(`${ORIGIN}/__scheduled?cron=*%2F15+*+*+*+*`);
+  await fetch(`${ORIGIN}/__scheduled?cron=*%2F15+*+*+*+*`);
+  const adminInbox = await api('GET', '/inbox?tab=team', undefined, A.token);
+  const roleNotes = (adminInbox.json.notifications ?? []).filter((n) => n.title === 'A role or permission was changed');
+  check('after a role change the admins are told in the inbox, and two cron runs in an hour tell them once', roleNotes.length >= 1 && roleNotes.length <= 2, [roleNotes.length, Object.keys(adminInbox.json)]);
+}
+
 section('Export and delete');
 {
   const exp = await api('GET', '/me/export', undefined, B.token);
@@ -2428,7 +2575,8 @@ section('Limits');
 {
   const third = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 2) & 255}`;
   let last = 0;
-  for (let i = 0; i < 11; i += 1) {
+  // Eleven tries in one window must hit the limit; if the minute rolled over halfway, a few more tries do.
+  for (let i = 0; i < 25 && last !== 429; i += 1) {
     const r = await api('POST', '/auth/signin', { email: `guess-${stamp}-${i}@smoke.test`, password: 'not-the-password-1' }, null, { 'CF-Connecting-IP': third });
     last = r.status;
   }

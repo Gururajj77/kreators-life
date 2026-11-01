@@ -820,7 +820,7 @@ export function SessionChat() {
   const submitAccount = (rec: Record<string, string>) => {
     say('bumling', [], { ask: { kind: 'wait', text: 'Making your account' } });
     api
-      .signup({ email: rec.email ?? '', password: rec.password ?? '', displayName: rec.name || undefined, phone: rec.phone ?? '', birthDate: rec.birthDate ?? '' })
+      .signup({ email: rec.email ?? '', password: rec.password ?? '', displayName: rec.name || undefined, phone: rec.phone ?? '', birthDate: rec.birthDate ?? '', acceptTerms: rec.acceptTerms === 'yes' })
       .then(async (r) => {
         setToken(r.token);
         await refresh();

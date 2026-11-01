@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Cohort, CohortSession, CourseAssignment, Enrollment, LearningItem, Program, Submission } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { audit, can, nameOf, newId, notify, nowIso, num, oneOf, str, pageOf, paged } from '../db';
+import { audit, can, nameOf, newId, notify, nowIso, num, oneOf, str, pageOf, paged, httpUrl } from '../db';
 
 export const school = new Hono<AppEnv>();
 
@@ -231,7 +231,7 @@ school.post('/cohorts/:id/sessions', async (c) => {
   const startsAt = str(body.startsAt, 40);
   if (!title || !startsAt) return c.json({ error: 'title and a start time' }, 400);
   const start = new Date(startsAt);
-  await db.prepare('INSERT INTO cohort_sessions (id, cohort_id, title, starts_at, ends_at, online_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(newId(), c.req.param('id'), title, start.toISOString(), new Date(start.getTime() + (num(body.minutes, 60, 15, 600) ?? 60) * 60_000).toISOString(), str(body.onlineUrl, 500) || null, nowIso()).run();
+  await db.prepare('INSERT INTO cohort_sessions (id, cohort_id, title, starts_at, ends_at, online_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(newId(), c.req.param('id'), title, start.toISOString(), new Date(start.getTime() + (num(body.minutes, 60, 15, 600) ?? 60) * 60_000).toISOString(), httpUrl(body.onlineUrl, 500) || null, nowIso()).run();
   return c.json({ ok: true }, 201);
 });
 

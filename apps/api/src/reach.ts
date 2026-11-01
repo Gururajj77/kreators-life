@@ -1,5 +1,7 @@
 import { detectPlatform, type ResearchItem } from '@kreators/shared';
 import type { Env } from './env';
+import { fetchT, TIMEOUT } from './http';
+import { publicHttpsUrl, safeFetch, UnsafeUrlError } from './safeurl';
 
 /**
  * Research for the content strategist. The real engine is Agent Reach, a read-only command-line tool
@@ -94,13 +96,15 @@ export function htmlToText(html: string): { title: string; description: string; 
 
 async function readPage(url: string): Promise<ReachResult> {
   try {
-    const res = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0 (compatible; kreators.app content strategist)', accept: 'text/html,*/*' }, redirect: 'follow' });
+    // The address came from a person: only a public https address is read, redirects are checked one by one, and the page is cut at 1 MB.
+    const res = await safeFetch(url, { headers: { 'user-agent': 'Mozilla/5.0 (compatible; kreators.app content strategist)', accept: 'text/html,*/*' } }, { timeoutMs: 10_000, maxBytes: 1_000_000 });
     if (!res.ok) return fail(`The page answered ${res.status}.`, 'page');
     const type = res.headers.get('content-type') ?? '';
     const raw = await res.text();
     const page = type.includes('html') ? htmlToText(raw) : { title: '', description: '', text: clip(raw, 20_000) };
     return { ok: true, backend: 'page', items: [{ title: page.title, url, author: '', publishedAt: '', text: [page.description, page.text].filter(Boolean).join('\n\n'), stats: {} }], error: '' };
-  } catch {
+  } catch (e) {
+    if (e instanceof UnsafeUrlError) return fail(e.message, 'page');
     return fail('That page could not be read.', 'page');
   }
 }
@@ -126,11 +130,11 @@ async function youtubeApi(env: Env, action: 'read' | 'search', target: string, l
     let ids: string[] = [];
     if (action === 'read') ids = [ytId(target)].filter(Boolean);
     else {
-      const s = (await (await fetch(`${YT}/search?part=snippet&type=video&maxResults=${Math.min(25, limit)}&q=${encodeURIComponent(target)}&key=${env.YOUTUBE_API_KEY}`)).json()) as { items?: YtVideo[] };
+      const s = (await (await fetchT(`${YT}/search?part=snippet&type=video&maxResults=${Math.min(25, limit)}&q=${encodeURIComponent(target)}&key=${env.YOUTUBE_API_KEY}`, {}, TIMEOUT.quick)).json()) as { items?: YtVideo[] };
       ids = (s.items ?? []).map((v) => (typeof v.id === 'string' ? v.id : (v.id?.videoId ?? ''))).filter(Boolean);
     }
     if (ids.length === 0) return fail('No videos found.', 'youtube-api');
-    const d = (await (await fetch(`${YT}/videos?part=snippet,statistics&id=${ids.join(',')}&key=${env.YOUTUBE_API_KEY}`)).json()) as { items?: YtVideo[] };
+    const d = (await (await fetchT(`${YT}/videos?part=snippet,statistics&id=${ids.join(',')}&key=${env.YOUTUBE_API_KEY}`, {}, TIMEOUT.quick)).json()) as { items?: YtVideo[] };
     return { ok: true, backend: 'youtube-api', items: (d.items ?? []).map(ytItem), error: '' };
   } catch {
     return fail('YouTube did not answer.', 'youtube-api');
@@ -141,10 +145,10 @@ async function youtubeApi(env: Env, action: 'read' | 'search', target: string, l
 async function channelsFor(env: Env, query: string, n: number): Promise<ReachResult> {
   if (env.YOUTUBE_API_KEY) {
     try {
-      const s = (await (await fetch(`${YT}/search?part=snippet&type=channel&maxResults=${Math.min(25, n)}&q=${encodeURIComponent(query)}&key=${env.YOUTUBE_API_KEY}`)).json()) as { items?: { id?: { channelId?: string } }[] };
+      const s = (await (await fetchT(`${YT}/search?part=snippet&type=channel&maxResults=${Math.min(25, n)}&q=${encodeURIComponent(query)}&key=${env.YOUTUBE_API_KEY}`, {}, TIMEOUT.quick)).json()) as { items?: { id?: { channelId?: string } }[] };
       const ids = (s.items ?? []).map((c) => c.id?.channelId ?? '').filter(Boolean);
       if (ids.length) {
-        const d = (await (await fetch(`${YT}/channels?part=snippet,statistics&id=${ids.join(',')}&key=${env.YOUTUBE_API_KEY}`)).json()) as { items?: { id: string; snippet?: { title?: string; description?: string; publishedAt?: string }; statistics?: { subscriberCount?: string; viewCount?: string; videoCount?: string } }[] };
+        const d = (await (await fetchT(`${YT}/channels?part=snippet,statistics&id=${ids.join(',')}&key=${env.YOUTUBE_API_KEY}`, {}, TIMEOUT.quick)).json()) as { items?: { id: string; snippet?: { title?: string; description?: string; publishedAt?: string }; statistics?: { subscriberCount?: string; viewCount?: string; videoCount?: string } }[] };
         const items: ResearchItem[] = (d.items ?? [])
           .map((c) => ({
             title: clip(c.snippet?.title ?? '', 200),
@@ -182,6 +186,8 @@ async function channelsFor(env: Env, query: string, n: number): Promise<ReachRes
 
 /** Read one link: the channel is picked from the address, Agent Reach first, the Worker's own readers after. */
 export async function readLink(env: Env, url: string): Promise<ReachResult> {
+  // A link that is not a public https address goes nowhere, not to the bridge and not to a page reader.
+  if (!publicHttpsUrl(url)) return fail('That link is not a public https address, so it was not read.');
   const platform = detectPlatform(url);
   if (reachConnected(env)) {
     const viaReach =
@@ -221,6 +227,7 @@ export async function research(env: Env, kind: string, query: string, limit: num
     case 'reddit_search':
       return reachConnected(env) ? bridge(env, 'reddit', 'search', { query, limit: n }) : fail('Searching Reddit needs Agent Reach.');
     case 'transcript':
+      if (/^[a-z][a-z0-9+.-]*:\/\//i.test(query.trim()) && !publicHttpsUrl(query)) return fail('That link is not a public https address, so it was not read.');
       return reachConnected(env) ? bridge(env, 'youtube', 'subtitle', { target: query, lang: 'en,en-orig,hi' }) : fail('Transcripts need Agent Reach.');
     case 'profile': {
       if (!reachConnected(env)) return fail('Profiles need Agent Reach with a login for that platform.');
