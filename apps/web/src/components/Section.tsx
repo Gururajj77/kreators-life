@@ -16,14 +16,15 @@ interface Props {
 export function Section({ id, title, lede, action, span = false, className = '', children }: Props) {
   return (
     <section className={`mt-lg ${span ? 'span-all' : ''} ${className}`} aria-labelledby={id}>
-      <div className="flex items-end justify-between gap-sm">
+      <div className="flex items-start justify-between gap-sm">
         <div className="min-w-0">
           <h2 id={id} className="text-[24px]">
             {title}
           </h2>
           {lede && <p className="mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">{lede}</p>}
         </div>
-        {action && <div className="shrink-0 pb-xs">{action}</div>}
+        {/* The action sits level with the title, at the top of the block, never down by the line under it. It is as tall as one line of the title and centres on it, so a 44px link or button still has its full tap area. */}
+        {action && <div className="flex h-[1.2em] shrink-0 items-center text-[24px] leading-none">{action}</div>}
       </div>
       <div className="mt-sm">{children}</div>
     </section>

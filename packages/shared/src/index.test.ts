@@ -1815,3 +1815,28 @@ describe('setup: agencies, clients and planning', () => {
     expect(sets.size / pairs).toBeGreaterThan(0.9);
   });
 });
+
+describe('what is worth a look in the week plan', () => {
+  const t = (id: string, o: Partial<PlanTask> = {}): PlanTask => ({ id, title: `Task ${id}`, relationship: 'self', estimateMin: 60, priority: null, doDate: null, dueDate: null, ...o });
+  const today = '2026-11-02';
+  it('names the tasks each line is about, so the screen can offer the fix', () => {
+    const p = planWeek(today, [t('late', { dueDate: '2026-10-30', estimateMin: null }), t('a', { doDate: today, estimateMin: 200 }), t('b', { doDate: today, estimateMin: 100 }), t('c', { doDate: '2026-11-03', estimateMin: null })]);
+    const kinds = p.attention.map((a) => a.kind);
+    expect(kinds).toEqual(expect.arrayContaining(['heavy', 'late', 'empty', 'unsized']));
+    expect(p.attention.find((a) => a.kind === 'late')!.tasks.map((x) => x.id)).toEqual(['late']);
+    expect(p.attention.find((a) => a.kind === 'unsized')!.tasks.map((x) => x.id).sort()).toEqual(['c', 'late']);
+    expect(p.attention.find((a) => a.kind === 'heavy')!.tasks.map((x) => x.id).sort()).toEqual(['a', 'b', 'late']);
+    expect(p.attention.find((a) => a.kind === 'empty')!.days.length).toBeGreaterThan(0);
+  });
+  it('keeps the plain lines the same as before, and at most four', () => {
+    const p = planWeek(today, [t('a', { doDate: today, estimateMin: 300 })]);
+    expect(p.notes).toEqual(p.attention.map((a) => a.text));
+    expect(p.notes.length).toBeLessThanOrEqual(4);
+  });
+  it('lists the tasks that did not fit, for a line that says so', () => {
+    const many = Array.from({ length: 30 }, (_, i) => t(`t${i}`, { estimateMin: 120 }));
+    const room = planWeek(today, many, 240).attention.find((a) => a.kind === 'noRoom')!;
+    expect(room.tasks.length).toBe(12);
+    expect(room.tasks.every((x) => x.day === null)).toBe(true);
+  });
+});

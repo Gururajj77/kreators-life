@@ -11402,6 +11402,24 @@ export interface WeekPlan {
   strengthWith: PlanStrength;
   /** A few plain lines on what to look at, most useful first. */
   notes: string[];
+  /** The same lines with what each is about, so a screen can offer the fix: the tasks to move, to size, or the days to fill. */
+  attention: PlanAttention[];
+}
+export interface PlanTaskRef {
+  id: string;
+  title: string;
+  relationship: RelationshipKey;
+  estimateMin: number | null;
+  /** The day it is on in the plan, or null when it has none. */
+  day: string | null;
+}
+/** One thing worth a look. `kind` says what to offer: move (a heavy day or a late task), size (no estimate), fill (empty days), room (did not fit). */
+export interface PlanAttention {
+  kind: 'heavy' | 'late' | 'empty' | 'noRoom' | 'unsized' | 'start';
+  text: string;
+  tasks: PlanTaskRef[];
+  /** For an empty-days line: the days, as dates. */
+  days: string[];
 }
 
 const dayName = (date: string): string => new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
@@ -11443,6 +11461,7 @@ export function planWeek(today: string, tasks: readonly PlanTask[], capacityMin:
   let total = 0;
   let late = 0;
   const open: PlanTask[] = [];
+  const placed: { t: PlanTask; at: string; late: boolean }[] = [];
   for (const t of tasks) {
     const day = t.doDate ?? t.dueDate;
     if (!day) {
@@ -11452,6 +11471,7 @@ export function planWeek(today: string, tasks: readonly PlanTask[], capacityMin:
     if (day > last) continue;
     const at = day < today ? today : day;
     if (day < today) late += 1;
+    placed.push({ t, at, late: day < today });
     const l = load.get(at)!;
     l.min += est(t);
     l.tasks += 1;
@@ -11499,17 +11519,20 @@ export function planWeek(today: string, tasks: readonly PlanTask[], capacityMin:
   const nowTotal = total - suggestions.length;
   const strengthNow = planStrength(nowLoad, capacityMin, estimated, nowTotal);
   const strengthWith = planStrength(withLoad, capacityMin, estimated + sEst, total);
-  const notes: string[] = [];
+  const ref = (t: PlanTask, day: string | null): PlanTaskRef => ({ id: t.id, title: t.title, relationship: t.relationship, estimateMin: t.estimateMin, day });
+  const attention: PlanAttention[] = [];
+  const add = (kind: PlanAttention['kind'], text: string, tasks: PlanTaskRef[] = [], dayList: string[] = []) => attention.push({ kind, text, tasks, days: dayList });
   const heavy = days.filter((d) => d.overloaded).sort((a, b) => b.plannedMin + b.suggestedMin - (a.plannedMin + a.suggestedMin))[0];
-  if (heavy) notes.push(`${dayName(heavy.date)} has ${hm(heavy.plannedMin + heavy.suggestedMin)} planned, over your ${hm(capacityMin)}. Move one task to a lighter day.`);
-  if (late > 0) notes.push(`${late} late ${late === 1 ? 'task is' : 'tasks are'} counted on today. Finish or move ${late === 1 ? 'it' : 'them'} first.`);
-  const empty = days.filter((d) => d.tasks === 0).map((d) => dayName(d.date).slice(0, 3));
-  if (empty.length > 0 && empty.length < WEEK_PLAN_DAYS) notes.push(`Nothing is planned on ${empty.slice(0, 3).join(', ')}${empty.length > 3 ? ' and more' : ''}. Rest is fine; make it a choice.`);
-  if (noRoom.length > 0) notes.push(`${noRoom.length} ${noRoom.length === 1 ? 'task does' : 'tasks do'} not fit this week at ${hm(capacityMin)} a day. Leave ${noRoom.length === 1 ? 'it' : 'them'} for next week, or raise the hours.`);
-  const unsized = tasks.filter((t) => !t.estimateMin && (t.doDate ?? t.dueDate) && (t.doDate ?? t.dueDate)! <= last).length;
-  if (unsized > 0) notes.push(`${unsized} ${unsized === 1 ? 'task has' : 'tasks have'} no time estimate. Add one so the days add up.`);
-  if (tasks.length === 0) notes.push('Add a few tasks first, then plan the week around them.');
-  return { from: today, capacityMin, days, suggestions, noRoom, strengthNow, strengthWith, notes: notes.slice(0, 4) };
+  if (heavy) add('heavy', `${dayName(heavy.date)} has ${hm(heavy.plannedMin + heavy.suggestedMin)} planned, over your ${hm(capacityMin)}. Move one task to a lighter day.`, placed.filter((p) => p.at === heavy.date).slice(0, 12).map((p) => ref(p.t, p.at)));
+  if (late > 0) add('late', `${late} late ${late === 1 ? 'task is' : 'tasks are'} counted on today. Finish or move ${late === 1 ? 'it' : 'them'} first.`, placed.filter((p) => p.late).slice(0, 12).map((p) => ref(p.t, p.at)));
+  const empty = days.filter((d) => d.tasks === 0).map((d) => d.date);
+  if (empty.length > 0 && empty.length < WEEK_PLAN_DAYS) add('empty', `Nothing is planned on ${empty.slice(0, 3).map((d) => dayName(d).slice(0, 3)).join(', ')}${empty.length > 3 ? ' and more' : ''}. Rest is fine; make it a choice.`, [], empty);
+  if (noRoom.length > 0) add('noRoom', `${noRoom.length} ${noRoom.length === 1 ? 'task does' : 'tasks do'} not fit this week at ${hm(capacityMin)} a day. Leave ${noRoom.length === 1 ? 'it' : 'them'} for next week, or raise the hours.`, noRoom.slice(0, 12).map((n) => ref(open.find((o) => o.id === n.id)!, null)));
+  const unsized = placed.filter((p) => !p.t.estimateMin);
+  if (unsized.length > 0) add('unsized', `${unsized.length} ${unsized.length === 1 ? 'task has' : 'tasks have'} no time estimate. Add one so the days add up.`, unsized.slice(0, 12).map((p) => ref(p.t, p.at)));
+  if (tasks.length === 0) add('start', 'Add a few tasks first, then plan the week around them.');
+  const shown = attention.slice(0, 4);
+  return { from: today, capacityMin, days, suggestions, noRoom, strengthNow, strengthWith, notes: shown.map((a) => a.text), attention: shown };
 }
 
 /** A time of day as "9:30 am". */

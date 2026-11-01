@@ -387,6 +387,26 @@
   .screen-columns > * {
     min-width: 0;
   }
+  /* Home: the two halves of a row are the same height, the height of the taller one. Each half-width section is a column, its body
+     fills what is left, and the card (or the list of rows) in it stretches to the bottom. Full-width sections are left alone. */
+  .screen-even {
+    align-items: stretch;
+  }
+  .screen-even > section:not(.span-all) {
+    display: flex;
+    flex-direction: column;
+  }
+  .screen-even > section:not(.span-all) > :last-child {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+  .screen-even > section:not(.span-all) > :last-child > :first-child {
+    flex: 1 1 auto;
+  }
+  .screen-even > section:not(.span-all) > :last-child > ul.flex > li {
+    flex: 1 1 auto;
+  }
 }
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);

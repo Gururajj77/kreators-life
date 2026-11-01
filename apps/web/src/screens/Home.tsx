@@ -65,7 +65,7 @@ export function Home() {
   const recentMoods = d ? d.trackers.mood.week.filter((m): m is number => m !== null).slice(-3) : [];
 
   return (
-    <Screen columns>
+    <Screen columns className="screen-even">
       <header className="relative -mx-md overflow-hidden rounded-b-card night-card px-md pt-lg pb-md text-on-fill md:mx-0 md:mt-md md:rounded-card">
         <HeroBlobs opacity={0.06} kind="cosmos" />
         <div className="relative flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
@@ -144,7 +144,7 @@ export function Home() {
 
       {d && (
         <>
-          <Section id="home-metrics" title="Your metrics" action={<SeeAll to="/life">Life</SeeAll>} span>
+          <Section id="home-metrics" title="Your metrics" lede="Where you stand today. Tap one for the detail." action={<SeeAll to="/life">Life</SeeAll>} span>
             <ul className="-mx-md flex snap-x scroll-px-md list-none gap-xs overflow-x-auto px-md pb-xs scrollbar-none m-0 md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0">
               <li className="w-[168px] shrink-0 snap-start md:col-span-2 md:w-auto">
                 <MetricCard to="/life" title="Life score" emoji="🧭" tone="var(--color-r4)" deep="var(--deep-lover_partner)" corner={<Avatar relationship="lover_partner" size={36} decorative mood={(d.life?.overall ?? 0) >= 60 ? 'excited' : 'happy'} />}>
@@ -214,7 +214,7 @@ export function Home() {
             </div>
           </Section>
 
-          <Section id="home-today" title="Daily" action={<SeeAll to="/today">Open</SeeAll>}>
+          <Section id="home-today" title="Daily" lede="Tick each box when you have done it." action={<SeeAll to="/today">Open</SeeAll>}>
             <div className="relative overflow-hidden rounded-card bg-r4 p-md text-on-fill">
               <HeroBlobs kind="daisy" />
               <div className="relative">
@@ -343,7 +343,7 @@ export function Home() {
             </ul>
           </Section>
 
-          <Section id="home-next" title="Up next" action={<SeeAll to="/party">Party</SeeAll>}>
+          <Section id="home-next" title="Up next" lede="Events, runs and circles you joined." action={<SeeAll to="/party">Party</SeeAll>}>
             <div className="rounded-card bg-card p-md shadow-toy-soft">
               <div className="flex items-center justify-between gap-sm">
                 <p className="m-0 flex items-baseline gap-xs">
@@ -437,7 +437,7 @@ export function Home() {
             </div>
           </Section>
 
-          <Section id="home-trend" title="Last 14 days" lede="Xp per day. A green dot under a day means a task was ticked." action={<SeeAll to="/today">Daily</SeeAll>}>
+          <Section id="home-trend" title="Last 14 days" lede="Xp a day. A green dot is a task ticked." action={<SeeAll to="/today">Daily</SeeAll>}>
             <div className="rounded-card bg-card p-md shadow-toy-soft">
               <AreaLine values={d.days.map((x) => x.xp)} max={Math.max(60, ...d.days.map((x) => x.xp))} labels={d.days.map((x) => weekday(x.date))} color="var(--color-r4)" height={160} empty="No xp in the last two weeks" label={`Xp per day for the last fourteen days, ${d.xp.week} this week`} />
               <div className="mt-xs flex gap-xs" role="img" aria-label="Days with a task ticked">
@@ -493,7 +493,7 @@ export function Home() {
           )}
 
           {d.resources.length > 0 && (
-            <Section id="home-reads" title="Knowledge" action={<SeeAll to="/knowledge">See all</SeeAll>} span={lastOptional === 'reads'}>
+            <Section id="home-reads" title="Knowledge" lede="Reads and guides from the library." action={<SeeAll to="/knowledge">See all</SeeAll>} span={lastOptional === 'reads'}>
               <ul className={`grid list-none grid-cols-2 gap-xs p-0 m-0 ${lastOptional === 'reads' ? 'md:grid-cols-4' : ''}`}>
                 {d.resources.map((r, i) => (
                   <li key={r.id} className={bento(i, d.resources.length, 2, lastOptional === 'reads' ? 4 : 2)}>

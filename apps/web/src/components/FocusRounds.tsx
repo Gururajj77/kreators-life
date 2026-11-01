@@ -98,7 +98,7 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
   const [said, setSaid] = useState('');
   const endsAt = useRef<number | null>(null);
   const lock = useRef<{ release: () => Promise<void> } | null>(null);
-  const tasks = useQuery({ queryKey: ['focus-tasks'], queryFn: api.focusTasks, enabled: Boolean(token), staleTime: 60_000 });
+  const tasks = useQuery({ queryKey: ['focus-tasks'], queryFn: () => api.focusTasks(), enabled: Boolean(token), staleTime: 60_000 });
   const picked = tasks.data?.tasks.find((t) => t.id === taskId) ?? null;
 
   // "Start focus" on a task opens this with the task picked and its estimate as the first round's length. That is only this round: the saved lengths do not change.

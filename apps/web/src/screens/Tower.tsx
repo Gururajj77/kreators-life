@@ -114,7 +114,7 @@ export function Tower() {
         {!sess.isPending && !assessment && <StartSessionCard />}
       </header>
       {assessment && (
-        <div className="mt-md flex items-end justify-between gap-sm">
+        <div className="mt-md flex items-start justify-between gap-sm">
           <p className="m-0 text-[14px] font-semibold text-ink-soft">{focusNames.length ? `Month one: ${focusNames.join(' and ')}. ` : ''}Each card shows where that relationship lives on the map, and where it drops.</p>
           <a href="#life-map" className="shrink-0 text-[14px] font-bold underline underline-offset-4">
             Life map below

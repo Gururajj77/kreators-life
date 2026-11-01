@@ -4,8 +4,14 @@ import { useId, useState, type ReactNode } from 'react';
  * A small fold-out in the app's own style: the title is a rounded flat button with a chevron, tinted while open, and what it holds sits
  * under it. Use it instead of a bare `<details>`, which has no corners, no chevron and a hover of its own.
  */
-export function Fold({ title, hint, defaultOpen = false, children, className = '' }: { title: ReactNode; hint?: ReactNode; defaultOpen?: boolean; children: ReactNode; className?: string }) {
-  const [open, setOpen] = useState(defaultOpen);
+export function Fold({ title, hint, defaultOpen = false, open: openProp, onOpenChange, children, className = '' }: { title: ReactNode; hint?: ReactNode; defaultOpen?: boolean; /** Pass `open` and `onOpenChange` when the screen needs to open it itself. */ open?: boolean; onOpenChange?: (open: boolean) => void; children: ReactNode; className?: string }) {
+  const [own, setOwn] = useState(defaultOpen);
+  const open = openProp ?? own;
+  const setOpen = (f: (o: boolean) => boolean) => {
+    const next = f(open);
+    setOwn(next);
+    onOpenChange?.(next);
+  };
   const id = useId();
   return (
     <div className={className}>

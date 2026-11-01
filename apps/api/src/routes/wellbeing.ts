@@ -97,7 +97,9 @@ wellbeing.put('/focus-settings', async (c) => {
 });
 
 wellbeing.get('/focus/tasks', async (c) => {
-  const rows = await c.env.DB.prepare("SELECT id, title, relationship, COALESCE(do_date, due_date) AS due_date FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' ORDER BY COALESCE(do_date, due_date) IS NULL, COALESCE(do_date, due_date) ASC, created_at DESC LIMIT 60").bind(c.get('user').id).all<{ id: string; title: string; relationship: RelationshipKey; due_date: string | null }>();
+  // With ?q= it finds open tasks by name, so a person with many tasks can still pick any one (Plan my week uses it); without it, the nearest sixty.
+  const q = (c.req.query('q') ?? '').trim().replace(/[%_]/g, '').slice(0, 60);
+  const rows = await c.env.DB.prepare(`SELECT id, title, relationship, COALESCE(do_date, due_date) AS due_date FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active'${q ? ' AND title LIKE ?' : ''} ORDER BY COALESCE(do_date, due_date) IS NULL, COALESCE(do_date, due_date) ASC, created_at DESC LIMIT ${q ? 12 : 60}`).bind(...[c.get('user').id, ...(q ? [`%${q}%`] : [])]).all<{ id: string; title: string; relationship: RelationshipKey; due_date: string | null }>();
   const tasks: FocusTask[] = rows.results.map((r) => ({ id: r.id, title: r.title, relationship: r.relationship, dueDate: r.due_date }));
   return c.json({ tasks });
 });

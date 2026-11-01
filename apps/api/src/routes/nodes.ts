@@ -32,6 +32,17 @@ nodes.get('/', async (c) => {
   return c.json({ nodes: await withSubtasks(db, user.id, rows.results.map((r) => toNode(r, gate))) });
 });
 
+// One layer, the person's own. A screen that has only an id (Plan my week picks a task by name) reads it here to fill its form.
+nodes.get('/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await getNode(db, user.id, c.req.param('id'));
+  if (!row) return c.json({ error: 'not found' }, 404);
+  const gate = await taskGate(db, user.id);
+  const [node] = await withSubtasks(db, user.id, [toNode(row, gate)]);
+  return c.json({ node });
+});
+
 /** What a layer is made from, as sent: checked here, whoever sends it. */
 export interface NodeBody {
   kind?: unknown;
