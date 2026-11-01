@@ -19,13 +19,13 @@ for (const [w, h] of [[1280, 900], [390, 844]]) {
         const inner = act.querySelector('a,button'); if (!inner) return null;
         const tr = h2.getBoundingClientRect();
         const range = document.createRange(); range.selectNodeContents(inner); const lr = range.getBoundingClientRect();
-        return { title: h2.textContent.trim().slice(0, 24), titleMid: Math.round((tr.top + tr.bottom) / 2), actionMid: Math.round((lr.top + lr.bottom) / 2) };
+        return { link: inner.tagName === 'A', chevron: Boolean(inner.querySelector('svg')), title: h2.textContent.trim().slice(0, 24), titleMid: Math.round((tr.top + tr.bottom) / 2), actionMid: Math.round((lr.top + lr.bottom) / 2) };
       }).filter(Boolean));
-      for (const x of r) { n += 1; if (Math.abs(x.titleMid - x.actionMid) > 4) bad.push(`${w}px ${shot.path} "${x.title}" title ${x.titleMid} vs action ${x.actionMid}`); }
+      for (const x of r) { n += 1; if (x.link && !x.chevron) bad.push(`${w}px ${shot.path} "${x.title}" action is a link without the See all chevron`); if (Math.abs(x.titleMid - x.actionMid) > 4) bad.push(`${w}px ${shot.path} "${x.title}" title ${x.titleMid} vs action ${x.actionMid}`); }
     } catch {}
     await page.close();
   }
 }
 await browser.close();
-console.log(`${n} headings with an action, ${bad.length} not level with their title`);
+console.log(`${n} headings with an action, ${bad.length} not level with their title or not in the See all style`);
 bad.slice(0, 12).forEach((b) => console.log('  ', b));

@@ -1,6 +1,5 @@
 import { PERIOD_META, periodFor, type Period, type ReviewSummary } from '@kreators/shared';
 import { useState, type ReactNode } from 'react';
-import { Link } from 'react-router';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { useAuthed } from '../lib/queries';
@@ -8,7 +7,7 @@ import { StatTile } from './Charts';
 import { MoodFace } from './MoodFace';
 import { PeriodFilter } from './PeriodFilter';
 import { bento } from '../lib/bento';
-import { Section } from './Section';
+import { Section, SeeAll } from './Section';
 
 export type SummaryPart = 'daily' | 'notToDo' | 'wellbeing' | 'journal' | 'finance' | 'shop' | 'school' | 'work' | 'people';
 
@@ -119,11 +118,7 @@ export function PeriodPanel({ id, parts, title = 'By period', span = false }: { 
       title={title}
       lede="The same numbers by week, month, quarter or half year, next to the one before."
       span={span}
-      action={
-        <Link to="/reviews" className="inline-flex min-h-[44px] items-center gap-xs text-[14px] font-bold text-ink-mute underline-offset-4 hover:text-ink hover:underline">
-          Review it
-        </Link>
-      }
+      action={<SeeAll to="/reviews">Review it</SeeAll>}
     >
       <PeriodFilter period={period} onChange={setPeriod} today={today} />
       <div className="mt-sm">

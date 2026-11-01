@@ -37,6 +37,16 @@ for (const [w, h] of [[1280, 900], [1600, 1000], [1100, 800]]) {
         if (cards.length && Math.abs(Math.max(...cards.map((c) => c.bottom)) - ul.getBoundingClientRect().bottom) > 1) out.push(`${s.getAttribute('aria-labelledby')}: the cards stop short of the bottom of the half`);
       }
     }
+    // The Daily card's two buttons are one height and sit at the foot of the card, whatever height the row gives it.
+    const open = document.querySelector('a[aria-label="Open Today"]');
+    if (open) {
+      const main = open.previousElementSibling.getBoundingClientRect();
+      const arrow = open.getBoundingClientRect();
+      if (Math.abs(main.height - arrow.height) > 1 || Math.abs(main.bottom - arrow.bottom) > 1) out.push(`Daily buttons are ${Math.round(main.height)} and ${Math.round(arrow.height)} tall, ending ${Math.round(main.bottom)} and ${Math.round(arrow.bottom)}`);
+      const card = open.closest('.rounded-card').getBoundingClientRect();
+      const gap = card.bottom - arrow.bottom;
+      if (gap < 8 || gap > 20) out.push(`Daily buttons sit ${Math.round(gap)}px above the foot of their card`);
+    }
     return out;
   });
   console.log(`${w}px:`, problems.length ? problems : 'every pair is one height, cards start together and fill their half');

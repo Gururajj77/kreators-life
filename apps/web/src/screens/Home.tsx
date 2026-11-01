@@ -215,9 +215,9 @@ export function Home() {
           </Section>
 
           <Section id="home-today" title="Daily" lede="Tick each box when you have done it." action={<SeeAll to="/today">Open</SeeAll>}>
-            <div className="relative overflow-hidden rounded-card bg-r4 p-md text-on-fill">
+            <div className="relative flex flex-col overflow-hidden rounded-card bg-r4 p-md text-on-fill">
               <HeroBlobs kind="daisy" />
-              <div className="relative">
+              <div className="relative flex flex-1 flex-col">
                 <div className="flex items-center justify-between gap-sm">
                   <div className="flex items-center gap-sm">
                     <Ring value={d.today.doneCount / 3} size={64} stroke={8} color={WHITE} track={WHITE_TRACK} label={`${d.today.doneCount} of 3 done`}>
@@ -254,11 +254,11 @@ export function Home() {
                   <p className="m-0 font-display text-[18px] font-extrabold leading-tight">{d.nudge.lead}</p>
                   <p className="mt-xs m-0 text-[14px] font-semibold opacity-95">{d.nudge.body}</p>
                 </div>
-                <div className="mt-sm flex gap-xs">
+                <div className="mt-auto flex items-stretch gap-xs pt-sm">
                   <Link to={d.nudge.path} className="toy inline-flex min-h-[48px] min-w-0 flex-1 items-center justify-center rounded-pill bg-card px-md text-[16px] font-bold text-ink">
                     {d.nudge.action}
                   </Link>
-                  <Link to="/today" aria-label="Open Today" className="toy flex size-[48px] shrink-0 items-center justify-center rounded-pill bg-white/25 text-on-fill">
+                  <Link to="/today" aria-label="Open Today" className="toy flex min-h-[48px] w-[48px] shrink-0 items-center justify-center rounded-pill bg-white/25 text-on-fill">
                     <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M5 12h14M13 6l6 6-6 6" />
                     </svg>
