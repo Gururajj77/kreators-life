@@ -200,9 +200,9 @@ root.route('/', app);
 
 export default {
   fetch: root.fetch,
-  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(
-      runScheduled(env)
+      runScheduled(env, event.cron)
         .then(async (r) => {
           console.log('scheduled', JSON.stringify(r));
           const did = Object.entries(r).filter(([, n]) => n > 0).map(([k, n]) => `${k} ${n}`).join(', ');

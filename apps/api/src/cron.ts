@@ -12,9 +12,18 @@ import { flaggedFor } from './routes/reviews';
 const LAST_TICK = 23 * 60 + 45;
 
 /** Every fifteen minutes: sequence messages, then fresh numbers for posts and reward submissions where a platform lets us read them. */
-export async function runScheduled(env: Env): Promise<{ sequences: number; recurring: number; circles: number; weekly: number; content: number; submissions: number; reminders: number; events: number; season: number }> {
+/** Water reminders have their own trigger, every two hours. The other trigger runs every fifteen minutes and leaves water alone. */
+export const WATER_CRON = '0 */2 * * *';
+export const MAIN_CRON = '*/15 * * * *';
+
+export async function runScheduled(env: Env, cron: string = ''): Promise<{ sequences: number; recurring: number; circles: number; weekly: number; content: number; submissions: number; reminders: number; events: number; season: number }> {
   const db = env.DB;
-  const reminders = (await sendReminders(db)) + (await sendWaterAndCustom(db)) + (await sendTaskReminders(db)) + (await sendReviewReminders(db));
+  // The two-hour trigger only sends water; the fifteen-minute one does everything else. Anything else (a test run by hand) does both.
+  if (cron === WATER_CRON) {
+    const water = await sendWaterAndCustom(db, { water: true, custom: false });
+    return { sequences: 0, recurring: 0, circles: 0, weekly: 0, content: 0, submissions: 0, reminders: water, events: 0, season: 0 };
+  }
+  const reminders = (await sendReminders(db)) + (await sendWaterAndCustom(db, { water: cron !== MAIN_CRON, custom: true })) + (await sendTaskReminders(db)) + (await sendReviewReminders(db));
   await clearPastWaterNotes(db);
   const events = await sendEventReminders(db);
   const season = await closeSeason(db);
@@ -83,7 +92,7 @@ export async function clearPastWaterNotes(db: D1Database): Promise<number> {
  * chose, inside their day, and only while the day's goal is not met, as one inbox line a day that each reminder rewrites; a custom reminder goes once on each of its days, within
  * an hour after its time. Nothing is sent to someone who switched water off or turned a reminder off.
  */
-export async function sendWaterAndCustom(db: D1Database): Promise<number> {
+export async function sendWaterAndCustom(db: D1Database, parts: { water: boolean; custom: boolean } = { water: true, custom: true }): Promise<number> {
   const now = new Date();
   let sent = 0;
   const notice = (userId: string, title: string, body: string) =>
@@ -95,54 +104,59 @@ export async function sendWaterAndCustom(db: D1Database): Promise<number> {
   };
   const mins = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
 
-  const water = await db
-    .prepare('SELECT p.user_id, p.water_goal_ml, p.water_glass_ml, p.water_every_min, p.water_from, p.water_to, p.last_water_at, u.timezone FROM reminder_prefs p JOIN users u ON u.id = p.user_id WHERE p.water_on = 1')
-    .all<{ user_id: string; water_goal_ml: number; water_glass_ml: number; water_every_min: number; water_from: string; water_to: string; last_water_at: string | null; timezone: string }>();
-  for (const w of water.results) {
-    let at;
-    try {
-      at = local(w.timezone || 'Asia/Kolkata');
-    } catch {
-      continue;
+  if (parts.water) {
+    const water = await db
+      .prepare('SELECT p.user_id, p.water_goal_ml, p.water_glass_ml, p.water_every_min, p.water_from, p.water_to, p.last_water_at, u.timezone FROM reminder_prefs p JOIN users u ON u.id = p.user_id WHERE p.water_on = 1')
+      .all<{ user_id: string; water_goal_ml: number; water_glass_ml: number; water_every_min: number; water_from: string; water_to: string; last_water_at: string | null; timezone: string }>();
+    for (const w of water.results) {
+      let at;
+      try {
+        at = local(w.timezone || 'Asia/Kolkata');
+      } catch {
+        continue;
+      }
+      if (at.minutes < mins(w.water_from) || at.minutes > mins(w.water_to)) continue;
+      // A few minutes of slack: the tick two hours after the last one lands a few seconds before the two hours are up.
+      if (w.last_water_at && now.getTime() - Date.parse(w.last_water_at) < (w.water_every_min - 5) * 60_000) continue;
+      const so = await db.prepare('SELECT COALESCE(SUM(ml), 0) AS ml FROM water_logs WHERE user_id = ? AND day = ?').bind(w.user_id, at.day).first<{ ml: number }>();
+      const drunk = so?.ml ?? 0;
+      if (drunk >= w.water_goal_ml) continue;
+      // One water line per person per day: later reminders rewrite it (new count, back to unread, newest first) instead of piling up.
+      await db
+        .prepare(
+          "INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', 'Time for some water', ?, '/today', NULL, ?) ON CONFLICT(id) DO UPDATE SET body = excluded.body, created_at = excluded.created_at, read_at = NULL, archived_at = NULL",
+        )
+        .bind(`water-${w.user_id}-${at.day}`, w.user_id, `${Math.floor(drunk / w.water_glass_ml)} of ${Math.ceil(w.water_goal_ml / w.water_glass_ml)} glasses so far today. Tap to log one.`, nowIso())
+        .run();
+      await db.prepare('UPDATE reminder_prefs SET last_water_at = ? WHERE user_id = ?').bind(nowIso(), w.user_id).run();
+      sent += 1;
     }
-    if (at.minutes < mins(w.water_from) || at.minutes > mins(w.water_to)) continue;
-    if (w.last_water_at && now.getTime() - Date.parse(w.last_water_at) < w.water_every_min * 60_000) continue;
-    const so = await db.prepare('SELECT COALESCE(SUM(ml), 0) AS ml FROM water_logs WHERE user_id = ? AND day = ?').bind(w.user_id, at.day).first<{ ml: number }>();
-    const drunk = so?.ml ?? 0;
-    if (drunk >= w.water_goal_ml) continue;
-    // One water line per person per day: later reminders rewrite it (new count, back to unread, newest first) instead of piling up.
-    await db
-      .prepare(
-        "INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', 'Time for some water', ?, '/today', NULL, ?) ON CONFLICT(id) DO UPDATE SET body = excluded.body, created_at = excluded.created_at, read_at = NULL, archived_at = NULL",
-      )
-      .bind(`water-${w.user_id}-${at.day}`, w.user_id, `${Math.floor(drunk / w.water_glass_ml)} of ${Math.ceil(w.water_goal_ml / w.water_glass_ml)} glasses so far today. Tap to log one.`, nowIso())
-      .run();
-    await db.prepare('UPDATE reminder_prefs SET last_water_at = ? WHERE user_id = ?').bind(nowIso(), w.user_id).run();
-    sent += 1;
   }
 
-  const custom = await db
-    .prepare('SELECT r.id, r.user_id, r.title, r.time, r.days_json, r.last_sent_day, u.timezone FROM custom_reminders r JOIN users u ON u.id = r.user_id WHERE r.enabled = 1')
-    .all<{ id: string; user_id: string; title: string; time: string; days_json: string; last_sent_day: string | null; timezone: string }>();
-  for (const r of custom.results) {
-    let at;
-    try {
-      at = local(r.timezone || 'Asia/Kolkata');
-    } catch {
-      continue;
+  if (parts.custom) {
+    const custom = await db
+      .prepare('SELECT r.id, r.user_id, r.title, r.time, r.days_json, r.last_sent_day, u.timezone FROM custom_reminders r JOIN users u ON u.id = r.user_id WHERE r.enabled = 1')
+      .all<{ id: string; user_id: string; title: string; time: string; days_json: string; last_sent_day: string | null; timezone: string }>();
+    for (const r of custom.results) {
+      let at;
+      try {
+        at = local(r.timezone || 'Asia/Kolkata');
+      } catch {
+        continue;
+      }
+      if (r.last_sent_day === at.day) continue;
+      let days: number[] = [];
+      try {
+        days = JSON.parse(r.days_json) as number[];
+      } catch {
+        continue;
+      }
+      const since = at.minutes - Math.min(mins(r.time), LAST_TICK);
+      if (!days.includes(at.weekday) || since < 0 || since > 60) continue;
+      await notice(r.user_id, r.title, 'Your own reminder.');
+      await db.prepare('UPDATE custom_reminders SET last_sent_day = ? WHERE id = ?').bind(at.day, r.id).run();
+      sent += 1;
     }
-    if (r.last_sent_day === at.day) continue;
-    let days: number[] = [];
-    try {
-      days = JSON.parse(r.days_json) as number[];
-    } catch {
-      continue;
-    }
-    const since = at.minutes - Math.min(mins(r.time), LAST_TICK);
-    if (!days.includes(at.weekday) || since < 0 || since > 60) continue;
-    await notice(r.user_id, r.title, 'Your own reminder.');
-    await db.prepare('UPDATE custom_reminders SET last_sent_day = ? WHERE id = ?').bind(at.day, r.id).run();
-    sent += 1;
   }
   return sent;
 }

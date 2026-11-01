@@ -6,7 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   // Every fifteen minutes: post-purchase sequences, content and reward view refreshes.
-  "triggers": { "crons": ["*/15 * * * *"] },
+  "triggers": { "crons": ["*/15 * * * *", "0 */2 * * *"] },
   // The built web app is served as static assets by the same Worker.
   // Any /api/* request runs the Worker; everything else is a file or the SPA shell.
   // The site home ("/") also runs the Worker, which fills in the absolute share-image URL for link previews.

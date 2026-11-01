@@ -5985,7 +5985,8 @@ export interface BlockedPerson {
 // Water and reminders, for Daily and Journal. A bubble on a laptop, a section on a phone; never a floating button on a phone.
 // ---------------------------------------------------------------------------
 
-export const WATER_EVERY_CHOICES = [30, 45, 60, 90, 120, 180] as const;
+/** The water reminder has its own trigger every two hours, so every two hours is the shortest gap and the others are multiples of it. */
+export const WATER_EVERY_CHOICES = [120, 240] as const;
 export const WATER_GOAL_MIN = 500;
 export const WATER_GOAL_MAX = 6000;
 export const WATER_GLASS_MIN = 50;
@@ -6024,9 +6025,19 @@ export interface CustomReminder {
   days: number[];
   enabled: boolean;
 }
+/** A task from Daily that is tagged Remember, as the water and reminders box shows it. With a day it also sends one inbox note on that day at its time. */
+export interface RememberedTask {
+  id: string;
+  title: string;
+  /** The day it is planned for (its do date, else its due date), or null: then it waits in To remember and sends no note. */
+  day: string | null;
+  /** The time of the note, or null for 09:00. */
+  time: string | null;
+}
 export interface RemindersResponse {
   water: WaterState;
   custom: CustomReminder[];
+  tasks: RememberedTask[];
 }
 export const REMINDER_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 /** The days of a reminder from anything the browser sends: whole numbers 1 to 7, once each, in order. */
@@ -9614,7 +9625,10 @@ export interface FocusTask {
   id: string;
   title: string;
   relationship: RelationshipKey;
+  /** The day it is planned for: its do date, else its due date. */
   dueDate: string | null;
+  /** Tagged Remember. */
+  remind: boolean;
 }
 export interface FocusBucket {
   /** The first day of the bucket: a day, a Monday, or the first of a month. */

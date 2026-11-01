@@ -1,4 +1,4 @@
-import { MAX_CUSTOM_REMINDERS, REMINDER_TITLE_MAX, WATER_EVERY_CHOICES, WEEKDAY_NAMES, weekdaysLabel, type CustomReminder, type WaterState } from '@kreators/shared';
+import { MAX_CUSTOM_REMINDERS, REMINDER_TIME, REMINDER_TITLE_MAX, WATER_EVERY_CHOICES, WEEKDAY_NAMES, weekdaysLabel, type CustomReminder, type WaterState } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router';
@@ -11,6 +11,12 @@ import { Sheet } from './Sheet';
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'That did not work. Try again.');
 const litres = (ml: number) => (ml >= 1000 ? `${(ml / 1000).toFixed(ml % 1000 === 0 ? 0 : 2).replace(/0$/, '')} L` : `${ml} ml`);
+
+/** "Tue 3 Nov" for a day typed as YYYY-MM-DD. */
+const shortDay = (d: string) => {
+  const [y, m, n] = d.split('-').map(Number);
+  return new Date(y ?? 2000, (m ?? 1) - 1, n ?? 1).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+};
 
 function useReminders() {
   const token = useSession((s) => s.token);
@@ -47,21 +53,41 @@ function Bar({ w }: { w: WaterState }) {
 /** Water, the person's own reminders and the settings for both. The same on a laptop's bubble and a phone's section. */
 export function RemindersPanel({ bento = false }: { bento?: boolean }) {
   const { q, day, refresh } = useReminders();
+  const qc = useQueryClient();
   const w = q.data?.water;
   const custom = q.data?.custom ?? [];
+  const remembered = q.data?.tasks ?? [];
   const [showSet, setShowSet] = useState(false);
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState('');
   const [time, setTime] = useState('18:00');
   const [days, setDays] = useState<number[]>([1, 2, 3, 4, 5, 6, 7]);
   const [ml, setMl] = useState('');
+  const [picking, setPicking] = useState(false);
+  const [pickId, setPickId] = useState('');
+  const [pickDay, setPickDay] = useState(day);
+  const [pickTime, setPickTime] = useState('09:00');
+  const open = useQuery({ queryKey: ['reminders', 'pick'], queryFn: () => api.focusTasks(), enabled: picking });
+  const pickable = (open.data?.tasks ?? []).filter((t) => !(t.remind && t.dueDate));
+  const chosen = pickable.find((t) => t.id === pickId);
+  const touchDaily = () => {
+    refresh();
+    void qc.invalidateQueries({ queryKey: ['today'] });
+    void qc.invalidateQueries({ queryKey: ['nodes'] });
+  };
+  // A task with a day keeps it; one with none gets the day picked here, since the inbox note goes out on a day.
+  const remember = useMutation({
+    mutationFn: () => api.updateNode(pickId, { remind: true, dueTime: pickTime, ...(chosen?.dueDate ? {} : { doDate: pickDay }) }),
+    onSuccess: () => { setPicking(false); setPickId(''); touchDaily(); },
+  });
+  const forget = useMutation({ mutationFn: (id: string) => api.updateNode(id, { remind: false }), onSuccess: touchDaily });
   const drink = useMutation({ mutationFn: (amount?: number) => api.drinkWater(day, amount), onSuccess: () => { setMl(''); refresh(); } });
   const undo = useMutation({ mutationFn: () => api.undoWater(day), onSuccess: refresh });
   const settle = useMutation({ mutationFn: (s: Parameters<typeof api.waterSettings>[1]) => api.waterSettings(day, s), onSuccess: refresh });
   const add = useMutation({ mutationFn: () => api.addReminder({ title, time, days }), onSuccess: () => { setTitle(''); setAdding(false); refresh(); } });
   const change = useMutation({ mutationFn: (v: { id: string; r: Partial<CustomReminder> }) => api.changeReminder(v.id, v.r), onSuccess: refresh });
   const remove = useMutation({ mutationFn: (id: string) => api.removeReminder(id), onSuccess: refresh });
-  const failed = drink.error ?? undo.error ?? settle.error ?? add.error ?? change.error ?? remove.error;
+  const failed = drink.error ?? undo.error ?? settle.error ?? add.error ?? change.error ?? remove.error ?? remember.error ?? forget.error;
   if (!w) return <p className="m-0 text-[14px] font-bold text-ink-soft" role="status">{q.isError ? 'Could not load.' : 'Loading'}</p>;
   const max = Math.max(w.goalMl, ...w.week.map((d) => d.ml));
 
@@ -134,7 +160,7 @@ export function RemindersPanel({ bento = false }: { bento?: boolean }) {
               <select value={w.everyMin} onChange={(e) => settle.mutate({ everyMin: Number(e.target.value) })} className={field}>
                 {WATER_EVERY_CHOICES.map((m) => (
                   <option key={m} value={m}>
-                    {m >= 60 ? `${m / 60} ${m === 60 ? 'hour' : 'hours'}` : `${m} min`}
+                    {m / 60} hours
                   </option>
                 ))}
               </select>
@@ -190,13 +216,14 @@ export function RemindersPanel({ bento = false }: { bento?: boolean }) {
               <span className="block text-[12px] font-bold">At</span>
               <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={field} />
             </label>
-            <div role="group" aria-label="Days" className="flex flex-wrap gap-xs">
+            <div role="group" aria-label="Days" className="grid grid-cols-7 gap-xs">
               {WEEKDAY_NAMES.map((n, i) => {
                 const d = i + 1;
                 const on = days.includes(d);
                 return (
-                  <button key={n} type="button" aria-pressed={on} onClick={() => setDays((x) => (on ? x.filter((y) => y !== d) : [...x, d].sort()))} className={`min-h-[40px] rounded-pill border-2 px-sm text-[12px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
-                    {n}
+                  <button key={n} type="button" aria-pressed={on} onClick={() => setDays((x) => (on ? x.filter((y) => y !== d) : [...x, d].sort()))} className={`min-h-[40px] min-w-0 rounded-pill border-2 px-0 text-[12px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+                    <span className="sm:hidden">{n.slice(0, 2)}</span>
+                    <span className="hidden sm:inline">{n}</span>
                   </button>
                 );
               })}
@@ -215,6 +242,72 @@ export function RemindersPanel({ bento = false }: { bento?: boolean }) {
             Add a reminder
           </Button>
         )}
+
+        <div role="group" aria-labelledby="from-daily" className="mt-sm">
+          <h4 id="from-daily" className="m-0 text-[14px] font-extrabold">
+            Tasks from Daily
+          </h4>
+          <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">A task you ask to remember sends one note to your Inbox on its day.</p>
+          {remembered.length > 0 && (
+            <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+              {remembered.map((t) => (
+                <li key={t.id} className="rounded-inner-sm bg-paper p-xs">
+                  <label className="toy toy-flat flex min-h-[44px] cursor-pointer items-center gap-sm rounded-tile px-xs">
+                    <input type="checkbox" checked onChange={() => forget.mutate(t.id)} disabled={forget.isPending} aria-label={`Stop reminding me about ${t.title}`} className="size-[22px] shrink-0" />
+                    <span className="min-w-0">
+                      <span className="block truncate text-[14px] font-bold">{t.title}</span>
+                      <span className="block text-[12px] font-bold text-ink-soft">{t.day ? `${shortDay(t.day)} · ${t.time ?? '09:00'}` : 'No day yet, so no note'}</span>
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
+          {picking ? (
+            <form
+              className="mt-xs flex flex-col gap-xs rounded-inner bg-paper p-sm"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (chosen && REMINDER_TIME.test(pickTime)) remember.mutate();
+              }}
+            >
+              <label className="block">
+                <span className="block text-[12px] font-bold">Task</span>
+                <select value={pickId} onChange={(e) => setPickId(e.target.value)} className={field}>
+                  <option value="">{open.isLoading ? 'Loading' : pickable.length === 0 ? 'No open tasks' : 'Pick a task'}</option>
+                  {pickable.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {chosen && !chosen.dueDate && (
+                <label className="block">
+                  <span className="block text-[12px] font-bold">On</span>
+                  <input type="date" value={pickDay} min={day} onChange={(e) => setPickDay(e.target.value)} className={field} />
+                  <span className="mt-xs block text-[12px] font-semibold text-ink-soft">It will show on Daily from that day.</span>
+                </label>
+              )}
+              <label className="block">
+                <span className="block text-[12px] font-bold">At</span>
+                <input type="time" value={pickTime} onChange={(e) => setPickTime(e.target.value)} className={field} />
+              </label>
+              <div className="flex gap-xs">
+                <Button size="sm" type="submit" disabled={remember.isPending || !chosen || !REMINDER_TIME.test(pickTime) || (!chosen.dueDate && pickDay < day)}>
+                  Remind me
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setPicking(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <Button size="sm" variant="outline" className="mt-xs" onClick={() => { setPickDay(day); setPicking(true); }}>
+              Remind me about a task
+            </Button>
+          )}
+        </div>
       </section>
       {failed && <p role="alert" className={`m-0 text-[14px] font-bold ${bento ? 'md:col-span-2' : ''}`}>{msg(failed)}</p>}
     </div>

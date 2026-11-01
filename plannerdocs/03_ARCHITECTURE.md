@@ -46,7 +46,7 @@ Worker entry: a root Hono app
           +---- reach.ts    research: Agent Reach over the bridge, page reads and YouTube as fallbacks
           +---- strategist.ts the writer: Claude by SDK, Workers AI, or a labelled digest
           +---- assistant/  tools.ts (each tool is a description over an existing route), dispatch.ts (runs it through app.fetch as the person), model.ts (any OpenAI-compatible endpoint)
-          +---- cron.ts, engage.ts   every fifteen minutes (see 7)
+          +---- cron.ts, engage.ts   every fifteen minutes, and water every two hours (see 7)
           |
           v
 D1 (SQLite): 57 migrations, 177 tables
