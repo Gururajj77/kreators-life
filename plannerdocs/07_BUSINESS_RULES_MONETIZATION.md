@@ -3,8 +3,8 @@
 **Last updated:** 2026-11-01
 
 **Product:** kreators.app
-**Version:** 0.4, reconciled with the app on 1 November 2026, after that day's bug sweep (0.3 was 26 October 2026)
-**Source of truth:** the constants in `packages/shared/src/index.ts` (`XP`, `POINTS`, `WAIT`, `REWARDS`, `REWARD_GROUPS`, `CARD_GAMES`, `SOCIAL_REWARDS`, `RUN_REWARD`, `FEATURE_FEE_POINTS`, `AFFILIATE_SHARE`, `PLANS`, `TOPUP_PACKS`, `AGENT_LIMITS`, `PAYMENTS_LIVE`, `trustScore`, `bountyPayout`, `unlockFor`, `earningGuide`, `invoiceTotals`), `apps/api/src/payments.ts`, `rewards.ts`, `credits.ts`, `routes/finance.ts`, `routes/agencyDocs.ts`, the policy pages at `/terms`, `/privacy`, `/refunds`, `/pricing`, and `docs/DECISIONS.md`.
+**Version:** 0.4, reconciled with the app on 1 November 2026, after that day's bug sweep and its legal, security and performance pass (0.3 was 26 October 2026)
+**Source of truth:** the constants in `packages/shared/src/index.ts` (`XP`, `POINTS`, `WAIT`, `REWARDS`, `REWARD_GROUPS`, `CARD_GAMES`, `SOCIAL_REWARDS`, `RUN_REWARD`, `FEATURE_FEE_POINTS`, `AFFILIATE_SHARE`, `PLANS`, `TOPUP_PACKS`, `AGENT_LIMITS`, `PAYMENTS_LIVE`, `trustScore`, `bountyPayout`, `unlockFor`, `earningGuide`, `invoiceTotals`), `apps/api/src/payments.ts`, `rewards.ts`, `credits.ts`, `routes/finance.ts`, `routes/agencyDocs.ts`, the policy pages at `/terms`, `/privacy`, `/refunds`, `/pricing`, `/contact`, `/subprocessors` (`apps/web/src/site/Policy.tsx`), `RETENTION` and `CONSENT_PURPOSES` in shared, and `docs/DECISIONS.md`.
 
 ## 1. Purpose
 
@@ -158,11 +158,23 @@ The bug sweep of 1 November 2026 closed the places where two taps at once, or a 
 - **A typed amount is read from its digits** (`typedCents` in shared: "1,250.50" is 125050, "1.005" is 101, anything else is NaN), never through `Math.round(Number(x) * 100)`. It is used for the money fields in Agency invoices and agreements, the Store forms and business metrics. The older `centsFrom`, used for the assistant and credits, refuses more than two decimals.
 - **Finance "run now" touches the person's own rows only** (`runRecurring(db, onlyUser)`); the cron runs it for everyone.
 
+## 17. Plans, withdrawal, marketing mail and records (added 2026-11-01, later)
+
+The legal pass wrote down, in words and in code, rules that were already how the app behaved. No price, fee, xp or points amount changed: the plans in 13, the 5 percent shop fee and every table above are as they were.
+
+- **A plan does not renew by itself.** A plan lasts `PLAN_DAYS` (30) days and ends. Nothing more is charged unless the person picks a plan again, the plan's credits end with it, and top-up credits stay until used. The terms, `/pricing` and `/refunds` all say so, and no job renews a plan, so there is nothing to cancel. The price shown is the price charged, and any tax is shown before the person pays.
+- **The right to change your mind.** The refunds page (`/refunds`) tells people in the EU or the UK that they can withdraw from a distance purchase within 14 days without a reason (for goods from the day they arrive, for everything else from the day they buy). The one exception is digital content and services: the right ends once supply starts, if the person gave clear consent to start at once and acknowledged that they lose the right; if they ask for a service to start inside the 14 days and then withdraw, they pay for the part used. A refund goes out without delay and within 14 days of learning of the withdrawal, by the way it was paid; a refund in points is instant. Until a withdrawal form exists, Help and `/contact` are the way to withdraw, and the page says that.
+- **Not built yet, before payments go live:** a consent box and acknowledgement at the checkout itself. Today the wording is on the page only, and plans and top-ups cannot be paid for (`PAYMENTS_LIVE` is false), so nothing depends on it. It must be built before the switch.
+- **Marketing mail needs a recorded yes.** The third privacy choice (`CONSENT_PURPOSES` key `marketing`) starts off. `sendEmail({ marketing: true })` in `ops.ts` sends only to a person with a stored yes and only when the business address is set (the mail's footer carries it); every such mail carries an unsubscribe link and the `List-Unsubscribe` headers, and the public `/unsubscribe/:token` page (and `POST /api/public/unsubscribe/:token`, limit `unsubscribe`) turns the choice off and logs it. Receipts and password resets are never marketing and are not affected by the choice.
+- **Records kept for the books.** Orders, invoices and money records are kept seven years, with the person's name taken off when they delete the account (`RETENTION` in shared, which the privacy page, the cron and these docs all read). Nothing deletes an order sooner. The raw text of a payment message is cleared after a year and the order stays; the email outbox is cleared after 90 days (`RETENTION_DAYS`, `tidyOld` in `cron.ts`).
+- **Typed money.** An amount a person types is read from its digits with `typedCents` (see 16), never through a float.
+- **The business behind the pages** (name, address, tax numbers, copyright agent) comes from Worker variables the owner sets (`BUSINESS_*`, `DMCA_*`, `PUBLIC_URL`; see 09 §6). Until they are set the pages say "Being set up", so the invoices and notices never carry a made-up company.
+
 ## Known gaps
 
 - Rights and consent beyond the campaign fields are legal text, not product.
 - No reconciliation of provider settlements against orders exists beyond the webhook log and replay.
-- Plans and top-ups cannot be paid for yet (`PAYMENTS_LIVE` is false).
+- Plans and top-ups cannot be paid for yet (`PAYMENTS_LIVE` is false), and the checkout has no consent box for the digital-content exception to the 14-day right (17).
 - Whether a client's own tax rules (GST place of supply, TDS sections) are right for a given invoice is the creator's call; the calculator only does the arithmetic.
 - Found in the 2026-11-01 sweep and reported, not changed; each awaits a decision:
   - Party: when a host cancels an event the message says points are refunded, but nothing is refunded; a waitlist promotion never charges the points the ticket costs.
@@ -176,3 +188,5 @@ The bug sweep of 1 November 2026 closed the places where two taps at once, or a 
 Since 26 October 2026: plans, credits and top-ups for the assistant (13); the rewards catalog grew from four items to 41 on nine shelves, with nine card games that unlock for good; unlocks gained an xp floor; the monthly leaderboard's top three win an honor; Agency arrived with its invoice calculator (GST, TDS, total in words), templates, agreements and client links (14); business metrics in Reviews; planning and focus tools that pay nothing (Plan my week, time blocks, pace, focus quality); a product page can carry questions and answers and a reward page a live earnings calculator (from `docs/whop-study.md`); and Pro became a plan instead of a flag. Section 15 lists what is free and what costs.
 
 **2026-11-01 (bug sweep):** section 16 is new. Points and money now move with a guard first (a guarded points update on redeem, the status moved before the refund, payout and cancel), the test payment path is closed for points-only products and points-priced programs, a sold product is archived instead of deleted, typed amounts are read as `typedCents`, and Finance's run-now touches only the person's own rows. The money-related items the sweep reported but did not change are under Known gaps.
+
+**2026-11-01 (later, legal and privacy pass):** section 17 is new and records rules the policy pages now state: plans do not renew by themselves; the EU and UK 14-day right to withdraw, with the digital-content exception (the checkout consent box for it is not built, as nothing is chargeable yet); marketing email needs a recorded yes, with unsubscribe; orders, invoices and money records are kept seven years with the name removed on delete; typed amounts go through `typedCents`; and the business details come from Worker variables. No price, plan, fee, xp or points number changed.

@@ -3,9 +3,10 @@
 Last updated: 2026-11-01
 
 **Product:** kreators.app
-**Version:** 0.4, reconciled with the app on 1 November 2026
+**Version:** 0.4, reconciled with the app on 1 November 2026 (status line updated later the same day for the launch pass)
 **Owner:** Product founder
-**Source of truth:** `CLAUDE.md` for rules, `README.md` for the description, `docs/DECISIONS.md` for why, `docs/whop-study.md` and `docs/superfocus-study.md` for what two studies took and left.
+**Source of truth:** `CLAUDE.md` for rules, `README.md` for the description, `docs/DECISIONS.md` for why, `docs/whop-study.md` and `docs/superfocus-study.md` for what two studies took and left, `docs/security/SECURITY_REPORT.md` for the security checks and `docs/performance.md` for the performance checks.
+**Status (1 November 2026, after the launch pass):** built for the scope in section 7 and checked by 209 shared tests and 910 smoke checks. The legal, security, performance and accessibility checklists were worked through the same day as a pre-launch pass. What still stands between it and a launch: payments are in test mode, the pages still need a lawyer's review, the business details on the legal pages are Worker variables the owner has not filled in, and the owner's own steps (rotating two pasted keys, a second factor on the provider accounts, spending caps, mail DNS, a rehearsed restore) are written down in the security report and not done. See Known gaps.
 
 ## 1. Executive summary
 
@@ -51,9 +52,9 @@ Unchanged from v0.1, plus the one the game answers: people do not show up every 
 3. **Human in the loop.** Views are confirmed by a reviewer, payouts need the finance permission, completion is a manager's decision, Club is reviewed, moderation is by guides, a client approves a deliverable. Holds.
 4. **One identity, modular experiences.** One account, forty-six modules, each with a person's own switch and an admin's flag. An account can be signed in on three devices at a time. Holds.
 5. **Explicit permissions.** Roles, permissions, ownership and module flags are all checked on the server. Holds.
-6. **Portable data.** Plain SQL migrations (58 of them), one JSON export, no vendor lock beyond Cloudflare. Holds.
+6. **Portable data.** Plain SQL migrations (60 of them), one JSON export, no vendor lock beyond Cloudflare. Holds.
 7. **Measurable outcomes.** Fifteen product events in our own table, Observability counts (including how much Discover and Agency are used, as counts only), period numbers in Reviews. Holds for product metrics; company-level business metrics need queries, see §10.
-8. **Trust and safety.** Signed webhooks, salted click hashes, journal and wellbeing kept private, consented introductions, aliases in chats, no clickable links in what people write to each other, blocking, a rank-based mute. Holds; moderation is thin, see 08.
+8. **Trust and safety.** Signed webhooks, salted click hashes, journal and wellbeing kept private, consented introductions, aliases in chats, no clickable links in what people write to each other, blocking, a rank-based mute. Since the launch pass also: the terms agreed to on purpose at sign-up and kept as a record, three privacy choices that start off (a tracking cookie, outside videos, marketing mail), an enforcing content security policy, no cross-site reads of the API, and a note to the admins when sign-ins fail in bulk. Holds; moderation is thin, see 08.
 9. **No vanity-only scoring.** Trust is built from earned things; the Leaderboard never sorts by followers. Holds. Home does lead with xp, streak, points and level, on purpose: they are the game's results, not vanity, and every card under them is an action.
 10. **Wellbeing is not clinical care.** Holds; see 08 §5. Discover's "how your mind works" is never a diagnosis and says so; Human design and numerology are shown as reflection, not science.
 11. **Plain words.** The seven are pillars, each a pyramid of six layers (foundation, guiding principle, value goal, goal outcome, project, task), the daily nudge is a small act, the list under tasks is not to do, reviews are by period (a week, a month, a quarter or a half year), the tabs are Home, Daily, Pillars, Apps and Profile. Never tower, floor, spark, ladder, rule, feeling, proof, sprint, cycle or retro; the not-to-do list is never called habits, vices or avoidances (a repeating task does wear a Habit tag). Keys and routes keep old names. No word stands alone on the last line of a heading, a card or a paragraph, on a laptop or a phone; a probe measures it.
@@ -79,7 +80,7 @@ School, Work, Army, Journal, Life, Shop, Public page and the Leaderboard (on for
 Win, Agency, Party, Kreators Run, Community, Club, Bond, Circles, Games (the card games), Discover, Coaching, Wellbeing, Mood, Sleep, Stress, Mindful minutes, Reviews, Companion, Store, Audience, Content, Auto-DM, Finance, My purchases, Knowledge, Tools, TV, Fund. A person switches one on from Profile, Features; an admin can switch any of them off for everyone, for a role, for a brand or for one person. The setup chat switches on the apps that fit what the person said.
 
 ### Built and not an app
-Rewards (`/rewards`, a catalog of books, card games, merch and experiences bought with points), the strategy session (`/session`), the private calendar link, the client, invoice and agreement links, and the public site.
+Rewards (`/rewards`, a catalog of books, card games, merch and experiences bought with points), the strategy session (`/session`), the private calendar link, the client, invoice and agreement links, the public site, and the legal pages (`/terms`, `/privacy`, `/refunds`, `/contact`, `/pricing`, `/subprocessors`, `/copyright`, `/licences`) with the privacy choices a person makes once and can change under Profile.
 
 ### Parked, by decision
 - Stored-value currency. Points are not money and cannot be cashed out.
@@ -109,7 +110,7 @@ Founder addresses in `apps/api/src/admins.ts` and `ADMIN_EMAILS` become admins o
 
 ### Anyone joins
 1. The site at `/`, a story told in the PASTOR order: the problem, the five villains, the hero, the five Ws, how each villain is beaten with the apps that do it, before and after with the live numbers, the offer, the one next step. It shows nothing made up. `/features` lists everything a creator needs by group and `/7rp` lists every app a relationship serves. "Start free" goes to Welcome; "Go to app" goes to sign-in, or to Home with a session.
-2. Welcome opens an anonymous device session and the **setup chat** (`/onboarding`): one guide (Bumling), a few taps on small grouped lists (what brings you here, which of these sound like you, what you make if you make things, what usually gets in your way), every answer said back in plain words, a typing box that understands "what is Army?" and picks up tags from free text. The account is made inside it in two small cards (how you sign in; phone and birthday, which nobody else sees). Sign-up asks for an email, a password, a phone number and a date of birth, refuses anyone under eighteen, and creates the user and seven zero scores and nothing else; an email added to a device account keeps its progress. The chat ends by switching on the apps that fit (a short list with each one's reason) and offering the strategy session or the Discover quiz.
+2. Welcome opens an anonymous device session and the **setup chat** (`/onboarding`): one guide (Bumling), a few taps on small grouped lists (what brings you here, which of these sound like you, what you make if you make things, what usually gets in your way), every answer said back in plain words, a typing box that understands "what is Army?" and picks up tags from free text. The account is made inside it in two small cards (how you sign in; phone and birthday, which nobody else sees). Sign-up asks for an email, a password, a phone number and a date of birth, needs a ticked box agreeing to the terms of use and privacy policy (kept as a record), refuses anyone under eighteen, and creates the user and seven zero scores and nothing else; an email added to a device account keeps its progress. The chat ends by switching on the apps that fit (a short list with each one's reason) and offering the strategy session or the Discover quiz.
 3. The **strategy session** (`/session`, opened from Pillars or from the setup chat's last card): one conversation hosted by Bumling and the seven characters in turn, every answer a tap or a short line, an explanation before each question: the frame; a placement on the map for each relationship (core and floor, names never numbers, evidence when placed high); fears and insecurities; a scorecard with a behaviour check; the real day; a focus of at most two (floors under Courage first and suggested, never forced); a routine of six blocks ramped from the real day; practices; a signed contract whose check-in time becomes the daily reminder; the optional live call.
 4. Leaving halfway resumes at the same part, and a chat keeps its place while the person moves around the app. The vibe check then asks only the focus pillars inside the same chat, three taps each; the rest wait on Pillars. On the derived screen the person picks or writes the value goal and project per pillar. Then the pyramid is built and explained one card at a time.
 5. Pillars ends with the life map (the `#life-map` section): all seven on the map, the focus, the scores, fears and insecurities, the routine and the contract, with a run-again button; each pillar page says where it sits and each project with a due day shows its pace (on track, slipping or behind). Daily shows the three boxes and, under the first, the routine. The first three task ticks are free; after that a task needs ten minutes of age and a ten-minute gap, and a task cannot be ticked before its do date.
@@ -150,6 +151,7 @@ A quiz in five parts (most-and-least picks, adjusting pattern puzzles, descripto
 - Period numbers in `GET /reviews/summary`: check-ins, tasks, small acts, xp by pillar, kept days, mood, sleep, stress, mindful minutes, journal entries, money in and out, orders and sales, lessons, applications, events, posts, circles and runs, and the tasks brought to the review, next to the period before.
 - Focus time and quality on the Mindful dashboard (minutes, sessions, the average rating of the sessions the person rated).
 - Clicks per tracked link, taps per link block, outbound taps per store item and tool.
+- Real-user web vitals (`web_vitals`): how long a page took to show, to respond and to settle, by route and by phone or desktop, with no person attached; staff read a summary from the API, with no screen for it yet.
 - For a person who switches on business metrics in Reviews: up to twelve of their own, typed in each period or read from Agency (pieces published, approved first time, published on time, billable hours, utilisation, invoiced, paid, new clients), judged against a target.
 
 ### Not measured yet
@@ -160,17 +162,17 @@ Total registered users and follower counts are never a success metric.
 ## 11. Non-functional requirements, with status
 
 - Responsive, phone-first, installable PWA. Holds.
-- Accessibility: aria labels and roles throughout, reduced motion respected, a contrast probe over every route in dark mode, an overflow probe and an orphan-word probe over the shot list at laptop and phone width, an opaque fallback for the glass under reduced transparency and more contrast. No WCAG level stated and no screen-reader pass yet. Partial.
+- Accessibility: aria labels and roles throughout, reduced motion respected, a skip link, one keyboard rule for every dialog, a visible focus ring, an `alt` on every picture (a scan fails otherwise), a contrast probe over every route in dark mode that now measures WCAG 2.2 AA (colours were tuned; 3,375 hits became 30, mostly drawn map art), an overflow probe and an orphan-word probe over the shot list at laptop and phone width, an opaque fallback for the glass under reduced transparency and more contrast. No screen-reader pass yet. Partial.
 - Secure authentication and sessions. At most three devices at once. Holds; see 08.
 - Server-side authorization. Roles, ownership and module flags. Holds.
 - Input validation and rate limits. Validation on every route through `str`, `num`, `oneOf` and shared parsers; every limit in one file (`apps/api/src/limits.ts`) covering the auth doors, posts, replies, likes, follows, chats, offers, listings, tickets, applications, run entries, attendee code claims, coaching, Agency work, a client at their link, and the saving of settings. Holds.
 - Audit logs for privileged and financial changes. Holds (`audit_logs`, read under Admin).
-- Backups and tested restore. Nothing written down; D1 is relied on. Gap.
-- Error monitoring and logs. Wrangler observability is on; `pnpm cf:logs` tails; the app's own log (a Logs page for super admins) records changes, refusals, server errors, cron runs that did something and errors a browser reports. No alerting. Partial.
-- Export and deletion. One JSON export (which includes Agency, templates, review schedules and focus settings); deletion anonymises the person, keeps money rows for the books (an invoice keeps its totals and loses who it was for, its lines, its bank and its link). Holds.
+- Backups and tested restore. A restore procedure is written (`docs/security/RESTORE.md`) but has not been rehearsed; D1's own recovery is relied on. Gap.
+- Error monitoring and logs. Wrangler observability is on; `pnpm cf:logs` tails; the app's own log (a Logs page for super admins) records changes, refusals, server errors, cron runs that did something and errors a browser reports, and every answer carries a request id. The cron writes to every admin's inbox when failed sign-ins, throttled requests or server errors pass a line, or a role changes (`securityAlerts`); nothing reaches outside the app yet. Partial.
+- Export and deletion. One JSON export (which includes Agency, templates, review schedules, focus settings, posts and messages, support tickets, finance lists and what the person agreed to and chose); deletion anonymises the person, removes those too, keeps money rows for the books (an invoice keeps its totals and loses who it was for, its lines, its bank and its link). Each export and delete is logged without a name, and old outbox mail, link clicks, payment-message text and settled notices are removed on a schedule. Holds; a few tables are still missed (04, Known gaps).
 - Environments: development on 8787, a smoke server on 8788 with its own database, production. No staging. Gap.
-- Migrations in source control. Holds (58 plain SQL files, 0001 to 0058). Every migration is applied to the live database with `pnpm db:migrate` before `pnpm deploy`; the new code expects the new tables.
-- Automated tests for permissions, payments, flags and workflows. Unit tests in shared (209 cases) and an end-to-end smoke test (857 checks), both counted on 1 November 2026; see 09.
+- Migrations in source control. Holds (60 plain SQL files, 0001 to 0060). Every migration is applied to the live database with `pnpm db:migrate` before `pnpm deploy`; the new code expects the new tables.
+- Automated tests for permissions, payments, flags and workflows. Unit tests in shared (209 cases) and an end-to-end smoke test (910 checks), both counted on 1 November 2026; see 09.
 
 ## 12. Decisions: resolved and open
 
@@ -195,6 +197,7 @@ Total registered users and follower counts are never a success metric.
 - Agency is for content agencies and freelance creators, owner only, and billing reuses invoices (2026-11-01).
 - Plan my week, time blocks, a project's pace, focus quality, Lo-fi and the private calendar link, from the Superfocus study (2026-11-01).
 - Reviews on a calendar with repeating reminders, and a task flag that brings a task to a review (2026-11-01).
+- Terms on record, three privacy choices that start off, an enforcing content security policy, no CORS, and screens that load when opened (2026-11-01, the launch pass).
 
 ### Still open
 - Email or phone verification. The phone is collected but neither is verified; founder admin promotion relies on signing up first.
@@ -202,6 +205,7 @@ Total registered users and follower counts are never a success metric.
 - A staging environment and a written backup and restore step.
 - Refund and cancellation terms for paid programs, if any are ever priced.
 - Creator contracts, rights and exclusivity as legal text for Army (the fields exist on a campaign). Agreements in Agency are templates and say they are a starting point, not legal advice.
+- A lawyer's review of the terms and privacy policy for each country the app is offered in (the terms say they are a plain-language draft), and the owner filling in the business details and the copyright agent.
 - Rights for the book collection before any AI use.
 - Hosting and data residency beyond Cloudflare's defaults.
 - A live payment provider, and so priced plans, a funding step for rewards and anything that needs recurring billing.
@@ -227,14 +231,18 @@ Version 0.3 was written on 26 October 2026. Since then, in plain words:
 - **Team tools.** Observability moved into Operations and counts the newer apps; a Logs page for super admins; super admins can give xp and badges and delete a person.
 - **Design and words.** A calm glass-on-gradient look with bento layouts; two pillar colours changed; no orphan words (measured); tabs, filters and switches keep the page where it is; plain words checked at a teenager's reading level.
 - **Studies.** Whop (an earnings calculator and product questions taken) and Superfocus (planning and focus ideas taken); what each left out is written down.
+- **Legal, security and performance (the launch pass).** Terms agreed to at sign-up and recorded; three privacy choices that start off and are asked once; legal pages in plain words; an enforcing content security policy, no cross-site reads, blocked paths, an address guard and alerts to the admins; pages that download when opened (the main script fell from 703 to 119 kB gzip, and the first download is about 421 kB gzip); indexes and timeouts; fonts served from this site; colours that meet WCAG AA, a skip link and one keyboard rule for dialogs.
 - **Safety and limits.** Three devices an account; words people write are never links; every limit is in one file; the journal and wellbeing numbers still never reach brands, staff, the leaderboard, Club selection or a coach.
 
 ## Known gaps
 
 - No email or phone verification (§9, §12).
-- No staging, no written backup and restore, no alerting (§11).
+- No staging; a restore procedure written but not rehearsed; alerts reach the admins' inbox only (§11).
 - Company-level business metrics are not computed (§10).
 - Each deploy needs `pnpm db:migrate` first, by hand; nothing checks that production has the latest migration.
-- A bug sweep on 1 November 2026 fixed what it proved and listed what it only reported: Party refunds and waitlist charges, a few missing guards on points, account delete and data export that miss some tables, and some limits and block checks. They await decisions and are listed in 07 and 08 §13.
+- A bug sweep on 1 November 2026 fixed what it proved and listed what it only reported: Party refunds and waitlist charges, a few missing guards on points, and some limits and block checks. They await decisions and are listed in 07 and 08 §13. The delete and export gaps in that list were mostly closed by the launch pass; a few tables remain (04).
+- The launch pass left these open on purpose, each with its next step in `docs/security/SECURITY_REPORT.md` and `docs/performance.md`: one real test-mode payment with the console open (bank pages, UPI and 3-D Secure are untested against the content security policy), no second factor for staff, no continuous integration, session tokens kept in `localStorage` (protected by the policy and the absence of outside scripts), the `X-Admin-Key` door with no rate limit, public pages drawn in the browser and not on the server, the one 690 kB shared file not yet split, and the assistant answering once instead of streaming. The owner's own steps (rotate the two keys pasted in an earlier chat, a second factor on the provider accounts, spending caps, mail DNS, Cloudflare Always Use HTTPS, GitHub push protection) are in the security report.
 
 **Update, 1 November 2026 (later):** a bug sweep fixed dates that were not real days, repeats that drifted after a short month, key lookups that crashed on a word like "constructor", and several places where points or money could move twice (see 07 §16 and 08 §13). Water reminders now have their own two-hour trigger, with a choice of every two or four hours, and the Water and reminders box lists the tasks tagged Remember. Section actions on Home and other screens are one See all style. The figures are 58 migrations, 209 shared cases and 857 smoke checks.
+
+**Update, 1 November 2026 (later still, the launch pass):** the legal, security, performance and accessibility checklists were worked through with one rule, that nothing may break, and proved by 910 smoke checks, the browser drivers, the layout probes and a 102-route policy browse. Sign-up now needs a ticked box for the terms and privacy policy, each acceptance is a record, three privacy choices (a tracking cookie, outside videos, marketing mail) start off and are asked once in a card at the bottom left, and `/terms`, `/privacy`, `/refunds`, `/contact`, `/pricing`, `/subprocessors`, `/copyright` and `/licences` are written in plain words. The figures are 60 migrations, 183 tables, 209 shared cases and 910 smoke checks.
