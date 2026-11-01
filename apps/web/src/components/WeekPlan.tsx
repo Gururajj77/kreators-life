@@ -107,7 +107,8 @@ interface Own {
   plan: Plan;
 }
 const chip = (on: boolean) => `toy min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`;
-const selectClass = 'block min-h-[44px] w-full rounded-pill border-2 border-line bg-card-strong px-sm text-[14px] font-bold text-ink';
+const selectBase = 'block min-h-[44px] rounded-pill border-2 border-line bg-card-strong px-sm text-[14px] font-bold text-ink';
+const selectClass = `${selectBase} w-full`;
 
 /** The form for a task you pick yourself: its day, how long it takes, a time, a priority and the rest, from the same form a task uses on Daily. */
 function OwnForm({ node, day, today, onAdd }: { node: Node; day: string; today: string; onAdd: (o: Own) => void }) {
@@ -243,7 +244,7 @@ function Fix({ a, plan, edits, stage, onFill }: { a: PlanAttention; plan: WeekPl
             <Inert text={t.title} />
             {t.estimateMin ? <span className="font-semibold text-ink-soft"> {minutesLabel2(t.estimateMin)}</span> : null}
           </p>
-          <select value={edits[t.id]?.doDate ?? t.day ?? ''} onChange={(e) => stage(t.id, { doDate: e.target.value })} aria-label={`Day for ${t.title}`} className={`${selectClass} w-[148px] shrink-0`}>
+          <select value={edits[t.id]?.doDate ?? t.day ?? ''} onChange={(e) => stage(t.id, { doDate: e.target.value })} aria-label={`Day for ${t.title}`} className={`${selectBase} w-[148px] shrink-0`}>
             {!t.day && <option value="">{COPY.chooseDay}</option>}
             {plan.days.map((d) => (
               <option key={d.date} value={d.date}>

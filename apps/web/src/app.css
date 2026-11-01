@@ -407,6 +407,10 @@
   .screen-even > section:not(.span-all) > :last-child > ul.flex > li {
     flex: 1 1 auto;
   }
+  /* A card in a grid of cards (the reads under Knowledge) fills its cell, so cards in one row are one height. */
+  .screen-even > section:not(.span-all) > :last-child > ul > li > :first-child {
+    height: 100%;
+  }
 }
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);

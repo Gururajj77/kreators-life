@@ -11,6 +11,7 @@ const day = (n) => new Date(Date.parse(`${today}T00:00:00Z`) + n * 86_400_000).t
 const proj = ((await api('GET', '/nodes?relationship=self&kind=project')).nodes ?? [])[0];
 const mk = (b) => api('POST', '/nodes', { kind: 'task', parentId: proj.id, relationship: proj.relationship, ...b });
 const stamp = Date.now().toString(36).slice(-4);
+const lateTask = (await mk({ title: `Spend a full day with a friend, screens off ${stamp}`, dueDate: day(-3) })).node;
 const unsized = (await mk({ title: `Reply to the brand ${stamp}`, doDate: day(2) })).node;
 const picked = (await mk({ title: `Plan the next shoot ${stamp}`, doDate: day(6), estimateMin: 20 })).node;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -35,6 +36,12 @@ note('a fix is staged: 45m on the task with no estimate', chipHit);
 const k1 = await keepLabel();
 note('the Keep button counts the staged fix', k1 !== k0 && /\((\d+)\)/.test(k1), `${k0} -> ${k1}`);
 await page.screenshot({ path: `${OUT}/plan2-fix.png` });
+// the "move to a day" fix: the title keeps its room and the day picker does not sit on it
+await page.evaluate(() => { const li = [...document.querySelectorAll('[role=dialog] li')].find((l) => /late task/.test(l.innerText) && l.querySelector('button[aria-expanded]')); const b = li.querySelector('button[aria-expanded]'); if (b.getAttribute('aria-expanded') !== 'true') b.click(); });
+await sleep(500);
+const moveRow = await page.evaluate((title) => { const row = [...document.querySelectorAll('[role=dialog] li')].find((l) => l.innerText.includes(title) && l.querySelector('select') && !l.querySelector('li')); if (!row) return null; const p = row.querySelector('p').getBoundingClientRect(); const sel = row.querySelector('select').getBoundingClientRect(); return { titleW: Math.round(p.width), titleRight: Math.round(p.right), selLeft: Math.round(sel.left), selW: Math.round(sel.width), titleH: Math.round(p.height) }; }, lateTask.title);
+note('a late task row keeps room for its title, with the day picker beside it', moveRow && moveRow.titleW >= 120 && moveRow.selLeft >= moveRow.titleRight - 2 && moveRow.selW <= 200 && moveRow.titleH < 90, JSON.stringify(moveRow));
+await page.screenshot({ path: `${OUT}/plan2-move.png` });
 // tick the line as dealt with
 const lineTick = await page.evaluate(() => { const li = [...document.querySelectorAll('[role=dialog] li')].find((l) => /no time estimate/.test(l.innerText)); const cb = li.querySelector('input[type=checkbox]'); cb.click(); return true; });
 await sleep(300);
