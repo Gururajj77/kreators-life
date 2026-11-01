@@ -11,9 +11,9 @@ Last updated: 2026-11-01
 A modular monolith, as v0.1 recommended, on a fixed stack the founder set on 23 October 2026. It has not moved since:
 
 - `apps/web`: React 19, Vite 7, Tailwind 4, React Router 7, TanStack Query, Zustand, GSAP (new motion; `motion/react` only where it already is), `vite-plugin-pwa`, `qrcode`. The public site and the app are one bundle.
-- `apps/api`: Hono on a Cloudflare Worker with a D1 database (`wrangler.jsonc`: compatibility date 2026-10-01, `nodejs_compat`, observability on, one cron). The Worker serves the built web app as static assets, so one deploy ships everything. It runs first for `/`, `/api/*`, `/go/*`, `/out/*`, `/__scheduled` and `/sitemap.xml`; everything else is a file or the SPA shell. Its only runtime dependencies are `hono` and `@anthropic-ai/sdk`.
-- `packages/shared`: the domain model both sides import straight from TypeScript, with Vitest tests (it has no runtime dependencies of its own). Relationships, the pyramid, xp and waits, questions, modules, flags, roles and permissions, periods, repeat rules, money, time zones and slots, matching, listings, commerce, finance, the invoice calculator and contract templates, the week plan, the how-tos and the glossary.
-- A pnpm workspace. No ORM; plain SQL migrations in `apps/api/migrations` (57 of them), applied with wrangler.
+- `apps/api`: Hono on a Cloudflare Worker with a D1 database (`wrangler.jsonc`: compatibility date 2026-10-01, `nodejs_compat`, observability on, two cron triggers). The Worker serves the built web app as static assets, so one deploy ships everything. It runs first for `/`, `/api/*`, `/go/*`, `/out/*`, `/__scheduled` and `/sitemap.xml`; everything else is a file or the SPA shell. Its only runtime dependencies are `hono` and `@anthropic-ai/sdk`.
+- `packages/shared`: the domain model both sides import straight from TypeScript, with Vitest tests (it has no runtime dependencies of its own). Relationships, the pyramid, xp and waits, questions, modules, flags, roles and permissions, periods, repeat rules, money, time zones and slots, matching, listings, commerce, finance, the invoice calculator and contract templates, the week plan, the how-tos and the glossary. Two small helpers sit there for the whole app: `byKey` (not exported; it builds every `*_BY_KEY` lookup with no prototype, so a key a person typed, such as "constructor", finds nothing instead of an inherited function) and `typedCents` (reads a typed amount from its digits, never through a float).
+- A pnpm workspace. No ORM; plain SQL migrations in `apps/api/migrations` (58 of them), applied with wrangler.
 
 ## 2. Logical layers
 
@@ -46,10 +46,10 @@ Worker entry: a root Hono app
           +---- reach.ts    research: Agent Reach over the bridge, page reads and YouTube as fallbacks
           +---- strategist.ts the writer: Claude by SDK, Workers AI, or a labelled digest
           +---- assistant/  tools.ts (each tool is a description over an existing route), dispatch.ts (runs it through app.fetch as the person), model.ts (any OpenAI-compatible endpoint)
-          +---- cron.ts, engage.ts   every fifteen minutes, and water every two hours (see 7)
+          +---- cron.ts, engage.ts   two triggers: everything every fifteen minutes, water alone every two hours (see 7)
           |
           v
-D1 (SQLite): 57 migrations, 177 tables
+D1 (SQLite): 58 migrations, 177 tables
           |
           v
 Adapters: Razorpay, Resend (through the outbox), YouTube Data API, Meta webhooks, Workers AI (optional), the Anthropic SDK (the content strategist's writer), an OpenAI-compatible endpoint for the assistant (OpenRouter by default), the Agent Reach bridge (research, scripts/reach/server.mjs)
@@ -63,6 +63,8 @@ Adapters: Razorpay, Resend (through the outbox), YouTube Data API, Meta webhooks
 - One action, two callers. The assistant never has a second version of an action: every tool in `assistant/tools.ts` is a description over an existing route, and `dispatch.ts` runs it inside the Worker with the person's own Bearer token (`app.fetch`), so the session, the module gate, the limits, the waits, the xp caps and the owner filters apply exactly as to a tap. The same holds for Agency's use of Army (`uploadVersion` is exported from `army.ts`) and of Finance (`createInvoice` and `setInvoiceStatus` are exported from `finance.ts`), and for a coach's tasks (`createNode` and `editNode` in `nodes.ts`).
 - Money and points move only through `points_ledger`, `orders` and `xp_events` (credits through `credit_ledger`; a creator's own books are `finance_transactions`); nothing writes a balance directly except through those paths.
 - Race-sensitive writes use D1 batches and unique indexes: one booking per slot, one application per listing, one registration per event, one review per period, one entry per run, one open offer per buyer, one open coaching link per pair, one claim of a code per person, a pay-out capped inside the batch that pays.
+- Guards against double pay and double refund (the 2026-11-01 bug sweep). A write that moves points or money first makes one guarded `UPDATE`, then checks `meta.changes`, and goes on only when it is 1. Rewards redeem takes the points first with `WHERE points >= ?`; rewards cancel moves the redemption out of `reserved` first; a Win payout moves the submission out of `verified` first (so a paid one cannot be paid or resubmitted again); `refundOrder` flips the order to `refunded` before it credits anyone, so two refunds at once pay the buyer once; Finance's recurring run moves `next_date` first with `AND next_date = ?`, and the manual run (`runRecurring(db, onlyUser)`) touches only the caller's own rows. The same sweep closed the free-purchase holes: School enrol takes `pay: 'test'` only when the program has a money price and no points price, and the Store checkout treats a payment as money only when `cents > 0`.
+- Real days only. `DATE_RE.test` in `db.ts` checks a day against the calendar (2026-11-31 and 2026-00-00 have the shape and are refused, never a 500); `parseRepeat` drops an `until` that is not a real day. The person's day still comes from the device (`dayFromDevice`).
 
 ## 4. Cross-module flows as built
 
@@ -116,27 +118,40 @@ The matching site pages are `/`, `/explore`, `/features`, `/features/:key`, `/7r
 
 ## 7. The cron
 
-`*/15 * * * *` runs `runScheduled`, in this order:
+`apps/api/wrangler.jsonc` has two triggers, and `runScheduled(env, cron)` in `cron.ts` decides what each one does:
+
+- **`0 */2 * * *` (`WATER_CRON`, every two hours):** water only (`sendWaterAndCustom` with water on and custom reminders off). Nothing else runs, so this trigger returns at once.
+- **`*/15 * * * *` (`MAIN_CRON`, every fifteen minutes):** everything else, in this order. It leaves water alone.
+- Any other schedule, for example a hand-made `GET /__scheduled` test, does both.
+
+The fifteen-minute run:
 
 1. The daily reminder (`sendReminders`): anyone whose check-in time has passed within the last hour in their own zone and who has not checked in that day, once per due time.
-2. Water and the person's own reminders (`sendWaterAndCustom`).
-3. Task reminders (`sendTaskReminders`): a task tagged Remember with a day, at its time, once.
+2. The person's own reminders (`sendWaterAndCustom` with custom on): a reminder goes once on each of its days, within an hour after its time.
+3. Task reminders (`sendTaskReminders`): a task tagged Remember with a day, at its time, once. The date window is applied in SQL (yesterday to tomorrow in UTC), then each task's own zone decides.
 4. Review reminders (`sendReviewReminders`): a scheduled review on its day at its time in the person's zone, once; `next_on` is moved to the next day the repeat rule falls on, and a day missed while nothing ran is skipped, never sent late. The note links to the period it covers and says how many tasks were brought to it.
-5. Event reminders (`sendEventReminders`, engage.ts): a day before and an hour before every Party event, circle table and run someone signed up for, once each through `event_reminders`.
-6. Close last month's leaderboard season once (`closeSeason`): its top three go to `season_results` and get the `season_top` honor.
-7. Post-purchase sequences into inboxes (`runSequences`).
-8. Monthly recurring finance entries (`runRecurring`).
-9. Circle tables set two days out, and the next weekly occurrence opened (`matchDueCircles`, `rollWeeklyCircles`).
-10. Money orders nobody paid for within half an hour are closed (`expired`), so the product is buyable again.
-11. YouTube numbers refreshed for content items not synced in six hours (twenty at a time) and for YouTube reward submissions with no automatic reading in the last six hours (twenty at a time), when a key is set.
+5. `clearPastWaterNotes`: inbox water lines (`water-<user>-<day>`) of a day that is over, in that person's own zone, are deleted whether read or archived or not (`pastWaterNote` in shared). Other notes stay.
+6. Event reminders (`sendEventReminders`, engage.ts): a day before and an hour before every Party event, circle table and run someone signed up for, once each through `event_reminders`.
+7. Close last month's leaderboard season once (`closeSeason`): its top three go to `season_results` and get the `season_top` honor.
+8. Post-purchase sequences into inboxes (`runSequences`).
+9. Monthly recurring finance entries (`runRecurring`).
+10. Circle tables set two days out, and the next weekly occurrence opened (`matchDueCircles`, `rollWeeklyCircles`).
+11. Money orders nobody paid for within half an hour are closed (`expired`), so the product is buyable again.
+12. YouTube numbers refreshed for content items not synced in six hours (twenty at a time) and for YouTube reward submissions with no automatic reading in the last six hours (twenty at a time), when a key is set.
 
-After the run: a line in `app_logs` if anything was done, `pruneLogs` (log lines older than thirty days), and `session_evictions` rows older than thirty days are deleted. Locally `pnpm dev` passes `--test-scheduled`, so `GET /__scheduled?cron=*+*+*+*+*` runs it by hand (the smoke test does this for the reminders).
+Three rules of the reminders:
+
+- **Water has its own rhythm.** The choices are two or four hours (`WATER_EVERY_CHOICES` = 120, 240; migration 0058 moved shorter choices to 120 and anything from 121 to 239 to 240). A reminder waits for "time since the last water note" to reach the choice less five minutes, because the next two-hour tick lands a few seconds before the two hours are up. Water is one inbox line per person per day: each reminder rewrites it with the new count, back to unread, newest first, and clears `archived_at`, so an archived line comes back.
+- **The last tick of the day is 23:45 (`LAST_TICK`).** A reminder set for 23:46 to 23:59 goes out at 23:45 and not at 00:00, when its day has already turned over. It applies to the daily reminder, custom reminders, task reminders and review reminders.
+- **Each goes once.** The ids are fixed (`task-<id>-<day>`, `review-<id>-<day>`, `water-<user>-<day>`), and custom reminders keep `last_sent_day`.
+
+After the run: a line in `app_logs` if anything was done, `pruneLogs` (log lines older than thirty days), and `session_evictions` rows older than thirty days are deleted. Locally `pnpm dev` passes `--test-scheduled`, so `GET /__scheduled?cron=*+*+*+*+*` runs both halves by hand (the smoke test does this for the reminders, and also runs the two-hour trigger on its own).
 
 ## 8. Environments, deployment and checks
 
 - Development: `pnpm dev`, web on 5173 proxying `/api`, `/go` and `/out` to the Worker on 8787 with a local D1 under `.wrangler`. Secrets in `apps/api/.dev.vars`; `.dev.vars.example` lists every key.
-- Smoke: a second Worker on 8788 with its own database under `scripts/smoke/state`, started by `scripts/smoke/blueprint.sh` (`--fresh` wipes the database, `--keep` leaves the server up). `scripts/smoke/smoke.mjs` imports the shared model straight from TypeScript and, at the last run, made 843 checks; it serves a stand-in model on 8799 so the assistant checks never pay for a model. Test accounts live only there.
-- Probes and drives (puppeteer-core driving the installed Chrome, over `shots-all.mjs`'s list of about a hundred routes): `shoot.mjs` takes the shots; `orphan-probe.js` (no word alone on the last line, must be 0 on a laptop), `overflow-probe.js` (nothing past the screen at phone width), `contrast-probe.js` (text on its real background, in dark mode); `drive-signup.mjs`, `drive-keep.mjs`, `drive-talk.mjs`, `drive-cards.mjs` (cards stay on the table when focus mode is left) and `drive-scroll.mjs` (no tab or toggle throws the page back to the top). `scripts/scan.sh` runs the spacing, colour, link and old-name scans; `scripts/flesch.py` scores reading ease.
+- Smoke: a second Worker on 8788 with its own database under `scripts/smoke/state`, started by `scripts/smoke/blueprint.sh` (`--fresh` wipes the database, `--keep` leaves the server up). `scripts/smoke/smoke.mjs` imports the shared model straight from TypeScript and, at the last run, made 857 checks (the shared package has 209 Vitest tests); it serves a stand-in model on 8799 so the assistant checks never pay for a model. Test accounts live only there.
+- Probes and drives (puppeteer-core driving the installed Chrome, over `shots-all.mjs`'s list of about a hundred routes): `shoot.mjs` takes the shots; `orphan-probe.js` (no word alone on the last line, must be 0 on a laptop), `overflow-probe.js` (nothing past the screen at phone width), `contrast-probe.js` (text on its real background, in dark mode); `drive-signup.mjs`, `drive-keep.mjs`, `drive-talk.mjs`, `drive-cards.mjs` (cards stay on the table when focus mode is left), `drive-scroll.mjs` (no tab or toggle throws the page back to the top), `drive-headings.mjs` (every section heading and its action are level, and a link action has its chevron), `drive-home.mjs` (Home's paired halves are one height at 1100, 1280 and 1600 pixels) and `drive-plan.mjs` (the Plan my week sheet; it sweeps its own leftover tasks at the start and the end). `scripts/scan.sh` runs the spacing, colour, link and old-name scans; `scripts/flesch.py` scores reading ease.
 - Production: `pnpm deploy` builds the web app and runs `wrangler deploy`. Secrets with `pnpm cf:secret <NAME>`. Migrations with `pnpm db:migrate` (run it before the deploy that needs them). Logs with `pnpm cf:logs`. Wrangler observability is enabled.
 - The PWA: `vite-plugin-pwa` with `autoUpdate`, `skipWaiting` and `clientsClaim`, so a deploy replaces a cached page on the next load; `/api/*` is never served from the shell; Google Fonts are cached first; the start page is `/today`.
 - There is no staging environment, no written backup and restore step, and no alerting. D1's own point-in-time recovery is relied on but not documented or rehearsed.
@@ -145,7 +160,7 @@ After the run: a line in `app_logs` if anything was done, `pruneLogs` (log lines
 ## 9. Anti-patterns, checked
 
 - One mega-prompt: avoided; DECISIONS shows the slices.
-- One giant component or table: avoided; 57 migrations, one route file per module, screens built from `Screen`, `Section`, `StatTile` and the charts, one `DataTable`, one `Pager`, one `KanbanBoard`.
+- One giant component or table: avoided; 58 migrations, one route file per module, screens built from `Screen`, `Section`, `StatTile` and the charts, one `DataTable`, one `Pager`, one `KanbanBoard`.
 - Frontend-only authorization: avoided; roles, ownership and module flags are all server checks, and what a client may see at a link is removed on the server (`invoiceForClient`, the parts of `PortalView`).
 - Hard-coded access in components: avoided; `Gate` reads `access` from `/api/me`.
 - Payment state in a mutable user field: avoided; `orders` plus `webhook_events`.
@@ -162,8 +177,22 @@ After the run: a line in `app_logs` if anything was done, `pruneLogs` (log lines
 - No purge for `webhook_events`, `email_outbox`, `analytics_events` or `link_clicks` (only `app_logs` and `session_evictions` are tidied by the cron).
 - A PDF of an invoice or an agreement is the browser's print and save, because a Worker cannot make one.
 - Calendar sync is one way (tasks and reviews appear in a calendar; nothing changes back), and there is no two-way link to Google, Outlook, Slack or meeting-note tools.
+- Reported in the 2026-11-01 bug sweep and not changed, because each needs a decision:
+  - `/orgs` is not in `MODULE_FOR_PREFIX`, so it is treated as core and always open, even when Army is off for the person (see 05).
+  - `POST /public/client-error` is registered before the rate-limit loop, so the `clientError` limit never runs.
+  - `POST /me/password` is not in `ROUTE_LIMITS`, and it compares the current password with `!==` instead of the constant-time compare used at sign-in.
+  - Invoice status can move between any two states (draft straight to paid books the income).
+  - Under simultaneous requests, a store checkout can create orders with one debit; School and Party enrolment debit points with no `points >= ?` guard; a coupon use is spent before a checkout that then fails.
+  - Party: a host cancelling an event says points are refunded but refunds nothing, and promoting someone off the waitlist never charges them.
+  - Dates and numbers that use UTC day edges instead of the person's zone: Agency's `approved_day` for a client's approval, and the Reviews numbers (`fromTs`, `toTs` in `reviews.ts`).
+  - `getStats` counts a Club badge for membership statuses `accepted`, `member` and `active`, but reviewers set `approved`.
+  - A community mute uses `INSERT OR REPLACE`, so muting again resets the muter's rank; Bond chat messages have no block check.
+  - Uploaded media can never be deleted (the cap is 60).
+  - A few screens ignore a failed mutation (Agency and review buttons) and keep stale error text when a sheet reopens.
+  - A KPI target of 0 means "no target".
 
 ## What changed since this was written
 
 - 2026-11-01: reconciled from 0.3 (26 October, 25 migrations, about 110 tables) to the app as it stands: 57 migrations and 177 tables, 46 modules. New since then: the strategy session, the setup chat, the assistant with credits and plans, coaching, attendee codes, engagement (reactions, pins, event reminders, seasons), media and event extras, anonymous threads, water and reminders, card games, Discover and its add-ons, the app's own log, focus rounds and their settings, task dates, repeat, priority and subtasks, the device cap, Agency (clients, deliverables, time, invoices, agreements, templates, the client link), business metrics, the private calendar link, and scheduled reviews with reminders.
 - 2026-11-01: the request flow now has the module gate and the per-person limits written out in order; the public routes are listed in one place (6); the cron lists all eleven jobs; and the Club-only Work gap from 0.3 is closed.
+- 2026-11-01 (later): bug sweep and water pass. The cron now has two triggers (the fifteen-minute one and a two-hour one that sends only water), `LAST_TICK` 23:45 for late reminders, and `clearPastWaterNotes`; migration 0058 makes two hours the shortest water gap (58 migrations, still 177 tables). New guard patterns are written down in section 3 (guarded `UPDATE`, then `meta.changes`; status-first pay and refund; `byKey`; real-day checks), and the reported-but-not-changed list is under Known gaps. Counts: 857 smoke checks, 209 shared tests.

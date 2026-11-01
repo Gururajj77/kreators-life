@@ -51,7 +51,7 @@ Unchanged from v0.1, plus the one the game answers: people do not show up every 
 3. **Human in the loop.** Views are confirmed by a reviewer, payouts need the finance permission, completion is a manager's decision, Club is reviewed, moderation is by guides, a client approves a deliverable. Holds.
 4. **One identity, modular experiences.** One account, forty-six modules, each with a person's own switch and an admin's flag. An account can be signed in on three devices at a time. Holds.
 5. **Explicit permissions.** Roles, permissions, ownership and module flags are all checked on the server. Holds.
-6. **Portable data.** Plain SQL migrations (57 of them), one JSON export, no vendor lock beyond Cloudflare. Holds.
+6. **Portable data.** Plain SQL migrations (58 of them), one JSON export, no vendor lock beyond Cloudflare. Holds.
 7. **Measurable outcomes.** Fifteen product events in our own table, Observability counts (including how much Discover and Agency are used, as counts only), period numbers in Reviews. Holds for product metrics; company-level business metrics need queries, see §10.
 8. **Trust and safety.** Signed webhooks, salted click hashes, journal and wellbeing kept private, consented introductions, aliases in chats, no clickable links in what people write to each other, blocking, a rank-based mute. Holds; moderation is thin, see 08.
 9. **No vanity-only scoring.** Trust is built from earned things; the Leaderboard never sorts by followers. Holds. Home does lead with xp, streak, points and level, on purpose: they are the game's results, not vanity, and every card under them is an action.
@@ -169,8 +169,8 @@ Total registered users and follower counts are never a success metric.
 - Error monitoring and logs. Wrangler observability is on; `pnpm cf:logs` tails; the app's own log (a Logs page for super admins) records changes, refusals, server errors, cron runs that did something and errors a browser reports. No alerting. Partial.
 - Export and deletion. One JSON export (which includes Agency, templates, review schedules and focus settings); deletion anonymises the person, keeps money rows for the books (an invoice keeps its totals and loses who it was for, its lines, its bank and its link). Holds.
 - Environments: development on 8787, a smoke server on 8788 with its own database, production. No staging. Gap.
-- Migrations in source control. Holds (57 plain SQL files, 0001 to 0057). Every migration is applied to the live database with `pnpm db:migrate` before `pnpm deploy`; the new code expects the new tables.
-- Automated tests for permissions, payments, flags and workflows. Unit tests in shared (nearly two hundred) and an end-to-end smoke test (more than eight hundred checks); see 09.
+- Migrations in source control. Holds (58 plain SQL files, 0001 to 0058). Every migration is applied to the live database with `pnpm db:migrate` before `pnpm deploy`; the new code expects the new tables.
+- Automated tests for permissions, payments, flags and workflows. Unit tests in shared (209 cases) and an end-to-end smoke test (857 checks), both counted on 1 November 2026; see 09.
 
 ## 12. Decisions: resolved and open
 
@@ -235,3 +235,6 @@ Version 0.3 was written on 26 October 2026. Since then, in plain words:
 - No staging, no written backup and restore, no alerting (§11).
 - Company-level business metrics are not computed (§10).
 - Each deploy needs `pnpm db:migrate` first, by hand; nothing checks that production has the latest migration.
+- A bug sweep on 1 November 2026 fixed what it proved and listed what it only reported: Party refunds and waitlist charges, a few missing guards on points, account delete and data export that miss some tables, and some limits and block checks. They await decisions and are listed in 07 and 08 §13.
+
+**Update, 1 November 2026 (later):** a bug sweep fixed dates that were not real days, repeats that drifted after a short month, key lookups that crashed on a word like "constructor", and several places where points or money could move twice (see 07 §16 and 08 §13). Water reminders now have their own two-hour trigger, with a choice of every two or four hours, and the Water and reminders box lists the tasks tagged Remember. Section actions on Home and other screens are one See all style. The figures are 58 migrations, 209 shared cases and 857 smoke checks.

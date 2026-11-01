@@ -3,7 +3,7 @@
 **Last updated:** 2026-11-01
 
 **Product:** kreators.app
-**Version:** 0.4, reconciled with the app on 1 November 2026 (0.3 was 26 October 2026)
+**Version:** 0.4, reconciled with the app on 1 November 2026, after that day's bug sweep (0.3 was 26 October 2026)
 **Source of truth:** the constants in `packages/shared/src/index.ts` (`XP`, `POINTS`, `WAIT`, `REWARDS`, `REWARD_GROUPS`, `CARD_GAMES`, `SOCIAL_REWARDS`, `RUN_REWARD`, `FEATURE_FEE_POINTS`, `AFFILIATE_SHARE`, `PLANS`, `TOPUP_PACKS`, `AGENT_LIMITS`, `PAYMENTS_LIVE`, `trustScore`, `bountyPayout`, `unlockFor`, `earningGuide`, `invoiceTotals`), `apps/api/src/payments.ts`, `rewards.ts`, `credits.ts`, `routes/finance.ts`, `routes/agencyDocs.ts`, the policy pages at `/terms`, `/privacy`, `/refunds`, `/pricing`, and `docs/DECISIONS.md`.
 
 ## 1. Purpose
@@ -147,13 +147,32 @@ Agency (Contribution, off by default) is for a content agency or a freelance cre
 - **Costs money, through the provider:** a creator's own products, when a buyer pays by money checkout (live only with Razorpay keys), and plans and top-ups once `PAYMENTS_LIVE` is switched on.
 - **Taken from no one:** invoices, agreements, the client link and the calendar link; Store gear sales between people.
 
+## 16. How points and money move safely (added 2026-11-01)
+
+The bug sweep of 1 November 2026 closed the places where two taps at once, or a path meant for tests, could pay twice or pay nothing. The rules now:
+
+- **Points are taken first, with a guarded update.** Redeeming a reward runs `UPDATE users SET points = points - cost ... WHERE points >= cost` and checks that one row changed; if none did, nothing is given. A balance cannot go under zero however fast the taps come.
+- **The status moves first, then the money.** Cancelling a reward moves the redemption from `reserved` to `cancelled` before the points go back, so two cancels refund once. A win payout moves the submission from `verified` to `paid` before the pool is touched, and a paid submission cannot be sent in again. `refundOrder` flips the order to `refunded` first (`WHERE status != 'refunded'`), so two refunds credit the buyer once. A recurring finance entry moves its `next_date` first (`AND next_date = ?`), so it books once.
+- **The test path is closed to anything free.** The test payment on the shop counts as money only when the amount is above zero, so a product priced in points alone is never free through it. A School enrolment may use the test path only when the program has a money price and no points price.
+- **A product that has been sold is archived, not deleted** (`DELETE /studio/products/:id` sets `status = 'archived'`), so paid orders and the buyers' access stay.
+- **A typed amount is read from its digits** (`typedCents` in shared: "1,250.50" is 125050, "1.005" is 101, anything else is NaN), never through `Math.round(Number(x) * 100)`. It is used for the money fields in Agency invoices and agreements, the Store forms and business metrics. The older `centsFrom`, used for the assistant and credits, refuses more than two decimals.
+- **Finance "run now" touches the person's own rows only** (`runRecurring(db, onlyUser)`); the cron runs it for everyone.
+
 ## Known gaps
 
 - Rights and consent beyond the campaign fields are legal text, not product.
 - No reconciliation of provider settlements against orders exists beyond the webhook log and replay.
 - Plans and top-ups cannot be paid for yet (`PAYMENTS_LIVE` is false).
 - Whether a client's own tax rules (GST place of supply, TDS sections) are right for a given invoice is the creator's call; the calculator only does the arithmetic.
+- Found in the 2026-11-01 sweep and reported, not changed; each awaits a decision:
+  - Party: when a host cancels an event the message says points are refunded, but nothing is refunded; a waitlist promotion never charges the points the ticket costs.
+  - Store checkout can create more than one order from one debit when two requests run together; School and Party enrolment take points without a `points >= ?` guard; a coupon's use is spent before a checkout that then fails.
+  - An invoice's status can move between any two states, so draft to paid books income without a sent step.
+  - The Club badge count in `getStats` counts `accepted`, `member` and `active`, but reviewers set `approved`.
+  - A KPI target of 0 means "no target".
 
 ## What changed since this was written (2026-11-01)
 
 Since 26 October 2026: plans, credits and top-ups for the assistant (13); the rewards catalog grew from four items to 41 on nine shelves, with nine card games that unlock for good; unlocks gained an xp floor; the monthly leaderboard's top three win an honor; Agency arrived with its invoice calculator (GST, TDS, total in words), templates, agreements and client links (14); business metrics in Reviews; planning and focus tools that pay nothing (Plan my week, time blocks, pace, focus quality); a product page can carry questions and answers and a reward page a live earnings calculator (from `docs/whop-study.md`); and Pro became a plan instead of a flag. Section 15 lists what is free and what costs.
+
+**2026-11-01 (bug sweep):** section 16 is new. Points and money now move with a guard first (a guarded points update on redeem, the status moved before the refund, payout and cancel), the test payment path is closed for points-only products and points-priced programs, a sold product is archived instead of deleted, typed amounts are read as `typedCents`, and Finance's run-now touches only the person's own rows. The money-related items the sweep reported but did not change are under Known gaps.

@@ -3,7 +3,7 @@
 **Last updated:** 2026-11-01
 
 **Product:** kreators.app
-**Version:** 0.4, reconciled with the app on 1 November 2026 (0.3 was 26 October 2026)
+**Version:** 0.4, reconciled with the app on 1 November 2026, after that day's bug sweep (0.3 was 26 October 2026)
 **Source of truth:** the auth and privacy rules in `CLAUDE.md`; `apps/api/src/routes/auth.ts`, `me.ts`, `ops.ts`, `index.ts`, `access.ts`, `limits.ts`, `account.ts`, `logs.ts`, `go.ts`, `companion.ts`, `media.ts`, `agency.ts`, `agencyDocs.ts`, `calendar.ts`, `assistant/`; `packages/shared/src/index.ts`; the policy pages in `apps/web/src/site/Policy.tsx`.
 
 ## 1. Security baseline as built
@@ -126,6 +126,35 @@ The app's own log (`app_logs`, `apps/api/src/logs.ts`) has a line for every chan
 - **Erase** (`POST /me/reset`, under Profile) wipes progress but keeps the device session so the person can start over: pyramids, not-to-do, reviews, xp and scores, the strategy session, Discover, the assistant's actions and the points ledger. It keeps what must not be undone or is not progress: a plan and its credits, unlocked card games, attendee claims and run entries (clearing them would let a code or a run pay again), a life coach and their links, and the person's business records (Agency, invoices).
 - **Delete** (the person's own, or an admin's from People, never an admin account or one's own; both through `deleteAccount` in `apps/api/src/account.ts`, audited): the personal details go, the person's own things go (sessions, pyramids, journal, wellbeing, reviews and their schedules, the calendar link, Agency's clients, deliverables, notes, time, agreements, comments, templates and business metrics, uploaded files), and the money records stay anonymised for the books. An invoice stays with its totals and loses who it was for, its lines, the bank and its link. Account deletion needs the word DELETE.
 
+## 13. Hardening from the 2026-11-01 sweep
+
+Four read-only reviewers went over the shared rules, the server, the newer server features and the screens; each proved a bug before it was reported. What was fixed and is now the rule:
+
+- **A typed key finds nothing it should not.** Every `*_BY_KEY` lookup in shared is built by `byKey` as a null-prototype object, so a key like `constructor` or `toString` finds nothing instead of an inherited function (it used to answer 500).
+- **A date must be a real day.** `DATE_RE.test` in `apps/api/src/db.ts` checks the calendar, not only the shape: `2026-11-31` and `2026-00-00` are refused with a plain error, never a 500. `parseRepeat` drops an end day that is not a real day. `GET /wellbeing/:kind?days=abc` no longer fails.
+- **Members-only community posts stay members-only.** Liking, reading the replies and replying all go through `canSeePost` (the owner or a buyer of the membership); anyone else gets 404.
+- **Roles.** `POST /admin/users/:id/role` and the same change in Observability refuse changing your own role (400). Adding a teammate to an organization is `INSERT OR IGNORE`, so it cannot demote an owner who is already a member.
+- **A coach cannot set a due day before the student's do day** (`DATES_PROBLEM`), the same rule the student's own edit has.
+- **Links.** `parseLinkBlocks` refuses an https link that holds control characters and gives every block its own id. The calendar file escapes a lone carriage return and folds lines before 75 bytes without splitting a character.
+- **Free and double use closed.** The test payment path cannot make a points-only product or a points-priced program free, and points and refunds move with a guard first (see 07 §16).
+
+### Reported in the 2026-11-01 sweep, not changed (open items, awaiting a decision)
+
+These were found and written down; none has been fixed or ruled out. Money items are also in 07.
+
+- `POST /public/client-error` is registered before the rate-limit loop in `index.ts`, so its `clientError` limit (20 in ten minutes) never runs.
+- `POST /me/password` is not in `ROUTE_LIMITS`, and the current password is compared with `!==`, not the constant-time compare used at sign-in.
+- `/orgs` has no line in `MODULE_FOR_PREFIX`, so it is treated as core and always open.
+- Bond chat messages have no block check, so a blocked person can still be written to in an open chat.
+- Community mute uses `INSERT OR REPLACE`, which resets the muter's rank on an existing mute and so changes who may lift it.
+- Media uploads can never be deleted by the person; only the 60-file cap and account deletion remove them.
+- Time: a client's approval day (`approved_day`) and the review numbers (`reviews.ts`, `fromTs` and `toTs`) use UTC day edges, not the person's zone.
+- Money and points (also 07): Party host cancel says points are refunded but refunds nothing; a waitlist promotion never charges; Store checkout can make orders from one debit under concurrency; School and Party enrolment take points without a `points >= ?` guard; a coupon is spent before a checkout that fails; an invoice's status can move between any two states (draft to paid books income).
+- `getStats` counts a Club badge for `accepted`, `member` and `active`, but reviewers set `approved`.
+- Screens: a few (Agency and review buttons) ignore a failed save, and some keep a stale error line when a sheet is reopened. A KPI target of 0 means "no target".
+- **Delete leaves some rows behind.** Account delete does not remove Bond, circle and pre-owned messages, support tickets, introductions, applications, finance dues, goals and budgets, `email_outbox.to_email`, or the client details on invoices outside Agency.
+- **Export leaves some things out.** `GET /me/export` omits the Companion's chat (`chat_messages`), portfolio items, KYC details (`kyc_profiles`), Community mutes, event reminders, posts and replies, messages, tickets, finance dues, goals and budgets, `xp_events` and `relationship_scores`.
+
 ## Known gaps
 
 - No report button, no report queue, no code of conduct.
@@ -135,7 +164,10 @@ The app's own log (`app_logs`, `apps/api/src/logs.ts`) has a line for every chan
 - Uploaded files that nothing uses any more are not cleaned out: only the 60-file cap and account deletion remove them.
 - No two-factor sign-in and no session list the person can read, beyond the three-device cap.
 - A client link has no expiry date; it works until the owner closes or renews it.
+- The open items in 13 (found 2026-11-01, awaiting a decision), including the export and delete gaps: the export leaves out several tables and delete leaves some rows behind. Until they are decided, read "everything the person wrote" in 3 and 12 as most of it, not all.
 
 ## What changed since this was written (2026-11-01)
 
 Since 26 October 2026: an account is capped at three devices and the pushed-out one is told why; the list of rate limits grew to 34 names (assistant, Discover, coaching, upload, Agency, client links and more); pictures and GIFs can be uploaded (small, checked by their first bytes), so "there are no uploads" no longer holds; the assistant can read the journal for its owner, on request and only through a model that keeps nothing; Discover, life coaches, the leaderboard and anonymous posts have written privacy rules; Agency added the client link, invoice and agreement links and the calendar link, each with switches enforced on the server; the app has its own thirty-day log; erase, delete and export now cover the new tables; the privacy page gained sections for most of this.
+
+**2026-11-01 (bug sweep):** section 13 is new. It records what the sweep fixed (null-prototype key lookups, real-calendar date checks, members-only community posts, no changing your own role, no demoting an owner by adding them as a teammate, the coach date rule) and lists everything it reported but did not change, including the export and delete gaps, as open items awaiting a decision.

@@ -3,7 +3,7 @@
 **Last updated:** 2026-11-01
 
 **Product:** kreators.app. The identifiers keep their old name: the Worker and database `kreators-life`, the `@kreators/*` packages, storage keys and the repo.
-**Version:** 0.4, reconciled with the app on 1 November 2026 (v0.1 was the pre-build blueprint; 0.2 the audit; 0.3 on 26 October after the gaps it found were closed; 0.4 after the week that added Agency, planning, scheduled reviews and the redesign).
+**Version:** 0.4, reconciled with the app on 1 November 2026, including that day's bug sweep and water-trigger change (v0.1 was the pre-build blueprint; 0.2 the audit; 0.3 on 26 October after the gaps it found were closed; 0.4 after the week that added Agency, planning, scheduled reviews and the redesign).
 **Status:** these docs describe the app as built. When a doc and the code disagree, the doc is wrong unless it records a rule the app broke; those are listed under "Known gaps" at the end of each doc.
 
 Where the truth lives:
@@ -25,7 +25,7 @@ Seven relationships as a daily game, with a creator super app around it.
 
 ## State of the project (1 November 2026)
 
-Everything described in 01 to 09 is built and tested locally: 57 migrations, 46 modules, 196 shared test cases and 843 smoke checks (the figures are date-stamped and change every slice). The work up to this date is committed; whether it has been deployed is not recorded in the repo. 09 §6 lists the migrations to apply before a deploy and the order (migrate first). What is not built is listed under "Known gaps" at the end of each doc: no report button, no email or phone verification, no payments for plans and top-ups yet (`PAYMENTS_LIVE` is false), no staging step, backup or alerting, and no incident-response document.
+Everything described in 01 to 09 is built and tested locally: 58 migrations, 46 modules, 209 shared test cases and 857 smoke checks (the figures are date-stamped and change every slice). The work up to this date is committed; whether it has been deployed is not recorded in the repo. 09 §6 lists the migrations to apply before a deploy (0052 to 0058) and the order (migrate first, then deploy; the deploy adds a second cron trigger for water). On 1 November a bug sweep fixed what it proved; what it only reported is listed as open items, awaiting a decision, in 08 §13 and 07 Known gaps. What is not built is listed under "Known gaps" at the end of each doc: no report button, no email or phone verification, no payments for plans and top-ups yet (`PAYMENTS_LIVE` is false), no staging step, backup or alerting, and no incident-response document.
 
 ## How the v0.1 blueprint turned out
 
@@ -74,3 +74,5 @@ Not planned in v0.1 and now built: Discover (quizzes, add-ons, Human design, num
 ## What changed since this was written (2026-11-01)
 
 Since 26 October 2026: the pack's figures were brought up to date (46 modules in six groups, nine permissions, 57 migrations); a state-of-the-project paragraph and a list of what was added after v0.1 were added; the reading order now includes the two studies and the copy brief; the Known-gaps rule gained a dated "What changed" section in each doc; and the notes on constraints now name the apps that start on and what a web app cannot do.
+
+**2026-11-01 (later that day):** the figures are now 58 migrations (0001 to 0058), 209 shared cases and 857 smoke checks. 07 gained §16 (how points and money move safely), 08 gained §13 (what the bug sweep fixed and the open items it reported), and 09 gained the two cron triggers and how to run each by hand, the new browser drivers and two working lessons. 02 to 06 are updated separately.
