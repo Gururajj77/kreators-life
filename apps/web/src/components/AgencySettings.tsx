@@ -9,7 +9,9 @@ import {
   TDS_MODES,
   TDS_RATES_BPS,
   emptyProfile,
+  parseDocStyle,
   type BusinessProfile,
+  type DocStyle,
   type TdsMode,
 } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -17,6 +19,7 @@ import { useState, type ReactNode } from 'react';
 import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
 import { Button } from './Button';
+import { DocStyleCard, DocStyleSheet } from './DocStyleSheet';
 import { Inert } from './Inert';
 import { BankFields, Chips, Field, FIELD, LABEL, PartyFields, ShowSwitches, SummaryCard } from './InvoiceView';
 import { Sheet } from './Sheet';
@@ -38,6 +41,8 @@ export function AgencySettings() {
   const [currency, setCurrency] = useState('INR');
   const [hours, setHours] = useState('30');
   const [note, setNote] = useState('');
+  const [styleOpen, setStyleOpen] = useState(false);
+  const [docStyle, setDocStyle] = useState<DocStyle>(parseDocStyle(undefined));
   const saved = q.data?.settings;
 
   const open = (p: Part) => {
@@ -112,9 +117,17 @@ export function AgencySettings() {
         />
         <SummaryCard title="What a client sees on a new invoice" onEdit={() => open('show')} summary={`${shownCount} of ${INVOICE_SHOW_PARTS.length} shown. You can change them on each invoice.`} />
         <SummaryCard title="For agreements" onEdit={() => open('agree')} summary={p.signerName ? <Inert text={`${p.signerName}${p.signerTitle ? `, ${p.signerTitle}` : ''}${p.jurisdiction ? `. Courts of ${p.jurisdiction}` : ''}`} /> : 'Not filled in yet'} />
+        <DocStyleCard
+          style={parseDocStyle(p.docStyle)}
+          onEdit={() => {
+            setDocStyle(parseDocStyle(p.docStyle));
+            setStyleOpen(true);
+          }}
+        />
         <SummaryCard title="Currency and hours" onEdit={() => open('hours')} summary={`${saved.currency}, ${saved.weeklyHours} hours a week`} />
       </ul>
 
+      <DocStyleSheet open={styleOpen} onClose={() => setStyleOpen(false)} value={docStyle} onChange={setDocStyle} asDefault />
       {sheetOf('from', 'Who invoices come from', <PartyFields idp="set-from" value={profile.from} onChange={(from) => set({ from })} nameLabel="Name or brand" lineLabel="Line under the name" lineHint="Prop. Your name for Your brand" />)}
       {sheetOf('bank', 'Bank details', (
         <>

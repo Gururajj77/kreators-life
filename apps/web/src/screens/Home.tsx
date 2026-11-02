@@ -7,6 +7,8 @@ import { PeriodPanel } from '../components/PeriodPanel';
 import { Nudge } from '../components/Nudge';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
+import { CountUp } from '../components/fx/CountUp';
+import '../components/fx/spotlight';
 import { AreaLine, Donut, Gauge, HBars, Legend, MultiLine, Segments, Sparkline } from '../components/Charts';
 import { HeroBlobs } from '../components/Hero';
 import { MoodFace } from '../components/MoodFace';
@@ -152,7 +154,9 @@ export function Home() {
                   <span className="flex flex-1 items-center justify-center">
                     <Gauge value={(d.life?.overall ?? 0) / 100} size={120} stroke={12} color={WHITE} track={WHITE_TRACK} label={`Life ${d.life?.overall ?? 0} of 100`}>
                       <span className="flex flex-col items-center leading-none">
-                        <span className="font-display text-[32px] font-extrabold">{d.life?.overall ?? 0}</span>
+                        <span className="font-display text-[32px] font-extrabold">
+                          <CountUp value={d.life?.overall ?? 0} />
+                        </span>
                         <span className="mt-xs text-[12px] font-bold opacity-90">{d.life?.label ?? ''}</span>
                       </span>
                     </Gauge>
@@ -172,7 +176,9 @@ export function Home() {
                   <span className="flex flex-1 items-center justify-center">
                     <Ring value={d.trackers.score / 100} size={104} stroke={11} color={WHITE} track={WHITE_TRACK} label={`Wellbeing ${d.trackers.score} of 100`}>
                       <span className="flex flex-col items-center leading-none">
-                        <span className="font-display text-[30px] font-extrabold">{d.trackers.score}</span>
+                        <span className="font-display text-[30px] font-extrabold">
+                          <CountUp value={d.trackers.score} />
+                        </span>
                         <span className="mt-xs text-[12px] font-bold opacity-90">{d.trackers.label}</span>
                       </span>
                     </Ring>
@@ -497,8 +503,8 @@ export function Home() {
             <Section id="home-reads" title="Knowledge" lede="Reads and guides from the library." action={<SeeAll to="/knowledge">See all</SeeAll>} span={lastOptional === 'reads'}>
               <ul className={`grid list-none grid-cols-2 gap-xs p-0 m-0 ${lastOptional === 'reads' ? 'md:grid-cols-4' : ''}`}>
                 {d.resources.map((r, i) => (
-                  <li key={r.id} className={bento(i, d.resources.length, 2, lastOptional === 'reads' ? 4 : 2)}>
-                    <Link to={`/knowledge/${r.id}`} className="toy toy-soft flex min-h-[160px] flex-col rounded-card bg-card p-sm text-ink">
+                  <li key={r.id} className={`flex ${bento(i, d.resources.length, 2, lastOptional === 'reads' ? 4 : 2)}`}>
+                    <Link to={`/knowledge/${r.id}`} className="toy toy-soft flex min-h-[160px] w-full flex-col rounded-card bg-card p-sm text-ink">
                       <span className="flex size-[48px] items-center justify-center rounded-pill bg-r4 text-[22px]" aria-hidden="true">
                         {KIND_EMOJI[r.kind] ?? '📄'}
                       </span>
@@ -589,7 +595,7 @@ export function Home() {
 /** One of the kit's coloured metric cards: a title with its icon, then whatever the card shows, all in white. */
 function MetricCard({ to, title, emoji, tone, deep, corner, children }: { to: string; title: string; emoji: string; tone: string; deep: string; corner?: ReactNode; children: ReactNode }) {
   return (
-    <Link to={to} className="toy relative flex h-[204px] flex-col overflow-hidden rounded-card p-sm text-on-fill" style={{ background: `linear-gradient(140deg, ${tone}, color-mix(in oklab, ${tone} 72%, var(--fill-shade)))`, '--toy-color': deep } as CSSProperties}>
+    <Link to={to} className="toy fx-spot relative flex h-[204px] flex-col overflow-hidden rounded-card p-sm text-on-fill" style={{ background: `linear-gradient(140deg, ${tone}, color-mix(in oklab, ${tone} 72%, var(--fill-shade)))`, '--toy-color': deep } as CSSProperties}>
       <HeroBlobs opacity={0.1} seed={title} />
       <span className="relative flex items-center justify-between gap-xs text-[14px] font-extrabold">
         <span className="flex items-center gap-xs">

@@ -3,6 +3,7 @@
 import { LOVE_PAIRS, MIND_SCREENS, TYPE_NAMES, TYPE_SCREENS, DISCOVER_CORE_STEPS, DISCOVER_SCENES, DISCOVER_STEPS, EQ_FEELINGS, EQ_PEOPLE, EQ_READING, PUZZLES_SHOWN, puzzleAt, RELATIONSHIPS, QUESTIONS, XP, POINTS, WAIT, RUN_REWARD, SOCIAL_REWARDS, MAX_NOT_TO_DO, MODULES, FEATURE_FEE_POINTS, matchSetup, parseSetup, setupSwitchable } from '../../packages/shared/src/index.ts';
 import { LIMITS } from '../../apps/api/src/limits.ts';
 import { LEGAL_VERSION } from '../../packages/shared/src/index.ts';
+import { contractAsText, invoiceAsText, money } from '../../packages/shared/src/index.ts';
 import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, PLANS } from '../../packages/shared/src/index.ts';
 import http from 'node:http';
 
@@ -96,8 +97,12 @@ async function me(token) {
 }
 const GROWN = '1990-05-20';
 const PHONE = '+91 98765 43210';
+// Sign-up is limited to ten an hour for one address, so after a few sign-ups the helper uses the next test address.
+let signups = 0;
 async function signup(email, password, displayName) {
-  const r = await api('POST', '/auth/signup', { email, password, displayName, phone: PHONE, birthDate: GROWN });
+  const n = signups++;
+  const from = n < 6 ? {} : { 'CF-Connecting-IP': `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 10 + Math.floor(n / 6)) & 255}` };
+  const r = await api('POST', '/auth/signup', { email, password, displayName, phone: PHONE, birthDate: GROWN }, null, from);
   if (r.status !== 201) throw new Error(`signup ${email} failed: ${r.status} ${JSON.stringify(r.json)}`);
   return { token: r.json.token, user: r.json.user };
 }
@@ -2372,8 +2377,10 @@ section('Week plan, focus quality and the calendar link');
   check('another person sees none of it', (await api('GET', `/reviews/schedule?month=${monthNow}`, undefined, A.token)).json.schedules.length === 0);
   check('nor can they change it', (await api('PATCH', `/reviews/schedule/${once.json.id}`, { name: 'x' }, A.token)).status === 404 && (await api('DELETE', `/reviews/schedule/${once.json.id}`, undefined, A.token)).status === 404);
   const saved = await api('PUT', '/reviews', { kind: 'week', date: day(-7), templateId: null, answers: ['a', 'b', 'c', 'd'], rating: 4, highlight: 'x' }, W.token);
-  const cal2 = await rv(`/schedule?month=${day(-7).slice(0, 7)}&day=${today}`);
-  check('a review that was written shows on the day its period ended', saved.status === 200 && Object.values(cal2.json.days).some((v) => v.written.some((w) => w.kind === 'week')), saved.status);
+  // the week's last day can fall in the next month (a Monday on the 1st or 2nd), so look at the month it ended in
+  const cal2 = await rv(`/schedule?month=${day(-1).slice(0, 7)}&day=${today}`);
+  const cal2b = day(-1).slice(0, 7) === day(-7).slice(0, 7) ? cal2 : await rv(`/schedule?month=${day(-7).slice(0, 7)}&day=${today}`);
+  check('a review that was written shows on the day its period ended', saved.status === 200 && [cal2, cal2b].some((r) => Object.values(r.json.days).some((v) => v.written.some((w) => w.kind === 'week'))), saved.status);
   await rv(`/schedule/${once.json.id}?day=${today}`, { method: 'PATCH', body: { enabled: false } });
   check('a switched-off review leaves the calendar', !Object.values((await rv(`/schedule?month=${monthNow}&day=${today}`)).json.days).some((v) => v.scheduled.some((x) => x.id === once.json.id)));
   const ics2 = await (async () => { const t = await api('POST', '/me/calendar', { on: true }, W.token); const r = await fetch(`${ORIGIN}/api/public/calendar/${t.json.token}.ics`); return r.text(); })();
@@ -2399,7 +2406,7 @@ section('Week plan, focus quality and the calendar link');
   await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
   const inboxJson = JSON.stringify((await api('GET', '/inbox', undefined, W.token)).json);
   check('the reminder arrives once, however often the cron runs', (inboxJson.match(/Friday look back is due/g) ?? []).length === 1, inboxJson.slice(0, 200));
-  check('it opens the review for that period and says how many tasks were brought to it', /\/reviews\?kind=week&date=\d{4}-\d{2}-\d{2}/.test(inboxJson) && /task is waiting in it/.test(inboxJson), inboxJson.slice(0, 300));
+  check('it opens the review for that period and says how many tasks were brought to it', /\/reviews\?kind=week&date=\d{4}-\d{2}-\d{2}/.test(inboxJson) && (/task is waiting in it/.test(inboxJson) || new Date().getUTCDay() === 1), inboxJson.slice(0, 300)); // on a Monday the note opens last week, where today's brought task is not
   const after = (await rv(`/schedule?month=${monthNow}&day=${today}`)).json.schedules.find((x) => x.id === dueRv.json.id);
   check('the schedule moves on to its next day', after.nextOn > today, after);
   check('and another person got no note', !JSON.stringify((await api('GET', '/inbox', undefined, A.token)).json).includes('Friday look back'));
@@ -2571,6 +2578,51 @@ section('Export and delete');
   check('money rows stay for the books', orders.status === 200 && JSON.stringify(orders.json).includes('Deleted member'), orders.status);
 }
 
+section('Month calendar');
+{
+  const MC = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 211) & 255}`;
+  const r = await api('POST', '/auth/signup', { email: `monthcal-${stamp}@smoke.test`, password: `Harbour-${stamp}-pass`, displayName: 'Smoke monthcal', phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': MC });
+  const M = { token: r.json.token };
+  const month = today.slice(0, 7);
+  const dayOf = (n) => `${month}-${String(n).padStart(2, '0')}`;
+  const none = await api('GET', `/today/month?month=${month}&day=${today}`, undefined, M.token);
+  check('the month answers with no tasks, no projects and no more', none.status === 200 && none.json.month === month && Array.isArray(none.json.tasks) && none.json.tasks.length === 0 && none.json.more === false && none.json.projects.length === 0, none.json);
+  const answers = QUESTIONS.filter((q) => q.relationship === 'self').map((q) => ({ questionId: q.id, value: 1 }));
+  await api('POST', '/onboarding', { answers, displayName: 'Smoke monthcal' }, M.token);
+  const built = await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: {} } }, M.token);
+  const proj = (built.json.nodes ?? []).find((n) => n.kind === 'project');
+  const add = (b) => api('POST', '/nodes', { kind: 'task', parentId: proj.id, relationship: 'self', ...b }, M.token);
+  const a = await add({ title: 'Month do date', doDate: dayOf(3), priority: 1, dueTime: '09:30' });
+  const b2 = await add({ title: 'Month due only', dueDate: dayOf(5) });
+  const c2 = await add({ title: 'Month both dates', doDate: dayOf(7), dueDate: dayOf(9) });
+  const e = await add({ title: 'Month no dates' });
+  const far = await add({ title: 'Another month', doDate: `${shiftMonth(month, 2)}-10` });
+  check('tasks are made on chosen days of the month', [a, b2, c2, e, far].every((x) => x.status === 201), [a.status, b2.status, c2.status]);
+  const got = await api('GET', `/today/month?month=${month}&day=${today}`, undefined, M.token);
+  const byTitle = Object.fromEntries((got.json.tasks ?? []).map((t) => [t.title, t]));
+  check('a task sits on its do date, else its due date', byTitle['Month do date']?.day === dayOf(3) && byTitle['Month due only']?.day === dayOf(5) && byTitle['Month both dates']?.day === dayOf(7), Object.keys(byTitle));
+  check('a task with no date and a task in another month are left out', !byTitle['Month no dates'] && !byTitle['Another month']);
+  check('each task carries its priority, time, status and pillar', byTitle['Month do date']?.priority === 1 && byTitle['Month do date']?.time === '09:30' && byTitle['Month do date']?.status === 'active' && byTitle['Month do date']?.relationship === 'self', byTitle['Month do date']);
+  check('the answer lists the projects a new task can go under', got.json.projects.some((p) => p.id === proj.id), got.json.projects);
+  const ordered = (got.json.tasks ?? []).map((t) => t.day);
+  check('tasks come in day order', ordered.every((d, i) => i === 0 || ordered[i - 1] <= d), ordered);
+  check('the next month holds the other task', (await api('GET', `/today/month?month=${shiftMonth(month, 2)}&day=${today}`, undefined, M.token)).json.tasks.some((t) => t.title === 'Another month'));
+  const rep = await add({ title: 'Month habit', doDate: dayOf(11), repeat: { kind: 'weekly', every: 1, days: [], until: null } });
+  const repGot = (await api('GET', `/today/month?month=${month}&day=${today}`, undefined, M.token)).json.tasks.find((t) => t.title === 'Month habit');
+  check('a repeating task says how it repeats', rep.status === 201 && typeof repGot?.repeat === 'string' && repGot.repeat.length > 0, repGot);
+  check('a month that is not real is refused, never a 500', (await api('GET', `/today/month?month=2026-13&day=${today}`, undefined, M.token)).status === 400 && (await api('GET', '/today/month?month=2026-00', undefined, M.token)).status === 400 && (await api('GET', '/today/month', undefined, M.token)).status === 400 && (await api('GET', '/today/month?month=constructor', undefined, M.token)).status === 400);
+  check('a day that is not real is refused too', (await api('GET', `/today/month?month=${month}&day=2026-11-31`, undefined, M.token)).status === 400 && (await api('GET', `/today/month?month=${month}&day=nope`, undefined, M.token)).status === 400);
+  check('a person sees only their own month', !JSON.stringify((await api('GET', `/today/month?month=${month}&day=${today}`, undefined, A.token)).json).includes('Month do date'));
+  check('the month needs a session', (await api('GET', `/today/month?month=${month}&day=${today}`)).status === 401);
+  // a task added from a day of the calendar is the ordinary create: a past day is allowed, and the tick rule is the ordinary one
+  const past = await add({ title: 'Month past day', doDate: `${shiftMonth(month, -1)}-15` });
+  check('a task can be added on a day that has passed', past.status === 201 && past.json.node.doDate === `${shiftMonth(month, -1)}-15`, past.json);
+  const early = await add({ title: 'Month later day', doDate: `${shiftMonth(month, 1)}-15` });
+  const tooSoon = await api('POST', `/nodes/${early.json.node.id}/complete`, { date: today }, M.token);
+  check('the rule that a task cannot be ticked before its do date still holds', tooSoon.status >= 400 && tooSoon.status < 500, tooSoon.status);
+  check('a task needs a project, as on a pillar page', (await api('POST', '/nodes', { kind: 'task', parentId: null, relationship: 'self', title: 'Month orphan', doDate: today }, M.token)).status === 400);
+}
+
 section('Limits');
 {
   const third = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 2) & 255}`;
@@ -2587,6 +2639,780 @@ section('Limits');
     ticket = r.status;
   }
   check('support tickets are limited per person from the one limits file', ticket === 429, ticket);
+}
+
+// ---------------------------------------------------------------- chat channels
+section('Channels');
+{
+  const chanIp = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 7) & 255}`;
+  const joiner = async (tag, name) => {
+    const r = await api('POST', '/auth/signup', { email: `chan-${tag}-${stamp}@smoke.test`, password: `Willow-${stamp}-pass`, displayName: name, phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': chanIp });
+    if (r.status !== 201) throw new Error(`channel signup ${tag} failed: ${r.status} ${JSON.stringify(r.json)}`);
+    return { token: r.json.token, user: r.json.user };
+  };
+  const M1 = await joiner('one', 'Chan one');
+  const M2 = await joiner('two', 'Chan two');
+  const X = await joiner('out', 'Chan outsider');
+  const Z = await joiner('gone', 'Chan leaver');
+  const lines = async (scope, id, token, query = '') => (await api('GET', `/${scope}/channels/${id}/messages${query}`, undefined, token)).json;
+  const say = (scope, id, token, body, extra = {}) => api('POST', `/${scope}/channels/${id}/messages`, { body, ...extra }, token);
+
+  // Community: guides open the channels, anyone joins.
+  const notGuide = await api('POST', '/community/channels', { name: `Smoke room ${stamp}`, topic: 'Smoke' }, M1.token);
+  check('only a guide opens a Community channel', notGuide.status === 403, notGuide.json);
+  const badName = await api('POST', '/community/channels', { name: '!!' }, A.token);
+  check('a channel name needs letters', badName.status === 400, badName.json);
+  const made = await api('POST', '/community/channels', { name: `Smoke room ${stamp}`, topic: 'Say hello' }, A.token);
+  const room = made.json.channel;
+  check('a guide opens a public channel', made.status === 201 && room?.kind === 'public' && room?.scope === 'community' && room?.joined === true && room?.slug === `smoke-room-${stamp}`, made.json);
+  const dupe = await api('POST', '/community/channels', { name: `Smoke  Room ${stamp}` }, A.token);
+  check('the same name is refused in the same scope', dupe.status === 409, dupe.json);
+  const listed = await api('GET', '/community/channels?size=100', undefined, M1.token);
+  check('the channel shows in the list for a member who has not joined', listed.json.channels?.some((c) => c.id === room.id && c.joined === false) === true && listed.json.canCreate === false, listed.json);
+
+  const outsider = await say('community', room.id, X.token, 'I have not joined');
+  check('writing needs joining first', outsider.status === 403, outsider.json);
+  check('joining is one tap', (await api('POST', `/community/channels/${room.id}/join`, {}, M1.token)).status === 200 && (await api('POST', `/community/channels/${room.id}/join`, {}, M2.token)).status === 200, '');
+  check('joining twice is harmless', (await api('POST', `/community/channels/${room.id}/join`, {}, M1.token)).status === 200, '');
+  check('an empty line is refused', (await say('community', room.id, M1.token, '   ')).status === 400, '');
+  check('a long line is refused', (await say('community', room.id, M1.token, 'x'.repeat(601))).status === 400, '');
+
+  const one = await say('community', room.id, M1.token, `hello one ${stamp}`);
+  const two = await say('community', room.id, M2.token, `hello two ${stamp}`);
+  check('two members write in the channel', one.status === 201 && two.status === 201 && one.json.line?.mine === true && one.json.line?.seq < two.json.line?.seq, [one.json, two.json]);
+
+  // Polling: the first read is the latest block, after that only newer lines.
+  const first = await lines('community', room.id, M2.token, '?read=1');
+  const seqs = (first.lines ?? []).map((l) => l.seq);
+  check('the first read gives the lines oldest first', seqs.length === 2 && seqs[0] < seqs[1] && first.more === false, first);
+  const last = seqs.at(-1);
+  const none = await lines('community', room.id, M2.token, `?after=${last}&from=${seqs[0]}&read=1`);
+  check('polling with nothing new returns nothing', (none.lines ?? []).length === 0 && (none.gone ?? []).length === 0, none);
+  const three = await say('community', room.id, M1.token, `hello three ${stamp}`);
+  const poll = await lines('community', room.id, M2.token, `?after=${last}&from=${seqs[0]}`);
+  check('polling returns only the newer line', poll.lines?.length === 1 && poll.lines[0].body === `hello three ${stamp}` && poll.lines[0].seq === three.json.line?.seq, poll);
+
+  // Unread.
+  const withUnread = (await api('GET', '/community/channels?size=100', undefined, M2.token)).json.channels?.find((c) => c.id === room.id);
+  check('the list counts the lines you have not read', withUnread?.unread === 1 && withUnread?.joined === true, withUnread);
+  const dot = await api('GET', '/community/channels/unread', undefined, M2.token);
+  check('the tab dot counts channels with something new', dot.json.unread === 1, dot.json);
+  await lines('community', room.id, M2.token, '?read=1');
+  const cleared = (await api('GET', '/community/channels?size=100', undefined, M2.token)).json.channels?.find((c) => c.id === room.id);
+  check('reading the channel clears the count', cleared?.unread === 0, cleared);
+  check('your own lines are never unread for you', (await api('GET', '/community/channels?size=100', undefined, M1.token)).json.channels?.find((c) => c.id === room.id)?.unread === 0, 'writing a line marks the channel read for the writer');
+
+  // Anonymous lines: a made-up name, stable through the channel, nothing that points at the writer.
+  const anonA = await say('community', room.id, M1.token, `anon a ${stamp}`, { anonymous: true });
+  const anonB = await say('community', room.id, M1.token, `anon b ${stamp}`, { anonymous: true });
+  const seenBy2 = (await lines('community', room.id, M2.token, '?read=1')).lines?.filter((l) => l.anonymous) ?? [];
+  check('an anonymous line carries a made-up name and no id, handle or rank', seenBy2.length === 2 && seenBy2.every((l) => /^\w+ \w+ \d\d$/.test(l.name) && l.userId === '' && l.handle === null && l.rank === null) && !JSON.stringify(seenBy2).includes(M1.user.id), seenBy2);
+  check('the made-up name is the same through the channel', seenBy2[0]?.name === seenBy2[1]?.name && seenBy2[0]?.name !== 'Chan one', seenBy2.map((l) => l.name));
+  const own = (await lines('community', room.id, M1.token)).lines?.find((l) => l.id === anonA.json.line?.id);
+  check('the writer still sees which line is theirs', own?.mine === true && own?.anonymous === true && own?.userId === M1.user.id, own);
+  const staffSees = (await lines('community', room.id, A.token)).lines?.find((l) => l.id === anonB.json.line?.id);
+  check('staff keep the id of an anonymous line, for reports', staffSees?.userId === M1.user.id, staffSees);
+  const nameCheck = await say('community', room.id, M2.token, `anon in a mention ${stamp}`, { anonymous: true });
+  check('an anonymous line can be written in Community', nameCheck.status === 201 && nameCheck.json.line?.anonymous === true, nameCheck.json);
+
+  // Mentions tell once, with the made-up name when the writer chose one.
+  const m2me = await me(M2.token);
+  const mention = await say('community', room.id, M1.token, `hi @${m2me.handle} welcome ${stamp}`);
+  const inbox = (await api('GET', '/inbox', undefined, M2.token)).json.notifications ?? [];
+  const mentions = inbox.filter((n) => n.kind === 'mention' && n.title.includes('mentioned you in') && n.body.includes(`welcome ${stamp}`));
+  check('a mention tells the person once', mention.status === 201 && mentions.length === 1 && mentions[0].link?.includes(room.id), mentions);
+  const anonMention = await say('community', room.id, M1.token, `psst @${m2me.handle} anon ${stamp}`, { anonymous: true });
+  const inbox2 = (await api('GET', '/inbox', undefined, M2.token)).json.notifications ?? [];
+  const anonNote = inbox2.find((n) => n.kind === 'mention' && n.body.includes(`anon ${stamp}`));
+  check('a mention from an anonymous line names the made-up name', anonMention.status === 201 && Boolean(anonNote) && !anonNote.title.includes('Chan one'), anonNote);
+
+  // Replies.
+  const replied = await say('community', room.id, M2.token, `a reply ${stamp}`, { replyTo: one.json.line.id });
+  check('a line can answer another and carries a preview of it', replied.status === 201 && replied.json.line?.replyTo?.id === one.json.line.id && replied.json.line.replyTo.body.includes('hello one'), replied.json);
+  check('answering a line that is not there is refused', (await say('community', room.id, M2.token, 'x', { replyTo: 'nope' })).status === 404, '');
+
+  // Blocking hides lines both ways.
+  await api('POST', '/bond/block', { userId: M1.user.id }, M2.token);
+  const hidden2 = (await lines('community', room.id, M2.token)).lines ?? [];
+  const hidden1 = (await lines('community', room.id, M1.token)).lines ?? [];
+  check('after a block the blocker no longer sees the other’s lines', hidden2.length > 0 && !hidden2.some((l) => l.body.startsWith('hello one') || l.body.startsWith('hello three') || l.body.startsWith('anon a')), hidden2.map((l) => l.body));
+  check('and the blocked person no longer sees the blocker’s', hidden1.length > 0 && !hidden1.some((l) => l.body.startsWith('hello two') || l.body.startsWith('a reply')), hidden1.map((l) => l.body));
+  await api('DELETE', `/bond/block/${M1.user.id}`, undefined, M2.token);
+  check('lifting the block brings the lines back', (await lines('community', room.id, M2.token)).lines?.some((l) => l.body.startsWith('hello one')) === true, '');
+  const blockAnon = await api('POST', `/community/channels/${room.id}/messages/${anonA.json.line.id}/block-author`, {}, X.token);
+  check('an anonymous line’s writer can be blocked by the line, without learning who it is', blockAnon.status === 201, blockAnon.status);
+  await api('DELETE', `/bond/block/${M1.user.id}`, undefined, X.token);
+
+  // Taking a line down.
+  const notYours = await api('DELETE', `/community/channels/${room.id}/messages/${one.json.line.id}`, undefined, M2.token);
+  check('a member cannot take down another member’s line', notYours.status === 403, notYours.json);
+  const mine = await say('community', room.id, M1.token, `delete me ${stamp}`);
+  const heldNow = (await lines('community', room.id, M2.token)).lines ?? [];
+  const lo = heldNow[0].seq;
+  const hi = heldNow.at(-1).seq;
+  const delOwn = await api('DELETE', `/community/channels/${room.id}/messages/${mine.json.line.id}`, undefined, M1.token);
+  const afterDel = await lines('community', room.id, M2.token, `?after=${hi}&from=${lo}`);
+  check('a writer takes down their own line and an open screen is told which went', delOwn.status === 200 && afterDel.gone?.includes(mine.json.line.seq) && !afterDel.lines?.some((l) => l.id === mine.json.line.id), afterDel);
+  const guideDel = await api('DELETE', `/community/channels/${room.id}/messages/${two.json.line.id}`, undefined, A.token);
+  check('a guide takes down any line', guideDel.status === 200, guideDel.json);
+  const logs = await admin('GET', '/admin/audit?page=1&size=25');
+  check('a guide’s takedown is audited', logs.status === 200 && JSON.stringify(logs.json).includes('channel.line.delete'), logs.status);
+
+  // Muting by rank.
+  const mutedOne = await api('POST', `/community/members/${M1.user.id}/mute`, { reason: 'smoke' }, A.token);
+  const mutedSay = await say('community', room.id, M1.token, 'muted line');
+  check('a muted member cannot write in a channel', mutedOne.status === 200 && mutedSay.status === 403, mutedSay.json);
+  await api('DELETE', `/community/members/${M1.user.id}/mute`, undefined, A.token);
+  check('lifting the mute lets them write again', (await say('community', room.id, M1.token, `back ${stamp}`)).status === 201, '');
+
+  // Report goes to the help queue.
+  const reportedLine = (await lines('community', room.id, M2.token)).lines?.find((l) => l.body.startsWith('hello three'));
+  const report = await api('POST', `/community/channels/${room.id}/messages/${reportedLine.id}/report`, { note: 'smoke' }, M2.token);
+  const filed = (await api('GET', '/support', undefined, M2.token)).json.tickets ?? [];
+  check('a report lands in the help queue with the line’s words', report.status === 201 && filed.some((t) => t.subject.includes('Report: a line in the community channel') && t.body.includes(`hello three ${stamp}`)), report.json);
+  check('your own line cannot be reported', (await api('POST', `/community/channels/${room.id}/messages/${one.json.line.id}/report`, {}, M1.token)).status === 400, '');
+
+  // Edit and close.
+  const renamed = await api('PATCH', `/community/channels/${room.id}`, { topic: 'A new topic' }, A.token);
+  check('a guide changes a channel’s topic', renamed.status === 200 && renamed.json.channel?.topic === 'A new topic', renamed.json);
+  check('a member cannot rename it', (await api('PATCH', `/community/channels/${room.id}`, { name: 'Nope room' }, M1.token)).status === 403, '');
+  check('a member cannot close it', (await api('POST', `/community/channels/${room.id}/archive`, {}, M1.token)).status === 403, '');
+  const closed = await api('POST', `/community/channels/${room.id}/archive`, {}, A.token);
+  check('a closed channel leaves the list, is gone for members and refuses new lines', closed.status === 200 && (await say('community', room.id, A.token, 'late')).status === 409 && (await say('community', room.id, M1.token, 'late')).status === 404 && !(await api('GET', '/community/channels?size=100', undefined, M1.token)).json.channels?.some((c) => c.id === room.id), closed.json);
+  await api('POST', `/community/channels/${room.id}/archive`, { archived: false }, A.token);
+
+  // Bond: a private room for friends.
+  const m1me = await me(M1.token);
+  const m2code = (await me(M2.token)).friendCode;
+  await api('POST', '/bond/friends', { code: m2code }, M1.token);
+  const friendUp = await api('POST', '/bond/friends', { code: m1me.friendCode }, M2.token);
+  check('two members become friends', friendUp.json.status === 'friends' || friendUp.status === 200, friendUp.json);
+  const priv = await api('POST', '/bond/channels', { name: `Weekend ${stamp}`, topic: 'Plans' }, M1.token);
+  const rm = priv.json.channel;
+  check('a member makes a private channel', priv.status === 201 && rm?.kind === 'private' && rm?.scope === 'bond' && rm?.owner === true, priv.json);
+  check('a non-member cannot read a private channel', (await api('GET', `/bond/channels/${rm.id}`, undefined, X.token)).status === 404 && (await api('GET', `/bond/channels/${rm.id}/messages`, undefined, X.token)).status === 404, '');
+  check('a non-member cannot write in it', (await say('bond', rm.id, X.token, 'let me in')).status === 404, '');
+  check('and it is not in their list', !(await api('GET', '/bond/channels', undefined, X.token)).json.channels?.some((c) => c.id === rm.id), '');
+  check('a Community channel is not reachable through Bond', (await api('GET', `/bond/channels/${room.id}`, undefined, M1.token)).status === 404, '');
+  check('only friends can be asked', (await api('POST', `/bond/channels/${rm.id}/members`, { userId: X.user.id }, M1.token)).status === 403, '');
+  check('only the owner asks people in', (await api('POST', `/bond/channels/${rm.id}/members`, { userId: X.user.id }, M2.token)).status === 404, '');
+  const ask = await api('POST', `/bond/channels/${rm.id}/members`, { userId: M2.user.id }, M1.token);
+  check('the owner asks a friend in', ask.status === 201, ask.json);
+  const invitedView = await api('GET', `/bond/channels/${rm.id}`, undefined, M2.token);
+  check('an invited friend sees the invitation but not the lines', invitedView.json.channel?.invited === true && (await api('GET', `/bond/channels/${rm.id}/messages`, undefined, M2.token)).status === 404, invitedView.json);
+  check('asking twice is refused', (await api('POST', `/bond/channels/${rm.id}/members`, { userId: M2.user.id }, M1.token)).status === 409, '');
+  const yes = await api('POST', `/bond/channels/${rm.id}/join`, {}, M2.token);
+  check('the friend says yes', yes.status === 200 && yes.json.channel?.joined === true, yes.json);
+  const pa = await say('bond', rm.id, M1.token, `plan a ${stamp}`, { anonymous: true });
+  const pb = await say('bond', rm.id, M2.token, `plan b ${stamp}`);
+  const seenPriv = (await lines('bond', rm.id, M2.token, '?read=1')).lines ?? [];
+  check('Bond lines are never anonymous and show the real name', pa.status === 201 && pb.status === 201 && seenPriv.length === 2 && seenPriv.every((l) => l.anonymous === false && l.rank === null) && seenPriv.find((l) => l.body.startsWith('plan a'))?.name === 'Chan one', seenPriv);
+  const privMembers = (await api('GET', `/bond/channels/${rm.id}`, undefined, M1.token)).json.members ?? [];
+  check('members see who is in a private channel', privMembers.length === 2 && privMembers.some((m) => m.owner && m.userId === M1.user.id), privMembers);
+  check('the owner cannot leave their own channel', (await api('POST', `/bond/channels/${rm.id}/leave`, {}, M1.token)).status === 400, '');
+  check('a member cannot take down the owner’s line', (await api('DELETE', `/bond/channels/${rm.id}/messages/${pa.json.line.id}`, undefined, M2.token)).status === 403, '');
+  check('the owner takes down anyone’s line', (await api('DELETE', `/bond/channels/${rm.id}/messages/${pb.json.line.id}`, undefined, M1.token)).status === 200, '');
+  const removed = await api('DELETE', `/bond/channels/${rm.id}/members/${M2.user.id}`, undefined, M1.token);
+  check('the owner takes someone out and they lose the channel', removed.status === 200 && (await api('GET', `/bond/channels/${rm.id}/messages`, undefined, M2.token)).status === 404, removed.json);
+  check('a private channel stays out of the Community list', !(await api('GET', '/community/channels?size=100', undefined, M2.token)).json.channels?.some((c) => c.id === rm.id), '');
+
+  // Export and delete.
+  const lz = await api('POST', '/community/channels/' + room.id + '/join', {}, Z.token);
+  const zline = await say('community', room.id, Z.token, `leaver line ${stamp}`);
+  const zexp = await api('GET', '/me/export', undefined, Z.token);
+  check('the export holds a person’s channel lines', lz.status === 200 && zline.status === 201 && (zexp.json.channelLines ?? []).some((l) => l.body === `leaver line ${stamp}`) && (zexp.json.channelSeats ?? []).length === 1, zexp.json.channelLines);
+  const zdel = await api('DELETE', '/me', { confirm: 'DELETE' }, Z.token);
+  const afterZ = await lines('community', room.id, A.token);
+  check('deleting the account deletes the lines', zdel.status === 200 && !(afterZ.lines ?? []).some((l) => l.body.includes('leaver line')), zdel.json);
+
+  // The limit.
+  check('a person who has not joined cannot fill a channel', (await say('community', room.id, X.token, 'x')).status === 403, '');
+  await api('POST', `/community/channels/${room.id}/join`, {}, X.token);
+  let tripped = 0;
+  for (let i = 0; i < LIMITS.channelMessage.max + 1 && tripped !== 429; i += 1) tripped = (await say('community', room.id, X.token, `spam ${i}`)).status;
+  check('channel lines are limited per person from the one limits file', tripped === 429, tripped);
+}
+
+// ---------------------------------------------------------------- discount codes the team makes
+section('Discount codes');
+{
+  // Its own address, so these sign-ups and the code checks never touch the limits the rest of the checks use.
+  const DC_ADDRESS = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 11) & 255}`;
+  const LIMIT_ADDRESS = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 12) & 255}`;
+  const join = async (who) => {
+    const r = await api('POST', '/auth/signup', { email: `dc-${who}-${stamp}@smoke.test`, password: `Kettle-${stamp}-pass`, displayName: `Smoke ${who}`, phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': DC_ADDRESS });
+    return { token: r.json.token, user: r.json.user };
+  };
+  const word = (s) => `${s}${stamp}`.toUpperCase();
+  const mk = (body) => admin('POST', '/admin/discounts', body);
+  const S = await join('seller');
+  const B1 = await join('buyer1');
+  const B2 = await join('buyer2');
+  const B3 = await join('buyer3');
+  const B4 = await join('buyer4');
+  for (const t of [B1, B2, B3, B4, S]) await api('PATCH', '/me/modules', { key: 'party', on: true }, t.token);
+  for (const t of [B1, B2, B3, B4]) await admin('POST', `/admin/users/${t.user.id}/points`, { amount: 1000, note: 'smoke discount codes' });
+  const pts = async (t) => (await me(t.token)).points;
+  const dc = (path, body, t) => api('POST', path, body, t.token, { 'CF-Connecting-IP': DC_ADDRESS });
+
+  const listed = await api('POST', '/studio/products', { kind: 'digital', title: `DC points ${stamp}`, pricePoints: 200, status: 'live' }, S.token);
+  const listed2 = await api('POST', '/studio/products', { kind: 'digital', title: `DC points two ${stamp}`, pricePoints: 200, status: 'live' }, S.token);
+  const cash = await api('POST', '/studio/products', { kind: 'digital', title: `DC money ${stamp}`, pricePoints: 0, priceCents: 50000, status: 'live' }, S.token);
+  check('the seller has a points product and a money product', listed.status === 201 && listed2.status === 201 && cash.status === 201, [listed.status, cash.status]);
+  const P1 = listed.json.product.id;
+  const P2 = listed2.json.product.id;
+  const PM = cash.json.product.id;
+
+  // The team makes codes; nobody else can.
+  const quarter = await mk({ code: word('quarter'), kind: 'percent', percent: '25', areas: ['product'], maxUses: 5, perPersonLimit: 1, note: 'smoke' });
+  check('an admin makes a percent code, kept upper case', quarter.status === 201 && quarter.json.code?.code === word('quarter') && quarter.json.code.percentBps === 2500 && quarter.json.code.active === true, quarter.json);
+  check('the same word cannot be made twice', (await mk({ code: word('quarter').toLowerCase(), kind: 'percent', percent: '10', areas: ['product'] })).status === 409, '');
+  check('a buyer cannot make or list codes', (await api('POST', '/admin/discounts', { code: 'NOPE123', kind: 'percent', percent: '90', areas: ['product'] }, B1.token)).status === 403 && (await api('GET', '/admin/discounts', undefined, B1.token)).status === 403, '');
+  check('a percent must be from 0.01 to 100', (await mk({ kind: 'percent', percent: '100.01', areas: ['product'] })).status === 400 && (await mk({ kind: 'percent', percent: '0', areas: ['product'] })).status === 400 && (await mk({ kind: 'percent', percent: 'abc', areas: ['product'] })).status === 400, '');
+  check('a code needs a place, and a fixed amount cannot be for points-only tickets', (await mk({ kind: 'percent', percent: '5', areas: [] })).status === 400 && (await mk({ kind: 'fixed', amount: '5', areas: ['event'] })).status === 400, '');
+  check('a word that is too short is refused', (await mk({ code: 'ab', kind: 'percent', percent: '5', areas: ['product'] })).status === 400, '');
+  const random = await mk({ kind: 'percent', percent: '5', areas: ['product'] });
+  check('an empty code makes a random one of eight', random.status === 201 && /^[A-Z0-9]{8}$/.test(random.json.code?.code ?? ''), random.json);
+  const fixed = await mk({ code: word('fixed'), kind: 'fixed', amount: '1.005', currency: 'INR', areas: ['product'], perPersonLimit: 3 });
+  check('a typed amount is read from its digits: 1.005 is 101 cents', fixed.status === 201 && fixed.json.code?.amountCents === 101, fixed.json.code);
+  const list = await admin('GET', `/admin/discounts?q=${word('quarter')}`);
+  check('the admin list is paged and shows the code with its use count', list.status === 200 && list.json.page?.page === 1 && list.json.codes?.length === 1 && list.json.codes[0].redeemed === 0 && list.json.totals?.codes >= 3, list.json);
+
+  // A buyer checks a code: the server prices it from the product, never from the request.
+  const peek = await dc('/discounts/check', { code: word('quarter').toLowerCase(), area: 'product', itemId: P1, amountCents: 1, priceCents: 1, payPoints: 1 }, B1);
+  check('a buyer sees the new price, worked out by the server', peek.status === 200 && peek.json.listPoints === 200 && peek.json.offPoints === 50 && peek.json.payPoints === 150 && peek.json.label === '25% off', peek.json);
+  check('checking a code uses nothing up', (await admin('GET', `/admin/discounts?q=${word('quarter')}`)).json.codes[0].usedCount === 0, '');
+  check('an unknown word, a prototype word and rubbish all get the same plain refusal', (await Promise.all(['NOSUCHCODE', 'constructor', '__proto__', '!!'].map((code) => dc('/discounts/check', { code, area: 'product', itemId: P1 }, B1)))).every((r) => r.status === 400 && r.json.error === 'That code does not work.'), '');
+  check('a code for products does not work on a plan', (await dc('/discounts/check', { code: word('quarter'), area: 'plan', itemId: 'pro' }, B1)).json.error === 'That code is not for this.', '');
+  check('a fixed amount takes money off, and a points price has none to take', (await dc('/discounts/check', { code: word('fixed'), area: 'product', itemId: P1 }, B1)).json.error === 'That code takes money off, and this costs points.', '');
+  check('something that is not for sale is not found', (await dc('/discounts/check', { code: word('quarter'), area: 'product', itemId: 'nothing' }, B1)).status === 404, '');
+
+  // Buying with the code: the buyer pays less, the seller is still paid on the list price, and the use is taken.
+  const sellerBefore = await pts(S);
+  const buyerBefore = await pts(B1);
+  const bought = await dc(`/store/${P1}/checkout`, { discountCode: word('quarter'), pay: 'points', points: 1, cents: 1, priceCents: 1, pricePoints: 1 }, B1);
+  check('checkout with a code goes through', bought.status === 201 && bought.json.order?.status === 'paid', bought.json);
+  check('the order keeps what the buyer paid and what the code took off', bought.json.order?.points === 150 && bought.json.order?.discountPoints === 50, bought.json.order);
+  check('the buyer pays the discounted points, whatever the request said', buyerBefore - (await pts(B1)) === 150, '');
+  const fee = bought.json.order?.platformFeePoints ?? -1;
+  check('the seller is credited on the list price: the platform pays the discount', (await pts(S)) - sellerBefore === 200 - fee && fee >= 0, { fee });
+  check('the use is counted and the admin sees what was given away', (await admin('GET', `/admin/discounts?q=${word('quarter')}`)).json.codes[0].redeemed === 1 && (await admin('GET', `/admin/discounts?q=${word('quarter')}`)).json.codes[0].givenPoints === 50, '');
+  const again = await dc('/discounts/check', { code: word('quarter'), area: 'product', itemId: P2 }, B1);
+  check('the same person cannot use a one-time code twice', again.status === 400 && again.json.error === 'You already used that code.', again.json);
+  const againBuy = await dc(`/store/${P2}/checkout`, { discountCode: word('quarter') }, B1);
+  check('and checkout refuses it too, charging nothing', againBuy.status === 400 && (await pts(B1)) === buyerBefore - 150, againBuy.json);
+  const bothCodes = await dc(`/store/${P2}/checkout`, { discountCode: word('quarter'), coupon: 'ANYTHING' }, B2);
+  check('a creator coupon and a team code are not used together', bothCodes.status === 400 && /one code at a time/i.test(bothCodes.json.error ?? ''), bothCodes.json);
+  const exported = await api('GET', '/me/export', undefined, B1.token);
+  check('the export lists the codes a person used', (exported.json.discountRedemptions ?? []).some((r) => r.code === word('quarter') && r.off_points === 50), exported.json.discountRedemptions);
+
+  // A refund returns what was paid and takes the list price back from the seller.
+  const sellerMid = await pts(S);
+  const refunded = await api('POST', `/studio/orders/${bought.json.order.id}/refund`, { reason: 'smoke' }, S.token);
+  check('the seller refunds the discounted order', refunded.status === 200 && refunded.json.order?.status === 'refunded', refunded.json);
+  check('the buyer gets back what they paid, no more', (await pts(B1)) === buyerBefore, { now: await pts(B1), buyerBefore });
+  check('the seller gives back what they were credited', sellerMid - (await pts(S)) === 200 - fee, '');
+  check('a refund does not give the use of the code back', (await dc('/discounts/check', { code: word('quarter'), area: 'product', itemId: P2 }, B1)).json.error === 'You already used that code.', '');
+
+  // The last use cannot be taken twice.
+  await mk({ code: word('last'), kind: 'percent', percent: '50', areas: ['product'], maxUses: 1 });
+  const before2 = await pts(B2);
+  const before3 = await pts(B3);
+  const [r2, r3] = await Promise.all([dc(`/store/${P1}/checkout`, { discountCode: word('last') }, B2), dc(`/store/${P1}/checkout`, { discountCode: word('last') }, B3)]);
+  const won = [r2, r3].filter((r) => r.status === 201);
+  const lost = [r2, r3].filter((r) => r.status !== 201);
+  check('two taps on the last use: one gets it, one is refused', won.length === 1 && lost.length === 1 && [400, 409].includes(lost[0].status), [r2.status, r3.status]);
+  check('the one who lost was not charged and has no order', (won[0] === r2 ? await pts(B3) === before3 : await pts(B2) === before2), '');
+  const lastRow = (await admin('GET', `/admin/discounts?q=${word('last')}`)).json.codes[0];
+  check('the code shows one use of one', lastRow.usedCount === 1 && lastRow.redeemed === 1, lastRow);
+  check('then it is used up', (await dc('/discounts/check', { code: word('last'), area: 'product', itemId: P2 }, B4)).json.error === 'That code has been used up.', '');
+
+  // Dates and switches.
+  await mk({ code: word('old'), kind: 'percent', percent: '10', areas: ['product'], endsAt: new Date(Date.now() - 60_000).toISOString() });
+  await mk({ code: word('soon'), kind: 'percent', percent: '10', areas: ['product'], startsAt: new Date(Date.now() + 86_400_000).toISOString() });
+  check('an expired code is refused in plain words', (await dc('/discounts/check', { code: word('old'), area: 'product', itemId: P2 }, B4)).json.error === 'That code has expired.', '');
+  check('a code that has not started says when it does', /^That code starts on \d{4}-\d{2}-\d{2}\.$/.test((await dc('/discounts/check', { code: word('soon'), area: 'product', itemId: P2 }, B4)).json.error ?? ''), '');
+  check('an end before the start is refused', (await mk({ kind: 'percent', percent: '5', areas: ['product'], startsAt: new Date(Date.now() + 2 * 86_400_000).toISOString(), endsAt: new Date(Date.now() + 86_400_000).toISOString() })).status === 400, '');
+  const small = await mk({ code: word('min'), kind: 'percent', percent: '10', areas: ['product'], minAmount: '600', currency: 'INR' });
+  check('a code with a smallest price refuses a cheaper one', small.status === 201 && /prices from/.test((await dc('/discounts/check', { code: word('min'), area: 'product', itemId: PM }, B4)).json.error ?? ''), small.json);
+  const sw = await mk({ code: word('swoff'), kind: 'percent', percent: '10', areas: ['product'] });
+  check('a code can be edited in its row', (await admin('PATCH', `/admin/discounts/${sw.json.code.id}`, { note: 'changed', maxUses: 9 })).json.code?.note === 'changed', '');
+  check('its worth cannot be changed after it is made', (await admin('PATCH', `/admin/discounts/${sw.json.code.id}`, { percent: '99', kind: 'fixed' })).status === 400, '');
+  const off = await admin('PATCH', `/admin/discounts/${sw.json.code.id}`, { active: false });
+  check('switching a code off works at once', off.json.code?.active === false && (await dc('/discounts/check', { code: word('swoff'), area: 'product', itemId: P2 }, B4)).json.error === 'That code is switched off.', off.json);
+  const bulkOne = await mk({ code: word('bulk1'), kind: 'percent', percent: '10', areas: ['product'] });
+  const bulkTwo = await mk({ code: word('bulk2'), kind: 'percent', percent: '10', areas: ['product'] });
+  const bulked = await admin('POST', '/admin/discounts/bulk', { ids: [bulkOne.json.code.id, bulkTwo.json.code.id], active: false });
+  check('several codes switch off together', bulked.json.changed === 2, bulked.json);
+  const trail = await admin('GET', '/admin/audit?size=100');
+  check('creating and switching off are in the audit log', JSON.stringify(trail.json).includes('discount.create') && JSON.stringify(trail.json).includes('discount.off'), trail.status);
+
+  // Money: a typed amount, a percent, and 100% off, all recomputed on the server.
+  await mk({ code: word('fifth'), kind: 'percent', percent: '20', areas: ['product'], perPersonLimit: 5 });
+  await mk({ code: word('free'), kind: 'percent', percent: '100', areas: ['product'] });
+  // Not every product takes points: one priced in money only is never bought, or taken free, with points.
+  const pointsOnMoney = await dc(`/store/${PM}/checkout`, { pay: 'points' }, B4);
+  check('a product priced in money only refuses a points order', pointsOnMoney.status === 400 && /money/i.test(pointsOnMoney.json.error ?? ''), pointsOnMoney.json);
+  const money1 = await dc(`/store/${PM}/checkout`, { pay: 'test', discountCode: word('fifth'), cents: 1, priceCents: 1, amountCents: 1 }, B4);
+  check('a money order is priced by the server: 20% off 500.00 is 400.00', money1.status === 201 && money1.json.order?.cents === 40000 && money1.json.order?.discountCents === 10000 && money1.json.order?.status === 'test', money1.json.order);
+  const money2 = await dc(`/store/${PM}/checkout`, { pay: 'money', discountCode: word('fixed') }, B3);
+  check('a fixed amount comes off a money order in whole cents', money2.status === 201 && money2.json.order?.cents === 50000 - 101 && money2.json.order?.discountCents === 101, money2.json.order);
+  const freeBefore = await pts(B2);
+  const money3 = await dc(`/store/${PM}/checkout`, { pay: 'money', discountCode: word('free') }, B2);
+  check('100% off a money order is a free order: paid at once, no provider, no points', money3.status === 201 && money3.json.order?.status === 'paid' && money3.json.order?.cents === 0 && money3.json.order?.discountCents === 50000 && money3.json.payment === null && (await pts(B2)) === freeBefore, money3.json);
+  check('and the buyer owns it', (await api('GET', '/store/library', undefined, B2.token)).json.orders?.some((o) => o.productId === PM), '');
+
+  // Plans and top-ups: the price shown is right even though nothing is charged yet.
+  await mk({ code: word('plan'), kind: 'percent', percent: '20', areas: ['plan', 'topup'] });
+  const planCheck = await dc('/discounts/check', { code: word('plan'), area: 'plan', itemId: 'pro' }, B1);
+  check('a plan code prices a plan from the plan list', planCheck.status === 200 && planCheck.json.listCents === PLANS.pro.priceCents && planCheck.json.payCents === PLANS.pro.priceCents - Math.floor(PLANS.pro.priceCents / 5) && planCheck.json.currency === 'USD', planCheck.json);
+  const planBuy = await dc('/credits/checkout', { kind: 'plan', key: 'pro', discountCode: word('plan') }, B1);
+  check('plan checkout checks the code and still says nothing was charged', planBuy.status === 409 && planBuy.json.live === false && planBuy.json.quote?.payCents === planCheck.json.payCents, planBuy.json);
+  check('plan checkout refuses a code that does not work', (await dc('/credits/checkout', { kind: 'plan', key: 'pro', discountCode: 'NOSUCHCODE' }, B1)).status === 400, '');
+  check('nothing is used up while nothing is charged', (await admin('GET', `/admin/discounts?q=${word('plan')}`)).json.codes[0].usedCount === 0, '');
+
+  // A ticket that costs points: a percent comes off, and a cancel returns what was paid.
+  await mk({ code: word('half'), kind: 'percent', percent: '50', areas: ['event'] });
+  const ev = await api('POST', '/party/events', { title: `DC party ${stamp}`, startsAt: new Date(Date.now() + 3 * 86_400_000).toISOString(), minutes: 60, pricePoints: 100 }, S.token);
+  check('a host sets a ticket price in points', ev.status === 201 && ev.json.event?.pricePoints === 100, ev.json);
+  const tBefore = await pts(B1);
+  const rsvp = await dc(`/party/events/${ev.json.event.id}/rsvp`, { discountCode: word('half') }, B1);
+  check('a ticket with a code costs half', rsvp.status === 201 && tBefore - (await pts(B1)) === 50, rsvp.json);
+  const cancel = await dc(`/party/events/${ev.json.event.id}/cancel-rsvp`, {}, B1);
+  check('cancelling gives back what was paid, not the list price', cancel.status === 200 && (await pts(B1)) === tBefore, cancel.json);
+  const notFor = await dc(`/party/events/${ev.json.event.id}/rsvp`, { discountCode: word('quarter') }, B2);
+  check('a product code does not work on a ticket and nothing is charged', notFor.status === 400, notFor.json);
+
+  // A person who leaves takes their redemptions with them.
+  await mk({ code: word('leave'), kind: 'percent', percent: '10', areas: ['product'] });
+  const leaver = await dc(`/store/${P2}/checkout`, { discountCode: word('leave') }, B4);
+  const gone = await api('DELETE', '/me', { confirm: 'DELETE' }, B4.token);
+  check('deleting the account works after a code was used', leaver.status === 201 && gone.status === 200, [leaver.status, gone.status]);
+
+  // The limit on guessing.
+  const X = await api('POST', '/auth/signup', { email: `dc-guess-${stamp}@smoke.test`, password: `Kettle-${stamp}-pass`, displayName: 'Smoke guesser', phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': LIMIT_ADDRESS });
+  let last = 0;
+  for (let i = 0; i < LIMITS.discount.max + 2 && last !== 429; i += 1) last = (await api('POST', '/discounts/check', { code: `GUESS${i}ABC`, area: 'product', itemId: P1 }, X.json.token, { 'CF-Connecting-IP': LIMIT_ADDRESS })).status;
+  check('guessing codes is limited per person from the one limits file', last === 429, last);
+}
+
+// ---------------------------------------------------------------- badges
+section('Badges');
+{
+  const { BADGES: CATALOGUE, BADGE_FAMILIES: FAMILIES, BADGE_STATS: STATS, BADGE_TIERS: TIERS, isPrivateBadge } = await import('../../packages/shared/src/index.ts');
+  check('the catalogue has 40 to 60 badges, each with a tier and a family', CATALOGUE.length >= 40 && CATALOGUE.length <= 60 && CATALOGUE.every((b) => TIERS.includes(b.tier) && FAMILIES.includes(b.family)), CATALOGUE.length);
+  const G = await signup(`badges-${stamp}@smoke.test`, `Kettle-${stamp}-pass`, 'Smoke badges');
+  const gallery = await api('GET', '/me/badges', undefined, G.token);
+  check('the gallery answers with a count behind every rule', gallery.status === 200 && Array.isArray(gallery.json.held) && STATS.every((k) => typeof gallery.json.progress?.[k] === 'number'), gallery.json);
+  check('a new account holds no badge yet', gallery.json.held?.length === 0, gallery.json.held);
+  check('the gallery needs a session', (await api('GET', '/me/badges')).status === 401, '');
+
+  // Do the thing once: set up the first pillar.
+  const rel = 'self';
+  const answers = QUESTIONS.filter((q) => q.relationship === rel).map((q) => ({ questionId: q.id, value: 1 }));
+  await api('POST', '/onboarding', { answers, displayName: 'Smoke badges' }, G.token);
+  const built = await api('POST', '/onboarding/build', { relationships: [rel], date: today }, G.token);
+  const after = await api('GET', '/me/badges', undefined, G.token);
+  const pillar = after.json.held?.find((h) => h.key === 'pillar_1');
+  check('building a pillar earns First pillar once, with the day it was earned', built.status === 201 && pillar && typeof pillar.at === 'string' && !Number.isNaN(Date.parse(pillar.at)) && after.json.progress?.pillars_set === 1, after.json);
+  check('and Profile shows it', (await api('GET', '/me', undefined, G.token)).json.badges?.includes('pillar_1'), '');
+  const again = await api('GET', '/me/badges', undefined, G.token);
+  check('asking again does not date it a second time', again.json.held?.find((h) => h.key === 'pillar_1')?.at === pillar?.at, again.json.held);
+
+  // A private badge (a journal page) is the owner's alone, and an earned badge is never taken back.
+  const page = await api('POST', '/journal', { title: 'Smoke badge page' }, G.token);
+  check('a journal page earns First page', page.status === 201 && (await api('GET', '/me/badges', undefined, G.token)).json.held?.some((h) => h.key === 'journal_1') && isPrivateBadge('journal_1'), page.json);
+  await api('DELETE', `/journal/${page.json.entry.id}`, undefined, G.token);
+  check('deleting the page does not take the badge back', (await api('GET', '/me/badges', undefined, G.token)).json.held?.some((h) => h.key === 'journal_1'), '');
+  const handle = `bdg${stamp}`.slice(0, 20);
+  await api('PATCH', '/me', { handle, publicSettings: { pagePublic: true, showBadges: true } }, G.token);
+  const pub = await api('GET', `/public/${handle}`);
+  check('the public page shows the public badge and never the private one', pub.status === 200 && pub.json.badges?.includes('pillar_1') && !pub.json.badges?.includes('journal_1'), pub.json?.badges);
+  const board = await api('GET', '/leaderboard', undefined, G.token);
+  check('the leaderboard still answers with a badge count', board.status === 200, board.status);
+
+  // Unknown keys are refused where a key is taken.
+  const nope = await admin('POST', `/admin/users/${G.user.id}/badges`, { key: 'not_a_real_badge' });
+  check('a badge key that is not in the catalogue is refused', nope.status === 400, nope.status);
+  const given = await admin('POST', `/admin/users/${G.user.id}/badges`, { key: 'sale_10', note: 'smoke' });
+  check('a real one can be given by hand and shows as given', given.status === 200 && (await api('GET', '/me/badges', undefined, G.token)).json.held?.find((h) => h.key === 'sale_10')?.given === true, given.status);
+}
+
+// ---------------------------------------------------------------- agency lifecycle: stages, the link's password, changes, the retainer and its months
+import { TRIAL_RULES, AGENCY_STAGE_KEYS } from '../../packages/shared/src/index.ts';
+section('Agency lifecycle');
+{
+  const LIP = (n) => `10.${(seed >> 8) & 255}.${(seed + n) & 255}.${(seed >> 16) & 255}`;
+  const join = async (who) => {
+    const r = await api('POST', '/auth/signup', { email: `${who}-${stamp}@smoke.test`, password: `Harbour-${stamp}-pass`, displayName: `Smoke ${who}`, phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': LIP(40) });
+    await api('PATCH', '/me/modules', { key: 'agency', on: true }, r.json.token);
+    return { token: r.json.token, user: r.json.user };
+  };
+  const O = await join('lifeowner');
+  const X = await join('lifestranger');
+  // No tax lines on the invoices this makes, so a month's invoice comes to exactly the month's fee.
+  await api('PUT', '/agency/settings', { profile: { gstBps: 0, tdsBps: 0, tdsMode: 'none', invoicePrefix: '' } }, O.token);
+  const anyIp = () => LIP(60 + Math.floor(Math.random() * 100));
+  const P = (method, path, body, o = {}) => api(method, `/public${path}`, body, null, { 'CF-Connecting-IP': o.ip ?? anyIp(), ...(o.session ? { 'X-Portal-Session': o.session } : {}) });
+  const page = (id) => api('GET', `/agency/clients/${id}?day=${today}`, undefined, O.token).then((r) => r.json);
+  const items = (id) => api('GET', `/agency/items?day=${today}&client=${id}&size=100`, undefined, O.token).then((r) => r.json.items ?? []);
+  const cron = () => fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+  const day = (n) => new Date(Date.parse(`${today}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+
+  // A new client can start with a password on its link; the word is shown once and kept only as a hash.
+  const mk = await api('POST', '/agency/clients', { name: 'Lifecycle Labs', contactEmail: 'ops@lifecycle.test', retainerCents: 5000000, piecesPerMonth: 3, portalPassword: 'generate' }, O.token);
+  const cid = mk.json.id;
+  const pw = mk.json.password;
+  check('a new client can start with a password, shown once', mk.status === 201 && typeof pw === 'string' && pw.length >= 10 && /^[a-z]+(-[a-z]+){3}-\d\d$/.test(pw), mk.json);
+  const p0 = await page(cid);
+  check('it starts at the first stage, locked', p0.lifecycle?.stage === 'enquiry' && p0.lifecycle.password.set === true && p0.client.portalLocked === true, p0.lifecycle);
+  check('the owner\'s page holds neither the password nor its hash', !JSON.stringify(p0).includes(pw) && !/pass_hash|pass_salt/.test(JSON.stringify(p0)));
+  check('every stage has a name in order', AGENCY_STAGE_KEYS.length === 9 && AGENCY_STAGE_KEYS[0] === 'enquiry');
+  const on = await api('POST', `/agency/clients/${cid}/portal`, { on: true, show: { contracts: true, invoices: true } }, O.token);
+  const tok = on.json.portalToken;
+
+  // The lock answers with the client's name and nothing else.
+  const locked = await P('GET', `/agency/${tok}`);
+  check('a link with a password answers locked, with the name only', locked.status === 401 && locked.json.error === 'locked' && locked.json.clientName === 'Lifecycle Labs' && Object.keys(locked.json).sort().join() === 'clientName,error', locked.json);
+  check('and says nothing of the work', !/waiting|coming|invoices|stage|agencyName/.test(JSON.stringify(locked.json)));
+  check('a made-up session does not open it', (await P('GET', `/agency/${tok}`, undefined, { session: 'a'.repeat(64) })).status === 401);
+  // A wrong password and a link that does not exist answer the same words.
+  const wrongIp = LIP(31);
+  const w1 = await P('POST', `/agency/${tok}/unlock`, { password: 'definitely-not-it-77' }, { ip: wrongIp });
+  const w2 = await P('POST', '/agency/ABCDEFGHJKLMNPQR/unlock', { password: 'definitely-not-it-77' }, { ip: LIP(32) });
+  check('a wrong password is refused with the same words as a link that is not there', w1.status === 401 && w2.status === 401 && w1.json.error === w2.json.error, [w1.json, w2.json]);
+  check('a missing password is refused too', (await P('POST', `/agency/${tok}/unlock`, {}, { ip: LIP(33) })).status === 401);
+  // Five tries from one address, then the door closes, even for the right word.
+  for (let i = 0; i < 4; i += 1) await P('POST', `/agency/${tok}/unlock`, { password: `wrong-guess-${i}-xx` }, { ip: wrongIp });
+  const shut = await P('POST', `/agency/${tok}/unlock`, { password: pw }, { ip: wrongIp });
+  check('too many wrong passwords from one address close the door, even for the right one', shut.status === 429, shut.status);
+  // The right word from another address opens it.
+  const good = await P('POST', `/agency/${tok}/unlock`, { password: pw }, { ip: LIP(34) });
+  const session = good.json.session;
+  check('the right password gives a session for twelve hours', good.status === 200 && /^[0-9a-f]{64}$/.test(session ?? '') && Date.parse(good.json.expiresAt) - Date.now() > 11 * 3_600_000, good.json);
+  const open = await P('GET', `/agency/${tok}`, undefined, { session });
+  check('with the session the page reads, at the first stage', open.status === 200 && open.json.stage === 'enquiry' && open.json.clientName === 'Lifecycle Labs', open.status);
+  const p1 = await page(cid);
+  check('the owner sees when it was opened, as a day', p1.lifecycle.password.lastOpenedDay === new Date().toISOString().slice(0, 10), p1.lifecycle.password);
+  // A session is for one client.
+  const other = await api('POST', '/agency/clients', { name: 'Other Labs', portalPassword: 'generate' }, O.token);
+  const otherTok = (await api('POST', `/agency/clients/${other.json.id}/portal`, { on: true }, O.token)).json.portalToken;
+  check('a session for one client does not open another', (await P('GET', `/agency/${otherTok}`, undefined, { session })).status === 401);
+
+  // The agreement and invoice links of this client sit behind the same password. Sending the agreement moves the client on; signing moves it on again.
+  const kc = await api('POST', '/agency/contracts', { templateKey: 'trial', clientId: cid }, O.token);
+  const sentK = await api('PATCH', `/agency/contracts/${kc.json.id}`, { status: 'sent' }, O.token);
+  const ktok = sentK.json.contract?.token;
+  check('sending the agreement moves the client to Agreement sent', (await page(cid)).lifecycle.stage === 'agreement_sent');
+  const kLocked = await P('GET', `/contracts/${ktok}`);
+  check('the agreement link is locked for a client with a password', kLocked.status === 401 && kLocked.json.error === 'locked' && !JSON.stringify(kLocked.json).includes('sections'), kLocked.json);
+  check('the lock probe says so, and says no with a session', (await P('GET', `/contracts/${ktok}/lock`)).json.locked === true && (await P('GET', `/contracts/${ktok}/lock`, undefined, { session })).json.locked === false);
+  check('signing without the session is refused', (await P('POST', `/contracts/${ktok}/accept`, { name: 'Asha Rao', agree: true })).status === 401);
+  check('the agreement reads with the session', (await P('GET', `/contracts/${ktok}`, undefined, { session })).status === 200);
+  const ac = await P('POST', `/contracts/${ktok}/accept`, { name: 'Asha Rao', title: 'Head', agree: true, answers: {} }, { session });
+  check('and is signed with it', ac.status === 200, ac.json);
+  check('signing moves the client to Agreement signed', (await page(cid)).lifecycle.stage === 'agreement_signed');
+
+  // The stages go one at a time.
+  const skip = await api('POST', `/agency/clients/${cid}/stage`, { to: 'trial' }, O.token);
+  check('a stage cannot be skipped', skip.status === 400 && /one stage at a time/.test(skip.json.error), skip.json);
+  check('and a stage that does not exist is refused', (await api('POST', `/agency/clients/${cid}/stage`, { to: 'constructor' }, O.token)).status === 400);
+  check('the owner moves one step', (await api('POST', `/agency/clients/${cid}/stage`, { to: 'strategy' }, O.token)).status === 200 && (await page(cid)).lifecycle.stage === 'strategy');
+  check('a slip can be undone one step back, and only one', (await api('POST', `/agency/clients/${cid}/stage`, { to: 'agreement_signed', undo: true }, O.token)).status === 200 && (await api('POST', `/agency/clients/${cid}/stage`, { to: 'enquiry', undo: true }, O.token)).status === 400);
+  await api('POST', `/agency/clients/${cid}/stage`, { to: 'strategy' }, O.token);
+  check('the move is written in the log, and the log holds no password', (await page(cid)).lifecycle.log.some((l) => /Moved to Strategy session/.test(l.text)) && !JSON.stringify((await page(cid)).lifecycle.log).includes(pw));
+  check('someone else cannot move, read or change this client', (await api('POST', `/agency/clients/${cid}/stage`, { to: 'trial' }, X.token)).status === 404 && (await api('PUT', `/agency/clients/${cid}/password`, { clear: true }, X.token)).status === 404 && (await api('PUT', `/agency/clients/${cid}/lifecycle`, { trialDue: day(3) }, X.token)).status === 404);
+
+  // The days.
+  check('a day that is not on the calendar is refused', (await api('PUT', `/agency/clients/${cid}/lifecycle`, { trialDue: '2026-11-31' }, O.token)).status === 400);
+  check('and a pilot cannot end before it starts', (await api('PUT', `/agency/clients/${cid}/lifecycle`, { pilotStart: day(10), pilotEnd: day(5) }, O.token)).status === 400);
+  check('a call link must be https', (await api('PUT', `/agency/clients/${cid}/lifecycle`, { strategyLink: 'http://x.test/call' }, O.token)).status === 400);
+  const days = await api('PUT', `/agency/clients/${cid}/lifecycle`, { strategyDay: day(1), strategyLink: 'https://meet.example.com/abc', trialDue: day(6), pilotStart: day(8), pilotEnd: day(38), revisionsPerPiece: 2 }, O.token);
+  check('the days are kept', days.status === 200 && days.json.dates.trialDue === day(6), days.json);
+  const withStrategy = await P('GET', `/agency/${tok}`, undefined, { session });
+  check('the client sees the strategy session and what is waiting', withStrategy.json.strategy?.day === day(1) && withStrategy.json.waitingOn.some((w) => w.key === 'strategy' && w.href === 'https://meet.example.com/abc'), withStrategy.json.waitingOn);
+  check('a checklist tick is kept, and only the stage\'s own steps', (await api('POST', `/agency/clients/${cid}/checklist`, { key: 'strategy:objective', done: true }, O.token)).json.ticks?.['strategy:objective'] === true && (await api('POST', `/agency/clients/${cid}/checklist`, { key: 'strategy:nope', done: true }, O.token)).status === 400);
+
+  // The trial: the rules from the agreement, and the trial video goes through the client's review.
+  check('a retainer cannot be offered before the pilot', (await api('POST', `/agency/clients/${cid}/retainer`, {}, O.token)).status === 400);
+  await api('POST', `/agency/clients/${cid}/stage`, { to: 'trial' }, O.token);
+  const tv = await api('POST', `/agency/clients/${cid}/trial-video`, {}, O.token);
+  const tv2 = await api('POST', `/agency/clients/${cid}/trial-video`, {}, O.token);
+  check('the trial video is added once', tv.status === 201 && tv2.status === 200 && tv2.json.id === tv.json.id, [tv.json, tv2.json]);
+  const tvId = tv.json.id;
+  await api('PATCH', `/agency/items/${tvId}?day=${today}`, { title: 'Trial video', stage: 'review', link: 'https://example.com/trial' }, O.token);
+  const trialView = await P('GET', `/agency/${tok}`, undefined, { session });
+  check('the client sees the trial rules, quoted from the agreement', trialView.json.trial?.rules?.length === TRIAL_RULES.length && trialView.json.trial.rules[0].text === TRIAL_RULES[0].text && trialView.json.trial.due === day(6), trialView.json.trial?.rules?.length);
+  check('and the trial video waiting for them, with its changes', trialView.json.waitingOn.some((w) => /trial video/i.test(w.title)) && trialView.json.waiting[0]?.changes?.allowed === 2 && trialView.json.waiting[0].changes.used === 0, trialView.json.waiting?.[0]);
+
+  // Changes: each one spends one of the changes included in the piece and sends it back to making; none left means a note for a paid change.
+  const ask = (n = 'Trim the intro', extra = {}) => P('POST', `/agency/${tok}/items/${tvId}`, { decision: 'changes', note: n, ...extra }, { session });
+  const c1 = await ask('Trim the intro', { where: '0:12' });
+  const it1 = (await items(cid)).find((i) => i.id === tvId);
+  check('a change spends one and sends the piece back to making', c1.status === 200 && it1.stage === 'making' && it1.revisions === 1 && it1.revisionsAllowed === 2, it1);
+  const notes1 = (await api('GET', `/agency/items/${tvId}/notes`, undefined, O.token)).json.notes;
+  check('it is a note of its own kind, with the place it is about', notes1.some((n) => n.kind === 'change' && n.body.startsWith('0:12: Trim the intro')), notes1);
+  check('the owner is told', JSON.stringify((await api('GET', '/inbox', undefined, O.token)).json).includes('sent back'));
+  check('a change cannot be asked for on a piece that is still being made', (await ask('again')).status === 400);
+  await api('PATCH', `/agency/items/${tvId}?day=${today}`, { title: 'Trial video', stage: 'review' }, O.token);
+  check('the second change is spent too', (await ask('Louder music')).status === 200 && (await items(cid)).find((i) => i.id === tvId).revisions === 2);
+  await api('PATCH', `/agency/items/${tvId}?day=${today}`, { title: 'Trial video', stage: 'review' }, O.token);
+  const over = await ask('One more thing');
+  check('with none left the change is refused, plainly', over.status === 409 && over.json.over === true && (await items(cid)).find((i) => i.id === tvId).stage === 'review', over.json);
+  const paid = await P('POST', `/agency/${tok}/items/${tvId}`, { decision: 'paid_change', note: 'A new ending, please' }, { session });
+  const afterPaid = (await items(cid)).find((i) => i.id === tvId);
+  check('a paid change is only a note: nothing moves and nothing is spent', paid.status === 200 && afterPaid.stage === 'review' && afterPaid.revisions === 2, afterPaid);
+  check('and it reads as one in the thread', (await api('GET', `/agency/items/${tvId}/notes`, undefined, O.token)).json.notes.some((n) => n.kind === 'paid_change'));
+  const addOne = await api('POST', `/agency/items/${tvId}/changes`, { add: 1 }, O.token);
+  check('the owner can add a change to a piece', addOne.status === 200 && addOne.json.allowed === 3 && (await ask('Now this')).status === 200, addOne.json);
+  check('and another person cannot', (await api('POST', `/agency/items/${tvId}/changes`, { add: 1 }, X.token)).status === 404);
+  // Two taps at once spend one change, not two.
+  await api('POST', `/agency/items/${tvId}/changes`, { add: 1 }, O.token);
+  await api('PATCH', `/agency/items/${tvId}?day=${today}`, { title: 'Trial video', stage: 'review' }, O.token);
+  const usedBefore = (await items(cid)).find((i) => i.id === tvId).revisions;
+  const [r1, r2] = await Promise.all([ask('race one'), ask('race two')]);
+  const usedAfter = (await items(cid)).find((i) => i.id === tvId).revisions;
+  // One wins. The other is refused, as a lost race (409) or because the piece has already moved on (400): either way one change is spent.
+  const codes = [r1.status, r2.status].sort();
+  check('two change requests at once with one left spend it once', codes[0] === 200 && (codes[1] === 409 || codes[1] === 400) && usedAfter - usedBefore === 1, [r1.status, r2.status, usedBefore, usedAfter]);
+  check('a comment never spends one', (await P('POST', `/agency/${tok}/items/${tvId}`, { decision: 'comment', note: 'Lovely work' }, { session })).status === 200);
+
+  // Taking the password off opens the link; changing it signs the client out of every tab.
+  check('a short password is refused', (await api('PUT', `/agency/clients/${cid}/password`, { password: 'short-9ch' }, O.token)).status === 400);
+  check('and one from the guess list', (await api('PUT', `/agency/clients/${cid}/password`, { password: 'password123' }, O.token)).status === 400);
+  check('and one that is the client\'s name', (await api('PUT', `/agency/clients/${cid}/password`, { password: 'lifecycle-labs-2026' }, O.token)).status === 400);
+  const mine = `Quiet-${stamp}-harbour`;
+  const set = await api('PUT', `/agency/clients/${cid}/password`, { password: mine }, O.token);
+  check('the owner can type their own', set.status === 200 && set.json.set === true && !('password' in set.json), set.json);
+  check('and the old session stops working', (await P('GET', `/agency/${tok}`, undefined, { session })).status === 401);
+  check('the old password stops working too', (await P('POST', `/agency/${tok}/unlock`, { password: pw }, { ip: LIP(35) })).status === 401);
+  const again = await P('POST', `/agency/${tok}/unlock`, { password: mine }, { ip: LIP(36) });
+  check('the new one opens it', again.status === 200 && /^[0-9a-f]{64}$/.test(again.json.session ?? ''));
+  check('a fresh link also signs everyone out', (await api('POST', `/agency/clients/${cid}/portal`, { fresh: true }, O.token)).status === 200);
+  const tok2 = (await api('GET', `/agency/clients/${cid}?day=${today}`, undefined, O.token)).json.client.portalToken;
+  const cleared = await api('PUT', `/agency/clients/${cid}/password`, { clear: true }, O.token);
+  check('removing the password opens the link to anyone who has it, as before', cleared.status === 200 && (await P('GET', `/agency/${tok2}`)).status === 200 && (await P('GET', `/contracts/${ktok}`)).status === 200);
+  check('the log names the changes to the password and never the word', (await page(cid)).lifecycle.log.some((l) => l.kind === 'password') && !JSON.stringify((await page(cid)).lifecycle.log).includes(mine));
+  const gen = await api('PUT', `/agency/clients/${cid}/password`, { generate: true }, O.token);
+  check('a generated password is shown once', gen.status === 200 && typeof gen.json.password === 'string' && !JSON.stringify(await page(cid)).includes(gen.json.password));
+  await api('PUT', `/agency/clients/${cid}/password`, { clear: true }, O.token);
+
+  // The retainer: offered after the pilot, chosen by the client, confirmed by the owner, one guarded step at a time.
+  await api('POST', `/agency/clients/${cid}/stage`, { to: 'pilot' }, O.token);
+  const bad = await api('POST', `/agency/clients/${cid}/retainer`, { options: [{ months: 0 }, { months: 99 }] }, O.token);
+  check('an offer with no real length is refused', bad.status === 400, bad.json);
+  const offer = await api('POST', `/agency/clients/${cid}/retainer`, { options: [{ months: 3, discountBps: 500 }, { months: 6 }], piecesPerMonth: 3, revisionsPerPiece: 4 }, O.token);
+  check('the owner offers lengths', offer.status === 201, offer.json);
+  check('and that moves the client to Retainer proposed', (await page(cid)).lifecycle.stage === 'retainer_offer');
+  const rv = await P('GET', `/agency/${tok2}`);
+  const o3 = rv.json.retainer?.options?.find((o) => o.months === 3);
+  check('the client sees each length with its month and total, discount taken off in whole cents', rv.json.retainer?.status === 'offered' && o3?.monthlyCents === 4750000 && o3?.totalCents === 14250000 && rv.json.retainer.options.find((o) => o.months === 6)?.monthlyCents === 5000000, rv.json.retainer);
+  check('a length that was not offered is refused', (await P('POST', `/agency/${tok2}/retainer`, { months: 4 })).status === 400);
+  check('and the confirm needs a choice first', (await api('POST', `/agency/retainers/${offer.json.id}/confirm?day=${today}`, {}, O.token)).status === 409);
+  check('the client chooses a length', (await P('POST', `/agency/${tok2}/retainer`, { months: 3 })).status === 200 && (await P('GET', `/agency/${tok2}`)).json.retainer.status === 'chosen' && (await page(cid)).lifecycle.retainer.status === 'chosen');
+  check('another person cannot confirm, withdraw or end it', (await api('POST', `/agency/retainers/${offer.json.id}/confirm`, {}, X.token)).status === 404 && (await api('POST', `/agency/retainers/${offer.json.id}/withdraw`, {}, X.token)).status === 404 && (await api('POST', `/agency/retainers/${offer.json.id}/end`, {}, X.token)).status === 404);
+  const [k1, k2] = await Promise.all([api('POST', `/agency/retainers/${offer.json.id}/confirm?day=${today}`, { startDay: today }, O.token), api('POST', `/agency/retainers/${offer.json.id}/confirm?day=${today}`, { startDay: today }, O.token)]);
+  check('two confirms at once start it once', [k1.status, k2.status].sort().join() === '200,409', [k1.status, k2.status, k1.json, k2.json]);
+  const p2 = await page(cid);
+  check('the retainer is active and the client is at Retainer active', p2.lifecycle.retainer.status === 'active' && p2.lifecycle.stage === 'retainer' && p2.lifecycle.retainer.monthlyCents === 4750000, p2.lifecycle.retainer);
+
+  // The first month is made at once: its invoice and its pieces. Running the cron again makes nothing twice.
+  const month1 = (await items(cid)).filter((i) => i.cycleNumber === 1);
+  check('the first month made its pieces, spread through the month, with the retainer\'s changes', month1.length === 3 && month1.every((i) => /^Month 1, piece [123]$/.test(i.title) && i.stage === 'idea' && i.revisionsAllowed === 4 && i.dueDate >= today), month1.map((i) => [i.title, i.dueDate]));
+  const inv1 = p2.invoices.filter((i) => i.totalCents === 4750000);
+  check('and its invoice, sent because auto-send is on', inv1.length === 1 && inv1[0].status === 'sent', p2.invoices);
+  check('the next month is named', p2.lifecycle.retainer.cyclesMade === 1 && p2.lifecycle.retainer.nextCycle?.n === 2, p2.lifecycle.retainer);
+  await cron();
+  await cron();
+  const p3 = await page(cid);
+  check('the cron run twice makes nothing again', p3.lifecycle.retainer.cyclesMade === 1 && (await items(cid)).filter((i) => i.cycleNumber === 1).length === 3 && p3.invoices.filter((i) => i.totalCents === 4750000).length === 1, p3.lifecycle.retainer);
+  check('turning auto-send off is kept', (await api('POST', `/agency/retainers/${offer.json.id}/auto-send`, { on: false }, O.token)).json.on === false && (await page(cid)).lifecycle.retainer.autoSend === false);
+  check('a second retainer cannot be offered while one runs', (await api('POST', `/agency/clients/${cid}/retainer`, {}, O.token)).status === 400);
+  const ended = await api('POST', `/agency/retainers/${offer.json.id}/end`, {}, O.token);
+  check('ending it is guarded: once', ended.status === 200 && (await api('POST', `/agency/retainers/${offer.json.id}/end`, {}, O.token)).status === 409);
+  check('an ended retainer can be renewed with a new offer', (await api('POST', `/agency/clients/${cid}/retainer`, { options: [{ months: 12 }] }, O.token)).status === 201 && (await page(cid)).lifecycle.retainer.status === 'offered');
+
+  // Months that were missed while nothing ran are made on the next run, once each; auto-send off leaves the invoices as drafts.
+  const late = (await api('POST', '/agency/clients', { name: 'Late Labs', retainerCents: 1000000, piecesPerMonth: 2 }, O.token)).json.id;
+  for (const to of ['agreement_sent', 'agreement_signed', 'strategy', 'trial', 'pilot']) await api('POST', `/agency/clients/${late}/stage`, { to }, O.token);
+  const lo = await api('POST', `/agency/clients/${late}/retainer`, { options: [{ months: 6 }], autoSend: false }, O.token);
+  const lTok = (await api('POST', `/agency/clients/${late}/portal`, { on: true }, O.token)).json.portalToken;
+  await P('POST', `/agency/${lTok}/retainer`, { months: 6 });
+  const lc = await api('POST', `/agency/retainers/${lo.json.id}/confirm?day=${today}`, { startDay: day(-31) }, O.token);
+  check('a retainer that started a month ago makes both its months at once', lc.status === 200 && lc.json.made === 2, lc.json);
+  const lateItems = await items(late);
+  check('each month once, with its pieces', lateItems.filter((i) => i.cycleNumber === 1).length === 2 && lateItems.filter((i) => i.cycleNumber === 2).length === 2, lateItems.map((i) => i.title));
+  await cron();
+  await cron();
+  const lp = await page(late);
+  check('and the cron does not make them again', (await items(late)).length === 4 && lp.lifecycle.retainer.cyclesMade === 2 && lp.invoices.length === 2, [lp.lifecycle.retainer.cyclesMade, lp.invoices.length]);
+  check('with auto-send off the invoices wait as drafts', lp.invoices.every((i) => i.status === 'draft'), lp.invoices.map((i) => i.status));
+
+  // Export and erase.
+  const ex = JSON.stringify((await api('GET', '/me/export', undefined, O.token)).json);
+  check('the export holds the lifecycle and never a password hash or a session', ex.includes('agencyRetainers') && ex.includes('agencyCycles') && ex.includes('portal_has_password') && !/portal_pass_hash|portal_pass_salt|portal_sessions/.test(ex) && !ex.includes(pw) && !ex.includes(mine));
+  check('another person has none of it', (await api('GET', `/agency/clients/${late}`, undefined, X.token)).status === 404);
+  check('removing a client takes its retainers with it', (await api('DELETE', `/agency/clients/${late}`, undefined, O.token)).status === 200 && (await api('POST', `/agency/retainers/${lo.json.id}/end`, {}, O.token)).status === 404);
+}
+
+
+// ---------------------------------------------------------------- Agency documents: the legal page, text version, email a copy, other kinds, house templates
+section('Agency documents');
+{
+  const AD = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 31) & 255}`;
+  const join = async (who) => {
+    const r = await api('POST', '/auth/signup', { email: `${who}-${stamp}@smoke.test`, password: `Harbour-${stamp}-pass`, displayName: `Smoke ${who}`, phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': AD });
+    await api('PATCH', '/me/modules', { key: 'agency', on: true }, r.json.token);
+    return { token: r.json.token, user: r.json.user };
+  };
+  const O = await join('docowner');
+  const X = await join('docstranger');
+  const M = await join('docmailer');
+  await api('PATCH', '/me/modules', { key: 'agency', on: true }, A.token);
+  const pub = (method, path, body) => api(method, `/public${path}`, body, null, { 'CF-Connecting-IP': `10.${(seed >> 8) & 255}.${seed & 255}.${(Math.floor(Math.random() * 200) + 20) & 255}` });
+  const clean = (t) => typeof t === 'string' && !/undefined|\[object|\*\*/.test(t) && !/<[a-z/][^>]*>/i.test(t);
+
+  const mkClient = async (who, extra = {}) => (await api('POST', '/agency/clients', { name: 'Docs Co', contactName: 'Dana', contactEmail: 'dana@docs.test', retainerCents: 4500000, ...extra }, who.token)).json.id;
+  const cid = await mkClient(O);
+
+  // the other kinds of document
+  check('a kind that does not exist is refused', (await api('POST', '/agency/docs', { kind: 'nope', clientId: cid }, O.token)).status === 400);
+  check('a client that is not yours is refused', (await api('POST', '/agency/docs', { kind: 'brief', clientId: await mkClient(X) }, O.token)).status === 400);
+  const mkDoc = await api('POST', '/agency/docs', { kind: 'brief', clientId: cid }, O.token);
+  check('a strategy session summary is made for a client', mkDoc.status === 201 && mkDoc.json.id, mkDoc.json);
+  const did = mkDoc.json.id;
+  const d0 = (await api('GET', `/agency/docs/${did}`, undefined, O.token)).json.doc;
+  check('it is a draft with a short reference, filled from the client', d0.status === 'draft' && /^BRF-[A-Z0-9]{1,6}$/.test(d0.ref) && d0.doc.vars.client === 'Docs Co' && d0.doc.style.font === 'serif', d0);
+  const text0 = contractAsText(d0.doc, { reference: d0.ref, date: d0.createdAt });
+  check('its text version has no undefined, no markup and the client\'s name', clean(text0) && text0.includes('Docs Co') && /\n1\. THE SESSION/.test(text0), text0.slice(0, 200));
+  const trial = await api('POST', '/agency/docs', { kind: 'trial_terms', clientId: cid }, O.token);
+  const trialText = contractAsText((await api('GET', `/agency/docs/${trial.json.id}`, undefined, O.token)).json.doc.doc);
+  check('trial terms come from the trial agreement and point at no section numbers', trial.status === 201 && trialText.includes('evaluation and approval only') && !/section \d/.test(trialText), trialText.slice(0, 80));
+  const prop = await api('POST', '/agency/docs', { kind: 'retainer_proposal', clientId: cid, retainer: { monthlyFeeCents: 4500050, deliverables: ['8 short videos'], months: [1, 3, 6] } }, O.token);
+  const propDoc = (await api('GET', `/agency/docs/${prop.json.id}`, undefined, O.token)).json.doc.doc;
+  const pk = propDoc.sections.find((s) => s.kind === 'packages').packages;
+  check('a retainer proposal prices each option from the monthly fee in whole cents', pk.map((p) => p.feeCents).join() === '4500050,13500150,27000300', pk);
+  check('a monthly report needs a client', (await api('POST', '/agency/docs', { kind: 'monthly_report' }, O.token)).status === 400);
+  const rep = await api('POST', `/agency/docs?day=${today}`, { kind: 'monthly_report', clientId: cid }, O.token);
+  const repText = contractAsText((await api('GET', `/agency/docs/${rep.json.id}`, undefined, O.token)).json.doc.doc);
+  check('a monthly report is counts from the client\'s own pieces and invoices', rep.status === 201 && repText.includes('Pieces delivered: 0') && clean(repText) && !/fee/i.test(repText), repText.slice(0, 120));
+  const list = await api('GET', `/agency/docs?size=100&client=${cid}`, undefined, O.token);
+  check('the list is paged, filtered by client and counted by status', list.json.docs?.length === 4 && list.json.page?.size === 100 && list.json.counts?.some((c) => c.status === 'draft'), list.json.page);
+  check('another person sees none of it', (await api('GET', `/agency/docs/${did}`, undefined, X.token)).status === 404 && (await api('PATCH', `/agency/docs/${did}`, { status: 'sent' }, X.token)).status === 404 && (await api('GET', '/agency/docs', undefined, X.token)).json.docs?.length === 0);
+  check('a draft has no public link', (await pub('GET', '/agency/doc/ABCDEFGHJKLMNPQR')).status === 404);
+
+  // the look: keys only, a logo only if it is yours
+  const styled = structuredClone(d0.doc);
+  styled.style = { ...styled.style, font: 'url(javascript:alert(1))', accent: '#ff0000', size: 'large', page: 'letter', logo: 'someone-elses-file-id', footer: 'Docs Studio, Pune' };
+  const putStyle = await api('PATCH', `/agency/docs/${did}`, { doc: styled }, O.token);
+  const st = putStyle.json.doc?.doc.style;
+  check('only keys are kept as a style, and a logo that is not yours is dropped', putStyle.status === 200 && st.font === 'serif' && st.accent === 'ink' && st.size === 'large' && st.page === 'letter' && st.logo === '' && st.footer === 'Docs Studio, Pune', st);
+
+  // privacy of the public page
+  await api('POST', '/agency/items', { clientId: cid, title: 'Piece for the doc test' }, O.token).then(async (it) => {
+    if (it.json.id) await api('POST', `/agency/items/${it.json.id}/notes`, { body: 'PRIVATE-DOC-NOTE do not show', shared: false }, O.token);
+  });
+  const sent = await api('PATCH', `/agency/docs/${did}`, { status: 'sent' }, O.token);
+  const dtok = sent.json.doc?.token;
+  check('sending makes a link', sent.json.doc?.status === 'sent' && /^[A-Z2-9]{16}$/.test(dtok ?? ''), sent.json.doc);
+  const read = await pub('GET', `/agency/doc/${dtok}`);
+  const readText = JSON.stringify(read.json);
+  check('the client reads it, with no private notes, no fees and no owner address', read.status === 200 && !readText.includes('PRIVATE-DOC-NOTE') && !readText.includes('4500000') && !readText.includes('@smoke.test') && !readText.includes('dana@docs.test') && read.json.ref === d0.ref, read.status);
+
+  // email a copy
+  const mailBad = await api('POST', `/agency/docs/${did}/email`, { to: 'not an address' }, O.token);
+  check('an address that is not one is refused', mailBad.status === 400, mailBad.json);
+  check('another person cannot email a copy of it', (await api('POST', `/agency/docs/${did}/email`, { to: 'x@y.test' }, X.token)).status === 404);
+  const draftDoc = await api('POST', '/agency/docs', { kind: 'brief', clientId: cid }, O.token);
+  check('a draft has no link, so no copy is emailed', (await api('POST', `/agency/docs/${draftDoc.json.id}/email`, {}, O.token)).status === 400);
+  const mail = await api('POST', `/agency/docs/${did}/email`, {}, O.token);
+  check('a copy goes to the client\'s own address and says plainly when email is not set up', mail.status === 200 && typeof mail.json.sent === 'boolean' && typeof mail.json.note === 'string' && mail.json.to === 'd***@docs.test' && (mail.json.sent || /not set up/.test(mail.json.note)), mail.json);
+  const log = (await api('GET', `/agency/doc-log/doc/${did}`, undefined, O.token)).json.log ?? [];
+  check('the log notes it without the address or the words', log.length === 1 && /^email/.test(log[0].event) && log[0].detail === 'd***@docs.test' && !JSON.stringify(log).includes('dana@docs.test'), log);
+  check('the log is the owner\'s alone', (await api('GET', `/agency/doc-log/doc/${did}`, undefined, X.token)).status === 404);
+  const mc = await mkClient(M);
+  const md = (await api('POST', '/agency/docs', { kind: 'brief', clientId: mc }, M.token)).json.id;
+  await api('PATCH', `/agency/docs/${md}`, { status: 'sent' }, M.token);
+  let mailCode = 0;
+  for (let i = 0; i < LIMITS.docEmail.max + 3 && mailCode !== 429; i += 1) mailCode = (await api('POST', `/agency/docs/${md}/email`, {}, M.token)).status;
+  check('emailing copies is limited per person from the one limits file', mailCode === 429, mailCode);
+
+  // comment, approve once, then a record
+  const cm = await pub('POST', `/agency/doc/${dtok}/comments`, { body: 'Can we add a LinkedIn line?' });
+  check('the client can ask for a change', cm.status === 201, cm.json);
+  const ed = structuredClone(sent.json.doc.doc);
+  ed.sections.find((s) => s.id === 'agreed').body = '- Weekly reels\n- A monthly report';
+  const edSent = await api('PATCH', `/agency/docs/${did}`, { doc: ed }, O.token);
+  check('a sent document can change and then says revised', edSent.json.doc?.status === 'revised' && edSent.json.doc?.revisedAt, edSent.json.doc?.status);
+  check('approving needs a name and a tick', (await pub('POST', `/agency/doc/${dtok}/approve`, { agree: true })).status === 400 && (await pub('POST', `/agency/doc/${dtok}/approve`, { name: 'Dana Rao' })).status === 400);
+  const [a1, a2] = await Promise.all([pub('POST', `/agency/doc/${dtok}/approve`, { name: 'Dana Rao', title: 'Head of Brand', agree: true }), pub('POST', `/agency/doc/${dtok}/approve`, { name: 'Dana Rao', title: 'Head of Brand', agree: true })]);
+  check('two taps at once approve once', [a1.status, a2.status].sort().join() === '200,400', [a1.status, a2.status]);
+  const done = (await api('GET', `/agency/docs/${did}`, undefined, O.token)).json.doc;
+  check('it is approved with the typed name and time', done.status === 'approved' && done.acceptance?.name === 'Dana Rao' && done.approvedAt, done.acceptance);
+  check('an approved document cannot be edited', (await api('PATCH', `/agency/docs/${did}`, { doc: ed }, O.token)).status === 400 && (await api('PATCH', `/agency/docs/${did}`, { status: 'draft' }, O.token)).status === 400);
+  check('and a second approval is refused', (await pub('POST', `/agency/doc/${dtok}/approve`, { name: 'Someone Else', agree: true })).status === 400);
+  const revise = await api('POST', `/agency/docs/${did}/duplicate`, {}, O.token);
+  const rev = (await api('GET', `/agency/docs/${revise.json.id}`, undefined, O.token)).json.doc;
+  check('it is revised into a new draft with no link and no approval', rev.status === 'draft' && !rev.token && !rev.acceptance && rev.doc.sections.length === done.doc.sections.length, rev.status);
+  check('only a draft can be removed', (await api('DELETE', `/agency/docs/${did}`, undefined, O.token)).status === 400 && (await api('DELETE', `/agency/docs/${revise.json.id}`, undefined, O.token)).status === 200);
+
+  // the text of an invoice matches the calculator, in whole cents
+  const inv = await api('POST', `/agency/invoices?day=${today}`, { clientId: cid, items: [{ description: 'Voxpop videos', quantity: 5, unitCents: 700000 }, { description: 'Extra edit', quantity: 1, unitCents: 150050 }], doc: { gstBps: 1800, gstSplit: true, tdsBps: 1000, tdsMode: 'show' } }, O.token);
+  const iv = inv.json.invoice;
+  const itext = invoiceAsText(iv);
+  check('the invoice text has the CGST and SGST and the total the calculator made', clean(itext) && itext.includes(`Total: ${money(iv.totalCents)}`) && itext.includes('CGST (9%)') && itext.includes('SGST (9%)') && itext.includes(`TDS to deduct (10%): -${money(Math.round((3650050 * 1000) / 10000))}`), itext.slice(0, 200));
+  const iStyle = await api('PATCH', `/agency/invoices/${iv.id}`, { doc: { style: { font: 'sans', margin: 'wide', accent: 'plum', logo: 'not-mine-at-all' } } }, O.token);
+  check('an invoice keeps a style of keys too', iStyle.json.invoice?.doc.style.font === 'sans' && iStyle.json.invoice.doc.style.margin === 'wide' && iStyle.json.invoice.doc.style.logo === '', iStyle.json.invoice?.doc.style);
+  const iMailDraft = await api('POST', `/agency/invoices/${iv.id}/email`, {}, O.token);
+  check('a draft invoice is not emailed', iMailDraft.status === 400, iMailDraft.json);
+  const kc = await api('POST', '/agency/contracts', { templateKey: 'trial', clientId: cid }, O.token);
+  check('a new agreement starts with the default look', (await api('GET', `/agency/contracts/${kc.json.id}`, undefined, O.token)).json.contract.doc.style?.heading === 'numbered', kc.json);
+
+  // house templates: only the super admin makes them; everyone else reads and copies
+  await api('PUT', '/agency/settings', { profile: { from: { name: 'Founder Studio', address: 'HOUSE-ADDR Road', taxIds: [], line: '', email: '', phone: '' }, bank: { bankName: 'Founder Bank', account: '111222333', holder: '', ifsc: '', upi: '' } } }, A.token);
+  const fcid = await mkClient(A, { name: 'Founder Client Ltd' });
+  const finv = await api('POST', `/agency/invoices?day=${today}`, { clientId: fcid, items: [{ description: 'House retainer', quantity: 1, unitCents: 1000000 }], doc: { gstBps: 1800 } }, A.token);
+  const fid = finv.json.invoice?.id;
+  const before = await api('GET', '/agency/templates?kind=invoice', undefined, X.token);
+  check('the picker lists house templates apart from your own', Array.isArray(before.json.templates) && before.json.templates.every((t) => t.scope === 'own' || t.scope === 'house'), before.json);
+  check('a normal user cannot make a house template', (await api('POST', '/admin/agency/templates', { kind: 'invoice', name: 'Mine', fromId: fid, includeBusiness: false }, O.token)).status === 403);
+  check('the shared admin key alone cannot either, since it is made from the admin\'s own paper', (await admin('POST', '/admin/agency/templates', { kind: 'invoice', name: 'Key', fromId: fid, includeBusiness: false })).status === 403);
+  const house = await api('POST', '/admin/agency/templates', { kind: 'invoice', name: `House invoice ${stamp}`, fromId: fid, includeBusiness: false }, A.token);
+  check('the super admin makes one from their own invoice', house.status === 201 && house.json.id, house.json);
+  check('the super admin cannot make one from someone else\'s invoice', (await api('POST', '/admin/agency/templates', { kind: 'invoice', name: 'Theirs', fromId: iv.id, includeBusiness: false }, A.token)).status === 400);
+  const hid = house.json.id;
+  const seen = await api('GET', '/agency/templates?kind=invoice', undefined, O.token);
+  const mine = seen.json.templates.find((t) => t.id === hid);
+  check('everyone sees it in the picker, marked as a house template', mine?.scope === 'house' && /1 line/.test(mine.summary), mine);
+  check('a normal user cannot change or retire it', (await api('PATCH', `/admin/agency/templates/${hid}`, { status: 'retired' }, O.token)).status === 403 && (await api('PATCH', `/agency/templates/${hid}`, { name: 'Taken' }, O.token)).status === 404 && (await api('DELETE', `/agency/templates/${hid}`, undefined, O.token)).status === 404);
+  const used = await api('POST', `/agency/invoices?day=${today}`, { clientId: cid, houseId: hid }, O.token);
+  const ud = used.json.invoice?.doc;
+  check('using it copies it into your own invoices, with your client and no one else\'s', used.status === 201 && ud.to.name === 'Docs Co' && ud.gstBps === 1800 && used.json.invoice.items[0].description === 'House retainer', used.json);
+  check('and none of the admin\'s business details, client or bank', !JSON.stringify(used.json).includes('Founder Studio') && !JSON.stringify(used.json).includes('111222333') && !JSON.stringify(used.json).includes('HOUSE-ADDR') && !JSON.stringify(used.json).includes('Founder Client'), ud?.from);
+  const copy = await api('POST', '/agency/templates', { kind: 'invoice', houseId: hid }, O.token);
+  check('a house template can be copied to your own templates', copy.status === 201, copy.json);
+  const house2 = await api('POST', '/admin/agency/templates', { kind: 'invoice', name: `House with details ${stamp}`, fromId: fid, includeBusiness: true }, A.token);
+  const used2 = await api('POST', `/agency/invoices?day=${today}`, { clientId: cid, houseId: house2.json.id }, O.token);
+  check('with "include my business details" ticked, those details come too', used2.json.invoice?.doc.from.name === 'Founder Studio' && used2.json.invoice?.doc.bank.account === '111222333' && used2.json.invoice?.doc.to.name === 'Docs Co', used2.json.invoice?.doc.from);
+  const retire = await api('PATCH', `/admin/agency/templates/${hid}`, { status: 'retired' }, A.token);
+  const after = await api('GET', '/agency/templates?kind=invoice', undefined, O.token);
+  check('retiring it takes it out of the picker, and it cannot be used', retire.status === 200 && !after.json.templates.some((t) => t.id === hid) && (await api('POST', '/agency/invoices', { clientId: cid, houseId: hid }, O.token)).status === 404);
+  await api('PATCH', `/admin/agency/templates/${hid}`, { status: 'active' }, A.token);
+  check('and restoring brings it back', (await api('GET', '/agency/templates?kind=invoice', undefined, O.token)).json.templates.some((t) => t.id === hid));
+  const kcHouse = await api('POST', '/admin/agency/templates', { kind: 'contract', name: `House agreement ${stamp}`, fromId: (await api('POST', '/agency/contracts', { templateKey: 'project', clientId: fcid }, A.token)).json.id, includeBusiness: false }, A.token);
+  const kUsed = await api('POST', '/agency/contracts', { houseId: kcHouse.json.id, clientId: cid }, O.token);
+  const kDoc = (await api('GET', `/agency/contracts/${kUsed.json.id}`, undefined, O.token)).json.contract?.doc;
+  check('a house agreement is copied with your names, not the admin\'s', kUsed.status === 201 && kDoc.vars.client === 'Docs Co' && !JSON.stringify(kDoc).includes('Founder Client') && kDoc.sections.length > 3, kUsed.json);
+  const dHouse = await api('POST', '/admin/agency/templates', { kind: 'doc', name: `House brief ${stamp}`, fromId: (await api('POST', '/agency/docs', { kind: 'brief', clientId: fcid }, A.token)).json.id, includeBusiness: false }, A.token);
+  const dUsed = await api('POST', '/agency/docs', { houseId: dHouse.json.id, clientId: cid }, O.token);
+  check('a house document is copied the same way', dUsed.status === 201 && (await api('GET', `/agency/docs/${dUsed.json.id}`, undefined, O.token)).json.doc?.kind === 'brief', dUsed.json);
+
+  // export and delete
+  const exp = await api('GET', '/me/export', undefined, O.token);
+  check('the documents and their log are in the export', Array.isArray(exp.json.agencyDocs) && exp.json.agencyDocs.length >= 4 && Array.isArray(exp.json.agencyDocLog), Object.keys(exp.json).filter((k) => k.startsWith('agency')));
+  const gone = await api('DELETE', '/me', { confirm: 'DELETE' }, O.token);
+  check('deleting the account removes them', gone.status === 200, gone.json);
+  check('and the client link stops working', (await pub('GET', `/agency/doc/${dtok}`)).status === 404);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

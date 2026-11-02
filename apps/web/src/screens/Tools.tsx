@@ -1,4 +1,4 @@
-import { BADGES, isFeatured, TOOL_CATEGORIES, type Tool } from '@kreators/shared';
+import { PUBLIC_BADGES, isFeatured, TOOL_CATEGORIES, type Tool } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button } from '../components/Button';
@@ -228,7 +228,7 @@ function SuggestSheet({ open, onClose, onDone, categories, reviewer }: { open: b
               <span className="block text-[14px] font-bold">Holds the badge</span>
               <select value={badge} onChange={(e) => setBadge(e.target.value)} className={field}>
                 <option value="">Any badge or none</option>
-                {BADGES.map((b) => (
+                {PUBLIC_BADGES.map((b) => (
                   <option key={b.key} value={b.key}>
                     {b.emoji} {b.name}
                   </option>

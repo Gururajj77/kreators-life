@@ -1,14 +1,15 @@
 import { Hono, type Context } from 'hono';
 import { rewardSocial, trustFor } from '../rewards';
-import { unlockFor } from '@kreators/shared';
+import { productPayWays, unlockFor } from '@kreators/shared';
 import { haveFor } from '../unlocks';
 import { pageOf, paged } from '../db';
 import { AFFILIATE_SHARE, levelFromXp, type Lesson, type PublicPage } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { DATE_RE, nameOf, newId, notify, nowIso, parseList, parseSocials, sessionUser, publicOf, getStats, computeBadges, grantedBadges, honorKeys, linksOf, withGranted } from '../db';
+import { DATE_RE, nameOf, newId, notify, nowIso, parseList, parseSocials, sessionUser, publicOf, getStats, badgeState, publicBadgeKeys, honorKeys, linksOf } from '../db';
 import { slotsFor, type AvailabilityOverride } from '@kreators/shared';
 import { paymentsConfig, providerFor } from '../payments';
 import { logEvent, sendEmail, track } from '../ops';
+import { quoteCode, redeem, release, type Quoted } from '../discounts';
 import { BOOKING_SELECT, ORDER_SELECT, PRODUCT_SELECT, TESTIMONIAL_SELECT, toBooking, toLesson, toOrder, toProduct, toTestimonial, type BookingRow, type LessonRow, type OrderRow, type ProductRow } from './studio';
 
 /** Public: no session needed. */
@@ -62,7 +63,7 @@ async function pageFor(c: Context<AppEnv>, owner: UserRow): Promise<PublicPage> 
     db.prepare("SELECT * FROM portfolio_items WHERE user_id = ? AND visibility = 'public' ORDER BY created_at DESC LIMIT 30").bind(owner.id).all<{ id: string; title: string; description: string; url: string; visibility: 'public' | 'private'; created_at: string }>(),
   ]);
   // None of these depends on another (the page view is only a count), so they go out together.
-  const [posts, stats, honors, friend, trust, granted] = await Promise.all([
+  const [posts, stats, honors, friend, trust] = await Promise.all([
     shows.posts
       ? db
           .prepare('SELECT p.id, p.category, p.body, p.created_at, (SELECT COUNT(*) FROM community_likes l WHERE l.post_id = p.id) AS likes, (SELECT COUNT(*) FROM community_replies r WHERE r.post_id = p.id AND r.hidden_at IS NULL) AS replies FROM community_posts p WHERE p.user_id = ? AND p.anonymous = 0 AND p.hidden_at IS NULL AND p.product_id IS NULL ORDER BY p.created_at DESC LIMIT 10')
@@ -73,9 +74,10 @@ async function pageFor(c: Context<AppEnv>, owner: UserRow): Promise<PublicPage> 
     shows.badges ? honorKeys(db, owner) : Promise.resolve([] as string[]),
     viewer && viewer.id !== owner.id ? db.prepare('SELECT id, requester_id, status FROM friendships WHERE (requester_id = ?1 AND recipient_id = ?2) OR (requester_id = ?2 AND recipient_id = ?1)').bind(viewer.id, owner.id).first<{ id: string; requester_id: string; status: string }>() : Promise.resolve(null),
     trustFor(db, owner.id),
-    shows.badges ? grantedBadges(db, owner.id) : Promise.resolve([] as string[]),
     !mine && open ? db.prepare("INSERT INTO page_events (owner_id, kind, ref, created_at) VALUES (?, 'view', NULL, ?)").bind(owner.id, nowIso()).run() : Promise.resolve(null),
   ]);
+  // Only the badges that are public: the journal, money and focus families never leave their owner. Reading another person's page writes nothing.
+  const shownBadges = stats && shows.badges ? publicBadgeKeys((await badgeState(db, owner, { stats, persist: false })).keys) : [];
   const page: PublicPage = {
     id: owner.id,
     handle: owner.handle ?? '',
@@ -105,7 +107,7 @@ async function pageFor(c: Context<AppEnv>, owner: UserRow): Promise<PublicPage> 
     allowChats: open && ps.allowChats,
     posts: posts.results.map((p) => ({ id: p.id, category: p.category, body: p.body, likes: p.likes, replies: p.replies, createdAt: p.created_at })),
     activity: stats && shows.activity ? { level: levelFromXp(owner.xp), streak: owner.streak, areasSetUp: stats.relationshipsWithPillars, memberSince: owner.created_at } : null,
-    badges: stats && shows.badges ? withGranted(computeBadges(owner, stats), granted) : [],
+    badges: shownBadges,
     honors,
     links: shows.blocks ? linksOf(owner).filter((b) => b.on) : [],
   };
@@ -192,7 +194,9 @@ store.post('/:productId/checkout', async (c) => {
     const gate = unlockFor({ minPoints: product.min_points, minXp: product.min_xp, badge: product.badge }, await haveFor(db, user));
     if (!gate.ok) return c.json({ error: gate.why, unlock: gate }, 403);
   }
-  const body = await c.req.json<{ coupon?: string; affiliate?: string; pay?: string; points?: number; question?: string; intake?: unknown; replay?: boolean; click?: string; src?: string }>().catch(() => ({}) as Record<string, never>);
+  const body = await c.req.json<{ coupon?: string; discountCode?: string; affiliate?: string; pay?: string; points?: number; question?: string; intake?: unknown; replay?: boolean; click?: string; src?: string }>().catch(() => ({}) as Record<string, never>);
+
+  if (typeof body.coupon === 'string' && body.coupon.trim() && typeof body.discountCode === 'string' && body.discountCode.trim()) return c.json({ error: 'Use one code at a time: the creator coupon or the kreators.app code.' }, 400);
 
   // Replays: an event recording sold to people who missed the event.
   const replay = body.replay === true && product.kind === 'event';
@@ -219,6 +223,10 @@ store.post('/:productId/checkout', async (c) => {
   const intake = Array.isArray(body.intake) ? body.intake.map((x) => String(x).trim().slice(0, 500)).slice(0, intakeQs.length) : [];
   if (product.kind !== 'session' && intakeQs.length > 0 && intake.filter(Boolean).length < intakeQs.length) return c.json({ error: 'answer the questions first' }, 400);
 
+  // Not every product takes points: one priced in money only is bought with money, never free by sending `pay: 'points'`.
+  if (!replay && body.pay !== 'test' && body.pay !== 'money' && !productPayWays({ pricePoints: product.price_points, priceCents: product.price_cents, pwyw: product.pwyw === 1 }).points) {
+    return c.json({ error: 'This one is paid for with money, not points.' }, 400);
+  }
   let points = replay ? product.replay_points : product.price_points;
   let cents = replay ? 0 : product.price_cents;
   if (product.pwyw === 1 && !replay) {
@@ -241,13 +249,29 @@ store.post('/:productId/checkout', async (c) => {
   }
   // Money is only asked for when the product has a money price; a product priced in points only is never free through the test path.
   const wantsMoney = (body.pay === 'test' || body.pay === 'money') && cents > 0;
+  // A code from the team (not the creator's own coupon above). The price is worked out here from the product's own price, for the way the
+  // person chose to pay: money, or points. The platform pays what the code takes off, so the seller is still settled on the list price.
+  const listCents = wantsMoney ? cents : 0;
+  const listPoints = wantsMoney ? 0 : points;
+  let discount: Extract<Quoted, { ok: true }> | null = null;
+  if (typeof body.discountCode === 'string' && body.discountCode.trim()) {
+    if (couponCode) return c.json({ error: 'Use one code at a time: the creator coupon or the kreators.app code.' }, 400);
+    const q = await quoteCode(db, user.id, body.discountCode, 'product', product.id, { cents: listCents, points: listPoints, currency: product.currency });
+    if (!q.ok) return c.json({ error: q.why }, 400);
+    discount = q;
+    if (wantsMoney) cents = q.quote.payCents;
+    else points = q.quote.payPoints;
+  }
   const provider = providerFor(c.env);
   // With provider keys, money orders wait for the provider's webhook; without them the order is recorded and nothing is charged.
+  // A money order that a code brought to nothing is a free order: no provider is asked and it is paid at once.
   const live = wantsMoney && provider.name === 'razorpay' && cents > 0;
-  const pay = wantsMoney ? 'test' : 'points';
+  const pay = wantsMoney && cents > 0 ? 'test' : 'points';
   const status: 'paid' | 'test' | 'pending' = live ? 'pending' : pay === 'test' ? 'test' : 'paid';
-  await track(db, user.id, 'checkout_started', { productId: product.id, kind: product.kind, points, cents, live });
-  if (pay === 'points' && user.points < points) return c.json({ error: `you need ${points - user.points} more points` }, 400);
+  // What the person pays in points: nothing on the money path, whatever the product also costs in points.
+  const owe = pay === 'points' && !wantsMoney ? points : 0;
+  await track(db, user.id, 'checkout_started', { productId: product.id, kind: product.kind, points: owe, cents, live });
+  if (owe > 0 && user.points < owe) return c.json({ error: `you need ${owe - user.points} more points` }, 400);
   let affiliateCode: string | null = null;
   let affiliate: UserRow | null = null;
   if (typeof body.affiliate === 'string' && body.affiliate.trim()) {
@@ -257,33 +281,53 @@ store.post('/:productId/checkout', async (c) => {
   }
   const owner = await db.prepare('SELECT fee_bps FROM users WHERE id = ?').bind(product.owner_id).first<{ fee_bps: number }>();
   const feeBps = owner?.fee_bps ?? 500;
-  const paidPoints = pay === 'points' ? points : 0;
-  const fee = Math.round((paidPoints * feeBps) / 10000);
-  const share = affiliate ? Math.round(paidPoints * AFFILIATE_SHARE) : 0;
+  const paidPoints = owe;
+  // The seller's side is worked out on the list price, so a code the platform pays for never costs the seller anything.
+  const settledPoints = wantsMoney ? 0 : listPoints;
+  const fee = Math.round((settledPoints * feeBps) / 10000);
+  const share = affiliate ? Math.round(settledPoints * AFFILIATE_SHARE) : 0;
   const src = await attribution(db, c, body, product.owner_id);
 
   const id = newId();
   const now = nowIso();
+  // Take the use of the code first (two guarded statements), and give it back if anything below fails.
+  if (discount) {
+    const why = await redeem(db, { row: discount.row, userId: user.id, area: 'product', itemId: product.id, ref: id, offCents: discount.quote.offCents, offPoints: discount.quote.offPoints, currency: product.currency });
+    if (why) return c.json({ error: why }, 409);
+  }
+  // The points leave the buyer first, with a guarded update, so two taps at once cannot spend the same points twice.
+  if (paidPoints > 0) {
+    const debit = await db.prepare('UPDATE users SET points = points - ? WHERE id = ? AND points >= ?').bind(paidPoints, user.id, paidPoints).run();
+    if (debit.meta.changes !== 1) {
+      if (discount) await release(db, id);
+      return c.json({ error: `you need ${paidPoints - user.points} more points` }, 400);
+    }
+  }
+  const undo = async () => {
+    if (paidPoints > 0) await db.prepare('UPDATE users SET points = points + ? WHERE id = ?').bind(paidPoints, user.id).run();
+    if (discount) await release(db, id);
+  };
   let providerOrderId: string | null = null;
   if (live) {
     try {
       providerOrderId = (await provider.createOrder({ amountCents: cents, currency: product.currency, receipt: id, notes: { product: product.title.slice(0, 60) } })).providerOrderId;
     } catch (e) {
+      await undo();
       return c.json({ error: e instanceof Error ? e.message : 'the payment provider is not answering' }, 502);
     }
   }
   const expiresAt = product.kind === 'membership' && product.period_months ? new Date(Date.now() + product.period_months * 30 * 86_400_000).toISOString() : null;
   const stmts = [
     db
-      .prepare('INSERT INTO orders (id, buyer_id, product_id, owner_id, points, cents, currency, status, coupon_code, affiliate_code, created_at, source_link_id, click_id, platform_fee_points, intake_json, variant, provider, provider_order_id, paid_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, user.id, product.id, product.owner_id, paidPoints, pay === 'test' ? cents : 0, product.currency, status, couponCode, affiliateCode, now, src.linkId, src.clickId, fee, JSON.stringify(product.kind === 'dm' && live ? [question] : intake), replay ? 'replay' : '', live ? 'razorpay' : pay === 'test' ? 'test' : 'points', providerOrderId, live ? null : now, expiresAt),
+      .prepare('INSERT INTO orders (id, buyer_id, product_id, owner_id, points, cents, currency, status, coupon_code, affiliate_code, created_at, source_link_id, click_id, platform_fee_points, intake_json, variant, provider, provider_order_id, paid_at, expires_at, list_cents, list_points, discount_code_id, discount_cents, discount_points) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, user.id, product.id, product.owner_id, paidPoints, pay === 'test' ? cents : 0, product.currency, status, couponCode, affiliateCode, now, src.linkId, src.clickId, fee, JSON.stringify(product.kind === 'dm' && live ? [question] : intake), replay ? 'replay' : '', live ? 'razorpay' : pay === 'test' ? 'test' : 'points', providerOrderId, live ? null : now, expiresAt, discount ? listCents : 0, discount ? listPoints : 0, discount?.row.id ?? null, discount ? discount.quote.offCents : 0, discount ? discount.quote.offPoints : 0),
   ];
-  if (paidPoints > 0) {
+  // The buyer's points already left above. The seller is credited on the list price; the difference is what the code took off, paid by the platform.
+  if (settledPoints > 0) {
+    if (paidPoints > 0) stmts.push(db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(user.id, -paidPoints, 'purchase', id, now));
     stmts.push(
-      db.prepare('UPDATE users SET points = points - ? WHERE id = ? AND points >= ?').bind(paidPoints, user.id, paidPoints),
-      db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(user.id, -paidPoints, 'purchase', id, now),
-      db.prepare('UPDATE users SET points = points + ? WHERE id = ?').bind(paidPoints - share - fee, product.owner_id),
-      db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(product.owner_id, paidPoints - share - fee, 'sale', id, now),
+      db.prepare('UPDATE users SET points = points + ? WHERE id = ?').bind(settledPoints - share - fee, product.owner_id),
+      db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(product.owner_id, settledPoints - share - fee, 'sale', id, now),
     );
     if (affiliate && share > 0) {
       stmts.push(
@@ -303,13 +347,18 @@ store.post('/:productId/checkout', async (c) => {
   if (product.lead_magnet === 1 && paidPoints === 0 && cents === 0) {
     stmts.push(db.prepare('INSERT INTO leads (id, owner_id, name, email, message, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(newId(), product.owner_id, nameOf(user), user.email ?? '', `Got ${product.title}`, 'lead_magnet', now));
   }
-  await db.batch(stmts);
-  await logEvent(db, 'order', id, live ? 'order.pending' : 'order.paid', { points: paidPoints, cents, provider: live ? 'razorpay' : pay });
+  try {
+    await db.batch(stmts);
+  } catch (e) {
+    await undo();
+    throw e;
+  }
+  await logEvent(db, 'order', id, live ? 'order.pending' : 'order.paid', { points: paidPoints, cents, provider: live ? 'razorpay' : pay, ...(discount ? { code: discount.row.code, offCents: discount.quote.offCents, offPoints: discount.quote.offPoints } : {}) });
   if (!live) {
     await track(db, user.id, 'payment_succeeded', { productId: product.id, method: pay });
-    await notify(db, product.owner_id, 'order', `${nameOf(user)} got ${product.title}${replay ? ' (replay)' : ''}`, pay === 'points' ? `${points} points${src.linkId ? ', via a tracked link' : ''}` : `${(cents / 100).toFixed(2)} ${product.currency}, test mode`, product.kind === 'dm' ? '/shop/dm' : `/shop/products/${product.id}`);
+    await notify(db, product.owner_id, 'order', `${nameOf(user)} got ${product.title}${replay ? ' (replay)' : ''}`, pay === 'points' ? `${paidPoints} points${src.linkId ? ', via a tracked link' : ''}` : `${(cents / 100).toFixed(2)} ${product.currency}, test mode`, product.kind === 'dm' ? '/shop/dm' : `/shop/products/${product.id}`);
     if (affiliate) await notify(db, affiliate.id, 'affiliate', 'Your link made a sale', `${product.title}, ${share} points to you`, '/shop/audience');
-    await sendEmail(db, c.env, { userId: user.id, to: user.email, subject: `Your receipt: ${product.title}`, body: `You got ${product.title}${pay === 'points' ? ` for ${points} points` : ''}. Find it under My purchases.` });
+    await sendEmail(db, c.env, { userId: user.id, to: user.email, subject: `Your receipt: ${product.title}`, body: `You got ${product.title}${pay === 'points' && paidPoints > 0 ? ` for ${paidPoints} points` : ''}${discount ? ` with the code ${discount.row.code}` : ''}. Find it under My purchases.` });
   }
   const row = await db.prepare(`${ORDER_SELECT} WHERE o.id = ?`).bind(id).first<OrderRow>();
   return c.json({ order: row ? toOrder(row) : null, payment: live ? { mode: 'razorpay' as const, keyId: paymentsConfig(c.env).keyId, providerOrderId, amountCents: cents, currency: product.currency } : null }, 201);

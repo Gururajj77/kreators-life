@@ -15,7 +15,7 @@ import {
   type RelationshipState,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { computeBadges, getStats, getUser, grantedBadges, honorKeys, withGranted, newId, nowIso, parseModules, randomCode, str, toUser, publicOf } from '../db';
+import { badgeState, badgesFor, getStats, getUser, honorKeys, newId, nowIso, parseModules, randomCode, str, toUser, publicOf } from '../db';
 import { resolveAccess } from '../access';
 import { hashPassword, randomHex } from './auth';
 import { sendEmail, track } from '../ops';
@@ -33,7 +33,7 @@ me.get('/', async (c) => {
     await db.prepare('UPDATE users SET referral_code = ? WHERE id = ? AND referral_code IS NULL').bind(randomCode(), user.id).run();
     user = (await getUser(db, user.id)) ?? user;
   }
-  const [scores, counts, stats, honors, resolved, unread, orgs, answeredRows, granted] = await Promise.all([
+  const [scores, counts, stats, honors, resolved, unread, orgs, answeredRows] = await Promise.all([
     db
       .prepare('SELECT relationship, score, xp FROM relationship_scores WHERE user_id = ?')
       .bind(user.id)
@@ -55,8 +55,9 @@ me.get('/', async (c) => {
     db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL').bind(user.id).first<{ n: number }>(),
     db.prepare("SELECT o.*, m.role AS my_role FROM organizations o JOIN organization_members m ON m.organization_id = o.id WHERE m.user_id = ? AND m.status = 'active' ORDER BY o.name").bind(user.id).all<{ id: string; name: string; type: Organization['type']; status: Organization['status']; created_at: string; my_role: 'owner' | 'member' }>(),
     db.prepare('SELECT DISTINCT relationship FROM onboarding_answers WHERE user_id = ?').bind(user.id).all<{ relationship: string }>(),
-    grantedBadges(db, user.id),
   ]);
+  // The badges: what the counts earn, what was earned before, and what the team gave. New ones are written down here.
+  const held = await badgeState(db, user, { stats });
 
   const scoreBy = new Map(scores.results.map((s) => [s.relationship, s]));
   const countBy = new Map(counts.results.map((s) => [s.relationship, s]));
@@ -84,7 +85,7 @@ me.get('/', async (c) => {
   const body: MeResponse = {
     user: toUser(user),
     relationships,
-    badges: withGranted(computeBadges(user, stats), granted),
+    badges: held.keys,
     honors,
     identity: evolutionFor(IDENTITY_STAGES, user.xp, daysSince(user.created_at)),
     moduleSettings: resolved.settings,
@@ -95,6 +96,9 @@ me.get('/', async (c) => {
   };
   return c.json(body);
 });
+
+// The badge gallery: what you hold with its date, and the count behind every rule so a bar can be drawn. Only you see this.
+me.get('/badges', async (c) => c.json(await badgesFor(c.env.DB, c.get('user'))));
 
 // How many times each link block on your page was tapped. Only you see this.
 me.get('/link-clicks', async (c) => {
@@ -261,6 +265,7 @@ me.get('/export', async (c) => {
     ['attendeeClaims', 'SELECT * FROM attendee_claims WHERE user_id = ?'],
     ['cardUnlocks', 'SELECT * FROM card_unlocks WHERE user_id = ?'],
     ['badgeGrants', 'SELECT * FROM badge_grants WHERE user_id = ?'],
+    ['badgeAwards', 'SELECT * FROM badge_awards WHERE user_id = ?'],
     ['focusRounds', 'SELECT * FROM focus_rounds WHERE user_id = ?'],
     ['discoverDraft', 'SELECT * FROM discover_drafts WHERE user_id = ?'],
     ['discoverSettings', 'SELECT * FROM discover_settings WHERE user_id = ?'],
@@ -278,6 +283,9 @@ me.get('/export', async (c) => {
     ['uploads', 'SELECT id, mime, size, created_at FROM media_files WHERE owner_id = ?'],
     ['mediaItems', 'SELECT * FROM media_items WHERE added_by = ?'],
     ['eventMessages', 'SELECT * FROM event_messages WHERE user_id = ?'],
+    ['channelLines', 'SELECT seq, id, channel_id, body, anonymous, reply_to, created_at, deleted_at FROM channel_messages WHERE user_id = ?'],
+    ['channelSeats', 'SELECT * FROM channel_members WHERE user_id = ?'],
+    ['channelsMade', 'SELECT * FROM channels WHERE created_by = ?'],
     ['eventNetworking', 'SELECT * FROM event_networking WHERE user_id = ?'],
     ['blocks', 'SELECT * FROM blocks WHERE blocker_id = ?'],
     ['waterLogs', 'SELECT * FROM water_logs WHERE user_id = ?'],
@@ -286,14 +294,21 @@ me.get('/export', async (c) => {
     ['calendarFeed', 'SELECT user_id, enabled, created_at FROM calendar_feeds WHERE user_id = ?'],
     ['customReminders', 'SELECT * FROM custom_reminders WHERE user_id = ?'],
     ['agencySettings', 'SELECT * FROM agency_settings WHERE user_id = ?'],
-    ['agencyClients', 'SELECT * FROM agency_clients WHERE user_id = ?'],
+    // The password hash and salt of a client link are never exported, nor are portal sessions.
+    ['agencyClients', 'SELECT id, user_id, name, contact_name, contact_email, status, health, channels_json, retainer_cents, pieces_per_month, hours_per_month, renewal_date, notes, campaign_id, billing_json, portal_token, portal_json, created_at, updated_at, stage, stage_since, lifecycle_json, ticks_json, revisions_per_piece, (portal_pass_hash IS NOT NULL) AS portal_has_password, portal_pass_set_at, portal_last_opened_day FROM agency_clients WHERE user_id = ?'],
+    ['agencyRetainers', 'SELECT * FROM agency_retainers WHERE user_id = ?'],
+    ['agencyCycles', 'SELECT * FROM agency_cycles WHERE user_id = ?'],
+    ['agencyLog', 'SELECT * FROM agency_log WHERE user_id = ?'],
     ['agencyItems', 'SELECT * FROM agency_items WHERE user_id = ?'],
     ['agencyNotes', 'SELECT * FROM agency_notes WHERE user_id = ?'],
     ['agencyTime', 'SELECT * FROM agency_time WHERE user_id = ?'],
     ['agencyContracts', 'SELECT * FROM agency_contracts WHERE user_id = ?'],
     ['agencyDocComments', 'SELECT * FROM agency_doc_comments WHERE user_id = ?'],
+    ['agencyDocs', 'SELECT * FROM agency_docs WHERE user_id = ?'],
+    ['agencyDocLog', 'SELECT * FROM agency_doc_log WHERE user_id = ?'],
     ['agencyTemplates', 'SELECT * FROM agency_templates WHERE user_id = ?'],
     ['kpiPrefs', 'SELECT * FROM kpi_prefs WHERE user_id = ?'],
+    ['discountRedemptions', 'SELECT r.id, c.code, r.area, r.ref, r.item_id, r.off_cents, r.off_points, r.currency, r.released_at, r.created_at FROM discount_redemptions r JOIN discount_codes c ON c.id = r.code_id WHERE r.user_id = ?'],
     ['kpis', 'SELECT * FROM kpis WHERE user_id = ?'],
     ['kpiValues', 'SELECT v.* FROM kpi_values v JOIN kpis k ON k.id = v.kpi_id WHERE k.user_id = ?'],
     // What you agreed to and chose, and the rest of what you wrote or earned.
@@ -374,6 +389,7 @@ me.post('/reset', async (c) => {
     db.prepare('DELETE FROM not_to_do WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM reviews WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM xp_events WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM badge_awards WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM spark_completions WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM onboarding_answers WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM assessments WHERE user_id = ?').bind(user.id),

@@ -1,3 +1,4 @@
+import { quoteCode, redeem, release, type Quoted } from '../discounts';
 import { Hono } from 'hono';
 import type { Cohort, CohortSession, CourseAssignment, Enrollment, LearningItem, Program, Submission } from '@kreators/shared';
 import type { AppEnv } from '../env';
@@ -103,15 +104,39 @@ school.post('/cohorts/:id/enroll', async (c) => {
   const user = c.get('user');
   const k = await db.prepare(`${COHORT_SELECT} WHERE k.id = ?`).bind(c.req.param('id')).first<CohortRow & { price_points?: number }>();
   if (!k) return c.json({ error: 'not found' }, 404);
-  const prog = await db.prepare('SELECT price_points, price_cents, published FROM programs WHERE id = ?').bind(k.program_id).first<{ price_points: number; price_cents: number; published: number }>();
+  const prog = await db.prepare('SELECT price_points, price_cents, currency, published FROM programs WHERE id = ?').bind(k.program_id).first<{ price_points: number; price_cents: number; currency: string; published: number }>();
   if (!prog || prog.published !== 1) return c.json({ error: 'this program is not open' }, 400);
   if (k.status === 'finished' || k.status === 'cancelled') return c.json({ error: 'this cohort is closed' }, 400);
-  const body = await c.req.json<{ pay?: string }>().catch(() => ({}) as { pay?: string });
+  const body = await c.req.json<{ pay?: string; discountCode?: string }>().catch(() => ({}) as { pay?: string; discountCode?: string });
   // Test mode is for a program with a money price; a program priced in points always takes the points.
   const pay = body.pay === 'test' && prog.price_cents > 0 && prog.price_points === 0 ? 'test' : prog.price_points > 0 ? 'points' : 'free';
-  if (pay === 'points' && user.points < prog.price_points) return c.json({ error: `you need ${prog.price_points - user.points} more points` }, 400);
+  // A code from the team: the price is worked out here from the program's own price, for the way the person pays. The platform pays what it takes off.
+  let discount: Extract<Quoted, { ok: true }> | null = null;
+  let owe = pay === 'points' ? prog.price_points : 0;
+  let payment: string = pay === 'points' ? 'paid' : pay;
+  if (typeof body.discountCode === 'string' && body.discountCode.trim()) {
+    if (pay === 'free') return c.json({ error: 'This program costs nothing, so there is nothing to take off.' }, 400);
+    const q = await quoteCode(db, user.id, body.discountCode, 'program', k.program_id, pay === 'points' ? { cents: 0, points: prog.price_points, currency: prog.currency } : { cents: prog.price_cents, points: 0, currency: prog.currency });
+    if (!q.ok) return c.json({ error: q.why }, 400);
+    discount = q;
+    if (pay === 'points') owe = q.quote.payPoints;
+    else if (q.quote.payCents === 0) payment = 'free';
+  }
+  if (owe > 0 && user.points < owe) return c.json({ error: `you need ${owe - user.points} more points` }, 400);
   const id = newId();
   const now = nowIso();
+  if (discount) {
+    const why = await redeem(db, { row: discount.row, userId: user.id, area: 'program', itemId: k.program_id, ref: id, offCents: discount.quote.offCents, offPoints: discount.quote.offPoints, currency: prog.currency });
+    if (why) return c.json({ error: why }, 409);
+  }
+  // The points leave first, with a guarded update, so two taps at once cannot spend the same points twice.
+  if (owe > 0) {
+    const debit = await db.prepare('UPDATE users SET points = points - ? WHERE id = ? AND points >= ?').bind(owe, user.id, owe).run();
+    if (debit.meta.changes !== 1) {
+      if (discount) await release(db, id);
+      return c.json({ error: `you need ${owe - user.points} more points` }, 400);
+    }
+  }
   // One statement takes the seat: it only inserts while a seat is free and the learner is not already in.
   const ins = await db
     .prepare(
@@ -120,15 +145,14 @@ school.post('/cohorts/:id/enroll', async (c) => {
        WHERE (SELECT COUNT(*) FROM enrollments WHERE cohort_id = ?2 AND status != 'withdrawn') < (SELECT capacity FROM cohorts WHERE id = ?2)
          AND NOT EXISTS (SELECT 1 FROM enrollments WHERE cohort_id = ?2 AND learner_user_id = ?3)`,
     )
-    .bind(id, k.id, user.id, pay === 'points' ? 'paid' : pay, now)
+    .bind(id, k.id, user.id, payment, now)
     .run();
-  if (ins.meta.changes !== 1) return c.json({ error: 'full, or you are already in' }, 409);
-  if (pay === 'points') {
-    await db.batch([
-      db.prepare('UPDATE users SET points = points - ? WHERE id = ?').bind(prog.price_points, user.id),
-      db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(user.id, -prog.price_points, 'enrollment', id, now),
-    ]);
+  if (ins.meta.changes !== 1) {
+    if (owe > 0) await db.prepare('UPDATE users SET points = points + ? WHERE id = ?').bind(owe, user.id).run();
+    if (discount) await release(db, id);
+    return c.json({ error: 'full, or you are already in' }, 409);
   }
+  if (owe > 0) await db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(user.id, -owe, 'enrollment', id, now).run();
   if (k.manager_user_id) await notify(db, k.manager_user_id, 'school', `${nameOf(user)} joined ${k.name}`, '', `/school/${k.id}`);
   return c.json({ ok: true, id }, 201);
 });

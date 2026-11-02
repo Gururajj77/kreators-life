@@ -1,4 +1,4 @@
-import { PRODUCT_KIND_META, type CourseDraft, type Lesson, type QuizQuestion , BADGES, HONORS, FAQ_A_MAX, FAQ_Q_MAX, MAX_FAQ, type ProductFaq } from '@kreators/shared';
+import { PRODUCT_KIND_META, productPayWays, type CourseDraft, type Lesson, type QuizQuestion , PUBLIC_BADGES, HONORS, FAQ_A_MAX, FAQ_Q_MAX, MAX_FAQ, type ProductFaq } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -200,6 +200,14 @@ export function StudioProduct() {
             <input type="number" min={0} value={priceCents} onChange={(e) => setPriceCents(e.target.value)} className={field} />
           </label>
         )}
+        {priced && (
+          <p className="m-0 text-[12px] font-bold text-ink-soft">
+            {(() => {
+              const w = productPayWays({ pricePoints: Number(pricePoints) || 0, priceCents: Number(priceCents) || 0, pwyw });
+              return w.free ? 'With both prices at 0 this is free.' : w.points && w.money ? 'Buyers can pay with points or with money.' : w.money ? 'Buyers pay with money only. Set a points price above 0 to let them pay with points too.' : 'Buyers pay with points only. Add a money price to let them pay with money too.';
+            })()}
+          </p>
+        )}
         <fieldset className="m-0 rounded-tile border-2 border-line p-sm">
           <legend className="px-xs text-[14px] font-bold">Who can buy</legend>
           <p className="m-0 text-[12px] font-bold text-ink-soft">Leave them empty and anyone can. Set an xp floor, a points floor, a badge, or any mix, and only people who earned them can. A super admin is never locked out.</p>
@@ -216,7 +224,7 @@ export function StudioProduct() {
               <span className="block text-[14px] font-bold">Holds the badge</span>
               <select value={badge} onChange={(e) => setBadge(e.target.value)} className={field}>
                 <option value="">Any badge or none</option>
-                {BADGES.map((b) => (
+                {PUBLIC_BADGES.map((b) => (
                   <option key={b.key} value={b.key}>
                     {b.emoji} {b.name}
                   </option>

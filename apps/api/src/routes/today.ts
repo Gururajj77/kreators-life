@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { PLAN_DAY_MINUTES, planWeek, type PlanTask, MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, notToDoStreak, notToDoWeek, POINTS, RELATIONSHIPS, sparkFor, XP, zonedToUtc, type CheckinResponse, type NotToDo, type NotToDoStatus, type RelationshipKey, type TodayResponse } from '@kreators/shared';
+import { MONTH_RE, MONTH_TASKS_MAX, monthShift, repeatLabel, type MonthProject, type MonthTask, type TodayMonthResponse, PLAN_DAY_MINUTES, planWeek, type PlanTask, MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, notToDoStreak, notToDoWeek, POINTS, RELATIONSHIPS, sparkFor, XP, zonedToUtc, type CheckinResponse, type NotToDo, type NotToDoStatus, type RelationshipKey, type TodayResponse } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { DATE_RE, dateNearToday, getUser, newId, notify, nowIso, shiftDate, toNode, type NodeRow, taskGate, withSubtasks } from '../db';
 
@@ -167,6 +167,56 @@ today.get('/week-plan', async (c) => {
     .all<{ id: string; title: string; relationship: RelationshipKey; estimate_min: number | null; priority: number | null; do_date: string | null; due_date: string | null; origin: string | null }>();
   const tasks: PlanTask[] = rows.results.map((r) => ({ id: r.id, title: r.title, relationship: r.relationship, estimateMin: r.estimate_min, priority: (r.priority as PlanTask['priority']) ?? null, doDate: r.do_date, dueDate: r.due_date, fromPillar: r.origin === 'build' }));
   return c.json({ plan: planWeek(date, tasks, hours * 60) });
+});
+
+// The month calendar on Daily: every task whose day (do date, else due date) falls in the month, ticked ones included, and the projects a new task can go under.
+// Bounded: at most MONTH_TASKS_MAX tasks (one extra row is read so `more` is true); the person's own, filtered by the session user.
+today.get('/month', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const month = c.req.query('month') ?? '';
+  if (!MONTH_RE.test(month)) return c.json({ error: 'month must be a real month like 2026-11' }, 400);
+  const dayAsked = c.req.query('day');
+  if (dayAsked !== undefined && !DATE_RE.test(dayAsked)) return c.json({ error: 'day must be a real day like 2026-11-02' }, 400);
+  const start = `${month}-01`;
+  const end = `${monthShift(month, 1)}-01`;
+  const [gate, rows, projects] = await Promise.all([
+    taskGate(db, user.id),
+    db
+      .prepare(
+        `SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status IN ('active', 'done')
+         AND COALESCE(do_date, due_date) >= ? AND COALESCE(do_date, due_date) < ?
+         ORDER BY COALESCE(do_date, due_date) ASC, CASE WHEN due_time IS NULL THEN 1 ELSE 0 END, due_time ASC, CASE WHEN priority IS NULL THEN 1 ELSE 0 END, priority ASC, created_at ASC LIMIT ?`,
+      )
+      .bind(user.id, start, end, MONTH_TASKS_MAX + 1)
+      .all<NodeRow>(),
+    db
+      .prepare("SELECT id, title, relationship FROM nodes WHERE user_id = ? AND kind = 'project' AND status = 'active' ORDER BY relationship ASC, sort_order ASC, created_at ASC LIMIT 100")
+      .bind(user.id)
+      .all<MonthProject>(),
+  ]);
+  const more = rows.results.length > MONTH_TASKS_MAX;
+  const tasks: MonthTask[] = rows.results.slice(0, MONTH_TASKS_MAX).map((r) => {
+    const n = toNode(r, gate);
+    const day = n.doDate ?? n.dueDate ?? start;
+    return {
+      id: n.id,
+      title: n.title,
+      relationship: n.relationship,
+      doDate: n.doDate,
+      dueDate: n.dueDate,
+      day,
+      status: n.status === 'done' ? 'done' : 'active',
+      priority: n.priority,
+      time: n.dueTime,
+      estimateMin: n.estimateMin,
+      repeat: n.repeat ? repeatLabel(n.repeat, day) : null,
+      readyAt: n.readyAt,
+      completedAt: n.completedAt,
+    };
+  });
+  const res: TodayMonthResponse = { month, today: dayAsked ?? dateParam(undefined), tasks, more, projects: projects.results };
+  return c.json(res);
 });
 
 today.post('/checkin', async (c) => {

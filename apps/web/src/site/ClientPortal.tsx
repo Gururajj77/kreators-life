@@ -6,40 +6,54 @@ import {
   DELIVERABLE_STAGE_TONE,
   INVOICE_STATUS_NAME,
   INVOICE_STATUS_TONE,
+  NOTE_KIND_NAME,
+  changesLabel,
+  changesLeft,
   minutesLabel2,
   money,
+  type DeliverableStage,
   type PortalView,
 } from '@kreators/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Button } from '../components/Button';
 import { Inert } from '../components/Inert';
+import { PortalLock } from '../components/PortalLock';
+import { StageBar } from '../components/StageBar';
 import { StatusTag } from '../components/StatusTag';
 import { ApiError, publicApi } from '../lib/api';
 import { prettyDate } from '../lib/date';
+import { forgetPortalSessions } from '../lib/portalSession';
 import { SiteLayout } from './SiteLayout';
 
 const COPY = {
   loading: 'Loading.',
   gone: 'No page at this link. Ask the person who sent it for a fresh link.',
-  waitingLede: 'These are ready for you. Watch each one, then approve it or send it back with a note.',
+  waitingLede: 'These are ready for you. Watch each one, then approve it or ask for a change.',
   waitingViewOnly: 'These are ready for you to look at.',
   comingLede: 'What is being made, and the day it should go live.',
   publishedLede: 'What has gone live.',
   nothingWaiting: 'Nothing is waiting for you right now.',
-  sentBack: 'Sent back. They will get your note.',
+  changeAsked: 'Sent. It is back in making, and they have your note.',
+  paidAsked: 'Sent. They will come back to you about it.',
   approved: 'Approved. Thank you.',
   noted: 'Your note was sent.',
-  needNote: 'Say what to change, then send it back.',
+  needNote: 'Say what to change first.',
+  noneLeft: 'You have used all the changes included in this piece. A further change is paid for separately.',
+  failed: 'That did not go through. Try again.',
 };
 
 const dot = (s: string | null) => (s ? prettyDate(s.slice(0, 10)) : '');
 /** Only a real https address is ever a link. */
 const safe = (u: string) => u.startsWith('https://');
 
-function Card({ children }: { children: React.ReactNode }) {
-  return <li className="list-none rounded-tile bg-card p-sm shadow-toy-soft">{children}</li>;
+function Card({ children, id }: { children: React.ReactNode; id?: string }) {
+  return (
+    <li id={id} className="list-none rounded-tile bg-card p-sm shadow-toy-soft">
+      {children}
+    </li>
+  );
 }
 
 function Heading({ id, title, lede }: { id: string; title: string; lede?: string }) {
@@ -53,84 +67,93 @@ function Heading({ id, title, lede }: { id: string; title: string; lede?: string
   );
 }
 
-/** One deliverable waiting for the client: watch it, read the thread, then approve, send it back or write a note. */
-function Waiting({ token, view, item, onDone }: { token: string; view: PortalView; item: PortalView['waiting'][number]; onDone: (line: string) => void }) {
+const area = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
+
+/**
+ * What a client can do with one piece: approve it, ask for a change (which spends one of the changes included in it and sends it back to
+ * making), ask for a paid change when none are left, or leave a comment. What the owner switched off is not offered.
+ */
+function PieceActions({ token, view, id, stage, changes, onDone }: { token: string; view: PortalView; id: string; stage: DeliverableStage; changes: { used: number; allowed: number }; onDone: (line: string) => void }) {
+  const can = view.show;
+  const [mode, setMode] = useState<null | 'change' | 'paid' | 'comment'>(null);
   const [note, setNote] = useState('');
+  const [where, setWhere] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const can = view.show;
-  const act = async (decision: 'approve' | 'changes' | 'comment') => {
-    if (decision === 'changes' && !note.trim()) {
-      setError(COPY.needNote);
+  const left = changesLeft(changes.used, changes.allowed);
+  const canChange = can.canApprove && (stage === 'review' || stage === 'approved');
+  const canPaid = can.canApprove && changes.used >= changes.allowed && stage !== 'idea';
+
+  const send = async (decision: 'approve' | 'changes' | 'paid_change' | 'comment') => {
+    if (decision !== 'approve' && !note.trim()) {
+      setError(decision === 'comment' ? 'Write something first.' : COPY.needNote);
       return;
     }
     setBusy(true);
     setError('');
     try {
-      await publicApi.portalDecide(token, item.id, { decision, note: note.trim() || undefined });
+      await publicApi.portalDecide(token, id, { decision, note: note.trim() || undefined, where: where.trim() || undefined });
       setNote('');
-      onDone(decision === 'approve' ? COPY.approved : decision === 'changes' ? COPY.sentBack : COPY.noted);
+      setWhere('');
+      setMode(null);
+      onDone(decision === 'approve' ? COPY.approved : decision === 'changes' ? COPY.changeAsked : decision === 'paid_change' ? COPY.paidAsked : COPY.noted);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'That did not go through. Try again.');
+      setError(e instanceof ApiError ? e.message : COPY.failed);
     } finally {
       setBusy(false);
     }
   };
-  const meta = [DELIVERABLE_KIND_NAME[item.kind], item.platform, item.publishDate ? `goes live ${dot(item.publishDate)}` : ''].filter(Boolean).join(', ');
+
+  if (!can.canApprove && !can.canComment) return null;
   return (
-    <Card>
-      <p className="m-0 text-[16px] font-extrabold">
-        <Inert text={item.title} />
-      </p>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{meta}</p>
-      {safe(item.link) && (
-        <p className="mt-xs m-0">
-          <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-[14px] font-bold text-ink underline underline-offset-4">
-            Watch it
-          </a>
-        </p>
-      )}
-      {item.thread.length > 0 && (
-        <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0" aria-label="Notes">
-          {item.thread.map((t, i) => (
-            <li key={`${t.createdAt}-${i}`} className={`rounded-tile p-sm text-[14px] font-semibold ${t.author === 'client' ? 'bg-paper' : 'bg-card-strong'}`}>
-              <span className="block text-[12px] font-extrabold text-ink-soft">{t.author === 'client' ? 'You' : view.agencyName}</span>
-              <span className="whitespace-pre-wrap">
-                <Inert text={t.body} />
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {(can.canApprove || can.canComment) && (
-        <div className="mt-sm no-print">
-          <label className="block text-[14px] font-bold" htmlFor={`note-${item.id}`}>
-            {can.canApprove ? 'Your note (needed to send it back)' : 'Your note'}
+    <div className="mt-sm no-print">
+      {stage !== 'published' && <p className="m-0 text-[12px] font-bold text-ink-soft">{changesLabel(changes.used, changes.allowed)}</p>}
+      <div className="mt-xs flex flex-wrap gap-xs">
+        {can.canApprove && stage === 'review' && (
+          <Button size="sm" onClick={() => send('approve')} disabled={busy}>
+            Approve
+          </Button>
+        )}
+        {canChange && left > 0 && (
+          <Button size="sm" variant="outline" onClick={() => setMode(mode === 'change' ? null : 'change')} aria-expanded={mode === 'change'} disabled={busy}>
+            Ask for a change
+          </Button>
+        )}
+        {canChange && left === 0 && (
+          <Button size="sm" variant="outline" onClick={() => setMode(mode === 'paid' ? null : 'paid')} aria-expanded={mode === 'paid'} disabled={busy}>
+            Ask for a paid change
+          </Button>
+        )}
+        {!canChange && canPaid && (
+          <Button size="sm" variant="outline" onClick={() => setMode(mode === 'paid' ? null : 'paid')} aria-expanded={mode === 'paid'} disabled={busy}>
+            Ask for a paid change
+          </Button>
+        )}
+        {can.canComment && (
+          <Button size="sm" variant="outline" onClick={() => setMode(mode === 'comment' ? null : 'comment')} aria-expanded={mode === 'comment'} disabled={busy}>
+            Leave a comment
+          </Button>
+        )}
+      </div>
+      {mode !== null && (
+        <div className="mt-sm">
+          {mode === 'paid' && <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.noneLeft}</p>}
+          {(mode === 'change' || mode === 'paid') && (
+            <>
+              <label className="mt-xs block text-[14px] font-bold" htmlFor={`where-${id}`}>
+                Where, if it helps (a time in the video, a line, a slide)
+              </label>
+              <input id={`where-${id}`} value={where} onChange={(e) => setWhere(e.target.value)} maxLength={60} placeholder="0:42" className={area} />
+            </>
+          )}
+          <label className="mt-xs block text-[14px] font-bold" htmlFor={`note-${id}`}>
+            {mode === 'comment' ? 'Your comment' : 'What should change?'}
           </label>
-          <textarea
-            id={`note-${item.id}`}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={3}
-            maxLength={500}
-            className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]"
-          />
-          <div className="mt-xs flex flex-wrap gap-xs">
-            {can.canApprove && (
-              <Button size="sm" onClick={() => act('approve')} disabled={busy}>
-                Approve
-              </Button>
-            )}
-            {can.canApprove && (
-              <Button size="sm" variant="outline" onClick={() => act('changes')} disabled={busy}>
-                Send back
-              </Button>
-            )}
-            {can.canComment && (
-              <Button size="sm" variant="outline" onClick={() => act('comment')} disabled={busy || !note.trim()}>
-                Send note
-              </Button>
-            )}
+          <textarea id={`note-${id}`} value={note} onChange={(e) => setNote(e.target.value)} rows={3} maxLength={500} className={area} />
+          <div className="mt-xs">
+            <Button size="sm" onClick={() => send(mode === 'change' ? 'changes' : mode === 'paid' ? 'paid_change' : 'comment')} disabled={busy || !note.trim()}>
+              {mode === 'comment' ? 'Send the comment' : mode === 'paid' ? 'Send the request' : 'Send the change'}
+            </Button>
           </div>
         </div>
       )}
@@ -139,21 +162,142 @@ function Waiting({ token, view, item, onDone }: { token: string; view: PortalVie
           {error}
         </p>
       )}
-    </Card>
+    </div>
   );
 }
 
-/** The client's dashboard at the link their agency or freelancer sent: only the parts that were switched on, and no sign-in. */
+/** A thing waiting on the client: a title, one line and where to do it. */
+function WaitingOn({ item }: { item: PortalView['waitingOn'][number] }) {
+  const inner = (
+    <>
+      <span className="block text-[16px] font-extrabold">{item.title}</span>
+      <span className="block text-[14px] font-semibold text-ink-soft">{item.line}</span>
+    </>
+  );
+  const cls = 'block rounded-tile bg-card p-sm shadow-toy-soft text-ink';
+  if (!item.href) return <li className={`list-none ${cls}`}>{inner}</li>;
+  if (item.href.startsWith('https://'))
+    return (
+      <li className="list-none">
+        <a href={item.href} target="_blank" rel="noopener noreferrer" className={`toy toy-soft ${cls}`}>
+          {inner}
+          <span className="mt-xs block text-[14px] font-bold underline underline-offset-4">Open the link</span>
+        </a>
+      </li>
+    );
+  if (item.href.startsWith('#'))
+    return (
+      <li className="list-none">
+        <a href={item.href} className={`toy toy-soft ${cls}`}>
+          {inner}
+        </a>
+      </li>
+    );
+  return (
+    <li className="list-none">
+      <Link to={item.href} className={`toy toy-soft ${cls}`}>
+        {inner}
+      </Link>
+    </li>
+  );
+}
+
+/** The retainer: pick a length from the offer, or read the one that is running. */
+function Retainer({ token, view, onDone }: { token: string; view: PortalView; onDone: (line: string) => void }) {
+  const r = view.retainer;
+  const [months, setMonths] = useState<number | null>(r?.chosenMonths ?? null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  if (!r) return null;
+  const choose = async () => {
+    if (!months) return;
+    setBusy(true);
+    setError('');
+    try {
+      await publicApi.portalRetainer(token, months);
+      onDone(`You chose ${months} months. They will confirm it.`);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : COPY.failed);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const open = r.status !== 'active';
+  return (
+    <section className="mt-lg" aria-labelledby="retainer-heading">
+      <Heading
+        id="retainer-heading"
+        title={r.status === 'active' ? 'Your retainer' : 'Choose how many months'}
+        lede={r.status === 'active' ? 'Pieces and an invoice come every month.' : r.status === 'chosen' ? 'You can change your mind until they confirm.' : 'Pick the length of the retainer. A longer one can cost less each month.'}
+      />
+      <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0" role={open ? 'radiogroup' : undefined} aria-label={open ? 'Retainer length' : undefined}>
+        {r.options.map((o) => {
+          const picked = open ? months === o.months : true;
+          const body = (
+            <>
+              <span className="block text-[16px] font-extrabold">{`${o.months} ${o.months === 1 ? 'month' : 'months'}`}</span>
+              <span className="block text-[14px] font-semibold text-ink-soft">
+                {`${money(o.monthlyCents, r.currency)} a month, ${money(o.totalCents, r.currency)} in all${o.discountBps > 0 ? `, ${o.discountBps % 100 === 0 ? o.discountBps / 100 : (o.discountBps / 100).toFixed(2)}% off` : ''}`}
+              </span>
+            </>
+          );
+          return open ? (
+            <li key={o.months} className="list-none">
+              <button type="button" role="radio" aria-checked={picked} onClick={() => setMonths(o.months)} className={`toy block w-full rounded-tile border-2 p-sm text-left ${picked ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
+                {body}
+                {picked && <span className="mt-xs block text-[12px] font-extrabold">Your pick</span>}
+              </button>
+            </li>
+          ) : (
+            <Card key={o.months}>{body}</Card>
+          );
+        })}
+      </ul>
+      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+        {`${r.piecesPerMonth} ${r.piecesPerMonth === 1 ? 'piece' : 'pieces'} a month, and ${r.revisionsPerPiece} ${r.revisionsPerPiece === 1 ? 'change' : 'changes'} included in each.`}
+        {r.status === 'active' && r.startDay ? ` Started ${dot(r.startDay)}.` : ''}
+      </p>
+      {open && (
+        <div className="mt-sm no-print">
+          <Button onClick={choose} disabled={busy || !months || (r.status === 'chosen' && months === r.chosenMonths)}>
+            {busy ? 'Sending' : r.status === 'chosen' ? 'Change my pick' : months ? `Choose ${months} months` : 'Pick a length'}
+          </Button>
+          {r.status === 'chosen' && months === r.chosenMonths && <span role="status" className="ml-xs text-[14px] font-bold">{`You chose ${r.chosenMonths} months. Waiting for them to confirm.`}</span>}
+          {error && (
+            <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+              {error}
+            </p>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** The client's dashboard at the link their agency or freelancer sent: the stage bar, what is waiting, and the parts that were switched on. A password may stand in front. */
 export function ClientPortal() {
   const { token = '' } = useParams();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['agency', 'portal', token], queryFn: () => publicApi.portal(token), retry: false });
   const [said, setSaid] = useState('');
   const v = q.data;
+  const locked = q.error instanceof ApiError && q.error.status === 401 && q.error.data.error === 'locked';
+  // A kept unlock the server no longer accepts (twelve hours, or the password changed) is dropped, so it is not sent again.
+  useEffect(() => {
+    if (locked) forgetPortalSessions();
+  }, [locked]);
   const done = (line: string) => {
     setSaid(line);
     void qc.invalidateQueries({ queryKey: ['agency', 'portal', token] });
   };
+
+  if (locked) {
+    return (
+      <SiteLayout wide={false}>
+        <PortalLock clientName={String((q.error as ApiError).data.clientName ?? '')} unlock={(pw) => publicApi.portalUnlock(token, pw)} onOpen={() => void qc.invalidateQueries({ queryKey: ['agency', 'portal', token] })} />
+      </SiteLayout>
+    );
+  }
 
   return (
     <SiteLayout wide={false}>
@@ -182,6 +326,63 @@ export function ClientPortal() {
               </p>
             )}
 
+            <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
+              <StageBar stage={v.stage} />
+            </div>
+
+            {v.waitingOn.length > 0 && (
+              <section className="mt-lg" aria-labelledby="waiting-on-heading">
+                <Heading id="waiting-on-heading" title="Waiting on you" lede="What to do next, in order." />
+                <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+                  {v.waitingOn.map((w) => (
+                    <WaitingOn key={w.key} item={w} />
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {v.strategy && (
+              <section className="mt-lg" aria-labelledby="strategy-heading">
+                <Heading id="strategy-heading" title="Strategy session" />
+                <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
+                  <p className="m-0 font-display text-[22px] font-extrabold leading-tight">{v.strategy.day ? dot(v.strategy.day) : 'A day will be shared here'}</p>
+                  {v.strategy.link && safe(v.strategy.link) && (
+                    <p className="mt-xs m-0">
+                      <a href={v.strategy.link} target="_blank" rel="noopener noreferrer" className="text-[14px] font-bold text-ink underline underline-offset-4">
+                        Join the call
+                      </a>
+                    </p>
+                  )}
+                  <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Bring your brand guide and three to five videos that show the feel you want.</p>
+                </div>
+              </section>
+            )}
+
+            {v.trial && (
+              <section className="mt-lg" aria-labelledby="trial-heading">
+                <Heading id="trial-heading" title="The trial video" lede={v.trial.due ? `Due ${dot(v.trial.due)}. These are the rules it is made under.` : 'These are the rules it is made under.'} />
+                <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+                  {v.trial.rules.map((r) => (
+                    <Card key={r.key}>
+                      <p className="m-0 text-[14px] font-semibold">{r.text}</p>
+                      <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{r.source}</p>
+                    </Card>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {v.pilot && (
+              <section className="mt-lg" aria-labelledby="pilot-heading">
+                <Heading id="pilot-heading" title="Pilot month" />
+                <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
+                  <p className="m-0 text-[16px] font-bold">{[v.pilot.start ? `Starts ${dot(v.pilot.start)}` : '', v.pilot.end ? `ends ${dot(v.pilot.end)}` : ''].filter(Boolean).join(', ')}</p>
+                </div>
+              </section>
+            )}
+
+            <Retainer token={token} view={v} onDone={done} />
+
             {v.show.waiting && (
               <section className="mt-lg" aria-labelledby="waiting-heading">
                 <Heading id="waiting-heading" title="Waiting for you" lede={v.show.canApprove ? COPY.waitingLede : COPY.waitingViewOnly} />
@@ -189,9 +390,37 @@ export function ClientPortal() {
                   <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{COPY.nothingWaiting}</p>
                 ) : (
                   <ul className="mt-sm flex flex-col gap-sm p-0 m-0">
-                    {v.waiting.map((w) => (
-                      <Waiting key={w.id} token={token} view={v} item={w} onDone={done} />
-                    ))}
+                    {v.waiting.map((w) => {
+                      const meta = [DELIVERABLE_KIND_NAME[w.kind], w.platform, w.publishDate ? `goes live ${dot(w.publishDate)}` : ''].filter(Boolean).join(', ');
+                      return (
+                        <Card key={w.id}>
+                          <p className="m-0 text-[16px] font-extrabold">
+                            <Inert text={w.title} />
+                          </p>
+                          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{meta}</p>
+                          {safe(w.link) && (
+                            <p className="mt-xs m-0">
+                              <a href={w.link} target="_blank" rel="noopener noreferrer" className="text-[14px] font-bold text-ink underline underline-offset-4">
+                                Watch it
+                              </a>
+                            </p>
+                          )}
+                          {w.thread.length > 0 && (
+                            <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0" aria-label="Notes">
+                              {w.thread.map((t, i) => (
+                                <li key={`${t.createdAt}-${i}`} className={`rounded-tile p-sm text-[14px] font-semibold ${t.author === 'client' ? 'bg-paper' : 'bg-card-strong'}`}>
+                                  <span className="block text-[12px] font-extrabold text-ink-soft">{`${t.author === 'client' ? 'You' : v.agencyName}${t.kind === 'change' || t.kind === 'paid_change' ? `, ${NOTE_KIND_NAME[t.kind].toLowerCase()}` : ''}`}</span>
+                                  <span className="whitespace-pre-wrap">
+                                    <Inert text={t.body} />
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          <PieceActions token={token} view={v} id={w.id} stage="review" changes={w.changes} onDone={done} />
+                        </Card>
+                      );
+                    })}
                   </ul>
                 )}
               </section>
@@ -219,8 +448,8 @@ export function ClientPortal() {
                   <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing is being made right now.</p>
                 ) : (
                   <ul className="mt-sm flex flex-col gap-xs p-0 m-0">
-                    {v.coming.map((c, i) => (
-                      <Card key={`${c.title}-${i}`}>
+                    {v.coming.map((c) => (
+                      <Card key={c.id}>
                         <div className="flex items-start justify-between gap-sm">
                           <div className="min-w-0">
                             <p className="m-0 text-[16px] font-bold">
@@ -230,6 +459,7 @@ export function ClientPortal() {
                           </div>
                           <StatusTag tone={DELIVERABLE_STAGE_TONE[c.stage]}>{DELIVERABLE_STAGE_META[c.stage].name}</StatusTag>
                         </div>
+                        <PieceActions token={token} view={v} id={c.id} stage={c.stage} changes={c.changes} onDone={done} />
                       </Card>
                     ))}
                   </ul>
@@ -244,8 +474,8 @@ export function ClientPortal() {
                   <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing has gone live yet.</p>
                 ) : (
                   <ul className="mt-sm flex flex-col gap-xs p-0 m-0">
-                    {v.published.map((p, i) => (
-                      <Card key={`${p.title}-${i}`}>
+                    {v.published.map((p) => (
+                      <Card key={p.id}>
                         <p className="m-0 text-[16px] font-bold">
                           <Inert text={p.title} />
                         </p>
@@ -255,6 +485,7 @@ export function ClientPortal() {
                             Open it
                           </a>
                         )}
+                        <PieceActions token={token} view={v} id={p.id} stage="published" changes={{ used: 0, allowed: 0 }} onDone={done} />
                       </Card>
                     ))}
                   </ul>

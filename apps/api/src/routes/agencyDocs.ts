@@ -1,7 +1,17 @@
 import { Hono } from 'hono';
 import {
   CONTRACT_STATUSES,
+  contractAsText,
   contractTemplateDoc,
+  docRef,
+  houseDoc,
+  houseInvoiceDoc,
+  invoiceAsText,
+  invoiceForClient,
+  parseDocStyle,
+  type DocLogLine,
+  type DocStyle,
+  type BusinessProfile,
   INVOICE_STARTER_BY_KEY,
   invoiceTemplateDoc,
   MAX_TEMPLATES,
@@ -12,6 +22,7 @@ import {
   type TemplateKind,
   DOC_COMMENT_MAX,
   DOC_TYPES,
+  defaultDocStyle,
   type DocComment,
   type DocType,
   CONTRACT_TEMPLATE_BY_KEY,
@@ -33,9 +44,10 @@ import {
   type PublicContract,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { DATE_RE, dayFromDevice, nameOf, newId, notify, nowIso, num, oneOf, pageOf, paged, randomCode, shiftDate, str } from '../db';
+import { audit, DATE_RE, dayFromDevice, nameOf, newId, notify, nowIso, num, oneOf, pageOf, paged, randomCode, shiftDate, str } from '../db';
 import { createInvoice, INV_SELECT, nextNumberAfter, setInvoiceStatus, toInvoice, updateDraftInvoice, type InvRow } from './finance';
 import { billingOf, settingsFor } from './agency';
+import { emailCopy, emailProblem, logDoc, maskEmail, ownLogo, publicUrl } from '../agencyPaper';
 
 /**
  * Agency's paper: designed invoices with a calculator, and agreements made from a template. Owner only, like the rest of Agency;
@@ -47,7 +59,7 @@ export const contractsPublic = new Hono<AppEnv>();
 const dayOf = (c: { req: { query: (k: string) => string | undefined } }) => dayFromDevice(c.req.query('day'));
 const dateOrNull = (v: unknown): string | null => (typeof v === 'string' && DATE_RE.test(v) ? v : null);
 
-function itemsIn(v: unknown): InvoiceItem[] {
+export function itemsIn(v: unknown): InvoiceItem[] {
   return (Array.isArray(v) ? v : [])
     .map((x) => (x && typeof x === 'object' ? (x as Record<string, unknown>) : {}))
     .map((x) => ({ description: str(x.description, 200), quantity: num(x.quantity, 1, 1, 100000) ?? 1, unitCents: num(x.unitCents, 0, 0, 1_000_000_000_00) ?? 0 }))
@@ -55,8 +67,8 @@ function itemsIn(v: unknown): InvoiceItem[] {
     .slice(0, MAX_INVOICE_LINES);
 }
 
-interface ClientBits { id: string; name: string; contact_name: string; contact_email: string; billing_json: string }
-async function clientBits(db: D1Database, userId: string, id: unknown): Promise<ClientBits | null> {
+export interface ClientBits { id: string; name: string; contact_name: string; contact_email: string; billing_json: string }
+export async function clientBits(db: D1Database, userId: string, id: unknown): Promise<ClientBits | null> {
   if (typeof id !== 'string' || !id) return null;
   return db.prepare('SELECT id, name, contact_name, contact_email, billing_json FROM agency_clients WHERE id = ? AND user_id = ?').bind(id, userId).first<ClientBits>();
 }
@@ -64,22 +76,49 @@ async function clientBits(db: D1Database, userId: string, id: unknown): Promise<
 
 // ---- the person's own templates
 
-interface TemplateRow { id: string; kind: TemplateKind; name: string; doc_json: string; items_json: string; created_at: string; updated_at: string }
-function templateDoc(r: TemplateRow): { invoice: InvoiceDoc | null; contract: ContractDoc | null; items: InvoiceItem[] } {
+export interface TemplateRow { id: string; kind: TemplateKind; name: string; doc_json: string; items_json: string; created_at: string; updated_at: string }
+export function templateDoc(r: Pick<TemplateRow, 'kind' | 'doc_json' | 'items_json'>): { invoice: InvoiceDoc | null; contract: ContractDoc | null; items: InvoiceItem[] } {
   const items = itemsIn(jsonOr<unknown>(r.items_json, []));
   return r.kind === 'invoice' ? { invoice: parseInvoiceDoc(jsonOr<unknown>(r.doc_json, {})), contract: null, items } : { invoice: null, contract: parseContractDoc(jsonOr<unknown>(r.doc_json, null)), items };
 }
-function toTemplate(r: TemplateRow): AgencyTemplate {
+function toTemplate(r: TemplateRow, scope: 'own' | 'house' = 'own'): AgencyTemplate {
   const t = templateDoc(r);
   const doc = (t.invoice ?? t.contract)!;
-  return { id: r.id, kind: r.kind, name: r.name, summary: doc ? templateSummary(r.kind, doc, t.items) : '', createdAt: r.created_at, updatedAt: r.updated_at };
+  return { id: r.id, scope, kind: r.kind, name: r.name, summary: doc ? templateSummary(r.kind, doc, t.items) : '', createdAt: r.created_at, updatedAt: r.updated_at };
 }
-async function ownTemplate(db: D1Database, userId: string, id: unknown, kind: TemplateKind): Promise<TemplateRow | null> {
+
+// ---- house templates: made by the super admin for every Agency user, read only here, copied into the person's own documents
+
+export interface HouseRow { id: string; kind: TemplateKind; name: string; doc_json: string; items_json: string; include_business: number; status: 'active' | 'retired'; created_by: string | null; created_at: string; updated_at: string }
+export async function activeHouse(db: D1Database, id: unknown, kind: TemplateKind): Promise<HouseRow | null> {
+  if (typeof id !== 'string' || !id) return null;
+  return db.prepare("SELECT * FROM agency_house_templates WHERE id = ? AND kind = ? AND status = 'active'").bind(id, kind).first<HouseRow>();
+}
+/** A house invoice template used by someone: their own details fill the sender and the bank unless the admin included theirs. */
+function houseInvoice(row: HouseRow, profile: BusinessProfile): { doc: InvoiceDoc; items: InvoiceItem[] } {
+  const t = templateDoc(row);
+  const doc = t.invoice!;
+  if (row.include_business) return { doc, items: t.items };
+  const logo = parseDocStyle(profile.docStyle).logo;
+  return { doc: { ...doc, from: profile.from, bank: profile.bank, footer: doc.footer || profile.footer, style: { ...parseDocStyle(doc.style), logo, footer: parseDocStyle(profile.docStyle).footer } }, items: t.items };
+}
+/** A house agreement or document used by someone: the names are theirs, the logo and footer fall back to their own default look. */
+export function houseContract(row: HouseRow, profile: BusinessProfile): ContractDoc {
+  const doc = templateDoc(row).contract!;
+  if (row.include_business) return doc;
+  const mine = parseDocStyle(profile.docStyle);
+  return { ...doc, style: { ...parseDocStyle(doc.style), logo: mine.logo, footer: mine.footer } };
+}
+export async function ownTemplate(db: D1Database, userId: string, id: unknown, kind: TemplateKind): Promise<TemplateRow | null> {
   if (typeof id !== 'string' || !id) return null;
   return db.prepare('SELECT * FROM agency_templates WHERE id = ? AND user_id = ? AND kind = ?').bind(id, userId, kind).first<TemplateRow>();
 }
 /** What a template takes from an invoice or an agreement of the person's: its look and lines (never who it was for), or its sections (never the names). */
-async function snapshotOf(db: D1Database, userId: string, kind: TemplateKind, fromId: string): Promise<{ doc: unknown; items: InvoiceItem[] } | null> {
+export async function snapshotOf(db: D1Database, userId: string, kind: TemplateKind, fromId: string): Promise<{ doc: unknown; items: InvoiceItem[] } | null> {
+  if (kind === 'doc') {
+    const row = await db.prepare('SELECT body_json FROM agency_docs WHERE id = ? AND user_id = ?').bind(fromId, userId).first<{ body_json: string }>();
+    return row ? { doc: contractTemplateDoc(docOf(row.body_json)), items: [] } : null;
+  }
   if (kind === 'invoice') {
     const row = await db.prepare(`${INV_SELECT} WHERE i.id = ? AND i.user_id = ? AND i.agency_client_id IS NOT NULL`).bind(fromId, userId).first<InvRow>();
     if (!row) return null;
@@ -90,13 +129,21 @@ async function snapshotOf(db: D1Database, userId: string, kind: TemplateKind, fr
   return row ? { doc: contractTemplateDoc(docOf(row.doc_json)), items: [] } : null;
 }
 
+// The person's own templates, then the house templates (made by the super admin, read only). One list for the picker.
 agencyDocs.get('/templates', async (c) => {
   const kind = c.req.query('kind');
-  const rows = await c.env.DB
-    .prepare(`SELECT * FROM agency_templates WHERE user_id = ?${kind && (TEMPLATE_KINDS as readonly string[]).includes(kind) ? ' AND kind = ?' : ''} ORDER BY updated_at DESC LIMIT ${MAX_TEMPLATES * 2}`)
-    .bind(...[c.get('user').id, ...(kind && (TEMPLATE_KINDS as readonly string[]).includes(kind) ? [kind] : [])])
-    .all<TemplateRow>();
-  return c.json({ templates: rows.results.map(toTemplate) });
+  const ok = kind && (TEMPLATE_KINDS as readonly string[]).includes(kind);
+  const [own, house] = await Promise.all([
+    c.env.DB
+      .prepare(`SELECT * FROM agency_templates WHERE user_id = ?${ok ? ' AND kind = ?' : ''} ORDER BY updated_at DESC LIMIT ${MAX_TEMPLATES * 2}`)
+      .bind(...[c.get('user').id, ...(ok ? [kind] : [])])
+      .all<TemplateRow>(),
+    c.env.DB
+      .prepare(`SELECT * FROM agency_house_templates WHERE status = 'active'${ok ? ' AND kind = ?' : ''} ORDER BY name LIMIT 100`)
+      .bind(...(ok ? [kind] : []))
+      .all<HouseRow>(),
+  ]);
+  return c.json({ templates: [...own.results.map((r) => toTemplate(r)), ...house.results.map((r) => toTemplate(r, 'house'))] });
 });
 
 // Save one of the person's invoices or agreements as a template, or replace what an existing template holds with it.
@@ -104,11 +151,15 @@ agencyDocs.post('/templates', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
-  const kind = oneOf(body.kind, TEMPLATE_KINDS, 'invoice');
-  const name = str(body.name, TEMPLATE_NAME_MAX);
+  let kind = oneOf(body.kind, TEMPLATE_KINDS, 'invoice');
+  // A house template can be copied into the person's own templates; the copy is theirs to change.
+  const fromHouse = typeof body.houseId === 'string' ? await db.prepare("SELECT * FROM agency_house_templates WHERE id = ? AND status = 'active'").bind(body.houseId).first<HouseRow>() : null;
+  if (typeof body.houseId === 'string' && !fromHouse) return c.json({ error: 'that house template is not here any more' }, 404);
+  if (fromHouse) kind = fromHouse.kind;
+  const name = str(body.name, TEMPLATE_NAME_MAX) || (fromHouse ? str(fromHouse.name, TEMPLATE_NAME_MAX) : '');
   if (!name) return c.json({ error: 'give it a name' }, 400);
-  const snap = typeof body.fromId === 'string' ? await snapshotOf(db, user.id, kind, body.fromId) : null;
-  if (!snap) return c.json({ error: kind === 'invoice' ? 'pick one of your invoices' : 'pick one of your agreements' }, 400);
+  const snap = fromHouse ? { doc: JSON.parse(fromHouse.doc_json) as unknown, items: itemsIn(jsonOr<unknown>(fromHouse.items_json, [])) } : typeof body.fromId === 'string' ? await snapshotOf(db, user.id, kind, body.fromId) : null;
+  if (!snap) return c.json({ error: kind === 'invoice' ? 'pick one of your invoices' : kind === 'doc' ? 'pick one of your documents' : 'pick one of your agreements' }, 400);
   const n = await db.prepare('SELECT COUNT(*) AS n FROM agency_templates WHERE user_id = ? AND kind = ?').bind(user.id, kind).first<{ n: number }>();
   if ((n?.n ?? 0) >= MAX_TEMPLATES) return c.json({ error: `up to ${MAX_TEMPLATES} templates; remove one first` }, 400);
   const id = newId();
@@ -204,18 +255,27 @@ agencyDocs.post('/invoices', async (c) => {
   // It starts from one of the person's templates, a built-in starting point, or the profile alone; what they send on top wins.
   const tpl = body.templateId ? await ownTemplate(db, user.id, body.templateId, 'invoice') : null;
   if (body.templateId && !tpl) return c.json({ error: 'that template is not yours' }, 400);
+  const house = body.houseId ? await activeHouse(db, body.houseId, 'invoice') : null;
+  if (body.houseId && !house) return c.json({ error: 'that house template is not here any more' }, 404);
   const starter = typeof body.starter === 'string' ? INVOICE_STARTER_BY_KEY[body.starter] : undefined;
   let base = { ...docFromProfile(settings.profile), to: billingOf(client) };
   let starting: InvoiceItem[] = [];
-  if (tpl) {
+  if (house) {
+    // A house template is copied: the invoice is the person's own, so they can restyle it freely.
+    const h = houseInvoice(house, settings.profile);
+    base = { ...h.doc, to: billingOf(client) };
+    starting = h.items;
+  } else if (tpl) {
     const t = templateDoc(tpl);
-    base = { ...t.invoice!, to: billingOf(client) };
+    // A template saved without the sender's details (a copy of a house template) takes the person's own.
+    base = { ...t.invoice!, from: t.invoice!.from.name ? t.invoice!.from : settings.profile.from, bank: t.invoice!.bank.account || t.invoice!.bank.upi ? t.invoice!.bank : settings.profile.bank, to: billingOf(client) };
     starting = t.items;
   } else if (starter) {
     base = { ...base, title: starter.title, footnote: starter.footnote || base.footnote };
     starting = starter.items;
   }
-  const doc = parseInvoiceDoc(body.doc, base);
+  const parsed = parseInvoiceDoc(body.doc, base);
+  const doc = house ? parsed : await ownLogo(db, user.id, parsed, parseDocStyle(base.style).logo);
   const items = Array.isArray(body.items) ? itemsIn(body.items) : starting;
   if (items.length === 0) return c.json({ error: 'at least one line' }, 400);
   const invoice = await createInvoice(db, user.id, {
@@ -280,7 +340,7 @@ agencyDocs.patch('/invoices/:id', async (c) => {
   if (row.status === 'paid') return c.json({ error: 'a paid invoice must be marked sent again before it can change' }, 400);
   if (row.status === 'void') return c.json({ error: 'a void invoice cannot change' }, 400);
   const prev = toInvoice(row);
-  const doc = parseInvoiceDoc(body.doc, prev.doc);
+  const doc = await ownLogo(db, user.id, parseInvoiceDoc(body.doc, prev.doc), parseDocStyle(prev.doc.style).logo);
   const items = 'items' in body ? itemsIn(body.items) : prev.items;
   if (items.length === 0) return c.json({ error: 'at least one line' }, 400);
   let number: string | undefined;
@@ -308,6 +368,7 @@ agencyDocs.delete('/invoices/:id', async (c) => {
   const res = await db.prepare("DELETE FROM invoices WHERE id = ? AND user_id = ? AND agency_client_id IS NOT NULL AND status = 'draft'").bind(c.req.param('id'), user.id).run();
   if (!res.meta.changes) return c.json({ error: 'only a draft can be removed; void a sent one' }, 400);
   await db.prepare("DELETE FROM agency_doc_comments WHERE doc_type = 'invoice' AND doc_id = ? AND user_id = ?").bind(c.req.param('id'), user.id).run();
+  await db.prepare("DELETE FROM agency_doc_log WHERE doc_type = 'invoice' AND doc_id = ? AND user_id = ?").bind(c.req.param('id'), user.id).run();
   return c.json({ ok: true });
 });
 
@@ -344,7 +405,7 @@ function shiftMonthLabel(label: string, n: number): string {
 // ---- comments on an invoice or an agreement: the client's, and the person's replies
 
 const docOwned = async (db: D1Database, userId: string, type: DocType, id: string): Promise<boolean> =>
-  Boolean(await db.prepare(type === 'invoice' ? 'SELECT 1 AS x FROM invoices WHERE id = ? AND user_id = ? AND agency_client_id IS NOT NULL' : 'SELECT 1 AS x FROM agency_contracts WHERE id = ? AND user_id = ?').bind(id, userId).first());
+  Boolean(await db.prepare(type === 'invoice' ? 'SELECT 1 AS x FROM invoices WHERE id = ? AND user_id = ? AND agency_client_id IS NOT NULL' : type === 'doc' ? 'SELECT 1 AS x FROM agency_docs WHERE id = ? AND user_id = ?' : 'SELECT 1 AS x FROM agency_contracts WHERE id = ? AND user_id = ?').bind(id, userId).first());
 
 agencyDocs.get('/comments/:type/:id', async (c) => {
   const db = c.env.DB;
@@ -375,24 +436,24 @@ agencyDocs.delete('/comments/:id', async (c) => {
 
 // ---- contracts
 
-interface ContractRow {
+export interface ContractRow {
   id: string; user_id: string; client_id: string | null; client_name: string | null; title: string; template_key: string; status: ContractStatus; doc_json: string; token: string | null; answers_json: string;
   acceptance_json: string | null; sent_at: string | null; signed_at: string | null; revised_at: string | null; created_at: string; updated_at: string;
 }
-const CONTRACT_SELECT = 'SELECT k.*, (SELECT name FROM agency_clients c WHERE c.id = k.client_id) AS client_name FROM agency_contracts k';
+export const CONTRACT_SELECT = 'SELECT k.*, (SELECT name FROM agency_clients c WHERE c.id = k.client_id) AS client_name FROM agency_contracts k';
 /** The list and the board show a title and a status, so they leave out the document itself, the answers and the acceptance (the heavy columns). */
 const CONTRACT_LIST_SELECT = 'SELECT k.id, k.user_id, k.client_id, k.title, k.template_key, k.status, k.sent_at, k.signed_at, k.revised_at, k.created_at, k.updated_at, (SELECT name FROM agency_clients c WHERE c.id = k.client_id) AS client_name FROM agency_contracts k';
 type ContractListRow = Pick<ContractRow, 'id' | 'user_id' | 'client_id' | 'client_name' | 'title' | 'template_key' | 'status' | 'sent_at' | 'signed_at' | 'revised_at' | 'created_at' | 'updated_at'>;
 
-function jsonOr<T>(raw: string | null, fallback: T): T {
+export function jsonOr<T>(raw: string | null, fallback: T): T {
   try {
     return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
     return fallback;
   }
 }
-function docOf(raw: string): ContractDoc {
-  return parseContractDoc(jsonOr<unknown>(raw, null)) ?? { title: 'Agreement', subtitle: '', templateKey: 'custom', show: { comments: true, download: true }, currency: 'INR', vars: {}, sections: [] };
+export function docOf(raw: string): ContractDoc {
+  return parseContractDoc(jsonOr<unknown>(raw, null)) ?? { title: 'Agreement', subtitle: '', templateKey: 'custom', show: { comments: true, download: true }, currency: 'INR', vars: {}, sections: [], style: defaultDocStyle() };
 }
 const toContract = (r: ContractRow): AgencyContract => ({
   id: r.id,
@@ -467,18 +528,24 @@ agencyDocs.post('/contracts', async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
   const mine = body.templateId ? await ownTemplate(db, user.id, body.templateId, 'contract') : null;
   if (body.templateId && !mine) return c.json({ error: 'that template is not yours' }, 400);
-  const template = mine ? { key: 'custom', doc: templateDoc(mine).contract! } : CONTRACT_TEMPLATE_BY_KEY[String(body.templateKey)];
+  const houseRow = body.houseId ? await activeHouse(db, body.houseId, 'contract') : null;
+  if (body.houseId && !houseRow) return c.json({ error: 'that house template is not here any more' }, 404);
+  const settings0 = houseRow ? await settingsFor(db, user.id) : null;
+  const template = houseRow ? { key: 'custom', doc: houseContract(houseRow, settings0!.profile) } : mine ? { key: 'custom', doc: templateDoc(mine).contract! } : CONTRACT_TEMPLATE_BY_KEY[String(body.templateKey)];
   if (!template || !template.doc) return c.json({ error: 'pick a template' }, 400);
   const client = await clientBits(db, user.id, body.clientId);
   const n = await db.prepare('SELECT COUNT(*) AS n FROM agency_contracts WHERE user_id = ?').bind(user.id).first<{ n: number }>();
   if ((n?.n ?? 0) >= MAX_CONTRACTS) return c.json({ error: 'too many agreements; remove some first' }, 400);
-  const settings = await settingsFor(db, user.id);
+  const settings = settings0 ?? (await settingsFor(db, user.id));
   const billing = client ? billingOf(client) : null;
-  const doc: ContractDoc = {
+  // A built-in or own template takes the person's default look unless it has its own; a house template already carries the look it was given.
+  const baseStyle = parseDocStyle(template.doc.style, parseDocStyle(settings.profile.docStyle));
+  const doc: ContractDoc = await ownLogo(db, user.id, {
     ...structuredClone(template.doc),
     currency: settings.currency,
     vars: contractVarsFor(settings.profile, client ? { name: client.name, address: billing?.address ?? '', contactName: client.contact_name } : null),
-  };
+    style: baseStyle,
+  }, houseRow ? baseStyle.logo : '');
   const id = newId();
   const now = nowIso();
   await db
@@ -511,8 +578,9 @@ agencyDocs.patch('/contracts/:id', async (c) => {
     // A draft or a sent agreement can change in place (the client then sees it marked revised). A signed one is a record: revise it into a new draft.
     if (row.status === 'signed') return c.json({ error: 'a signed agreement is a record; make a revised copy and send that' }, 400);
     if (row.status === 'void') return c.json({ error: 'a voided agreement cannot change' }, 400);
-    const doc = 'doc' in body ? parseContractDoc(body.doc) : docOf(row.doc_json);
-    if (!doc) return c.json({ error: 'that agreement could not be read' }, 400);
+    const parsedDoc = 'doc' in body ? parseContractDoc(body.doc) : docOf(row.doc_json);
+    if (!parsedDoc) return c.json({ error: 'that agreement could not be read' }, 400);
+    const doc = await ownLogo(db, user.id, parsedDoc, parseDocStyle(docOf(row.doc_json).style).logo);
     let clientId = row.client_id;
     if ('clientId' in body) {
       if (body.clientId === null || body.clientId === '') clientId = null;
@@ -548,7 +616,82 @@ agencyDocs.delete('/contracts/:id', async (c) => {
   const res = await db.prepare("DELETE FROM agency_contracts WHERE id = ? AND user_id = ? AND status IN ('draft', 'void')").bind(c.req.param('id'), user.id).run();
   if (!res.meta.changes) return c.json({ error: 'only a draft or a voided agreement can be removed' }, 400);
   await db.prepare("DELETE FROM agency_doc_comments WHERE doc_type = 'contract' AND doc_id = ? AND user_id = ?").bind(c.req.param('id'), user.id).run();
+  await db.prepare("DELETE FROM agency_doc_log WHERE doc_type = 'contract' AND doc_id = ? AND user_id = ?").bind(c.req.param('id'), user.id).run();
   return c.json({ ok: true });
+});
+
+// ---- email a copy: the text version and the client's link, sent as ordinary mail from the server
+
+/** Who a copy goes to: an address the person typed (checked), else the client's contact address. */
+export async function recipientFor(db: D1Database, userId: string, clientId: string | null, typed: unknown, fallback = ''): Promise<{ to: string } | { error: string }> {
+  if (typeof typed === 'string' && typed.trim()) {
+    const problem = emailProblem(typed);
+    return problem ? { error: problem } : { to: typed.trim() };
+  }
+  const client = clientId ? await db.prepare('SELECT contact_email FROM agency_clients WHERE id = ? AND user_id = ?').bind(clientId, userId).first<{ contact_email: string }>() : null;
+  const to = (client?.contact_email || fallback).trim();
+  return to && !emailProblem(to) ? { to } : { error: 'there is no email address for this client yet; type one' };
+}
+
+agencyDocs.post('/invoices/:id/email', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await db.prepare(`${INV_SELECT} WHERE i.id = ? AND i.user_id = ? AND i.agency_client_id IS NOT NULL`).bind(c.req.param('id'), user.id).first<InvRow>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  if (row.status === 'draft') return c.json({ error: 'mark the invoice as sent first, so the link in the email works' }, 400);
+  if (row.status === 'void') return c.json({ error: 'a void invoice is not sent' }, 400);
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const who = await recipientFor(db, user.id, row.agency_client_id ?? null, body.to, row.client_email);
+  if ('error' in who) return c.json({ error: who.error }, 400);
+  // The client's version: what the person switched off is left out of the words too.
+  const inv = invoiceForClient(toInvoice(row));
+  const settings = await settingsFor(db, user.id);
+  const result = await emailCopy(db, c.env, user.id, {
+    to: who.to,
+    subject: `${inv.doc.title || 'Invoice'} ${inv.number} from ${inv.doc.from.name || nameOf(user)}`,
+    intro: `Hello,\n\nHere is ${inv.doc.title.toLowerCase() === 'invoice' ? 'invoice' : inv.doc.title.toLowerCase()} ${inv.number}.`,
+    text: invoiceAsText(inv),
+    link: publicUrl(c.env, `/i/${row.token}`),
+    replyTo: settings.profile.from.email,
+  });
+  await logDoc(db, user.id, 'invoice', row.id, result.sent ? 'emailed' : 'email-not-sent', maskEmail(who.to));
+  await audit(db, user.id, 'agency_doc.email', 'invoice', row.id, '', maskEmail(who.to));
+  return c.json({ ok: true, ...result, to: maskEmail(who.to) });
+});
+
+agencyDocs.post('/contracts/:id/email', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await db.prepare(`${CONTRACT_SELECT} WHERE k.id = ? AND k.user_id = ?`).bind(c.req.param('id'), user.id).first<ContractRow>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  if (row.status === 'draft' || !row.token) return c.json({ error: 'send the agreement first, so the link in the email works' }, 400);
+  if (row.status === 'void') return c.json({ error: 'a voided agreement is not sent' }, 400);
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const who = await recipientFor(db, user.id, row.client_id, body.to);
+  if ('error' in who) return c.json({ error: who.error }, 400);
+  const doc = docOf(row.doc_json);
+  const settings = await settingsFor(db, user.id);
+  const result = await emailCopy(db, c.env, user.id, {
+    to: who.to,
+    subject: `${doc.title} from ${doc.vars.providerBusiness || nameOf(user)}`,
+    intro: 'Hello,\n\nHere is the agreement for you to read. You can answer any questions and accept it at the link below.',
+    text: contractAsText(doc, { reference: docRef('AGR', row.id), date: row.sent_at ?? row.created_at, answers: jsonOr<Record<string, ContractAnswer>>(row.answers_json, {}), acceptance: jsonOr<AgencyContract['acceptance']>(row.acceptance_json, null) }),
+    link: publicUrl(c.env, `/k/${row.token}`),
+    replyTo: settings.profile.from.email,
+  });
+  await logDoc(db, user.id, 'contract', row.id, result.sent ? 'emailed' : 'email-not-sent', maskEmail(who.to));
+  await audit(db, user.id, 'agency_doc.email', 'contract', row.id, '', maskEmail(who.to));
+  return c.json({ ok: true, ...result, to: maskEmail(who.to) });
+});
+
+// What was done with a document: emailed a copy, approved. Owner only.
+agencyDocs.get('/doc-log/:type/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const type = c.req.param('type') as DocType;
+  if (!(DOC_TYPES as readonly string[]).includes(type) || !(await docOwned(db, user.id, type, c.req.param('id')))) return c.json({ error: 'not found' }, 404);
+  const rows = await db.prepare('SELECT id, event, detail, created_at FROM agency_doc_log WHERE user_id = ? AND doc_type = ? AND doc_id = ? ORDER BY created_at DESC LIMIT 50').bind(user.id, type, c.req.param('id')).all<{ id: string; event: string; detail: string; created_at: string }>();
+  return c.json({ log: rows.results.map((r): DocLogLine => ({ id: r.id, event: r.event, detail: r.detail, createdAt: r.created_at })) });
 });
 
 // ---- the client's side of an agreement
@@ -569,6 +712,8 @@ contractsPublic.get('/:token', async (c) => {
     ? await c.env.DB.prepare("SELECT id, author, body, created_at FROM agency_doc_comments WHERE doc_type = 'contract' AND doc_id = ? ORDER BY created_at LIMIT 100").bind(row.id).all<{ id: string; author: 'me' | 'client'; body: string; created_at: string }>()
     : { results: [] as { id: string; author: 'me' | 'client'; body: string; created_at: string }[] };
   const view: PublicContract = {
+    ref: docRef('AGR', row.id),
+    sentAt: row.sent_at,
     ownerName: nameOf({ display_name: row.owner_name }),
     status: row.status,
     revisedAt: row.revised_at,

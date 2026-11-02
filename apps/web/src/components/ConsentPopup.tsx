@@ -78,7 +78,7 @@ export function ConsentPopup() {
       ref={root}
       role="dialog"
       aria-label={step === 'terms' ? 'Our terms and privacy policy' : 'Your privacy choices'}
-      className="fixed inset-x-sm bottom-[calc(var(--spacing-xl)+var(--spacing-md)+env(safe-area-inset-bottom))] z-[45] max-h-[min(70dvh,560px)] overflow-y-auto rounded-card border-2 border-line bg-card-strong p-md text-ink shadow-toy md:inset-x-auto md:bottom-[calc(var(--spacing-xl)+var(--spacing-md))] md:left-[calc(240px+var(--spacing-md))] md:w-[400px]"
+      className={`fixed inset-x-sm bottom-[calc(var(--spacing-xl)+var(--spacing-md)+env(safe-area-inset-bottom))] z-[45] max-h-[min(70dvh,560px)] overflow-y-auto rounded-card border-2 border-line bg-card-strong p-md text-ink shadow-toy md:inset-x-auto md:bottom-[calc(var(--spacing-xl)+var(--spacing-md))] md:w-[400px] ${token ? 'md:left-[calc(240px+var(--spacing-md))]' : 'md:left-md'}`}
     >
       {step === 'terms' ? (
         <>

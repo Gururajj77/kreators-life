@@ -1052,3 +1052,1591 @@ input[type='radio'] {
 .badge-locked > :first-child {
   opacity: 0.5;
 }
+
+/* Month calendar on Daily: the printable month. Hidden on screen. Print this month gives the body `printing-month`, and then only this sheet
+   is on the page: black on white, square corners, no glass or gradients, on a landscape page of its own (a named page, so other prints keep theirs). */
+.month-print-sheet {
+  display: none;
+}
+@media print {
+  @page month {
+    size: landscape;
+    margin: 10mm;
+  }
+  body.printing-month > *:not(.month-print-sheet) {
+    display: none !important;
+  }
+  body.printing-month .month-print-sheet {
+    display: block;
+    page: month;
+    color: black;
+    background: white;
+    font-size: 9pt;
+    line-height: 1.25;
+  }
+  body.printing-month .mp-title {
+    font-size: 18pt;
+    font-weight: 800;
+    margin-bottom: 4mm;
+  }
+  body.printing-month .mp-week {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    break-inside: avoid;
+  }
+  body.printing-month .mp-head span {
+    border: 1px solid black;
+    padding: 1mm 2mm;
+    font-weight: 800;
+    text-align: center;
+  }
+  body.printing-month .mp-day {
+    border: 1px solid black;
+    min-height: 28mm;
+    padding: 1mm 2mm;
+    overflow-wrap: anywhere;
+  }
+  body.printing-month .mp-out {
+    background: white;
+  }
+  body.printing-month .mp-num {
+    display: block;
+    font-weight: 800;
+    font-size: 11pt;
+  }
+  body.printing-month .mp-task {
+    margin: 0 0 0.8mm;
+  }
+  body.printing-month .mp-done {
+    text-decoration: line-through;
+  }
+  body.printing-month .mp-legend {
+    margin: 3mm 0 0;
+    font-size: 8pt;
+  }
+}
+
+/* ------------------------------------------------------------------------------------------------
+   Motion kit (2026-11-02, from Kokonut UI and Skiper UI; see components/fx/). Motion is the accent, never every element:
+   transform and opacity only, mouse-only effects behind (hover: hover) and (pointer: fine), nothing endless while off screen or in
+   a hidden tab (the components set data-run), and a still version for prefers-reduced-motion. No inline script, no third party.
+   ------------------------------------------------------------------------------------------------ */
+:root {
+  --ease-spring: cubic-bezier(0.34, 1.45, 0.5, 1); /* a small overshoot, then settle */
+  --fx-spot: rgba(104, 120, 232, 0.17); /* the pointer-following highlight on a card */
+  --fx-shine: rgba(255, 255, 255, 0.3); /* the sweep across a shimmer button */
+  --fx-beam-a: var(--color-r6);
+  --fx-beam-b: var(--color-r5);
+  --fx-path-still: 0.1;
+  --fx-path-flow: 0.5;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fx-spot: rgba(150, 165, 255, 0.15);
+    --fx-shine: rgba(255, 255, 255, 0.22);
+    --fx-beam-a: #8f9bff;
+    --fx-beam-b: #5fd0c0;
+    --fx-path-still: 0.14;
+    --fx-path-flow: 0.7;
+  }
+}
+:root[data-theme='dark'] {
+  --fx-spot: rgba(150, 165, 255, 0.15);
+  --fx-shine: rgba(255, 255, 255, 0.22);
+  --fx-beam-a: #8f9bff;
+  --fx-beam-b: #5fd0c0;
+  --fx-path-still: 0.14;
+  --fx-path-flow: 0.7;
+}
+
+/* Reveal: fades and lifts in once when scrolled to; siblings stagger by --fx-i. */
+.fx-reveal {
+  opacity: 0;
+  transform: translate3d(0, 24px, 0);
+  transition:
+    opacity 600ms var(--ease-open),
+    transform 800ms var(--ease-open);
+  transition-delay: calc(var(--fx-i, 0) * 70ms);
+}
+.fx-reveal[data-in] {
+  opacity: 1;
+  transform: none;
+}
+
+/* TextReveal: the words rise in one by one. The text is real text from the first paint; only opacity and transform move. */
+.fx-word {
+  display: inline-block;
+  transition:
+    opacity 600ms var(--ease-open),
+    transform 800ms var(--ease-open);
+  transition-delay: calc(var(--fx-delay, 0ms) + var(--fx-i, 0) * var(--fx-step, 55ms));
+}
+.fx-text:not([data-on]) .fx-word {
+  opacity: 0;
+  transform: translate3d(0, 0.4em, 0);
+}
+
+/* Spotlight: a soft radial highlight under the pointer, inside the card, behind its words. A pointer-fine effect only. */
+.fx-spot {
+  position: relative;
+  isolation: isolate;
+}
+.fx-spot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(300px circle at var(--mx, 50%) var(--my, 50%), var(--fx-spot), transparent 70%);
+  transition: opacity 320ms var(--ease-open);
+}
+@media (hover: hover) and (pointer: fine) {
+  .fx-spot:hover::before {
+    opacity: 1;
+  }
+}
+
+/* Shimmer: a soft band of light sweeps across a button on hover or keyboard focus. `fx-shimmer-intro` plays it once when the page opens. */
+.fx-shimmer {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.fx-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 55%;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent, var(--fx-shine) 50%, transparent);
+  transform: translate3d(-130%, 0, 0) skewX(-18deg);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fx-shimmer:focus-visible::after {
+    transform: translate3d(280%, 0, 0) skewX(-18deg);
+    transition: transform 900ms var(--ease-open);
+  }
+  .fx-shimmer-intro::after {
+    animation: fx-sheen 1300ms var(--ease-open) 700ms 1 both;
+  }
+}
+@media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
+  .fx-shimmer:hover::after {
+    transform: translate3d(280%, 0, 0) skewX(-18deg);
+    transition: transform 900ms var(--ease-open);
+  }
+}
+@keyframes fx-sheen {
+  from {
+    transform: translate3d(-130%, 0, 0) skewX(-18deg);
+  }
+  to {
+    transform: translate3d(280%, 0, 0) skewX(-18deg);
+  }
+}
+
+/* The beam and the spotlight copy their card's squircle corner (corner-shape is not inherited by itself). */
+@supports (corner-shape: squircle) {
+  .fx-beam,
+  .fx-spot::before {
+    corner-shape: inherit;
+  }
+}
+
+/* Magnet: the wrapper that GSAP moves. */
+.fx-magnet {
+  display: inline-flex;
+  will-change: transform;
+}
+
+/* Border beam: a hairline of light going round the edge. The ring is a mask; the moving part is a rotating square. */
+.fx-beam {
+  position: absolute;
+  inset: 0;
+  padding: calc(var(--spacing-xs) / 4); /* a 2px hairline */
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+.fx-beam::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 200%;
+  aspect-ratio: 1;
+  background: conic-gradient(from 0deg, transparent 0deg 292deg, var(--fx-beam-a) 330deg, var(--fx-beam-b) 352deg, transparent 360deg);
+  transform: translate(-50%, -50%) rotate(40deg);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fx-beam::before {
+    animation: fx-spin var(--fx-beam-dur, 9s) linear infinite;
+    animation-play-state: paused;
+  }
+  .fx-beam[data-run='true']::before {
+    animation-play-state: running;
+    will-change: transform;
+  }
+}
+@keyframes fx-spin {
+  to {
+    transform: translate(-50%, -50%) rotate(400deg);
+  }
+}
+
+/* Marquee: the track holds the items twice and slides half its width, then starts over without a jump. */
+.fx-marquee {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+}
+.fx-marquee-track {
+  display: flex;
+  width: max-content;
+}
+.fx-marquee-set {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--spacing-xs);
+  padding: 0 var(--spacing-xs) 0 0;
+  margin: 0;
+  list-style: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fx-marquee-track {
+    animation: fx-marquee var(--fx-dur, 90s) linear infinite;
+    animation-play-state: paused;
+  }
+  .fx-marquee[data-reverse] .fx-marquee-track {
+    animation-direction: reverse;
+  }
+  .fx-marquee[data-run='true'] .fx-marquee-track {
+    animation-play-state: running;
+  }
+  .fx-marquee:hover .fx-marquee-track,
+  .fx-marquee:focus-within .fx-marquee-track {
+    animation-play-state: paused;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-marquee {
+    overflow-x: auto;
+  }
+  .fx-marquee-copy {
+    display: none;
+  }
+}
+@keyframes fx-marquee {
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+/* Background paths: still hairlines, and a short dash travelling along each. Very faint, behind the words. */
+.fx-paths {
+  opacity: 0.85;
+  -webkit-mask-image: radial-gradient(ellipse 70% 78% at 50% 50%, #000 38%, transparent 100%);
+  mask-image: radial-gradient(ellipse 70% 78% at 50% 50%, #000 38%, transparent 100%);
+}
+.fx-paths path {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.fx-path-still {
+  stroke-width: 1;
+  opacity: var(--fx-path-still);
+}
+.fx-path-flow {
+  stroke-width: 1.6;
+  opacity: var(--fx-path-flow);
+  stroke-dasharray: 130 870;
+  animation: fx-flow linear infinite;
+  animation-play-state: paused;
+}
+.fx-paths[data-run='true'] .fx-path-flow {
+  animation-play-state: running;
+}
+@keyframes fx-flow {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -1000;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-path-flow {
+    display: none;
+  }
+}
+
+/* Particle burst: confetti dots in a fixed layer, removed when done. */
+.fx-burst {
+  position: fixed;
+  width: 0;
+  height: 0;
+  z-index: 70;
+  pointer-events: none;
+}
+.fx-burst-dot {
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* Count-up numbers keep digit width, so counting never shifts the line. */
+.fx-num {
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Sliding tab indicator: set --fx-x, --fx-y, --fx-w and --fx-h from components/fx/useSlider.ts on the row; the pill is its ::before. */
+.fx-slide {
+  position: relative;
+}
+.fx-slide::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--fx-w, 0px);
+  height: var(--fx-h, 0px);
+  border-radius: var(--radius-pill);
+  background: var(--color-ink);
+  background-image: linear-gradient(135deg, var(--color-ink), color-mix(in oklab, var(--color-ink) 80%, var(--color-r6)));
+  transform: translate3d(var(--fx-x, 0px), var(--fx-y, 0px), 0);
+  opacity: 0;
+  pointer-events: none;
+}
+.fx-slide[data-has]::before {
+  opacity: 1;
+}
+.fx-slide[data-glide]::before {
+  transition:
+    transform 420ms var(--ease-spring),
+    width 320ms var(--ease-open),
+    height 320ms var(--ease-open),
+    opacity 200ms ease;
+}
+.fx-slide-paper::before {
+  background: var(--paper);
+  background-image: none;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+/* The site header: a firm glass strip at the top of the page; once the page has moved it frosts, gains an edge and a soft shadow. */
+.fx-header {
+  background: color-mix(in oklab, var(--card-strong) 92%, transparent);
+  border-bottom: 1px solid transparent;
+  transition:
+    background-color 300ms var(--ease-open),
+    border-color 300ms var(--ease-open),
+    box-shadow 300ms var(--ease-open),
+    -webkit-backdrop-filter 300ms var(--ease-open),
+    backdrop-filter 300ms var(--ease-open);
+}
+.fx-header[data-scrolled] {
+  background: color-mix(in oklab, var(--card-strong) 90%, transparent);
+  border-bottom-color: var(--line);
+  box-shadow: 0 10px 28px -14px var(--shade-2);
+}
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .fx-header[data-scrolled] {
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    backdrop-filter: blur(18px) saturate(1.4);
+  }
+}
+
+/* A sheet's grab bar on a phone: drag it down to let the sheet go. */
+.fx-grab {
+  touch-action: none;
+  cursor: grab;
+}
+.fx-grab:active {
+  cursor: grabbing;
+}
+
+/* Less transparency, more contrast: no glass, no wash of lines, no highlight. Reduced motion: everything shown, nothing moving. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .fx-header,
+  .fx-header[data-scrolled] {
+    background: var(--card-strong);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .fx-spot::before,
+  .fx-paths {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-reveal,
+  .fx-text:not([data-on]) .fx-word {
+    opacity: 1;
+    transform: none;
+  }
+  .fx-reveal,
+  .fx-word,
+  .fx-header,
+  .fx-slide::before {
+    transition: none !important;
+  }
+}
+@media print {
+  .fx-reveal,
+  .fx-text:not([data-on]) .fx-word {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ------------------------------------------------------------------------------------------------
+   Apple-leaning layer of the motion kit (2026-11-02; Human Interface Guidelines as inspiration, no Apple assets, fonts or symbols).
+   Semantic names for the tokens above (label, fill, separator, tint), a press that squeezes and springs back, bars that blur what
+   scrolls under them, an inset list, a segmented control with a sliding thumb, an iOS-style switch, a large title that condenses.
+   ------------------------------------------------------------------------------------------------ */
+:root {
+  /* Semantic colour, mapped onto the existing tokens, so dark mode follows by itself. */
+  --label: var(--ink);
+  --label-2: var(--ink-soft);
+  --label-3: var(--ink-mute);
+  --fill-1: color-mix(in oklab, var(--ink) 10%, transparent);
+  --fill-2: color-mix(in oklab, var(--ink) 6%, transparent);
+  --separator: var(--line);
+  --tint: var(--color-r6); /* the app's accent: a screen sets it to its relationship colour */
+  /* Type scale in rem, so text follows the browser's font size. */
+  --text-large-title: 2.125rem;
+  --text-title: 1.5rem;
+  --text-headline: 1.0625rem;
+  --text-body: 1rem;
+  --text-footnote: 0.8125rem;
+  --text-caption: 0.75rem;
+  /* The specular edge and the soft glow inside a glass material. */
+  --spec: linear-gradient(180deg, color-mix(in oklab, var(--glass-hi) 70%, transparent), transparent 3.5rem);
+  --glow-in: inset 0 1px 0 var(--glass-hi), inset 0 0 0 1px color-mix(in oklab, var(--glass-hi) 22%, transparent);
+}
+.type-large {
+  font-size: var(--text-large-title);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+.type-footnote {
+  font-size: var(--text-footnote);
+}
+
+/* A press: a quick squeeze to 97% while held, a spring back on release. Buttons squeeze more than cards and rows. */
+.toy:active:not(:disabled) {
+  transform: translateY(1px) scale(0.97);
+}
+.toy-soft:active:not(:disabled) {
+  transform: scale(0.985);
+}
+.toy:not(:active) {
+  transition-timing-function: var(--ease-spring), var(--ease-open), ease, ease;
+}
+
+/* A bar that content scrolls under: translucent, with the blur doing the work, a specular top edge and the strong fill as the fallback.
+   Kept above 88% opaque so the text on it always reads. */
+.fx-bar {
+  background-color: color-mix(in oklab, var(--card-strong) 93%, transparent);
+  background-image: var(--spec);
+  box-shadow: var(--glow-in);
+}
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .fx-bar {
+    -webkit-backdrop-filter: blur(22px) saturate(1.7);
+    backdrop-filter: blur(22px) saturate(1.7);
+  }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .fx-bar {
+    background-color: var(--card-strong);
+    background-image: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+/* The same specular edge on a sheet and on a glass card that asks for it. */
+.fx-sheen-top {
+  background-image: var(--spec);
+}
+@media (prefers-contrast: more) {
+  .fx-sheen-top {
+    background-image: none;
+  }
+}
+
+/* Inset grouped list: rows in one rounded card, hairlines between them, a press highlight on each. */
+.fx-inset {
+  overflow: hidden;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-radius: var(--radius-tile);
+  background: var(--card);
+  box-shadow: var(--shadow-toy-soft);
+}
+.fx-inset > li + li {
+  position: relative;
+}
+.fx-inset > li + li::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: calc(var(--spacing-sm) + 48px + var(--spacing-sm)); /* inset past the icon, like a settings list */
+  height: 1px;
+  background: var(--separator);
+  pointer-events: none;
+}
+.fx-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  min-height: 56px;
+  padding: var(--spacing-sm);
+  text-align: left;
+  transition: background-color 160ms ease;
+}
+.fx-row:focus-visible {
+  outline: 2px solid var(--tint, var(--color-r6));
+  outline-offset: -2px;
+}
+.fx-row:active {
+  background-color: var(--fill-1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .fx-row:hover {
+    background-color: var(--fill-2);
+  }
+}
+
+/* Segmented control: a capsule, a thumb that slides under the chosen segment (components/fx/Segmented.tsx). */
+.fx-seg {
+  display: inline-flex;
+  gap: 0;
+  padding: calc(var(--spacing-xs) / 2);
+  border-radius: var(--radius-pill);
+  background: var(--fill-1);
+  max-width: 100%;
+}
+.fx-seg::before {
+  background: var(--card-strong);
+  background-image: none;
+  box-shadow:
+    0 0 0 1px var(--edge),
+    0 2px 6px var(--shade-2);
+}
+.fx-seg > button {
+  position: relative;
+  min-height: 44px;
+  padding: 0 var(--spacing-md);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-footnote);
+  font-weight: 700;
+  color: var(--label-2);
+  white-space: nowrap;
+  transition: color 160ms ease;
+}
+.fx-seg > button[aria-pressed='true'],
+.fx-seg > button[aria-selected='true'] {
+  color: var(--label);
+}
+.fx-seg:not([data-has]) > button[aria-pressed='true'],
+.fx-seg:not([data-has]) > button[aria-selected='true'] {
+  background: var(--card-strong);
+  box-shadow: 0 0 0 1px var(--edge);
+}
+
+/* The switch: a 52 by 32 capsule, a 28 knob that springs across, the tint when on. */
+.fx-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 52px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  background: var(--fill-1);
+  box-shadow: inset 0 0 0 1px var(--separator);
+  transition: background-color 220ms ease;
+}
+.fx-switch[aria-checked='true'] {
+  background: var(--switch-on, var(--color-r4));
+  box-shadow: none;
+}
+.fx-switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-on-fill);
+  box-shadow:
+    0 2px 4px color-mix(in oklab, var(--color-shadow) 40%, transparent),
+    0 0 0 1px color-mix(in oklab, var(--color-shadow) 6%, transparent);
+  transition: transform 380ms var(--ease-spring);
+}
+.fx-switch[aria-checked='true'] .fx-switch-knob {
+  transform: translate3d(20px, 0, 0);
+}
+.fx-switch:active .fx-switch-knob {
+  width: 32px;
+}
+.fx-switch[aria-checked='true']:active .fx-switch-knob {
+  transform: translate3d(16px, 0, 0);
+}
+
+/* Large title: the page's own title is big; once it has gone under the top, a small centred copy fades in on a blurred bar. */
+.fx-condensed {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: calc(env(safe-area-inset-top) + 52px);
+  padding: 0 var(--spacing-xl) var(--spacing-xs);
+  border-bottom: 1px solid var(--separator);
+  pointer-events: none;
+  opacity: 0;
+  transform: translate3d(0, -8px, 0);
+  transition:
+    opacity 220ms var(--ease-open),
+    transform 320ms var(--ease-spring);
+}
+.fx-condensed[data-on] {
+  opacity: 1;
+  transform: none;
+}
+.fx-condensed > span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-headline);
+  font-weight: 800;
+  line-height: 1.6;
+  color: var(--label);
+}
+@media (width >= 48rem) and (height >= 30rem) {
+  .fx-condensed {
+    left: 240px; /* the sidebar's width */
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-condensed,
+  .fx-switch-knob {
+    transition: none !important;
+  }
+  .toy:active:not(:disabled),
+  .toy-soft:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* One height per row of cards. A list cell that holds a single card (a `toy`) stretches that card to the cell, so two cards side by side
+   are never two heights because their words wrap differently. `scripts/smoke/height-probe.js` is the check. */
+ul.grid > li:has(> .toy:only-child),
+ol.grid > li:has(> .toy:only-child) {
+  display: flex;
+}
+ul.grid > li > .toy:only-child,
+ol.grid > li > .toy:only-child {
+  width: 100%;
+}
+
+/* Badge medals (components/BadgeArt.tsx): the four tier finishes and the locked grey. Each finish is a rim (light to dark) and a plate (the lighter
+   face the picture sits on). Dark mode keeps the metals but deepens them so a medal does not glare on the dark page. */
+:root {
+  --badge-bronze-a: #f1c7a1;
+  --badge-bronze-b: #a96a3e;
+  --badge-bronze-plate-a: #fbe5d0;
+  --badge-bronze-plate-b: #e8b78e;
+  --badge-silver-a: #eef0f6;
+  --badge-silver-b: #8e96ab;
+  --badge-silver-plate-a: #fafbfd;
+  --badge-silver-plate-b: #d3d8e4;
+  --badge-gold-a: #fbe49a;
+  --badge-gold-b: #b98a1c;
+  --badge-gold-plate-a: #fff3c8;
+  --badge-gold-plate-b: #f1cf6b;
+  --badge-platinum-a: #e3e8ff;
+  --badge-platinum-b: #7c80c4;
+  --badge-platinum-plate-a: #f5f6ff;
+  --badge-platinum-plate-b: #c6caf0;
+  --badge-locked-a: #dfe2ec;
+  --badge-locked-b: #aab0c4;
+  --badge-locked-plate-a: #f1f2f7;
+  --badge-locked-plate-b: #d6d9e6;
+  --badge-shine: rgba(255, 255, 255, 0.9);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --badge-bronze-a: #d9a074;
+    --badge-bronze-b: #7d4a29;
+    --badge-bronze-plate-a: #e9c3a1;
+    --badge-bronze-plate-b: #b9825a;
+    --badge-silver-a: #cfd4e2;
+    --badge-silver-b: #626a82;
+    --badge-silver-plate-a: #e6e9f2;
+    --badge-silver-plate-b: #a5adc3;
+    --badge-gold-a: #e9c668;
+    --badge-gold-b: #8a6310;
+    --badge-gold-plate-a: #f2dd9b;
+    --badge-gold-plate-b: #c9a23f;
+    --badge-platinum-a: #bcc3f2;
+    --badge-platinum-b: #565aa0;
+    --badge-platinum-plate-a: #dcdffa;
+    --badge-platinum-plate-b: #9aa0d6;
+    --badge-locked-a: #4a5068;
+    --badge-locked-b: #343950;
+    --badge-locked-plate-a: #5a607a;
+    --badge-locked-plate-b: #454a62;
+    --badge-shine: rgba(255, 255, 255, 0.6);
+  }
+}
+:root[data-theme='dark'] {
+  --badge-bronze-a: #d9a074;
+  --badge-bronze-b: #7d4a29;
+  --badge-bronze-plate-a: #e9c3a1;
+  --badge-bronze-plate-b: #b9825a;
+  --badge-silver-a: #cfd4e2;
+  --badge-silver-b: #626a82;
+  --badge-silver-plate-a: #e6e9f2;
+  --badge-silver-plate-b: #a5adc3;
+  --badge-gold-a: #e9c668;
+  --badge-gold-b: #8a6310;
+  --badge-gold-plate-a: #f2dd9b;
+  --badge-gold-plate-b: #c9a23f;
+  --badge-platinum-a: #bcc3f2;
+  --badge-platinum-b: #565aa0;
+  --badge-platinum-plate-a: #dcdffa;
+  --badge-platinum-plate-b: #9aa0d6;
+  --badge-locked-a: #4a5068;
+  --badge-locked-b: #343950;
+  --badge-locked-plate-a: #5a607a;
+  --badge-locked-plate-b: #454a62;
+  --badge-shine: rgba(255, 255, 255, 0.6);
+}
+/* A locked medal: the picture goes grey and quiet; the padlock and the words carry the state. */
+.badge-art--locked .badge-art-emoji {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+
+/* ==========================================================================================================
+   Legal documents: invoices, agreements and the other Agency documents (components/PrintSheet.tsx).
+   One component draws all of them, on the screen and on paper. The owner's "Document style" sets data attributes on .legal-root
+   (font, size, accent, heading, signature layout); every one is a KEY mapped to a value here, never a stored raw value.
+   The print half is a plain legal page: white, black, serif, A4 or Letter with real margins, numbered headings in small caps, clauses
+   and signature blocks kept whole, a thin rule under the letterhead, page numbers and a running title where the browser draws page
+   margin boxes (Chrome and Edge 131 and up; `@page` is written by the component), no screen chrome, no glass, gradients or shadows.
+   The print block may use plain black and white and a few calm rule colours: that is the one place raw colour values are allowed.
+   ========================================================================================================== */
+.legal-root {
+  --doc-font: Georgia, 'Times New Roman', Times, serif;
+  --doc-fs: 16px;
+  --doc-fs-print: 11pt;
+  --doc-accent: var(--color-ink-soft);
+  position: relative;
+}
+.legal-root[data-font='sans'] { --doc-font: system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; }
+.legal-root[data-size='small'] { --doc-fs: 14px; --doc-fs-print: 10pt; }
+.legal-root[data-size='large'] { --doc-fs: 18px; --doc-fs-print: 12.5pt; }
+.legal-root[data-accent='navy'] { --doc-accent: #2b3d7a; }
+.legal-root[data-accent='green'] { --doc-accent: #2e6b4c; }
+.legal-root[data-accent='plum'] { --doc-accent: #6d3b69; }
+.legal-root[data-accent='clay'] { --doc-accent: #9b5a3a; }
+.legal-root[data-accent='slate'] { --doc-accent: #596378; }
+
+.legal-doc {
+  position: relative;
+  font-family: var(--doc-font);
+  font-size: var(--doc-fs);
+  line-height: 1.6;
+  counter-reset: legal-sec;
+  overflow-wrap: anywhere;
+}
+.legal-doc h1, .legal-doc h2, .legal-doc h3 { font-family: inherit; }
+.legal-letterhead { display: flex; align-items: center; gap: var(--spacing-sm); padding-bottom: var(--spacing-sm); margin-bottom: var(--spacing-md); border-bottom: 2px solid var(--doc-accent); }
+.legal-logo { display: block; max-height: 56px; max-width: 160px; object-fit: contain; }
+.legal-letterhead-name { margin: 0; font-size: 1.3em; font-weight: 700; line-height: 1.2; }
+.legal-letterhead-lines { margin: 0; font-size: 0.85em; color: var(--color-ink-soft); }
+.legal-title { margin: 0; text-align: center; font-size: 1.75em; font-weight: 700; line-height: 1.2; font-variant: small-caps; letter-spacing: 0.06em; text-wrap: balance; }
+.legal-subtitle { margin: 4px 0 0; text-align: center; color: var(--color-ink-soft); }
+.legal-meta { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--spacing-xs) var(--spacing-md); margin: var(--spacing-sm) 0 0; padding: var(--spacing-xs) 0; border-top: 1px solid var(--doc-accent); border-bottom: 1px solid var(--doc-accent); font-size: 0.85em; }
+.legal-meta dt { display: inline; font-weight: 700; }
+.legal-meta dd { display: inline; margin: 0 0 0 4px; }
+.legal-parties { width: 100%; margin-top: var(--spacing-md); border-collapse: collapse; font-size: 0.92em; }
+.legal-parties th, .legal-parties td { border: 1px solid var(--color-line); padding: var(--spacing-xs); vertical-align: top; text-align: left; }
+.legal-parties th { width: 28%; font-variant: small-caps; letter-spacing: 0.04em; }
+.legal-sec { margin-top: var(--spacing-md); padding-top: var(--spacing-sm); }
+.legal-sec-h { margin: 0; padding-bottom: 4px; border-bottom: 1px solid var(--doc-accent); font-size: 1.15em; font-weight: 700; font-variant: small-caps; letter-spacing: 0.05em; line-height: 1.3; }
+.legal-root[data-heading='numbered'] .legal-sec-h { counter-increment: legal-sec; }
+.legal-root[data-heading='numbered'] .legal-sec-h::before { content: counter(legal-sec) '. '; }
+.legal-clause { margin: var(--spacing-xs) 0 0; text-align: left; hyphens: auto; }
+.legal-list { margin: var(--spacing-xs) 0 0; padding: 0; list-style: none; }
+.legal-list li { display: flex; gap: var(--spacing-xs); margin-top: 4px; }
+.legal-doc strong { font-weight: 700; }
+.legal-table { width: 100%; margin-top: var(--spacing-xs); border-collapse: collapse; }
+.legal-table th, .legal-table td { border: 1px solid var(--color-line); padding: 4px var(--spacing-xs); font-size: 0.92em; text-align: left; }
+.legal-table thead th { border-bottom: 2px solid var(--doc-accent); }
+.legal-sign { display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-md); margin-top: var(--spacing-sm); }
+.legal-root[data-sign='stacked'] .legal-sign { grid-template-columns: 1fr; }
+.legal-sign-block { min-width: 0; }
+.legal-sign-block h3 { margin: 0; font-size: 1em; font-weight: 700; font-variant: small-caps; letter-spacing: 0.04em; }
+.legal-sign-line { display: flex; gap: var(--spacing-xs); margin: var(--spacing-xs) 0 0; }
+.legal-sign-line > span:last-child { flex: 1; min-width: 0; border-bottom: 1px solid var(--color-ink-mute); padding-bottom: 2px; }
+.legal-sign-accepted { margin: var(--spacing-xs) 0 0; font-size: 0.85em; color: var(--color-ink-soft); }
+.legal-stamp { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; pointer-events: none; z-index: 0; }
+.legal-stamp > span { transform: rotate(-24deg); font-family: var(--doc-font); font-size: clamp(40px, 12vw, 96px); font-weight: 700; letter-spacing: 0.12em; color: var(--color-ink); opacity: 0.06; border: 6px solid currentColor; padding: 0 var(--spacing-md); border-radius: 12px; white-space: nowrap; }
+.legal-doc > *:not(.legal-stamp) { position: relative; z-index: 1; }
+.legal-run-head, .legal-run-foot { display: none; }
+.legal-text { margin: var(--spacing-xs) 0 0; padding: var(--spacing-sm); max-height: 420px; overflow: auto; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; line-height: 1.5; border-radius: var(--radius-tile); background: var(--color-paper); user-select: text; }
+
+@media print {
+  html, body { background: #fff !important; color: #000 !important; }
+  /* The page frame (the sidebar's offset, the column width, the gutters) is not part of the sheet either. */
+  main:has(.legal-root) { margin: 0 !important; padding: 0 !important; max-width: none !important; width: auto !important; }
+  .legal-root { --doc-accent: #333; }
+  .legal-root[data-accent='navy'] { --doc-accent: #1f2d63; }
+  .legal-root[data-accent='green'] { --doc-accent: #1f5a3c; }
+  .legal-root[data-accent='plum'] { --doc-accent: #5a2c56; }
+  .legal-root[data-accent='clay'] { --doc-accent: #84472b; }
+  .legal-root[data-accent='slate'] { --doc-accent: #454f63; }
+  .legal-doc, .legal-doc * {
+    background: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    color: #000 !important;
+    border-color: #777 !important;
+    -webkit-print-color-adjust: economy;
+    print-color-adjust: economy;
+  }
+  /* A screen's own heading above the document ("The invoice") is not part of the sheet. */
+  .legal-host > div:first-child { display: none !important; }
+  .legal-host, .legal-host > div { margin: 0 !important; }
+  .legal-doc { padding: 0 !important; font-size: var(--doc-fs-print); line-height: 1.45; width: auto; }
+  .legal-doc .legal-letterhead { border-bottom: 1pt solid var(--doc-accent) !important; margin-bottom: 8mm; padding-bottom: 3mm; }
+  .legal-doc .legal-letterhead-lines, .legal-doc .legal-subtitle, .legal-doc .legal-sign-accepted { color: #333 !important; }
+  .legal-doc .legal-title, .legal-doc .legal-sec-h { color: var(--doc-accent) !important; }
+  .legal-doc .legal-sec-h { border-bottom: 0.5pt solid var(--doc-accent) !important; break-after: avoid; page-break-after: avoid; }
+  .legal-doc .legal-meta { border-color: var(--doc-accent) !important; }
+  .legal-doc .legal-sec { margin-top: 6mm; padding-top: 0; }
+  .legal-doc .legal-clause, .legal-doc .legal-list li { orphans: 3; widows: 3; break-inside: avoid; page-break-inside: avoid; }
+  .legal-doc .legal-sign, .legal-doc .legal-sign-block, .legal-doc .legal-parties, .legal-doc tr, .legal-doc fieldset { break-inside: avoid; page-break-inside: avoid; }
+  .legal-doc .legal-sign { margin-top: 8mm; }
+  .legal-doc .legal-sign-line { margin-top: 7mm; }
+  .legal-doc thead { display: table-header-group; }
+  .legal-doc table { border-collapse: collapse; width: 100%; }
+  .legal-doc th, .legal-doc td { border: 0.5pt solid #777 !important; }
+  .legal-doc .legal-invoice th { font-variant: small-caps; letter-spacing: 0.04em; border-bottom: 1pt solid var(--doc-accent) !important; }
+  .legal-doc .legal-invoice, .legal-doc .legal-invoice * { font-size: inherit; }
+  .legal-doc .legal-invoice h2 { font-size: 1.3em !important; }
+  .legal-doc input[type='radio'], .legal-doc input[type='checkbox'] { accent-color: #000; }
+  /* "DRAFT", "PAID" and the rest: a faint stamp across the middle of every page. */
+  .legal-doc .legal-stamp { position: fixed; inset: 0; z-index: 0; }
+  .legal-doc .legal-stamp > span { color: #000 !important; opacity: 0.07; border-color: #000 !important; font-size: 90pt; }
+  /* Where the browser cannot draw page margin boxes, a running title and footer stand in, fixed to every page. */
+  .legal-root[data-boxes='0'] .legal-run-head { display: block; position: fixed; top: 0; left: 0; right: 0; font-size: 8pt; color: #555 !important; border-bottom: 0.5pt solid #777; background: #fff !important; }
+  .legal-root[data-boxes='0'] .legal-run-foot { display: flex; justify-content: space-between; position: fixed; bottom: 0; left: 0; right: 0; font-size: 8pt; color: #555 !important; border-top: 0.5pt solid #777; background: #fff !important; }
+  .legal-root[data-boxes='0'] .legal-doc { padding-top: 8mm !important; padding-bottom: 8mm !important; }
+}
+
+/* ===== The ruler and the focus panel (2026-11-02, Mindful) =====
+   components/RulerPicker.tsx draws `.rp`; components/FocusRounds.tsx and screens/Mindful.tsx draw the night-slate panel (`.mf-*`).
+   Colours come from the tokens; the slate is the same one `.night-card` uses, so the orange reads in both themes.
+   Orange text on the slate is 4.96:1 or better (the gradient's lightest end), white text 12.3:1, white at 78% 8.2:1; the other accents are lightened 45% towards white (4.5:1 or better). */
+.rp {
+  --rp-accent: var(--color-r2);
+  position: relative;
+  height: 72px;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+  border-radius: var(--radius-inner);
+}
+.rp:active {
+  cursor: grabbing;
+}
+.rp[data-accent='r1'] { --rp-accent: var(--color-r1); }
+.rp[data-accent='r2'] { --rp-accent: var(--color-r2); }
+.rp[data-accent='r3'] { --rp-accent: var(--color-r3); }
+.rp[data-accent='r4'] { --rp-accent: var(--color-r4); }
+.rp[data-accent='r5'] { --rp-accent: var(--color-r5); }
+.rp[data-accent='r6'] { --rp-accent: var(--color-r6); }
+.rp[data-accent='r7'] { --rp-accent: var(--color-r7); }
+/* On the dark slate: white labels, the accent lightened so it holds 4.5:1 (orange and yellow are light already). */
+.rp[data-tone='night'] {
+  --rp-accent-text: color-mix(in oklab, var(--rp-accent) 55%, #ffffff);
+  --rp-label: rgba(255, 255, 255, 0.78);
+}
+.rp[data-tone='night'][data-accent='r2'],
+.rp[data-tone='night'][data-accent='r3'] {
+  --rp-accent-text: var(--rp-accent);
+}
+/* On the page or a sheet: ink labels, the accent deepened towards the ink. */
+.rp[data-tone='paper'] {
+  --rp-accent-text: color-mix(in oklab, var(--rp-accent) 50%, var(--color-ink));
+  --rp-label: var(--color-ink-soft);
+}
+.rp[data-tone='paper'][data-accent='r3'] {
+  --rp-accent-text: color-mix(in oklab, var(--rp-accent) 30%, var(--color-ink));
+}
+.rp:focus-visible {
+  outline: 2px solid var(--rp-accent-text);
+  outline-offset: 3px;
+}
+.rp[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: default;
+}
+.rp-view {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent);
+}
+.rp-track {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  display: flex;
+  height: 100%;
+  will-change: transform;
+}
+.rp-tick {
+  position: relative;
+  flex: none;
+  width: var(--rp-gap, 14px);
+  height: 100%;
+}
+.rp-line {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  width: 2px;
+  height: var(--h, 20px);
+  margin-left: -1px;
+  border-radius: 2px;
+  background: var(--rp-accent-text);
+  opacity: var(--o, 1);
+  transition:
+    height 140ms var(--ease-open),
+    opacity 140ms ease;
+}
+.rp-tick[data-on] .rp-line {
+  width: 3px;
+  margin-left: -1.5px;
+  opacity: 1;
+}
+.rp-label {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--rp-label);
+}
+.rp-tick[data-on] .rp-label {
+  font-weight: 800;
+  color: var(--rp-accent-text);
+}
+.rp-marker {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  height: 0;
+  margin-left: -6px;
+  border-right: 6px solid transparent;
+  border-bottom: 9px solid var(--rp-accent-text);
+  border-left: 6px solid transparent;
+}
+.rp[data-empty] .rp-marker {
+  opacity: 0.35;
+}
+
+/* The focus panel: a night slate card with the tabs and Start on top, the ruler and the time, the settings as four small chips. */
+.mf-panel {
+  position: relative;
+  padding: var(--spacing-md);
+  box-shadow: var(--shadow-toy-soft);
+  --mf-a-text: var(--color-r2);
+  --mf-dim: rgba(255, 255, 255, 0.78);
+}
+.mf-panel[data-accent='r4'] {
+  --mf-a-text: color-mix(in oklab, var(--color-r4) 55%, #ffffff);
+}
+.mf-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+}
+.mf-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  color: #ffffff;
+}
+.mf-tabs {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  min-width: 0;
+}
+.mf-tabs.fx-slide::before {
+  top: auto;
+  bottom: 6px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--mf-a-text);
+  background-image: none;
+  transform: translate3d(var(--fx-x, 0px), 0, 0);
+}
+.mf-tabs > button {
+  position: relative;
+  min-height: 44px;
+  padding: 0 var(--spacing-xs);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mf-dim);
+  transition: color 160ms ease;
+}
+.mf-tabs > button[aria-pressed='true'] {
+  color: #ffffff;
+}
+.mf-tabs > button:disabled {
+  opacity: 0.45;
+}
+.mf-tabs:not([data-has]) > button[aria-pressed='true'] {
+  box-shadow: inset 0 -2px 0 var(--mf-a-text);
+}
+.mf-start {
+  min-width: 96px;
+  min-height: 44px;
+  padding: 0 var(--spacing-md);
+  border-radius: var(--radius-pill);
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--color-ink-fixed);
+  background-color: var(--color-r2);
+  background-image: linear-gradient(140deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 55%, rgba(30, 30, 60, 0.1));
+}
+.mf-panel[data-accent='r4'] .mf-start {
+  color: #ffffff;
+  background-color: var(--color-r4);
+}
+.mf-dial {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--spacing-xs);
+  align-items: center;
+  margin-top: var(--spacing-sm);
+}
+.mf-ruler {
+  min-width: 0;
+}
+.mf-time-wrap {
+  order: -1;
+  text-align: center;
+}
+.mf-time {
+  display: block;
+  min-width: 5.4ch;
+  font-family: var(--font-display);
+  font-size: 44px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--mf-a-text);
+}
+@media (width >= 40rem) {
+  .mf-dial {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--spacing-md);
+  }
+  .mf-time-wrap {
+    order: 0;
+  }
+}
+.mf-bar {
+  height: 4px;
+  margin-top: var(--spacing-sm);
+  border-radius: 2px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.14);
+}
+.mf-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--mf-a-text);
+  transform-origin: left;
+  transition: transform 250ms linear;
+}
+.mf-sets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-sm);
+}
+@media (width >= 40rem) {
+  .mf-sets {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.mf-set {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-width: 0;
+}
+.mf-set-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--mf-dim);
+}
+.mf-set-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-xs);
+  width: 100%;
+  min-height: 44px;
+  margin-top: var(--spacing-xs);
+  padding: 0 var(--spacing-sm);
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--mf-a-text);
+}
+.mf-pop {
+  position: absolute;
+  z-index: 30;
+  top: 100%;
+  left: 0;
+  width: max-content;
+  min-width: 100%;
+  max-width: min(240px, 80vw);
+  max-height: 264px;
+  margin: var(--spacing-xs) 0 0;
+  padding: var(--spacing-xs);
+  overflow-y: auto;
+  list-style: none;
+  border-radius: var(--radius-tile);
+  border: 1px solid var(--line);
+  background: var(--card-strong);
+  color: var(--color-ink);
+  box-shadow: var(--shadow-toy-soft);
+  outline: none;
+}
+.mf-set:nth-child(even) .mf-pop {
+  right: 0;
+  left: auto;
+}
+@media (width >= 40rem) {
+  .mf-set:nth-child(n + 3) .mf-pop {
+    right: 0;
+    left: auto;
+  }
+  .mf-set:nth-child(-n + 2) .mf-pop {
+    right: auto;
+    left: 0;
+  }
+}
+.mf-opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  min-height: 44px;
+  padding: 0 var(--spacing-sm);
+  border-radius: var(--radius-inner);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+}
+.mf-opt[data-active] {
+  background: var(--fill-2);
+}
+.mf-opt[aria-selected='true'] {
+  font-weight: 800;
+}
+.mf-opt[aria-selected='true']::after {
+  content: '\2713';
+}
+.mf-line {
+  margin: var(--spacing-sm) 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mf-dim);
+}
+.mf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-sm);
+}
+.mf-mini {
+  min-height: 44px;
+  padding: 0 var(--spacing-sm);
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+}
+.mf-mini[aria-pressed='true'] {
+  border-color: var(--mf-a-text);
+  background: rgba(255, 255, 255, 0.2);
+}
+.mf-mini:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.mf-nudge {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-left: auto;
+}
+.mf-nudge-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mf-dim);
+}
+.mf-status {
+  margin-top: var(--spacing-xs);
+}
+.mf-dots {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-xs);
+}
+.mf-dots > span[data-state] {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+}
+.mf-dots > span[data-state='done'] {
+  background: #ffffff;
+}
+.mf-dots > span[data-state='now'] {
+  background: var(--mf-a-text);
+}
+.mf-plus {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--mf-dim);
+}
+.mf-long {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+}
+.mf-long[data-on] {
+  border-color: var(--mf-a-text);
+  background: var(--mf-a-text);
+}
+.mf-rate {
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-inner);
+  background: rgba(255, 255, 255, 0.08);
+}
+.mf-secs {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 72px;
+  padding-bottom: 16px;
+}
+.mf-secs > i {
+  display: block;
+  width: 2px;
+  height: 18px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.25);
+  transition: background-color 120ms ease;
+}
+.mf-secs > i[data-five] {
+  height: 30px;
+}
+.mf-secs > i[data-on] {
+  background: var(--mf-a-text);
+}
+.mf-orb-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 72px;
+}
+.mf-orb {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--mf-a-text);
+  opacity: 0.85;
+}
+.mf-breath-orb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 30px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #ffffff;
+}
+/* The round buttons: under the panel in one row on a phone; floating at its corners on a laptop, in the space its stage leaves. */
+.mf-rounds {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-sm);
+}
+.mf-round {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: #ffffff;
+  background-color: #25293a;
+  background-image: linear-gradient(135deg, #25293a, color-mix(in oklab, #25293a 80%, var(--color-r6)));
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.16),
+    0 6px 14px -4px var(--shade-2);
+}
+.mf-round::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + var(--spacing-xs));
+  left: 50%;
+  z-index: 20;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-inner);
+  background: var(--card-strong);
+  color: var(--color-ink);
+  box-shadow: 0 0 0 1px var(--line);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%);
+  transition: opacity 140ms ease;
+}
+.mf-round[data-at='tl']::after {
+  left: 0;
+  transform: none;
+}
+.mf-round[data-at='tr']::after,
+.mf-round[data-at='br']::after {
+  right: 0;
+  left: auto;
+  transform: none;
+}
+.mf-round:focus-visible::after {
+  opacity: 1;
+}
+@media (hover: hover) and (pointer: fine) {
+  .mf-round:hover::after {
+    opacity: 1;
+  }
+}
+@media (width >= 48rem) and (height >= 30rem) {
+  .mf-stage {
+    position: relative;
+    padding: 0 var(--spacing-xl) var(--spacing-lg);
+  }
+  .mf-stage .mf-panel {
+    padding-bottom: var(--spacing-lg);
+  }
+  .mf-rounds {
+    display: contents;
+  }
+  .mf-round {
+    position: absolute;
+  }
+  .mf-round[data-at='tl'] {
+    top: var(--spacing-md);
+    left: var(--spacing-xs);
+  }
+  .mf-round[data-at='tr'] {
+    top: var(--spacing-md);
+    right: var(--spacing-xs);
+  }
+  .mf-round[data-at='br'] {
+    top: calc(var(--spacing-md) + 44px + var(--spacing-xs));
+    right: var(--spacing-xs);
+  }
+  .mf-round[data-at='bc'] {
+    bottom: 0;
+    left: 50%;
+    margin-left: -22px;
+  }
+  /* A laptop has room beside the buttons, so their tips open sideways (towards the middle) rather than above. */
+  .mf-round[data-at='tl']::after {
+    top: 50%;
+    bottom: auto;
+    left: calc(100% + var(--spacing-xs));
+    transform: translateY(-50%);
+  }
+  .mf-round[data-at='tr']::after,
+  .mf-round[data-at='br']::after {
+    top: 50%;
+    right: calc(100% + var(--spacing-xs));
+    bottom: auto;
+    left: auto;
+    transform: translateY(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rp-line,
+  .mf-bar > span,
+  .mf-round::after,
+  .mf-secs > i,
+  .mf-tabs > button {
+    transition: none !important;
+  }
+}
+
+/* The focus panel's tabs and Start share one row on a phone: keep them from touching. */
+@media (max-width: 480px) {
+  .mf-top {
+    gap: var(--spacing-xs);
+  }
+  .mf-tabs {
+    gap: 0;
+  }
+  .mf-tabs > button {
+    padding: 0 var(--spacing-xs);
+    font-size: 13px;
+  }
+  .mf-start {
+    min-width: 72px;
+    padding: 0 var(--spacing-sm);
+    font-size: 15px;
+  }
+}
+
+/* Wrapping for the document pages: a title shares its words over its lines, a clause is a long read so it keeps full lines but never ends on one word. */
+.legal-title {
+  text-wrap: balance;
+}
+.legal-clause {
+  text-wrap: pretty;
+}
+
+/* A document is paper. Invoices, agreements and the other documents are always white with dark ink, in dark mode too, so the page on the
+   screen is the page that prints. The theme's colours reach the document through variables, so they are set back to their light values
+   on the sheet itself (the aliases that Tailwind reads as well as the base ones). The app around the sheet keeps its theme. */
+.legal-doc {
+  color-scheme: light;
+  --ink: #25293a;
+  --ink-soft: #444a5f;
+  --ink-mute: #565c72;
+  --on-ink: #ffffff;
+  --paper: #f3f4f9;
+  --card: #ffffff;
+  --card-strong: #ffffff;
+  --line: #d7dae8;
+  --color-ink: #25293a;
+  --color-ink-soft: #444a5f;
+  --color-ink-mute: #565c72;
+  --color-on-ink: #ffffff;
+  --color-paper: #f3f4f9;
+  --color-card: #ffffff;
+  --color-card-strong: #ffffff;
+  --color-line: #d7dae8;
+  --tint-red: #fde8ee;
+  --tint-orange: #fdeee0;
+  --tint-yellow: #fbf3cf;
+  --tint-green: #e6f2e4;
+  --tint-sky: #dcebf8;
+  --tint-indigo: #e1e4fa;
+  --tint-purple: #ece8fb;
+  background-color: #ffffff;
+  background-image: none;
+  color: #25293a;
+}
+
+@media print {
+  /* Only the document prints. Everything that is not the sheet, not inside it and not holding it is gone (the headings, the editor, the menus,
+     the buttons, the sidebar), what holds it loses its frame (offsets, gutters, the page wash), so the paper is the sheet and nothing else. */
+  body *:not(:has(.legal-root)):not(.legal-root):not(.legal-root *) {
+    display: none !important;
+  }
+  html::before, html::after, body::before, body::after {
+    display: none !important;
+  }
+  *:has(.legal-root):not(.legal-root) {
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    transform: none !important;
+    overflow: visible !important;
+    background: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}

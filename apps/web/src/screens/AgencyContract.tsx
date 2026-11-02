@@ -1,4 +1,6 @@
 import {
+  contractAsText,
+  docRef,
   fillContractText,
   AGENCY_CURRENCIES,
   CONTRACT_STATUS_NAME,
@@ -8,6 +10,7 @@ import {
   MAX_CONTRACT_QUESTIONS,
   MAX_CONTRACT_SECTIONS,
   money,
+  parseDocStyle,
   priceForUnits,
   type ContractDoc,
   type ContractPackage,
@@ -17,9 +20,13 @@ import {
 } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { Button } from '../components/Button';
 import { ContractView, paperDate } from '../components/ContractView';
+import { DocActions, DocLog, DocTextFold, EmailCopySheet } from '../components/DocActions';
+import { DocStyleCard, DocStyleSheet } from '../components/DocStyleSheet';
+import { HouseTemplateButton } from '../components/HouseTemplateButton';
+import type { SheetStamp } from '../components/PrintSheet';
 import { Inert } from '../components/Inert';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
@@ -27,20 +34,21 @@ import { Sheet } from '../components/Sheet';
 import { StatusTag } from '../components/StatusTag';
 import { Toggle } from '../components/Toggle';
 import { api, ApiError } from '../lib/api';
+import { fileTitle, useAutoPrint } from '../lib/printDoc';
 import { tie } from '../lib/text';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-const small = 'mt-xs w-full min-h-[44px] rounded-tile border-2 border-line bg-paper px-sm text-[16px]';
-const COPY = {
+export const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
+export const small = 'mt-xs w-full min-h-[44px] rounded-tile border-2 border-line bg-paper px-sm text-[16px]';
+export const COPY = {
   hint: 'A blank line starts a new paragraph. Start a line with "- " for a bullet. Put two stars round words to make them bold. Write {{client}} to fill in a name from Names and blanks.',
   law: 'Typed acceptance, not a certified e-signature. A starting point, not legal advice: have a lawyer read it before you rely on it.',
   sentNote: 'The client sees a change at the same link, marked as revised.',
   signed: 'A signed agreement is a record. Make a revised copy.',
 };
-const KIND_NAME: Record<ContractSection['kind'], string> = { text: 'Text', packages: 'Prices', brief: 'Brief', signatures: 'Signatures' };
+export const KIND_NAME: Record<ContractSection['kind'], string> = { text: 'Text', packages: 'Prices', brief: 'Brief', signatures: 'Signatures' };
 
 /** A control that asks twice: the first tap says what it will do, the second does it. */
-function useTwoTap(): [string | null, (key: string, run: () => void) => void] {
+export function useTwoTap(): [string | null, (key: string, run: () => void) => void] {
   const [armed, setArmed] = useState<string | null>(null);
   const tap = (key: string, run: () => void) => {
     if (armed === key) {
@@ -106,10 +114,10 @@ function LinesField({ value, onChange, label, max }: { value: string[]; onChange
   );
 }
 
-const newId = () => `n${Date.now().toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`;
+export const newId = () => `n${Date.now().toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`;
 
 /** One short line saying what a section holds, for its row. */
-function lineOf(s: ContractSection, vars: Record<string, string>): string {
+export function lineOf(s: ContractSection, vars: Record<string, string>): string {
   if (s.kind === 'packages') {
     const n = s.packages?.length ?? 0;
     return `${n} ${n === 1 ? 'package' : 'packages'}${s.unitName ? ` of ${s.unitName}` : ''}`;
@@ -128,7 +136,7 @@ function lineOf(s: ContractSection, vars: Record<string, string>): string {
 }
 
 /** The sheets this page opens, one at a time: a part of the agreement, or the thread, or saving a template. */
-type Open = { kind: 'details' } | { kind: 'section'; id: string } | { kind: 'can' } | { kind: 'thread' } | { kind: 'template' } | null;
+type Open = { kind: 'details' } | { kind: 'section'; id: string } | { kind: 'can' } | { kind: 'thread' } | { kind: 'template' } | { kind: 'style' } | { kind: 'email' } | { kind: 'activity' } | null;
 
 /** The agreement editor: a short page of rows, each with an Edit that opens just that part. Draft or sent can change; signed is a record. */
 export function AgencyContract() {
@@ -154,6 +162,14 @@ export function AgencyContract() {
     setClientId(c.clientId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stamp]);
+
+  const [params] = useSearchParams();
+  // ?print=1 opens the print window once the agreement has loaded (the Download PDF button on a list row); ?email=1 opens the email sheet.
+  useAutoPrint(Boolean(c && doc), fileTitle('Agreement', c?.clientName, c?.doc.title));
+  useEffect(() => {
+    if (c && params.get('email') === '1') setOpen({ kind: 'email' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [c?.id]);
 
   const editable = c?.status === 'draft' || c?.status === 'sent';
   const dirty = Boolean(c && doc && (JSON.stringify(doc) !== JSON.stringify(c.doc) || clientId !== c.clientId));
@@ -215,17 +231,6 @@ export function AgencyContract() {
       setCopied(false);
     }
   };
-  const printIt = () => {
-    const prev = document.title;
-    document.title = doc?.title || 'Agreement';
-    const restore = () => {
-      document.title = prev;
-      window.removeEventListener('afterprint', restore);
-    };
-    window.addEventListener('afterprint', restore);
-    window.print();
-  };
-
   const edit = (fn: (d: ContractDoc) => ContractDoc) => setDoc((d) => (d ? fn(d) : d));
   const patchSection = (sid: string, p: Partial<ContractSection>) => edit((d) => ({ ...d, sections: d.sections.map((s) => (s.id === sid ? { ...s, ...p } : s)) }));
   const moveSection = (i: number, by: -1 | 1) =>
@@ -268,6 +273,10 @@ export function AgencyContract() {
   }
 
   const clientName = clients.data?.clients.find((cl) => cl.id === clientId)?.name ?? c.clientName;
+  const ref = docRef('AGR', c.id);
+  const text = contractAsText(doc, { reference: ref, date: c.sentAt ?? c.createdAt, answers: c.answers, acceptance: c.acceptance });
+  const fileName = fileTitle('Agreement', clientName, doc.title);
+  const sheetStamp: SheetStamp | null = c.status === 'draft' ? 'draft' : c.status === 'void' ? 'void' : c.status === 'signed' ? 'signed' : c.revisedAt ? 'revised' : null;
   const openSection = open?.kind === 'section' ? doc.sections.find((s) => s.id === open.id) : undefined;
   const comments = thread.data?.comments ?? [];
   const latest = comments[comments.length - 1];
@@ -356,19 +365,16 @@ export function AgencyContract() {
             >
               Save as template
             </Button>
-            {doc.show.download && (
-              <Button variant="outline" onClick={printIt}>
-                Download PDF
-              </Button>
-            )}
+            {editable || c.status === 'signed' ? <HouseTemplateButton kind="contract" fromId={id} defaultName={doc.title || 'Agreement'} beforeSave={dirty && editable ? () => save.mutateAsync() : undefined} /> : null}
             {(c.status === 'draft' || c.status === 'void') && (
               <Button variant="ghost" onClick={() => tap('delete', () => remove.mutate())}>
                 {armed === 'delete' ? 'Tap again to delete' : 'Delete'}
               </Button>
             )}
           </div>
-          <p className="mt-xs m-0 text-[12px] font-semibold text-ink-mute">"Download PDF" opens the print window. Choose "Save as PDF" there.</p>
+          <DocActions className="mt-sm" fileName={fileName} text={text} onEmail={() => setOpen({ kind: 'email' })} />
         </section>
+        <DocTextFold text={text} />
 
         {editable ? (
           <section className="mt-lg" aria-labelledby="parts-heading">
@@ -425,11 +431,12 @@ export function AgencyContract() {
                   </Button>
                 </div>
               </li>
+              <DocStyleCard style={parseDocStyle(doc.style)} onEdit={() => setOpen({ kind: 'style' })} />
               <li className={row}>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[16px] font-extrabold">What the client can do</span>
                   <span className="block text-[14px] font-semibold text-ink-soft">
-                    Comments {doc.show.comments ? 'on' : 'off'}, PDF {doc.show.download ? 'on' : 'off'}
+                    Comments {doc.show.comments ? 'on' : 'off'}. Once sent, they can always download a PDF.
                   </span>
                 </span>
                 <Button size="sm" variant="outline" onClick={() => setOpen({ kind: 'can' })}>
@@ -462,16 +469,25 @@ export function AgencyContract() {
                 Open
               </Button>
             </li>
+            <li className={row}>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[16px] font-extrabold">Activity</span>
+                <span className="block text-[14px] font-semibold text-ink-soft">Copies you emailed and when it was accepted.</span>
+              </span>
+              <Button size="sm" variant="outline" onClick={() => setOpen({ kind: 'activity' })}>
+                Open
+              </Button>
+            </li>
           </ul>
         </section>
       </div>
 
-      <section className="mt-lg" aria-labelledby="preview-heading">
+      <section className="mt-lg legal-host" aria-labelledby="preview-heading">
         <h2 id="preview-heading" className="no-print text-[24px]">
           Preview
         </h2>
         <div className="mt-sm">
-          <ContractView doc={doc} answers={c.answers} acceptance={c.acceptance} />
+          <ContractView doc={doc} answers={c.answers} acceptance={c.acceptance} reference={ref} date={c.sentAt ?? c.createdAt} stamp={sheetStamp} />
         </div>
         <p className="no-print mt-md m-0 text-[12px] font-semibold text-ink-mute">{COPY.law}</p>
       </section>
@@ -549,7 +565,6 @@ export function AgencyContract() {
       <Sheet open={open?.kind === 'can'} onClose={closeSheet} title="What the client can do">
         <div className="flex flex-col gap-xs">
           <Toggle on={doc.show.comments} onChange={(on) => edit((d) => ({ ...d, show: { ...d.show, comments: on } }))} label="Write comments" hint="They can ask for a change at their link." />
-          <Toggle on={doc.show.download} onChange={(on) => edit((d) => ({ ...d, show: { ...d.show, download: on } }))} label="Download a PDF copy" hint="They can save or print a copy." />
         </div>
         <div className="mt-md">
           <Button onClick={closeSheet}>Done</Button>
@@ -589,6 +604,12 @@ export function AgencyContract() {
         </form>
       </Sheet>
 
+      <DocStyleSheet open={open?.kind === 'style'} onClose={closeSheet} value={parseDocStyle(doc.style)} onChange={(style) => edit((d) => ({ ...d, style }))} disabled={!editable} />
+      <EmailCopySheet open={open?.kind === 'email'} onClose={closeSheet} route="contracts" id={id} defaultTo={clients.data?.clients.find((cl) => cl.id === clientId)?.contactEmail ?? ''} text={text} noLinkYet={c.status === 'draft' || c.status === 'void'} />
+      <Sheet open={open?.kind === 'activity'} onClose={closeSheet} title="Activity">
+        <DocLog type="contract" id={id} />
+      </Sheet>
+
       <Sheet open={open?.kind === 'template'} onClose={closeSheet} title="Save as template">
         <p className="m-0 text-balance text-[14px] font-semibold text-ink-soft">A template keeps the sections and the look, not the names filled in. Start a new agreement from it any time.</p>
         <label className="mt-sm block text-[14px] font-bold" htmlFor="tpl-name">
@@ -624,7 +645,7 @@ export function AgencyContract() {
   );
 }
 
-function PackagesEditor({ s, currency, count, onCount, onChange }: { s: ContractSection; currency: string; count: string; onCount: (v: string) => void; onChange: (p: Partial<ContractSection>) => void }) {
+export function PackagesEditor({ s, currency, count, onCount, onChange }: { s: ContractSection; currency: string; count: string; onCount: (v: string) => void; onChange: (p: Partial<ContractSection>) => void }) {
   const packages = s.packages ?? [];
   const setPkg = (i: number, p: Partial<ContractPackage>) => onChange({ packages: packages.map((x, j) => (j === i ? { ...x, ...p } : x)) });
   const n = Math.round(Number(count));
@@ -684,7 +705,7 @@ function PackagesEditor({ s, currency, count, onCount, onChange }: { s: Contract
   );
 }
 
-function BriefEditor({ s, onChange, armed, tap }: { s: ContractSection; onChange: (qs: ContractQuestion[]) => void; armed: string | null; tap: (key: string, run: () => void) => void }) {
+export function BriefEditor({ s, onChange, armed, tap }: { s: ContractSection; onChange: (qs: ContractQuestion[]) => void; armed: string | null; tap: (key: string, run: () => void) => void }) {
   const qs = s.questions ?? [];
   const set = (i: number, p: Partial<ContractQuestion>) => onChange(qs.map((q, j) => (j === i ? { ...q, ...p } : q)));
   return (

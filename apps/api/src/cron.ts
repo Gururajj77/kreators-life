@@ -1,3 +1,4 @@
+import { releaseDeadOrders } from './discounts';
 import type { Env } from './env';
 import { nowIso } from './db';
 import { runSequences } from './routes/growth';
@@ -8,6 +9,9 @@ import { closeSeason, sendEventReminders } from './engage';
 import { RETENTION_DAYS, nextOccurrence, nextOnOrAfter, parseRepeat, pastWaterNote, PERIOD_META, reviewPeriodFor, zonedToUtc, type PeriodKind } from '@kreators/shared';
 import { flaggedFor } from './routes/reviews';
 import { securityAlerts } from './alerts';
+import { runAgencyCycles } from './agencyCycles';
+import { syncStageFromAgreements } from './lifecycle';
+import { pruneExpiredPortalSessions } from './portalAccess';
 
 /** The cron runs every fifteen minutes, so 23:45 is the last tick of a day: a reminder set for 23:46 to 23:59 goes out then and not at 00:00, when its day has already turned over. */
 const LAST_TICK = 23 * 60 + 45;
@@ -17,12 +21,12 @@ const LAST_TICK = 23 * 60 + 45;
 export const WATER_CRON = '0 */2 * * *';
 export const MAIN_CRON = '*/15 * * * *';
 
-export async function runScheduled(env: Env, cron: string = ''): Promise<{ sequences: number; recurring: number; circles: number; weekly: number; content: number; submissions: number; reminders: number; events: number; season: number }> {
+export async function runScheduled(env: Env, cron: string = ''): Promise<{ sequences: number; recurring: number; circles: number; weekly: number; content: number; submissions: number; reminders: number; events: number; season: number; agency: number }> {
   const db = env.DB;
   // The two-hour trigger only sends water; the fifteen-minute one does everything else. Anything else (a test run by hand) does both.
   if (cron === WATER_CRON) {
     const water = await sendWaterAndCustom(db, { water: true, custom: false });
-    return { sequences: 0, recurring: 0, circles: 0, weekly: 0, content: 0, submissions: 0, reminders: water, events: 0, season: 0 };
+    return { sequences: 0, recurring: 0, circles: 0, weekly: 0, content: 0, submissions: 0, reminders: water, events: 0, season: 0, agency: 0 };
   }
   const reminders = (await sendReminders(db)) + (await sendWaterAndCustom(db, { water: cron !== MAIN_CRON, custom: true })) + (await sendTaskReminders(db)) + (await sendReviewReminders(db));
   await clearPastWaterNotes(db);
@@ -32,10 +36,16 @@ export async function runScheduled(env: Env, cron: string = ''): Promise<{ seque
   const season = await closeSeason(db);
   const sequences = await runSequences(db);
   const recurring = await runRecurring(db);
+  // Agency: a retainer's months (each one's invoice and pieces, once), clients whose agreement moved, and client-link sessions past twelve hours.
+  const agencyMade = await runAgencyCycles(db).catch(() => 0);
+  await syncStageFromAgreements(db).catch(() => 0);
+  await pruneExpiredPortalSessions(db).catch(() => undefined);
   const circles = await matchDueCircles(db);
   const weekly = await rollWeeklyCircles(db);
   // Money orders nobody paid for within half an hour are closed so the product is buyable again.
   await db.prepare("UPDATE orders SET status = 'expired' WHERE status = 'pending' AND created_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-30 minutes')").run();
+  // A discount code's use is given back when the order it was taken for failed or expired.
+  await releaseDeadOrders(db).catch(() => 0);
   let content = 0;
   const stale = await db.prepare("SELECT id, url FROM content_items WHERE platform = 'youtube' AND (synced_at IS NULL OR synced_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-6 hours')) LIMIT 20").all<{ id: string; url: string }>();
   for (const item of stale.results) {
@@ -58,7 +68,7 @@ export async function runScheduled(env: Env, cron: string = ''): Promise<{ seque
     ]);
     submissions += 1;
   }
-  return { sequences, recurring, circles, weekly, content, submissions, reminders, events, season };
+  return { sequences, recurring, circles, weekly, content, submissions, reminders, events, season, agency: agencyMade };
 }
 
 /**
@@ -72,6 +82,7 @@ export async function tidyOld(db: D1Database): Promise<void> {
     db.prepare('DELETE FROM password_resets WHERE (used_at IS NOT NULL AND used_at < ?) OR expires_at < ?').bind(ago(RETENTION_DAYS.resets), ago(RETENTION_DAYS.resets)),
     db.prepare("UPDATE webhook_events SET payload = '' WHERE received_at < ? AND payload != ''").bind(ago(RETENTION_DAYS.webhooks)),
     db.prepare('DELETE FROM link_clicks WHERE created_at < ?').bind(ago(RETENTION_DAYS.clicks)),
+    db.prepare('DELETE FROM channel_messages WHERE created_at < ?').bind(ago(RETENTION_DAYS.channelLines)),
     db.prepare('DELETE FROM data_requests WHERE requested_at < ?').bind(ago(RETENTION_DAYS.requests)),
     db.prepare("DELETE FROM copyright_notices WHERE status != 'new' AND COALESCE(resolved_at, created_at) < ?").bind(ago(RETENTION_DAYS.notices)),
   ]);

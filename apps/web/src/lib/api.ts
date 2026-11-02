@@ -1,6 +1,10 @@
 import type { ConsentChoices } from '@kreators/shared';
-import type { Page, Unlock } from '@kreators/shared';
+import type { AdminDiscountCode, DiscountArea, DiscountCheck } from '@kreators/shared';
+import type { BadgesResponse, Page, Unlock } from '@kreators/shared';
+import type { Channel, ChannelLine, ChannelMember, ChannelScope } from '@kreators/shared';
 import { todayLocal } from './date';
+import { portalSessionHeader } from './portalSession';
+import type { AgencyStageKey, LifecycleDates, RetainerOption } from '@kreators/shared';
 import type { AdminAttendeeCode, AttendeeCodeHost, AttendeeCodeView } from '@kreators/shared';
 import type { AssistantContext, AssistantReceipt, AssistantReply, AssistantStatus, AssistantTurn, CreditEntry, CreditsResponse, PlanKey } from '@kreators/shared';
 import type { Brand, BrandDetail, BrandPiece, BrandSource, PieceKind, ResearchKind, ResearchRun } from '@kreators/shared';
@@ -15,6 +19,7 @@ import type { DailyBrief, GettingStarted, InboxShow, InboxTab, ReactionKind } fr
 import type { AdminCoachAsk, AdminCoachLink, CoachDirectoryEntry, CoachHub, CoachLink, CoachLogEntry, CoachProfile, CoachShare, CoachStudentView, CoachTaskInput, MyCoachResponse } from '@kreators/shared';
 import type { CustomReminder, RemindersResponse, WaterState, BlockedPerson, EventApp, EventExtras, LinkBlock, MediaItem, MediaOwner } from '@kreators/shared';
 import type { ObservabilityResponse } from '@kreators/shared';
+import type { AgencyDocFull, AgencyDocKind, AgencyDocListItem, DocLogLine, HouseTemplate, PublicAgencyDoc, RetainerInput } from '@kreators/shared';
 import type { WeekPlan, AgencyTemplate, TemplateKind, AgencyClient, AgencyClientPage, AgencyContract, AgencyDeliverable, AgencyNote, AgencyOverview, AgencySettings, BoardColumn, BusinessProfile, ContractAnswer, ContractDoc, ContractListItem, DeliverableStage, DocComment, DocType, InvoiceDoc, InvoiceParty, Kpi, KpisResponse, Page as AgencyPage, PortalShow, PortalView, PublicContract } from '@kreators/shared';
 import type {
   HomeResponse,
@@ -139,6 +144,7 @@ import type {
   Priority,
   Repeat,
   Subtask,
+  TodayMonthResponse,
   TodayResponse,
   User,
   WellbeingLog,
@@ -247,6 +253,8 @@ export const api = {
   /** Change the password: the current one, then the new one. Other sessions are signed out. */
   setPassword: (body: { current: string; password: string }) => post<{ ok: true }>('/me/password', body),
   me: () => request<MeResponse>('/me'),
+  /** The badge gallery: what you hold with its date, and the count behind every rule. */
+  badges: () => request<BadgesResponse>('/me/badges'),
   updateMe: (body: {
     displayName?: string;
     focus?: string;
@@ -293,7 +301,9 @@ export const api = {
   // plans and credits
   credits: () => request<CreditsResponse>('/credits'),
   creditLedger: (pq = '') => request<{ page: Page; entries: CreditEntry[] }>(withQ('/credits/ledger', pq)),
-  creditCheckout: (kind: 'plan' | 'topup', key: string) => post<{ ok: true }>('/credits/checkout', { kind, key }),
+  creditCheckout: (kind: 'plan' | 'topup', key: string, discountCode?: string) => post<{ ok: true }>('/credits/checkout', { kind, key, discountCode: discountCode || undefined }),
+  /** Does a team discount code work on this, and what does it come to? The server prices it; nothing is used up. */
+  discountCheck: (code: string, area: DiscountArea, itemId: string, points?: number) => post<DiscountCheck>('/discounts/check', { code, area, itemId, points }),
   // internal, team only
   observability: (q: string, pq = '') => request<ObservabilityResponse>(withQ(`/internal/observability?q=${encodeURIComponent(q)}`, pq)),
   setRole: (id: string, role: Role) => post<{ user: { id: string; name: string; handle: string | null; role: Role } }>(`/internal/users/${id}/role`, { role }),
@@ -317,6 +327,7 @@ export const api = {
 
   // daily
   today: (date: string) => request<TodayResponse>(`/today?date=${date}`),
+  todayMonth: (month: string, day: string) => request<TodayMonthResponse>(`/today/month?month=${month}&day=${day}`),
   home: (date: string, hour: number) => request<HomeResponse>(`/home?date=${date}&hour=${hour}`),
   checkin: (date: string) => post<CheckinResponse>('/today/checkin', { date }),
   notToDoAdd: (title: string, relationship: RelationshipKey | null) => post<{ item: NotToDo }>('/today/not-to-do', { title, relationship }),
@@ -338,11 +349,23 @@ export const api = {
   agency: (q = '') => request<AgencyOverview>(withQ(`/agency?day=${todayLocal()}`, q)),
   agencySettings: (body: Partial<{ currency: string; weeklyHours: number; profile: BusinessProfile }>) => put<{ settings: AgencySettings }>('/agency/settings', body),
   agencyClient: (id: string) => request<AgencyClientPage>(`/agency/clients/${id}?day=${todayLocal()}`),
-  agencyClientAdd: (body: Partial<AgencyClient>) => post<{ id: string }>('/agency/clients', body),
+  agencyClientAdd: (body: Partial<AgencyClient> & { portalPassword?: 'generate' }) => post<{ id: string; password?: string }>('/agency/clients', body),
   agencyClientUpdate: (id: string, body: Partial<AgencyClient> & { campaignId?: string | null }) => patch<{ ok: true }>(`/agency/clients/${id}`, body),
   agencyClientRemove: (id: string) => del<{ ok: true }>(`/agency/clients/${id}`),
   agencyPortal: (id: string, body: { on?: boolean; fresh?: boolean; show?: Partial<PortalShow> }) => post<{ portalToken: string | null; portal: PortalShow }>(`/agency/clients/${id}/portal`, body),
   agencyArmyImport: (id: string) => post<{ added: number }>(`/agency/clients/${id}/army-import`),
+  // lifecycle: the stage, the days, the checklist, the password on the client link, the trial video, the retainer and the changes on a piece
+  agencyStageMove: (id: string, to: AgencyStageKey, undo = false) => post<{ stage: AgencyStageKey }>(`/agency/clients/${id}/stage`, { to, undo }),
+  agencyLifecycleSave: (id: string, body: Partial<LifecycleDates> & { revisionsPerPiece?: number }) => put<{ dates: LifecycleDates; revisionsPerPiece: number }>(`/agency/clients/${id}/lifecycle`, body),
+  agencyChecklist: (id: string, key: string, done: boolean) => post<{ ticks: Record<string, boolean> }>(`/agency/clients/${id}/checklist`, { key, done }),
+  agencyPassword: (id: string, body: { password?: string; generate?: boolean; clear?: boolean }) => put<{ set: boolean; password?: string }>(`/agency/clients/${id}/password`, body),
+  agencyTrialVideo: (id: string) => post<{ id: string }>(`/agency/clients/${id}/trial-video`),
+  agencyRetainerOffer: (id: string, body: { options: RetainerOption[]; feeCents?: number; piecesPerMonth?: number; revisionsPerPiece?: number; autoSend?: boolean }) => post<{ id: string }>(`/agency/clients/${id}/retainer`, body),
+  agencyRetainerConfirm: (retainerId: string, body: { startDay?: string; autoSend?: boolean }) => post<{ ok: true; made: number }>(`/agency/retainers/${retainerId}/confirm?day=${todayLocal()}`, body),
+  agencyRetainerAutoSend: (retainerId: string, on: boolean) => post<{ ok: true; on: boolean }>(`/agency/retainers/${retainerId}/auto-send`, { on }),
+  agencyRetainerEnd: (retainerId: string) => post<{ ok: true }>(`/agency/retainers/${retainerId}/end`),
+  agencyRetainerWithdraw: (retainerId: string) => post<{ ok: true }>(`/agency/retainers/${retainerId}/withdraw`),
+  agencyItemChanges: (id: string, add: number) => post<{ allowed: number }>(`/agency/items/${id}/changes`, { add }),
   agencyItems: (q = '') => request<{ page: AgencyPage; items: AgencyDeliverable[]; counts: Record<DeliverableStage, number> }>(withQ(`/agency/items?day=${todayLocal()}`, q)),
   agencyBoard: (q = '') => request<{ columns: BoardColumn<AgencyDeliverable>[] }>(withQ(`/agency/board?day=${todayLocal()}`, q)),
   agencyItemAdd: (body: Partial<AgencyDeliverable> & { clientId: string }) => post<{ id: string }>(`/agency/items?day=${todayLocal()}`, body),
@@ -356,13 +379,13 @@ export const api = {
   agencyTimeAdd: (body: { clientId: string; itemId?: string | null; day: string; minutes: number; billable: boolean; note?: string }) => post<{ id: string }>('/agency/time', body),
   agencyTimeRemove: (id: string) => del<{ ok: true }>(`/agency/time/${id}`),
   agencyTemplates: (kind?: TemplateKind) => request<{ templates: AgencyTemplate[] }>(`/agency/templates${kind ? `?kind=${kind}` : ''}`),
-  agencyTemplateAdd: (body: { kind: TemplateKind; name: string; fromId: string }) => post<{ id: string }>('/agency/templates', body),
+  agencyTemplateAdd: (body: { kind: TemplateKind; name: string; fromId?: string; houseId?: string }) => post<{ id: string }>('/agency/templates', body),
   agencyTemplateUpdate: (id: string, body: { name?: string; fromId?: string }) => patch<{ ok: true }>(`/agency/templates/${id}`, body),
   agencyTemplateRemove: (id: string) => del<{ ok: true }>(`/agency/templates/${id}`),
   agencyInvoices: (q = '') => request<{ page: AgencyPage; invoices: Invoice[]; counts: { status: string; n: number; cents: number }[] }>(withQ('/agency/invoices', q)),
   agencyInvoiceBoard: (q = '') => request<{ columns: (BoardColumn<Invoice> & { cents: number })[] }>(withQ('/agency/invoices/board', q)),
   agencyInvoice: (id: string) => request<{ invoice: Invoice }>(`/agency/invoices/${id}`),
-  agencyInvoiceAdd: (body: { clientId: string; templateId?: string; starter?: string; items?: InvoiceItem[]; doc?: Partial<InvoiceDoc>; dueDate?: string | null; issueDate?: string | null; note?: string }) => post<{ invoice: Invoice }>(`/agency/invoices?day=${todayLocal()}`, body),
+  agencyInvoiceAdd: (body: { clientId: string; templateId?: string; houseId?: string; starter?: string; items?: InvoiceItem[]; doc?: Partial<InvoiceDoc>; dueDate?: string | null; issueDate?: string | null; note?: string }) => post<{ invoice: Invoice }>(`/agency/invoices?day=${todayLocal()}`, body),
   agencyInvoiceFromClient: (clientId: string, month?: string) => post<{ invoice: Invoice }>(`/agency/clients/${clientId}/invoice?day=${todayLocal()}`, month ? { month } : {}),
   agencyInvoiceUpdate: (id: string, body: { items?: InvoiceItem[]; doc?: Partial<InvoiceDoc> & { from?: InvoiceParty; to?: InvoiceParty }; dueDate?: string | null; issueDate?: string | null; note?: string; number?: string; status?: Invoice['status'] }) => patch<{ invoice: Invoice }>(`/agency/invoices/${id}`, body),
   agencyInvoiceDuplicate: (id: string, body: { issueDate?: string; dueDate?: string | null; number?: string; bumpMonths?: boolean } = {}) => post<{ invoice: Invoice }>(`/agency/invoices/${id}/duplicate?day=${todayLocal()}`, body),
@@ -370,13 +393,21 @@ export const api = {
   agencyContracts: (q = '') => request<{ page: AgencyPage; contracts: ContractListItem[]; counts: { status: string; n: number }[] }>(withQ('/agency/contracts', q)),
   agencyContractBoard: (q = '') => request<{ columns: BoardColumn<ContractListItem>[] }>(withQ('/agency/contracts/board', q)),
   agencyContract: (id: string) => request<{ contract: AgencyContract }>(`/agency/contracts/${id}`),
-  agencyContractAdd: (body: { templateKey?: string; templateId?: string; clientId?: string | null }) => post<{ id: string }>('/agency/contracts', body),
+  agencyContractAdd: (body: { templateKey?: string; templateId?: string; houseId?: string; clientId?: string | null }) => post<{ id: string }>('/agency/contracts', body),
   agencyContractUpdate: (id: string, body: { doc?: ContractDoc; clientId?: string | null; status?: 'draft' | 'sent' | 'void' }) => patch<{ contract: AgencyContract }>(`/agency/contracts/${id}`, body),
   agencyContractDuplicate: (id: string) => post<{ id: string }>(`/agency/contracts/${id}/duplicate`),
   agencyContractRemove: (id: string) => del<{ ok: true }>(`/agency/contracts/${id}`),
   agencyComments: (type: DocType, id: string) => request<{ comments: DocComment[] }>(`/agency/comments/${type}/${id}`),
   agencyCommentAdd: (type: DocType, id: string, body: string) => post<{ ok: true }>(`/agency/comments/${type}/${id}`, { body }),
   agencyCommentRemove: (id: string) => del<{ ok: true }>(`/agency/comments/${id}`),
+  agencyEmailCopy: (type: 'invoices' | 'contracts' | 'docs', id: string, to?: string) => post<EmailCopyResult>(`/agency/${type}/${id}/email`, to ? { to } : {}),
+  agencyDocLog: (type: DocType, id: string) => request<{ log: DocLogLine[] }>(`/agency/doc-log/${type}/${id}`),
+  agencyDocs: (q = '') => request<{ page: AgencyPage; docs: AgencyDocListItem[]; counts: { status: string; n: number }[] }>(withQ('/agency/docs', q)),
+  agencyDoc: (id: string) => request<{ doc: AgencyDocFull }>(`/agency/docs/${id}`),
+  agencyDocAdd: (body: { kind?: AgencyDocKind; clientId?: string | null; templateId?: string; houseId?: string; month?: string; retainer?: Partial<RetainerInput> }) => post<{ id: string }>(`/agency/docs?day=${todayLocal()}`, body),
+  agencyDocUpdate: (id: string, body: { doc?: ContractDoc; clientId?: string | null; status?: 'draft' | 'sent' }) => patch<{ doc: AgencyDocFull }>(`/agency/docs/${id}`, body),
+  agencyDocDuplicate: (id: string) => post<{ id: string }>(`/agency/docs/${id}/duplicate`),
+  agencyDocRemove: (id: string) => del<{ ok: true }>(`/agency/docs/${id}`),
 
   // business metrics in Reviews: only for people who switched them on
   kpis: (kind: PeriodKind, date: string) => request<KpisResponse>(`/reviews/kpis?kind=${kind}&date=${date}&day=${todayLocal()}`),
@@ -471,7 +502,7 @@ export const api = {
   click: (handle: string, ref: string) => post<{ ok: true }>(`/public/${encodeURIComponent(handle)}/click`, { ref }),
   lead: (handle: string, body: { name: string; email: string; message: string }) => post<{ ok: true }>(`/public/${encodeURIComponent(handle)}/lead`, body),
   follow: (handle: string) => post<{ following: boolean }>(`/store/follow/${encodeURIComponent(handle)}`),
-  checkout: (productId: string, body: { coupon?: string; affiliate?: string | null; pay: 'points' | 'test' | 'money'; points?: number; question?: string; intake?: string[]; replay?: boolean; click?: string | null; src?: string | null }) =>
+  checkout: (productId: string, body: { coupon?: string; discountCode?: string; affiliate?: string | null; pay: 'points' | 'test' | 'money'; points?: number; question?: string; intake?: string[]; replay?: boolean; click?: string | null; src?: string | null }) =>
     post<{ order: Order; payment: { mode: 'razorpay'; keyId: string | null; providerOrderId: string | null; amountCents: number; currency: string } | null }>(`/store/${productId}/checkout`, body),
   order: (id: string) => request<{ order: Order }>(`/store/orders/${id}`),
   reschedule: (bookingId: string, startsAt: string) => post<{ booking: Booking }>(`/store/bookings/${bookingId}/reschedule`, { startsAt }),
@@ -548,7 +579,7 @@ export const api = {
   addLearningItem: (programId: string, body: { moduleTitle: string; contentType?: LearningItem['contentType']; contentRef?: string; body?: string }) => post<{ ok: true }>(`/school/programs/${programId}/items`, body),
   addAssignment: (programId: string, body: { title: string; instructions?: string; rubric?: string; dueDays?: number }) => post<{ ok: true }>(`/school/programs/${programId}/assignments`, body),
   openCohort: (programId: string, body: { name: string; startAt: string; endAt: string; capacity?: number }) => post<{ ok: true; id: string }>(`/school/programs/${programId}/cohorts`, body),
-  enroll: (cohortId: string, pay?: 'test') => post<{ ok: true; id: string }>(`/school/cohorts/${cohortId}/enroll`, pay ? { pay } : {}),
+  enroll: (cohortId: string, pay?: 'test', discountCode?: string) => post<{ ok: true; id: string }>(`/school/cohorts/${cohortId}/enroll`, { ...(pay ? { pay } : {}), ...(discountCode ? { discountCode } : {}) }),
   cohort: (id: string) =>
     request<{ cohort: Cohort; items: LearningItem[]; assignments: CourseAssignment[]; submissions: Submission[]; sessions: CohortSession[]; enrollments: Enrollment[]; manager: boolean; mentor: boolean; myProgress: Enrollment['progress'] | null; myStatus: Enrollment['status'] | null }>(`/school/cohorts/${id}`),
   submitAssignment: (assignmentId: string, body: { cohortId: string; url?: string; text?: string }) => post<{ ok: true }>(`/school/assignments/${assignmentId}/submit`, body),
@@ -571,7 +602,7 @@ export const api = {
   event: (id: string) => request<{ event: PartyEvent; registrations: EventRegistration[]; host: boolean; feedback: { average: number | null; count: number }; hostCode: AttendeeCodeHost | null; attendee: AttendeeCodeView | null }>(`/party/events/${id}`),
   setEventCode: (id: string, change: CodeChange) => put<{ hostCode: AttendeeCodeHost }>(`/party/events/${id}/attendee-code`, change),
   claimEventCode: (id: string, code: string) => post<{ xp: number; newBadges: string[] }>(`/party/events/${id}/claim`, { code }),
-  rsvp: (id: string, networking: boolean) => post<{ status: EventRegistration['status'] }>(`/party/events/${id}/rsvp`, { networking }),
+  rsvp: (id: string, networking: boolean, discountCode?: string) => post<{ status: EventRegistration['status'] }>(`/party/events/${id}/rsvp`, { networking, ...(discountCode ? { discountCode } : {}) }),
   cancelRsvp: (id: string) => post<{ ok: true }>(`/party/events/${id}/cancel-rsvp`),
   checkinGuest: (id: string, userId: string) => post<{ ok: true }>(`/party/events/${id}/checkin`, { userId }),
   eventFeedback: (id: string, body: { rating: number; comment?: string; networking?: boolean }) => post<{ ok: true }>(`/party/events/${id}/feedback`, body),
@@ -654,6 +685,29 @@ export const api = {
   unfriend: (userId: string) => del<{ ok: true }>(`/bond/friends/${userId}`),
   chats: () => request<{ chats: BondChat[] }>('/bond/chats'),
   openChat: (body: { userId?: string; groupId?: string; alias?: string }) => post<{ chat: BondChat }>('/bond/chats', body),
+  // chat channels: /community/channels (public, made by guides) and /bond/channels (private, made for friends)
+  channels: (scope: ChannelScope, pq = '', all = false) => request<{ page: Page; channels: Channel[]; canCreate: boolean }>(withQ(`/${scope}/channels${all ? '?all=1' : ''}`, pq)),
+  channelsUnread: (scope: ChannelScope) => request<{ unread: number }>(`/${scope}/channels/unread`),
+  channel: (scope: ChannelScope, id: string) => request<{ channel: Channel; members: ChannelMember[] }>(`/${scope}/channels/${id}`),
+  createChannel: (scope: ChannelScope, body: { name: string; topic: string }) => post<{ channel: Channel | null }>(`/${scope}/channels`, body),
+  changeChannel: (scope: ChannelScope, id: string, body: { name?: string; topic?: string }) => patch<{ channel: Channel | null }>(`/${scope}/channels/${id}`, body),
+  closeChannel: (scope: ChannelScope, id: string, archived: boolean) => post<{ channel: Channel | null }>(`/${scope}/channels/${id}/archive`, { archived }),
+  joinChannel: (scope: ChannelScope, id: string) => post<{ channel: Channel | null }>(`/${scope}/channels/${id}/join`),
+  leaveChannel: (scope: ChannelScope, id: string) => post<{ ok: true }>(`/${scope}/channels/${id}/leave`),
+  inviteToChannel: (id: string, userId: string) => post<{ ok: true }>(`/bond/channels/${id}/members`, { userId }),
+  removeFromChannel: (id: string, userId: string) => del<{ ok: true }>(`/bond/channels/${id}/members/${userId}`),
+  channelLines: (scope: ChannelScope, id: string, q: { after?: number; before?: number; from?: number; read?: boolean } = {}) => {
+    const p = new URLSearchParams();
+    if (q.after) p.set('after', String(q.after));
+    if (q.before) p.set('before', String(q.before));
+    if (q.after && q.from) p.set('from', String(q.from));
+    if (q.read) p.set('read', '1');
+    return request<{ lines: ChannelLine[]; more: boolean; gone: number[] }>(withQ(`/${scope}/channels/${id}/messages`, p.toString()));
+  },
+  channelSay: (scope: ChannelScope, id: string, body: string, opts: { anonymous?: boolean; replyTo?: string | null } = {}) => post<{ line: ChannelLine | null }>(`/${scope}/channels/${id}/messages`, { body, ...opts }),
+  channelUnsay: (scope: ChannelScope, id: string, mid: string) => del<{ ok: true }>(`/${scope}/channels/${id}/messages/${mid}`),
+  channelReport: (scope: ChannelScope, id: string, mid: string, note = '') => post<{ ok: true }>(`/${scope}/channels/${id}/messages/${mid}/report`, { note }),
+  channelBlockAuthor: (scope: ChannelScope, id: string, mid: string) => post<{ ok: true }>(`/${scope}/channels/${id}/messages/${mid}/block-author`),
   chat: (id: string) => request<{ chat: BondChat; messages: BondMessage[] }>(`/bond/chats/${id}`),
   chatSay: (id: string, body: string) => post<{ ok: true; id: string }>(`/bond/chats/${id}/messages`, { body }),
   block: (userId: string, reason?: string) => post<{ ok: true }>('/bond/block', { userId, reason }),
@@ -811,6 +865,28 @@ export const api = {
   hidePost: (id: string, hidden: boolean, reason?: string) => post<{ post: CommunityPost }>(`/manage/community/posts/${id}`, { hidden, reason }),
 };
 
+export interface DiscountList {
+  page: Page;
+  codes: AdminDiscountCode[];
+  totals: { codes: number; live: number; redemptions: number; givenPoints: number; givenCents: { currency: string; cents: number }[] };
+}
+/** What the create sheet sends: the percent and the amounts are what was typed, and the server reads their digits. */
+export interface DiscountInput {
+  code?: string;
+  kind: 'percent' | 'fixed';
+  percent?: string;
+  amount?: string;
+  currency?: string;
+  areas: DiscountArea[];
+  itemId?: string;
+  minAmount?: string;
+  maxUses?: string;
+  perPersonLimit?: string;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  note?: string;
+}
+
 /** Admin calls use the shared key when given; an admin's own session also works. */
 async function adminRequest<T>(key: string, path: string, init: RequestInit = {}): Promise<T> {
   const token = useSession.getState().token;
@@ -837,6 +913,14 @@ export const adminApi = {
   revokeBadge: (key: string, id: string, badge: string) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/badges/${badge}`, { method: 'DELETE' }),
   addPoints: (key: string, id: string, amount: number, note: string) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/points`, { method: 'POST', body: JSON.stringify({ amount, note }) }),
   setPlan: (key: string, id: string, plan: PlanKey, days: number) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/plan`, { method: 'POST', body: JSON.stringify({ plan, days }) }),
+  houseTemplates: (key: string, pq = '') => adminRequest<{ page: Page; templates: HouseTemplate[] }>(key, withQ('/agency/templates', pq)),
+  houseTemplateAdd: (key: string, body: { kind: TemplateKind; name: string; fromId: string; includeBusiness: boolean }) => adminRequest<{ id: string }>(key, '/agency/templates', { method: 'POST', body: JSON.stringify(body) }),
+  houseTemplateUpdate: (key: string, id: string, body: { name?: string; status?: 'active' | 'retired'; fromId?: string; includeBusiness?: boolean }) => adminRequest<{ ok: true }>(key, `/agency/templates/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  discountCodes: (key: string, q: string, filters: { active?: string; area?: string }, pq = '') =>
+    adminRequest<DiscountList>(key, withQ(`/discounts?q=${encodeURIComponent(q)}&active=${encodeURIComponent(filters.active ?? '')}&area=${encodeURIComponent(filters.area ?? '')}`, pq)),
+  createDiscount: (key: string, body: DiscountInput) => adminRequest<{ code: AdminDiscountCode | null }>(key, '/discounts', { method: 'POST', body: JSON.stringify(body) }),
+  updateDiscount: (key: string, id: string, body: Record<string, unknown>) => adminRequest<{ code: AdminDiscountCode | null }>(key, `/discounts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  bulkDiscounts: (key: string, ids: string[], active: boolean) => adminRequest<{ changed: number }>(key, '/discounts/bulk', { method: 'POST', body: JSON.stringify({ ids, active }) }),
   attendeeCodes: (key: string, app: string, q: string, pq = '') => adminRequest<{ page: Page; codes: AdminAttendeeCode[] }>(key, withQ(`/attendee-codes?app=${encodeURIComponent(app)}&q=${encodeURIComponent(q)}`, pq)),
   setAttendeeCode: (key: string, app: string, id: string, change: CodeChange) => adminRequest<{ code: AdminAttendeeCode | null }>(key, `/attendee-codes/${app}/${id}`, { method: 'PUT', body: JSON.stringify(change) }),
   coachAsks: (key: string, pq = '') => adminRequest<{ page: Page; asks: AdminCoachAsk[] }>(key, withQ('/coaching/asks', pq)),
@@ -872,22 +956,41 @@ export const adminApi = {
 };
 
 /** The public site. No session needed, and none is sent. */
+/** A client link, an agreement or an invoice that has a password also needs the unlock the browser kept for this tab (lib/portalSession.ts). */
+const portalHeaders = (): Record<string, string> => {
+  const kept = portalSessionHeader();
+  return kept ? { 'X-Portal-Session': kept } : {};
+};
+
 async function publicRequest<T>(path: string): Promise<T> {
-  const res = await fetch(`/api/public${path}`);
+  const res = await fetch(`/api/public${path}`, { headers: portalHeaders() });
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new ApiError(body.error ?? res.statusText, res.status);
+    throw new ApiError(body.error ?? res.statusText, res.status, body);
   }
   return (await res.json()) as T;
 }
 
 async function publicSend<T>(method: 'POST', path: string, body: unknown): Promise<T> {
-  const res = await fetch(`/api/public${path}`, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await fetch(`/api/public${path}`, { method, headers: { 'Content-Type': 'application/json', ...portalHeaders() }, body: JSON.stringify(body) });
   if (!res.ok) {
     const b = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new ApiError(b.error ?? res.statusText, res.status);
+    throw new ApiError(b.error ?? res.statusText, res.status, b);
   }
   return (await res.json()) as T;
+}
+
+/** The three kinds of client-facing link that can sit behind a client's password, by their public path. */
+export type LockedLink = 'contracts' | 'invoices' | 'agency/doc';
+
+/** What emailing a copy answered: whether it went, and a plain sentence when it did not. */
+export interface EmailCopyResult {
+  ok: true;
+  sent: boolean;
+  note: string;
+  linkIncluded: boolean;
+  /** The address, masked. */
+  to: string;
 }
 
 /** What the client sees on an invoice link: the invoice with what was switched off removed, and its thread. */
@@ -900,9 +1003,16 @@ export interface PublicInvoice {
 
 export const publicApi = {
   portal: (token: string) => publicRequest<PortalView>(`/agency/${encodeURIComponent(token)}`),
-  portalDecide: (token: string, id: string, body: { decision: 'approve' | 'changes' | 'comment'; note?: string }) => publicSend<{ ok: true }>('POST', `/agency/${encodeURIComponent(token)}/items/${id}`, body),
+  portalDecide: (token: string, id: string, body: { decision: 'approve' | 'changes' | 'paid_change' | 'comment'; note?: string; where?: string }) => publicSend<{ ok: true }>('POST', `/agency/${encodeURIComponent(token)}/items/${id}`, body),
+  portalUnlock: (token: string, password: string) => publicSend<{ open: boolean; session: string | null; expiresAt: string | null }>('POST', `/agency/${encodeURIComponent(token)}/unlock`, { password }),
+  portalRetainer: (token: string, months: number) => publicSend<{ ok: true }>('POST', `/agency/${encodeURIComponent(token)}/retainer`, { months }),
+  linkLock: (kind: LockedLink, token: string) => publicRequest<{ locked: boolean; clientName?: string }>(`/${kind}/${encodeURIComponent(token)}/lock`),
+  linkUnlock: (kind: LockedLink, token: string, password: string) => publicSend<{ open: boolean; session: string | null; expiresAt: string | null }>('POST', `/${kind}/${encodeURIComponent(token)}/unlock`, { password }),
   contract: (token: string) => publicRequest<PublicContract>(`/contracts/${encodeURIComponent(token)}`),
   contractAccept: (token: string, body: { name: string; title: string; agree: boolean; answers: Record<string, ContractAnswer> }) => publicSend<{ ok: true }>('POST', `/contracts/${encodeURIComponent(token)}/accept`, body),
+  agencyDoc: (token: string) => publicRequest<PublicAgencyDoc>(`/agency/doc/${encodeURIComponent(token)}`),
+  agencyDocApprove: (token: string, body: { name: string; title: string; agree: boolean; answers: Record<string, ContractAnswer> }) => publicSend<{ ok: true }>('POST', `/agency/doc/${encodeURIComponent(token)}/approve`, body),
+  agencyDocComment: (token: string, text: string) => publicSend<{ ok: true }>('POST', `/agency/doc/${encodeURIComponent(token)}/comments`, { body: text }),
   contractComment: (token: string, text: string) => publicSend<{ ok: true }>('POST', `/contracts/${encodeURIComponent(token)}/comments`, { body: text }),
   invoiceComment: (token: string, text: string) => publicSend<{ ok: true }>('POST', `/invoices/${encodeURIComponent(token)}/comments`, { body: text }),
   explore: (opts: { q?: string; type?: ListingType; featured?: boolean; limit?: number } = {}) =>

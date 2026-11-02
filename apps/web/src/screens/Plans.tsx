@@ -1,7 +1,8 @@
-import { AGENT_LIMITS, AGENT_META, AGENTS, messagesFor, money, PAID_PLANS, PLAN_CURRENCY, PLAN_DAYS, PLANS, type AgentLimit, type CreditEntry, type CreditReason } from '@kreators/shared';
+import { AGENT_LIMITS, AGENT_META, AGENTS, messagesFor, money, PAID_PLANS, PLAN_CURRENCY, PLAN_DAYS, PLANS, type AgentLimit, type CreditEntry, type CreditReason, type DiscountCheck } from '@kreators/shared';
 import { useState } from 'react';
 import { Button } from '../components/Button';
 import { AreaLine, StatTile } from '../components/Charts';
+import { DiscountField } from '../components/DiscountField';
 import { PageHeader } from '../components/PageHeader';
 import { Pager, usePage } from '../components/Pager';
 import { Screen } from '../components/Screen';
@@ -55,11 +56,13 @@ export function Plans() {
   // What the checkout said, under the button that asked. Until payments are live it says nothing was charged.
   const [said, setSaid] = useState<Record<string, string>>({});
   const [asking, setAsking] = useState<string | null>(null);
+  // A team discount code applied to one plan or top-up. The server prices it again at checkout.
+  const [applied, setApplied] = useState<Record<string, DiscountCheck | null>>({});
   const choose = async (kind: 'plan' | 'topup', key: string) => {
     const id = `${kind}:${key}`;
     setAsking(id);
     try {
-      await api.creditCheckout(kind, key);
+      await api.creditCheckout(kind, key, applied[id]?.code);
       setSaid((s) => ({ ...s, [id]: 'Done.' }));
     } catch (e) {
       setSaid((s) => ({ ...s, [id]: e instanceof Error ? e.message : 'That did not go through. Nothing was charged. Try again.' }));
@@ -164,7 +167,8 @@ export function Plans() {
                   <li key={p.key} className={`flex flex-col rounded-card bg-card p-md shadow-toy-soft ${mine ? 'border-2 border-ink' : 'border-2 border-transparent'}`}>
                     <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-soft">{p.name}</p>
                     <p className="mt-xs m-0 font-display text-[32px] font-extrabold leading-none">
-                      {money(p.priceCents, PLAN_CURRENCY)}
+                      {applied[id] && applied[id]!.offCents > 0 && <s className="mr-xs text-[16px] font-bold text-ink-soft">{money(p.priceCents, PLAN_CURRENCY)}</s>}
+                      {money(applied[id] ? applied[id]!.payCents : p.priceCents, PLAN_CURRENCY)}
                       <span className="text-[14px] font-bold text-ink-soft"> a month</span>
                     </p>
                     <p className="mt-sm m-0 text-[14px] font-bold">
@@ -178,6 +182,7 @@ export function Plans() {
                         Choose {p.name}
                       </Button>
                     )}
+                    {!mine && <DiscountField className="mt-xs" area="plan" itemId={p.key} value={applied[id]?.code ?? ''} check={applied[id] ?? null} onChange={(_c, check) => setApplied((a2) => ({ ...a2, [id]: check }))} />}
                     {said[id] && (
                       <p role="status" className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
                         {said[id]}
@@ -197,11 +202,12 @@ export function Plans() {
                   <li key={t.key} className="flex flex-col rounded-card bg-card p-md shadow-toy-soft">
                     <p className="m-0 font-display text-[24px] font-extrabold leading-none">{n(t.credits)} credits</p>
                     <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-                      About {n(messagesFor(t.credits))} messages, for {money(t.priceCents, PLAN_CURRENCY)}
+                      About {n(messagesFor(t.credits))} messages, for {applied[id] && applied[id]!.offCents > 0 && <s>{money(t.priceCents, PLAN_CURRENCY)}</s>} {money(applied[id] ? applied[id]!.payCents : t.priceCents, PLAN_CURRENCY)}
                     </p>
                     <Button variant="outline" className="mt-sm" disabled={asking === id} onClick={() => void choose('topup', t.key)}>
                       Top up
                     </Button>
+                    <DiscountField className="mt-xs" area="topup" itemId={t.key} value={applied[id]?.code ?? ''} check={applied[id] ?? null} onChange={(_c, check) => setApplied((a2) => ({ ...a2, [id]: check }))} />
                     {said[id] && (
                       <p role="status" className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
                         {said[id]}

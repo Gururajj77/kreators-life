@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
 import { Button } from './Button';
 import { Sheet } from './Sheet';
+import { Toggle } from './Toggle';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 
@@ -85,6 +86,10 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
   const [campaignId, setCampaignId] = useState(client?.campaignId ?? '');
   const [confirm, setConfirm] = useState(false);
   const [imported, setImported] = useState<number | null>(null);
+  // A new client starts with a password on its link unless the owner says otherwise; the generated one is shown once, here.
+  const [askPassword, setAskPassword] = useState(true);
+  const [made, setMade] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const detail = useAuthed(['agency', 'client', client?.id ?? 'new'], () => api.agencyClient(client!.id), Boolean(client));
   const campaigns = detail.data?.campaigns ?? [];
@@ -111,12 +116,14 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
         await api.agencyClientUpdate(client.id, { ...body(), billing, campaignId: campaignId || null });
         return;
       }
-      const made = await api.agencyClientAdd(body());
-      if (billingFilled) await api.agencyClientUpdate(made.id, { billing });
+      const added = await api.agencyClientAdd({ ...body(), ...(askPassword ? { portalPassword: 'generate' as const } : {}) });
+      if (billingFilled) await api.agencyClientUpdate(added.id, { billing });
+      return added.password ?? null;
     },
-    onSuccess: () => {
+    onSuccess: (password) => {
       invalidate();
-      onClose();
+      if (password) setMade(password);
+      else onClose();
     },
   });
   const remove = useMutation({
@@ -141,6 +148,33 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
     setChannels([...channels, v]);
   };
   const setId = (i: number, patch: Partial<{ label: string; value: string }>) => setBilling({ ...billing, taxIds: billing.taxIds.map((t, j) => (j === i ? { ...t, ...patch } : t)) });
+
+  if (made) {
+    return (
+      <div>
+        <p className="m-0 text-[16px] font-bold">{`${name.trim()} is added, with a password on their link.`}</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Here is the password. It is shown once, and we keep only a scrambled copy. Send it to your client separately from the link. You can make a new one any time from their page.</p>
+        <input readOnly value={made} aria-label="The password" onFocus={(e) => e.currentTarget.select()} className="mt-sm w-full rounded-tile border-2 border-line bg-paper px-sm py-sm font-mono text-[16px]" />
+        <div className="mt-sm flex flex-wrap gap-xs">
+          <Button
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(made);
+                setCopied(true);
+              } catch {
+                setCopied(false);
+              }
+            }}
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </Button>
+          <Button variant="outline" onClick={onClose}>
+            I have saved it
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form
@@ -221,6 +255,12 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
       <Field label="Notes, only for you">
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={AGENCY_NOTES_MAX} className={field} />
       </Field>
+
+      {!client && (
+        <div className="mt-md">
+          <Toggle on={askPassword} onChange={setAskPassword} label="Ask for a password at their link" hint="Recommended. We make one and show it once, so you can send it to them. Without it, anyone with the link can open their page." />
+        </div>
+      )}
 
       <h3 className="mt-md text-[18px]">Billing details</h3>
       <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.billing}</p>

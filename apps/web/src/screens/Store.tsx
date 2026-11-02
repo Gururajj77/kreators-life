@@ -1,4 +1,4 @@
-import { BADGES, typedCents, isFeatured, PREOWNED_CONDITION_META, PREOWNED_CONDITIONS, STORE_CATEGORIES, STORE_STAGE_META, STORE_STAGES, type MarketCard, type PreownedListing, type StoreItem, type StoreKit, type StoreStage } from '@kreators/shared';
+import { PUBLIC_BADGES, typedCents, isFeatured, PREOWNED_CONDITION_META, PREOWNED_CONDITIONS, STORE_CATEGORIES, STORE_STAGE_META, STORE_STAGES, type MarketCard, type PreownedListing, type StoreItem, type StoreKit, type StoreStage } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { Button } from '../components/Button';
@@ -546,7 +546,7 @@ function ItemSheet({ open, onClose, onSaved }: { open: boolean; onClose: () => v
           <Field label="Holds the badge">
             <select value={badge} onChange={(e) => setBadge(e.target.value)} className={field}>
               <option value="">Any badge or none</option>
-              {BADGES.map((b) => (
+              {PUBLIC_BADGES.map((b) => (
                 <option key={b.key} value={b.key}>
                   {b.emoji} {b.name}
                 </option>

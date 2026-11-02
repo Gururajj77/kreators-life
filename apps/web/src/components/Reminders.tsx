@@ -1,4 +1,4 @@
-import { MAX_CUSTOM_REMINDERS, REMINDER_TIME, REMINDER_TITLE_MAX, WATER_EVERY_CHOICES, WEEKDAY_NAMES, weekdaysLabel, type CustomReminder, type WaterState } from '@kreators/shared';
+import { MAX_CUSTOM_REMINDERS, REMINDER_TIME, REMINDER_TITLE_MAX, WATER_EVERY_CHOICES, WATER_GLASS_MAX, WATER_GLASS_MIN, WATER_GOAL_MAX, WATER_GOAL_MIN, WEEKDAY_NAMES, weekdaysLabel, type CustomReminder, type WaterState } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
@@ -7,6 +7,7 @@ import { todayLocal } from '../lib/date';
 import { useSession } from '../lib/store';
 import { useDialogFocus } from '../lib/useDialogFocus';
 import { Button } from './Button';
+import { RulerPicker } from './RulerPicker';
 import { Sheet } from './Sheet';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
@@ -18,6 +19,57 @@ const shortDay = (d: string) => {
   const [y, m, n] = d.split('-').map(Number);
   return new Date(y ?? 2000, (m ?? 1) - 1, n ?? 1).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
 };
+
+/**
+ * A water number (the daily goal or a glass, in ml): a ruler to scrub, and the exact number to type beside it. The ruler saves once it
+ * settles, the typed number when the box loses focus; the server keeps its own limits.
+ */
+function WaterNumber({ label, value, min, max, step, labelEvery, onSave }: { label: string; value: number; min: number; max: number; step: number; labelEvery: number; onSave: (n: number) => void }) {
+  const [v, setV] = useState(value);
+  const [text, setText] = useState(String(value));
+  useEffect(() => {
+    setV(value);
+    setText(String(value));
+  }, [value]);
+  return (
+    <div className="col-span-2">
+      <label className="flex items-center justify-between gap-sm">
+        <span className="text-[12px] font-bold">{label}</span>
+        <input
+          value={text}
+          inputMode="numeric"
+          aria-label={`${label}, type the exact number`}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={() => {
+            const n = Math.round(Number(text));
+            if (Number.isFinite(n) && n > 0 && n !== value) {
+              setV(n);
+              onSave(n);
+            } else setText(String(v));
+          }}
+          className="w-[96px] rounded-tile border-2 border-line bg-paper px-sm py-xs text-right text-[16px]"
+        />
+      </label>
+      <RulerPicker
+        label={label}
+        tone="paper"
+        accent="r5"
+        min={min}
+        max={max}
+        step={step}
+        labelEvery={labelEvery}
+        majorStep={labelEvery}
+        value={v}
+        onChange={(n) => {
+          setV(n);
+          setText(String(n));
+        }}
+        onCommit={(n) => n !== value && onSave(n)}
+        valueText={(n) => `${n} millilitres`}
+      />
+    </div>
+  );
+}
 
 function useReminders() {
   const token = useSession((s) => s.token);
@@ -150,12 +202,8 @@ export function RemindersPanel({ bento = false }: { bento?: boolean }) {
         </button>
         {showSet && (
           <div className="mt-xs grid grid-cols-2 gap-xs">
-            {([['Daily goal (ml)', 'goalMl', w.goalMl], ['A glass (ml)', 'glassMl', w.glassMl]] as const).map(([label, key, v]) => (
-              <label key={key} className="block">
-                <span className="block text-[12px] font-bold">{label}</span>
-                <input defaultValue={v} inputMode="numeric" onBlur={(e) => Number(e.target.value) !== v && settle.mutate({ [key]: Number(e.target.value) })} className={field} />
-              </label>
-            ))}
+            <WaterNumber label="Daily goal (ml)" value={w.goalMl} min={WATER_GOAL_MIN} max={WATER_GOAL_MAX} step={100} labelEvery={500} onSave={(n) => settle.mutate({ goalMl: n })} />
+            <WaterNumber label="A glass (ml)" value={w.glassMl} min={WATER_GLASS_MIN} max={WATER_GLASS_MAX} step={50} labelEvery={250} onSave={(n) => settle.mutate({ glassMl: n })} />
             <label className="block">
               <span className="block text-[12px] font-bold">How often</span>
               <select value={w.everyMin} onChange={(e) => settle.mutate({ everyMin: Number(e.target.value) })} className={field}>

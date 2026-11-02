@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes, CSSProperties } from 'react';
 
-type Variant = 'primary' | 'outline' | 'ghost' | 'color' | 'light';
+type Variant = 'primary' | 'outline' | 'ghost' | 'color' | 'light' | 'shimmer';
 
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
@@ -22,6 +22,8 @@ export function Button({ variant = 'primary', color, deep, size = 'md', full = f
     color: 'toy text-ink',
     /* For buttons that sit on a coloured hero: a white pill with dark text, like the kit. */
     light: 'toy bg-card-strong text-ink',
+    /* The primary look with a band of light that sweeps across on hover or keyboard focus (app.css, Motion kit). For the one main action on a screen. */
+    shimmer: 'toy fx-shimmer bg-ink text-on-ink',
   }[variant];
   const colorStyle = variant === 'color' ? ({ background: color, '--toy-color': deep ?? '#1a1a1a', ...style } as CSSProperties) : style;
 

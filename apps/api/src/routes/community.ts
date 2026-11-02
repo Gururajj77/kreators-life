@@ -355,7 +355,7 @@ community.post('/replies/:id/block-author', async (c) => {
   const row = await c.env.DB.prepare('SELECT user_id FROM community_replies WHERE id = ?').bind(c.req.param('id')).first<{ user_id: string }>();
   return blockBehind(c, row?.user_id);
 });
-async function blockBehind(c: Context<AppEnv>, target: string | undefined) {
+export async function blockBehind(c: Context<AppEnv>, target: string | undefined) {
   const me = c.get('user');
   if (!target) return c.json({ error: 'not found' }, 404);
   if (target === me.id) return c.json({ error: 'that is you' }, 400);

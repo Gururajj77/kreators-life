@@ -26,7 +26,7 @@ export function KanbanBoard<T extends { id: string }>({ columns, card, onMove, o
   const [over, setOver] = useState<string | null>(null);
   const find = (id: string, col: string) => columns.find((c) => c.stage === col)?.items.find((i) => i.id === id);
   return (
-    <div className="scroll-row md:grid md:auto-cols-[minmax(240px,1fr)] md:grid-flow-col md:items-start md:gap-sm md:overflow-x-auto md:pb-xs">
+    <div className="scroll-row md:grid md:auto-cols-[minmax(240px,1fr)] md:grid-flow-col md:items-stretch md:gap-sm md:overflow-x-auto md:pb-xs">
       {columns.map((col) => (
         <section
           key={col.stage}

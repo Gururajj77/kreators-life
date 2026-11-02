@@ -42,6 +42,8 @@ import { DataTable, Select } from '../components/DataTable';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
+import { AdminDiscounts } from '../components/AdminDiscounts';
+import { AdminHouseTemplates } from '../components/AdminHouseTemplates';
 import { Toggle } from '../components/Toggle';
 import { adminApi } from '../lib/api';
 import { useMe } from '../lib/queries';
@@ -49,7 +51,7 @@ import { useMe } from '../lib/queries';
 const ADMIN_HONORS = HONORS.filter((h) => h.source === 'admin' && h.key !== 'pro');
 const KEY_STORE = 'kreators.adminKey';
 const PERMISSION_NAMES: Record<Permission, string> = { talent: 'Talent', cohorts: 'Cohorts', events: 'Events', finance: 'Finance', moderation: 'Moderation', support: 'Support', review: 'Review', mentor: 'Mentor', coach: 'Life coach' };
-const TAB_KEYS = ['people', 'flags', 'listings', 'coaches', 'codes', 'orders', 'webhooks', 'kyc', 'ops', 'redemptions', 'audit'] as const;
+const TAB_KEYS = ['people', 'flags', 'listings', 'coaches', 'codes', 'discounts', 'agencyhouse', 'orders', 'webhooks', 'kyc', 'ops', 'redemptions', 'audit'] as const;
 type Tab = (typeof TAB_KEYS)[number];
 /** The tab a link asked for (an inbox note about a coach ask opens Life coaches), else People. */
 const firstTab = (): Tab => {
@@ -336,6 +338,8 @@ export function Admin() {
     ['listings', 'Listings'],
     ['coaches', 'Life coaches'],
     ['codes', 'Attendee codes'],
+    ['discounts', 'Discount codes'],
+    ['agencyhouse', 'Agency templates'],
     ['orders', 'Orders'],
     ['webhooks', 'Webhooks'],
     ['kyc', 'KYC'],
@@ -565,7 +569,7 @@ export function Admin() {
                     <select value={badgeKey} onChange={(e) => setBadgeKey(e.target.value)} aria-label="Badge" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]">
                       {BADGES.map((b) => (
                         <option key={b.key} value={b.key}>
-                          {b.emoji} {b.name}
+                          {b.emoji} {b.name} ({b.family})
                         </option>
                       ))}
                     </select>
@@ -1550,6 +1554,9 @@ export function Admin() {
               </div>
             </section>
           )}
+
+          {tab === 'discounts' && <AdminDiscounts adminKey={key} />}
+          {tab === 'agencyhouse' && <AdminHouseTemplates adminKey={key} />}
 
           {tab === 'audit' && (
             <section className="mt-md" aria-labelledby="audit-heading">

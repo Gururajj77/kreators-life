@@ -1,8 +1,10 @@
-import { BADGES, FOCUS_OPTIONS, HONORS, IDENTITY_BY_KEY, IDENTITY_STAGES, identityLabel, identityLine, levelFromXp, matchSetup, passwordProblem, MODULE_GROUP_ACCENT, MODULE_GROUP_BLURB, MODULE_GROUPS, POINTS, RELATIONSHIP_BY_KEY, RELATIONSHIPS, BADGE_META, badgeRoleOf, setupSwitchable, type MeResponse, nextBadge } from '@kreators/shared';
+import { FOCUS_OPTIONS, HONORS, IDENTITY_BY_KEY, IDENTITY_STAGES, identityLabel, identityLine, levelFromXp, matchSetup, passwordProblem, MODULE_GROUP_ACCENT, MODULE_GROUP_BLURB, MODULE_GROUPS, POINTS, RELATIONSHIP_BY_KEY, RELATIONSHIPS, BADGE_META, badgeRoleOf, setupSwitchable, type MeResponse, nextBadge } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Avatar } from '../components/Avatar';
+import { BadgeArt } from '../components/BadgeArt';
+import { Busy, Skeleton } from '../components/Skeleton';
 import { Button } from '../components/Button';
 import { MyCoachSection } from '../components/MyCoach';
 import { Nudge } from '../components/Nudge';
@@ -20,9 +22,11 @@ import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useMe, useRefreshAll } from '../lib/queries';
 import { tie } from '../lib/text';
+import { lazyNamed } from '../lib/lazy';
 import { CalendarLink } from '../components/CalendarLink';
 import { PrivacyChoices } from '../components/PrivacyChoices';
 
+const BadgeGallery = lazyNamed(() => import('../components/BadgeGallery'), 'BadgeGallery');
 
 export function You() {
   const me = useMe();
@@ -116,7 +120,6 @@ function YouView({ data }: { data: MeResponse }) {
     return new Map([...m.apps, ...m.more].map((a) => [a.key, a.why]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.identities.join('|'), user.intake.goals.join('|'), user.intake.blockers.join('|'), modules]);
-  const earned = new Set(badges);
   const awarded = new Set(honors);
 
   return (
@@ -435,39 +438,29 @@ function YouView({ data }: { data: MeResponse }) {
         </div>
       </section>
 
-      <section className="mt-lg" aria-labelledby="badges-heading">
-        <h2 id="badges-heading" className="text-[24px]">
-          Badges
-        </h2>
-        {nextBadge(badges) && <Nudge className="mt-xs" text={`Next up: ${nextBadge(badges)!.name}. ${nextBadge(badges)!.how}.`} />}
-        <h3 className="mt-sm text-[16px]">Earned</h3>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Yours the moment you do the thing.</p>
-        <ul className="mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0">
-          {BADGES.map((b) => {
-            const on = earned.has(b.key);
-            return (
-              <li key={b.key} className={`rounded-tile bg-card p-sm shadow-toy-soft ${on ? '' : 'badge-locked'}`}>
-                <p className="m-0 text-[24px]" aria-hidden="true">
-                  {b.emoji}
-                </p>
-                <p className="mt-xs m-0 text-[14px] font-extrabold">{b.name}</p>
-                <p className="m-0 text-[12px] font-semibold text-ink-soft">{on ? 'Earned' : b.how}</p>
-              </li>
-            );
-          })}
-        </ul>
+      <section className="mt-lg" aria-label="Badges and honors">
+        <Suspense
+          fallback={
+            <Busy label="Loading your badges">
+              <Skeleton className="h-[176px]" />
+            </Busy>
+          }
+        >
+          <BadgeGallery />
+        </Suspense>
+        {nextBadge(badges) && <Nudge className="mt-sm" text={`Next up: ${nextBadge(badges)!.name}. ${nextBadge(badges)!.how}.`} />}
         <h3 className="mt-md text-[16px]">Awarded</h3>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Given by the kreators.app team, or unlocked by time in the app. These count on the leaderboard too.</p>
-        <ul className="mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0">
+        <ul className="mt-sm grid list-none grid-cols-2 gap-sm p-0 m-0 md:grid-cols-3">
           {HONORS.map((h) => {
             const on = awarded.has(h.key);
             return (
-              <li key={h.key} className={`rounded-tile bg-card p-sm shadow-toy-soft ${on ? '' : 'badge-locked'}`}>
-                <p className="m-0 text-[24px]" aria-hidden="true">
-                  {h.emoji}
-                </p>
-                <p className="mt-xs m-0 text-[14px] font-extrabold">{h.name}</p>
-                <p className="m-0 text-[12px] font-semibold text-ink-soft">{on ? (h.source === 'time' ? 'Unlocked' : 'Awarded') : h.how}</p>
+              <li key={h.key} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+                <BadgeArt name={h.name} emoji={h.emoji} tier={h.tier} shape="seal" earned={on} size="sm" decorative />
+                <span className="min-w-0">
+                  <span className="block text-[14px] font-extrabold">{h.name}</span>
+                  <span className="block text-[12px] font-semibold text-ink-soft">{on ? (h.source === 'time' ? 'Unlocked' : 'Awarded') : `Locked · ${h.how}`}</span>
+                </span>
               </li>
             );
           })}

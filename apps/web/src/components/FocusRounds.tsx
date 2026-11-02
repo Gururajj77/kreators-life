@@ -1,23 +1,36 @@
 import { BREAK_BEATS, FOCUS_PRESETS, FOCUS_QUALITY, focusQualityName, RELATIONSHIP_BY_KEY, type FocusSettings } from '@kreators/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { motion, useReducedMotion } from 'motion/react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import gsap from 'gsap';
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { api } from '../lib/api';
-import { bento } from '../lib/bento';
 import { todayLocal } from '../lib/date';
+import { MAX_PART_MIN, mmss, nextLeft, useCountdown, useStopwatch, useTicker, wholeMinutes } from '../lib/focusClocks';
 import { useFocusPrefs } from '../lib/focusPrefs';
 import { playBeats, playChime, unlockAudio, useAmbient } from '../lib/sound';
 import { useSession } from '../lib/store';
 import { Button } from './Button';
+import { ChipSelect, type ChipOption } from './ChipSelect';
+import { prefersReducedMotion } from './fx/env';
+import { useSlider } from './fx/useSlider';
+import { RulerPicker } from './RulerPicker';
+import { Sheet } from './Sheet';
 import { SoundControls } from './SoundControls';
 import { Toggle } from './Toggle';
 
 type Phase = 'focus' | 'short' | 'long';
+type Mode = 'timer' | 'pomodoro' | 'stopwatch';
 type Settings = FocusSettings;
 const LABEL: Record<Phase, string> = { focus: 'Focus', short: 'Mini break', long: 'Long break' };
+const MODES: readonly { key: Mode; name: string; blurb: string }[] = [
+  { key: 'timer', name: 'Timer', blurb: 'One countdown, no breaks.' },
+  { key: 'pomodoro', name: 'Pomodoro', blurb: 'Focus sessions with breaks.' },
+  { key: 'stopwatch', name: 'Stopwatch', blurb: 'Counts up from zero.' },
+];
 const DAY_KEY = 'kreators.focusRounds.day';
-const MAX_PART_MIN = 180;
+const TAB_KEY = 'kreators.focusTab';
+const TIMER_KEY = 'kreators.focusTimerMin';
+const RULER = { min: 5, max: 120, step: 5, labelEvery: 10 } as const;
 
 const clampInt = (v: unknown, lo: number, hi: number, fallback: number) => {
   const n = Math.round(Number(v));
@@ -34,11 +47,30 @@ function readDay(): { day: string; rounds: number; minutes: number } {
   }
   return { day, rounds: 0, minutes: 0 };
 }
-
-const mmss = (ms: number) => {
-  const s = Math.max(0, Math.ceil(ms / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+const readTab = (): Mode => {
+  try {
+    const v = localStorage.getItem(TAB_KEY);
+    return v === 'timer' || v === 'pomodoro' || v === 'stopwatch' ? v : 'pomodoro';
+  } catch {
+    return 'pomodoro';
+  }
 };
+const readTimerMin = (): number | null => {
+  try {
+    const n = Number(localStorage.getItem(TIMER_KEY));
+    return Number.isFinite(n) && n >= 1 && n <= MAX_PART_MIN ? Math.round(n) : null;
+  } catch {
+    return null;
+  }
+};
+const keep = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // not kept on this device
+  }
+};
+
 const hoursMin = (min: number) => (min >= 60 ? `${Math.floor(min / 60)} h ${min % 60 ? `${min % 60} min` : ''}`.trim() : `${min} min`);
 
 /** A plain line for what the settings add up to. */
@@ -49,36 +81,114 @@ export function planLine(s: Settings): string {
   return `${run}. ${s.cycles > 0 ? `${s.cycles} ${s.cycles === 1 ? 'time' : 'times'}, ${hoursMin(cycle * s.cycles - s.long)} before the last long break.` : `That is ${hoursMin(cycle)} for one go, and it carries on until you stop.`}`;
 }
 
-function Stepper({ label, value, min, max, onChange, unit = '', hint, className = '' }: { label: string; value: number; min: number; max: number; onChange: (v: number) => void; unit?: string; hint?: string; className?: string }) {
+/** The choices on a setting chip: the usual few, and the person's own number when it is not one of them (kept from before). */
+const optionsOf = (usual: readonly number[], current: number, label: (n: number) => string): ChipOption[] => {
+  const all = usual.includes(current) ? usual : [...usual, current].sort((a, b) => a - b);
+  return all.map((n) => ({ value: n, label: label(n) }));
+};
+const SHORT_CHOICES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30] as const;
+const LONG_CHOICES = [5, 10, 15, 20, 25, 30, 40, 45, 60, 90, 120] as const;
+const EVERY_CHOICES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
+
+/** Small line icons for the round buttons. Each is drawn on a 24 box, with the stroke taking the button's colour. */
+function Icon({ name }: { name: 'gear' | 'sound' | 'mute' | 'music' | 'task' }) {
+  const paths: Record<typeof name, ReactNode> = {
+    gear: (
+      <>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+      </>
+    ),
+    sound: (
+      <>
+        <path d="M11 5 6 9H3v6h3l5 4z" />
+        <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" />
+      </>
+    ),
+    mute: (
+      <>
+        <path d="M11 5 6 9H3v6h3l5 4z" />
+        <path d="m16 9 6 6M22 9l-6 6" />
+      </>
+    ),
+    music: (
+      <>
+        <path d="M9 18V5l11-2v13" />
+        <circle cx="6" cy="18" r="3" />
+        <circle cx="17" cy="16" r="3" />
+      </>
+    ),
+    task: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <circle cx="12" cy="12" r="4.5" />
+        <circle cx="12" cy="12" r="0.8" />
+      </>
+    ),
+  };
   return (
-    <div className={`rounded-tile bg-card p-xs ${className}`}>
-      <span className="block text-[12px] font-extrabold text-ink-soft">{label}</span>
-      <div className="mt-xs flex items-center justify-between gap-xs">
-        <button type="button" aria-label={`Less ${label.toLowerCase()}`} disabled={value <= min} onClick={() => onChange(value - 1)} className="toy toy-soft flex size-[44px] items-center justify-center rounded-pill border border-line bg-card-strong text-[20px] font-extrabold disabled:opacity-40">
-          −
-        </button>
-        <span className="font-display text-[22px] font-extrabold" aria-live="polite">
-          {value}
-          {unit && <span className="text-[12px] font-bold text-ink-soft"> {unit}</span>}
-        </span>
-        <button type="button" aria-label={`More ${label.toLowerCase()}`} disabled={value >= max} onClick={() => onChange(value + 1)} className="toy toy-soft flex size-[44px] items-center justify-center rounded-pill border border-line bg-card-strong text-[20px] font-extrabold disabled:opacity-40">
-          +
-        </button>
-      </div>
-      {hint && <span className="mt-xs block text-[12px] font-semibold text-ink-mute">{hint}</span>}
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {paths[name]}
+    </svg>
+  );
+}
+
+/** A round glass button that floats by the panel: a name for screen readers, and the same name as a tooltip on hover and keyboard focus. */
+function RoundButton({ at, label, icon, onClick, opens = false }: { at: 'tl' | 'tr' | 'br' | 'bc'; label: string; icon: 'gear' | 'sound' | 'mute' | 'music' | 'task'; onClick: () => void; /** It opens a dialog. */ opens?: boolean }) {
+  return (
+    <button type="button" className="mf-round toy" data-at={at} data-tip={label} aria-label={label} aria-haspopup={opens ? 'dialog' : undefined} onClick={onClick}>
+      <Icon name={icon} />
+    </button>
+  );
+}
+
+/** The sixty marks of a stopwatch's minute: the ones the seconds hand has passed light up. Only for the eye. */
+const SecondsStrip = memo(function SecondsStrip({ seconds, live }: { seconds: number; live: boolean }) {
+  return (
+    <div className="mf-secs" aria-hidden="true">
+      {Array.from({ length: 60 }, (_, i) => (
+        <i key={i} data-on={live && i <= seconds ? '' : undefined} data-five={i % 5 === 0 ? '' : undefined} />
+      ))}
+    </div>
+  );
+});
+
+/** A circle that grows as you breathe in and shrinks as you breathe out, while a break runs. A still circle otherwise. */
+function BreathOrb({ active }: { active: boolean }) {
+  const orb = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = orb.current;
+    if (!el) return;
+    if (!active || prefersReducedMotion()) {
+      gsap.set(el, { scale: 1 });
+      return;
+    }
+    // Ten seconds a breath: four in, one held, five out.
+    const tl = gsap.timeline({ repeat: -1 });
+    tl.to(el, { scale: 1.4, duration: 4, ease: 'sine.inOut' }).to(el, { scale: 1.4, duration: 1 }).to(el, { scale: 1, duration: 5, ease: 'sine.inOut' });
+    return () => {
+      tl.kill();
+      gsap.set(el, { scale: 1 });
+    };
+  }, [active]);
+  return (
+    <div className="mf-orb-row" aria-hidden="true">
+      <div ref={orb} className="mf-orb" />
     </div>
   );
 }
 
 /**
- * Pomodoro-style sessions for Mindful minutes. The classic run is 25 minutes of focus and a 5 minute mini break, four times, then a 30 minute
- * long break; every part of it can be changed, also while it runs: the length of a round, of a mini break and of the long break, how many
- * rounds come before the long break (so how many mini breaks), and how many times the run goes round. A change to the kind of part you are
- * in moves its end; the "adjust this part" buttons change only the part you are in. The clock runs on an end time, so a background tab stays
- * right. A round can be pointed at one of your tasks; a finished round is kept, with the task, for the dashboard.
+ * The focus panel of Mindful minutes: a dark slate glass card with three kinds of clock (Timer, Pomodoro, Stopwatch) under one row of tabs,
+ * a ruler to choose how long a focus part is, the time in large figures, and the break settings as four small chips. Four round buttons float
+ * by it (settings, sounds on or off, background music, the task being worked on). Every clock runs on an end time or a start instant, so a
+ * background tab stays right; it keeps the screen awake, chimes and buzzes at the end, and puts the time in the tab's title.
+ *
+ * What logs: a Pomodoro focus round is always kept for the dashboard and counts as mindful minutes only if that switch is on; a finished
+ * break counts only if its switch is on; a finished Timer and a stopped Stopwatch (whole minutes, at most a day, nothing under a minute) are
+ * kept the same way and only when the "focus sessions count as mindful minutes" switch is on. Skipping or stopping a part early counts nothing.
  */
 export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind: 'break' | 'focus') => void; onRound: (minutes: number, nodeId: string | null) => void | Promise<string | void | undefined> }) {
-  const reduce = useReducedMotion();
   const qc = useQueryClient();
   // How the last finished focus session felt. Asked after a session, never in the way of the clock; a rating is private and pays nothing.
   const [rate, setRate] = useState<{ id: string | null; mode: 'ask' | 'rated'; value: number | null; failed: boolean } | null>(null);
@@ -86,6 +196,8 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
   const token = useSession((s) => s.token);
   const { settings, set: setPrefs, ready } = useFocusPrefs();
   const fromUrl = useRef(false);
+  const [params] = useSearchParams();
+  const [mode, setModeState] = useState<Mode>(() => (params.get('task') || params.get('min') ? 'pomodoro' : readTab()));
   const [phase, setPhase] = useState<Phase>('focus');
   const [round, setRound] = useState(1);
   const [cycle, setCycle] = useState(1);
@@ -96,13 +208,67 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
   const [taskId, setTaskId] = useState('');
   const [finished, setFinished] = useState(false);
   const [said, setSaid] = useState('');
+  const [sheet, setSheet] = useState<'settings' | 'music' | 'task' | null>(null);
   const endsAt = useRef<number | null>(null);
   const lock = useRef<{ release: () => Promise<void> } | null>(null);
   const tasks = useQuery({ queryKey: ['focus-tasks'], queryFn: () => api.focusTasks(), enabled: Boolean(token), staleTime: 60_000 });
   const picked = tasks.data?.tasks.find((t) => t.id === taskId) ?? null;
+  const tabs = useSlider<HTMLDivElement>('[aria-pressed="true"]', mode);
+
+  // The Timer's length is its own, kept on this device; until the person sets one it follows their saved focus length.
+  const [timerMin, setTimerMin] = useState<number | null>(readTimerMin);
+  const timerLen = timerMin ?? settings.focus;
+  const stopwatch = useStopwatch();
+
+  /** A finished focus part is kept: today's tally, the dashboard's round (with its rating), and mindful minutes when that switch is on. */
+  const recordFocus = (minutes: number, always: boolean) => {
+    if (!always && !settings.logFocus) return;
+    const next = { day: todayLocal(), rounds: day.rounds + 1, minutes: day.minutes + minutes };
+    setDay(next);
+    keep(DAY_KEY, JSON.stringify(next));
+    const made = onRound(minutes, taskId || null);
+    rateSeq.current += 1;
+    const mine = rateSeq.current;
+    setRate({ id: null, mode: 'ask', value: null, failed: false });
+    // The round's id arrives a moment later; it only goes to the round it belongs to.
+    void Promise.resolve(made)
+      .then((id) => {
+        if (typeof id === 'string' && rateSeq.current === mine) setRate((r) => (r && r.id === null ? { ...r, id } : r));
+      })
+      .catch(() => undefined);
+    if (settings.logFocus) onLog(minutes, 'focus');
+  };
+  const buzz = () => {
+    if (!settings.vibrate) return;
+    try {
+      navigator.vibrate?.([200, 100, 200]);
+    } catch {
+      // no vibration here
+    }
+  };
+
+  const timer = useCountdown(timerLen * 60_000, (ms) => {
+    if (settings.sound) {
+      playChime();
+      buzz();
+    }
+    recordFocus(Math.max(1, Math.round(ms / 60_000)), false);
+    setSaid('Timer done.');
+  });
+  // An idle timer follows its length (and the saved focus length arriving late).
+  useEffect(() => {
+    timer.sync(timerLen * 60_000);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timerLen, ready]);
+
+  const anyRunning = running || timer.running || stopwatch.running;
+  const setMode = (m: Mode) => {
+    setModeState(m);
+    keep(TAB_KEY, m);
+    setSaid(`${MODES.find((x) => x.key === m)!.name}.`);
+  };
 
   // "Start focus" on a task opens this with the task picked and its estimate as the first round's length. That is only this round: the saved lengths do not change.
-  const [params] = useSearchParams();
   useEffect(() => {
     const t = params.get('task');
     const m = clampInt(params.get('min'), 0, MAX_PART_MIN, 0);
@@ -121,7 +287,7 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
   const length = useCallback((p: Phase, s: Settings) => (p === 'focus' ? s.focus : p === 'short' ? s.short : s.long) * 60_000, []);
   const idleAtFull = !running && leftMs >= partMs - 500;
 
-  // Change the part you are in by some milliseconds: the end moves, and so does the ring's total.
+  // Change the part you are in by some milliseconds: the end moves, and so does the total.
   const nudge = (deltaMs: number) => {
     const part = Math.min(MAX_PART_MIN * 60_000, Math.max(60_000, partMs + deltaMs));
     const real = part - partMs;
@@ -145,6 +311,14 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
     } else nudge(delta);
   };
 
+  // The ruler picks the focus length (only while the clock waits at its full time): the saved length, and this part, move together.
+  const pickFocus = (v: number) => {
+    fromUrl.current = false;
+    setPrefs({ ...settings, focus: v });
+    setPartMs(v * 60_000);
+    setLeftMs(v * 60_000);
+  };
+
   // The person's saved lengths arrive from their account a moment after the page opens: an idle timer picks them up.
   useEffect(() => {
     if (fromUrl.current || running || leftMs < partMs - 500) return;
@@ -156,18 +330,18 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.focus, settings.short, settings.long, ready]);
 
-  // A background sound plays while a timer runs, when sounds are on.
-  useAmbient(running && settings.sound, settings.ambient, settings.ambientVolume);
+  // A background sound plays while a clock runs, when sounds are on.
+  useAmbient(anyRunning && settings.sound, settings.ambient, settings.ambientVolume);
 
-  // Keep the screen awake while a round runs, where the browser allows it.
+  // Keep the screen awake while a clock runs, where the browser allows it.
   useEffect(() => {
     const nav = navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<{ release: () => Promise<void> }> } };
-    if (running && nav.wakeLock) void nav.wakeLock.request('screen').then((l) => (lock.current = l)).catch(() => undefined);
+    if (anyRunning && nav.wakeLock) void nav.wakeLock.request('screen').then((l) => (lock.current = l)).catch(() => undefined);
     return () => {
       void lock.current?.release().catch(() => undefined);
       lock.current = null;
     };
-  }, [running]);
+  }, [anyRunning]);
 
   const begin = (nextPhase: Phase, go: boolean) => {
     const ms = length(nextPhase, settings);
@@ -189,34 +363,10 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
           if (to) {
             if (to === 'long' ? settings.soundLong : settings.soundShort) playBeats(BREAK_BEATS[to]);
           } else if (phase === 'long' ? settings.soundLong : settings.soundShort) playChime();
-          if (settings.vibrate) {
-            try {
-              navigator.vibrate?.([200, 100, 200]);
-            } catch {
-              // no vibration here
-            }
-          }
+          buzz();
         }
-        if (wasFocus) {
-          const next = { day: todayLocal(), rounds: day.rounds + 1, minutes: day.minutes + minutes };
-          setDay(next);
-          try {
-            localStorage.setItem(DAY_KEY, JSON.stringify(next));
-          } catch {
-            // not kept
-          }
-          const made = onRound(minutes, taskId || null);
-          rateSeq.current += 1;
-          const mine = rateSeq.current;
-          setRate({ id: null, mode: 'ask', value: null, failed: false });
-          // The round's id arrives a moment later; it only goes to the round it belongs to.
-          void Promise.resolve(made)
-            .then((id) => {
-              if (typeof id === 'string' && rateSeq.current === mine) setRate((r) => (r && r.id === null ? { ...r, id } : r));
-            })
-            .catch(() => undefined);
-          if (settings.logFocus) onLog(minutes, 'focus');
-        } else {
+        if (wasFocus) recordFocus(minutes, true);
+        else {
           setRate(null);
           if (settings.logBreaks) onLog(minutes, 'break');
         }
@@ -247,25 +397,23 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
     [phase, partMs, day, taskId, settings, round, cycle, onLog, onRound], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  // The clock: a look at the end time a few times a second.
-  useEffect(() => {
-    if (!running) return;
-    const t = window.setInterval(() => {
-      const left = (endsAt.current ?? 0) - Date.now();
-      if (left <= 0) finish(true);
-      else setLeftMs(left);
-    }, 250);
-    return () => window.clearInterval(t);
-  }, [running, finish]);
+  // The Pomodoro clock: a look at the end time a few times a second.
+  useTicker(running, () => {
+    const left = (endsAt.current ?? 0) - Date.now();
+    if (left <= 0) finish(true);
+    else setLeftMs((p) => nextLeft(p, left));
+  });
 
   // The tab says how long is left, so it can be read from another tab.
+  const tabTime = mode === 'timer' ? mmss(timer.left) : mode === 'stopwatch' ? mmss(stopwatch.ms, false) : mmss(leftMs);
+  const tabName = mode === 'timer' ? 'Timer' : mode === 'stopwatch' ? 'Stopwatch' : LABEL[phase];
   useEffect(() => {
     const base = document.title;
-    if (running) document.title = `${mmss(leftMs)} ${LABEL[phase]} · kreators.app`;
+    if (anyRunning) document.title = `${tabTime} ${tabName} · kreators.app`;
     return () => {
       document.title = base;
     };
-  }, [running, leftMs, phase]);
+  }, [anyRunning, tabTime, tabName]);
 
   const start = () => {
     unlockAudio();
@@ -307,169 +455,302 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
     setSaid('Back to the first session.');
   };
 
-  const progress = partMs ? Math.min(1, Math.max(0, 1 - leftMs / partMs)) : 0;
-  const isBreak = phase !== 'focus';
-  const R = 88;
-  const C = 2 * Math.PI * R;
-  const color = isBreak ? 'var(--color-r4)' : 'var(--color-r1)';
+  // The one button at the top right, for whichever clock is showing.
+  const on = mode === 'timer' ? timer.running : mode === 'stopwatch' ? stopwatch.running : running;
+  const paused = mode === 'timer' ? !timer.atFull && !timer.running : mode === 'stopwatch' ? stopwatch.ms > 0 && !stopwatch.running : leftMs < partMs - 500 && !running;
+  const press = () => {
+    if (mode === 'timer') {
+      if (timer.running) {
+        timer.pause();
+        setSaid('Paused.');
+      } else {
+        unlockAudio();
+        setRate(null);
+        timer.start();
+        setSaid('Timer started.');
+      }
+    } else if (mode === 'stopwatch') {
+      if (stopwatch.running) {
+        stopwatch.pause();
+        setSaid('Paused.');
+      } else {
+        unlockAudio();
+        stopwatch.start();
+        setSaid('Stopwatch started.');
+      }
+    } else if (running) pause();
+    else start();
+  };
+  // Stopwatch: stop saves the whole minutes (when the switch is on) and goes back to zero; Reset throws the time away.
+  const stopStopwatch = () => {
+    const minutes = wholeMinutes(stopwatch.reset());
+    if (minutes >= 1 && settings.logFocus) {
+      recordFocus(minutes, false);
+      setSaid(`Stopped. ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} kept.`);
+    } else setSaid(minutes >= 1 ? 'Stopped. Nothing kept, since focus sessions do not count as mindful minutes.' : 'Stopped. Under a minute, so nothing was kept.');
+  };
+
+  const isBreak = mode === 'pomodoro' && phase !== 'focus';
+  const accent = isBreak ? 'r4' : 'r2';
   const slots = Array.from({ length: settings.every }, (_, i) => i + 1);
+  const progress = mode === 'timer' ? (timer.total ? 1 - timer.left / timer.total : 0) : mode === 'pomodoro' ? (partMs ? 1 - leftMs / partMs : 0) : 0;
+  const readout = mode === 'timer' ? mmss(timer.left) : mode === 'stopwatch' ? mmss(stopwatch.ms, false) : mmss(leftMs);
+  const nudgeable = mode !== 'stopwatch';
+  const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
   return (
-    <section className="mt-md rounded-card p-md text-center" style={{ background: isBreak ? 'var(--tint-green)' : 'var(--tint-yellow)' }} aria-labelledby="focus-heading">
+    <section className="mt-md" aria-labelledby="focus-heading">
       <h2 id="focus-heading" className="text-[24px]">
         Focus sessions
       </h2>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Work in sessions, breathe in the breaks. Today: {day.rounds} {day.rounds === 1 ? 'session' : 'sessions'}, {day.minutes} min of focus.</p>
+      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Work in sessions, breathe in the breaks. Today: {plural(day.rounds, 'session')}, {day.minutes} min of focus.</p>
 
-      <div className="relative mx-auto mt-md flex h-[200px] w-[200px] items-center justify-center" role="timer" aria-label={`${LABEL[phase]}, ${mmss(leftMs)} left`}>
-        <svg viewBox="0 0 200 200" className="absolute inset-0 size-full -rotate-90" aria-hidden="true">
-          <circle cx="100" cy="100" r={R} fill="none" stroke="var(--color-line)" strokeWidth="10" />
-          <circle cx="100" cy="100" r={R} fill="none" stroke={color} strokeWidth="10" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - progress)} />
-        </svg>
-        <motion.div
-          className="flex size-[132px] flex-col items-center justify-center rounded-pill bg-card font-display text-ink shadow-toy-soft"
-          animate={running && isBreak && !reduce ? { scale: [1, 1.12, 1.12, 1] } : { scale: 1 }}
-          transition={running && isBreak && !reduce ? { duration: 10, times: [0, 0.4, 0.5, 1], repeat: Number.POSITIVE_INFINITY, ease: 'easeInOut' } : { duration: 0.3 }}
-        >
-          <span className="text-[34px] font-extrabold leading-none">{mmss(leftMs)}</span>
-          <span className="mt-xs text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{LABEL[phase]}</span>
-        </motion.div>
-      </div>
+      <div className="mf-stage mt-sm">
+        <div className="night-card mf-panel rounded-card" data-accent={accent}>
+          <div className="mf-top">
+            <div ref={tabs.ref} role="group" aria-label="Kind of clock" className="fx-slide mf-tabs">
+              {MODES.map((m) => (
+                <button key={m.key} type="button" aria-pressed={mode === m.key} disabled={anyRunning && mode !== m.key} onClick={() => setMode(m.key)}>
+                  {m.name}
+                </button>
+              ))}
+            </div>
+            <button type="button" className="mf-start toy" onClick={press}>
+              {on ? 'Pause' : paused ? 'Resume' : 'Start'}
+            </button>
+          </div>
 
-      <div className="mt-sm flex items-center justify-center gap-xs" role="img" aria-label={`Session ${round} of ${settings.every}${settings.cycles > 0 ? `, run ${cycle} of ${settings.cycles}` : ''}`}>
-        {slots.map((n) => (
-          <span key={n} className="block size-[12px] rounded-pill" style={{ background: n < round || (n === round && isBreak) ? 'var(--color-ink)' : n === round ? color : 'var(--color-line)' }} />
-        ))}
-        <span className="ml-xs text-[12px] font-extrabold text-ink-soft" aria-hidden="true">
-          +
-        </span>
-        <span className="block size-[14px] rounded-pill border-2" style={{ borderColor: phase === 'long' ? 'var(--color-r4)' : 'var(--color-line)', background: phase === 'long' ? 'var(--color-r4)' : 'transparent' }} title="The long break" />
-      </div>
-      <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
-        {finished
-          ? 'All the runs are done. Start again whenever you like.'
-          : `Session ${round} of ${settings.every}${settings.cycles > 0 ? `, run ${cycle} of ${settings.cycles}` : ''}. ${isBreak ? 'Breathe in as the circle grows, out as it shrinks.' : picked ? `On it: ${picked.title}` : 'One thing at a time.'}`}
-      </p>
+          <div className="mf-dial">
+            <div className="mf-ruler">
+              {mode === 'stopwatch' ? (
+                <SecondsStrip seconds={Math.floor(stopwatch.ms / 1000) % 60} live={stopwatch.ms > 0} />
+              ) : isBreak ? (
+                <BreathOrb active={running} />
+              ) : mode === 'timer' ? (
+                <RulerPicker
+                  label="Timer length"
+                  tone="night"
+                  accent="r2"
+                  {...RULER}
+                  value={timerLen}
+                  disabled={!timer.atFull}
+                  onChange={(v) => {
+                    setTimerMin(v);
+                    keep(TIMER_KEY, String(v));
+                  }}
+                  valueText={(v) => `${v} minutes`}
+                  format={(v) => String(v)}
+                />
+              ) : (
+                <RulerPicker label="Focus length" tone="night" accent="r2" {...RULER} value={Math.round(partMs / 60_000)} disabled={!idleAtFull} onChange={pickFocus} valueText={(v) => `${v} minutes`} format={(v) => String(v)} />
+              )}
+            </div>
+            <div className="mf-time-wrap">
+              <span className="mf-time" role="timer" aria-label={`${mode === 'pomodoro' ? LABEL[phase] : MODES.find((m) => m.key === mode)!.name}, ${readout}${mode === 'stopwatch' ? '' : ' left'}`}>
+                {readout}
+              </span>
+            </div>
+          </div>
+          {mode !== 'stopwatch' && (
+            <div className="mf-bar" aria-hidden="true">
+              <span style={{ transform: `scaleX(${Math.min(1, Math.max(0, progress))})` }} />
+            </div>
+          )}
 
-      {rate && (
-        <div className="mt-sm rounded-tile bg-card p-sm text-left" role="group" aria-label="How focused you were">
-          {rate.mode === 'rated' ? (
-            <div className="flex items-center justify-between gap-sm">
-              <p className="m-0 text-[14px] font-bold" role="status">
-                Rated {focusQualityName(rate.value)}
-              </p>
-              <Button variant="ghost" size="sm" onClick={() => setRate({ ...rate, mode: 'ask' })}>
-                Change
-              </Button>
+          {mode === 'pomodoro' ? (
+            <div className="mf-sets" role="group" aria-label="Breaks and sessions">
+              <ChipSelect label="Short break" value={settings.short} valueLabel={`${settings.short}m`} options={optionsOf(SHORT_CHOICES, settings.short, (n) => `${n} min`)} onChange={(v) => save({ ...settings, short: v })} />
+              <ChipSelect label="Long break" value={settings.long} valueLabel={`${settings.long}m`} options={optionsOf(LONG_CHOICES, settings.long, (n) => `${n} min`)} onChange={(v) => save({ ...settings, long: v })} />
+              <ChipSelect label="Sessions between long breaks" value={settings.every} valueLabel={String(settings.every)} options={optionsOf(EVERY_CHOICES, settings.every, (n) => `${n} ${n === 1 ? 'session' : 'sessions'}`)} onChange={(v) => save({ ...settings, every: v })} />
+              <ChipSelect
+                label="Total sessions"
+                value={settings.cycles}
+                valueLabel={settings.cycles === 0 ? 'Open' : String(settings.cycles * settings.every)}
+                options={[{ value: 0, label: 'Until I stop' }, ...Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: `${(i + 1) * settings.every} ${(i + 1) * settings.every === 1 ? 'session' : 'sessions'}, ${plural(i + 1, 'long break')}` }))]}
+                onChange={(v) => save({ ...settings, cycles: v })}
+              />
             </div>
           ) : (
-            <>
-              <p className="m-0 text-[14px] font-extrabold">How focused were you?</p>
-              <div className="mt-xs flex flex-wrap gap-xs">
-                {FOCUS_QUALITY.map((q) => (
-                  <button
-                    key={q.value}
-                    type="button"
-                    disabled={!rate.id}
-                    onClick={() => rateIt(q.value)}
-                    aria-pressed={rate.value === q.value}
-                    className="toy toy-soft min-h-[44px] rounded-pill border-2 border-line bg-card-strong px-sm text-[14px] font-bold"
-                  >
-                    {q.name}
+            <p id="mf-mode-line" className="mf-line">
+              {mode === 'timer' ? 'One countdown, no breaks. It counts as mindful minutes only if you switch that on in settings.' : 'Counts up from zero. Stop saves the whole minutes, if you switch that on in settings. Under a minute counts for nothing.'}
+            </p>
+          )}
+
+          <div className="mf-actions" role="group" aria-label="Clock actions">
+            {mode === 'pomodoro' && (
+              <>
+                <button type="button" className="mf-mini toy" onClick={() => finish(false)} aria-label="Skip to the next part">
+                  Skip
+                </button>
+                <button type="button" className="mf-mini toy" onClick={reset} aria-label="Start again from session one">
+                  Reset
+                </button>
+              </>
+            )}
+            {mode === 'timer' && (
+              <button
+                type="button"
+                className="mf-mini toy"
+                disabled={timer.atFull}
+                onClick={() => {
+                  timer.stop();
+                  setSaid('Stopped. Nothing was kept.');
+                }}
+                aria-label="Stop the timer and keep nothing"
+              >
+                Stop
+              </button>
+            )}
+            {mode === 'stopwatch' && (
+              <>
+                <button type="button" className="mf-mini toy" disabled={stopwatch.ms === 0} onClick={stopStopwatch} aria-label="Stop the stopwatch and save the whole minutes">
+                  Stop
+                </button>
+                <button
+                  type="button"
+                  className="mf-mini toy"
+                  disabled={stopwatch.ms === 0}
+                  onClick={() => {
+                    stopwatch.reset();
+                    setSaid('Back to zero. Nothing was kept.');
+                  }}
+                  aria-label="Back to zero and keep nothing"
+                >
+                  Reset
+                </button>
+              </>
+            )}
+            {nudgeable && (
+              <span className="mf-nudge" role="group" aria-label={`Adjust this ${mode === 'timer' ? 'timer' : LABEL[phase].toLowerCase()}`}>
+                <span className="mf-nudge-label">This part</span>
+                {[-5, -1, 1, 5].map((m) => (
+                  <button key={m} type="button" className="mf-mini toy" onClick={() => (mode === 'timer' ? timer.nudge(m * 60_000) : nudge(m * 60_000))} aria-label={`${m > 0 ? 'Add' : 'Take off'} ${Math.abs(m)} ${Math.abs(m) === 1 ? 'minute' : 'minutes'}`}>
+                    {m > 0 ? `+${m}` : `−${-m}`}
                   </button>
                 ))}
-                <Button variant="ghost" size="sm" onClick={() => setRate(null)}>
-                  Skip
-                </Button>
+              </span>
+            )}
+          </div>
+
+          {mode === 'pomodoro' && (
+            <div className="mf-status">
+              <div className="mf-dots" role="img" aria-label={`Session ${round} of ${settings.every}${settings.cycles > 0 ? `, run ${cycle} of ${settings.cycles}` : ''}`}>
+                {slots.map((n) => (
+                  <span key={n} data-state={n < round || (n === round && isBreak) ? 'done' : n === round ? 'now' : 'next'} />
+                ))}
+                <span className="mf-plus" aria-hidden="true">
+                  +
+                </span>
+                <span className="mf-long" data-on={phase === 'long' ? '' : undefined} title="The long break" />
               </div>
-              {rate.failed && (
-                <p role="alert" className="mt-xs m-0 text-[12px] font-bold">
-                  That did not save. Try again.
-                </p>
+              <p className="mf-line">
+                {finished
+                  ? 'All the runs are done. Start again whenever you like.'
+                  : `Session ${round} of ${settings.every}${settings.cycles > 0 ? `, run ${cycle} of ${settings.cycles}` : ''}. ${isBreak ? 'Breathe in as the circle grows, out as it shrinks.' : picked ? `On it: ${picked.title}` : 'One thing at a time.'}`}
+              </p>
+            </div>
+          )}
+          {mode !== 'pomodoro' && picked && <p className="mf-line">On it: {picked.title}</p>}
+
+          {rate && (
+            <div className="mf-rate" role="group" aria-label="How focused you were">
+              {rate.mode === 'rated' ? (
+                <div className="flex items-center justify-between gap-sm">
+                  <p className="m-0 text-[14px] font-bold" role="status">
+                    Rated {focusQualityName(rate.value)}
+                  </p>
+                  <button type="button" className="mf-mini toy" onClick={() => setRate({ ...rate, mode: 'ask' })}>
+                    Change
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <p className="m-0 text-[14px] font-extrabold">How focused were you?</p>
+                  <div className="mt-xs flex flex-wrap gap-xs">
+                    {FOCUS_QUALITY.map((q) => (
+                      <button key={q.value} type="button" disabled={!rate.id} onClick={() => rateIt(q.value)} aria-pressed={rate.value === q.value} className="mf-mini toy">
+                        {q.name}
+                      </button>
+                    ))}
+                    <button type="button" className="mf-mini toy" onClick={() => setRate(null)}>
+                      Skip
+                    </button>
+                  </div>
+                  {rate.failed && (
+                    <p role="alert" className="mt-xs m-0 text-[12px] font-bold">
+                      That did not save. Try again.
+                    </p>
+                  )}
+                </>
               )}
-            </>
+            </div>
           )}
         </div>
-      )}
 
-      {/* The task for the session: one of your own, still to do. Changing it takes effect from the next session that ends. */}
-      <label className="mt-sm block text-left">
-        <span className="block text-[14px] font-bold">Working on</span>
-        <select value={taskId} onChange={(e) => setTaskId(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]">
-          <option value="">No task picked</option>
-          {tasks.data?.tasks.map((t) => (
-            <option key={t.id} value={t.id}>
-              {RELATIONSHIP_BY_KEY[t.relationship].name}: {t.title}
-              {t.dueDate ? ` (due ${t.dueDate})` : ''}
-            </option>
-          ))}
-        </select>
-        {tasks.data && tasks.data.tasks.length === 0 && <span className="mt-xs block text-[12px] font-semibold text-ink-soft">No open tasks yet. Add one in Pillars and it shows up here.</span>}
-      </label>
-
-      <div className="mt-md grid grid-cols-[1fr_auto_auto] gap-xs">
-        {running ? (
-          <Button size="lg" variant="outline" onClick={pause}>
-            Pause
-          </Button>
-        ) : (
-          <Button size="lg" onClick={start}>
-            {leftMs < partMs - 500 ? 'Resume' : `Start ${LABEL[phase].toLowerCase()}`}
-          </Button>
-        )}
-        <Button size="lg" variant="outline" onClick={() => finish(false)} aria-label="Skip to the next part">
-          Skip
-        </Button>
-        <Button size="lg" variant="ghost" onClick={reset} aria-label="Start again from session one">
-          Reset
-        </Button>
+        <div className="mf-rounds">
+          <RoundButton at="tl" label="Focus on a task" icon="task" opens onClick={() => setSheet('task')} />
+          <RoundButton at="tr" label="Timer settings" icon="gear" opens onClick={() => setSheet('settings')} />
+          <RoundButton at="br" label={settings.sound ? 'Sounds are on. Turn them off' : 'Sounds are off. Turn them on'} icon={settings.sound ? 'sound' : 'mute'} onClick={() => save({ ...settings, sound: !settings.sound })} />
+          <RoundButton at="bc" label="Background music" icon="music" opens onClick={() => setSheet('music')} />
+        </div>
       </div>
 
-      {/* This part only: a minute or five more or less, whether it runs or waits. */}
-      <div className="mt-sm flex flex-wrap items-center justify-center gap-xs" role="group" aria-label={`Adjust this ${LABEL[phase].toLowerCase()}`}>
-        <span className="text-[12px] font-extrabold text-ink-soft">This {LABEL[phase].toLowerCase()}:</span>
-        {[-5, -1, 1, 5].map((m) => (
-          <button key={m} type="button" onClick={() => nudge(m * 60_000)} className="toy toy-soft min-h-[40px] min-w-[44px] rounded-pill border border-line bg-card-strong px-sm text-[14px] font-extrabold">
-            {m > 0 ? `+${m}` : `−${-m}`}
-          </button>
-        ))}
-        <span className="text-[12px] font-bold text-ink-soft">min</span>
-      </div>
+      <p className="sr-only" role="status" aria-live="polite">
+        {said}
+      </p>
 
-      {/* The plan: every length and count, changeable at any time. */}
-      <div className="mt-md text-left">
+      <Sheet open={sheet === 'task'} onClose={() => setSheet(null)} title="Focus on a task">
+        <label className="block">
+          <span className="block text-[14px] font-bold">Working on</span>
+          <select value={taskId} onChange={(e) => setTaskId(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]">
+            <option value="">No task picked</option>
+            {tasks.data?.tasks.map((t) => (
+              <option key={t.id} value={t.id}>
+                {RELATIONSHIP_BY_KEY[t.relationship].name}: {t.title}
+                {t.dueDate ? ` (due ${t.dueDate})` : ''}
+              </option>
+            ))}
+          </select>
+          {tasks.data && tasks.data.tasks.length === 0 && <span className="mt-xs block text-[12px] font-semibold text-ink-soft">No open tasks yet. Add one in Pillars and it shows up here.</span>}
+          <span className="mt-xs block text-[12px] font-semibold text-ink-soft">The task is saved with each session that ends from now on. Change it any time.</span>
+        </label>
+        <Button className="mt-md" full onClick={() => setSheet(null)}>
+          Done
+        </Button>
+      </Sheet>
+
+      <Sheet open={sheet === 'music'} onClose={() => setSheet(null)} title="Background music">
+        <SoundControls settings={settings} onChange={save} part="music" />
+        <Button className="mt-md" full onClick={() => setSheet(null)}>
+          Done
+        </Button>
+      </Sheet>
+
+      <Sheet open={sheet === 'settings'} onClose={() => setSheet(null)} title="Timer settings">
         <p className="m-0 text-[14px] font-extrabold">Your plan</p>
         <div className="scroll-row mt-xs flex gap-xs" role="group" aria-label="Plans to start from">
           {FOCUS_PRESETS.map((p) => {
-            const on = settings.focus === p.focus && settings.short === p.short && settings.long === p.long && settings.every === p.every;
+            const same = settings.focus === p.focus && settings.short === p.short && settings.long === p.long && settings.every === p.every;
             return (
-              <button key={p.name} type="button" aria-pressed={on} onClick={() => save({ ...settings, ...p })} className={`toy min-h-[44px] shrink-0 rounded-pill border-2 px-sm text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+              <button key={p.name} type="button" aria-pressed={same} onClick={() => save({ ...settings, ...p })} className={`toy min-h-[44px] shrink-0 rounded-pill border-2 px-sm text-[14px] font-bold ${same ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                 {p.name} {p.focus}/{p.short}
               </button>
             );
           })}
         </div>
-        <div className="mt-xs grid grid-cols-2 gap-xs">
-          <Stepper className={bento(0, 5, 2, 2)} label="Focus session" value={settings.focus} min={1} max={120} unit="min" onChange={(v) => save({ ...settings, focus: v })} />
-          <Stepper className={bento(1, 5, 2, 2)} label="Mini break" value={settings.short} min={1} max={60} unit="min" onChange={(v) => save({ ...settings, short: v })} />
-          <Stepper className={bento(2, 5, 2, 2)} label="Sessions before the long break" value={settings.every} min={1} max={12} hint={settings.every > 1 ? `${settings.every - 1} mini ${settings.every - 1 === 1 ? 'break' : 'breaks'} between them` : 'No mini breaks'} onChange={(v) => save({ ...settings, every: v })} />
-          <Stepper className={bento(3, 5, 2, 2)} label="Long break" value={settings.long} min={1} max={120} unit="min" onChange={(v) => save({ ...settings, long: v })} />
-          <Stepper className={bento(4, 5, 2, 2)} label="Runs, then stop (0 is until I stop)" value={settings.cycles} min={0} max={12} hint={settings.cycles === 0 ? 'Carries on until you stop' : `${settings.cycles} long ${settings.cycles === 1 ? 'break' : 'breaks'} in all`} onChange={(v) => save({ ...settings, cycles: v })} />
-        </div>
         <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{planLine(settings)}</p>
-      </div>
-
-      <div className="mt-sm flex flex-col gap-xs text-left">
-        <Toggle compact on={settings.logFocus} onChange={(v) => save({ ...settings, logFocus: v })} label="Count finished focus sessions as mindful minutes" />
-        <Toggle compact on={settings.logBreaks} onChange={(v) => save({ ...settings, logBreaks: v })} label="Count finished breaks as mindful minutes" />
-        <Toggle compact on={settings.auto} onChange={(v) => save({ ...settings, auto: v })} label="Start the next part by itself" />
-      </div>
-      <div className="mt-md border-t border-line pt-sm">
-        <SoundControls settings={settings} onChange={save} breaks />
-      </div>
-      <p className="sr-only" role="status" aria-live="polite">
-        {said}
-      </p>
+        <div className="mt-sm flex flex-col gap-xs text-left">
+          <Toggle compact on={settings.logFocus} onChange={(v) => save({ ...settings, logFocus: v })} label="Count finished focus sessions as mindful minutes" />
+          <Toggle compact on={settings.logBreaks} onChange={(v) => save({ ...settings, logBreaks: v })} label="Count finished breaks as mindful minutes" />
+          <Toggle compact on={settings.auto} onChange={(v) => save({ ...settings, auto: v })} label="Start the next part by itself" />
+        </div>
+        <div className="mt-md border-t border-line pt-sm">
+          <SoundControls settings={settings} onChange={save} breaks />
+        </div>
+        <Button className="mt-md" full onClick={() => setSheet(null)}>
+          Done
+        </Button>
+      </Sheet>
     </section>
   );
 }

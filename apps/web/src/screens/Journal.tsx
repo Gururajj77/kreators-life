@@ -1,6 +1,6 @@
 import { MOODS, STRESSORS, type JournalEntry } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
@@ -14,8 +14,12 @@ import { SkeletonList } from '../components/Skeleton';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
+import { lazyNamed } from '../lib/lazy';
 import { useJournal, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
+
+// The prompt list is a large block of text, so it downloads only when the Journal opens.
+const JournalPrompt = lazyNamed(() => import('../components/JournalPrompt'), 'JournalPrompt');
 
 export function Journal() {
   const pg = usePage();
@@ -26,6 +30,8 @@ export function Journal() {
   const [month, setMonth] = useState(todayLocal().slice(0, 7));
   const [day, setDay] = useState<string | null>(null);
   const [newFor, setNewFor] = useState<string | undefined>(undefined);
+  // A prompt the person chose to write about: it sets the new entry's title and its first line. It lives only in this screen, never on the server.
+  const [start, setStart] = useState<{ title: string; body: string } | null>(null);
   const monthQ = useQuery({ queryKey: ['journal-days', month], queryFn: () => api.journalDays(month) });
   const marks = Object.fromEntries(
     (monthQ.data?.days ?? []).map((d) => {
@@ -76,6 +82,16 @@ export function Journal() {
       <Button full size="lg" className="mt-md" onClick={() => setEditing('new')}>
         New entry
       </Button>
+
+      <Suspense fallback={null}>
+        <JournalPrompt
+          onWrite={(s) => {
+            setNewFor(undefined);
+            setStart(s);
+            setEditing('new');
+          }}
+        />
+      </Suspense>
 
       <PeriodPanel id="journal-period" parts={['journal', 'wellbeing']} />
       <section className="mt-lg" aria-labelledby="entries-heading">
@@ -130,9 +146,11 @@ export function Journal() {
       <EntrySheet
         entry={editing}
         date={newFor}
+        start={start}
         onClose={() => {
           setEditing(null);
           setNewFor(undefined);
+          setStart(null);
         }}
         onSaved={() => {
           refresh();
@@ -178,7 +196,7 @@ function DaySheet({ date, onClose, onOpen, onNew }: { date: string | null; onClo
   );
 }
 
-function EntrySheet({ entry, date, onClose, onSaved }: { entry: JournalEntry | null | 'new'; date?: string; onClose: () => void; onSaved: () => void }) {
+function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEntry | null | 'new'; date?: string; start?: { title: string; body: string } | null; onClose: () => void; onSaved: () => void }) {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [emotion, setEmotion] = useState<number | null>(null);
@@ -188,8 +206,8 @@ function EntrySheet({ entry, date, onClose, onSaved }: { entry: JournalEntry | n
   const qc = useQueryClient();
 
   useEffect(() => {
-    setTitle(existing?.title ?? '');
-    setBody(existing?.body ?? '');
+    setTitle(existing?.title ?? start?.title ?? '');
+    setBody(existing?.body ?? start?.body ?? '');
     setEmotion(existing?.emotion ?? null);
     setStress(existing?.stress ?? 2);
     setStressors(existing?.stressors ?? []);

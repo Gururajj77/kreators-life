@@ -4,6 +4,7 @@ import { PeriodPanel } from '../components/PeriodPanel';
 import { Button } from '../components/Button';
 import { AreaLine, Donut, PillBars } from '../components/Charts';
 import { Hero, HeroNumber } from '../components/Hero';
+import { RulerPicker } from '../components/RulerPicker';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
@@ -51,7 +52,7 @@ export function Sleep() {
           {hours}
           <span className="text-[20px]"> hours</span>
         </p>
-        <input type="range" min={0} max={14} step={0.5} value={hours} onChange={(e) => setHours(Number(e.target.value))} aria-label="Hours slept" className="mt-md w-full accent-ink" />
+        <RulerPicker className="mt-md" label="Hours slept" tone="paper" accent="r7" min={0} max={14} step={0.5} labelEvery={2} majorStep={1} value={hours} onChange={setHours} valueText={(v) => `${v} ${v === 1 ? 'hour' : 'hours'}`} />
         <p className="mt-md m-0 text-[14px] font-bold">Quality</p>
         <div className="mt-xs grid grid-cols-5 gap-xs" role="group" aria-label="Sleep quality">
           {QUALITY.map((q, i) => (

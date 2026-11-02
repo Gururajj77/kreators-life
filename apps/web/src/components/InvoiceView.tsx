@@ -3,6 +3,7 @@ import {
   INVOICE_SHOW_PARTS,
   invoiceTotals,
   money,
+  tdsGrossupNote,
   type BankDetails,
   type Invoice,
   type InvoiceDesign,
@@ -13,6 +14,7 @@ import {
 import type { ReactNode } from 'react';
 import { Button } from './Button';
 import { Inert } from './Inert';
+import { invoiceStamp, PrintSheet } from './PrintSheet';
 import { Toggle } from './Toggle';
 
 /** What each look wears. Colours are theme tokens; a bar that holds text has its own text token so dark mode keeps it readable. */
@@ -50,7 +52,8 @@ function Party({ p }: { p: InvoiceParty }) {
  * What the person switched off is simply missing from the data (the server removes it), and a block with nothing in it is left out.
  * Lines marked no-print stay on screen only. The whole thing is `print-doc`, so Download PDF is the browser's own save as PDF.
  */
-export function InvoiceView({ invoice, totals, owner = false }: { invoice: Invoice; totals?: InvoiceTotals; owner?: boolean }) {
+/** `owner` is kept on the type for the callers that pass it; the invoice reads the same to the owner and the client. */
+export function InvoiceView({ invoice, totals }: { invoice: Invoice; totals?: InvoiceTotals; owner?: boolean }) {
   const doc = invoice.doc;
   const t = totals ?? invoiceTotals(invoice.items, doc);
   const look = LOOK[doc.design];
@@ -73,9 +76,10 @@ export function InvoiceView({ invoice, totals, owner = false }: { invoice: Invoi
       sums.push([`SGST (${doc.gstBps / 200}%)`, money(t.sgst, cur)]);
     } else sums.push([`GST (${gstPct})`, money(t.gst, cur)]);
   }
-  if (doc.tdsMode === 'grossup') sums.push(['TDS adjusted', money(t.tdsAdjusted, cur)]);
+  if (doc.tdsMode === 'grossup') sums.push(['TDS adjusted*', money(t.tdsAdjusted, cur)]);
   return (
-    <article className="print-doc rounded-card bg-card-strong p-md text-ink shadow-toy-soft md:p-lg" aria-label={`${doc.title} ${invoice.number}`}>
+    <PrintSheet kind="invoice" title={doc.title || 'Invoice'} reference={invoice.number} date={invoice.issueDate} style={doc.style} stamp={invoiceStamp(invoice)} titleBlock={false} letterhead={{ name: '', lines: [] }}>
+      <div className="legal-invoice">
       <div className="grid gap-md md:grid-cols-2">
         <div className="min-w-0">
           <h2 className="m-0 break-words font-display text-[30px] font-extrabold leading-tight">
@@ -176,18 +180,12 @@ export function InvoiceView({ invoice, totals, owner = false }: { invoice: Invoi
             ))}
             <dt className="mt-sm text-right text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">Total</dt>
             <dd className="m-0 mt-xs text-right font-display text-[26px] font-extrabold leading-none">{money(t.total, cur)}</dd>
-            {doc.tdsMode === 'show' && t.tdsDeducted > 0 && (
+            {(doc.tdsMode === 'show' || doc.tdsMode === 'grossup') && t.tdsDeducted > 0 && (
               <>
                 <dt className="mt-sm text-right text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">TDS to deduct ({doc.tdsBps / 100}%)</dt>
                 <dd className="m-0 mt-sm text-right text-ink-soft">-{money(t.tdsDeducted, cur)}</dd>
                 <dt className="text-right text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">To pay after TDS</dt>
                 <dd className="m-0 text-right font-extrabold">{money(t.netReceivable, cur)}</dd>
-              </>
-            )}
-            {owner && doc.tdsMode === 'grossup' && t.tdsDeducted > 0 && (
-              <>
-                <dt className="no-print mt-sm text-right text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">You receive after TDS</dt>
-                <dd className="no-print m-0 mt-sm text-right font-extrabold">{money(t.netReceivable, cur)}</dd>
               </>
             )}
           </dl>
@@ -197,6 +195,11 @@ export function InvoiceView({ invoice, totals, owner = false }: { invoice: Invoi
       {doc.show.words && (
         <p className="m-0 mt-xs px-sm py-xs text-[14px] font-extrabold uppercase leading-snug" style={{ background: look.words, border: doc.design === 'mono' ? '1px solid var(--color-line)' : undefined }}>
           Total amount in words: {amountInWords(t.total, cur)}
+        </p>
+      )}
+      {doc.tdsMode === 'grossup' && doc.tdsBps > 0 && (
+        <p className="mt-xs m-0 text-[12px] font-semibold leading-snug text-ink-soft">
+          <Inert text={tdsGrossupNote(doc.tdsBps)} />
         </p>
       )}
       {invoice.note && (
@@ -214,7 +217,8 @@ export function InvoiceView({ invoice, totals, owner = false }: { invoice: Invoi
           <Inert text={doc.footer} />
         </p>
       )}
-    </article>
+      </div>
+    </PrintSheet>
   );
 }
 

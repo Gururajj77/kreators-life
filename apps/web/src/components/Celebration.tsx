@@ -1,4 +1,5 @@
 import { BADGES, KIND_META, RELATIONSHIPS, type Node, type RippleEvent } from '@kreators/shared';
+import { BadgeMedal } from './BadgeArt';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
@@ -143,8 +144,9 @@ function Overlay({ c }: { c: Celebration }) {
               {c.newBadges.map((k) => {
                 const b = BADGES.find((x) => x.key === k);
                 return (
-                  <li key={k} className="rounded-pill bg-on-ink px-sm py-xs text-[14px] font-bold text-ink">
-                    New badge {b?.emoji} {b?.name ?? k}
+                  <li key={k} className="flex items-center gap-xs rounded-pill bg-on-ink py-xs pl-xs pr-sm text-[14px] font-bold text-ink">
+                    <BadgeMedal k={k} size="sm" shine decorative />
+                    <span>New badge: {b?.name ?? k}</span>
                   </li>
                 );
               })}

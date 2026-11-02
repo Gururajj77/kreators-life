@@ -52,7 +52,7 @@ function useTaste() {
  * out and are kept); under it, with `breaks`, a soft beat for a mini break and three for the long one, and a buzz; and a background sound
  * with its volume. Used by the focus sessions and by the breathing timer, which share one set of choices on the person's account.
  */
-export function SoundControls({ settings, onChange, breaks = false }: { settings: FocusSettings; onChange: (s: FocusSettings) => void; breaks?: boolean }) {
+export function SoundControls({ settings, onChange, breaks = false, part = 'all' }: { settings: FocusSettings; onChange: (s: FocusSettings) => void; breaks?: boolean; /** `music` is only the background sound and its volume (the focus panel's music button); the master switch keeps its say. */ part?: 'all' | 'music' }) {
   const off = !settings.sound;
   const t = useTaste();
   // The preview follows the controls: the master switch silences it, the slider changes it, and another sound ends it.
@@ -68,9 +68,17 @@ export function SoundControls({ settings, onChange, breaks = false }: { settings
   const set = (patch: Partial<FocusSettings>) => onChange({ ...settings, ...patch });
   return (
     <div className="flex flex-col gap-xs text-left">
-      <Toggle compact on={settings.sound} onChange={(v) => set({ sound: v })} label={bare(COPY.master)} />
-      <p className="m-0 text-[12px] font-semibold text-ink-soft">{off ? COPY.silent : COPY.covers}</p>
-      {breaks && (
+      {part === 'all' ? (
+        <>
+          <Toggle compact on={settings.sound} onChange={(v) => set({ sound: v })} label={bare(COPY.master)} />
+          <p className="m-0 text-[12px] font-semibold text-ink-soft">{off ? COPY.silent : COPY.covers}</p>
+        </>
+      ) : (
+        off && (
+          <Toggle compact on={settings.sound} onChange={(v) => set({ sound: v })} label={bare(COPY.master)} hint={COPY.silent} />
+        )
+      )}
+      {breaks && part === 'all' && (
         <div className={`flex flex-col gap-xs ${off ? 'opacity-50' : ''}`}>
           <Toggle compact disabled={off} on={settings.soundShort} onChange={(v) => set({ soundShort: v })} label={bare(COPY.oneBeat)} />
           <Toggle compact disabled={off} on={settings.soundLong} onChange={(v) => set({ soundLong: v })} label={bare(COPY.threeBeats)} />

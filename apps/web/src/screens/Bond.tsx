@@ -10,6 +10,7 @@ import { Screen } from '../components/Screen';
 import { Section, SeeAll } from '../components/Section';
 import { Sheet } from '../components/Sheet';
 import { Toggle } from '../components/Toggle';
+import { ChannelsPanel } from '../components/Channels';
 import { api } from '../lib/api';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
 
@@ -104,6 +105,10 @@ export function Bond() {
           </ul>
         )}
         <Err e={openChat.isError ? openChat.error : null} />
+      </Section>
+
+      <Section id="bond-channels" title="Channels" lede="Private rooms for you and friends you ask in. Unlike chats, names show here.">
+        <ChannelsPanel scope="bond" />
       </Section>
 
       {(blocked.data?.blocked.length ?? 0) > 0 && (

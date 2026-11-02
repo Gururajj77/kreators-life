@@ -9,6 +9,8 @@ import {
   DELIVERABLE_KIND_NAME,
   DELIVERABLE_STAGES,
   DELIVERABLE_STAGE_META,
+  NOTE_KIND_NAME,
+  changesLabel,
   type AgencyClient,
   type AgencyDeliverable,
   type AgencyNote,
@@ -40,6 +42,7 @@ const COPY = {
   timeLede: 'Type minutes, or hours and minutes like 1:30.',
   removeAsk: 'This removes the deliverable and its notes. It cannot be undone.',
   armyLede: 'This one answers a deliverable in an Army campaign.',
+  changesLede: 'The client can ask for a change at their link while some are left; it goes back to making and uses one. With none left they can only ask for a paid change, which arrives here as a note. A new month starts with a fresh count.',
 } as const;
 
 const ARMY_TAG: Record<string, { tone: TagTone; name: string }> = {
@@ -227,6 +230,7 @@ function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | 
       </form>
 
       {item && <Army item={item} link={link} onDone={invalidate} />}
+      {item && <Changes item={item} onDone={invalidate} />}
       {item && <Thread itemId={item.id} onDone={invalidate} />}
       {item && <TimeLog item={item} onDone={invalidate} />}
     </div>
@@ -287,6 +291,46 @@ function Army({ item, link, onDone }: { item: AgencyDeliverable; link: string; o
   );
 }
 
+/** Changes included in a piece: how many the client has used, and a way to give one more (or take one back). */
+function Changes({ item, onDone }: { item: AgencyDeliverable; onDone: () => void }) {
+  const [said, setSaid] = useState('');
+  const change = useMutation({
+    mutationFn: (n: number) => api.agencyItemChanges(item.id, n),
+    onSuccess: (r) => {
+      setSaid(`Changes included are now ${r.allowed}.`);
+      onDone();
+    },
+  });
+  const left = Math.max(0, item.revisionsAllowed - item.revisions);
+  return (
+    <section className="mt-md rounded-tile bg-paper p-sm" aria-labelledby={`changes-${item.id}`}>
+      <h3 id={`changes-${item.id}`} className="m-0 text-[18px]">
+        Changes
+      </h3>
+      <p className="mt-xs m-0 text-[14px] font-bold">{`${changesLabel(item.revisions, item.revisionsAllowed)}${left === 0 ? '. None left' : ''}`}</p>
+      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{COPY.changesLede}</p>
+      <div className="mt-xs flex flex-wrap gap-xs">
+        <Button variant="outline" size="sm" onClick={() => change.mutate(1)} disabled={change.isPending}>
+          Add a change
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => change.mutate(-1)} disabled={change.isPending || item.revisionsAllowed <= item.revisions}>
+          Take one back
+        </Button>
+      </div>
+      {said && (
+        <p role="status" className="mt-xs m-0 text-[14px] font-bold">
+          {said}
+        </p>
+      )}
+      {change.isError && (
+        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+          That did not save. Try again.
+        </p>
+      )}
+    </section>
+  );
+}
+
 /** The thread on a deliverable: yours, the client's and the brand's. */
 function Thread({ itemId, onDone }: { itemId: string; onDone: () => void }) {
   const qc = useQueryClient();
@@ -317,6 +361,7 @@ function Thread({ itemId, onDone }: { itemId: string; onDone: () => void }) {
           <li key={n.id} className="rounded-tile bg-paper p-sm">
             <div className="flex flex-wrap items-center gap-xs">
               <StatusTag tone={AUTHOR_TONE[n.author]}>{AGENCY_AUTHOR_NAME[n.author]}</StatusTag>
+              {n.kind !== 'note' && <StatusTag tone={n.kind === 'change' ? 'warn' : n.kind === 'paid_change' ? 'bad' : 'neutral'}>{NOTE_KIND_NAME[n.kind]}</StatusTag>}
               {n.author === 'me' && <span className="text-[12px] font-bold text-ink-soft">{n.shared ? 'Shared with the client' : 'Private'}</span>}
               <span className="text-[12px] font-semibold text-ink-mute">{prettyDate(n.createdAt.slice(0, 10))}</span>
               {n.author === 'me' && (

@@ -15,6 +15,7 @@ import { useAuthed, useCommunity, useMe, useRefreshAll } from '../lib/queries';
 import { Pager, PagerBar, usePage } from '../components/Pager';
 import { Toggle } from '../components/Toggle';
 import { AnonToggle } from '../components/AnonToggle';
+import { ChannelsPanel, ChannelTabs } from '../components/Channels';
 
 /**
  * Six reactions under a post or a reply: the counts that have any, and a row to pick from. Picking yours again takes
@@ -125,7 +126,30 @@ function HeldPosts() {
   );
 }
 
+/** Community has two sections: the feed, and chat channels beside it (kept in the URL as `tab`). */
 export function Community() {
+  const [tab] = useParamState('tab', 'feed');
+  const [params] = useSearchParams();
+  return tab === 'channels' && !params.get('product') ? <CommunityChannels /> : <CommunityFeed />;
+}
+
+function CommunityChannels() {
+  return (
+    <Screen>
+      <header className="pt-lg">
+        <BackLink to="/apps">Apps</BackLink>
+        <h1 className="text-[30px]">Community</h1>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Chat rooms for one topic each, kept kind by guides.</p>
+      </header>
+      <ChannelTabs />
+      <div className="mt-md">
+        <ChannelsPanel scope="community" />
+      </div>
+    </Screen>
+  );
+}
+
+function CommunityFeed() {
   const me = useMe();
   const [params] = useSearchParams();
   const product = params.get('product') ?? undefined;
@@ -173,6 +197,7 @@ export function Community() {
           Type @ and a page name to tell someone. Follow a post to hear about new replies. Guides pin up to {MAX_PINNED} posts in each category. A post pays {SOCIAL_REWARDS.post.xp} xp, up to {SOCIAL_REWARDS.post.perDay} a day. A reply pays {SOCIAL_REWARDS.reply.xp}, a like you give pays {SOCIAL_REWARDS.like.xp}. A like on your post pays you a point, a new follower {SOCIAL_REWARDS.follower.points}.
         </p>
       </header>
+      {!product && <ChannelTabs />}
       <div className="mt-md">
       <div className="scroll-row" role="group" aria-label="Show">
         {FEED_FILTERS.map((f) => (

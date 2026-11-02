@@ -7,8 +7,10 @@ import {
   INVOICE_STATUS_NAME,
   INVOICE_STATUS_TONE,
   INVOICE_TITLES,
+  invoiceAsText,
   invoiceForClient,
   invoiceTotals,
+  parseDocStyle,
   MAX_INVOICE_LINES,
   money,
   TDS_MODE_NAME,
@@ -16,6 +18,7 @@ import {
   TDS_RATES_BPS,
   type Invoice,
   type InvoiceDesign,
+  type DocStyle,
   type InvoiceDoc,
   type InvoiceItem,
   type InvoiceParty,
@@ -26,9 +29,12 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { BankFields, Chips, Field, FIELD, InvoiceView, LABEL, PartyFields, ShowSwitches, SummaryCard, invoiceDate } from '../components/InvoiceView';
 import { Button } from '../components/Button';
+import { DocActions, DocLog, DocTextFold, EmailCopySheet } from '../components/DocActions';
+import { DocStyleCard, DocStyleSheet } from '../components/DocStyleSheet';
+import { HouseTemplateButton } from '../components/HouseTemplateButton';
 import { Inert } from '../components/Inert';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
@@ -38,10 +44,11 @@ import { StatusTag } from '../components/StatusTag';
 import { Toggle } from '../components/Toggle';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
+import { fileTitle, printAs, useAutoPrint } from '../lib/printDoc';
 import { useAuthed } from '../lib/queries';
 
 /** The parts of an invoice that open in their own sheet. */
-type Part = 'details' | 'from' | 'to' | 'lines' | 'calc' | 'bank' | 'design' | 'show' | 'comments';
+type Part = 'details' | 'from' | 'to' | 'lines' | 'calc' | 'bank' | 'design' | 'style' | 'show' | 'comments' | 'activity';
 
 interface Row {
   description: string;
@@ -68,6 +75,7 @@ interface Form {
   show: InvoiceShow;
   footnote: string;
   footer: string;
+  style: DocStyle;
 }
 
 const cents = (s: string) => Math.max(0, typedCents(s) || 0);
@@ -96,17 +104,18 @@ function fromInvoice(inv: Invoice): Form {
     show: d.show,
     footnote: d.footnote,
     footer: d.footer,
+    style: parseDocStyle(d.style),
   };
 }
 const itemsOf = (f: Form): InvoiceItem[] => f.rows.filter((r) => r.description.trim()).map((r) => ({ description: r.description.trim(), quantity: wholeQty(r.qty), unitCents: cents(r.unit) }));
 function docOf(f: Form): InvoiceDoc {
   const value = f.discountMode === 'none' ? 0 : f.discountMode === 'percent' ? Math.min(10000, Math.round((Number.parseFloat(f.discountValue) || 0) * 100)) : cents(f.discountValue);
-  return { show: f.show, title: f.title, from: f.from, to: f.to, bank: f.bank, design: f.design, discountMode: f.discountMode, discountValue: value, gstBps: f.gstBps, gstSplit: f.gstSplit, tdsBps: f.tdsBps, tdsMode: f.tdsMode, footnote: f.footnote, footer: f.footer };
+  return { show: f.show, title: f.title, from: f.from, to: f.to, bank: f.bank, design: f.design, discountMode: f.discountMode, discountValue: value, gstBps: f.gstBps, gstSplit: f.gstSplit, tdsBps: f.tdsBps, tdsMode: f.tdsMode, footnote: f.footnote, footer: f.footer, style: f.style };
 }
 
 const TDS_SENTENCE: Record<TdsMode, string> = {
   none: 'No TDS on this invoice.',
-  grossup: 'The TDS is added to the total, so after your client takes it off you still get the full amount.',
+  grossup: 'Your client pays the TDS. The extra is added to the total, then the invoice shows the TDS they take off and the amount to pay, so you are paid your price in full. A note about it is printed under the total.',
   show: 'The total stays as it is. The invoice shows what your client may take off.',
 };
 const GST_OPTIONS = GST_RATES_BPS.map((b) => ({ value: b, name: b === 0 ? 'None' : `${b / 100}%` }));
@@ -135,6 +144,7 @@ export function AgencyInvoice() {
   const [dupOpen, setDupOpen] = useState(false);
   const [part, setPart] = useState<Part | null>(null);
   const [tplOpen, setTplOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
   const stamp = inv ? `${inv.id}:${inv.status}:${inv.revisedAt}:${inv.totalCents}:${inv.number}` : '';
   useEffect(() => {
     if (inv) setForm(fromInvoice(inv));
@@ -212,20 +222,25 @@ export function AgencyInvoice() {
       setCopyNote(link);
     }
   };
-  // The saved PDF is the client's version of the page, named by the invoice number.
+  // The saved PDF is the client's version of the page, named "Invoice KR-0007".
+  const fileName = fileTitle('Invoice', form?.number || inv?.number);
   const print = () => {
-    const before = document.title;
     const wasClient = clientView;
     const restore = () => {
-      document.title = before;
       setClientView(wasClient);
       window.removeEventListener('afterprint', restore);
     };
     window.addEventListener('afterprint', restore);
     flushSync(() => setClientView(true));
-    document.title = form?.number || 'Invoice';
-    window.print();
+    printAs(fileName);
   };
+  const [params] = useSearchParams();
+  // ?print=1 opens the print window once the invoice has loaded (Download PDF on a list row); ?email=1 opens the email sheet.
+  useAutoPrint(Boolean(inv && form), fileName, print);
+  useEffect(() => {
+    if (inv && params.get('email') === '1') setEmailOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inv?.id]);
 
   if (q.isError) {
     return (
@@ -264,6 +279,8 @@ export function AgencyInvoice() {
   const gstText = form.gstBps > 0 ? `GST ${form.gstBps / 100}%${form.gstSplit ? ' (CGST and SGST)' : ''}` : 'no GST';
   const tdsText = form.tdsBps > 0 && form.tdsMode !== 'none' ? `TDS ${form.tdsBps / 100}%` : 'no TDS';
   const discountText = totals.discount > 0 ? `, ${money(totals.discount, inv.currency)} off` : '';
+  // The words Copy text and Email a copy use: the client's version, so what is switched off is not in them.
+  const text = invoiceAsText(clientView ? preview : invoiceForClient(preview), totals);
   const partyText = (p: InvoiceParty) => (p.name ? (p.line ? `${p.name}, ${p.line}` : p.name) : 'Not filled in yet');
 
   return (
@@ -309,9 +326,7 @@ export function AgencyInvoice() {
           <Button variant="outline" onClick={() => setTplOpen(true)}>
             Save as template
           </Button>
-          <Button variant="outline" onClick={print}>
-            Download PDF
-          </Button>
+          <HouseTemplateButton kind="invoice" fromId={inv.id} defaultName={`${inv.doc.title || 'Invoice'}`} beforeSave={dirty && editable ? () => save.mutateAsync() : undefined} />
           {link && (
             <>
               <Button variant="outline" onClick={copy}>
@@ -328,6 +343,7 @@ export function AgencyInvoice() {
             </Button>
           )}
         </div>
+        <DocActions className="mt-sm" fileName={fileName} text={text} onPrint={print} onEmail={() => setEmailOpen(true)} />
         {!editable && (
           <p className="mt-sm m-0 rounded-tile bg-card p-sm text-[14px] font-bold">
             {inv.status === 'paid' ? 'This invoice is paid, so the books match it. Mark it as sent again to change it.' : 'A void invoice is kept for the record. Duplicate it to start again.'}
@@ -351,9 +367,11 @@ export function AgencyInvoice() {
         )}
       </header>
 
-      <Section id="preview" title="The invoice" lede={clientView ? 'This is what your client sees. Anything you switched off is missing.' : 'This is how it looks to you, with the money you will receive.'} action={<span className="no-print"><Toggle compact on={clientView} onChange={setClientView} label="View as client" /></span>}>
+      <Section id="preview" className="legal-host" title="The invoice" lede={clientView ? 'This is what your client sees. Anything you switched off is missing.' : 'This is how it looks to you, with the money you will receive.'} action={<span className="no-print"><Toggle compact on={clientView} onChange={setClientView} label="View as client" /></span>}>
         <InvoiceView invoice={preview} totals={totals} owner={!clientView} />
       </Section>
+
+      <DocTextFold text={text} />
 
       <div className="no-print">
         <Section id="parts" title="Change a part" lede="Each one opens on its own. Nothing is sent until you save.">
@@ -365,7 +383,9 @@ export function AgencyInvoice() {
             <SummaryCard title="Calculator" disabled={!editable} onEdit={() => setPart('calc')} summary={`${gstText}, ${tdsText}${discountText}, total ${money(totals.total, inv.currency)}`} />
             <SummaryCard title="Bank details" disabled={!editable} onEdit={() => setPart('bank')} summary={form.bank.bankName || bankTail ? <Inert text={`${form.bank.bankName || 'Bank'}${bankTail ? `, ends ${bankTail}` : ''}`} /> : 'Not filled in yet'} />
             <SummaryCard title="Design" disabled={!editable} onEdit={() => setPart('design')} summary={`${INVOICE_DESIGN_META[form.design].name} look`} />
+ <DocStyleCard style={form.style} disabled={!editable} onEdit={() => setPart('style')} />
             <SummaryCard title="What the client sees" disabled={!editable} onEdit={() => setPart('show')} summary={`${shown} of ${INVOICE_SHOW_PARTS.length} shown`} />
+            <SummaryCard title="Activity" editLabel="Open" onEdit={() => setPart('activity')} summary="Copies you emailed to your client." />
             <SummaryCard
               title="Comments"
               editLabel="Open"
@@ -505,7 +525,7 @@ export function AgencyInvoice() {
               ['Discount', `-${money(totals.discount, inv.currency)}`],
               ['Taxable amount', money(totals.taxable, inv.currency)],
               ['GST', money(totals.gst, inv.currency)],
-              ['TDS added to the total', money(totals.tdsAdjusted, inv.currency)],
+              ['TDS adjusted (added)', money(totals.tdsAdjusted, inv.currency)],
             ] as const
           ).map(([k, v]) => (
             <div key={k} className="contents">
@@ -515,9 +535,9 @@ export function AgencyInvoice() {
           ))}
           <dt className="font-extrabold">Total</dt>
           <dd className="m-0 text-right font-display text-[22px] font-extrabold leading-none">{money(totals.total, inv.currency)}</dd>
-          <dt className="text-ink-soft">TDS your client will take off</dt>
+          <dt className="text-ink-soft">Less: TDS your client takes off</dt>
           <dd className="m-0 text-right">{money(totals.tdsDeducted, inv.currency)}</dd>
-          <dt className="font-extrabold">You receive</dt>
+          <dt className="font-extrabold">To pay after TDS</dt>
           <dd className="m-0 text-right font-extrabold">{money(totals.netReceivable, inv.currency)}</dd>
           <dt className="col-span-2 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">Total in words</dt>
           <dd className="col-span-2 m-0 text-[14px] font-extrabold">{amountInWords(totals.total, inv.currency)}</dd>
@@ -591,6 +611,11 @@ export function AgencyInvoice() {
         </div>
       </Sheet>
 
+      <DocStyleSheet open={part === 'style'} onClose={close} value={form.style} onChange={(style) => set({ style })} disabled={!editable} />
+      <Sheet open={part === 'activity'} onClose={close} title="Activity">
+        <DocLog type="invoice" id={inv.id} />
+      </Sheet>
+      <EmailCopySheet open={emailOpen} onClose={() => setEmailOpen(false)} route="invoices" id={inv.id} defaultTo={inv.clientEmail || inv.doc.to.email} text={text} noLinkYet={inv.status === 'draft' || inv.status === 'void'} />
       <TemplateSheet open={tplOpen} onClose={() => setTplOpen(false)} inv={inv} dirty={dirty && editable} saveFirst={() => save.mutateAsync()} />
       <DuplicateSheet open={dupOpen} onClose={() => setDupOpen(false)} inv={inv} />
     </Screen>

@@ -1,11 +1,13 @@
 import { RELATIONSHIPS } from '@kreators/shared';
-import type { ReactNode } from 'react';
-import { Link, NavLink } from 'react-router';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Link, NavLink, useLocation } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Ornament, Posy } from '../components/Hero';
 import { useSession } from '../lib/store';
-import { useTheme, type ThemeMode } from '../lib/theme';
+import { useTheme } from '../lib/theme';
 import { ThemeToggle } from '../components/ThemeToggle';
+import { Segmented } from '../components/fx/Segmented';
+import { useSlider } from '../components/fx/useSlider';
 
 /** Where "Go to app" goes: straight in for people with a session, to sign in for everyone else. */
 export function useAppEntry(): string {
@@ -32,15 +34,29 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
   const themeMode = useTheme((s) => s.mode);
   const setThemeMode = useTheme((s) => s.setMode);
   // Two classes, because Tailwind 4 orders `inline-flex` after `hidden`: a link that carries both would always show.
-  const navBase = 'min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill px-sm text-[16px] font-bold text-ink-soft transition-colors hover:text-ink aria-[current=page]:text-ink';
+  const navBase = 'relative min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill px-sm text-[16px] font-bold text-ink-soft transition-colors hover:text-ink aria-[current=page]:text-ink';
   // Phones keep only the logo, "Go to app" and the theme button; the rest comes back from the laptop breakpoint.
   const navWide = `hidden lg:inline-flex ${navBase}`;
+  // The header frosts once the page has moved: a one-pixel marker at the very top tells us when it has left the screen (no scroll listener).
+  const top = useRef<HTMLDivElement>(null);
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const el = top.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(([e]) => setScrolled(!e?.isIntersecting));
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  // A pill that glides to the page you are on.
+  const { pathname } = useLocation();
+  const slide = useSlider<HTMLElement>('[aria-current="page"]', pathname);
   return (
     <div className="min-h-dvh text-ink">
-      <header className="safe-top relative z-30 border-b border-line bg-card backdrop-blur-md md:sticky md:top-0">
+      <div ref={top} aria-hidden="true" className="pointer-events-none absolute top-0 left-0 h-xs w-xs" />
+      <header data-scrolled={scrolled ? '' : undefined} className="fx-header safe-top relative z-30 md:sticky md:top-0">
         <div className={`mx-auto flex min-w-0 ${wide ? 'max-w-[1080px]' : 'max-w-[720px]'} items-center justify-between gap-sm px-md py-xs`}>
           <Logo />
-          <nav aria-label="Site" className="flex min-w-0 items-center gap-xs">
+          <nav ref={slide.ref} aria-label="Site" className="fx-slide fx-slide-paper flex min-w-0 items-center gap-xs">
             <NavLink to="/explore" className={navWide}>
               Explore
             </NavLink>
@@ -130,19 +146,16 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
               Privacy choices
             </button>
           </nav>
-          <div className="flex gap-xs" role="group" aria-label="Theme">
-            {(
-              [
-                ['system', 'Auto'],
-                ['light', 'Light'],
-                ['dark', 'Dark'],
-              ] as [ThemeMode, string][]
-            ).map(([m, label]) => (
-              <button key={m} type="button" aria-pressed={themeMode === m} onClick={() => setThemeMode(m)} className={`toy min-h-[40px] rounded-pill border-2 px-sm text-[14px] font-bold ${themeMode === m ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-                {label}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label="Theme"
+            value={themeMode}
+            onChange={setThemeMode}
+            options={[
+              { value: 'system', label: 'Auto' },
+              { value: 'light', label: 'Light' },
+              { value: 'dark', label: 'Dark' },
+            ]}
+          />
         </div>
         <Ornament className="mt-xs" />
         <p className="relative m-0 px-md text-center text-[12px] font-semibold text-ink-mute">Your journal and wellbeing numbers are never shown to brands, staff, the leaderboard or Club selection.</p>

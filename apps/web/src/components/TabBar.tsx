@@ -1,5 +1,6 @@
 import { BADGE_META, badgeRoleOf, MODULE_GROUPS, type ModuleGroup } from '@kreators/shared';
 import { useEffect, useState } from 'react';
+import { useSlider } from './fx/useSlider';
 import { Link, NavLink, useLocation } from 'react-router';
 import { useGroupOrder, useModules } from '../lib/modules';
 import { useMe } from '../lib/queries';
@@ -14,7 +15,7 @@ const TABS = [
     to: '/home',
     label: 'Home',
     icon: (
-      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 11.5 12 4l9 7.5" />
         <path d="M5.5 10v10h13V10" />
         <path d="M10 20v-6h4v6" fill="currentColor" stroke="none" />
@@ -25,7 +26,7 @@ const TABS = [
     to: '/today',
     label: 'Daily',
     icon: (
-      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
         <circle cx="12" cy="12" r="4.5" fill="currentColor" stroke="none" />
         <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1" />
       </svg>
@@ -58,7 +59,7 @@ const TABS = [
     to: '/you',
     label: 'Profile',
     icon: (
-      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
         <circle cx="12" cy="12" r="9.5" />
         <circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none" />
         <circle cx="15" cy="10" r="1.2" fill="currentColor" stroke="none" />
@@ -76,6 +77,9 @@ export function TabBar() {
   const { modules } = useModules();
   const groupOrder = useGroupOrder(SIDEBAR_GROUPS);
   const loc = useLocation();
+  // The filled circle (phone) and the filled pill (laptop) behind the page you are on glide from tab to tab; until they are placed the tab keeps its own fill.
+  const bottom = useSlider<HTMLUListElement>('[aria-current="page"] .tab-icon', loc.pathname);
+  const side = useSlider<HTMLUListElement>('[aria-current="page"]', loc.pathname);
   const sidebarApps = modules.filter((m) => m.on && !m.locked);
   // Phone: the sidebar's app groups live behind a menu button at the top right.
   const [menu, setMenu] = useState(false);
@@ -89,8 +93,8 @@ export function TabBar() {
   return (
     <>
       {/* Phone: tabs along the bottom. */}
-      <nav aria-label="Main" className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-card md:hidden">
-        <ul className="mx-auto flex max-w-[480px] list-none items-stretch justify-around p-0 m-0">
+      <nav aria-label="Main" className="fx-bar safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line md:hidden">
+        <ul ref={bottom.ref} className="fx-slide mx-auto flex max-w-[480px] list-none items-stretch justify-around p-0 m-0">
           {TABS.map((t) => (
             <li key={t.to} className="flex-1">
               <NavLink
@@ -101,7 +105,7 @@ export function TabBar() {
               >
                 {({ isActive }) => (
                   <>
-                    <span className={`tab-icon relative flex size-[36px] items-center justify-center rounded-pill transition-colors ${isActive ? 'bg-ink text-on-ink' : ''}`}>
+                    <span className={`tab-icon relative flex size-[36px] items-center justify-center rounded-pill transition-colors ${isActive ? (bottom.ready ? 'text-on-ink' : 'bg-ink text-on-ink') : ''}`}>
                       {t.icon}
                       {badge(t.to)}
                     </span>
@@ -189,10 +193,10 @@ export function TabBar() {
           )}
           <ThemeToggle />
         </div>
-        <ul className="mt-md flex list-none flex-col gap-xs p-0 m-0">
+        <ul ref={side.ref} className="fx-slide mt-md flex list-none flex-col gap-xs p-0 m-0">
           {TABS.map((t) => (
             <li key={t.to}>
-              <NavLink to={t.to} className={({ isActive }) => `tab flex min-h-[48px] items-center gap-sm rounded-pill px-sm text-[16px] font-bold transition-colors ${isActive ? 'bg-ink text-on-ink' : 'text-ink-soft hover:bg-paper hover:text-ink'}`}>
+              <NavLink to={t.to} className={({ isActive }) => `tab relative flex min-h-[48px] items-center gap-sm rounded-pill px-sm text-[16px] font-bold transition-colors ${isActive ? (side.ready ? 'text-on-ink' : 'bg-ink text-on-ink') : 'text-ink-soft hover:bg-paper hover:text-ink'}`}>
                 <span className="relative flex size-[28px] items-center justify-center">
                   {t.icon}
                   {badge(t.to)}

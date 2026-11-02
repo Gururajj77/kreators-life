@@ -4,6 +4,7 @@ import type { AppEnv } from '../env';
 import { newId, nowIso } from '../db';
 import { handleComment } from './growth';
 import { providerFor } from '../payments';
+import { release } from '../discounts';
 import { logEvent, sendEmail, track } from '../ops';
 import { ORDER_SELECT, type OrderRow } from './studio';
 import { nameOf, notify } from '../db';
@@ -126,7 +127,9 @@ export async function handlePaymentEvent(db: D1Database, env: Env, parsed: { typ
   }
   if (parsed.type === 'payment.failed') {
     if (o.status !== 'pending') return `already ${o.status}`;
-    await db.prepare("UPDATE orders SET status = 'failed' WHERE id = ?").bind(o.id).run();
+    const failed = await db.prepare("UPDATE orders SET status = 'failed' WHERE id = ? AND status = 'pending'").bind(o.id).run();
+    // A discount code's use is given back when the payment did not go through.
+    if (failed.meta.changes === 1) await release(db, o.id);
     await logEvent(db, 'order', o.id, 'payment.failed');
     await track(db, o.buyer_id, 'payment_failed', { productId: o.product_id });
     return 'failed';

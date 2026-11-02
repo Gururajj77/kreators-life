@@ -1,4 +1,4 @@
-import { CONTRACT_STATUSES, CONTRACT_STATUS_NAME, CONTRACT_STATUS_TONE, CONTRACT_TEMPLATES, type AgencyTemplate, type BoardColumn, type ContractListItem, type ContractStatus } from '@kreators/shared';
+import { contractAsText, docRef, CONTRACT_STATUSES, CONTRACT_STATUS_NAME, CONTRACT_STATUS_TONE, CONTRACT_TEMPLATES, type AgencyTemplate, type BoardColumn, type ContractListItem, type ContractStatus } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -6,7 +6,10 @@ import { api, ApiError } from '../lib/api';
 import { useAuthed } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
 import { tie } from '../lib/text';
+import { AgencyDocsList } from './AgencyDocs';
+import { AgencyInvoices } from './AgencyInvoices';
 import { Button } from './Button';
+import { DocRowActions } from './DocActions';
 import { Fold } from './Fold';
 import { KanbanBoard } from './KanbanBoard';
 import { Pager, usePage } from './Pager';
@@ -30,8 +33,38 @@ function canMove(from: string, to: string): boolean {
   return to === 'draft' || to === 'sent' || to === 'void';
 }
 
-/** The agreements pipeline: a list or a board, for every client or for one. */
+const SEGMENTS = [
+  ['agreements', 'Agreements'],
+  ['invoices', 'Invoices'],
+  ['other', 'Other documents'],
+] as const;
+
+/**
+ * All the paper in one place: agreements, invoices, and the other documents (a strategy session summary, trial terms, a retainer proposal,
+ * a monthly report). A segmented filter chooses which; each has its own list or board.
+ */
 export function AgencyContracts({ clientId }: { clientId?: string }) {
+  const [seg, setSeg] = useParamState('agseg', 'agreements');
+  // On one client's page the invoices and the other documents have their own blocks, so only the agreements are here.
+  if (clientId) return <AgencyAgreements clientId={clientId} />;
+  return (
+    <div>
+      <div role="group" aria-label="Kind of paper" className="scroll-row flex gap-xs">
+        {SEGMENTS.map(([k, name]) => (
+          <button key={k} type="button" aria-pressed={seg === k} onClick={() => setSeg(k)} className={`toy min-h-[44px] shrink-0 rounded-pill border-2 px-md text-[14px] font-bold ${seg === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            {name}
+          </button>
+        ))}
+      </div>
+      <div className="mt-sm">
+        {seg === 'invoices' ? <AgencyInvoices /> : seg === 'other' ? <AgencyDocsList /> : <AgencyAgreements />}
+      </div>
+    </div>
+  );
+}
+
+/** The agreements pipeline: a list or a board, for every client or for one. */
+export function AgencyAgreements({ clientId }: { clientId?: string }) {
   const qc = useQueryClient();
   const nav = useNavigate();
   const [view, setView] = useView('ag', 'board');
@@ -50,7 +83,8 @@ export function AgencyContracts({ clientId }: { clientId?: string }) {
   const list = useAuthed(['agency', 'contracts', 'list', clientId ?? '', status, pg.page, pg.size], () => api.agencyContracts(listQuery), view === 'list');
   const clients = useAuthed(['agency', 'clients-pick'], () => api.agency('csize=100'), adding && !clientId);
   const templates = useAuthed(['agency', 'templates', 'contract'], () => api.agencyTemplates('contract'));
-  const mine = templates.data?.templates ?? [];
+  const mine = (templates.data?.templates ?? []).filter((t) => t.scope === 'own');
+  const house = (templates.data?.templates ?? []).filter((t) => t.scope === 'house');
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['agency'] });
   const move = useMutation({
@@ -63,7 +97,7 @@ export function AgencyContracts({ clientId }: { clientId?: string }) {
   });
   const create = useMutation({
     mutationFn: () => {
-      const body = template.startsWith('own:') ? { templateId: template.slice(4) } : { templateKey: template.slice(4) };
+      const body = template.startsWith('own:') ? { templateId: template.slice(4) } : template.startsWith('house:') ? { houseId: template.slice(6) } : { templateKey: template.slice(4) };
       return api.agencyContractAdd({ ...body, clientId: clientId ?? (pickClient || null) });
     },
     onSuccess: (r) => {
@@ -157,6 +191,15 @@ export function AgencyContracts({ clientId }: { clientId?: string }) {
                   </span>
                   <StatusTag tone={CONTRACT_STATUS_TONE[c.status]}>{CONTRACT_STATUS_NAME[c.status]}</StatusTag>
                 </Link>
+                <div className="mt-xs px-sm">
+                  <DocRowActions
+                    path={`/agency/contracts/${c.id}`}
+                    getText={async () => {
+                      const { contract } = await api.agencyContract(c.id);
+                      return contractAsText(contract.doc, { reference: docRef('AGR', contract.id), date: contract.sentAt ?? contract.createdAt, answers: contract.answers, acceptance: contract.acceptance });
+                    }}
+                  />
+                </div>
               </li>
             ))}
           </ul>
@@ -201,6 +244,18 @@ export function AgencyContracts({ clientId }: { clientId?: string }) {
             ))}
           </ul>
         )}
+        <h3 className="mt-md text-[16px]">House templates</h3>
+        {house.length === 0 ? (
+          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">No house templates yet.</p>
+        ) : (
+          <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0" role="radiogroup" aria-label="House templates">
+            {house.map((t) => (
+              <li key={t.id}>
+                <Choice house on={template === `house:${t.id}`} onPick={() => setTemplate(`house:${t.id}`)} name={t.name} blurb={t.summary} />
+              </li>
+            ))}
+          </ul>
+        )}
         {create.isError && (
           <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
             {create.error instanceof ApiError ? create.error.message : 'That did not work. Try again.'}
@@ -220,10 +275,13 @@ export function AgencyContracts({ clientId }: { clientId?: string }) {
 }
 
 /** One pickable starting point. */
-function Choice({ on, onPick, name, blurb }: { on: boolean; onPick: () => void; name: string; blurb: string }) {
+function Choice({ on, onPick, name, blurb, house = false }: { on: boolean; onPick: () => void; name: string; blurb: string; house?: boolean }) {
   return (
     <button type="button" role="radio" aria-checked={on} onClick={onPick} className={`toy w-full rounded-tile border-2 p-sm text-left ${on ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
-      <span className="block text-[16px] font-extrabold">{tie(name)}</span>
+      <span className="flex flex-wrap items-center gap-xs text-[16px] font-extrabold">
+        {tie(name)}
+        {house && <StatusTag tone="info">House template</StatusTag>}
+      </span>
       <span className="block text-[14px] font-semibold text-ink-soft">{blurb}</span>
     </button>
   );

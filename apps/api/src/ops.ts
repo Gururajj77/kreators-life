@@ -79,14 +79,15 @@ export async function limited(db: D1Database, key: string, max: number, windowSe
   return (row?.count ?? 0) > max;
 }
 
-const ipOf = (c: Context<AppEnv>) => c.req.header('CF-Connecting-IP') ?? c.req.header('X-Forwarded-For') ?? 'local';
+export const ipOf = (c: Context<AppEnv>) => c.req.header('CF-Connecting-IP') ?? c.req.header('X-Forwarded-For') ?? 'local';
 
 /** Middleware: the named limit from limits.ts, per address, or per person once there is a session. */
-export function rateLimit(name: LimitName) {
+export function rateLimit(name: LimitName, by?: 'address') {
   const { max, windowSec } = LIMITS[name];
   return async (c: Context<AppEnv>, next: Next) => {
-    const who = c.get('user')?.id ?? ipOf(c);
-    if (await limited(c.env.DB, `${name}:${who}`, max, windowSec)) return c.json({ error: 'too many tries, wait a minute' }, 429);
+    // `by: 'address'` counts the address even for a signed-in person, so one address cannot try codes through many accounts.
+    const who = by === 'address' ? ipOf(c) : (c.get('user')?.id ?? ipOf(c));
+    if (await limited(c.env.DB, `${name}${by === 'address' ? ':ip' : ''}:${who}`, max, windowSec)) return c.json({ error: 'too many tries, wait a minute' }, 429);
     await next();
   };
 }

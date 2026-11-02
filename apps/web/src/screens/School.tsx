@@ -1,8 +1,9 @@
-import type { Cohort as CohortT, LearningItem, Program } from '@kreators/shared';
+import type { Cohort as CohortT, DiscountCheck, LearningItem, Program } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
+import { DiscountField } from '../components/DiscountField';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
@@ -95,7 +96,9 @@ export function School() {
 
 function ProgramCard({ program: p, staff, myIds, onChange }: { program: Program; staff: boolean; myIds: Set<string>; onChange: () => void }) {
   const [tool, setTool] = useState<'lesson' | 'assignment' | 'cohort' | null>(null);
-  const enroll = useMutation({ mutationFn: (cohortId: string) => api.enroll(cohortId), onSuccess: () => onChange() });
+  // A team discount code for this program. The server prices it again when someone enrols.
+  const [discount, setDiscount] = useState<DiscountCheck | null>(null);
+  const enroll = useMutation({ mutationFn: (cohortId: string) => api.enroll(cohortId, undefined, discount ? discount.code : undefined), onSuccess: () => onChange() });
   const publish = useMutation({ mutationFn: (published: boolean) => api.updateProgram(p.id, { published }), onSuccess: () => onChange() });
   const open = p.cohorts.filter((k) => k.status === 'upcoming' || k.status === 'running');
   return (
@@ -122,6 +125,7 @@ function ProgramCard({ program: p, staff, myIds, onChange }: { program: Program;
         </p>
       )}
       {open.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No cohort dates are set yet. Come back after the team adds one.</p>}
+      {open.length > 0 && p.pricePoints > 0 && p.published && <DiscountField className="mt-sm" area="program" itemId={p.id} value={discount?.code ?? ''} check={discount} onChange={(_c, check) => setDiscount(check)} />}
       <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
         {open.map((k) => (
           <li key={k.id} className="flex items-center gap-sm rounded-tile bg-paper p-sm">

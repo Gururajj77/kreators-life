@@ -1,10 +1,11 @@
-import { EVENT_TYPE_META, EVENT_TYPES, type EventRegistration, type EventType, type PartyEvent } from '@kreators/shared';
+import { EVENT_TYPE_META, EVENT_TYPES, type DiscountCheck, type EventRegistration, type EventType, type PartyEvent } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { MediaSection } from '../components/MediaSection';
 import { EventPanel } from '../components/EventPanel';
 import { Button } from '../components/Button';
+import { DiscountField } from '../components/DiscountField';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
@@ -279,12 +280,14 @@ export function EventPage() {
   const refresh = useRefreshAll();
   const codeError = ((useLocation().state as { codeError?: string } | null)?.codeError ?? null);
   const [networking, setNetworking] = useState(false);
+  // A team discount code on a ticket that costs points. The server prices it again when the RSVP is sent.
+  const [discount, setDiscount] = useState<DiscountCheck | null>(null);
   const [rsvpResult, setRsvpResult] = useState<string | null>(null);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [thanks, setThanks] = useState(false);
   const rsvp = useMutation({
-    mutationFn: () => api.rsvp(id, networking),
+    mutationFn: () => api.rsvp(id, networking, discount && discount.offPoints > 0 ? discount.code : undefined),
     onSuccess: (r) => {
       setRsvpResult(r.status === 'registered' ? 'You are in. See you there.' : 'The room is full, so you are on the waitlist. We will tell you if a seat opens.');
       refresh();
@@ -405,9 +408,10 @@ export function EventPage() {
                 <input type="checkbox" checked={networking} onChange={(ev) => setNetworking(ev.target.checked)} className="size-[20px] accent-ink" />
                 Happy to be introduced to other guests
               </label>
+              {e.pricePoints > 0 && <DiscountField area="event" itemId={id} value={discount?.code ?? ''} check={discount} onChange={(_c, check) => setDiscount(check)} />}
               <Err e={rsvp.isError ? rsvp.error : null} />
               <Button size="lg" full onClick={() => rsvp.mutate()} disabled={rsvp.isPending}>
-                {e.capacity !== null && e.registered >= e.capacity ? 'Join the waitlist' : e.pricePoints > 0 ? `RSVP for ${e.pricePoints} points` : 'RSVP'}
+                {e.capacity !== null && e.registered >= e.capacity ? 'Join the waitlist' : e.pricePoints > 0 ? `RSVP for ${discount && discount.offPoints > 0 ? discount.payPoints : e.pricePoints} points` : 'RSVP'}
               </Button>
             </div>
           ) : (

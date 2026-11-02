@@ -16,6 +16,7 @@ import { journal } from './routes/journal';
 import { inbox } from './routes/inbox';
 import { manageResources, resources } from './routes/resources';
 import { community, moderate } from './routes/community';
+import { bondChannels, communityChannels } from './routes/channels';
 import { companion } from './routes/companion';
 import { search } from './routes/search';
 import { studio } from './routes/studio';
@@ -58,13 +59,17 @@ import { strategist } from './routes/strategist';
 import { session } from './routes/session';
 import { assistantRoutes } from './routes/assistant';
 import { credits } from './routes/credits';
+import { discounts } from './routes/discounts';
 import { coach, myCoach } from './routes/coach';
 import { media, mediaPublic } from './routes/media';
 import { reminders } from './routes/reminders';
 import { agency, agencyPublic } from './routes/agency';
+import { agencyLife, agencyLifePublic } from './routes/agencyLife';
+import { portalDocGate, portalDocs } from './portalAccess';
 import { kpis } from './routes/kpis';
 import { calendarMe, calendarPublic } from './routes/calendar';
 import { agencyDocs, contractsPublic } from './routes/agencyDocs';
+import { agencyOther, docsPublic } from './routes/agencyOther';
 import { connect } from './routes/connect';
 import { logger, pruneLogs, writeClientError, writeLog } from './logs';
 import { blockedPath, originAllowed, PAGE_HEADERS } from './headers';
@@ -118,7 +123,7 @@ app.use('*', logger());
 
 app.get('/health', (c) => c.json({ ok: true, at: new Date().toISOString() }));
 // Abuse limits on the doors that take no session, per address. The numbers live in limits.ts. They are registered first, so a limit runs before the door it guards.
-for (const r of ROUTE_LIMITS) if (isOpenDoor(r.path)) app.on(r.method, r.path, rateLimit(r.limit));
+for (const r of ROUTE_LIMITS) if (isOpenDoor(r.path)) app.on(r.method, r.path, rateLimit(r.limit, r.by));
 // A screen that broke in someone's browser says so here: a short message and where, never who. Limited per address.
 app.post('/public/client-error', async (c) => {
   const body = await c.req.json<{ message?: unknown; path?: unknown }>().catch(() => ({}) as { message?: unknown; path?: unknown });
@@ -132,8 +137,17 @@ app.route('/public', legalPublic);
 app.route('/public', vitalsPublic);
 app.route('/public/explore', explore);
 app.route('/public/media', mediaPublic);
+// A client with a password on their link needs a live portal session for their agreement and invoice links too (portalAccess.ts).
+for (const kind of ['contract', 'invoice', 'doc'] as const) {
+  const prefix = kind === 'contract' ? '/public/contracts' : kind === 'invoice' ? '/public/invoices' : '/public/agency/doc';
+  app.use(`${prefix}/:token`, portalDocGate(kind));
+  app.use(`${prefix}/:token/*`, portalDocGate(kind));
+}
+app.route('/public', portalDocs);
 app.route('/public/certificates', certificates);
 app.route('/public/invoices', publicInvoices);
+app.route('/public/agency/doc', docsPublic);
+app.route('/public/agency', agencyLifePublic);
 app.route('/public/agency', agencyPublic);
 app.route('/public/contracts', contractsPublic);
 app.route('/public/calendar', calendarPublic);
@@ -170,7 +184,7 @@ app.use('*', async (c, next) => {
 });
 
 // The rest of the limits, per person. Same file.
-for (const r of ROUTE_LIMITS) if (!isOpenDoor(r.path)) app.on(r.method, r.path, rateLimit(r.limit));
+for (const r of ROUTE_LIMITS) if (!isOpenDoor(r.path)) app.on(r.method, r.path, rateLimit(r.limit, r.by));
 
 // The student's side of coaching is core, so it is mounted before the rest of /me and never gated.
 app.route('/me/coach', myCoach);
@@ -189,6 +203,9 @@ app.route('/wellbeing', wellbeing);
 app.route('/journal', journal);
 app.route('/inbox', inbox);
 app.route('/resources', resources);
+// Channels sit under their own app, so the module gate reads Community for one and Bond for the other.
+app.route('/community/channels', communityChannels);
+app.route('/bond/channels', bondChannels);
 app.route('/community', community);
 app.route('/companion', companion);
 app.route('/search', search);
@@ -220,7 +237,9 @@ app.route('/life', life);
 app.route('/home', home);
 app.route('/reviews/kpis', kpis);
 app.route('/reviews', reviews);
+app.route('/agency/docs', agencyOther);
 app.route('/agency', agency);
+app.route('/agency', agencyLife);
 app.route('/agency', agencyDocs);
 app.route('/market', market);
 app.route('/run', run);
@@ -230,6 +249,7 @@ app.route('/studio', strategist);
 // The assistant calls the app's own routes as the person, so it gets the app itself to call into.
 app.route('/assistant', assistantRoutes((req, env, ctx) => app.fetch(req, env, ctx)));
 app.route('/credits', credits);
+app.route('/discounts', discounts);
 app.route('/coach', coach);
 
 app.notFound((c) => c.json({ error: 'not found' }, 404));

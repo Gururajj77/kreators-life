@@ -1,4 +1,5 @@
 import { PIPELINE_VIEWS, type PipelineView } from '@kreators/shared';
+import { Segmented } from './fx/Segmented';
 import { useParamState } from '../lib/useParamState';
 
 const NAME: Record<PipelineView, string> = { list: 'List', board: 'Board' };
@@ -12,19 +13,5 @@ export function useView(prefix = '', fallback: PipelineView = 'board'): [Pipelin
 
 /** The two-way switch between a list and a kanban board. */
 export function ViewToggle({ view, onChange, label = 'View' }: { view: PipelineView; onChange: (v: PipelineView) => void; label?: string }) {
-  return (
-    <div role="group" aria-label={label} className="flex gap-xs">
-      {PIPELINE_VIEWS.map((v) => (
-        <button
-          key={v}
-          type="button"
-          aria-pressed={view === v}
-          onClick={() => onChange(v)}
-          className={`toy min-h-[44px] rounded-pill border-2 px-md text-[14px] font-bold ${view === v ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
-        >
-          {NAME[v]}
-        </button>
-      ))}
-    </div>
-  );
+  return <Segmented label={label} value={view} onChange={onChange} options={PIPELINE_VIEWS.map((v) => ({ value: v, label: NAME[v] }))} />;
 }

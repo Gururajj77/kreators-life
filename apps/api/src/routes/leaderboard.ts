@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
-import { daysSince, EXPERIENCE_LEVELS, evolutionFor, IDENTITY_STAGES, isLeaderboardScope, LEADERBOARD_POOL, levelFromXp, RELATIONSHIPS, SETUP_GOALS, seasonLabel, seasonOf, seasonStart, timeHonors, type LeaderboardBlock, type LeaderboardEntry, type LeaderboardOption, type LeaderboardOptions, type LeaderboardResponse, type LeaderboardScope, type LeaderboardSort, type SeasonResult } from '@kreators/shared';
+import { daysSince, isPrivateBadge, EXPERIENCE_LEVELS, evolutionFor, IDENTITY_STAGES, isLeaderboardScope, LEADERBOARD_POOL, levelFromXp, RELATIONSHIPS, SETUP_GOALS, seasonLabel, seasonOf, seasonStart, timeHonors, type LeaderboardBlock, type LeaderboardEntry, type LeaderboardOption, type LeaderboardOptions, type LeaderboardResponse, type LeaderboardScope, type LeaderboardSort, type SeasonResult } from '@kreators/shared';
 import { nameOf, pageOf, paged } from '../db';
 import type { AppEnv } from '../env';
-import { computeBadges } from '../db';
+import { computeBadges, emptyFacts } from '../db';
 
 export const leaderboard = new Hono<AppEnv>();
 
@@ -20,6 +20,8 @@ interface Row {
   sparks_done: number;
   admin_honors: number;
   admin_badges: number;
+  /** Badges already written down for this person (a comma list); the board never counts the private families. */
+  awarded: string | null;
   season_xp: number;
 }
 
@@ -84,6 +86,7 @@ leaderboard.get('/', async (c) => {
           (SELECT COUNT(*) FROM spark_completions s WHERE s.user_id = u.id) AS sparks_done,
           (SELECT COUNT(*) FROM honors h WHERE h.user_id = u.id) AS admin_honors,
           (SELECT COUNT(*) FROM badge_grants b WHERE b.user_id = u.id) AS admin_badges,
+          (SELECT GROUP_CONCAT(a.badge_key) FROM badge_awards a WHERE a.user_id = u.id) AS awarded,
           (SELECT COALESCE(SUM(x.amount), 0) FROM xp_events x WHERE x.user_id = u.id AND x.created_at >= ?1 ${scope === 'pillar' ? 'AND x.relationship = ?2' : ''}) AS season_xp
          FROM users u ${sc.join}
          WHERE u.leaderboard_opt_in = 1 AND u.onboarded_at IS NOT NULL AND u.display_name != 'Deleted member' ${sc.where} ${NOT_BLOCKED}
@@ -99,15 +102,13 @@ leaderboard.get('/', async (c) => {
   ]);
 
   const entries: LeaderboardEntry[] = rows.results.map((r) => {
-    const badges = computeBadges(r, {
-      tasksDone: r.tasks_done,
-      projectsCleared: r.projects_cleared,
-      relationshipsWithPillars: r.rels_with_pillars,
-      clubMember: false, // the board does not look up Club rows; the badge shows on the person's own page
-      sparksDone: r.sparks_done,
-      runsLogged: 0, // run badges likewise show on the person's own page, not the board
-      runMetres: 0,
-    }).length;
+    // The board counts the badges its cheap counts can show, plus the ones already written down for the person, and never a private family.
+    // The rest (Club, runs and the like) show on the person's own page.
+    const earned = new Set([
+      ...computeBadges(r, { facts: { ...emptyFacts(), tasks_done: r.tasks_done, projects_cleared: r.projects_cleared, pillars_set: r.rels_with_pillars, sparks_done: r.sparks_done } }),
+      ...(r.awarded ?? '').split(',').filter(Boolean),
+    ]);
+    const badges = [...earned].filter((k) => !isPrivateBadge(k)).length;
     return {
       rank: 0,
       userId: r.id,

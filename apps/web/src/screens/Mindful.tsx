@@ -3,7 +3,8 @@ import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { FocusDashboard } from '../components/FocusDashboard';
 import { FocusRounds } from '../components/FocusRounds';
-import { Fold } from '../components/Fold';
+import { RulerPicker } from '../components/RulerPicker';
+import { Sheet } from '../components/Sheet';
 import { SoundControls } from '../components/SoundControls';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { Button } from '../components/Button';
@@ -29,6 +30,7 @@ export function Mindful() {
   const logs = useLogs('mindful', 30);
   const { settings: prefs, set: setPrefs } = useFocusPrefs();
   const [minutes, setMinutes] = useState(3);
+  const [soundsOpen, setSoundsOpen] = useState(false);
   const [left, setLeft] = useState<number | null>(null);
   const timer = useRef<number | null>(null);
   const save = useMutation({
@@ -89,10 +91,32 @@ export function Mindful() {
         </Hero>
       )}
 
-      <section className="mt-md rounded-card p-md text-center" style={{ background: 'var(--tint-green)' }} aria-live="polite">
-        <div className="mx-auto flex h-[200px] w-[200px] items-center justify-center">
+      {/* The breathing timer wears the same night slate as the focus panel, so Mindful is one calm family. */}
+      <section className="night-card mf-panel mt-md rounded-card" data-accent="r4" aria-labelledby="breathe-heading">
+        <div className="mf-top">
+          <h2 id="breathe-heading" className="mf-title">
+            Breathe
+          </h2>
+          {running ? (
+            <button type="button" className="mf-start toy" onClick={() => setLeft(null)} aria-label="Stop without logging">
+              Stop
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="mf-start toy"
+              onClick={() => {
+                unlockAudio();
+                setLeft(minutes * 60);
+              }}
+            >
+              Start
+            </button>
+          )}
+        </div>
+        <div className="mx-auto mt-sm flex h-[200px] w-[200px] items-center justify-center" aria-live="polite">
           <motion.div
-            className="flex size-[120px] items-center justify-center rounded-pill bg-card font-display text-[30px] font-extrabold text-ink shadow-toy-soft"
+            className="mf-breath-orb font-display"
             animate={running && !reduce ? { scale: [1, 1.5, 1.5, 1] } : { scale: 1 }}
             transition={running && !reduce ? { duration: 10, times: [0, 0.4, 0.5, 1], repeat: Number.POSITIVE_INFINITY, ease: 'easeInOut' } : { duration: 0.3 }}
           >
@@ -101,36 +125,30 @@ export function Mindful() {
         </div>
         {!running ? (
           <>
-            <div className="grid grid-cols-4 gap-xs" role="group" aria-label="Length">
+            <div className="mf-ruler mt-sm">
+              <RulerPicker label="Breathing length" tone="night" accent="r4" min={1} max={30} step={1} labelEvery={5} majorStep={5} value={minutes} onChange={setMinutes} valueText={(v) => `${v} ${v === 1 ? 'minute' : 'minutes'}`} />
+            </div>
+            <div className="mf-actions" role="group" aria-label="Quick lengths">
               {LENGTHS.map((m) => (
-                <button key={m} type="button" aria-pressed={minutes === m} onClick={() => setMinutes(m)} className={`toy min-h-[48px] rounded-tile text-[14px] font-bold ${minutes === m ? 'bg-ink text-on-ink' : 'toy-soft bg-card'}`}>
+                <button key={m} type="button" aria-pressed={minutes === m} onClick={() => setMinutes(m)} className="mf-mini toy">
                   {m} min
                 </button>
               ))}
+              <button type="button" className="mf-mini toy" onClick={() => setSoundsOpen(true)} aria-haspopup="dialog">
+                Sounds{prefs.sound ? (prefs.ambient !== 'off' ? `: ${prefs.ambient}` : '') : ': off'}
+              </button>
             </div>
-            <Button
-              full
-              size="lg"
-              className="mt-md"
-              onClick={() => {
-                unlockAudio();
-                setLeft(minutes * 60);
-              }}
-            >
-              Start
-            </Button>
-            <Fold className="mt-sm text-left" title="Sounds" hint={prefs.sound ? (prefs.ambient !== 'off' ? prefs.ambient : '') : 'off'}>
-              <div className="rounded-tile bg-card p-sm">
-                <SoundControls settings={prefs} onChange={setPrefs} />
-              </div>
-            </Fold>
           </>
         ) : (
-          <Button variant="outline" full className="mt-md" onClick={() => setLeft(null)}>
-            Stop without logging
-          </Button>
+          <p className="mf-line">Breathe in as the circle grows, out as it shrinks. Stop ends it without logging.</p>
         )}
       </section>
+      <Sheet open={soundsOpen} onClose={() => setSoundsOpen(false)} title="Sounds">
+        <SoundControls settings={prefs} onChange={setPrefs} />
+        <Button className="mt-md" full onClick={() => setSoundsOpen(false)}>
+          Done
+        </Button>
+      </Sheet>
 
       <FocusRounds
         onRound={(m, nodeId) =>

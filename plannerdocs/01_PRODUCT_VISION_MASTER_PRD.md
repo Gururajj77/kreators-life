@@ -6,7 +6,7 @@ Last updated: 2026-11-01
 **Version:** 0.4, reconciled with the app on 1 November 2026 (status line updated later the same day for the launch pass)
 **Owner:** Product founder
 **Source of truth:** `CLAUDE.md` for rules, `README.md` for the description, `docs/DECISIONS.md` for why, `docs/whop-study.md` and `docs/superfocus-study.md` for what two studies took and left, `docs/security/SECURITY_REPORT.md` for the security checks and `docs/performance.md` for the performance checks.
-**Status (1 November 2026, after the launch pass):** built for the scope in section 7 and checked by 209 shared tests and 910 smoke checks. The legal, security, performance and accessibility checklists were worked through the same day as a pre-launch pass. What still stands between it and a launch: payments are in test mode, the pages still need a lawyer's review, the business details on the legal pages are Worker variables the owner has not filled in, and the owner's own steps (rotating two pasted keys, a second factor on the provider accounts, spending caps, mail DNS, a rehearsed restore) are written down in the security report and not done. See Known gaps.
+**Status (1 November 2026, after the launch pass):** built for the scope in section 7 and checked by 256 shared tests and 910 smoke checks. The legal, security, performance and accessibility checklists were worked through the same day as a pre-launch pass. What still stands between it and a launch: payments are in test mode, the pages still need a lawyer's review, the business details on the legal pages are Worker variables the owner has not filled in, and the owner's own steps (rotating two pasted keys, a second factor on the provider accounts, spending caps, mail DNS, a rehearsed restore) are written down in the security report and not done. See Known gaps.
 
 ## 1. Executive summary
 
@@ -172,7 +172,7 @@ Total registered users and follower counts are never a success metric.
 - Export and deletion. One JSON export (which includes Agency, templates, review schedules, focus settings, posts and messages, support tickets, finance lists and what the person agreed to and chose); deletion anonymises the person, removes those too, keeps money rows for the books (an invoice keeps its totals and loses who it was for, its lines, its bank and its link). Each export and delete is logged without a name, and old outbox mail, link clicks, payment-message text and settled notices are removed on a schedule. Holds; a few tables are still missed (04, Known gaps).
 - Environments: development on 8787, a smoke server on 8788 with its own database, production. No staging. Gap.
 - Migrations in source control. Holds (60 plain SQL files, 0001 to 0060). Every migration is applied to the live database with `pnpm db:migrate` before `pnpm deploy`; the new code expects the new tables.
-- Automated tests for permissions, payments, flags and workflows. Unit tests in shared (209 cases) and an end-to-end smoke test (910 checks), both counted on 1 November 2026; see 09.
+- Automated tests for permissions, payments, flags and workflows. Unit tests in shared (256 cases) and an end-to-end smoke test (910 checks), both counted on 1 November 2026; see 09.
 
 ## 12. Decisions: resolved and open
 

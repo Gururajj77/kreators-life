@@ -4,8 +4,11 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 import { Button } from '../components/Button';
 import { ContractView, paperDate } from '../components/ContractView';
+import { DocActions } from '../components/DocActions';
+import type { SheetStamp } from '../components/PrintSheet';
 import { Inert } from '../components/Inert';
 import { ApiError, publicApi } from '../lib/api';
+import { fileTitle } from '../lib/printDoc';
 import { SiteLayout } from './SiteLayout';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
@@ -44,21 +47,10 @@ export function ContractPublic() {
       void qc.invalidateQueries({ queryKey: ['contract', token] });
     },
   });
-  const printIt = () => {
-    const prev = document.title;
-    document.title = d?.doc.title ?? 'Agreement';
-    const restore = () => {
-      document.title = prev;
-      window.removeEventListener('afterprint', restore);
-    };
-    window.addEventListener('afterprint', restore);
-    window.print();
-  };
+  const stamp: SheetStamp | null = d?.status === 'signed' ? 'signed' : d?.revisedAt ? 'revised' : null;
 
   return (
     <SiteLayout wide={false}>
-      {/* On paper only the agreement prints: no site bar, no footer. */}
-      <style>{'@media print { header.safe-top, footer { display: none !important; } }'}</style>
       <div className="pt-lg">
         {q.isPending && <p className="m-0 text-[16px] font-semibold text-ink-soft">Loading…</p>}
         {q.isError && (
@@ -74,11 +66,7 @@ export function ContractPublic() {
                 From <strong className="text-ink">{d.ownerName}</strong>
                 {d.revisedAt ? ` · Revised ${paperDate(d.revisedAt)}` : ''}
               </p>
-              {d.doc.show.download && (
-                <Button size="sm" variant="outline" onClick={printIt}>
-                  Download PDF
-                </Button>
-              )}
+              <DocActions fileName={fileTitle('Agreement', d.doc.vars.client, d.doc.title)} />
             </div>
 
             <ContractView
@@ -86,6 +74,9 @@ export function ContractPublic() {
               answers={answers}
               onAnswer={d.status === 'sent' ? (id, a) => setAnswers((m) => ({ ...m, [id]: a })) : undefined}
               acceptance={d.acceptance}
+              reference={d.ref}
+              date={d.sentAt ?? undefined}
+              stamp={stamp}
               signLine={d.status === 'sent' && name.trim() ? { name: name.trim(), title: title.trim() } : null}
             />
 

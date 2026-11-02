@@ -47,6 +47,8 @@ export default defineConfig({
         manualChunks(id: string) {
           // The shared domain model is one 690 KB source file that every screen draws from, so it is one file of its own,
           // cached apart from the app's screens (it cannot be split further without splitting the package).
+          // The journal prompts (a large list of text) download only when Prompt me opens, so they are not in the shared file.
+          if (id.includes('/packages/shared/src/journalPrompts')) return 'journal-prompts';
           if (id.includes('/packages/shared/src/')) return 'shared';
           if (!id.includes('/node_modules/')) return undefined;
           if (/\/node_modules\/(react|react-dom|scheduler|react-router)\//.test(id)) return 'vendor-react';

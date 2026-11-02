@@ -1,3 +1,4 @@
+import { quoteCode, redeem, release, type Quoted } from '../discounts';
 import { Hono } from 'hono';
 import { EVENT_TYPE_META, EVENT_TYPES, type EventRegistration, type PartyEvent } from '@kreators/shared';
 import type { AppEnv } from '../env';
@@ -12,7 +13,7 @@ const SELECT = `SELECT e.*, u.display_name AS host_name,
   (SELECT COUNT(*) FROM event_registrations r WHERE r.event_id = e.id AND r.status = 'waitlisted') AS waitlisted,
   (SELECT a.xp FROM attendee_codes a WHERE a.app = 'party' AND a.thing_id = e.id) AS attendee_xp
   FROM events e JOIN users u ON u.id = e.host_user_id`;
-interface RegRow { id: string; event_id: string; user_id: string; name: string; status: EventRegistration['status']; registered_at: string; checked_in_at: string | null; networking_opt_in: number }
+interface RegRow { id: string; event_id: string; user_id: string; name: string; status: EventRegistration['status']; registered_at: string; checked_in_at: string | null; networking_opt_in: number; /** What the ticket cost this person; null is the full price. */ paid_points?: number | null }
 const toReg = (r: RegRow): EventRegistration => ({ id: r.id, eventId: r.event_id, userId: r.user_id, name: nameOf({ display_name: r.name }), status: r.status, registeredAt: r.registered_at, checkedInAt: r.checked_in_at, networkingOptIn: r.networking_opt_in === 1 });
 const toEvent = (r: EventRow, mine: EventRegistration | null): PartyEvent => ({ id: r.id, title: r.title, description: r.description, eventType: r.event_type, hostId: r.host_user_id, hostName: nameOf({ display_name: r.host_name }), venue: r.venue, onlineUrl: r.online_url, timezone: r.timezone, startsAt: r.starts_at, endsAt: r.ends_at, capacity: r.capacity, pricePoints: r.price_points, visibility: r.visibility, status: r.status, registered: r.registered, waitlisted: r.waitlisted, mine, attendeeXp: r.attendee_xp ?? null, createdAt: r.created_at });
 
@@ -94,27 +95,47 @@ party.post('/events/:id/rsvp', async (c) => {
   if (new Date(row.ends_at).getTime() < Date.now()) return c.json({ error: 'this event is over' }, 400);
   const existing = await db.prepare("SELECT status FROM event_registrations WHERE event_id = ? AND user_id = ?").bind(row.id, user.id).first<{ status: string }>();
   if (existing && existing.status !== 'cancelled') return c.json({ error: `you are already ${existing.status}` }, 409);
-  if (row.price_points > 0 && user.points < row.price_points) return c.json({ error: `you need ${row.price_points - user.points} more points` }, 400);
-  const body = await c.req.json<{ networking?: boolean }>().catch(() => ({}) as { networking?: boolean });
+  const body = await c.req.json<{ networking?: boolean; discountCode?: string }>().catch(() => ({}) as { networking?: boolean; discountCode?: string });
+  // A code from the team takes a percent off a ticket that costs points. The price is worked out here, from the event's own price.
+  let discount: Extract<Quoted, { ok: true }> | null = null;
+  let owe = row.price_points;
+  if (typeof body.discountCode === 'string' && body.discountCode.trim()) {
+    if (row.price_points <= 0) return c.json({ error: 'This ticket costs nothing, so there is nothing to take off.' }, 400);
+    const q = await quoteCode(db, user.id, body.discountCode, 'event', row.id, { cents: 0, points: row.price_points, currency: 'INR' });
+    if (!q.ok) return c.json({ error: q.why }, 400);
+    discount = q;
+    owe = q.quote.payPoints;
+  }
+  if (owe > 0 && user.points < owe) return c.json({ error: `you need ${owe - user.points} more points` }, 400);
   const id = newId();
   const now = nowIso();
+  if (discount) {
+    const why = await redeem(db, { row: discount.row, userId: user.id, area: 'event', itemId: row.id, ref: id, offCents: 0, offPoints: discount.quote.offPoints, currency: 'INR' });
+    if (why) return c.json({ error: why }, 409);
+  }
   const cap = row.capacity ?? 1_000_000;
   // Try for a seat; if the seat count is already at capacity the insert does nothing and we waitlist.
   await db.prepare('DELETE FROM event_registrations WHERE event_id = ? AND user_id = ?').bind(row.id, user.id).run();
   const seat = await db
-    .prepare(`INSERT INTO event_registrations (id, event_id, user_id, status, registered_at, checked_in_at, networking_opt_in)
-      SELECT ?1, ?2, ?3, 'registered', ?4, NULL, ?5 WHERE (SELECT COUNT(*) FROM event_registrations WHERE event_id = ?2 AND status IN ('registered','attended')) < ?6`)
-    .bind(id, row.id, user.id, now, body.networking ? 1 : 0, cap)
+    .prepare(`INSERT INTO event_registrations (id, event_id, user_id, status, registered_at, checked_in_at, networking_opt_in, paid_points)
+      SELECT ?1, ?2, ?3, 'registered', ?4, NULL, ?5, ?7 WHERE (SELECT COUNT(*) FROM event_registrations WHERE event_id = ?2 AND status IN ('registered','attended')) < ?6`)
+    .bind(id, row.id, user.id, now, body.networking ? 1 : 0, cap, row.price_points > 0 ? owe : null)
     .run();
   let status: EventRegistration['status'] = 'registered';
   if (seat.meta.changes !== 1) {
     status = 'waitlisted';
     await db.prepare("INSERT INTO event_registrations (id, event_id, user_id, status, registered_at, checked_in_at, networking_opt_in) VALUES (?, ?, ?, 'waitlisted', ?, NULL, ?)").bind(id, row.id, user.id, now, body.networking ? 1 : 0).run();
-  } else if (row.price_points > 0) {
-    await db.batch([
-      db.prepare('UPDATE users SET points = points - ? WHERE id = ?').bind(row.price_points, user.id),
-      db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(user.id, -row.price_points, 'ticket', id, now),
-    ]);
+    // Nothing is charged on a waitlist, so a code's use goes back.
+    if (discount) await release(db, id);
+  } else if (owe > 0) {
+    // The points leave with a guarded update; if two taps at once left too few, the seat is given up.
+    const debit = await db.prepare('UPDATE users SET points = points - ? WHERE id = ? AND points >= ?').bind(owe, user.id, owe).run();
+    if (debit.meta.changes !== 1) {
+      await db.prepare("UPDATE event_registrations SET status = 'cancelled' WHERE id = ?").bind(id).run();
+      if (discount) await release(db, id);
+      return c.json({ error: 'you need more points' }, 400);
+    }
+    await db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(user.id, -owe, 'ticket', id, now).run();
   }
   await notify(db, user.id, 'party', status === 'registered' ? `You are in: ${row.title}` : `Waitlisted for ${row.title}`, new Date(row.starts_at).toUTCString(), `/party/${row.id}`);
   return c.json({ status }, 201);
@@ -129,10 +150,12 @@ party.post('/events/:id/cancel-rsvp', async (c) => {
   if (!mine || mine.status === 'cancelled') return c.json({ error: 'you are not registered' }, 400);
   const wasSeated = mine.status === 'registered';
   await db.prepare("UPDATE event_registrations SET status = 'cancelled' WHERE id = ?").bind(mine.id).run();
-  if (wasSeated && row.price_points > 0) {
+  // A ticket bought with a code gives back what was paid, not the list price. A code's use is not given back by a cancel.
+  const back = mine.paid_points ?? row.price_points;
+  if (wasSeated && back > 0) {
     await db.batch([
-      db.prepare('UPDATE users SET points = points + ? WHERE id = ?').bind(row.price_points, user.id),
-      db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(user.id, row.price_points, 'refund', mine.id, nowIso()),
+      db.prepare('UPDATE users SET points = points + ? WHERE id = ?').bind(back, user.id),
+      db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(user.id, back, 'refund', mine.id, nowIso()),
     ]);
   }
   // Promote the first person on the waitlist into the freed seat.

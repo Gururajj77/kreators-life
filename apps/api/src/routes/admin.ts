@@ -20,6 +20,8 @@ import { setEventCode, setRunCode } from '../attendee';
 import { endLink, LINK, linkById, logCoach, type LinkRow } from '../coaching';
 import { linkProblem, startLink } from './coach';
 import { toRedemption, type RedemptionRow } from './rewards';
+import { adminDiscounts } from './adminDiscounts';
+import { adminAgency } from './adminAgency';
 
 export const admin = new Hono<AppEnv>();
 
@@ -302,6 +304,11 @@ admin.get('/audit', async (c) => {
   const logs: AuditLog[] = pg.items.map((r) => ({ id: r.id, actorId: r.actor_user_id, actorName: r.actor_name ? nameOf({ display_name: r.actor_name }) : r.actor_user_id ? 'Someone' : 'Admin key', action: r.action, resourceType: r.resource_type, resourceId: r.resource_id, before: r.before_summary, after: r.after_summary, createdAt: r.created_at }));
   return c.json({ page: pg.page, logs });
 });
+
+// ---- discount codes the team makes (routes/adminDiscounts.ts)
+admin.route('/discounts', adminDiscounts);
+// ---- house templates for Agency, made by the super admin (routes/adminAgency.ts)
+admin.route('/agency', adminAgency);
 
 // ---- orders: search, the timeline, a refund
 interface AdminOrderRow extends OrderRow { owner_name: string; owner_handle: string | null; buyer_email: string | null; platform_fee_points: number; provider_payment_id: string | null }

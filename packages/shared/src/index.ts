@@ -2,6 +2,11 @@
 // kreators.app — shared domain model (used by both the web app and the API)
 // ---------------------------------------------------------------------------
 
+// Journal prompts live in their own file, '@kreators/shared/journalPrompts' (the content is large, so it is not part of this
+// barrel and the web app downloads it only when Prompt me is opened). The one line that Help also says sits here.
+/** Said once, under the prompt card and in Help. The ideas come from these traditions, the wording is ours. */
+export const JOURNAL_PROMPT_CREDIT = "Prompt ideas follow the journaling methods in Keila Shaheen's journals. The wording is our own.";
+
 export type RelationshipKey =
   | 'servant_leader'
   | 'friendship'
@@ -782,27 +787,208 @@ export function sparkFor(relationship: RelationshipKey, date: string): string {
 // Badges
 // ---------------------------------------------------------------------------
 
+/** The four finishes. A badge's tier is how much it asks of you, not how rare it is. */
+export const BADGE_TIERS = ['bronze', 'silver', 'gold', 'platinum'] as const;
+export type BadgeTier = (typeof BADGE_TIERS)[number];
+export const BADGE_TIER_LABEL: Record<BadgeTier, string> = { bronze: 'Bronze', silver: 'Silver', gold: 'Gold', platinum: 'Platinum' };
+
+/** The shapes a medal is drawn in. Each family wears one. */
+export type BadgeShape = 'shield' | 'hexagon' | 'star' | 'seal' | 'ribbon' | 'diamond' | 'medal';
+
+export const BADGE_FAMILIES = ['Daily habits', 'Pillars', 'Focus', 'Reflection', 'Community', 'Creator', 'Money', 'Fitness', 'Learning', 'Milestones'] as const;
+export type BadgeFamily = (typeof BADGE_FAMILIES)[number];
+/**
+ * `private` families are counted from things only their owner may see (the journal, a tracker, money, focus time).
+ * Their badges show to the owner alone: never on the public page, never in the leaderboard count, never in a unlock picker.
+ */
+export const BADGE_FAMILY_META: Record<BadgeFamily, { shape: BadgeShape; blurb: string; private: boolean }> = {
+  'Daily habits': { shape: 'shield', blurb: 'Ticks, small acts and days in a row.', private: false },
+  Pillars: { shape: 'hexagon', blurb: 'Setting up the seven pillars and finishing projects.', private: false },
+  Focus: { shape: 'star', blurb: 'Focus rounds and days you stayed away from what you listed. Only you see these.', private: true },
+  Reflection: { shape: 'seal', blurb: 'Journal pages, reviews and moods. Only you see these, and only counts are used, never what you wrote.', private: true },
+  Community: { shape: 'ribbon', blurb: 'Posts, replies, friends, followers and events.', private: false },
+  Creator: { shape: 'diamond', blurb: 'Products, sales and content rewards.', private: false },
+  Money: { shape: 'medal', blurb: 'Finance entries, goals and paid invoices. Only you see these.', private: true },
+  Fitness: { shape: 'medal', blurb: 'Runs and kilometres with your clubs.', private: false },
+  Learning: { shape: 'seal', blurb: 'Lessons finished and certificates earned.', private: false },
+  Milestones: { shape: 'star', blurb: 'Levels and the Club.', private: false },
+};
+
+/** The counts a rule can read. The server fills every one from data it already holds; a count never reads what a person wrote. */
+export const BADGE_STATS = [
+  'tasks_done', 'tasks_pillars', 'sparks_done', 'projects_cleared', 'pillars_set', 'best_streak', 'level', 'not_to_do_kept',
+  'focus_rounds', 'focus_minutes', 'journal_entries', 'reviews_written', 'mood_days', 'mindful_logs', 'discover_taken',
+  'posts', 'replies', 'friends', 'followers', 'referrals', 'events_claimed', 'products_live', 'sales', 'bounties_paid',
+  'finance_entries', 'finance_goals_done', 'invoices_paid', 'runs_logged', 'run_metres', 'lessons_done', 'certificates', 'club',
+] as const;
+export type BadgeStat = (typeof BADGE_STATS)[number];
+export type BadgeFacts = Record<BadgeStat, number>;
+
+/** How a count is said in a progress line: "3 of 7 days". `per` turns metres into kilometres and minutes into hours. */
+export const BADGE_STAT_UNIT: Record<BadgeStat, { one: string; many: string; per?: number }> = {
+  tasks_done: { one: 'task', many: 'tasks' },
+  tasks_pillars: { one: 'pillar', many: 'pillars' },
+  sparks_done: { one: 'small act', many: 'small acts' },
+  projects_cleared: { one: 'project', many: 'projects' },
+  pillars_set: { one: 'pillar', many: 'pillars' },
+  best_streak: { one: 'day', many: 'days' },
+  level: { one: 'level', many: 'levels' },
+  not_to_do_kept: { one: 'kept day', many: 'kept days' },
+  focus_rounds: { one: 'round', many: 'rounds' },
+  focus_minutes: { one: 'hour', many: 'hours', per: 60 },
+  journal_entries: { one: 'entry', many: 'entries' },
+  reviews_written: { one: 'review', many: 'reviews' },
+  mood_days: { one: 'day', many: 'days' },
+  mindful_logs: { one: 'session', many: 'sessions' },
+  discover_taken: { one: 'quiz', many: 'quizzes' },
+  posts: { one: 'post', many: 'posts' },
+  replies: { one: 'reply', many: 'replies' },
+  friends: { one: 'friend', many: 'friends' },
+  followers: { one: 'follower', many: 'followers' },
+  referrals: { one: 'friend', many: 'friends' },
+  events_claimed: { one: 'event', many: 'events' },
+  products_live: { one: 'product', many: 'products' },
+  sales: { one: 'sale', many: 'sales' },
+  bounties_paid: { one: 'reward', many: 'rewards' },
+  finance_entries: { one: 'entry', many: 'entries' },
+  finance_goals_done: { one: 'goal', many: 'goals' },
+  invoices_paid: { one: 'invoice', many: 'invoices' },
+  runs_logged: { one: 'run', many: 'runs' },
+  run_metres: { one: 'km', many: 'km', per: 1000 },
+  lessons_done: { one: 'lesson', many: 'lessons' },
+  certificates: { one: 'certificate', many: 'certificates' },
+  club: { one: 'membership', many: 'memberships' },
+};
+
 export interface Badge {
   key: string;
   name: string;
   emoji: string;
+  /** How to earn it, with the exact number. */
   how: string;
+  tier: BadgeTier;
+  family: BadgeFamily;
+  /** The rule: this count has to reach `min`. */
+  stat: BadgeStat;
+  min: number;
 }
 
+const badge = (key: string, name: string, emoji: string, family: BadgeFamily, tier: BadgeTier, stat: BadgeStat, min: number, how: string): Badge => ({ key, name, emoji, how, tier, family, stat, min });
+
+/** In the order the gallery shows them: family by family, the easiest first. The first two stay First tick and Three in a row. */
 export const BADGES: readonly Badge[] = [
-  { key: 'first_task', name: 'First tick', emoji: '✅', how: 'Complete your first task' },
-  { key: 'streak_3', name: 'Three in a row', emoji: '🔥', how: 'Check in three days running' },
-  { key: 'streak_7', name: 'Full week', emoji: '🌈', how: 'Check in seven days running' },
-  { key: 'all_seven', name: 'All seven', emoji: '🏰', how: 'Set up every one of the seven pillars' },
-  { key: 'ten_tasks', name: 'Ripple maker', emoji: '🌊', how: 'Complete ten tasks' },
-  { key: 'project_clear', name: 'Project cleared', emoji: '🏁', how: 'Finish every task in a project' },
-  { key: 'level_5', name: 'Level five', emoji: '⭐', how: 'Reach level five' },
-  { key: 'spark_5', name: 'Good hands', emoji: '⚡', how: 'Do five small acts' },
-  { key: 'club_member', name: 'Club member', emoji: '🪪', how: 'Be accepted into the Club' },
-  { key: 'run_1', name: 'First run', emoji: '🏃', how: 'Log a run with a start code' },
-  { key: 'run_10', name: 'Ten runs', emoji: '👟', how: 'Log ten runs with your clubs' },
-  { key: 'run_100k', name: 'Hundred k', emoji: '🏅', how: 'Run a hundred kilometres with your clubs' },
+  badge('first_task', 'First tick', '✅', 'Daily habits', 'bronze', 'tasks_done', 1, 'Complete your first task'),
+  badge('streak_3', 'Three in a row', '🔥', 'Daily habits', 'bronze', 'best_streak', 3, 'Check in three days running'),
+  badge('streak_7', 'Full week', '🌈', 'Daily habits', 'silver', 'best_streak', 7, 'Check in seven days running'),
+  badge('ten_tasks', 'Ripple maker', '🌊', 'Daily habits', 'bronze', 'tasks_done', 10, 'Complete ten tasks'),
+  badge('spark_5', 'Good hands', '⚡', 'Daily habits', 'bronze', 'sparks_done', 5, 'Do five small acts'),
+  badge('tasks_100', 'Hundred ticks', '💯', 'Daily habits', 'silver', 'tasks_done', 100, 'Complete one hundred tasks'),
+  badge('streak_30', 'Thirty days', '🌕', 'Daily habits', 'gold', 'best_streak', 30, 'Check in thirty days running'),
+  badge('tasks_500', 'Five hundred ticks', '🏔️', 'Daily habits', 'platinum', 'tasks_done', 500, 'Complete five hundred tasks'),
+  badge('streak_100', 'Hundred days', '👑', 'Daily habits', 'platinum', 'best_streak', 100, 'Check in one hundred days running'),
+
+  badge('pillar_1', 'First pillar', '🏛️', 'Pillars', 'bronze', 'pillars_set', 1, 'Set up your first pillar'),
+  badge('project_clear', 'Project cleared', '🏁', 'Pillars', 'bronze', 'projects_cleared', 1, 'Finish every task in a project'),
+  badge('project_5', 'Project closer', '🗂️', 'Pillars', 'silver', 'projects_cleared', 5, 'Finish every task in five projects'),
+  badge('project_10', 'Ten projects cleared', '🧱', 'Pillars', 'gold', 'projects_cleared', 10, 'Finish every task in ten projects'),
+  badge('all_seven', 'All seven', '🏰', 'Pillars', 'gold', 'pillars_set', 7, 'Set up every one of the seven pillars'),
+  badge('seven_sided', 'Seven-sided', '🌐', 'Pillars', 'platinum', 'tasks_pillars', 7, 'Complete a task in every one of the seven pillars'),
+
+  badge('not_to_do_7', 'Held the line', '🛑', 'Focus', 'bronze', 'not_to_do_kept', 7, 'Keep seven days on your not to do list'),
+  badge('not_to_do_30', 'Stayed away', '🚧', 'Focus', 'silver', 'not_to_do_kept', 30, 'Keep thirty days on your not to do list'),
+  badge('focus_1', 'First focus round', '🎧', 'Focus', 'bronze', 'focus_rounds', 1, 'Finish a focus round in Mindful minutes'),
+  badge('focus_10h', 'Ten hours of focus', '🔭', 'Focus', 'gold', 'focus_minutes', 600, 'Focus for ten hours in total'),
+  badge('focus_50h', 'Fifty hours of focus', '🧠', 'Focus', 'platinum', 'focus_minutes', 3000, 'Focus for fifty hours in total'),
+
+  badge('journal_1', 'First page', '📓', 'Reflection', 'bronze', 'journal_entries', 1, 'Write your first journal entry'),
+  badge('journal_10', 'Ten pages', '📖', 'Reflection', 'silver', 'journal_entries', 10, 'Write ten journal entries'),
+  badge('journal_50', 'Fifty pages', '🖋️', 'Reflection', 'gold', 'journal_entries', 50, 'Write fifty journal entries'),
+  badge('review_1', 'First review', '🔍', 'Reflection', 'bronze', 'reviews_written', 1, 'Save your first review'),
+  badge('review_4', 'Four reviews', '🪞', 'Reflection', 'silver', 'reviews_written', 4, 'Save four reviews'),
+  badge('mood_7', 'Seven moods', '🙂', 'Reflection', 'bronze', 'mood_days', 7, 'Log your mood on seven different days'),
+  badge('mindful_10', 'Ten still moments', '🌬️', 'Reflection', 'silver', 'mindful_logs', 10, 'Log ten mindful minutes sessions'),
+  badge('discover_1', 'Know yourself', '🧭', 'Reflection', 'bronze', 'discover_taken', 1, 'Finish the Discover quiz'),
+
+  badge('post_1', 'First post', '💬', 'Community', 'bronze', 'posts', 1, 'Write a post in Community'),
+  badge('post_10', 'Ten posts', '📣', 'Community', 'silver', 'posts', 10, 'Write ten posts in Community'),
+  badge('reply_5', 'Good neighbour', '🏡', 'Community', 'bronze', 'replies', 5, 'Reply to five posts'),
+  badge('reply_25', 'Helpful voice', '🗣️', 'Community', 'silver', 'replies', 25, 'Reply to twenty-five posts'),
+  badge('friend_1', 'First friend', '🤝', 'Community', 'bronze', 'friends', 1, 'Make your first friend in Bond'),
+  badge('friend_5', 'Five friends', '🫂', 'Community', 'silver', 'friends', 5, 'Make five friends in Bond'),
+  badge('follower_10', 'Ten followers', '👥', 'Community', 'silver', 'followers', 10, 'Get ten followers on your public page'),
+  badge('referral_1', 'Brought a friend', '🎁', 'Community', 'bronze', 'referrals', 1, 'Have a friend sign up with your link and an email'),
+  badge('event_1', 'Showed up', '🎟️', 'Community', 'bronze', 'events_claimed', 1, 'Claim an attendee code at an event'),
+
+  badge('product_1', 'First product', '🛍️', 'Creator', 'bronze', 'products_live', 1, 'Put a product live in your Shop'),
+  badge('product_5', 'Five products', '🧰', 'Creator', 'silver', 'products_live', 5, 'Have five products live in your Shop'),
+  badge('sale_1', 'First sale', '💰', 'Creator', 'silver', 'sales', 1, 'Make your first sale'),
+  badge('sale_10', 'Ten sales', '💸', 'Creator', 'gold', 'sales', 10, 'Make ten sales'),
+  badge('win_1', 'First reward', '🏆', 'Creator', 'bronze', 'bounties_paid', 1, 'Get paid for a post in Win'),
+  badge('win_5', 'Five rewards', '🎖️', 'Creator', 'silver', 'bounties_paid', 5, 'Get paid for five posts in Win'),
+
+  badge('finance_1', 'First entry', '📒', 'Money', 'bronze', 'finance_entries', 1, 'Add your first entry in Finance'),
+  badge('goal_done', 'Goal reached', '🏦', 'Money', 'silver', 'finance_goals_done', 1, 'Reach a savings goal in Finance'),
+  badge('invoice_1', 'First invoice paid', '🧾', 'Money', 'silver', 'invoices_paid', 1, 'Mark your first invoice as paid'),
+  badge('invoice_10', 'Ten invoices paid', '📈', 'Money', 'gold', 'invoices_paid', 10, 'Mark ten invoices as paid'),
+
+  badge('run_1', 'First run', '🏃', 'Fitness', 'bronze', 'runs_logged', 1, 'Log a run with a start code'),
+  badge('run_10', 'Ten runs', '👟', 'Fitness', 'silver', 'runs_logged', 10, 'Log ten runs with your clubs'),
+  badge('run_42k', 'Marathon distance', '🛣️', 'Fitness', 'silver', 'run_metres', 42_195, 'Run 42.2 kilometres in total with your clubs'),
+  badge('run_100k', 'Hundred k', '🏅', 'Fitness', 'gold', 'run_metres', 100_000, 'Run a hundred kilometres with your clubs'),
+  badge('run_500k', 'Five hundred k', '🌍', 'Fitness', 'platinum', 'run_metres', 500_000, 'Run five hundred kilometres with your clubs'),
+
+  badge('lesson_1', 'First lesson', '📚', 'Learning', 'bronze', 'lessons_done', 1, 'Finish a lesson in School'),
+  badge('lesson_10', 'Ten lessons', '🎒', 'Learning', 'silver', 'lessons_done', 10, 'Finish ten lessons in School'),
+  badge('cert_1', 'Certified', '🎓', 'Learning', 'gold', 'certificates', 1, 'Earn a School certificate'),
+
+  badge('level_5', 'Level five', '⭐', 'Milestones', 'silver', 'level', 5, 'Reach level five'),
+  badge('club_member', 'Club member', '🪪', 'Milestones', 'silver', 'club', 1, 'Be accepted into the Club'),
+  badge('level_10', 'Level ten', '🌠', 'Milestones', 'gold', 'level', 10, 'Reach level ten'),
+  badge('level_20', 'Level twenty', '🚀', 'Milestones', 'platinum', 'level', 20, 'Reach level twenty'),
 ];
+
+export const BADGE_BY_KEY: Record<string, Badge> = byKey(BADGES.map((b) => [b.key, b]));
+
+/** A badge whose count comes from things only its owner may see: it never leaves their own screens. */
+export const isPrivateBadge = (key: string): boolean => {
+  const b = BADGE_BY_KEY[key];
+  return b ? BADGE_FAMILY_META[b.family].private : false;
+};
+/** What the public page, the leaderboard and an unlock picker may use. */
+export const PUBLIC_BADGES: readonly Badge[] = BADGES.filter((b) => !BADGE_FAMILY_META[b.family].private);
+
+/** The badges these counts earn, in catalogue order. A count that is missing is zero. */
+export function badgesFrom(facts: Partial<BadgeFacts>): string[] {
+  return BADGES.filter((b) => (facts[b.stat] ?? 0) >= b.min).map((b) => b.key);
+}
+
+/** How far along a badge is: "3 of 7 days". Only a rule that asks for more than one has a bar. */
+export function badgeProgress(b: Badge, have: number): { have: number; need: number; pct: number; label: string; countable: boolean } {
+  const u = BADGE_STAT_UNIT[b.stat];
+  const per = u.per ?? 1;
+  const say = (n: number) => String(per > 1 ? Math.round((n / per) * 10) / 10 : n);
+  const shown = Math.min(have, b.min);
+  const need = per > 1 ? b.min / per : b.min;
+  return {
+    have: Math.min(have, b.min),
+    need: b.min,
+    pct: b.min > 0 ? Math.max(0, Math.min(100, Math.floor((shown / b.min) * 100))) : 100,
+    label: `${say(shown)} of ${say(b.min)} ${need === 1 ? u.one : u.many}`,
+    countable: b.min > 1,
+  };
+}
+
+/** One badge a person holds. `at` is empty for a badge earned before dates were kept. `given` is a badge the team gave by hand. */
+export interface HeldBadge {
+  key: string;
+  at: string | null;
+  given: boolean;
+}
+/** What the gallery reads: what is held, and every count a rule reads so a bar can be drawn. */
+export interface BadgesResponse {
+  held: HeldBadge[];
+  progress: BadgeFacts;
+}
 
 // ---------------------------------------------------------------------------
 // API shapes
@@ -1400,21 +1586,23 @@ export interface Honor {
   name: string;
   emoji: string;
   source: 'admin' | 'time' | 'season';
+  /** The finish its medal is drawn in. */
+  tier: BadgeTier;
   /** For time honors: days since the account started. */
   days?: number;
   how: string;
 }
 
 export const HONORS: readonly Honor[] = [
-  { key: 'pro', name: 'Pro', emoji: '💎', source: 'admin', how: 'Given by the kreators.app team to pro members' },
-  { key: 'founder', name: 'Founding member', emoji: '🏗️', source: 'admin', how: 'For the first hundred climbers' },
-  { key: 'community_star', name: 'Community star', emoji: '🌟', source: 'admin', how: 'For lifting other people up' },
-  { key: 'collab', name: 'Team player', emoji: '🤝', source: 'admin', how: 'For working with others in a way that moved people' },
-  { key: 'week_in', name: 'One week in', emoji: '🌱', source: 'time', days: 7, how: 'Unlocks seven days after you start' },
-  { key: 'month_in', name: 'One month in', emoji: '🌿', source: 'time', days: 30, how: 'Unlocks thirty days after you start' },
-  { key: 'season_in', name: 'One season in', emoji: '🌳', source: 'time', days: 90, how: 'Unlocks ninety days after you start' },
-  { key: 'year_in', name: 'One year in', emoji: '🌲', source: 'time', days: 365, how: 'Unlocks a year after you start' },
-  { key: 'season_top', name: 'Season top three', emoji: '🏅', source: 'season', how: 'Finished a monthly season in the top three on the leaderboard' },
+  { key: 'pro', name: 'Pro', emoji: '💎', source: 'admin', tier: 'platinum', how: 'Given by the kreators.app team to pro members' },
+  { key: 'founder', name: 'Founding member', emoji: '🏗️', source: 'admin', tier: 'gold', how: 'For the first hundred climbers' },
+  { key: 'community_star', name: 'Community star', emoji: '🌟', source: 'admin', tier: 'gold', how: 'For lifting other people up' },
+  { key: 'collab', name: 'Team player', emoji: '🤝', source: 'admin', tier: 'silver', how: 'For working with others in a way that moved people' },
+  { key: 'week_in', name: 'One week in', emoji: '🌱', source: 'time', tier: 'bronze', days: 7, how: 'Unlocks seven days after you start' },
+  { key: 'month_in', name: 'One month in', emoji: '🌿', source: 'time', tier: 'silver', days: 30, how: 'Unlocks thirty days after you start' },
+  { key: 'season_in', name: 'One season in', emoji: '🌳', source: 'time', tier: 'gold', days: 90, how: 'Unlocks ninety days after you start' },
+  { key: 'year_in', name: 'One year in', emoji: '🌲', source: 'time', tier: 'platinum', days: 365, how: 'Unlocks a year after you start' },
+  { key: 'season_top', name: 'Season top three', emoji: '🏅', source: 'season', tier: 'gold', how: 'Finished a monthly season in the top three on the leaderboard' },
 ];
 
 export const HONOR_BY_KEY: Record<string, Honor> = byKey(HONORS.map((h) => [h.key, h]));
@@ -2147,6 +2335,129 @@ export function mentionsIn(text: string): string[] {
     if (out.length >= MAX_MENTIONS) break;
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Chat channels (migration 0062): topic rooms in Community (public, made by guides, anonymous lines allowed) and in Bond
+// (private, made by a member for friends, never anonymous). Polled, not live: the screen asks for lines newer than the last one it holds.
+// ---------------------------------------------------------------------------
+
+export const CHANNEL_SCOPES = ['community', 'bond'] as const;
+export type ChannelScope = (typeof CHANNEL_SCOPES)[number];
+export const MIN_CHANNEL_NAME = 2;
+export const MAX_CHANNEL_NAME = 40;
+export const MAX_CHANNEL_TOPIC = 120;
+export const MAX_CHANNEL_MESSAGE = 600;
+/** People in one private channel, the owner included. */
+export const MAX_CHANNEL_MEMBERS = 12;
+/** Private channels one person can own at a time. */
+export const MAX_CHANNELS_OWNED = 5;
+/** Channels one person can be in at a time, public and private together. */
+export const MAX_CHANNELS_JOINED = 40;
+/** Public channels that can be open in Community at once. */
+export const MAX_COMMUNITY_CHANNELS = 30;
+/** How often an open channel asks for newer lines, while its tab is showing. */
+export const CHANNEL_POLL_MS = 5000;
+/** Lines in one answer. "Load earlier" asks for the next block. */
+export const CHANNEL_LINES = 50;
+/** Within this many pixels of the end counts as "at the bottom": new lines then scroll into view. */
+export const CHANNEL_NEAR_BOTTOM_PX = 80;
+
+/** The short word a channel is known by: letters and numbers (any script) in lower case, joined by hyphens. Empty when the name has none. */
+export function channelSlug(name: string): string {
+  return name
+    .normalize('NFC')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\p{M}]+/gu, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 32)
+    .replace(/-+$/g, '');
+}
+/** What is wrong with a channel name, in plain words, or null when it is fine. */
+export function channelNameProblem(name: unknown): string | null {
+  if (typeof name !== 'string') return 'Give the channel a name.';
+  const n = name.trim();
+  if (n.length < MIN_CHANNEL_NAME) return `A channel name needs at least ${MIN_CHANNEL_NAME} letters.`;
+  if (n.length > MAX_CHANNEL_NAME) return `Keep the name under ${MAX_CHANNEL_NAME} letters.`;
+  if (!channelSlug(n)) return 'Use some letters or numbers in the name.';
+  return null;
+}
+/** A channel line as it is kept: line breaks tidied, no run of blank lines, trimmed, cut at the limit. */
+export function cleanChannelMessage(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  return raw.replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, MAX_CHANNEL_MESSAGE);
+}
+/** What is wrong with a line before it is sent, or null. */
+export function channelMessageProblem(raw: unknown): string | null {
+  if (typeof raw !== 'string' || !raw.trim()) return 'Write something first.';
+  if (raw.trim().length > MAX_CHANNEL_MESSAGE) return `Keep a line under ${MAX_CHANNEL_MESSAGE} letters.`;
+  return null;
+}
+/** A line number from a query string, or null when it is not a whole number above zero. */
+export function channelCursor(raw: unknown): number | null {
+  const n = typeof raw === 'string' && /^\d{1,12}$/.test(raw) ? Number(raw) : typeof raw === 'number' ? raw : NaN;
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
+}
+/** Put lines newer or older than the ones held into the list: oldest first, each line once (the newer copy wins). */
+export function mergeChannelLines<T extends { seq: number }>(held: readonly T[], fresh: readonly T[]): T[] {
+  const bySeq = new Map<number, T>();
+  for (const l of held) bySeq.set(l.seq, l);
+  for (const l of fresh) bySeq.set(l.seq, l);
+  return [...bySeq.values()].sort((a, b) => a.seq - b.seq);
+}
+/** Whether a scroll box is at (or nearly at) its end, so a new line may scroll into view without pulling anyone away from what they are reading. */
+export function isNearBottom(box: { scrollHeight: number; scrollTop: number; clientHeight: number }, slack = CHANNEL_NEAR_BOTTOM_PX): boolean {
+  return box.scrollHeight - box.scrollTop - box.clientHeight <= slack;
+}
+/** The unread dot's number: nothing, the count, or 99+. */
+export function unreadLabel(n: number): string {
+  return n <= 0 ? '' : n > 99 ? '99+' : String(n);
+}
+
+export interface Channel {
+  id: string;
+  scope: ChannelScope;
+  slug: string;
+  name: string;
+  topic: string;
+  kind: 'public' | 'private';
+  members: number;
+  /** The person is in it. */
+  joined: boolean;
+  /** A private channel's owner asked the person in, and they have not answered. */
+  invited: boolean;
+  /** Lines from other people since the person last read it. */
+  unread: number;
+  lastLineAt: string | null;
+  archived: boolean;
+  /** The person made it (Bond). */
+  owner: boolean;
+  /** The person may rename it, archive it and take down any line. */
+  canManage: boolean;
+  createdAt: string;
+}
+export interface ChannelLine {
+  /** The line's place in its channel: only ever goes up, and is what polling and "load earlier" ask by. */
+  seq: number;
+  id: string;
+  /** Empty for a line written anonymously, unless the reader wrote it or is staff. */
+  userId: string;
+  name: string;
+  handle: string | null;
+  anonymous: boolean;
+  mine: boolean;
+  /** Community rank, shown with the name. Hidden on an anonymous line except to staff. */
+  rank: CommunityRank | null;
+  body: string;
+  createdAt: string;
+  replyTo: { id: string; name: string; body: string } | null;
+}
+export interface ChannelMember {
+  userId: string;
+  name: string;
+  handle: string | null;
+  role: 'member' | 'mod';
+  owner: boolean;
 }
 
 export type ResourceKind = 'article' | 'exercise' | 'video';
@@ -3129,6 +3440,9 @@ export interface Order {
   variant: string;
   refundedAt: string | null;
   createdAt: string;
+  /** What a discount code took off (the platform pays it; the seller is settled on the price before it). 0 without a code. */
+  discountCents: number;
+  discountPoints: number;
 }
 
 export interface Coupon {
@@ -3551,6 +3865,17 @@ export function typedCents(typed: string | number): number {
   const whole = Number(m[2] || '0') * 100 + Number(frac.slice(0, 2)) + (Number(frac[2]) >= 5 ? 1 : 0);
   return m[1] ? -whole : whole;
 }
+/**
+ * The ways a product can be paid for, from its own prices, and the one rule the server and the screens share. A product with a points price
+ * can be bought with points; one with a money price can be bought with money; one with both takes either; one with neither is free; a
+ * pay-what-you-want product is always in points. A product priced in money only is never bought with points, so sending `pay: 'points'`
+ * for it gets nothing.
+ */
+export function productPayWays(p: { pricePoints: number; priceCents: number; pwyw?: boolean }): { points: boolean; money: boolean; free: boolean } {
+  const free = p.pricePoints <= 0 && p.priceCents <= 0 && !p.pwyw;
+  return { points: Boolean(p.pwyw) || p.pricePoints > 0 || free, money: p.priceCents > 0, free };
+}
+
 export function money(cents: number, currency = 'INR'): string {
   const symbol = currency === 'INR' ? '₹' : currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : `${currency} `;
   const abs = Math.abs(cents) / 100;
@@ -3910,6 +4235,177 @@ export function slotsFor(input: SlotInput): string[] {
 /** A fee in basis points with integer maths. */
 export function feeBps(amount: number, bps: number): number {
   return Math.round((amount * bps) / 10_000);
+}
+
+// ---------------------------------------------------------------------------
+// Discount codes: made by the team, taken off the paid areas, paid for by the platform
+// ---------------------------------------------------------------------------
+
+/** The places a code can work: a creator's product, a School program, a Party ticket, a plan and a credit top-up. */
+export const DISCOUNT_AREAS = ['product', 'program', 'event', 'plan', 'topup'] as const;
+export type DiscountArea = (typeof DISCOUNT_AREAS)[number];
+export const DISCOUNT_AREA_META: Readonly<Record<DiscountArea, { name: string; blurb: string }>> = {
+  product: { name: 'Shop products', blurb: 'Anything a creator sells in the Shop, paid in points or money.' },
+  program: { name: 'School programs', blurb: 'Enrolling in a cohort of a School program.' },
+  event: { name: 'Party tickets', blurb: 'A ticket to a Party event that costs points.' },
+  plan: { name: 'Plans', blurb: 'Pro, Pro Max and Ultra.' },
+  topup: { name: 'Credit top-ups', blurb: 'Extra credits on top of a plan.' },
+};
+export const isDiscountArea = (v: unknown): v is DiscountArea => (DISCOUNT_AREAS as readonly unknown[]).includes(v);
+/** 100% off, in basis points. */
+export const DISCOUNT_MAX_PERCENT_BPS = 10_000;
+export const DISCOUNT_CODE_MIN = 3;
+export const DISCOUNT_CODE_MAX = 24;
+/** Most people use a code once; the team can allow more. */
+export const DISCOUNT_PER_PERSON_MAX = 100;
+
+/**
+ * A code as typed, made into the one form that is stored and looked up: upper case, letters, numbers and single dashes, three to
+ * twenty-four of them. Anything else is dropped, so "spring 25" and "SPRING-25" are different words but "Spring25" and "SPRING25" are
+ * one. An empty string means the text is not a usable code. (Attendee codes have their own `normalizeCode`.)
+ */
+export function discountCodeKey(text: unknown): string {
+  if (typeof text !== 'string') return '';
+  const key = text.toUpperCase().replace(/[^A-Z0-9-]/g, '').replace(/-{2,}/g, '-').replace(/^-|-$/g, '').slice(0, DISCOUNT_CODE_MAX).replace(/-$/, '');
+  return key.length < DISCOUNT_CODE_MIN ? '' : key;
+}
+
+/** A percent typed by the team ("12.5") as basis points (1250), read from its digits the way `typedCents` reads money. NaN when it is not between 0.01 and 100. */
+export function typedPercentBps(typed: string | number): number {
+  const bps = typedCents(typed);
+  return Number.isInteger(bps) && bps >= 1 && bps <= DISCOUNT_MAX_PERCENT_BPS ? bps : Number.NaN;
+}
+
+/** The rules of one code that the arithmetic and the checks need. */
+export interface DiscountRule {
+  kind: 'percent' | 'fixed';
+  /** percent: 1 to 10000. */
+  percentBps: number;
+  /** fixed: the cents taken off, in `currency`. */
+  amountCents: number;
+  currency: string;
+  areas: readonly DiscountArea[];
+  itemId: string | null;
+  minCents: number;
+  maxUses: number | null;
+  usedCount: number;
+  perPersonLimit: number;
+  startsAt: string | null;
+  endsAt: string | null;
+  active: boolean;
+}
+
+const wholeNonNegative = (n: number): number => (Number.isFinite(n) && n > 0 ? Math.floor(n) : 0);
+
+/** `bps` of an amount, rounded down, in integers only: 12.5% of 99 is 12. Never below 0 and never above the amount. */
+export function percentOff(amount: number, bps: number): number {
+  const a = wholeNonNegative(amount);
+  const b = Math.min(DISCOUNT_MAX_PERCENT_BPS, wholeNonNegative(bps));
+  const q = Math.floor(a / 10_000);
+  const r = a - q * 10_000;
+  return Math.min(a, q * b + Math.floor((r * b) / 10_000));
+}
+
+/** The cents a code takes off a price in cents: a percent is rounded down, a fixed amount never goes over the price. */
+export function discountCents(priceCents: number, code: Pick<DiscountRule, 'kind' | 'percentBps' | 'amountCents'>): number {
+  const price = wholeNonNegative(priceCents);
+  return code.kind === 'percent' ? percentOff(price, code.percentBps) : Math.min(price, wholeNonNegative(code.amountCents));
+}
+
+/** The points a code takes off a price in points. Only a percent can: a fixed amount is money. */
+export function discountPoints(pricePoints: number, code: Pick<DiscountRule, 'kind' | 'percentBps'>): number {
+  return code.kind === 'percent' ? percentOff(pricePoints, code.percentBps) : 0;
+}
+
+export interface DiscountQuote {
+  offCents: number;
+  offPoints: number;
+  payCents: number;
+  payPoints: number;
+}
+/** What is taken off a list price and what is left to pay, in cents and in points. */
+export function priceWithDiscount(price: { cents: number; points: number }, code: Pick<DiscountRule, 'kind' | 'percentBps' | 'amountCents'>): DiscountQuote {
+  const cents = wholeNonNegative(price.cents);
+  const points = wholeNonNegative(price.points);
+  const offCents = discountCents(cents, code);
+  const offPoints = discountPoints(points, code);
+  return { offCents, offPoints, payCents: cents - offCents, payPoints: points - offPoints };
+}
+
+/** "25% off", "12.5% off" or "₹500 off". */
+export function discountLabel(code: Pick<DiscountRule, 'kind' | 'percentBps' | 'amountCents' | 'currency'>): string {
+  if (code.kind === 'fixed') return `${money(code.amountCents, code.currency)} off`;
+  const whole = Math.floor(code.percentBps / 100);
+  const frac = code.percentBps % 100;
+  return `${whole}${frac ? `.${String(frac).padStart(2, '0').replace(/0$/, '')}` : ''}% off`;
+}
+
+export interface DiscountContext {
+  area: DiscountArea;
+  itemId: string | null;
+  /** The list price. */
+  cents: number;
+  points: number;
+  currency: string;
+  /** Now, as a UTC ISO string. */
+  now: string;
+  /** How many times this person has used the code already (a released use does not count). */
+  usedByPerson: number;
+}
+/**
+ * Why a code does not work here, in plain words, or null when it does. The order is: switched off, not started, ended, used up,
+ * not for this, wrong money, below the minimum, already used by you, nothing to take off. A code starts at `startsAt` and
+ * works up to, not including, `endsAt`.
+ */
+export function discountProblem(code: DiscountRule, ctx: DiscountContext): string | null {
+  const now = Date.parse(ctx.now);
+  if (!code.active) return 'That code is switched off.';
+  if (code.startsAt && Date.parse(code.startsAt) > now) return `That code starts on ${code.startsAt.slice(0, 10)}.`;
+  if (code.endsAt && Date.parse(code.endsAt) <= now) return 'That code has expired.';
+  if (code.maxUses !== null && code.usedCount >= code.maxUses) return 'That code has been used up.';
+  if (!code.areas.includes(ctx.area)) return 'That code is not for this.';
+  if (code.itemId && code.itemId !== ctx.itemId) return 'That code is not for this item.';
+  if (code.kind === 'fixed') {
+    if (ctx.cents <= 0) return 'That code takes money off, and this costs points.';
+    if (code.currency !== ctx.currency) return `That code is in ${code.currency}, and this is priced in ${ctx.currency}.`;
+  }
+  if (code.minCents > 0 && ctx.cents > 0 && ctx.cents < code.minCents) return `That code is for prices from ${money(code.minCents, ctx.currency)}.`;
+  if (ctx.usedByPerson >= Math.max(1, code.perPersonLimit)) return code.perPersonLimit <= 1 ? 'You already used that code.' : 'You used that code as many times as it allows.';
+  const q = priceWithDiscount({ cents: ctx.cents, points: ctx.points }, code);
+  if (q.offCents + q.offPoints === 0) return 'That code takes nothing off this.';
+  return null;
+}
+
+/** One code as the team sees it. */
+export interface AdminDiscountCode extends DiscountRule {
+  id: string;
+  code: string;
+  note: string;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  /** Redemptions that were not given back. */
+  redeemed: number;
+  /** What those redemptions took off, by kind. */
+  givenCents: number;
+  givenPoints: number;
+}
+
+/** The answer to "does this code work here?" for a signed-in person. */
+export interface DiscountCheck {
+  ok: true;
+  code: string;
+  label: string;
+  area: DiscountArea;
+  itemId: string | null;
+  currency: string;
+  /** The list price and what is taken off it, in cents and points. */
+  listCents: number;
+  listPoints: number;
+  offCents: number;
+  offPoints: number;
+  payCents: number;
+  payPoints: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -4984,7 +5480,10 @@ export function earningGuide(): { title: string; lines: EarningLine[] }[] {
   },
   {
     title: 'Badges',
-    lines: BADGES.map((b) => ({ what: `${b.emoji} ${b.name}`, pays: 'a badge on your page', how: b.how })),
+    lines: BADGE_FAMILIES.map((f) => {
+      const own = BADGES.filter((b) => b.family === f);
+      return { what: `${own[0]?.emoji ?? ''} ${f}`, pays: `${own.length} badges, no xp`, how: BADGE_FAMILY_META[f].blurb };
+    }),
   },
   ];
 }
@@ -5229,9 +5728,10 @@ export const TERMS: Record<string, string> = {
   xp: 'Progress. It fills your level and your pillars. It is never spent.',
   points: 'Spendable. Earned by showing up and selling, spent on rewards and featured spots.',
   level: 'Where your xp has got you. Each level needs more than the last.',
-  badge: 'Proof you did something, earned by the app\'s own count. It sits on your public page.',
+  badge: 'A medal for something you did, earned by the app\'s own count and never taken back. It comes in bronze, silver, gold or platinum. Badges from your journal, money or focus time stay yours alone.',
   honor: 'A badge the team gives, or time unlocks.',
   ripple: 'Xp that runs up from a ticked task to every layer above it.',
+  'chat channel': 'A chat room for one topic. In Community, guides open them and anyone can join. In Bond, you make a private one for your friends.',
   bumling: 'The app’s own guide. Bumling helps you set things up and runs the chats about the whole app, not one relationship.',
   'do date': 'The day you will do a task. It shows on Daily from that day, and cannot be ticked before it.',
   'due date': 'The day a task must be done by. After it the task says Overdue, but you can still tick it.',
@@ -5261,6 +5761,7 @@ export const TERMS: Record<string, string> = {
   'pre-owned': 'Gear another creator is selling. You make an offer; the two of you settle the rest.',
   kit: 'What to buy at a stage, within a budget: new and pre-owned pieces added up.',
   offer: 'Your price for a pre-owned piece. The seller accepts or declines.',
+  'discount code': 'A word the team gives out that takes a percent or an amount off a price. Type it where you buy, under Have a discount code. It can work once, a few times or until a day passes.',
   unlock: 'Some things ask for a points balance, a badge, or both before you can buy them. A card game is unlocked once with points and then yours for good.',
   'personality type': 'Your 16 personality types result: four letters from a self-check in the style of Myers-Briggs (MBTI), one from each of four pairs: outward or inward, hands-on or big picture, head or heart, planned or open. One of sixteen types. It is not the official MBTI®, and no type is better than another.',
   'love language': 'A way of feeling cared for or showing care: words, time, gifts, help or touch. Discover shows how you like to receive love and how you give it. They can differ.',
@@ -5324,9 +5825,9 @@ export const TERM_GROUPS: { name: string; terms: string[] }[] = [
   { name: 'Pillars and pyramids', terms: ['pillar', 'pyramid', 'foundation', 'guiding principle', 'value goal', 'goal outcome', 'project', 'task', 'ripple', 'map', 'life map', 'strategy session', 'routine', 'contract', 'core', 'floor'] },
   { name: 'Daily and progress', terms: ['small act', 'check-in', 'daily three', 'do date', 'due date', 'priority', 'habit', 'subtask', 'remember', 'not scheduled', 'daily brief', 'not-to-do', 'kept day', 'streak', 'xp', 'points', 'level', 'who you are becoming', 'life score', 'five areas of life', 'period', 'review', 'season'] },
   { name: 'You and your page', terms: ['strength', 'personality type', 'love language', 'signs', 'human design', 'gate', 'channel', 'sidereal', 'numerology', 'master number', 'username', 'identity tag', 'setup chat', 'public page', 'badge', 'honor', 'trust', 'unlock'] },
-  { name: 'Friends and community', terms: ['friend code', 'alias', 'circle', 'reaction', 'mention', 'guide', 'life coach', 'student', 'change log', 'run club', 'start code', 'attendee code', 'deck', 'focus mode', 'focus session'] },
+  { name: 'Friends and community', terms: ['friend code', 'chat channel', 'alias', 'circle', 'reaction', 'mention', 'guide', 'life coach', 'student', 'change log', 'run club', 'start code', 'attendee code', 'deck', 'focus mode', 'focus session'] },
   { name: 'Learn and earn', terms: ['cohort', 'campaign', 'bounty', 'Club', 'collab', 'giveaway', 'retainer', 'deliverable', 'client link', 'utilisation', 'first pass', 'plan strength', 'pace'] },
-  { name: 'Shop and store', terms: ['featured', 'partner link', 'pre-owned', 'kit', 'offer'] },
+  { name: 'Shop and store', terms: ['featured', 'partner link', 'pre-owned', 'kit', 'offer', 'discount code'] },
   { name: 'Content', terms: ['brand folder', 'outlier', 'hook', 'piece'] },
   { name: 'Assistant and plans', terms: ['bumling', 'assistant', 'Pro', 'credits', 'top-up'] },
 ];
@@ -5375,7 +5876,7 @@ export const HOW_TO: Record<string, HowTo> = {
       'Daily is three boxes a day: check in, do the small act, tick one task. Checking in pays 10 xp and 10 points and keeps your streak; every seventh day in a row pays 50 points more. The small act is a two-minute thing for your weakest pillar and pays 15 xp. Your routine from the strategy session sits under the first box.',
       'Tasks come from the pillars you set up. Each pays 20 xp and sends a ripple up its pyramid. A task has a do date, the day you will do it, and can have a due date, the deadline. It shows here from its do date and cannot be ticked before it. After its due date it says Overdue, but you can still tick it. A new task waits ten minutes before it can be ticked.',
       'Tap the pencil on a task to plan it. Tag it P0 (do now), P1, P2 or P3 (whenever), in red, orange, purple and grey, and sort the list by day, priority or due date. Make it repeat every day, week, month or year, and the next one appears when you tick it; that makes it a habit. Add subtasks, say how many minutes it takes, tag it Remember, and start a focus session on it. Remember tasks with no day wait in a To remember list on Daily, and with a day they also send a note to your inbox.',
-      'A task with no date waits under Not scheduled yet. It stays out of Tasks until you pick a do date or a due date, and then it moves up. Plan my week suggests a day for each one, spread so no day is overloaded, and shows how strong the plan is; nothing changes until you keep it. Tasks with a time show as time blocks, with the free time between.',
+      'A task with no date waits under Not scheduled yet. It stays out of Tasks until you pick a do date or a due date, and then it moves up. Plan my week suggests a day for each one, spread so no day is overloaded, and shows how strong the plan is; nothing changes until you keep it. Tasks with a time show as time blocks, with the free time between. Open Month calendar to see the whole month: tap a day to tick its tasks or add one, and tap Print this month for a paper copy.',
       'Under the tasks, the not-to-do list holds up to seven things you are staying away from. Tick one to say you kept it today: a kept day pays 5 xp and grows that item’s streak. At the bottom, who you are becoming shows the figure your xp is filling in.',
     ],
     terms: ['daily three', 'check-in', 'small act', 'task', 'do date', 'due date', 'priority', 'plan strength', 'habit', 'subtask', 'remember', 'not scheduled', 'not-to-do', 'kept day', 'who you are becoming', 'routine', 'assistant'],
@@ -5402,7 +5903,7 @@ export const HOW_TO: Record<string, HowTo> = {
   you: {
     steps: [
       'Who you are sits at the top: the identity tags from the setup chat. Run the setup again to change them and the apps that fit. Your account, badges, honors and life coach live here too: say yes to a coach, pick what they see, or end it.',
-      'Badges are earned by the app’s own count: your first task, streaks, ten tasks, a cleared project, level five, small acts, the Club, and runs. Honors are given by the team or unlocked by time here.',
+      'Badges are medals the app earns for you by its own count: ticks, streaks, pillars, community, your shop, runs, lessons and levels. Each is bronze, silver, gold or platinum, and the gallery says the next step for every one. Badges from your journal, money and focus time stay private. Honors are given by the team or unlocked by time here.',
       'Under Account, add an email and password so your progress survives this device, change the password, export your data, or delete the account.',
       'Under Features, switch apps on or off, in the same groups and colours as the Apps page. An app that fits your tags says why. Appearance picks light, dark or auto.',
       'See my public page shows exactly what other people see at your address.',
@@ -5493,9 +5994,9 @@ export const HOW_TO: Record<string, HowTo> = {
       'Sort the feed by recent, popular or most replies. Filter it to everyone, people you follow, or your own posts.',
       `React to a post or a reply in six ways, from Like to Funny. Follow a person, or follow a post to hear about new replies. Type @ and a page name to tell someone, up to ${MAX_MENTIONS} people at a time.`,
       'A post pays 5 xp (up to three a day), a reply 2 xp (up to five), a reaction you give 1 xp (up to ten). A reaction on your post pays you a point and a new follower two, up to twenty a day. Each pays once, so changing a reaction pays nothing more.',
-      'Members-only spaces come with memberships you buy from a creator’s shop.',
+      `Channels are chat rooms beside the feed, one for each topic. Guides open them; join one and talk, under your name or a made-up one. New lines show up every few seconds, and a dot shows what you have not read. Members-only spaces come with memberships you buy from a creator’s shop.`,
     ],
-    terms: ['reaction', 'mention', 'xp', 'points', 'guide'],
+    terms: ['reaction', 'mention', 'xp', 'points', 'guide', 'chat channel'],
   },
   club: {
     steps: [
@@ -5512,8 +6013,9 @@ export const HOW_TO: Record<string, HowTo> = {
       'Ask to meet someone. Nothing moves until they say yes; then you are both introduced.',
       'Add friends from their public page and chat under aliases. Nobody is ever revealed.',
       'Block anyone, any time. A blocked person cannot ask again.',
+      `Make a channel for friends: a private room for up to ${MAX_CHANNEL_MEMBERS} people. Invite friends, they say yes, and you talk in it under your own names. You can remove people, and anyone can leave.`,
     ],
-    terms: ['alias'],
+    terms: ['alias', 'chat channel'],
   },
   circles: {
     steps: [
@@ -5572,9 +6074,9 @@ export const HOW_TO: Record<string, HowTo> = {
   },
   mindful: {
     steps: [
-      'Pick a length and breathe with the circle. The timer can play a background sound, such as rain, ocean, wind, a soft hum or slow lo-fi chords, that fades out when it stops.',
-      'Or work in focus sessions. The classic is 25 minutes of focus and a 5 minute mini break, four times, then a 30 minute long break. Change any length, how many sessions come before the long break, and how many times it runs, even while it runs. Point a session at one of your tasks.',
-      'The minutes log themselves when the timer ends, and after a focus session you can rate how focused you were, from scattered to deep. The dashboard shows the average, for you alone. A finished focus session counts as mindful minutes, and a finished break counts only if you switch that on. Starting the next part by itself is off until you switch it on. A chart shows your focus time and tasks ticked by day, week or month, in minutes or hours.',
+      'Breathe: slide the ruler to a length from one to thirty minutes, or tap a quick length, and breathe with the circle. The timer can play a background sound, such as rain, ocean, wind, a soft hum or slow lo-fi chords, that fades out when it stops.',
+      'Or use the focus panel, which has three tabs. Pomodoro is focus sessions with breaks: slide the ruler to the focus length (5 to 120 minutes), and set the short break, the long break, the sessions before it and the total from the four small chips. The classic is 25 minutes of focus and a 5 minute mini break, four times, then a 30 minute long break. Timer is one countdown with no breaks. Stopwatch counts up from zero, and Stop keeps the whole minutes. The round buttons beside the panel open settings, switch sounds on or off, choose background music and pick the task you are working on.',
+      'The minutes log themselves when the timer ends, and after a focus session you can rate how focused you were, from scattered to deep. The dashboard shows the average, for you alone. A finished focus session, Timer or Stopwatch counts as mindful minutes, and a finished break counts only if you switch that on. Skipping or stopping early counts for nothing. Starting the next part by itself is off until you switch it on. A chart shows your focus time and tasks ticked by day, week or month, in minutes or hours.',
       'Sounds: one soft beat marks a mini break and three mark the long break. One switch turns every sound and alarm off at once, and your other choices are kept. All your timer choices are saved on your account, so they follow you to every device.',
       'Sixty minutes a week scores full marks. The minutes count in Life twice: as breath under physical and as stillness under spiritual.',
     ],
@@ -5586,6 +6088,7 @@ export const HOW_TO: Record<string, HowTo> = {
       'Only you ever see an entry: not brands, not staff, not the leaderboard, never your public page.',
       'Entries this month show on the calendar. Search finds them by title or text.',
       'The feeling you tag feeds the emotional part of Life.',
+      'Not sure what to write? Tap Prompt me for a question from a category such as shadow work, gratitude or a weekly reset, with why it helps and what to expect. Write about this opens a new entry with the question as its first line. Which prompts you saw stays on this device.',
     ],
     terms: [],
   },
@@ -5624,9 +6127,9 @@ export const HOW_TO: Record<string, HowTo> = {
       'Make a product in a minute and share its link. It also sits on your public page.',
       'Set who can buy: anyone, or people with a points balance, a badge, or both.',
       'Points move instantly. Money checkout is in test mode until a payment provider is connected, and a money order is only paid once the provider confirms it.',
-      'Coupons, availability, orders, customers and testimonials live under the Shop sections.',
+      'Coupons, availability, orders, customers and testimonials live under the Shop sections. A buyer can also type a discount code from the team under Have a discount code; the price shown is the price charged, and you are still paid the full price.',
     ],
-    terms: ['unlock', 'points'],
+    terms: ['unlock', 'points', 'discount code'],
   },
   store: {
     steps: [
@@ -6203,6 +6706,7 @@ export interface SupportTicket {
 }
 
 export const HELP_FAQ = [
+  { q: 'How do I use a discount code?', a: 'Where you pay, tap Have a discount code, type it and tap Apply. You see what it saves and the new total before you buy. A code can be for one thing or many, can run out or end on a day, and may be used once each. If it does not work, the message says why. The team pays for the discount, so a seller still gets the full price. A refund gives back what you paid, and the code is not given back.' },
   { q: 'What does Plan my week do?', a: 'On Daily, it looks at your open tasks and suggests a day for each one that has none. It puts the most important first and spreads them so no day is overloaded. It also shows how strong the plan is, out of a hundred, and a few notes on what to look at. Nothing changes until you tap Keep. It uses rules, not an AI, so it costs no credits.' },
   { q: 'How do I see my tasks in Google, Apple or Outlook Calendar?', a: 'Under Profile, switch on Calendar. You get a private address to subscribe to in your calendar app. It shows each open task that has a day, with its time when it has one. It never shows notes, your journal or your mood. A fresh link closes the old one. It shows your tasks in the calendar; it does not change them from there.' },
   { q: 'Can the app block other apps or websites while I focus?', a: 'No. A web app cannot block other apps. What it can do is time your focus sessions, play a background sound, and show how focused each one felt. Use your phone\'s own focus mode, or a blocker app, beside it.' },
@@ -6227,6 +6731,7 @@ export const HELP_FAQ = [
   { q: 'How do I sell something?', a: 'Switch Shop on from Apps. Make a product, publish it, and share your Profile page.' },
   { q: 'How do I get work?', a: 'Work lists opportunities from brands and the team. Apply once per opportunity and follow its status in Work.' },
   { q: 'Is the Companion a therapist?', a: 'No. It reflects and asks questions. If you are in danger, contact your local emergency number. In India, Tele-MANAS is 14416.' },
+  { q: 'Where do the journal prompts come from?', a: `Under Prompt me in Journal there are prompts in sixteen categories, such as shadow work, inner child, gratitude, boundaries, manifestation scripting, 3-6-9 writing, money, body and a weekly reset. Each says why it helps and what you can reasonably expect. ${JOURNAL_PROMPT_CREDIT} They are for reflection, not therapy or medical advice, and a hopeful prompt is a planning tool, not a promise. Which prompts you were shown stays on your device and is never sent to us or to the assistant.` },
   { q: 'Who can see my journal?', a: 'Only you. Journal entries and wellbeing scores are never shown to brands, staff, the leaderboard or Club selection.' },
   { q: 'What are Games?', a: 'Nine card games you unlock once with points in Rewards, then play in the app. You shuffle, draw, flip and drag cards around a table. Nothing is posted to you. Games switches on when you unlock your first one.' },
   { q: 'What is focus mode?', a: 'On a game table, the icon with four corner brackets hides the menu, the assistant and everything else, so the table has the whole screen. Press Escape or tap the icon again to leave.' },
@@ -9775,6 +10280,60 @@ export function repeatLabel(rule: Repeat, base: string | null = null): string {
 /** The day a task opens: its do date, else its due date. Null for a task with no date. */
 export const openDay = (t: { doDate: string | null; dueDate: string | null }): string | null => t.doDate ?? t.dueDate;
 
+/** Month calendar on Daily: a month is YYYY-MM with a real month (01 to 12). */
+export const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+/** The most tasks one month answers with; past it `more` is true and the screen says so. */
+export const MONTH_TASKS_MAX = 500;
+/** The month `by` months from `month` (negative goes back). */
+export function monthShift(month: string, by: number): string {
+  const total = Number(month.slice(0, 4)) * 12 + (Number(month.slice(5, 7)) - 1) + by;
+  return `${String(Math.floor(total / 12)).padStart(4, '0')}-${String((total % 12) + 1).padStart(2, '0')}`;
+}
+/** A month as weeks of ISO days, Monday first. The first and last week carry days of the months beside it; an unreal month gives no weeks. */
+export function monthGrid(month: string): string[][] {
+  if (!MONTH_RE.test(month)) return [];
+  const first = `${month}-01`;
+  const lead = isoWeekday(first) - 1;
+  const length = daysInMonth(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1);
+  const start = addDays(first, -lead);
+  return Array.from({ length: Math.ceil((lead + length) / 7) }, (_, w) => Array.from({ length: 7 }, (_, d) => addDays(start, w * 7 + d)));
+}
+/** One task on the month calendar: what a cell and the day's list need, and nothing more. */
+export interface MonthTask {
+  id: string;
+  title: string;
+  relationship: RelationshipKey;
+  doDate: string | null;
+  dueDate: string | null;
+  /** The day it sits on: the do date, else the due date. */
+  day: string;
+  status: 'active' | 'done';
+  priority: Priority | null;
+  /** HH:MM, when the task has a time. */
+  time: string | null;
+  estimateMin: number | null;
+  /** The repeat rule in words, or null when it does not repeat. */
+  repeat: string | null;
+  /** When it can first be ticked (a new task waits a few minutes). */
+  readyAt: string | null;
+  completedAt: string | null;
+}
+/** The projects a new task can go under (a task needs one). */
+export interface MonthProject {
+  id: string;
+  title: string;
+  relationship: RelationshipKey;
+}
+/** `GET /today/month`: the month's tasks, the person's active projects, and whether the month had more than the cap. */
+export interface TodayMonthResponse {
+  month: string;
+  /** The device day the screen sent, echoed back. */
+  today: string;
+  tasks: MonthTask[];
+  more: boolean;
+  projects: MonthProject[];
+}
+
 /** One line in a task's checklist. */
 export interface Subtask {
   id: string;
@@ -10363,6 +10922,58 @@ export function parseFocusSettings(raw: unknown): FocusSettings {
 export const BREAK_BEATS = { short: 1, long: 3 } as const;
 
 // ---------------------------------------------------------------------------
+// The ruler (components/RulerPicker.tsx): a row of tick marks for choosing a number from a range with a step. Only the maths lives here.
+// ---------------------------------------------------------------------------
+
+/** How many decimals a step carries (0.5 has one, 5 has none), so a value never drifts to 0.30000000000000004. */
+const stepDecimals = (step: number): number => {
+  const s = String(step);
+  const dot = s.indexOf('.');
+  return dot < 0 ? 0 : Math.min(6, s.length - dot - 1);
+};
+const roundTo = (v: number, decimals: number): number => Number(v.toFixed(decimals));
+/** A ruler's range, made safe: a whole-or-decimal step above zero, and a max that is not under the min. */
+function rulerRange(min: number, max: number, step: number) {
+  const st = Number.isFinite(step) && step > 0 ? step : 1;
+  const lo = Number.isFinite(min) ? min : 0;
+  const hi = Number.isFinite(max) && max >= lo ? max : lo;
+  const decimals = Math.max(stepDecimals(st), stepDecimals(lo));
+  // The last tick is the highest value `min + n * step` that does not pass the max (a max that is not a multiple of the step is not itself a tick).
+  const last = Math.floor((hi - lo) / st + 1e-9);
+  return { lo, st, decimals, last };
+}
+/** The tick number (0 is the first) of a value, as a fraction when the value sits between two ticks. Clamped to the ruler. */
+export function rulerIndex(value: number, min: number, max: number, step: number): number {
+  const { lo, st, last } = rulerRange(min, max, step);
+  const raw = (Number(value) - lo) / st;
+  if (!Number.isFinite(raw)) return 0;
+  return Math.min(last, Math.max(0, raw));
+}
+/** A value held to the ruler: inside min and max and on the nearest tick (a step counted from the min). */
+export function rulerClamp(value: number, min: number, max: number, step: number): number {
+  const { lo, st, decimals } = rulerRange(min, max, step);
+  return roundTo(lo + Math.round(rulerIndex(value, min, max, step)) * st, decimals);
+}
+/** The value under a pixel offset from the first tick's centre, on a ruler whose ticks sit `gap` pixels apart. */
+export function rulerValueAt(offsetPx: number, min: number, max: number, step: number, gap: number): number {
+  const g = Number.isFinite(gap) && gap > 0 ? gap : 1;
+  const { lo, st, decimals, last } = rulerRange(min, max, step);
+  const i = Math.min(last, Math.max(0, Math.round((Number.isFinite(offsetPx) ? offsetPx : 0) / g)));
+  return roundTo(lo + i * st, decimals);
+}
+/** Every tick of a ruler, with the ones that carry a label (a multiple of `labelEvery`, counted from zero, so 20, 25 and 30 when it is 5). */
+export function rulerTicks(min: number, max: number, step: number, labelEvery?: number): { value: number; major: boolean }[] {
+  const { lo, st, decimals, last } = rulerRange(min, max, step);
+  const out: { value: number; major: boolean }[] = [];
+  for (let i = 0; i <= last; i += 1) {
+    const value = roundTo(lo + i * st, decimals);
+    const major = typeof labelEvery === 'number' && labelEvery > 0 ? Math.abs(value / labelEvery - Math.round(value / labelEvery)) < 1e-9 : false;
+    out.push({ value, major });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Agency: a content agency's or a freelance creator's clients, pieces, time and approvals
 // ---------------------------------------------------------------------------
 
@@ -10449,6 +11060,10 @@ export interface AgencyClient {
   portal: PortalShow;
   /** The client link is /a/<token>; null while it is switched off. */
   portalToken: string | null;
+  /** Whether the link asks for a password. */
+  portalLocked: boolean;
+  /** Where the client is on the way from enquiry to monthly delivery. */
+  stage: AgencyStageKey;
   createdAt: string;
   /** Worked out by the server for this month. */
   month: { published: number; inReview: number; open: number; overdue: number; minutes: number; billableMinutes: number };
@@ -10474,7 +11089,13 @@ export interface AgencyDeliverable {
   /** How many notes are in the thread. */
   noteCount: number;
   feeCents: number;
+  /** Changes spent so far, and how many are included for this piece. */
   revisions: number;
+  revisionsAllowed: number;
+  /** The month of a retainer this piece was made for, when the cycle made it. */
+  cycleNumber: number | null;
+  /** The trial video. */
+  trial: boolean;
   approvedAt: string | null;
   publishedAt: string | null;
   createdAt: string;
@@ -10485,6 +11106,8 @@ export interface AgencyDeliverable {
 export interface AgencyNote {
   id: string;
   author: 'me' | 'client' | 'brand';
+  /** A plain note, a comment, or a change the client asked for. */
+  kind: NoteKind;
   shared: boolean;
   body: string;
   createdAt: string;
@@ -10557,6 +11180,8 @@ export interface AgencyClientPage {
   campaigns: AgencyCampaign[];
   time: AgencyTimeEntry[];
   invoices: AgencyInvoiceRow[];
+  /** The way from enquiry to monthly delivery. */
+  lifecycle: ClientLifecycle;
 }
 
 /** The parts of a client's dashboard the owner can show at the client link. Each is a switch; the default says what it starts as. */
@@ -10574,13 +11199,13 @@ export const PORTAL_PARTS = [
 export type PortalPartKey = (typeof PORTAL_PARTS)[number]['key'];
 /** What the person at the link may do, apart from looking. */
 export const PORTAL_ACTIONS = [
-  { key: 'canApprove', name: 'Approve or send back', blurb: 'They can approve a deliverable in review, or send it back with a note.', on: true },
+  { key: 'canApprove', name: 'Approve or ask for changes', blurb: 'They can approve a piece in review, or ask for a change while changes are left on it.', on: true },
   { key: 'canComment', name: 'Write notes', blurb: 'They can leave a note on any deliverable.', on: true },
 ] as const;
 export type PortalActionKey = (typeof PORTAL_ACTIONS)[number]['key'];
 export type PortalShow = Record<PortalPartKey | PortalActionKey, boolean>;
 /** What is never at the link, whatever is switched on. Said on the screen next to the switches. */
-export const PORTAL_NEVER: readonly string[] = ['Your private notes', 'Your fee for each piece and the retainer amount', 'Your time, line by line', 'Other clients', 'What the brand wrote in Army'];
+export const PORTAL_NEVER: readonly string[] = ['Your private notes', 'Your fee for each piece, and what you charge a month unless you send a retainer offer', 'Your time, line by line', 'Other clients', 'What the brand wrote in Army', 'Your password for the link'];
 
 export const defaultPortalShow = (): PortalShow => Object.fromEntries([...PORTAL_PARTS, ...PORTAL_ACTIONS].map((p) => [p.key, p.on])) as PortalShow;
 /** Reads the saved switches; a switch that was never saved takes its default, anything unclean is dropped. */
@@ -10597,9 +11222,21 @@ export interface PortalView {
   agencyName: string;
   clientName: string;
   show: PortalShow;
-  waiting: { id: string; title: string; kind: DeliverableKind; platform: string; link: string; publishDate: string | null; thread: { author: 'me' | 'client'; body: string; createdAt: string }[] }[];
-  coming: { title: string; kind: DeliverableKind; platform: string; stage: DeliverableStage; publishDate: string | null }[];
-  published: { title: string; kind: DeliverableKind; platform: string; link: string; publishedAt: string | null }[];
+  /** Where they are on the way from first contact to monthly delivery. */
+  stage: AgencyStageKey;
+  /** What is waiting on the client now. */
+  waitingOn: PortalWaitingOn[];
+  /** The strategy session, from the strategy stage on. */
+  strategy: { day: string | null; link: string } | null;
+  /** The trial rules and the day the trial video is due, during the trial. */
+  trial: { due: string | null; rules: readonly TrialRule[] } | null;
+  /** The pilot month's days, during and after the pilot. */
+  pilot: { start: string | null; end: string | null } | null;
+  /** The retainer offer, or the running retainer. */
+  retainer: PortalRetainer | null;
+  waiting: { id: string; title: string; kind: DeliverableKind; platform: string; link: string; publishDate: string | null; changes: { used: number; allowed: number }; thread: { author: 'me' | 'client'; kind: NoteKind; body: string; createdAt: string }[] }[];
+  coming: { id: string; title: string; kind: DeliverableKind; platform: string; stage: DeliverableStage; publishDate: string | null; changes: { used: number; allowed: number } }[];
+  published: { id: string; title: string; kind: DeliverableKind; platform: string; link: string; publishedAt: string | null }[];
   month: { published: number; planned: number } | null;
   channels: { channel: string; published: number; open: number }[];
   hours: { usedMinutes: number; includedMinutes: number } | null;
@@ -10632,6 +11269,430 @@ export function deliverableOverdue(stage: DeliverableStage, dueDate: string | nu
   if (stage === 'published') return false;
   const day = stage === 'approved' ? (publishDate ?? dueDate) : dueDate;
   return Boolean(day && day < today);
+}
+
+// ---------------------------------------------------------------------------
+// Agency lifecycle: from a brand's enquiry to monthly delivery. The stages, the trial rules, the client link's password, the retainer
+// and its monthly cycle. Pure rules; the server and the screens both read them.
+// ---------------------------------------------------------------------------
+
+export const AGENCY_STAGE_KEYS = ['enquiry', 'agreement_sent', 'agreement_signed', 'strategy', 'trial', 'pilot', 'retainer_offer', 'retainer', 'delivery'] as const;
+export type AgencyStageKey = (typeof AGENCY_STAGE_KEYS)[number];
+export interface AgencyStage {
+  key: AgencyStageKey;
+  name: string;
+  /** What this stage is, in one plain line. */
+  line: string;
+  /** What the client does here, and what the owner does here. */
+  clientDoes: string;
+  ownerDoes: string;
+  /** The owner's checklist for the stage. */
+  steps: readonly { key: string; text: string }[];
+}
+export const AGENCY_STAGES: readonly AgencyStage[] = [
+  {
+    key: 'enquiry',
+    name: 'Enquiry',
+    line: 'A brand got in touch and asked what comes next.',
+    clientDoes: 'Nothing yet. An agreement is on its way.',
+    ownerDoes: 'Make the trial and pilot agreement and send it.',
+    steps: [
+      { key: 'note', text: 'Write down what they asked for, in the client notes.' },
+      { key: 'make', text: 'Make a Trial and pilot agreement for them.' },
+      { key: 'send', text: 'Send it. The stage moves on by itself.' },
+    ],
+  },
+  {
+    key: 'agreement_sent',
+    name: 'Agreement sent',
+    line: 'The agreement is with the client to read, answer and sign.',
+    clientDoes: 'Read the agreement, fill in the brief and sign by typing a name.',
+    ownerDoes: 'Wait for the signature. Answer any comment they leave.',
+    steps: [
+      { key: 'comments', text: 'Answer any comment on the agreement.' },
+      { key: 'revise', text: 'If they ask for a change, revise it and send it again.' },
+    ],
+  },
+  {
+    key: 'agreement_signed',
+    name: 'Agreement signed',
+    line: 'Both sides said yes in writing.',
+    clientDoes: 'Get ready for the strategy session.',
+    ownerDoes: 'Set the day of the strategy session and share the link.',
+    steps: [
+      { key: 'day', text: 'Pick the day of the strategy session and put it in Dates.' },
+      { key: 'link', text: 'Add the call link, so the client sees it.' },
+    ],
+  },
+  {
+    key: 'strategy',
+    name: 'Strategy session',
+    line: 'One call to settle the direction before anything is filmed.',
+    clientDoes: 'Join the call. Bring the brand guide and three to five videos that show the feel you want.',
+    ownerDoes: 'Hold the call and lock the points below.',
+    steps: [
+      { key: 'objective', text: 'Lock the main objective and the products featured.' },
+      { key: 'audience', text: 'Lock the target audience, the core message and the response wanted.' },
+      { key: 'facts', text: 'Write down the brand and product facts, the must-haves and the things to avoid.' },
+      { key: 'special', text: 'Note any special needs for the shoot.' },
+    ],
+  },
+  {
+    key: 'trial',
+    name: 'Trial video',
+    line: 'The first video, made under the trial rules.',
+    clientDoes: 'Watch the trial video and send one set of feedback.',
+    ownerDoes: 'Make the trial video, send it for review and take the feedback.',
+    steps: [
+      { key: 'due', text: 'Set the day the trial video is due, in Dates.' },
+      { key: 'add', text: 'Add the trial video to the pipeline.' },
+      { key: 'review', text: 'Send it for review.' },
+      { key: 'feedback', text: 'Take the one set of feedback and make the small changes.' },
+    ],
+  },
+  {
+    key: 'pilot',
+    name: 'Pilot month',
+    line: 'A paid first month of real work. The package fee is paid first.',
+    clientDoes: 'Pick a package, pay the pilot invoice and review each piece.',
+    ownerDoes: 'Send the pilot invoice. Start when it is paid, then make and deliver the batch.',
+    steps: [
+      { key: 'dates', text: 'Set the start and end day of the pilot, in Dates.' },
+      { key: 'invoice', text: 'Send the pilot invoice. Work starts when it is paid.' },
+      { key: 'plan', text: 'Lock the plan for each shoot before it starts.' },
+      { key: 'deliver', text: 'Deliver the batch and take the review.' },
+    ],
+  },
+  {
+    key: 'retainer_offer',
+    name: 'Retainer proposed',
+    line: 'The client is choosing how many months to stay.',
+    clientDoes: 'Choose a length: 3, 6 or 12 months.',
+    ownerDoes: 'Wait for the choice, then confirm it.',
+    steps: [
+      { key: 'offer', text: 'Send the retainer offer with the lengths and any discount.' },
+      { key: 'confirm', text: 'When they choose, confirm it and set the start day.' },
+    ],
+  },
+  {
+    key: 'retainer',
+    name: 'Retainer active',
+    line: 'The retainer started. Each month makes its invoice and its pieces by itself.',
+    clientDoes: 'Pay each month and review each piece.',
+    ownerDoes: 'Check the first month, then keep delivering.',
+    steps: [
+      { key: 'agreement', text: 'Send the monthly retainer agreement, if you have not.' },
+      { key: 'first', text: 'Check the first month\'s invoice and pieces.' },
+    ],
+  },
+  {
+    key: 'delivery',
+    name: 'Monthly delivery',
+    line: 'Pieces and an invoice every month, with changes and comments on each piece.',
+    clientDoes: 'Review pieces, ask for changes inside the allowance, pay on time.',
+    ownerDoes: 'Make the pieces, answer changes, send the invoice, and offer the renewal before the end.',
+    steps: [
+      { key: 'pieces', text: 'Move each piece along the pipeline.' },
+      { key: 'changes', text: 'Answer change requests inside the allowance.' },
+      { key: 'renew', text: 'Offer the renewal before the last month ends.' },
+    ],
+  },
+];
+export const AGENCY_STAGE_BY_KEY: Record<AgencyStageKey, AgencyStage> = byKey(AGENCY_STAGES.map((s) => [s.key, s]));
+
+/** A stage key from a column or a request; anything else is the first stage. */
+export function parseStage(v: unknown): AgencyStageKey {
+  return typeof v === 'string' && (AGENCY_STAGE_KEYS as readonly string[]).includes(v) ? (v as AgencyStageKey) : 'enquiry';
+}
+export const stageIndex = (k: AgencyStageKey): number => AGENCY_STAGE_KEYS.indexOf(k);
+export const nextStage = (k: AgencyStageKey): AgencyStageKey | null => AGENCY_STAGE_KEYS[stageIndex(k) + 1] ?? null;
+export const previousStage = (k: AgencyStageKey): AgencyStageKey | null => AGENCY_STAGE_KEYS[stageIndex(k) - 1] ?? null;
+
+/** Where a client stands: the stages behind, the one they are in and the ones to come, and how far along that is in whole percent. */
+export function stageProgress(k: AgencyStageKey): { index: number; total: number; percent: number; done: AgencyStageKey[]; current: AgencyStageKey; upcoming: AgencyStageKey[] } {
+  const index = stageIndex(k);
+  const total = AGENCY_STAGE_KEYS.length;
+  return { index, total, percent: Math.round(((index + 1) / total) * 100), done: AGENCY_STAGE_KEYS.slice(0, index), current: k, upcoming: AGENCY_STAGE_KEYS.slice(index + 1) };
+}
+
+/** What the owner's move depends on. */
+export interface StageFacts {
+  /** A retainer offer is open (offered or chosen). */
+  offerOpen: boolean;
+  /** A retainer is active. */
+  retainerActive: boolean;
+}
+/**
+ * Why the owner cannot move a client from one stage to another, or null when they can. The owner moves one step forward at a time;
+ * the stages that need a retainer say so.
+ */
+export function moveProblem(from: AgencyStageKey, to: AgencyStageKey, facts: StageFacts): string | null {
+  if (to !== nextStage(from)) return from === to ? 'They are already there.' : 'A client moves one stage at a time.';
+  if (to === 'retainer_offer' && !facts.offerOpen) return 'Send the retainer offer first. That moves them on.';
+  if ((to === 'retainer' || to === 'delivery') && !facts.retainerActive) return 'Confirm the retainer first. That moves them on.';
+  return null;
+}
+/** The moves the app makes by itself. Each goes forward only and never skips past what happened. */
+export type StageEvent = 'agreement_sent' | 'agreement_signed' | 'offer_sent' | 'retainer_active';
+export function autoStage(current: AgencyStageKey, event: StageEvent): AgencyStageKey | null {
+  const at = stageIndex(current);
+  const go = (to: AgencyStageKey) => (stageIndex(to) > at ? to : null);
+  if (event === 'agreement_sent') return at === 0 ? go('agreement_sent') : null;
+  if (event === 'agreement_signed') return at <= stageIndex('agreement_sent') ? go('agreement_signed') : null;
+  if (event === 'offer_sent') return current === 'pilot' ? go('retainer_offer') : null;
+  return current === 'pilot' || current === 'retainer_offer' ? go('retainer') : null;
+}
+
+/**
+ * The rules of the trial video, as the Trial and pilot agreement already states them (`CONTRACT_TEMPLATES`, key `trial`). Each line is
+ * quoted from that agreement and a test checks it still is. The agreement is the source: if a person edits their own copy, theirs wins.
+ */
+export interface TrialRule {
+  key: string;
+  text: string;
+  /** Where in the agreement it comes from. */
+  source: string;
+}
+export const TRIAL_RULES: readonly TrialRule[] = [
+  { key: 'evaluation', text: 'Anything made in the trial is for evaluation and approval only.', source: 'Trial agreement, 4.1' },
+  { key: 'no-use', text: 'The client may not publish, share, boost, advertise, reuse, sublicense or otherwise use it commercially unless a paid engagement is later confirmed in writing.', source: 'Trial agreement, 4.1' },
+  { key: 'comes-down', text: 'If the work does not go ahead, unpublished trial content stays unused and published trial content comes down on request.', source: 'Trial agreement, 4.1' },
+  { key: 'rights', text: 'Unless agreed in writing, ownership and usage rights do not pass to the client just because of the trial.', source: 'Trial agreement, 4.2' },
+  { key: 'brief', text: 'The client fills in this brief before the shoot.', source: 'Trial agreement, 3' },
+  { key: 'feedback', text: 'The client sends feedback through one point of contact.', source: 'Trial agreement, 5 and 8.3' },
+  { key: 'edits', text: 'Small edit-level changes such as text, trims, order and captions are part of the process. A new concept, format, set-up, new footage or a reshoot is discussed separately before it is started.', source: 'Trial agreement, 8.3' },
+  { key: 'no-promise', text: 'The trial does not oblige either side to go on to a pilot.', source: 'Trial agreement, 2' },
+];
+
+// ---- the days of the lifecycle
+
+export interface LifecycleDates {
+  strategyDay: string | null;
+  strategyLink: string;
+  trialDue: string | null;
+  pilotStart: string | null;
+  pilotEnd: string | null;
+}
+export const emptyLifecycleDates = (): LifecycleDates => ({ strategyDay: null, strategyLink: '', trialDue: null, pilotStart: null, pilotEnd: null });
+const realLifeDay = (d: unknown): string | null => (typeof d === 'string' && DATE_PATTERN.test(d) && fromDay(asDay(d)) === d ? d : null);
+/** The saved days, each a real calendar day or nothing, and the call link only when it is https. */
+export function parseLifecycleDates(v: unknown): LifecycleDates {
+  let raw = v;
+  if (typeof raw === 'string') {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = null;
+    }
+  }
+  const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const link = typeof o.strategyLink === 'string' ? o.strategyLink.trim().slice(0, 300) : '';
+  return { strategyDay: realLifeDay(o.strategyDay), strategyLink: /^https:\/\/[^\s]+$/.test(link) ? link : '', trialDue: realLifeDay(o.trialDue), pilotStart: realLifeDay(o.pilotStart), pilotEnd: realLifeDay(o.pilotEnd) };
+}
+/** Why the days will not do, or null. The pilot cannot end before it starts. */
+export function lifecycleDatesProblem(d: LifecycleDates): string | null {
+  if (d.pilotStart && d.pilotEnd && d.pilotEnd < d.pilotStart) return 'The pilot cannot end before it starts.';
+  return null;
+}
+
+// ---- the password on a client link
+
+export const PORTAL_PASSWORD_MIN = 10;
+/** Why a client-link password will not do, or null. Ten characters or more, then the same rule as every password. */
+export function portalPasswordProblem(password: string, clientName = ''): string | null {
+  if (password.length < PORTAL_PASSWORD_MIN) return `Use at least ${PORTAL_PASSWORD_MIN} characters.`;
+  const base = passwordProblem(password);
+  if (base) return base;
+  const lower = password.toLowerCase();
+  for (const word of clientName.toLowerCase().split(/[^a-z0-9]+/)) if (word.length >= 4 && lower.includes(word)) return 'Not the client\'s name, or a part of it.';
+  return null;
+}
+const PORTAL_WORDS = [
+  'amber', 'anchor', 'apple', 'arrow', 'aspen', 'badge', 'basil', 'beach', 'berry', 'birch', 'blaze', 'bloom', 'bridge', 'brook', 'cable', 'candle',
+  'canyon', 'cedar', 'chalk', 'cherry', 'cloud', 'clover', 'cobalt', 'comet', 'coral', 'cotton', 'crane', 'crest', 'daisy', 'delta', 'dune', 'eagle',
+  'ember', 'fable', 'falcon', 'fern', 'field', 'flint', 'forest', 'frost', 'garden', 'garnet', 'ginger', 'glade', 'glow', 'grove', 'harbor', 'hazel',
+  'heron', 'honey', 'island', 'ivory', 'jasper', 'jungle', 'kettle', 'lagoon', 'lantern', 'lemon', 'lilac', 'linen', 'lotus', 'maple', 'marble', 'meadow',
+  'mint', 'moss', 'nectar', 'north', 'oasis', 'olive', 'orbit', 'otter', 'paper', 'pearl', 'pebble', 'pine', 'planet', 'plum', 'pond', 'poppy',
+  'quartz', 'quill', 'rabbit', 'rain', 'raven', 'reef', 'river', 'robin', 'saffron', 'sage', 'sandal', 'sierra', 'silver', 'slate', 'spring', 'stone',
+  'storm', 'summit', 'sunset', 'swan', 'tangle', 'thistle', 'tide', 'timber', 'topaz', 'tulip', 'valley', 'velvet', 'violet', 'willow', 'winter', 'zephyr',
+] as const;
+/** A readable password: four words and two digits, like "maple-river-cloud-stone-48". `rand(n)` must give a whole number from 0 to n - 1. */
+export function makePortalPassword(rand: (n: number) => number): string {
+  const word = () => PORTAL_WORDS[rand(PORTAL_WORDS.length)]!;
+  return `${word()}-${word()}-${word()}-${word()}-${String(rand(100)).padStart(2, '0')}`;
+}
+
+// ---- changes (revisions) on a piece
+
+export const DEFAULT_REVISIONS_PER_PIECE = 2;
+export const REVISIONS_MAX = 20;
+/** The kinds of line in a piece's thread. A change request spends one change; a paid change is only a note to the owner. */
+export const NOTE_KINDS = ['note', 'comment', 'change', 'paid_change'] as const;
+export type NoteKind = (typeof NOTE_KINDS)[number];
+export const NOTE_KIND_NAME: Record<NoteKind, string> = { note: 'Note', comment: 'Comment', change: 'Change asked for', paid_change: 'Paid change asked for' };
+export const changesLeft = (used: number, allowed: number): number => Math.max(0, allowed - used);
+/** "2 of 3 changes used". */
+export const changesLabel = (used: number, allowed: number): string => `${used} of ${allowed} ${allowed === 1 ? 'change' : 'changes'} used`;
+/** The stages a piece can be sent back from, and where it goes: back into making. */
+export const CHANGE_FROM_STAGES: readonly DeliverableStage[] = ['review', 'approved'];
+export const CHANGE_TO_STAGE: DeliverableStage = 'making';
+
+// ---- the retainer
+
+export const RETAINER_MONTHS_MAX = 24;
+export const RETAINER_OPTIONS_MAX = 4;
+export const RETAINER_PIECES_MAX = 50;
+export const RETAINER_DISCOUNT_MAX_BPS = 5000;
+export const RETAINER_STATUSES = ['offered', 'chosen', 'active', 'ended', 'withdrawn'] as const;
+export type RetainerStatus = (typeof RETAINER_STATUSES)[number];
+export const RETAINER_STATUS_NAME: Record<RetainerStatus, string> = { offered: 'Offered', chosen: 'Chosen by the client', active: 'Active', ended: 'Ended', withdrawn: 'Withdrawn' };
+export const RETAINER_STATUS_TONE: Record<RetainerStatus, TagTone> = { offered: 'info', chosen: 'warn', active: 'good', ended: 'neutral', withdrawn: 'neutral' };
+export interface RetainerOption {
+  months: number;
+  /** Off the monthly fee, in basis points: 500 is 5 percent. */
+  discountBps: number;
+}
+export const RETAINER_DEFAULT_OPTIONS: readonly RetainerOption[] = [
+  { months: 3, discountBps: 0 },
+  { months: 6, discountBps: 0 },
+  { months: 12, discountBps: 0 },
+];
+/** The lengths an offer carries: whole months from 1 to 24, no repeats, a discount from 0 to half, at most four, shortest first. */
+export function parseRetainerOptions(raw: unknown): RetainerOption[] {
+  let v = raw;
+  if (typeof v === 'string') {
+    try {
+      v = JSON.parse(v);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(v)) return [];
+  const out: RetainerOption[] = [];
+  for (const x of v) {
+    const o = x && typeof x === 'object' ? (x as Record<string, unknown>) : {};
+    const months = Math.round(Number(o.months));
+    const bps = Math.round(Number(o.discountBps ?? 0));
+    if (!Number.isInteger(months) || months < 1 || months > RETAINER_MONTHS_MAX || out.some((p) => p.months === months)) continue;
+    out.push({ months, discountBps: Number.isFinite(bps) ? Math.min(RETAINER_DISCOUNT_MAX_BPS, Math.max(0, bps)) : 0 });
+  }
+  return out.sort((a, b) => a.months - b.months).slice(0, RETAINER_OPTIONS_MAX);
+}
+/** A month's fee after the discount, in whole cents: the discount is rounded to the nearest cent, half up. */
+export function retainerMonthlyCents(feeCents: number, discountBps: number): number {
+  const bps = Math.min(RETAINER_DISCOUNT_MAX_BPS, Math.max(0, Math.round(discountBps)));
+  return feeCents - feeBps(feeCents, bps);
+}
+/** What the whole retainer comes to over its months. */
+export const retainerTotalCents = (feeCents: number, months: number, discountBps: number): number => retainerMonthlyCents(feeCents, discountBps) * months;
+
+export interface RetainerCycle {
+  /** 1 for the first month. */
+  n: number;
+  /** The day the month starts, on the retainer's own day of the month (a short month falls on its last day). */
+  day: string;
+  /** The last day of the month, the day before the next one starts. */
+  end: string;
+  /** YYYY-MM of `day`: the key a month is made once under. */
+  month: string;
+}
+/**
+ * The months of a retainer that starts on `anchor`: the same repeat rule a task uses (`nextOccurrence`), so a retainer that began on the 31st
+ * starts its months on the 31st, the 28th or 29th of February, the 31st again in March. At most `RETAINER_MONTHS_MAX`.
+ */
+export function retainerCycles(anchor: string, months: number): RetainerCycle[] {
+  const count = Math.min(RETAINER_MONTHS_MAX, Math.max(0, Math.floor(months)));
+  if (count === 0 || !realLifeDay(anchor)) return [];
+  const rule: Repeat = { kind: 'monthly', every: 1, days: [], until: null, anchor };
+  const days = [anchor];
+  while (days.length <= count) {
+    const next = nextOccurrence(rule, anchor, days[days.length - 1]!);
+    if (!next) break;
+    days.push(next);
+  }
+  return days.slice(0, count).map((day, i) => ({ n: i + 1, day, month: day.slice(0, 7), end: addDays(days[i + 1] ?? addDays(day, 30), -1) }));
+}
+/** The months whose day has come on `today` (the owner's own day). A month that was missed is still due, so it is made on the next run, once. */
+export const cyclesDue = (anchor: string, months: number, today: string): RetainerCycle[] => retainerCycles(anchor, months).filter((c) => c.day <= today);
+/** Due days for `pieces` pieces spread through a month from `start` to `end`: the last one lands on the last day. */
+export function cyclePieceDays(start: string, end: string, pieces: number): string[] {
+  const len = daysBetween(start, end) + 1;
+  if (pieces < 1 || len < 1) return [];
+  return Array.from({ length: pieces }, (_, i) => addDays(start, Math.max(0, Math.min(len - 1, Math.floor(((i + 1) * len) / pieces) - 1))));
+}
+/** The title of the n-th piece of a month: "Month 3, piece 2". */
+export const cyclePieceTitle = (month: number, piece: number): string => `Month ${month}, piece ${piece}`;
+
+/** A retainer as the owner sees it. */
+export interface AgencyRetainer {
+  id: string;
+  status: RetainerStatus;
+  options: RetainerOption[];
+  /** The length the client chose (or that is running). */
+  months: number | null;
+  /** The monthly fee before any discount, in cents. */
+  feeCents: number;
+  discountBps: number;
+  /** The monthly fee after the discount, once a length is chosen. */
+  monthlyCents: number | null;
+  totalCents: number | null;
+  piecesPerMonth: number;
+  revisionsPerPiece: number;
+  startDay: string | null;
+  endDay: string | null;
+  autoSend: boolean;
+  /** The next month still to be made, and how many are made. */
+  nextCycle: { n: number; day: string } | null;
+  cyclesMade: number;
+  chosenAt: string | null;
+  createdAt: string;
+}
+export interface LifecycleLogLine {
+  id: string;
+  actor: 'me' | 'client' | 'auto';
+  kind: string;
+  text: string;
+  at: string;
+}
+/** The owner's side of a client's lifecycle: the stage, the days, the checklist, the password state, the retainer and what happened. */
+export interface ClientLifecycle {
+  stage: AgencyStageKey;
+  stageSince: string | null;
+  dates: LifecycleDates;
+  /** Checklist ticks, "<stage>:<step>" to true. */
+  ticks: Record<string, boolean>;
+  revisionsPerPiece: number;
+  password: { set: boolean; setAt: string | null; lastOpenedDay: string | null };
+  /** The open or running retainer, else the latest one that ended. */
+  retainer: AgencyRetainer | null;
+  /** What has happened, newest first. */
+  log: LifecycleLogLine[];
+  /** The trial video piece, once the owner added it. */
+  trialItemId: string | null;
+}
+
+/** What the lock screen of a client link may say: the client's name and nothing else. */
+export interface PortalLock {
+  error: 'locked';
+  clientName: string;
+}
+/** One thing waiting on the client, with where to do it. */
+export interface PortalWaitingOn {
+  key: string;
+  title: string;
+  line: string;
+  /** An address on this site to open, when there is one. */
+  href: string | null;
+}
+/** The retainer offer as the client sees it: the lengths with what each comes to. Only while an offer is open or running. */
+export interface PortalRetainer {
+  status: 'offered' | 'chosen' | 'active';
+  currency: string;
+  options: { months: number; discountBps: number; monthlyCents: number; totalCents: number }[];
+  chosenMonths: number | null;
+  piecesPerMonth: number;
+  revisionsPerPiece: number;
+  startDay: string | null;
 }
 
 // ---- Business metrics in Reviews: only for people who switch them on
@@ -10738,7 +11799,9 @@ export const GST_RATES_BPS = [0, 500, 1200, 1800, 2800] as const;
 export const TDS_RATES_BPS = [0, 100, 200, 500, 1000] as const;
 export const TDS_MODES = ['none', 'grossup', 'show'] as const;
 export type TdsMode = (typeof TDS_MODES)[number];
-export const TDS_MODE_NAME: Record<TdsMode, string> = { none: 'No TDS', grossup: 'Add it to the total', show: 'Show what they will deduct' };
+export const TDS_MODE_NAME: Record<TdsMode, string> = { none: 'No TDS', grossup: 'The client pays the TDS (add it, then deduct it)', show: 'Show what they will deduct' };
+/** The line under the total when the client bears the TDS: the extra amount is on the invoice so that, after they deduct TDS, the price is paid in full. */
+export const tdsGrossupNote = (tdsBps: number): string => `*Additional ${tdsBps / 100}% adjusted on total invoice amount applicable for TDS deducted to be borne by the company as per the agreement terms.`;
 export const MAX_INVOICE_LINES = 30;
 export const INVOICE_TEXT_MAX = 200;
 
@@ -10802,6 +11865,8 @@ export interface InvoiceDoc {
   footnote: string;
   /** The line at the very foot of the page. */
   footer: string;
+  /** How the printed page looks: letterhead, font, size, page, margins, footer. Older invoices have the default. */
+  style?: DocStyle;
 }
 export const emptyInvoiceDoc = (): InvoiceDoc => ({ show: defaultInvoiceShow(), title: 'Invoice', from: emptyParty(), to: emptyParty(), bank: emptyBank(), design: 'classic', discountMode: 'none', discountValue: 0, gstBps: 0, gstSplit: false, tdsBps: 0, tdsMode: 'none', footnote: '', footer: '' });
 
@@ -10823,8 +11888,10 @@ export interface BusinessProfile {
   signerName: string;
   signerTitle: string;
   jurisdiction: string;
+  /** The look every new document starts with. */
+  docStyle?: DocStyle;
 }
-export const emptyProfile = (): BusinessProfile => ({ show: defaultInvoiceShow(), from: emptyParty(), bank: emptyBank(), design: 'classic', title: 'Invoice', footnote: '', footer: '', invoicePrefix: '', payDays: 14, gstBps: 0, tdsBps: 0, tdsMode: 'none', signerName: '', signerTitle: '', jurisdiction: '' });
+export const emptyProfile = (): BusinessProfile => ({ show: defaultInvoiceShow(), from: emptyParty(), bank: emptyBank(), design: 'classic', title: 'Invoice', footnote: '', footer: '', invoicePrefix: '', payDays: 14, gstBps: 0, tdsBps: 0, tdsMode: 'none', signerName: '', signerTitle: '', jurisdiction: '', docStyle: defaultDocStyle() });
 
 const cleanText = (v: unknown, max = INVOICE_TEXT_MAX): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const bps = (v: unknown, max: number): number => {
@@ -10871,6 +11938,7 @@ export function parseInvoiceDoc(v: unknown, base: InvoiceDoc = emptyInvoiceDoc()
     tdsMode: oneOfList(o.tdsMode, TDS_MODES, base.tdsMode),
     footnote: 'footnote' in o ? cleanText(o.footnote, 300) : base.footnote,
     footer: 'footer' in o ? cleanText(o.footer, 300) : base.footer,
+    style: 'style' in o ? parseDocStyle(o.style, base.style) : parseDocStyle(base.style),
   };
 }
 export function parseProfile(v: unknown): BusinessProfile {
@@ -10892,11 +11960,12 @@ export function parseProfile(v: unknown): BusinessProfile {
     signerName: cleanText(o.signerName, 80),
     signerTitle: cleanText(o.signerTitle, 80),
     jurisdiction: cleanText(o.jurisdiction, 80),
+    docStyle: parseDocStyle(o.docStyle),
   };
 }
 /** A fresh invoice's look and details, from the person's profile. */
 export function docFromProfile(p: BusinessProfile): InvoiceDoc {
-  return { ...emptyInvoiceDoc(), show: p.show, title: p.title, from: p.from, bank: p.bank, design: p.design, gstBps: p.gstBps, tdsBps: p.tdsBps, tdsMode: p.tdsMode, footnote: p.footnote, footer: p.footer };
+  return { ...emptyInvoiceDoc(), show: p.show, title: p.title, from: p.from, bank: p.bank, design: p.design, gstBps: p.gstBps, tdsBps: p.tdsBps, tdsMode: p.tdsMode, footnote: p.footnote, footer: p.footer, style: parseDocStyle(p.docStyle) };
 }
 
 /** The invoice as the client may see it: what the person switched off is removed here, so it never reaches the client's browser. */
@@ -10941,9 +12010,18 @@ export function invoiceTotals(items: readonly InvoiceItem[], doc: Pick<InvoiceDo
   const gst = Math.round((taxable * doc.gstBps) / 10000);
   const cgst = doc.gstSplit ? Math.floor(gst / 2) : 0;
   const sgst = doc.gstSplit ? gst - cgst : 0;
-  const tdsAdjusted = doc.tdsMode === 'grossup' && doc.tdsBps > 0 && doc.tdsBps < 10000 ? Math.round((taxable * doc.tdsBps) / (10000 - doc.tdsBps)) : 0;
+  // What the client takes off a given amount as TDS, in whole cents.
+  const takeOff = (amount: number) => Math.round((amount * doc.tdsBps) / 10000);
+  let tdsAdjusted = 0;
+  if (doc.tdsMode === 'grossup' && doc.tdsBps > 0 && doc.tdsBps < 10000 && taxable > 0) {
+    // The extra is the smallest amount that leaves exactly `taxable` after the client's TDS comes off (taxable + extra - TDS = taxable),
+    // so the person is paid their price to the cent. It starts at taxable * rate / (1 - rate) and is nudged by a cent or two where rounding needs it.
+    tdsAdjusted = Math.round((taxable * doc.tdsBps) / (10000 - doc.tdsBps));
+    for (let i = 0; i < 4 && taxable + tdsAdjusted - takeOff(taxable + tdsAdjusted) < taxable; i += 1) tdsAdjusted += 1;
+    for (let i = 0; i < 4 && tdsAdjusted > 0 && taxable + tdsAdjusted - 1 - takeOff(taxable + tdsAdjusted - 1) >= taxable; i += 1) tdsAdjusted -= 1;
+  }
   const total = taxable + gst + tdsAdjusted;
-  const tdsDeducted = doc.tdsMode === 'none' || doc.tdsBps <= 0 ? 0 : Math.round(((taxable + tdsAdjusted) * doc.tdsBps) / 10000);
+  const tdsDeducted = doc.tdsMode === 'none' || doc.tdsBps <= 0 ? 0 : takeOff(taxable + tdsAdjusted);
   return { subtotal, discount, taxable, gst, cgst, sgst, tdsAdjusted, total, tdsDeducted, netReceivable: total - tdsDeducted };
 }
 
@@ -11009,7 +12087,7 @@ export interface DocComment {
   createdAt: string;
 }
 export const DOC_COMMENT_MAX = 600;
-export const DOC_TYPES = ['invoice', 'contract'] as const;
+export const DOC_TYPES = ['invoice', 'contract', 'doc'] as const;
 export type DocType = (typeof DOC_TYPES)[number];
 
 export const MAX_CONTRACT_SECTIONS = 30;
@@ -11055,6 +12133,8 @@ export interface ContractDoc {
   currency: string;
   vars: Record<string, string>;
   sections: ContractSection[];
+  /** How the printed page looks. Older agreements have the default. */
+  style?: DocStyle;
 }
 export interface ContractAnswer {
   picked: string[];
@@ -11285,7 +12365,7 @@ export function parseContractDoc(v: unknown): ContractDoc | null {
   const vars: Record<string, string> = {};
   const rawVars = o.vars && typeof o.vars === 'object' ? (o.vars as Record<string, unknown>) : {};
   for (const d of CONTRACT_VARS) vars[d.key] = cleanText(rawVars[d.key], 300);
-  return { title: cleanText(o.title, 120) || 'Agreement', subtitle: cleanText(o.subtitle, 160), templateKey: cleanText(o.templateKey, 30) || 'custom', show: { comments: (o.show as Record<string, unknown> | undefined)?.comments !== false, download: (o.show as Record<string, unknown> | undefined)?.download !== false }, currency: cleanText(o.currency, 3).toUpperCase() || 'INR', vars, sections: clean };
+  return { title: cleanText(o.title, 120) || 'Agreement', subtitle: cleanText(o.subtitle, 160), templateKey: cleanText(o.templateKey, 30) || 'custom', show: { comments: (o.show as Record<string, unknown> | undefined)?.comments !== false, download: (o.show as Record<string, unknown> | undefined)?.download !== false }, currency: cleanText(o.currency, 3).toUpperCase() || 'INR', vars, sections: clean, style: parseDocStyle(o.style) };
 }
 
 export interface AgencyContract {
@@ -11317,6 +12397,9 @@ export interface ContractListItem {
 }
 /** What a client sees at their contract link. */
 export interface PublicContract {
+  /** The reference printed on the page, such as AGR-1A2B3C. */
+  ref: string;
+  sentAt: string | null;
   ownerName: string;
   status: ContractStatus;
   revisedAt: string | null;
@@ -11330,7 +12413,7 @@ export interface PublicContract {
 // Templates: built-in starting points, and the person's own
 // ---------------------------------------------------------------------------
 
-export const TEMPLATE_KINDS = ['invoice', 'contract'] as const;
+export const TEMPLATE_KINDS = ['invoice', 'contract', 'doc'] as const;
 export type TemplateKind = (typeof TEMPLATE_KINDS)[number];
 /** Up to this many of their own, for each kind. */
 export const MAX_TEMPLATES = 30;
@@ -11339,6 +12422,8 @@ export const TEMPLATE_NAME_MAX = 60;
 /** A person's own template, as the screen reads it. */
 export interface AgencyTemplate {
   id: string;
+  /** Your own, or a house template the team made for everyone (read only, copied into your documents). */
+  scope: 'own' | 'house';
   kind: TemplateKind;
   name: string;
   /** One plain line on what is in it: "3 lines, GST 18%" or "9 sections". */
@@ -11383,6 +12468,475 @@ export function templateSummary(kind: TemplateKind, doc: InvoiceDoc | ContractDo
   return `${n} ${n === 1 ? 'section' : 'sections'}`;
 }
 
+
+// ---------------------------------------------------------------------------
+// Agency documents: how a page looks, the text version of any document, the other kinds of document, and house templates.
+// ---------------------------------------------------------------------------
+
+/** The look of a printed document. Every choice is a key; the screen maps a key to a value in code, so stored data never becomes a raw CSS value. */
+export const DOC_HEADINGS = ['numbered', 'plain'] as const;
+export const DOC_FONTS = ['serif', 'sans'] as const;
+export const DOC_SIZES = ['small', 'normal', 'large'] as const;
+/** Calm presets for the thin rule and the headings: ink, navy, green, plum, clay and slate. */
+export const DOC_ACCENTS = ['ink', 'navy', 'green', 'plum', 'clay', 'slate'] as const;
+export const DOC_PAGES = ['a4', 'letter'] as const;
+export const DOC_MARGINS = ['narrow', 'normal', 'wide'] as const;
+export const DOC_SIGN_LAYOUTS = ['side', 'stacked'] as const;
+export type DocHeading = (typeof DOC_HEADINGS)[number];
+export type DocFont = (typeof DOC_FONTS)[number];
+export type DocSize = (typeof DOC_SIZES)[number];
+export type DocAccent = (typeof DOC_ACCENTS)[number];
+export type DocPage = (typeof DOC_PAGES)[number];
+export type DocMargin = (typeof DOC_MARGINS)[number];
+export type DocSignLayout = (typeof DOC_SIGN_LAYOUTS)[number];
+export const DOC_STYLE_NAMES = {
+  heading: { numbered: 'Numbered', plain: 'Plain' },
+  font: { serif: 'Serif', sans: 'Sans' },
+  size: { small: 'Small', normal: 'Normal', large: 'Large' },
+  accent: { ink: 'Ink', navy: 'Navy', green: 'Green', plum: 'Plum', clay: 'Clay', slate: 'Slate' },
+  page: { a4: 'A4', letter: 'Letter' },
+  margin: { narrow: 'Narrow', normal: 'Normal', wide: 'Wide' },
+  signLayout: { side: 'Side by side', stacked: 'Stacked' },
+} as const;
+export const DOC_FOOTER_MAX = 200;
+/** A picture the person uploaded to use as a logo: the id of the stored file, never a web address. */
+export const DOC_LOGO_RE = /^[A-Za-z0-9_-]{8,64}$/;
+
+export interface DocStyle {
+  /** The sender's name and address at the top of the first page. */
+  letterhead: boolean;
+  /** An uploaded picture's id, or empty for a text-only letterhead. */
+  logo: string;
+  heading: DocHeading;
+  font: DocFont;
+  size: DocSize;
+  accent: DocAccent;
+  page: DocPage;
+  margin: DocMargin;
+  /** A line at the foot of every page. */
+  footer: string;
+  /** "Page 1 of 3" at the foot of every page. */
+  pageNumbers: boolean;
+  signLayout: DocSignLayout;
+}
+export const defaultDocStyle = (): DocStyle => ({ letterhead: true, logo: '', heading: 'numbered', font: 'serif', size: 'normal', accent: 'ink', page: 'a4', margin: 'normal', footer: '', pageNumbers: true, signLayout: 'side' });
+
+/** The one reader of a document's style: anything unknown falls back to `base` (the default unless given), so a stored value is always a key we know. */
+export function parseDocStyle(v: unknown, base: DocStyle = defaultDocStyle()): DocStyle {
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  const logo = typeof o.logo === 'string' ? o.logo.trim() : base.logo;
+  return {
+    letterhead: typeof o.letterhead === 'boolean' ? o.letterhead : base.letterhead,
+    logo: DOC_LOGO_RE.test(logo) ? logo : '',
+    heading: oneOfList(o.heading, DOC_HEADINGS, base.heading),
+    font: oneOfList(o.font, DOC_FONTS, base.font),
+    size: oneOfList(o.size, DOC_SIZES, base.size),
+    accent: oneOfList(o.accent, DOC_ACCENTS, base.accent),
+    page: oneOfList(o.page, DOC_PAGES, base.page),
+    margin: oneOfList(o.margin, DOC_MARGINS, base.margin),
+    footer: 'footer' in o ? cleanText(o.footer, DOC_FOOTER_MAX) : base.footer,
+    pageNumbers: typeof o.pageNumbers === 'boolean' ? o.pageNumbers : base.pageNumbers,
+    signLayout: oneOfList(o.signLayout, DOC_SIGN_LAYOUTS, base.signLayout),
+  };
+}
+/** One plain line on a style, for its summary card. */
+export function docStyleSummary(s: DocStyle): string {
+  return `${DOC_STYLE_NAMES.font[s.font]}, ${DOC_STYLE_NAMES.size[s.size].toLowerCase()} type, ${DOC_STYLE_NAMES.page[s.page]}, ${s.heading === 'numbered' ? 'numbered' : 'plain'} headings${s.letterhead ? '' : ', no letterhead'}`;
+}
+
+// ---- the words of a document
+
+const DOC_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
+/** 2026-10-12 or a full instant as "12 Oct 2026", the same everywhere (no locale), read in UTC. */
+export function docDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return '';
+  return `${Number(m[3])} ${DOC_MONTHS[Number(m[2]) - 1] ?? ''} ${m[1]}`;
+}
+/** An instant as "12 Oct 2026, 14:05 UTC". */
+export function docDateTime(iso: string): string {
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(iso);
+  return m ? `${docDate(m[1]!)}, ${m[2]} UTC` : docDate(iso);
+}
+/** A heading with its typed number taken off ("4. Trial content" is "Trial content"), so numbering is done once, in order. */
+export function stripNumber(heading: string): string {
+  return heading.replace(/^\s*\d+(\.\d+)*\.?\s+/, '').trim();
+}
+/** The heading as printed: numbered counts the sections in order (the typed number is dropped), plain keeps it as typed. */
+export function docHeadingText(style: DocStyle, heading: string, n: number): string {
+  return style.heading === 'numbered' ? `${n}. ${stripNumber(heading)}` : heading.trim();
+}
+/** AGR-1A2B3C: a short reference printed on a document, from its id. */
+export function docRef(prefix: string, id: string): string {
+  return `${prefix}-${id.replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase()}`;
+}
+
+export interface DocParty {
+  label: string;
+  lines: string[];
+}
+/** The two sides of a document, from the names filled in (the blanks show as lines to write on in the page, not here). */
+export function contractParties(doc: Pick<ContractDoc, 'vars'>): DocParty[] {
+  const v = doc.vars;
+  const f = (k: string) => (v[k] ?? '').trim();
+  const lines = (...xs: string[]) => xs.flatMap((x) => x.split('\n')).map((x) => x.trim()).filter(Boolean);
+  const provider = lines([f('provider'), f('providerTitle')].filter(Boolean).join(', '), f('providerBusiness'), f('providerAddress'), [f('providerEmail'), f('providerPhone')].filter(Boolean).join(' | '));
+  const client = lines(f('client'), f('clientAddress'), f('brands') && f('brands') !== f('client') ? `Brand or brands: ${f('brands')}` : '', f('clientContact') ? `Contact: ${f('clientContact')}` : '');
+  return [
+    ...(provider.length ? [{ label: 'Service provider', lines: provider }] : []),
+    ...(client.length ? [{ label: 'Client', lines: client }] : []),
+  ];
+}
+/** An agreement built from a template already has a Parties section, so the page does not draw the parties table as well. */
+export const hasPartiesSection = (doc: Pick<ContractDoc, 'sections'>): boolean => doc.sections.some((s) => s.id === 'parties');
+
+/** One section's words as plain text: blanks filled, **bold** marks removed, bullets kept as "- ". */
+export function plainWords(body: string, vars: Record<string, string>): string {
+  return fillContractText(body, vars)
+    .replace(/\r\n?/g, '\n')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*\*/g, '')
+    .split('\n')
+    .map((l) => l.replace(/^\*\s/, '- ').trimEnd())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+export interface DocTextExtras {
+  reference?: string;
+  /** The date on the document, as YYYY-MM-DD or an instant. */
+  date?: string;
+  answers?: Record<string, ContractAnswer>;
+  acceptance?: { name: string; title: string; at: string } | null;
+  parties?: DocParty[];
+}
+
+/**
+ * An agreement (or any sectioned document) as clean plain text, the way it goes into an email: the title, the parties, numbered sections
+ * with a blank line between them, packages as lines, the brief with its answers, and the signature lines. No markup characters.
+ */
+export function contractAsText(doc: ContractDoc, extras: DocTextExtras = {}): string {
+  const style = parseDocStyle(doc.style);
+  const out: string[] = [doc.title.toUpperCase()];
+  if (doc.subtitle) out.push(doc.subtitle);
+  const meta = [extras.reference ? `Reference: ${extras.reference}` : '', extras.date ? `Date: ${docDate(extras.date)}` : ''].filter(Boolean);
+  if (meta.length) out.push(meta.join('   '));
+  const parties = extras.parties ?? (hasPartiesSection(doc) ? [] : contractParties(doc));
+  for (const p of parties) out.push('', `${p.label}:`, ...p.lines);
+  let n = 0;
+  for (const s of doc.sections) {
+    n += 1;
+    out.push('', docHeadingText(style, s.heading || 'Section', n).toUpperCase());
+    const words = plainWords(s.body, doc.vars);
+    if (words) out.push('', words);
+    if (s.kind === 'packages') {
+      const unit = s.unitName || 'pieces';
+      const one = unit.endsWith('s') ? unit.slice(0, -1) : unit;
+      const fee = (c: number) => (c > 0 ? money(c, doc.currency) : 'to be agreed');
+      out.push('');
+      for (const p of s.packages ?? []) out.push(`- ${p.name}: ${p.units} ${unit}, ${fee(p.feeCents)}${p.feeCents > 0 && p.units > 0 ? ` (${money(packageRate(p), doc.currency)} a ${one})` : ''}`);
+      if (s.extra && s.extra.units > 0) out.push(`- Each further block of ${s.extra.units} ${unit}: ${fee(s.extra.feeCents)}`);
+    }
+    if (s.kind === 'brief') {
+      for (const q of s.questions ?? []) {
+        const a = extras.answers?.[q.id];
+        out.push('', plainWords(q.label, doc.vars));
+        for (const o of q.options) out.push(`  [${a?.picked.includes(o) ? 'x' : ' '}] ${o}`);
+        if (q.other) out.push(`  Other: ${a?.other ?? ''}`.trimEnd());
+        if (q.text) out.push(`  Answer: ${a?.text ?? ''}`.trimEnd());
+      }
+    }
+    if (s.kind === 'signatures') {
+      const acc = extras.acceptance;
+      const v = doc.vars;
+      out.push(
+        '',
+        'For the service provider',
+        `Name: ${(v.provider ?? '').trim()}`.trimEnd(),
+        `Designation: ${(v.providerTitle ?? '').trim()}`.trimEnd(),
+        'Signature: ____________________',
+        'Date: ____________________',
+        '',
+        'For the client',
+        `Name: ${acc?.name ?? ''}`.trimEnd(),
+        `Designation: ${acc?.title ?? ''}`.trimEnd(),
+        `Signature: ${acc ? acc.name : '____________________'}`,
+        `Date: ${acc ? docDate(acc.at) : '____________________'}`,
+      );
+      if (acc) out.push('', `Accepted electronically by ${acc.name} on ${docDateTime(acc.at)}. Typed acceptance, not a certified e-signature.`);
+    }
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/** What invoiceAsText needs from an invoice. */
+export type InvoiceTextSource = Pick<Invoice, 'number' | 'ownerName' | 'clientName' | 'items' | 'currency' | 'issueDate' | 'dueDate' | 'note' | 'doc'>;
+
+/**
+ * An invoice as plain text for an email: who it is from and to, the lines, the sums (discount, GST or CGST and SGST, TDS) in whole cents,
+ * the total in words, the bank details and the notes. Pass the client's version (`invoiceForClient`) to leave out what the client may not see.
+ */
+export function invoiceAsText(inv: InvoiceTextSource, totals?: InvoiceTotals): string {
+  const d = inv.doc;
+  const t = totals ?? invoiceTotals(inv.items, d);
+  const cur = inv.currency;
+  const party = (p: InvoiceParty, fallback: string): string[] => [p.name || fallback, p.line, ...p.taxIds.map((x) => `${x.label}: ${x.value}`), ...p.address.split('\n'), p.email, p.phone].map((x) => x.trim()).filter(Boolean);
+  const out: string[] = [`${(d.title || 'Invoice').toUpperCase()} ${inv.number}`.trim()];
+  out.push(`Date: ${docDate(inv.issueDate)}`);
+  if (inv.dueDate) out.push(`Payment due by: ${docDate(inv.dueDate)}`);
+  out.push('', 'From:', ...party(d.from, inv.ownerName), '', 'Billed to:', ...party(d.to, inv.clientName), '', 'Items:');
+  inv.items.forEach((i, n) => out.push(`${n + 1}. ${i.description}: ${i.quantity} x ${money(i.unitCents, cur)} = ${money(i.quantity * i.unitCents, cur)}`));
+  out.push('', `Subtotal: ${money(t.subtotal, cur)}`);
+  if (t.discount > 0) out.push(`${d.discountMode === 'percent' ? `Discount (${d.discountValue / 100}%)` : 'Discount'}: -${money(t.discount, cur)}`);
+  if (d.gstBps > 0 || t.gst > 0) {
+    if (d.gstSplit) {
+      out.push(`CGST (${d.gstBps / 200}%): ${money(t.cgst, cur)}`, `SGST (${d.gstBps / 200}%): ${money(t.sgst, cur)}`);
+    } else out.push(`GST (${d.gstBps / 100}%): ${money(t.gst, cur)}`);
+  }
+  if (d.tdsMode === 'grossup') out.push(`TDS adjusted: ${money(t.tdsAdjusted, cur)}`);
+  out.push(`Total: ${money(t.total, cur)}`);
+  if (d.show.words) out.push(`Total amount in words: ${amountInWords(t.total, cur)}`);
+  if ((d.tdsMode === 'show' || d.tdsMode === 'grossup') && t.tdsDeducted > 0) out.push(`TDS to deduct (${d.tdsBps / 100}%): -${money(t.tdsDeducted, cur)}`, `To pay after TDS: ${money(t.netReceivable, cur)}`);
+  if (d.tdsMode === 'grossup' && d.tdsBps > 0) out.push('', tdsGrossupNote(d.tdsBps));
+  const bank = [d.bank.bankName && `Bank name: ${d.bank.bankName}`, d.bank.holder && `Account holder: ${d.bank.holder}`, d.bank.account && `Account number: ${d.bank.account}`, d.bank.ifsc && `IFSC code: ${d.bank.ifsc}`, d.bank.upi && `UPI details: ${d.bank.upi}`].filter((x): x is string => Boolean(x));
+  if (bank.length) out.push('', 'Bank account details:', ...bank);
+  if (inv.note.trim()) out.push('', inv.note.trim());
+  if (d.footnote.trim()) out.push('', d.footnote.trim());
+  if (d.footer.trim()) out.push('', d.footer.trim());
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// ---- other kinds of document, in the same page and the same editor as an agreement
+
+export const AGENCY_DOC_KINDS = ['brief', 'trial_terms', 'retainer_proposal', 'monthly_report'] as const;
+export type AgencyDocKind = (typeof AGENCY_DOC_KINDS)[number];
+export const AGENCY_DOC_KIND_META: Record<AgencyDocKind, { name: string; blurb: string; refPrefix: string }> = {
+  brief: { name: 'Strategy session summary', blurb: 'What was agreed, goals, audience, channels, content pillars and next steps. The client reads it and approves.', refPrefix: 'BRF' },
+  trial_terms: { name: 'Trial video terms', blurb: 'The rules of a trial and the pilot that follows: what the trial is for, content use, the steps after it, and how revisions work.', refPrefix: 'TRL' },
+  retainer_proposal: { name: 'Retainer proposal', blurb: 'The months on offer, the monthly fee, what is delivered and how revisions work.', refPrefix: 'PRP' },
+  monthly_report: { name: 'Monthly report', blurb: 'Pieces delivered, changes used, invoices and next month, filled in from your Agency numbers.', refPrefix: 'RPT' },
+};
+export const AGENCY_DOC_STATUSES = ['draft', 'sent', 'approved', 'revised'] as const;
+export type AgencyDocStatus = (typeof AGENCY_DOC_STATUSES)[number];
+export const AGENCY_DOC_STATUS_NAME: Record<AgencyDocStatus, string> = { draft: 'Draft', sent: 'Sent', approved: 'Approved', revised: 'Revised' };
+export const AGENCY_DOC_STATUS_TONE: Record<AgencyDocStatus, TagTone> = { draft: 'neutral', sent: 'info', approved: 'good', revised: 'warn' };
+export const isAgencyDocKind = (v: unknown): v is AgencyDocKind => typeof v === 'string' && (AGENCY_DOC_KINDS as readonly string[]).includes(v);
+export const MAX_AGENCY_DOCS = 300;
+
+export interface AgencyDocListItem {
+  id: string;
+  clientId: string | null;
+  clientName: string;
+  kind: AgencyDocKind;
+  title: string;
+  status: AgencyDocStatus;
+  sentAt: string | null;
+  approvedAt: string | null;
+  updatedAt: string;
+}
+export interface AgencyDocFull extends AgencyDocListItem {
+  doc: ContractDoc;
+  /** The client link is /d/<token> once it is sent. */
+  token: string | null;
+  ref: string;
+  revisedAt: string | null;
+  acceptance: { name: string; title: string; at: string } | null;
+  answers: Record<string, ContractAnswer>;
+  createdAt: string;
+}
+/** What a client sees at a document's link. */
+export interface PublicAgencyDoc {
+  ref: string;
+  ownerName: string;
+  kind: AgencyDocKind;
+  status: AgencyDocStatus;
+  sentAt: string | null;
+  revisedAt: string | null;
+  comments: DocComment[];
+  doc: ContractDoc;
+  answers: Record<string, ContractAnswer>;
+  acceptance: { name: string; title: string; at: string } | null;
+}
+/** A line in a document's private log. */
+export interface DocLogLine {
+  id: string;
+  event: string;
+  detail: string;
+  createdAt: string;
+}
+/** A house template, as the admin's list reads it. */
+export interface HouseTemplate {
+  id: string;
+  kind: TemplateKind;
+  name: string;
+  summary: string;
+  includeBusiness: boolean;
+  status: 'active' | 'retired';
+  createdAt: string;
+  updatedAt: string;
+}
+
+const BLANKS = '______';
+const sec = (id: string, heading: string, body: string): ContractSection => ({ id, heading, kind: 'text', body });
+const APPROVAL = (heading: string, body: string): ContractSection => ({ id: 'sign', heading, kind: 'signatures', body });
+
+/** What a retainer proposal is built from. The retainer part of Agency can pass real data; until then the person types it. */
+export interface RetainerInput {
+  monthlyFeeCents: number;
+  /** The month lengths on offer, such as 1, 3 and 6. */
+  months: number[];
+  deliverables: string[];
+  revisionRounds: number;
+  notes: string;
+}
+export const emptyRetainerInput = (): RetainerInput => ({ monthlyFeeCents: 0, months: [1, 3, 6], deliverables: [], revisionRounds: 2, notes: '' });
+export function parseRetainerInput(v: unknown): RetainerInput {
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  const e = emptyRetainerInput();
+  const months = (Array.isArray(o.months) ? o.months : e.months)
+    .map((m) => Math.round(Number(m)))
+    .filter((m) => Number.isFinite(m) && m >= 1 && m <= 36)
+    .slice(0, 6);
+  return {
+    monthlyFeeCents: Math.max(0, Math.min(1_000_000_000_00, Math.round(Number(o.monthlyFeeCents)) || 0)),
+    months: [...new Set(months)].sort((a, b) => a - b).length ? [...new Set(months)].sort((a, b) => a - b) : e.months,
+    deliverables: (Array.isArray(o.deliverables) ? o.deliverables : []).map((d) => cleanText(d, 160)).filter(Boolean).slice(0, 12),
+    revisionRounds: Math.max(0, Math.min(10, Math.round(Number(o.revisionRounds)) || e.revisionRounds)),
+    notes: cleanText(o.notes, 600),
+  };
+}
+const ROUNDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
+
+/** A retainer proposal: the months on offer priced from the monthly fee, what is delivered, and how revisions work. */
+export function retainerProposalDoc(input: Partial<RetainerInput> = {}): ContractDoc {
+  const r = parseRetainerInput({ ...emptyRetainerInput(), ...input });
+  const rounds = r.revisionRounds === 0 ? 'Changes are quoted separately.' : `${ROUNDS[r.revisionRounds]} ${r.revisionRounds === 1 ? 'round' : 'rounds'} of small edit-level changes (text, trims, order, captions) ${r.revisionRounds === 1 ? 'is' : 'are'} included for each piece. A new concept, format or new footage is quoted separately.`;
+  return {
+    title: 'Retainer proposal',
+    subtitle: 'Monthly content services',
+    templateKey: 'retainer_proposal',
+    show: { comments: true, download: true },
+    currency: 'INR',
+    vars: {},
+    style: defaultDocStyle(),
+    sections: [
+      sec('summary', 'Summary', 'Prepared for {{client}} by {{providerBusiness}}.\n\nThis is a proposal for monthly content work for the brand or brands: {{brands}}. Pick one of the options below and approve this page to go ahead.'),
+      { id: 'options', heading: 'Options and fee', kind: 'packages', body: `The monthly fee is the same in every option${r.monthlyFeeCents > 0 ? '' : ' (to be filled in)'}; a longer option is simply paid for more months. The fee is paid in advance, on or before the first day of each month. Fees do not include taxes such as GST.`, unitName: 'months', packages: r.months.map((m) => ({ name: `${m} ${m === 1 ? 'month' : 'months'}`, units: m, feeCents: r.monthlyFeeCents * m })) },
+      sec('included', 'What is delivered each month', r.deliverables.length ? r.deliverables.map((d) => `- ${d}`).join('\n') : `- Number and kind of pieces: ${BLANKS}\n- Channels: ${BLANKS}\n- Hours of work included: ${BLANKS}`),
+      sec('revisions', 'Revisions', rounds),
+      ...(r.notes ? [sec('notes', 'Notes', r.notes)] : []),
+      APPROVAL('Approval', 'By approving, the client confirms they have read this proposal and wish to go ahead with the option they chose.'),
+    ],
+  };
+}
+
+/** The facts a monthly report is made from. Counts and titles only: no fees, no private notes, no time line by line. */
+export interface MonthlyReportFacts {
+  clientName: string;
+  /** YYYY-MM. */
+  month: string;
+  published: { title: string }[];
+  inReview: number;
+  open: number;
+  /** How many times pieces published this month were sent back for changes. */
+  revisionsUsed: number;
+  invoicesRaised: number;
+  invoicesPaid: number;
+}
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+export function monthName(month: string): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(month);
+  return m ? `${MONTH_NAMES[Number(m[2]) - 1] ?? ''} ${m[1]}` : month;
+}
+export function monthlyReportDoc(f: MonthlyReportFacts): ContractDoc {
+  const n = f.published.length;
+  const shown = f.published.slice(0, 20);
+  return {
+    title: `Monthly report, ${monthName(f.month)}`,
+    subtitle: f.clientName,
+    templateKey: 'monthly_report',
+    show: { comments: true, download: true },
+    currency: 'INR',
+    vars: {},
+    style: defaultDocStyle(),
+    sections: [
+      sec('numbers', 'This month in numbers', `- Pieces delivered: ${n}\n- Pieces waiting for your review: ${f.inReview}\n- Pieces still being made: ${f.open}\n- Changes used: ${f.revisionsUsed}\n- Invoices raised: ${f.invoicesRaised}\n- Invoices paid: ${f.invoicesPaid}`),
+      sec('delivered', 'What was delivered', n === 0 ? 'Nothing was published this month.' : `${shown.map((p) => `- ${p.title}`).join('\n')}${n > shown.length ? `\n- and ${n - shown.length} more` : ''}`),
+      sec('changes', 'Changes used', `Pieces were sent back for changes ${f.revisionsUsed} ${f.revisionsUsed === 1 ? 'time' : 'times'} this month. Small edit-level changes such as text, trims, order and captions are part of the process. A new concept, format, set-up, new footage or a reshoot is discussed separately before it is started.`),
+      sec('invoices', 'Invoices', `${f.invoicesRaised} ${f.invoicesRaised === 1 ? 'invoice was' : 'invoices were'} raised this month and ${f.invoicesPaid} ${f.invoicesPaid === 1 ? 'was' : 'were'} paid.`),
+      sec('next', `Plan for next month`, `- Focus: ${BLANKS}\n- Pieces planned: ${BLANKS}\n- Shoot or delivery dates: ${BLANKS}\n- What we need from you: ${BLANKS}`),
+      APPROVAL('Received', 'The client confirms they have read this report.'),
+    ],
+  };
+}
+
+const TRIAL = CONTRACT_TEMPLATE_BY_KEY.trial?.doc.sections ?? [];
+const trialPart = (id: string, heading: string): ContractSection => {
+  const s = TRIAL.find((x) => x.id === id);
+  // The trial agreement points to its own section numbers; on this page they point to the parts named here.
+  const body = (s?.body ?? '')
+    .replace('as in section 8', 'as under "How we work" below')
+    .replace('from section 6', 'from the packages in the pilot agreement')
+    .replace('the items in section 8 first. The brief in section 3 is', 'the items under "How we work" below first. The trial brief is');
+  return sec(id, heading, body);
+};
+
+const STARTERS: Record<AgencyDocKind, () => ContractDoc> = {
+  brief: () => ({
+    title: 'Strategy session summary',
+    subtitle: 'What we agreed',
+    templateKey: 'brief',
+    show: { comments: true, download: true },
+    currency: 'INR',
+    vars: {},
+    style: defaultDocStyle(),
+    sections: [
+      sec('about', 'The session', `**Client:** {{client}}\n**Brand or brands:** {{brands}}\n**Point of contact:** {{clientContact}}\n**Prepared by:** {{provider}}, {{providerBusiness}}\n\nDate of the session: ${BLANKS}\nPeople in the session: ${BLANKS}`),
+      sec('agreed', 'What we agreed', `- ${BLANKS}\n- ${BLANKS}\n- ${BLANKS}`),
+      sec('goals', 'Goals', `The main goal for the next ${BLANKS} months:\n\n- Goal one: ${BLANKS} (how we will tell: ${BLANKS})\n- Goal two: ${BLANKS} (how we will tell: ${BLANKS})\n\nResults depend on the platform, the audience, the account, ad spend and the offer, so no particular views, reach, sales or return can be promised.`),
+      sec('audience', 'Audience', `Who we are speaking to: ${BLANKS}\nWhat they care about: ${BLANKS}\nWhere they spend their time: ${BLANKS}`),
+      sec('channels', 'Channels', `- Channel: ${BLANKS}, how often: ${BLANKS}\n- Channel: ${BLANKS}, how often: ${BLANKS}`),
+      sec('pillars', 'Content pillars', `- Pillar one: ${BLANKS}\n- Pillar two: ${BLANKS}\n- Pillar three: ${BLANKS}`),
+      sec('next', 'Next steps', `- ${BLANKS}, by ${BLANKS}\n- ${BLANKS}, by ${BLANKS}\n- ${BLANKS}, by ${BLANKS}`),
+      APPROVAL('Approval', 'By approving, the client confirms this summary reflects the session. A change can be asked for in writing.'),
+    ],
+  }),
+  trial_terms: () => ({
+    title: 'Trial video terms',
+    subtitle: 'Trial and pilot rules',
+    templateKey: 'trial_terms',
+    show: { comments: true, download: true },
+    currency: 'INR',
+    vars: {},
+    style: defaultDocStyle(),
+    sections: [
+      sec('details', 'Trial details', `**Client:** {{client}}\n**Brand or brands for this trial:** {{brands}}\n**Point of contact:** {{clientContact}}\n\nNumber of trial pieces: ${BLANKS}\nTrial fee, if any: ${BLANKS}\nShoot or delivery dates: ${BLANKS}`),
+      trialPart('purpose', 'Purpose of the trial'),
+      trialPart('ownership', 'Trial content, ownership and use'),
+      trialPart('after', 'What happens after the trial'),
+      trialPart('how', 'How we work'),
+      APPROVAL('Acceptance', 'By approving, the client confirms they have read and agree to these trial terms.'),
+    ],
+  }),
+  retainer_proposal: () => retainerProposalDoc(),
+  monthly_report: () => monthlyReportDoc({ clientName: '', month: '', published: [], inReview: 0, open: 0, revisionsUsed: 0, invoicesRaised: 0, invoicesPaid: 0 }),
+};
+/** A new document of this kind, ready to fill in. A report is better made with `monthlyReportDoc`, which has the month's facts. */
+export function agencyDocStarter(kind: AgencyDocKind, retainer?: Partial<RetainerInput>): ContractDoc {
+  return kind === 'retainer_proposal' ? retainerProposalDoc(retainer) : STARTERS[kind]();
+}
+
+/** What a house template keeps of a document: everything but the names filled in and, unless the admin chose to include them, their own business details. */
+export function houseDoc(doc: ContractDoc, includeBusiness: boolean): ContractDoc {
+  const style = parseDocStyle(doc.style);
+  return { ...doc, vars: {}, style: includeBusiness ? style : { ...style, logo: '', footer: '' } };
+}
+export function houseInvoiceDoc(doc: InvoiceDoc, includeBusiness: boolean): InvoiceDoc {
+  const style = parseDocStyle(doc.style);
+  const base = invoiceTemplateDoc(doc);
+  return includeBusiness ? { ...base, style } : { ...base, from: emptyParty(), bank: emptyBank(), footer: '', style: { ...style, logo: '', footer: '' } };
+}
 
 // ---------------------------------------------------------------------------
 // From a study of Superfocus (docs/superfocus-study.md): focus quality, a week plan with a plan strength, time blocks,
@@ -11846,13 +13400,16 @@ export const RETENTION: readonly RetentionRule[] = [
   { category: 'Your account, profile, pillars, tasks, trackers and everything you add', keep: 'Until you delete your account, then gone at once', why: 'It is your data and the reason the app exists.' },
   { category: 'Your journal and wellbeing logs', keep: 'Until you delete an entry or your account', why: 'Only you can read them.' },
   { category: 'Sign-in sessions', keep: 'Until you sign out, you pass the device limit, or thirty days after you were signed out by it', why: 'To keep you signed in, and to say why you were signed out.' },
+  { category: 'A client\'s unlock of an Agency link that has a password (a random token kept only as a hash)', keep: 'Twelve hours, or until the owner changes the password', why: 'So a client does not type the password on every page.' },
   { category: 'Password reset links', keep: 'Thirty minutes to use; the used or expired row is removed within a week', why: 'Safety.' },
   { category: 'The app\'s own log (changes, refusals, errors, who did it)', keep: 'Thirty days', why: 'To find and fix problems and to spot abuse. Never holds what you wrote.' },
   { category: 'Emails we sent you (receipts, resets)', keep: 'Ninety days in the outbox, then deleted', why: 'To show what was sent if something goes wrong.' },
   { category: 'Raw payment messages from the payment provider', keep: 'One year, then the raw text is cleared and the order stays', why: 'To settle a dispute about a payment.' },
   { category: 'Orders, invoices and money records', keep: 'Seven years, with your name taken off when you delete your account', why: 'Tax and accounting law in most places asks for it.' },
+  { category: 'Discount codes you used (which code, what it took off, when)', keep: 'Until you delete your account', why: 'To hold each code to its limits and to show what it cost.' },
   { category: 'Tracked link clicks (an address hash, never the address)', keep: 'Thirteen months', why: 'So a creator can compare this year with last year.' },
   { category: 'Your terms and privacy choices', keep: 'Until you delete your account', why: 'To show what you agreed to and when.' },
+  { category: 'Lines you write in Community and Bond channels', keep: 'A year after each line was written, or until you delete the line or your account', why: 'A channel is a running chat, not a record.' },
   { category: 'Data requests (the date, what was asked, when it was done; no names)', keep: 'Three years', why: 'To show we answered in time.' },
   { category: 'Copyright notices', keep: 'Three years after they were settled', why: 'To show what was done about a notice.' },
 ];
@@ -11879,7 +13436,7 @@ export const SUBPROCESSORS: readonly Subprocessor[] = [
 ];
 
 /** The days after which a thing is removed by the daily tidy-up. One list, read by the cron. */
-export const RETENTION_DAYS = { outbox: 90, webhooks: 365, clicks: 396, resets: 7, requests: 1095, notices: 1095 } as const;
+export const RETENTION_DAYS = { outbox: 90, webhooks: 365, clicks: 396, resets: 7, requests: 1095, notices: 1095, channelLines: 365 } as const;
 
 /** What the business that runs kreators.app wants shown on the contact page and in the copyright notice process. Every field is set by the owner, never in code. */
 export interface BusinessInfo {

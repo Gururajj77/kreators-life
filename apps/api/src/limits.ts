@@ -64,14 +64,44 @@ export const LIMITS = {
   prefs: { max: 240, windowSec: 3600 },
   /** Everyday Agency work: moving a deliverable, a note, a time entry. */
   agency: { max: 600, windowSec: 3600 },
+  /** Asking whether a discount code works, per person; the same number again per address (`discountAddress`), so many accounts on one address cannot guess codes. */
+  discount: { max: 20, windowSec: 600 },
+  discountAddress: { max: 60, windowSec: 600 },
+  /** Emailing a copy of an invoice, agreement or document to a client: real mail goes out, so it is held to ten an hour per person. */
+  docEmail: { max: 10, windowSec: 3600 },
   /** A client at their link: approving, sending back, commenting, accepting. The link is the only key, so it is counted per address. */
   portal: { max: 30, windowSec: 600 },
+  /** The password on a client link, per address: five tries in ten minutes. */
+  portalLogin: { max: 5, windowSec: 600 },
+  /** The same password, per client whatever the address, so many addresses cannot share the guessing. */
+  portalLoginLink: { max: 20, windowSec: 600 },
+  /** A client choosing a retainer length, and the owner's lifecycle calls (stage, password, offer, confirm). */
+  lifecycle: { max: 120, windowSec: 3600 },
+  /** Lines written in Community and Bond channels. A room is chattier than a one-to-one chat, so this is above `message`. */
+  channelMessage: { max: 180, windowSec: 3600 },
 } as const;
 
 export type LimitName = keyof typeof LIMITS;
 
+type Door = { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE'; path: string; limit: LimitName };
+/** The same doors for the channels of each app: /community/channels (public, guides) and /bond/channels (private, friends). */
+const CHANNEL_DOORS: Door[] = (['community', 'bond'] as const).flatMap((app): Door[] => [
+  { method: 'POST', path: `/${app}/channels`, limit: 'create' },
+  { method: 'PATCH', path: `/${app}/channels/:id`, limit: 'prefs' },
+  { method: 'POST', path: `/${app}/channels/:id/archive`, limit: 'prefs' },
+  { method: 'POST', path: `/${app}/channels/:id/join`, limit: 'follow' },
+  { method: 'POST', path: `/${app}/channels/:id/leave`, limit: 'follow' },
+  { method: 'POST', path: `/${app}/channels/:id/members`, limit: 'intro' },
+  { method: 'DELETE', path: `/${app}/channels/:id/members/:userId`, limit: 'prefs' },
+  { method: 'POST', path: `/${app}/channels/:id/messages`, limit: 'channelMessage' },
+  { method: 'DELETE', path: `/${app}/channels/:id/messages/:mid`, limit: 'prefs' },
+  { method: 'POST', path: `/${app}/channels/:id/messages/:mid/report`, limit: 'ticket' },
+  { method: 'POST', path: `/${app}/channels/:id/messages/:mid/block-author`, limit: 'follow' },
+]);
+
 /** Which doors each limit guards: the method and the path under /api. Patterns follow Hono's. */
-export const ROUTE_LIMITS: readonly { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE'; path: string; limit: LimitName }[] = [
+export const ROUTE_LIMITS: readonly { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE'; path: string; limit: LimitName; /** Count the address instead of the person. */ by?: 'address' }[] = [
+  ...CHANNEL_DOORS,
   { method: 'POST', path: '/auth/signin', limit: 'signin' },
   { method: 'POST', path: '/auth/signup', limit: 'signup' },
   { method: 'POST', path: '/auth/forgot', limit: 'forgot' },
@@ -150,6 +180,11 @@ export const ROUTE_LIMITS: readonly { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE
   { method: 'POST', path: '/agency/templates', limit: 'create' },
   { method: 'POST', path: '/agency/contracts', limit: 'create' },
   { method: 'POST', path: '/agency/contracts/:id/duplicate', limit: 'create' },
+  { method: 'POST', path: '/agency/docs', limit: 'create' },
+  { method: 'POST', path: '/agency/docs/:id/duplicate', limit: 'create' },
+  { method: 'POST', path: '/agency/invoices/:id/email', limit: 'docEmail' },
+  { method: 'POST', path: '/agency/contracts/:id/email', limit: 'docEmail' },
+  { method: 'POST', path: '/agency/docs/:id/email', limit: 'docEmail' },
   { method: 'POST', path: '/agency/items', limit: 'agency' },
   { method: 'PATCH', path: '/agency/items/:id', limit: 'agency' },
   { method: 'POST', path: '/agency/items/:id/notes', limit: 'agency' },
@@ -158,9 +193,29 @@ export const ROUTE_LIMITS: readonly { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE
   { method: 'POST', path: '/agency/comments/:type/:id', limit: 'message' },
   { method: 'PUT', path: '/agency/settings', limit: 'prefs' },
   { method: 'POST', path: '/public/agency/:token/items/:id', limit: 'portal' },
+  { method: 'POST', path: '/public/agency/:token/unlock', limit: 'portalLogin', by: 'address' },
+  { method: 'POST', path: '/public/contracts/:token/unlock', limit: 'portalLogin', by: 'address' },
+  { method: 'POST', path: '/public/invoices/:token/unlock', limit: 'portalLogin', by: 'address' },
+  { method: 'POST', path: '/public/agency/doc/:token/unlock', limit: 'portalLogin', by: 'address' },
+  { method: 'POST', path: '/public/agency/:token/retainer', limit: 'portal' },
+  { method: 'POST', path: '/agency/clients/:id/stage', limit: 'lifecycle' },
+  { method: 'PUT', path: '/agency/clients/:id/lifecycle', limit: 'lifecycle' },
+  { method: 'POST', path: '/agency/clients/:id/checklist', limit: 'lifecycle' },
+  { method: 'PUT', path: '/agency/clients/:id/password', limit: 'lifecycle' },
+  { method: 'POST', path: '/agency/clients/:id/trial-video', limit: 'lifecycle' },
+  { method: 'POST', path: '/agency/clients/:id/retainer', limit: 'lifecycle' },
+  { method: 'POST', path: '/agency/retainers/:id/confirm', limit: 'lifecycle' },
+  { method: 'POST', path: '/agency/retainers/:id/end', limit: 'lifecycle' },
+  { method: 'POST', path: '/agency/retainers/:id/auto-send', limit: 'lifecycle' },
+  { method: 'POST', path: '/agency/retainers/:id/withdraw', limit: 'lifecycle' },
+  { method: 'POST', path: '/agency/items/:id/changes', limit: 'agency' },
   { method: 'POST', path: '/public/contracts/:token/accept', limit: 'portal' },
   { method: 'POST', path: '/public/contracts/:token/comments', limit: 'portal' },
   { method: 'POST', path: '/public/invoices/:token/comments', limit: 'portal' },
+  { method: 'POST', path: '/public/agency/doc/:token/approve', limit: 'portal' },
+  { method: 'POST', path: '/public/agency/doc/:token/comments', limit: 'portal' },
+  { method: 'POST', path: '/discounts/check', limit: 'discount' },
+  { method: 'POST', path: '/discounts/check', limit: 'discountAddress', by: 'address' },
 ];
 
 /** The doors that take no session are limited before the session check; everything else after it, per person. */

@@ -4,6 +4,7 @@ import { Inert } from '../components/Inert';
 import { useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
+import { BadgeMedal } from '../components/BadgeArt';
 import { Button } from '../components/Button';
 import { TrustBadge } from '../components/TrustBadge';
 import { LinkBlocks } from '../components/LinkBlocks';
@@ -190,9 +191,7 @@ export function Public() {
               <ul className="mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0 md:grid-cols-3">
                 {[...d.badges.map((k) => BADGES.find((b) => b.key === k)).filter((b) => b !== undefined), ...d.honors.map((k) => HONORS.find((h) => h.key === k)).filter((h) => h !== undefined)].map((b) => (
                   <li key={b.key} className="rounded-tile bg-paper p-sm">
-                    <p className="m-0 text-[24px]" aria-hidden="true">
-                      {b.emoji}
-                    </p>
+                    <BadgeMedal k={b.key} size="sm" decorative />
                     <p className="mt-xs m-0 text-[14px] font-extrabold">{b.name}</p>
                     <p className="m-0 text-[12px] font-semibold text-ink-soft">{b.how}</p>
                   </li>

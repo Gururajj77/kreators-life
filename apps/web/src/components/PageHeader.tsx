@@ -1,5 +1,6 @@
 import type { MouseEvent, ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { CondensedTitle } from './fx/CondensedTitle';
 
 /**
  * The way back, one step up. A small round button so it reads as a control, not a label. A screen that lives inside a page's own address
@@ -51,7 +52,9 @@ export function PageHeader({ back, eyebrow, title, lede, aside, children }: Prop
       {back && <BackLink to={back.to}>{back.label}</BackLink>}
       {eyebrow && <p className="m-0 text-[14px] font-bold text-ink-soft">{eyebrow}</p>}
       <div className="flex items-center justify-between gap-sm">
-        <h1 className="min-w-0 text-[30px]">{title}</h1>
+        <CondensedTitle className="min-w-0" title={typeof title === 'string' ? title : ''}>
+          <h1 className="type-large min-w-0">{title}</h1>
+        </CondensedTitle>
         {aside && <div className="shrink-0">{aside}</div>}
       </div>
       {lede && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{lede}</p>}

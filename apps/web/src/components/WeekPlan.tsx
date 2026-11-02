@@ -8,6 +8,7 @@ import { Button } from './Button';
 import { Fold } from './Fold';
 import { Inert } from './Inert';
 import { Ring } from './Ring';
+import { RulerPicker } from './RulerPicker';
 import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
 import { TaskPlanFields, planBody, planOf, planProblem, type Plan } from './TaskPlan';
@@ -499,9 +500,11 @@ export function WeekPlanButton() {
   const [said, setSaid] = useState('');
   const q = useAuthed(['today', 'week-plan', date, hours], () => api.weekPlan(date, hours), open);
   const plan = q.data?.plan;
+  const [draftHours, setDraftHours] = useState(hours);
   const setH = (n: number) => {
     const next = Math.max(1, Math.min(12, n));
     setHours(next);
+    setDraftHours(next);
     saveHours(next);
   };
   const done = (kept: number, failed: number) => {
@@ -528,19 +531,15 @@ export function WeekPlanButton() {
       <Sheet open={open} onClose={() => setOpen(false)} title={COPY.title}>
         <div className="pb-md">
           <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.lede}</p>
-          <div className="mt-sm flex items-center justify-between gap-sm rounded-tile bg-paper p-sm">
-            <span className="text-[14px] font-bold">{COPY.hours}</span>
-            <span className="flex items-center gap-xs">
-              <button type="button" onClick={() => setH(hours - 1)} disabled={hours <= 1} aria-label="One hour less" className="toy toy-soft min-h-[44px] min-w-[44px] rounded-pill border border-line bg-card-strong text-[18px] font-extrabold disabled:opacity-50">
-                &minus;
-              </button>
-              <span className="min-w-[32px] text-center font-display text-[20px] font-extrabold" aria-live="polite">
-                {hours}
+          <div className="mt-sm rounded-tile bg-paper p-sm">
+            <div className="flex items-baseline justify-between gap-sm">
+              <span className="text-[14px] font-bold">{COPY.hours}</span>
+              <span className="font-display text-[20px] font-extrabold" aria-hidden="true">
+                {draftHours} h
               </span>
-              <button type="button" onClick={() => setH(hours + 1)} disabled={hours >= 12} aria-label="One hour more" className="toy toy-soft min-h-[44px] min-w-[44px] rounded-pill border border-line bg-card-strong text-[18px] font-extrabold disabled:opacity-50">
-                +
-              </button>
-            </span>
+            </div>
+            {/* The plan is asked for again only once the ruler settles, not at every tick it passes. */}
+            <RulerPicker label={COPY.hours} tone="paper" accent="r2" min={1} max={12} step={1} labelEvery={2} majorStep={2} value={draftHours} onChange={setDraftHours} onCommit={setH} valueText={(v) => `${v} ${v === 1 ? 'hour' : 'hours'} a day`} />
           </div>
           <div className="mt-md">
             {q.isPending && (

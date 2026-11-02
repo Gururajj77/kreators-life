@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { Fragment, useState } from 'react';
 import { EventPanel } from '../components/EventPanel';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
+import { BadgeMedal } from '../components/BadgeArt';
 import { Button } from '../components/Button';
 import { useCelebrate } from '../components/Celebration';
 import { AreaLine, HBars, StatTile } from '../components/Charts';
@@ -267,9 +268,7 @@ function TrackingTab({ t }: { t: RunTracking }) {
             const pct = Math.min(1, have / want);
             return (
               <li key={key} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-                <span className={`flex size-[44px] shrink-0 items-center justify-center rounded-pill text-[22px] ${earned ? '' : 'opacity-40 grayscale'}`} style={{ background: `var(--soft-${REL.key})` }} aria-hidden="true">
-                  {b.emoji}
-                </span>
+                <BadgeMedal k={key} earned={earned} size="sm" decorative />
                 <span className="min-w-0 flex-1">
                   <span className="block text-[16px] font-bold">{b.name}</span>
                   <span className="block text-[14px] font-semibold text-ink-soft">{earned ? 'Earned' : need.runs > 0 ? `${t.runs} of ${need.runs} runs` : `${kmLabel(t.metres)} of ${kmLabel(need.metres)}`}</span>

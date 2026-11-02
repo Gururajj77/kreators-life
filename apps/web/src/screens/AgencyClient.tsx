@@ -3,6 +3,9 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { AgencyContracts } from '../components/AgencyContracts';
+import { ClientDocs } from '../components/AgencyDocs';
+import { LifecycleCard, PortalSecurityCard, RetainerCard } from '../components/AgencyLifecycle';
+import { StageBar } from '../components/StageBar';
 import { AgencyInvoices } from '../components/AgencyInvoices';
 import { AgencyPipeline } from '../components/AgencyPipeline';
 import { Button } from '../components/Button';
@@ -30,7 +33,9 @@ const COPY = {
   timeEmpty: 'No time logged yet.',
   invoiceLede: 'Drafts, sent and paid. Open one to design it, send it or copy it for next month.',
   agreementLede: 'Trial terms, retainers and project agreements for this client.',
-  linkLede: 'One page your client can open to see their work. You choose what shows.',
+  linkLede: 'One page your client can open to see their work. You choose what shows, and a password keeps it private.',
+  lifecycleLede: 'From the first enquiry to monthly delivery. The client sees the same bar at their link.',
+  retainerLede: 'After the pilot: the client picks how many months, and each month makes its own invoice and pieces.',
   billingLede: 'What goes under "Billed to" on invoices and in agreements.',
   noBilling: 'No billing details yet. Add them so invoices fill in by themselves.',
   invoiceFailed: 'Could not make the invoice. Set a retainer or a fee on a published deliverable first.',
@@ -152,6 +157,10 @@ export function AgencyClient() {
         )}
       </header>
 
+      <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
+        <StageBar stage={d.lifecycle.stage} />
+      </div>
+
       <div className="mt-md grid grid-cols-2 gap-sm md:grid-cols-3">
         {tiles.map((t, i) => (
           <StatTile key={t.label} label={t.label} value={t.value} hint={t.hint} className={bento(i, tiles.length, 2, 3)}>
@@ -164,8 +173,19 @@ export function AgencyClient() {
         ))}
       </div>
 
+      <Section id="lifecycle-heading" title="The way through" lede={COPY.lifecycleLede}>
+        <LifecycleCard client={c} life={d.lifecycle} />
+      </Section>
+
       <Section id="link-heading" title="Client link" lede={COPY.linkLede}>
-        <ClientLink client={c} />
+        <div className="flex flex-col gap-sm">
+          <PortalSecurityCard client={c} life={d.lifecycle} />
+          <ClientLink client={c} />
+        </div>
+      </Section>
+
+      <Section id="retainer-heading" title="Retainer" lede={COPY.retainerLede}>
+        <RetainerCard client={c} life={d.lifecycle} currency={cur} />
       </Section>
 
       <Section id="pipeline-heading" title="Pipeline">
@@ -279,6 +299,10 @@ export function AgencyClient() {
       <Section id="agreements-heading" title="Agreements" lede={COPY.agreementLede}>
         <AgencyContracts clientId={id} />
       </Section>
+
+      <div className="mt-lg">
+        <ClientDocs clientId={id} />
+      </div>
 
       <Section id="billing-heading" title="Billing details and notes" lede={COPY.billingLede} action={<Button variant="outline" size="sm" onClick={() => setEditing(true)}>Edit</Button>}>
         <div className="rounded-card bg-card p-md shadow-toy-soft">

@@ -106,7 +106,7 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
     <Screen tabs={false}>
       <div className="pt-xl">
         <Avatar relationship="friendship" size={72} />
-        <h1 className="mt-md text-[30px]">{mode === 'signup' ? 'Create your account' : 'Welcome back'}</h1>
+        <h1 className="type-large mt-md">{mode === 'signup' ? 'Create your account' : 'Welcome back'}</h1>
         <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">
           {mode === 'signup' ? (hasSession ? 'Everything on this phone comes with you. Add an email so it survives a new phone.' : `An email, a password, a phone number and your date of birth. You need to be ${MIN_AGE} or older.`) : 'Sign in to pick up where you left off.'}
         </p>
@@ -151,7 +151,7 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
             {go.error instanceof Error ? go.error.message : 'That did not work. Check your connection and try again.'}
           </p>
         )}
-        <Button type="submit" size="lg" full disabled={go.isPending || !ready}>
+        <Button type="submit" variant="shimmer" size="lg" full disabled={go.isPending || !ready}>
           {mode === 'signup' ? 'Create account' : 'Sign in'}
         </Button>
       </form>

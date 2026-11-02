@@ -26,10 +26,12 @@ export interface LogLine {
 
 /** `/api/community/3f2a.../reply` becomes `/community/:id/reply`. */
 export function cleanPath(path: string): string {
-  return path
-    .replace(/^\/api/, '')
-    .split('/')
-    .map((seg) => (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(seg) || /^[0-9a-f]{16,}$/i.test(seg) || /^\d{5,}$/.test(seg) ? ':id' : seg))
+  const parts = path.replace(/^\/api/, '').split('/');
+  // The address of a client link, agreement, invoice or document is its key: it never reaches the log (parts[0] is empty, so /public/agency/<token> is at 3).
+  // A page of the app that holds one (/a/<token>, /k/, /i/, /d/) is named the same way.
+  const at = parts[1] === 'public' && (parts[2] === 'agency' || parts[2] === 'contracts' || parts[2] === 'invoices') ? (parts[2] === 'agency' && parts[3] === 'doc' ? 4 : 3) : ['a', 'k', 'i', 'd'].includes(parts[1] ?? '') ? 2 : -1;
+  return parts
+    .map((seg, i) => (i === at && seg ? ':token' : /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(seg) || /^[0-9a-f]{16,}$/i.test(seg) || /^\d{5,}$/.test(seg) ? ':id' : seg))
     .join('/')
     .slice(0, 160);
 }

@@ -3,10 +3,12 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useParams } from 'react-router';
 import { Button } from '../components/Button';
+import { DocActions } from '../components/DocActions';
 import { Inert } from '../components/Inert';
 import { InvoiceView, invoiceDate } from '../components/InvoiceView';
 import { StatusTag } from '../components/StatusTag';
 import { publicApi } from '../lib/api';
+import { fileTitle } from '../lib/printDoc';
 import { SiteLayout } from './SiteLayout';
 
 /** The client's view of an invoice, from the link the creator sent: read it, save a copy as a PDF, or ask for a change. */
@@ -26,17 +28,6 @@ export function InvoicePage() {
     },
     onError: (e: Error) => setDone(e.message),
   });
-  // The saved PDF is named by the invoice number.
-  const print = () => {
-    const before = document.title;
-    const restore = () => {
-      document.title = before;
-      window.removeEventListener('afterprint', restore);
-    };
-    window.addEventListener('afterprint', restore);
-    document.title = inv?.number ?? 'Invoice';
-    window.print();
-  };
   return (
     <SiteLayout wide={false}>
       <div className="pt-lg">
@@ -54,11 +45,7 @@ export function InvoicePage() {
                 <StatusTag tone={INVOICE_STATUS_TONE[inv.status]}>{INVOICE_STATUS_NAME[inv.status]}</StatusTag>
                 {inv.revisedAt && <StatusTag tone="warn">{`Revised ${invoiceDate(inv.revisedAt.slice(0, 10))}`}</StatusTag>}
               </div>
-              {d.canDownload && (
-                <Button variant="outline" onClick={print}>
-                  Download PDF
-                </Button>
-              )}
+              <DocActions fileName={fileTitle(inv.doc.title || 'Invoice', inv.number)} canDownload={d.canDownload} />
             </div>
             <InvoiceView invoice={inv} />
             {inv.revisedAt && <p className="no-print mt-sm m-0 text-[14px] font-semibold text-ink-soft">This invoice was changed after it was first sent. What you see is the latest version.</p>}

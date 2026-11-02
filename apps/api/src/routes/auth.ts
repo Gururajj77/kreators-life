@@ -17,7 +17,8 @@ export async function hashPassword(password: string, salt: string): Promise<stri
   return Array.from(new Uint8Array(bits), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-function safeEqual(a: string, b: string): boolean {
+/** Constant-time compare of two strings of the same kind (hex hashes). */
+export function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);

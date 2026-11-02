@@ -1,4 +1,4 @@
-import { INVOICE_STARTERS, INVOICE_STATUS_NAME, INVOICE_STATUS_TONE, INVOICE_STATUSES, money, pageQuery, TEMPLATE_NAME_MAX, type AgencyTemplate, type Invoice } from '@kreators/shared';
+import { INVOICE_STARTERS, invoiceAsText, invoiceForClient, INVOICE_STATUS_NAME, INVOICE_STATUS_TONE, INVOICE_STATUSES, money, pageQuery, TEMPLATE_NAME_MAX, type AgencyTemplate, type Invoice } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -7,6 +7,7 @@ import { useAuthed } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
 import { tie } from '../lib/text';
 import { Button } from './Button';
+import { DocRowActions } from './DocActions';
 import { Fold } from './Fold';
 import { Inert } from './Inert';
 import { Field, invoiceDate } from './InvoiceView';
@@ -127,8 +128,8 @@ export function AgencyInvoices({ clientId }: { clientId?: string }) {
           {list.data && list.data.invoices.length === 0 && <p className="mt-sm m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft">No invoices here yet.</p>}
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {list.data?.invoices.map((inv) => (
-              <li key={inv.id}>
-                <Link to={`/agency/invoices/${inv.id}`} className="toy flex flex-wrap items-center gap-sm rounded-tile bg-card p-sm text-ink no-underline shadow-toy-soft">
+              <li key={inv.id} className="rounded-tile bg-card shadow-toy-soft">
+                <Link to={`/agency/invoices/${inv.id}`} className="toy flex flex-wrap items-center gap-sm rounded-tile p-sm text-ink no-underline">
                   <span className="min-w-0 flex-1">
                     <span className="block text-[16px] font-extrabold">{inv.number}</span>
                     <span className="block text-[14px] font-semibold text-ink-soft">
@@ -142,6 +143,15 @@ export function AgencyInvoices({ clientId }: { clientId?: string }) {
                   </span>
                   <span className="font-display text-[20px] font-extrabold">{money(inv.totalCents, inv.currency)}</span>
                 </Link>
+                <div className="px-sm pb-sm">
+                  <DocRowActions
+                    path={`/agency/invoices/${inv.id}`}
+                    getText={async () => {
+                      const { invoice } = await api.agencyInvoice(inv.id);
+                      return invoiceAsText(invoiceForClient(invoice));
+                    }}
+                  />
+                </div>
               </li>
             ))}
           </ul>
@@ -175,8 +185,8 @@ function NewInvoice({ open, clientId, onClose, onMade }: { open: boolean; client
   const [err, setErr] = useState('');
   const id = clientId ?? pick;
   const make = useMutation({
-    mutationFn: (start: { starter?: string; templateId?: string }) =>
-      api.agencyInvoiceAdd({ clientId: id, ...start, ...(start.starter || start.templateId ? {} : { items: [{ description: 'Services', quantity: 1, unitCents: 0 }] }) }),
+    mutationFn: (start: { starter?: string; templateId?: string; houseId?: string }) =>
+      api.agencyInvoiceAdd({ clientId: id, ...start, ...(start.starter || start.templateId || start.houseId ? {} : { items: [{ description: 'Services', quantity: 1, unitCents: 0 }] }) }),
     onSuccess: (r) => onMade(r.invoice.id),
     onError: (e: Error) => setErr(e.message),
   });
@@ -214,11 +224,24 @@ function NewInvoice({ open, clientId, onClose, onMade }: { open: boolean; client
           ))}
         </div>
         <h3 className="m-0 mt-xs text-[16px] font-extrabold">Your templates</h3>
-        {mine.data && mine.data.templates.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">None yet. Open any invoice and tap Save as template to keep it as a starting point.</p>}
+        {mine.data && mine.data.templates.filter((t) => t.scope === 'own').length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">None yet. Open any invoice and tap Save as template to keep it as a starting point.</p>}
         <div role="group" aria-label="Your templates" className="grid gap-xs md:grid-cols-2">
-          {(mine.data?.templates ?? []).map((t) => (
+          {(mine.data?.templates ?? []).filter((t) => t.scope === 'own').map((t) => (
             <button key={t.id} type="button" disabled={!id || make.isPending} onClick={() => make.mutate({ templateId: t.id })} className={card}>
               <span className="block text-[16px] font-extrabold">{t.name}</span>
+              <span className="mt-xs block text-[14px] font-semibold text-ink-soft">{t.summary}</span>
+            </button>
+          ))}
+        </div>
+        <h3 className="m-0 text-[16px] font-extrabold">House templates</h3>
+        {mine.data && mine.data.templates.filter((t) => t.scope === 'house').length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">No house templates yet.</p>}
+        <div role="group" aria-label="House templates" className="grid gap-xs md:grid-cols-2">
+          {(mine.data?.templates ?? []).filter((t) => t.scope === 'house').map((t) => (
+            <button key={t.id} type="button" disabled={!id || make.isPending} onClick={() => make.mutate({ houseId: t.id })} className={card}>
+              <span className="flex flex-wrap items-center gap-xs text-[16px] font-extrabold">
+                {t.name}
+                <StatusTag tone="info">House template</StatusTag>
+              </span>
               <span className="mt-xs block text-[14px] font-semibold text-ink-soft">{t.summary}</span>
             </button>
           ))}
@@ -266,7 +289,7 @@ function TemplateList() {
     },
     onError: (e: Error) => setMsg(e.message),
   });
-  const list = q.data?.templates ?? [];
+  const list = (q.data?.templates ?? []).filter((t) => t.scope === 'own');
   return (
     <div className="rounded-tile bg-card p-sm">
       <p className="m-0 text-[14px] font-semibold text-ink-soft">Open any invoice and tap Save as template to keep it here. A template keeps the look, the bank, the tax and the lines, never who it was for.</p>

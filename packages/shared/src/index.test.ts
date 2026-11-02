@@ -1,10 +1,13 @@
-import { FOCUS_DEFAULTS, parseFocusSettings, AMBIENT_SOUNDS, BREAK_BEATS } from './index';
+import { FOCUS_DEFAULTS, parseFocusSettings, AMBIENT_SOUNDS, BREAK_BEATS, rulerClamp, rulerIndex, rulerTicks, rulerValueAt } from './index';
 import { parseFaq, MAX_FAQ } from './index';
 import { lineForDay, DAILY_LINE_COUNT } from './index';
 import { numberValue, computeNumerology, personalCycle, numerologyInsights, nameWords, NUMBER_READINGS, KARMIC_DEBTS, YEAR_THEMES, type NumerologyContext } from './index';
 import { MAX_DEVICES } from './index';
+import { channelCursor, channelMessageProblem, channelNameProblem, channelSlug, cleanChannelMessage, isNearBottom, MAX_CHANNEL_MESSAGE, MAX_CHANNEL_NAME, mergeChannelLines, unreadLabel, CHANNEL_NEAR_BOTTOM_PX } from './index';
 import { GATE_WHEEL, GATE_NAMES, DESIGN_CENTERS, DESIGN_CHANNELS, DESIGN_TYPES, DESIGN_AUTHORITIES, DESIGN_PROFILES, ZODIACS, bodyLongitudes, sunLongitude, moonLongitude, centuriesOf, designMoment, faganBradleyAyanamsa, gateAt, signOf, computeDesign, designChart, analyseDesign, designCompare, designProfile, designInputProblem, parseDesignInput, emptyDesignInput, centerOfGate, type DesignType } from './index';
 import { LOVE_KEYS, LOVE_LANGUAGES, LOVE_PAIRS, MIND_SCREENS, TYPE_NAMES, TYPE_SCREENS, analyseLove, analyseMind, analyseType, emptyLoveAnswers, extraComplete, extraHints, extraProgress, extrasForAssistant, extrasProfile, learnedForAssistant, loveRanked, lovePairLines, loveTop, mindBand, parseLoveAnswers, parseMindAnswers, parseTypeAnswers, scoreLove, scoreMind, scoreType, briefFor } from './index';
+import { invoiceTotals, tdsGrossupNote } from './index';
+import { MONTH_RE, MONTH_TASKS_MAX, monthGrid, monthShift, productPayWays } from './index';
 import { nextOccurrence, openDay, parsePriority, parseRepeat, priorityTag, repeatLabel, isTaskSort, sortTasks, type Priority, type Repeat, type RepeatKind } from './index';
 import { BADGES as ALL_BADGES, HOW_TO, kmLabel, MODULES as MODS, paceLabel, RUN_BADGES, runEntryState, TERMS, termGroups, weekStart, weekStreak } from './index';
 import { earningGuide, nextBadge, unlockFor } from './index';
@@ -989,6 +992,39 @@ describe('task dates, repeating, priority and sorting', () => {
     expect(openDay({ doDate: null, dueDate: '2026-11-09' })).toBe('2026-11-09');
     expect(openDay({ doDate: null, dueDate: null })).toBeNull();
   });
+  it('lays a month out as Monday-first weeks for the month calendar', () => {
+    const nov = monthGrid('2026-11');
+    expect(nov).toHaveLength(6);
+    expect(nov.every((w) => w.length === 7)).toBe(true);
+    expect(nov[0]![0]).toBe('2026-10-26');
+    expect(nov[0]![6]).toBe('2026-11-01');
+    expect(nov[5]![0]).toBe('2026-11-30');
+    expect(nov[5]![6]).toBe('2026-12-06');
+    // February 2027 starts on a Monday and has 28 days: exactly four weeks, nothing from the months beside it.
+    const feb = monthGrid('2027-02');
+    expect(feb).toHaveLength(4);
+    expect(feb.flat().every((d) => d.startsWith('2027-02'))).toBe(true);
+    // A leap year, and a month that needs six weeks (31 days starting on a Sunday).
+    expect(monthGrid('2028-02').flat().filter((d) => d.startsWith('2028-02'))).toHaveLength(29);
+    expect(monthGrid('2026-03')).toHaveLength(6);
+    // Every day of the month appears once, in order.
+    const days = monthGrid('2026-11').flat().filter((d) => d.startsWith('2026-11'));
+    expect(days).toHaveLength(30);
+    expect(days[0]).toBe('2026-11-01');
+    expect(monthGrid('2026-13')).toEqual([]);
+    expect(monthGrid('nope')).toEqual([]);
+  });
+  it('moves between months across a year and checks a month is real', () => {
+    expect(monthShift('2026-11', 1)).toBe('2026-12');
+    expect(monthShift('2026-12', 1)).toBe('2027-01');
+    expect(monthShift('2026-01', -1)).toBe('2025-12');
+    expect(monthShift('2026-11', 14)).toBe('2028-01');
+    expect(MONTH_RE.test('2026-11')).toBe(true);
+    expect(MONTH_RE.test('2026-00')).toBe(false);
+    expect(MONTH_RE.test('2026-13')).toBe(false);
+    expect(MONTH_RE.test('2026-1')).toBe(false);
+    expect(MONTH_TASKS_MAX).toBe(500);
+  });
   it('teaches the new words where the Daily screen explains itself', () => {
     for (const word of ['do date', 'due date', 'priority', 'habit', 'subtask', 'remember', 'not scheduled']) expect(TERMS[word]).toBeTruthy();
     expect(HOW_TO.today?.steps.length).toBeLessThanOrEqual(5);
@@ -1940,5 +1976,390 @@ describeFixes('water reminders from a day that is over', () => {
     expectFix(pastWaterNote('water-abc-123-2026-11-02', '2026-11-01')).toBe(false);
     expectFix(pastWaterNote('task-abc-2026-10-31', '2026-11-01')).toBe(false);
     expectFix(pastWaterNote('water-bad', '2026-11-01')).toBe(false);
+  });
+});
+
+describe('chat channels', () => {
+  it('a slug is lower case letters and numbers joined by hyphens', () => {
+    expect(channelSlug('  Morning Pages!  ')).toBe('morning-pages');
+    expect(channelSlug('Love & Family -- Q/A')).toBe('love-family-q-a');
+    expect(channelSlug('!!!')).toBe('');
+    expect(channelSlug('a'.repeat(80)).length).toBe(32);
+    expect(channelSlug('नमस्ते दोस्त')).not.toBe('');
+    expect(channelSlug('x'.repeat(31) + '--y')).not.toMatch(/-$/);
+  });
+  it('a name needs letters and fits the limit', () => {
+    expect(channelNameProblem('Writers')).toBeNull();
+    expect(channelNameProblem('a')).not.toBeNull();
+    expect(channelNameProblem('   ')).not.toBeNull();
+    expect(channelNameProblem('????')).not.toBeNull();
+    expect(channelNameProblem('x'.repeat(MAX_CHANNEL_NAME + 1))).not.toBeNull();
+    expect(channelNameProblem(42)).not.toBeNull();
+  });
+  it('a line is trimmed, tidied and checked', () => {
+    expect(channelMessageProblem('')).not.toBeNull();
+    expect(channelMessageProblem('   ')).not.toBeNull();
+    expect(channelMessageProblem('hello')).toBeNull();
+    expect(channelMessageProblem('x'.repeat(MAX_CHANNEL_MESSAGE + 1))).not.toBeNull();
+    expect(cleanChannelMessage('  a\r\n\r\n\r\n\r\nb  ')).toBe('a\n\nb');
+    expect(cleanChannelMessage('y'.repeat(MAX_CHANNEL_MESSAGE + 50)).length).toBe(MAX_CHANNEL_MESSAGE);
+    expect(cleanChannelMessage(null)).toBe('');
+  });
+  it('a cursor is a whole number above zero', () => {
+    expect(channelCursor('12')).toBe(12);
+    expect(channelCursor('0')).toBeNull();
+    expect(channelCursor('-3')).toBeNull();
+    expect(channelCursor('1.5')).toBeNull();
+    expect(channelCursor('abc')).toBeNull();
+    expect(channelCursor(undefined)).toBeNull();
+  });
+  it('merging keeps each line once, oldest first, and the newer copy wins', () => {
+    const held = [{ seq: 3, t: 'c' }, { seq: 1, t: 'a' }];
+    const out = mergeChannelLines(held, [{ seq: 2, t: 'b' }, { seq: 3, t: 'c2' }, { seq: 4, t: 'd' }]);
+    expect(out.map((l) => l.seq)).toEqual([1, 2, 3, 4]);
+    expect(out.find((l) => l.seq === 3)?.t).toBe('c2');
+    expect(mergeChannelLines([], [])).toEqual([]);
+  });
+  it('near the bottom means within the slack of the end', () => {
+    expect(isNearBottom({ scrollHeight: 1000, scrollTop: 500, clientHeight: 500 })).toBe(true);
+    expect(isNearBottom({ scrollHeight: 1000, scrollTop: 500 - CHANNEL_NEAR_BOTTOM_PX, clientHeight: 500 })).toBe(true);
+    expect(isNearBottom({ scrollHeight: 1000, scrollTop: 400, clientHeight: 500 })).toBe(false);
+  });
+  it('the unread label caps at 99+', () => {
+    expect([unreadLabel(0), unreadLabel(7), unreadLabel(99), unreadLabel(100)]).toEqual(['', '7', '99', '99+']);
+  });
+});
+
+describe('productPayWays', () => {
+  it('says how a product can be paid for', () => {
+    expect(productPayWays({ pricePoints: 100, priceCents: 0 })).toEqual({ points: true, money: false, free: false });
+    expect(productPayWays({ pricePoints: 0, priceCents: 49900 })).toEqual({ points: false, money: true, free: false });
+    expect(productPayWays({ pricePoints: 100, priceCents: 49900 })).toEqual({ points: true, money: true, free: false });
+    expect(productPayWays({ pricePoints: 0, priceCents: 0 })).toEqual({ points: true, money: false, free: true });
+    expect(productPayWays({ pricePoints: 0, priceCents: 0, pwyw: true })).toEqual({ points: true, money: false, free: false });
+  });
+});
+
+import { AGENCY_STAGES, AGENCY_STAGE_KEYS, autoStage, changesLabel, changesLeft, CONTRACT_TEMPLATES, cyclePieceDays, cyclePieceTitle, cyclesDue, lifecycleDatesProblem, makePortalPassword, moveProblem, nextStage, parseLifecycleDates, parseRetainerOptions, parseStage, portalPasswordProblem, previousStage, retainerCycles, retainerMonthlyCents, retainerTotalCents, stageProgress, TRIAL_RULES, RETAINER_MONTHS_MAX, PORTAL_NEVER } from './index';
+
+describe('the agency lifecycle', () => {
+  it('has nine stages in the order the work goes, each with a checklist', () => {
+    expect(AGENCY_STAGE_KEYS).toEqual(['enquiry', 'agreement_sent', 'agreement_signed', 'strategy', 'trial', 'pilot', 'retainer_offer', 'retainer', 'delivery']);
+    expect(AGENCY_STAGES.map((s) => s.key)).toEqual([...AGENCY_STAGE_KEYS]);
+    for (const s of AGENCY_STAGES) {
+      expect(s.steps.length).toBeGreaterThan(0);
+      expect(new Set(s.steps.map((x) => x.key)).size).toBe(s.steps.length);
+      expect(s.line && s.clientDoes && s.ownerDoes).toBeTruthy();
+    }
+  });
+  it('reads a stage from anything, and falls back to the first', () => {
+    expect(parseStage('trial')).toBe('trial');
+    expect(parseStage('constructor')).toBe('enquiry');
+    expect(parseStage(null)).toBe('enquiry');
+    expect(nextStage('delivery')).toBeNull();
+    expect(previousStage('enquiry')).toBeNull();
+    expect(nextStage('pilot')).toBe('retainer_offer');
+  });
+  it('shows where a client stands: what is done, the stage they are in and what is to come', () => {
+    const p = stageProgress('strategy');
+    expect(p.done).toEqual(['enquiry', 'agreement_sent', 'agreement_signed']);
+    expect(p.current).toBe('strategy');
+    expect(p.upcoming[0]).toBe('trial');
+    expect(p.done.length + 1 + p.upcoming.length).toBe(AGENCY_STAGE_KEYS.length);
+    expect(stageProgress('enquiry').percent).toBeLessThan(stageProgress('delivery').percent);
+    expect(stageProgress('delivery').percent).toBe(100);
+  });
+  it('lets the owner move one step forward and never skip', () => {
+    const none = { offerOpen: false, retainerActive: false };
+    expect(moveProblem('enquiry', 'agreement_sent', none)).toBeNull();
+    expect(moveProblem('enquiry', 'agreement_signed', none)).toMatch(/one stage at a time/);
+    expect(moveProblem('trial', 'enquiry', none)).toMatch(/one stage at a time/);
+    expect(moveProblem('trial', 'trial', none)).toMatch(/already/);
+    expect(moveProblem('pilot', 'retainer_offer', none)).toMatch(/offer/);
+    expect(moveProblem('pilot', 'retainer_offer', { offerOpen: true, retainerActive: false })).toBeNull();
+    expect(moveProblem('retainer_offer', 'retainer', none)).toMatch(/Confirm the retainer/);
+    expect(moveProblem('retainer', 'delivery', { offerOpen: false, retainerActive: true })).toBeNull();
+  });
+  it('moves by itself only forward, on the events that happened', () => {
+    expect(autoStage('enquiry', 'agreement_sent')).toBe('agreement_sent');
+    expect(autoStage('agreement_sent', 'agreement_sent')).toBeNull();
+    expect(autoStage('enquiry', 'agreement_signed')).toBe('agreement_signed');
+    expect(autoStage('agreement_sent', 'agreement_signed')).toBe('agreement_signed');
+    expect(autoStage('trial', 'agreement_signed')).toBeNull();
+    expect(autoStage('pilot', 'offer_sent')).toBe('retainer_offer');
+    expect(autoStage('trial', 'offer_sent')).toBeNull();
+    expect(autoStage('pilot', 'retainer_active')).toBe('retainer');
+    expect(autoStage('retainer_offer', 'retainer_active')).toBe('retainer');
+    expect(autoStage('delivery', 'retainer_active')).toBeNull();
+  });
+  it('quotes the trial rules from the Trial and pilot agreement, word for word', () => {
+    const trial = CONTRACT_TEMPLATES.find((t) => t.key === 'trial')!;
+    const all = trial.doc.sections.map((s) => `${s.body}\n${(s.questions ?? []).map((q) => q.label).join('\n')}`).join('\n').replace(/\*\*/g, '');
+    expect(TRIAL_RULES.length).toBeGreaterThanOrEqual(5);
+    for (const r of TRIAL_RULES) {
+      // A rule that says "the client fills in this brief" quotes the section it sits in.
+      expect(all.replace(/\s+/g, ' ')).toContain(r.text);
+      expect(r.source).toMatch(/Trial agreement/);
+    }
+    expect(new Set(TRIAL_RULES.map((r) => r.key)).size).toBe(TRIAL_RULES.length);
+  });
+});
+
+describe('the password on a client link', () => {
+  it('needs ten characters and the usual rule, and not the client\'s name', () => {
+    expect(portalPasswordProblem('short1')).toMatch(/at least 10/);
+    expect(portalPasswordProblem('aaaaaaaaaaaa')).toMatch(/over and over/);
+    expect(portalPasswordProblem('password123')).toMatch(/guess list/);
+    expect(portalPasswordProblem('Bluebird-Kettle-42')).toBeNull();
+    expect(portalPasswordProblem('acme-corp-2026', 'Acme Corp')).toMatch(/name/);
+    expect(portalPasswordProblem('x'.repeat(200))).toMatch(/under 128/);
+  });
+  it('makes a readable password that always passes its own rule', () => {
+    let seed = 7;
+    const rand = (n: number) => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed % n;
+    };
+    const seen = new Set<string>();
+    for (let i = 0; i < 50; i += 1) {
+      const p = makePortalPassword(rand);
+      expect(p).toMatch(/^[a-z]+(-[a-z]+){3}-\d\d$/);
+      expect(portalPasswordProblem(p)).toBeNull();
+      seen.add(p);
+    }
+    expect(seen.size).toBeGreaterThan(40);
+    expect(makePortalPassword(() => 0)).toBe('amber-amber-amber-amber-00');
+  });
+  it('keeps the password out of what is said to be never shown', () => {
+    expect(PORTAL_NEVER.join(' ')).toMatch(/password/i);
+  });
+});
+
+describe('the lifecycle days', () => {
+  it('keeps real days and an https call link, and drops the rest', () => {
+    const d = parseLifecycleDates({ strategyDay: '2026-11-31', strategyLink: 'http://x.test/call', trialDue: '2026-12-01', pilotStart: '2026-12-02', pilotEnd: '2027-01-01' });
+    expect(d.strategyDay).toBeNull();
+    expect(d.strategyLink).toBe('');
+    expect(d.trialDue).toBe('2026-12-01');
+    expect(parseLifecycleDates(JSON.stringify({ strategyLink: 'https://meet.example/abc' })).strategyLink).toBe('https://meet.example/abc');
+    expect(parseLifecycleDates('not json').pilotStart).toBeNull();
+  });
+  it('does not let the pilot end before it starts', () => {
+    expect(lifecycleDatesProblem({ ...parseLifecycleDates({}), pilotStart: '2026-12-02', pilotEnd: '2026-12-01' })).toMatch(/cannot end/);
+    expect(lifecycleDatesProblem({ ...parseLifecycleDates({}), pilotStart: '2026-12-02', pilotEnd: '2026-12-02' })).toBeNull();
+  });
+});
+
+describe('retainer arithmetic', () => {
+  it('reads the lengths an offer carries: 1 to 24 months, no repeats, a discount of at most half, four at most', () => {
+    expect(parseRetainerOptions([{ months: 6, discountBps: 500 }, { months: 3 }, { months: 6, discountBps: 900 }, { months: 0 }, { months: 25 }, { months: 12, discountBps: 99999 }])).toEqual([
+      { months: 3, discountBps: 0 },
+      { months: 6, discountBps: 500 },
+      { months: 12, discountBps: 5000 },
+    ]);
+    expect(parseRetainerOptions('[{"months":2.4}]')).toEqual([{ months: 2, discountBps: 0 }]);
+    expect(parseRetainerOptions('nope')).toEqual([]);
+    expect(parseRetainerOptions(Array.from({ length: 9 }, (_, i) => ({ months: i + 1 })))).toHaveLength(4);
+  });
+  it('takes a discount off in whole cents, rounded to the nearest cent', () => {
+    expect(retainerMonthlyCents(100000, 0)).toBe(100000);
+    expect(retainerMonthlyCents(100000, 500)).toBe(95000);
+    // 5% of 33333 is 1666.65: the discount rounds to 1667, so the month is 31666.
+    expect(retainerMonthlyCents(33333, 500)).toBe(31666);
+    // Half a cent rounds up: 10% of 5 is 0.5.
+    expect(retainerMonthlyCents(5, 1000)).toBe(4);
+    expect(retainerMonthlyCents(100000, -300)).toBe(100000);
+    expect(retainerMonthlyCents(100000, 90000)).toBe(50000);
+    expect(retainerTotalCents(100000, 6, 500)).toBe(570000);
+    expect(Number.isInteger(retainerTotalCents(33333, 7, 275))).toBe(true);
+  });
+  it('counts the months from the day the retainer started, with a short month on its last day', () => {
+    const c = retainerCycles('2026-01-31', 5);
+    expect(c.map((x) => x.day)).toEqual(['2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30', '2026-05-31']);
+    expect(c.map((x) => x.month)).toEqual(['2026-01', '2026-02', '2026-03', '2026-04', '2026-05']);
+    expect(c[0]!.end).toBe('2026-02-27');
+    expect(c[1]!.end).toBe('2026-03-30');
+    expect(c[4]!.n).toBe(5);
+    // A leap year keeps the 29th, and the year turns over.
+    expect(retainerCycles('2027-12-31', 4).map((x) => x.day)).toEqual(['2027-12-31', '2028-01-31', '2028-02-29', '2028-03-31']);
+    expect(retainerCycles('2026-11-15', 2).map((x) => x.day)).toEqual(['2026-11-15', '2026-12-15']);
+  });
+  it('never gives two months the same key, and stops at 24', () => {
+    const c = retainerCycles('2026-01-29', 99);
+    expect(c).toHaveLength(RETAINER_MONTHS_MAX);
+    expect(new Set(c.map((x) => x.month)).size).toBe(RETAINER_MONTHS_MAX);
+    expect(retainerCycles('2026-02-30', 3)).toEqual([]);
+    expect(retainerCycles('2026-01-31', 0)).toEqual([]);
+  });
+  it('finds the months that are due, so a missed one is still made, once each', () => {
+    expect(cyclesDue('2026-01-31', 6, '2026-01-30')).toHaveLength(0);
+    expect(cyclesDue('2026-01-31', 6, '2026-01-31').map((x) => x.n)).toEqual([1]);
+    expect(cyclesDue('2026-01-31', 6, '2026-03-31').map((x) => x.n)).toEqual([1, 2, 3]);
+    expect(cyclesDue('2026-01-31', 2, '2027-01-01').map((x) => x.n)).toEqual([1, 2]);
+  });
+  it('spreads the pieces of a month through it, the last on the last day', () => {
+    expect(cyclePieceDays('2026-11-01', '2026-11-30', 4)).toEqual(['2026-11-07', '2026-11-15', '2026-11-22', '2026-11-30']);
+    expect(cyclePieceDays('2026-11-01', '2026-11-30', 1)).toEqual(['2026-11-30']);
+    expect(cyclePieceDays('2026-02-28', '2026-03-30', 3)).toHaveLength(3);
+    for (const d of cyclePieceDays('2026-02-28', '2026-03-30', 40)) expect(d >= '2026-02-28' && d <= '2026-03-30').toBe(true);
+    expect(cyclePieceDays('2026-11-01', '2026-11-30', 0)).toEqual([]);
+    expect(cyclePieceTitle(3, 2)).toBe('Month 3, piece 2');
+  });
+  it('counts changes left', () => {
+    expect(changesLeft(1, 3)).toBe(2);
+    expect(changesLeft(5, 3)).toBe(0);
+    expect(changesLabel(2, 3)).toBe('2 of 3 changes used');
+    expect(changesLabel(0, 1)).toBe('0 of 1 change used');
+  });
+});
+
+describe('the ruler', () => {
+  it('lists a step of 5 from 5 to 120, with a label on every multiple of 15', () => {
+    const t = rulerTicks(5, 120, 5, 15);
+    expect(t).toHaveLength(24);
+    expect(t[0]).toEqual({ value: 5, major: false });
+    expect(t.at(-1)!.value).toBe(120);
+    expect(t.filter((x) => x.major).map((x) => x.value)).toEqual([15, 30, 45, 60, 75, 90, 105, 120]);
+  });
+  it('lists a step of 1, and labels 20, 25 and 30 when labels come every 5', () => {
+    const t = rulerTicks(1, 30, 1, 5);
+    expect(t).toHaveLength(30);
+    expect(t.filter((x) => x.major).map((x) => x.value)).toEqual([5, 10, 15, 20, 25, 30]);
+    expect(rulerTicks(1, 3, 1).every((x) => !x.major)).toBe(true);
+  });
+  it('ends at the last step that fits when the max is not a multiple', () => {
+    expect(rulerTicks(0, 12, 5).map((x) => x.value)).toEqual([0, 5, 10]);
+    expect(rulerClamp(12, 0, 12, 5)).toBe(10);
+    expect(rulerClamp(999, 5, 118, 5)).toBe(115);
+    expect(rulerValueAt(10_000, 5, 118, 5, 14)).toBe(115);
+  });
+  it('holds a value outside the range to the nearest end, and a value between ticks to the nearest tick', () => {
+    expect(rulerClamp(-40, 5, 120, 5)).toBe(5);
+    expect(rulerClamp(999, 5, 120, 5)).toBe(120);
+    expect(rulerClamp(27, 5, 120, 5)).toBe(25);
+    expect(rulerClamp(28, 5, 120, 5)).toBe(30);
+    expect(rulerClamp(Number.NaN, 5, 120, 5)).toBe(5);
+  });
+  it('keeps decimal steps clean', () => {
+    expect(rulerTicks(0, 14, 0.5)).toHaveLength(29);
+    expect(rulerClamp(7.3, 0, 14, 0.5)).toBe(7.5);
+    expect(rulerClamp(0.3, 0, 1, 0.1)).toBe(0.3);
+    expect(rulerTicks(0, 1, 0.1).map((x) => x.value)[3]).toBe(0.3);
+  });
+  it('turns an offset into a value, and a value into a place on the ruler', () => {
+    expect(rulerValueAt(0, 5, 120, 5, 14)).toBe(5);
+    expect(rulerValueAt(14 * 4, 5, 120, 5, 14)).toBe(25);
+    expect(rulerValueAt(14 * 4 + 6, 5, 120, 5, 14)).toBe(25);
+    expect(rulerValueAt(14 * 4 + 8, 5, 120, 5, 14)).toBe(30);
+    expect(rulerValueAt(-50, 5, 120, 5, 14)).toBe(5);
+    expect(rulerIndex(25, 5, 120, 5)).toBe(4);
+    expect(rulerIndex(27, 5, 120, 5)).toBeCloseTo(4.4);
+    expect(rulerIndex(500, 5, 120, 5)).toBe(23);
+  });
+  it('survives a bad step or range', () => {
+    expect(rulerTicks(5, 1, 5)).toEqual([{ value: 5, major: false }]);
+    expect(rulerClamp(3, 0, 10, 0)).toBe(3);
+    expect(rulerClamp(3, 0, 10, -2)).toBe(3);
+  });
+});
+
+import { readFileSync } from 'node:fs';
+import { BADGE_BY_KEY, BADGE_FAMILIES, BADGE_FAMILY_META, BADGE_STAT_UNIT, BADGE_STATS, BADGE_TIERS, badgeProgress, badgesFrom, HONORS as ALL_HONORS, isPrivateBadge, PUBLIC_BADGES } from './index';
+
+describe('badges', () => {
+  it('has a sensible set with unique keys, valid tiers and families, and a rule on a count the server knows', () => {
+    expect(ALL_BADGES.length).toBeGreaterThanOrEqual(40);
+    expect(ALL_BADGES.length).toBeLessThanOrEqual(60);
+    expect(new Set(ALL_BADGES.map((b) => b.key)).size).toBe(ALL_BADGES.length);
+    expect(new Set(ALL_BADGES.map((b) => b.name)).size).toBe(ALL_BADGES.length);
+    for (const b of ALL_BADGES) {
+      expect(BADGE_TIERS, b.key).toContain(b.tier);
+      expect(BADGE_FAMILIES, b.key).toContain(b.family);
+      expect(BADGE_STATS, b.key).toContain(b.stat);
+      expect(BADGE_STAT_UNIT[b.stat], b.key).toBeTruthy();
+      expect(Number.isInteger(b.min) && b.min >= 1, b.key).toBe(true);
+      expect(b.how.length, b.key).toBeGreaterThan(8);
+      expect(b.emoji, b.key).toBeTruthy();
+    }
+    for (const f of BADGE_FAMILIES) expect(ALL_BADGES.some((b) => b.family === f), f).toBe(true);
+    for (const t of BADGE_TIERS) expect(ALL_BADGES.some((b) => b.tier === t), t).toBe(true);
+    // The keys that were stored before the redesign still exist, and keep their meaning.
+    for (const k of ['first_task', 'streak_3', 'streak_7', 'all_seven', 'ten_tasks', 'project_clear', 'level_5', 'spark_5', 'club_member', 'run_1', 'run_10', 'run_100k']) expect(BADGE_BY_KEY[k], k).toBeTruthy();
+    for (const [k, need] of Object.entries(RUN_BADGES)) {
+      const b = BADGE_BY_KEY[k]!;
+      expect(b.stat).toBe(need.runs > 0 ? 'runs_logged' : 'run_metres');
+      expect(b.min).toBe(need.runs > 0 ? need.runs : need.metres);
+    }
+  });
+  it('has a count in the server for every rule, named the same way', () => {
+    const db = readFileSync(new URL('../../../apps/api/src/db.ts', import.meta.url), 'utf8');
+    const from = db.indexOf('export async function getStats');
+    const sql = db.slice(from, db.indexOf('export function factsFor', from));
+    for (const stat of BADGE_STATS) {
+      if (stat === 'best_streak' || stat === 'level') continue; // these two come from the user row
+      expect(sql, stat).toContain(` AS ${stat}`);
+    }
+  });
+  it('earns a badge from its count and from nothing else', () => {
+    expect(badgesFrom({})).toEqual([]);
+    expect(badgesFrom({ tasks_done: 10 })).toEqual(['first_task', 'ten_tasks']);
+    expect(badgesFrom({ run_metres: 100_000 })).toEqual(expect.arrayContaining(['run_42k', 'run_100k']));
+    expect(badgesFrom({ run_metres: 100_000 })).not.toContain('run_500k');
+    expect(badgesFrom({ best_streak: 7 })).toEqual(['streak_3', 'streak_7']);
+    expect(badgesFrom({ pillars_set: 7 })).toEqual(['pillar_1', 'all_seven']);
+    expect(badgesFrom({ focus_minutes: 600 })).toEqual(['focus_10h']);
+  });
+  it('keeps the journal, money and focus families private', () => {
+    for (const k of ['journal_1', 'mood_7', 'review_1', 'discover_1', 'finance_1', 'invoice_1', 'focus_1', 'not_to_do_7']) expect(isPrivateBadge(k), k).toBe(true);
+    for (const k of ['first_task', 'post_1', 'run_1', 'sale_1', 'lesson_1']) expect(isPrivateBadge(k), k).toBe(false);
+    expect(PUBLIC_BADGES.every((b) => !BADGE_FAMILY_META[b.family].private)).toBe(true);
+    expect(PUBLIC_BADGES.length).toBeLessThan(ALL_BADGES.length);
+  });
+  it('says progress in plain words', () => {
+    expect(badgeProgress(BADGE_BY_KEY.streak_7!, 3)).toMatchObject({ label: '3 of 7 days', pct: 42, countable: true });
+    expect(badgeProgress(BADGE_BY_KEY.streak_7!, 12)).toMatchObject({ label: '7 of 7 days', pct: 100 });
+    expect(badgeProgress(BADGE_BY_KEY.first_task!, 0)).toMatchObject({ label: '0 of 1 task', countable: false });
+    expect(badgeProgress(BADGE_BY_KEY.run_100k!, 42_195).label).toBe('42.2 of 100 km');
+    expect(badgeProgress(BADGE_BY_KEY.focus_10h!, 90).label).toBe('1.5 of 10 hours');
+  });
+  it('gives every honor a tier and keeps the words plain', () => {
+    for (const h of ALL_HONORS) expect(BADGE_TIERS, h.key).toContain(h.tier);
+    const words = ALL_BADGES.map((b) => `${b.name}. ${b.how}`).join('\n');
+    expect(words).not.toMatch(/\bspark\b|\btower\b|Kreators Life|\bsprint\b|\bretro\b|\bvice\b|\bavoidance/i);
+    expect(nextBadge([])?.key).toBe('first_task');
+  });
+});
+
+describe('the client pays the TDS (gross-up)', () => {
+  const items = (cents: number) => [{ description: 'x', quantity: 1, unitCents: cents }];
+  const doc = (tdsBps: number, tdsMode: 'grossup' | 'show' | 'none' = 'grossup') => ({ discountMode: 'none' as const, discountValue: 0, gstBps: 0, gstSplit: false, tdsBps, tdsMode });
+  it('adds the extra, takes TDS off, and leaves exactly the price', () => {
+    const t = invoiceTotals(items(3500000), doc(1000));
+    expect(t.tdsAdjusted).toBe(388889);
+    expect(t.total).toBe(3888889);
+    expect(t.tdsDeducted).toBe(388889);
+    expect(t.netReceivable).toBe(3500000);
+  });
+  it('lands on the price to the cent for many prices and rates', () => {
+    for (const bps of [100, 200, 500, 1000, 2000, 3000]) {
+      for (let cents = 1; cents < 3000; cents += 7) {
+        const t = invoiceTotals(items(cents), doc(bps));
+        expect(t.netReceivable).toBe(cents);
+      }
+      for (const cents of [99999, 123457, 7000000, 35000000, 1000001]) expect(invoiceTotals(items(cents), doc(bps)).netReceivable).toBe(cents);
+    }
+  });
+  it('keeps GST on the price, and the net after TDS is the price plus GST', () => {
+    const t = invoiceTotals(items(1000000), { ...doc(1000), gstBps: 1800 });
+    expect(t.gst).toBe(180000);
+    expect(t.netReceivable).toBe(1180000);
+  });
+  it('adds nothing when it is not asked for', () => {
+    expect(invoiceTotals(items(1000000), doc(1000, 'show')).tdsAdjusted).toBe(0);
+    expect(invoiceTotals(items(1000000), doc(1000, 'none')).tdsDeducted).toBe(0);
+    expect(invoiceTotals(items(1000000), doc(0)).tdsAdjusted).toBe(0);
+  });
+  it('writes the note under the total with the rate', () => {
+    expect(tdsGrossupNote(1000)).toBe('*Additional 10% adjusted on total invoice amount applicable for TDS deducted to be borne by the company as per the agreement terms.');
   });
 });

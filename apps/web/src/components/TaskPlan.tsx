@@ -5,6 +5,7 @@ import { Link } from 'react-router';
 import { api, type TaskPlanBody } from '../lib/api';
 import { useRefreshAll } from '../lib/queries';
 import { RepeatPicker } from './RepeatPicker';
+import { RulerPicker } from './RulerPicker';
 import { Toggle } from './Toggle';
 
 const FIELD = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
@@ -164,6 +165,22 @@ export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange
           </button>
         ))}
       </div>
+      {/* The quick picks stay; the ruler is for anything between (5 to 240 minutes). A longer time can still be typed above. */}
+      <RulerPicker
+        label="Minutes it should take"
+        tone="paper"
+        accent="r2"
+        min={5}
+        max={240}
+        step={5}
+        labelEvery={30}
+        majorStep={30}
+        defaultValue={25}
+        value={Number(plan.minutes) > 0 ? Number(plan.minutes) : null}
+        onChange={(v) => set({ minutes: String(v) })}
+        format={(v) => (v % 60 === 0 ? `${v / 60}h` : String(v))}
+        valueText={(v) => `${v} minutes`}
+      />
     </div>
   );
 }

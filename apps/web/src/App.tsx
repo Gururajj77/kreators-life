@@ -61,8 +61,11 @@ const Agency = lazyNamed(() => import('./screens/Agency'), 'Agency');
 const AgencyClient = lazyNamed(() => import('./screens/AgencyClient'), 'AgencyClient');
 const AgencyInvoice = lazyNamed(() => import('./screens/AgencyInvoice'), 'AgencyInvoice');
 const AgencyContract = lazyNamed(() => import('./screens/AgencyContract'), 'AgencyContract');
+const AgencyDoc = lazyNamed(() => import('./screens/AgencyDoc'), 'AgencyDoc');
 const ClientPortal = lazyNamed(() => import('./site/ClientPortal'), 'ClientPortal');
 const ContractPublic = lazyNamed(() => import('./site/ContractPublic'), 'ContractPublic');
+const DocPublic = lazyNamed(() => import('./site/DocPublic'), 'DocPublic');
+const PortalDocGate = lazyNamed(() => import('./components/PortalLock'), 'PortalDocGate');
 const Run = lazyNamed(() => import('./screens/Run'), 'Run');
 const RunClubPage = lazyNamed(() => import('./screens/Run'), 'RunClubPage');
 const Store = lazyNamed(() => import('./screens/Store'), 'Store');
@@ -223,9 +226,10 @@ const router = createBrowserRouter([
   { path: '/7rp', element: <SevenRP /> },
   { path: '/features/:key', element: <Feature /> },
   { path: '/c/:code', element: <CertificatePage /> },
-  { path: '/i/:token', element: <InvoicePage /> },
+  { path: '/i/:token', element: <PortalDocGate kind="invoices"><InvoicePage /></PortalDocGate> },
   { path: '/a/:token', element: <ClientPortal /> },
-  { path: '/k/:token', element: <ContractPublic /> },
+  { path: '/k/:token', element: <PortalDocGate kind="contracts"><ContractPublic /></PortalDocGate> },
+  { path: '/d/:token', element: <PortalDocGate kind="agency/doc"><DocPublic /></PortalDocGate> },
   { path: '/unsubscribe/:token', element: <Unsubscribe /> },
   { path: '/terms', element: <Policy kind="terms" /> },
   { path: '/privacy', element: <Policy kind="privacy" /> },
@@ -295,6 +299,7 @@ const router = createBrowserRouter([
       { path: '/agency', element: gated('agency', <Agency />) },
       { path: '/agency/invoices/:id', element: gated('agency', <AgencyInvoice />) },
       { path: '/agency/contracts/:id', element: gated('agency', <AgencyContract />) },
+      { path: '/agency/docs/:id', element: gated('agency', <AgencyDoc />) },
       { path: '/agency/:id', element: gated('agency', <AgencyClient />) },
       // people
       { path: '/party', element: gated('party', <Party />) },

@@ -1,10 +1,24 @@
-import { fillContractText, money, packageRate, type ContractAnswer, type ContractDoc, type ContractSection } from '@kreators/shared';
+import { contractParties, docDateTime, fillContractText, hasPartiesSection, money, packageRate, parseDocStyle, stripNumber, type ContractAnswer, type ContractDoc, type ContractSection } from '@kreators/shared';
 import { Fragment, type ReactNode } from 'react';
 import { Inert } from './Inert';
-import { tie } from '../lib/text';
+import { PrintSheet, type SheetStamp } from './PrintSheet';
 
 /** A day as a person reads it on paper: 12 Oct 2026. */
 export const paperDate = (iso: string): string => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+
+/** A short defined term in double quotes, such as "parties": set in bold on the page. */
+const DEFINED = /("[A-Za-z][A-Za-z '-]{1,26}")/g;
+function plainRun(text: string, key: string): ReactNode {
+  return text.split(DEFINED).map((part, i) =>
+    i % 2 === 1 ? (
+      <strong key={`${key}-d${i}`}>
+        <Inert text={part} />
+      </strong>
+    ) : (
+      <Inert key={`${key}-d${i}`} text={part} />
+    ),
+  );
+}
 
 /** **bold** inside a line, and nothing else: no links, no HTML. Every run of words goes through Inert, so an address stays plain text. */
 function inline(text: string, key: string): ReactNode[] {
@@ -14,9 +28,7 @@ function inline(text: string, key: string): ReactNode[] {
         <Inert text={part} />
       </strong>
     ) : (
-      <Fragment key={`${key}-${i}`}>
-        <Inert text={part} />
-      </Fragment>
+      <Fragment key={`${key}-${i}`}>{plainRun(part, `${key}-${i}`)}</Fragment>
     ),
   );
 }
@@ -38,7 +50,7 @@ function Words({ text, vars }: { text: string; vars: Record<string, string> }) {
           if (!plain.length) return;
           const k = `p${bi}-${out.length}`;
           out.push(
-            <p key={k} className="mt-sm m-0 text-[16px] font-semibold leading-relaxed">
+            <p key={k} className="legal-clause">
               {plain.map((l, i) => (
                 <Fragment key={i}>
                   {i > 0 && <br />}
@@ -53,9 +65,9 @@ function Words({ text, vars }: { text: string; vars: Record<string, string> }) {
           if (!bullets.length) return;
           const k = `u${bi}-${out.length}`;
           out.push(
-            <ul key={k} className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+            <ul key={k} className="legal-list">
               {bullets.map((b, i) => (
-                <li key={i} className="flex gap-xs text-[16px] font-semibold leading-relaxed">
+                <li key={i}>
                   <span aria-hidden="true" className="shrink-0 font-extrabold">
                     •
                   </span>
@@ -85,7 +97,6 @@ function Words({ text, vars }: { text: string; vars: Record<string, string> }) {
 }
 
 const one = (unit: string) => (unit.endsWith('s') ? unit.slice(0, -1) : unit);
-const cell = 'border border-line px-sm py-xs text-[14px] font-semibold';
 
 function Packages({ s, doc }: { s: ContractSection; doc: ContractDoc }) {
   const unit = s.unitName ?? 'pieces';
@@ -93,34 +104,34 @@ function Packages({ s, doc }: { s: ContractSection; doc: ContractDoc }) {
   const dash = (cents: number) => (cents > 0 ? money(cents, doc.currency) : '—');
   return (
     <div className="mt-sm overflow-x-auto">
-      <table className="w-full border-collapse text-left">
+      <table className="legal-table text-left">
         <thead>
-          <tr className="bg-line/40">
-            <th className={`${cell} font-extrabold`}>Package</th>
-            <th className={`${cell} font-extrabold`}>{unit.charAt(0).toUpperCase() + unit.slice(1)}</th>
-            <th className={`${cell} text-right font-extrabold`}>Package fee</th>
-            <th className={`${cell} text-right font-extrabold`}>Rate per {one(unit)}</th>
+          <tr>
+            <th>Package</th>
+            <th>{unit.charAt(0).toUpperCase() + unit.slice(1)}</th>
+            <th className="text-right">Package fee</th>
+            <th className="text-right">Rate per {one(unit)}</th>
           </tr>
         </thead>
         <tbody>
           {(s.packages ?? []).map((p, i) => (
             <tr key={i}>
-              <td className={cell}>
+              <td>
                 <Inert text={p.name} />
               </td>
-              <td className={cell}>{p.units}</td>
-              <td className={`${cell} text-right`}>{dash(p.feeCents)}</td>
-              <td className={`${cell} text-right`}>{dash(packageRate(p))}</td>
+              <td>{p.units}</td>
+              <td className="text-right">{dash(p.feeCents)}</td>
+              <td className="text-right">{dash(packageRate(p))}</td>
             </tr>
           ))}
           {s.extra && s.extra.units > 0 && (
             <tr>
-              <td className={cell}>
+              <td>
                 Additional {unit} beyond {top}
               </td>
-              <td className={cell}>Each block of {s.extra.units}</td>
-              <td className={`${cell} text-right`}>{dash(s.extra.feeCents)} a block</td>
-              <td className={`${cell} text-right`}>{dash(packageRate({ name: '', units: s.extra.units, feeCents: s.extra.feeCents }))}</td>
+              <td>Each block of {s.extra.units}</td>
+              <td className="text-right">{dash(s.extra.feeCents)} a block</td>
+              <td className="text-right">{dash(packageRate({ name: '', units: s.extra.units, feeCents: s.extra.feeCents }))}</td>
             </tr>
           )}
         </tbody>
@@ -192,30 +203,37 @@ function Brief({ s, answers, onAnswer }: { s: ContractSection; answers: Record<s
 }
 
 function Signatures({ doc, acceptance, signLine }: { doc: ContractDoc; acceptance?: { name: string; title: string; at: string } | null; signLine?: { name: string; title: string } | null }) {
-  const blank = ' ';
+  const blank = ' ';
   const row = (label: string, value: string, hand = false) => (
-    <p className="mt-xs m-0 flex gap-xs text-[16px] font-semibold">
+    <p className="legal-sign-line m-0">
       <span className="shrink-0">{label}</span>
-      <span className={`min-w-0 flex-1 border-b border-ink/40 pb-[2px] ${hand ? 'font-display text-[20px] italic' : ''}`}>{value || blank}</span>
+      <span className={hand ? 'font-display text-[20px] italic' : ''}>{value || blank}</span>
     </p>
   );
   const client = acceptance ?? (signLine ? { name: signLine.name, title: signLine.title, at: '' } : null);
   return (
-    <div className="mt-sm grid gap-md md:grid-cols-2">
-      <div>
-        <h3 className="m-0 text-[16px] font-extrabold">For the service provider</h3>
-        {row('Name:', doc.vars.provider ?? '')}
-        {row('Designation:', doc.vars.providerTitle ?? '')}
-        {row('Signature:', '')}
-        {row('Date:', '')}
+    <div>
+      <div className="legal-sign">
+        <div className="legal-sign-block">
+          <h3>For the service provider</h3>
+          {row('Name:', doc.vars.provider ?? '')}
+          {row('Designation:', doc.vars.providerTitle ?? '')}
+          {row('Signature:', '')}
+          {row('Date:', '')}
+        </div>
+        <div className="legal-sign-block">
+          <h3>For the client</h3>
+          {row('Name:', client?.name ?? '')}
+          {row('Designation:', client?.title ?? '')}
+          {row('Signature:', acceptance ? acceptance.name : '', true)}
+          {row('Date:', acceptance ? paperDate(acceptance.at) : '')}
+        </div>
       </div>
-      <div>
-        <h3 className="m-0 text-[16px] font-extrabold">For the client</h3>
-        {row('Name:', client?.name ?? '')}
-        {row('Designation:', client?.title ?? '')}
-        {row('Signature:', acceptance ? acceptance.name : '', true)}
-        {row('Date:', acceptance ? paperDate(acceptance.at) : '')}
-      </div>
+      {acceptance && (
+        <p className="legal-sign-accepted">
+          Accepted electronically by {acceptance.name} on {docDateTime(acceptance.at)}. Typed acceptance, not a certified e-signature.
+        </p>
+      )}
     </div>
   );
 }
@@ -228,19 +246,43 @@ interface Props {
   acceptance?: { name: string; title: string; at: string } | null;
   /** The name and title being typed, shown in the signature block before the client accepts. */
   signLine?: { name: string; title: string } | null;
+  /** AGR-1A2B3C, printed in the title block and the running header. */
+  reference?: string;
+  /** The date on the document. */
+  date?: string;
+  /** DRAFT, REVISED, SIGNED and so on, stamped faintly across the page. */
+  stamp?: SheetStamp | null;
+  /** An agreement, or one of the other documents (a summary, trial terms, a proposal, a report). */
+  kind?: 'agreement' | 'document';
 }
 
-/** An agreement as a page: the title, then every section in order. It prints as the page itself (print-doc). */
-export function ContractView({ doc, answers = {}, onAnswer, acceptance, signLine }: Props) {
+/** The sender's name and address for the top of the first page, from the names filled in. */
+function letterheadOf(doc: ContractDoc): { name: string; lines: string[] } {
+  const v = doc.vars;
+  const f = (k: string) => (v[k] ?? '').trim();
+  return { name: f('providerBusiness') || f('provider'), lines: [...f('providerAddress').split('\n'), [f('providerEmail'), f('providerPhone')].filter(Boolean).join(' | ')].map((l) => l.trim()).filter(Boolean) };
+}
+
+/** An agreement (or any sectioned document) as a page: the letterhead, the title block, then every section in order. It prints as a legal document (PrintSheet). */
+export function ContractView({ doc, answers = {}, onAnswer, acceptance, signLine, reference, date, stamp, kind = 'agreement' }: Props) {
+  const style = parseDocStyle(doc.style);
   return (
-    <article className="print-doc rounded-card bg-card p-md shadow-toy md:p-lg">
-      <h1 className="m-0 text-[28px] leading-tight">{tie(doc.title)}</h1>
-      {doc.subtitle && <p className="mt-xs m-0 text-[16px] font-bold text-ink-soft">{doc.subtitle}</p>}
+    <PrintSheet
+      kind={kind}
+      title={doc.title}
+      subtitle={doc.subtitle}
+      reference={reference}
+      date={date}
+      style={style}
+      stamp={stamp}
+      letterhead={letterheadOf(doc)}
+      parties={hasPartiesSection(doc) ? [] : contractParties(doc)}
+    >
       {doc.sections.map((s) => (
-        <section key={s.id} className="mt-lg border-t border-line pt-md" aria-label={s.heading || 'Section'}>
-          {s.heading && <h2 className="m-0 text-[22px] leading-tight">{s.heading}</h2>}
+        <section key={s.id} className="legal-sec" aria-label={s.heading || 'Section'}>
+          {s.heading && <h2 className="legal-sec-h">{style.heading === 'numbered' ? stripNumber(s.heading) : s.heading}</h2>}
           {s.body && (
-            <div className="prose-long">
+            <div>
               <Words text={s.body} vars={doc.vars} />
             </div>
           )}
@@ -249,7 +291,7 @@ export function ContractView({ doc, answers = {}, onAnswer, acceptance, signLine
           {s.kind === 'signatures' && <Signatures doc={doc} acceptance={acceptance} signLine={signLine} />}
         </section>
       ))}
-      {doc.sections.length === 0 && <p className="mt-md m-0 text-[16px] font-semibold text-ink-soft">This agreement has no sections yet.</p>}
-    </article>
+      {doc.sections.length === 0 && <p className="mt-md m-0 text-[16px] font-semibold text-ink-soft">This document has no sections yet.</p>}
+    </PrintSheet>
   );
 }

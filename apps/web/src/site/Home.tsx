@@ -5,9 +5,16 @@ import { HeroBlobs } from '../components/Hero';
 import { motion } from 'motion/react';
 import { Link } from 'react-router';
 import { Avatar } from '../components/Avatar';
+import { BackgroundPaths } from '../components/fx/BackgroundPaths';
+import { BorderBeam } from '../components/fx/BorderBeam';
+import { CountUp } from '../components/fx/CountUp';
+import { Magnet } from '../components/fx/Magnet';
+import { Marquee } from '../components/fx/Marquee';
+import { SpotlightCard } from '../components/fx/SpotlightCard';
+import { TextReveal } from '../components/fx/TextReveal';
 import { publicApi } from '../lib/api';
 import { useSession } from '../lib/store';
-import { BRAND_PITCH, FEATURES, SITE_FAQ } from './content';
+import { BRAND_PITCH, FEATURES, SITE_FAQ, SITE_FEATURES } from './content';
 import { rise, Tower } from './SevenRP';
 import { SiteLayout, useAppEntry } from './SiteLayout';
 
@@ -74,21 +81,29 @@ export function Home() {
   return (
     <SiteLayout>
       {/* The hero, read like a poster: the hook from across the room, the context closer, the details at arm's length. */}
-      <section className="relative grid gap-lg pt-lg md:grid-cols-2 md:items-center md:pt-xl">
+      <section className="relative isolate grid gap-lg pt-lg md:grid-cols-2 md:items-center md:pt-xl">
+        <BackgroundPaths />
         <HeroBlobs tone="ink" kind="blossom" />
         <div className="@container">
           <p className={eyebrow}>For creators, freelancers, small agencies and students, 18 and up</p>
           {/* Sized from the column width so each line stays whole. */}
           <h1 className="type-hook mt-sm text-[clamp(40px,13cqw,84px)]">
-            Grow your work <em>without losing your life</em>
+            <TextReveal
+              parts={[
+                { text: 'Grow your work' },
+                { text: 'without losing your life', em: true },
+              ]}
+            />
           </h1>
           <p className="type-context mt-md m-0 max-w-[520px] text-[20px] text-ink-soft">
             Your work is one of seven relationships. When it eats the other six, the work suffers too. kreators.app is a daily game that keeps all seven moving, with the tools a creator needs built in.
           </p>
           <div className="mt-lg flex flex-wrap items-center gap-md">
-            <Link to={start} className="toy inline-flex min-h-[56px] items-center rounded-pill bg-ink px-lg text-[18px] font-bold text-on-ink">
-              {token ? 'Go to app' : 'Start free'}
-            </Link>
+            <Magnet>
+              <Link to={start} className="toy fx-shimmer fx-shimmer-intro inline-flex min-h-[56px] items-center rounded-pill bg-ink px-lg text-[18px] font-bold text-on-ink">
+                {token ? 'Go to app' : 'Start free'}
+              </Link>
+            </Magnet>
             <a href="#story" className="inline-flex min-h-[48px] items-center text-[16px] font-bold underline underline-offset-4 hover:text-ink-soft">
               See how it works
             </a>
@@ -100,6 +115,20 @@ export function Home() {
           <Tower />
         </div>
       </section>
+
+      {/* Every app, drifting past: real names from the feature list, each opening its own page. */}
+      <div className="mt-xl">
+        <Marquee label="Every app inside kreators.app" duration={Math.max(60, SITE_FEATURES.length * 3)}>
+          {SITE_FEATURES.map((m) => (
+            <li key={m.key}>
+              <Link to={`/features/${m.key}`} title={FEATURES[m.key]?.tagline} className="inline-flex min-h-[44px] items-center gap-xs whitespace-nowrap rounded-pill border border-line bg-card-strong px-sm text-[14px] font-bold text-ink-soft transition-colors hover:text-ink">
+                <span aria-hidden="true">{m.emoji}</span>
+                {m.name}
+              </Link>
+            </li>
+          ))}
+        </Marquee>
+      </div>
 
       {/* P: the problem. */}
       <section id="problem" className="mt-2xl scroll-mt-lg" aria-labelledby="problem-heading">
@@ -125,14 +154,14 @@ export function Home() {
         </motion.div>
         <ul className="bento mt-md list-none p-0 m-0">
           {VILLAINS.map((v, i) => (
-            <motion.li key={v.key} {...rise} className={`rounded-card bg-card p-md shadow-toy-soft ${i === 0 ? 'bento-w2 bento-h2 bento-feature' : ''}`}>
+            <SpotlightCard as="li" index={i} key={v.key} className={`rounded-card bg-card p-md shadow-toy-soft ${i === 0 ? 'bento-w2 bento-h2 bento-feature' : ''}`}>
               <p className="m-0 text-[32px] leading-none" aria-hidden="true">
                 {v.emoji}
               </p>
               <h3 className="mt-sm m-0 text-[22px] text-balance">{v.name}</h3>
               <p className="mt-xs m-0 text-balance text-[16px] font-semibold">{v.does}</p>
               <p className="mt-sm m-0 text-balance text-[14px] font-extrabold text-ink-soft">What it costs: {v.costs}</p>
-            </motion.li>
+            </SpotlightCard>
           ))}
         </ul>
         <p className="mt-md m-0 text-[16px] font-bold">Here is the good news: each one has a fix, and the setup chat asks which ones you face.</p>
@@ -169,13 +198,13 @@ export function Home() {
               ['Your pillars', 'A short session places your seven relationships on a map and builds a pyramid for the ones that need you most.'],
               ['Three boxes a day', 'Check in, do one small act, tick one task. Every tick climbs a pillar, and your guides grow with you.'],
             ].map(([t, d], i) => (
-              <li key={t} className={`rounded-tile bg-paper p-md ${i === 0 ? 'bento-w2' : ''}`}>
+              <SpotlightCard as="li" index={i} key={t} className={`rounded-tile bg-paper p-md ${i === 0 ? 'bento-w2' : ''}`}>
                 <p className="m-0 type-figure text-[28px] text-ink-mute" aria-hidden="true">
                   0{i + 1}
                 </p>
                 <h3 className="mt-sm m-0 text-[20px] text-balance">{t}</h3>
                 <p className="mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">{d}</p>
-              </li>
+              </SpotlightCard>
             ))}
           </ol>
           <Link to="/7rp" className="toy toy-soft mt-md inline-flex min-h-[48px] items-center rounded-pill bg-paper px-md font-bold">
@@ -194,10 +223,10 @@ export function Home() {
         </motion.div>
         <dl className="bento mt-md m-0">
           {FIVE_WS.map((x, i) => (
-            <motion.div key={x.w} {...rise} className={`rounded-card bg-card p-md shadow-toy-soft ${i === 0 || i === 3 || i === 4 ? 'bento-w2' : ''} ${i === 0 ? 'bento-feature' : ''}`}>
+            <SpotlightCard index={i} key={x.w} className={`rounded-card bg-card p-md shadow-toy-soft ${i === 0 || i === 3 || i === 4 ? 'bento-w2' : ''} ${i === 0 ? 'bento-feature' : ''}`}>
               <dt className="type-hook text-[28px]">{x.w}</dt>
               <dd className="mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">{x.text}</dd>
-            </motion.div>
+            </SpotlightCard>
           ))}
         </dl>
         <p className="type-measure mt-md m-0 text-[16px] font-semibold text-ink-soft">
@@ -220,10 +249,10 @@ export function Home() {
           </Link>
         </motion.div>
         <ul className="mt-md flex list-none flex-col gap-sm p-0 m-0">
-          {ANSWERS.map((a) => {
+          {ANSWERS.map((a, ai) => {
             const v = VILLAINS.find((x) => x.key === a.villain)!;
             return (
-              <motion.li key={a.villain} {...rise} className="grid gap-sm rounded-card bg-card p-md shadow-toy-soft md:grid-cols-[200px_1fr]">
+              <SpotlightCard as="li" index={Math.min(ai, 2)} key={a.villain} className="grid gap-sm rounded-card bg-card p-md shadow-toy-soft md:grid-cols-[200px_1fr]">
                 <div>
                   <p className="m-0 text-[28px] leading-none" aria-hidden="true">
                     {v.emoji}
@@ -246,7 +275,7 @@ export function Home() {
                       ))}
                   </ul>
                 </div>
-              </motion.li>
+              </SpotlightCard>
             );
           })}
         </ul>
@@ -285,10 +314,12 @@ export function Home() {
             </ul>
           </motion.div>
           {live.map(([label, value]) => (
-            <motion.div key={label} {...rise} className={`rounded-tile bg-card p-sm shadow-toy-soft ${live.length < 4 && live[live.length - 1]?.[0] === label ? ['', 'bento-w4', 'bento-w3', 'bento-w2'][live.length] ?? '' : ''}`}>
-              <p className="m-0 type-figure text-[28px]">{value.toLocaleString()}</p>
+            <SpotlightCard index={1} key={label} className={`rounded-tile bg-card p-sm shadow-toy-soft ${live.length < 4 && live[live.length - 1]?.[0] === label ? ['', 'bento-w4', 'bento-w3', 'bento-w2'][live.length] ?? '' : ''}`}>
+              <p className="m-0 type-figure text-[28px]">
+                <CountUp value={value} format={(n) => n.toLocaleString()} />
+              </p>
               <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{label} <span className="sr-only">live from the app</span></p>
-            </motion.div>
+            </SpotlightCard>
           ))}
         </div>
         <Link to="/explore" className="toy toy-soft mt-md inline-flex min-h-[48px] items-center rounded-pill bg-card px-md font-bold">
@@ -298,7 +329,8 @@ export function Home() {
 
       {/* O: the offer. Value, then the price, then the paid parts, then the way out. */}
       <section id="offer" className="mt-2xl scroll-mt-lg" aria-labelledby="offer-heading">
-        <motion.div {...rise} className="rounded-card bg-card p-md shadow-toy-soft md:p-lg">
+        <motion.div {...rise} className="relative rounded-card bg-card p-md shadow-toy-soft md:p-lg">
+          <BorderBeam />
           <p className={eyebrow}>The offer</p>
           <h2 id="offer-heading" className={h2}>
             Free to start. <em>Free to stay.</em>
@@ -374,7 +406,8 @@ export function Home() {
 
       {/* R: the response. One thing to do next. */}
       <section className="mt-2xl" aria-labelledby="start-heading">
-        <motion.div {...rise} className="rounded-card bg-ink p-md text-on-ink md:p-lg">
+        <motion.div {...rise} className="relative rounded-card bg-ink p-md text-on-ink md:p-lg">
+          <BorderBeam />
           <div className="flex flex-wrap gap-xs" aria-hidden="true">
             {RELATIONSHIPS.map((r) => (
               <Avatar key={r.key} relationship={r.key} size={36} decorative />
@@ -384,9 +417,13 @@ export function Home() {
             The villains have had enough time. <em>Your turn.</em>
           </h2>
           <p className="type-context mt-sm m-0 text-[18px] text-on-ink/80">{TOUCHSTONE}</p>
-          <Link to={start} className="toy mt-md inline-flex min-h-[56px] items-center rounded-pill bg-card px-lg text-[18px] font-bold text-ink">
-            {token ? 'Go to app' : 'Start free'}
-          </Link>
+          <div className="mt-md">
+            <Magnet>
+              <Link to={start} className="toy fx-shimmer inline-flex min-h-[56px] items-center rounded-pill bg-card px-lg text-[18px] font-bold text-ink">
+                {token ? 'Go to app' : 'Start free'}
+              </Link>
+            </Magnet>
+          </div>
           <ol className="mt-md flex list-none flex-col gap-xs p-0 m-0 text-[14px] font-semibold text-on-ink/80 sm:flex-row sm:gap-md">
             <li>1. Answer a few questions.</li>
             <li>2. We switch on the apps that fit.</li>

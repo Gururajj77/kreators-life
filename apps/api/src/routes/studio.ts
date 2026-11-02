@@ -135,12 +135,18 @@ export interface OrderRow {
   variant: string;
   refunded_at: string | null;
   created_at: string;
+  /** The price before a discount code (0 on an order made without one), and what the code took off. The platform pays that difference. */
+  list_cents?: number;
+  list_points?: number;
+  discount_cents?: number;
+  discount_points?: number;
 }
 export const ORDER_SELECT = `SELECT o.*, b.display_name AS buyer_name, p.title AS product_title, p.kind AS product_kind, COALESCE(NULLIF(l.label, ''), l.code) AS source_label FROM orders o JOIN users b ON b.id = o.buyer_id JOIN products p ON p.id = o.product_id LEFT JOIN tracked_links l ON l.id = o.source_link_id`;
 export const toOrder = (r: OrderRow): Order => ({
   id: r.id, buyerId: r.buyer_id, buyerName: nameOf({ display_name: r.buyer_name }), productId: r.product_id, productTitle: r.product_title, productKind: r.product_kind, points: r.points, cents: r.cents, currency: r.currency, status: r.status, couponCode: r.coupon_code, affiliateCode: r.affiliate_code,
   provider: r.provider ?? 'points', providerOrderId: r.provider_order_id ?? null, paidAt: r.paid_at ?? null, expiresAt: r.expires_at ?? null,
   sourceLinkId: r.source_link_id, sourceLabel: r.source_label, clickId: r.click_id, platformFeePoints: r.platform_fee_points ?? 0, intake: parseList(r.intake_json), variant: r.variant ?? '', refundedAt: r.refunded_at, createdAt: r.created_at,
+  discountCents: r.discount_cents ?? 0, discountPoints: r.discount_points ?? 0,
 });
 
 export interface BookingRow {

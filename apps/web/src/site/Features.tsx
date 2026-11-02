@@ -1,8 +1,9 @@
 import { MODULE_GROUPS, type ModuleGroup } from '@kreators/shared';
-import { motion } from 'motion/react';
 import { Link } from 'react-router';
 import { FEATURES, SITE_FEATURES } from './content';
-import { rise } from './SevenRP';
+import { BorderBeam } from '../components/fx/BorderBeam';
+import { Reveal } from '../components/fx/Reveal';
+import '../components/fx/spotlight';
 import { SiteLayout, useAppEntry } from './SiteLayout';
 
 /** The first card is wide; the last one stretches to close the row, so a group never ends with a hole in its grid. */
@@ -38,25 +39,26 @@ export function Features() {
             </h2>
             <ul className="bento mt-sm list-none p-0 m-0">
               {list.map((m, i) => (
-                <motion.li key={m.key} {...rise} className={span(i, list.length)}>
-                  <Link to={`/features/${m.key}`} className="toy toy-soft flex h-full min-h-[120px] flex-col rounded-tile bg-card p-md">
+                <Reveal as="li" index={i % 4} key={m.key} className={span(i, list.length)}>
+                  <Link to={`/features/${m.key}`} className="toy toy-soft fx-spot flex h-full min-h-[120px] flex-col rounded-tile bg-card p-md">
                     <span className="text-[28px]" aria-hidden="true">
                       {m.emoji}
                     </span>
                     <span className="mt-xs block text-[18px] font-extrabold leading-tight tracking-tight">{m.name}</span>
                     <span className="block text-balance text-[14px] font-semibold leading-snug text-ink-soft">{FEATURES[m.key]?.tagline ?? m.blurb}</span>
                   </Link>
-                </motion.li>
+                </Reveal>
               ))}
             </ul>
           </section>
         );
       })}
       <section className="mt-2xl">
-        <div className="rounded-card bg-ink p-lg text-on-ink">
+        <div className="relative rounded-card bg-ink p-lg text-on-ink">
+          <BorderBeam />
           <h2 className="type-hook text-[clamp(32px,6vw,56px)] text-on-ink">Switch on only <em>what you need</em></h2>
           <p className="type-context mt-sm m-0 text-[18px] text-on-ink/80">Answer a few questions and we switch on the apps that fit you. Change them any time, free.</p>
-          <Link to={entry === '/home' ? '/home' : '/start'} className="toy mt-md inline-flex min-h-[56px] items-center rounded-pill bg-card px-lg text-[18px] font-bold text-ink">
+          <Link to={entry === '/home' ? '/home' : '/start'} className="toy fx-shimmer mt-md inline-flex min-h-[56px] items-center rounded-pill bg-card px-lg text-[18px] font-bold text-ink">
             Start free
           </Link>
         </div>

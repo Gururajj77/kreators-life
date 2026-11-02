@@ -18,6 +18,9 @@ export const MODULE_FOR_PREFIX: Record<string, readonly string[]> = {
   party: ['party'],
   run: ['run'],
   community: ['community'],
+  // Chat channels: a Community channel needs Community, a Bond channel needs Bond. Said out loud, though the parent prefix would give the same.
+  'community/channels': ['community'],
+  'bond/channels': ['bond'],
   club: ['club'],
   leaderboard: ['leaderboard'],
   cards: ['cards'],
@@ -52,6 +55,8 @@ export const MODULE_FOR_PREFIX: Record<string, readonly string[]> = {
   proposals: ['tv', 'fund'],
   manage: ['manage'],
   internal: ['observability'],
+  // Not listed on purpose: `discounts` (a signed-in person asking whether a code works) is core. It serves plans and top-ups, which belong to no
+  // module, and it only prices an item; each area's own checkout (store, school, party, credits) is gated like any other route.
 };
 
 /** The modules an API path under /api belongs to, or null for the core. */

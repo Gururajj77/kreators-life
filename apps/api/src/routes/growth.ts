@@ -405,13 +405,19 @@ export async function refundOrder(db: D1Database, env: Env, o: OrderRow & { plat
   const flipped = await db.prepare("UPDATE orders SET status = 'refunded', refunded_at = ?, refund_reason = ? WHERE id = ? AND status != 'refunded'").bind(now, reason, o.id).run();
   if (flipped.meta.changes !== 1) return 'already refunded';
   const stmts: D1PreparedStatement[] = [];
-  if (o.points > 0) {
+  // The buyer gets back what they paid. The seller was credited on the list price (a discount code is paid by the platform), so that is what comes back from them.
+  const settled = (o.list_points ?? 0) > 0 ? (o.list_points ?? 0) : o.points;
+  if (o.points > 0 || settled > 0) {
     const affiliate = o.affiliate_code ? await db.prepare('SELECT id FROM users WHERE referral_code = ?').bind(o.affiliate_code).first<{ id: string }>() : null;
-    const share = affiliate ? Math.round(o.points * 0.2) : 0;
-    const sellerGot = o.points - share - (o.platform_fee_points ?? 0);
+    const share = affiliate ? Math.round(settled * 0.2) : 0;
+    const sellerGot = settled - share - (o.platform_fee_points ?? 0);
+    if (o.points > 0) {
+      stmts.push(
+        db.prepare('UPDATE users SET points = points + ? WHERE id = ?').bind(o.points, o.buyer_id),
+        db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(o.buyer_id, o.points, 'refund', o.id, now),
+      );
+    }
     stmts.push(
-      db.prepare('UPDATE users SET points = points + ? WHERE id = ?').bind(o.points, o.buyer_id),
-      db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(o.buyer_id, o.points, 'refund', o.id, now),
       db.prepare('UPDATE users SET points = MAX(0, points - ?) WHERE id = ?').bind(sellerGot, o.owner_id),
       db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(o.owner_id, -sellerGot, 'refund_out', o.id, now),
     );

@@ -1,8 +1,9 @@
-import { PRODUCT_KIND_META, unlockAt } from '@kreators/shared';
+import { PRODUCT_KIND_META, productPayWays, unlockAt, type DiscountCheck } from '@kreators/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { Button } from '../components/Button';
+import { DiscountField } from '../components/DiscountField';
 import { LockedButton } from '../components/LockedButton';
 import { TrustBadge } from '../components/TrustBadge';
 import { useCelebrate } from '../components/Celebration';
@@ -61,6 +62,8 @@ export function ProductPage() {
   const q = useQuery({ queryKey: ['product', id, token], queryFn: () => api.publicProduct(id) });
   const config = useQuery({ queryKey: ['payments-config'], queryFn: publicApi.config, staleTime: 60_000 });
   const [coupon, setCoupon] = useState('');
+  // A discount code from the team. The server prices it again at checkout; this is what the person is shown.
+  const [discount, setDiscount] = useState<DiscountCheck | null>(null);
   const [offer, setOffer] = useState('');
   const [question, setQuestion] = useState('');
   const [intake, setIntake] = useState<string[]>([]);
@@ -78,6 +81,8 @@ export function ProductPage() {
   const needsIntake = Boolean(p && p.kind !== 'session' && p.intake.length > 0);
   const price = p ? (p.pwyw ? Math.max(p.pricePoints, Number(offer) || 0) : p.pricePoints) : 0;
   const live = config.data?.mode === 'razorpay';
+  // Not every product takes points: the buy box offers only the ways this one can be paid for.
+  const ways = productPayWays({ pricePoints: p?.pricePoints ?? 0, priceCents: p?.priceCents ?? 0, pwyw: Boolean(p?.pwyw) });
 
   const finish = async () => {
     await refresh();
@@ -119,6 +124,8 @@ export function ProductPage() {
     mutationFn: ({ pay, replay }: { pay: 'points' | 'money'; replay?: boolean }) =>
       api.checkout(id, {
         coupon: coupon || undefined,
+        // The code goes only on the way of paying it takes something off: a percent takes points off, a fixed amount takes money off.
+        discountCode: discount && ((pay === 'money' && discount.offCents > 0) || (pay === 'points' && discount.offPoints > 0)) ? discount.code : undefined,
         affiliate: storedRef(),
         pay,
         points: p?.pwyw ? price : undefined,
@@ -158,9 +165,11 @@ export function ProductPage() {
   });
 
   const ready = (p?.kind !== 'dm' || question.trim().length > 0) && (!needsIntake || intake.filter((a) => a.trim()).length >= (p?.intake.length ?? 0)) && (!p?.pwyw || price >= (p?.pricePoints ?? 0));
-  const buyLabel = (label: string) => (p?.pricePoints === 0 && !p?.pwyw ? `${label} for free` : `${label} for ${price} points`);
+  const payPoints = discount && discount.offPoints > 0 ? discount.payPoints : price;
+  const buyLabel = (label: string) => (p?.pricePoints === 0 && !p?.pwyw ? `${label} for free` : payPoints === 0 ? `${label} for free` : `${label} for ${payPoints} points`);
   const busy = buy.isPending || pendingOrder !== null;
-  const moneyLabel = p ? `${(p.priceCents / 100).toFixed(2)} ${p.currency}` : '';
+  const payCents = p ? (discount && discount.offCents > 0 ? discount.payCents : p.priceCents) : 0;
+  const moneyLabel = p ? `${(payCents / 100).toFixed(2)} ${p.currency}` : '';
 
   return (
     <Screen tabs={false}>
@@ -244,9 +253,20 @@ export function ProductPage() {
                 ))}
               {!replayForSale && (
                 <label className="mt-sm block">
-                  <span className="block text-[14px] font-bold">Coupon</span>
+                  <span className="block text-[14px] font-bold">Creator coupon</span>
                   <input value={coupon} onChange={(e) => setCoupon(e.target.value.toUpperCase())} placeholder="Optional" className={field} />
                 </label>
+              )}
+              {!replayForSale && d.unlock.ok && (p.pricePoints > 0 || p.priceCents > 0) && (
+                <DiscountField
+                  className="mt-sm"
+                  area="product"
+                  itemId={p.id}
+                  points={p.pwyw ? price : undefined}
+                  value={discount?.code ?? ''}
+                  check={discount}
+                  onChange={(_code, c) => setDiscount(c)}
+                />
               )}
               {buy.isError && (
                 <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
@@ -265,18 +285,20 @@ export function ProductPage() {
                 </Button>
               ) : !d.unlock.ok ? (
                 <LockedButton unlock={d.unlock} className="mt-md" />
-              ) : (
+              ) : ways.points ? (
                 <Button full size="lg" className="mt-md" onClick={() => buy.mutate({ pay: 'points' })} disabled={busy || !ready}>
                   {buyLabel(meta.buy)}
                 </Button>
-              )}
-              <p className="mt-xs m-0 text-center text-[12px] font-bold text-ink-soft">You have {points} points.</p>
-              {p.priceCents > 0 && !replayForSale && d.unlock.ok && (
+              ) : null}
+              {(ways.points || replayForSale) && <p className="mt-xs m-0 text-center text-[12px] font-bold text-ink-soft">You have {points} points.</p>}
+              {ways.money && !replayForSale && d.unlock.ok && (
                 <>
-                  <Button variant="outline" full className="mt-sm" onClick={() => buy.mutate({ pay: 'money' })} disabled={busy || !ready || !d.unlock.ok}>
+                  <Button variant={ways.points ? 'outline' : 'primary'} full size={ways.points ? 'md' : 'lg'} className={ways.points ? 'mt-sm' : 'mt-md'} onClick={() => buy.mutate({ pay: 'money' })} disabled={busy || !ready || !d.unlock.ok}>
                     {live ? `Pay ${moneyLabel}` : `Record a money order (test), ${moneyLabel}`}
                   </Button>
-                  <p className="mt-xs m-0 text-center text-[12px] font-bold text-ink-soft">{live ? 'UPI, cards and netbanking through Razorpay. Your purchase unlocks once the bank confirms.' : 'Money checkout is not live yet, so this only records a test order and charges nothing. Points work today.'}</p>
+                  <p className="mt-xs m-0 text-center text-[12px] font-bold text-ink-soft">
+                    {live ? 'UPI, cards and netbanking through Razorpay. Your purchase unlocks once the bank confirms.' : `Money checkout is not live yet, so this only records a test order and charges nothing.${ways.points ? ' Points work today.' : ''}`}
+                  </p>
                 </>
               )}
             </section>

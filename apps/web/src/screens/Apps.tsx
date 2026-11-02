@@ -4,6 +4,8 @@ import { useState, type CSSProperties } from 'react';
 import { Link } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
+import { CondensedTitle } from '../components/fx/CondensedTitle';
+import { Reveal } from '../components/fx/Reveal';
 import { Screen } from '../components/Screen';
 import { SearchBox } from '../components/SearchBox';
 import { Sheet } from '../components/Sheet';
@@ -40,11 +42,13 @@ export function Apps() {
   return (
     <Screen>
       <header className="pt-lg">
-        <h1 className="text-[30px]">Apps</h1>
+        <CondensedTitle title="Apps">
+          <h1 className="type-large">Apps</h1>
+        </CondensedTitle>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
           {listed.length} on. Tap one to open it. The ones that matter most to you come first.
         </p>
-        <Link to="/you#features" className="toy mt-md flex items-center gap-sm rounded-card bg-ink p-md text-on-ink" style={{ '--toy-color': 'var(--color-ink)' } as CSSProperties}>
+        <Link to="/you#features" className="toy fx-shimmer mt-md flex items-center gap-sm rounded-card bg-ink p-md text-on-ink" style={{ '--toy-color': 'var(--color-ink)' } as CSSProperties}>
           <span className="flex size-[48px] shrink-0 items-center justify-center rounded-pill bg-on-ink/15 text-[24px]" aria-hidden="true">
             🧩
           </span>
@@ -61,13 +65,13 @@ export function Apps() {
         </div>
       </header>
 
-      {groupOrder.map((g) => {
+      {groupOrder.map((g, gi) => {
         const list = listed.filter((m) => m.group === g);
         if (list.length === 0) return null;
         const rel = RELATIONSHIP_BY_KEY[MODULE_GROUP_ACCENT[g]];
         const on = list.filter((m) => m.on).length;
         return (
-          <section key={g} className="span-all mt-lg" aria-labelledby={`g-${g}`}>
+          <Reveal as="section" index={Math.min(gi, 3)} key={g} className="span-all mt-lg" aria-labelledby={`g-${g}`}>
             <div className="flex items-center gap-sm rounded-card p-sm" style={{ background: `var(--soft-${rel.key})` }}>
               <Avatar relationship={rel.key} size={40} decorative still mood={on > 0 ? 'happy' : 'sleepy'} />
               <div className="min-w-0 flex-1">
@@ -82,14 +86,14 @@ export function Apps() {
                 {on} on
               </span>
             </div>
-            <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+            <ul className="fx-inset mt-xs">
               {list.map((m) => (
                 <li key={m.key}>
                   <AppRow m={m} color={rel.color} tint={`var(--soft-${rel.key})`} unread={m.key === 'notifications' ? unread : 0} onAsk={() => setAsking(m)} />
                 </li>
               ))}
             </ul>
-          </section>
+          </Reveal>
         );
       })}
 
@@ -153,13 +157,13 @@ function AppRow({ m, color, tint, unread, onAsk }: { m: ModuleView; color: strin
   );
   if (m.on) {
     return (
-      <Link to={m.path} className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm text-ink" style={{ borderLeft: `6px solid ${color}` } as CSSProperties}>
+      <Link to={m.path} className="fx-row text-ink" style={{ '--tint': color } as CSSProperties}>
         {inner}
       </Link>
     );
   }
   return (
-    <button type="button" onClick={onAsk} className="toy toy-flat flex w-full items-center gap-sm rounded-tile border-2 border-dashed border-line bg-paper p-sm text-left text-ink" aria-label={`${m.name} is off. Switch it on`}>
+    <button type="button" onClick={onAsk} className="fx-row text-ink" aria-label={`${m.name} is off. Switch it on`}>
       {inner}
     </button>
   );

@@ -1,5 +1,5 @@
 import { anonAliasFrom, pageSizeOf, parseIdentities, parseRepeat, parsePriority, parseIntake, parseLinkBlocks, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
-import { BADGES, EMPTY_SOCIALS, parsePublicSettings, HONORS, isStaffFor, levelFromXp, PERMISSIONS, RELATIONSHIPS, roleRank, RUN_BADGES, taskReadyAt, timeHonors, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
+import { BADGE_STATS, BADGES, badgesFrom, EMPTY_SOCIALS, isPrivateBadge, parsePublicSettings, HONORS, isStaffFor, levelFromXp, PERMISSIONS, RELATIONSHIPS, roleRank, taskReadyAt, timeHonors, type BadgeFacts, type BadgesResponse, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
 import type { Context, Next } from 'hono';
 import type { AppEnv } from './env';
 import type { UserRow } from './env';
@@ -334,6 +334,8 @@ export interface Stats {
   /** Runs logged with a start code, and their metres, for the run badges. */
   runsLogged: number;
   runMetres: number;
+  /** Every count a badge rule reads, except the two that come from the user row (best streak and level). */
+  facts: Omit<BadgeFacts, 'best_streak' | 'level'>;
 }
 
 /** What a task tick is gated on: how many the person has ever ticked, and when the last one was. */
@@ -362,45 +364,69 @@ export function readyAtFor(r: { created_at: string; ready_at: string | null }, g
 }
 
 export async function getStats(db: D1Database, userId: string): Promise<Stats> {
+  // One read for every count a badge rule uses. Each column is named after its stat in BADGE_STATS; each is an indexed count for this person
+  // and nothing here reads a word anyone wrote (the journal and the trackers are counted, never opened).
   const row = await db
     .prepare(
       `SELECT
         (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'done') AS tasks_done,
+        (SELECT COUNT(DISTINCT relationship) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'done') AS tasks_pillars,
         (SELECT COUNT(*) FROM spark_completions WHERE user_id = ?1) AS sparks_done,
         (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'project' AND status = 'done') AS projects_cleared,
-        (SELECT COUNT(DISTINCT relationship) FROM nodes WHERE user_id = ?1 AND kind = 'pillar' AND status != 'archived') AS rels_with_pillars,
-        (SELECT COUNT(*) FROM memberships WHERE user_id = ?1 AND status IN ('accepted', 'member', 'active')) AS club,
+        (SELECT COUNT(DISTINCT relationship) FROM nodes WHERE user_id = ?1 AND kind = 'pillar' AND status != 'archived') AS pillars_set,
+        (SELECT COUNT(*) FROM not_to_do_days WHERE user_id = ?1 AND status = 'kept') AS not_to_do_kept,
+        (SELECT COUNT(*) FROM focus_rounds WHERE user_id = ?1) AS focus_rounds,
+        (SELECT COALESCE(SUM(minutes), 0) FROM focus_rounds WHERE user_id = ?1) AS focus_minutes,
+        (SELECT COUNT(*) FROM journal_entries WHERE user_id = ?1) AS journal_entries,
+        (SELECT COUNT(*) FROM reviews WHERE user_id = ?1) AS reviews_written,
+        (SELECT COUNT(DISTINCT date) FROM wellbeing_logs WHERE user_id = ?1 AND kind = 'mood') AS mood_days,
+        (SELECT COUNT(*) FROM wellbeing_logs WHERE user_id = ?1 AND kind = 'mindful') AS mindful_logs,
+        (SELECT COUNT(*) FROM discover_results WHERE user_id = ?1) AS discover_taken,
+        (SELECT COUNT(*) FROM community_posts WHERE user_id = ?1 AND anonymous = 0 AND hidden_at IS NULL AND held_at IS NULL) AS posts,
+        (SELECT COUNT(*) FROM community_replies WHERE user_id = ?1 AND anonymous = 0 AND hidden_at IS NULL) AS replies,
+        (SELECT COUNT(*) FROM friendships WHERE requester_id = ?1 AND status = 'accepted') + (SELECT COUNT(*) FROM friendships WHERE recipient_id = ?1 AND status = 'accepted') AS friends,
+        (SELECT COUNT(*) FROM follows WHERE owner_id = ?1) AS followers,
+        (SELECT COUNT(*) FROM users WHERE referred_by = (SELECT referral_code FROM users WHERE id = ?1) AND email IS NOT NULL) AS referrals,
+        (SELECT COUNT(*) FROM attendee_claims WHERE user_id = ?1) AS events_claimed,
+        (SELECT COUNT(*) FROM products WHERE owner_id = ?1 AND status = 'live') AS products_live,
+        (SELECT COUNT(*) FROM orders WHERE owner_id = ?1 AND status = 'paid' AND buyer_id != ?1) AS sales,
+        (SELECT COUNT(*) FROM bounty_submissions WHERE user_id = ?1 AND status = 'paid') AS bounties_paid,
+        (SELECT COUNT(*) FROM finance_transactions WHERE user_id = ?1 AND source = 'manual') AS finance_entries,
+        (SELECT COUNT(*) FROM finance_goals WHERE user_id = ?1 AND target_cents > 0 AND saved_cents >= target_cents) AS finance_goals_done,
+        (SELECT COUNT(*) FROM invoices WHERE user_id = ?1 AND status = 'paid') AS invoices_paid,
         (SELECT COUNT(*) FROM run_entries WHERE user_id = ?1 AND status = 'logged') AS runs_logged,
-        (SELECT COALESCE(SUM(metres), 0) FROM run_entries WHERE user_id = ?1 AND status = 'logged') AS run_metres`,
+        (SELECT COALESCE(SUM(metres), 0) FROM run_entries WHERE user_id = ?1 AND status = 'logged') AS run_metres,
+        (SELECT COUNT(*) FROM lesson_progress WHERE user_id = ?1) AS lessons_done,
+        (SELECT COUNT(*) FROM certificates WHERE user_id = ?1) AS certificates,
+        (SELECT COUNT(*) FROM memberships WHERE user_id = ?1 AND status IN ('accepted', 'member', 'active')) AS club`,
     )
     .bind(userId)
-    .first<{ tasks_done: number; sparks_done: number; projects_cleared: number; rels_with_pillars: number; club: number; runs_logged: number; run_metres: number }>();
+    .first<Record<string, number>>();
+  const facts = {} as Stats['facts'];
+  for (const k of BADGE_STATS) if (k !== 'best_streak' && k !== 'level') facts[k] = row?.[k] ?? 0;
   return {
-    tasksDone: row?.tasks_done ?? 0,
-    sparksDone: row?.sparks_done ?? 0,
-    projectsCleared: row?.projects_cleared ?? 0,
-    relationshipsWithPillars: row?.rels_with_pillars ?? 0,
-    clubMember: (row?.club ?? 0) > 0,
-    runsLogged: row?.runs_logged ?? 0,
-    runMetres: row?.run_metres ?? 0,
+    tasksDone: facts.tasks_done,
+    sparksDone: facts.sparks_done,
+    projectsCleared: facts.projects_cleared,
+    relationshipsWithPillars: facts.pillars_set,
+    clubMember: facts.club > 0,
+    runsLogged: facts.runs_logged,
+    runMetres: facts.run_metres,
+    facts,
   };
 }
 
-export function computeBadges(user: { xp: number; best_streak: number }, stats: Stats): string[] {
-  const earned = new Set<string>();
-  if (stats.tasksDone >= 1) earned.add('first_task');
-  if (user.best_streak >= 3) earned.add('streak_3');
-  if (user.best_streak >= 7) earned.add('streak_7');
-  if (stats.relationshipsWithPillars >= RELATIONSHIPS.length) earned.add('all_seven');
-  if (stats.tasksDone >= 10) earned.add('ten_tasks');
-  if (stats.projectsCleared >= 1) earned.add('project_clear');
-  if (levelFromXp(user.xp) >= 5) earned.add('level_5');
-  if (stats.sparksDone >= 5) earned.add('spark_5');
-  if (stats.clubMember) earned.add('club_member');
-  if (stats.runsLogged >= RUN_BADGES.run_1.runs) earned.add('run_1');
-  if (stats.runsLogged >= RUN_BADGES.run_10.runs) earned.add('run_10');
-  if (stats.runMetres >= RUN_BADGES.run_100k.metres) earned.add('run_100k');
-  return BADGES.map((b) => b.key).filter((k) => earned.has(k));
+/** Every count at zero, for a place that knows only some of them (the leaderboard's pool). */
+export const emptyFacts = (): Stats['facts'] => Object.fromEntries(BADGE_STATS.filter((k) => k !== 'best_streak' && k !== 'level').map((k) => [k, 0])) as Stats['facts'];
+
+/** The counts the rules read for one person: the stats plus the two that sit on the user row. */
+export function factsFor(user: { xp: number; best_streak: number }, stats: Pick<Stats, 'facts'>): BadgeFacts {
+  return { ...stats.facts, best_streak: user.best_streak, level: levelFromXp(user.xp) };
+}
+
+/** The badges a person's counts earn right now, in catalogue order. */
+export function computeBadges(user: { xp: number; best_streak: number }, stats: Pick<Stats, 'facts'>): string[] {
+  return badgesFrom(factsFor(user, stats));
 }
 
 /** Badges a super admin gave by hand. */
@@ -414,12 +440,53 @@ export const withGranted = (earned: readonly string[], granted: readonly string[
   return BADGES.map((b) => b.key).filter((k) => have.has(k));
 };
 
+/** Earned dates were first kept on this day. An older account seen for the first time gets the badges it already had with no date. */
+const BADGE_DATES_FROM = '2026-11-02';
+
+/**
+ * Everything about a person's badges in one go: what their counts earn now, what was earned before (a badge once earned is never taken back,
+ * even when a count drops, like a deleted post), what the team gave by hand, and when each was earned. New ones are written to `badge_awards`
+ * (INSERT OR IGNORE, so two taps at once earn once) unless `persist` is off, as on someone else's public page.
+ */
+export async function badgeState(
+  db: D1Database,
+  user: Pick<UserRow, 'id' | 'xp' | 'best_streak' | 'created_at'>,
+  opts: { stats?: Stats; persist?: boolean } = {},
+): Promise<{ keys: string[]; facts: BadgeFacts; at: Map<string, string | null>; given: Set<string> }> {
+  const [stats, granted, stored] = await Promise.all([
+    opts.stats ? Promise.resolve(opts.stats) : getStats(db, user.id),
+    grantedBadges(db, user.id),
+    db.prepare('SELECT badge_key, earned_at FROM badge_awards WHERE user_id = ?').bind(user.id).all<{ badge_key: string; earned_at: string | null }>(),
+  ]);
+  const facts = factsFor(user, stats);
+  const at = new Map(stored.results.map((r) => [r.badge_key, r.earned_at]));
+  const fresh = badgesFrom(facts).filter((k) => !at.has(k));
+  if (fresh.length) {
+    const when = stored.results.length === 0 && user.created_at < BADGE_DATES_FROM ? null : nowIso();
+    if (opts.persist !== false) {
+      await db.batch(fresh.map((k) => db.prepare('INSERT OR IGNORE INTO badge_awards (user_id, badge_key, earned_at) VALUES (?, ?, ?)').bind(user.id, k, when)));
+    }
+    for (const k of fresh) at.set(k, when);
+  }
+  const given = new Set(granted);
+  const have = new Set([...at.keys(), ...given]);
+  return { keys: BADGES.map((b) => b.key).filter((k) => have.has(k)), facts, at, given };
+}
+
 export async function badgesNow(db: D1Database, userId: string): Promise<string[]> {
   const user = await getUser(db, userId);
   if (!user) return [];
-  const [stats, granted] = await Promise.all([getStats(db, userId), grantedBadges(db, userId)]);
-  return withGranted(computeBadges(user, stats), granted);
+  return (await badgeState(db, user)).keys;
 }
+
+/** What the badge gallery reads: what is held, when it was earned, and the counts behind every rule. Owner only. */
+export async function badgesFor(db: D1Database, user: UserRow): Promise<BadgesResponse> {
+  const s = await badgeState(db, user);
+  return { held: s.keys.map((key) => ({ key, at: s.at.get(key) ?? null, given: s.given.has(key) && !s.at.has(key) })), progress: s.facts };
+}
+
+/** The badges anyone may see on a person's page: the held ones, minus the private families (journal, money, focus). */
+export const publicBadgeKeys = (keys: readonly string[]): string[] => keys.filter((k) => !isPrivateBadge(k));
 
 /** Honors stored by an admin plus the ones time has unlocked, in catalog order. */
 export async function honorKeys(db: D1Database, user: UserRow): Promise<string[]> {

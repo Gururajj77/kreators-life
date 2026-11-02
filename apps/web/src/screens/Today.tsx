@@ -1,6 +1,6 @@
 import { RELATIONSHIP_BY_KEY, TASK_SORTS, addDays, isTaskSort, sortTasks, type Node } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Link } from 'react-router';
 import { Avatar } from '../components/Avatar';
@@ -9,22 +9,27 @@ import { useCelebrate } from '../components/Celebration';
 import { CheckRow } from '../components/CheckRow';
 import { DayBlocks } from '../components/DayBlocks';
 import { EvolutionReveal } from '../components/EvolutionReveal';
+import { Fold } from '../components/Fold';
 import { GuideCard, useGuide } from '../components/Guide';
 import { NotToDoBlock } from '../components/NotToDoList';
 import { Nudge } from '../components/Nudge';
 import { Person } from '../components/Person';
 import { RoutineSection } from '../components/RoutineSection';
 import { Screen } from '../components/Screen';
-import { SkeletonList } from '../components/Skeleton';
+import { Skeleton, SkeletonList } from '../components/Skeleton';
 import { RemindersSection } from '../components/Reminders';
 import { TaskRow } from '../components/TaskRow';
 import { TaskPanel } from '../components/TaskPlan';
 import { WeekPlanButton } from '../components/WeekPlan';
 import { api } from '../lib/api';
 import { prettyDate } from '../lib/date';
+import { lazyNamed } from '../lib/lazy';
 import { useMe, useRefreshAll, useToday } from '../lib/queries';
 import { useActionQueue } from '../lib/useActionQueue';
 import { useParamState } from '../lib/useParamState';
+
+// The month calendar downloads only when its toggle is opened.
+const TaskMonth = lazyNamed(() => import('../components/TaskMonth'), 'TaskMonth');
 
 /** A task on Daily with its plan panel one tap away. */
 function DailyTask({ t, date, queue, onToggle, subtitle }: { t: Node; date: string; queue: ReturnType<typeof useActionQueue>; onToggle: () => void; subtitle: string }) {
@@ -255,6 +260,11 @@ export function Today() {
                 ))}
               </div>
             )}
+            <Fold className="mt-xs" title="Month calendar">
+              <Suspense fallback={<Skeleton className="h-[320px]" />}>
+                <TaskMonth today={date} />
+              </Suspense>
+            </Fold>
             {data.timePlan.plannedMin + data.timePlan.doneMin > 0 && (
               <div className="mt-xs rounded-tile bg-card p-sm shadow-toy-soft" aria-label="Time plan">
                 <div className="flex items-baseline justify-between gap-sm">

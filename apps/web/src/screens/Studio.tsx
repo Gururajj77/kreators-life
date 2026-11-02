@@ -1,4 +1,4 @@
-import { PRODUCT_KIND_META, PRODUCT_KINDS, type Booking, type Order, type Product, type ProductKind } from '@kreators/shared';
+import { money, PRODUCT_KIND_META, PRODUCT_KINDS, type Booking, type Order, type Product, type ProductKind } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -130,7 +130,7 @@ export function Studio({ tab = 'home' }: { tab?: 'home' | 'page' | 'bookings' | 
                         {PRODUCT_KIND_META[p.kind].name}, {p.status}, {p.sold} sold
                       </span>
                     </span>
-                    <span className="shrink-0 text-[14px] font-extrabold">{p.pricePoints} pts</span>
+                    <span className="shrink-0 text-[14px] font-extrabold">{p.pricePoints === 0 && p.priceCents > 0 ? money(p.priceCents, p.currency) : `${p.pricePoints} pts`}</span>
                   </Link>
                 </li>
               ))}
