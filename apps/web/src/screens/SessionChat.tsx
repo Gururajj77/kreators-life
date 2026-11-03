@@ -25,11 +25,17 @@ import {
   MAX_INSECURITIES,
   nextQuestionId,
   PENALTIES,
+  isOptionalPillar,
   pickFocus,
+  picksOfPlacement,
   placementFlags,
+  placementFromPicks,
+  priorityOrder,
+  readFeelings,
   QUESTION_BY_ID,
   RELATIONSHIP_BY_KEY,
   RELATIONSHIPS,
+  awayPlacement,
   routineFor,
   SCORE_LABEL,
   SCORECARD,
@@ -49,13 +55,17 @@ import {
   type Question,
   characterHello,
 } from '@kreators/shared';
+import { Check } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { AccountForm } from '../components/AccountForm';
 import { ProfileCard } from '../components/ProfileCard';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
+import { Fold } from '../components/Fold';
+import { Icon } from '../components/Icon';
+import { Toggle } from '../components/Toggle';
 import { ConsciousnessMap, PlacementChart } from '../components/LifeMap';
 import { Pyramid } from '../components/Pyramid';
 import { Sheet } from '../components/Sheet';
@@ -73,21 +83,22 @@ import { forgetKept, useKept, useKeptRef } from '../lib/kept';
 // ---------------------------------------------------------------------------
 
 
-const PARTS = ['account', 'hello', 'map', 'way', 'scorecard', 'day', 'focus', 'plan', 'contract', 'call', 'pillars', 'steps', 'done'] as const;
+/**
+ * The parts the header names and the progress bar counts: eight, plus the account when there is none. The frame opens
+ * the map, what gets in the way is part of the map, the live call is a line in the contract, and the first steps are
+ * part of the pillars. The header shows a name and a bar, never "part 3 of 8".
+ */
+const PARTS = ['account', 'map', 'scorecard', 'day', 'focus', 'plan', 'contract', 'pillars', 'done'] as const;
 type Part = (typeof PARTS)[number];
 const PART_NAME: Record<Part, string> = {
   account: 'Your account',
-  hello: 'The frame',
-  map: 'The map',
-  way: 'What gets in the way',
-  scorecard: 'Scorecard',
+  map: 'Your map',
+  scorecard: 'How things are going',
   day: 'Your real day',
   focus: 'Your focus',
   plan: 'Routine and practices',
-  contract: 'The contract',
-  call: 'A live call',
+  contract: 'Your plan',
   pillars: 'Your pillars',
-  steps: 'First steps',
   done: 'What comes next',
 };
 
@@ -121,13 +132,16 @@ type Stage =
   | { part: 'focus' }
   | { part: 'plan'; sub: 'routine' | 'practices' }
   | { part: 'contract' }
-  | { part: 'call' }
   | { part: 'pillars'; id: string; history: string[]; own?: boolean }
   | { part: 'steps' }
   | { part: 'done' };
+/** Which named part each stage belongs to. */
+const PART_OF: Record<Stage['part'], Part> = { account: 'account', hello: 'map', map: 'map', way: 'map', scorecard: 'scorecard', day: 'day', focus: 'focus', plan: 'plan', contract: 'contract', pillars: 'pillars', steps: 'pillars', done: 'done' };
 
 interface Data {
   placements: Partial<Record<RelationshipKey, Placement>>;
+  /** Love, teachers or faith set aside as not part of life right now: placed at Neutrality, left out of the focus. */
+  away: RelationshipKey[];
   fears: Fear[];
   insecurities: Insecurity[];
   scores: Scores;
@@ -142,6 +156,7 @@ interface Data {
 }
 const EMPTY: Data = {
   placements: {},
+  away: [],
   fears: [],
   insecurities: [],
   scores: {},
@@ -188,18 +203,6 @@ const pill = (on: boolean) => `min-h-[44px] rounded-pill border-2 px-sm text-[14
 const card = (on: boolean) => `toy toy-flat w-full rounded-tile border-2 p-sm text-left ${on ? 'border-ink bg-card' : 'border-line bg-card'}`;
 const levelName = (v: number | undefined) => (v === undefined ? '' : (levelByValue(v)?.name ?? ''));
 
-/** The seven in order of what to work on: floors under Courage first (lowest first), then the lowest cores weighted by what weighs there. */
-function priorityOrder(placements: Placement[], insecurities: Insecurity[]): { key: RelationshipKey; why: string }[] {
-  const weight = (k: RelationshipKey) => insecurities.filter((i) => i.relationship === k).reduce((a, i) => a + i.weight, 0);
-  const rows = placements.map((p) => ({ key: p.relationship, f: placementFlags(p), w: weight(p.relationship) }));
-  const required = rows.filter((r) => r.f.required).sort((a, b) => a.f.floor - b.f.floor);
-  const rest = rows.filter((r) => !r.f.required).sort((a, b) => a.f.core - a.w * 10 - (b.f.core - b.w * 10));
-  return [
-    ...required.map((r) => ({ key: r.key, why: `drops to ${levelName(r.f.floor)} under stress, below Courage. A good place to start.` })),
-    ...rest.map((r) => ({ key: r.key, why: `${r.f.volatile ? 'a big drop under stress, check it weekly' : `lives at ${levelName(r.f.core)}`}${r.w ? ', and something you named weighs here' : ''}.` })),
-  ];
-}
-
 // ---------------------------------------------------------------------------
 // The cards. Each is one part answered in one go, drawn the way the card flow drew it.
 // ---------------------------------------------------------------------------
@@ -214,11 +217,21 @@ function FrameCard() {
             <span className="block text-[16px] font-bold">
               {r.name} <span className="font-semibold text-ink-soft">· {r.character}</span>
             </span>
-            <span className="block text-[14px] font-semibold text-ink-soft">{r.key === 'self' ? 'Body, health, mind.' : r.key === 'servant_leader' ? 'Work, money, time.' : r.question}</span>
+            <span className="block text-[14px] font-semibold text-ink-soft">{coversLine(r)}</span>
           </span>
         </li>
       ))}
     </ul>
+  );
+}
+
+/** The whole scale the map comes from, folded so the card stays light. Feelings are picked by name; the numbers only show the order. */
+function MapPicture() {
+  return (
+    <Fold title="See the whole map">
+      <p className="m-0 mb-xs text-[14px] text-ink-soft">From Shame at the bottom to Full Consciousness at the top.</p>
+      <ConsciousnessMap />
+    </Fold>
   );
 }
 
@@ -246,51 +259,170 @@ const ownValue = (q: Question) => {
   return best;
 };
 
-/** All seven placed in one go: for each, where you usually live and where you drop, the levels grouped by band. */
-function MapForm({ initial, onSend }: { initial: Partial<Record<RelationshipKey, Placement>>; onSend: Send }) {
-  const [v, setV] = useState<Partial<Record<RelationshipKey, { core?: number; floor?: number }>>>(Object.fromEntries(Object.entries(initial).map(([k, p]) => [k, { core: p?.core, floor: p?.floor }])));
-  const ready = RELATIONSHIPS.every((r) => v[r.key]?.core !== undefined && v[r.key]?.floor !== undefined);
-  const set = (k: RelationshipKey, which: 'core' | 'floor', value: string) => setV((x) => ({ ...x, [k]: { ...x[k], [which]: value === '' ? undefined : Number(value) } }));
-  const select = (k: RelationshipKey, which: 'core' | 'floor') => (
-    <label className="block">
-      <span className="block text-[12px] font-bold text-ink-soft">{which === 'core' ? 'Where you usually live' : 'Where you drop under stress'}</span>
-      <select value={v[k]?.[which] ?? ''} onChange={(e) => set(k, which, e.target.value)} className={field}>
-        <option value="">Pick a level</option>
-        {/* Top down, like the map: At ease first, Shame last. */}
-        {[...MAP_BANDS].reverse().map((b) => (
-          <optgroup key={b} label={`${MAP_BAND_META[b].name}: ${BAND_STATEMENTS[k][b]}`}>
-            {MAP_LEVELS.filter((l) => l.band === b)
-              .reverse()
-              .map((l) => (
-                <option key={l.value} value={l.value}>
-                  {l.name}. {l.sounds}
-                </option>
-              ))}
-          </optgroup>
-        ))}
-      </select>
-    </label>
-  );
+/** What a relationship covers, said under its name. */
+const coversLine = (r: (typeof RELATIONSHIPS)[number]) => (r.key === 'self' ? 'Your body, your health and your mind.' : r.key === 'servant_leader' ? 'Your work, your money and your time.' : r.question);
+
+/**
+ * The map, one relationship at a time. For each, tick every feeling you know from it, on good days and bad ("Pick all that
+ * you feel"); the core and the floor are worked out from the ticks (`placementFromPicks`). Your own words can suggest ticks
+ * (`readFeelings`, rules only), which you then confirm. Love, teachers and faith can be set aside as not part of your life
+ * right now. One card for the whole map, sent once when all seven are done.
+ */
+function MapForm({ initial, initialAway, onSend }: { initial: Partial<Record<RelationshipKey, Placement>>; initialAway: RelationshipKey[]; onSend: Send }) {
+  const [picks, setPicks] = useState<Partial<Record<RelationshipKey, number[]>>>(() => Object.fromEntries(RELATIONSHIPS.filter((r) => initial[r.key] && !initialAway.includes(r.key)).map((r) => [r.key, picksOfPlacement(initial[r.key]!)])));
+  const [away, setAway] = useState<RelationshipKey[]>(initialAway);
+  const done = (k: RelationshipKey) => away.includes(k) || (picks[k]?.length ?? 0) > 0;
+  const [at, setAt] = useState(() => Math.max(0, RELATIONSHIPS.findIndex((r) => !done(r.key))));
+  const [words, setWords] = useState('');
+  const [suggested, setSuggested] = useState<number[] | null>(null);
+  const top = useRef<HTMLDivElement>(null);
+  const r = RELATIONSHIPS[at]!;
+  const mine = picks[r.key] ?? [];
+  const isAway = away.includes(r.key);
+  const placed = isAway ? null : placementFromPicks(r.key, mine);
+  const allDone = RELATIONSHIPS.every((x) => done(x.key));
+  const go = (i: number) => {
+    setAt(i);
+    setWords('');
+    setSuggested(null);
+    top.current?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  };
+  const toggle = (v: number) => setPicks((p) => ({ ...p, [r.key]: mine.includes(v) ? mine.filter((x) => x !== v) : [...mine, v] }));
+  const setAside = (on: boolean) => setAway((a) => (on ? [...a, r.key] : a.filter((k) => k !== r.key)));
+  const nextOpen = () => {
+    const after = RELATIONSHIPS.findIndex((x, i) => i > at && !done(x.key));
+    return after >= 0 ? after : RELATIONSHIPS.findIndex((x) => !done(x.key));
+  };
+  const send = () => {
+    const rec: Record<string, string> = { away: JSON.stringify(away) };
+    const said: string[] = [];
+    for (const x of RELATIONSHIPS) {
+      if (away.includes(x.key)) {
+        said.push(`${x.name}: not part of my life right now`);
+        continue;
+      }
+      const p = placementFromPicks(x.key, picks[x.key] ?? [])!;
+      rec[`${x.key}.core`] = String(p.core);
+      rec[`${x.key}.floor`] = String(p.floor);
+      said.push(p.core === p.floor ? `${x.name}: ${levelName(p.core)}` : `${x.name}: ${levelName(p.floor)} to ${levelName(p.core)}`);
+    }
+    onSend(rec, said.join('. '));
+  };
+  const following = nextOpen();
+  const last = allDone || following < 0 || following === at;
   return (
-    <div>
-      <ul className="m-0 flex list-none flex-col gap-xs p-0">
-        {RELATIONSHIPS.map((r) => (
-          <li key={r.key} className="rounded-tile bg-card p-sm shadow-toy-soft">
-            <div className="flex items-center gap-sm">
-              <Avatar relationship={r.key} size={40} decorative still />
-              <span className="min-w-0 flex-1">
-                <span className="block text-[16px] font-bold">{r.name}</span>
-                <span className="block text-[14px] font-semibold text-ink-soft">{r.key === 'self' ? 'Body, health and mind sit here.' : r.key === 'servant_leader' ? 'Work, money and time sit here.' : r.question}</span>
-              </span>
-            </div>
-            <div className="mt-xs grid gap-xs md:grid-cols-2">
-              {select(r.key, 'core')}
-              {select(r.key, 'floor')}
-            </div>
+    <div ref={top} className="scroll-mt-[120px]">
+      {/* The seven, as a row of faces: where you are, and which are done. */}
+      <ol className="m-0 grid list-none grid-cols-7 gap-xs p-0" aria-label="The seven relationships">
+        {RELATIONSHIPS.map((x, i) => (
+          <li key={x.key}>
+            <button type="button" onClick={() => go(i)} aria-current={i === at ? 'step' : undefined} aria-label={`${x.name}${done(x.key) ? ', done' : ''}`} className={`toy toy-flat relative flex min-h-[48px] w-full items-center justify-center rounded-tile border-2 ${i === at ? 'border-ink bg-card' : 'border-transparent'}`}>
+              <Avatar relationship={x.key} size={32} decorative still />
+              {done(x.key) && (
+                <span aria-hidden="true" className="absolute right-[2px] top-[2px] flex size-[16px] items-center justify-center rounded-pill bg-ink text-on-ink">
+                  <Icon icon={Check} size={12} strokeWidth={3} />
+                </span>
+              )}
+            </button>
           </li>
         ))}
-      </ul>
-      <ChatActions full next="That is my map" ready={ready} onNext={() => onSend(Object.fromEntries(RELATIONSHIPS.flatMap((r) => [[`${r.key}.core`, String(v[r.key]!.core)], [`${r.key}.floor`, String(v[r.key]!.floor)]])), RELATIONSHIPS.map((r) => `${r.name}: ${levelName(v[r.key]?.floor)} to ${levelName(v[r.key]?.core)}`).join('. '))} />
+      </ol>
+
+      <div className="mt-sm rounded-tile bg-card p-sm shadow-toy-soft">
+        <div className="flex items-center gap-sm">
+          <Avatar relationship={r.key} size={40} decorative still />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[18px] font-bold">{r.name}</span>
+            <span className="block text-[14px] font-semibold text-ink-soft">{coversLine(r)}</span>
+          </span>
+        </div>
+        {isOptionalPillar(r.key) && (
+          <div className="mt-sm">
+            <Toggle compact on={isAway} onChange={setAside} label="Not part of my life right now" />
+          </div>
+        )}
+        {isAway ? (
+          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Set aside for now. It sits at Neutrality, stays out of your focus and gets no pyramid. You can turn it back on from your life map under Pillars.</p>
+        ) : (
+          <>
+            <p className="mt-sm m-0 text-[14px] font-bold">Pick all that you feel here, on good days and on bad ones.</p>
+            {[...MAP_BANDS].reverse().map((b) => (
+              <div key={b} className="mt-sm">
+                <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{MAP_BAND_META[b].name}</p>
+                <p className="m-0 text-[12px] font-semibold text-ink-soft">{BAND_STATEMENTS[r.key][b]}</p>
+                <ul className="fx-inset mt-xs">
+                  {MAP_LEVELS.filter((l) => l.band === b)
+                    .slice()
+                    .reverse()
+                    .map((l) => {
+                      const on = mine.includes(l.value);
+                      return (
+                        <li key={l.value}>
+                          <button type="button" role="checkbox" aria-checked={on} onClick={() => toggle(l.value)} className="fx-row">
+                            <span aria-hidden="true" className={`flex size-[24px] shrink-0 items-center justify-center rounded-[8px] border-2 ${on ? 'border-ink bg-ink text-on-ink' : 'border-line'}`}>
+                              {on && <Icon icon={Check} size={16} strokeWidth={3} />}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-[16px] font-bold">{l.name}</span>
+                              <span className="block text-[14px] font-semibold text-ink-soft">“{l.sounds}”</span>
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                </ul>
+              </div>
+            ))}
+            <Fold className="mt-sm" title="Say it in your own words">
+              <p className="m-0 mb-xs text-[14px] text-ink-soft">I read your words and suggest feelings. You choose which to tick.</p>
+              <label className="block">
+                <span className="sr-only">How {r.name.toLowerCase()} feels for you</span>
+                <textarea value={words} onChange={(e) => setWords(e.target.value)} rows={2} maxLength={600} placeholder="Like: I get scared to call, but I keep trying" className={field} />
+              </label>
+              <div className="mt-xs flex">
+                <Button type="button" variant="outline" disabled={words.trim().length < 3} onClick={() => setSuggested(readFeelings(words))}>
+                  Read my words
+                </Button>
+              </div>
+              {suggested && (
+                <div className="mt-xs" role="status">
+                  {suggested.length === 0 ? (
+                    <p className="m-0 text-[14px] font-semibold text-ink-soft">I could not find a feeling in that. Try words like scared, fine or grateful, or tick the list above.</p>
+                  ) : (
+                    <>
+                      <p className="m-0 text-[14px] font-semibold">That sounds like {listOf(suggested.map((v) => levelName(v)))}. Is that right?</p>
+                      <div className="mt-xs flex flex-wrap gap-xs">
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            setPicks((p) => ({ ...p, [r.key]: [...new Set([...mine, ...suggested])] }));
+                            setSuggested(null);
+                          }}
+                        >
+                          Yes, tick these
+                        </Button>
+                        <Button type="button" variant="outline" onClick={() => setSuggested(null)}>
+                          No, I will pick
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </Fold>
+            {placed && (
+              <p className="mt-sm m-0 rounded-tile bg-paper p-sm text-[14px] font-bold" role="status">
+                {placed.core === placed.floor ? `You usually sit at ${levelName(placed.core)}.` : `You usually sit at ${levelName(placed.core)}, and drop to ${levelName(placed.floor)} under stress.`}
+              </p>
+            )}
+          </>
+        )}
+      </div>
+      {last ? (
+        <ChatActions full skip={at > 0 ? 'Back' : undefined} onSkip={() => go(at - 1)} next="That is my map" ready={allDone} onNext={send} />
+      ) : (
+        <ChatActions full skip={at > 0 ? 'Back' : undefined} onSkip={() => go(at - 1)} next={`Next: ${RELATIONSHIPS[following]!.name}`} ready={done(r.key)} onNext={() => go(following)} />
+      )}
     </div>
   );
 }
@@ -430,8 +562,10 @@ function Stars({ value, onChange, label, color }: { value: number; onChange: (st
   );
 }
 
-function ScoreForm({ onSend }: { onSend: Send }) {
-  const keys = [...SCORECARD.health, ...SCORECARD.wealth, ...RELATIONSHIPS.map((r) => r.key)];
+function ScoreForm({ away, onSend }: { away: RelationshipKey[]; onSend: Send }) {
+  // A pillar set aside as not part of life right now is not rated.
+  const seven = RELATIONSHIPS.filter((r) => !away.includes(r.key)).map((r) => r.key);
+  const keys = [...SCORECARD.health, ...SCORECARD.wealth, ...seven];
   const labels: Record<string, string> = { ...SCORE_LABEL, ...Object.fromEntries(RELATIONSHIPS.map((r) => [r.key, r.name])) };
   // Stars, one to five; three to start.
   const [v, setV] = useState<Record<string, number>>(Object.fromEntries(keys.map((k) => [k, 3])));
@@ -458,8 +592,8 @@ function ScoreForm({ onSend }: { onSend: Send }) {
     <div className="flex flex-col gap-md">
       {group('Health', SCORECARD.health, 'var(--deep-self)')}
       {group('Wealth', SCORECARD.wealth, 'var(--deep-servant_leader)')}
-      {group('The seven', RELATIONSHIPS.map((r) => r.key), 'var(--deep-friendship)')}
-      <ChatActions full next="Those are my stars" onNext={() => onSend(Object.fromEntries(keys.map((k) => [k, String(scoreOfStars(v[k] ?? 3))])), `Health ${avg(SCORECARD.health)} stars, wealth ${avg(SCORECARD.wealth)} stars, the seven ${avg(RELATIONSHIPS.map((r) => r.key))} stars on average`)} />
+      {group(away.length ? 'Your relationships' : 'The seven', seven, 'var(--deep-friendship)')}
+      <ChatActions full next="Those are my stars" onNext={() => onSend(Object.fromEntries(keys.map((k) => [k, String(scoreOfStars(v[k] ?? 3))])), `Health ${avg(SCORECARD.health)} stars, wealth ${avg(SCORECARD.wealth)} stars, relationships ${avg(seven)} stars on average`)} />
     </div>
   );
 }
@@ -590,6 +724,7 @@ function PracticesForm({ focus, onSend }: { focus: RelationshipKey[]; onSend: Se
 
 function ContractForm({ initial, placeholder, onSend }: { initial: Data['contract']; placeholder: string; onSend: Send }) {
   const [c, setC] = useState(initial);
+  const [call, setCall] = useState(false);
   return (
     <div>
       <p className="m-0 text-[14px] font-bold">Days a week, at least</p>
@@ -621,7 +756,11 @@ function ContractForm({ initial, placeholder, onSend }: { initial: Data['contrac
         <span className="block text-[14px] font-bold">Type your name to sign</span>
         <input value={c.signedName} onChange={(e) => setC({ ...c, signedName: e.target.value })} maxLength={80} placeholder={placeholder} className={field} />
       </label>
-      <ChatActions full next="Sign it" ready={Boolean(c.signedName.trim())} onNext={() => onSend({ minDays: String(c.minDays), checkinTime: c.checkinTime, penalty: c.penalty, signedName: c.signedName.trim() }, `${c.minDays} days a week, check-in at ${c.checkinTime}, ${PENALTIES.find((p) => p.key === c.penalty)?.name.toLowerCase()}. Signed ${c.signedName.trim()}.`)} />
+      {/* The live call, once and optional: a line in the plan rather than a step of its own. */}
+      <div className="mt-md">
+        <Toggle on={call} onChange={setCall} label="I would like a live call with a coach" hint="A person goes through your answers with you, for US$100, or ₹10,000 in India. The app works without it, and saying no changes nothing." />
+      </div>
+      <ChatActions full next="Sign it" ready={Boolean(c.signedName.trim())} onNext={() => onSend({ minDays: String(c.minDays), checkinTime: c.checkinTime, penalty: c.penalty, signedName: c.signedName.trim(), call: call ? 'yes' : 'no' }, `${c.minDays} days a week, check-in at ${c.checkinTime}, ${PENALTIES.find((p) => p.key === c.penalty)?.name.toLowerCase()}. Signed ${c.signedName.trim()}.${call ? ' And I would like a live call.' : ''}`)} />
     </div>
   );
 }
@@ -729,9 +868,9 @@ function NextStepsCard({ order, focus }: { order: { key: RelationshipKey; why: s
 // ---------------------------------------------------------------------------
 
 /**
- * The strategy session as one conversation: twelve parts, each hosted by one of the seven characters, each
- * answered in one go on a single card drawn the way the card flow drew it. The map is placed for all seven
- * at once and the focus is derived from the whole; the chat ends with the vibe check for the focus pillars,
+ * The strategy session as one conversation in a few named parts, hosted by Bumling (Lumen hosts the practices, and
+ * each focus pillar's questions are asked by its character), each answered in one go on a single card. The map is
+ * placed one relationship at a time on one card and the focus is derived from the whole; the chat ends with the vibe check for the focus pillars,
  * their pyramids drawn, and the order to work on all seven.
  */
 export function SessionChat() {
@@ -810,13 +949,8 @@ export function SessionChat() {
 
   // ---- the parts
 
-  const goHello = (greet: string[]) =>
-    say(
-      'bumling',
-      [...greet, 'This is your strategy session. It sets up your pillars: the seven relationships the app is built around.', 'Each step is one card. Fill it in and send it, and I will take you to the next one. By the end you will have a map of where you are, one or two pillars to focus on, a daily routine and a plan you sign.', 'First, the big picture. A good life rests on three things: your health, your wealth and your relationships. Health means your body and your mind. Wealth means your money and your time. Here are the seven relationships. Health is part of “With yourself”, and work and money are part of “Servant leader”.', { node: <FrameCard /> }, 'There are no wrong answers. An honest answer helps you more than an impressive one.'],
-      { stage: { part: 'hello' }, ask: { kind: 'chips', chips: [{ label: "Let's start", value: 'go' }], more: 'There are twelve steps: the map, what gets in your way, your scores, your normal day, your focus, your routine, your morning practices, the plan you sign, an optional call, your pillars, your first steps, and what comes next. Made a mistake? Tap “Change my last answer” under any card. If you close the chat, everything you already sent is saved.' } },
-    );
-
+  /** The first card: the frame in a few lines, then the map straight away. There is no "Let's start" to tap first. */
+  const goHello = (greet: string[]) => goMap(greet);
   const submitAccount = (rec: Record<string, string>) => {
     say('bumling', [], { ask: { kind: 'wait', text: 'Making your account' } });
     api
@@ -832,20 +966,28 @@ export function SessionChat() {
       });
   };
 
-  const goMap = () =>
+  const goMap = (greet?: string[]) =>
     say(
       'bumling',
-      ['Step one is your map. It shows how you show up in each of your seven relationships.', 'For each relationship you pick two levels. First, where you usually are on a normal day. Then, where you drop to when you are stressed or upset.', 'The picture shows the whole scale, from Shame at the bottom to Full Consciousness at the top. You pick by name, from Shame up to Oneness. The numbers only show the order.', { node: <ConsciousnessMap /> }, 'Take your time. Pick the levels that are true for you now, not the ones you wish were true.'],
-      { stage: { part: 'map', sub: 'all' }, ask: { kind: 'form', render: (send) => <MapForm initial={chatRef.current.data.placements} onSend={send} />, more: 'The levels come in three groups. Stuck, below 200: fear, blame or shame are in charge. Owning it, from 200 to 399: you show up and keep your word. At ease, 400 and up: things flow and you give without keeping score. The key line is Courage, at 200. If you drop below Courage when you are stressed, that relationship is a good place to start.' } },
+      [
+        ...(greet
+          ? [...greet, 'This is your strategy session. It sets up your pillars: the seven relationships the app is built around. By the end you will have a map, one or two pillars to focus on, a daily routine and a plan you sign.', 'A good life rests on three things: your health, your wealth and your relationships. Health is part of “Yourself”, and work and money have a pillar of their own. Here are the seven.', { node: <FrameCard /> }]
+          : []),
+        'Let’s start with your map. It shows how you show up in each relationship, one at a time.',
+        'For each one, tick every feeling you know from it, on good days and on bad ones. I work out where you usually are and where you drop under stress. If love, teachers or faith are not part of your life right now, you can set them aside.',
+        { node: <MapPicture /> },
+        'There are no wrong answers. An honest answer helps you more than an impressive one.',
+      ],
+      { stage: { part: 'map', sub: 'all' }, ask: { kind: 'form', render: (send) => <MapForm initial={chatRef.current.data.placements} initialAway={chatRef.current.data.away} onSend={send} />, more: 'The feelings come in three groups. Stuck, below Courage: fear, blame or shame are in charge. Owning it: you show up and keep your word. At ease: things flow and you give without keeping score. The key line is Courage. If you drop below it when you are stressed, that relationship is a good place to start. A pillar you set aside sits at Neutrality, “fine either way”, and stays out of your focus until you turn it back on. Made a mistake? Tap “Change my last answer” under any card. If you close the chat, everything you already sent is saved.' } },
     );
 
   const goWay = (data: Data) => {
     const starts = placedOf(data).filter((p) => placementFlags(p).required).map((p) => p.relationship);
-    say('bumling', [starts.length ? belowCourage(starts) : 'Nothing drops below Courage, even under stress. That is a strong start.', 'Next: what gets in your way. There are two kinds of things. Fears show up when you are about to act, like the fear of being judged. Insecurities are things you worry other people notice about you.', 'Pick any that fit, or add your own words. If nothing fits, just send the card. That is a fine answer.'], { stage: { part: 'way' }, ask: { kind: 'form', render: (send) => <WayForm onSend={send} />, more: 'For each fear, pick the relationship it holds back, and say how often it decides things for you. For each insecurity, pick how heavy it feels, from a little to very heavy, and the relationship it touches. The heavier it is, the more it pulls that relationship towards your focus.' } });
+    say('bumling', [starts.length ? belowCourage(starts) : 'Nothing drops below Courage, even under stress. That is a strong start.', 'Still on your map: what gets in your way. There are two kinds of things. Fears show up when you are about to act, like the fear of being judged. Insecurities are things you worry other people notice about you.', 'Pick any that fit, or add your own words. If nothing fits, just send the card. That is a fine answer.'], { stage: { part: 'way' }, ask: { kind: 'form', render: (send) => <WayForm onSend={send} />, more: 'For each fear, pick the relationship it holds back, and say how often it decides things for you. For each insecurity, pick how heavy it feels, from a little to very heavy, and the relationship it touches. The heavier it is, the more it pulls that relationship towards your focus.' } });
   };
 
   const goScorecard = () =>
-    say('bumling', ['Now rate how things are going right now, from one star to five. One star means very poor. Five stars means great.', 'There are three groups: your health, your wealth, and your seven relationships. Go with your first feeling.'], { stage: { part: 'scorecard', sub: 'all', checks: [] }, ask: { kind: 'form', render: (send) => <ScoreForm onSend={send} />, more: 'If a high score does not match your map, I will ask one quick question about last week to check it. Being honest never counts against you.' } });
+    say('bumling', ['Now rate how things are going right now, from one star to five. One star means very poor. Five stars means great.', 'There are three groups: your health, your wealth, and your seven relationships. Go with your first feeling.'], { stage: { part: 'scorecard', sub: 'all', checks: [] }, ask: { kind: 'form', render: (send) => <ScoreForm away={chatRef.current.data.away} onSend={send} />, more: 'If a high score does not match your map, I will ask one quick question about last week to check it. Being honest never counts against you.' } });
 
   const goDay = () =>
     say('bumling', ['Next, tell me about a normal day as it is now, not the day you wish you had.', 'Your routine starts from this day and changes slowly, by half an hour a week. Nobody jumps from waking at 10:30 to waking at 8 on day one.'], { stage: { part: 'day' }, ask: { kind: 'form', render: (send) => <DayForm initial={chatRef.current.data.realDay} onSend={send} /> } });
@@ -853,7 +995,7 @@ export function SessionChat() {
   const goFocus = (suggested: RelationshipKey[], data: Data) => {
     const placed = placedOf(data);
     const starts = placed.filter((p) => placementFlags(p).required).map((p) => p.relationship);
-    say('bumling', ['Here is your map: all seven relationships, from where you drop under stress to where you usually are.', { node: <PlacementChart placements={placed} focus={suggested} /> }, `${starts.length ? `${belowCourage(starts)} ` : ''}After that, I look at your lowest levels and at what weighs on you most. My suggestion: ${listOf(suggested.map(pillar))}.`, 'Which relationships do you want to work on first? Keep my picks or choose your own, up to two.'], { stage: { part: 'focus' }, ask: { kind: 'multi', chips: RELATIONSHIPS.map((r) => ({ label: r.name, value: r.key })), min: 1, max: 2, done: 'Work on these', more: 'Two at a time works better than seven at once. The others stay on your map, and you can change your focus later. In the first month, the aim is to stay at Courage or above in your focus relationships, even on hard days.' } });
+    say('bumling', ['Here is your map: all seven relationships, from where you drop under stress to where you usually are.', { node: <PlacementChart placements={placed} focus={suggested} away={data.away} /> }, `${starts.length ? `${belowCourage(starts)} ` : ''}After that, I look at your lowest levels and at what weighs on you most. My suggestion: ${listOf(suggested.map(pillar))}.`, ...(data.away.length ? [`${listOf(data.away.map(pillar))} ${data.away.length === 1 ? 'is' : 'are'} set aside, so ${data.away.length === 1 ? 'it is' : 'they are'} not in the list.`] : []), 'Which relationships do you want to work on first? Keep my picks or choose your own, up to two.'], { stage: { part: 'focus' }, ask: { kind: 'multi', chips: RELATIONSHIPS.filter((r) => !data.away.includes(r.key)).map((r) => ({ label: r.name, value: r.key })), min: 1, max: 2, done: 'Work on these', more: 'Two at a time works better than seven at once. The others stay on your map, and you can change your focus later. In the first month, the aim is to stay at Courage or above in your focus relationships, even on hard days.' } });
     setMulti(suggested);
   };
 
@@ -866,13 +1008,10 @@ export function SessionChat() {
   const goContract = () =>
     say('bumling', ['The last step of the plan is the contract. Signing it turns this plan into a promise to yourself.', 'Choose how many days a week you will keep the routine, when you want your daily check-in, and what happens if you miss. Then type your name to sign.'], { stage: { part: 'contract' }, ask: { kind: 'form', render: (send) => <ContractForm initial={chatRef.current.data.contract} placeholder={me.data?.user.displayName || 'Your name'} onSend={send} />, more: 'The contract is counted by the week. If you keep the routine on fewer days than you chose, the penalty you picked applies. A weekly check comes every Sunday, and a monthly review in thirty days.' } });
 
-  const goCall = () =>
-    say('bumling', ['Signed! Your plan is saved, and Daily will show your routine from tomorrow morning.', 'One offer, just once: a live strategy call with a coach, for US$100, or ₹10,000 in India. The app works without it. On the call, a person goes through your answers with you. Saying no changes nothing.'], { stage: { part: 'call' }, ask: { kind: 'chips', chips: [{ label: 'Book a live call', value: 'book' }, { label: 'Not now', value: 'skip' }] } });
-
-  const goPillars = (data: Data) => {
+  const goPillars = (data: Data, lead: string[] = []) => {
     const first = data.focus[0];
     if (!first) return goSteps(data);
-    say('bumling', ['Last part: your pillars. Each relationship you chose gets its own pyramid: a foundation, a guiding principle, a value goal, a goal outcome, a project and a first task.', 'Answer three quick questions for each one, and the pyramid is built from your answers.', `${who(first)}, ${RELATIONSHIP_BY_KEY[first].role}, asks first.`], { stage: { part: 'pillars', id: firstQuestionId(first), history: [] }, ask: null });
+    say('bumling', [...lead, 'Last part: your pillars. Each relationship you chose gets its own pyramid: a foundation, a guiding principle, a value goal, a goal outcome, a project and a first task.', 'Answer three quick questions for each one, and the pyramid is built from your answers.', `${who(first)}, ${RELATIONSHIP_BY_KEY[first].role}, asks first.`], { stage: { part: 'pillars', id: firstQuestionId(first), history: [] }, ask: null });
     timers.current.push(window.setTimeout(() => askQuestion(firstQuestionId(first), [], true), reduce ? 0 : 1100));
   };
 
@@ -897,10 +1036,10 @@ export function SessionChat() {
   };
 
   const goDone = (data: Data) => {
-    const order = priorityOrder(placedOf(data), data.insecurities);
+    const order = priorityOrder(placedOf(data), data.insecurities, data.away);
     const lines: (string | { node: ReactNode })[] = ['Your pillars are ready. Each one is a pyramid: the foundation at the top, down to your first task at the point.'];
     if (data.result) lines.push({ node: <PyramidsCard focus={data.focus} result={data.result} picks={data.picks} /> });
-    lines.push(`Here is the order to work through all seven. Start with ${listOf(data.focus.map(pillar))} this month. When those hold at Courage, move on to the next one on the list.`, { node: <NextStepsCard order={order} focus={data.focus} /> }, 'From tomorrow, tick your morning routine on Daily. On Sunday night, take five minutes for the weekly check. In thirty days you will do a review. Everything from this session is saved at the bottom of Pillars, as your life map.', 'What would you like to do now? You can open your pillars, or add your interests so people with the same interests can find you.');
+    lines.push(`Here is the order to work through all seven. Start with ${listOf(data.focus.map(pillar))} this month. When those hold at Courage, move on to the next one on the list.`, { node: <NextStepsCard order={order} focus={data.focus} /> }, ...(data.away.length ? [`${listOf(data.away.map(pillar))} ${data.away.length === 1 ? 'is' : 'are'} set aside, so ${data.away.length === 1 ? 'it stays' : 'they stay'} out of the list. Turn ${data.away.length === 1 ? 'it' : 'them'} back on from your life map whenever you like.`] : []), 'From tomorrow, tick your morning routine on Daily. On Sunday night, take five minutes for the weekly check. In thirty days you will do a review. Everything from this session is saved at the bottom of Pillars, as your life map.', 'What would you like to do now? You can open your pillars, or add your interests so people with the same interests can find you.');
     say('bumling', lines, { stage: { part: 'done' }, ask: { kind: 'chips', chips: DONE_CHIPS } });
   };
 
@@ -932,7 +1071,7 @@ export function SessionChat() {
   const submitAssessment = (data: Data) => {
     say('bumling', [], { ask: { kind: 'wait', text: 'Bumling is working out your focus' } });
     api
-      .submitAssessment({ placements: placedOf(data), fears: data.fears, insecurities: data.insecurities, scores: data.scores, behaviour: data.behaviour, realDay: data.realDay })
+      .submitAssessment({ placements: placedOf(data), away: data.away, fears: data.fears, insecurities: data.insecurities, scores: data.scores, behaviour: data.behaviour, realDay: data.realDay })
       .then((r) => goFocus(r.suggestedFocus, data))
       .catch((e) => {
         setNotice(err(e));
@@ -940,13 +1079,14 @@ export function SessionChat() {
       });
   };
 
-  const submitPlan = (data: Data) => {
+  const submitPlan = (data: Data, call: boolean) => {
     say('bumling', [], { ask: { kind: 'wait', text: 'Filing the contract' } });
     api
       .submitPlan({ focus: data.focus, practices: { ...data.practices, affirmation: data.practices.affirmation || affirmationFor(data.focus) }, contract: data.contract, date: todayLocal() })
       .then(async () => {
         await refresh();
-        goCall();
+        if (call) setCallOpen(true);
+        goPillars(data, ['Signed! Your plan is saved, and Daily will show your routine from tomorrow morning.', ...(call ? ['I opened the details for a live call. Read them when you like; the chat waits here.'] : [])]);
       })
       .catch((e) => {
         setNotice(err(e));
@@ -1000,15 +1140,21 @@ export function SessionChat() {
     if (s.part === 'account') return submitAccount(rec);
 
     if (s.part === 'hello') {
-      if (str === 'keep') return goFocus(d.focus.length ? d.focus : pickFocus(placedOf(d), d.insecurities), d);
+      if (str === 'keep') return goFocus(d.focus.length ? d.focus.filter((k) => !d.away.includes(k)) : pickFocus(placedOf(d), d.insecurities, d.away), d);
       if (str === 'pillars') return goPillars(d);
       return goMap();
     }
 
     if (s.part === 'map') {
       if (s.sub === 'all') {
-        const placements = Object.fromEntries(RELATIONSHIPS.map((r) => [r.key, { relationship: r.key, core: Number(rec[`${r.key}.core`]), floor: Number(rec[`${r.key}.floor`]), evidence: d.placements[r.key]?.evidence ?? '' }])) as Record<RelationshipKey, Placement>;
-        const data = { ...d, placements };
+        let away: RelationshipKey[] = [];
+        try {
+          away = (JSON.parse(rec.away ?? '[]') as RelationshipKey[]).filter(isOptionalPillar);
+        } catch {
+          away = [];
+        }
+        const placements = Object.fromEntries(RELATIONSHIPS.map((r) => [r.key, away.includes(r.key) ? awayPlacement(r.key) : { relationship: r.key, core: Number(rec[`${r.key}.core`]), floor: Number(rec[`${r.key}.floor`]), evidence: d.placements[r.key]?.evidence ?? '' }])) as Record<RelationshipKey, Placement>;
+        const data = { ...d, placements, away };
         keep(data);
         const high = RELATIONSHIPS.filter((r) => placements[r.key].core >= 400).map((r) => r.key);
         if (high.length) return say('bumling', [`You placed ${listOf(high.map(pillar))} at Inner light or higher. That is great.`, 'To keep the map honest, write one thing you did last week that shows it. If you leave it empty, I will hold that relationship at Acceptance for now.'], { stage: { part: 'map', sub: 'evidence' }, ask: { kind: 'form', render: (send) => <EvidenceForm keys={high} onSend={send} />, more: 'Without something that shows it, the map holds that pillar at Acceptance. Not a punishment: the plan is built from where you act, not where you hope.' } });
@@ -1076,12 +1222,7 @@ export function SessionChat() {
     if (s.part === 'contract') {
       const data = { ...d, contract: { minDays: Number(rec.minDays ?? CONTRACT_MIN_DAYS_DEFAULT), checkinTime: rec.checkinTime ?? d.contract.checkinTime, penalty: (rec.penalty as Contract['penalty']) ?? 'streak', signedName: (rec.signedName ?? '').trim() } };
       keep(data);
-      return submitPlan(data);
-    }
-
-    if (s.part === 'call') {
-      if (str === 'book') setCallOpen(true);
-      return goPillars(d);
+      return submitPlan(data, rec.call === 'yes');
     }
 
     if (s.part === 'pillars') {
@@ -1154,6 +1295,7 @@ export function SessionChat() {
       const data: Data = {
         ...EMPTY,
         placements: Object.fromEntries(a.placements.map((p) => [p.relationship, { relationship: p.relationship, core: p.core, floor: p.floor, evidence: p.evidence }])),
+        away: a.away ?? [],
         fears: a.fears,
         insecurities: a.insecurities,
         scores: a.scores,
@@ -1221,7 +1363,7 @@ export function SessionChat() {
   };
 
   // ---- what shows under the last lines: the choices or the card, then the small links.
-  const part = PARTS.indexOf(chat.stage.part) + 1;
+  const part = PARTS.indexOf(PART_OF[chat.stage.part]);
   const ask = chat.ask;
   const answerNode = (() => {
     if (!ask) return null;
@@ -1262,8 +1404,8 @@ export function SessionChat() {
     <>
       <ChatScreen
         title="Strategy session"
-        step={`Part ${part} of ${PARTS.length}: ${PART_NAME[chat.stage.part]}`}
-        progress={part / PARTS.length}
+        step={PART_NAME[PART_OF[chat.stage.part]]}
+        progress={(part + 1) / PARTS.length}
         closeTo={closeTo}
         onStartOver={startOver}
         log={chat.log}

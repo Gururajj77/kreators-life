@@ -1,5 +1,6 @@
 import { birthDateProblem, passwordProblem, phoneProblem } from '@kreators/shared';
 import { useState } from 'react';
+import { todayLocal } from '../lib/date';
 import { ChatActions } from './Chat';
 import { TermsBox } from './TermsBox';
 
@@ -47,7 +48,7 @@ export function AccountForm({ initialName, onSend }: { initialName: string; onSe
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Date of birth</span>
-          <input type="date" value={v.birthDate} onChange={set('birthDate')} autoComplete="bday" max={new Date().toISOString().slice(0, 10)} className={field} />
+          <input type="date" value={v.birthDate} onChange={set('birthDate')} autoComplete="bday" max={todayLocal()} className={field} />
           {hint(badBirth ?? 'Eighteen or over. Never shown to anyone.')}
         </label>
       </div>
@@ -125,7 +126,7 @@ export function PrivateCard({ onSend }: { onSend: (value: Record<string, string>
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Date of birth</span>
-          <input type="date" value={v.birthDate} onChange={set('birthDate')} autoComplete="bday" max={new Date().toISOString().slice(0, 10)} className={field} />
+          <input type="date" value={v.birthDate} onChange={set('birthDate')} autoComplete="bday" max={todayLocal()} className={field} />
           {hint(badBirth)}
         </label>
       </div>

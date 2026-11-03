@@ -28,7 +28,7 @@ export function explainTyped(text: string): string[] {
   const out: string[] = [];
   for (const m of MODULES) {
     if (m.group === 'manage') continue;
-    if (has(t, m.name) || (m.key.length > 3 && has(t, m.key))) out.push(`${m.emoji} ${m.name}: ${SETUP_APP_LINES[m.key] ?? m.blurb}`);
+    if (has(t, m.name) || (m.key.length > 3 && has(t, m.key))) out.push(`${m.name}: ${SETUP_APP_LINES[m.key] ?? m.blurb}`);
   }
   for (const r of RELATIONSHIPS) {
     if (has(t, r.name) || has(t, r.character)) out.push(`${r.name} is your relationship with ${r.role.replace(/^guide to /, '')}. ${r.character} looks after it.`);

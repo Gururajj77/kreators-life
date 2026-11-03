@@ -2,6 +2,8 @@ import { LISTING_TYPE_META, LISTING_TYPES, type ListingType } from '@kreators/sh
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
+import { AppIcon } from '../components/AppIcon';
+import { Pager, usePage } from '../components/Pager';
 import { publicApi } from '../lib/api';
 import { ListingCard } from './ListingCard';
 import { SiteLayout } from './SiteLayout';
@@ -13,6 +15,7 @@ export function Explore() {
   const [params, setParams] = useSearchParams();
   const type = isType(params.get('type')) ? (params.get('type') as ListingType) : undefined;
   const [q, setQ] = useState(params.get('q') ?? '');
+  const pg = usePage();
   const [debounced, setDebounced] = useState(q);
   useEffect(() => {
     const t = window.setTimeout(() => setDebounced(q.trim()), 250);
@@ -22,10 +25,15 @@ export function Explore() {
     const next = new URLSearchParams(params);
     if (debounced) next.set('q', debounced);
     else next.delete('q');
-    if (next.toString() !== params.toString()) setParams(next, { replace: true, preventScrollReset: true });
-  }, [debounced, params, setParams]);
+    if (next.toString() !== params.toString()) {
+      setParams(next, { replace: true, preventScrollReset: true });
+      pg.reset();
+    }
+    // A new search starts back on the first page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debounced]);
 
-  const results = useQuery({ queryKey: ['explore', debounced, type ?? ''], queryFn: () => publicApi.explore({ q: debounced, type, limit: 100 }) });
+  const results = useQuery({ queryKey: ['explore', debounced, type ?? '', pg.query], queryFn: () => publicApi.explore({ q: debounced, type, pq: pg.query }) });
   const list = results.data?.listings ?? [];
 
   const setType = (t: ListingType | undefined) => {
@@ -33,6 +41,7 @@ export function Explore() {
     if (t) next.set('type', t);
     else next.delete('type');
     setParams(next, { replace: true, preventScrollReset: true });
+    pg.reset();
   };
 
   return (
@@ -56,7 +65,7 @@ export function Explore() {
           </button>
           {LISTING_TYPES.map((t) => (
             <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)} className={`toy min-h-[40px] rounded-pill border-2 px-sm text-[14px] font-bold ${type === t ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-              <span aria-hidden="true">{LISTING_TYPE_META[t].emoji} </span>
+              <AppIcon name={LISTING_TYPE_META[t].icon} size={16} className="mr-xs inline-block align-[-3px]" />
               {LISTING_TYPE_META[t].plural}
             </button>
           ))}
@@ -85,6 +94,7 @@ export function Explore() {
                 <ListingCard key={`${l.type}-${l.id}`} listing={l} />
               ))}
             </ul>
+            <Pager page={results.data?.page} label="listings" />
           </>
         )}
       </section>

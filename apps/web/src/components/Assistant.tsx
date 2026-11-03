@@ -35,6 +35,7 @@ import {
   type NotToDoStatus,
   type RelationshipKey,
   type Host,
+  type IconName,
   characterHello,
   hostName,
 } from '@kreators/shared';
@@ -42,8 +43,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
 import { useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { ArrowRight, Check, CircleAlert, CircleQuestionMark, Minus, Undo2, WandSparkles, type LucideIcon } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { ChatActions, ChatComposer, ChatLinks, ChatTurns, ChoiceChips, ChoiceGroups, chip, countTurns, typingTime, useChatMotion } from './Chat';
+import { AppIcon } from './AppIcon';
+import { Icon } from './Icon';
 import { api, ApiError } from '../lib/api';
 import { prettyDate, todayLocal } from '../lib/date';
 import { explainTyped, isQuestion } from '../lib/explain';
@@ -55,6 +59,7 @@ import { useDialogFocus } from '../lib/useDialogFocus';
 import { Avatar } from './Avatar';
 import { Markdown } from './Markdown';
 import { StartOver } from './StartOver';
+import { MoodFace } from './MoodFace';
 
 /**
  * The assistant: the round button at the bottom right of every screen in the app, and the panel it opens over the
@@ -70,7 +75,7 @@ type Flow = 'checkin' | 'spark' | 'tick' | 'routine' | 'notToDoDay' | 'notToDo' 
 
 interface FlowMeta {
   label: string;
-  emoji: string;
+  icon: IconName;
   /** Where the answer shows up, said before anything is asked. */
   lands: string;
   to: string;
@@ -81,26 +86,26 @@ interface FlowMeta {
 
 const TRACKERS = ['wellbeing', 'mood', 'sleep', 'stress', 'mindful', 'life'];
 const FLOWS: Record<Flow, FlowMeta> = {
-  checkin: { label: 'Check in for today', emoji: '✅', lands: 'Daily, under Show up, and your streak on Home', to: '/today', host: 'bumling', needs: null },
-  spark: { label: 'Mark the small act done', emoji: '✨', lands: 'Daily, under the small act', to: '/today', host: 'bumling', needs: null },
-  tick: { label: 'Tick tasks I did', emoji: '☑️', lands: 'Daily, under Tasks, and the pyramid each task holds up', to: '/today', host: 'bumling', needs: null },
-  routine: { label: 'Tick my morning routine', emoji: '🌅', lands: 'Daily, under Your routine, and the week dots for your contract', to: '/today', host: 'bumling', needs: null },
-  notToDoDay: { label: 'Mark my not to do list', emoji: '🚫', lands: 'Daily, under Not to do, with each streak', to: '/today', host: 'bumling', needs: null },
-  notToDo: { label: 'Add to my not to do list', emoji: '➕', lands: 'Daily, under Not to do', to: '/today', host: 'bumling', needs: null },
-  task: { label: 'Add a task', emoji: '📝', lands: 'the pyramid in Pillars, and Daily on the day it is due', to: '/tower', host: 'bumling', needs: null },
-  layer: { label: 'Add to a pyramid', emoji: '🔺', lands: 'that pillar in Pillars', to: '/tower', host: 'bumling', needs: null },
-  mood: { label: 'Log my mood', emoji: '🙂', lands: 'the trackers on Home, Mood and your Life score', to: '/home', host: 'bumling', needs: TRACKERS },
-  sleep: { label: 'Log my sleep', emoji: '🌙', lands: 'the trackers on Home, Sleep and your Life score', to: '/home', host: 'bumling', needs: TRACKERS },
-  stress: { label: 'Log my stress', emoji: '🌊', lands: 'the trackers on Home, Stress and your Life score', to: '/home', host: 'bumling', needs: TRACKERS },
-  mindful: { label: 'Log mindful minutes', emoji: '🧘', lands: 'the trackers on Home, Mindful minutes and your Life score', to: '/home', host: 'divine', needs: TRACKERS },
-  move: { label: 'Log time moving', emoji: '🏃', lands: 'the physical part of your Life score', to: '/life', host: 'self', needs: TRACKERS },
-  journal: { label: 'Write in my journal', emoji: '📓', lands: 'your Journal. Only you can see it', to: '/journal', host: 'self', needs: ['journal'] },
-  money: { label: 'Add money in or out', emoji: '💰', lands: 'Finance, and money this month on Home', to: '/finance', host: 'servant_leader', needs: ['finance'] },
-  due: { label: 'Note money owed', emoji: '🤝', lands: 'Finance, under what is owed', to: '/finance', host: 'servant_leader', needs: ['finance'] },
-  settle: { label: 'Settle something owed', emoji: '✔️', lands: 'Finance, under what is owed', to: '/finance', host: 'servant_leader', needs: ['finance'] },
-  goal: { label: 'Set a money goal', emoji: '🎯', lands: 'Finance, under goals', to: '/finance', host: 'servant_leader', needs: ['finance'] },
-  goalAdd: { label: 'Add to a money goal', emoji: '🪙', lands: 'Finance, under goals', to: '/finance', host: 'servant_leader', needs: ['finance'] },
-  review: { label: 'Write a review', emoji: '📝', lands: 'Reviews, saved with that period\'s numbers', to: '/reviews', host: 'bumling', needs: ['reviews'] },
+  checkin: { label: 'Check in for today', icon: 'CircleCheck', lands: 'Daily, under Show up, and your streak on Home', to: '/today', host: 'bumling', needs: null },
+  spark: { label: 'Mark the small act done', icon: 'Sparkles', lands: 'Daily, under the small act', to: '/today', host: 'bumling', needs: null },
+  tick: { label: 'Tick tasks I did', icon: 'SquareCheck', lands: 'Daily, under Tasks, and the pyramid each task holds up', to: '/today', host: 'bumling', needs: null },
+  routine: { label: 'Tick my morning routine', icon: 'Sunrise', lands: 'Daily, under Your routine, and the week dots for your contract', to: '/today', host: 'bumling', needs: null },
+  notToDoDay: { label: 'Mark my not to do list', icon: 'Ban', lands: 'Daily, under Not to do, with each streak', to: '/today', host: 'bumling', needs: null },
+  notToDo: { label: 'Add to my not to do list', icon: 'CirclePlus', lands: 'Daily, under Not to do', to: '/today', host: 'bumling', needs: null },
+  task: { label: 'Add a task', icon: 'ListPlus', lands: 'the pyramid in Pillars, and Daily on the day it is due', to: '/tower', host: 'bumling', needs: null },
+  layer: { label: 'Add to a pyramid', icon: 'Triangle', lands: 'that pillar in Pillars', to: '/tower', host: 'bumling', needs: null },
+  mood: { label: 'Log my mood', icon: 'FaceSlightlySmiling', lands: 'the trackers on Home, Mood and your Life score', to: '/home', host: 'bumling', needs: TRACKERS },
+  sleep: { label: 'Log my sleep', icon: 'Moon', lands: 'the trackers on Home, Sleep and your Life score', to: '/home', host: 'bumling', needs: TRACKERS },
+  stress: { label: 'Log my stress', icon: 'WavesHorizontal', lands: 'the trackers on Home, Stress and your Life score', to: '/home', host: 'bumling', needs: TRACKERS },
+  mindful: { label: 'Log mindful minutes', icon: 'Wind', lands: 'the trackers on Home, Mindful minutes and your Life score', to: '/home', host: 'divine', needs: TRACKERS },
+  move: { label: 'Log time moving', icon: 'Footprints', lands: 'the physical part of your Life score', to: '/life', host: 'self', needs: TRACKERS },
+  journal: { label: 'Write in my journal', icon: 'NotebookPen', lands: 'your Journal. Only you can see it', to: '/journal', host: 'self', needs: ['journal'] },
+  money: { label: 'Add money in or out', icon: 'Wallet', lands: 'Finance, and money this month on Home', to: '/finance', host: 'servant_leader', needs: ['finance'] },
+  due: { label: 'Note money owed', icon: 'HandCoins', lands: 'Finance, under what is owed', to: '/finance', host: 'servant_leader', needs: ['finance'] },
+  settle: { label: 'Settle something owed', icon: 'CircleCheckBig', lands: 'Finance, under what is owed', to: '/finance', host: 'servant_leader', needs: ['finance'] },
+  goal: { label: 'Set a money goal', icon: 'Target', lands: 'Finance, under goals', to: '/finance', host: 'servant_leader', needs: ['finance'] },
+  goalAdd: { label: 'Add to a money goal', icon: 'PiggyBank', lands: 'Finance, under goals', to: '/finance', host: 'servant_leader', needs: ['finance'] },
+  review: { label: 'Write a review', icon: 'ClipboardCheck', lands: 'Reviews, saved with that period\'s numbers', to: '/reviews', host: 'bumling', needs: ['reviews'] },
 };
 const ALL_FLOWS = Object.keys(FLOWS) as Flow[];
 const FIRST: Record<TalkOrigin, Flow[]> = {
@@ -130,7 +135,7 @@ interface Msg {
   text?: string;
   node?: ReactNode;
 }
-type Chip = { label: string; value: string; emoji?: string; blurb?: string };
+type Chip = { label: string; value: string; icon?: IconName; blurb?: string };
 type Ask =
   | { kind: 'chips'; chips: Chip[]; pick: (c: Chip) => void; more?: string }
   | { kind: 'multi'; chips: Chip[]; start: string[]; done: string; pick: (values: string[], label: string) => void; more?: string }
@@ -332,8 +337,9 @@ function JournalForm({ onSend }: { onSend: (v: { title: string; body: string; em
         <p className="m-0 text-[14px] font-bold">How does it feel? Optional.</p>
         <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label="Emotion">
           {MOODS.map((m) => (
-            <button key={m.value} type="button" aria-pressed={emotion === m.value} className={chip(emotion === m.value)} onClick={() => setEmotion(emotion === m.value ? null : m.value)}>
-              {m.emoji} {m.name}
+            <button key={m.value} type="button" aria-pressed={emotion === m.value} className={`${chip(emotion === m.value)} inline-flex items-center gap-xs`} onClick={() => setEmotion(emotion === m.value ? null : m.value)}>
+              <MoodFace value={m.value} size={20} />
+              {m.name}
             </button>
           ))}
         </div>
@@ -430,8 +436,9 @@ function ReviewForm({ prompts, start, onSend }: { prompts: string[]; start: { an
         <p className="m-0 text-[14px] font-bold">How did the period feel? Optional.</p>
         <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label="How it felt">
           {MOODS.map((m) => (
-            <button key={m.value} type="button" aria-pressed={rating === m.value} className={chip(rating === m.value)} onClick={() => setRating(rating === m.value ? null : m.value)}>
-              {m.emoji} {m.name}
+            <button key={m.value} type="button" aria-pressed={rating === m.value} className={`${chip(rating === m.value)} inline-flex items-center gap-xs`} onClick={() => setRating(rating === m.value ? null : m.value)}>
+              <MoodFace value={m.value} size={20} />
+              {m.name}
             </button>
           ))}
         </div>
@@ -534,22 +541,18 @@ function Landed({ meta }: { meta: FlowMeta }) {
   if (here)
     return (
       <p className="m-0 flex items-center gap-sm rounded-tile bg-card p-sm text-[14px] font-bold shadow-toy-soft">
-        <span aria-hidden="true" className="text-[22px]">
-          {meta.emoji}
-        </span>
+        <AppIcon name={meta.icon} size={22} />
         <span>Saved. It is on this page now.</span>
       </p>
     );
   return (
     <Link to={meta.to} className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm text-ink shadow-toy-soft">
-      <span aria-hidden="true" className="text-[22px]">
-        {meta.emoji}
-      </span>
+      <AppIcon name={meta.icon} size={22} />
       <span className="min-w-0 flex-1">
         <span className="block text-[14px] font-bold">Saved. It shows up on {meta.lands.split('. ')[0]}.</span>
         <span className="block text-[12px] font-semibold text-ink-soft">Tap to see it there.</span>
       </span>
-      <span aria-hidden="true">→</span>
+      <Icon icon={ArrowRight} size={18} />
     </Link>
   );
 }
@@ -606,7 +609,7 @@ function useRefreshKeys() {
   );
 }
 
-const MARK: Record<AssistantReceipt['status'], string> = { done: '✓', failed: '!', undone: '↺', cancelled: '–', pending: '?' };
+const MARK: Record<AssistantReceipt['status'], LucideIcon> = { done: Check, failed: CircleAlert, undone: Undo2, cancelled: Minus, pending: CircleQuestionMark };
 
 function Receipts({ scope, ids }: { scope: string; ids: string[] }) {
   const [map, setMap] = useKept<Record<string, AssistantReceipt>>(scope, 'receipts', {});
@@ -645,8 +648,8 @@ function Receipts({ scope, ids }: { scope: string; ids: string[] }) {
           </li>
         ) : (
           <li key={r.id} className="flex items-center gap-sm rounded-tile bg-card px-sm py-xs shadow-toy-soft">
-            <span aria-hidden="true" className={`flex size-[24px] shrink-0 items-center justify-center rounded-pill text-[12px] font-extrabold ${r.status === 'done' ? 'bg-ink text-on-ink' : 'bg-paper text-ink-soft'}`}>
-              {MARK[r.status]}
+            <span className={`flex size-[24px] shrink-0 items-center justify-center rounded-pill ${r.status === 'done' ? 'bg-ink text-on-ink' : 'bg-paper text-ink-soft'}`}>
+              <Icon icon={MARK[r.status]} size={14} strokeWidth={3} />
             </span>
             <span className="min-w-0 flex-1">
               <span className={`block text-[14px] font-bold ${r.status === 'undone' || r.status === 'cancelled' ? 'text-ink-soft line-through' : ''}`}>{r.label}</span>
@@ -695,14 +698,12 @@ function PlanCard({ reason }: { reason: AssistantPaywall }) {
   const p = PAYWALL[reason];
   return (
     <Link to="/plans" className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm text-ink shadow-toy-soft">
-      <span aria-hidden="true" className="text-[22px]">
-        🪄
-      </span>
+      <Icon icon={WandSparkles} size={22} />
       <span className="min-w-0 flex-1">
         <span className="block text-[14px] font-bold">{p.title}</span>
         <span className="block text-[12px] font-semibold text-ink-soft">{p.line}</span>
       </span>
-      <span aria-hidden="true">→</span>
+      <Icon icon={ArrowRight} size={18} />
     </Link>
   );
 }
@@ -811,8 +812,8 @@ function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focusIn: bo
   const menu = (first: boolean, all = false) => {
     setFlow(null);
     const list = all ? flowsOn : FIRST[from].filter((f) => flowsOn.includes(f));
-    const chips: Chip[] = list.map((f) => ({ label: FLOWS[f].label, value: f, emoji: FLOWS[f].emoji, blurb: `Shows up on ${FLOWS[f].lands}.` }));
-    if (!all) chips.push({ label: 'Something else', value: 'all', emoji: '🗂️', blurb: 'Every flow the chat can do, with where each one shows up.' });
+    const chips: Chip[] = list.map((f) => ({ label: FLOWS[f].label, value: f, icon: FLOWS[f].icon, blurb: `Shows up on ${FLOWS[f].lands}.` }));
+    if (!all) chips.push({ label: 'Something else', value: 'all', icon: 'LayoutList', blurb: 'Every flow the chat can do, with where each one shows up.' });
     chips.push({ label: 'Nothing now, close the chat', value: 'close' });
     const lines = first
       ? [
@@ -831,7 +832,7 @@ function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focusIn: bo
       chips,
       more: 'Each flow asks one or two short questions, then saves the answer the same way the screen would. The points and xp are the same too. Close at any time: anything already saved stays saved.',
       pick: (c) => {
-        you(`${c.emoji ? `${c.emoji} ` : ''}${c.label}`);
+        you(c.label);
         if (c.value === 'close') return close();
         if (c.value === 'all') return menu(false, true);
         start(c.value as Flow);
@@ -1125,9 +1126,9 @@ function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focusIn: bo
       if (f === 'mood') {
         return say(meta.host, [intro, 'How are you feeling right now? One a day. Logging again replaces it.'], {
           kind: 'chips',
-          chips: MOODS.map((m) => ({ label: m.name, value: String(m.value), emoji: m.emoji })),
+          chips: MOODS.map((m) => ({ label: m.name, value: String(m.value), mood: m.value })),
           pick: async (c) => {
-            you(`${c.emoji} ${c.label}`);
+            you(c.label);
             wait(f, 'Logging');
             try {
               await api.log('mood', { date, value: Number(c.value) });

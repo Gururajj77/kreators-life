@@ -1,10 +1,14 @@
-import { characterTitle, hostName, type Host } from '@kreators/shared';
+import { characterTitle, hostName, type Host, type IconName } from '@kreators/shared';
 import gsap from 'gsap';
 import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
 import { useReducedMotion } from 'motion/react';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Link } from 'react-router';
+import { ArrowRight, ArrowUp, Check, Square } from 'lucide-react';
+import { AppIcon } from './AppIcon';
 import { Avatar } from './Avatar';
+import { Icon } from './Icon';
+import { MoodFace } from './MoodFace';
 import { Button } from './Button';
 import { StartOver } from './StartOver';
 import { ThemeToggle } from './ThemeToggle';
@@ -31,21 +35,36 @@ export interface ChatLine {
 /** Who says the lines that are not one of the seven's, like the Companion's. */
 export interface ChatVoice {
   name: string;
-  emoji: string;
+  /** The voice's badge, a shared icon key. */
+  icon?: IconName;
+  /** @deprecated An emoji badge, kept only until every caller passes `icon`. */
+  emoji?: string;
 }
 
 export interface ChatChoice {
   value: string;
   label: string;
+  /** A small icon before the label, a shared icon key. */
+  icon?: IconName;
+  /** @deprecated Text before the label, kept only until every caller passes `icon` (wave 2 removes it). */
   emoji?: string;
+  /** A mood from 1 to 5: the choice wears that mood's face (moods are `MoodFace`, never emoji). */
+  mood?: number;
   /** A line under the label turns the choice into a card; on a pick-some pill it sits small after the label. */
   blurb?: string;
 }
 
 export interface ChatChoiceGroup {
   label?: string;
-  emoji?: string;
+  icon?: IconName;
   choices: ChatChoice[];
+}
+
+/** What sits before a choice's label: its icon, or (until every caller has moved) its old emoji. */
+function Mark({ c, size = 16 }: { c: { icon?: IconName; emoji?: string; mood?: number }; size?: number }) {
+  if (c.mood) return <MoodFace value={c.mood} size={size + 4} className="mr-xs inline-block align-[-5px]" />;
+  if (c.icon) return <AppIcon name={c.icon} size={size} className="mr-xs inline-block align-[-3px]" />;
+  return c.emoji ? <>{`${c.emoji} `}</> : null;
 }
 
 /** How long a line takes to type: longer lines take longer, up to a cap. */
@@ -67,8 +86,8 @@ export const countTurns = (log: ChatLine[]) => turnsOf(log).length;
 
 function Badge({ voice }: { voice: ChatVoice }) {
   return (
-    <span aria-hidden="true" className="flex size-[24px] shrink-0 items-center justify-center rounded-pill bg-card text-[14px] shadow-toy-soft">
-      {voice.emoji}
+    <span aria-hidden="true" className="flex size-[24px] shrink-0 items-center justify-center rounded-pill bg-card text-[14px] text-ink-soft shadow-toy-soft">
+      {voice.icon ? <AppIcon name={voice.icon} size={14} /> : voice.emoji}
     </span>
   );
 }
@@ -211,15 +230,11 @@ export function ChatComposer({
       />
       {onStop ? (
         <button type="button" aria-label={stopping ? 'Stopping' : 'Stop'} title={stopping ? 'Stopping' : 'Stop'} onClick={onStop} disabled={stopping} className="toy flex size-[48px] shrink-0 items-center justify-center rounded-pill bg-ink text-on-ink disabled:opacity-40">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor">
-            <rect x="6" y="6" width="12" height="12" rx="2.5" />
-          </svg>
+          <Icon icon={Square} size={18} filled />
         </button>
       ) : (
         <button type="submit" aria-label="Send" disabled={disabled || !text.trim()} className="toy flex size-[48px] shrink-0 items-center justify-center rounded-pill bg-ink text-on-ink disabled:opacity-40">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 19V5M5 12l7-7 7 7" />
-          </svg>
+          <Icon icon={ArrowUp} size={20} />
         </button>
       )}
     </form>
@@ -287,7 +302,7 @@ export function ChatActions({
       <Button type={submit ? 'submit' : 'button'} size={full ? 'lg' : 'md'} disabled={!ready} onClick={onNext} className={`max-w-full whitespace-nowrap ${stacked ? 'w-full' : full ? 'min-w-fit flex-1' : 'ml-auto'}`}>
         <span>{next}</span>
         {extra && <span className="text-[14px] font-semibold text-on-ink/70">· {extra}</span>}
-        <span aria-hidden="true">→</span>
+        <Icon icon={ArrowRight} size={18} />
       </Button>
     </div>
   );
@@ -305,7 +320,7 @@ export function ChoiceChips({ choices, onPick, wide = false, full = false }: { c
       <div role="group" aria-label="Your answer" className={numbers ? 'grid gap-xs' : 'flex flex-col gap-xs'} style={numbers ? { gridTemplateColumns: `repeat(${choices.length}, minmax(0, 1fr))` } : undefined}>
         {choices.map((c) => (
           <button key={c.value} type="button" onClick={() => onPick(c)} className="toy toy-soft min-h-[48px] w-full rounded-pill border-2 border-line bg-card px-sm text-[16px] font-bold">
-            {c.emoji ? `${c.emoji} ` : ''}
+            <Mark c={c} />
             {c.label}
           </button>
         ))}
@@ -318,14 +333,14 @@ export function ChoiceChips({ choices, onPick, wide = false, full = false }: { c
         cards ? (
           <button key={c.value} type="button" onClick={() => onPick(c)} className="toy toy-flat w-full rounded-tile border-2 border-line bg-card p-sm text-left">
             <span className="block text-[16px] font-bold">
-              {c.emoji ? `${c.emoji} ` : ''}
+              <Mark c={c} />
               {c.label}
             </span>
             {c.blurb && <span className="block text-[14px] font-semibold text-ink-soft">{c.blurb}</span>}
           </button>
         ) : (
           <button key={c.value} type="button" onClick={() => onPick(c)} className="toy toy-soft min-h-[44px] rounded-pill border-2 border-line bg-card px-sm text-[14px] font-bold">
-            {c.emoji ? `${c.emoji} ` : ''}
+            <Mark c={c} />
             {c.label}
           </button>
         ),
@@ -374,7 +389,7 @@ export function ChoiceGroups({
         <div key={g.label ?? gi} className={gi === 0 ? '' : 'mt-sm'}>
           {g.label && (
             <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
-              {g.emoji ? `${g.emoji} ` : ''}
+              <Mark c={g} size={14} />
               {g.label}
             </p>
           )}
@@ -391,7 +406,7 @@ export function ChoiceGroups({
                   onClick={() => setPicked((p) => (p.includes(c.value) ? p.filter((x) => x !== c.value) : [...p, c.value]))}
                   className={`${chip(on)} text-left`}
                 >
-                  {on ? '✓ ' : c.emoji ? `${c.emoji} ` : ''}
+                  {on ? <Icon icon={Check} size={16} strokeWidth={3} className="mr-xs inline-block align-[-3px]" /> : <Mark c={c} />}
                   {c.label}
                   {c.blurb && <span className={`ml-xs text-[12px] ${on ? 'text-on-ink/70' : 'text-ink-soft'}`}>{c.blurb}</span>}
                 </button>
@@ -522,6 +537,9 @@ export function useChatMotion({ count, lines, lastTurn, root, scroller, head }: 
   }, [lines, reduce, root]);
 }
 
+/** The card colour over the page's solid base: an opaque fill for the chat's header and typing box. */
+const SOLID = 'linear-gradient(var(--card-strong), var(--card-strong)), var(--page-base-a)';
+
 /** A whole-page chat: a slim header, the conversation, and the typing box at the bottom. Only the page scrolls. */
 export function ChatScreen({
   title,
@@ -568,7 +586,9 @@ export function ChatScreen({
 
   return (
     <div className="min-h-dvh">
-      <header ref={head} className="safe-top sticky top-0 z-20 bg-card-strong">
+      {/* Fully opaque in both themes: the near-solid card colour laid over the page's own solid base, so no line of the
+          chat shows through the header or the typing box as it scrolls under them. */}
+      <header ref={head} className="safe-top sticky top-0 z-20" style={{ background: SOLID }}>
         {/* Start over on the left, Close and the theme on the right. On a phone the title and the step take a second
             line under the buttons, so they are never cut short; on a laptop they sit between them. */}
         <div className="mx-auto grid w-full max-w-[760px] grid-cols-[1fr_auto] items-center gap-x-xs gap-y-xs px-md py-sm md:grid-cols-[1fr_auto_1fr]">
@@ -578,7 +598,7 @@ export function ChatScreen({
             {step && <p className="m-0 truncate text-[12px] font-bold text-ink-soft">{step}</p>}
           </div>
           <div className="col-start-2 row-start-1 flex items-center justify-end gap-xs md:col-start-3">
-            <Link to={closeTo} className="toy toy-soft inline-flex min-h-[40px] shrink-0 items-center rounded-pill bg-card px-sm text-[14px] font-bold">
+            <Link to={closeTo} className="toy toy-soft inline-flex min-h-[44px] min-w-[44px] shrink-0 justify-center items-center rounded-pill bg-card px-sm text-[14px] font-bold">
               Close
             </Link>
             <ThemeToggle />
@@ -597,7 +617,7 @@ export function ChatScreen({
 
       <footer ref={foot} className="sticky bottom-0 z-20">
         <div className="h-md" style={{ background: 'linear-gradient(to top, var(--card-strong), transparent)' }} aria-hidden="true" />
-        <div className="safe-bottom bg-card-strong">{composer ? <ChatComposer {...composer} className="mx-auto max-w-[760px] px-md pb-sm" /> : <div className="h-sm" />}</div>
+        <div className="safe-bottom" style={{ background: SOLID }}>{composer ? <ChatComposer {...composer} className="mx-auto max-w-[760px] px-md pb-sm" /> : <div className="h-sm" />}</div>
       </footer>
     </div>
   );

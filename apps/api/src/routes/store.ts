@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { rewardSocial, trustFor } from '../rewards';
-import { productPayWays, unlockFor } from '@kreators/shared';
+import { money, percentOff, productPayWays, unlockFor } from '@kreators/shared';
 import { haveFor } from '../unlocks';
 import { pageOf, paged } from '../db';
 import { AFFILIATE_SHARE, levelFromXp, type Lesson, type PublicPage } from '@kreators/shared';
@@ -235,6 +235,7 @@ store.post('/:productId/checkout', async (c) => {
     points = Math.min(offered, 1_000_000);
   }
   let couponCode: string | null = null;
+  let couponId: string | null = null;
   if (typeof body.coupon === 'string' && body.coupon.trim()) {
     const code = body.coupon.trim().toUpperCase();
     const coupon = await db
@@ -242,10 +243,12 @@ store.post('/:productId/checkout', async (c) => {
       .bind(product.owner_id, code, product.id, nowIso())
       .first<{ id: string; percent_off: number }>();
     if (!coupon) return c.json({ error: 'that coupon does not work here' }, 400);
-    points = Math.round(points * (1 - coupon.percent_off / 100));
-    cents = Math.round(cents * (1 - coupon.percent_off / 100));
+    // Whole numbers only: the amount off rounds down, the same way a team code does. The use is taken later, once nothing can fail first.
+    const bps = Math.round(Number(coupon.percent_off) * 100);
+    points -= percentOff(points, bps);
+    cents -= percentOff(cents, bps);
     couponCode = code;
-    await db.prepare('UPDATE coupons SET uses = uses + 1 WHERE id = ?').bind(coupon.id).run();
+    couponId = coupon.id;
   }
   // Money is only asked for when the product has a money price; a product priced in points only is never free through the test path.
   const wantsMoney = (body.pay === 'test' || body.pay === 'money') && cents > 0;
@@ -256,7 +259,9 @@ store.post('/:productId/checkout', async (c) => {
   let discount: Extract<Quoted, { ok: true }> | null = null;
   if (typeof body.discountCode === 'string' && body.discountCode.trim()) {
     if (couponCode) return c.json({ error: 'Use one code at a time: the creator coupon or the kreators.app code.' }, 400);
-    const q = await quoteCode(db, user.id, body.discountCode, 'product', product.id, { cents: listCents, points: listPoints, currency: product.currency });
+    // Pay what you want: the code's percent comes off the product's own minimum, never off the amount typed.
+    const pwywPoints = product.pwyw === 1 && !replay && !wantsMoney ? { basePoints: product.price_points } : {};
+    const q = await quoteCode(db, user.id, body.discountCode, 'product', product.id, { cents: listCents, points: listPoints, currency: product.currency, ...pwywPoints });
     if (!q.ok) return c.json({ error: q.why }, 400);
     discount = q;
     if (wantsMoney) cents = q.quote.payCents;
@@ -303,10 +308,22 @@ store.post('/:productId/checkout', async (c) => {
       return c.json({ error: `you need ${paidPoints - user.points} more points` }, 400);
     }
   }
+  // The creator's coupon use is taken now, guarded on max_uses, so two buyers cannot both take the last one, and a checkout
+  // that stopped earlier never spent one.
+  let couponTaken = false;
   const undo = async () => {
     if (paidPoints > 0) await db.prepare('UPDATE users SET points = points + ? WHERE id = ?').bind(paidPoints, user.id).run();
     if (discount) await release(db, id);
+    if (couponTaken && couponId) await db.prepare('UPDATE coupons SET uses = uses - 1 WHERE id = ? AND uses > 0').bind(couponId).run();
   };
+  if (couponId) {
+    const took = await db.prepare('UPDATE coupons SET uses = uses + 1 WHERE id = ? AND (max_uses IS NULL OR uses < max_uses) AND (expires_at IS NULL OR expires_at > ?)').bind(couponId, now).run();
+    if (took.meta.changes !== 1) {
+      await undo();
+      return c.json({ error: 'that coupon has just run out' }, 409);
+    }
+    couponTaken = true;
+  }
   let providerOrderId: string | null = null;
   if (live) {
     try {
@@ -356,7 +373,7 @@ store.post('/:productId/checkout', async (c) => {
   await logEvent(db, 'order', id, live ? 'order.pending' : 'order.paid', { points: paidPoints, cents, provider: live ? 'razorpay' : pay, ...(discount ? { code: discount.row.code, offCents: discount.quote.offCents, offPoints: discount.quote.offPoints } : {}) });
   if (!live) {
     await track(db, user.id, 'payment_succeeded', { productId: product.id, method: pay });
-    await notify(db, product.owner_id, 'order', `${nameOf(user)} got ${product.title}${replay ? ' (replay)' : ''}`, pay === 'points' ? `${paidPoints} points${src.linkId ? ', via a tracked link' : ''}` : `${(cents / 100).toFixed(2)} ${product.currency}, test mode`, product.kind === 'dm' ? '/shop/dm' : `/shop/products/${product.id}`);
+    await notify(db, product.owner_id, 'order', `${nameOf(user)} got ${product.title}${replay ? ' (replay)' : ''}`, pay === 'points' ? `${paidPoints} points${src.linkId ? ', via a tracked link' : ''}` : `${money(cents, product.currency)}, test mode`, product.kind === 'dm' ? '/shop/dm' : `/shop/products/${product.id}`);
     if (affiliate) await notify(db, affiliate.id, 'affiliate', 'Your link made a sale', `${product.title}, ${share} points to you`, '/shop/audience');
     await sendEmail(db, c.env, { userId: user.id, to: user.email, subject: `Your receipt: ${product.title}`, body: `You got ${product.title}${pay === 'points' && paidPoints > 0 ? ` for ${paidPoints} points` : ''}${discount ? ` with the code ${discount.row.code}` : ''}. Find it under My purchases.` });
   }

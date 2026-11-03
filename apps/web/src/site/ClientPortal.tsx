@@ -24,6 +24,7 @@ import { StageBar } from '../components/StageBar';
 import { StatusTag } from '../components/StatusTag';
 import { ApiError, publicApi } from '../lib/api';
 import { prettyDate } from '../lib/date';
+import { fileTitle, printAs } from '../lib/printDoc';
 import { forgetPortalSessions } from '../lib/portalSession';
 import { SiteLayout } from './SiteLayout';
 
@@ -282,10 +283,11 @@ export function ClientPortal() {
   const [said, setSaid] = useState('');
   const v = q.data;
   const locked = q.error instanceof ApiError && q.error.status === 401 && q.error.data.error === 'locked';
-  // A kept unlock the server no longer accepts (twelve hours, or the password changed) is dropped, so it is not sent again.
+  // A kept unlock for this link the server no longer accepts (twelve hours, or the password changed) is dropped, so it is not sent again.
+  // Other clients' links keep theirs.
   useEffect(() => {
-    if (locked) forgetPortalSessions();
-  }, [locked]);
+    if (locked) forgetPortalSessions(`agency:${token}`);
+  }, [locked, token]);
   const done = (line: string) => {
     setSaid(line);
     void qc.invalidateQueries({ queryKey: ['agency', 'portal', token] });
@@ -294,7 +296,7 @@ export function ClientPortal() {
   if (locked) {
     return (
       <SiteLayout wide={false}>
-        <PortalLock clientName={String((q.error as ApiError).data.clientName ?? '')} unlock={(pw) => publicApi.portalUnlock(token, pw)} onOpen={() => void qc.invalidateQueries({ queryKey: ['agency', 'portal', token] })} />
+        <PortalLock clientName={String((q.error as ApiError).data.clientName ?? '')} link={`agency:${token}`} unlock={(pw) => publicApi.portalUnlock(token, pw)} onOpen={() => void qc.invalidateQueries({ queryKey: ['agency', 'portal', token] })} />
       </SiteLayout>
     );
   }
@@ -315,7 +317,7 @@ export function ClientPortal() {
               <p className="m-0 type-eyebrow text-ink-mute">Your dashboard</p>
               <h1 className="mt-xs text-[30px]">{`${v.clientName}, content with ${v.agencyName}`}</h1>
               <div className="mt-xs no-print">
-                <Button variant="outline" size="sm" onClick={() => window.print()}>
+                <Button variant="outline" size="sm" onClick={() => printAs(fileTitle('Dashboard', v.clientName))}>
                   Print or save as PDF
                 </Button>
               </div>

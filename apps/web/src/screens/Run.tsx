@@ -366,7 +366,8 @@ function ApplicationRow({ a, onChange }: { a: RunCollabApplication & { collabTit
 
 function CollabsTab() {
   const pg = usePage('c');
-  const q = useAuthed(['run-collabs', pg.query], () => api.runCollabs(pg.query));
+  const apg = usePage('a');
+  const q = useAuthed(['run-collabs', pg.query, apg.query], () => api.runCollabs(`${pg.query}&${apg.query}`));
   const [posting, setPosting] = useState(false);
   const [applying, setApplying] = useState<RunCollab | null>(null);
   const d = q.data;
@@ -400,6 +401,7 @@ function CollabsTab() {
               <ApplicationRow key={a.id} a={a} onChange={() => q.refetch()} />
             ))}
           </ul>
+          <Pager page={d.applicationPage} prefix="a" label="applications" />
         </section>
       )}
       <PostCollabSheet open={posting} onClose={() => setPosting(false)} onDone={() => q.refetch()} />
@@ -876,7 +878,8 @@ function AddRunSheet({ open, clubId, collabs, onClose, onDone }: { open: boolean
 
 export function RunClubPage() {
   const { id = '' } = useParams();
-  const q = useAuthed(['run-club', id], () => api.runClub(id));
+  const epg = usePage('e');
+  const q = useAuthed(['run-club', id, epg.query], () => api.runClub(id, epg.query));
   const refresh = useRefreshAll();
   const celebrate = useCelebrate();
   const [adding, setAdding] = useState(false);
@@ -1042,6 +1045,7 @@ export function RunClubPage() {
               </li>
             ))}
           </ul>
+          <Pager page={d.entryPage} prefix="e" label="entries" />
         </section>
       )}
 

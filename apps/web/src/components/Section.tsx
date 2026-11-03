@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
+import { ChevronRight } from 'lucide-react';
+import { Icon } from './Icon';
 
 interface Props {
   id: string;
@@ -37,9 +39,7 @@ export function SeeAll({ to, children }: { to: string; children: ReactNode }) {
   return (
     <Link to={to} className="inline-flex min-h-[44px] items-center gap-xs text-[14px] font-bold text-ink-mute underline-offset-4 hover:text-ink hover:underline">
       {children}
-      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M9 5l7 7-7 7" />
-      </svg>
+      <Icon icon={ChevronRight} size={16} />
     </Link>
   );
 }

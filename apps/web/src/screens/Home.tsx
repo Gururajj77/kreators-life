@@ -1,8 +1,13 @@
 import { QuoteOfTheDay } from '../components/QuoteOfTheDay';
 import { RemindersSection } from '../components/Reminders';
-import { badgeRoleOf, greetingFor, LIFE_AREAS, MODULE_GROUPS, money, MOODS, RELATIONSHIP_BY_KEY, STRESS_LEVELS, type HomeResponse, type ModuleGroup } from '@kreators/shared';
+import { badgeRoleOf, greetingFor, knowledgeKindIcon, LIFE_AREAS, MODULE_BY_KEY, MODULE_GROUPS, money, MOODS, RELATIONSHIP_BY_KEY, STRESS_LEVELS, type HomeResponse, type ModuleGroup } from '@kreators/shared';
 import type { CSSProperties, ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
+import type { LucideIcon } from 'lucide-react';
+import { ArrowDownLeft, ArrowRight, ArrowUpRight, Bell, CalendarClock, CalendarDays, Check, ChevronDown, ChevronRight, Clock, Coins, Compass, FaceSlightlySmiling, Flame, Footprints, HandCoins, HeartPulse, MessageCircle, MessageCirclePlus, NotebookPen, PartyPopper, Pencil, Receipt, Sparkles, Star, UserRound, Users, UsersRound } from 'lucide-react';
+import { AppIcon } from '../components/AppIcon';
+import { Icon } from '../components/Icon';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { Nudge } from '../components/Nudge';
 import { Avatar } from '../components/Avatar';
@@ -29,7 +34,37 @@ import { SkeletonList } from '../components/Skeleton';
 const SHORTCUT_ORDER: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'manage'];
 const weekday = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' });
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
-const KIND_EMOJI: Record<string, string> = { article: '📄', exercise: '🧘', video: '🎥', audio: '🎧', link: '🔗' };
+/** What is coming up wears its app's icon: a Party event, a run, a circle, or a calendar for a session or booking. */
+const upIcon = (kind: string): LucideIcon => (kind === 'event' ? PartyPopper : kind === 'run' ? Footprints : kind === 'circle' ? UsersRound : CalendarDays);
+/** A reading's tag is free text; a pillar key among them reads as that pillar's name, never a raw snake_case key. */
+const tagLabel = (t: string) => RELATIONSHIP_BY_KEY[t as keyof typeof RELATIONSHIP_BY_KEY]?.name ?? t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+/**
+ * On a phone, Home runs long: this folds a few less-checked-daily sections behind one toggle, closed to start.
+ * On a laptop, Home already flows into two columns and the grid pairs half-width sections up, so here the
+ * sections render exactly as they always did, with no toggle and no extra wrapper in the way of that pairing.
+ */
+function MoreOnHome({ children }: { children: ReactNode }) {
+  const [isPhone, setIsPhone] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const sync = () => setIsPhone(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+  if (!isPhone) return <div className="contents">{children}</div>;
+  return (
+    <div className="contents">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="toy toy-flat col-span-full flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile bg-paper px-sm text-left text-[16px] font-bold aria-expanded:bg-line">
+        More on Home
+        <Icon icon={ChevronDown} size={16} className={`text-ink-soft transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && children}
+    </div>
+  );
+}
 const SOURCE_META = {
   checkin: { label: 'Check-ins', color: 'var(--color-r3)' },
   spark: { label: 'Small acts', color: 'var(--color-r6)' },
@@ -73,22 +108,16 @@ export function Home() {
         <HeroBlobs opacity={0.06} kind="cosmos" />
         <div className="relative flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
           <p className="order-2 m-0 text-[14px] font-bold opacity-80 md:order-1">
-            <span aria-hidden="true">📅 </span>
+            <Icon icon={CalendarDays} size={16} className="mr-xs inline-block align-[-3px]" />
             {prettyDate(date)}, {greetingFor(hour).toLowerCase()}
           </p>
           <div className="order-1 flex items-center justify-between gap-xs md:order-2 md:shrink-0 md:justify-end">
             <Link to={myPage} className="toy inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-white/15 px-sm text-[14px] font-bold text-on-fill">
-              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="8" r="4" />
-                <path d="M4 21a8 8 0 0 1 16 0" />
-              </svg>
+              <Icon icon={UserRound} size={18} />
               My page
             </Link>
           <Link to="/inbox" aria-label={d && d.unread > 0 ? `Inbox, ${d.unread} unread` : 'Inbox'} className="toy relative flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-white/15 text-on-fill">
-            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16Z" />
-              <path d="M10 20a2 2 0 0 0 4 0" />
-            </svg>
+            <Icon icon={Bell} size={20} />
             {d && d.unread > 0 && <span className="absolute -top-[2px] -right-[2px] flex min-w-[18px] items-center justify-center rounded-pill bg-r2 px-xs text-[11px] font-extrabold leading-[18px] text-on-fill">{d.unread > 9 ? '9+' : d.unread}</span>}
           </Link>
           </div>
@@ -105,16 +134,16 @@ export function Home() {
             {d && (
               <p className="mt-xs m-0 flex flex-wrap items-center gap-xs text-[14px] font-bold opacity-90" aria-label="At a glance">
                 <Link to="/tower" className="underline-offset-4 hover:underline">
-                  <span aria-hidden="true">⭐ </span>Level {d.xp.level}
+                  <Icon icon={Star} size={14} className="mr-xs inline-block align-[-2px]" />Level {d.xp.level}
                 </Link>
                 <span aria-hidden="true">·</span>
                 <Link to="/today" className="underline-offset-4 hover:underline">
-                  <span aria-hidden="true">🔥 </span>
+                  <Icon icon={Flame} size={14} className="mr-xs inline-block align-[-2px]" />
                   {d.today.streak} {d.today.streak === 1 ? 'day' : 'days'}
                 </Link>
                 <span aria-hidden="true">·</span>
                 <Link to="/mood" className="underline-offset-4 hover:underline">
-                  <span aria-hidden="true">{moodToday ? moodToday.emoji : '🙂'} </span>
+                  {moodToday ? <MoodFace value={moodToday.value} size={16} className="mr-xs inline-block align-[-3px]" /> : <Icon icon={FaceSlightlySmiling} size={14} className="mr-xs inline-block align-[-2px]" />}
                   {moodToday ? moodToday.name : 'Log your mood'}
                 </Link>
               </p>
@@ -150,7 +179,7 @@ export function Home() {
           <Section id="home-metrics" title="Your metrics" lede="Where you stand today. Tap one for the detail." action={<SeeAll to="/life">Life</SeeAll>} span>
             <ul className="-mx-md flex snap-x scroll-px-md list-none gap-xs overflow-x-auto px-md pb-xs scrollbar-none m-0 md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0">
               <li className="w-[168px] shrink-0 snap-start md:col-span-2 md:w-auto">
-                <MetricCard to="/life" title="Life score" emoji="🧭" tone="var(--color-r4)" deep="var(--deep-lover_partner)" corner={<Avatar relationship="lover_partner" size={36} decorative mood={(d.life?.overall ?? 0) >= 60 ? 'excited' : 'happy'} />}>
+                <MetricCard to="/life" title="Life score" icon={Compass} tone="var(--color-r4)" deep="var(--deep-lover_partner)" corner={<Avatar relationship="lover_partner" size={36} decorative mood={(d.life?.overall ?? 0) >= 60 ? 'excited' : 'happy'} />}>
                   <span className="flex flex-1 items-center justify-center">
                     <Gauge value={(d.life?.overall ?? 0) / 100} size={120} stroke={12} color={WHITE} track={WHITE_TRACK} label={`Life ${d.life?.overall ?? 0} of 100`}>
                       <span className="flex flex-col items-center leading-none">
@@ -164,7 +193,7 @@ export function Home() {
                 </MetricCard>
               </li>
               <li className="w-[168px] shrink-0 snap-start md:w-auto">
-                <MetricCard to="/mood" title="Mood" emoji="" tone="var(--color-r2)" deep="var(--deep-friendship)" corner={<MoodFace value={moodToday?.value ?? 3} size={40} color="rgba(255,255,255,0.25)" face="var(--color-on-fill)" />}>
+                <MetricCard to="/mood" title="Mood" tone="var(--color-r2)" deep="var(--deep-friendship)" corner={<MoodFace value={moodToday?.value ?? 3} size={40} color="rgba(255,255,255,0.25)" face="var(--color-on-fill)" />}>
                   <span className="block font-display text-[26px] font-extrabold leading-none">{moodToday ? moodToday.name : 'Not logged'}</span>
                   <span className="mt-xs block flex-1">
                     <AreaLine values={d.trackers.mood.week} max={5} min={1} color={WHITE} height={80} onFill axes={false} empty="No moods yet" label="Mood for the last seven days" />
@@ -172,7 +201,7 @@ export function Home() {
                 </MetricCard>
               </li>
               <li className="w-[168px] shrink-0 snap-start md:w-auto">
-                <MetricCard to="/wellbeing" title="Wellbeing" emoji="💚" tone="var(--color-r6)" deep="var(--deep-guru)" corner={<Avatar relationship="guru" size={36} decorative mood={d.trackers.score >= 60 ? 'excited' : 'happy'} />}>
+                <MetricCard to="/wellbeing" title="Wellbeing" icon={HeartPulse} tone="var(--color-r6)" deep="var(--deep-guru)" corner={<Avatar relationship="guru" size={36} decorative mood={d.trackers.score >= 60 ? 'excited' : 'happy'} />}>
                   <span className="flex flex-1 items-center justify-center">
                     <Ring value={d.trackers.score / 100} size={104} stroke={11} color={WHITE} track={WHITE_TRACK} label={`Wellbeing ${d.trackers.score} of 100`}>
                       <span className="flex flex-col items-center leading-none">
@@ -190,10 +219,10 @@ export function Home() {
 
           <Section id="home-stats" title="Your numbers" lede="Results first. Everything below is what moves them." span>
             <div className="grid grid-cols-2 gap-xs md:grid-cols-4">
-              <KitTile to="/today" tone="bg-r4" icon="🔥" value={String(d.today.streak)} label="day streak" hint={d.today.checkedIn ? 'checked in today' : 'not yet today'} />
-              <KitTile to="/today" tone="bg-r2" icon="✨" value={`+${d.xp.today}`} label="xp today" hint={`${d.xp.week} this week`} />
-              <KitTile to="/rewards" tone="bg-r3" yellow icon="🪙" value={d.points.toLocaleString()} label="points" hint="trade for rewards" />
-              <KitTile to="/tower" tone="bg-ink" icon="⭐" value={`Level ${d.xp.level}`} label={`${d.xp.into} of ${d.xp.span} xp`} hint={`${d.xp.span - d.xp.into} to level ${d.xp.level + 1}`}>
+              <KitTile to="/today" tone="bg-r4" icon={Flame} value={String(d.today.streak)} label="day streak" hint={d.today.checkedIn ? 'checked in today' : 'not yet today'} />
+              <KitTile to="/today" tone="bg-r2" icon={Sparkles} value={`+${d.xp.today}`} label="xp today" hint={`${d.xp.week} this week`} />
+              <KitTile to="/rewards" tone="bg-r3" yellow icon={Coins} value={d.points.toLocaleString()} label="points" hint="trade for rewards" />
+              <KitTile to="/tower" tone="bg-ink" icon={Star} value={`Level ${d.xp.level}`} label={`${d.xp.into} of ${d.xp.span} xp`} hint={`${d.xp.span - d.xp.into} to level ${d.xp.level + 1}`}>
                 <span className="mt-xs block h-[6px] overflow-hidden rounded-pill bg-on-ink/20" aria-hidden="true">
                   <span className="block h-full rounded-pill bg-on-ink" style={{ width: `${Math.round((d.xp.into / Math.max(1, d.xp.span)) * 100)}%` }} />
                 </span>
@@ -247,9 +276,7 @@ export function Home() {
                   ].map(([text, done]) => (
                     <li key={String(text)} className={`inline-flex min-h-[32px] items-center gap-xs rounded-pill px-sm text-[12px] font-extrabold ${done ? 'bg-card text-ink' : 'bg-ink-fixed/20 text-on-fill'}`}>
                       {done ? (
-                        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M5 12.5l4.5 4.5L19 7.5" />
-                        </svg>
+                        <Icon icon={Check} size={14} strokeWidth={3} />
                       ) : (
                         <span className="block size-[12px] rounded-[4px] border-2 border-current" aria-hidden="true" />
                       )}
@@ -266,9 +293,7 @@ export function Home() {
                     {d.nudge.action}
                   </Link>
                   <Link to="/today" aria-label="Open Today" className="toy flex min-h-[48px] w-[48px] shrink-0 items-center justify-center rounded-pill bg-white/25 text-on-fill">
-                    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M5 12h14M13 6l6 6-6 6" />
-                    </svg>
+                    <Icon icon={ArrowRight} size={20} />
                   </Link>
                 </div>
               </div>
@@ -279,12 +304,12 @@ export function Home() {
             <ul className="flex list-none flex-col gap-xs p-0 m-0">
               {[
                 {
-                  key: 'mindful', to: '/mindful', name: 'Mindful minutes', emoji: '🧘', tone: 'var(--tint-green)',
+                  key: 'mindful', to: '/mindful', name: 'Mindful minutes', icon: MODULE_BY_KEY.mindful?.icon, tone: 'var(--tint-green)',
                   value: d.trackers.mindful.minutesWeek > 0 ? `${d.trackers.mindful.minutesWeek} min this week` : 'none this week',
                   visual: <Sparkline values={d.trackers.mindful.week} max={60} color="var(--color-r4)" width={80} height={32} />,
                 },
                 {
-                  key: 'sleep', to: '/sleep', name: 'Sleep', emoji: '🌙', tone: 'var(--tint-purple)',
+                  key: 'sleep', to: '/sleep', name: 'Sleep', icon: MODULE_BY_KEY.sleep?.icon, tone: 'var(--tint-purple)',
                   value: d.trackers.sleep.avg7 === null ? 'not logged' : `${d.trackers.sleep.avg7.toFixed(1)} h a night`,
                   visual: (
                     <Ring value={d.trackers.sleep.avg7 === null ? 0 : (Math.max(4, Math.min(8, d.trackers.sleep.avg7)) - 4) / 4} size={44} stroke={5} color="var(--color-r6)" track="var(--color-line)" label="Sleep quality">
@@ -293,7 +318,7 @@ export function Home() {
                   ),
                 },
                 {
-                  key: 'journal', to: '/journal', name: 'Journal', emoji: '📓', tone: 'var(--tint-orange)',
+                  key: 'journal', to: '/journal', name: 'Journal', icon: MODULE_BY_KEY.journal?.icon, tone: 'var(--tint-orange)',
                   value: d.trackers.journal.streakDays > 0 ? `${d.trackers.journal.streakDays} day streak` : d.trackers.journal.entriesMonth > 0 ? `${d.trackers.journal.entriesMonth} this month` : 'nothing written yet',
                   visual: (
                     <span className="grid grid-cols-7 gap-xs" role="img" aria-label="Days with an entry in the last two weeks">
@@ -304,12 +329,12 @@ export function Home() {
                   ),
                 },
                 {
-                  key: 'stress', to: '/stress', name: 'Stress', emoji: '🌊', tone: 'var(--tint-yellow)',
+                  key: 'stress', to: '/stress', name: 'Stress', icon: MODULE_BY_KEY.stress?.icon, tone: 'var(--tint-yellow)',
                   value: d.trackers.stress.latest === null ? 'not logged' : `Level ${d.trackers.stress.latest} (${STRESS_LEVELS[d.trackers.stress.latest - 1] ?? ''})`,
                   visual: <Segments value={d.trackers.stress.latest} color="var(--color-r3)" label="Stress level out of five" />,
                 },
                 {
-                  key: 'mood', to: '/mood', name: 'Mood', emoji: '🙂', tone: 'var(--tint-brown)',
+                  key: 'mood', to: '/mood', name: 'Mood', icon: MODULE_BY_KEY.mood?.icon, tone: 'var(--tint-brown)',
                   value: moodToday ? `${moodToday.name} today` : 'not logged today',
                   visual:
                     recentMoods.length === 0 ? (
@@ -319,9 +344,7 @@ export function Home() {
                         {recentMoods.map((m, i) => (
                           <span key={i} className="flex items-center gap-xs">
                             {i > 0 && (
-                              <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="text-ink-mute">
-                                <path d="M5 12h14M13 6l6 6-6 6" />
-                              </svg>
+                              <Icon icon={ArrowRight} size={12} className="text-ink-mute" />
                             )}
                             <MoodFace value={m} size={28} />
                           </span>
@@ -335,8 +358,8 @@ export function Home() {
                     {r.key === 'mood' && moodToday ? (
                       <MoodFace value={moodToday.value} size={48} />
                     ) : (
-                      <span className="flex size-[48px] shrink-0 items-center justify-center rounded-pill text-[22px]" style={{ background: r.tone }} aria-hidden="true">
-                        {r.emoji}
+                      <span className="flex size-[48px] shrink-0 items-center justify-center rounded-pill text-ink" style={{ background: r.tone }}>
+                        <AppIcon name={r.icon} size={22} />
                       </span>
                     )}
                     <span className="min-w-0 flex-1">
@@ -358,9 +381,7 @@ export function Home() {
                   <span className="text-[16px] font-bold">coming up</span>
                 </p>
                 <Link to="/party" aria-label="Open Party" className="toy flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-r4 text-on-fill" style={{ '--toy-color': 'var(--deep-lover_partner)' } as CSSProperties}>
-                  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M5 12h14M13 6l6 6-6 6" />
-                  </svg>
+<Icon icon={ArrowRight} size={20} />
                 </Link>
               </div>
               <p className="mt-xs m-0 flex flex-wrap gap-sm text-[12px] font-bold text-ink-soft">
@@ -369,7 +390,7 @@ export function Home() {
                   if (n === 0) return null;
                   return (
                     <span key={k}>
-                      <span aria-hidden="true">{k === 'event' ? '🎉' : k === 'run' ? '🏃' : k === 'circle' ? '🫧' : '📅'} </span>
+                      <Icon icon={upIcon(k)} size={14} className="mr-xs inline-block align-[-2px]" />
                       {n} {k === 'booking' ? (n === 1 ? 'booking you host' : 'bookings you host') : n === 1 ? k : `${k}s`}
                     </span>
                   );
@@ -381,20 +402,18 @@ export function Home() {
                   {d.upNext.map((u) => (
                     <li key={`${u.kind}-${u.path}-${u.at}`}>
                       <Link to={u.path} className="toy toy-flat flex items-center gap-sm rounded-tile bg-paper p-sm text-ink">
-                        <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-card text-[20px] shadow-toy-soft" aria-hidden="true">
-                          {u.kind === 'event' ? '🎉' : u.kind === 'run' ? '🏃' : u.kind === 'circle' ? '🫧' : '📅'}
+                        <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-card text-ink-soft shadow-toy-soft">
+                          <Icon icon={upIcon(u.kind)} size={20} />
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[16px] font-bold">{u.title}</span>
                           <span className="block text-[12px] font-bold text-ink-soft">
-                            <span aria-hidden="true">🕒 </span>
+                            <Icon icon={Clock} size={12} className="mr-xs inline-block align-[-2px]" />
                             {when(u.at)}
                             {u.note ? `, ${u.note}` : ''}
                           </span>
                         </span>
-                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-ink-mute">
-                          <path d="M9 5l7 7-7 7" />
-                        </svg>
+                        <Icon icon={ChevronRight} size={18} className="text-ink-mute" />
                       </Link>
                     </li>
                   ))}
@@ -418,11 +437,11 @@ export function Home() {
                 <p className="m-0 font-display text-[40px] font-extrabold leading-none">{d.companion.messages.toLocaleString()}</p>
                 <p className="mt-xs m-0 text-[18px] font-extrabold">{d.companion.messages === 1 ? 'message' : 'messages'}</p>
                 <p className="mt-xs m-0 text-[14px] font-bold opacity-80">
-                  <span aria-hidden="true">💬 </span>
+                  <Icon icon={MessageCircle} size={14} className="mr-xs inline-block align-[-2px]" />
                   {d.companion.messages === 0 ? 'Say what is on your mind.' : 'Pick up where you left off.'}
                 </p>
                 <p className="m-0 text-[14px] font-bold opacity-80">
-                  <span aria-hidden="true">📓 </span>Or write it in the journal.
+                  <Icon icon={NotebookPen} size={14} className="mr-xs inline-block align-[-2px]" />Or write it in the journal.
                 </p>
               </div>
               <span className="pointer-events-none absolute top-md right-md opacity-90" aria-hidden="true">
@@ -430,20 +449,16 @@ export function Home() {
               </span>
               <div className="relative z-10 mt-md flex gap-sm">
                 <Link to="/companion" aria-label="Talk to the companion" className="toy flex size-[56px] items-center justify-center rounded-pill bg-r4 text-on-fill" style={{ '--toy-color': 'var(--deep-lover_partner)' } as CSSProperties}>
-                  <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
+<Icon icon={MessageCirclePlus} size={24} />
                 </Link>
                 <Link to="/journal" aria-label="Write in the journal" className="toy flex size-[56px] items-center justify-center rounded-pill bg-r2 text-on-fill" style={{ '--toy-color': 'var(--deep-friendship)' } as CSSProperties}>
-                  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M4 20h4l10-10-4-4L4 16v4Z" />
-                    <path d="M12.5 7.5l4 4" />
-                  </svg>
+<Icon icon={Pencil} size={22} />
                 </Link>
               </div>
             </div>
           </Section>
 
+          <MoreOnHome>
           <Section id="home-trend" title="Last 14 days" lede="Xp a day. A green dot is a task ticked." action={<SeeAll to="/today">Daily</SeeAll>}>
             <div className="rounded-card bg-card p-md shadow-toy-soft">
               <AreaLine values={d.days.map((x) => x.xp)} max={Math.max(60, ...d.days.map((x) => x.xp))} labels={d.days.map((x) => weekday(x.date))} color="var(--color-r4)" height={160} empty="No xp in the last two weeks" label={`Xp per day for the last fourteen days, ${d.xp.week} this week`} />
@@ -471,6 +486,7 @@ export function Home() {
               </div>
             </div>
           </Section>
+          </MoreOnHome>
 
           {d.life && (
             <Section id="home-life" title="Life" lede={`${d.life.overall} of 100, ${d.life.label.toLowerCase()}. Only you see this.`} action={<SeeAll to="/life">Open</SeeAll>} span={lastOptional === 'life'}>
@@ -505,10 +521,10 @@ export function Home() {
                 {d.resources.map((r, i) => (
                   <li key={r.id} className={`flex ${bento(i, d.resources.length, 2, lastOptional === 'reads' ? 4 : 2)}`}>
                     <Link to={`/knowledge/${r.id}`} className="toy toy-soft flex min-h-[160px] w-full flex-col rounded-card bg-card p-sm text-ink">
-                      <span className="flex size-[48px] items-center justify-center rounded-pill bg-r4 text-[22px]" aria-hidden="true">
-                        {KIND_EMOJI[r.kind] ?? '📄'}
+                      <span className="flex size-[48px] items-center justify-center rounded-pill bg-r4 text-on-fill">
+                        <AppIcon name={knowledgeKindIcon(r.kind)} size={22} />
                       </span>
-                      {r.tag && <span className="mt-xs inline-flex w-fit rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[22px] text-ink-soft">{r.tag}</span>}
+                      {r.tag && <span className="mt-xs inline-flex w-fit rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[22px] text-ink-soft">{tagLabel(r.tag)}</span>}
                       <span className="mt-xs block text-[16px] font-bold leading-snug">{r.title}</span>
                       <span className="mt-xs block text-[12px] font-bold text-ink-soft">{r.kind}</span>
                     </Link>
@@ -521,10 +537,10 @@ export function Home() {
           {d.money && (
             <Section id="home-money" title="Money this month" lede="From Finance. Only you see this." action={<SeeAll to="/finance">Open</SeeAll>} span={lastOptional === 'money'}>
               <div className="grid grid-cols-2 gap-xs">
-                <KitTile to="/finance" tone="bg-r4" icon="↓" value={money(d.money.incomeCents, d.money.currency)} label="in" />
-                <KitTile to="/finance" tone="bg-r2" icon="↑" value={money(d.money.expenseCents, d.money.currency)} label="out" />
-                <KitTile to="/finance" tone="bg-card" plain icon="🤝" value={money(d.money.owedToMeCents, d.money.currency)} label="owed to you" hint={d.money.overdueInvoices > 0 ? `${d.money.overdueInvoices} overdue ${d.money.overdueInvoices === 1 ? 'invoice' : 'invoices'}` : 'no overdue invoices'} />
-                <KitTile to="/finance" tone="bg-card" plain icon="📅" value={money(d.money.iOweCents, d.money.currency)} label="you owe" hint={d.money.dueSoon > 0 ? `${d.money.dueSoon} due within a week` : 'nothing due this week'} />
+                <KitTile to="/finance" tone="bg-r4" icon={ArrowDownLeft} value={money(d.money.incomeCents, d.money.currency)} label="in" />
+                <KitTile to="/finance" tone="bg-r2" icon={ArrowUpRight} value={money(d.money.expenseCents, d.money.currency)} label="out" />
+                <KitTile to="/finance" tone="bg-card" plain icon={HandCoins} value={money(d.money.owedToMeCents, d.money.currency)} label="owed to you" hint={d.money.overdueInvoices > 0 ? `${d.money.overdueInvoices} overdue ${d.money.overdueInvoices === 1 ? 'invoice' : 'invoices'}` : 'no overdue invoices'} />
+                <KitTile to="/finance" tone="bg-card" plain icon={CalendarClock} value={money(d.money.iOweCents, d.money.currency)} label="you owe" hint={d.money.dueSoon > 0 ? `${d.money.dueSoon} due within a week` : 'nothing due this week'} />
               </div>
             </Section>
           )}
@@ -552,9 +568,9 @@ export function Home() {
             <Section id="home-shop" title="Shop this month" lede={`${d.shop.products} ${d.shop.products === 1 ? 'product' : 'products'} live or in draft.`} action={<SeeAll to="/shop">Open</SeeAll>} span>
               <div className="rounded-card bg-card p-md shadow-toy-soft">
                 <div className="grid grid-cols-3 gap-xs">
-                  <KitTile tone="bg-paper" plain icon="🧾" value={String(d.shop.ordersMonth)} label="orders" />
-                  <KitTile tone="bg-paper" plain icon="🪙" value={d.shop.pointsMonth.toLocaleString()} label="points" hint={d.shop.centsMonth > 0 ? money(d.shop.centsMonth, d.shop.currency) : undefined} />
-                  <KitTile tone="bg-paper" plain icon="👥" value={String(d.shop.followers)} label="followers" hint={`${d.shop.views} page views`} />
+                  <KitTile tone="bg-paper" plain icon={Receipt} value={String(d.shop.ordersMonth)} label="orders" />
+                  <KitTile tone="bg-paper" plain icon={Coins} value={d.shop.pointsMonth.toLocaleString()} label="points" hint={d.shop.centsMonth > 0 ? money(d.shop.centsMonth, d.shop.currency) : undefined} />
+                  <KitTile tone="bg-paper" plain icon={Users} value={String(d.shop.followers)} label="followers" hint={`${d.shop.views} page views`} />
                 </div>
                 <div className="mt-md">
                   <AreaLine values={d.shop.days.map((x) => x.orders)} max={Math.max(3, ...d.shop.days.map((x) => x.orders))} labels={d.shop.days.map((x) => weekday(x.date))} color="var(--color-r6)" height={140} empty="No orders in the last two weeks" label="Orders per day for the last fourteen days" />
@@ -574,9 +590,7 @@ export function Home() {
                     {list.map((m, i) => (
                       <li key={m.key} className={bento(i, list.length, 3, 6)}>
                         <Link to={m.path} className="toy toy-soft flex min-h-[72px] flex-col items-center justify-center gap-xs rounded-tile bg-card p-xs text-center text-ink">
-                          <span className="text-[24px] leading-none" aria-hidden="true">
-                            {m.emoji}
-                          </span>
+                          <AppIcon name={m.icon} size={24} />
                           <span className="block w-full truncate text-[12px] font-bold">{m.name}</span>
                         </Link>
                       </li>
@@ -593,13 +607,13 @@ export function Home() {
 }
 
 /** One of the kit's coloured metric cards: a title with its icon, then whatever the card shows, all in white. */
-function MetricCard({ to, title, emoji, tone, deep, corner, children }: { to: string; title: string; emoji: string; tone: string; deep: string; corner?: ReactNode; children: ReactNode }) {
+function MetricCard({ to, title, icon, tone, deep, corner, children }: { to: string; title: string; icon?: LucideIcon; tone: string; deep: string; corner?: ReactNode; children: ReactNode }) {
   return (
     <Link to={to} className="toy fx-spot relative flex h-[204px] flex-col overflow-hidden rounded-card p-sm text-on-fill" style={{ background: `linear-gradient(140deg, ${tone}, color-mix(in oklab, ${tone} 72%, var(--fill-shade)))`, '--toy-color': deep } as CSSProperties}>
       <HeroBlobs opacity={0.1} seed={title} />
       <span className="relative flex items-center justify-between gap-xs text-[14px] font-extrabold">
         <span className="flex items-center gap-xs">
-          {emoji && <span aria-hidden="true">{emoji}</span>}
+          {icon && <Icon icon={icon} size={16} />}
           {title}
         </span>
         {corner && <span className="shrink-0">{corner}</span>}
@@ -610,15 +624,13 @@ function MetricCard({ to, title, emoji, tone, deep, corner, children }: { to: st
 }
 
 /** One of the kit's stat tiles: a small icon and a big number on a solid fill, the label under it. White on colour, brown on yellow or on a plain card. */
-function KitTile({ to, tone, icon, value, label, hint, yellow = false, plain = false, children }: { to?: string; tone: string; icon: string; value: string; label: string; hint?: string; yellow?: boolean; plain?: boolean; children?: ReactNode }) {
+function KitTile({ to, tone, icon, value, label, hint, yellow = false, plain = false, children }: { to?: string; tone: string; icon: LucideIcon; value: string; label: string; hint?: string; yellow?: boolean; plain?: boolean; children?: ReactNode }) {
   const fg = plain ? 'text-ink' : yellow ? 'text-on-yellow' : tone === 'bg-ink' ? 'text-on-ink' : 'text-on-fill';
   const cls = `block min-h-[96px] rounded-tile p-sm ${tone} ${fg} ${plain ? 'shadow-toy-soft' : ''}`;
   const inner = (
     <>
       <span className="flex items-baseline gap-xs">
-        <span className="text-[16px]" aria-hidden="true">
-          {icon}
-        </span>
+        <Icon icon={icon} size={16} className="self-center" />
         <span className="font-display text-[24px] font-extrabold leading-none">{value}</span>
       </span>
       <span className="mt-xs block text-[14px] font-bold">{label}</span>

@@ -1,8 +1,9 @@
-import { PUBLIC_BADGES, isFeatured, TOOL_CATEGORIES, type Tool } from '@kreators/shared';
+import { PUBLIC_BADGES, isFeatured, TOOL_CATEGORIES, unlockAt, type Tool } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button } from '../components/Button';
 import { LockedButton } from '../components/LockedButton';
+import { MediaSection } from '../components/MediaSection';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
@@ -41,7 +42,7 @@ function ToolRow({ t, reviewer, onChange }: { t: Tool; reviewer: boolean; onChan
             {t.verified ? 'Verified by the team' : `Suggested by ${t.suggestedByName}, waiting for review`}
             {t.affiliate ? '. Partner link: kreators.app may earn a share.' : ''}
             {t.clicks > 0 ? ` · ${t.clicks} ${t.clicks === 1 ? 'tap' : 'taps'}` : ''}
-            {t.unlock.ok && (t.minPoints > 0 || t.minXp > 0 || t.badge) ? ' · Earned: it asks for what you already have.' : ''}
+            {t.unlock.ok && (t.minPoints > 0 || t.minXp > 0 || t.badge) ? ` · ${unlockAt(t.unlock)}. You have it.` : ''}
           </span>
         </span>
         {!t.unlock.ok ? (
@@ -56,6 +57,7 @@ function ToolRow({ t, reviewer, onChange }: { t: Tool; reviewer: boolean; onChan
           </a>
         )}
       </div>
+      <MediaSection type="tool" id={t.id} title="Pictures and videos" />
       {reviewer && (
         <div className="mt-sm flex flex-wrap gap-xs">
           {!t.verified && (

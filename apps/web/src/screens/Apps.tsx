@@ -13,6 +13,9 @@ import { api } from '../lib/api';
 import { useGroupOrder, useModules, type ModuleView } from '../lib/modules';
 import { useMe, useRefreshAll } from '../lib/queries';
 import { tie } from '../lib/text';
+import { ChevronRight, ToggleRight } from 'lucide-react';
+import { AppIcon } from '../components/AppIcon';
+import { Icon } from '../components/Icon';
 
 const ORDER: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'core', 'manage'];
 
@@ -49,16 +52,14 @@ export function Apps() {
           {listed.length} on. Tap one to open it. The ones that matter most to you come first.
         </p>
         <Link to="/you#features" className="toy fx-shimmer mt-md flex items-center gap-sm rounded-card bg-ink p-md text-on-ink" style={{ '--toy-color': 'var(--color-ink)' } as CSSProperties}>
-          <span className="flex size-[48px] shrink-0 items-center justify-center rounded-pill bg-on-ink/15 text-[24px]" aria-hidden="true">
-            🧩
+          <span className="flex size-[48px] shrink-0 items-center justify-center rounded-pill bg-on-ink/15">
+            <Icon icon={ToggleRight} size={24} />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[18px] font-extrabold leading-tight">Turn apps on or off</span>
             <span className="mt-xs block text-[14px] font-semibold text-on-ink/70">{offCount > 0 ? `${offCount} more ${offCount === 1 ? 'app is' : 'apps are'} waiting. Switch on only what you need.` : 'Every app is on. Switch off what you do not use.'}</span>
           </span>
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-            <path d="M9 5l7 7-7 7" />
-          </svg>
+          <Icon icon={ChevronRight} size={20} />
         </Link>
         <div className="mt-md">
           <SearchBox placeholder="Search tasks, journals, library, products, people" />
@@ -103,8 +104,8 @@ export function Apps() {
         {asking && (
           <div>
             <div className="flex items-center gap-sm">
-              <span className="flex size-[56px] shrink-0 items-center justify-center rounded-pill text-[28px]" style={{ background: `var(--soft-${MODULE_GROUP_ACCENT[asking.group]})` }} aria-hidden="true">
-                {asking.emoji}
+              <span className="flex size-[56px] shrink-0 items-center justify-center rounded-pill text-ink" style={{ background: `var(--soft-${MODULE_GROUP_ACCENT[asking.group]})` }}>
+                <AppIcon name={asking.icon} size={28} />
               </span>
               <div className="min-w-0">
                 <p className="m-0 text-[16px] font-bold">{asking.name}</p>
@@ -136,8 +137,8 @@ export function Apps() {
 function AppRow({ m, color, tint, unread, onAsk }: { m: ModuleView; color: string; tint: string; unread: number; onAsk: () => void }) {
   const inner = (
     <>
-      <span className={`flex size-[48px] shrink-0 items-center justify-center rounded-pill text-[24px] ${m.on ? '' : 'grayscale'}`} style={{ background: m.on ? tint : 'var(--color-line)' }} aria-hidden="true">
-        {m.emoji}
+      <span className={`flex size-[48px] shrink-0 items-center justify-center rounded-pill ${m.on ? 'text-ink' : 'text-ink-mute'}`} style={{ background: m.on ? tint : 'var(--color-line)' }}>
+        <AppIcon name={m.icon} size={24} />
       </span>
       <span className="min-w-0 flex-1">
         <span className={`flex items-center gap-xs text-[16px] font-bold leading-tight ${m.on ? '' : 'text-ink-soft'}`}>
@@ -147,9 +148,7 @@ function AppRow({ m, color, tint, unread, onAsk }: { m: ModuleView; color: strin
         <span className={`prose-long mt-xs block text-[14px] font-semibold leading-snug ${m.on ? 'text-ink-soft' : 'text-ink-mute'}`}>{tie(m.blurb)}</span>
       </span>
       {m.on ? (
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-ink-mute">
-          <path d="M9 5l7 7-7 7" />
-        </svg>
+        <Icon icon={ChevronRight} size={20} className="text-ink-mute" />
       ) : (
         <span className="shrink-0 rounded-pill border-2 border-line px-sm text-[12px] font-extrabold leading-[28px] text-ink-mute">Off</span>
       )}

@@ -1,6 +1,7 @@
 import { docDate, type DocType } from '@kreators/shared';
+import { EMAIL_NOTE_MAX, EMAIL_TEMPLATES, emailTemplate, emptyEmailVars, fillEmail, suggestEmailTemplate, type EmailVars } from '@kreators/shared/agencyEmail';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { api, ApiError } from '../lib/api';
 import { printAs } from '../lib/printDoc';
@@ -76,11 +77,114 @@ export function DocTextFold({ text, title = 'Text version', hint = 'to paste int
   );
 }
 
-/** Email the text version and the client's link. The server sends it (ten an hour at most) and says plainly when email is not set up. */
-export function EmailCopySheet({ open, onClose, route, id, defaultTo, text, noLinkYet = false }: { open: boolean; onClose: () => void; route: 'invoices' | 'contracts' | 'docs'; id: string; defaultTo: string; text: string; noLinkYet?: boolean }) {
+/** What a document knows that its email note can start from. Every part is optional and every one can be changed in the sheet. */
+export interface EmailContext {
+  kind: 'invoice' | 'contract' | 'doc';
+  /** Who the note greets, from the client's contact: "Parag". */
+  names?: string;
+  engagement?: string;
+  /** What goes with the note, one per line: "The invoice EX-001 for ₹54,000". */
+  attached?: string[];
+  amount?: string;
+  period?: string;
+  dueBy?: string;
+  /** An agreement the client has already signed: the note offered first is the signed-copy one. */
+  signed?: boolean;
+  /** An invoice that belongs to a retainer month. */
+  retainerMonth?: boolean;
+}
+
+const SELECT = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
+
+/**
+ * Write the email: pick a note (the first send, this month's invoice, a renewal, a payment reminder and the rest), fill the few details, and the
+ * words are written out for you to change. The sender's name, studio, phone and email come from Agency settings. Nothing is sent until you tap.
+ */
+function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subject: string; body: string }) => void }) {
+  const settings = useAuthed(['agency', 'settings'], () => api.agency());
+  const profile = settings.data?.settings.profile;
+  const [key, setKey] = useState<string>(() => suggestEmailTemplate(ctx.kind, { retainerMonth: ctx.retainerMonth, signed: ctx.signed }));
+  const [vars, setVars] = useState<EmailVars>(() => ({ ...emptyEmailVars(), names: ctx.names ?? '', engagement: ctx.engagement ?? '', attached: ctx.attached ?? [], amount: ctx.amount ?? '', period: ctx.period ?? '', dueBy: ctx.dueBy ?? '' }));
+  const [signed, setSigned] = useState(false);
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [typed, setTyped] = useState(false);
+  // The sender's lines arrive with the settings, once.
+  useEffect(() => {
+    if (!profile || signed) return;
+    setSigned(true);
+    setVars((v) => ({ ...v, signName: profile.signerName || '', signStudio: profile.from.name, signPhone: profile.from.phone, signEmail: profile.from.email }));
+  }, [profile, signed]);
+  // The words follow the note and the details until the person types in them; "Start again" gives the control back.
+  useEffect(() => {
+    if (typed) return;
+    const f = fillEmail(key, vars);
+    setSubject(f.subject);
+    setBody(f.body);
+  }, [key, vars, typed]);
+  useEffect(() => onChange({ subject, body }), [subject, body, onChange]);
+  const set = (patch: Partial<EmailVars>) => setVars((v) => ({ ...v, ...patch }));
+  const t = emailTemplate(key);
+  return (
+    <div className="grid gap-sm">
+      <div>
+        <label htmlFor="email-note-key" className="block text-[14px] font-bold">
+          Which note
+        </label>
+        <select id="email-note-key" value={key} onChange={(e) => { setKey(e.target.value); setTyped(false); }} className={SELECT}>
+          {EMAIL_TEMPLATES.map((n) => (
+            <option key={n.key} value={n.key}>
+              {n.name}
+            </option>
+          ))}
+        </select>
+        <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{t.when}</p>
+      </div>
+      <Fold title="Fill in the details" hint="names, amount, day">
+        <div className="grid gap-sm md:grid-cols-2">
+          <Field id="en-names" label="Who it greets" value={vars.names} onChange={(v) => set({ names: v })} max={120} placeholder="Parag and Circle team" />
+          <Field id="en-eng" label="What the work is called" value={vars.engagement} onChange={(v) => set({ engagement: v })} max={120} placeholder="one month Voxpop trial engagement" />
+          <Field id="en-amt" label="Amount" value={vars.amount} onChange={(v) => set({ amount: v })} max={40} placeholder="₹30,000" />
+          <Field id="en-per" label="Month or period" value={vars.period} onChange={(v) => set({ period: v })} max={60} placeholder="May 2026" />
+          <Field id="en-due" label="Pay by or due on" value={vars.dueBy} onChange={(v) => set({ dueBy: v })} max={40} placeholder="1 May 2026" />
+          <Field id="en-status" label="How the work stands" value={vars.status} onChange={(v) => set({ status: v })} max={160} placeholder="shoot completed, editing in progress" />
+        </div>
+        <div className="mt-sm">
+          <label htmlFor="en-att" className="block text-[14px] font-bold">
+            What is attached, one line each
+          </label>
+          <textarea id="en-att" rows={3} value={vars.attached.join('\n')} onChange={(e) => set({ attached: e.target.value.split('\n').slice(0, 8) })} className={SELECT} placeholder="The Service Agreement for the one month trial" />
+        </div>
+        <div className="mt-sm">
+          <label htmlFor="en-more" className="block text-[14px] font-bold">
+            Anything else to add
+          </label>
+          <textarea id="en-more" rows={2} value={vars.note} maxLength={1200} onChange={(e) => set({ note: e.target.value })} className={SELECT} />
+        </div>
+      </Fold>
+      <Field id="en-subject" label="Subject" value={subject} onChange={(v) => { setSubject(v); setTyped(true); }} max={200} />
+      <div>
+        <label htmlFor="en-body" className="block text-[14px] font-bold">
+          The email
+        </label>
+        <textarea id="en-body" rows={14} value={body} maxLength={EMAIL_NOTE_MAX} onChange={(e) => { setBody(e.target.value); setTyped(true); }} className={`${SELECT} font-medium leading-snug [text-wrap:wrap]`} />
+        {typed && (
+          <button type="button" onClick={() => setTyped(false)} className="toy-flat mt-xs rounded-pill px-sm py-xs text-[12px] font-bold">
+            Start again from the note
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Email a note and the client's link. The server sends it (ten an hour at most) and says plainly when email is not set up. */
+export function EmailCopySheet({ open, onClose, route, id, defaultTo, text, context, noLinkYet = false }: { open: boolean; onClose: () => void; route: 'invoices' | 'contracts' | 'docs'; id: string; defaultTo: string; text: string; context: EmailContext; noLinkYet?: boolean }) {
   const qc = useQueryClient();
   const [to, setTo] = useState(defaultTo);
   const [msg, setMsg] = useState('');
+  const [note, setNote] = useState({ subject: '', body: '' });
+  const onNote = useCallback((n: { subject: string; body: string }) => setNote(n), []);
   useEffect(() => {
     if (open) {
       setTo(defaultTo);
@@ -90,39 +194,35 @@ export function EmailCopySheet({ open, onClose, route, id, defaultTo, text, noLi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   const send = useMutation({
-    mutationFn: () => api.agencyEmailCopy(route, id, to.trim() || undefined),
+    mutationFn: () => api.agencyEmailCopy(route, id, { to: to.trim() || undefined, message: note.body, subject: note.subject }),
     onSuccess: async (r) => {
       setMsg(r.note);
       await qc.invalidateQueries({ queryKey: ['agency', 'doc-log'] });
     },
     onError: (e) => setMsg(e instanceof ApiError ? e.message : 'That did not go. Try again.'),
   });
+  const copyNote = async () => setMsg((await copyPlain(`${note.subject}\n\n${note.body}`)) ? 'Copied the subject and the email. Paste them into your own email.' : 'Copying did not work here. Select the text and copy it by hand.');
   return (
     <Sheet open={open} onClose={onClose} title="Email a copy">
       <div className="grid gap-sm pb-xl">
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">This sends the words below and a link to the page, from our server, to the address you choose. You can also copy the text and send it from your own email.</p>
+        <p className="m-0 text-[14px] font-semibold text-ink-soft">Pick a note, check the words, then send it from here with a link to the page, or copy it and send it from your own email with the PDF attached.</p>
         {noLinkYet && <p className="m-0 rounded-tile p-sm text-[14px] font-bold" style={{ background: 'var(--tint-yellow)' }}>It has not been sent yet, so there is no link. Send it first.</p>}
         <Field id="email-copy-to" label="Send to" type="email" value={to} onChange={setTo} max={120} placeholder="the client's email" />
-        <div>
-          <p className="m-0 text-[14px] font-bold">What goes in the email</p>
-          <pre className="legal-text" tabIndex={0}>
-            {text}
-          </pre>
-        </div>
+        {open && <EmailNote ctx={context} onChange={onNote} />}
         {msg && (
           <p role="status" className="m-0 text-[14px] font-bold">
             {msg}
           </p>
         )}
         <div className="flex flex-wrap gap-xs">
-          <Button onClick={() => send.mutate()} disabled={send.isPending || noLinkYet}>
+          <Button onClick={() => send.mutate()} disabled={send.isPending || noLinkYet || !note.body.trim()}>
             {send.isPending ? 'Sending' : 'Send the email'}
           </Button>
-          <Button
-            variant="outline"
-            onClick={async () => setMsg((await copyPlain(text)) ? 'Copied. Paste it into your own email.' : 'Copying did not work here. Select the text above and copy it by hand.')}
-          >
-            Copy text instead
+          <Button variant="outline" onClick={copyNote}>
+            Copy the email
+          </Button>
+          <Button variant="outline" onClick={async () => setMsg((await copyPlain(text)) ? 'Copied the document text. Paste it into your own email.' : 'Copying did not work here.')}>
+            Copy the document text
           </Button>
         </div>
       </div>

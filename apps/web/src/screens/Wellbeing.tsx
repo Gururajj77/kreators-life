@@ -1,4 +1,5 @@
-import { MOODS, STRESS_LEVELS, type LogKind } from '@kreators/shared';
+import { MODULE_BY_KEY, MOODS, STRESS_LEVELS, type LogKind } from '@kreators/shared';
+import { AppIcon } from '../components/AppIcon';
 import { Link } from 'react-router';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { Donut, EmojiRow, Legend, Sparkline } from '../components/Charts';
@@ -9,11 +10,12 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { useMe, useWellbeing } from '../lib/queries';
 
-const ROWS: { kind: LogKind; name: string; emoji: string; path: string; color: string; tint: string; max: number; format: (v: number | null) => string }[] = [
-  { kind: 'mood', name: 'Mood', emoji: '🙂', path: '/mood', color: 'var(--color-r3)', tint: 'var(--tint-yellow)', max: 5, format: (v) => (v === null ? 'Not logged today' : (MOODS.find((m) => m.value === Math.round(v))?.name ?? '')) },
-  { kind: 'sleep', name: 'Sleep', emoji: '🌙', path: '/sleep', color: 'var(--color-r6)', tint: 'var(--tint-purple)', max: 10, format: (v) => (v === null ? 'Not logged' : `${v} hours`) },
-  { kind: 'stress', name: 'Stress', emoji: '🌊', path: '/stress', color: 'var(--color-r2)', tint: 'var(--tint-orange)', max: 5, format: (v) => (v === null ? 'Not logged' : STRESS_LEVELS[Math.round(v) - 1] ?? '') },
-  { kind: 'mindful', name: 'Mindful minutes', emoji: '🧘', path: '/mindful', color: 'var(--color-r4)', tint: 'var(--tint-green)', max: 60, format: (v) => `${v ?? 0} min this week` },
+/** The four trackers; each wears its app's own icon from the registry. */
+const ROWS: { kind: LogKind; name: string; path: string; color: string; tint: string; max: number; format: (v: number | null) => string }[] = [
+  { kind: 'mood', name: 'Mood', path: '/mood', color: 'var(--color-r3)', tint: 'var(--tint-yellow)', max: 5, format: (v) => (v === null ? 'Not logged today' : (MOODS.find((m) => m.value === Math.round(v))?.name ?? '')) },
+  { kind: 'sleep', name: 'Sleep', path: '/sleep', color: 'var(--color-r6)', tint: 'var(--tint-purple)', max: 10, format: (v) => (v === null ? 'Not logged' : `${v} hours`) },
+  { kind: 'stress', name: 'Stress', path: '/stress', color: 'var(--color-r2)', tint: 'var(--tint-orange)', max: 5, format: (v) => (v === null ? 'Not logged' : STRESS_LEVELS[Math.round(v) - 1] ?? '') },
+  { kind: 'mindful', name: 'Mindful minutes', path: '/mindful', color: 'var(--color-r4)', tint: 'var(--tint-green)', max: 60, format: (v) => `${v ?? 0} min this week` },
 ];
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
@@ -81,7 +83,7 @@ export function Wellbeing() {
               <EmojiRow
                 items={d.week.map((w) => {
                   const m = w.mood === null ? null : (MOODS.find((x) => x.value === w.mood) ?? null);
-                  return { label: new Date(`${w.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' }).slice(0, 2), emoji: m?.emoji ?? null, color: m?.color ?? null, mood: m?.value ?? null };
+                  return { label: new Date(`${w.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' }).slice(0, 2), emoji: null, color: m?.color ?? null, mood: m?.value ?? null };
                 })}
               />
             </div>
@@ -97,8 +99,8 @@ export function Wellbeing() {
                     {r.kind === 'mood' && p?.latest ? (
                       <MoodFace value={p.latest} size={48} />
                     ) : (
-                      <span className="flex size-[48px] shrink-0 items-center justify-center rounded-pill text-[22px]" style={{ background: r.tint }} aria-hidden="true">
-                        {r.emoji}
+                      <span className="flex size-[48px] shrink-0 items-center justify-center rounded-pill text-ink" style={{ background: r.tint }}>
+                        <AppIcon name={MODULE_BY_KEY[r.kind]?.icon} size={22} />
                       </span>
                     )}
                     <span className="min-w-0 flex-1">
@@ -113,12 +115,12 @@ export function Wellbeing() {
           </ul>
           <div className="mt-md grid grid-cols-2 gap-xs">
             <Link to="/journal" className="toy toy-soft rounded-tile bg-card p-sm">
-              <span className="block text-[22px]" aria-hidden="true">📓</span>
+              <AppIcon name={MODULE_BY_KEY.journal?.icon} size={22} className="text-ink-soft" />
               <span className="block text-[16px] font-bold">Journal</span>
               <span className="block text-[14px] font-semibold text-ink-soft">Write it down</span>
             </Link>
             <Link to="/companion" className="toy toy-soft rounded-tile bg-card p-sm">
-              <span className="block text-[22px]" aria-hidden="true">💬</span>
+              <AppIcon name={MODULE_BY_KEY.companion?.icon} size={22} className="text-ink-soft" />
               <span className="block text-[16px] font-bold">Companion</span>
               <span className="block text-[14px] font-semibold text-ink-soft">Talk it through</span>
             </Link>

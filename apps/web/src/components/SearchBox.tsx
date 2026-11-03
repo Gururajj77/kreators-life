@@ -1,6 +1,11 @@
 import { KIND_META, PRODUCT_KIND_META, RELATIONSHIP_BY_KEY , HELP_FAQ, MODULES, PREOWNED_CONDITION_META, type PreownedCondition} from '@kreators/shared';
 import { useId, useState } from 'react';
 import { Link } from 'react-router';
+import type { LucideIcon } from 'lucide-react';
+import { BookOpen, LifeBuoy, MessageCircle, NotebookPen, Recycle, ShoppingBag, ShoppingCart, SquareCheck, Toolbox, Footprints, UserRound } from 'lucide-react';
+import { appIcon } from '../lib/appIcons';
+import { AnimatedIcon } from './AnimatedIcon';
+import { Icon } from './Icon';
 import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
 import { useDebounced } from '../lib/useDebounced';
@@ -27,10 +32,19 @@ export function SearchBox({ placeholder = 'Search anything', autoFocus = false, 
         Search
       </label>
       <div className={`flex min-h-[48px] items-center gap-sm rounded-pill border-2 border-transparent bg-card px-md shadow-toy-soft transition-colors ${onDark ? 'focus-within:outline focus-within:outline-[3px] focus-within:outline-offset-[3px] focus-within:outline-on-fill' : 'focus-within:border-ink'}`}>
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" className="shrink-0 text-ink">
-          <circle cx="11" cy="11" r="7" />
-          <path d="M20 20l-3.5-3.5" />
-        </svg>
+        {/* The magnifier turns into the clear button once there is text (useanimations' searchToX). */}
+        {/* One element the whole time, so the morph plays: a magnifier while empty, the clear button once there is text. */}
+        <button
+          type="button"
+          onClick={() => setQ('')}
+          disabled={!q}
+          aria-label={q ? 'Clear search' : undefined}
+          aria-hidden={q ? undefined : true}
+          tabIndex={q ? 0 : -1}
+          className="-ml-sm flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink disabled:cursor-text"
+        >
+          <AnimatedIcon name="searchToX" active={q !== ''} />
+        </button>
         <input
           id={id}
           type="search"
@@ -43,20 +57,13 @@ export function SearchBox({ placeholder = 'Search anything', autoFocus = false, 
           aria-expanded={live}
           className="min-w-0 flex-1 bg-transparent py-sm text-[16px] font-semibold text-ink outline-none placeholder:text-ink-soft"
         />
-        {q && (
-          <button type="button" onClick={() => setQ('')} aria-label="Clear" className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink-soft">
-            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          </button>
-        )}
       </div>
       {live && (
         <div id={`${id}-results`} role="region" aria-live="polite" aria-label="Search results" className="mt-xs rounded-card bg-card p-sm shadow-toy-soft">
           {apps.length > 0 && (
             <Group title="Apps">
               {apps.map((m) => (
-                <Row key={m.key} to={m.path} title={m.name} sub={m.blurb} emoji={m.emoji} />
+                <Row key={m.key} to={m.path} title={m.name} sub={m.blurb} icon={appIcon(m.icon)} />
               ))}
             </Group>
           )}
@@ -65,77 +72,77 @@ export function SearchBox({ placeholder = 'Search anything', autoFocus = false, 
           {d && d.tasks.length > 0 && (
             <Group title={KIND_META.task.plural}>
               {d.tasks.slice(0, 5).map((t) => (
-                <Row key={t.id} to={`/realm/${t.relationship}`} title={t.title} sub={`${RELATIONSHIP_BY_KEY[t.relationship].name}, ${t.status}`} emoji="✅" />
+                <Row key={t.id} to={`/realm/${t.relationship}`} title={t.title} sub={`${RELATIONSHIP_BY_KEY[t.relationship].name}, ${t.status}`} icon={SquareCheck} />
               ))}
             </Group>
           )}
           {d && d.journal.length > 0 && (
             <Group title="Journal">
               {d.journal.slice(0, 5).map((j) => (
-                <Row key={j.id} to="/journal" title={j.title} sub={new Date(j.createdAt).toLocaleDateString()} emoji="📓" />
+                <Row key={j.id} to="/journal" title={j.title} sub={new Date(j.createdAt).toLocaleDateString()} icon={NotebookPen} />
               ))}
             </Group>
           )}
           {d && d.resources.length > 0 && (
             <Group title="Knowledge">
               {d.resources.slice(0, 5).map((r) => (
-                <Row key={r.id} to={`/knowledge/${r.id}`} title={r.title} sub={r.kind} emoji="📚" />
+                <Row key={r.id} to={`/knowledge/${r.id}`} title={r.title} sub={r.kind} icon={BookOpen} />
               ))}
             </Group>
           )}
           {d && d.products.length > 0 && (
             <Group title="Products">
               {d.products.slice(0, 5).map((p) => (
-                <Row key={p.id} to={`/p/${p.id}`} title={p.title} sub={PRODUCT_KIND_META[p.kind].name} emoji={PRODUCT_KIND_META[p.kind].emoji} />
+                <Row key={p.id} to={`/p/${p.id}`} title={p.title} sub={PRODUCT_KIND_META[p.kind].name} icon={ShoppingBag} />
               ))}
             </Group>
           )}
           {d && d.people.length > 0 && (
             <Group title="People">
               {d.people.slice(0, 5).map((p) => (
-                <Row key={p.handle} to={`/u/${p.handle}`} title={p.name || p.handle} sub={`@${p.handle}`} emoji="🧑" />
+                <Row key={p.handle} to={`/u/${p.handle}`} title={p.name || p.handle} sub={`@${p.handle}`} icon={UserRound} />
               ))}
             </Group>
           )}
           {d && d.items.length > 0 && (
             <Group title="Store">
               {d.items.slice(0, 5).map((i) => (
-                <Row key={i.id} to="/store" title={i.title} sub={`${i.category}, new`} emoji="🛒" />
+                <Row key={i.id} to="/store" title={i.title} sub={`${i.category}, new`} icon={ShoppingCart} />
               ))}
             </Group>
           )}
           {d && d.listings.length > 0 && (
             <Group title="Pre-owned">
               {d.listings.slice(0, 5).map((l) => (
-                <Row key={l.id} to="/store" title={l.title} sub={PREOWNED_CONDITION_META[l.condition as PreownedCondition]?.name ?? l.condition} emoji="♻️" />
+                <Row key={l.id} to="/store" title={l.title} sub={PREOWNED_CONDITION_META[l.condition as PreownedCondition]?.name ?? l.condition} icon={Recycle} />
               ))}
             </Group>
           )}
           {d && d.tools.length > 0 && (
             <Group title="Tools">
               {d.tools.slice(0, 5).map((t) => (
-                <Row key={t.id} to="/tools" title={t.title} sub={t.category} emoji="🧰" />
+                <Row key={t.id} to="/tools" title={t.title} sub={t.category} icon={Toolbox} />
               ))}
             </Group>
           )}
           {d && d.clubs.length > 0 && (
             <Group title="Run clubs">
               {d.clubs.slice(0, 5).map((k) => (
-                <Row key={k.id} to={`/run/clubs/${k.id}`} title={k.title} sub={k.city} emoji="🏃" />
+                <Row key={k.id} to={`/run/clubs/${k.id}`} title={k.title} sub={k.city} icon={Footprints} />
               ))}
             </Group>
           )}
           {d && d.posts.length > 0 && (
             <Group title="Community">
               {d.posts.slice(0, 5).map((p) => (
-                <Row key={p.id} to={`/community?post=${p.id}`} title={p.body} sub={p.authorName} emoji="💬" />
+                <Row key={p.id} to={`/community?post=${p.id}`} title={p.body} sub={p.authorName} icon={MessageCircle} />
               ))}
             </Group>
           )}
           {help.length > 0 && (
             <Group title="Help">
               {help.map((f) => (
-                <Row key={f.q} to="/help" title={f.q} sub={f.a.slice(0, 80)} emoji="🛟" />
+                <Row key={f.q} to="/help" title={f.q} sub={f.a.slice(0, 80)} icon={LifeBuoy} />
               ))}
             </Group>
           )}
@@ -154,12 +161,12 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-function Row({ to, title, sub, emoji }: { to: string; title: string; sub: string; emoji: string }) {
+function Row({ to, title, sub, icon }: { to: string; title: string; sub: string; icon: LucideIcon }) {
   return (
     <li>
       <Link to={to} className="toy toy-flat flex items-center gap-sm rounded-tile bg-paper p-sm text-ink">
-        <span className="flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-card text-[16px]" aria-hidden="true">
-          {emoji}
+        <span className="flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-card text-ink-soft">
+          <Icon icon={icon} size={18} />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[16px] font-bold">{title}</span>

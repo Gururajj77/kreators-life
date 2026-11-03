@@ -255,12 +255,14 @@ export function PillBars({ values, max, labels, colors, color, label, height = 1
     <div role="img" aria-label={label}>
       <div className="flex items-end gap-xs" style={{ height }}>
         {values.map((v, i) => {
-          const fill = v === null ? 0 : Math.max(0.08, Math.min(1, v / Math.max(1e-6, max)));
+          // No day logged at all is a short, plainly empty stub, never a full-height tinted pill that reads as a bar with data in it.
+          if (v === null) return <div key={i} className="relative flex flex-1 flex-col justify-end" style={{ height: 8 }} aria-hidden="true"><span className="block w-full rounded-pill" style={{ height: 8, background: 'var(--color-line)' }} /></div>;
+          const fill = Math.max(0.08, Math.min(1, v / Math.max(1e-6, max)));
           const c = colors?.[i] ?? color;
           return (
             <div key={i} className="relative flex h-full flex-1 flex-col justify-end overflow-hidden rounded-pill" style={{ background: onFill ? 'rgba(255,255,255,0.22)' : `color-mix(in oklab, ${c} 18%, var(--color-card))` }}>
               {dots && dots[i] ? <span className="absolute top-xs left-1/2 size-[6px] -translate-x-1/2 rounded-pill" style={{ background: c }} aria-hidden="true" /> : null}
-              <span className="block w-full rounded-pill" style={{ height: `${Math.round(fill * 100)}%`, background: v === null ? 'transparent' : c }} />
+              <span className="block w-full rounded-pill" style={{ height: `${Math.round(fill * 100)}%`, background: c }} />
             </div>
           );
         })}
@@ -474,7 +476,8 @@ export function CalendarGrid({
   const [y, m] = month.split('-').map(Number);
   const first = new Date(y ?? 2026, (m ?? 1) - 1, 1);
   const daysIn = new Date(y ?? 2026, m ?? 1, 0).getDate();
-  const lead = first.getDay();
+  // Monday-first, like Daily's month calendar (CLAUDE.md: "Use Monday everywhere").
+  const lead = (first.getDay() + 6) % 7;
   const cells: (number | null)[] = [...Array.from({ length: lead }, () => null), ...Array.from({ length: daysIn }, (_, i) => i + 1)];
   const pad = (n: number) => String(n).padStart(2, '0');
   const shift = (by: number) => {
@@ -499,7 +502,7 @@ export function CalendarGrid({
         </div>
       )}
       <div className="grid grid-cols-7 gap-xs">
-        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+        {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
           <span key={i} className={`text-center text-[12px] font-extrabold ${onFill ? 'text-on-fill opacity-80' : 'text-ink-soft'}`}>
             {d}
           </span>

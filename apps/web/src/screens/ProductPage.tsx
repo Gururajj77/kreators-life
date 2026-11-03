@@ -1,10 +1,12 @@
-import { PRODUCT_KIND_META, productPayWays, unlockAt, type DiscountCheck } from '@kreators/shared';
+import { PRODUCT_KIND_META, productHasOwnCover, productPayWays, unlockAt, type DiscountCheck } from '@kreators/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
+import { AppIcon } from '../components/AppIcon';
 import { Button } from '../components/Button';
 import { DiscountField } from '../components/DiscountField';
 import { LockedButton } from '../components/LockedButton';
+import { MediaSection } from '../components/MediaSection';
 import { TrustBadge } from '../components/TrustBadge';
 import { useCelebrate } from '../components/Celebration';
 import { BackLink } from '../components/PageHeader';
@@ -181,7 +183,7 @@ export function ProductPage() {
         <>
           <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
             <span className="text-[48px]" aria-hidden="true">
-              {p.cover || meta.emoji}
+              {productHasOwnCover(p.kind, p.cover) ? p.cover : <AppIcon name={meta.icon} size={48} />}
             </span>
             <p className="mt-sm m-0 text-[14px] font-bold text-ink-soft">
               {meta.name} by {p.ownerName}
@@ -216,6 +218,8 @@ export function ProductPage() {
               <li>{p.sold} people have this</li>
             </ul>
           </div>
+
+          <MediaSection type="product" id={p.id} />
 
           {d.owned ? (
             <Link to={`/library/${p.id}`} className="toy mt-md flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-[18px] font-bold text-on-ink">

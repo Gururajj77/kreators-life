@@ -234,8 +234,14 @@ admin.get('/modules', async (c) => c.json({ settings: await allSettings(c.env.DB
 
 admin.get('/flags', async (c) => {
   const db = c.env.DB;
-  const [settings, ovs] = await Promise.all([allSettings(db), db.prepare('SELECT * FROM flag_overrides ORDER BY created_at DESC LIMIT 300').all<OverrideRow>()]);
-  return c.json({ settings, overrides: ovs.results.map(toOverride) });
+  const ask = pageOf(c);
+  const [settings, ovs, counts] = await Promise.all([
+    allSettings(db),
+    db.prepare('SELECT * FROM flag_overrides ORDER BY created_at DESC LIMIT ? OFFSET ?').bind(ask.limit, ask.offset).all<OverrideRow>(),
+    db.prepare('SELECT flag_key, COUNT(*) AS n FROM flag_overrides GROUP BY flag_key').all<{ flag_key: string; n: number }>(),
+  ]);
+  const pg = paged(ovs.results, ask);
+  return c.json({ settings, page: pg.page, overrides: pg.items.map(toOverride), overrideCounts: Object.fromEntries(counts.results.map((r) => [r.flag_key, r.n])) });
 });
 
 async function setFlag(c: Context<AppEnv>) {
@@ -846,16 +852,21 @@ admin.post('/redemptions/:id', async (c) => {
   if (row.status !== 'reserved') return c.json({ error: `already ${row.status}` }, 400);
   const note = typeof body.note === 'string' ? body.note.trim().slice(0, 200) : row.note;
   const now = nowIso();
-  const stmts = [db.prepare('UPDATE redemptions SET status = ?, note = ?, updated_at = ? WHERE id = ?').bind(body.status, note, now, row.id)];
+  // The status moves first, guarded, and only the call that moved it refunds: two admin taps, or an admin and the person's own
+  // cancel at once, give the points back once, and a fulfil cannot land on a redemption that was just cancelled.
+  const moved = await db.prepare("UPDATE redemptions SET status = ?, note = ?, updated_at = ? WHERE id = ? AND status = 'reserved'").bind(body.status, note, now, row.id).run();
+  if (moved.meta.changes !== 1) {
+    const now2 = await db.prepare('SELECT status FROM redemptions WHERE id = ?').bind(row.id).first<{ status: string }>();
+    return c.json({ error: `already ${now2?.status ?? 'changed'}` }, 400);
+  }
   if (body.status === 'cancelled') {
-    stmts.push(
+    await db.batch([
       db.prepare('UPDATE users SET points = points + ? WHERE id = ?').bind(row.points, row.user_id),
       db
         .prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)')
         .bind(row.user_id, row.points, 'refund', row.id, now),
-    );
+    ]);
   }
-  await db.batch(stmts);
   await audit(db, actorOf(c), 'redemption.status', 'redemption', row.id, row.status, body.status);
   const fresh = await db.prepare('SELECT * FROM redemptions WHERE id = ?').bind(row.id).first<RedemptionRow>();
   return c.json({ redemption: fresh ? toRedemption(fresh) : null });

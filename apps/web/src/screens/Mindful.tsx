@@ -1,8 +1,7 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { FocusDashboard } from '../components/FocusDashboard';
-import { FocusRounds } from '../components/FocusRounds';
 import { RulerPicker } from '../components/RulerPicker';
 import { Sheet } from '../components/Sheet';
 import { SoundControls } from '../components/SoundControls';
@@ -18,12 +17,12 @@ import { lastDays, shortDay, todayLocal } from '../lib/date';
 import { useFocusPrefs } from '../lib/focusPrefs';
 import { playChime, unlockAudio, useAmbient } from '../lib/sound';
 import { useLogs, useRefreshAll, useWellbeing } from '../lib/queries';
+import { useFocusPortal } from '../lib/focusPortal';
 
 const LENGTHS = [1, 3, 5, 10];
 
 export function Mindful() {
   const refresh = useRefreshAll();
-  const qc = useQueryClient();
   const celebrate = useCelebrate();
   const reduce = useReducedMotion();
   const wb = useWellbeing();
@@ -33,6 +32,7 @@ export function Mindful() {
   const [soundsOpen, setSoundsOpen] = useState(false);
   const [left, setLeft] = useState<number | null>(null);
   const timer = useRef<number | null>(null);
+  const setFocusSlot = useFocusPortal((s) => s.setTarget);
   const save = useMutation({
     mutationFn: (m: number) => api.log('mindful', { date: todayLocal(), value: m, extra: { kind: 'breathe' } }),
     onSuccess: (_, m) => {
@@ -150,23 +150,9 @@ export function Mindful() {
         </Button>
       </Sheet>
 
-      <FocusRounds
-        onRound={(m, nodeId) =>
-          api
-            .logFocus(m, nodeId, todayLocal())
-            .then((r) => {
-              void qc.invalidateQueries({ queryKey: ['focus'] });
-              return r.id;
-            })
-            .catch(() => undefined)
-        }
-        onLog={(m, kind) =>
-          void api.log('mindful', { date: todayLocal(), value: m, extra: { kind } }).then(() => {
-            refresh();
-            celebrate({ title: `${m} mindful ${m === 1 ? 'minute' : 'minutes'} logged`, color: '#9BB068' });
-          })
-        }
-      />
+      {/* FocusRounds itself lives in FocusRoundsHost, mounted once by Shell so a running clock survives leaving this page; this slot is
+          where it draws while Mindful is the screen showing (lib/focusPortal.ts). */}
+      <div ref={setFocusSlot} />
 
       <FocusDashboard />
 

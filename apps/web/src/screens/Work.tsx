@@ -8,6 +8,7 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
+import { todayLocal } from '../lib/date';
 import { useAuthed } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 
@@ -74,7 +75,8 @@ function Chips({ items }: { items: string[] }) {
 
 export function Work() {
   const pg = usePage();
-  const q = useAuthed(['work', pg.query], () => api.work(pg.query));
+  const dpg = usePage('d');
+  const q = useAuthed(['work', pg.query, dpg.query], () => api.work(pg.query, dpg.query));
   const [posting, setPosting] = useState(false);
   const setStatus = useMutation({ mutationFn: ({ id, status }: { id: string; status: OpportunityT['status'] }) => api.setOpportunity(id, status), onSuccess: () => q.refetch() });
   const d = q.data;
@@ -170,6 +172,7 @@ export function Work() {
               </li>
             ))}
           </ul>
+          <Pager page={d?.draftPage} prefix="d" label="your listings" />
           <div className="mt-xs">
             <Err error={setStatus.error} />
           </div>
@@ -338,7 +341,8 @@ function PostSheet({ open, onClose, onPosted }: { open: boolean; onClose: () => 
 
 export function Opportunity() {
   const { id = '' } = useParams();
-  const q = useAuthed(['opportunity', id], () => api.opportunity(id));
+  const pg = usePage();
+  const q = useAuthed(['opportunity', id, pg.query], () => api.opportunity(id, pg.query));
   const [coverNote, setCoverNote] = useState('');
   const [note, setNote] = useState('');
   const apply = useMutation({ mutationFn: () => api.apply(id, coverNote), onSuccess: () => q.refetch() });
@@ -360,7 +364,7 @@ export function Opportunity() {
   if (!d) return null;
   const o = d.opportunity;
   const mine = o.myApplication;
-  const closed = o.status !== 'published' || (o.deadline !== null && o.deadline < new Date().toISOString().slice(0, 10));
+  const closed = o.status !== 'published' || (o.deadline !== null && o.deadline < todayLocal());
 
   return (
     <Screen>
@@ -487,6 +491,7 @@ export function Opportunity() {
                 </li>
               ))}
             </ul>
+            <Pager page={d.page} label="applicants" />
             <div className="mt-xs">
               <Err error={setApp.error} />
             </div>

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { isBadgeKey, TOOL_CATEGORIES, unlockFor, type Tool, type UnlockHave } from '@kreators/shared';
+import { isUnlockBadgeKey, TOOL_CATEGORIES, unlockFor, type Tool, type UnlockHave } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { can, nameOf, newId, nowIso, num, oneOf, str, pageOf, paged } from '../db';
 import { haveFor } from '../unlocks';
@@ -36,7 +36,7 @@ tools.post('/', async (c) => {
   if (!name || !/^https?:\/\//.test(url)) return c.json({ error: 'a name and a link' }, 400);
   const id = newId();
   const staff = can(user, 'review');
-  await db.prepare('INSERT INTO tools (id, name, category, url, description, affiliate, verified, suggested_by, created_at, min_points, badge) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id, name, oneOf(body.category, TOOL_CATEGORIES, 'Editing'), url, str(body.description, 500), body.affiliate === true ? 1 : 0, staff ? 1 : 0, user.id, nowIso(), staff ? (num(body.minPoints, 0, 0) ?? 0) : 0, staff && isBadgeKey(str(body.badge, 40)) ? str(body.badge, 40) : '').run();
+  await db.prepare('INSERT INTO tools (id, name, category, url, description, affiliate, verified, suggested_by, created_at, min_points, badge) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id, name, oneOf(body.category, TOOL_CATEGORIES, 'Editing'), url, str(body.description, 500), body.affiliate === true ? 1 : 0, staff ? 1 : 0, user.id, nowIso(), staff ? (num(body.minPoints, 0, 0) ?? 0) : 0, staff && isUnlockBadgeKey(str(body.badge, 40)) ? str(body.badge, 40) : '').run();
   if (can(user, 'review') && num(body.minXp, 0, 0)) await db.prepare('UPDATE tools SET min_xp = ? WHERE id = ?').bind(num(body.minXp, 0, 0), id).run();
   return c.json({ ok: true, id, verified: can(user, 'review') }, 201);
 });
@@ -70,7 +70,7 @@ tools.post('/:id', async (c) => {
   }
   if (body.badge !== undefined) {
     sets.push('badge = ?');
-    binds.push(isBadgeKey(str(body.badge, 40)) ? str(body.badge, 40) : '');
+    binds.push(isUnlockBadgeKey(str(body.badge, 40)) ? str(body.badge, 40) : '');
   }
   if (sets.length === 0) return c.json({ error: 'nothing to change' }, 400);
   const r = await c.env.DB.prepare(`UPDATE tools SET ${sets.join(', ')} WHERE id = ?`).bind(...binds, c.req.param('id')).run();

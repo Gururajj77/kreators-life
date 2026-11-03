@@ -1,4 +1,4 @@
-import { FOCUS_OPTIONS, HONORS, IDENTITY_BY_KEY, IDENTITY_STAGES, identityLabel, identityLine, levelFromXp, matchSetup, passwordProblem, MODULE_GROUP_ACCENT, MODULE_GROUP_BLURB, MODULE_GROUPS, POINTS, RELATIONSHIP_BY_KEY, RELATIONSHIPS, BADGE_META, badgeRoleOf, setupSwitchable, type MeResponse, nextBadge } from '@kreators/shared';
+import { FOCUS_OPTIONS, HONORS, IDENTITY_BY_KEY, OWN_TAG_ICON, IDENTITY_STAGES, identityLabel, identityLine, levelFromXp, matchSetup, passwordProblem, MODULE_GROUP_ACCENT, MODULE_GROUP_BLURB, MODULE_GROUPS, POINTS, RELATIONSHIP_BY_KEY, RELATIONSHIPS, BADGE_META, badgeRoleOf, setupSwitchable, type MeResponse, nextBadge } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Suspense, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -25,6 +25,9 @@ import { tie } from '../lib/text';
 import { lazyNamed } from '../lib/lazy';
 import { CalendarLink } from '../components/CalendarLink';
 import { PrivacyChoices } from '../components/PrivacyChoices';
+import { UserRound, WandSparkles } from 'lucide-react';
+import { AppIcon } from '../components/AppIcon';
+import { Icon } from '../components/Icon';
 
 const BadgeGallery = lazyNamed(() => import('../components/BadgeGallery'), 'BadgeGallery');
 
@@ -148,14 +151,14 @@ function YouView({ data }: { data: MeResponse }) {
         </p>
         <div className="mt-sm flex flex-wrap items-center gap-xs">
           <Link to={user.handle ? `/u/${user.handle}` : `/people/${user.id}`} className="toy toy-soft inline-flex min-h-[48px] items-center gap-xs rounded-pill bg-card px-md text-[14px] font-bold text-ink">
-            <span aria-hidden="true">👤</span>
+            <Icon icon={UserRound} size={18} />
             See my public page
           </Link>
           <Link to="/profile" className="inline-flex min-h-[48px] items-center px-sm text-[14px] font-bold text-ink-mute underline-offset-4 hover:text-ink hover:underline">
             Edit page
           </Link>
           <Link to="/plans" className="toy toy-soft inline-flex min-h-[48px] w-full items-center justify-center gap-xs rounded-pill bg-card px-md text-[14px] font-bold text-ink md:ml-auto md:w-auto md:justify-start">
-            <span aria-hidden="true">🪄</span>
+            <Icon icon={WandSparkles} size={18} />
             Plans and credits
           </Link>
         </div>
@@ -169,8 +172,9 @@ function YouView({ data }: { data: MeResponse }) {
         {user.identities.length > 0 && (
           <ul className="mt-sm flex list-none flex-wrap gap-xs p-0 m-0" aria-label="Your tags">
             {user.identities.map((k) => (
-              <li key={k} className="rounded-pill bg-card px-sm py-xs text-[14px] font-bold shadow-toy-soft">
-                {IDENTITY_BY_KEY[k]?.emoji ?? '🏷️'} {identityLabel(k)}
+              <li key={k} className="inline-flex items-center gap-xs rounded-pill bg-card px-sm py-xs text-[14px] font-bold shadow-toy-soft">
+                <AppIcon name={IDENTITY_BY_KEY[k]?.icon ?? OWN_TAG_ICON} size={16} className="text-ink-soft" />
+                {identityLabel(k)}
               </li>
             ))}
           </ul>
@@ -236,13 +240,17 @@ function YouView({ data }: { data: MeResponse }) {
                       label={
                         fits.has(m.key) ? (
                           <>
-                            {m.emoji} {m.name}{' '}
+                            <AppIcon name={m.icon} size={16} className="mr-xs inline-block align-[-2px]" />
+                            {m.name}{' '}
                             <span className="ml-xs rounded-pill px-xs align-middle text-[11px] font-extrabold uppercase tracking-wide" style={{ background: `var(--soft-${rel.key})`, color: `var(--deep-${rel.key})` }}>
                               Fits you
                             </span>
                           </>
                         ) : (
-                          `${m.emoji} ${m.name}`
+                          <>
+                            <AppIcon name={m.icon} size={16} className="mr-xs inline-block align-[-2px]" />
+                            {m.name}
+                          </>
                         )
                       }
                       hint={

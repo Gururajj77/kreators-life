@@ -66,7 +66,7 @@ export function Mood() {
                   setTouched(true);
                   setValue(m.value);
                 }}
-                className="toy flex min-h-[64px] flex-col items-center justify-center gap-xs rounded-tile bg-card text-[12px] font-bold text-ink"
+                className="toy flex min-h-[64px] flex-col items-center justify-center gap-xs rounded-tile bg-card-strong text-[12px] font-bold text-ink"
                 style={value === m.value ? { outline: '3px solid var(--color-on-fill)', outlineOffset: 2 } : undefined}
               >
                 <MoodFace value={m.value} size={28} />
@@ -131,7 +131,7 @@ export function Mood() {
                   <EmojiRow
                     items={wb.data.week.map((w) => {
                       const m = w.mood === null ? null : (MOODS.find((x) => x.value === w.mood) ?? null);
-                      return { label: DAY[new Date(`${w.date}T00:00:00`).getDay()] ?? '', emoji: m?.emoji ?? null, color: m?.color ?? null, mood: m?.value ?? null };
+                      return { label: DAY[new Date(`${w.date}T00:00:00`).getDay()] ?? '', emoji: null, color: m?.color ?? null, mood: m?.value ?? null };
                     })}
                   />
                 </div>

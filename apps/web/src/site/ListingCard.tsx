@@ -1,5 +1,6 @@
 import { LISTING_TYPE_META, MODULE_BY_KEY, type Listing } from '@kreators/shared';
 import { Link } from 'react-router';
+import { AppIcon } from '../components/AppIcon';
 import { MediaCover } from '../components/Media';
 import { useSession } from '../lib/store';
 
@@ -14,7 +15,7 @@ export function ListingCard({ listing, showFeature = true }: { listing: Listing;
       <MediaCover items={listing.media} title={listing.title} />
       <div className="flex items-start gap-sm">
         <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-[22px]" aria-hidden="true">
-          {meta.emoji}
+          <AppIcon name={meta.icon} size={22} />
         </span>
         <div className="min-w-0 flex-1">
           <p className="m-0 type-eyebrow text-ink-mute">

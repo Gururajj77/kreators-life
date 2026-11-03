@@ -82,9 +82,14 @@ export async function limited(db: D1Database, key: string, max: number, windowSe
 export const ipOf = (c: Context<AppEnv>) => c.req.header('CF-Connecting-IP') ?? c.req.header('X-Forwarded-For') ?? 'local';
 
 /** Middleware: the named limit from limits.ts, per address, or per person once there is a session. */
-export function rateLimit(name: LimitName, by?: 'address') {
+export function rateLimit(name: LimitName, by?: 'address', when?: 'discountCode') {
   const { max, windowSec } = LIMITS[name];
   return async (c: Context<AppEnv>, next: Next) => {
+    // A limit that counts only code tries looks at the body (Hono keeps it, so the route still reads it).
+    if (when === 'discountCode') {
+      const body = await c.req.json<{ discountCode?: unknown }>().catch(() => null);
+      if (!body || typeof body.discountCode !== 'string' || !body.discountCode.trim()) return next();
+    }
     // `by: 'address'` counts the address even for a signed-in person, so one address cannot try codes through many accounts.
     const who = by === 'address' ? ipOf(c) : (c.get('user')?.id ?? ipOf(c));
     if (await limited(c.env.DB, `${name}${by === 'address' ? ':ip' : ''}:${who}`, max, windowSec)) return c.json({ error: 'too many tries, wait a minute' }, 429);

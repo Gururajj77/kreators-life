@@ -3,9 +3,11 @@ import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { Button } from '../components/Button';
+import { MediaSection } from '../components/MediaSection';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
+import { Pager, usePage } from '../components/Pager';
 import { api } from '../lib/api';
 import { useAuthed, useRefreshAll, useStudio } from '../lib/queries';
 
@@ -14,7 +16,9 @@ const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-
 export function StudioProduct() {
   const { id = '' } = useParams();
   const nav = useNavigate();
-  const q = useAuthed(['studio-product', id], () => api.studioProduct(id));
+  const opg = usePage('o');
+  const bpg = usePage('b');
+  const q = useAuthed(['studio-product', id, opg.query, bpg.query], () => api.studioProduct(id, `${opg.query}&${bpg.query}`));
   const coupons = useAuthed(['coupons'], api.coupons);
   const studio = useStudio();
   const refresh = useRefreshAll();
@@ -166,6 +170,8 @@ export function StudioProduct() {
           )}
         </div>
       </header>
+
+      <MediaSection type="product" id={p.id} />
 
       <form
         className="mt-md flex flex-col gap-md rounded-card bg-card p-md shadow-toy-soft"
@@ -533,6 +539,8 @@ export function StudioProduct() {
               </li>
             ))}
           </ul>
+          {d.orders.length > 0 && <Pager page={d.orderPage} prefix="o" label="buyers" />}
+          {d.bookings.length > 0 && <Pager page={d.bookingPage} prefix="b" label="bookings" />}
         </section>
       )}
 

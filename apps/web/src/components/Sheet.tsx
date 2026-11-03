@@ -2,6 +2,8 @@ import { AnimatePresence, motion, useDragControls } from 'motion/react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { tick } from './fx/haptics';
 import { useDialogFocus } from '../lib/useDialogFocus';
+import { X } from 'lucide-react';
+import { Icon } from './Icon';
 
 interface Props {
   open: boolean;
@@ -87,9 +89,7 @@ export function Sheet({ open, onClose, title, children }: Props) {
                 {title}
               </h2>
               <button type="button" onClick={onClose} aria-label="Close" className="toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink">
-                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-                  <path d="M6 6l12 12M18 6L6 18" />
-                </svg>
+                <Icon icon={X} size={20} />
               </button>
             </div>
             <div className="mt-md">{children}</div>

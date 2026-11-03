@@ -8,7 +8,11 @@ import { Pager, usePage } from '../components/Pager';
 import { StatTile } from '../components/Charts';
 import { Section } from '../components/Section';
 import { useLeaderboard, useAuthed } from '../lib/queries';
+import { bento } from '../lib/bento';
 import { api } from '../lib/api';
+import { Medal } from 'lucide-react';
+import { AppIcon } from '../components/AppIcon';
+import { Icon } from '../components/Icon';
 
 const SORTS: { key: LeaderboardSort; label: string; stat: (e: LeaderboardEntry) => string }[] = [
   { key: 'xp', label: 'All time', stat: (e) => `${e.xp} xp` },
@@ -17,9 +21,26 @@ const SORTS: { key: LeaderboardSort; label: string; stat: (e: LeaderboardEntry) 
   { key: 'badges', label: 'Badges', stat: (e) => `${e.badgeCount} ${e.badgeCount === 1 ? 'badge' : 'badges'}` },
 ];
 
+const PLACE_TONE = ['var(--badge-gold-b)', 'var(--badge-silver-b)', 'var(--badge-bronze-b)'] as const;
+const PLACE_WORD = ['1st', '2nd', '3rd'] as const;
+
+/** The mark for places one to three: a medal in gold, silver or bronze. Places past three have none. */
+function PlaceMark({ place, size = 16 }: { place: number; size?: number }) {
+  const tone = PLACE_TONE[place - 1];
+  if (!tone) return null;
+  return (
+    <span style={{ color: tone }} className="inline-flex align-[-3px]">
+      <Icon icon={Medal} size={size} />
+    </span>
+  );
+}
+
+/** Places one to three in words, for lines of text where an icon cannot sit. */
+const placeWord = (place: number) => PLACE_WORD[place - 1] ?? `#${place}`;
+
 function Entry({ e, stat }: { e: LeaderboardEntry; stat: string }) {
   const stage = IDENTITY_STAGES.find((s) => s.stage === e.stage);
-  const medal = e.rank === 1 ? '🥇' : e.rank === 2 ? '🥈' : e.rank === 3 ? '🥉' : null;
+  const medal = e.rank <= 3 ? <PlaceMark place={e.rank} size={20} /> : null;
   return (
     <li className={`flex items-center gap-sm rounded-tile p-sm shadow-toy-soft ${e.isMe ? 'bg-ink text-on-ink' : 'bg-card'}`}>
       <span
@@ -61,11 +82,11 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
   );
 }
 
-function BlockCard({ b, onOpen }: { b: LeaderboardBlock; onOpen: () => void }) {
+function BlockCard({ b, onOpen, className = '' }: { b: LeaderboardBlock; onOpen: () => void; className?: string }) {
   return (
-    <li className="flex flex-col rounded-tile bg-card p-sm shadow-toy-soft">
+    <li className={`flex flex-col rounded-tile bg-card p-sm shadow-toy-soft ${className}`}>
       <p className="m-0 text-[16px] font-extrabold">
-        {b.emoji && <span aria-hidden="true">{b.emoji} </span>}
+        {b.icon && <AppIcon name={b.icon} size={16} className="mr-xs inline-block align-[-2px] text-ink-soft" />}
         {b.label}
       </p>
       <p className="m-0 text-[12px] font-bold text-ink-soft">
@@ -77,7 +98,7 @@ function BlockCard({ b, onOpen }: { b: LeaderboardBlock; onOpen: () => void }) {
           {b.top.map((t) => (
             <li key={t.rank} className="flex items-baseline justify-between gap-xs text-[14px] font-semibold">
               <span className="min-w-0 truncate">
-                {t.rank === 1 ? '🥇' : t.rank === 2 ? '🥈' : '🥉'} {t.name}
+                <PlaceMark place={t.rank} /> {t.name}
                 {t.isMe ? ' (you)' : ''}
               </span>
               <span className="shrink-0 font-extrabold">{t.xp} xp</span>
@@ -169,7 +190,6 @@ export function Leaderboard() {
               {choices.length === 0 && <option value="">{options.isPending ? 'Loading' : 'None yet'}</option>}
               {choices.map((o) => (
                 <option key={o.value} value={o.value}>
-                  {o.emoji ? `${o.emoji} ` : ''}
                   {o.label} ({o.count})
                 </option>
               ))}
@@ -249,9 +269,9 @@ export function Leaderboard() {
 
           {goalBlocks.some((b) => b.people > 0) && (
             <Section id="lb-goals" title="Boards by goal" lede="What people are working on. Open one to see the whole board.">
-              <ul className="grid list-none grid-cols-1 gap-xs p-0 m-0 sm:grid-cols-2">
-                {goalBlocks.filter((b) => b.people > 0).map((b) => (
-                  <BlockCard key={b.value} b={b} onOpen={() => open(b)} />
+              <ul className="grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
+                {goalBlocks.filter((b) => b.people > 0).map((b, i, arr) => (
+                  <BlockCard key={b.value} b={b} onOpen={() => open(b)} className={bento(i, arr.length, 1, 2)} />
                 ))}
               </ul>
               {goalBlocks.some((b) => b.people === 0) && <p className="mt-sm m-0 text-[12px] font-bold text-ink-soft">No one yet on: {goalBlocks.filter((b) => b.people === 0).map((b) => b.label).join(', ')}.</p>}
@@ -259,9 +279,9 @@ export function Leaderboard() {
           )}
           {pillarBlocks.some((b) => b.people > 0) && (
             <Section id="lb-pillars" title="Boards by pillar" lede="Ranked by the xp each person earned in that pillar alone.">
-              <ul className="grid list-none grid-cols-1 gap-xs p-0 m-0 sm:grid-cols-2">
-                {pillarBlocks.filter((b) => b.people > 0).map((b) => (
-                  <BlockCard key={b.value} b={b} onOpen={() => open(b)} />
+              <ul className="grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
+                {pillarBlocks.filter((b) => b.people > 0).map((b, i, arr) => (
+                  <BlockCard key={b.value} b={b} onOpen={() => open(b)} className={bento(i, arr.length, 1, 2)} />
                 ))}
               </ul>
             </Section>
@@ -276,7 +296,7 @@ export function Leaderboard() {
                   <li key={p.season} className="rounded-tile bg-card p-sm shadow-toy-soft">
                     <p className="m-0 text-[14px] font-extrabold">{p.label}</p>
                     <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                      {p.top.map((t) => `${t.place === 1 ? '🥇' : t.place === 2 ? '🥈' : '🥉'} ${t.name}${t.isMe ? ' (you)' : ''}, ${t.xp} xp`).join(' · ')}
+                      {p.top.map((t) => `${placeWord(t.place)} ${t.name}${t.isMe ? ' (you)' : ''}, ${t.xp} xp`).join(' · ')}
                     </p>
                   </li>
                 ))}

@@ -74,13 +74,13 @@ const h1 = await page.$eval('h1', (el) => el.textContent).catch(() => '(no h1)')
 console.log('h1', h1);
 // DRIVE_TAPS: chip labels to tap in turn after landing, waiting for each to appear (motion on makes the hosts type at speed).
 for (const t of (process.env.DRIVE_TAPS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) {
-  // "type:<text>" types into the chat's typing box and sends it; "first" taps the first choice under the question; anything else taps the button whose text starts with it (or, for a choice with an emoji, holds it).
+  // "type:<text>" types into the chat's typing box and sends it; "first" taps the first choice under the question; anything else taps the button whose text starts with it (or, failing that, the one in the chat that holds it).
   const ok = await page.evaluate(async (label) => {
     const s = (ms) => new Promise((r) => setTimeout(r, ms));
     const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     for (let i = 0; i < 300; i++) {
       if (label.startsWith('fill:')) {
-        // "fill:<option>" sets every empty select in the card under the question to the option whose text starts with it (else its first real option), then sends the card.
+        // "fill:<option>" sets every empty select in the card under the question to the option whose text starts with it (else its first real option), then sends the card; on the session's map it ticks that level for each of the seven.
         const selects = [...document.querySelectorAll('main [data-answer] select')];
         if (selects.length) {
           const want = label.slice(5);
@@ -93,6 +93,22 @@ for (const t of (process.env.DRIVE_TAPS ?? '').split(',').map((x) => x.trim()).f
           const btns = [...document.querySelectorAll('main [data-answer] button')].filter((x) => !/Change my last answer|Tell me more|Add/.test(x.textContent) && !x.disabled);
           const send = btns.at(-1);
           if (send) { send.click(); await s(300); return true; }
+        }
+        // The session's map is one relationship at a time with tick rows: tick the level that starts with <option>
+        // (else the first) for each of the seven, tapping "Next: ..." between them, then "That is my map".
+        if (document.querySelector('main [data-answer] [role="checkbox"]')) {
+          const want = label.slice(5);
+          for (let r = 0; r < 8; r++) {
+            const boxes = [...document.querySelectorAll('main [data-answer] [role="checkbox"]')];
+            if (boxes.length && !boxes.some((x) => x.getAttribute('aria-checked') === 'true')) (boxes.find((x) => x.textContent.trim().startsWith(want)) ?? boxes[0]).click();
+            await s(200);
+            const btns = [...document.querySelectorAll('main [data-answer] button')].filter((x) => !x.disabled);
+            const done = btns.find((x) => x.textContent.trim().startsWith('That is my map'));
+            if (done) { done.click(); await s(300); return true; }
+            const next = btns.find((x) => x.textContent.trim().startsWith('Next:'));
+            if (next) next.click();
+            await s(300);
+          }
         }
       } else if (label.startsWith('type:')) {
         const el = document.querySelector('[data-composer] textarea');
@@ -107,7 +123,7 @@ for (const t of (process.env.DRIVE_TAPS ?? '').split(',').map((x) => x.trim()).f
         const b = [...document.querySelectorAll('main [data-answer] button')].find((x) => !/Change my last answer|Tell me more/.test(x.textContent) && !x.disabled);
         if (b) { b.click(); await s(300); return true; }
       } else {
-        // A pill or chip by its first words; a card, whose text starts with its emoji, by any words in it.
+        // A pill or chip by its first words (its icon is a drawing with no text); otherwise any button in the chat holding the words.
         const all = [...document.querySelectorAll('button')].filter((x) => !x.disabled);
         const b = all.find((x) => x.textContent.trim().startsWith(label)) ?? all.find((x) => x.closest('main') && x.textContent.includes(label));
         if (b) { b.click(); await s(300); return true; }

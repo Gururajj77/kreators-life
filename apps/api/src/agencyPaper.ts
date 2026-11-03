@@ -1,4 +1,5 @@
 import { parseDocStyle, type DocStyle } from '@kreators/shared';
+import { EMAIL_NOTE_MAX } from '@kreators/shared/agencyEmail';
 import type { Env } from './env';
 import { newId, nowIso } from './db';
 import { sendEmail } from './ops';
@@ -52,6 +53,17 @@ export interface EmailedCopy {
  * Email the text version of a document with the client's link. It is ordinary mail (never marketing) and the outbox keeps it for the
  * team to see. Says plainly when email is not set up or the provider refused, so the person knows to paste the text themselves.
  */
+/**
+ * The cover note a person wrote for an email (`message`, with an optional `subject`): taken as plain text, trimmed, held to the same length the
+ * shared notes keep to, and the subject made one line so it can never add a header. Nothing here is trusted as markup: the mail is plain text.
+ */
+export function coverFrom(body: Record<string, unknown>): { message: string; subject: string } | null {
+  const message = typeof body.message === 'string' ? body.message.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim().slice(0, EMAIL_NOTE_MAX) : '';
+  if (!message) return null;
+  const subject = typeof body.subject === 'string' ? body.subject.replace(/[\u0000-\u001F\u007F]+/g, ' ').trim().slice(0, 200) : '';
+  return { message, subject };
+}
+
 export async function emailCopy(db: D1Database, env: Env, userId: string, msg: { to: string; subject: string; intro: string; text: string; link: string; replyTo?: string }): Promise<EmailedCopy> {
   const body = [msg.intro, '', msg.text, '', msg.link ? `Read it online: ${msg.link}` : '', msg.replyTo ? `Questions? Write to ${msg.replyTo}.` : ''].filter((l, i, all) => l !== '' || all[i - 1] !== '').join('\n').trim();
   const subject = msg.subject.slice(0, 200);

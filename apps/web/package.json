@@ -13,11 +13,13 @@
     "@kreators/shared": "workspace:*",
     "@tanstack/react-query": "^5.90.0",
     "gsap": "3.13.0",
+    "lucide-react": "1.66.0",
     "motion": "^12.23.0",
     "qrcode": "1.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router": "^7.9.0",
+    "react-useanimations": "3.1.1",
     "zustand": "^5.0.8"
   },
   "devDependencies": {

@@ -625,7 +625,7 @@ function DesignForm({ initial, birthDate, onDone }: { initial: DesignInput; birt
       <p className="m-0 text-[14px] font-semibold text-ink-soft">Use the details on your birth record. The time matters: the Moon moves about half a degree an hour, so a few hours can change a line.</p>
       <label className="block">
         <span className="block text-[14px] font-bold">Birth date</span>
-        <input type="date" value={input.date} max={new Date().toISOString().slice(0, 10)} onChange={(e) => set({ date: e.target.value })} className={FIELD} required />
+        <input type="date" value={input.date} max={todayLocal()} onChange={(e) => set({ date: e.target.value })} className={FIELD} required />
       </label>
       <label className="block">
         <span className="block text-[14px] font-bold">Birth time</span>

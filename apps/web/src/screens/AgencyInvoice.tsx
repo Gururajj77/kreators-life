@@ -32,6 +32,7 @@ import { flushSync } from 'react-dom';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { BankFields, Chips, Field, FIELD, InvoiceView, LABEL, PartyFields, ShowSwitches, SummaryCard, invoiceDate } from '../components/InvoiceView';
 import { Button } from '../components/Button';
+import { DocPassword } from '../components/AgencyLifecycle';
 import { DocActions, DocLog, DocTextFold, EmailCopySheet } from '../components/DocActions';
 import { DocStyleCard, DocStyleSheet } from '../components/DocStyleSheet';
 import { HouseTemplateButton } from '../components/HouseTemplateButton';
@@ -344,6 +345,7 @@ export function AgencyInvoice() {
           )}
         </div>
         <DocActions className="mt-sm" fileName={fileName} text={text} onPrint={print} onEmail={() => setEmailOpen(true)} />
+        <DocPassword clientId={inv.agencyClientId} clientName={inv.clientName} />
         {!editable && (
           <p className="mt-sm m-0 rounded-tile bg-card p-sm text-[14px] font-bold">
             {inv.status === 'paid' ? 'This invoice is paid, so the books match it. Mark it as sent again to change it.' : 'A void invoice is kept for the record. Duplicate it to start again.'}
@@ -615,11 +617,24 @@ export function AgencyInvoice() {
       <Sheet open={part === 'activity'} onClose={close} title="Activity">
         <DocLog type="invoice" id={inv.id} />
       </Sheet>
-      <EmailCopySheet open={emailOpen} onClose={() => setEmailOpen(false)} route="invoices" id={inv.id} defaultTo={inv.clientEmail || inv.doc.to.email} text={text} noLinkYet={inv.status === 'draft' || inv.status === 'void'} />
+      <EmailCopySheet open={emailOpen} onClose={() => setEmailOpen(false)} route="invoices" id={inv.id} defaultTo={inv.clientEmail || inv.doc.to.email} text={text} context={{ kind: 'invoice', names: inv.doc.to.name ? `${inv.doc.to.name} team` : '', attached: [`The invoice ${inv.number} for ${money(totals.total, inv.currency)}`], amount: money(totals.total, inv.currency), dueBy: inv.dueDate ? invoiceDate(inv.dueDate) : '', ...retainerMonthOf(inv) }} noLinkYet={inv.status === 'draft' || inv.status === 'void'} />
       <TemplateSheet open={tplOpen} onClose={() => setTplOpen(false)} inv={inv} dirty={dirty && editable} saveFirst={() => save.mutateAsync()} />
       <DuplicateSheet open={dupOpen} onClose={() => setDupOpen(false)} inv={inv} />
     </Screen>
   );
+}
+
+/**
+ * Whether this invoice is a retainer month's, read from the line the cron writes ("Content retainer, month 3 of 6 (2026-05)", agencyCycles.ts),
+ * so Email a copy opens on the monthly invoice note with the month filled in. Any other invoice gets nothing and opens on the first note.
+ */
+const RETAINER_LINE = /^Content retainer, month \d+ of \d+ \((\d{4})-(\d{2})\)$/;
+function retainerMonthOf(inv: Invoice): { retainerMonth?: true; period?: string } {
+  for (const i of inv.items) {
+    const m = RETAINER_LINE.exec(i.description.trim());
+    if (m) return { retainerMonth: true, period: new Date(Number(m[1]), Number(m[2]) - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) };
+  }
+  return {};
 }
 
 function prettyShort(iso: string): string {

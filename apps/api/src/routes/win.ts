@@ -43,16 +43,20 @@ win.get('/', async (c) => {
   const reviewer = can(user, 'review');
   const finance = can(user, 'finance');
   const ask = pageOf(c);
+  const queueAsk = pageOf(c, 'q');
   const [bs, mine, queue] = await Promise.all([
     db.prepare(`${SELECT} WHERE b.status = 'open' OR b.id IN (SELECT bounty_id FROM bounty_submissions WHERE user_id = ?) ORDER BY b.featured DESC, b.ends_at LIMIT ? OFFSET ?`).bind(user.id, ask.limit, ask.offset).all<BRow>(),
     db.prepare(`${S_SELECT} WHERE s.user_id = ? ORDER BY s.created_at DESC`).bind(user.id).all<SRow>(),
-    reviewer || finance ? db.prepare(`${S_SELECT} WHERE s.status IN ('submitted','verified','disputed') ORDER BY s.created_at LIMIT 500`).all<SRow>() : Promise.resolve({ results: [] as SRow[] }),
+    reviewer || finance
+      ? db.prepare(`${S_SELECT} WHERE s.status IN ('submitted','verified','disputed') ORDER BY s.created_at LIMIT ? OFFSET ?`).bind(queueAsk.limit, queueAsk.offset).all<SRow>()
+      : Promise.resolve({ results: [] as SRow[] }),
   ]);
   const metrics = await metricsFor(db, [...mine.results, ...queue.results].map((s) => s.id));
   const byB = new Map(mine.results.map((s) => [s.bounty_id, toS(s, metrics)]));
   const earned = mine.results.filter((s) => s.status === 'paid').reduce((a, s) => a + s.payout_points, 0);
   const pg = paged(bs.results, ask);
-  return c.json({ page: pg.page, bounties: pg.items.map((b) => toB(b, byB.get(b.id) ?? null)), mine: mine.results.map((s) => toS(s, metrics)), queue: queue.results.map((s) => toS(s, metrics)), earned, reviewer, finance, canCreate: reviewer || can(user, 'talent') });
+  const qpg = paged(queue.results, queueAsk);
+  return c.json({ page: pg.page, bounties: pg.items.map((b) => toB(b, byB.get(b.id) ?? null)), mine: mine.results.map((s) => toS(s, metrics)), queuePage: qpg.page, queue: qpg.items.map((s) => toS(s, metrics)), earned, reviewer, finance, canCreate: reviewer || can(user, 'talent') });
 });
 
 win.get('/:id', async (c) => {
@@ -61,15 +65,17 @@ win.get('/:id', async (c) => {
   const b = await db.prepare(`${SELECT} WHERE b.id = ?`).bind(c.req.param('id')).first<BRow>();
   if (!b) return c.json({ error: 'not found' }, 404);
   const staff = can(user, 'review') || can(user, 'finance');
+  const ask = pageOf(c);
   // The person's own entry, everyone's entries (staff only) and this reward's board do not depend on each other: read together.
   const [mine, all, board] = await Promise.all([
     db.prepare(`${S_SELECT} WHERE s.bounty_id = ? AND s.user_id = ?`).bind(b.id, user.id).first<SRow>(),
-    staff ? db.prepare(`${S_SELECT} WHERE s.bounty_id = ? ORDER BY s.latest_views DESC LIMIT 500`).bind(b.id).all<SRow>() : Promise.resolve({ results: [] as SRow[] }),
+    staff ? db.prepare(`${S_SELECT} WHERE s.bounty_id = ? ORDER BY s.latest_views DESC LIMIT ? OFFSET ?`).bind(b.id, ask.limit, ask.offset).all<SRow>() : Promise.resolve({ results: [] as SRow[] }),
     // The leaderboard of this reward shows names and views only, never payouts.
     db.prepare('SELECT u.display_name, s.latest_views, s.status FROM bounty_submissions s JOIN users u ON u.id = s.user_id WHERE s.bounty_id = ? AND s.status != \'rejected\' ORDER BY s.latest_views DESC LIMIT 10').bind(b.id).all<{ display_name: string; latest_views: number; status: string }>(),
   ]);
   const [metrics, allMetrics] = await Promise.all([metricsFor(db, mine ? [mine.id] : []), staff ? metricsFor(db, all.results.map((s) => s.id)) : Promise.resolve([])]);
-  return c.json({ bounty: toB(b, mine ? toS(mine, metrics) : null), submissions: all.results.map((s) => toS(s, allMetrics)), board: board.results.map((r) => ({ name: nameOf(r), views: r.latest_views, status: r.status })) });
+  const pg = paged(all.results, ask);
+  return c.json({ bounty: toB(b, mine ? toS(mine, metrics) : null), page: pg.page, submissions: pg.items.map((s) => toS(s, allMetrics)), board: board.results.map((r) => ({ name: nameOf(r), views: r.latest_views, status: r.status })) });
 });
 
 // Staff launch a reward. Brands launch through Army or the admin's listings page.

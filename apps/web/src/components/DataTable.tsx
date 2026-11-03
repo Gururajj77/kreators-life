@@ -252,7 +252,7 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
                     {c.sortable === false ? (
                       c.label
                     ) : (
-                      <button type="button" onClick={() => toggleSort(c)} className={`inline-flex min-h-[32px] items-center gap-xs rounded-pill hover:text-ink ${active ? 'text-ink' : ''}`}>
+                      <button type="button" onClick={() => toggleSort(c)} className={`inline-flex min-h-[44px] items-center gap-xs rounded-pill hover:text-ink ${active ? 'text-ink' : ''}`}>
                         {c.label}
                         <span aria-hidden="true" className="text-[10px]">
                           {active ? (sort.dir === 'asc' ? '▲' : '▼') : '△'}

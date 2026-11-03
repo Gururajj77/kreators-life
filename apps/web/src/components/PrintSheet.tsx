@@ -2,6 +2,7 @@ import { docDate, parseDocStyle, type DocParty, type DocStyle, type Invoice } fr
 import { useState, type ReactNode } from 'react';
 import { todayLocal } from '../lib/date';
 import { supportsMarginBoxes } from '../lib/printDoc';
+import { tie } from '../lib/text';
 import { Inert } from './Inert';
 
 /** The words stamped faintly across a document. "Sent" is the normal state and gets none. */
@@ -100,7 +101,7 @@ export function PrintSheet({ kind, title, subtitle, reference = '', date, dateLa
         )}
         {titleBlock && (
           <div className="legal-head">
-            <h1 className="legal-title">{title}</h1>
+            <h1 className="legal-title">{tie(title)}</h1>
             {subtitle && <p className="legal-subtitle">{subtitle}</p>}
             {(reference || date) && (
               <dl className="legal-meta">

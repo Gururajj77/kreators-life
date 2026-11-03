@@ -2,6 +2,7 @@ import { MODULE_BY_KEY } from '@kreators/shared';
 import { useEffect, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useModule } from '../lib/modules';
+import { AppIcon } from './AppIcon';
 import { HowTo } from './HowTo';
 import { Screen } from './Screen';
 
@@ -23,8 +24,8 @@ export function Gate({ moduleKey, children }: { moduleKey: string; children: Rea
   return (
     <Screen>
       <div className="pt-xl text-center">
-        <p className="m-0 text-[36px]" aria-hidden="true">
-          {meta?.emoji}
+        <p className="m-0 flex justify-center text-ink-soft">
+          <AppIcon name={meta?.icon} size={40} />
         </p>
         <h1 className="mt-sm text-[30px]">{meta?.name ?? 'This feature'} is off</h1>
         <p className="mt-sm m-0 text-[16px] font-semibold text-ink-soft">

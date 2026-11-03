@@ -11,6 +11,9 @@ import {
   MAX_FEARS,
   MAX_INSECURITIES,
   OWN_MANTRA_MAX,
+  AWAY_LEVEL,
+  awayPlacement,
+  parseAway,
   parseRoutineBlocks,
   PENALTIES,
   pickFocus,
@@ -35,11 +38,12 @@ import {
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { DATE_RE, newId, nowIso, num, oneOf, shiftDate, str } from '../db';
+import { localDay } from '../coaching';
 
 /** The strategy session: the assessment, the plan it produces, and the morning routine day by day. */
 export const session = new Hono<AppEnv>();
 
-interface ARow { id: string; kind: Assessment['kind']; fears_json: string; insecurities_json: string; scores_json: string; real_day_json: string; focus_json: string; created_at: string }
+interface ARow { id: string; kind: Assessment['kind']; fears_json: string; insecurities_json: string; scores_json: string; real_day_json: string; focus_json: string; away_json?: string; created_at: string }
 interface PRow { relationship: RelationshipKey; core_level: number; floor_level: number; evidence: string }
 interface RRow { id: string; assessment_id: string; ramp_step: number; general_json: string; exceptional_json: string; practices_json: string; created_at: string }
 interface CRow { min_days: number; checkin_time: string; penalty: Contract['penalty']; next_weekly: string; next_monthly: string; signed_name: string; signed_at: string }
@@ -72,6 +76,7 @@ export async function latest(db: D1Database, userId: string, date: string): Prom
       scores: json<Scores>(a.scores_json, {}),
       realDay: json<RealDay>(a.real_day_json, DEFAULT_REAL_DAY),
       focus: json<RelationshipKey[]>(a.focus_json, []),
+      away: parseAway(json<unknown>(a.away_json ?? '[]', [])),
       createdAt: a.created_at,
     };
   }
@@ -90,9 +95,16 @@ export async function latest(db: D1Database, userId: string, date: string): Prom
   };
 }
 
-const dateOf = (v: string | undefined) => (v && DATE_RE.test(v) ? v : new Date().toISOString().slice(0, 10));
+/**
+ * The person's day: the one the device sent when it is a real day no further ahead than tomorrow in their zone, else today in
+ * their own zone, never the server's UTC date (which is a day behind for the first hours of an Indian morning).
+ */
+const dateOf = (v: string | undefined, zone: string) => {
+  const own = localDay(zone);
+  return v && DATE_RE.test(v) && v <= shiftDate(own, 1) ? v : own;
+};
 
-session.get('/', async (c) => c.json(await latest(c.env.DB, c.get('user').id, dateOf(c.req.query('date')))));
+session.get('/', async (c) => c.json(await latest(c.env.DB, c.get('user').id, dateOf(c.req.query('date'), c.get('user').timezone))));
 
 /** The assessment: seven placements, fears, insecurities, the scorecard, the real day. The rules run here, not in the browser. */
 session.post('/assessment', async (c) => {
@@ -108,6 +120,13 @@ session.post('/assessment', async (c) => {
     const floor = num(p.floor, null, 20, 540);
     if (core === null || floor === null || !levelByValue(core) || !levelByValue(floor)) continue;
     placements.push({ relationship: p.relationship, core, floor, evidence: str(p.evidence, 500) });
+  }
+  // "Not part of my life right now": love, teachers or faith, placed at Neutrality whatever was sent, and never suggested.
+  const away = parseAway(body.away);
+  for (const k of away) {
+    const at = placements.findIndex((p) => p.relationship === k);
+    if (at >= 0) placements[at] = awayPlacement(k);
+    else placements.push(awayPlacement(k));
   }
   const seen = new Set(placements.map((p) => p.relationship));
   if (seen.size !== RELATIONSHIPS.length) return c.json({ error: 'place every one of the seven relationships' }, 400);
@@ -134,15 +153,38 @@ session.post('/assessment', async (c) => {
   }
   const rd = (body.realDay && typeof body.realDay === 'object' ? body.realDay : {}) as Record<string, unknown>;
   const realDay: RealDay = { wake: time(rd.wake, DEFAULT_REAL_DAY.wake), sleep: time(rd.sleep, DEFAULT_REAL_DAY.sleep), workStart: time(rd.workStart, DEFAULT_REAL_DAY.workStart), workEnd: time(rd.workEnd, DEFAULT_REAL_DAY.workEnd), evening: str(rd.evening, 200), gym: time(rd.gym, '') };
-  const focus = pickFocus(placements, insecurities);
+  const focus = pickFocus(placements, insecurities, away);
   const id = newId();
   const now = nowIso();
   await db.batch([
-    db.prepare('INSERT INTO assessments (id, user_id, kind, fears_json, insecurities_json, scores_json, real_day_json, focus_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id, user.id, kind, JSON.stringify(fears), JSON.stringify(insecurities), JSON.stringify(scores), JSON.stringify(realDay), JSON.stringify(focus), now),
+    db.prepare('INSERT INTO assessments (id, user_id, kind, fears_json, insecurities_json, scores_json, real_day_json, focus_json, away_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id, user.id, kind, JSON.stringify(fears), JSON.stringify(insecurities), JSON.stringify(scores), JSON.stringify(realDay), JSON.stringify(focus), JSON.stringify(away), now),
     ...placements.map((p) => db.prepare('INSERT INTO placements (id, assessment_id, user_id, relationship, core_level, floor_level, core_band, floor_band, evidence, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(newId(), id, user.id, p.relationship, p.core, p.floor, levelByValue(p.core)!.band, levelByValue(p.floor)!.band, p.evidence, now)),
   ]);
-  const res = await latest(db, user.id, dateOf(undefined));
+  const res = await latest(db, user.id, dateOf(undefined, user.timezone));
   return c.json({ ...res, suggestedFocus: focus }, 201);
+});
+
+/**
+ * Set one optional pillar aside, or bring it back, on the latest map (from the life map under Pillars). Set aside, it sits at
+ * Neutrality and leaves the focus; brought back, it keeps Neutrality until the person places it again.
+ */
+session.put('/away', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const k = parseAway([body.relationship])[0];
+  if (!k) return c.json({ error: 'only love, teachers or faith can be set aside' }, 400);
+  const a = await db.prepare("SELECT * FROM assessments WHERE user_id = ? AND kind = 'onboard' ORDER BY created_at DESC LIMIT 1").bind(user.id).first<ARow>();
+  if (!a) return c.json({ error: 'do the assessment first' }, 400);
+  const was = parseAway(json<unknown>(a.away_json ?? '[]', []));
+  const on = body.away === true;
+  const away = parseAway(on ? [...was, k] : was.filter((x) => x !== k));
+  const focus = json<RelationshipKey[]>(a.focus_json, []).filter((x) => !on || x !== k);
+  await db.batch([
+    db.prepare('UPDATE assessments SET away_json = ?, focus_json = ? WHERE id = ? AND user_id = ?').bind(JSON.stringify(away), JSON.stringify(focus), a.id, user.id),
+    ...(on ? [db.prepare("UPDATE placements SET core_level = ?, floor_level = ?, core_band = ?, floor_band = ?, evidence = '' WHERE assessment_id = ? AND user_id = ? AND relationship = ?").bind(AWAY_LEVEL, AWAY_LEVEL, levelByValue(AWAY_LEVEL)!.band, levelByValue(AWAY_LEVEL)!.band, a.id, user.id, k)] : []),
+  ]);
+  return c.json(await latest(db, user.id, dateOf(typeof body.date === 'string' ? body.date : undefined, user.timezone)));
 });
 
 /** The plan: the focus the person settled on, the routine ramped from their day, the practices, and the signed contract. */
@@ -173,7 +215,7 @@ session.post('/plan', async (c) => {
   const ct = (body.contract && typeof body.contract === 'object' ? body.contract : {}) as Record<string, unknown>;
   const signedName = str(ct.signedName, 80);
   if (!signedName) return c.json({ error: 'type your name to sign' }, 400);
-  const today = dateOf(typeof body.date === 'string' ? body.date : undefined);
+  const today = dateOf(typeof body.date === 'string' ? body.date : undefined, user.timezone);
   const dow = new Date(`${today}T00:00:00Z`).getUTCDay();
   const nextWeekly = shiftDate(today, dow === 0 ? 7 : 7 - dow);
   const nextMonthly = shiftDate(today, 30);
@@ -204,14 +246,14 @@ session.patch('/routine', async (c) => {
     exceptional: body.exceptional === undefined ? exceptional : parseRoutineBlocks(body.exceptional, exceptional),
   };
   await db.prepare('UPDATE routines SET general_json = ?, exceptional_json = ? WHERE id = ? AND user_id = ?').bind(JSON.stringify(next.general), JSON.stringify(next.exceptional), r.id, user.id).run();
-  return c.json(await latest(db, user.id, dateOf(typeof body.date === 'string' ? body.date : undefined)));
+  return c.json(await latest(db, user.id, dateOf(typeof body.date === 'string' ? body.date : undefined, user.timezone)));
 });
 
 session.post('/day', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
-  const day = dateOf(typeof body.date === 'string' ? body.date : undefined);
+  const day = dateOf(typeof body.date === 'string' ? body.date : undefined, user.timezone);
   const dayType = oneOf(body.dayType, ['general', 'exceptional'] as const, 'general');
   const r = await db.prepare('SELECT * FROM routines WHERE user_id = ? ORDER BY created_at DESC LIMIT 1').bind(user.id).first<RRow>();
   if (!r) return c.json({ error: 'no routine yet; run the strategy session first' }, 400);

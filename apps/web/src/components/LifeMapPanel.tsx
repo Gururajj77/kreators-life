@@ -1,4 +1,5 @@
-import { BREATHING, mantraLine, PENALTIES, RELATIONSHIP_BY_KEY, RELATIONSHIPS, SCORE_LABEL, SCORECARD, weightWord } from '@kreators/shared';
+import { BREATHING, mantraLine, OPTIONAL_PILLARS, PENALTIES, RELATIONSHIP_BY_KEY, RELATIONSHIPS, SCORE_LABEL, SCORECARD, weightWord, type RelationshipKey } from '@kreators/shared';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
@@ -8,6 +9,7 @@ import { MapLadder, PlacementChart, ScoreRow } from './LifeMap';
 import { Ring } from './Ring';
 import { RoutinePanel } from './RoutinePanel';
 import { Section } from './Section';
+import { Toggle } from './Toggle';
 
 const avg = (vals: (number | undefined)[]) => {
   const v = vals.filter((x): x is number => typeof x === 'number');
@@ -39,12 +41,22 @@ export function LifeMapPanel() {
   const me = useMe();
   const date = todayLocal();
   const q = useAuthed(['session', date], () => api.session(date));
+  const qc = useQueryClient();
+  // Love, teachers or faith set aside, or brought back. Set aside, a pillar sits at Neutrality and leaves the focus.
+  const setAway = useMutation({
+    mutationFn: ({ k, on }: { k: RelationshipKey; on: boolean }) => api.setSessionAway(k, on, date),
+    onSuccess: (res) => {
+      qc.setQueryData(['session', date], res);
+      void qc.invalidateQueries();
+    },
+  });
   const d = q.data;
   if (!d) return null;
   const a = d.assessment;
   const built = new Set((me.data?.relationships ?? []).filter((r) => r.pillars > 0).map((r) => r.key));
   if (!a) return null;
   const focus = a.focus;
+  const away = a.away ?? [];
   const unbuilt = focus.filter((k) => !built.has(k));
   const relScores = RELATIONSHIPS.map((r) => a.scores[r.key]);
   const when = new Date(a.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
@@ -53,7 +65,7 @@ export function LifeMapPanel() {
       <h2 id="life-map-heading" className="text-[24px]">
         Your life map
       </h2>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{`From your strategy session on ${when}. Health lives inside With yourself; work, money and time inside Servant leader.`}</p>
+      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{`From your strategy session on ${when}. Health lives inside Yourself; work, money and time have a pillar of their own.`}</p>
       <div className="mt-sm flex flex-wrap gap-xs">
         <Link to="/session?fresh=1" className="toy inline-flex min-h-[44px] items-center rounded-pill bg-card px-sm text-[14px] font-bold shadow-toy-soft">
           Run the session again
@@ -79,7 +91,22 @@ export function LifeMapPanel() {
       </Section>
 
       <Section id="place-heading" title="Where each one sits" lede="The bar runs from where you drop under stress to where you usually live. The thin line is Courage.">
-        <PlacementChart placements={a.placements} focus={focus} />
+        <PlacementChart placements={a.placements} focus={focus} away={away} />
+      </Section>
+
+      <Section id="away-heading" title="Part of your life?" lede="Love, teachers and faith can be set aside when they are not part of your life right now. A pillar set aside sits at Neutrality, stays out of your focus and gets no pyramid. Turn it back on here any time.">
+        <ul className="m-0 flex list-none flex-col gap-xs p-0">
+          {OPTIONAL_PILLARS.map((k) => (
+            <li key={k}>
+              <Toggle on={away.includes(k)} disabled={setAway.isPending} onChange={(on) => setAway.mutate({ k, on })} label={`${RELATIONSHIP_BY_KEY[k].name}: not part of my life right now`} hint={away.includes(k) ? 'Set aside. Turn it off to bring it back. It stays at Neutrality until you place it again.' : undefined} />
+            </li>
+          ))}
+        </ul>
+        {setAway.isError && (
+          <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+            {setAway.error instanceof Error ? setAway.error.message : 'That did not save. Try again.'}
+          </p>
+        )}
       </Section>
 
       <Section id="ladder-heading" title="The whole map" lede="Sixteen levels in three bands. The goal for month one is every floor above the Courage line.">

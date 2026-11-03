@@ -1,4 +1,4 @@
-import { MOODS, STRESSORS, type JournalEntry } from '@kreators/shared';
+import { MODULE_BY_KEY, MOODS, STRESSORS, type JournalEntry } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Suspense, useEffect, useState } from 'react';
 import { PeriodPanel } from '../components/PeriodPanel';
@@ -17,6 +17,7 @@ import { todayLocal } from '../lib/date';
 import { lazyNamed } from '../lib/lazy';
 import { useJournal, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
+import { AppIcon } from '../components/AppIcon';
 
 // The prompt list is a large block of text, so it downloads only when the Journal opens.
 const JournalPrompt = lazyNamed(() => import('../components/JournalPrompt'), 'JournalPrompt');
@@ -109,8 +110,8 @@ export function Journal() {
                   {m ? (
                     <MoodFace value={m.value} size={40} />
                   ) : (
-                    <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-paper text-[20px]" aria-hidden="true">
-                      📝
+                    <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink-soft">
+                      <AppIcon name={MODULE_BY_KEY.journal?.icon} size={20} />
                     </span>
                   )}
                   <span className="min-w-0 flex-1">
@@ -256,9 +257,7 @@ function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEn
           <div className="mt-xs grid grid-cols-5 gap-xs">
             {MOODS.map((m) => (
               <button key={m.value} type="button" aria-pressed={emotion === m.value} onClick={() => setEmotion(emotion === m.value ? null : m.value)} className="toy toy-soft flex min-h-[56px] flex-col items-center justify-center rounded-tile bg-card text-[12px] font-bold" style={emotion === m.value ? { background: m.color, color: m.text } : undefined}>
-                <span className="text-[22px]" aria-hidden="true">
-                  {m.emoji}
-                </span>
+                <MoodFace value={m.value} size={28} />
                 {m.name}
               </button>
             ))}

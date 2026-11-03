@@ -6,6 +6,7 @@ import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
+import { todayLocal } from '../lib/date';
 import { useRefreshAll } from '../lib/queries';
 import { useSession } from '../lib/store';
 import { TermsBox } from '../components/TermsBox';
@@ -141,7 +142,7 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
         {mode === 'signup' && (
           <label className="block">
             <span className="block text-[14px] font-bold">Date of birth</span>
-            <input type="date" required value={birthDate} onChange={(e) => setBirthDate(e.target.value)} autoComplete="bday" max={new Date().toISOString().slice(0, 10)} className={field} />
+            <input type="date" required value={birthDate} onChange={(e) => setBirthDate(e.target.value)} autoComplete="bday" max={todayLocal()} className={field} />
             <span className="mt-xs block text-[12px] font-bold text-ink-soft">{ageBad ?? `We ask so everyone here is ${MIN_AGE} or older. Nobody else sees it.`}</span>
           </label>
         )}

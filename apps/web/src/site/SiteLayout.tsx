@@ -100,49 +100,49 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
             <p className="mt-xs m-0 max-w-[420px] text-[14px] font-semibold text-ink-soft">A daily game for the seven relationships that make a life, with the tools a creator needs built in. One small act a day, for all seven. Free to start, free to stay.</p>
           </div>
           <nav aria-label="Footer" className="grid grid-cols-2 gap-xs text-[14px] font-bold text-ink-soft sm:grid-cols-3">
-            <Link to="/explore" className="min-h-[32px] hover:text-ink">
+            <Link to="/explore" className="min-h-[44px] hover:text-ink">
               Explore
             </Link>
-            <Link to="/7rp" className="min-h-[32px] hover:text-ink">
+            <Link to="/7rp" className="min-h-[44px] hover:text-ink">
               7RP
             </Link>
-            <Link to="/features" className="min-h-[32px] hover:text-ink">
+            <Link to="/features" className="min-h-[44px] hover:text-ink">
               Features
             </Link>
-            <a href="/#brands" className="min-h-[32px] hover:text-ink">
+            <a href="/#brands" className="min-h-[44px] hover:text-ink">
               For brands
             </a>
-            <Link to="/features/help" className="min-h-[32px] hover:text-ink">
+            <Link to="/features/help" className="min-h-[44px] hover:text-ink">
               Help
             </Link>
-            <Link to="/signin" className="min-h-[32px] hover:text-ink">
+            <Link to="/signin" className="min-h-[44px] hover:text-ink">
               Sign in
             </Link>
-            <Link to="/pricing" className="min-h-[32px] hover:text-ink">
+            <Link to="/pricing" className="min-h-[44px] hover:text-ink">
               Pricing
             </Link>
-            <Link to="/terms" className="min-h-[32px] hover:text-ink">
+            <Link to="/terms" className="min-h-[44px] hover:text-ink">
               Terms
             </Link>
-            <Link to="/privacy" className="min-h-[32px] hover:text-ink">
+            <Link to="/privacy" className="min-h-[44px] hover:text-ink">
               Privacy
             </Link>
-            <Link to="/refunds" className="min-h-[32px] hover:text-ink">
+            <Link to="/refunds" className="min-h-[44px] hover:text-ink">
               Refunds
             </Link>
-            <Link to="/contact" className="min-h-[32px] hover:text-ink">
+            <Link to="/contact" className="min-h-[44px] hover:text-ink">
               Contact
             </Link>
-            <Link to="/subprocessors" className="min-h-[32px] hover:text-ink">
+            <Link to="/subprocessors" className="min-h-[44px] hover:text-ink">
               Subprocessors
             </Link>
-            <Link to="/copyright" className="min-h-[32px] hover:text-ink">
+            <Link to="/copyright" className="min-h-[44px] hover:text-ink">
               Copyright
             </Link>
-            <Link to="/licences" className="min-h-[32px] hover:text-ink">
+            <Link to="/licences" className="min-h-[44px] hover:text-ink">
               Licences
             </Link>
-            <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kreators:open-consent'))} className="min-h-[32px] text-left hover:text-ink">
+            <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kreators:open-consent'))} className="min-h-[44px] text-left hover:text-ink">
               Privacy choices
             </button>
           </nav>

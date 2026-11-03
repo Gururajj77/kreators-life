@@ -25,7 +25,7 @@ import type { AppEnv, UserRow } from '../env';
 import { nameOf, newId, notify, nowIso, num, oneOf, str, pageOf, paged } from '../db';
 import { trustForMany } from '../rewards';
 import { haveFor } from '../unlocks';
-import { isBadgeKey, unlockFor } from '@kreators/shared';
+import { isUnlockBadgeKey, unlockFor } from '@kreators/shared';
 import { trustScore, type TrustScore } from '@kreators/shared';
 
 /** The Store: staff add new gear with partner links, anyone sells pre-owned gear, kits group both by budget. */
@@ -162,7 +162,7 @@ market.post('/items', async (c) => {
   const id = newId();
   const now = nowIso();
   await c.env.DB.prepare('INSERT INTO store_items (id, title, category, description, price_cents, currency, url, image_url, stage, featured_until, status, created_by, created_at, updated_at, min_points, badge) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)')
-    .bind(id, title, oneOf(body.category, STORE_CATEGORIES, 'Other'), str(body.description, 2000), num(body.priceCents, 0, 0) ?? 0, str(body.currency, 3, 'INR').toUpperCase(), url, https(body.imageUrl), oneOf(body.stage, STORE_STAGES, 'any'), body.hidden === true ? 'hidden' : 'live', user.id, now, now, num(body.minPoints, 0, 0) ?? 0, isBadgeKey(str(body.badge, 40)) ? str(body.badge, 40) : '')
+    .bind(id, title, oneOf(body.category, STORE_CATEGORIES, 'Other'), str(body.description, 2000), num(body.priceCents, 0, 0) ?? 0, str(body.currency, 3, 'INR').toUpperCase(), url, https(body.imageUrl), oneOf(body.stage, STORE_STAGES, 'any'), body.hidden === true ? 'hidden' : 'live', user.id, now, now, num(body.minPoints, 0, 0) ?? 0, isUnlockBadgeKey(str(body.badge, 40)) ? str(body.badge, 40) : '')
     .run();
   if (num(body.minXp, 0, 0)) await c.env.DB.prepare('UPDATE store_items SET min_xp = ? WHERE id = ?').bind(num(body.minXp, 0, 0), id).run();
   const row = await c.env.DB.prepare(`${ITEM_SELECT} WHERE i.id = ?`).bind(id).first<ItemRow>();
@@ -180,7 +180,7 @@ market.patch('/items/:id', async (c) => {
   const url = https(body.url) || row.url;
   await db
     .prepare('UPDATE store_items SET title = ?, category = ?, description = ?, price_cents = ?, url = ?, image_url = ?, stage = ?, status = ?, updated_at = ?, min_points = ?, badge = ? WHERE id = ?')
-    .bind(title, oneOf(body.category, STORE_CATEGORIES, row.category as (typeof STORE_CATEGORIES)[number]), body.description === undefined ? row.description : str(body.description, 2000), body.priceCents === undefined ? row.price_cents : (num(body.priceCents, row.price_cents, 0) ?? row.price_cents), url, body.imageUrl === undefined ? row.image_url : https(body.imageUrl), oneOf(body.stage, STORE_STAGES, row.stage), body.hidden === undefined ? row.status : body.hidden ? 'hidden' : 'live', nowIso(), body.minPoints === undefined ? row.min_points : (num(body.minPoints, row.min_points, 0) ?? row.min_points), body.badge === undefined ? row.badge : isBadgeKey(str(body.badge, 40)) ? str(body.badge, 40) : '', row.id)
+    .bind(title, oneOf(body.category, STORE_CATEGORIES, row.category as (typeof STORE_CATEGORIES)[number]), body.description === undefined ? row.description : str(body.description, 2000), body.priceCents === undefined ? row.price_cents : (num(body.priceCents, row.price_cents, 0) ?? row.price_cents), url, body.imageUrl === undefined ? row.image_url : https(body.imageUrl), oneOf(body.stage, STORE_STAGES, row.stage), body.hidden === undefined ? row.status : body.hidden ? 'hidden' : 'live', nowIso(), body.minPoints === undefined ? row.min_points : (num(body.minPoints, row.min_points, 0) ?? row.min_points), body.badge === undefined ? row.badge : isUnlockBadgeKey(str(body.badge, 40)) ? str(body.badge, 40) : '', row.id)
     .run();
   if (body.minXp !== undefined) await db.prepare('UPDATE store_items SET min_xp = ? WHERE id = ?').bind(num(body.minXp, 0, 0) ?? 0, row.id).run();
   const fresh = await db.prepare(`${ITEM_SELECT} WHERE i.id = ?`).bind(row.id).first<ItemRow>();

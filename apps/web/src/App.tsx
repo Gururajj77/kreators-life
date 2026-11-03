@@ -24,6 +24,9 @@ import { Welcome } from './screens/Welcome';
 import { Home } from './site/Home';
 import { SevenRP } from './site/SevenRP';
 
+// Mounted once by Shell, not a screen, but still downloaded only after the first paint so the entry stays under budget:
+// its state lives outside the component (lib/focusPortal.ts, localStorage), so a tick's worth of delay loses nothing.
+const FocusRoundsHost = lazyNamed(() => import('./components/FocusRoundsHost'), 'FocusRoundsHost');
 const Admin = lazyNamed(() => import('./screens/Admin'), 'Admin');
 const Manage = lazyNamed(() => import('./screens/Manage'), 'Manage');
 const Observability = lazyNamed(() => import('./screens/Observability'), 'Observability');
@@ -174,6 +177,11 @@ function Shell() {
   return (
     <>
       <Page tabs />
+      {/* Outside the card table's own "focus mode" guard on purpose: a different thing with the same name (CLAUDE.md), and a running
+          focus clock must keep going while that is on too. */}
+      <Suspense fallback={null}>
+        <FocusRoundsHost />
+      </Suspense>
       {!focus && (
         <div className="contents no-print">
           <TabBar />

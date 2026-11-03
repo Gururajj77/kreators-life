@@ -39,7 +39,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
   {
     key: 'servant_leader',
     floor: 1,
-    name: 'Servant leader',
+    name: 'Work and money',
     character: 'Ember',
     role: 'guide to work and money',
     color: '#C2375B',
@@ -52,7 +52,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
   {
     key: 'friendship',
     floor: 2,
-    name: 'Friendship',
+    name: 'Friends',
     character: 'Pip',
     role: 'guide to friends',
     color: '#F08A4B',
@@ -65,7 +65,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
   {
     key: 'parent_child',
     floor: 3,
-    name: 'Parent & child',
+    name: 'Family',
     character: 'Sunny',
     role: 'guide to family',
     color: '#F3CF5A',
@@ -78,7 +78,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
   {
     key: 'lover_partner',
     floor: 4,
-    name: 'Lover & partner',
+    name: 'Love',
     character: 'Clover',
     role: 'guide to love',
     color: '#42714A',
@@ -91,7 +91,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
   {
     key: 'self',
     floor: 5,
-    name: 'With yourself',
+    name: 'Yourself',
     character: 'Dew',
     role: 'guide to yourself',
     color: '#2A6FAA',
@@ -104,7 +104,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
   {
     key: 'guru',
     floor: 6,
-    name: 'With the guru',
+    name: 'Teachers',
     character: 'Sage',
     role: 'guide to teachers',
     color: '#4C57C7',
@@ -117,7 +117,7 @@ export const RELATIONSHIPS: readonly Relationship[] = [
   {
     key: 'divine',
     floor: 7,
-    name: 'With the divine',
+    name: 'Faith',
     character: 'Lumen',
     role: 'guide to faith',
     color: '#5A3FA6',
@@ -1087,7 +1087,7 @@ export interface ObservedUser {
 export interface AppUsage {
   key: string;
   name: string;
-  emoji: string;
+  icon: IconName;
   group: ModuleGroup;
   /** How many people have it on. */
   on: number;
@@ -1643,7 +1643,7 @@ export const CARD_GAMES: readonly CardGameInfo[] = [
   { key: 'dateflow_connect', name: 'DateFlow Connect', tagline: 'A game for better dating experiences.', emoji: '💞', accent: 'lover_partner', cost: 2000, minXp: 500 },
   { key: 'date_guru', name: 'DateGuru', tagline: 'Fifty-two lessons for better dating experiences.', emoji: '🧭', accent: 'lover_partner', cost: 1500, minXp: 100 },
   { key: 'healflow', name: 'HealFlow', tagline: 'For mindful families who want to heal, bond and connect over fun, therapeutic activities.', emoji: '🌿', accent: 'parent_child', cost: 1500, minXp: 100 },
-  { key: 'funflow', name: 'FunFlow', tagline: 'For friends and teams who want to bond and grow together.', emoji: '🎉', accent: 'friendship', cost: 1500, minXp: 100 },
+  { key: 'funflow', name: 'FunFlow', tagline: 'For friends, teams and party nights who want to bond and grow together.', emoji: '🎉', accent: 'friendship', cost: 1500, minXp: 100 },
   { key: 'relationship_method', name: 'The Relationship Method Challenge', tagline: 'One small daily challenge for each of the seven relationships.', emoji: '🌈', accent: 'self', cost: 1000, minXp: 0 },
   { key: 'roast_or_flirt', name: 'Roast or Flirt', tagline: 'Build better self-esteem with your relationships power.', emoji: '🔥', accent: 'friendship', cost: 2000, minXp: 500 },
   { key: 'shadowflow', name: 'ShadowFlow', tagline: 'Use ShadowFlow to learn more about your hidden self.', emoji: '🌙', accent: 'divine', cost: 1500, minXp: 250 },
@@ -1829,7 +1829,7 @@ export const isLeaderboardScope = (v: unknown): v is LeaderboardScope => LEADERB
 export interface LeaderboardOption {
   value: string;
   label: string;
-  emoji?: string;
+  icon?: IconName;
   /** People on the board who opted in. */
   count: number;
 }
@@ -1845,7 +1845,8 @@ export interface LeaderboardBlock {
   scope: LeaderboardScope;
   value: string;
   label: string;
-  emoji: string;
+  /** A goal's icon; a pillar's board has none (its colour says it). */
+  icon?: IconName;
   people: number;
   top: { rank: number; name: string; xp: number; isMe: boolean }[];
   myRank: number | null;
@@ -1966,11 +1967,45 @@ export function isRole(v: unknown): v is Role {
   return typeof v === 'string' && (ROLES as readonly string[]).includes(v);
 }
 
+// ---------------------------------------------------------------------------
+// Icons. Shared stays free of React, so a registry names its icon with a key and the web draws it
+// (`apps/web/src/lib/appIcons.ts` maps every key to a lucide-react icon, and the type check insists on all of them).
+// The keys are lucide's own names in 1.66. A new key is added here and in that map, nowhere else.
+// ---------------------------------------------------------------------------
+
+export const ICON_NAMES = [
+  'Aperture', 'ArrowRight', 'Backpack', 'BadgeDollarSign', 'Ban', 'Banknote', 'BatteryLow', 'Bell', 'BookOpen', 'Bot', 'Brain', 'Briefcase',
+  'BriefcaseBusiness', 'CalendarClock', 'CalendarRange', 'Camera', 'Cast', 'Check', 'CircleAlert', 'CircleCheck', 'CircleCheckBig',
+  'CirclePlus', 'CircleQuestionMark', 'Clapperboard', 'ClipboardCheck', 'Coins', 'Compass', 'CreditCard', 'Dumbbell',
+  'EighthNotes', 'FaceGrinning', 'FaceSlightlySmiling', 'FileDown', 'FileText', 'Flame', 'Flower2', 'FolderKanban', 'Footprints', 'Gamepad2', 'GraduationCap',
+  'HandCoins', 'HandHeart', 'HandHelping', 'Handshake', 'Headphones', 'Heart', 'HeartPulse', 'Hourglass', 'House', 'IdCard', 'KeyRound', 'Landmark',
+  'LayoutList', 'LifeBuoy', 'Lightbulb', 'Link', 'ListChecks', 'ListPlus', 'Lock', 'Luggage', 'Mail', 'Medal', 'Megaphone', 'MessageCircle', 'MessageCircleHeart', 'MessagesSquare', 'MicSignal',
+  'MicVocal', 'Minus', 'Moon', 'MoonStar', 'NotebookPen', 'Package', 'Palette', 'PartyPopper', 'PenLine', 'PiggyBank', 'Plane', 'Presentation', 'Puzzle',
+  'RadioTower', 'Recycle', 'Repeat', 'Rocket', 'Scissors', 'Search', 'SearchCheck', 'Share2', 'Shield', 'ShieldCheck', 'ShoppingBag', 'ShoppingCart',
+  'Signpost', 'Smartphone', 'Spade', 'Sparkle', 'Sparkles', 'SquareCheck', 'Sprout', 'Sun', 'Sunrise', 'Tag', 'Target', 'Telescope', 'ThumbsUp', 'Ticket', 'Toolbox', 'Tornado',
+  'TrendingUp', 'Triangle', 'Trophy', 'Tv', 'Type', 'Undo2', 'UserRound', 'UsersRound', 'Video', 'Wallet', 'WalletMinimal', 'WandSparkles',
+  'WavesHorizontal', 'Wind', 'X',
+] as const;
+export type IconName = (typeof ICON_NAMES)[number];
+export const isIconName = (v: unknown): v is IconName => typeof v === 'string' && (ICON_NAMES as readonly string[]).includes(v);
+/** The icon a tag in someone's own words wears: it is not one of the known tags. */
+export const OWN_TAG_ICON: IconName = 'Tag';
+
+/** One icon per kind of Knowledge read, shared by Home and Knowledge so the two never disagree. */
+export const KNOWLEDGE_KIND_ICON: Readonly<Record<string, IconName>> = {
+  article: 'FileText',
+  exercise: 'Puzzle',
+  video: 'Video',
+  audio: 'Headphones',
+  link: 'Link',
+};
+export const knowledgeKindIcon = (kind: string): IconName => (Object.hasOwn(KNOWLEDGE_KIND_ICON, kind) ? KNOWLEDGE_KIND_ICON[kind]! : 'FileText');
+
 /** Each role has a small badge: it sits on the profile picture and under the logo. It is not an earned badge. */
-export const ROLE_META: Record<Role, { name: string; blurb: string; emoji: string; accent: RelationshipKey }> = {
-  user: { name: 'Creator', blurb: 'Learns, works, connects and sells.', emoji: '✨', accent: 'self' },
-  sub_admin: { name: 'Staff', blurb: 'Runs parts of Kreators, as far as their permissions go.', emoji: '🛡️', accent: 'guru' },
-  admin: { name: 'Admin', blurb: 'Everything, including roles, permissions and which features exist.', emoji: '🔑', accent: 'divine' },
+export const ROLE_META: Record<Role, { name: string; blurb: string; icon: IconName; accent: RelationshipKey }> = {
+  user: { name: 'Creator', blurb: 'Learns, works, connects and sells.', icon: 'Sparkles', accent: 'self' },
+  sub_admin: { name: 'Staff', blurb: 'Runs parts of Kreators, as far as their permissions go.', icon: 'Shield', accent: 'guru' },
+  admin: { name: 'Admin', blurb: 'Everything, including roles, permissions and which features exist.', icon: 'KeyRound', accent: 'divine' },
 };
 
 /**
@@ -1982,16 +2017,16 @@ export type Permission = (typeof PERMISSIONS)[number];
 /** The permissions a creator can hold. Every other one needs the Staff role. */
 export const CREATOR_PERMISSIONS: readonly Permission[] = ['mentor', 'coach'];
 
-export const PERMISSION_META: Record<Permission, { name: string; blurb: string }> = {
-  talent: { name: 'Talent manager', blurb: 'Runs Army campaigns, shortlists and assigns creators.' },
-  cohorts: { name: 'Cohort manager', blurb: 'Publishes programs, runs cohorts, marks completion.' },
-  events: { name: 'Event host', blurb: 'Creates any kind of event and checks people in.' },
-  finance: { name: 'Finance', blurb: 'Approves bounty payouts and reviews money orders.' },
-  moderation: { name: 'Moderator', blurb: 'Hides posts and handles reports.' },
-  support: { name: 'Support', blurb: 'Answers help requests.' },
-  review: { name: 'Reviewer', blurb: 'Decides Club applications, bounties, TV and Fund proposals.' },
-  mentor: { name: 'Mentor', blurb: 'Gives feedback on assignments. Can be held by a creator.' },
-  coach: { name: 'Life coach', blurb: 'Coaches students who said yes: sees what they share, leaves notes, adds tasks. Never their journal. Can be held by a creator.' },
+export const PERMISSION_META: Record<Permission, { name: string; blurb: string; icon: IconName }> = {
+  talent: { name: 'Talent manager', blurb: 'Runs Army campaigns, shortlists and assigns creators.', icon: 'Clapperboard' },
+  cohorts: { name: 'Cohort manager', blurb: 'Publishes programs, runs cohorts, marks completion.', icon: 'GraduationCap' },
+  events: { name: 'Event host', blurb: 'Creates any kind of event and checks people in.', icon: 'PartyPopper' },
+  finance: { name: 'Finance', blurb: 'Approves bounty payouts and reviews money orders.', icon: 'Banknote' },
+  moderation: { name: 'Moderator', blurb: 'Hides posts and handles reports.', icon: 'ShieldCheck' },
+  support: { name: 'Support', blurb: 'Answers help requests.', icon: 'LifeBuoy' },
+  review: { name: 'Reviewer', blurb: 'Decides Club applications, bounties, TV and Fund proposals.', icon: 'SearchCheck' },
+  mentor: { name: 'Mentor', blurb: 'Gives feedback on assignments. Can be held by a creator.', icon: 'Presentation' },
+  coach: { name: 'Life coach', blurb: 'Coaches students who said yes: sees what they share, leaves notes, adds tasks. Never their journal. Can be held by a creator.', icon: 'Target' },
 };
 
 /**
@@ -2007,9 +2042,9 @@ export function isStaffFor(user: { role: Role; permissions: readonly string[] },
 
 /** What the small badge on a picture says: the role, or Life coach for a creator the team made a life coach. */
 export type BadgeRole = Role | 'coach';
-export const BADGE_META: Record<BadgeRole, { name: string; blurb: string; emoji: string; accent: RelationshipKey }> = {
+export const BADGE_META: Record<BadgeRole, { name: string; blurb: string; icon: IconName; accent: RelationshipKey }> = {
   ...ROLE_META,
-  coach: { name: 'Life coach', blurb: 'Coaches students who said yes. The team makes someone a life coach.', emoji: '🎯', accent: 'guru' },
+  coach: { name: 'Life coach', blurb: 'Coaches students who said yes. The team makes someone a life coach.', icon: 'Target', accent: 'guru' },
 };
 /** Staff and admins keep their own badge; a creator who holds Life coach wears that one. */
 export function badgeRoleOf(user: { role: Role; permissions: readonly string[] }): BadgeRole {
@@ -2027,7 +2062,8 @@ export interface AppModule {
   key: string;
   name: string;
   blurb: string;
-  emoji: string;
+  /** The app's icon, a key the web draws (`lib/appIcons.ts`). */
+  icon: IconName;
   group: ModuleGroup;
   path: string;
   /** The relationship whose colours this app wears; dark mode tints its pages with that hue. */
@@ -2040,63 +2076,63 @@ export interface AppModule {
 }
 
 export const MODULES: readonly AppModule[] = [
-  { key: 'home', name: 'Home', blurb: 'Your numbers, your day, and a door into everything.', emoji: '🏠', group: 'core', path: '/home', defaultOn: true, locked: true, minRole: 'user' },
-  { key: 'today', name: 'Daily', blurb: 'Your three boxes a day.', emoji: '☀️', group: 'core', path: '/today', defaultOn: true, locked: true, minRole: 'user' },
-  { key: 'tower', name: 'Pillars', blurb: 'The seven pillars of your life, one per relationship.', emoji: '🏰', group: 'core', path: '/tower', defaultOn: true, locked: true, minRole: 'user' },
-  { key: 'search', name: 'Search', blurb: 'Find anything you wrote, bought, applied to or read.', emoji: '🔍', group: 'core', path: '/search', defaultOn: true, locked: true, minRole: 'user' },
+  { key: 'home', name: 'Home', blurb: 'Your numbers, your day, and a door into everything.', icon: 'House', group: 'core', path: '/home', defaultOn: true, locked: true, minRole: 'user' },
+  { key: 'today', name: 'Daily', blurb: 'Your three boxes a day.', icon: 'Sun', group: 'core', path: '/today', defaultOn: true, locked: true, minRole: 'user' },
+  { key: 'tower', name: 'Pillars', blurb: 'The seven pillars of your life, one per relationship.', icon: 'Landmark', group: 'core', path: '/tower', defaultOn: true, locked: true, minRole: 'user' },
+  { key: 'search', name: 'Search', blurb: 'Find anything you wrote, bought, applied to or read.', icon: 'Search', group: 'core', path: '/search', defaultOn: true, locked: true, minRole: 'user' },
   // On for everyone. People still only appear after they opt in under Profile, and journal and wellbeing never count.
-  { key: 'leaderboard', name: 'Leaderboard', blurb: 'See where you stand by goal, pillar, city and more. Boards for each goal, filters, and a monthly season.', emoji: '🏆', group: 'core', path: '/leaderboard', defaultOn: true, minRole: 'user' },
+  { key: 'leaderboard', name: 'Leaderboard', blurb: 'See where you stand by goal, pillar, city and more. Boards for each goal, filters, and a monthly season.', icon: 'Trophy', group: 'core', path: '/leaderboard', defaultOn: true, minRole: 'user' },
   // Off on a new account; unlocking a game in Rewards switches it on.
-  { key: 'cards', name: 'Games', blurb: 'Unlock a game once with points, then shuffle, flip and play it with the people you are with.', emoji: '🃏', group: 'community', path: '/cards', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  { key: 'cards', name: 'Games', blurb: 'Unlock a game once with points, then shuffle, flip and play it with the people you are with.', icon: 'Spade', group: 'community', path: '/cards', defaultOn: false, minRole: 'user', accent: 'friendship' },
   // Off on a new account. Owner only, like the journal: never shown to brands, staff, the leaderboard, a coach or the assistant.
-  { key: 'discover', name: 'Discover', blurb: 'A quiz about how you think, feel and act, with puzzles and real situations. It gives a detailed read on your personality, your reasoning and your emotional intelligence, and your strengths across the seven relationships.', emoji: '🔭', group: 'wellbeing', path: '/discover', defaultOn: false, minRole: 'user', accent: 'self' },
-  { key: 'notifications', name: 'Inbox', blurb: 'What happened while you were away, and daily reminders.', emoji: '🔔', group: 'core', path: '/inbox', defaultOn: true, minRole: 'user' },
-  { key: 'help', name: 'Help', blurb: 'Answers to common questions, and a line to the team.', emoji: '🛟', group: 'core', path: '/help', defaultOn: true, minRole: 'user' },
+  { key: 'discover', name: 'Discover', blurb: 'A quiz about how you think, feel and act, with puzzles and real situations. It gives a detailed read on your personality, your reasoning and your emotional intelligence, and your strengths across the seven relationships.', icon: 'Telescope', group: 'wellbeing', path: '/discover', defaultOn: false, minRole: 'user', accent: 'self' },
+  { key: 'notifications', name: 'Inbox', blurb: 'What happened while you were away, and daily reminders.', icon: 'Bell', group: 'core', path: '/inbox', defaultOn: true, minRole: 'user' },
+  { key: 'help', name: 'Help', blurb: 'Answers to common questions, and a line to the team.', icon: 'LifeBuoy', group: 'core', path: '/help', defaultOn: true, minRole: 'user' },
   // The assistant is part of every screen, not an app of its own: locked on, and its page is its plan and credits.
-  { key: 'assistant', name: 'Assistant', blurb: 'Tap a flow to log something, or type what you did and it is done in the app for you. Typing is part of a plan.', emoji: '🪄', group: 'core', path: '/plans', defaultOn: true, locked: true, minRole: 'user' },
+  { key: 'assistant', name: 'Assistant', blurb: 'Tap a flow to log something, or type what you did and it is done in the app for you. Typing is part of a plan.', icon: 'WandSparkles', group: 'core', path: '/plans', defaultOn: true, locked: true, minRole: 'user' },
 
-  { key: 'school', name: 'School', blurb: 'Programs and cohorts: lessons, assignments, mentor feedback, completion.', emoji: '🎓', group: 'earn', path: '/school', defaultOn: true, minRole: 'user', accent: 'guru' },
-  { key: 'work', name: 'Work', blurb: 'Opportunities from brands and the team. Apply, track, get hired.', emoji: '💼', group: 'earn', path: '/work', defaultOn: true, minRole: 'user', accent: 'servant_leader' },
-  { key: 'army', name: 'Army', blurb: 'Brand campaigns: briefs, shortlists, production, approvals, delivery.', emoji: '🎬', group: 'earn', path: '/army', defaultOn: true, minRole: 'user', accent: 'servant_leader' },
-  { key: 'win', name: 'Win', blurb: 'Content rewards: make a video about a brand, get paid per verified view.', emoji: '🥇', group: 'earn', path: '/win', defaultOn: false, minRole: 'user', accent: 'parent_child' },
+  { key: 'school', name: 'School', blurb: 'Programs and cohorts: lessons, assignments, mentor feedback, completion.', icon: 'GraduationCap', group: 'earn', path: '/school', defaultOn: true, minRole: 'user', accent: 'guru' },
+  { key: 'work', name: 'Work', blurb: 'Opportunities from brands and the team. Apply, track, get hired.', icon: 'BriefcaseBusiness', group: 'earn', path: '/work', defaultOn: true, minRole: 'user', accent: 'servant_leader' },
+  { key: 'army', name: 'Army', blurb: 'Brand campaigns: briefs, shortlists, production, approvals, delivery.', icon: 'Clapperboard', group: 'earn', path: '/army', defaultOn: true, minRole: 'user', accent: 'servant_leader' },
+  { key: 'win', name: 'Win', blurb: 'Content rewards: make a video about a brand, get paid per verified view.', icon: 'Medal', group: 'earn', path: '/win', defaultOn: false, minRole: 'user', accent: 'parent_child' },
   // Off on a new account. Owner only: a content agency's or a freelance creator's clients, pieces, time and approvals.
-  { key: 'agency', name: 'Agency', blurb: 'Clients, content pieces from idea to published, retainers, time, approvals and invoices.', emoji: '🗂️', group: 'earn', path: '/agency', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
+  { key: 'agency', name: 'Agency', blurb: 'Clients, content pieces from idea to published, retainers, time, approvals and invoices.', icon: 'FolderKanban', group: 'earn', path: '/agency', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
 
-  { key: 'party', name: 'Party', blurb: 'Meetups, workshops, camps and flagship days. RSVP, waitlist, check in.', emoji: '🎉', group: 'community', path: '/party', defaultOn: false, minRole: 'user', accent: 'friendship' },
-  { key: 'run', name: 'Kreators Run', blurb: 'Run clubs near you. A start code at the line logs your run and pays points. Kilometres, badges, and brand collabs with giveaways.', emoji: '🏃', group: 'community', path: '/run', defaultOn: false, minRole: 'user', accent: 'friendship' },
-  { key: 'community', name: 'Community', blurb: 'Posts, replies and likes, by category.', emoji: '🫶', group: 'community', path: '/community', defaultOn: false, minRole: 'user', accent: 'friendship' },
-  { key: 'club', name: 'Club', blurb: 'A curated membership with benefits and exclusive opportunities.', emoji: '🪪', group: 'community', path: '/club', defaultOn: false, minRole: 'user', accent: 'friendship' },
-  { key: 'bond', name: 'Bond', blurb: 'Friends, introductions, and anonymous chats with people you met.', emoji: '🤝', group: 'community', path: '/bond', defaultOn: false, minRole: 'user', accent: 'friendship' },
-  { key: 'circles', name: 'Circles', blurb: 'Small anonymous groups near you every week, matched by interests that fit together. The chat opens a day before you meet.', emoji: '🫧', group: 'community', path: '/circles', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  { key: 'party', name: 'Party', blurb: 'Meetups, workshops, camps and flagship days. RSVP, waitlist, check in.', icon: 'PartyPopper', group: 'community', path: '/party', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  { key: 'run', name: 'Kreators Run', blurb: 'Run clubs near you. A start code at the line logs your run and pays points. Kilometres, badges, and brand collabs with giveaways.', icon: 'Footprints', group: 'community', path: '/run', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  { key: 'community', name: 'Community', blurb: 'Posts, replies and likes, by category.', icon: 'MessagesSquare', group: 'community', path: '/community', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  { key: 'club', name: 'Club', blurb: 'A curated membership with benefits and exclusive opportunities.', icon: 'IdCard', group: 'community', path: '/club', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  { key: 'bond', name: 'Bond', blurb: 'Friends, introductions, and anonymous chats with people you met.', icon: 'Handshake', group: 'community', path: '/bond', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  { key: 'circles', name: 'Circles', blurb: 'Small anonymous groups near you every week, matched by interests that fit together. The chat opens a day before you meet.', icon: 'UsersRound', group: 'community', path: '/circles', defaultOn: false, minRole: 'user', accent: 'friendship' },
 
-  { key: 'life', name: 'Life', blurb: 'Physical, financial, emotional, mental and spiritual, on one dashboard that opens into each part of the app.', emoji: '🧭', group: 'wellbeing', path: '/life', defaultOn: true, minRole: 'user', accent: 'lover_partner' },
-  { key: 'wellbeing', name: 'Wellbeing', blurb: 'One score from your mood, sleep, stress and mindful minutes.', emoji: '💚', group: 'wellbeing', path: '/wellbeing', defaultOn: false, minRole: 'user', accent: 'lover_partner' },
-  { key: 'mood', name: 'Mood', blurb: 'How are you feeling today? Pick a face, see the week.', emoji: '🙂', group: 'wellbeing', path: '/mood', defaultOn: false, minRole: 'user', accent: 'parent_child' },
-  { key: 'sleep', name: 'Sleep', blurb: 'Hours and quality, night by night.', emoji: '🌙', group: 'wellbeing', path: '/sleep', defaultOn: false, minRole: 'user', accent: 'guru' },
-  { key: 'stress', name: 'Stress', blurb: 'Level and what is behind it.', emoji: '🌊', group: 'wellbeing', path: '/stress', defaultOn: false, minRole: 'user', accent: 'friendship' },
-  { key: 'mindful', name: 'Mindful minutes', blurb: 'A breathing timer that logs your minutes.', emoji: '🧘', group: 'wellbeing', path: '/mindful', defaultOn: false, minRole: 'user', accent: 'divine' },
-  { key: 'journal', name: 'Journal', blurb: 'Write it down with an emotion and a stress level.', emoji: '📓', group: 'wellbeing', path: '/journal', defaultOn: true, minRole: 'user', accent: 'self' },
-  { key: 'reviews', name: 'Reviews', blurb: 'Weekly, monthly, quarterly and mid-year reviews: the numbers from every app, and what you make of them.', emoji: '📝', group: 'wellbeing', path: '/reviews', defaultOn: false, minRole: 'user', accent: 'self' },
-  { key: 'companion', name: 'Companion', blurb: 'A chat that knows how you are doing. Not a therapist.', emoji: '💬', group: 'wellbeing', path: '/companion', defaultOn: false, minRole: 'user', accent: 'guru' },
-  { key: 'coaching', name: 'Coaching', blurb: 'Work with a life coach who sees the progress you choose to share, or coach your own students. Never your journal.', emoji: '🎯', group: 'wellbeing', path: '/coaching', defaultOn: false, minRole: 'user', accent: 'guru' },
+  { key: 'life', name: 'Life', blurb: 'Physical, financial, emotional, mental and spiritual, on one dashboard that opens into each part of the app.', icon: 'Compass', group: 'wellbeing', path: '/life', defaultOn: true, minRole: 'user', accent: 'lover_partner' },
+  { key: 'wellbeing', name: 'Wellbeing', blurb: 'One score from your mood, sleep, stress and mindful minutes.', icon: 'HeartPulse', group: 'wellbeing', path: '/wellbeing', defaultOn: false, minRole: 'user', accent: 'lover_partner' },
+  { key: 'mood', name: 'Mood', blurb: 'How are you feeling today? Pick a face, see the week.', icon: 'FaceSlightlySmiling', group: 'wellbeing', path: '/mood', defaultOn: false, minRole: 'user', accent: 'parent_child' },
+  { key: 'sleep', name: 'Sleep', blurb: 'Hours and quality, night by night.', icon: 'Moon', group: 'wellbeing', path: '/sleep', defaultOn: false, minRole: 'user', accent: 'guru' },
+  { key: 'stress', name: 'Stress', blurb: 'Level and what is behind it.', icon: 'WavesHorizontal', group: 'wellbeing', path: '/stress', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  { key: 'mindful', name: 'Mindful minutes', blurb: 'A breathing timer that logs your minutes.', icon: 'Wind', group: 'wellbeing', path: '/mindful', defaultOn: false, minRole: 'user', accent: 'divine' },
+  { key: 'journal', name: 'Journal', blurb: 'Write it down with an emotion and a stress level.', icon: 'NotebookPen', group: 'wellbeing', path: '/journal', defaultOn: true, minRole: 'user', accent: 'self' },
+  { key: 'reviews', name: 'Reviews', blurb: 'Weekly, monthly, quarterly and mid-year reviews: the numbers from every app, and what you make of them.', icon: 'ClipboardCheck', group: 'wellbeing', path: '/reviews', defaultOn: false, minRole: 'user', accent: 'self' },
+  { key: 'companion', name: 'Companion', blurb: 'A chat that knows how you are doing. Not a therapist.', icon: 'MessageCircleHeart', group: 'wellbeing', path: '/companion', defaultOn: false, minRole: 'user', accent: 'guru' },
+  { key: 'coaching', name: 'Coaching', blurb: 'Work with a life coach who sees the progress you choose to share, or coach your own students. Never your journal.', icon: 'Target', group: 'wellbeing', path: '/coaching', defaultOn: false, minRole: 'user', accent: 'guru' },
 
-  { key: 'profile', name: 'Public page', blurb: 'What people see: bio, skills, portfolio, links and what you sell.', emoji: '🔗', group: 'creator', path: '/profile', defaultOn: true, minRole: 'user', accent: 'self' },
-  { key: 'shop', name: 'Shop', blurb: 'Sell downloads, courses, memberships, sessions and events.', emoji: '🛍️', group: 'creator', path: '/shop', defaultOn: true, minRole: 'user', accent: 'servant_leader' },
-  { key: 'store', name: 'Store', blurb: 'Gear and software for creators: new through partner links, pre-owned from other creators with offers and chat, and kits by budget.', emoji: '🛒', group: 'creator', path: '/store', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
-  { key: 'audience', name: 'Audience', blurb: 'Followers, leads, broadcasts and your affiliate link.', emoji: '📣', group: 'creator', path: '/shop/audience', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
-  { key: 'content', name: 'Content', blurb: 'Which post made money: tracked links, views and revenue per piece of content.', emoji: '📈', group: 'creator', path: '/shop/content', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
-  { key: 'automations', name: 'Auto-DM', blurb: 'Comment a keyword, get a link in DMs. Funnels show where people drop off.', emoji: '🤖', group: 'creator', path: '/shop/automations', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
-  { key: 'finance', name: 'Finance', blurb: 'Money in, money out, dues, budgets, goals and a monthly picture of your creator business.', emoji: '💰', group: 'creator', path: '/finance', defaultOn: false, minRole: 'user', accent: 'parent_child' },
-  { key: 'library', name: 'My purchases', blurb: 'Courses, downloads, memberships, tickets and sessions you own.', emoji: '🎒', group: 'creator', path: '/library', defaultOn: false, minRole: 'user', accent: 'guru' },
-  { key: 'knowledge', name: 'Knowledge', blurb: 'Curated articles and exercises with their sources.', emoji: '📚', group: 'creator', path: '/knowledge', defaultOn: false, minRole: 'user', accent: 'guru' },
-  { key: 'tools', name: 'Tools', blurb: 'A directory of creator tools, verified by the team.', emoji: '🧰', group: 'creator', path: '/tools', defaultOn: false, minRole: 'user', accent: 'guru' },
-  { key: 'tv', name: 'TV', blurb: 'Pitch a series. Track it from proposal to release.', emoji: '📺', group: 'creator', path: '/tv', defaultOn: false, minRole: 'user', accent: 'divine' },
-  { key: 'fund', name: 'Fund', blurb: 'Apply for a grant or backing for a project.', emoji: '🌱', group: 'creator', path: '/fund', defaultOn: false, minRole: 'user', accent: 'divine' },
+  { key: 'profile', name: 'Public page', blurb: 'What people see: bio, skills, portfolio, links and what you sell.', icon: 'Link', group: 'creator', path: '/profile', defaultOn: true, minRole: 'user', accent: 'self' },
+  { key: 'shop', name: 'Shop', blurb: 'Sell downloads, courses, memberships, sessions and events.', icon: 'ShoppingBag', group: 'creator', path: '/shop', defaultOn: true, minRole: 'user', accent: 'servant_leader' },
+  { key: 'store', name: 'Store', blurb: 'Gear and software for creators: new through partner links, pre-owned from other creators with offers and chat, and kits by budget.', icon: 'ShoppingCart', group: 'creator', path: '/store', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
+  { key: 'audience', name: 'Audience', blurb: 'Followers, leads, broadcasts and your affiliate link.', icon: 'Megaphone', group: 'creator', path: '/shop/audience', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
+  { key: 'content', name: 'Content', blurb: 'Which post made money: tracked links, views and revenue per piece of content.', icon: 'TrendingUp', group: 'creator', path: '/shop/content', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
+  { key: 'automations', name: 'Auto-DM', blurb: 'Comment a keyword, get a link in DMs. Funnels show where people drop off.', icon: 'Bot', group: 'creator', path: '/shop/automations', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
+  { key: 'finance', name: 'Finance', blurb: 'Money in, money out, dues, budgets, goals and a monthly picture of your creator business.', icon: 'Wallet', group: 'creator', path: '/finance', defaultOn: false, minRole: 'user', accent: 'parent_child' },
+  { key: 'library', name: 'My purchases', blurb: 'Courses, downloads, memberships, tickets and sessions you own.', icon: 'Backpack', group: 'creator', path: '/library', defaultOn: false, minRole: 'user', accent: 'guru' },
+  { key: 'knowledge', name: 'Knowledge', blurb: 'Curated articles and exercises with their sources.', icon: 'BookOpen', group: 'creator', path: '/knowledge', defaultOn: false, minRole: 'user', accent: 'guru' },
+  { key: 'tools', name: 'Tools', blurb: 'A directory of creator tools, verified by the team.', icon: 'Toolbox', group: 'creator', path: '/tools', defaultOn: false, minRole: 'user', accent: 'guru' },
+  { key: 'tv', name: 'TV', blurb: 'Pitch a series. Track it from proposal to release.', icon: 'Tv', group: 'creator', path: '/tv', defaultOn: false, minRole: 'user', accent: 'divine' },
+  { key: 'fund', name: 'Fund', blurb: 'Apply for a grant or backing for a project.', icon: 'Sprout', group: 'creator', path: '/fund', defaultOn: false, minRole: 'user', accent: 'divine' },
 
-  { key: 'manage', name: 'Manage', blurb: 'Your staff tools, as far as your permissions go.', emoji: '🛡️', group: 'manage', path: '/manage', defaultOn: true, minRole: 'sub_admin' },
-  { key: 'admin', name: 'Admin', blurb: 'Roles, permissions, feature flags, audit log, honors, points.', emoji: '🔑', group: 'manage', path: '/admin', defaultOn: true, minRole: 'admin' },
+  { key: 'manage', name: 'Manage', blurb: 'Your staff tools, as far as your permissions go.', icon: 'ShieldCheck', group: 'manage', path: '/manage', defaultOn: true, minRole: 'sub_admin' },
+  { key: 'admin', name: 'Admin', blurb: 'Roles, permissions, feature flags, audit log, honors, points.', icon: 'KeyRound', group: 'manage', path: '/admin', defaultOn: true, minRole: 'admin' },
   // Tracking for the team, in Operations: the module's minRole keeps it to staff and admins.
-  { key: 'observability', name: 'Observability', blurb: 'Who is here, which apps they have on, who holds which role, and the build map.', emoji: '📡', group: 'manage', path: '/internal/observability', defaultOn: true, minRole: 'sub_admin' },
+  { key: 'observability', name: 'Observability', blurb: 'Who is here, which apps they have on, who holds which role, and the build map.', icon: 'RadioTower', group: 'manage', path: '/internal/observability', defaultOn: true, minRole: 'sub_admin' },
 ];
 
 export const MODULE_BY_KEY: Record<string, AppModule> = byKey(MODULES.map((m) => [m.key, m]));
@@ -2313,13 +2349,13 @@ export interface CommunityReply {
 export const REACTIONS = ['like', 'celebrate', 'support', 'love', 'insightful', 'funny'] as const;
 export type ReactionKind = (typeof REACTIONS)[number];
 export type ReactionCounts = Partial<Record<ReactionKind, number>>;
-export const REACTION_META: Record<ReactionKind, { name: string; emoji: string }> = {
-  like: { name: 'Like', emoji: '👍' },
-  celebrate: { name: 'Celebrate', emoji: '🎉' },
-  support: { name: 'Support', emoji: '🙌' },
-  love: { name: 'Love', emoji: '❤️' },
-  insightful: { name: 'Insightful', emoji: '💡' },
-  funny: { name: 'Funny', emoji: '😄' },
+export const REACTION_META: Record<ReactionKind, { name: string; icon: IconName }> = {
+  like: { name: 'Like', icon: 'ThumbsUp' },
+  celebrate: { name: 'Celebrate', icon: 'PartyPopper' },
+  support: { name: 'Support', icon: 'HandHeart' },
+  love: { name: 'Love', icon: 'Heart' },
+  insightful: { name: 'Insightful', icon: 'Lightbulb' },
+  funny: { name: 'Funny', icon: 'FaceGrinning' },
 };
 export const isReaction = (v: unknown): v is ReactionKind => typeof v === 'string' && (REACTIONS as readonly string[]).includes(v);
 /** Pinned posts a category can hold at once. */
@@ -2715,7 +2751,7 @@ export const ACCEPTANCE = 350;
 export const VOLATILE_GAP = 150;
 export const levelByValue = (v: number): MapLevel | undefined => MAP_LEVELS.find((l) => l.value === v);
 
-/** The statement for each band, per relationship. Health sits inside Self; work and wealth inside Servant leader. */
+/** The statement for each band, per relationship. Health sits inside Yourself; work and wealth inside Work and money. */
 export const BAND_STATEMENTS: Record<RelationshipKey, Record<MapBand, string>> = {
   self: { victim: 'Shame about my looks or body. I attack myself, numb out, and compare all the time.', empowerment: 'I keep promises to myself, hold routines through moods, and own my mistakes.', realization: 'Self-respect that needs no proof. Rest and discipline feel the same.' },
   lover_partner: { victim: 'I avoid approaching, or I stay from fear of being alone. Jealousy, control, neediness.', empowerment: 'I start honestly, say what I need, and survive a no without falling apart.', realization: 'I love without keeping score and give the other person room.' },
@@ -2825,8 +2861,9 @@ export interface RealDay {
 export const DEFAULT_REAL_DAY: RealDay = { wake: '08:30', sleep: '00:30', workStart: '10:00', workEnd: '18:30', evening: '', gym: '' };
 
 /** The suggested focus, up to two pillars: every floor under Courage first, then the lowest cores weighted by insecurity. The person can change it. */
-export function pickFocus(placements: Placement[], insecurities: Insecurity[]): RelationshipKey[] {
-  const flagged = placements.map((p) => ({ key: p.relationship, f: placementFlags(p) }));
+export function pickFocus(placements: Placement[], insecurities: Insecurity[], away: readonly RelationshipKey[] = []): RelationshipKey[] {
+  // A pillar that is not part of the person's life right now is never suggested.
+  const flagged = placements.filter((p) => !away.includes(p.relationship)).map((p) => ({ key: p.relationship, f: placementFlags(p) }));
   const required = flagged.filter((x) => x.f.required).sort((a, b) => a.f.floor - b.f.floor).map((x) => x.key);
   if (required.length >= 2) return required.slice(0, 2);
   const weight = (k: RelationshipKey) => insecurities.filter((i) => i.relationship === k).reduce((a, i) => a + i.weight, 0);
@@ -2835,6 +2872,99 @@ export function pickFocus(placements: Placement[], insecurities: Insecurity[]): 
     .sort((a, b) => a.f.core - weight(a.key) * 10 - (b.f.core - weight(b.key) * 10))
     .map((x) => x.key);
   return [...required, ...rest].slice(0, 2);
+}
+
+/**
+ * The seven in the order to work on them: floors under Courage first (lowest first), then the lowest cores weighted by
+ * what weighs there. A pillar that is not part of the person's life right now is left out.
+ */
+export function priorityOrder(placements: Placement[], insecurities: Insecurity[], away: readonly RelationshipKey[] = []): { key: RelationshipKey; why: string }[] {
+  const name = (v: number) => levelByValue(v)?.name ?? '';
+  const weight = (k: RelationshipKey) => insecurities.filter((i) => i.relationship === k).reduce((a, i) => a + i.weight, 0);
+  const rows = placements.filter((p) => !away.includes(p.relationship)).map((p) => ({ key: p.relationship, f: placementFlags(p), w: weight(p.relationship) }));
+  const required = rows.filter((r) => r.f.required).sort((a, b) => a.f.floor - b.f.floor);
+  const rest = rows.filter((r) => !r.f.required).sort((a, b) => a.f.core - a.w * 10 - (b.f.core - b.w * 10));
+  return [
+    ...required.map((r) => ({ key: r.key, why: `Drops to ${name(r.f.floor)} under stress, below Courage. A good place to start.` })),
+    ...rest.map((r) => ({ key: r.key, why: `${r.f.volatile ? 'A big drop under stress, so check it each week' : `Usually at ${name(r.f.core)}`}${r.w ? ', and something you named weighs here' : ''}.` })),
+  ];
+}
+
+/**
+ * The pillars a person can say are not part of their life right now: love, teachers and faith. Such a pillar is placed at
+ * Neutrality for both levels, is never suggested as a focus or put in the order to work on, and gets no pyramid unless the
+ * person picks it later. It can be turned back on from the life map.
+ */
+export const OPTIONAL_PILLARS: readonly RelationshipKey[] = ['lover_partner', 'guru', 'divine'];
+/** Where a pillar that is not part of someone's life sits: Neutrality, "fine either way". */
+export const AWAY_LEVEL = 250;
+export const isOptionalPillar = (k: RelationshipKey): boolean => OPTIONAL_PILLARS.includes(k);
+export const awayPlacement = (relationship: RelationshipKey): Placement => ({ relationship, core: AWAY_LEVEL, floor: AWAY_LEVEL, evidence: '' });
+/** The away list as it is kept: only the optional pillars, each once, in their own order. */
+export function parseAway(input: unknown): RelationshipKey[] {
+  const given = new Set(Array.isArray(input) ? input.filter((x): x is string => typeof x === 'string') : []);
+  return OPTIONAL_PILLARS.filter((k) => given.has(k));
+}
+
+/**
+ * A placement from the levels a person ticked ("Pick all that you feel"). The core is the band picked most often (a tie goes
+ * to the higher band), at the middle of the picks in that band (the higher of two); the floor is the lowest pick. The shape
+ * is the same Placement, so `placementFlags` and the server read it as before. Nothing ticked gives null.
+ */
+export function placementFromPicks(relationship: RelationshipKey, picks: readonly number[], evidence = ''): Placement | null {
+  const levels = [...new Set(picks)].filter((v) => levelByValue(v)).sort((a, b) => a - b);
+  if (levels.length === 0) return null;
+  const count = (b: MapBand) => levels.filter((v) => levelByValue(v)!.band === b).length;
+  // MAP_BANDS runs low to high, so reading it backwards lets the higher band win a tie.
+  const band = [...MAP_BANDS].reverse().reduce((best, b) => (count(b) > count(best) ? b : best), MAP_BANDS[MAP_BANDS.length - 1]!);
+  const inBand = levels.filter((v) => levelByValue(v)!.band === band);
+  const core = inBand[Math.floor(inBand.length / 2)]!;
+  return { relationship, core, floor: levels[0]!, evidence };
+}
+/** The ticks to start a placement's picker from: its floor and its core. */
+export const picksOfPlacement = (p: Pick<Placement, 'core' | 'floor'>): number[] => [...new Set([p.floor, p.core])].filter((v) => levelByValue(v)).sort((a, b) => a - b);
+
+/**
+ * Words people use for each level of the map, for "Say it in your own words". Rules only, no model: a phrase found in what
+ * someone typed suggests its level, and the person ticks the ones that fit. Longer phrases are read first and used up,
+ * so "hate myself" reads as Shame and not also as Anger.
+ */
+export const MAP_LEVEL_WORDS: Record<number, readonly string[]> = {
+  20: ['shame', 'ashamed', 'embarrassed', 'humiliated', 'worthless', 'hate myself', 'not good enough', 'i am the problem', "i'm the problem", 'disgusted with myself'],
+  30: ['guilt', 'guilty', 'my fault', 'blame myself', 'regret', 'mess up', 'messed up', 'let them down', 'let people down', 'let everyone down', 'feel bad about'],
+  50: ['apathy', 'pointless', "what's the point", 'what is the point', 'numb', "don't care", 'do not care', 'dont care', 'hopeless', 'give up', 'gave up', 'empty', "can't be bothered", 'cannot be bothered', 'unmotivated', 'no energy', 'lazy'],
+  75: ['grief', 'grieving', 'sad', 'sadness', 'heartbroken', 'heartbreak', 'i miss', 'miss them', 'miss her', 'miss him', 'lost them', 'loss', 'lonely', 'cry', 'crying', 'mourning'],
+  100: ['fear', 'afraid', 'scared', 'anxious', 'anxiety', 'worry', 'worried', 'nervous', 'panic', 'avoid', 'avoiding', 'dread', 'overthink', 'overthinking', 'terrified'],
+  125: ['desire', 'crave', 'craving', 'desperate', 'envy', 'envious', 'jealous', 'jealousy', 'never enough', 'longing', 'obsessed', 'need approval', 'validation', 'want more', 'clingy', 'needy'],
+  150: ['anger', 'angry', 'mad at', 'furious', 'resent', 'resentment', 'annoyed', 'irritated', 'frustrated', 'frustration', 'rage', 'their fault', 'his fault', 'her fault', 'blame them', 'hate', 'bitter'],
+  175: ['pride', 'better than', 'above this', 'above it', 'superior', 'arrogant', 'ego', 'show off', 'showing off', "don't need anyone", 'do not need anyone', 'know better', 'look down on'],
+  200: ['courage', 'brave', 'do it anyway', 'doing it anyway', 'try anyway', 'trying anyway', 'keep trying', 'step up', 'stepping up', 'face it', 'facing it', 'push through', 'pushing through'],
+  250: ['neutral', 'fine', 'okay', 'alright', 'all right', 'so-so', 'not bad', 'either way', 'it is what it is', 'meh', 'ok'],
+  310: ['willing', 'show up', 'showing up', 'working on', 'work on it', 'effort', 'ready', 'committed', 'motivated', 'keen', 'putting in', 'trying hard', 'doing the work'],
+  350: ['accept', 'acceptance', 'own it', 'owning it', 'responsible', 'responsibility', 'my part', 'let go', 'letting go', 'at peace with', 'it is mine'],
+  400: ['understand', 'i see how', 'makes sense', 'clear', 'clarity', 'curious', 'learning a lot', 'figured out'],
+  440: ['wise', 'wisdom', 'i know why', 'purpose', 'insight', 'meaningful', 'meaning'],
+  500: ['love', 'loving', 'care', 'caring', 'kind', 'kindness', 'grateful', 'gratitude', 'thankful', 'warm', 'close to', 'connected', 'give freely'],
+  540: ['oneness', 'one with', 'at peace', 'peaceful', 'joy', 'joyful', 'bliss', 'whole', 'surrender', 'unity', 'your good is my good'],
+};
+const NEGATED = /\b(?:not|never|no|isn't|isnt|aren't|wasn't|don't|doesn't|didn't|hardly|rarely)\s+(?:\w+\s+)?$/;
+/** The levels a line someone typed points to, lowest first, at most four. A word after "not" or "never" does not count. */
+export function readFeelings(text: string): number[] {
+  let t = ` ${text.slice(0, 600).toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z0-9' -]+/g, ' ').replace(/\s+/g, ' ')} `;
+  const phrases = Object.entries(MAP_LEVEL_WORDS)
+    .flatMap(([v, words]) => words.map((w) => ({ w, v: Number(v) })))
+    .sort((a, b) => b.w.length - a.w.length);
+  const found = new Set<number>();
+  for (const { w, v } of phrases) {
+    const re = new RegExp(`(?<=[ ])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=[ ])`, 'g');
+    t = t.replace(re, (m, at: number) => {
+      // A phrase that holds its own "not" or "don't" is read as it is; a plain word after one is not.
+      if (!/\b(?:not|don't|dont|no|never)\b/.test(w) && NEGATED.test(t.slice(0, at))) return m;
+      found.add(v);
+      return ' '.repeat(m.length);
+    });
+  }
+  return [...found].sort((a, b) => a - b).slice(0, 4);
 }
 
 export const BLOCK_KEYS = ['morning', 'nutrition', 'work', 'skills', 'social', 'sleep'] as const;
@@ -3006,6 +3136,8 @@ export interface Assessment {
   scores: Scores;
   realDay: RealDay;
   focus: RelationshipKey[];
+  /** The optional pillars the person said are not part of their life right now (`OPTIONAL_PILLARS`), placed at Neutrality. */
+  away?: RelationshipKey[];
   createdAt: string;
 }
 export interface RoutineDay {
@@ -3246,6 +3378,15 @@ export function pageQuery(page: number, size: number, prefix = ''): string {
 /** Nobody under this age can sign up. The terms page says the same. */
 export const MIN_AGE = 18;
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+/**
+ * The one check that a YYYY-MM-DD is a day on the calendar. Date.parse rolls 2008-02-30 over to 1 March instead of failing,
+ * so the day is read and written back and must come out the same.
+ */
+export function isRealDay(d: unknown): d is string {
+  if (typeof d !== 'string' || !DAY_RE.test(d)) return false;
+  const t = Date.parse(`${d}T00:00:00Z`);
+  return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === d;
+}
 
 /** Whole years between a birth date and a day, both YYYY-MM-DD. */
 export function ageOn(birthDate: string, day: string): number {
@@ -3257,7 +3398,7 @@ export function ageOn(birthDate: string, day: string): number {
 
 /** Why a date of birth will not do, in plain words, or null when it is fine. */
 export function birthDateProblem(birthDate: string, today = new Date().toISOString().slice(0, 10)): string | null {
-  if (!DAY_RE.test(birthDate) || Number.isNaN(Date.parse(`${birthDate}T00:00:00Z`))) return 'Enter your date of birth.';
+  if (!isRealDay(birthDate)) return 'Enter your date of birth.';
   if (birthDate > today) return 'That day has not happened yet.';
   const age = ageOn(birthDate, today);
   if (age < MIN_AGE) return `You need to be ${MIN_AGE} or older to join.`;
@@ -3316,18 +3457,27 @@ export const TIMEZONES = [
 export const PRODUCT_KINDS = ['digital', 'course', 'membership', 'session', 'event', 'link', 'payment', 'bundle', 'locked', 'dm'] as const;
 export type ProductKind = (typeof PRODUCT_KINDS)[number];
 
-export const PRODUCT_KIND_META: Record<ProductKind, { name: string; emoji: string; blurb: string; buy: string }> = {
-  digital: { name: 'Download', emoji: '📄', blurb: 'A file or link delivered after purchase.', buy: 'Get it' },
-  course: { name: 'Course', emoji: '🎓', blurb: 'Lessons, released on a schedule if you like.', buy: 'Enrol' },
-  membership: { name: 'Membership', emoji: '🪪', blurb: 'Access to members-only community posts.', buy: 'Join' },
-  session: { name: 'Session', emoji: '📅', blurb: 'One-to-one time, booked from your availability.', buy: 'Book' },
-  event: { name: 'Event', emoji: '🎟️', blurb: 'A live session on a date, with a joining link.', buy: 'Get a ticket' },
-  link: { name: 'Link', emoji: '🔗', blurb: 'A free link on your page.', buy: 'Open' },
-  payment: { name: 'Payment link', emoji: '💳', blurb: 'A fixed price, or pay what you want. Nothing to deliver.', buy: 'Pay' },
-  bundle: { name: 'Bundle', emoji: '🎁', blurb: 'Several of your products for one price.', buy: 'Get the bundle' },
-  locked: { name: 'Locked post', emoji: '🔒', blurb: 'One paid post: text, links or a video, shown after purchase.', buy: 'Unlock' },
-  dm: { name: 'Priority DM', emoji: '✉️', blurb: 'A paid question you promise to answer within a few days.', buy: 'Ask' },
+export const PRODUCT_KIND_META: Record<ProductKind, { name: string; icon: IconName; blurb: string; buy: string }> = {
+  digital: { name: 'Download', icon: 'FileDown', blurb: 'A file or link delivered after purchase.', buy: 'Get it' },
+  course: { name: 'Course', icon: 'GraduationCap', blurb: 'Lessons, released on a schedule if you like.', buy: 'Enrol' },
+  membership: { name: 'Membership', icon: 'IdCard', blurb: 'Access to members-only community posts.', buy: 'Join' },
+  session: { name: 'Session', icon: 'CalendarClock', blurb: 'One-to-one time, booked from your availability.', buy: 'Book' },
+  event: { name: 'Event', icon: 'Ticket', blurb: 'A live session on a date, with a joining link.', buy: 'Get a ticket' },
+  link: { name: 'Link', icon: 'Link', blurb: 'A free link on your page.', buy: 'Open' },
+  payment: { name: 'Payment link', icon: 'CreditCard', blurb: 'A fixed price, or pay what you want. Nothing to deliver.', buy: 'Pay' },
+  bundle: { name: 'Bundle', icon: 'Package', blurb: 'Several of your products for one price.', buy: 'Get the bundle' },
+  locked: { name: 'Locked post', icon: 'Lock', blurb: 'One paid post: text, links or a video, shown after purchase.', buy: 'Unlock' },
+  dm: { name: 'Priority DM', icon: 'Mail', blurb: 'A paid question you promise to answer within a few days.', buy: 'Ask' },
 };
+
+/** Emoji a product's `cover` once defaulted to, before product covers drew an icon; a product whose cover is still
+ * exactly its kind's old default shows the kind's icon instead of that emoji as text. */
+const PRODUCT_KIND_LEGACY_COVER: Record<ProductKind, string> = {
+  digital: '📄', course: '🎓', membership: '🪪', session: '📅', event: '🎟️', link: '🔗', payment: '💳', bundle: '🎁', locked: '🔒', dm: '✉️',
+};
+export function productHasOwnCover(kind: ProductKind, cover: string): boolean {
+  return Boolean(cover) && cover !== PRODUCT_KIND_LEGACY_COVER[kind];
+}
 
 export interface QuizQuestion {
   q: string;
@@ -5064,6 +5214,7 @@ export interface RunClubDetail {
   /** Collabs the club was accepted into. */
   collabs: RunCollab[];
   /** For the host: every entry on the club's runs, newest first. */
+  entryPage: Page;
   entries: RunEntry[];
 }
 
@@ -5074,6 +5225,7 @@ export interface RunCollabsResponse {
   myClubs: RunClub[];
   canPost: boolean;
   /** For posters: applications to your collabs, newest first. */
+  applicationPage: Page;
   applications: (RunCollabApplication & { collabTitle: string })[];
 }
 
@@ -5207,17 +5359,17 @@ export interface ListingTypeMeta {
   moduleKey: string;
   /** The verb on the sign-in button. */
   verb: string;
-  emoji: string;
+  icon: IconName;
 }
 
 export const LISTING_TYPE_META: Record<ListingType, ListingTypeMeta> = {
-  reward: { name: 'Content reward', plural: 'Content rewards', moduleKey: 'win', verb: 'Submit a video', emoji: '🥇' },
-  opportunity: { name: 'Opportunity', plural: 'Opportunities', moduleKey: 'work', verb: 'Apply', emoji: '💼' },
-  event: { name: 'Event', plural: 'Events', moduleKey: 'party', verb: 'RSVP', emoji: '🎉' },
-  program: { name: 'Program', plural: 'Programs', moduleKey: 'school', verb: 'Enrol', emoji: '🎓' },
-  tool: { name: 'Tool', plural: 'Tools', moduleKey: 'tools', verb: 'Open', emoji: '🧰' },
-  campaign: { name: 'Campaign', plural: 'Campaigns', moduleKey: 'army', verb: 'See the brief', emoji: '🎬' },
-  circle: { name: 'Circle', plural: 'Circles', moduleKey: 'circles', verb: 'Join', emoji: '🫧' },
+  reward: { name: 'Content reward', plural: 'Content rewards', moduleKey: 'win', verb: 'Submit a video', icon: 'Medal' },
+  opportunity: { name: 'Opportunity', plural: 'Opportunities', moduleKey: 'work', verb: 'Apply', icon: 'BriefcaseBusiness' },
+  event: { name: 'Event', plural: 'Events', moduleKey: 'party', verb: 'RSVP', icon: 'PartyPopper' },
+  program: { name: 'Program', plural: 'Programs', moduleKey: 'school', verb: 'Enrol', icon: 'GraduationCap' },
+  tool: { name: 'Tool', plural: 'Tools', moduleKey: 'tools', verb: 'Open', icon: 'Toolbox' },
+  campaign: { name: 'Campaign', plural: 'Campaigns', moduleKey: 'army', verb: 'See the brief', icon: 'Clapperboard' },
+  circle: { name: 'Circle', plural: 'Circles', moduleKey: 'circles', verb: 'Join', icon: 'UsersRound' },
 };
 export const LISTING_TYPES = Object.keys(LISTING_TYPE_META) as ListingType[];
 
@@ -5403,6 +5555,11 @@ export function badgeName(key: string): string {
   return BADGES.find((b) => b.key === key)?.name ?? HONORS.find((h) => h.key === key)?.name ?? key;
 }
 export const isBadgeKey = (key: string): boolean => BADGES.some((b) => b.key === key) || HONORS.some((h) => h.key === key);
+/**
+ * A badge a product, store item, tool or game may ask for: a public badge or an honor. The private families (Reflection, Focus,
+ * Money) are never an unlock, since a gate on them would tell a seller something drawn from a journal, focus or money count.
+ */
+export const isUnlockBadgeKey = (key: string): boolean => PUBLIC_BADGES.some((b) => b.key === key) || HONORS.some((h) => h.key === key);
 /** The viewer, for the unlock rule. A super admin (role admin) is never locked out of anything. */
 export interface UnlockHave {
   points: number;
@@ -6361,9 +6518,9 @@ export interface MediaItem {
   url: string;
   caption: string;
 }
-/** Who can carry media: every public listing, and a lesson in School. */
-export type MediaOwner = ListingType | 'lesson';
-export const MEDIA_OWNERS: readonly MediaOwner[] = [...LISTING_TYPES, 'lesson'];
+/** Who can carry media: every public listing, a lesson in School, a creator's product, a store item and a pre-owned listing. */
+export type MediaOwner = ListingType | 'lesson' | 'product' | 'item' | 'preowned';
+export const MEDIA_OWNERS: readonly MediaOwner[] = [...LISTING_TYPES, 'lesson', 'product', 'item', 'preowned'];
 export const MAX_MEDIA_ITEMS = 8;
 export const MAX_MEDIA_CAPTION = 120;
 /** An upload is a picture or a GIF. The browser shrinks pictures first; videos are linked, never uploaded. */
@@ -7108,7 +7265,7 @@ export interface IdentityOption {
   key: string;
   /** The tag as it shows: Student, Video editor. */
   label: string;
-  emoji: string;
+  icon: IconName;
   kind: IdentityKind;
   /** The line under it on its card. */
   blurb: string;
@@ -7126,47 +7283,47 @@ export interface IdentityOption {
 
 export const IDENTITIES: readonly IdentityOption[] = [
   // Who you are right now: the first card.
-  { key: 'creator', label: 'Creator', emoji: '🎬', kind: 'role', blurb: 'I make content', because: 'you make content', words: ['creator', 'content creator', 'influencer', 'youtuber', 'instagrammer', 'vlogger', 'make content', 'create content', 'post content', 'make videos', 'my channel', 'my page', 'my followers', 'my subscribers'], focus: 'Creating', apps: { profile: 2, army: 2, win: 2, work: 1, content: 1, tools: 1, agency: 1 } },
-  { key: 'freelancer', label: 'Freelancer', emoji: '🧳', kind: 'role', blurb: 'I freelance for clients', because: 'you make things for clients', words: ['freelance', 'freelancer', 'freelancing', 'clients', 'my clients', 'client work', 'fiverr', 'upwork'], focus: 'Creating', apps: { work: 3, profile: 2, agency: 2, army: 1, finance: 1 } },
-  { key: 'student', label: 'Student', emoji: '🎓', kind: 'role', blurb: "I'm a student", because: 'you are studying', words: ['student', 'studying', 'college', 'university', 'uni', 'school', 'exams', 'semester', 'degree', 'final year', 'class 12'], focus: 'Study', apps: { school: 3, work: 1, knowledge: 1, circles: 1 } },
-  { key: 'employee', label: 'Employee', emoji: '💼', kind: 'role', blurb: 'I have a job', because: 'you have a job', words: ['my job', 'day job', 'full time job', 'i have a job', 'office', 'employee', 'corporate', 'salaried', 'working professional', '9 to 5', '9-5', 'nine to five', 'i work at', 'i work in'], focus: 'Work', apps: { reviews: 2, finance: 2, journal: 1, school: 1 } },
-  { key: 'founder', label: 'Founder', emoji: '🚀', kind: 'role', blurb: 'I run a business', because: 'you run a business', words: ['founder', 'co-founder', 'cofounder', 'my business', 'own business', 'small business', 'startup', 'my brand', 'brand owner', 'business owner', 'shop owner', 'store owner', 'entrepreneur', 'my shop', 'my store', 'my company', 'run a business', 'run a brand', 'run a company', 'run a shop', 'run a store', 'run a startup', 'run a small', 'own a business', 'own a shop', 'own brand', 'd2c'], focus: 'Business', apps: { shop: 2, finance: 3, audience: 2, content: 2, automations: 1 } },
-  { key: 'agency_owner', label: 'Agency or studio owner', emoji: '🗂️', kind: 'role', blurb: 'I run a content agency or studio', because: 'you run a content agency or studio', words: ['agency owner', 'own an agency', 'run an agency', 'run a content agency', 'my agency', 'content agency', 'creative agency', 'video agency', 'marketing agency', 'social media agency', 'production house', 'my studio', 'studio owner', 'retainer', 'retainers'], focus: 'Business', apps: { agency: 3, finance: 2, profile: 2, reviews: 1, army: 1 } },
-  { key: 'explorer', label: 'Explorer', emoji: '🧭', kind: 'role', blurb: "I'm between things", because: 'you are working out what is next', words: ['between jobs', 'unemployed', 'jobless', 'gap year', 'figuring out', 'figuring it out', 'career change', 'quit my job', 'looking for a job', 'looking for work', 'fresh start', 'what is next'], focus: 'Other', apps: { work: 3, school: 2, knowledge: 1, journal: 1 } },
-  { key: 'coach', label: 'Life coach', emoji: '🎯', kind: 'role', blurb: "I'm a life coach", because: 'you coach people', words: ["i'm a life coach", 'i am a life coach', 'im a life coach', "i'm a coach", 'i am a coach', 'im a coach', 'work as a coach', 'work as a life coach', 'certified coach', 'certified life coach', 'i coach people', 'coach for a living'], focus: 'Work', apps: { coaching: 3, shop: 2, profile: 1 } },
-  { key: 'parent', label: 'Parent or carer', emoji: '👪', kind: 'role', blurb: 'I look after family', because: 'you look after family', words: ['parent', 'mom', 'mum', 'mother', 'dad', 'father', 'my kids', 'my son', 'my daughter', 'children', 'my baby', 'carer', 'caregiver', 'looking after'], focus: 'Family', interest: 'Parenting', apps: { sleep: 2, stress: 2, journal: 1, mood: 1, finance: 1 } },
+  { key: 'creator', label: 'Creator', icon: 'Clapperboard', kind: 'role', blurb: 'I make content', because: 'you make content', words: ['creator', 'content creator', 'influencer', 'youtuber', 'instagrammer', 'vlogger', 'make content', 'create content', 'post content', 'make videos', 'my channel', 'my page', 'my followers', 'my subscribers'], focus: 'Creating', apps: { profile: 2, army: 2, win: 2, work: 1, content: 1, tools: 1, agency: 1 } },
+  { key: 'freelancer', label: 'Freelancer', icon: 'Luggage', kind: 'role', blurb: 'I freelance for clients', because: 'you make things for clients', words: ['freelance', 'freelancer', 'freelancing', 'clients', 'my clients', 'client work', 'fiverr', 'upwork'], focus: 'Creating', apps: { work: 3, profile: 2, agency: 2, army: 1, finance: 1 } },
+  { key: 'student', label: 'Student', icon: 'GraduationCap', kind: 'role', blurb: "I'm a student", because: 'you are studying', words: ['student', 'studying', 'college', 'university', 'uni', 'school', 'exams', 'semester', 'degree', 'final year', 'class 12'], focus: 'Study', apps: { school: 3, work: 1, knowledge: 1, circles: 1 } },
+  { key: 'employee', label: 'Employee', icon: 'Briefcase', kind: 'role', blurb: 'I have a job', because: 'you have a job', words: ['my job', 'day job', 'full time job', 'i have a job', 'office', 'employee', 'corporate', 'salaried', 'working professional', '9 to 5', '9-5', 'nine to five', 'i work at', 'i work in'], focus: 'Work', apps: { reviews: 2, finance: 2, journal: 1, school: 1 } },
+  { key: 'founder', label: 'Founder', icon: 'Rocket', kind: 'role', blurb: 'I run a business', because: 'you run a business', words: ['founder', 'co-founder', 'cofounder', 'my business', 'own business', 'small business', 'startup', 'my brand', 'brand owner', 'business owner', 'shop owner', 'store owner', 'entrepreneur', 'my shop', 'my store', 'my company', 'run a business', 'run a brand', 'run a company', 'run a shop', 'run a store', 'run a startup', 'run a small', 'own a business', 'own a shop', 'own brand', 'd2c'], focus: 'Business', apps: { shop: 2, finance: 3, audience: 2, content: 2, automations: 1 } },
+  { key: 'agency_owner', label: 'Agency or studio owner', icon: 'FolderKanban', kind: 'role', blurb: 'I run a content agency or studio', because: 'you run a content agency or studio', words: ['agency owner', 'own an agency', 'run an agency', 'run a content agency', 'my agency', 'content agency', 'creative agency', 'video agency', 'marketing agency', 'social media agency', 'production house', 'my studio', 'studio owner', 'retainer', 'retainers'], focus: 'Business', apps: { agency: 3, finance: 2, profile: 2, reviews: 1, army: 1 } },
+  { key: 'explorer', label: 'Explorer', icon: 'Compass', kind: 'role', blurb: "I'm between things", because: 'you are working out what is next', words: ['between jobs', 'unemployed', 'jobless', 'gap year', 'figuring out', 'figuring it out', 'career change', 'quit my job', 'looking for a job', 'looking for work', 'fresh start', 'what is next'], focus: 'Other', apps: { work: 3, school: 2, knowledge: 1, journal: 1 } },
+  { key: 'coach', label: 'Life coach', icon: 'Target', kind: 'role', blurb: "I'm a life coach", because: 'you coach people', words: ["i'm a life coach", 'i am a life coach', 'im a life coach', "i'm a coach", 'i am a coach', 'im a coach', 'work as a coach', 'work as a life coach', 'certified coach', 'certified life coach', 'i coach people', 'coach for a living'], focus: 'Work', apps: { coaching: 3, shop: 2, profile: 1 } },
+  { key: 'parent', label: 'Parent or carer', icon: 'HandHeart', kind: 'role', blurb: 'I look after family', because: 'you look after family', words: ['parent', 'mom', 'mum', 'mother', 'dad', 'father', 'my kids', 'my son', 'my daughter', 'children', 'my baby', 'carer', 'caregiver', 'looking after'], focus: 'Family', interest: 'Parenting', apps: { sleep: 2, stress: 2, journal: 1, mood: 1, finance: 1 } },
   // What a creator makes.
-  { key: 'short_video', label: 'Short-form creator', emoji: '📱', kind: 'craft', blurb: 'Reels and Shorts', because: 'you make short videos', words: ['reels', 'reel', 'shorts', 'tiktok', 'tiktoks', 'short videos', 'short form', 'short-form'], interest: 'Video', apps: { win: 2, army: 1, content: 1, automations: 1 } },
-  { key: 'long_video', label: 'Video creator', emoji: '🎥', kind: 'craft', blurb: 'YouTube videos', because: 'you make long videos', words: ['youtube', 'youtuber', 'long videos', 'long form', 'long-form', 'vlog', 'vlogs', 'documentary', 'documentaries'], interest: 'Video', apps: { content: 2, win: 1, army: 1, tools: 1, tv: 1 } },
-  { key: 'photo', label: 'Photographer', emoji: '📷', kind: 'craft', blurb: 'Photos', because: 'you take photos', words: ['photo', 'photos', 'photography', 'photographer', 'carousels'], skill: 'Photography', interest: 'Photography', apps: { work: 2, store: 1, shop: 1 } },
-  { key: 'podcast', label: 'Podcaster', emoji: '🎙️', kind: 'craft', blurb: 'Podcasts', because: 'you make a podcast', words: ['podcast', 'podcasts', 'podcaster', 'talk show'], skill: 'Interviewing', interest: 'Podcasting', apps: { tv: 2, content: 1, tools: 1 } },
-  { key: 'writing', label: 'Writer', emoji: '✍️', kind: 'craft', blurb: 'Writing', because: 'you write', words: ['writer', 'writing', 'blog', 'blogger', 'newsletter', 'threads', 'articles', 'substack'], skill: 'Writing', interest: 'Writing', apps: { content: 2, knowledge: 1 } },
-  { key: 'music', label: 'Musician', emoji: '🎵', kind: 'craft', blurb: 'Music', because: 'you make music', words: ['music', 'musician', 'singer', 'rapper', 'music producer', 'beats', 'songs', 'covers', 'my band'], interest: 'Music making', apps: { party: 2, shop: 1 } },
-  { key: 'stream', label: 'Streamer', emoji: '🎮', kind: 'craft', blurb: 'Live streams', because: 'you stream', words: ['stream', 'streams', 'streaming', 'streamer', 'twitch', 'live stream', 'go live'], skill: 'Live streaming', interest: 'Gaming', apps: { audience: 2, community: 1, tools: 1 } },
-  { key: 'teach', label: 'Educator', emoji: '🧑‍🏫', kind: 'craft', blurb: 'Courses or lessons', because: 'you teach', words: ['teach', 'teacher', 'teaching', 'tutor', 'tutoring', 'coaching', 'online course', 'courses', 'lessons', 'workshops'], skill: 'Teaching', interest: 'Education', apps: { shop: 2, audience: 1, school: 1 } },
+  { key: 'short_video', label: 'Short-form creator', icon: 'Smartphone', kind: 'craft', blurb: 'Reels and Shorts', because: 'you make short videos', words: ['reels', 'reel', 'shorts', 'tiktok', 'tiktoks', 'short videos', 'short form', 'short-form'], interest: 'Video', apps: { win: 2, army: 1, content: 1, automations: 1 } },
+  { key: 'long_video', label: 'Video creator', icon: 'Video', kind: 'craft', blurb: 'YouTube videos', because: 'you make long videos', words: ['youtube', 'youtuber', 'long videos', 'long form', 'long-form', 'vlog', 'vlogs', 'documentary', 'documentaries'], interest: 'Video', apps: { content: 2, win: 1, army: 1, tools: 1, tv: 1 } },
+  { key: 'photo', label: 'Photographer', icon: 'Camera', kind: 'craft', blurb: 'Photos', because: 'you take photos', words: ['photo', 'photos', 'photography', 'photographer', 'carousels'], skill: 'Photography', interest: 'Photography', apps: { work: 2, store: 1, shop: 1 } },
+  { key: 'podcast', label: 'Podcaster', icon: 'MicSignal', kind: 'craft', blurb: 'Podcasts', because: 'you make a podcast', words: ['podcast', 'podcasts', 'podcaster', 'talk show'], skill: 'Interviewing', interest: 'Podcasting', apps: { tv: 2, content: 1, tools: 1 } },
+  { key: 'writing', label: 'Writer', icon: 'PenLine', kind: 'craft', blurb: 'Writing', because: 'you write', words: ['writer', 'writing', 'blog', 'blogger', 'newsletter', 'threads', 'articles', 'substack'], skill: 'Writing', interest: 'Writing', apps: { content: 2, knowledge: 1 } },
+  { key: 'music', label: 'Musician', icon: 'EighthNotes', kind: 'craft', blurb: 'Music', because: 'you make music', words: ['music', 'musician', 'singer', 'rapper', 'music producer', 'beats', 'songs', 'covers', 'my band'], interest: 'Music making', apps: { party: 2, shop: 1 } },
+  { key: 'stream', label: 'Streamer', icon: 'Cast', kind: 'craft', blurb: 'Live streams', because: 'you stream', words: ['stream', 'streams', 'streaming', 'streamer', 'twitch', 'live stream', 'go live'], skill: 'Live streaming', interest: 'Gaming', apps: { audience: 2, community: 1, tools: 1 } },
+  { key: 'teach', label: 'Educator', icon: 'Presentation', kind: 'craft', blurb: 'Courses or lessons', because: 'you teach', words: ['teach', 'teacher', 'teaching', 'tutor', 'tutoring', 'coaching', 'online course', 'courses', 'lessons', 'workshops'], skill: 'Teaching', interest: 'Education', apps: { shop: 2, audience: 1, school: 1 } },
   // What a freelancer does for others.
-  { key: 'editor', label: 'Video editor', emoji: '✂️', kind: 'service', blurb: 'Editing', because: 'you edit', words: ['edit', 'edits', 'editing', 'editor', 'video editor', 'premiere', 'premiere pro', 'davinci', 'resolve', 'capcut', 'final cut', 'after effects'], skill: 'Editing', interest: 'Video', apps: { work: 2, school: 2, tools: 1, army: 1 } },
-  { key: 'shooter', label: 'Videographer', emoji: '📹', kind: 'service', blurb: 'Shooting', because: 'you shoot', words: ['videographer', 'shoot', 'shooting', 'cinematographer', 'camera operator', 'dop', 'filming', 'filmmaker'], skill: 'Videography', interest: 'Film making', apps: { work: 2, store: 2, army: 1 } },
-  { key: 'designer', label: 'Designer', emoji: '🎨', kind: 'service', blurb: 'Design', because: 'you design', words: ['design', 'designer', 'graphic', 'graphics', 'thumbnail', 'thumbnails', 'figma', 'canva', 'illustrator', 'photoshop'], skill: 'Design', interest: 'Art & design', apps: { work: 2, tools: 1 } },
-  { key: 'copywriter', label: 'Copywriter', emoji: '📝', kind: 'service', blurb: 'Scripts and copy', because: 'you write for others', words: ['copywriter', 'copywriting', 'scripts', 'scriptwriter', 'script writer', 'ghostwriter', 'ghostwriting'], skill: 'Writing', apps: { work: 2, content: 1 } },
-  { key: 'sound', label: 'Sound person', emoji: '🎧', kind: 'service', blurb: 'Sound', because: 'you do sound', words: ['mixing', 'mastering', 'sound design', 'audio engineer', 'sound engineer'], skill: 'Sound', apps: { work: 2, store: 1 } },
-  { key: 'host', label: 'Host', emoji: '🎤', kind: 'service', blurb: 'On camera or on stage', because: 'you are on camera', words: ['host', 'hosting', 'anchor', 'presenter', 'on camera', 'actor', 'acting', 'modelling', 'modeling', 'emcee'], skill: 'On camera', apps: { army: 2, work: 1 } },
-  { key: 'social', label: 'Social media manager', emoji: '📲', kind: 'service', blurb: 'Social pages', because: 'you run pages for brands', words: ['social media manager', 'smm', 'managing pages', 'manage pages', 'community manager'], skill: 'Community', apps: { content: 2, automations: 2, audience: 1, work: 1 } },
+  { key: 'editor', label: 'Video editor', icon: 'Scissors', kind: 'service', blurb: 'Editing', because: 'you edit', words: ['edit', 'edits', 'editing', 'editor', 'video editor', 'premiere', 'premiere pro', 'davinci', 'resolve', 'capcut', 'final cut', 'after effects'], skill: 'Editing', interest: 'Video', apps: { work: 2, school: 2, tools: 1, army: 1 } },
+  { key: 'shooter', label: 'Videographer', icon: 'Aperture', kind: 'service', blurb: 'Shooting', because: 'you shoot', words: ['videographer', 'shoot', 'shooting', 'cinematographer', 'camera operator', 'dop', 'filming', 'filmmaker'], skill: 'Videography', interest: 'Film making', apps: { work: 2, store: 2, army: 1 } },
+  { key: 'designer', label: 'Designer', icon: 'Palette', kind: 'service', blurb: 'Design', because: 'you design', words: ['design', 'designer', 'graphic', 'graphics', 'thumbnail', 'thumbnails', 'figma', 'canva', 'illustrator', 'photoshop'], skill: 'Design', interest: 'Art & design', apps: { work: 2, tools: 1 } },
+  { key: 'copywriter', label: 'Copywriter', icon: 'Type', kind: 'service', blurb: 'Scripts and copy', because: 'you write for others', words: ['copywriter', 'copywriting', 'scripts', 'scriptwriter', 'script writer', 'ghostwriter', 'ghostwriting'], skill: 'Writing', apps: { work: 2, content: 1 } },
+  { key: 'sound', label: 'Sound person', icon: 'Headphones', kind: 'service', blurb: 'Sound', because: 'you do sound', words: ['mixing', 'mastering', 'sound design', 'audio engineer', 'sound engineer'], skill: 'Sound', apps: { work: 2, store: 1 } },
+  { key: 'host', label: 'Host', icon: 'MicVocal', kind: 'service', blurb: 'On camera or on stage', because: 'you are on camera', words: ['host', 'hosting', 'anchor', 'presenter', 'on camera', 'actor', 'acting', 'modelling', 'modeling', 'emcee'], skill: 'On camera', apps: { army: 2, work: 1 } },
+  { key: 'social', label: 'Social media manager', icon: 'Share2', kind: 'service', blurb: 'Social pages', because: 'you run pages for brands', words: ['social media manager', 'smm', 'managing pages', 'manage pages', 'community manager'], skill: 'Community', apps: { content: 2, automations: 2, audience: 1, work: 1 } },
   // Where you are with it. One at a time.
-  { key: 'starting', label: 'Just starting', emoji: '🌱', kind: 'stage', blurb: 'Not much out there yet', because: 'you are just starting', words: ['just started', 'just starting', 'starting out', 'beginner', 'new to this', 'zero followers', 'no followers'], level: 'Just starting', apps: { school: 2, knowledge: 1, tools: 1, win: 1 } },
-  { key: 'growing', label: 'Growing', emoji: '📈', kind: 'stage', blurb: 'Posting, not earning yet', because: 'you post but do not earn yet', words: ['growing', 'consistent', 'posting daily', 'post daily', 'not earning', 'no income yet'], level: 'Early', apps: { content: 1, audience: 1, win: 2, army: 1 } },
-  { key: 'earning', label: 'Earning', emoji: '🪙', kind: 'stage', blurb: 'Some money comes in', because: 'your work already earns', words: ['brand deals', 'brand deal', 'sponsorships', 'sponsored', 'monetized', 'monetised', 'paid collabs', 'already earning'], level: 'Working', apps: { finance: 2, shop: 1, audience: 1, army: 1 } },
-  { key: 'full_time', label: 'Full time', emoji: '🏆', kind: 'stage', blurb: 'It is my living', because: 'this is your living', words: ['full time creator', 'full-time creator', 'creator full time', 'my living', 'main income'], level: 'Established', apps: { finance: 3, shop: 2, audience: 2, automations: 1, club: 1 } },
+  { key: 'starting', label: 'Just starting', icon: 'Sprout', kind: 'stage', blurb: 'Not much out there yet', because: 'you are just starting', words: ['just started', 'just starting', 'starting out', 'beginner', 'new to this', 'zero followers', 'no followers'], level: 'Just starting', apps: { school: 2, knowledge: 1, tools: 1, win: 1 } },
+  { key: 'growing', label: 'Growing', icon: 'TrendingUp', kind: 'stage', blurb: 'Posting, not earning yet', because: 'you post but do not earn yet', words: ['growing', 'consistent', 'posting daily', 'post daily', 'not earning', 'no income yet'], level: 'Early', apps: { content: 1, audience: 1, win: 2, army: 1 } },
+  { key: 'earning', label: 'Earning', icon: 'Coins', kind: 'stage', blurb: 'Some money comes in', because: 'your work already earns', words: ['brand deals', 'brand deal', 'sponsorships', 'sponsored', 'monetized', 'monetised', 'paid collabs', 'already earning'], level: 'Working', apps: { finance: 2, shop: 1, audience: 1, army: 1 } },
+  { key: 'full_time', label: 'Full time', icon: 'Trophy', kind: 'stage', blurb: 'It is my living', because: 'this is your living', words: ['full time creator', 'full-time creator', 'creator full time', 'my living', 'main income'], level: 'Established', apps: { finance: 3, shop: 2, audience: 2, automations: 1, club: 1 } },
   // The rest of life: from your own words, or the extra pills on the first card.
-  { key: 'runner', label: 'Runner', emoji: '🏃', kind: 'life', blurb: 'I run', because: 'you run', words: ['runner', 'running', 'marathon', 'half marathon', '5k', '10k', 'jogging'], interest: 'Running', apps: { run: 3, life: 1 } },
-  { key: 'gym', label: 'Gym regular', emoji: '🏋️', kind: 'life', blurb: 'I train', because: 'you train', words: ['gym', 'lifting', 'weights', 'workouts', 'bodybuilding', 'crossfit'], interest: 'Gym', apps: { life: 2, wellbeing: 1, sleep: 1 } },
-  { key: 'yogi', label: 'Yoga and breath', emoji: '🧘', kind: 'life', blurb: 'I do yoga or meditate', because: 'you do yoga or meditate', words: ['yoga', 'meditate', 'meditation', 'breathwork', 'pranayama'], interest: 'Yoga', apps: { mindful: 3, wellbeing: 1 } },
-  { key: 'reader', label: 'Reader', emoji: '📚', kind: 'life', blurb: 'I read a lot', because: 'you read', words: ['reader', 'reading', 'books', 'bookworm'], interest: 'Books', apps: { knowledge: 2, journal: 1 } },
-  { key: 'gamer', label: 'Gamer', emoji: '🕹️', kind: 'life', blurb: 'I play games', because: 'you play games', words: ['gamer', 'gaming', 'video games', 'playstation', 'xbox', 'esports', 'bgmi', 'valorant'], interest: 'Gaming', apps: { community: 2, circles: 1 } },
-  { key: 'traveller', label: 'Traveller', emoji: '✈️', kind: 'life', blurb: 'I travel when I can', because: 'you travel', words: ['travel', 'traveller', 'traveler', 'travelling', 'traveling', 'backpacking'], interest: 'Travel', apps: { party: 1, finance: 1 } },
-  { key: 'night_owl', label: 'Night owl', emoji: '🦉', kind: 'life', blurb: 'I come alive late', because: 'you are up late', words: ['night owl', 'up late', 'sleep late', 'late nights', 'nocturnal', 'stay up late'], apps: { sleep: 2 } },
-  { key: 'spiritual', label: 'Spiritual', emoji: '🪔', kind: 'life', blurb: 'Faith or practice matters to me', because: 'faith or practice matters to you', words: ['spiritual', 'spirituality', 'my faith', 'god', 'temple', 'church', 'mosque', 'prayer', 'pray', 'bhakti'], interest: 'Spirituality', apps: { mindful: 2, journal: 1 } },
-  { key: 'volunteer', label: 'Volunteer', emoji: '🤝', kind: 'life', blurb: 'I give my time', because: 'you give your time', words: ['volunteer', 'volunteering', 'ngo', 'charity', 'social work'], interest: 'Volunteering', apps: { community: 2, party: 1 } },
+  { key: 'runner', label: 'Runner', icon: 'Footprints', kind: 'life', blurb: 'I run', because: 'you run', words: ['runner', 'running', 'marathon', 'half marathon', '5k', '10k', 'jogging'], interest: 'Running', apps: { run: 3, life: 1 } },
+  { key: 'gym', label: 'Gym regular', icon: 'Dumbbell', kind: 'life', blurb: 'I train', because: 'you train', words: ['gym', 'lifting', 'weights', 'workouts', 'bodybuilding', 'crossfit'], interest: 'Gym', apps: { life: 2, wellbeing: 1, sleep: 1 } },
+  { key: 'yogi', label: 'Yoga and breath', icon: 'Flower2', kind: 'life', blurb: 'I do yoga or meditate', because: 'you do yoga or meditate', words: ['yoga', 'meditate', 'meditation', 'breathwork', 'pranayama'], interest: 'Yoga', apps: { mindful: 3, wellbeing: 1 } },
+  { key: 'reader', label: 'Reader', icon: 'BookOpen', kind: 'life', blurb: 'I read a lot', because: 'you read', words: ['reader', 'reading', 'books', 'bookworm'], interest: 'Books', apps: { knowledge: 2, journal: 1 } },
+  { key: 'gamer', label: 'Gamer', icon: 'Gamepad2', kind: 'life', blurb: 'I play games', because: 'you play games', words: ['gamer', 'gaming', 'video games', 'playstation', 'xbox', 'esports', 'bgmi', 'valorant'], interest: 'Gaming', apps: { community: 2, circles: 1 } },
+  { key: 'traveller', label: 'Traveller', icon: 'Plane', kind: 'life', blurb: 'I travel when I can', because: 'you travel', words: ['travel', 'traveller', 'traveler', 'travelling', 'traveling', 'backpacking'], interest: 'Travel', apps: { party: 1, finance: 1 } },
+  { key: 'night_owl', label: 'Night owl', icon: 'MoonStar', kind: 'life', blurb: 'I come alive late', because: 'you are up late', words: ['night owl', 'up late', 'sleep late', 'late nights', 'nocturnal', 'stay up late'], apps: { sleep: 2 } },
+  { key: 'spiritual', label: 'Spiritual', icon: 'Sparkle', kind: 'life', blurb: 'Faith or practice matters to me', because: 'faith or practice matters to you', words: ['spiritual', 'spirituality', 'my faith', 'god', 'temple', 'church', 'mosque', 'prayer', 'pray', 'bhakti'], interest: 'Spirituality', apps: { mindful: 2, journal: 1 } },
+  { key: 'volunteer', label: 'Volunteer', icon: 'HandHelping', kind: 'life', blurb: 'I give my time', because: 'you give your time', words: ['volunteer', 'volunteering', 'ngo', 'charity', 'social work'], interest: 'Volunteering', apps: { community: 2, party: 1 } },
 ];
 
 export const IDENTITY_BY_KEY: Record<string, IdentityOption> = byKey(IDENTITIES.map((i) => [i.key, i]));
@@ -7184,7 +7341,7 @@ export function identityLabel(key: string): string {
 export interface SetupGoal {
   key: string;
   label: string;
-  emoji: string;
+  icon: IconName;
   /** What it opens, said on its card. */
   blurb: string;
   because: string;
@@ -7197,19 +7354,19 @@ export interface SetupGoal {
 }
 
 export const SETUP_GOALS: readonly SetupGoal[] = [
-  { key: 'earn', label: 'Earn from my content', emoji: '💸', blurb: 'Win pays per verified view. Army runs paid brand campaigns.', because: 'you want to earn from what you make', to: 'earn from what you make', words: ['earn', 'make money', 'monetize', 'monetise', 'get paid', 'side income', 'side hustle', 'extra income'], profileGoal: 'Find paid work', apps: { win: 3, army: 3, work: 1, finance: 1 } },
-  { key: 'work', label: 'Find paid work', emoji: '🧰', blurb: 'Gigs and jobs from brands and the team, in Work.', because: 'you want paid work', to: 'find paid work', words: ['find work', 'paid work', 'gigs', 'more clients', 'get hired', 'find a job', 'need a job', 'get a job', 'new job', 'internship', 'opportunities'], profileGoal: 'Find paid work', apps: { work: 3, army: 1, profile: 2, club: 1 } },
-  { key: 'learn', label: 'Learn a new skill', emoji: '📖', blurb: 'Programs with lessons and a mentor, in School.', because: 'you want to learn', to: 'learn a skill', words: ['learn', 'learning', 'a skill', 'new skill', 'skills', 'upskill', 'get better at', 'improve my'], profileGoal: 'Learn skills', apps: { school: 3, knowledge: 2, tools: 1 } },
-  { key: 'grow', label: 'Grow my audience', emoji: '📣', blurb: 'What worked, who follows, and replies that sell.', because: 'you want to grow an audience', to: 'grow an audience', words: ['grow', 'growth', 'more followers', 'followers', 'audience', 'reach', 'views', 'subscribers', 'go viral', 'viral', 'engagement'], apps: { content: 3, audience: 2, automations: 2, profile: 1, community: 1 } },
-  { key: 'sell', label: 'Sell what I make', emoji: '🛍️', blurb: 'Courses, downloads, sessions and memberships, in Shop.', because: 'you want to sell', to: 'sell what you make', words: ['sell', 'selling', 'products', 'merch', 'my course', 'digital products', 'presets', 'ebook', 'my services'], profileGoal: 'Sell what I make', apps: { shop: 3, profile: 2, finance: 1, audience: 1, automations: 1 } },
-  { key: 'money', label: 'Sort out my money', emoji: '💰', blurb: 'Money in and out, dues, budgets and goals, in Finance.', because: 'you want your money sorted', to: 'sort out your money', words: ['save money', 'saving', 'savings', 'budget', 'budgeting', 'debt', 'loan', 'expenses', 'spending', 'my money', 'finances', 'taxes'], apps: { finance: 3, reviews: 1 } },
-  { key: 'people', label: 'Meet new people', emoji: '🫶', blurb: 'Small tables near you, a feed, events and friends.', because: 'you want to meet people', to: 'meet people', words: ['meet people', 'friends', 'make friends', 'network', 'networking', 'community', 'people like me', 'collab', 'collabs', 'collaborate'], profileGoal: 'Collaborate', apps: { circles: 3, community: 2, bond: 2, party: 2, club: 1 } },
-  { key: 'health', label: 'Feel better day to day', emoji: '🌿', blurb: 'Mood, sleep, stress and calm, on one score.', because: 'you want to feel better day to day', to: 'feel better day to day', words: ['feel better', 'mood', 'mental health', 'calm', 'peace', 'health', 'healthy', 'happier', 'sleep better'], profileGoal: 'Get healthier habits', apps: { wellbeing: 3, mood: 2, sleep: 2, stress: 2, mindful: 2, life: 1 } },
-  { key: 'move', label: 'Move more', emoji: '👟', blurb: 'Run clubs, movement minutes and a body score.', because: 'you want to move more', to: 'move more', words: ['fitness', 'get fit', 'lose weight', 'weight loss', 'exercise', 'run more', 'move more', 'workout', 'be active'], profileGoal: 'Get healthier habits', apps: { run: 3, life: 2, wellbeing: 1 } },
-  { key: 'life', label: 'Work on myself', emoji: '🏰', blurb: 'The deeper path: your seven relationships, a routine and a plan.', because: 'you want to work on yourself', to: 'work on yourself', words: ['my life', 'life together', 'purpose', 'discipline', 'self improvement', 'self-improvement', 'better person', 'habits', 'routine', 'relationships', 'grow as a person'], apps: { journal: 2, reviews: 2, life: 2, mindful: 1, discover: 2 } },
-  { key: 'clients', label: 'Manage my clients and invoices', emoji: '🗂️', blurb: 'Clients, deliverables, time, invoices and approvals, in Agency.', because: 'you want your client work in one place', to: 'manage your clients and invoices', words: ['manage clients', 'manage my clients', 'client management', 'invoice', 'invoices', 'invoicing', 'send invoices', 'bill clients', 'client approvals', 'client portal'], apps: { agency: 3, finance: 2, shop: 1 } },
-  { key: 'plan', label: 'Plan my week and stay on track', emoji: '🗓️', blurb: 'Plan my week on Daily is always on. Reviews adds a calendar and reminders for looking back.', because: 'you want to plan your week and stay on track', to: 'plan your week and stay on track', words: ['plan my week', 'plan my day', 'plan my time', 'stay on track', 'stay organized', 'stay organised', 'time management', 'manage my time', 'be more productive', 'to-do list', 'to do list'], apps: { reviews: 3, mindful: 1, journal: 1, life: 1 } },
-  { key: 'find_coach', label: 'Work with a life coach', emoji: '🙋', blurb: 'A coach the team checked sees what you share and helps you keep going.', because: 'you want a coach in your corner', to: 'work with a life coach', words: ['need a life coach', 'want a life coach', 'find a life coach', 'get a life coach', 'need a coach', 'want a coach', 'find a coach', 'get a coach', 'my coach', 'accountability', 'keep me accountable', 'hold me accountable'], apps: { coaching: 3, life: 1, reviews: 1 } },
+  { key: 'earn', label: 'Earn from my content', icon: 'BadgeDollarSign', blurb: 'Win pays per verified view. Army runs paid brand campaigns.', because: 'you want to earn from what you make', to: 'earn from what you make', words: ['earn', 'make money', 'monetize', 'monetise', 'get paid', 'side income', 'side hustle', 'extra income'], profileGoal: 'Find paid work', apps: { win: 3, army: 3, work: 1, finance: 1 } },
+  { key: 'work', label: 'Find paid work', icon: 'BriefcaseBusiness', blurb: 'Gigs and jobs from brands and the team, in Work.', because: 'you want paid work', to: 'find paid work', words: ['find work', 'paid work', 'gigs', 'more clients', 'get hired', 'find a job', 'need a job', 'get a job', 'new job', 'internship', 'opportunities'], profileGoal: 'Find paid work', apps: { work: 3, army: 1, profile: 2, club: 1 } },
+  { key: 'learn', label: 'Learn a new skill', icon: 'GraduationCap', blurb: 'Programs with lessons and a mentor, in School.', because: 'you want to learn', to: 'learn a skill', words: ['learn', 'learning', 'a skill', 'new skill', 'skills', 'upskill', 'get better at', 'improve my'], profileGoal: 'Learn skills', apps: { school: 3, knowledge: 2, tools: 1 } },
+  { key: 'grow', label: 'Grow my audience', icon: 'Megaphone', blurb: 'What worked, who follows, and replies that sell.', because: 'you want to grow an audience', to: 'grow an audience', words: ['grow', 'growth', 'more followers', 'followers', 'audience', 'reach', 'views', 'subscribers', 'go viral', 'viral', 'engagement'], apps: { content: 3, audience: 2, automations: 2, profile: 1, community: 1 } },
+  { key: 'sell', label: 'Sell what I make', icon: 'ShoppingBag', blurb: 'Courses, downloads, sessions and memberships, in Shop.', because: 'you want to sell', to: 'sell what you make', words: ['sell', 'selling', 'products', 'merch', 'my course', 'digital products', 'presets', 'ebook', 'my services'], profileGoal: 'Sell what I make', apps: { shop: 3, profile: 2, finance: 1, audience: 1, automations: 1 } },
+  { key: 'money', label: 'Sort out my money', icon: 'Wallet', blurb: 'Money in and out, dues, budgets and goals, in Finance.', because: 'you want your money sorted', to: 'sort out your money', words: ['save money', 'saving', 'savings', 'budget', 'budgeting', 'debt', 'loan', 'expenses', 'spending', 'my money', 'finances', 'taxes'], apps: { finance: 3, reviews: 1 } },
+  { key: 'people', label: 'Meet new people', icon: 'UsersRound', blurb: 'Small tables near you, a feed, events and friends.', because: 'you want to meet people', to: 'meet people', words: ['meet people', 'friends', 'make friends', 'network', 'networking', 'community', 'people like me', 'collab', 'collabs', 'collaborate'], profileGoal: 'Collaborate', apps: { circles: 3, community: 2, bond: 2, party: 2, club: 1 } },
+  { key: 'health', label: 'Feel better day to day', icon: 'HeartPulse', blurb: 'Mood, sleep, stress and calm, on one score.', because: 'you want to feel better day to day', to: 'feel better day to day', words: ['feel better', 'mood', 'mental health', 'calm', 'peace', 'health', 'healthy', 'happier', 'sleep better'], profileGoal: 'Get healthier habits', apps: { wellbeing: 3, mood: 2, sleep: 2, stress: 2, mindful: 2, life: 1 } },
+  { key: 'move', label: 'Move more', icon: 'Footprints', blurb: 'Run clubs, movement minutes and a body score.', because: 'you want to move more', to: 'move more', words: ['fitness', 'get fit', 'lose weight', 'weight loss', 'exercise', 'run more', 'move more', 'workout', 'be active'], profileGoal: 'Get healthier habits', apps: { run: 3, life: 2, wellbeing: 1 } },
+  { key: 'life', label: 'Work on myself', icon: 'Landmark', blurb: 'The deeper path: your seven relationships, a routine and a plan.', because: 'you want to work on yourself', to: 'work on yourself', words: ['my life', 'life together', 'purpose', 'discipline', 'self improvement', 'self-improvement', 'better person', 'habits', 'routine', 'relationships', 'grow as a person'], apps: { journal: 2, reviews: 2, life: 2, mindful: 1, discover: 2 } },
+  { key: 'clients', label: 'Manage my clients and invoices', icon: 'FolderKanban', blurb: 'Clients, deliverables, time, invoices and approvals, in Agency.', because: 'you want your client work in one place', to: 'manage your clients and invoices', words: ['manage clients', 'manage my clients', 'client management', 'invoice', 'invoices', 'invoicing', 'send invoices', 'bill clients', 'client approvals', 'client portal'], apps: { agency: 3, finance: 2, shop: 1 } },
+  { key: 'plan', label: 'Plan my week and stay on track', icon: 'CalendarRange', blurb: 'Plan my week on Daily is always on. Reviews adds a calendar and reminders for looking back.', because: 'you want to plan your week and stay on track', to: 'plan your week and stay on track', words: ['plan my week', 'plan my day', 'plan my time', 'stay on track', 'stay organized', 'stay organised', 'time management', 'manage my time', 'be more productive', 'to-do list', 'to do list'], apps: { reviews: 3, mindful: 1, journal: 1, life: 1 } },
+  { key: 'find_coach', label: 'Work with a life coach', icon: 'Target', blurb: 'A coach the team checked sees what you share and helps you keep going.', because: 'you want a coach in your corner', to: 'work with a life coach', words: ['need a life coach', 'want a life coach', 'find a life coach', 'get a life coach', 'need a coach', 'want a coach', 'find a coach', 'get a coach', 'my coach', 'accountability', 'keep me accountable', 'hold me accountable'], apps: { coaching: 3, life: 1, reviews: 1 } },
 ];
 
 export const SETUP_GOAL_BY_KEY: Record<string, SetupGoal> = byKey(SETUP_GOALS.map((g) => [g.key, g]));
@@ -7219,7 +7376,7 @@ export const MAX_SETUP_GOALS = 3;
 export interface SetupBlocker {
   key: string;
   label: string;
-  emoji: string;
+  icon: IconName;
   because: string;
   words: readonly string[];
   apps: Readonly<Record<string, number>>;
@@ -7228,14 +7385,14 @@ export interface SetupBlocker {
 }
 
 export const SETUP_BLOCKERS: readonly SetupBlocker[] = [
-  { key: 'time', label: 'Not enough time', emoji: '⏳', because: 'time is short', words: ['no time', 'not enough time', 'busy', 'too busy', 'short on time'], cap: 3, apps: {} },
-  { key: 'focus', label: 'Hard to focus (ADHD counts)', emoji: '🌀', because: 'focus is hard', words: ['adhd', 'distracted', 'procrastinate', 'procrastinating', 'procrastination', "can't focus", 'cant focus', 'hard to focus', 'overthinking'], cap: 4, apps: { mindful: 1 } },
-  { key: 'energy', label: 'Low energy or feeling lazy', emoji: '🔋', because: 'energy runs low', words: ['lazy', 'laziness', 'tired', 'no energy', 'low energy', 'unmotivated', 'no motivation', 'burnt out', 'burned out', 'burnout', 'exhausted'], apps: { sleep: 2, mood: 1, wellbeing: 1 } },
-  { key: 'start', label: 'Not sure where to start', emoji: '🗺️', because: 'you are not sure where to start', words: ['where to start', 'how to start', "don't know how", 'dont know how', 'confused', 'feel lost', "i'm lost", 'no idea'], apps: { school: 2, knowledge: 2 } },
-  { key: 'alone', label: 'Doing it alone', emoji: '🫥', because: 'you are doing it alone', words: ['alone', 'lonely', 'loneliness', 'no friends', 'by myself', 'isolated', 'on my own'], apps: { circles: 2, community: 2, bond: 1, party: 1 } },
-  { key: 'cash', label: 'Money is tight', emoji: '🪫', because: 'money is tight', words: ['broke', 'no money', 'money is tight', 'tight on money', "can't afford", 'cant afford', 'in debt'], apps: { finance: 2, win: 1, work: 1 } },
-  { key: 'stress', label: 'Stress or worry', emoji: '🌊', because: 'stress gets in', words: ['stress', 'stressed', 'anxious', 'anxiety', 'worry', 'worried', 'overwhelmed', 'pressure'], apps: { stress: 2, journal: 2, mindful: 1 } },
-  { key: 'sleep', label: 'Bad sleep', emoji: '🌙', because: 'sleep is off', words: ['bad sleep', 'insomnia', "can't sleep", 'cant sleep', 'sleep badly', 'no sleep', 'sleep at 4', 'sleep at 3'], apps: { sleep: 3 } },
+  { key: 'time', label: 'Not enough time', icon: 'Hourglass', because: 'time is short', words: ['no time', 'not enough time', 'busy', 'too busy', 'short on time'], cap: 3, apps: {} },
+  { key: 'focus', label: 'Hard to focus (ADHD counts)', icon: 'Tornado', because: 'focus is hard', words: ['adhd', 'distracted', 'procrastinate', 'procrastinating', 'procrastination', "can't focus", 'cant focus', 'hard to focus', 'overthinking'], cap: 4, apps: { mindful: 1 } },
+  { key: 'energy', label: 'Low energy or feeling lazy', icon: 'BatteryLow', because: 'energy runs low', words: ['lazy', 'laziness', 'tired', 'no energy', 'low energy', 'unmotivated', 'no motivation', 'burnt out', 'burned out', 'burnout', 'exhausted'], apps: { sleep: 2, mood: 1, wellbeing: 1 } },
+  { key: 'start', label: 'Not sure where to start', icon: 'Signpost', because: 'you are not sure where to start', words: ['where to start', 'how to start', "don't know how", 'dont know how', 'confused', 'feel lost', "i'm lost", 'no idea'], apps: { school: 2, knowledge: 2 } },
+  { key: 'alone', label: 'Doing it alone', icon: 'UserRound', because: 'you are doing it alone', words: ['alone', 'lonely', 'loneliness', 'no friends', 'by myself', 'isolated', 'on my own'], apps: { circles: 2, community: 2, bond: 1, party: 1 } },
+  { key: 'cash', label: 'Money is tight', icon: 'WalletMinimal', because: 'money is tight', words: ['broke', 'no money', 'money is tight', 'tight on money', "can't afford", 'cant afford', 'in debt'], apps: { finance: 2, win: 1, work: 1 } },
+  { key: 'stress', label: 'Stress or worry', icon: 'WavesHorizontal', because: 'stress gets in', words: ['stress', 'stressed', 'anxious', 'anxiety', 'worry', 'worried', 'overwhelmed', 'pressure'], apps: { stress: 2, journal: 2, mindful: 1 } },
+  { key: 'sleep', label: 'Bad sleep', icon: 'Moon', because: 'sleep is off', words: ['bad sleep', 'insomnia', "can't sleep", 'cant sleep', 'sleep badly', 'no sleep', 'sleep at 4', 'sleep at 3'], apps: { sleep: 3 } },
 ];
 
 export const SETUP_BLOCKER_BY_KEY: Record<string, SetupBlocker> = byKey(SETUP_BLOCKERS.map((b) => [b.key, b]));
@@ -7597,25 +7754,25 @@ export function parseIntake(raw: string | null | undefined): Intake {
 /** A few small groups of choices, so a list reads at a glance. The setup chat draws every list this way. */
 export interface ChoiceGroup {
   label: string;
-  emoji: string;
+  icon: IconName;
   keys: readonly string[];
 }
 
 export const SETUP_GOAL_GROUPS: readonly ChoiceGroup[] = [
-  { label: 'Money and work', emoji: '💸', keys: ['earn', 'work', 'sell', 'clients', 'money'] },
-  { label: 'Grow', emoji: '🌱', keys: ['learn', 'grow', 'people', 'plan'] },
-  { label: 'You', emoji: '🌿', keys: ['health', 'move', 'life', 'find_coach'] },
+  { label: 'Money and work', icon: 'Banknote', keys: ['earn', 'work', 'sell', 'clients', 'money'] },
+  { label: 'Grow', icon: 'Sprout', keys: ['learn', 'grow', 'people', 'plan'] },
+  { label: 'You', icon: 'UserRound', keys: ['health', 'move', 'life', 'find_coach'] },
 ];
 
 export const SETUP_ROLE_GROUPS: readonly ChoiceGroup[] = [
-  { label: 'What you do', emoji: '🛠️', keys: ['creator', 'freelancer', 'agency_owner', 'employee', 'founder', 'coach'] },
-  { label: 'Where you are in life', emoji: '🧭', keys: ['student', 'explorer', 'parent'] },
+  { label: 'What you do', icon: 'BriefcaseBusiness', keys: ['creator', 'freelancer', 'agency_owner', 'employee', 'founder', 'coach'] },
+  { label: 'Where you are in life', icon: 'Compass', keys: ['student', 'explorer', 'parent'] },
 ];
 
 export const SETUP_BLOCKER_GROUPS: readonly ChoiceGroup[] = [
-  { label: 'Time and energy', emoji: '⏳', keys: ['time', 'energy', 'sleep'] },
-  { label: 'Head space', emoji: '🧠', keys: ['focus', 'stress', 'start'] },
-  { label: 'Life stuff', emoji: '🤝', keys: ['alone', 'cash'] },
+  { label: 'Time and energy', icon: 'Hourglass', keys: ['time', 'energy', 'sleep'] },
+  { label: 'Head space', icon: 'Brain', keys: ['focus', 'stress', 'start'] },
+  { label: 'Life stuff', icon: 'Handshake', keys: ['alone', 'cash'] },
 ];
 
 /** Every app the setup can switch on, said the way a friend would say it. The match shows this line under each app. */
@@ -9129,20 +9286,21 @@ const sinD = (d: number) => Math.sin(d * RAD);
 const cosD = (d: number) => Math.cos(d * RAD);
 
 export type DesignBody = 'sun' | 'earth' | 'moon' | 'nnode' | 'snode' | 'mercury' | 'venus' | 'mars' | 'jupiter' | 'saturn' | 'uranus' | 'neptune' | 'pluto';
+/** Each glyph ends in U+FE0E (text presentation), so a phone draws it as a symbol in the text colour, never as a colour emoji. */
 export const DESIGN_BODIES: readonly { key: DesignBody; name: string; glyph: string }[] = [
-  { key: 'sun', name: 'Sun', glyph: '☉' },
-  { key: 'earth', name: 'Earth', glyph: '⊕' },
-  { key: 'moon', name: 'Moon', glyph: '☽' },
-  { key: 'nnode', name: 'North node', glyph: '☊' },
-  { key: 'snode', name: 'South node', glyph: '☋' },
-  { key: 'mercury', name: 'Mercury', glyph: '☿' },
-  { key: 'venus', name: 'Venus', glyph: '♀' },
-  { key: 'mars', name: 'Mars', glyph: '♂' },
-  { key: 'jupiter', name: 'Jupiter', glyph: '♃' },
-  { key: 'saturn', name: 'Saturn', glyph: '♄' },
-  { key: 'uranus', name: 'Uranus', glyph: '♅' },
-  { key: 'neptune', name: 'Neptune', glyph: '♆' },
-  { key: 'pluto', name: 'Pluto', glyph: '♇' },
+  { key: 'sun', name: 'Sun', glyph: '☉\uFE0E' },
+  { key: 'earth', name: 'Earth', glyph: '⊕\uFE0E' },
+  { key: 'moon', name: 'Moon', glyph: '☽\uFE0E' },
+  { key: 'nnode', name: 'North node', glyph: '☊\uFE0E' },
+  { key: 'snode', name: 'South node', glyph: '☋\uFE0E' },
+  { key: 'mercury', name: 'Mercury', glyph: '☿\uFE0E' },
+  { key: 'venus', name: 'Venus', glyph: '♀\uFE0E' },
+  { key: 'mars', name: 'Mars', glyph: '♂\uFE0E' },
+  { key: 'jupiter', name: 'Jupiter', glyph: '♃\uFE0E' },
+  { key: 'saturn', name: 'Saturn', glyph: '♄\uFE0E' },
+  { key: 'uranus', name: 'Uranus', glyph: '♅\uFE0E' },
+  { key: 'neptune', name: 'Neptune', glyph: '♆\uFE0E' },
+  { key: 'pluto', name: 'Pluto', glyph: '♇\uFE0E' },
 ];
 
 /** The Julian day of an instant (milliseconds since 1970, UTC). */
@@ -9522,7 +9680,7 @@ export function parseDesignInput(raw: unknown): DesignInput {
   return { date, time, zone, place: str('place', 80), name };
 }
 export function designInputProblem(i: DesignInput, today = new Date().toISOString().slice(0, 10)): string | null {
-  if (!i.date || Number.isNaN(Date.parse(`${i.date}T00:00:00Z`))) return 'Enter your birth date.';
+  if (!isRealDay(i.date)) return 'Enter your birth date.';
   if (i.date > today) return 'That day has not happened yet.';
   if (i.date < '1900-01-01') return 'The chart works for births from 1900 on.';
   if (!i.time) return 'Enter your birth time, as the hours and minutes on your birth record.';
@@ -11931,7 +12089,15 @@ export function parseInvoiceDoc(v: unknown, base: InvoiceDoc = emptyInvoiceDoc()
     bank: 'bank' in o ? parseBank(o.bank) : base.bank,
     design: oneOfList(o.design, INVOICE_DESIGNS, base.design),
     discountMode: mode,
-    discountValue: mode === 'none' ? 0 : mode === 'percent' ? bps(o.discountValue, 10000) : Math.max(0, Math.min(1_000_000_000_00, Math.round(Number(o.discountValue)) || 0)),
+    // A doc that leaves the value out keeps the base's, while the mode is the base's too: an invoice made from a template keeps its discount.
+    discountValue:
+      mode === 'none'
+        ? 0
+        : !('discountValue' in o) && mode === base.discountMode
+          ? base.discountValue
+          : mode === 'percent'
+            ? bps(o.discountValue, 10000)
+            : Math.max(0, Math.min(1_000_000_000_00, Math.round(Number(o.discountValue)) || 0)),
     gstBps: 'gstBps' in o ? bps(o.gstBps, 2800) : base.gstBps,
     gstSplit: 'gstSplit' in o ? o.gstSplit === true : base.gstSplit,
     tdsBps: 'tdsBps' in o ? bps(o.tdsBps, 3000) : base.tdsBps,
@@ -12122,7 +12288,14 @@ export interface ContractSection {
   extra?: { units: number; feeCents: number };
   unitName?: string;
   questions?: ContractQuestion[];
+  /**
+   * Whether the section is on the printed page. The agreement is its main text; a section of information (how the work runs, what happens next) or a
+   * brief the client answers at the link can stay on the screen and out of the print. When it is not set, a brief is not printed and everything else is.
+   */
+  print?: boolean;
 }
+/** Whether a section goes on the printed page. */
+export const sectionPrints = (s: Pick<ContractSection, 'kind' | 'print'>): boolean => s.print ?? s.kind !== 'brief';
 export interface ContractDoc {
   title: string;
   subtitle: string;
@@ -12200,7 +12373,7 @@ export const CONTRACT_TEMPLATES: readonly ContractTemplate[] = [
           ],
         },
         text('ownership', '4. Trial content, ownership and use', '**4.1 Trial content.** Anything made in the trial is for evaluation and approval only. The client may not publish, share, boost, advertise, reuse, sublicense or otherwise use it commercially unless a paid engagement is later confirmed in writing. If the work does not go ahead, unpublished trial content stays unused and published trial content comes down on request.\n\n**4.2 Rights.** Unless agreed in writing, ownership and usage rights do not pass to the client just because of the trial. Commercial rights are set by the final engagement agreement.\n\n**4.3 Conflicts.** Either party may stop talks if a conflict of interest or competitor overlap appears. If the service provider finds one, it may ask for the trial content to come out of use.'),
-        text('after', '5. What happens after the trial', 'If the client wants to go on, the pilot runs like this:\n\n- **Step 1, trial review.** The trial pieces are shared for review.\n- **Step 2, one set of feedback.** The client sends feedback through one point of contact. Small edits are handled as in section 8.\n- **Step 3, pick a package.** The client chooses a package from section 6, for one brand.\n- **Step 4, agreement and prepayment.** A pilot agreement is signed, an invoice is raised and the full package fee is paid in advance. Work starts when payment arrives.\n- **Step 5, plan before each shoot.** The parties lock the items in section 8 first. The brief in section 3 is the starting point.\n- **Step 6, shoot, edit, deliver.** The batch is made in a planned cycle, with review points where useful and small revisions included.\n- **Step 7, usage rights.** Rights to the final pieces pass on full payment, on the terms of the pilot agreement.\n\nDelivery dates are set in the pilot agreement once the plan is locked.'),
+        { ...text('after', '5. What happens after the trial', 'If the client wants to go on, the pilot runs like this:\n\n- **Step 1, trial review.** The trial pieces are shared for review.\n- **Step 2, one set of feedback.** The client sends feedback through one point of contact. Small edits are handled as in section 8.\n- **Step 3, pick a package.** The client chooses a package from section 6, for one brand.\n- **Step 4, agreement and prepayment.** A pilot agreement is signed, an invoice is raised and the full package fee is paid in advance. Work starts when payment arrives.\n- **Step 5, plan before each shoot.** The parties lock the items in section 8 first. The brief in section 3 is the starting point.\n- **Step 6, shoot, edit, deliver.** The batch is made in a planned cycle, with review points where useful and small revisions included.\n- **Step 7, usage rights.** Rights to the final pieces pass on full payment, on the terms of the pilot agreement.\n\nDelivery dates are set in the pilot agreement once the plan is locked.'), print: false },
         {
           id: 'packages',
           heading: '6. Packages and pricing',
@@ -12215,7 +12388,7 @@ export const CONTRACT_TEMPLATES: readonly ContractTemplate[] = [
           extra: { units: 5, feeCents: 0 },
         },
         text('payment', '7. Payment', 'All payments are prepaid. The full package fee is due before planning or production starts. An invoice is raised when the client confirms the package and signs the pilot agreement. Work starts when payment arrives.\n\nIf payment is late or only part paid, the service provider may pause work, hold back edited files and raw footage, and keep usage rights suspended. Refund and delivery terms are set out in the pilot agreement.'),
-        text('how', '8. How we work', '**8.1 Direction and execution.** The client gives the objective, the product facts and the must-haves. The service provider owns the creative execution. Before each shoot the parties lock: the main objective, the products featured, the target audience, the core message, the response wanted, required brand and product facts, mandatory items, things to avoid, and any special needs for the shoot.\n\n**8.2 Flexibility on the day.** Once the direction is agreed, the team needs reasonable room on the ground to follow what is working.\n\n**8.3 Reviews and revisions.** Small edit-level changes such as text, trims, order and captions are part of the process. A new concept, format, set-up, new footage or a reshoot is discussed separately before it is started. The client sends feedback through one point of contact.\n\n**8.4 Delivery.** The agreed batch is finished in one planned cycle, not by changing direction between single pieces. Work can be shared at agreed checkpoints.\n\n**8.5 Results.** The service provider will make the content to get attention and the aim of the campaign. Results also depend on the platform, the audience, the account, ad spend, the offer and how the content is spread. So no particular views, reach, engagement, sales or return on ad spend can be promised.'),
+        { ...text('how', '8. How we work', '**8.1 Direction and execution.** The client gives the objective, the product facts and the must-haves. The service provider owns the creative execution. Before each shoot the parties lock: the main objective, the products featured, the target audience, the core message, the response wanted, required brand and product facts, mandatory items, things to avoid, and any special needs for the shoot.\n\n**8.2 Flexibility on the day.** Once the direction is agreed, the team needs reasonable room on the ground to follow what is working.\n\n**8.3 Reviews and revisions.** Small edit-level changes such as text, trims, order and captions are part of the process. A new concept, format, set-up, new footage or a reshoot is discussed separately before it is started. The client sends feedback through one point of contact.\n\n**8.4 Delivery.** The agreed batch is finished in one planned cycle, not by changing direction between single pieces. Work can be shared at agreed checkpoints.\n\n**8.5 Results.** The service provider will make the content to get attention and the aim of the campaign. Results also depend on the platform, the audience, the account, ad spend, the offer and how the content is spread. So no particular views, reach, engagement, sales or return on ad spend can be promised.'), print: false },
         text('law', '9. Confidentiality and law', `${CONFIDENTIALITY}\n\nThis agreement, with the completed brief, is the whole understanding between the parties for the trial and replaces earlier talks about it. The pilot is covered by a separate agreement.`),
         { id: 'sign', heading: '10. Acceptance', kind: 'signatures', body: SIGNATURES },
       ],
@@ -12335,6 +12508,7 @@ export function parseContractDoc(v: unknown): ContractDoc | null {
     seen.add(id);
     const kind = oneOfList(s.kind, kinds, 'text');
     const section: ContractSection = { id, heading: cleanText(s.heading, 120), kind, body: cleanText(s.body, CONTRACT_TEXT_MAX) };
+    if (typeof s.print === 'boolean') section.print = s.print;
     if (kind === 'packages') {
       const ps = Array.isArray(s.packages) ? s.packages : [];
       section.packages = ps

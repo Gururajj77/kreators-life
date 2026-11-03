@@ -414,8 +414,10 @@ const rankOf = (u: UserRow) => communityRankOf({ role: u.role, permissions: pars
 community.get('/mutes', async (c) => {
   const me = c.get('user');
   if (!canMute(rankOf(me), 'member')) return c.json({ error: 'you do not have access to that' }, 403);
-  const rows = await c.env.DB.prepare('SELECT m.user_id, m.reason, m.created_at, m.muter_rank, u.display_name, u.handle FROM community_mutes m JOIN users u ON u.id = m.user_id ORDER BY m.created_at DESC LIMIT 100').all<{ user_id: string; reason: string; created_at: string; muter_rank: string; display_name: string; handle: string | null }>();
-  return c.json({ mutes: rows.results.map((r) => ({ userId: r.user_id, name: nameOf(r), handle: r.handle, reason: r.reason, by: r.muter_rank, createdAt: r.created_at })) });
+  const ask = pageOf(c);
+  const rows = await c.env.DB.prepare('SELECT m.user_id, m.reason, m.created_at, m.muter_rank, u.display_name, u.handle FROM community_mutes m JOIN users u ON u.id = m.user_id ORDER BY m.created_at DESC LIMIT ? OFFSET ?').bind(ask.limit, ask.offset).all<{ user_id: string; reason: string; created_at: string; muter_rank: string; display_name: string; handle: string | null }>();
+  const pg = paged(rows.results, ask);
+  return c.json({ page: pg.page, mutes: pg.items.map((r) => ({ userId: r.user_id, name: nameOf(r), handle: r.handle, reason: r.reason, by: r.muter_rank, createdAt: r.created_at })) });
 });
 
 community.post('/members/:userId/mute', async (c) => {

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { EVENT_TYPE_META, LISTING_TYPES, type Listing, type ListingType, type PublicStats } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { nameOf } from '../db';
+import { nameOf, pageOf, paged } from '../db';
 import { mediaForListings } from './media';
 import { cache } from '../cachecontrol';
 
@@ -198,13 +198,15 @@ export async function listingsFor(db: D1Database, o: Opts): Promise<Listing[]> {
 
 explore.get('/', async (c) => {
   const type = c.req.query('type');
-  const listings = await listingsFor(c.env.DB, {
+  const ask = pageOf(c);
+  const all = await listingsFor(c.env.DB, {
     q: c.req.query('q') ?? '',
     type: (LISTING_TYPES as readonly string[]).includes(type ?? '') ? (type as ListingType) : undefined,
     featuredOnly: c.req.query('featured') === '1',
-    limit: Math.min(100, Number(c.req.query('limit')) || 60),
+    limit: ask.offset + ask.limit,
   });
-  return c.json({ listings });
+  const pg = paged(all.slice(ask.offset), ask);
+  return c.json({ page: pg.page, listings: pg.items });
 });
 
 explore.get('/stats', async (c) => {

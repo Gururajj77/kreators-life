@@ -1,6 +1,6 @@
 import { detectPlatform, type ResearchItem } from '@kreators/shared';
 import type { Env } from './env';
-import { fetchT, TIMEOUT } from './http';
+import { fetchT, isTimeout, TIMEOUT } from './http';
 import { publicHttpsUrl, safeFetch, UnsafeUrlError } from './safeurl';
 
 /**
@@ -50,15 +50,16 @@ function fromReach(raw: unknown): ResearchItem[] {
 /** Ask the bridge to run `agent-reach <channel> <action> ...`. */
 async function bridge(env: Env, channel: string, action: string, params: Record<string, string | number>): Promise<ReachResult> {
   if (!env.REACH_URL) return fail('Agent Reach is not connected. Set REACH_URL to the bridge.');
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 120_000);
   try {
-    const res = await fetch(`${env.REACH_URL.replace(/\/$/, '')}/run`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...(env.REACH_KEY ? { authorization: `Bearer ${env.REACH_KEY}` } : {}) },
-      body: JSON.stringify({ channel, action, params }),
-      signal: ctl.signal,
-    });
+    const res = await fetchT(
+      `${env.REACH_URL.replace(/\/$/, '')}/run`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...(env.REACH_KEY ? { authorization: `Bearer ${env.REACH_KEY}` } : {}) },
+        body: JSON.stringify({ channel, action, params }),
+      },
+      TIMEOUT.reach,
+    );
     const json = (await res.json().catch(() => ({}))) as { ok?: boolean; backend?: string | null; items?: unknown; error?: { code?: string; message?: string; hint?: string } | null };
     if (!res.ok || !json.ok) {
       const e = json.error ?? {};
@@ -66,9 +67,7 @@ async function bridge(env: Env, channel: string, action: string, params: Record<
     }
     return { ok: true, backend: json.backend ? `agent-reach/${json.backend}` : 'agent-reach', items: fromReach(json.items), error: '' };
   } catch (e) {
-    return fail(e instanceof Error && e.name === 'AbortError' ? 'Agent Reach took too long.' : 'Agent Reach could not be reached.', 'agent-reach');
-  } finally {
-    clearTimeout(timer);
+    return fail(isTimeout(e) ? 'Agent Reach took too long.' : 'Agent Reach could not be reached.', 'agent-reach');
   }
 }
 

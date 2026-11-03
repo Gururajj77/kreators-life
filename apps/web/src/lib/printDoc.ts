@@ -5,14 +5,17 @@ import { useSearchParams } from 'react-router';
  * Print or save as PDF, with the browser's own title set to the document's name for the moment of printing (that title becomes the file's
  * name), then put back. A Worker does not make PDFs, so this is the one way; the print stylesheet in app.css makes the page a legal document.
  */
-export function printAs(title: string): void {
+export function printAs(title: string, bodyClass?: string): void {
   const before = document.title;
   const restore = () => {
     document.title = before;
+    if (bodyClass) document.body.classList.remove(bodyClass);
     window.removeEventListener('afterprint', restore);
   };
   window.addEventListener('afterprint', restore);
   document.title = title;
+  // A body class (the month calendar's `printing-month`) picks which print rules in app.css apply, for the moment of printing only.
+  if (bodyClass) document.body.classList.add(bodyClass);
   window.print();
 }
 

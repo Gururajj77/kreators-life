@@ -1,9 +1,10 @@
-import { PUBLIC_BADGES, typedCents, isFeatured, PREOWNED_CONDITION_META, PREOWNED_CONDITIONS, STORE_CATEGORIES, STORE_STAGE_META, STORE_STAGES, type MarketCard, type PreownedListing, type StoreItem, type StoreKit, type StoreStage } from '@kreators/shared';
+import { PUBLIC_BADGES, typedCents, isFeatured, PREOWNED_CONDITION_META, PREOWNED_CONDITIONS, STORE_CATEGORIES, STORE_STAGE_META, STORE_STAGES, unlockAt, type MarketCard, type PreownedListing, type StoreItem, type StoreKit, type StoreStage } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { Button } from '../components/Button';
 import { LockedButton } from '../components/LockedButton';
 import { ListingSheet } from '../components/ListingSheet';
+import { MediaSection } from '../components/MediaSection';
 import { BackLink } from '../components/PageHeader';
 import { money } from '../components/PeriodPanel';
 import { Screen } from '../components/Screen';
@@ -136,9 +137,10 @@ export function Store() {
             Featured this week
           </h2>
           <div className="mt-sm">
-          <ul className="scroll-row list-none gap-sm">
+          {/* A single featured piece fills the row instead of sitting at a fixed card width with empty space beside it. */}
+          <ul className={d.featured.length === 1 ? 'list-none' : 'scroll-row list-none gap-sm'}>
             {d.featured.map((f) => (
-              <li key={`${f.type}-${f.type === 'item' ? f.item.id : f.type === 'kit' ? f.kit.id : f.listing.id}`} className="w-[260px] shrink-0">
+              <li key={`${f.type}-${f.type === 'item' ? f.item.id : f.type === 'kit' ? f.kit.id : f.listing.id}`} className={d.featured.length === 1 ? 'w-full' : 'w-[260px] shrink-0'}>
                 <FeaturedCard card={f} onOpen={setOpen} />
               </li>
             ))}
@@ -265,7 +267,8 @@ function ItemBody({ item }: { item: StoreItem }) {
         ) : null}
       </div>
       {!item.unlock.ok && <LockedButton unlock={item.unlock} />}
-      {item.unlock.ok && <span className="block text-[12px] font-bold text-ink-mute">Partner link. kreators.app may earn a share.{item.minPoints > 0 || item.minXp > 0 || item.badge ? ' Earned: it asks for what you already have.' : ''}</span>}
+      {item.unlock.ok && <span className="block text-[12px] font-bold text-ink-mute">Partner link. kreators.app may earn a share.{item.minPoints > 0 || item.minXp > 0 || item.badge ? ` ${unlockAt(item.unlock)}. You have it.` : ''}</span>}
+      <MediaSection type="item" id={item.id} title="More pictures, GIFs and video" />
     </div>
   );
 }

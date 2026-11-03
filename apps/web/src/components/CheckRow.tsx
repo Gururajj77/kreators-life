@@ -1,4 +1,6 @@
 import { useId, useState, type CSSProperties, type ReactNode } from 'react';
+import { Check, Clock } from 'lucide-react';
+import { Icon } from './Icon';
 
 interface Props {
   checked: boolean;
@@ -86,18 +88,11 @@ export function CheckRow({
             }}
           >
             {checked ? (
-              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke={text} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 12.5l4.5 4.5L19 7.5" />
-              </svg>
+              <Icon icon={Check} size={22} strokeWidth={3} color={text} />
             ) : locked ? (
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--color-ink-soft)" strokeWidth="2.6" strokeLinecap="round">
-                <circle cx="12" cy="12" r="8.5" />
-                <path d="M12 7.5V12l3 2" />
-              </svg>
+              <Icon icon={Clock} size={18} color="var(--color-ink-soft)" />
             ) : (
-              <svg className="check-preview" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke={color} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 12.5l4.5 4.5L19 7.5" />
-              </svg>
+              <Icon icon={Check} size={22} strokeWidth={3} color={color} className="check-preview" />
             )}
           </span>
           <span className="min-w-0 flex-1">

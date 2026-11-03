@@ -1,7 +1,9 @@
 import { GETTING_STARTED_DAYS, type BriefLine } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Link } from 'react-router';
+import { Check } from 'lucide-react';
 import { api } from '../lib/api';
+import { Icon } from './Icon';
 import { useAuthed } from '../lib/queries';
 
 const TONE: Record<BriefLine['tone'], string> = { good: 'var(--color-r4)', watch: 'var(--color-r1)', neutral: 'var(--color-line)' };
@@ -80,8 +82,8 @@ export function DailyBrief({ date, hour }: { date: string; hour: number }) {
                 {g.items.map((i) => (
                   <li key={i.key}>
                     <Link to={i.to} className={`toy toy-soft flex items-center gap-sm rounded-tile p-sm ${i.done ? 'bg-paper text-ink-soft' : 'bg-paper'}`}>
-                      <span className={`flex size-[24px] shrink-0 items-center justify-center rounded-pill border-2 text-[14px] font-extrabold ${i.done ? 'border-r4 bg-r4 text-on-fill' : 'border-line'}`} aria-hidden="true">
-                        {i.done ? '✓' : ''}
+                      <span className={`flex size-[24px] shrink-0 items-center justify-center rounded-pill border-2 ${i.done ? 'border-r4 bg-r4 text-on-fill' : 'border-line'}`} aria-hidden="true">
+                        {i.done ? <Icon icon={Check} size={14} strokeWidth={3} /> : ''}
                       </span>
                       <span className={`min-w-0 flex-1 text-[14px] font-bold ${i.done ? 'line-through' : ''}`}>{i.label}</span>
                       <span className="sr-only">{i.done ? 'done' : 'not yet'}</span>

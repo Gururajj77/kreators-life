@@ -22,10 +22,12 @@ import {
   type ClientLifecycle,
   type RetainerOption,
 } from '@kreators/shared';
+import { useAuthed } from '../lib/queries';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { ApiError, api } from '../lib/api';
 import { prettyDate, todayLocal } from '../lib/date';
+import { tie } from '../lib/text';
 import { Button } from './Button';
 import { Fold } from './Fold';
 import { Sheet } from './Sheet';
@@ -273,6 +275,60 @@ function DaysForm({ client, life, onClose }: { client: AgencyClient; life: Clien
 }
 
 // ---- the password on the client link
+
+/**
+ * The password line on a document's own page (an invoice, an agreement, another document): whether the client's password guards this link, and
+ * the same controls as the client's page, one tap away. The password belongs to the client, so one lock covers their page and every document
+ * sent to them.
+ */
+export function DocPassword({ clientId, clientName, savedClientId }: { clientId: string | null; clientName: string; savedClientId?: string | null }) {
+  const [open, setOpen] = useState(false);
+  const q = useAuthed(['agency', 'client', clientId ?? ''], () => api.agencyClient(clientId ?? ''), Boolean(clientId));
+  const page = q.data;
+  if (!clientId) {
+    return <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Pick a client for this document to protect its link with a password.</p>;
+  }
+  // The client picked here is not saved yet: the live link still follows the client it was saved with, so its password says nothing yet.
+  if (savedClientId !== undefined && savedClientId !== clientId) {
+    return <p className="no-print mt-sm m-0 text-[14px] font-semibold text-ink-soft">Save this change first. Until then the link is protected by the password of the client it was saved with.</p>;
+  }
+  if (q.isError && !page) {
+    const gone = q.error instanceof ApiError && q.error.status === 404;
+    return (
+      <div role="alert" className="no-print mt-sm flex flex-wrap items-center gap-xs rounded-tile bg-card p-sm shadow-toy-soft">
+        <StatusTag tone="warn">{gone ? 'Client gone' : 'Not checked'}</StatusTag>
+        <p className="m-0 min-w-0 flex-1 text-[14px] font-semibold text-ink-soft">{gone ? 'The client for this document was removed. Pick another client to protect its link.' : 'We could not check the password just now.'}</p>
+        {!gone && (
+          <Button size="sm" variant="outline" onClick={() => void q.refetch()} disabled={q.isFetching}>
+            {q.isFetching ? 'Checking' : 'Try again'}
+          </Button>
+        )}
+      </div>
+    );
+  }
+  const set = page?.lifecycle.password.set;
+  return (
+    <div className="no-print mt-sm flex flex-wrap items-center gap-xs rounded-tile bg-card p-sm shadow-toy-soft">
+      <StatusTag tone={set ? 'good' : 'warn'}>{page ? (set ? 'Password set' : 'No password') : 'Checking'}</StatusTag>
+      <p className="prose-long m-0 min-w-0 flex-1 text-[14px] font-semibold text-ink-soft">
+        {tie(
+          set
+            ? `${clientName || 'The client'} types a password before they can read this link. It is the same one for their page and every document sent to them.`
+            : 'Anyone with this link can open it. Set a password and the client types it first.',
+        )}
+      </p>
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)} disabled={!page}>
+        {set ? 'Change the password' : 'Set a password'}
+      </Button>
+      <Sheet open={open} onClose={() => setOpen(false)} title={`Password for ${clientName || 'this client'}`}>
+        {page && <PortalSecurityCard client={page.client} life={page.lifecycle} />}
+        <div className="mt-md pb-xl">
+          <Button onClick={() => setOpen(false)}>Done</Button>
+        </div>
+      </Sheet>
+    </div>
+  );
+}
 
 /** The password on this client's link: whether there is one, set or make one (shown once), remove it, and when the link was last opened. */
 export function PortalSecurityCard({ client, life }: { client: AgencyClient; life: ClientLifecycle }) {

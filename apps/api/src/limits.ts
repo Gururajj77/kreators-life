@@ -77,6 +77,8 @@ export const LIMITS = {
   portalLoginLink: { max: 20, windowSec: 600 },
   /** A client choosing a retainer length, and the owner's lifecycle calls (stage, password, offer, confirm). */
   lifecycle: { max: 120, windowSec: 3600 },
+  /** Changing the password from Profile, per person: the current password is checked, so a stolen session cannot guess it. */
+  passwordChange: { max: 5, windowSec: 900 },
   /** Lines written in Community and Bond channels. A room is chattier than a one-to-one chat, so this is above `message`. */
   channelMessage: { max: 180, windowSec: 3600 },
 } as const;
@@ -100,7 +102,15 @@ const CHANNEL_DOORS: Door[] = (['community', 'bond'] as const).flatMap((app): Do
 ]);
 
 /** Which doors each limit guards: the method and the path under /api. Patterns follow Hono's. */
-export const ROUTE_LIMITS: readonly { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE'; path: string; limit: LimitName; /** Count the address instead of the person. */ by?: 'address' }[] = [
+export const ROUTE_LIMITS: readonly {
+  method: 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+  path: string;
+  limit: LimitName;
+  /** Count the address instead of the person. */
+  by?: 'address';
+  /** Count only a request whose body carries a discount code, so an ordinary checkout, enrolment or RSVP never spends the code budget. */
+  when?: 'discountCode';
+}[] = [
   ...CHANNEL_DOORS,
   { method: 'POST', path: '/auth/signin', limit: 'signin' },
   { method: 'POST', path: '/auth/signup', limit: 'signup' },
@@ -148,6 +158,7 @@ export const ROUTE_LIMITS: readonly { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE
   { method: 'PUT', path: '/wellbeing/focus-settings', limit: 'prefs' },
   { method: 'PATCH', path: '/wellbeing/focus/:id', limit: 'prefs' },
   { method: 'POST', path: '/me/calendar', limit: 'prefs' },
+  { method: 'PUT', path: '/session/away', limit: 'prefs' },
   { method: 'POST', path: '/discover/more/:kind/submit', limit: 'discover' },
   { method: 'POST', path: '/public/client-error', limit: 'clientError' },
   { method: 'POST', path: '/public/vitals', limit: 'vitals' },
@@ -216,6 +227,33 @@ export const ROUTE_LIMITS: readonly { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE
   { method: 'POST', path: '/public/agency/doc/:token/comments', limit: 'portal' },
   { method: 'POST', path: '/discounts/check', limit: 'discount' },
   { method: 'POST', path: '/discounts/check', limit: 'discountAddress', by: 'address' },
+  // Every checkout that quotes a team code shares the same budget as the check above, so codes cannot be guessed through them.
+  ...(['/credits/checkout', '/school/cohorts/:id/enroll', '/party/events/:id/rsvp', '/store/:productId/checkout'] as const).flatMap((path) => [
+    { method: 'POST' as const, path, limit: 'discount' as const, when: 'discountCode' as const },
+    { method: 'POST' as const, path, limit: 'discountAddress' as const, by: 'address' as const, when: 'discountCode' as const },
+  ]),
+  { method: 'POST', path: '/me/password', limit: 'passwordChange' },
+  // The rest of Agency's writes: everyday work under `agency`, the heavy ones (a fresh client link ends every session, an
+  // import reaches Army) under `lifecycle`, and the business metrics under `prefs`.
+  { method: 'PATCH', path: '/agency/clients/:id', limit: 'agency' },
+  { method: 'DELETE', path: '/agency/clients/:id', limit: 'agency' },
+  { method: 'POST', path: '/agency/clients/:id/portal', limit: 'lifecycle' },
+  { method: 'POST', path: '/agency/clients/:id/army-import', limit: 'lifecycle' },
+  { method: 'DELETE', path: '/agency/items/:id', limit: 'agency' },
+  { method: 'DELETE', path: '/agency/notes/:id', limit: 'agency' },
+  { method: 'POST', path: '/agency/items/:id/army/sync', limit: 'agency' },
+  { method: 'DELETE', path: '/agency/time/:id', limit: 'agency' },
+  { method: 'PATCH', path: '/agency/templates/:id', limit: 'agency' },
+  { method: 'DELETE', path: '/agency/templates/:id', limit: 'agency' },
+  { method: 'PATCH', path: '/agency/invoices/:id', limit: 'agency' },
+  { method: 'DELETE', path: '/agency/invoices/:id', limit: 'agency' },
+  { method: 'DELETE', path: '/agency/comments/:id', limit: 'agency' },
+  { method: 'PATCH', path: '/agency/contracts/:id', limit: 'agency' },
+  { method: 'DELETE', path: '/agency/contracts/:id', limit: 'agency' },
+  { method: 'PATCH', path: '/agency/docs/:id', limit: 'agency' },
+  { method: 'DELETE', path: '/agency/docs/:id', limit: 'agency' },
+  { method: 'PATCH', path: '/reviews/kpis/:id', limit: 'prefs' },
+  { method: 'DELETE', path: '/reviews/kpis/:id', limit: 'prefs' },
 ];
 
 /** The doors that take no session are limited before the session check; everything else after it, per person. */

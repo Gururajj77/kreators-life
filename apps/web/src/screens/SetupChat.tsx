@@ -8,6 +8,7 @@ import {
   MAX_SETUP_GOALS,
   MODULE_BY_KEY,
   MODULE_GROUP_ACCENT,
+  OWN_TAG_ICON,
   readAbout,
   SETUP_APP_LINES,
   SETUP_BLOCKER_BY_KEY,
@@ -18,6 +19,7 @@ import {
   setupSwitchable,
   type AppPick,
   type ChoiceGroup,
+  type IconName,
   type IdentityKind,
   type SetupAnswers,
   type SetupMatch,
@@ -27,6 +29,9 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { useNavigate, useSearchParams } from 'react-router';
 import { PrivateCard, SignInCard } from '../components/AccountForm';
 import { ProfileCard } from '../components/ProfileCard';
+import { Check as CheckGlyph } from 'lucide-react';
+import { AppIcon } from '../components/AppIcon';
+import { Icon } from '../components/Icon';
 import { ChatActions, ChatLinks, ChatScreen, ChoiceChips, ChoiceGroups, typingTime, type ChatChoice, type ChatChoiceGroup, type ChatLine } from '../components/Chat';
 import { api } from '../lib/api';
 import { explainTyped, isQuestion } from '../lib/explain';
@@ -43,6 +48,8 @@ import { useSession } from '../lib/store';
 
 type Part = 'account' | 'private' | 'hello' | 'goals' | 'who' | 'work' | 'way' | 'match' | 'done';
 type Question = 'goals' | 'who' | 'work' | 'way';
+/** What the header says during each question: a name, never a count (the onboarding rule: a few questions, never a number). */
+const QUESTION_LABEL: Record<Question, string> = { goals: 'What you want', who: 'Who you are', work: 'What you make', way: 'What gets in the way' };
 type Line = string | { node: ReactNode };
 type Send = (value: Record<string, string>, label: string) => void;
 type Ask =
@@ -75,32 +82,33 @@ const makes = (a: SetupAnswers) => a.identities.includes('creator') || a.identit
 /** "I'm a student" said back: "you're a student". */
 const youSay = (k: string) => (IDENTITY_BY_KEY[k]?.blurb ?? k).replace(/^I'm /, "you're ").replace(/^I /, 'you ');
 
-const groupsOf = (groups: readonly ChoiceGroup[], choice: (key: string) => ChatChoice): ChatChoiceGroup[] => groups.map((g) => ({ label: g.label, emoji: g.emoji, choices: g.keys.map(choice) }));
-const goalChoice = (k: string): ChatChoice => ({ value: k, label: SETUP_GOAL_BY_KEY[k]!.label, emoji: SETUP_GOAL_BY_KEY[k]!.emoji });
-const blockerChoice = (k: string): ChatChoice => ({ value: k, label: SETUP_BLOCKER_BY_KEY[k]!.label, emoji: SETUP_BLOCKER_BY_KEY[k]!.emoji });
+const groupsOf = (groups: readonly ChoiceGroup[], choice: (key: string) => ChatChoice): ChatChoiceGroup[] => groups.map((g) => ({ label: g.label, icon: g.icon, choices: g.keys.map(choice) }));
+const goalChoice = (k: string): ChatChoice => ({ value: k, label: SETUP_GOAL_BY_KEY[k]!.label, icon: SETUP_GOAL_BY_KEY[k]!.icon });
+const blockerChoice = (k: string): ChatChoice => ({ value: k, label: SETUP_BLOCKER_BY_KEY[k]!.label, icon: SETUP_BLOCKER_BY_KEY[k]!.icon });
 /** Roles, crafts and services: the chip says what the person would say ("I'm a student", "Editing"). */
-const tagChoice = (k: string): ChatChoice => ({ value: k, label: IDENTITY_BY_KEY[k]!.blurb, emoji: IDENTITY_BY_KEY[k]!.emoji });
+const tagChoice = (k: string): ChatChoice => ({ value: k, label: IDENTITY_BY_KEY[k]!.blurb, icon: IDENTITY_BY_KEY[k]!.icon });
 
 function Check({ on }: { on: boolean }) {
   return (
     <span aria-hidden="true" className={`flex size-[24px] shrink-0 items-center justify-center rounded-pill border-2 text-[12px] font-extrabold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line'}`}>
-      {on ? '✓' : ''}
+      {on ? <Icon icon={CheckGlyph} size={14} strokeWidth={3} /> : null}
     </span>
   );
 }
 
 /** What was picked up from something typed, as small pills inside one of Dew's lines. */
 function Tags({ keys }: { keys: string[] }) {
-  const text = (k: string) => {
-    if (k.startsWith('goal:')) return `${SETUP_GOAL_BY_KEY[k.slice(5)]?.emoji} ${SETUP_GOAL_BY_KEY[k.slice(5)]?.label}`;
-    if (k.startsWith('way:')) return `${SETUP_BLOCKER_BY_KEY[k.slice(4)]?.emoji} ${SETUP_BLOCKER_BY_KEY[k.slice(4)]?.label}`;
-    return `${IDENTITY_BY_KEY[k]?.emoji ?? '🏷️'} ${identityLabel(k)}`;
+  const tag = (k: string): { icon: IconName; label: string } => {
+    if (k.startsWith('goal:')) return { icon: SETUP_GOAL_BY_KEY[k.slice(5)]?.icon ?? OWN_TAG_ICON, label: SETUP_GOAL_BY_KEY[k.slice(5)]?.label ?? k.slice(5) };
+    if (k.startsWith('way:')) return { icon: SETUP_BLOCKER_BY_KEY[k.slice(4)]?.icon ?? OWN_TAG_ICON, label: SETUP_BLOCKER_BY_KEY[k.slice(4)]?.label ?? k.slice(4) };
+    return { icon: IDENTITY_BY_KEY[k]?.icon ?? OWN_TAG_ICON, label: identityLabel(k) };
   };
   return (
     <ul className="m-0 flex list-none flex-wrap gap-xs p-0" aria-label="What I picked up">
       {keys.map((k) => (
-        <li key={k} className="rounded-pill bg-card px-sm py-xs text-[14px] font-bold shadow-toy-soft">
-          {text(k)}
+        <li key={k} className="inline-flex items-center gap-xs rounded-pill bg-card px-sm py-xs text-[14px] font-bold shadow-toy-soft">
+          <AppIcon name={tag(k).icon} size={16} className="text-ink-soft" />
+          {tag(k).label}
         </li>
       ))}
     </ul>
@@ -126,9 +134,7 @@ function MatchList({ answers, available, onSend }: { answers: SetupAnswers; avai
           onClick={() => setOn((o) => (o.includes(a.key) ? o.filter((k) => k !== a.key) : [...o, a.key]))}
           className={`toy toy-flat flex w-full items-center gap-sm rounded-tile border-2 bg-card px-sm py-xs text-left ${checked ? 'border-ink' : 'border-line'}`}
         >
-          <span aria-hidden="true" className="text-[22px] leading-none">
-            {mod.emoji}
-          </span>
+          <AppIcon name={mod.icon} size={22} className="text-ink-soft" />
           <span className="min-w-0 flex-1">
             <span className="block text-[16px] font-bold">{mod.name}</span>
             <span className="block text-[14px] font-semibold leading-snug text-ink-soft">{SETUP_APP_LINES[a.key] ?? mod.blurb}</span>
@@ -265,8 +271,8 @@ export function SetupChat() {
     const agency = a.identities.includes('agency_owner');
     const freelance = a.identities.includes('freelancer') || agency;
     const groups: ChatChoiceGroup[] = [
-      ...(creator ? [{ label: 'Your own content', emoji: '🎬', choices: identitiesOf('craft').map((i) => tagChoice(i.key)) }] : []),
-      ...(freelance ? [{ label: 'For clients', emoji: '🧳', choices: identitiesOf('service').map((i) => tagChoice(i.key)) }] : []),
+      ...(creator ? [{ label: 'Your own content', icon: 'Clapperboard' as const, choices: identitiesOf('craft').map((i) => tagChoice(i.key)) }] : []),
+      ...(freelance ? [{ label: 'For clients', icon: 'Luggage' as const, choices: identitiesOf('service').map((i) => tagChoice(i.key)) }] : []),
     ];
     const q = creator && freelance ? 'You make things, so tell me more: what do you make, for yourself or for clients? Pick all that fit, then tap Next.' : creator ? 'You make content, so tell me more: what kind? Pick all that fit, then tap Next.' : agency && !a.identities.includes('freelancer')
           ? 'Your agency works for clients, so tell me more: what does it make for them? Pick all that fit, then tap Next.'
@@ -616,7 +622,7 @@ export function SetupChat() {
 
   const steps: Part[] = ['goals', 'who', ...(makes(chat.answers) ? (['work'] as Part[]) : []), 'way', 'match'];
   const at = steps.indexOf(chat.part);
-  const step = chat.part === 'account' || chat.part === 'private' ? 'Your account' : chat.part === 'hello' ? 'Welcome back' : chat.part === 'done' ? 'All set' : chat.part === 'match' ? 'Your apps' : `Question ${at + 1} of ${steps.length - 1}`;
+  const step = chat.part === 'account' || chat.part === 'private' ? 'Your account' : chat.part === 'hello' ? 'Welcome back' : chat.part === 'done' ? 'All set' : chat.part === 'match' ? 'Your apps' : QUESTION_LABEL[chat.part as Question] ?? 'A few questions';
   const progress = chat.part === 'done' ? 1 : at < 0 ? 0 : at / steps.length;
 
   return (

@@ -406,7 +406,18 @@ export async function setInvoiceStatus(db: D1Database, userId: string, invoiceId
   if (!prev) return null;
   const status = oneOf(wanted, INVOICE_STATUSES, prev.status);
   const now = nowIso();
-  const stmts = [db.prepare('UPDATE invoices SET status = ?, paid_at = CASE WHEN ? = \'paid\' THEN COALESCE(paid_at, ?) ELSE paid_at END WHERE id = ?').bind(status, status, now, prev.id)];
+  if (status === prev.status) return toInvoice(prev);
+  // The status moves first, guarded on the one that was read, and the books change only when this call moved it, so two taps
+  // on Mark paid at once book the income once.
+  const moved = await db
+    .prepare("UPDATE invoices SET status = ?, paid_at = CASE WHEN ? = 'paid' THEN COALESCE(paid_at, ?) ELSE paid_at END WHERE id = ? AND user_id = ? AND status = ?")
+    .bind(status, status, now, prev.id, userId, prev.status)
+    .run();
+  if (moved.meta.changes !== 1) {
+    const now2 = await db.prepare(`${INV_SELECT} WHERE i.id = ?`).bind(prev.id).first<InvRow>();
+    return now2 ? toInvoice(now2) : null;
+  }
+  const stmts: D1PreparedStatement[] = [];
   if (status === 'paid' && prev.status !== 'paid') {
     stmts.push(
       db
@@ -415,7 +426,7 @@ export async function setInvoiceStatus(db: D1Database, userId: string, invoiceId
     );
   }
   if (status !== 'paid' && prev.status === 'paid') stmts.push(db.prepare("DELETE FROM finance_transactions WHERE user_id = ? AND source = 'invoice' AND ref = ?").bind(userId, prev.id));
-  await db.batch(stmts);
+  if (stmts.length) await db.batch(stmts);
   const row = await db.prepare(`${INV_SELECT} WHERE i.id = ?`).bind(prev.id).first<InvRow>();
   return row ? toInvoice(row) : null;
 }

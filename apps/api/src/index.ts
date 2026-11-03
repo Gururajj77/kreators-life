@@ -123,7 +123,7 @@ app.use('*', logger());
 
 app.get('/health', (c) => c.json({ ok: true, at: new Date().toISOString() }));
 // Abuse limits on the doors that take no session, per address. The numbers live in limits.ts. They are registered first, so a limit runs before the door it guards.
-for (const r of ROUTE_LIMITS) if (isOpenDoor(r.path)) app.on(r.method, r.path, rateLimit(r.limit, r.by));
+for (const r of ROUTE_LIMITS) if (isOpenDoor(r.path)) app.on(r.method, r.path, rateLimit(r.limit, r.by, r.when));
 // A screen that broke in someone's browser says so here: a short message and where, never who. Limited per address.
 app.post('/public/client-error', async (c) => {
   const body = await c.req.json<{ message?: unknown; path?: unknown }>().catch(() => ({}) as { message?: unknown; path?: unknown });
@@ -184,7 +184,7 @@ app.use('*', async (c, next) => {
 });
 
 // The rest of the limits, per person. Same file.
-for (const r of ROUTE_LIMITS) if (!isOpenDoor(r.path)) app.on(r.method, r.path, rateLimit(r.limit, r.by));
+for (const r of ROUTE_LIMITS) if (!isOpenDoor(r.path)) app.on(r.method, r.path, rateLimit(r.limit, r.by, r.when));
 
 // The student's side of coaching is core, so it is mounted before the rest of /me and never gated.
 app.route('/me/coach', myCoach);

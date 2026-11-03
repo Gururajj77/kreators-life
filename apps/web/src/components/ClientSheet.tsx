@@ -1,4 +1,4 @@
-import { AGENCY_CHANNELS, AGENCY_CLIENT_STATUSES, AGENCY_HEALTH, AGENCY_HEALTH_NAME, AGENCY_NAME_MAX, AGENCY_NOTES_MAX, AGENCY_STATUS_NAME, type AgencyClient, type AgencyClientStatus, type AgencyHealth, type InvoiceParty } from '@kreators/shared';
+import { AGENCY_CHANNELS, AGENCY_CLIENT_STATUSES, AGENCY_HEALTH, AGENCY_HEALTH_NAME, AGENCY_NAME_MAX, AGENCY_NOTES_MAX, AGENCY_STATUS_NAME, type AgencyClient, type AgencyClientStatus, type AgencyHealth, type InvoiceParty, typedCents } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
@@ -24,9 +24,10 @@ const COPY = {
 } as const;
 
 const toMajor = (cents: number): string => (cents === 0 ? '' : cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2));
+/** A typed amount in cents (`typedCents`: "30,000" and "₹30,000" read as 30000); NaN for junk or a minus, so the form can say so. Blank is 0. */
 const toCents = (v: string): number => {
-  const n = Number(v);
-  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : 0;
+  const c = typedCents(v);
+  return Number.isInteger(c) && c >= 0 ? c : Number.NaN;
 };
 const whole = (v: string): number => {
   const n = Math.round(Number(v));
@@ -95,6 +96,7 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
   const campaigns = detail.data?.campaigns ?? [];
   const invalidate = () => qc.invalidateQueries({ queryKey: ['agency'] });
 
+  const badRetainer = Number.isNaN(toCents(retainer));
   const body = () => ({
     name: name.trim(),
     contactName: contactName.trim(),
@@ -180,7 +182,7 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
     <form
       onSubmit={(e: FormEvent) => {
         e.preventDefault();
-        if (name.trim()) save.mutate();
+        if (name.trim() && !badRetainer) save.mutate();
       }}
     >
       <Field label={COPY.name}>
@@ -240,7 +242,8 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
 
       <div className="grid gap-sm md:grid-cols-3">
         <Field label="Retainer a month" hint={COPY.money}>
-          <input inputMode="decimal" value={retainer} onChange={(e) => setRetainer(e.target.value)} className={field} />
+          <input inputMode="decimal" value={retainer} onChange={(e) => setRetainer(e.target.value)} aria-invalid={badRetainer || undefined} className={field} />
+          {badRetainer && <p role="alert" className="mt-xs m-0 text-[14px] font-bold">Type the amount as a number, like 4000 or 4,000.50.</p>}
         </Field>
         <Field label="Deliverables a month">
           <input inputMode="numeric" value={pieces} onChange={(e) => setPieces(e.target.value)} className={field} />
@@ -346,7 +349,7 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
         </p>
       )}
       <div className="mt-md flex flex-wrap items-center gap-xs">
-        <Button type="submit" disabled={save.isPending || !name.trim()}>
+        <Button type="submit" disabled={save.isPending || !name.trim() || badRetainer}>
           {save.isPending ? 'Saving' : client ? 'Save changes' : 'Add the client'}
         </Button>
         {client &&

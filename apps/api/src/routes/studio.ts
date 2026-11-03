@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { AFFILIATE_SHARE, PRODUCT_KIND_META, PRODUCT_KINDS, type Availability, type AvailabilityOverride, type Booking, type Coupon, type Lead, type Lesson, type Order, type Product, type ProductKind, type QuizQuestion, type StudioAnalytics, type Testimonial, parseFaq } from '@kreators/shared';
-import { isBadgeKey } from '@kreators/shared';
+import { AFFILIATE_SHARE, PRODUCT_KINDS, type Availability, type AvailabilityOverride, type Booking, type Coupon, type Lead, type Lesson, type Order, type Product, type ProductKind, type QuizQuestion, type StudioAnalytics, type Testimonial, parseFaq } from '@kreators/shared';
+import { isUnlockBadgeKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { nameOf, newId, notify, nowIso, parseList, pageOf, paged, httpUrl } from '../db';
 import { logEvent, sendEmail, track } from '../ops';
@@ -283,10 +283,10 @@ studio.post('/products', async (c) => {
     .bind(
       id, user.id, kind, title, str(body.description, 2000), int(body.pricePoints, 0) ?? 0, int(body.priceCents, 0) ?? 0, str(body.currency, 3, 'INR').toUpperCase() || 'INR',
       str(body.url, 500) || null, str(body.startsAt, 40) || null, int(body.durationMin, kind === 'session' ? 30 : null, 5, 600), int(body.capacity, null, 1),
-      httpUrl(body.meetingUrl, 500) || null, body.status === 'live' ? 'live' : 'draft', str(body.cover, 8, PRODUCT_KIND_META[kind].emoji), 0, now, now,
+      httpUrl(body.meetingUrl, 500) || null, body.status === 'live' ? 'live' : 'draft', str(body.cover, 8, ''), 0, now, now,
       body.pwyw === true ? 1 : 0, JSON.stringify(list(body.intake, 8, 200)), httpUrl(body.replayUrl, 500) || null, int(body.replayPoints, 0) ?? 0, JSON.stringify(await ownedIds(db, user.id, body.bundleIds)), str(body.lockedBody, 20000), int(body.responseDays, kind === 'dm' ? 3 : null, 1, 30), body.leadMagnet === true ? 1 : 0, body.certificate === true ? 1 : 0,
       int(body.bufferMin, 0, 0, 120) ?? 0, int(body.noticeHours, 2, 0, 720) ?? 2, int(body.maxDaysAhead, 30, 1, 365) ?? 30, kind === 'membership' ? int(body.periodMonths, null, 1, 36) : null,
-      int(body.minPoints, 0, 0) ?? 0, isBadgeKey(str(body.badge, 40)) ? str(body.badge, 40) : '',
+      int(body.minPoints, 0, 0) ?? 0, isUnlockBadgeKey(str(body.badge, 40)) ? str(body.badge, 40) : '',
     )
     .run();
   if (int(body.minXp, 0, 0)) await db.prepare('UPDATE products SET min_xp = ? WHERE id = ?').bind(int(body.minXp, 0, 0), id).run();
@@ -301,13 +301,17 @@ studio.get('/products/:id', async (c) => {
   const user = c.get('user');
   const row = await ownProduct(db, user.id, c.req.param('id'));
   if (!row) return c.json({ error: 'not found' }, 404);
+  const orderAsk = pageOf(c, 'o');
+  const bookingAsk = pageOf(c, 'b');
   const [lessons, orders, bookings, testimonials] = await Promise.all([
     db.prepare('SELECT * FROM lessons WHERE product_id = ? ORDER BY sort_order ASC, created_at ASC').bind(row.id).all<LessonRow>(),
-    db.prepare(`${ORDER_SELECT} WHERE o.product_id = ? ORDER BY o.created_at DESC LIMIT 100`).bind(row.id).all<OrderRow>(),
-    db.prepare(`${BOOKING_SELECT} WHERE k.product_id = ? ORDER BY k.starts_at DESC LIMIT 100`).bind(row.id).all<BookingRow>(),
+    db.prepare(`${ORDER_SELECT} WHERE o.product_id = ? ORDER BY o.created_at DESC LIMIT ? OFFSET ?`).bind(row.id, orderAsk.limit, orderAsk.offset).all<OrderRow>(),
+    db.prepare(`${BOOKING_SELECT} WHERE k.product_id = ? ORDER BY k.starts_at DESC LIMIT ? OFFSET ?`).bind(row.id, bookingAsk.limit, bookingAsk.offset).all<BookingRow>(),
     db.prepare(`${TESTIMONIAL_SELECT} WHERE t.product_id = ? ORDER BY t.created_at DESC`).bind(row.id).all<TestimonialRow>(),
   ]);
-  return c.json({ product: toProduct(row, true), lessons: lessons.results.map((l) => toLesson(l)), orders: orders.results.map(toOrder), bookings: bookings.results.map(toBooking), testimonials: testimonials.results.map(toTestimonial) });
+  const opg = paged(orders.results, orderAsk);
+  const bpg = paged(bookings.results, bookingAsk);
+  return c.json({ product: toProduct(row, true), lessons: lessons.results.map((l) => toLesson(l)), orderPage: opg.page, orders: opg.items.map(toOrder), bookingPage: bpg.page, bookings: bpg.items.map(toBooking), testimonials: testimonials.results.map(toTestimonial) });
 });
 
 studio.patch('/products/:id', async (c) => {
@@ -331,7 +335,7 @@ studio.patch('/products/:id', async (c) => {
       'bundleIds' in body ? JSON.stringify(await ownedIds(db, user.id, body.bundleIds)) : prev.bundle_json, 'lockedBody' in body ? str(body.lockedBody, 20000) : prev.locked_body, 'responseDays' in body ? int(body.responseDays, prev.response_days, 1, 30) : prev.response_days,
       typeof body.leadMagnet === 'boolean' ? (body.leadMagnet ? 1 : 0) : prev.lead_magnet, typeof body.certificate === 'boolean' ? (body.certificate ? 1 : 0) : prev.certificate,
       int(body.bufferMin, prev.buffer_min, 0, 120) ?? prev.buffer_min, int(body.noticeHours, prev.notice_hours, 0, 720) ?? prev.notice_hours, int(body.maxDaysAhead, prev.max_days_ahead, 1, 365) ?? prev.max_days_ahead, 'periodMonths' in body ? int(body.periodMonths, prev.period_months, 1, 36) : prev.period_months,
-      'minPoints' in body ? (int(body.minPoints, prev.min_points, 0) ?? prev.min_points) : prev.min_points, 'badge' in body ? (isBadgeKey(str(body.badge, 40)) ? str(body.badge, 40) : '') : prev.badge, prev.id,
+      'minPoints' in body ? (int(body.minPoints, prev.min_points, 0) ?? prev.min_points) : prev.min_points, 'badge' in body ? (isUnlockBadgeKey(str(body.badge, 40)) ? str(body.badge, 40) : '') : prev.badge, prev.id,
     )
     .run();
   if ('minXp' in body) await db.prepare('UPDATE products SET min_xp = ? WHERE id = ?').bind(int(body.minXp, 0, 0) ?? 0, prev.id).run();

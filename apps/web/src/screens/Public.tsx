@@ -1,8 +1,9 @@
-import { PRODUCT_KIND_META, BADGES, HONORS, RELATIONSHIPS } from '@kreators/shared';
+import { PRODUCT_KIND_META, productHasOwnCover, BADGES, HONORS, RELATIONSHIPS } from '@kreators/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Inert } from '../components/Inert';
 import { useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
+import { AppIcon } from '../components/AppIcon';
 import { Avatar } from '../components/Avatar';
 import { BadgeMedal } from '../components/BadgeArt';
 import { Button } from '../components/Button';
@@ -235,7 +236,7 @@ export function Public() {
                   const inner = (
                     <>
                       <span className="flex size-[48px] shrink-0 items-center justify-center rounded-pill bg-paper text-[24px]" aria-hidden="true">
-                        {p.cover || meta.emoji}
+                        {productHasOwnCover(p.kind, p.cover) ? p.cover : <AppIcon name={meta.icon} size={24} />}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block text-[16px] font-bold leading-snug">{p.title}</span>

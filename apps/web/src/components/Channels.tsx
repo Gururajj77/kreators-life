@@ -693,7 +693,7 @@ function EditChannelSheet({ scope, channel, open, onClose, onSaved }: { scope: C
 
 /** Friends to ask into a private channel. Each is asked once and says yes or no under Bond. */
 function InviteSheet({ channel, open, onClose, onAsked, seats }: { channel: Channel; open: boolean; onClose: () => void; onAsked: () => void; seats: number }) {
-  const fr = useAuthed(['bond-friends'], api.friends, open);
+  const fr = useAuthed(['bond-friends', 'invite'], () => api.friends('size=100'), open);
   const [asked, setAsked] = useState<Set<string>>(new Set());
   const ask = useMutation({
     mutationFn: (userId: string) => api.inviteToChannel(channel.id, userId),

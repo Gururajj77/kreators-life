@@ -60,7 +60,7 @@ function CloseVibe({ inline = false }: { inline?: boolean }) {
     else nav('/onboarding');
   };
   return (
-    <button type="button" aria-label="Close" onClick={leave} className={`toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-card text-ink-soft hover:text-ink ${inline ? '' : 'safe-top fixed top-sm left-md z-30'}`}>
+    <button type="button" aria-label="Close" onClick={leave} className={`toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-card text-ink-soft hover:text-ink ${inline ? '' : 'safe-top fixed top-sm right-md z-30'}`}>
       <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
         <path d="M6 6l12 12M18 6L6 18" />
       </svg>
@@ -235,11 +235,12 @@ function PickFloors({ chosen, onChange, onBack, onNext }: { chosen: Relationship
   return (
     <Screen tabs={false}>
       <div className="pt-md">
-        <div className="flex items-center gap-xs">
-          <CloseVibe inline />
-          <button type="button" onClick={onBack} className="rounded-pill px-sm py-xs text-[14px] font-bold text-ink-soft">
+        {/* Back on the left, Close at the top right, where Close is on every screen. */}
+        <div className="flex items-center justify-between gap-xs">
+          <button type="button" onClick={onBack} className="min-h-[44px] rounded-pill px-sm py-xs text-[14px] font-bold text-ink-soft">
             Back
           </button>
+          <CloseVibe inline />
         </div>
         <h1 className="mt-md text-[36px]">Which relationships need work right now?</h1>
         <p className="mt-sm text-[16px] font-semibold text-ink-soft">Pick the pillars you want to start with. Each one asks three questions. The others wait under Pillars until you are ready for them.</p>
@@ -300,15 +301,14 @@ function QuestionStage({
     <div className="min-h-dvh pb-2xl" style={{ background: `var(--soft-${rel.key})` }}>
       <Screen tabs={false}>
       <div className="pt-md">
-          <div className="flex items-center justify-between gap-sm pr-xl">
-            <span className="flex items-center gap-xs">
+          {/* Back on the left, Close at the top right. The bar under it shows how far along you are, so no numbers. */}
+          <div className="flex items-center justify-between gap-sm">
+            <button type="button" onClick={onBack} className="min-h-[44px] rounded-pill px-sm py-xs text-[14px] font-bold text-ink-soft">
+              Back
+            </button>
+            <span className="flex min-w-0 items-center gap-xs">
+              <span className="truncate text-[14px] font-bold text-ink-soft">{rel.name}</span>
               <CloseVibe inline />
-              <button type="button" onClick={onBack} className="rounded-pill px-sm py-xs text-[14px] font-bold text-ink-soft">
-                Back
-              </button>
-            </span>
-            <span className="text-[14px] font-bold text-ink-soft">
-              Pillar {at + 1} of {floors.length}, step {step} of {STEPS_PER_FLOOR}
             </span>
           </div>
           <ol className="mt-sm flex list-none gap-xs p-0 m-0" aria-hidden="true">

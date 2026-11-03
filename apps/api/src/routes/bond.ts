@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { ALIAS_WORDS, normalizeCode, type BlockedPerson, RELATIONSHIPS, type BondChat, type BondMessage, type Friend, type Introduction } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { nameOf, newId, notify, nowIso, oneOf, parseList, publicOf, str } from '../db';
+import { nameOf, newId, notify, nowIso, oneOf, pageOf, paged, parseList, publicOf, str } from '../db';
 import { memberBehindAlias } from './circles';
 
 export const bond = new Hono<AppEnv>();
@@ -88,9 +88,11 @@ bond.post('/block', async (c) => {
 
 // Who I have blocked, and taking a block back. Anyone can do both, whatever their role.
 bond.get('/blocks', async (c) => {
-  const rows = await c.env.DB.prepare('SELECT b.blocked_id AS user_id, b.created_at, u.display_name, u.handle FROM blocks b JOIN users u ON u.id = b.blocked_id WHERE b.blocker_id = ? ORDER BY b.created_at DESC LIMIT 200').bind(c.get('user').id).all<{ user_id: string; created_at: string; display_name: string; handle: string | null }>();
-  const blocked: BlockedPerson[] = rows.results.map((r) => ({ userId: r.user_id, name: nameOf(r), handle: r.handle, createdAt: r.created_at }));
-  return c.json({ blocked });
+  const ask = pageOf(c, 'bl');
+  const rows = await c.env.DB.prepare('SELECT b.blocked_id AS user_id, b.created_at, u.display_name, u.handle FROM blocks b JOIN users u ON u.id = b.blocked_id WHERE b.blocker_id = ? ORDER BY b.created_at DESC LIMIT ? OFFSET ?').bind(c.get('user').id, ask.limit, ask.offset).all<{ user_id: string; created_at: string; display_name: string; handle: string | null }>();
+  const pg = paged(rows.results, ask);
+  const blocked: BlockedPerson[] = pg.items.map((r) => ({ userId: r.user_id, name: nameOf(r), handle: r.handle, createdAt: r.created_at }));
+  return c.json({ page: pg.page, blocked });
 });
 
 bond.delete('/block/:userId', async (c) => {
@@ -104,27 +106,30 @@ bond.delete('/block/:userId', async (c) => {
 
 interface FriendRow { id: string; requester_id: string; recipient_id: string; status: string; created_at: string; name: string; handle: string | null; avatar_url: string }
 
+const toFriend = (r: FriendRow, userId: string): Friend => ({
+  userId: r.requester_id === userId ? r.recipient_id : r.requester_id,
+  name: nameOf({ display_name: r.name }),
+  handle: r.handle,
+  avatarUrl: r.avatar_url ?? '',
+  status: r.status === 'accepted' ? 'friends' : r.requester_id === userId ? 'sent' : 'pending',
+  requestId: r.id,
+  createdAt: r.created_at,
+});
+const FRIEND_SELECT = `SELECT f.id, f.requester_id, f.recipient_id, f.status, f.created_at, u.display_name AS name, u.handle, u.avatar_url
+       FROM friendships f JOIN users u ON u.id = CASE WHEN f.requester_id = ?1 THEN f.recipient_id ELSE f.requester_id END`;
+
+// Open requests (pending and sent) are naturally few, so they come back in full; accepted friends are the list that
+// can grow, so that part alone is paged.
 bond.get('/friends', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const rows = await db
-    .prepare(
-      `SELECT f.id, f.requester_id, f.recipient_id, f.status, f.created_at, u.display_name AS name, u.handle, u.avatar_url
-       FROM friendships f JOIN users u ON u.id = CASE WHEN f.requester_id = ?1 THEN f.recipient_id ELSE f.requester_id END
-       WHERE (f.requester_id = ?1 OR f.recipient_id = ?1) AND f.status IN ('pending', 'accepted') ORDER BY f.created_at DESC LIMIT 200`,
-    )
-    .bind(user.id)
-    .all<FriendRow>();
-  const friends: Friend[] = rows.results.map((r) => ({
-    userId: r.requester_id === user.id ? r.recipient_id : r.requester_id,
-    name: nameOf({ display_name: r.name }),
-    handle: r.handle,
-    avatarUrl: r.avatar_url ?? '',
-    status: r.status === 'accepted' ? 'friends' : r.requester_id === user.id ? 'sent' : 'pending',
-    requestId: r.id,
-    createdAt: r.created_at,
-  }));
-  return c.json({ friends });
+  const ask = pageOf(c, 'fr');
+  const [openRows, friendRows] = await Promise.all([
+    db.prepare(`${FRIEND_SELECT} WHERE (f.requester_id = ?1 OR f.recipient_id = ?1) AND f.status = 'pending' ORDER BY f.created_at DESC LIMIT 100`).bind(user.id).all<FriendRow>(),
+    db.prepare(`${FRIEND_SELECT} WHERE (f.requester_id = ?1 OR f.recipient_id = ?1) AND f.status = 'accepted' ORDER BY f.created_at DESC LIMIT ?2 OFFSET ?3`).bind(user.id, ask.limit, ask.offset).all<FriendRow>(),
+  ]);
+  const pg = paged(friendRows.results, ask);
+  return c.json({ page: pg.page, open: openRows.results.map((r) => toFriend(r, user.id)), friends: pg.items.map((r) => toFriend(r, user.id)) });
 });
 
 /** Ask someone to be friends, or say yes if they asked first. Shared by the friend code, a page and an event. */
@@ -215,8 +220,10 @@ async function chatFor(db: D1Database, id: string, userId: string): Promise<Chat
 bond.get('/chats', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const rows = await db.prepare(`${CHAT_SELECT} WHERE c.a_user_id = ?1 OR c.b_user_id = ?1 ORDER BY COALESCE(c.last_message_at, c.created_at) DESC LIMIT 100`).bind(user.id).all<ChatRow>();
-  return c.json({ chats: rows.results.map((r) => toChat(r, user.id)) });
+  const ask = pageOf(c, 'ch');
+  const rows = await db.prepare(`${CHAT_SELECT} WHERE c.a_user_id = ?1 OR c.b_user_id = ?1 ORDER BY COALESCE(c.last_message_at, c.created_at) DESC LIMIT ?2 OFFSET ?3`).bind(user.id, ask.limit, ask.offset).all<ChatRow>();
+  const pg = paged(rows.results, ask);
+  return c.json({ page: pg.page, chats: pg.items.map((r) => toChat(r, user.id)) });
 });
 
 bond.post('/chats', async (c) => {

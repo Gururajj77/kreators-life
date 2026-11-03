@@ -114,6 +114,16 @@ export async function canEditMedia(db: D1Database, user: UserRow, type: MediaOwn
     }
     case 'tool':
       return user.role === 'sub_admin' && Boolean(await first<{ id: string }>('SELECT id FROM tools WHERE id = ?'));
+    case 'product': {
+      const r = await first<{ owner_id: string }>('SELECT owner_id FROM products WHERE id = ?');
+      return Boolean(r && r.owner_id === user.id);
+    }
+    case 'item':
+      return user.role === 'sub_admin' && Boolean(await first<{ id: string }>('SELECT id FROM store_items WHERE id = ?'));
+    case 'preowned': {
+      const r = await first<{ seller_id: string }>('SELECT seller_id FROM preowned_listings WHERE id = ?');
+      return Boolean(r && r.seller_id === user.id);
+    }
   }
 }
 

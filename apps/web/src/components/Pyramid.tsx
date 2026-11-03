@@ -130,7 +130,8 @@ export function Pyramid({ relationship, words = {}, autoplay = false, compact = 
               )}
               <span className="relative px-sm text-[14px] font-extrabold leading-tight text-balance">
                 {meta.label}
-                <span className="block text-[12px] font-bold opacity-90 text-balance">{text(k)}</span>
+                {/* Full strength, not faded: a faded white on the paler fills dropped under 4.5:1 at this size. */}
+                <span className="block text-[13px] font-bold text-balance">{text(k)}</span>
               </span>
             </Tag>
           );

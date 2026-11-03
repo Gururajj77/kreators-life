@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { daysSince, isPrivateBadge, EXPERIENCE_LEVELS, evolutionFor, IDENTITY_STAGES, isLeaderboardScope, LEADERBOARD_POOL, levelFromXp, RELATIONSHIPS, SETUP_GOALS, seasonLabel, seasonOf, seasonStart, timeHonors, type LeaderboardBlock, type LeaderboardEntry, type LeaderboardOption, type LeaderboardOptions, type LeaderboardResponse, type LeaderboardScope, type LeaderboardSort, type SeasonResult } from '@kreators/shared';
+import { daysSince, isPrivateBadge, EXPERIENCE_LEVELS, evolutionFor, IDENTITY_STAGES, isLeaderboardScope, LEADERBOARD_POOL, levelFromXp, RELATIONSHIPS, SETUP_GOALS, seasonLabel, seasonOf, seasonStart, timeHonors, type IconName, type LeaderboardBlock, type LeaderboardEntry, type LeaderboardOption, type LeaderboardOptions, type LeaderboardResponse, type LeaderboardScope, type LeaderboardSort, type SeasonResult } from '@kreators/shared';
 import { nameOf, pageOf, paged } from '../db';
 import type { AppEnv } from '../env';
 import { computeBadges, emptyFacts } from '../db';
@@ -172,7 +172,7 @@ leaderboard.get('/options', async (c) => {
   const lv = count(levels);
   // Every goal, pillar and level is always listed, so a person sees what exists even before anyone is on it.
   const out: LeaderboardOptions = {
-    goal: SETUP_GOALS.map((x): LeaderboardOption => ({ value: x.key, label: x.label, emoji: x.emoji, count: g.get(x.key) ?? 0 })),
+    goal: SETUP_GOALS.map((x): LeaderboardOption => ({ value: x.key, label: x.label, icon: x.icon, count: g.get(x.key) ?? 0 })),
     pillar: RELATIONSHIPS.map((x): LeaderboardOption => ({ value: x.key, label: x.name, count: p.get(x.key) ?? 0 })),
     city: cities.results.map((x) => ({ value: x.v, label: x.v, count: x.n })),
     identity: tags.results.map((x) => ({ value: x.v, label: x.v, count: x.n })),
@@ -185,9 +185,9 @@ leaderboard.get('/options', async (c) => {
 leaderboard.get('/blocks', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const targets: { scope: LeaderboardScope; value: string; label: string; emoji: string }[] = [
-    ...SETUP_GOALS.map((g) => ({ scope: 'goal' as const, value: g.key, label: g.label, emoji: g.emoji })),
-    ...RELATIONSHIPS.map((r) => ({ scope: 'pillar' as const, value: r.key, label: r.name, emoji: '' })),
+  const targets: { scope: LeaderboardScope; value: string; label: string; icon?: IconName }[] = [
+    ...SETUP_GOALS.map((g) => ({ scope: 'goal' as const, value: g.key, label: g.label, icon: g.icon })),
+    ...RELATIONSHIPS.map((r) => ({ scope: 'pillar' as const, value: r.key, label: r.name })),
   ];
   const results = await db.batch<{ id: string; display_name: string; xp: number }>(
     targets.map((t) => {
@@ -204,7 +204,7 @@ leaderboard.get('/blocks', async (c) => {
       scope: t.scope,
       value: t.value,
       label: t.label,
-      emoji: t.emoji,
+      icon: t.icon,
       people: rows.length,
       top: rows.slice(0, 3).map((r, k) => ({ rank: k + 1, name: nameOf(r), xp: r.xp, isMe: r.id === user.id })),
       myRank: at >= 0 ? at + 1 : null,

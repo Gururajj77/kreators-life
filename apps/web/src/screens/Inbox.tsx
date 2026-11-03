@@ -8,12 +8,18 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { SkeletonList } from '../components/Skeleton';
 import { Sheet } from '../components/Sheet';
+import type { LucideIcon } from 'lucide-react';
+import { AlarmClock, Archive, ArchiveRestore, AtSign, Bell, CalendarCheck, Footprints, Handshake, Mail, Medal, Megaphone, MessageCircle, MessagesSquare, PartyPopper, ShieldAlert, ShoppingBag, Star, Target, UserPlus, UsersRound, Wrench } from 'lucide-react';
+import { AnimatedIcon } from '../components/AnimatedIcon';
+import { Icon } from '../components/Icon';
 import { api } from '../lib/api';
 import { useInbox, useMe, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { useParamState } from '../lib/useParamState';
 
-const ICON: Record<string, string> = { reply: '💬', mention: '📣', thread: '🧵', order: '🛍️', lead: '📨', booking: '📅', follow: '🫶', broadcast: '📣', reminder: '⏰', review: '⭐', affiliate: '🤝', moderation: '🛡️', coach: '🎯', team: '🛠️', party: '🎉', circle: '🫧', run: '🏃', season: '🏅' };
+/** The icon for each kind of note; a kind this list does not know gets the bell. */
+const ICON: Record<string, LucideIcon> = { reply: MessageCircle, mention: AtSign, thread: MessagesSquare, order: ShoppingBag, lead: Mail, booking: CalendarCheck, follow: UserPlus, broadcast: Megaphone, reminder: AlarmClock, review: Star, affiliate: Handshake, moderation: ShieldAlert, coach: Target, team: Wrench, party: PartyPopper, circle: UsersRound, run: Footprints, season: Medal };
+const iconFor = (kind: string): LucideIcon => (Object.hasOwn(ICON, kind) ? ICON[kind]! : Bell);
 const SHOWS: [InboxShow, string][] = [
   ['inbox', 'Inbox'],
   ['unread', 'Unread'],
@@ -117,8 +123,8 @@ export function Inbox() {
           {list.map((n) => {
             const inner = (
               <>
-                <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-paper text-[18px]" aria-hidden="true">
-                  {ICON[n.kind] ?? '🔔'}
+                <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink-soft">
+                  <Icon icon={iconFor(n.kind)} size={18} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className={`block text-[16px] ${n.readAt ? 'font-semibold' : 'font-extrabold'}`}>{n.title}</span>
@@ -150,9 +156,7 @@ export function Inbox() {
                   title={n.archivedAt ? 'Bring back' : 'Archive'}
                   className="toy toy-soft flex w-[48px] shrink-0 flex-col items-center justify-center gap-xs rounded-tile bg-card text-ink-soft hover:text-ink"
                 >
-                  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    {n.archivedAt ? <path d="M4 12l5-5M4 12l5 5M4 12h11a5 5 0 0 1 0 10h-2" /> : <><rect x="3" y="4" width="18" height="5" rx="1" /><path d="M5 9v10h14V9M10 13h4" /></>}
-                  </svg>
+                  <Icon icon={n.archivedAt ? ArchiveRestore : Archive} size={20} />
                   {n.archivedAt && <span className="text-[12px] font-extrabold">Restore</span>}
                 </button>
                 {n.archivedAt && (
@@ -163,9 +167,7 @@ export function Inbox() {
                     title="Delete for good"
                     className="toy toy-soft flex w-[48px] shrink-0 flex-col items-center justify-center gap-xs rounded-tile border-2 border-r1/40 bg-card text-r1 hover:bg-r1/10"
                   >
-                    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
-                    </svg>
+                    <AnimatedIcon name="trash" size={20} />
                     <span className="text-[12px] font-extrabold">Delete</span>
                   </button>
                 )}

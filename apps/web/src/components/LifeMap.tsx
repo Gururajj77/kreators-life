@@ -194,7 +194,7 @@ const NARROW: Layout = {
     ['Level of Consciousness', 212],
     ['Category', 306],
   ],
-  sizes: { head: 8.5, level: 9.5, dim: 8, cat: 11, band: 9, note: 8.5 },
+  sizes: { head: 8.5, level: 9.5, dim: 9.5, cat: 11, band: 9, note: 8.5 },
   catX: 329,
   spanX: 336,
   noteX: 300,
@@ -246,7 +246,7 @@ function ScaleDrawing({ L }: { L: Layout }) {
 
       {/* The column heads. */}
       {L.heads.map(([t, x]) => (
-        <text key={t} x={x} y={14} fontSize={sizes.head} textAnchor="middle" className="fill-ink-soft font-semibold">
+        <text key={t} x={x} y={14} fontSize={sizes.head} textAnchor="middle" className="font-semibold" style={{ fill: 'var(--color-ink-soft)' }}>
           {t}
         </text>
       ))}
@@ -258,13 +258,13 @@ function ScaleDrawing({ L }: { L: Layout }) {
             <Span key={sp.from} x={8} y1={top(sp.from) + 2} y2={bottom(sp.to) - 2} color={sp.color} />
           ))}
           {SELVES.map((sf) => (
-            <g key={sf.lines[0]}>{lines(sf.lines, 80, middle(sf.from, sf.to), 10.5, 'middle', 'fill-ink font-bold')}</g>
+            <g key={sf.lines[0]}>{lines(sf.lines, 80, middle(sf.from, sf.to), 10.5, 'middle', 'font-bold', { fill: 'var(--color-ink)' })}</g>
           ))}
           {/* Where that is. */}
           {PLACES.map((pl) => (
             <g key={pl.name}>
               <Span x={152} y1={top(pl.from) + 2} y2={bottom(pl.to) - 2} color={pl.color} />
-              {lines([pl.name], 160, middle(pl.from, pl.to), 11, 'start', 'fill-ink font-bold')}
+              {lines([pl.name], 160, middle(pl.from, pl.to), 11, 'start', 'font-bold', { fill: 'var(--color-ink)' })}
             </g>
           ))}
         </>
@@ -289,7 +289,7 @@ function ScaleDrawing({ L }: { L: Layout }) {
       {SCALE.map((l) => {
         const y = top(l.value) + R / 2;
         return (
-          <text key={l.value} x={edge(y) + 7} y={y + sizes.level * 0.36} fontSize={sizes.level} className="fill-ink font-bold">
+          <text key={l.value} x={edge(y) + 7} y={y + sizes.level * 0.36} fontSize={sizes.level} className="font-bold" style={{ fill: 'var(--color-ink)' }}>
             {l.value} - {l.name}
           </text>
         );
@@ -297,7 +297,7 @@ function ScaleDrawing({ L }: { L: Layout }) {
 
       {/* The Courage line. */}
       <line x1={edge(courage) + 2} x2={L.noteX} y1={courage} y2={courage} strokeWidth={1.5} strokeDasharray="4 4" className="stroke-ink-mute" />
-      <text x={L.noteX} y={L.noteBelow ? courage + sizes.note + 3 : courage - 4} fontSize={sizes.note} textAnchor="end" className="fill-ink-soft font-semibold">
+      <text x={L.noteX} y={L.noteBelow ? courage + sizes.note + 3 : courage - 4} fontSize={sizes.note} textAnchor="end" className="font-semibold" style={{ fill: 'var(--color-ink-soft)' }}>
         Live above this line
       </text>
 
@@ -307,8 +307,10 @@ function ScaleDrawing({ L }: { L: Layout }) {
         return (
           <g key={c.band}>
             <Span x={L.spanX} y1={top(c.from) + 2} y2={bottom(c.to) - 2} color={c.color} />
-            {lines(c.lines, L.catX, y - 6, sizes.cat, 'end', 'font-bold', { fill: c.color })}
-            <text x={L.catX} y={y + (c.lines.length * (sizes.cat + 3)) / 2 + 4} fontSize={sizes.band} textAnchor="end" className="fill-ink-soft font-semibold">
+            {/* The words in ink, so they read on the page in both themes; the colour is on the span beside them. Fill is set inline (not a
+                className) so it always wins over any other rule and never picks up the span's own colour. */}
+            {lines(c.lines, L.catX, y - 6, sizes.cat, 'end', 'font-bold', { fill: 'var(--color-ink)' })}
+            <text x={L.catX} y={y + (c.lines.length * (sizes.cat + 3)) / 2 + 4} fontSize={sizes.band} textAnchor="end" className="font-semibold" style={{ fill: 'var(--color-ink-soft)' }}>
               {MAP_BAND_META[c.band].name}
             </text>
           </g>
@@ -351,7 +353,7 @@ export function ConsciousnessMap() {
 }
 
 /** Core and floor per relationship as one bar each on the 20 to 540 scale, names only, never numbers. */
-export function PlacementChart({ placements, focus = [], compact = false }: { placements: Placement[]; focus?: RelationshipKey[]; compact?: boolean }) {
+export function PlacementChart({ placements, focus = [], away = [], compact = false }: { placements: Placement[]; focus?: RelationshipKey[]; /** Pillars set aside as not part of life right now: named, without a bar. */ away?: RelationshipKey[]; compact?: boolean }) {
   const pct = (v: number) => ((v - 20) / (540 - 20)) * 100;
   return (
     <ul className="m-0 flex list-none flex-col gap-xs p-0">
@@ -361,6 +363,14 @@ export function PlacementChart({ placements, focus = [], compact = false }: { pl
         const left = pct(f.floor);
         const width = Math.max(2, pct(f.core) - left);
         const inFocus = focus.includes(p.relationship);
+        if (away.includes(p.relationship))
+          return (
+            <li key={p.relationship} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+              <Avatar relationship={rel.key} size={28} decorative still />
+              <span className="min-w-0 flex-1 text-[14px] font-bold">{rel.name}</span>
+              <span className="text-[12px] font-bold text-ink-soft">Set aside for now</span>
+            </li>
+          );
         return (
           <li key={p.relationship} className={`rounded-tile bg-card p-sm shadow-toy-soft ${inFocus ? 'ring-2 ring-ink' : ''}`}>
             <div className="flex items-center gap-sm">
@@ -390,7 +400,8 @@ export function PlacementChart({ placements, focus = [], compact = false }: { pl
 }
 
 /** One line for a pillar page: where it usually lives, where it drops, and what that means. */
-export function placementLine(p: Placement): string {
+export function placementLine(p: Placement, away = false): string {
+  if (away) return 'Set aside: not part of your life right now. It sits at Neutrality until you turn it back on in your life map.';
   const f = placementFlags(p);
   const core = levelByValue(f.core)?.name ?? '';
   const floor = levelByValue(f.floor)?.name ?? '';

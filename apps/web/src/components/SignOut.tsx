@@ -6,16 +6,12 @@ import { useMe } from '../lib/queries';
 import { useSession } from '../lib/store';
 import { Button } from './Button';
 import { Sheet } from './Sheet';
+import { LogOut } from 'lucide-react';
+import { Icon } from './Icon';
 
 /** A door with an arrow leaving it. */
 function DoorIcon({ size = 18 }: { size?: number }) {
-  return (
-    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <path d="M16 17l5-5-5-5" />
-      <path d="M21 12H9" />
-    </svg>
-  );
+  return <Icon icon={LogOut} size={size} />;
 }
 
 /**

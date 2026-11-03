@@ -22,6 +22,10 @@ import {
   STRESS_LEVELS,
   TIME_RE,
   WAIT,
+  type AgencyClientPage,
+  type AgencyOverview,
+  type CommunityPost,
+  type CommunityReply,
   type CompleteResponse,
   type FinanceDue,
   type FinanceGoal,
@@ -31,12 +35,17 @@ import {
   type LogKind,
   type Node,
   type NodeKind,
+  type Notification,
   type NotToDo,
   type PeriodKind,
+  type Product,
   type RelationshipKey,
+  type RemindersResponse,
   type ReviewsResponse,
   type SessionResponse,
+  type StoreItem,
   type TodayResponse,
+  type WeekPlan,
   type WellbeingLog,
   type WellbeingSummary,
 } from '@kreators/shared';
@@ -947,6 +956,317 @@ export const TOOLS: readonly Tool[] = [
         label: `${r.review ? 'Replaced' : 'Saved'} your ${PERIOD_META[kind].name.toLowerCase()} for ${periodLabel(r.period)}`,
         undo: !r.review && put.review ? { method: 'DELETE', path: `/reviews/${seg(put.review.id)}` } : null,
         data: { saved: true, period: periodLabel(r.period), replaced: Boolean(r.review) },
+      };
+    },
+  },
+
+  // ---- water and reminders (core)
+  {
+    name: 'get_reminders',
+    risk: 'read',
+    needs: null,
+    refresh: [],
+    title: 'Look at water and reminders',
+    description: "Today's water (how much, the goal, the glass size) and the person's own reminders: their custom ones and the tasks tagged Remember.",
+    params: { type: 'object', properties: { day: DAY } },
+    run: async (a, io) => {
+      const r = must(await io.call({ method: 'GET', path: `/reminders?day=${dayOf(a.day, io)}` })) as RemindersResponse;
+      return {
+        data: {
+          water: { ml: r.water.ml, goalMl: r.water.goalMl, glassMl: r.water.glassMl, glasses: r.water.glasses, goalGlasses: r.water.goalGlasses, on: r.water.on },
+          custom: r.custom.map((x) => ({ id: x.id, title: x.title, time: x.time, enabled: x.enabled })),
+          tasksToRemember: r.tasks.map((t) => ({ id: t.id, title: t.title, day: t.day, time: t.time })),
+        },
+      };
+    },
+  },
+  {
+    name: 'log_water',
+    risk: 'write',
+    needs: null,
+    refresh: ['reminders', 'home', 'today'],
+    title: 'Log water',
+    description: "Add water for today or yesterday: a glass (the person's own size) unless they say an amount in ml.",
+    params: { type: 'object', properties: { day: DAY, ml: { type: 'integer', minimum: 50, maximum: 2000 } } },
+    run: async (a, io) => {
+      const date = dayOf(a.day, io);
+      const r = must(await io.call({ method: 'POST', path: '/reminders/water', body: { day: date, ...(a.ml ? { ml: Number(a.ml) } : {}) } })) as { water: { ml: number; glasses: number } };
+      return { label: `Logged water, ${r.water.ml} ml today`, undo: { method: 'DELETE', path: `/reminders/water?day=${date}` }, data: { ml: r.water.ml, glasses: r.water.glasses } };
+    },
+  },
+
+  // ---- subtasks on a task (core)
+  {
+    name: 'list_subtasks',
+    risk: 'read',
+    needs: null,
+    refresh: [],
+    title: 'Look at a task’s subtasks',
+    description: 'The checklist on one task, with ids, so one can be ticked or removed.',
+    params: { type: 'object', properties: { taskId: id('task') }, required: ['taskId'] },
+    run: async (a, io) => {
+      const taskId = seg(a.taskId);
+      const r = must(await io.call({ method: 'GET', path: `/nodes/${taskId}/subtasks` })) as { subtasks: { id: string; title: string; done: boolean }[] };
+      return { data: { subtasks: r.subtasks } };
+    },
+  },
+  {
+    name: 'add_subtask',
+    risk: 'write',
+    needs: null,
+    refresh: ['nodes', 'today'],
+    title: 'Add a subtask',
+    description: "Add one line to a task's checklist (up to 20). It pays nothing and never blocks the tick.",
+    params: { type: 'object', properties: { taskId: id('task'), title: { type: 'string', maxLength: 200 } }, required: ['taskId', 'title'] },
+    run: async (a, io) => {
+      const taskId = seg(a.taskId);
+      const title = str(a.title);
+      if (!title) throw new ToolError('Say what the subtask is.');
+      const r = must(await io.call({ method: 'POST', path: `/nodes/${taskId}/subtasks`, body: { title } })) as { subtask: { id: string; title: string } };
+      return { label: `Added "${r.subtask.title}"`, undo: { method: 'DELETE', path: `/nodes/subtasks/${r.subtask.id}` }, data: { id: r.subtask.id, title: r.subtask.title } };
+    },
+  },
+  {
+    name: 'toggle_subtask',
+    risk: 'write',
+    needs: null,
+    refresh: ['nodes', 'today'],
+    title: 'Tick a subtask',
+    description: 'Tick or untick one subtask. It pays nothing and never blocks the task itself.',
+    params: { type: 'object', properties: { subtaskId: id('subtask'), done: { type: 'boolean' } }, required: ['subtaskId', 'done'] },
+    run: async (a, io) => {
+      const subtaskId = seg(a.subtaskId);
+      const done = a.done === true;
+      const r = must(await io.call({ method: 'PATCH', path: `/nodes/subtasks/${subtaskId}`, body: { done } })) as { subtask: { id: string; title: string; done: boolean } };
+      return { label: `${done ? 'Ticked' : 'Unticked'} "${r.subtask.title}"`, undo: { method: 'PATCH', path: `/nodes/subtasks/${subtaskId}`, body: { done: !done } }, data: { id: r.subtask.id, done: r.subtask.done } };
+    },
+  },
+
+  // ---- plan the week (core, read only: Keep applies suggestions one at a time with edit_pyramid_item)
+  {
+    name: 'get_week_plan',
+    risk: 'read',
+    needs: null,
+    refresh: [],
+    title: 'Plan the week',
+    description:
+      'A suggested day for each open task that has none, the lightest day it fits in, plus how strong the plan is and a few plain notes. Writes nothing: put a suggestion into effect with edit_pyramid_item and its doDate.',
+    params: { type: 'object', properties: { hoursADay: { type: 'integer', minimum: 1, maximum: 12 } } },
+    run: async (a, io) => {
+      const hours = a.hoursADay ? Number(a.hoursADay) : undefined;
+      const plan = must(await io.call({ method: 'GET', path: `/today/week-plan?date=${io.date}${hours ? `&hours=${hours}` : ''}` })) as WeekPlan;
+      return {
+        data: {
+          strengthNow: plan.strengthNow.label,
+          strengthWithSuggestions: plan.strengthWith.label,
+          suggestions: plan.suggestions.map((s) => ({ id: s.id, title: s.title, day: s.day, minutes: s.estimateMin, reason: s.reason })),
+          noRoom: plan.noRoom.map((t) => ({ id: t.id, title: t.title })),
+          notes: plan.notes,
+        },
+      };
+    },
+  },
+
+  // ---- focus (Mindful minutes)
+  {
+    name: 'get_focus',
+    risk: 'read',
+    sensitive: true,
+    needs: TRACKERS,
+    refresh: [],
+    title: 'Look at focus time',
+    description: 'Minutes of focus logged by day, by week or by month, the task it went to, and how this stretch compares with the one before.',
+    params: { type: 'object', properties: { view: { type: 'string', enum: ['day', 'week', 'month'] } } },
+    run: async (a, io) => {
+      const view = str(a.view) || 'day';
+      const r = must(await io.call({ method: 'GET', path: `/wellbeing/focus?date=${io.date}&view=${view}` })) as {
+        totals: { minutes: number; rounds: number; tasksDone: number; quality: number | null };
+        tasks: { title: string; minutes: number; rounds: number }[];
+        trend: string;
+      };
+      return { data: { minutes: r.totals.minutes, rounds: r.totals.rounds, tasksDone: r.totals.tasksDone, quality: r.totals.quality, byTask: r.tasks.slice(0, 5).map((t) => ({ title: t.title, minutes: t.minutes })), trend: r.trend } };
+    },
+  },
+
+  // ---- inbox (core)
+  {
+    name: 'get_inbox',
+    risk: 'read',
+    needs: null,
+    refresh: [],
+    title: 'Look at the inbox',
+    description: 'The inbox, newest first, with ids, so one can be archived. Unread by default.',
+    params: { type: 'object', properties: { show: { type: 'string', enum: ['inbox', 'unread', 'archived'] } } },
+    run: async (a, io) => {
+      const show = str(a.show) || 'unread';
+      const r = must(await io.call({ method: 'GET', path: `/inbox?show=${show}` })) as { notifications: Notification[]; unread: number };
+      return { data: { unread: r.unread, notifications: r.notifications.slice(0, 20).map((n) => ({ id: n.id, title: n.title, body: n.body, read: Boolean(n.readAt), createdAt: n.createdAt })) } };
+    },
+  },
+  {
+    name: 'archive_inbox',
+    risk: 'write',
+    needs: null,
+    refresh: ['inbox'],
+    title: 'Archive an inbox note',
+    description: 'Put one inbox note away, or bring it back.',
+    params: { type: 'object', properties: { noteId: id('inbox note'), archived: { type: 'boolean' } }, required: ['noteId'] },
+    run: async (a, io) => {
+      const noteId = seg(a.noteId);
+      const away = a.archived !== false;
+      const r = must(await io.call({ method: 'POST', path: `/inbox/${noteId}/archive`, body: { archived: away } })) as { archived: boolean };
+      return { label: r.archived ? 'Archived' : 'Brought back', undo: { method: 'POST', path: `/inbox/${noteId}/archive`, body: { archived: !away } }, data: { archived: r.archived } };
+    },
+  },
+
+  // ---- Community
+  {
+    name: 'list_community_posts',
+    risk: 'read',
+    needs: ['community'],
+    refresh: [],
+    title: 'Look at Community',
+    description: 'The Community feed: recent posts with ids, so one can be replied to.',
+    params: { type: 'object', properties: { category: { type: 'string', maxLength: 40 } } },
+    run: async (a, io) => {
+      const category = str(a.category);
+      const r = must(await io.call({ method: 'GET', path: `/community${category ? `?category=${encodeURIComponent(category)}` : ''}` })) as { posts: CommunityPost[] };
+      return { data: { posts: r.posts.slice(0, 15).map((p) => ({ id: p.id, by: p.anonymous ? 'anonymous' : p.authorName, category: p.category, body: p.body, likes: p.likes, replies: p.replies })) } };
+    },
+  },
+  {
+    name: 'add_community_post',
+    risk: 'write',
+    needs: ['community'],
+    refresh: ['community'],
+    title: 'Write a Community post',
+    description: 'Post to Community. Pays a little xp, up to three a day.',
+    params: { type: 'object', properties: { body: { type: 'string', maxLength: 2000 }, category: { type: 'string', maxLength: 40 } }, required: ['body'] },
+    run: async (a, io) => {
+      const body = str(a.body);
+      if (!body) throw new ToolError('Say what to post.');
+      const category = str(a.category);
+      const r = must(await io.call({ method: 'POST', path: '/community', body: { body, ...(category ? { category } : {}) } })) as { post: CommunityPost };
+      return { label: 'Posted to Community', undo: { method: 'DELETE', path: `/community/${r.post.id}` }, data: { id: r.post.id } };
+    },
+  },
+  {
+    name: 'reply_to_post',
+    risk: 'write',
+    needs: ['community'],
+    refresh: ['community', 'replies'],
+    title: 'Reply in Community',
+    description: 'Reply to a Community post. Pays a little xp, up to five a day.',
+    params: { type: 'object', properties: { postId: id('post'), body: { type: 'string', maxLength: 1000 } }, required: ['postId', 'body'] },
+    run: async (a, io) => {
+      const postId = seg(a.postId);
+      const body = str(a.body);
+      if (!body) throw new ToolError('Say what to reply.');
+      const r = must(await io.call({ method: 'POST', path: `/community/${postId}/replies`, body: { body } })) as { reply: CommunityReply | null };
+      return { label: 'Replied', data: { id: r.reply?.id ?? null } };
+    },
+  },
+
+  // ---- Party RSVP
+  {
+    name: 'rsvp_event',
+    risk: 'write',
+    needs: ['party'],
+    refresh: ['party', 'home'],
+    title: 'RSVP to an event',
+    description: 'RSVP to a Party event by its id (from the Party screen). Takes a seat, or a place on the waitlist when it is full; a ticket that costs points is paid from the balance.',
+    params: { type: 'object', properties: { eventId: id('event') }, required: ['eventId'] },
+    run: async (a, io) => {
+      const eventId = seg(a.eventId);
+      const r = must(await io.call({ method: 'POST', path: `/party/events/${eventId}/rsvp`, body: {} })) as { status: string };
+      return { label: r.status === 'waitlisted' ? 'On the waitlist' : 'RSVPed', undo: { method: 'POST', path: `/party/events/${eventId}/cancel-rsvp` }, data: { status: r.status } };
+    },
+  },
+
+  // ---- School enrolment
+  {
+    name: 'enrol_cohort',
+    risk: 'write',
+    needs: ['school'],
+    refresh: ['school'],
+    title: 'Enrol in a cohort',
+    description: 'Enrol in a School cohort by its id. A cohort priced in points spends them from the balance; a free one costs nothing.',
+    params: { type: 'object', properties: { cohortId: id('cohort') }, required: ['cohortId'] },
+    run: async (a, io) => {
+      const cohortId = seg(a.cohortId);
+      must(await io.call({ method: 'POST', path: `/school/cohorts/${cohortId}/enroll`, body: {} }));
+      return { label: 'Enrolled', data: { enrolled: true } };
+    },
+  },
+
+  // ---- Store and Shop reads
+  {
+    name: 'browse_shop',
+    risk: 'read',
+    needs: null,
+    refresh: [],
+    title: 'Browse the Shop',
+    description: "Open sessions or events for sale on the Shop, across creators (not only the person's own).",
+    params: { type: 'object', properties: { kind: { type: 'string', enum: ['session', 'event'] } } },
+    run: async (a, io) => {
+      const kind = str(a.kind) || 'session';
+      const r = must(await io.call({ method: 'GET', path: `/store/browse?kind=${kind}` })) as { products: Product[] };
+      return { data: { products: r.products.slice(0, 15).map((p) => ({ id: p.id, title: p.title, by: p.ownerName, points: p.pricePoints, cents: p.priceCents })) } };
+    },
+  },
+  {
+    name: 'browse_store',
+    risk: 'read',
+    needs: ['store'],
+    refresh: [],
+    title: 'Browse the Store',
+    description: 'Gear listed on the Store: new, through a partner link, or pre-owned from another creator.',
+    params: { type: 'object', properties: {} },
+    run: async (_a, io) => {
+      const r = must(await io.call({ method: 'GET', path: '/market' })) as { items: StoreItem[] };
+      return { data: { items: r.items.slice(0, 15).map((i) => ({ id: i.id, title: i.title, category: i.category })) } };
+    },
+  },
+
+  // ---- Agency reads (owner only; the route itself filters by the session user)
+  {
+    name: 'list_agency_clients',
+    risk: 'read',
+    needs: ['agency'],
+    refresh: [],
+    title: 'Look at Agency clients',
+    description: 'Every client, their stage and this month’s counts, and what needs attention today.',
+    params: { type: 'object', properties: {} },
+    run: async (_a, io) => {
+      const r = must(await io.call({ method: 'GET', path: `/agency?day=${io.date}` })) as AgencyOverview;
+      return {
+        data: {
+          attention: r.attention,
+          clients: r.clients.map((cl) => ({ id: cl.id, name: cl.name, status: cl.status, health: cl.health, stage: cl.stage, month: cl.month })),
+        },
+      };
+    },
+  },
+  {
+    name: 'get_agency_client',
+    risk: 'read',
+    needs: ['agency'],
+    refresh: [],
+    title: 'Look at one Agency client',
+    description: 'One client in full: stage, deliverable counts by stage, hours, invoices and where they are from enquiry to monthly delivery.',
+    params: { type: 'object', properties: { clientId: id('client') }, required: ['clientId'] },
+    run: async (a, io) => {
+      const clientId = seg(a.clientId);
+      const r = must(await io.call({ method: 'GET', path: `/agency/clients/${clientId}?day=${io.date}` })) as AgencyClientPage;
+      return {
+        data: {
+          name: r.client.name,
+          stage: r.client.stage,
+          health: r.client.health,
+          month: r.client.month,
+          deliverableCounts: r.counts,
+          invoices: r.invoices.map((inv) => ({ id: inv.id, number: inv.number, status: inv.status, cents: inv.totalCents, currency: inv.currency })),
+        },
       };
     },
   },

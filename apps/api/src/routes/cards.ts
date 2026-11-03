@@ -14,13 +14,30 @@ interface CardRow {
   alt_label: string | null;
   alt_text: string | null;
 }
-const toCard = (r: CardRow): PlayCard => ({
-  ...(r.title ? { title: r.title } : {}),
-  ...(r.label ? { label: r.label } : {}),
-  text: r.text,
-  ...(r.list_json ? { list: JSON.parse(r.list_json) as string[] } : {}),
-  ...(r.alt_text ? { alt: { label: r.alt_label ?? '', text: r.alt_text } } : {}),
-});
+// A stored list is JSON written by our own seed scripts, but a bad row should never take the whole game down with it: parsed
+// kindly, so one malformed example list drops only that card's list, never throws past here.
+function safeStringList(json: string | null): string[] | undefined {
+  if (!json) return undefined;
+  try {
+    const v = JSON.parse(json);
+    if (!Array.isArray(v)) return undefined;
+    const list = v.filter((x): x is string => typeof x === 'string' && x.length > 0);
+    return list.length > 0 ? list : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const toCard = (r: CardRow): PlayCard => {
+  const list = safeStringList(r.list_json);
+  return {
+    ...(r.title ? { title: r.title } : {}),
+    ...(r.label ? { label: r.label } : {}),
+    text: r.text,
+    ...(list ? { list } : {}),
+    ...(r.alt_text ? { alt: { label: r.alt_label ?? '', text: r.alt_text } } : {}),
+  };
+};
 
 /** The games a person may play: the ones they unlocked, and every game for the team (so the content can be checked). */
 export async function unlockedGames(db: D1Database, userId: string, role: string): Promise<Set<string>> {
@@ -66,12 +83,14 @@ cards.get('/:key', async (c) => {
     db.prepare('SELECT deck_key, name, hint FROM card_decks WHERE game_key = ? ORDER BY position').bind(key).all<{ deck_key: string; name: string; hint: string | null }>(),
     db.prepare('SELECT deck_key, title, label, text, list_json, alt_label, alt_text FROM cards WHERE game_key = ? ORDER BY deck_key, position').bind(key).all<CardRow>(),
   ]);
+  const special = safeStringList(game.special_json);
+  const rules = safeStringList(game.rules_json);
   const play: CardGamePlay = {
     ...info,
     howTo: game.how_to,
-    ...(game.special_json ? { special: JSON.parse(game.special_json) as string[] } : {}),
+    ...(special ? { special } : {}),
     ...(game.special_note ? { specialNote: game.special_note } : {}),
-    ...(game.rules_json ? { rules: JSON.parse(game.rules_json) as string[] } : {}),
+    ...(rules ? { rules } : {}),
     decks: decks.results.map((d): PlayDeck => ({ key: d.deck_key, name: d.name, ...(d.hint ? { hint: d.hint } : {}), cards: rows.results.filter((r) => r.deck_key === d.deck_key).map(toCard) })),
   };
   return c.json({ game: play });

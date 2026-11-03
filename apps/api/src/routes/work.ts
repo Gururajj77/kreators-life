@@ -27,18 +27,20 @@ work.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const ask = pageOf(c);
+  const draftAsk = pageOf(c, 'd');
   const [orgIds, member] = await Promise.all([orgIdsOf(db, user.id), isClubMember(db, user.id)]);
   const [published, mine, drafts] = await Promise.all([
     // Club-only listings are the Club's first look: only members see them.
     db.prepare(`${SELECT} WHERE o.status = 'published' AND (o.deadline IS NULL OR o.deadline >= ?) AND (o.club_only = 0 OR ? = 1) ORDER BY o.published_at DESC LIMIT ? OFFSET ?`).bind(new Date().toISOString().slice(0, 10), member ? 1 : 0, ask.limit, ask.offset).all<OppRow>(),
     db.prepare(`${APP_SELECT} WHERE a.creator_user_id = ? ORDER BY a.updated_at DESC`).bind(user.id).all<AppRow>(),
     can(user, 'talent')
-      ? db.prepare(`${SELECT} WHERE o.status != 'published' ORDER BY o.created_at DESC LIMIT 100`).all<OppRow>()
-      : db.prepare(`${SELECT} WHERE o.status != 'published' AND (o.created_by = ? OR o.organization_id IN (${orgIds.length ? orgIds.map(() => '?').join(',') : "''"})) ORDER BY o.created_at DESC`).bind(user.id, ...orgIds).all<OppRow>(),
+      ? db.prepare(`${SELECT} WHERE o.status != 'published' ORDER BY o.created_at DESC LIMIT ? OFFSET ?`).bind(draftAsk.limit, draftAsk.offset).all<OppRow>()
+      : db.prepare(`${SELECT} WHERE o.status != 'published' AND (o.created_by = ? OR o.organization_id IN (${orgIds.length ? orgIds.map(() => '?').join(',') : "''"})) ORDER BY o.created_at DESC LIMIT ? OFFSET ?`).bind(user.id, ...orgIds, draftAsk.limit, draftAsk.offset).all<OppRow>(),
   ]);
   const byOpp = new Map(mine.results.map((a) => [a.opportunity_id, toApp(a)]));
   const pg = paged(published.results, ask);
-  return c.json({ page: pg.page, opportunities: pg.items.map((o) => toOpp(o, byOpp.get(o.id) ?? null)), applications: mine.results.map(toApp), drafts: drafts.results.map((o) => toOpp(o, null)), canPost: can(user, 'talent') || orgIds.length > 0 });
+  const dpg = paged(drafts.results, draftAsk);
+  return c.json({ page: pg.page, opportunities: pg.items.map((o) => toOpp(o, byOpp.get(o.id) ?? null)), applications: mine.results.map(toApp), draftPage: dpg.page, drafts: dpg.items.map((o) => toOpp(o, null)), canPost: can(user, 'talent') || orgIds.length > 0 });
 });
 
 work.post('/opportunities', async (c) => {
@@ -68,8 +70,10 @@ work.get('/opportunities/:id', async (c) => {
   if (row.status !== 'published' && !owner) return c.json({ error: 'not found' }, 404);
   if (row.club_only === 1 && !owner && !(await isClubMember(db, user.id))) return c.json({ error: 'Club members only. Apply under Club for the first look.' }, 403);
   const mine = await db.prepare(`${APP_SELECT} WHERE a.opportunity_id = ? AND a.creator_user_id = ?`).bind(row.id, user.id).first<AppRow>();
-  const apps = owner ? await db.prepare(`${APP_SELECT} WHERE a.opportunity_id = ? ORDER BY a.submitted_at DESC LIMIT 500`).bind(row.id).all<AppRow>() : { results: [] as AppRow[] };
-  return c.json({ opportunity: toOpp(row, mine ? toApp(mine) : null), applications: apps.results.map(toApp), owner });
+  const ask = pageOf(c);
+  const apps = owner ? await db.prepare(`${APP_SELECT} WHERE a.opportunity_id = ? ORDER BY a.submitted_at DESC LIMIT ? OFFSET ?`).bind(row.id, ask.limit, ask.offset).all<AppRow>() : { results: [] as AppRow[] };
+  const pg = paged(apps.results, ask);
+  return c.json({ opportunity: toOpp(row, mine ? toApp(mine) : null), page: pg.page, applications: pg.items.map(toApp), owner });
 });
 
 work.patch('/opportunities/:id', async (c) => {

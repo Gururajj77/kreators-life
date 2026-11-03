@@ -1,4 +1,5 @@
 import { forgetKept } from './kept';
+import { useFocusSession } from './focusSession';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -32,8 +33,12 @@ export const useSession = create<SessionState>()(
     (set) => ({
       token: null,
       setToken: (token) => {
-        // Signing out, or a session the server no longer knows, forgets every kept chat.
-        if (!token) forgetKept();
+        // Signing out, or a session the server no longer knows, forgets every kept chat and any focus clock left running: a
+        // shared device must never show the next person someone else's timer.
+        if (!token) {
+          forgetKept();
+          useFocusSession.getState().clear();
+        }
         set({ token });
       },
     }),

@@ -11,6 +11,8 @@ import { DayBlocks } from '../components/DayBlocks';
 import { EvolutionReveal } from '../components/EvolutionReveal';
 import { Fold } from '../components/Fold';
 import { GuideCard, useGuide } from '../components/Guide';
+import { Icon } from '../components/Icon';
+import { Flame } from 'lucide-react';
 import { NotToDoBlock } from '../components/NotToDoList';
 import { Nudge } from '../components/Nudge';
 import { Person } from '../components/Person';
@@ -143,8 +145,8 @@ export function Today() {
         <div className="flex items-center justify-between gap-sm">
           <h1 className="text-[30px]">Daily</h1>
           {data && (
-            <span className="shrink-0 rounded-pill bg-card px-sm py-xs text-[14px] font-extrabold shadow-toy-soft">
-              <span aria-hidden="true">🔥 </span>
+            <span className="inline-flex shrink-0 items-center gap-xs rounded-pill bg-card px-sm py-xs text-[14px] font-extrabold shadow-toy-soft">
+              <Icon icon={Flame} size={16} />
               {data.streak} {data.streak === 1 ? 'day' : 'days'}
             </span>
           )}

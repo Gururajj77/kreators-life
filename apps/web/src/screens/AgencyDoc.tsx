@@ -16,6 +16,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { Button } from '../components/Button';
 import { ContractView, paperDate } from '../components/ContractView';
+import { DocPassword } from '../components/AgencyLifecycle';
 import { DocActions, DocLog, DocTextFold, EmailCopySheet } from '../components/DocActions';
 import { DocStyleCard, DocStyleSheet } from '../components/DocStyleSheet';
 import { HouseTemplateButton } from '../components/HouseTemplateButton';
@@ -264,6 +265,7 @@ export function AgencyDoc() {
             )}
           </div>
           <DocActions className="mt-sm" fileName={fileName} text={text} onEmail={() => setOpen({ kind: 'email' })} />
+          <DocPassword clientId={clientId} clientName={clientName} />
         </section>
         <DocTextFold text={text} />
 
@@ -458,7 +460,7 @@ export function AgencyDoc() {
       </Sheet>
 
       <DocStyleSheet open={open?.kind === 'style'} onClose={closeSheet} value={parseDocStyle(doc.style)} onChange={(style) => edit((x) => ({ ...x, style }))} disabled={!editable} />
-      <EmailCopySheet open={open?.kind === 'email'} onClose={closeSheet} route="docs" id={id} defaultTo={clients.data?.clients.find((cl) => cl.id === clientId)?.contactEmail ?? ''} text={text} noLinkYet={d.status === 'draft'} />
+      <EmailCopySheet open={open?.kind === 'email'} onClose={closeSheet} route="docs" id={id} defaultTo={clients.data?.clients.find((cl) => cl.id === clientId)?.contactEmail ?? ''} text={text} context={{ kind: 'doc', names: clientName ? `${clientName} team` : '', attached: [d.doc.title] }} noLinkYet={d.status === 'draft'} />
       <Sheet open={open?.kind === 'activity'} onClose={closeSheet} title="Activity">
         <DocLog type="doc" id={id} />
       </Sheet>

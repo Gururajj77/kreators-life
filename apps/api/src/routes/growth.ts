@@ -368,24 +368,27 @@ export async function runSequences(db: D1Database): Promise<number> {
 }
 
 // ---- customers, refunds, payouts, priority DMs
+const CUSTOMER_SELECT = `SELECT u.id, u.display_name, u.handle, u.email, COUNT(o.id) AS orders, COALESCE(SUM(o.points),0) AS points, COALESCE(SUM(o.cents),0) AS cents, MIN(o.created_at) AS first_at, MAX(o.created_at) AS last_at,
+         (SELECT COALESCE(l.label, l.code) FROM orders o2 LEFT JOIN tracked_links l ON l.id = o2.source_link_id WHERE o2.buyer_id = u.id AND o2.owner_id = ?1 ORDER BY o2.created_at LIMIT 1) AS source
+       FROM orders o JOIN users u ON u.id = o.buyer_id WHERE o.owner_id = ?1 AND o.status IN ('paid','test') GROUP BY u.id ORDER BY last_at DESC`;
+interface CustomerRow { id: string; display_name: string; handle: string | null; email: string | null; orders: number; points: number; cents: number; first_at: string; last_at: string; source: string | null }
+const toCustomer = (r: CustomerRow): Customer => ({ userId: r.id, name: nameOf(r), handle: r.handle, email: r.email, orders: r.orders, points: r.points, cents: r.cents, firstAt: r.first_at, lastAt: r.last_at, source: r.source ?? 'profile direct' });
+
 growth.get('/customers', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const rows = await db
-    .prepare(
-      `SELECT u.id, u.display_name, u.handle, u.email, COUNT(o.id) AS orders, COALESCE(SUM(o.points),0) AS points, COALESCE(SUM(o.cents),0) AS cents, MIN(o.created_at) AS first_at, MAX(o.created_at) AS last_at,
-         (SELECT COALESCE(l.label, l.code) FROM orders o2 LEFT JOIN tracked_links l ON l.id = o2.source_link_id WHERE o2.buyer_id = u.id AND o2.owner_id = ?1 ORDER BY o2.created_at LIMIT 1) AS source
-       FROM orders o JOIN users u ON u.id = o.buyer_id WHERE o.owner_id = ?1 AND o.status IN ('paid','test') GROUP BY u.id ORDER BY last_at DESC LIMIT 500`,
-    )
-    .bind(user.id)
-    .all<{ id: string; display_name: string; handle: string | null; email: string | null; orders: number; points: number; cents: number; first_at: string; last_at: string; source: string | null }>();
-  const customers: Customer[] = rows.results.map((r) => ({ userId: r.id, name: nameOf(r), handle: r.handle, email: r.email, orders: r.orders, points: r.points, cents: r.cents, firstAt: r.first_at, lastAt: r.last_at, source: r.source ?? 'profile direct' }));
   if (c.req.query('format') === 'csv') {
+    // The download takes the whole run (up to five hundred rows); the screen takes a page.
+    const rows = await db.prepare(`${CUSTOMER_SELECT} LIMIT 500`).bind(user.id).all<CustomerRow>();
+    const customers = rows.results.map(toCustomer);
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const csv = ['name,handle,email,orders,points,cents,first_purchase,last_purchase,source', ...customers.map((x) => [x.name, x.handle, x.email, x.orders, x.points, x.cents, x.firstAt, x.lastAt, x.source].map(esc).join(','))].join('\n');
     return c.body(csv, 200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="customers.csv"' });
   }
-  return c.json({ customers });
+  const ask = pageOf(c);
+  const rows = await db.prepare(`${CUSTOMER_SELECT} LIMIT ?2 OFFSET ?3`).bind(user.id, ask.limit, ask.offset).all<CustomerRow>();
+  const pg = paged(rows.results, ask);
+  return c.json({ page: pg.page, customers: pg.items.map(toCustomer) });
 });
 
 /** Full refund. Points go back to the buyer and come out of the seller and any affiliate; money goes back through the provider. */

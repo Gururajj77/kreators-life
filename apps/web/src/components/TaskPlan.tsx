@@ -2,7 +2,9 @@ import { PRIORITIES, addDays, priorityTag, repeatLabel, type Node, type Priority
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
+import { Bell, ClipboardCheck, Landmark, Repeat as RepeatIcon, X } from 'lucide-react';
 import { api, type TaskPlanBody } from '../lib/api';
+import { Icon } from './Icon';
 import { useRefreshAll } from '../lib/queries';
 import { RepeatPicker } from './RepeatPicker';
 import { RulerPicker } from './RulerPicker';
@@ -31,10 +33,26 @@ export function TaskTags({ task }: { task: Node }) {
   return (
     <>
       <PriorityChip priority={task.priority} />
-      {task.remind && <span className={plain}>🔔 Remember</span>}
-      {task.forReview && <span className={plain}>📝 For review</span>}
-      {task.repeat && <span className={plain} title={repeatLabel(task.repeat, task.doDate ?? task.dueDate)}>🔁 Habit</span>}
-      {task.fromPillar && <span className={plain}>🏛 From pillar</span>}
+      {task.remind && (
+        <span className={`${plain} inline-flex items-center gap-xs`}>
+          <Icon icon={Bell} size={12} /> Remember
+        </span>
+      )}
+      {task.forReview && (
+        <span className={`${plain} inline-flex items-center gap-xs`}>
+          <Icon icon={ClipboardCheck} size={12} /> For review
+        </span>
+      )}
+      {task.repeat && (
+        <span className={`${plain} inline-flex items-center gap-xs`} title={repeatLabel(task.repeat, task.doDate ?? task.dueDate)}>
+          <Icon icon={RepeatIcon} size={12} /> Habit
+        </span>
+      )}
+      {task.fromPillar && (
+        <span className={`${plain} inline-flex items-center gap-xs`}>
+          <Icon icon={Landmark} size={12} /> From pillar
+        </span>
+      )}
       {task.fromCoach && <span className={plain}>From your coach</span>}
     </>
   );
@@ -222,8 +240,8 @@ export function Subtasks({ task }: { task: Node }) {
               <input type="checkbox" checked={s.done} onChange={(e) => tick.mutate({ id: s.id, done: e.target.checked })} className="size-[20px] shrink-0" />
               <span className={`min-w-0 break-words text-[16px] font-semibold ${s.done ? 'text-ink-soft line-through' : ''}`}>{s.title}</span>
             </label>
-            <button type="button" onClick={() => remove.mutate(s.id)} aria-label={`Remove "${s.title}"`} className="min-h-[44px] min-w-[44px] text-[18px] font-bold text-ink-soft hover:text-ink">
-              ×
+            <button type="button" onClick={() => remove.mutate(s.id)} aria-label={`Remove "${s.title}"`} className="flex min-h-[44px] min-w-[44px] items-center justify-center text-ink-soft hover:text-ink">
+              <Icon icon={X} size={18} />
             </button>
           </li>
         ))}

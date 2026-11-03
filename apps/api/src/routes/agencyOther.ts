@@ -26,7 +26,7 @@ import {
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { audit, dayFromDevice, nameOf, newId, notify, nowIso, oneOf, pageOf, paged, randomCode, str } from '../db';
-import { emailCopy, logDoc, maskEmail, ownLogo, publicUrl } from '../agencyPaper';
+import { coverFrom, emailCopy, logDoc, maskEmail, ownLogo, publicUrl } from '../agencyPaper';
 import { billingOf, settingsFor } from './agency';
 import { activeHouse, clientBits, docOf, houseContract, jsonOr, ownTemplate, recipientFor, templateDoc } from './agencyDocs';
 
@@ -255,11 +255,12 @@ agencyOther.post('/:id/email', async (c) => {
   if ('error' in who) return c.json({ error: who.error }, 400);
   const full = toFull(row);
   const settings = await settingsFor(db, user.id);
+  const cover = coverFrom(body);
   const result = await emailCopy(db, c.env, user.id, {
     to: who.to,
-    subject: `${full.doc.title} from ${full.doc.vars.providerBusiness || nameOf(user)}`,
-    intro: 'Hello,\n\nHere is the document for you to read. You can write a comment or approve it at the link below.',
-    text: contractAsText(full.doc, { reference: full.ref, date: row.sent_at ?? row.created_at, answers: full.answers, acceptance: full.acceptance }),
+    subject: cover?.subject || `${full.doc.title} from ${full.doc.vars.providerBusiness || nameOf(user)}`,
+    intro: cover ? cover.message : 'Hello,\n\nHere is the document for you to read. You can write a comment or approve it at the link below.',
+    text: cover ? '' : contractAsText(full.doc, { reference: full.ref, date: row.sent_at ?? row.created_at, answers: full.answers, acceptance: full.acceptance }),
     link: publicUrl(c.env, `/d/${row.token}`),
     replyTo: settings.profile.from.email,
   });

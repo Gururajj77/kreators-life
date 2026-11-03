@@ -45,6 +45,8 @@ import { Sheet } from '../components/Sheet';
 import { AdminDiscounts } from '../components/AdminDiscounts';
 import { AdminHouseTemplates } from '../components/AdminHouseTemplates';
 import { Toggle } from '../components/Toggle';
+import { AppIcon } from '../components/AppIcon';
+import { AnimatedIcon } from '../components/AnimatedIcon';
 import { adminApi } from '../lib/api';
 import { useMe } from '../lib/queries';
 
@@ -149,6 +151,7 @@ export function Admin() {
   // flags
   const [settings, setSettings] = useState<ModuleSetting[]>([]);
   const [overrides, setOverrides] = useState<FlagOverride[]>([]);
+  const [overrideCounts, setOverrideCounts] = useState<Record<string, number>>({});
   const [overrideFor, setOverrideFor] = useState<string | null>(null);
   const [ovSubjectType, setOvSubjectType] = useState<FlagOverride['subjectType']>('user');
   const [ovSubjectId, setOvSubjectId] = useState('');
@@ -199,13 +202,15 @@ export function Admin() {
       } catch {
         // Private mode: the key just will not be remembered.
       }
-      const [u, r, f, l, a] = await Promise.all([adminApi.users(key, q, pq('users')), adminApi.redemptions(key, 'reserved', pq('redemptions')), adminApi.flags(key), adminApi.listings(key, undefined, '', pq('listings')), adminApi.audit(key, pq('audit'))]);
+      const [u, r, f, l, a] = await Promise.all([adminApi.users(key, q, pq('users')), adminApi.redemptions(key, 'reserved', pq('redemptions')), adminApi.flags(key, pq('overrides')), adminApi.listings(key, undefined, '', pq('listings')), adminApi.audit(key, pq('audit'))]);
       setUsers(u.users);
       gotPage('users', u.page);
       setRedemptions(r.redemptions);
       gotPage('redemptions', r.page);
       setSettings(f.settings);
       setOverrides(f.overrides);
+      setOverrideCounts(f.overrideCounts);
+      gotPage('overrides', f.page);
       setListings(l.listings);
       gotPage('listings', l.page);
       setLogs(a.logs);
@@ -227,10 +232,12 @@ export function Admin() {
     setSelected((s) => (s?.id === u.id ? u : s));
     setUsers((list) => list.map((x) => (x.id === u.id ? u : x)));
   };
-  const refreshFlags = async () => {
-    const f = await adminApi.flags(key);
+  const refreshFlags = async (ask?: Ask) => {
+    const f = await adminApi.flags(key, pq('overrides', ask));
     setSettings(f.settings);
     setOverrides(f.overrides);
+    setOverrideCounts(f.overrideCounts);
+    gotPage('overrides', f.page);
   };
   const refreshListings = async (ask?: Ask) => {
     const l = await adminApi.listings(key, undefined, '', pq('listings', ask));
@@ -465,9 +472,7 @@ export function Admin() {
                           }}
                           className="toy flex size-[44px] items-center justify-center rounded-pill text-ink-soft hover:text-r1 disabled:opacity-30"
                         >
-                          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
-                          </svg>
+                          <AnimatedIcon name="trash" size={20} />
                         </button>
                       ),
                     },
@@ -634,7 +639,10 @@ export function Admin() {
                                 <input type="checkbox" checked={allowed} disabled={busy || Boolean(m.locked)} onChange={(e) => void setAccess(e.target.checked)} className="size-[20px] shrink-0" aria-label={`Allow ${m.name}`} />
                                 <span className="min-w-0">
                                   <span className={`block truncate text-[14px] font-bold ${allowed ? '' : 'text-ink-soft line-through'}`}>
-                                    {m.emoji} {m.name}
+                                    <span className="inline-flex items-center gap-xs align-middle">
+                                      <AppIcon name={m.icon} size={16} />
+                                      {m.name}
+                                    </span>
                                   </span>
                                   {a && !a.available && <span className="block text-[11px] font-semibold text-ink-soft no-underline">{a.reason === 'override' ? 'Blocked for this person' : a.reason === 'role' ? 'Needs a higher role' : a.reason === 'rollout' ? 'Not rolled out to them yet' : 'Switched off for everyone'}</span>}
                                   {a?.available && mine.length > 0 && <span className="block text-[11px] font-semibold text-ink-soft">Allowed for this person</span>}
@@ -669,12 +677,12 @@ export function Admin() {
                   label="Feature flags"
                   busy={busy}
                   columns={[
-                    { key: 'module', label: 'Module', get: (s) => MODULE_BY_KEY[s.key]?.name ?? s.key, render: (s) => <span className="font-bold">{MODULE_BY_KEY[s.key]?.emoji} {MODULE_BY_KEY[s.key]?.name ?? s.key}</span> },
+                    { key: 'module', label: 'Module', get: (s) => MODULE_BY_KEY[s.key]?.name ?? s.key, render: (s) => <span className="inline-flex items-center gap-xs font-bold"><AppIcon name={MODULE_BY_KEY[s.key]?.icon} size={16} />{MODULE_BY_KEY[s.key]?.name ?? s.key}</span> },
                     { key: 'group', label: 'Group', get: (s) => MODULE_GROUPS[MODULE_BY_KEY[s.key]?.group ?? 'core'], filter: true, wide: true },
                     { key: 'enabled', label: 'On', get: (s) => s.enabled, filter: true, edit: { kind: 'toggle', onEdit: (s, v) => run(async () => { await adminApi.setModuleSetting(key, s.key, { enabled: Boolean(v) }); await refreshFlags(); }) } },
                     { key: 'minRole', label: 'Minimum role', get: (s) => ROLE_META[s.minRole].name, filter: true, edit: { kind: 'select', options: ROLE_OPTIONS, onEdit: (s, v) => run(async () => { await adminApi.setModuleSetting(key, s.key, { minRole: roleByName(String(v)) }); await refreshFlags(); }) } },
                     { key: 'rollout', label: 'Rollout %', get: (s) => s.rollout, align: 'right', edit: { kind: 'number', min: 0, max: 100, step: 5, onEdit: (s, v) => run(async () => { await adminApi.setModuleSetting(key, s.key, { rollout: Math.max(0, Math.min(100, Number(v))) }); await refreshFlags(); }) } },
-                    { key: 'overrides', label: 'Overrides', get: (s) => overrides.filter((o) => o.flagKey === s.key).length, align: 'right' },
+                    { key: 'overrides', label: 'Overrides', get: (s) => overrideCounts[s.key] ?? 0, align: 'right' },
                   ]}
                   actions={(s) => (
                     <Button variant="outline" size="sm" onClick={() => { setOverrideFor(s.key); setOvSubjectId(''); setOvReason(''); setOvDays(''); }}>
@@ -701,11 +709,13 @@ export function Admin() {
                     { key: 'reason', label: 'Reason', get: (o) => o.reason, wide: true, wrap: true },
                   ]}
                   actions={(o) => (
-                    <Button variant="ghost" size="sm" disabled={busy} onClick={() => run(async () => { await adminApi.removeOverride(key, o.id); await refreshFlags(); })}>
+                    <Button variant="ghost" size="sm" disabled={busy} onClick={() => run(async () => { await adminApi.removeOverride(key, o.id); await refreshFlags(asks.overrides); })}>
                       Remove
                     </Button>
                   )}
-                  bulk={[{ label: 'Remove', variant: 'ghost', onClick: (rows) => run(async () => { await each(rows, (o) => adminApi.removeOverride(key, o.id).then(() => undefined)); await refreshFlags(); }) }]}
+                  bulk={[{ label: 'Remove', variant: 'ghost', onClick: (rows) => run(async () => { await each(rows, (o) => adminApi.removeOverride(key, o.id).then(() => undefined)); await refreshFlags(asks.overrides); }) }]}
+                  page={pages.overrides}
+                  onPage={turn('overrides', refreshFlags)}
                 />
               </div>
               <Sheet open={overrideFor !== null} onClose={() => setOverrideFor(null)} title={`Override: ${MODULE_BY_KEY[overrideFor ?? '']?.name ?? ''}`}>
@@ -770,7 +780,7 @@ export function Admin() {
                   busy={busy}
                   empty="Nothing yet. Create the first listing above."
                   columns={[
-                    { key: 'type', label: 'Type', get: (l) => LISTING_TYPE_META[l.type].name, filter: true, render: (l) => <span>{LISTING_TYPE_META[l.type].emoji} {LISTING_TYPE_META[l.type].name}</span> },
+                    { key: 'type', label: 'Type', get: (l) => LISTING_TYPE_META[l.type].name, filter: true, render: (l) => <span className="inline-flex items-center gap-xs"><AppIcon name={LISTING_TYPE_META[l.type].icon} size={16} /> {LISTING_TYPE_META[l.type].name}</span> },
                     { key: 'title', label: 'Title', get: (l) => l.title, wrap: true, render: (l) => <span className="font-bold">{l.title}</span> },
                     { key: 'by', label: 'By', get: (l) => l.by, filter: true, wide: true },
                     { key: 'facts', label: 'Facts', get: (l) => l.facts.join(', '), wide: true, wrap: true },

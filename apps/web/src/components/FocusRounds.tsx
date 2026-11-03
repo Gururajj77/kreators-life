@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { MAX_PART_MIN, mmss, nextLeft, useCountdown, useStopwatch, useTicker, wholeMinutes } from '../lib/focusClocks';
 import { useFocusPrefs } from '../lib/focusPrefs';
+import { useFocusSession, type FocusKind } from '../lib/focusSession';
 import { playBeats, playChime, unlockAudio, useAmbient } from '../lib/sound';
 import { useSession } from '../lib/store';
 import { Button } from './Button';
@@ -223,7 +224,10 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
   /** A finished focus part is kept: today's tally, the dashboard's round (with its rating), and mindful minutes when that switch is on. */
   const recordFocus = (minutes: number, always: boolean) => {
     if (!always && !settings.logFocus) return;
-    const next = { day: todayLocal(), rounds: day.rounds + 1, minutes: day.minutes + minutes };
+    // A page left open past midnight starts the new day from nothing, not from yesterday's tally.
+    const now = todayLocal();
+    const base = day.day === now ? day : { day: now, rounds: 0, minutes: 0 };
+    const next = { day: base.day, rounds: base.rounds + 1, minutes: base.minutes + minutes };
     setDay(next);
     keep(DAY_KEY, JSON.stringify(next));
     const made = onRound(minutes, taskId || null);
@@ -262,6 +266,35 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
   }, [timerLen, ready]);
 
   const anyRunning = running || timer.running || stopwatch.running;
+
+  // The same state, written out for any other page to read: the small chip in place of the logo. FocusRounds itself never unmounts on
+  // a route change (it lives in FocusRoundsHost, mounted once by Shell, and only portals its panel in and out of Mindful's layout), so
+  // nothing here needs to be picked back up; this is only for the chip, which lives in a different part of the page.
+  useEffect(() => {
+    const isBreak = mode === 'pomodoro' && phase !== 'focus';
+    const kind: FocusKind = mode === 'timer' ? 'timer' : mode === 'stopwatch' ? 'stopwatch' : phase;
+    const label = mode === 'timer' ? 'Timer' : mode === 'stopwatch' ? 'Stopwatch' : isBreak ? LABEL[phase] : `Session ${round} of ${settings.every}`;
+    const active = mode === 'timer' ? timer.running || !timer.atFull : mode === 'stopwatch' ? stopwatch.running || stopwatch.ms > 0 : running || leftMs < partMs - 500;
+    useFocusSession.getState().publish({
+      active,
+      kind,
+      label,
+      running: mode === 'timer' ? timer.running : mode === 'stopwatch' ? stopwatch.running : running,
+      round,
+      cycle,
+      totalMs: mode === 'timer' ? timer.total : partMs,
+      endsAt: mode === 'timer' && timer.running ? timer.getEndsAt() : mode === 'pomodoro' && running ? endsAt.current : null,
+      leftMs: mode === 'timer' ? timer.left : leftMs,
+      // While running, the whole total so far lives in the anchor (`now - started = ms`), so `snapshotLeftMs` can tick
+      // it forward on its own between publishes; folding the same total into swAccumMs too would count it twice and
+      // double the time a chip elsewhere in the app shows. Paused, there is no running segment to anchor, so the total
+      // sits in swAccumMs alone.
+      swStartedAt: mode === 'stopwatch' && stopwatch.running ? Date.now() - (stopwatch.ms ?? 0) : null,
+      swAccumMs: mode === 'stopwatch' && !stopwatch.running ? stopwatch.ms : 0,
+      taskTitle: picked?.title ?? null,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, phase, round, cycle, running, partMs, leftMs, timer.running, timer.left, timer.total, timer.atFull, stopwatch.running, stopwatch.ms, settings.every, picked?.title]);
   const setMode = (m: Mode) => {
     setModeState(m);
     keep(TAB_KEY, m);
@@ -503,7 +536,7 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
       <h2 id="focus-heading" className="text-[24px]">
         Focus sessions
       </h2>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Work in sessions, breathe in the breaks. Today: {plural(day.rounds, 'session')}, {day.minutes} min of focus.</p>
+      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Work in sessions, breathe in the breaks. Today: {plural(day.day === todayLocal() ? day.rounds : 0, 'session')}, {day.day === todayLocal() ? day.minutes : 0} min of focus.</p>
 
       <div className="mf-stage mt-sm">
         <div className="night-card mf-panel rounded-card" data-accent={accent}>

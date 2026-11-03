@@ -321,7 +321,9 @@
   html {
     font-family: var(--font-body);
     color: var(--color-ink);
-    background: var(--page-base-a);
+    /* The same base the fixed wash ends on, not a flat tone: a full-page shot (or a fixed layer a browser does not
+       extend past the first screen) never meets a mismatched flat colour where the gradient wash should still be. */
+    background: linear-gradient(165deg, var(--page-base-a), var(--page-base-b));
     -webkit-tap-highlight-color: transparent;
     font-size: 16px;
     /* Kerning on everywhere: the pairs the font designer fixed (AV, To, Ty) stay fixed. */
@@ -779,6 +781,15 @@ details[open] > summary {
   /* The quiet half of a headline, in large type only: the second half steps back so the first is read first. */
   color: var(--color-ink-mute);
 }
+/* On a coloured or ink card the heading itself already switched to the on-fill token (contrast rule, CLAUDE.md): the quiet
+   half follows it at reduced opacity instead of the page's own ink-mute, which would read too close to a cream or coloured fill.
+   Both forms matter: the token sits on the same heading as .type-hook ("h2.type-hook.text-on-ink"), or on an ancestor wrapper. */
+.type-hook.text-on-ink em,
+.type-hook.text-on-fill em,
+.text-on-ink .type-hook em,
+.text-on-fill .type-hook em {
+  color: color-mix(in oklab, currentColor 70%, transparent);
+}
 .type-context {
   font-family: var(--font-body);
   font-weight: 600;
@@ -1045,6 +1056,39 @@ input[type='radio'] {
   }
   @page {
     margin: 12mm;
+  }
+  /* A .print-doc page that holds no legal sheet (the client dashboard at /a/:token): the site's own header and footer stay off the paper,
+     and the theme's colours go back to their light values, so a dark-mode reader does not print pale ink on white. */
+  body:has(.print-doc):not(:has(.legal-root)) header:not(.print-doc *),
+  body:has(.print-doc):not(:has(.legal-root)) footer:not(.print-doc *) {
+    display: none !important;
+  }
+  html:has(.print-doc):not(:has(.legal-root)) {
+    color-scheme: light;
+    --ink: #25293a;
+    --ink-soft: #444a5f;
+    --ink-mute: #565c72;
+    --on-ink: #ffffff;
+    --paper: #f3f4f9;
+    --card: #ffffff;
+    --card-strong: #ffffff;
+    --line: #d7dae8;
+    --color-ink: #25293a;
+    --color-ink-soft: #444a5f;
+    --color-ink-mute: #565c72;
+    --color-on-ink: #ffffff;
+    --color-paper: #f3f4f9;
+    --color-card: #ffffff;
+    --color-card-strong: #ffffff;
+    --color-line: #d7dae8;
+    --tint-red: #fde8ee;
+    --tint-orange: #fdeee0;
+    --tint-yellow: #fbf3cf;
+    --tint-green: #e6f2e4;
+    --tint-brown: #ece3de;
+    --tint-sky: #dcebf8;
+    --tint-indigo: #e1e4fa;
+    --tint-purple: #ece8fb;
   }
 }
 
@@ -1924,7 +1968,7 @@ ol.grid > li > .toy:only-child {
   .legal-root[data-accent='plum'] { --doc-accent: #5a2c56; }
   .legal-root[data-accent='clay'] { --doc-accent: #84472b; }
   .legal-root[data-accent='slate'] { --doc-accent: #454f63; }
-  .legal-doc, .legal-doc * {
+  .legal-doc, .legal-doc *:not(.legal-invoice):not(.legal-invoice *) {
     background: transparent !important;
     background-image: none !important;
     box-shadow: none !important;
@@ -1952,10 +1996,10 @@ ol.grid > li > .toy:only-child {
   .legal-doc .legal-sign-line { margin-top: 7mm; }
   .legal-doc thead { display: table-header-group; }
   .legal-doc table { border-collapse: collapse; width: 100%; }
-  .legal-doc th, .legal-doc td { border: 0.5pt solid #777 !important; }
-  .legal-doc .legal-invoice th { font-variant: small-caps; letter-spacing: 0.04em; border-bottom: 1pt solid var(--doc-accent) !important; }
-  .legal-doc .legal-invoice, .legal-doc .legal-invoice * { font-size: inherit; }
-  .legal-doc .legal-invoice h2 { font-size: 1.3em !important; }
+  .legal-doc table:not(.legal-invoice table) :is(th, td) { border: 0.5pt solid #777 !important; }
+  /* The invoice prints the way it looks on the screen: its own bars, tints and sizes, on white. The browser is told to keep the colours
+     (without it a print dialog drops every fill unless "Background graphics" is ticked). */
+  .legal-doc .legal-invoice, .legal-doc .legal-invoice * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .legal-doc input[type='radio'], .legal-doc input[type='checkbox'] { accent-color: #000; }
   /* "DRAFT", "PAID" and the rest: a faint stamp across the middle of every page. */
   .legal-doc .legal-stamp { position: fixed; inset: 0; z-index: 0; }
@@ -2614,14 +2658,16 @@ ol.grid > li > .toy:only-child {
 
 @media print {
   /* Only the document prints. Everything that is not the sheet, not inside it and not holding it is gone (the headings, the editor, the menus,
-     the buttons, the sidebar), what holds it loses its frame (offsets, gutters, the page wash), so the paper is the sheet and nothing else. */
-  body *:not(:has(.legal-root)):not(.legal-root):not(.legal-root *) {
+     the buttons, the sidebar), what holds it loses its frame (offsets, gutters, the page wash), so the paper is the sheet and nothing else.
+     Only on a page that holds a sheet (`body:has(.legal-root)`): the month calendar and the client dashboard (.print-doc) print by the
+     blocks further up, and would be blank under this rule. */
+  body:has(.legal-root) *:not(:has(.legal-root)):not(.legal-root):not(.legal-root *) {
     display: none !important;
   }
   html::before, html::after, body::before, body::after {
     display: none !important;
   }
-  *:has(.legal-root):not(.legal-root) {
+  body:has(.legal-root) *:has(.legal-root):not(.legal-root) {
     display: block !important;
     position: static !important;
     width: auto !important;
@@ -2639,4 +2685,13 @@ ol.grid > li > .toy:only-child {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
+}
+
+/* A section marked "not printed" stays on the screen and at the client's link and leaves the printed page; one line says where it went.
+   The print note is for paper only. */
+.legal-print-note { display: none; }
+@media print {
+  /* Kept in the flow but unseen and without height, so the numbers of the sections that print stay the numbers the text refers to ("section 6"). */
+  .legal-doc .legal-noprint { position: absolute !important; visibility: hidden !important; height: 0 !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; }
+  .legal-doc .legal-print-note { display: block; margin-top: 8mm; font-size: 8.5pt; font-style: italic; color: #555 !important; }
 }

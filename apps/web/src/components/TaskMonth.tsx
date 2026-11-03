@@ -3,8 +3,10 @@ import { useMutation } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router';
+import { Check, Repeat as RepeatIcon } from 'lucide-react';
 import { api } from '../lib/api';
 import { dueLabel, prettyDate } from '../lib/date';
+import { printAs } from '../lib/printDoc';
 import { useAuthed, useRefreshAll } from '../lib/queries';
 import { useActionQueue } from '../lib/useActionQueue';
 import { minutesUntil, useNow } from '../lib/useNow';
@@ -12,6 +14,7 @@ import { Button } from './Button';
 import { useCelebrate } from './Celebration';
 import { CheckRow } from './CheckRow';
 import { Fold } from './Fold';
+import { Icon } from './Icon';
 import { Sheet } from './Sheet';
 import { Skeleton } from './Skeleton';
 import { planBody, planOf, planProblem, PriorityChip, TaskPlanFields, type Plan } from './TaskPlan';
@@ -44,18 +47,7 @@ export function TaskMonth({ today }: { today: string }) {
     return m;
   }, [d]);
 
-  const print = () => {
-    const before = document.title;
-    const restore = () => {
-      document.title = before;
-      document.body.classList.remove('printing-month');
-      window.removeEventListener('afterprint', restore);
-    };
-    window.addEventListener('afterprint', restore);
-    document.title = `Tasks ${month}`;
-    document.body.classList.add('printing-month');
-    window.print();
-  };
+  const print = () => printAs(`Tasks ${month}`, 'printing-month');
 
   const arrow = 'toy toy-flat flex size-[44px] items-center justify-center rounded-pill text-ink-soft hover:text-ink';
   const cellHeight = 'min-h-[64px] sm:min-h-[96px]';
@@ -118,7 +110,9 @@ export function TaskMonth({ today }: { today: string }) {
                     {open > 0 ? (
                       <span className="rounded-pill bg-ink px-xs text-[12px] font-extrabold leading-[20px] text-on-ink">{open}</span>
                     ) : done > 0 ? (
-                      <span className="rounded-pill bg-card px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">✓</span>
+                      <span className="flex size-[20px] items-center justify-center rounded-pill bg-card text-ink-soft">
+                        <Icon icon={Check} size={12} strokeWidth={3} />
+                      </span>
                     ) : null}
                   </span>
                   <span className="hidden min-w-0 flex-col gap-xs sm:flex">
@@ -193,8 +187,8 @@ function DayTask({ t, today, queue }: { t: MonthTask; today: string; queue: Retu
           <span className="flex flex-wrap justify-end gap-xs">
             <PriorityChip priority={t.priority} />
             {t.repeat && (
-              <span className={chip} title={t.repeat}>
-                🔁 Habit
+              <span className={`${chip} inline-flex items-center gap-xs`} title={t.repeat}>
+                <Icon icon={RepeatIcon} size={12} /> Habit
               </span>
             )}
             {when && !done && <span className={chip}>{when}</span>}

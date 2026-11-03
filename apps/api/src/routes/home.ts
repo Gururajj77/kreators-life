@@ -14,7 +14,8 @@ import { summaryFor } from './wellbeing';
  */
 export const home = new Hono<AppEnv>();
 
-const dayOf = (iso: string) => iso.slice(0, 10);
+/** A plain day for a note, not a raw ISO string ("chat opens 2026-11-04"). */
+const dayOf = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
 home.get('/', async (c) => {
   const db = c.env.DB;

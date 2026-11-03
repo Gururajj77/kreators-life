@@ -11,6 +11,7 @@ import { Section, SeeAll } from '../components/Section';
 import { Sheet } from '../components/Sheet';
 import { Toggle } from '../components/Toggle';
 import { ChannelsPanel } from '../components/Channels';
+import { Pager, usePage } from '../components/Pager';
 import { api } from '../lib/api';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
 
@@ -39,8 +40,11 @@ export function Bond() {
   const me = useMe();
   const nav = useNavigate();
   const q = useAuthed(['bond'], api.bond);
-  const fr = useAuthed(['bond-friends'], api.friends);
-  const ch = useAuthed(['bond-chats'], api.chats);
+  const frPage = usePage('fr');
+  const fr = useAuthed(['bond-friends', frPage.query], () => api.friends(frPage.query));
+  const chPage = usePage('ch');
+  const ch = useAuthed(['bond-chats', chPage.query], () => api.chats(chPage.query));
+  const blPage = usePage('bl');
   const refresh = useRefreshAll();
   const [asking, setAsking] = useState<Person | null>(null);
   const [blocking, setBlocking] = useState<Person | null>(null);
@@ -68,7 +72,7 @@ export function Bond() {
       fr.refetch();
     },
   });
-  const blocked = useAuthed(['bond-blocks'], api.blocks);
+  const blocked = useAuthed(['bond-blocks', blPage.query], () => api.blocks(blPage.query));
   const unblock = useMutation({ mutationFn: (id: string) => api.unblock(id), onSuccess: () => { void blocked.refetch(); fr.refetch(); } });
   const unfriend = useMutation({ mutationFn: (userId: string) => api.unfriend(userId), onSuccess: () => fr.refetch() });
   const openChat = useMutation({ mutationFn: (userId: string) => api.openChat({ userId }), onSuccess: (r) => nav(`/bond/chats/${r.chat.id}`) });
@@ -78,8 +82,10 @@ export function Bond() {
   const incoming = (d?.intros ?? []).filter((i) => i.recipientId === myId && i.status === 'proposed');
   const rest = (d?.intros ?? []).filter((i) => !(i.recipientId === myId && i.status === 'proposed'));
   const other = (i: Introduction): Person => (i.requesterId === myId ? { userId: i.recipientId, name: i.recipientName } : { userId: i.requesterId, name: i.requesterName });
+  const open = fr.data?.open ?? [];
+  const pending = open.filter((f) => f.status === 'pending');
+  const sent = open.filter((f) => f.status === 'sent');
   const friends = fr.data?.friends ?? [];
-  const pending = friends.filter((f) => f.status === 'pending');
   const chats = ch.data?.chats ?? [];
 
   return (
@@ -104,6 +110,7 @@ export function Bond() {
             ))}
           </ul>
         )}
+        <Pager page={ch.data?.page} prefix="ch" label="chats" />
         <Err e={openChat.isError ? openChat.error : null} />
       </Section>
 
@@ -123,6 +130,7 @@ export function Bond() {
               </li>
             ))}
           </ul>
+          <Pager page={blocked.data?.page} prefix="bl" label="people you blocked" />
         </Section>
       )}
 
@@ -182,33 +190,32 @@ export function Bond() {
             ))}
           </ul>
         )}
-        {friends.filter((f) => f.status !== 'pending').length === 0 ? (
+        {sent.length === 0 && friends.length === 0 ? (
           <p className="m-0 text-[14px] font-semibold text-ink-soft">No friends yet. Open someone's page from the community feed and tap Add friend. Chats stay anonymous.</p>
         ) : (
           <ul className="flex list-none flex-col gap-xs p-0 m-0">
-            {friends
-              .filter((f) => f.status !== 'pending')
-              .map((f) => (
-                <li key={f.requestId} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-                  <Link to={f.handle ? `/u/${f.handle}` : `/people/${f.userId}`} className="min-w-0 flex-1">
-                    <span className="block text-[16px] font-bold">
-                      {f.name}
-                      {f.handle ? <span className="font-semibold text-ink-soft"> @{f.handle}</span> : ''}
-                    </span>
-                    <span className="block text-[14px] font-semibold text-ink-soft">{f.status === 'sent' ? 'Request sent, waiting' : 'Friends'}</span>
-                  </Link>
-                  {f.status === 'friends' && (
-                    <Button className="shrink-0" onClick={() => openChat.mutate(f.userId)} disabled={openChat.isPending}>
-                      Chat
-                    </Button>
-                  )}
-                  <Button variant="ghost" className="shrink-0" onClick={() => unfriend.mutate(f.userId)} disabled={unfriend.isPending}>
-                    {f.status === 'sent' ? 'Cancel' : 'Remove'}
+            {[...sent, ...friends].map((f) => (
+              <li key={f.requestId} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+                <Link to={f.handle ? `/u/${f.handle}` : `/people/${f.userId}`} className="min-w-0 flex-1">
+                  <span className="block text-[16px] font-bold">
+                    {f.name}
+                    {f.handle ? <span className="font-semibold text-ink-soft"> @{f.handle}</span> : ''}
+                  </span>
+                  <span className="block text-[14px] font-semibold text-ink-soft">{f.status === 'sent' ? 'Request sent, waiting' : 'Friends'}</span>
+                </Link>
+                {f.status === 'friends' && (
+                  <Button className="shrink-0" onClick={() => openChat.mutate(f.userId)} disabled={openChat.isPending}>
+                    Chat
                   </Button>
-                </li>
-              ))}
+                )}
+                <Button variant="ghost" className="shrink-0" onClick={() => unfriend.mutate(f.userId)} disabled={unfriend.isPending}>
+                  {f.status === 'sent' ? 'Cancel' : 'Remove'}
+                </Button>
+              </li>
+            ))}
           </ul>
         )}
+        <Pager page={fr.data?.page} prefix="fr" label="friends" />
       </Section>
 
       <Section id="bond-intros" title="Introductions" lede="For people you met at events. Your details only move after the other person says yes.">

@@ -17,12 +17,14 @@ import {
   type ContractQuestion,
   type ContractSection,
   typedCents,
+  sectionPrints,
 } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { Button } from '../components/Button';
 import { ContractView, paperDate } from '../components/ContractView';
+import { DocPassword } from '../components/AgencyLifecycle';
 import { DocActions, DocLog, DocTextFold, EmailCopySheet } from '../components/DocActions';
 import { DocStyleCard, DocStyleSheet } from '../components/DocStyleSheet';
 import { HouseTemplateButton } from '../components/HouseTemplateButton';
@@ -373,6 +375,7 @@ export function AgencyContract() {
             )}
           </div>
           <DocActions className="mt-sm" fileName={fileName} text={text} onEmail={() => setOpen({ kind: 'email' })} />
+          <DocPassword clientId={clientId} clientName={clientName} />
         </section>
         <DocTextFold text={text} />
 
@@ -398,6 +401,7 @@ export function AgencyContract() {
                     <span className="flex flex-wrap items-center gap-xs">
                       <span className="text-[16px] font-extrabold">{tie(s.heading || 'Untitled')}</span>
                       <StatusTag tone={s.kind === 'text' || s.kind === 'signatures' ? 'neutral' : 'info'}>{KIND_NAME[s.kind]}</StatusTag>
+                      {!sectionPrints(s) && <StatusTag tone="neutral">Not printed</StatusTag>}
                     </span>
                     <span className="block text-[14px] font-semibold text-ink-soft">{lineOf(s, doc.vars)}</span>
                   </span>
@@ -554,6 +558,11 @@ export function AgencyContract() {
             {openSection.kind === 'packages' && (
               <PackagesEditor s={openSection} currency={doc.currency} count={counts[openSection.id] ?? ''} onCount={(v) => setCounts((m) => ({ ...m, [openSection.id]: v }))} onChange={(p) => patchSection(openSection.id, p)} />
             )}
+            {openSection.kind !== 'signatures' && (
+              <div className="mt-sm">
+                <Toggle on={sectionPrints(openSection)} onChange={(on) => patchSection(openSection.id, { print: on })} label="Print this section" hint="Off keeps it on the screen and the client's link and out of the printed page. The agreement is its main text; the brief and notes of information need not print." />
+              </div>
+            )}
             {openSection.kind === 'brief' && <BriefEditor s={openSection} onChange={(qs) => patchSection(openSection.id, { questions: qs })} armed={armed} tap={tap} />}
             <div className="mt-md">
               <Button onClick={closeSheet}>Done</Button>
@@ -605,7 +614,7 @@ export function AgencyContract() {
       </Sheet>
 
       <DocStyleSheet open={open?.kind === 'style'} onClose={closeSheet} value={parseDocStyle(doc.style)} onChange={(style) => edit((d) => ({ ...d, style }))} disabled={!editable} />
-      <EmailCopySheet open={open?.kind === 'email'} onClose={closeSheet} route="contracts" id={id} defaultTo={clients.data?.clients.find((cl) => cl.id === clientId)?.contactEmail ?? ''} text={text} noLinkYet={c.status === 'draft' || c.status === 'void'} />
+      <EmailCopySheet open={open?.kind === 'email'} onClose={closeSheet} route="contracts" id={id} defaultTo={clients.data?.clients.find((cl) => cl.id === clientId)?.contactEmail ?? ''} text={text} context={{ kind: 'contract', names: clientName ? `${clientName} team` : '', attached: [`The ${doc.title}`], signed: c.status === 'signed' }} noLinkYet={c.status === 'draft' || c.status === 'void'} />
       <Sheet open={open?.kind === 'activity'} onClose={closeSheet} title="Activity">
         <DocLog type="contract" id={id} />
       </Sheet>

@@ -2,6 +2,8 @@ import { HOW_TO, MODULE_BY_KEY, TERMS } from '@kreators/shared';
 import gsap from 'gsap';
 import { createContext, useContext, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router';
+import { ChevronDown } from 'lucide-react';
+import { Icon } from './Icon';
 
 const Key = createContext<string | null>(null);
 
@@ -12,9 +14,7 @@ export function HowTo({ moduleKey, children }: { moduleKey: string; children: Re
 
 function Chevron({ open, className = '' }: { open: boolean; className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" className={`shrink-0 transition-transform ${open ? 'rotate-180' : ''} ${className}`} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 9l6 6 6-6" />
-    </svg>
+    <Icon icon={ChevronDown} size={20} className={`transition-transform ${open ? 'rotate-180' : ''} ${className}`} />
   );
 }
 

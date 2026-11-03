@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { prettyDate } from '../lib/date';
 import { useSession } from '../lib/store';
 import { Button } from './Button';
+import { MediaSection } from './MediaSection';
 import { money } from './PeriodPanel';
 import { Sheet } from './Sheet';
 import { TrustBadge } from './TrustBadge';
@@ -84,6 +85,7 @@ export function ListingSheet({ id, onClose, feature }: Props) {
             {l.status === 'agreed' && <p className="mt-xs m-0 rounded-tile bg-paper px-sm py-xs text-[14px] font-extrabold">An offer was accepted. The handover is being sorted in the chat.</p>}
             {l.status === 'withdrawn' && <p className="mt-xs m-0 rounded-tile bg-paper px-sm py-xs text-[14px] font-extrabold">Taken down for now.</p>}
           </div>
+          <MediaSection type="preowned" id={l.id} title="More pictures, GIFs and video" />
           {l.description && <p className="m-0 text-[16px] font-semibold whitespace-pre-wrap">{l.description}</p>}
           {l.includes && (
             <p className="m-0 text-[14px] font-semibold text-ink-soft">

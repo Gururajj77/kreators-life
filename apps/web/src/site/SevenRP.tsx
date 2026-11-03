@@ -12,8 +12,15 @@ import '../components/fx/spotlight';
 import { useParamState } from '../lib/useParamState';
 import { featuresForLifeArea, featuresForRelationship } from './content';
 import { SiteLayout, useAppEntry } from './SiteLayout';
+import { AppIcon } from '../components/AppIcon';
 
-export const rise = { initial: { opacity: 0, y: 24 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, margin: '-60px' }, transition: { duration: 0.5 } };
+/** A gentle lift into place the first time a section scrolls into view. The content is always visible (opacity
+ * never hides it); only the small upward delta animates, so a full-page shot taken before the observer fires never
+ * shows a blank band, and `prefers-reduced-motion` drops the lift and renders straight in its resting place. */
+export function useRise() {
+  const reduce = useReducedMotion();
+  return reduce ? { initial: { opacity: 1, y: 0 } } : { initial: { opacity: 1, y: 20 }, whileInView: { y: 0 }, viewport: { once: true, margin: '-60px' }, transition: { duration: 0.5 } };
+}
 
 /** The seven pillars stacked, each with its character on top: red at the bottom, violet at the top. */
 export function Tower() {
@@ -65,9 +72,7 @@ function AppTile({ m }: { m: AppModule }) {
   return (
     <li>
       <Link to={`/features/${m.key}`} className="toy toy-soft flex min-h-[56px] items-center gap-xs rounded-inner-sm bg-card-strong px-sm text-[14px] font-bold">
-        <span className="text-[20px]" aria-hidden="true">
-          {m.emoji}
-        </span>
+        <AppIcon name={m.icon} size={20} className="text-ink-soft" />
         <span className="min-w-0 flex-1">{m.name}</span>
       </Link>
     </li>
@@ -175,6 +180,7 @@ export function SevenRP() {
   const view = viewRaw === 'five' ? 'five' : 'seven';
   const [pick, setPick] = useParamState('pillar', RELATIONSHIPS[0]!.key);
   const entry = useAppEntry();
+  const rise = useRise();
 
   const sevenPicks: Choice[] = RELATIONSHIPS.map((r) => ({
     key: r.key,

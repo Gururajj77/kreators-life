@@ -1,5 +1,6 @@
-import { PRODUCT_KIND_META, type Page, type Product } from '@kreators/shared';
+import { PRODUCT_KIND_META, productHasOwnCover, type Page, type Product } from '@kreators/shared';
 import { Link } from 'react-router';
+import { AppIcon } from '../components/AppIcon';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
@@ -22,7 +23,7 @@ export function Sessions() {
           <li key={p.id}>
             <Link to={`/p/${p.id}`} className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm">
               <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-[22px]" aria-hidden="true">
-                {p.cover || PRODUCT_KIND_META[p.kind].emoji}
+                {productHasOwnCover(p.kind, p.cover) ? p.cover : <AppIcon name={PRODUCT_KIND_META[p.kind].icon} size={22} />}
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[16px] font-bold">{p.title}</span>

@@ -267,3 +267,17 @@ describe('house templates', () => {
     expect(houseDoc(k, true).style?.logo).toBe('a1b2c3d4e5');
   });
 });
+
+describe('what an agreement prints', () => {
+  it('prints the main text and leaves out a brief and the notes of information in the trial agreement', async () => {
+    const { CONTRACT_TEMPLATES, sectionPrints, parseContractDoc } = await import('./index');
+    const trial = CONTRACT_TEMPLATES.find((t) => t.key === 'trial')!.doc;
+    const off = trial.sections.filter((s) => !sectionPrints(s)).map((s) => s.id);
+    expect(off).toEqual(['brief', 'after', 'how']);
+    for (const id of ['parties', 'purpose', 'ownership', 'packages', 'payment', 'law', 'sign']) expect(sectionPrints(trial.sections.find((s) => s.id === id)!)).toBe(true);
+    // The choice survives a save, and a person can turn a section back on.
+    const again = parseContractDoc(JSON.parse(JSON.stringify({ ...trial, sections: trial.sections.map((s) => (s.id === 'how' ? { ...s, print: true } : s)) })))!;
+    expect(sectionPrints(again.sections.find((s) => s.id === 'how')!)).toBe(true);
+    expect(sectionPrints(again.sections.find((s) => s.id === 'after')!)).toBe(false);
+  });
+});

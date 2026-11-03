@@ -47,7 +47,7 @@ import type { AppEnv } from '../env';
 import { audit, DATE_RE, dayFromDevice, nameOf, newId, notify, nowIso, num, oneOf, pageOf, paged, randomCode, shiftDate, str } from '../db';
 import { createInvoice, INV_SELECT, nextNumberAfter, setInvoiceStatus, toInvoice, updateDraftInvoice, type InvRow } from './finance';
 import { billingOf, settingsFor } from './agency';
-import { emailCopy, emailProblem, logDoc, maskEmail, ownLogo, publicUrl } from '../agencyPaper';
+import { coverFrom, emailCopy, emailProblem, logDoc, maskEmail, ownLogo, publicUrl } from '../agencyPaper';
 
 /**
  * Agency's paper: designed invoices with a calculator, and agreements made from a template. Owner only, like the rest of Agency;
@@ -596,15 +596,20 @@ agencyDocs.patch('/contracts/:id', async (c) => {
     const next = oneOf(body.status, ['draft', 'sent', 'void'] as const, row.status === 'signed' ? 'draft' : (row.status as 'draft' | 'sent' | 'void'));
     if (row.status === 'signed' && next !== 'void') return c.json({ error: 'a signed agreement can only be voided' }, 400);
     if (row.status === 'void' && next !== 'void') return c.json({ error: 'a voided agreement cannot be sent again; make a copy' }, 400);
+    // Every move is guarded on the status that was read, so a client signing at that moment is never undone by a take-back,
+    // and a double tap cannot send a voided agreement again.
+    const changed = 'This agreement changed while you were working on it (it may have just been signed). Open it again.';
+    let res: D1Result | null = null;
     if (next === 'sent' && row.status !== 'sent') {
       const doc = docOf(row.doc_json);
       if (doc.sections.length === 0) return c.json({ error: 'an agreement needs at least one section' }, 400);
-      await db.prepare("UPDATE agency_contracts SET status = 'sent', token = COALESCE(token, ?), sent_at = ?, updated_at = ? WHERE id = ? AND user_id = ?").bind(randomCode(16), now, now, row.id, user.id).run();
+      res = await db.prepare("UPDATE agency_contracts SET status = 'sent', token = COALESCE(token, ?), sent_at = ?, updated_at = ? WHERE id = ? AND user_id = ? AND status = ?").bind(randomCode(16), now, now, row.id, user.id, row.status).run();
     } else if (next === 'draft' && row.status === 'sent') {
-      await db.prepare("UPDATE agency_contracts SET status = 'draft', token = NULL, updated_at = ? WHERE id = ? AND user_id = ?").bind(now, row.id, user.id).run();
-    } else if (next === 'void') {
-      await db.prepare("UPDATE agency_contracts SET status = 'void', token = NULL, updated_at = ? WHERE id = ? AND user_id = ?").bind(now, row.id, user.id).run();
+      res = await db.prepare("UPDATE agency_contracts SET status = 'draft', token = NULL, updated_at = ? WHERE id = ? AND user_id = ? AND status = 'sent'").bind(now, row.id, user.id).run();
+    } else if (next === 'void' && row.status !== 'void') {
+      res = await db.prepare("UPDATE agency_contracts SET status = 'void', token = NULL, updated_at = ? WHERE id = ? AND user_id = ? AND status = ?").bind(now, row.id, user.id, row.status).run();
     }
+    if (res && res.meta.changes !== 1) return c.json({ error: changed }, 409);
   }
   const fresh = await db.prepare(`${CONTRACT_SELECT} WHERE k.id = ? AND k.user_id = ?`).bind(row.id, user.id).first<ContractRow>();
   return fresh ? c.json({ contract: toContract(fresh) }) : c.json({ error: 'not found' }, 404);
@@ -646,11 +651,12 @@ agencyDocs.post('/invoices/:id/email', async (c) => {
   // The client's version: what the person switched off is left out of the words too.
   const inv = invoiceForClient(toInvoice(row));
   const settings = await settingsFor(db, user.id);
+  const cover = coverFrom(body);
   const result = await emailCopy(db, c.env, user.id, {
     to: who.to,
-    subject: `${inv.doc.title || 'Invoice'} ${inv.number} from ${inv.doc.from.name || nameOf(user)}`,
-    intro: `Hello,\n\nHere is ${inv.doc.title.toLowerCase() === 'invoice' ? 'invoice' : inv.doc.title.toLowerCase()} ${inv.number}.`,
-    text: invoiceAsText(inv),
+    subject: cover?.subject || `${inv.doc.title || 'Invoice'} ${inv.number} from ${inv.doc.from.name || nameOf(user)}`,
+    intro: cover ? cover.message : `Hello,\n\nHere is ${inv.doc.title.toLowerCase() === 'invoice' ? 'invoice' : inv.doc.title.toLowerCase()} ${inv.number}.`,
+    text: cover ? '' : invoiceAsText(inv),
     link: publicUrl(c.env, `/i/${row.token}`),
     replyTo: settings.profile.from.email,
   });
@@ -671,11 +677,12 @@ agencyDocs.post('/contracts/:id/email', async (c) => {
   if ('error' in who) return c.json({ error: who.error }, 400);
   const doc = docOf(row.doc_json);
   const settings = await settingsFor(db, user.id);
+  const cover = coverFrom(body);
   const result = await emailCopy(db, c.env, user.id, {
     to: who.to,
-    subject: `${doc.title} from ${doc.vars.providerBusiness || nameOf(user)}`,
-    intro: 'Hello,\n\nHere is the agreement for you to read. You can answer any questions and accept it at the link below.',
-    text: contractAsText(doc, { reference: docRef('AGR', row.id), date: row.sent_at ?? row.created_at, answers: jsonOr<Record<string, ContractAnswer>>(row.answers_json, {}), acceptance: jsonOr<AgencyContract['acceptance']>(row.acceptance_json, null) }),
+    subject: cover?.subject || `${doc.title} from ${doc.vars.providerBusiness || nameOf(user)}`,
+    intro: cover ? cover.message : 'Hello,\n\nHere is the agreement for you to read. You can answer any questions and accept it at the link below.',
+    text: cover ? '' : contractAsText(doc, { reference: docRef('AGR', row.id), date: row.sent_at ?? row.created_at, answers: jsonOr<Record<string, ContractAnswer>>(row.answers_json, {}), acceptance: jsonOr<AgencyContract['acceptance']>(row.acceptance_json, null) }),
     link: publicUrl(c.env, `/k/${row.token}`),
     replyTo: settings.profile.from.email,
   });

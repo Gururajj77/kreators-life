@@ -1,4 +1,6 @@
 import { useId, useState, type ReactNode } from 'react';
+import { ChevronDown } from 'lucide-react';
+import { Icon } from './Icon';
 
 /**
  * A small fold-out in the app's own style: the title is a rounded flat button with a chevron, tinted while open, and what it holds sits
@@ -20,9 +22,7 @@ export function Fold({ title, hint, defaultOpen = false, open: openProp, onOpenC
           <span className="text-[16px] font-bold">{title}</span>
           {hint !== undefined && hint !== '' && <span className="ml-xs whitespace-nowrap text-[16px] font-semibold text-ink-soft">{hint}</span>}
         </span>
-        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={`shrink-0 text-ink-soft ${open ? 'rotate-180' : ''}`}>
-          <path d="M6 9l6 6 6-6" />
-        </svg>
+        <Icon icon={ChevronDown} size={16} className={`text-ink-soft transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
         <div id={id} className="mt-xs">

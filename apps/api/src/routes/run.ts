@@ -151,15 +151,17 @@ run.get('/clubs/:id', async (c) => {
   const club = toClub(row, user.id);
   const host = hostOf(row, user);
   const month = `${now.slice(0, 7)}-01T00:00:00`;
+  const entryAsk = pageOf(c, 'e');
   const [runs, mine, board, collabs, entries] = await Promise.all([
     db.prepare(`${RUN} WHERE r.club_id = ? ORDER BY r.starts_at DESC LIMIT 60`).bind(row.id).all<RunRow>(),
     db.prepare(`${ENTRY} WHERE e.club_id = ? AND e.user_id = ?`).bind(row.id, user.id).all<EntryRow>(),
     db.prepare("SELECT e.user_id, u.display_name AS name, SUM(e.metres) AS metres, COUNT(*) AS runs FROM run_entries e JOIN users u ON u.id = e.user_id WHERE e.club_id = ? AND e.status = 'logged' AND e.logged_at >= ? GROUP BY e.user_id ORDER BY metres DESC LIMIT 20").bind(row.id, month).all<{ user_id: string; name: string; metres: number; runs: number }>(),
     db.prepare(`${COLLAB} WHERE c.id IN (SELECT collab_id FROM run_collab_applications WHERE club_id = ? AND status = 'accepted') ORDER BY c.ends_at DESC LIMIT 20`).bind(row.id).all<CollabRow>(),
-    host ? db.prepare(`${ENTRY} WHERE e.club_id = ? ORDER BY e.logged_at DESC LIMIT 100`).bind(row.id).all<EntryRow>() : Promise.resolve({ results: [] as EntryRow[] }),
+    host ? db.prepare(`${ENTRY} WHERE e.club_id = ? ORDER BY e.logged_at DESC LIMIT ? OFFSET ?`).bind(row.id, entryAsk.limit, entryAsk.offset).all<EntryRow>() : Promise.resolve({ results: [] as EntryRow[] }),
   ]);
   const myEntries = new Map(mine.results.map((e) => [e.run_id, toEntry(e)]));
   const all = runs.results.map((r) => toRun(r, myEntries.get(r.id) ?? null, host));
+  const epg = paged(entries.results, entryAsk);
   const detail: RunClubDetail = {
     club,
     // A run stays on the list while its start code works, done or not; after that, or cancelled, it is past.
@@ -167,7 +169,8 @@ run.get('/clubs/:id', async (c) => {
     past: all.filter((r) => r.status === 'cancelled' || r.entryState === 'closed'),
     board: board.results.map((b) => ({ userId: b.user_id, name: nameOf({ display_name: b.name }), metres: b.metres, runs: b.runs })),
     collabs: collabs.results.map((k) => toCollab(k, [], false)),
-    entries: entries.results.map(toEntry),
+    entryPage: epg.page,
+    entries: epg.items.map(toEntry),
   };
   return c.json(detail);
 });
@@ -352,7 +355,10 @@ run.post('/entries/:id/void', async (c) => {
   if (!club || !hostOf(club, user)) return c.json({ error: 'the host voids an entry' }, 403);
   if (e.status === 'void') return c.json({ ok: true });
   const now = nowIso();
-  const stmts = [db.prepare("UPDATE run_entries SET status = 'void' WHERE id = ?").bind(e.id)];
+  // The status moves first, guarded, and only the call that moved it takes the pay back, so two taps on Void take it once.
+  const moved = await db.prepare("UPDATE run_entries SET status = 'void' WHERE id = ? AND status != 'void'").bind(e.id).run();
+  if (moved.meta.changes !== 1) return c.json({ ok: true });
+  const stmts: D1PreparedStatement[] = [];
   if (e.xp > 0 || e.points > 0) {
     stmts.push(
       db.prepare('UPDATE users SET xp = MAX(0, xp - ?), points = MAX(0, points - ?) WHERE id = ?').bind(e.xp, e.points, e.user_id),
@@ -361,7 +367,7 @@ run.post('/entries/:id/void', async (c) => {
       db.prepare("INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, 'run:void', ?, ?)").bind(e.user_id, -e.points, e.id, now),
     );
   }
-  await db.batch(stmts);
+  if (stmts.length) await db.batch(stmts);
   await audit(db, user.id, 'run.entry.void', 'run_entry', e.id, 'logged', 'void');
   await notify(db, e.user_id, 'run', 'A run entry was voided', 'The host took back an entry and its points. Ask them if that is wrong.', `/run/clubs/${e.club_id}`);
   return c.json({ ok: true });
@@ -374,20 +380,23 @@ run.get('/collabs', async (c) => {
   const now = nowIso();
   const staff = can(user, 'events');
   const ask = pageOf(c);
+  const appAsk = pageOf(c, 'a');
   const [collabs, myClubs, mineApps, posterApps] = await Promise.all([
     db.prepare(`${COLLAB} WHERE (c.status = 'open' AND c.ends_at >= ?) OR c.created_by = ? ORDER BY c.status = 'open' DESC, c.ends_at LIMIT ? OFFSET ?`).bind(now, user.id, ask.limit, ask.offset).all<CollabRow>(),
     db.prepare(`${CLUB} WHERE k.status = 'active' AND k.host_user_id = ?1 ORDER BY k.created_at`).bind(user.id, now).all<ClubRow>(),
     db.prepare(`${APP} WHERE k.host_user_id = ? ORDER BY a.created_at DESC LIMIT 100`).bind(user.id).all<AppRow>(),
-    db.prepare(`${APP} JOIN run_collabs c ON c.id = a.collab_id WHERE c.created_by = ? ${staff ? 'OR 1 = 1' : ''} ORDER BY a.created_at DESC LIMIT 100`).bind(user.id).all<AppRow>(),
+    db.prepare(`${APP} JOIN run_collabs c ON c.id = a.collab_id WHERE c.created_by = ? ${staff ? 'OR 1 = 1' : ''} ORDER BY a.created_at DESC LIMIT ? OFFSET ?`).bind(user.id, appAsk.limit, appAsk.offset).all<AppRow>(),
   ]);
   const titles = new Map(collabs.results.map((k) => [k.id, k.title]));
   const pg = paged(collabs.results, ask);
+  const apg = paged(posterApps.results, appAsk);
   const res: RunCollabsResponse = {
     page: pg.page,
     collabs: pg.items.map((k) => toCollab(k, mineApps.results.filter((a) => a.collab_id === k.id).map(toApp), k.created_by === user.id || staff)),
     myClubs: myClubs.results.map((k) => toClub(k, user.id)),
     canPost: await canPostCollab(db, user),
-    applications: posterApps.results.map((a) => ({ ...toApp(a), collabTitle: titles.get(a.collab_id) ?? '' })),
+    applicationPage: apg.page,
+    applications: apg.items.map((a) => ({ ...toApp(a), collabTitle: titles.get(a.collab_id) ?? '' })),
   };
   return c.json(res);
 });

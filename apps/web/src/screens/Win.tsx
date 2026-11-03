@@ -203,7 +203,8 @@ function SubmissionRow({ s, rule, reviewer, finance, onDone, showPerson }: { s: 
 
 export function Win() {
   const pg = usePage();
-  const q = useAuthed(['win', pg.query], () => api.win(pg.query));
+  const qpg = usePage('q');
+  const q = useAuthed(['win', pg.query, qpg.query], () => api.win(pg.query, qpg.query));
   const [launching, setLaunching] = useState(false);
   const d = q.data;
   const ruleFor = (bountyId: string): Rule | null => d?.bounties.find((b) => b.id === bountyId) ?? null;
@@ -290,6 +291,7 @@ export function Win() {
                   <SubmissionRow key={s.id} s={s} rule={ruleFor(s.bountyId)} reviewer={d.reviewer} finance={d.finance} onDone={() => q.refetch()} showPerson />
                 ))}
               </ul>
+              <Pager page={d.queuePage} prefix="q" label="the review queue" />
             </section>
           )}
         </>
@@ -692,7 +694,8 @@ function EarnCalc({ b }: { b: Rule }) {
 
 export function Reward() {
   const { id = '' } = useParams();
-  const q = useAuthed(['bounty', id], () => api.bounty(id));
+  const pg = usePage();
+  const q = useAuthed(['bounty', id, pg.query], () => api.bounty(id, pg.query));
   const win = useAuthed(['win'], api.win);
   const refreshAll = useRefreshAll();
   const [url, setUrl] = useState('');
@@ -861,6 +864,7 @@ export function Reward() {
               <SubmissionRow key={s.id} s={s} rule={b} reviewer={reviewer} finance={finance} onDone={reload} showPerson />
             ))}
           </ul>
+          <Pager page={d.page} label="entries" />
         </section>
       )}
     </Screen>

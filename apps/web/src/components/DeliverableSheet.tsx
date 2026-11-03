@@ -17,6 +17,7 @@ import {
   type DeliverableKind,
   type DeliverableStage,
   type TagTone,
+  typedCents,
 } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react';
@@ -54,9 +55,10 @@ const ARMY_TAG: Record<string, { tone: TagTone; name: string }> = {
 const AUTHOR_TONE: Record<AgencyNote['author'], TagTone> = { me: 'neutral', client: 'info', brand: 'warn' };
 
 const toMajor = (cents: number): string => (cents === 0 ? '' : cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2));
+/** A typed amount in cents (`typedCents`: "30,000" and "₹30,000" read as 30000); NaN for junk or a minus, so the form can say so. Blank is 0. */
 const toCents = (v: string): number => {
-  const n = Number(v);
-  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : 0;
+  const c = typedCents(v);
+  return Number.isInteger(c) && c >= 0 ? c : Number.NaN;
 };
 /** "90" is minutes, "1:30" and "1h30" are an hour and a half, "1.5h" is the same. */
 export function parseMinutes(v: string): number {
@@ -103,6 +105,7 @@ function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | 
   const [fee, setFee] = useState(toMajor(item?.feeCents ?? 0));
   const [confirm, setConfirm] = useState(false);
   const listId = useId();
+  const badFee = Number.isNaN(toCents(fee));
 
   // The stage moves from outside too (the brand's answer in Army, a drag on the board), so the form follows it.
   useEffect(() => {
@@ -137,7 +140,7 @@ function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | 
       <form
         onSubmit={(e: FormEvent) => {
           e.preventDefault();
-          if (title.trim() && client) save.mutate();
+          if (title.trim() && client && !badFee) save.mutate();
         }}
       >
         {!item && !clientId && (
@@ -196,7 +199,8 @@ function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | 
           <input type="url" value={link} onChange={(e) => setLink(e.target.value)} maxLength={500} placeholder="https://" className={field} />
         </Field>
         <Field label="Fee" hint={COPY.feeHint}>
-          <input inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} className={field} />
+          <input inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} aria-invalid={badFee || undefined} className={field} />
+          {badFee && <p role="alert" className="mt-xs m-0 text-[14px] font-bold">Type the amount as a number, like 4000 or 4,000.50.</p>}
         </Field>
         <Field label="Notes, only for you" hint={COPY.notesHint}>
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={AGENCY_NOTES_MAX} className={field} />
@@ -207,7 +211,7 @@ function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | 
           </p>
         )}
         <div className="mt-md flex flex-wrap items-center gap-xs">
-          <Button type="submit" disabled={save.isPending || !title.trim() || !client}>
+          <Button type="submit" disabled={save.isPending || !title.trim() || !client || badFee}>
             {save.isPending ? 'Saving' : item ? 'Save changes' : 'Add it'}
           </Button>
           {item &&

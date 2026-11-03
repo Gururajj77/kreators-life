@@ -1,4 +1,5 @@
-import { ROLE_META, type Permission } from '@kreators/shared';
+import { MODULE_BY_KEY, PERMISSION_META, ROLE_META, type Permission } from '@kreators/shared';
+import { AppIcon } from '../components/AppIcon';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { BackLink } from '../components/PageHeader';
@@ -9,16 +10,17 @@ import { useDebounced } from '../lib/useDebounced';
 import { Pager, usePage } from '../components/Pager';
 import { tie } from '../lib/text';
 
-const PERMISSION_META: Record<Permission, { name: string; blurb: string; to: string; emoji: string; queue?: (q: Queues) => number }> = {
-  talent: { name: 'Talent', blurb: 'Campaign briefs, shortlists, assignments', to: '/army', emoji: '🎬', queue: (q) => q.campaigns },
-  cohorts: { name: 'Cohorts', blurb: 'Programs, cohorts, completion', to: '/school', emoji: '🎓', queue: (q) => q.assignments },
-  events: { name: 'Events', blurb: 'Parties, workshops, camps, days, run collabs', to: '/party', emoji: '🎉' },
-  finance: { name: 'Finance', blurb: 'Payouts for verified content rewards', to: '/win', emoji: '💸', queue: (q) => q.bountyQueue },
-  moderation: { name: 'Moderation', blurb: 'Hide or restore community posts', to: '/community', emoji: '🛡️' },
-  support: { name: 'Support', blurb: 'Answer tickets from Help', to: '/help', emoji: '🛟', queue: (q) => q.tickets },
-  review: { name: 'Review', blurb: 'Club, rewards, tools, TV and Fund proposals', to: '/club', emoji: '🔎', queue: (q) => q.clubApplied + q.proposals },
-  mentor: { name: 'Mentor', blurb: 'Feedback on learners’ assignments', to: '/school', emoji: '🧑‍🏫', queue: (q) => q.assignments },
-  coach: { name: 'Life coach', blurb: 'Your students, their asks, notes and tasks', to: '/coaching', emoji: '🎯', queue: (q) => q.coachAsks },
+/** Each permission's queue tile: where it opens and what is waiting. Its icon is the permission's own, from `PERMISSION_META` in shared. */
+const PERMISSION_TILES: Record<Permission, { name: string; blurb: string; to: string; queue?: (q: Queues) => number }> = {
+  talent: { name: 'Talent', blurb: 'Campaign briefs, shortlists, assignments', to: '/army', queue: (q) => q.campaigns },
+  cohorts: { name: 'Cohorts', blurb: 'Programs, cohorts, completion', to: '/school', queue: (q) => q.assignments },
+  events: { name: 'Events', blurb: 'Parties, workshops, camps, days, run collabs', to: '/party' },
+  finance: { name: 'Finance', blurb: 'Payouts for verified content rewards', to: '/win', queue: (q) => q.bountyQueue },
+  moderation: { name: 'Moderation', blurb: 'Hide or restore community posts', to: '/community' },
+  support: { name: 'Support', blurb: 'Answer tickets from Help', to: '/help', queue: (q) => q.tickets },
+  review: { name: 'Review', blurb: 'Club, rewards, tools, TV and Fund proposals', to: '/club', queue: (q) => q.clubApplied + q.proposals },
+  mentor: { name: 'Mentor', blurb: 'Feedback on learners’ assignments', to: '/school', queue: (q) => q.assignments },
+  coach: { name: 'Life coach', blurb: 'Your students, their asks, notes and tasks', to: '/coaching', queue: (q) => q.coachAsks },
 };
 type Queues = { campaigns: number; applications: number; tickets: number; clubApplied: number; bountyQueue: number; proposals: number; assignments: number; coachAsks: number };
 
@@ -50,15 +52,13 @@ export function Manage() {
           {o.permissions.length === 0 && role !== 'admin' && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">No staff permissions yet. An admin grants them under Admin, People.</p>}
           <ul className="mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0">
             {/* An admin holds every permission but Life coach, which the server lists only when given. */}
-            {(role === 'admin' ? (Object.keys(PERMISSION_META) as Permission[]).filter((p) => p !== 'coach' || o.permissions.includes('coach')) : o.permissions).map((p) => {
-              const m = PERMISSION_META[p];
+            {(role === 'admin' ? (Object.keys(PERMISSION_TILES) as Permission[]).filter((p) => p !== 'coach' || o.permissions.includes('coach')) : o.permissions).map((p) => {
+              const m = PERMISSION_TILES[p];
               const n = m.queue ? m.queue(o.queues) : 0;
               return (
                 <li key={p}>
                   <Link to={m.to} className="toy toy-soft relative flex min-h-[112px] flex-col justify-end rounded-tile bg-card p-sm">
-                    <span className="text-[22px]" aria-hidden="true">
-                      {m.emoji}
-                    </span>
+                    <AppIcon name={PERMISSION_META[p].icon} size={22} className="text-ink-soft" />
                     <span className="mt-xs block text-[16px] font-bold leading-tight">{m.name}</span>
                     <span className="block text-[14px] font-semibold leading-snug text-ink-soft">{tie(m.blurb)}</span>
                     {n > 0 && <span className="absolute top-sm right-sm rounded-pill bg-r1 px-xs text-[12px] font-extrabold leading-[20px] text-white">{n}</span>}
@@ -68,9 +68,7 @@ export function Manage() {
             })}
             <li>
               <Link to="/knowledge" className="toy toy-soft flex min-h-[112px] flex-col justify-end rounded-tile bg-card p-sm">
-                <span className="text-[22px]" aria-hidden="true">
-                  📚
-                </span>
+                <AppIcon name={MODULE_BY_KEY.knowledge?.icon} size={22} className="text-ink-soft" />
                 <span className="mt-xs block text-[16px] font-bold leading-tight">Knowledge</span>
                 <span className="block text-[14px] font-semibold leading-snug text-ink-soft">Write and publish articles</span>
               </Link>
@@ -78,9 +76,7 @@ export function Manage() {
             {role === 'admin' && (
               <li>
                 <Link to="/admin" className="toy toy-soft flex min-h-[112px] flex-col justify-end rounded-tile bg-card p-sm">
-                  <span className="text-[22px]" aria-hidden="true">
-                    🔑
-                  </span>
+                  <AppIcon name={MODULE_BY_KEY.admin?.icon} size={22} className="text-ink-soft" />
                   <span className="mt-xs block text-[16px] font-bold leading-tight">Admin</span>
                   <span className="block text-[14px] font-semibold leading-snug text-ink-soft">People, flags, listings, audit</span>
                 </Link>

@@ -1,4 +1,4 @@
-import { contractParties, docDateTime, fillContractText, hasPartiesSection, money, packageRate, parseDocStyle, stripNumber, type ContractAnswer, type ContractDoc, type ContractSection } from '@kreators/shared';
+import { contractParties, docDateTime, fillContractText, hasPartiesSection, money, packageRate, parseDocStyle, sectionPrints, stripNumber, type ContractAnswer, type ContractDoc, type ContractSection } from '@kreators/shared';
 import { Fragment, type ReactNode } from 'react';
 import { Inert } from './Inert';
 import { PrintSheet, type SheetStamp } from './PrintSheet';
@@ -279,7 +279,7 @@ export function ContractView({ doc, answers = {}, onAnswer, acceptance, signLine
       parties={hasPartiesSection(doc) ? [] : contractParties(doc)}
     >
       {doc.sections.map((s) => (
-        <section key={s.id} className="legal-sec" aria-label={s.heading || 'Section'}>
+        <section key={s.id} className={sectionPrints(s) ? 'legal-sec' : 'legal-sec legal-noprint'} aria-label={s.heading || 'Section'}>
           {s.heading && <h2 className="legal-sec-h">{style.heading === 'numbered' ? stripNumber(s.heading) : s.heading}</h2>}
           {s.body && (
             <div>
@@ -291,6 +291,11 @@ export function ContractView({ doc, answers = {}, onAnswer, acceptance, signLine
           {s.kind === 'signatures' && <Signatures doc={doc} acceptance={acceptance} signLine={signLine} />}
         </section>
       ))}
+      {doc.sections.some((s) => !sectionPrints(s)) && (
+        <p className="legal-print-note m-0">
+          {`Not printed here, and open at the agreement's link: ${doc.sections.filter((s) => !sectionPrints(s)).map((s) => s.heading.replace(/\.$/, '')).join('; ')}.`}
+        </p>
+      )}
       {doc.sections.length === 0 && <p className="mt-md m-0 text-[16px] font-semibold text-ink-soft">This document has no sections yet.</p>}
     </PrintSheet>
   );

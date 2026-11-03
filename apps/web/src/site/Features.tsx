@@ -5,6 +5,7 @@ import { BorderBeam } from '../components/fx/BorderBeam';
 import { Reveal } from '../components/fx/Reveal';
 import '../components/fx/spotlight';
 import { SiteLayout, useAppEntry } from './SiteLayout';
+import { AppIcon } from '../components/AppIcon';
 
 /** The first card is wide; the last one stretches to close the row, so a group never ends with a hole in its grid. */
 function span(i: number, n: number): string {
@@ -41,8 +42,8 @@ export function Features() {
               {list.map((m, i) => (
                 <Reveal as="li" index={i % 4} key={m.key} className={span(i, list.length)}>
                   <Link to={`/features/${m.key}`} className="toy toy-soft fx-spot flex h-full min-h-[120px] flex-col rounded-tile bg-card p-md">
-                    <span className="text-[28px]" aria-hidden="true">
-                      {m.emoji}
+                    <span className="flex text-ink-soft">
+                      <AppIcon name={m.icon} size={28} />
                     </span>
                     <span className="mt-xs block text-[18px] font-extrabold leading-tight tracking-tight">{m.name}</span>
                     <span className="block text-balance text-[14px] font-semibold leading-snug text-ink-soft">{FEATURES[m.key]?.tagline ?? m.blurb}</span>

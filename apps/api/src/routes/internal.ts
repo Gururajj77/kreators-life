@@ -93,7 +93,7 @@ internal.get('/observability', async (c) => {
     totals,
     additions,
     roles,
-    apps: MODULES.map((m) => ({ key: m.key, name: m.name, emoji: m.emoji, group: m.group, on: on.get(m.key) ?? 0 })),
+    apps: MODULES.map((m) => ({ key: m.key, name: m.name, icon: m.icon, group: m.group, on: on.get(m.key) ?? 0 })),
     users: matched.slice(ask.offset, ask.offset + ask.size),
     total: matched.length,
     page: { page: ask.page, size: ask.size, more: matched.length > ask.offset + ask.size },

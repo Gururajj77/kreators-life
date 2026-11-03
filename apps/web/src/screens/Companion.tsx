@@ -8,7 +8,7 @@ import { api } from '../lib/api';
 import { useCompanion } from '../lib/queries';
 
 const STARTERS = ['I feel tired today', 'I am stressed about work', 'What should I do next?', 'Today went well'];
-const VOICE: ChatVoice = { name: 'Companion', emoji: '💬' };
+const VOICE: ChatVoice = { name: 'Companion', icon: 'MessageCircleHeart' };
 
 /** The Companion, drawn like the other chats: its lines as plain text under its name, yours as bubbles. */
 export function Companion() {

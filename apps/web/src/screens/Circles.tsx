@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
+import { MediaSection } from '../components/MediaSection';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
@@ -487,6 +488,8 @@ export function CircleGroup() {
         <p className="mt-xs m-0 text-[16px] font-bold">{g.venue || 'Where: not decided yet'}</p>
         <p className="m-0 text-[14px] font-semibold text-ink-soft">{g.plan || 'Agree on the exact time and table in the chat, then write it here so everyone sees it.'}</p>
       </section>
+
+      <MediaSection type="circle" id={g.eventId} title="Pictures and videos from this circle" />
 
       {q.data?.attendee && (
         <section className="mt-md" aria-labelledby="code-heading">

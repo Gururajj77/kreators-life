@@ -168,7 +168,7 @@ function CoachSide({ hub, onChange }: { hub: CoachHub; onChange: () => void }) {
         </Section>
       )}
 
-      <Section id="ask-heading" title="Ask someone to be your student" lede="By their email or @handle. They say yes or no on their Profile tab, and pick what you see.">
+      <Section id="ask-heading" title="Ask someone to be your student" lede="By their email, @handle or friend code. They say yes or no on their Profile tab, and pick what you see.">
         <form
           className="grid grid-cols-[1fr_auto] gap-xs"
           onSubmit={(e) => {
@@ -177,7 +177,7 @@ function CoachSide({ hub, onChange }: { hub: CoachHub; onChange: () => void }) {
             if (who.trim()) ask.mutate();
           }}
         >
-          <input value={who} onChange={(e) => setWho(e.target.value)} placeholder="Email or @handle" aria-label="Their email or handle" autoCapitalize="none" autoComplete="off" className={field} />
+          <input value={who} onChange={(e) => setWho(e.target.value)} placeholder="Email, @handle or friend code" aria-label="Their email, handle or friend code" autoCapitalize="none" autoComplete="off" className={field} />
           <Button type="submit" disabled={ask.isPending || !who.trim()}>
             Ask
           </Button>

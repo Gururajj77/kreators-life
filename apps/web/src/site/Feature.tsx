@@ -9,6 +9,9 @@ import { useSession } from '../lib/store';
 import { featureFor, SITE_FEATURES } from './content';
 import { ListingCard } from './ListingCard';
 import { SiteLayout } from './SiteLayout';
+import { ChevronLeft } from 'lucide-react';
+import { AppIcon } from '../components/AppIcon';
+import { Icon } from '../components/Icon';
 
 /** One public page per part of the app. Each ends at the door into that part. */
 export function Feature() {
@@ -16,7 +19,7 @@ export function Feature() {
   const token = useSession((s) => s.token);
   const found = featureFor(key);
   const listingType = found?.copy.listing;
-  const listings = useQuery({ queryKey: ['explore', 'feature', listingType ?? ''], queryFn: () => publicApi.explore({ type: listingType, limit: 12 }), enabled: Boolean(listingType) });
+  const listings = useQuery({ queryKey: ['explore', 'feature', listingType ?? ''], queryFn: () => publicApi.explore({ type: listingType }), enabled: Boolean(listingType) });
   if (!found) return <Navigate to="/" replace />;
   const { module, copy } = found;
   const lead = RELATIONSHIP_BY_KEY[copy.relationships[0] ?? 'self'];
@@ -28,13 +31,11 @@ export function Feature() {
       <motion.header initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="wash mt-lg grid gap-md rounded-card bg-card p-md shadow-toy-soft md:grid-cols-[2fr_1fr] md:items-center md:p-lg" style={{ '--wash': lead.color } as CSSProperties}>
         <div>
           <Link to="/features" className="inline-flex min-h-[44px] items-center gap-xs text-[14px] font-bold text-ink-soft">
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M15 5l-7 7 7 7" />
-            </svg>
+            <Icon icon={ChevronLeft} size={18} />
             All features
           </Link>
-          <p className="m-0 text-[40px] leading-none" aria-hidden="true">
-            {module.emoji}
+          <p className="m-0 flex" style={{ color: `var(--deep-${lead.key})` }}>
+            <AppIcon name={module.icon} size={40} />
           </p>
           <h1 className="type-hook mt-xs text-[clamp(40px,9vw,80px)]">{module.name}</h1>
           <p className="mt-xs m-0 text-[20px] font-extrabold" style={{ color: `var(--deep-${lead.key})` }}>
@@ -60,7 +61,8 @@ export function Feature() {
       <section className="bento mt-lg" aria-label="How it goes">
         {copy.steps.map((s, i) => (
           <motion.div key={s} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }} className={`rounded-tile bg-card p-md shadow-toy-soft ${i === 0 ? 'bento-w2' : ''}`}>
-            <p className="m-0 type-hook text-[32px] leading-none" style={{ color: lead.color }}>
+            {/* The deep token, not the raw relationship colour: the raw colour reads too faint on a thin glass card in dark mode. */}
+            <p className="m-0 type-hook text-[32px] leading-none" style={{ color: `var(--deep-${lead.key})` }}>
               {i + 1}
             </p>
             <p className="mt-xs m-0 text-[16px] font-bold leading-snug">{s}</p>
@@ -101,7 +103,7 @@ export function Feature() {
           {listings.data && listings.data.listings.length === 0 && <p className="mt-sm m-0 rounded-tile bg-card p-md text-[16px] font-semibold text-ink-soft shadow-toy-soft">None listed at the moment. New ones appear here the moment they are published.</p>}
           {listings.data && listings.data.listings.length > 0 && (
             <ul className="mt-sm grid list-none gap-sm p-0 m-0 md:grid-cols-2 lg:grid-cols-3">
-              {listings.data.listings.map((l) => (
+              {listings.data.listings.slice(0, 12).map((l) => (
                 <ListingCard key={`${l.type}-${l.id}`} listing={l} showFeature={false} />
               ))}
             </ul>
@@ -118,7 +120,7 @@ export function Feature() {
             {others.map((m) => (
               <li key={m.key}>
                 <Link to={`/features/${m.key}`} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-card px-sm text-[14px] font-bold">
-                  <span aria-hidden="true">{m.emoji}</span>
+                  <AppIcon name={m.icon} size={16} />
                   {m.name}
                 </Link>
               </li>

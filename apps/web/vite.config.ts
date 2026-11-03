@@ -49,8 +49,17 @@ export default defineConfig({
           // cached apart from the app's screens (it cannot be split further without splitting the package).
           // The journal prompts (a large list of text) download only when Prompt me opens, so they are not in the shared file.
           if (id.includes('/packages/shared/src/journalPrompts')) return 'journal-prompts';
+          if (id.includes('/packages/shared/src/agencyEmail')) return 'agency-email';
           if (id.includes('/packages/shared/src/')) return 'shared';
+          // The icons the shared registries name (every app, setup tag, role...) are one map the shell needs, so it is a
+          // chunk of its own: preloaded with the first download, but kept out of the entry's 480 kB budget.
+          if (id.endsWith('/src/lib/appIcons.ts')) return 'icons-app';
           if (!id.includes('/node_modules/')) return undefined;
+          // lucide-react's shared drawing code is one small file; each icon stays beside the screen that imports it,
+          // never one big file of every icon.
+          if (/\/node_modules\/lucide-react\/dist\/esm\/(Icon|createLucideIcon|defaultAttributes|context|shared\/)/.test(id)) return 'vendor-icons';
+          // The animated icons' player and its eight animations load only through import(), after the first paint.
+          if (id.includes('/node_modules/react-useanimations/')) return 'vendor-useanimations';
           if (/\/node_modules\/(react|react-dom|scheduler|react-router)\//.test(id)) return 'vendor-react';
           if (id.includes('/node_modules/@tanstack/')) return 'vendor-query';
           if (/\/node_modules\/gsap\//.test(id)) return 'vendor-gsap';

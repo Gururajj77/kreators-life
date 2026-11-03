@@ -239,7 +239,9 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
   }, []);
 
   const narrow = box.w < 520;
-  const size = Math.round(Math.min(210, Math.max(132, box.w * (narrow ? 0.42 : 0.2))));
+  // The card's size follows the table's width, but never asks for more height than the table has to give: on a short table
+  // (a phone on its side in focus mode) this keeps enough room to lay several cards out without stacking them.
+  const size = Math.round(Math.min(210, Math.max(132, Math.min(box.w * (narrow ? 0.42 : 0.2), box.h / 1.9))));
   const height = Math.round(size * 1.4);
   const pileX = 16;
   const pileY = 16;
@@ -270,27 +272,49 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
     }
     setPiles((p) => ({ ...p, [deck.key]: pile.slice(0, -1) }));
     setTable((cur) => {
-      // Cards go anywhere on the table, the whole of it. Each new card takes the open spot nearest the middle that does not sit on another
-      // card or the pile; once the middle is full it works outwards, left and right alike, so nothing drifts to one side.
+      // Cards go anywhere on the table, the whole of it. Each new card takes the open spot nearest the middle that keeps clear of
+      // every other card and the pile; only once nothing is clear does it fall back to the least crowded spot, and a last check
+      // steps it off anything it still lands on, so a card already on the table is never hidden as an unreachable layer under a new one.
       const n = uid.current;
       const maxX = Math.max(0, box.w - size - 8);
       const maxY = Math.max(0, box.h - height - 8);
       const step = Math.max(24, Math.round(size * 0.3));
       const others = [{ x: pileX, y: pileY }, ...cur.map((c) => ({ x: c.x, y: c.y }))];
       const mid = { x: maxX / 2, y: maxY / 2 };
+      const minClear = size * 0.55;
       let best = { x: 8, y: 8, score: -Infinity };
-      for (let gy = 8; gy <= Math.max(8, maxY); gy += step) {
-        for (let gx = 8; gx <= Math.max(8, maxX); gx += step) {
-          const x0 = Math.min(maxX, gx + ((n * 7) % 13) - 6);
-          const y0 = Math.min(maxY, gy + ((n * 11) % 13) - 6);
+      let bestClear = { x: 8, y: 8, score: -Infinity };
+      for (let gy = 8; gy <= maxY || gy === 8; gy += step) {
+        if (gy > maxY && gy !== 8) break;
+        for (let gx = 8; gx <= maxX || gx === 8; gx += step) {
+          if (gx > maxX && gx !== 8) break;
           // How far the nearest card is, counted only up to a card and a bit: past that, the spot is as good as any.
-          const near = Math.min(...others.map((o) => Math.hypot(o.x - x0, o.y - y0)), size * 1.1);
-          const score = near - 0.5 * Math.hypot(x0 - mid.x, y0 - mid.y);
-          if (score > best.score) best = { x: x0, y: y0, score };
+          const near = Math.min(...others.map((o) => Math.hypot(o.x - gx, o.y - gy)));
+          const score = Math.min(near, size * 1.1) - 0.5 * Math.hypot(gx - mid.x, gy - mid.y);
+          if (score > best.score) best = { x: gx, y: gy, score };
+          if (near >= minClear && score > bestClear.score) bestClear = { x: gx, y: gy, score };
         }
       }
-      const x = Math.max(0, best.x);
-      const y = Math.max(0, best.y);
+      const chosen = bestClear.score > -Infinity ? bestClear : best;
+      const jx = ((n * 7) % 13) - 6;
+      const jy = ((n * 11) % 13) - 6;
+      let x = Math.max(0, Math.min(maxX, chosen.x + jx));
+      let y = Math.max(0, Math.min(maxY, chosen.y + jy));
+      const nearestTo = (px: number, py: number) => Math.min(...others.map((o) => Math.hypot(o.x - px, o.y - py)));
+      const hardFloor = Math.max(18, size * 0.14);
+      if (nearestTo(x, y) < hardFloor) {
+        const bump = 26;
+        const dirs: [number, number][] = [[bump, 0], [-bump, 0], [0, bump], [0, -bump], [bump, bump], [-bump, -bump], [bump, -bump], [-bump, bump]];
+        for (const [dx, dy] of dirs) {
+          const nx = Math.max(0, Math.min(maxX, x + dx));
+          const ny = Math.max(0, Math.min(maxY, y + dy));
+          if (nearestTo(nx, ny) >= hardFloor) {
+            x = nx;
+            y = ny;
+            break;
+          }
+        }
+      }
       zTop.current += 1;
       return [...cur, { uid: uid.current++, deck: deck.key, idx, x: Math.round(x), y: Math.round(y), z: zTop.current, flipped: false, from: { x: pileX, y: pileY } }];
     });

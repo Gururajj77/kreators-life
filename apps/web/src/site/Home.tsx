@@ -15,8 +15,11 @@ import { TextReveal } from '../components/fx/TextReveal';
 import { publicApi } from '../lib/api';
 import { useSession } from '../lib/store';
 import { BRAND_PITCH, FEATURES, SITE_FAQ, SITE_FEATURES } from './content';
-import { rise, Tower } from './SevenRP';
+import { Tower, useRise } from './SevenRP';
 import { SiteLayout, useAppEntry } from './SiteLayout';
+import { BatteryLow, Check, ChevronDown, Hourglass, MessageSquareDashed, Puzzle, Tornado, X } from 'lucide-react';
+import { AppIcon } from '../components/AppIcon';
+import { Icon } from '../components/Icon';
 
 /**
  * The landing page tells one story, in the PASTOR order: the problem, what it costs (the villains), the story and the
@@ -27,11 +30,11 @@ import { SiteLayout, useAppEntry } from './SiteLayout';
 
 /** The five villains every creator meets. Each one has an answer in the app, below. */
 const VILLAINS = [
-  { key: 'grind', name: 'The Grind', emoji: '🌀', does: 'Says one more video, one more hour. It takes your sleep first, then your mornings, then your mood.', costs: 'Tired work, and less of it.' },
-  { key: 'scatter', name: 'The Scatter', emoji: '🧩', does: 'Ten apps, ten logins, and nothing talks to anything. Courses, gigs, money and notes all live in different places.', costs: 'Hours lost looking, and chances you never see.' },
-  { key: 'silence', name: 'The Silence', emoji: '🫥', does: 'You work alone in your room. Nobody checks in, cheers you on or tells you the truth.', costs: 'Doubt grows fast when nobody is around.' },
-  { key: 'drift', name: 'The Drift', emoji: '⏳', does: 'Days pass. Goals sit in a note you never open. You feel busy, but nothing moves.', costs: 'A year goes by, and you are in the same place.' },
-  { key: 'squeeze', name: 'The Squeeze', emoji: '🪫', does: 'Money comes in bits, late, or not at all. Brands want views; you want rent.', costs: 'Stress that leaks into the rest of your life.' },
+  { key: 'grind', name: 'The Grind', icon: Tornado, does: 'Says one more video, one more hour. It takes your sleep first, then your mornings, then your mood.', costs: 'Tired work, and less of it.' },
+  { key: 'scatter', name: 'The Scatter', icon: Puzzle, does: 'Ten apps, ten logins, and nothing talks to anything. Courses, gigs, money and notes all live in different places.', costs: 'Hours lost looking, and chances you never see.' },
+  { key: 'silence', name: 'The Silence', icon: MessageSquareDashed, does: 'You work alone in your room. Nobody checks in, cheers you on or tells you the truth.', costs: 'Doubt grows fast when nobody is around.' },
+  { key: 'drift', name: 'The Drift', icon: Hourglass, does: 'Days pass. Goals sit in a note you never open. You feel busy, but nothing moves.', costs: 'A year goes by, and you are in the same place.' },
+  { key: 'squeeze', name: 'The Squeeze', icon: BatteryLow, does: 'Money comes in bits, late, or not at all. Brands want views; you want rent.', costs: 'Stress that leaks into the rest of your life.' },
 ] as const;
 
 /** How the app beats each villain: what it does (a rule the code keeps), what you get, and the apps that do it. */
@@ -64,6 +67,7 @@ const h2 = 'type-hook mt-xs text-[clamp(32px,7vw,56px)]';
 
 export function Home() {
   const entry = useAppEntry();
+  const rise = useRise();
   const token = useSession((s) => s.token);
   const start = token ? entry : '/start';
   const stats = useQuery({ queryKey: ['site', 'stats'], queryFn: publicApi.stats });
@@ -122,7 +126,7 @@ export function Home() {
           {SITE_FEATURES.map((m) => (
             <li key={m.key}>
               <Link to={`/features/${m.key}`} title={FEATURES[m.key]?.tagline} className="inline-flex min-h-[44px] items-center gap-xs whitespace-nowrap rounded-pill border border-line bg-card-strong px-sm text-[14px] font-bold text-ink-soft transition-colors hover:text-ink">
-                <span aria-hidden="true">{m.emoji}</span>
+                <AppIcon name={m.icon} size={16} />
                 {m.name}
               </Link>
             </li>
@@ -155,8 +159,8 @@ export function Home() {
         <ul className="bento mt-md list-none p-0 m-0">
           {VILLAINS.map((v, i) => (
             <SpotlightCard as="li" index={i} key={v.key} className={`rounded-card bg-card p-md shadow-toy-soft ${i === 0 ? 'bento-w2 bento-h2 bento-feature' : ''}`}>
-              <p className="m-0 text-[32px] leading-none" aria-hidden="true">
-                {v.emoji}
+              <p className="m-0 flex text-ink-soft">
+                <Icon icon={v.icon} size={32} />
               </p>
               <h3 className="mt-sm m-0 text-[22px] text-balance">{v.name}</h3>
               <p className="mt-xs m-0 text-balance text-[16px] font-semibold">{v.does}</p>
@@ -254,8 +258,8 @@ export function Home() {
             return (
               <SpotlightCard as="li" index={Math.min(ai, 2)} key={a.villain} className="grid gap-sm rounded-card bg-card p-md shadow-toy-soft md:grid-cols-[200px_1fr]">
                 <div>
-                  <p className="m-0 text-[28px] leading-none" aria-hidden="true">
-                    {v.emoji}
+                  <p className="m-0 flex text-ink-soft">
+                    <Icon icon={v.icon} size={28} />
                   </p>
                   <h3 className="mt-xs m-0 text-[20px] text-balance">Against {v.name}</h3>
                 </div>
@@ -267,8 +271,8 @@ export function Home() {
                       .filter((k) => FEATURES[k] && MODULE_BY_KEY[k])
                       .map((k) => (
                         <li key={k}>
-                          <Link to={`/features/${k}`} title={FEATURES[k]?.tagline} className="toy toy-soft inline-flex min-h-[40px] items-center gap-xs rounded-pill bg-paper px-sm text-[14px] font-bold">
-                            <span aria-hidden="true">{MODULE_BY_KEY[k]?.emoji}</span>
+                          <Link to={`/features/${k}`} title={FEATURES[k]?.tagline} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-paper px-sm text-[14px] font-bold">
+                            <AppIcon name={MODULE_BY_KEY[k]?.icon} size={16} />
                             {MODULE_BY_KEY[k]?.name}
                           </Link>
                         </li>
@@ -296,7 +300,7 @@ export function Home() {
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
               {BEFORE.map((b) => (
                 <li key={b} className="flex items-start gap-xs text-[16px] font-semibold text-ink-soft">
-                  <span aria-hidden="true">✕</span>
+                  <Icon icon={X} size={20} className="mt-[2px]" />
                   {b}
                 </li>
               ))}
@@ -307,7 +311,7 @@ export function Home() {
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
               {AFTER.map((b) => (
                 <li key={b} className="flex items-start gap-xs text-[16px] font-bold">
-                  <span aria-hidden="true">✓</span>
+                  <Icon icon={Check} size={20} className="mt-[2px]" />
                   {b}
                 </li>
               ))}
@@ -339,7 +343,7 @@ export function Home() {
           <ul className="bento mt-md list-none p-0 m-0">
             {FREE.map((f, i) => (
               <li key={f} className={`flex items-start gap-xs rounded-tile bg-paper p-sm text-[16px] font-bold ${i === 0 ? 'bento-w2' : i === 3 ? 'bento-w4' : ''}`}>
-                <span aria-hidden="true">✓</span>
+                <Icon icon={Check} size={20} className="mt-[2px]" />
                 {f}
               </li>
             ))}
@@ -393,9 +397,7 @@ export function Home() {
               <summary className="flex min-h-[56px] items-center gap-sm rounded-tile p-sm text-[16px] font-extrabold">
                 <span className="min-w-0 flex-1">{f.q}</span>
                 <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-paper" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" width="20" height="20" className="chev transition-transform" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M6 9l6 6 6-6" />
-                  </svg>
+                  <Icon icon={ChevronDown} size={20} className="chev transition-transform" />
                 </span>
               </summary>
               <p className="prose-long m-0 px-sm pb-sm text-[14px] font-semibold text-ink-soft">{f.a}</p>

@@ -1,7 +1,7 @@
 // The smoke checks. Run through blueprint.sh, which starts the server this talks to.
 // Node imports the shared model straight from TypeScript (--experimental-strip-types).
 import { LOVE_PAIRS, MIND_SCREENS, TYPE_NAMES, TYPE_SCREENS, DISCOVER_CORE_STEPS, DISCOVER_SCENES, DISCOVER_STEPS, EQ_FEELINGS, EQ_PEOPLE, EQ_READING, PUZZLES_SHOWN, puzzleAt, RELATIONSHIPS, QUESTIONS, XP, POINTS, WAIT, RUN_REWARD, SOCIAL_REWARDS, MAX_NOT_TO_DO, MODULES, FEATURE_FEE_POINTS, matchSetup, parseSetup, setupSwitchable } from '../../packages/shared/src/index.ts';
-import { LIMITS } from '../../apps/api/src/limits.ts';
+import { LIMITS, ROUTE_LIMITS } from '../../apps/api/src/limits.ts';
 import { LEGAL_VERSION } from '../../packages/shared/src/index.ts';
 import { contractAsText, invoiceAsText, money } from '../../packages/shared/src/index.ts';
 import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, PLANS } from '../../packages/shared/src/index.ts';
@@ -884,6 +884,17 @@ section('Strategy session');
   check('editing needs a routine first', noRoutine.status === 400, noRoutine.json);
   const fresh = await api('GET', `/session?date=${today}`, undefined, C.token);
   check('a new account has no session yet, so onboarding starts with it', fresh.status === 200 && fresh.json.assessment === null && fresh.json.contract === null, fresh.json);
+  // "Not part of my life right now": love, teachers and faith only, placed at Neutrality and never suggested.
+  const low = placements.map((p) => (p.relationship === 'lover_partner' ? { ...p, core: 350, floor: 50 } : p.relationship === 'divine' ? { ...p, core: 540, floor: 20 } : p));
+  const aw = await api('POST', '/session/assessment', { placements: low, away: ['lover_partner', 'divine', 'self'] }, C.token);
+  const awBy = Object.fromEntries((aw.json.assessment?.placements ?? []).map((p) => [p.relationship, p]));
+  check('a pillar set aside is kept, and only love, teachers or faith can be', aw.status === 201 && JSON.stringify(aw.json.assessment?.away) === '["lover_partner","divine"]', aw.json?.assessment?.away);
+  check('a pillar set aside sits at Neutrality whatever was sent', awBy.lover_partner?.core === 250 && awBy.lover_partner?.floor === 250 && awBy.divine?.floor === 250 && awBy.self?.core === 350, [awBy.lover_partner, awBy.divine]);
+  check('a pillar set aside is never suggested as a focus', Array.isArray(aw.json.suggestedFocus) && !aw.json.suggestedFocus.includes('lover_partner') && !aw.json.suggestedFocus.includes('divine'), aw.json?.suggestedFocus);
+  const back = await api('PUT', '/session/away', { relationship: 'divine', away: false, date: today }, C.token);
+  check('a pillar set aside can be turned back on from the life map', back.status === 200 && JSON.stringify(back.json.assessment?.away) === '["lover_partner"]', back.json?.assessment?.away);
+  const notOptional = await api('PUT', '/session/away', { relationship: 'self', away: true }, C.token);
+  check('only the optional pillars can be set aside', notOptional.status === 400, notOptional.json);
 }
 
 section('Daily reminder');
@@ -3413,6 +3424,159 @@ section('Agency documents');
   const gone = await api('DELETE', '/me', { confirm: 'DELETE' }, O.token);
   check('deleting the account removes them', gone.status === 200, gone.json);
   check('and the client link stops working', (await pub('GET', `/agency/doc/${dtok}`)).status === 404);
+}
+
+// ---------------------------------------------------------------- money guards (the 2026-11-03 audit)
+section('Money guards: two taps pay once, nothing is refunded that was not paid');
+{
+  const MG = (n) => `10.${(seed + n) & 255}.${(seed >> 16) & 255}.${(seed >> 8) & 255}`;
+  let joined = 0;
+  const join = async (who, apps = []) => {
+    const r = await api('POST', '/auth/signup', { email: `mg-${who}-${stamp}@smoke.test`, password: `Meadow-${stamp}-pass`, displayName: `Smoke ${who}`, phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': MG(90 + Math.floor(joined++ / 6)) });
+    for (const key of apps) await api('PATCH', '/me/modules', { key, on: true }, r.json.token);
+    return { token: r.json.token, user: r.json.user };
+  };
+  const pts = async (t) => (await me(t.token)).points;
+  const give = (t, amount) => admin('POST', `/admin/users/${t.user.id}/points`, { amount, note: 'smoke money guards' });
+
+  // Party: a paid ticket, a waitlist, cancels and a host cancel.
+  const H = await join('host', ['party']);
+  const A = await join('guest', ['party']);
+  const W = await join('waiter', ['party']);
+  await give(A, 1000);
+  await give(W, 1000);
+  const ev = await api('POST', '/party/events', { title: `Guarded party ${stamp}`, startsAt: new Date(Date.now() + 3 * 86_400_000).toISOString(), minutes: 60, pricePoints: 100, capacity: 1 }, H.token);
+  const eid = ev.json.event?.id;
+  const a0 = await pts(A);
+  const w0 = await pts(W);
+  const seated = await api('POST', `/party/events/${eid}/rsvp`, {}, A.token);
+  check('a paid seat costs the ticket price', seated.status === 201 && seated.json.status === 'registered' && a0 - (await pts(A)) === 100, seated.json);
+  const waiting = await api('POST', `/party/events/${eid}/rsvp`, {}, W.token);
+  check('a full event waitlists and charges nothing', waiting.status === 201 && waiting.json.status === 'waitlisted' && (await pts(W)) === w0, waiting.json);
+  const cancels = await Promise.all([1, 2, 3].map(() => api('POST', `/party/events/${eid}/cancel-rsvp`, {}, A.token)));
+  check('three cancels at once: one goes through', cancels.filter((r) => r.status === 200).length === 1, cancels.map((r) => r.status));
+  check('and the ticket is refunded once', (await pts(A)) === a0, { now: await pts(A), a0 });
+  const wDetail = await api('GET', `/party/events/${eid}`, undefined, W.token);
+  check('the freed seat goes to the waitlist, and the ticket is charged then', wDetail.json.event?.mine?.status === 'registered' && w0 - (await pts(W)) === 100, { status: wDetail.json.event?.mine?.status, paid: w0 - (await pts(W)) });
+  const hostView = await api('GET', `/party/events/${eid}`, undefined, H.token);
+  check('one seat is still one person', hostView.json.event?.registered === 1, hostView.json.event?.registered);
+  await api('POST', `/party/events/${eid}/cancel-rsvp`, {}, W.token);
+  check('a promoted guest who cancels gets back what they paid, no more', (await pts(W)) === w0, { now: await pts(W), w0 });
+  const taps = await Promise.all([1, 2].map(() => api('POST', `/party/events/${eid}/rsvp`, {}, A.token)));
+  check('two RSVPs at once take one seat', taps.filter((r) => r.status === 201).length === 1, taps.map((r) => [r.status, r.json.error ?? r.json.status]));
+  check('and charge one ticket', a0 - (await pts(A)) === 100, a0 - (await pts(A)));
+  const hostCancel = await Promise.all([1, 2].map(() => api('PATCH', `/party/events/${eid}`, { status: 'cancelled' }, H.token)));
+  check('the host cancels the event', hostCancel.every((r) => r.status === 200), hostCancel.map((r) => r.status));
+  check('every paid guest is refunded, once', (await pts(A)) === a0, { now: await pts(A), a0 });
+  const aInbox = await api('GET', '/inbox', undefined, A.token);
+  check('and is told the points are back', JSON.stringify(aInbox.json).includes('The points you paid for the ticket are back'), aInbox.status);
+
+  // Store: pay what you want with a 100% team code, and a creator coupon.
+  const S = await join('seller');
+  const B = await join('buyer');
+  const P = await join('poor');
+  await give(B, 3000);
+  const pw = await api('POST', '/studio/products', { kind: 'digital', title: `Pay what you want ${stamp}`, pricePoints: 1, pwyw: true, status: 'live' }, S.token);
+  const PW = pw.json.product?.id;
+  const allOff = `ALLOFF${stamp}`.toUpperCase();
+  await admin('POST', '/admin/discounts', { code: allOff, kind: 'percent', percent: '100', areas: ['product'], perPersonLimit: 3 });
+  const quote = await api('POST', '/discounts/check', { code: allOff, area: 'product', itemId: PW, points: 1000 }, B.token);
+  check('on pay what you want a code comes off the minimum, not the offer', quote.status === 200 && quote.json.offPoints === 1 && quote.json.payPoints === 999, quote.json);
+  const s0 = await pts(S);
+  const b0 = await pts(B);
+  const big = await api('POST', `/store/${PW}/checkout`, { pay: 'points', points: 1000, discountCode: allOff }, B.token);
+  check('the buyer pays the offer less the minimum', big.status === 201 && big.json.order?.points === 999 && big.json.order?.discountPoints === 1 && b0 - (await pts(B)) === 999, big.json.order ?? big.json);
+  const fee = big.json.order?.platformFeePoints ?? 0;
+  check('so the platform pays at most the real price, and makes no points', (await pts(S)) - s0 === 1000 - fee && (await pts(S)) - s0 - (b0 - (await pts(B))) <= 1, { seller: (await pts(S)) - s0, fee });
+  const coupon = await api('POST', '/studio/coupons', { code: `ONCE${stamp}`, percentOff: 34, maxUses: 1 }, S.token);
+  const item = await api('POST', '/studio/products', { kind: 'digital', title: `Coupon item ${stamp}`, pricePoints: 25, status: 'live' }, S.token);
+  const IT = item.json.product?.id;
+  const broke = await api('POST', `/store/${IT}/checkout`, { pay: 'points', coupon: `ONCE${stamp}` }, P.token);
+  check('a checkout that cannot pay is refused', broke.status === 400, broke.json);
+  const cAfter = (await api('GET', '/studio/coupons', undefined, S.token)).json.coupons?.find((x) => x.id === coupon.json.coupon?.id);
+  check('and spends no use of the coupon', cAfter?.uses === 0, cAfter);
+  const b1 = await pts(B);
+  const withCoupon = await api('POST', `/store/${IT}/checkout`, { pay: 'points', coupon: `ONCE${stamp}` }, B.token);
+  check('34% off 25 points is 17, worked out in whole numbers', withCoupon.status === 201 && b1 - (await pts(B)) === 17, withCoupon.json.order ?? withCoupon.json);
+  check('the coupon is used once and is then used up', (await api('GET', '/studio/coupons', undefined, S.token)).json.coupons?.find((x) => x.id === coupon.json.coupon?.id)?.uses === 1, '');
+
+  // Rewards: an admin cancel and the person's own cancel at once refund once.
+  const R = await join('rewards');
+  await give(R, 2000);
+  const r0 = await pts(R);
+  const held = await api('POST', '/rewards/book_relationship_method/redeem', undefined, R.token);
+  const rid = held.json.redemption?.id;
+  check('a book is reserved for its points', held.status === 201 && held.json.redemption?.status === 'reserved' && r0 - (await pts(R)) === 2000, held.json);
+  const both = await Promise.all([api('POST', `/rewards/redemptions/${rid}/cancel`, undefined, R.token), admin('POST', `/admin/redemptions/${rid}`, { status: 'cancelled' }), admin('POST', `/admin/redemptions/${rid}`, { status: 'cancelled' })]);
+  check('three cancels from two sides: one goes through', both.filter((r) => r.status === 200).length === 1, both.map((r) => r.status));
+  check('and the points come back once', (await pts(R)) === r0, { now: await pts(R), r0 });
+  check('a fulfil cannot land on a cancelled one', (await admin('POST', `/admin/redemptions/${rid}`, { status: 'fulfilled' })).status === 400, '');
+
+  // Run: two voids at once take the pay back once.
+  const C2 = await join('runhost', ['run']);
+  const M = await join('runner', ['run']);
+  await give(M, 500);
+  const club = await api('POST', '/run/clubs', { name: `Guarded runners ${stamp}`, city: 'Pune' }, C2.token);
+  const run1 = await api('POST', `/run/clubs/${club.json.club?.id}/runs`, { title: 'Guarded run', startsAt: new Date(Date.now() - 10 * 60_000).toISOString(), minutes: 60, metres: 5000 }, C2.token);
+  await api('POST', `/run/clubs/${club.json.club?.id}/join`, {}, M.token);
+  const m0 = await me(M.token);
+  const ent = await api('POST', `/run/runs/${run1.json.run?.id}/entry`, { code: run1.json.run?.code, minutes: 30, metres: 5000 }, M.token);
+  const entId = ent.json.entry?.id ?? (await api('GET', `/run/clubs/${club.json.club?.id}`, undefined, C2.token)).json.entries?.[0]?.id;
+  check('the runner is paid for the run', ent.status === 201 && (await pts(M)) > m0.points, ent.json);
+  await Promise.all([1, 2, 3].map(() => api('POST', `/run/entries/${entId}/void`, {}, C2.token)));
+  const m1 = await me(M.token);
+  check('three voids at once take the pay back once', m1.points === m0.points && m1.xp === m0.xp, { before: [m0.points, m0.xp], after: [m1.points, m1.xp] });
+
+  // Password change: the current password is limited like sign-in.
+  const PWU = await join('pwchange');
+  let lastPw = 0;
+  for (let i = 0; i < LIMITS.passwordChange.max + 1 && lastPw !== 429; i += 1) lastPw = (await api('POST', '/me/password', { current: `wrong-${i}-guess`, password: `Meadow-${stamp}-new1` }, PWU.token)).status;
+  check('guessing the current password is limited per person', lastPw === 429, lastPw);
+
+  // Codes cannot be guessed through a checkout either; an ordinary checkout spends nothing of that budget.
+  const G = await join('guesser');
+  let plain = 0;
+  for (let i = 0; i < LIMITS.discount.max + 1; i += 1) plain = Math.max(plain, (await api('POST', '/credits/checkout', { kind: 'plan', key: 'pro' }, G.token, { 'CF-Connecting-IP': MG(120) })).status);
+  check('checkouts without a code are not counted as guesses', plain !== 429, plain);
+  let guessed = 0;
+  for (let i = 0; i < LIMITS.discount.max + 2 && guessed !== 429; i += 1) guessed = (await api('POST', '/credits/checkout', { kind: 'plan', key: 'pro', discountCode: `GUESS${i}XYZ` }, G.token, { 'CF-Connecting-IP': MG(121) })).status;
+  check('guessing codes through plan checkout is limited', guessed === 429, guessed);
+
+  // Agency: a locked client's invoice in lower case is still locked; two taps on Mark paid book once; a take-back cannot undo a signature.
+  const O = await join('agencyguard', ['agency', 'finance']);
+  await api('PUT', '/agency/settings', { profile: { gstBps: 0, tdsBps: 0, tdsMode: 'none' } }, O.token);
+  const cl = await api('POST', '/agency/clients', { name: 'Guarded Co', contactEmail: 'ops@guarded.test', portalPassword: 'generate' }, O.token);
+  const inv = await api('POST', `/agency/invoices?day=${today}`, { clientId: cl.json.id, items: [{ description: 'Guarded reel', quantity: 1, unitCents: 100000 }] }, O.token);
+  const iid = inv.json.invoice?.id;
+  const sentInv = await api('PATCH', `/agency/invoices/${iid}`, { status: 'sent' }, O.token);
+  const itok = sentInv.json.invoice?.token ?? inv.json.invoice?.token;
+  const PUB = (method, path, body) => api(method, `/public${path}`, body, null, { 'CF-Connecting-IP': MG(130 + Math.floor(Math.random() * 60)) });
+  check('a locked client\'s invoice link is locked', (await PUB('GET', `/invoices/${itok}`)).status === 401, '');
+  const lower = await PUB('GET', `/invoices/${String(itok).toLowerCase()}`);
+  check('and so is the same link in lower case', lower.status === 401 && !JSON.stringify(lower.json).includes('Guarded reel'), lower.status);
+  check('a comment through the lower-case link is refused too', (await PUB('POST', `/invoices/${String(itok).toLowerCase()}/comments`, { body: 'hello' })).status === 401, '');
+  await Promise.all([1, 2, 3].map(() => api('PATCH', `/agency/invoices/${iid}`, { status: 'paid' }, O.token)));
+  const books = await api('GET', `/finance?month=${new Date().toISOString().slice(0, 7)}`, undefined, O.token);
+  const booked = (books.json.transactions ?? []).filter((t) => t.kind === 'income' && t.amountCents === 100000);
+  check('three taps on Mark paid book the income once', booked.length === 1, booked.length);
+  const kc = await api('POST', '/agency/contracts', { templateKey: 'trial', clientId: cl.json.id }, O.token);
+  const ks = await api('PATCH', `/agency/contracts/${kc.json.id}`, { status: 'sent' }, O.token);
+  const unlock = await PUB('POST', `/agency/${(await api('POST', `/agency/clients/${cl.json.id}/portal`, { on: true }, O.token)).json.portalToken}/unlock`, { password: cl.json.password });
+  const ktok = ks.json.contract?.token;
+  const [accept, takeBack] = await Promise.all([
+    api('POST', `/public/contracts/${ktok}/accept`, { name: 'Guard Signer', agree: true }, null, { 'CF-Connecting-IP': MG(200), 'X-Portal-Session': unlock.json.session ?? '' }),
+    api('PATCH', `/agency/contracts/${kc.json.id}`, { status: 'draft' }, O.token),
+  ]);
+  const kNow = (await api('GET', `/agency/contracts/${kc.json.id}`, undefined, O.token)).json.contract;
+  check('signing and taking back at once never leave a signed agreement as a draft', kNow && (kNow.acceptance ? kNow.status === 'signed' : kNow.status === 'draft'), { status: kNow?.status, accept: accept.status, takeBack: takeBack.status });
+
+  // Every Agency and business-metric write is in the one limits file.
+  const fs = await import('node:fs');
+  const root = new URL('../../apps/api/src/routes/', import.meta.url);
+  const mounts = [['agency.ts', 'agency', '/agency'], ['agencyDocs.ts', 'agencyDocs', '/agency'], ['agencyLife.ts', 'agencyLife', '/agency'], ['agencyOther.ts', 'agencyOther', '/agency/docs'], ['kpis.ts', 'kpis', '/reviews/kpis']];
+  const doors = mounts.flatMap(([file, name, base]) => [...fs.readFileSync(new URL(file, root), 'utf8').matchAll(new RegExp(`^${name}\\.(post|patch|put|delete)\\('([^']*)'`, 'gm'))].map((m) => ({ method: m[1].toUpperCase(), path: `${base}${m[2] === '/' ? '' : m[2]}` })));
+  const missing = doors.filter((d) => !ROUTE_LIMITS.some((r) => r.method === d.method && r.path === d.path));
+  check('every Agency and business-metric write has a rate limit', doors.length > 30 && missing.length === 0, missing.map((d) => `${d.method} ${d.path}`));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

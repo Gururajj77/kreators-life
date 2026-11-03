@@ -114,19 +114,31 @@ party.post('/events/:id/rsvp', async (c) => {
     if (why) return c.json({ error: why }, 409);
   }
   const cap = row.capacity ?? 1_000_000;
-  // Try for a seat; if the seat count is already at capacity the insert does nothing and we waitlist.
-  await db.prepare('DELETE FROM event_registrations WHERE event_id = ? AND user_id = ?').bind(row.id, user.id).run();
-  const seat = await db
-    .prepare(`INSERT INTO event_registrations (id, event_id, user_id, status, registered_at, checked_in_at, networking_opt_in, paid_points)
-      SELECT ?1, ?2, ?3, 'registered', ?4, NULL, ?5, ?7 WHERE (SELECT COUNT(*) FROM event_registrations WHERE event_id = ?2 AND status IN ('registered','attended')) < ?6`)
-    .bind(id, row.id, user.id, now, body.networking ? 1 : 0, cap, row.price_points > 0 ? owe : null)
-    .run();
+  // Try for a seat, never by deleting a row first: a cancelled row of this person's is reused, else a new one is written, and
+  // only the request whose own statement changed a row goes on to pay. Two taps at once take one seat and one charge.
+  const reuse = existing?.status === 'cancelled';
+  const seatCount = `(SELECT COUNT(*) FROM event_registrations WHERE event_id = ?2 AND status IN ('registered','attended')) < ?6`;
+  const take = (want: 'registered' | 'waitlisted', paid: number, guardSeat: boolean) =>
+    reuse
+      ? db
+          .prepare(`UPDATE event_registrations SET id = ?1, status = '${want}', registered_at = ?4, checked_in_at = NULL, networking_opt_in = ?5, paid_points = ?7
+            WHERE event_id = ?2 AND user_id = ?3 AND status = 'cancelled'${guardSeat ? ` AND ${seatCount}` : ' AND ?6 = ?6'}`)
+          .bind(id, row.id, user.id, now, body.networking ? 1 : 0, cap, paid)
+          .run()
+      : db
+          .prepare(`INSERT INTO event_registrations (id, event_id, user_id, status, registered_at, checked_in_at, networking_opt_in, paid_points)
+            SELECT ?1, ?2, ?3, '${want}', ?4, NULL, ?5, ?7 WHERE ${guardSeat ? seatCount : '?6 = ?6'}
+            ON CONFLICT(event_id, user_id) DO NOTHING`)
+          .bind(id, row.id, user.id, now, body.networking ? 1 : 0, cap, paid)
+          .run();
+  const seat = await take('registered', row.price_points > 0 ? owe : 0, true);
   let status: EventRegistration['status'] = 'registered';
   if (seat.meta.changes !== 1) {
-    status = 'waitlisted';
-    await db.prepare("INSERT INTO event_registrations (id, event_id, user_id, status, registered_at, checked_in_at, networking_opt_in) VALUES (?, ?, ?, 'waitlisted', ?, NULL, ?)").bind(id, row.id, user.id, now, body.networking ? 1 : 0).run();
-    // Nothing is charged on a waitlist, so a code's use goes back.
+    // Nothing is charged on a waitlist (paid_points 0, so a cancel can never refund a price nobody paid).
+    const wait = await take('waitlisted', 0, false);
     if (discount) await release(db, id);
+    if (wait.meta.changes !== 1) return c.json({ error: 'you are already registered' }, 409);
+    status = 'waitlisted';
   } else if (owe > 0) {
     // The points leave with a guarded update; if two taps at once left too few, the seat is given up.
     const debit = await db.prepare('UPDATE users SET points = points - ? WHERE id = ? AND points >= ?').bind(owe, user.id, owe).run();
@@ -141,6 +153,48 @@ party.post('/events/:id/rsvp', async (c) => {
   return c.json({ status }, 201);
 });
 
+/**
+ * What this registration actually paid: its paid_points, or for a row written before that column, the ticket line in the
+ * ledger. Never the list price, so a seat that cost nothing (a waitlist row, a free promotion) refunds nothing.
+ */
+async function paidFor(db: D1Database, reg: { id: string; user_id: string; paid_points?: number | null }): Promise<number> {
+  if (reg.paid_points !== null && reg.paid_points !== undefined) return Math.max(0, reg.paid_points);
+  const t = await db.prepare("SELECT COALESCE(-SUM(amount), 0) AS n FROM points_ledger WHERE user_id = ? AND reason = 'ticket' AND ref = ?").bind(reg.user_id, reg.id).first<{ n: number }>();
+  return Math.max(0, t?.n ?? 0);
+}
+
+/**
+ * A seat opened: the first waitlisted person who can pay takes it. The points leave first with a guarded update, then the row
+ * moves with a guarded status change that also checks the seat count, so two cancels at once never seat two people for one
+ * seat; if the move loses, the points go back. Someone who cannot pay stays on the waitlist and is told.
+ */
+async function promoteNext(db: D1Database, ev: { id: string; title: string; price_points: number; capacity: number | null }): Promise<void> {
+  const cap = ev.capacity ?? 1_000_000;
+  const wait = await db.prepare("SELECT id, user_id FROM event_registrations WHERE event_id = ? AND status = 'waitlisted' ORDER BY registered_at LIMIT 20").bind(ev.id).all<{ id: string; user_id: string }>();
+  for (const next of wait.results) {
+    const price = Math.max(0, ev.price_points);
+    if (price > 0) {
+      const debit = await db.prepare('UPDATE users SET points = points - ? WHERE id = ? AND points >= ?').bind(price, next.user_id, price).run();
+      if (debit.meta.changes !== 1) {
+        await notify(db, next.user_id, 'party', `A seat opened up: ${ev.title}`, `You need ${price} points to take it, so you are still on the waitlist.`, `/party/${ev.id}`);
+        continue;
+      }
+    }
+    const moved = await db
+      .prepare(`UPDATE event_registrations SET status = 'registered', paid_points = ?1 WHERE id = ?2 AND status = 'waitlisted'
+        AND (SELECT COUNT(*) FROM event_registrations WHERE event_id = ?3 AND status IN ('registered','attended')) < ?4`)
+      .bind(price, next.id, ev.id, cap)
+      .run();
+    if (moved.meta.changes !== 1) {
+      if (price > 0) await db.prepare('UPDATE users SET points = points + ? WHERE id = ?').bind(price, next.user_id).run();
+      return;
+    }
+    if (price > 0) await db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(next.user_id, -price, 'ticket', next.id, nowIso()).run();
+    await notify(db, next.user_id, 'party', `A seat opened up: ${ev.title}`, price > 0 ? `You are off the waitlist. ${price} points were taken for the ticket.` : 'You are off the waitlist.', `/party/${ev.id}`);
+    return;
+  }
+}
+
 party.post('/events/:id/cancel-rsvp', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
@@ -148,25 +202,20 @@ party.post('/events/:id/cancel-rsvp', async (c) => {
   if (!row) return c.json({ error: 'not found' }, 404);
   const mine = await db.prepare('SELECT * FROM event_registrations WHERE event_id = ? AND user_id = ?').bind(row.id, user.id).first<RegRow>();
   if (!mine || mine.status === 'cancelled') return c.json({ error: 'you are not registered' }, 400);
+  // The status moves first, guarded on the status that was read, so two taps at once cancel, refund and free a seat once.
+  const flip = await db.prepare("UPDATE event_registrations SET status = 'cancelled' WHERE id = ? AND status = ?").bind(mine.id, mine.status).run();
+  if (flip.meta.changes !== 1) return c.json({ error: 'you are not registered' }, 400);
   const wasSeated = mine.status === 'registered';
-  await db.prepare("UPDATE event_registrations SET status = 'cancelled' WHERE id = ?").bind(mine.id).run();
-  // A ticket bought with a code gives back what was paid, not the list price. A code's use is not given back by a cancel.
-  const back = mine.paid_points ?? row.price_points;
-  if (wasSeated && back > 0) {
+  // What was paid comes back, never the list price. A code's use is not given back by a cancel.
+  const back = wasSeated ? await paidFor(db, mine) : 0;
+  if (back > 0) {
     await db.batch([
       db.prepare('UPDATE users SET points = points + ? WHERE id = ?').bind(back, user.id),
       db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(user.id, back, 'refund', mine.id, nowIso()),
     ]);
   }
-  // Promote the first person on the waitlist into the freed seat.
-  if (wasSeated) {
-    const next = await db.prepare("SELECT id, user_id FROM event_registrations WHERE event_id = ? AND status = 'waitlisted' ORDER BY registered_at LIMIT 1").bind(row.id).first<{ id: string; user_id: string }>();
-    if (next) {
-      await db.prepare("UPDATE event_registrations SET status = 'registered' WHERE id = ?").bind(next.id).run();
-      await notify(db, next.user_id, 'party', `A seat opened up: ${row.title}`, 'You are off the waitlist.', `/party/${row.id}`);
-    }
-  }
-  return c.json({ ok: true });
+  if (wasSeated && row.status === 'published') await promoteNext(db, row);
+  return c.json({ ok: true, refunded: back });
 });
 
 party.post('/events/:id/checkin', async (c) => {
@@ -261,12 +310,29 @@ party.patch('/events/:id', async (c) => {
   if (row.host_user_id !== user.id && !can(user, 'events')) return c.json({ error: 'the host changes an event' }, 403);
   const body = await c.req.json<{ status?: string }>().catch(() => ({}) as { status?: string });
   const status = oneOf(body.status, ['published', 'cancelled', 'done'] as const, 'published');
-  await db.prepare('UPDATE events SET status = ? WHERE id = ?').bind(status, row.id).run();
+  // The event's status moves first and only when it changes, so two cancel taps at once notify and refund once.
+  const moved = await db.prepare('UPDATE events SET status = ? WHERE id = ? AND status != ?').bind(status, row.id, status).run();
+  if (moved.meta.changes !== 1) return c.json({ ok: true });
   await audit(db, user.id, 'event.status', 'event', row.id, row.status, status);
   if (status === 'cancelled') {
-    const regs = await db.prepare("SELECT user_id FROM event_registrations WHERE event_id = ? AND status IN ('registered','waitlisted')").bind(row.id).all<{ user_id: string }>();
-    await notifyMany(db, regs.results.map((r) => r.user_id), 'party', `Cancelled: ${row.title}`, 'Any points you paid are back in your balance.', '/party');
-    await db.prepare("UPDATE event_registrations SET status = 'cancelled' WHERE event_id = ?").bind(row.id).run();
+    const regs = await db.prepare("SELECT id, user_id, status, paid_points FROM event_registrations WHERE event_id = ? AND status IN ('registered','attended','waitlisted')").bind(row.id).all<{ id: string; user_id: string; status: string; paid_points: number | null }>();
+    const refunded: string[] = [];
+    const told: string[] = [];
+    for (const r of regs.results) {
+      // Each guest's row moves first, guarded, and only a row that moved is refunded what it paid.
+      const flip = await db.prepare("UPDATE event_registrations SET status = 'cancelled' WHERE id = ? AND status = ?").bind(r.id, r.status).run();
+      if (flip.meta.changes !== 1) continue;
+      const back = r.status === 'waitlisted' ? 0 : await paidFor(db, r);
+      if (back > 0) {
+        await db.batch([
+          db.prepare('UPDATE users SET points = points + ? WHERE id = ?').bind(back, r.user_id),
+          db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(r.user_id, back, 'refund', r.id, nowIso()),
+        ]);
+        refunded.push(r.user_id);
+      } else told.push(r.user_id);
+    }
+    if (refunded.length) await notifyMany(db, refunded, 'party', `Cancelled: ${row.title}`, 'The points you paid for the ticket are back in your balance.', '/party');
+    if (told.length) await notifyMany(db, told, 'party', `Cancelled: ${row.title}`, 'The host cancelled this event.', '/party');
   }
   return c.json({ ok: true });
 });

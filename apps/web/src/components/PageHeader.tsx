@@ -1,6 +1,8 @@
 import type { MouseEvent, ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { CondensedTitle } from './fx/CondensedTitle';
+import { ChevronLeft } from 'lucide-react';
+import { Icon } from './Icon';
 
 /**
  * The way back, one step up. A small round button so it reads as a control, not a label. A screen that lives inside a page's own address
@@ -25,9 +27,7 @@ export function BackLink({ to, children, inherit = false, onBack }: { to: string
   return (
     <Link to={to} onClick={back} className={`-ml-xs inline-flex min-h-[44px] items-center gap-xs rounded-pill pr-sm pl-xs text-[14px] font-bold transition-colors ${inherit ? '' : 'text-ink-soft hover:text-ink'}`}>
       <span className={`flex size-[32px] items-center justify-center rounded-pill shadow-toy-soft ${inherit ? 'bg-white/30' : 'bg-card text-ink'}`} aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M15 5l-7 7 7 7" />
-        </svg>
+        <Icon icon={ChevronLeft} size={18} />
       </span>
       {children}
     </Link>

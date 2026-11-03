@@ -17,7 +17,7 @@ import {
 import type { AppEnv } from '../env';
 import { badgeState, badgesFor, getStats, getUser, honorKeys, newId, nowIso, parseModules, randomCode, str, toUser, publicOf } from '../db';
 import { resolveAccess } from '../access';
-import { hashPassword, randomHex } from './auth';
+import { hashPassword, randomHex, safeEqual } from './auth';
 import { sendEmail, track } from '../ops';
 import { deleteAccount } from '../account';
 import { parseSocials } from '../db';
@@ -117,7 +117,7 @@ me.post('/password', async (c) => {
   const current = typeof body.current === 'string' ? body.current : '';
   const password = typeof body.password === 'string' ? body.password : '';
   if (!user.email || !user.password_hash || !user.password_salt) return c.json({ error: 'create an account first' }, 400);
-  if (!current || (await hashPassword(current, user.password_salt)) !== user.password_hash) return c.json({ error: 'the current password is not right' }, 400);
+  if (!current || !safeEqual(await hashPassword(current, user.password_salt), user.password_hash)) return c.json({ error: 'the current password is not right' }, 400);
   const weak = passwordProblem(password, user.email);
   if (weak) return c.json({ error: weak.charAt(0).toLowerCase() + weak.slice(1) }, 400);
   const salt = randomHex(16);

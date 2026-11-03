@@ -1,9 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
-import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useParams } from 'react-router';
 import { SiteLayout } from '../site/SiteLayout';
 import { ApiError, publicApi, type LockedLink } from '../lib/api';
-import { keepPortalSession } from '../lib/portalSession';
+import { forgetPortalSessions, keepPortalSession } from '../lib/portalSession';
 import { Button } from './Button';
 
 const COPY = {
@@ -19,7 +19,7 @@ const COPY = {
  * The lock screen of a client link, an agreement or an invoice that has a password. It names the client and nothing else, and the same
  * words answer a wrong password and a link that is not there. `unlock` makes the call; this keeps the session it returns for the tab.
  */
-export function PortalLock({ clientName, unlock, onOpen }: { clientName: string; unlock: (password: string) => Promise<{ session: string | null; expiresAt: string | null }>; onOpen: () => void }) {
+export function PortalLock({ clientName, link, unlock, onOpen }: { clientName: string; link: string; unlock: (password: string) => Promise<{ session: string | null; expiresAt: string | null }>; onOpen: () => void }) {
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const [password, setPassword] = useState('');
@@ -34,7 +34,7 @@ export function PortalLock({ clientName, unlock, onOpen }: { clientName: string;
     setError('');
     try {
       const r = await unlock(password);
-      if (r.session) keepPortalSession(r.session, r.expiresAt);
+      if (r.session) keepPortalSession(r.session, r.expiresAt, link);
       setPassword('');
       onOpen();
     } catch (err) {
@@ -91,14 +91,32 @@ export function PortalLock({ clientName, unlock, onOpen }: { clientName: string;
   );
 }
 
+/** A read that the server refused because the link's password session is gone (it ran out, or the password changed). */
+const isLockedAnswer = (e: unknown): boolean => e instanceof ApiError && e.status === 401 && e.data.error === 'locked';
+
 /**
  * Around the public page of an agreement or an invoice (or a document): asks the server whether the client behind it has a password, and
- * shows the lock screen until the right one is typed. Without a password, or once it is unlocked, the page shows as it always did.
+ * shows the lock screen until the right one is typed. Without a password, or once it is unlocked, the page shows as it always did. The
+ * question is asked again when the tab comes back, and whenever a read of the page answers locked, so a session that ran out or was ended
+ * brings the lock screen back instead of a "not found" over the old page.
  */
 export function PortalDocGate({ kind, children }: { kind: LockedLink; children: ReactNode }) {
   const { token = '' } = useParams();
-  const [opened, setOpened] = useState(false);
+  const qc = useQueryClient();
+  const link = `${kind}:${token}`;
   const q = useQuery({ queryKey: ['portal-lock', kind, token], queryFn: () => publicApi.linkLock(kind, token), retry: false, staleTime: 0, gcTime: 0 });
+  const locked = Boolean(q.data?.locked);
+  useEffect(
+    () =>
+      qc.getQueryCache().subscribe((ev) => {
+        if (ev.type !== 'updated' || ev.query.queryKey[0] === 'portal-lock') return;
+        if (ev.action.type === 'error' && isLockedAnswer(ev.action.error)) void qc.invalidateQueries({ queryKey: ['portal-lock', kind, token] });
+      }),
+    [qc, kind, token],
+  );
+  useEffect(() => {
+    if (locked) forgetPortalSessions(link);
+  }, [locked, link]);
   if (q.isPending) {
     return (
       <SiteLayout wide={false}>
@@ -106,10 +124,10 @@ export function PortalDocGate({ kind, children }: { kind: LockedLink; children: 
       </SiteLayout>
     );
   }
-  if (q.data?.locked && !opened) {
+  if (locked) {
     return (
       <SiteLayout wide={false}>
-        <PortalLock clientName={q.data.clientName ?? ''} unlock={(pw) => publicApi.linkUnlock(kind, token, pw)} onOpen={() => setOpened(true)} />
+        <PortalLock clientName={q.data?.clientName ?? ''} link={link} unlock={(pw) => publicApi.linkUnlock(kind, token, pw)} onOpen={() => void q.refetch()} />
       </SiteLayout>
     );
   }

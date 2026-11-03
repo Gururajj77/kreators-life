@@ -76,6 +76,11 @@ export interface ListPrice {
   cents: number;
   points: number;
   currency: string;
+  /**
+   * Pay what you want: the product's own minimum in points. A code takes its percent off this, never off what the buyer typed,
+   * so the platform pays at most the real price and a big offer with a 100% code cannot make points out of nothing.
+   */
+  basePoints?: number;
 }
 export async function listPriceFor(db: D1Database, area: DiscountArea, itemId: string, offeredPoints?: number): Promise<ListPrice | null> {
   if (area === 'plan') return isPaidPlan(itemId) ? { cents: PLANS[itemId].priceCents, points: 0, currency: PLAN_CURRENCY } : null;
@@ -86,8 +91,9 @@ export async function listPriceFor(db: D1Database, area: DiscountArea, itemId: s
   if (area === 'product') {
     const p = await db.prepare("SELECT price_points, price_cents, currency, pwyw FROM products WHERE id = ? AND status = 'live'").bind(itemId).first<{ price_points: number; price_cents: number; currency: string; pwyw: number }>();
     if (!p) return null;
-    const points = p.pwyw === 1 ? Math.min(1_000_000, Math.max(p.price_points, Math.round(Number(offeredPoints)) || 0)) : p.price_points;
-    return { cents: p.price_cents, points, currency: p.currency };
+    if (p.pwyw !== 1) return { cents: p.price_cents, points: p.price_points, currency: p.currency };
+    const points = Math.min(1_000_000, Math.max(p.price_points, Math.round(Number(offeredPoints)) || 0));
+    return { cents: p.price_cents, points, currency: p.currency, basePoints: p.price_points };
   }
   if (area === 'program') {
     const p = await db.prepare('SELECT price_points, price_cents, currency FROM programs WHERE id = ? AND published = 1').bind(itemId).first<{ price_points: number; price_cents: number; currency: string }>();
@@ -99,6 +105,14 @@ export async function listPriceFor(db: D1Database, area: DiscountArea, itemId: s
 
 export type Quoted = { ok: true; row: CodeRow; list: ListPrice; quote: DiscountQuote; area: DiscountArea; itemId: string } | { ok: false; why: string };
 
+/** What a code comes to on a list price. On pay what you want the amount off is worked out on the minimum, and the buyer pays their offer less that. */
+export function quoteFor(list: ListPrice, rule: DiscountRule): DiscountQuote {
+  if (list.basePoints === undefined) return priceWithDiscount(list, rule);
+  const base = Math.min(list.points, Math.max(0, list.basePoints));
+  const q = priceWithDiscount({ cents: list.cents, points: base }, rule);
+  return { ...q, payPoints: Math.max(0, list.points - q.offPoints) };
+}
+
 /** The same line for a word no code has and for text that cannot be a code. */
 export const NO_SUCH_CODE = 'That code does not work.';
 
@@ -109,7 +123,7 @@ export async function quoteCode(db: D1Database, userId: string, typed: unknown, 
   const used = await db.prepare('SELECT COUNT(*) AS n FROM discount_redemptions WHERE code_id = ? AND user_id = ? AND released_at IS NULL').bind(row.id, userId).first<{ n: number }>();
   const why = discountProblem(ruleOf(row), { area, itemId, cents: list.cents, points: list.points, currency: list.currency, now: nowIso(), usedByPerson: used?.n ?? 0 });
   if (why) return { ok: false, why };
-  return { ok: true, row, list, quote: priceWithDiscount(list, ruleOf(row)), area, itemId };
+  return { ok: true, row, list, quote: quoteFor(list, ruleOf(row)), area, itemId };
 }
 
 /** The quote as the browser reads it. */

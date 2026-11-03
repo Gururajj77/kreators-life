@@ -1,7 +1,8 @@
-import { PRODUCT_KIND_META, type Booking, type Lesson, type Order } from '@kreators/shared';
+import { PRODUCT_KIND_META, productHasOwnCover, type Booking, type Lesson, type Order } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
+import { AppIcon } from '../components/AppIcon';
 import { Button } from '../components/Button';
 import { CheckRow } from '../components/CheckRow';
 import { BackLink } from '../components/PageHeader';
@@ -63,7 +64,7 @@ function Mine() {
           <li key={p.id}>
             <Link to={`/library/${p.id}`} className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm">
               <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-[22px]" aria-hidden="true">
-                {p.cover || PRODUCT_KIND_META[p.kind].emoji}
+                {productHasOwnCover(p.kind, p.cover) ? p.cover : <AppIcon name={PRODUCT_KIND_META[p.kind].icon} size={22} />}
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[16px] font-bold">{p.title}</span>
@@ -276,7 +277,7 @@ function Owned({ id }: { id: string }) {
                   <li key={x.id}>
                     <Link to={`/library/${x.id}`} className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm">
                       <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-[22px]" aria-hidden="true">
-                        {x.cover || PRODUCT_KIND_META[x.kind].emoji}
+                        {productHasOwnCover(x.kind, x.cover) ? x.cover : <AppIcon name={PRODUCT_KIND_META[x.kind].icon} size={22} />}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[16px] font-bold">{x.title}</span>

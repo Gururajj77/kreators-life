@@ -1,9 +1,11 @@
 import { RELATIONSHIP_BY_KEY, timeLabel, type Node } from '@kreators/shared';
 import { motion, useReducedMotion } from 'motion/react';
 import type { ReactNode } from 'react';
+import { ListChecks } from 'lucide-react';
 import { dueLabel } from '../lib/date';
 import { minutesUntil, useNow } from '../lib/useNow';
 import { CheckRow } from './CheckRow';
+import { Icon } from './Icon';
 import { TaskTags } from './TaskPlan';
 
 interface Props {
@@ -30,7 +32,11 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
   // The deadline shows as a badge; only the do date holds a tick back.
   const due = done ? null : dueLabel(task.dueDate, today);
   const early = !done && Boolean(task.doDate && task.doDate > today);
-  const steps = task.subtaskTotal ? <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">☑ {task.subtaskDone ?? 0}/{task.subtaskTotal}</span> : null;
+  const steps = task.subtaskTotal ? (
+    <span className="inline-flex items-center gap-xs rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">
+      <Icon icon={ListChecks} size={12} /> {task.subtaskDone ?? 0}/{task.subtaskTotal}
+    </span>
+  ) : null;
 
   const when = [task.dueTime ? timeLabel(task.dueTime) : null, task.estimateMin ? `${task.estimateMin} min` : null].filter(Boolean).join(' · ');
   const timeChip = when && !done ? <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">{when}</span> : null;

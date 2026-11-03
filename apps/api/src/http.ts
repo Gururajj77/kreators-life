@@ -18,6 +18,8 @@ export const TIMEOUT = {
   assistant: 60_000,
   /** A long piece written by a model for the content strategist. */
   strategist: 90_000,
+  /** One run of the Agent Reach bridge (a search, outliers, a transcript): it drives other sites, so it is the slowest. */
+  reach: 120_000,
 } as const;
 
 type TimeoutName = keyof typeof TIMEOUT;

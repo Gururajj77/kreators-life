@@ -41,24 +41,26 @@ Add-ons assigned at the end: one mantra (Om Namah Shivaya for material path, Har
 
 ## Status: what is built, what is not
 
-The session is in kreators.app as the onboarding flow at `/session`, self-serve, no coach needed. The build follows this document; where the code decided something this document left open, the section below says so.
+The session is in kreators.app at `/session`, self-serve, no coach needed. It is offered by the setup chat (`/onboarding`), which every new account goes through first, and it waits in Pillars for anyone who skips it. The build follows this document; where the code decided something this document left open, the section below says so. Last brought up to date on 2026-11-03.
 
 | Part of this spec | Status | Where |
 | --- | --- | --- |
-| Onboarding, steps 1 to 11, as one conversation hosted by the seven characters | Built | `apps/web/src/screens/SessionChat.tsx`, `apps/api/src/routes/session.ts`, migration `0029_strategy_session.sql` |
-| Placement rules, focus rule, score settling, ramp | Built as pure functions with unit tests | `placementFlags`, `pickFocus`, `settleScore`, `rampTime`, `routineFor` in `packages/shared` |
+| The setup chat: a few questions, then the apps that fit, then the offer of the session | Built | `apps/web/src/screens/SetupChat.tsx`, `POST /onboarding/setup`, `matchSetup` in shared |
+| The session as one conversation in eight named parts (plus the account when there is none), hosted by Bumling, with Lumen for the practices and each focus pillar's own character for its questions | Built | `apps/web/src/screens/SessionChat.tsx`, `apps/api/src/routes/session.ts`, migrations `0029_strategy_session.sql` and `0066_session_away.sql` |
+| The map: one relationship at a time, "Pick all that you feel", the core and floor worked out from the ticks | Built, tested | `MapForm` in `SessionChat.tsx`; `placementFromPicks` and `picksOfPlacement` in shared |
+| "Say it in your own words": a rules reader that suggests levels the person confirms, no model | Built, tested | `readFeelings` and `MAP_LEVEL_WORDS` in shared |
+| "Not part of my life right now" for love, teachers and faith | Built, tested; kept on the assessment (`away_json`, migration 0066); turned back on from the life map | `OPTIONAL_PILLARS`, `AWAY_LEVEL`, `parseAway` in shared; `PUT /session/away` |
+| Placement rules, focus rule, the order to work on, score settling, ramp | Built as pure functions with unit tests | `placementFlags`, `pickFocus`, `priorityOrder`, `settleScore`, `rampTime`, `routineFor` in `packages/shared` |
 | Daily loop: morning block as ticks, day type, timeline, week dots | Built, under Show up on Daily | `apps/web/src/components/RoutineSection.tsx` |
 | Daily check-in reminder at the contract time | Built, sent by the cron | `sendReminders` in `apps/api/src/cron.ts` |
-| The seven pyramids for the focus pillars | Built: the vibe check for the focus runs inside the same chat | parts 13 and 14 of `SessionChat.tsx` |
-| The life map: every answer in one place, inside Pillars | Built: the map ladder with all seven placed, the bars, the focus, the scorecard, fears, insecurities, routine, practices and contract; a card on Pillars and a line on each pillar page; run again, keeping last time's map or placing afresh | the `#life-map` section at the bottom of `/tower`; `components/LifeMapPanel.tsx`, `components/LifeMap.tsx` |
-| Resume: leaving halfway never restarts | Built: `/onboarding` reads the saved session and sends the person to the right step; the session opens on its saved answers | `apps/web/src/screens/Onboarding.tsx`, `lib/onboarding.ts` |
+| The pyramids for the focus pillars | Built: the vibe check for the focus runs inside the same chat, then one card picks the value goal and project | the Your pillars part of `SessionChat.tsx` |
+| The life map: every answer in one place, inside Pillars | Built: the bars, the map ladder, the switches for love, teachers and faith, the focus, the scorecard, fears, insecurities, routine (editable), practices and contract; run again, keeping last time's map or placing afresh | the `#life-map` section at the bottom of `/tower`; `components/LifeMapPanel.tsx`, `components/LifeMap.tsx` |
+| Resume: leaving halfway never restarts | Built: the chat is kept for the tab (`lib/kept.ts`), and on a fresh open it reads the saved session and offers the next step | `SessionChat.tsx` (`resume`) |
 | Weekly loop: streak against the contract, heatmap, three questions, ramp step, unlocks | Partly: the week's dots and the count against the minimum show on Daily. The Sunday review, the heatmap, the ramp step and focus-tied unlocks are not built | |
 | Monthly, quarterly, bi-annual reviews | The generic Reviews app exists (period numbers, prompts, a saved snapshot). The re-run of the map and the radar against day zero are not built | `/reviews` |
-| Coach side: roster, exceptions, prep page, template editor, penalty rules, notes | Not built. One template is hardcoded in shared | |
-| Live call booking and payment | A note, not a checkout: the last card offers the call and points at Help until a payment provider is live | |
+| Coach side: roster, exceptions, prep page, template editor, penalty rules, notes | The Coaching app has links, notes, a roster and the student's chosen shares. The template editor and penalty rules are not built; one template is in shared | `/coaching` |
+| Live call booking and payment | A note, not a checkout: a switch in the contract card opens the details and points at Help until a payment provider is live | |
 | Module hiding until week one | Not built. Apps keep their own on/off; the session does not gate them | |
-
-The table that used to sit here compared the spec with the coach's demo. It is replaced by the list above; the demo it described is gone.
 
 ## The consciousness map and the seven relationships
 
@@ -137,123 +139,92 @@ Inner Wisdom (440) and above are not six-month targets. Treating them as targets
 
 ## Onboarding, as built: the self-serve strategy session
 
-Onboarding is the strategy call, fully self-serve: eleven cards, one at a time, twenty to thirty minutes, ending in a signed plan. It starts from the Welcome screen after sign-up (`/start`, button "Start the strategy session") and runs at `/session`. A live call with the coach is an optional paid add-on at the end, never a gate. The order is the spec's: emotions and insecurities first, the routine last, so the routine answers what the person said.
+Onboarding comes in two parts. First the **setup chat** (`/onboarding`, `SetupChat.tsx`), which every new account goes through: a few taps that find out what someone wants and who they are, then switch on the apps that fit. Then the **strategy session** (`/session`, `SessionChat.tsx`), which the setup chat offers by the match and which otherwise waits in Pillars. The session ends in a signed plan and the pyramids for one or two focus pillars. A live call with the coach is an optional paid add-on inside the contract card, never a gate. The order is the spec's: what gets in the way first, the routine last, so the routine answers what the person said. The wording follows the onboarding rule: "a few" questions, never a count and never a duration.
 
-**How the flow is built: a conversation.** One screen (`SessionChat.tsx`) runs the session as a chat, not a left-to-right card flow, and never one tap per question: each part is one card answered in one go, and the card sits in the conversation itself, never in a box with its own scrollbar. Sign-up is the first card: Start free opens a device session and the chat, Dew asks for the account (name, email, password, phone, date of birth) and the device user is upgraded in place, so nothing said is lost; someone who already has an account skips it. The map is placed for all seven at once (two levels per relationship, grouped by band with that relationship's band statement) and the focus is derived from the whole. Fears and insecurities share one card; the scorecard is one card; the real day, the practices, the contract and the first steps for every focus pillar are one card each. The chat ends with the pyramids drawn and the order to work through all seven, each with its reason. Twelve parts, each hosted by one of the seven characters in its own voice, with that character's tint behind the whole screen and its name and tone in the header ("Part 4 of 15. Fears. Pip, warm and playful, says it straight"). The host explains before every question; every ask carries a "Tell me more" that adds one longer explanation; "Change my last answer" undoes one step. Every answer is a tap on a chip, a short line, or one small card in the dock (sliders for a scorecard group, time fields for the real day, a weight slider for an insecurity, the check-in time). The hosts hand over cards inside the chat: the frame list, the map ladder, the placement chart, the routine preview. Nothing is saved until part 7 ends; parts 2 to 7 are sent as one assessment, parts 8 to 11 as one plan, then the vibe check for the focus pillars runs inside the same chat and builds the pyramids. On open the chat loads the latest saved session: a half-done run opens at the focus with Sage; a signed plan without pyramids opens at the vibe check; a person running it again is offered "Keep my map, go to the focus". Anyone who leaves is brought back by `/onboarding`, which every app route redirects to until onboarding is done.
+### The setup chat
 
-| Part | Host | Voice | What the host does |
-| --- | --- | --- | --- |
-| 1 Your account, 2 The frame | Dew (With yourself) | calm and clear, short sentences | Makes the account when there is none, welcomes, sets the frame, hands over the seven and the map ladder |
-| 3 The map | each relationship's own character | its own | Greets, asks where you live with it, then where you drop; asks for evidence when placed high |
-| 4 Fears | Pip (Friendship) | warm and playful, says it straight | The fear list, then a pillar and "does it drive you?" per fear |
-| 5 Insecurities | Clover (Lover & partner) | gentle and honest, no judgement | One at a time, a weight, a pillar |
-| 6 Scorecard | Ember (Servant leader) | direct, numbers first | Three slider cards, then the behaviour check when a score and the map disagree |
-| 7 Your real day | Sunny (Parent & child) | caring and practical | The day as it is now |
-| 8 Your focus | Sage (With the guru) | the mentor, asks why, sees the whole | Shows the map, explains the rule, pre-picks, lets you swap |
-| 9 Your routine | Sunny | caring and practical | The six blocks, both day types, the ramp |
-| 10 Practices | Lumen (With the divine) | quiet and spacious | Mantra, breathing, the line, the page |
-| 11 The contract | Ember | direct, numbers first | Days, check-in time, penalty, signature |
-| 12 A live call | Sage | the mentor | One offer, once |
-| 13 Your pillars, 14 First steps | each focus pillar's character | its own | The three-tap vibe check, then the value goal and project picks |
-| 15 Done | Sage | the mentor | Opens Pillars | Reduced motion is respected. People see level names, never numbers; the map's Hell, Purgatory and Heaven labels never appear.
+Hosted by Bumling, the app's own guide. When the account has no email, two small cards come first (`SignInCard`: name, email, password twice and the terms box; then `PrivateCard`: phone and birthday, 18 or over, never shown). Then: what brings you here (up to three goals), which of these sound like you (roles, or "None of these"), what you make (only for a creator or freelancer), what usually gets in your way, and the apps (`matchSetup`, at most five, each with its reason one tap away). The header names the question ("What you want", "Who you are", "What you make", "What gets in the way") and a thin bar shows how far along it is; it never says "Question 1 of 3". The typing box answers what any word means and reads tags from a line typed in your own words (`readAbout`). The last card tours the tabs and offers the strategy session, or "Add my interests".
 
-**Integration contract, in short**
+### The session: one conversation, eight parts
 
-| Step | Card | Input collected | Rule applied | Saved by |
-| --- | --- | --- | --- | --- |
-| 1 | The frame | nothing | | |
-| 2 | The map, seven times | core band, core level, floor band, floor level, evidence | placement rules 1 to 5 | `POST /session/assessment` at step 6 |
-| 3 | Fears | text, pillar, drives (yes, sometimes, no) | at most 8 | same |
-| 4 | Insecurities | text, weight 0 to 10, pillar | at most 8 | same |
-| 5 | Scorecard | 17 sliders, 0 to 10; behaviour days when asked | settle rule | same |
-| 6 | Your real day | wake, lights out, work start, work end, gym, evening habit | | `POST /session/assessment` |
-| 7 | Your focus | up to two pillars | required floors locked | `POST /session/plan` at step 10 |
-| 8 | Your routine | day type to preview | ramp rule | same |
-| 9 | Practices | mantra, breathing, line, reading | defaults | same |
-| 10 | The contract | min days, check-in time, penalty, typed name | signature required | `POST /session/plan` |
-| 11 | The live call | nothing | | hands focus to `/vibe-check` |
+One screen (`SessionChat.tsx`) runs the session as a chat, never a left-to-right card flow and never one tap per question: each part is answered in one go on a single card that sits in the conversation, right under the question. The header names the part and a progress bar shows how far along it is; there is no "Part 3 of 8".
 
-### Step 1. The frame
+| Part (header) | What is in it | Host |
+| --- | --- | --- |
+| Your account | only when the account has no email: `AccountForm` (name, email, password twice, phone, date of birth, the terms box), sent to `POST /auth/signup` with the device token so nothing said is lost | Bumling |
+| Your map | the frame in a few lines (health, wealth and the seven, with `FrameCard`), straight into the map card; the evidence card when a pillar is placed high; then what gets in the way (fears and insecurities in one card) | Bumling |
+| How things are going | the scorecard in stars; the behaviour check when a score and the map disagree | Bumling |
+| Your real day | the day as it is now | Bumling |
+| Your focus | the placement bars, the suggestion, pick up to two | Bumling |
+| Routine and practices | the routine preview, then the practices | Bumling, then Lumen, guide to faith |
+| Your plan | the contract card, with the optional live call as a switch inside it | Bumling |
+| Your pillars | the vibe check for each focus pillar, asked by its own character, then one card for the value goal and project of each | each focus pillar's character, then Bumling |
+| What comes next | the pyramids drawn, the order to work through the rest, then Open my pillars or Add my interests | Bumling |
 
-One card. Life is health (body, mind), wealth (money, time) and relationships. Under the seven, the whole map as a ladder: sixteen named levels in three bands, Oneness on top, Shame at the bottom, the Courage line marked, so the span of the map is seen before anything is placed on it. Relationships are seven, listed with their characters: servant leader (work, money, time sit here), friendship, parent and child, lover and partner, with yourself (body, health and mind sit here), guru, divine. No editing. The card ends: "Next you place each one on a map of how you operate, from stuck to at ease. Twice: where you usually live, and where you drop under stress. You see names, never numbers."
+Every ask carries a "Tell me more", "Change my last answer" undoes one step, and every answer, tapped or sent from a card, is written into the chat as the person's line. The chat is kept for the tab (`lib/kept.ts`); a fresh open reads the saved session and offers the next step first with "Place me again" beside it: a saved map without a contract offers "Keep my map, go to the focus", a signed plan without its pyramids offers "Build my pillars". Nothing is saved until the real day is sent: the map, what gets in the way, the scorecard and the day go as one assessment (`POST /session/assessment`), the focus, practices and contract as one plan (`POST /session/plan`), then the vibe check (`POST /onboard`) and the build.
 
-### Step 2. The map, one relationship at a time
+### The map, one relationship at a time
 
-For each of the seven relationships, in the app's order, four taps and sometimes a line of text:
+One card for the whole map. A row of the seven faces at the top shows where you are and which are done (a tick); tapping one goes to it. For the relationship on screen: its name and what it covers, then "Pick all that you feel here, on good days and on bad ones": the sixteen levels top down in their three bands (At ease, Owning it, Stuck), each band with that relationship's own statement, each level a tick row with its name and what it sounds like in your head. People see names, never numbers; the whole picture of the scale is folded under "See the whole map".
 
-1. **Core band.** "Where do you usually live with friendship?" Three cards, one per band, each with the band name and that relationship's statement from the relationship table below. The band names on screen are Stuck (20 to 199), Owning it (200 to 399) and At ease (400 to 540).
-2. **Core level.** "Which line sounds most like your head there?" The levels inside the picked band, each with its name and its "sounds like" line.
-3. **Floor band.** "Under stress, where do you drop to?" The same three cards.
-4. **Floor level.** "And what does that sound like?" The levels inside that band.
-5. **Evidence**, only when the core level is 400 or over. "What did you do last week that shows this?" A text box, up to 500 characters, with the note that an empty answer holds the placement at Acceptance.
+- **The core and the floor come from the ticks** (`placementFromPicks`): the core is the band ticked most often (a tie goes to the higher band), at the middle of the ticks in that band (the higher of two); the floor is the lowest tick. Under the list the card says it back: "You usually sit at Willingness, and drop to Fear under stress." The stored shape is the same `Placement` (core, floor, evidence), so `placementFlags` and the server are unchanged.
+- **Say it in your own words** (a fold under the list): the person writes a line, "Read my words" runs `readFeelings`, a rules reader over `MAP_LEVEL_WORDS` (a few everyday words and phrases per level, longer phrases first, a word after "not" or "never" left out, at most four), and the card asks "That sounds like Fear and Courage. Is that right?" with "Yes, tick these" and "No, I will pick". Nothing is ticked without that yes. No model and no credits.
+- **Not part of my life right now**, for love, teachers and faith only (`OPTIONAL_PILLARS`): a switch at the top of that relationship. Set aside, the pillar is placed at Neutrality (`AWAY_LEVEL`, 250) for both levels, is not rated on the scorecard, is left out of the focus suggestion (`pickFocus`) and the order to work on (`priorityOrder`), is not offered as a focus, and gets no pyramid. The card says so in plain words. The list is kept on the assessment (`away_json`, migration 0066; the server places those pillars at Neutrality whatever is sent and keeps only the optional keys, `parseAway`), and the life map has a switch for each to turn it back on (`PUT /session/away`), where it keeps Neutrality until the person places it again.
+- Back and "Next: <the next relationship not done>" move through the seven; "That is my map" sends the card once all seven are done.
 
 The placement rules run in one shared function, `placementFlags`, on the screen and again on the server:
 
-- A core of 400 or over with fewer than ten characters of evidence is capped at 350 (Acceptance) and marked `capped`.
+- A core of 400 or over with fewer than ten characters of evidence is capped at 350 (Acceptance) and marked `capped`. The evidence card asks for one thing from last week for every pillar placed that high.
 - A floor is never above the core; it is pulled down to the core if it is.
-- A floor under 200 (Courage) marks the pillar `required`: a month-one focus the person cannot unpick.
-- A gap of more than 150 between core and floor marks the pillar `volatile`, shown as "a big drop under stress, so a weekly check".
+- A floor under 200 (Courage) marks the pillar as the suggested place to start (the key stays `required`); nothing is forced, and the person picks their own focus.
+- A gap of more than 150 between core and floor marks the pillar `volatile`, shown as "a big drop under stress, so check it each week".
 
-Output, shown at step 7: a bar per relationship from floor to core on a 20 to 540 track with the Courage line marked, labelled "Fear to Willingness", never with numbers, in the relationship's colour.
+### What gets in the way
 
-### Step 3. Fears
+Still part of the map. Fears: eight chips (Trying new things, Being rejected, Being judged, Failing in public, Being alone, Losing money, Letting people down, Being seen) plus words of your own; each picked fear gets the pillar it pulls down and whether it drives your decisions (yes, sometimes, no). Insecurities: a short line each, a weight picked in words (`INSECURITY_WEIGHTS`, A little to Very heavy, kept out of ten) and the pillar it sits in. At most eight of each; none is a fine answer. Asked before the scorecard and the routine, so the weight can shape the focus.
 
-"What shows up when you are about to act?" Eight chips to toggle (Trying new things, Being rejected, Being judged, Failing in public, Being alone, Losing money, Letting people down, Being seen) plus a free-text field. Each picked fear becomes a card with two settings: the pillar it pulls down (a select over the seven) and "Does it drive your decisions?" (yes, sometimes, no). At most eight. None is an accepted answer.
+### How things are going
 
-### Step 4. Insecurities
+Five stars for each item (`STAR_WORDS`, Very poor to Great, kept out of ten at two points a star with `scoreOfStars`) under Health (sleep, food, movement, good stress, bad stress, control over your feelings), Wealth (income, money that comes in without your hours, learning, time that is yours) and the relationships (a pillar set aside is left out). Every item starts at three stars. When a relationship has four stars or more over a floor under Courage, one behaviour question follows: on how many of the last seven days did you act with courage there? The server applies `settleScore`: fewer than four days caps that score at 6.
 
-"What do you worry people see?" Free text, one at a time. Each becomes a card with a weight slider from 0 to 10 and the pillar it sits in. At most eight. Asked here, before the scorecard and the routine, so the weight can shape the focus in step 7.
+### Your real day
 
-### Step 5. Scorecard
+Wake up, lights out, work starts, work ends, gym or movement time if any, and what fills the last hour before sleep, starting from 08:30, 00:30, 10:00 and 18:30. Sending it sends the assessment; the server checks all seven are placed with real levels, places the set-aside pillars at Neutrality, recomputes the flags, settles the scores, stores the assessment and its seven placements, and answers with a suggested focus.
 
-Seventeen sliders out of ten under three headings: Health (sleep, food, movement, good stress, bad stress, control over your feelings), Wealth (income, money that comes in without your hours, learning, time that is yours), and the seven relationships. Every slider starts at 5.
+### Your focus
 
-When a relationship slider is 8 or more and that relationship's floor from step 2 is under Courage, one behaviour question appears under the sliders: "In the last seven days, how many days did you act from courage with friendship instead of avoiding it?" Answered 0 to 7. The server applies `settleScore`: fewer than four days caps that score at 6. The settled scores are what is saved.
+The placement bars (a set-aside pillar is named without a bar), then the suggestion from `pickFocus`: every pillar with a floor under Courage first (lowest floor first); if fewer than two, the lowest cores next, each lowered by ten times the insecurity weight sitting in that pillar. The person keeps it or picks their own, up to two, from the pillars that are not set aside. `POST /session/plan` keeps exactly what they picked.
 
-### Step 6. Your real day
+### Routine and practices
 
-Wake up, lights out, work starts, work ends, gym or movement time if any, and what fills the last hour before sleep. Defaults are 08:30, 00:30, 10:00 and 18:30 so the card is never empty. The forward button, "See my focus", sends steps 2 to 6 as one request to `POST /session/assessment`. The server checks that all seven relationships are placed with valid level values, recomputes the flags, settles the scores, stores the assessment and its seven placements, and answers with a suggested focus.
-
-### Step 7. Your focus
-
-The placement chart from step 2 sits on top with the flags written under any bar that has one. Below it, seven chips. The server's suggestion is pre-picked by `pickFocus`: every pillar with a floor under Courage first (lowest floor first); if fewer than two, the lowest cores next, each core lowered by ten times the insecurity weight sitting in that pillar. Required pillars are locked and labelled "(required)". The person can swap the rest. At most two. At least one to go on.
-
-### Step 8. Your routine
-
-A preview of what step 10 will sign, built on the screen by `routineFor` from the real day, with a toggle between a normal day and an exceptional day. Six blocks:
+The routine preview, built by `routineFor` from the real day, for a normal day and an exceptional day:
 
 | Block | Normal day | Exceptional day |
 | --- | --- | --- |
 | Morning routine | from wake-up for one hour: mantra five to ten minutes, three breathing rounds, two minutes of seeing the day go well, ten minutes of movement, one page of reading | twenty minutes: mantra five minutes, one breathing round, five minutes of movement |
 | Food and water | to 20:00; water through the day, last meal by eight | same |
 | Work | the person's work hours; gym before dinner, at their gym time if they gave one | same |
-| People | work end to 21:00; a required floor gets "one small scary thing a day for lover and partner, log it", otherwise one real conversation a day for the focus | same |
-| Learning and reflection | 21:00 to 23:00; a lesson, then the journal: mood, stress, where you were on the map today | 22:00 on, the journal only |
+| People | work end to 21:00; a floor under Courage gets "one small scary thing a day", otherwise one real conversation a day for the focus | same |
+| Learning and reflection | 21:00 to 23:00; a lesson, then the journal | 22:00 on, the journal only |
 | Lights out | the sleep time | same |
 
-The ramp is one pure function, `rampTime`: wake-up and lights-out move thirty minutes earlier for each week the contract was kept, stopping at 06:30 and 23:30. At onboarding the week count is zero, so the routine starts exactly on the person's own day. Nobody moves a 10:30 wake-up to 8 on day one. (Advancing the step after a kept week is not yet automated; see the status table.)
+The ramp is `rampTime`: wake-up and lights-out move thirty minutes earlier for each week the contract was kept, stopping at 06:30 and 23:30; at onboarding the count is zero, so the routine starts on the person's own day. Then Lumen, guide to faith, hosts the practices: a mantra (Om Namah Shivaya, Hare Krishna, "My own mantra" with your own words, or "No mantra yet"), breathing (box, four seven eight, alternate nostril), a line to say on waking and before sleep (`affirmationFor` by default) and one page a morning from a book the person names.
 
-### Step 9. Practices
+### Your plan
 
-Mantra: Om Namah Shivaya (the material path), Hare Krishna (the spiritual path), or none yet. Breathing: box, four seven eight, or alternate nostril, each with its pattern written under it. A line to say on waking and before sleep, pre-filled from the focus ("I show up for friendship and guru today, scared or not. Courage first; the rest follows."), editable. One page a morning, from a book, a scripture or an essay the person names.
+Days a week, at least: 3 to 7, default 5. A daily check-in time, default 21:00, written to the person's reminder time so the cron sends one inbox reminder on any day without a check-in. What a short week costs (`PENALTIES`). The weekly check and the monthly review dates. A typed name, then "Sign it". The optional live call is a switch in the same card ("I would like a live call with a coach", US$100 or ₹10,000 in India); when it is on, the details open after signing and point at Help to set a time by hand until a payment provider is connected. Saying no changes nothing.
 
-### Step 10. The contract
+### Your pillars and what comes next
 
-Days a week, at least: 3 to 7, default 5. Daily check-in time, default 21:00, with the note that a reminder lands in the inbox at that time on any day not checked in. What a short week costs, one of three: the streak breaks, the next unlock waits, the coach sees it. The next weekly check (the coming Sunday) and the monthly review (thirty days out) are stated. A typed name is required; the forward button is "Sign it".
-
-`POST /session/plan` takes the focus, practices and contract and the person's date. The server adds every required floor to the focus whatever was asked, trims to two, builds both day types with `routineFor`, fills practice defaults, writes the routine and the contract, and writes the check-in time to the person's reminder time. From then on the cron sends one reminder within the hour after that time in the person's zone on any day without a check-in, never twice for one due time.
-
-### Step 11. The optional live call
-
-"Your plan is in. One more thing, optional." A live strategy call with the coach, US$100 or ₹10,000 in India, offered once. Until a payment provider is connected the button opens a note that points at Help to set a time by hand. Skipping it changes nothing. The forward button, "Build my pillars", goes to `/vibe-check?floors=<focus>`: the existing three-tap vibe check runs for the focus pillars only and builds their pyramids; the other five wait on Pillars.
+The vibe check for each focus pillar runs inside the chat, three taps a pillar from `QUESTION_BY_ID`, asked by that pillar's character; every pick question also takes your own words (Write my own), and a foundation in your words replaces the template's. One card then picks the value goal and project for every focus pillar, and the build runs. The chat ends with the pyramids drawn, the order to work through the rest (`priorityOrder`, each with its reason; a set-aside pillar is not in it and the chat says how to bring it back), and two choices: Open my pillars, or Add my interests (`ProfileCard`).
 
 ### After the session: the life map under Pillars
 
-The bottom of Pillars keeps everything the session found: the focus pillars (tap one to open it), the placement bars, the map ladder with all seven placed (a full character where it lives, a faded one where it drops), the day-zero scores as three rings (health, wealth, relationships) and a row per item, fears with whether they drive decisions, insecurities with their weight, the routine with its times and practices, and the contract with this week's count. Two buttons: run the session again, and build the pillars for the focus when they are not built yet. On Pillars each pillar card carries its own map line (floor to core, the Courage mark, a Focus tag) under one summary line that jumps to the life map below; before the session, one ink card starts it. Each pillar page carries one line: where it lives, where it drops, what that means.
+The bottom of Pillars keeps everything the session found: the focus pillars, the placement bars, the switches for love, teachers and faith ("Part of your life?"), the map ladder with all seven placed, the day-zero scores in stars and a row per item, fears and insecurities, the routine with its times and practices (editable in `RoutinePanel`), and the contract with this week's count. Two buttons: run the session again, and build the pillars for the focus when they are not built yet. On Pillars each pillar card carries its own map line under one summary line that jumps to the life map; before the session, one ink card starts it. Each pillar page carries one line: where it lives, where it drops, what that means (`placementLine`, which says "set aside" for a pillar that is).
 
 ### After the session: Daily
 
-Daily carries the routine under Show up. The week's seven dots (done, not all steps, nothing yet) and "3 of 7 this week, 5 is the deal". The line to say. The day type toggle. The morning steps as tick rows; `POST /session/day` stores the ticks, and the day is done only when every morning step of that day type is ticked (steps not in the routine are ignored). The day's other blocks as a timeline with their notes. Without a session, one row leads to it. `GET /session?date=` answers the whole state in one call: the assessment with its flagged placements, the routine, the contract, today's ticks and the week.
+Daily carries the routine under Show up. The week's seven dots and the count against the contract. The line to say. The day type toggle. The morning steps as tick rows with their minutes; `POST /session/day` stores the ticks, and the day is done only when every morning step of that day type is ticked. The day's other blocks as a timeline with their notes. Without a session, one row leads to it. `GET /session?date=` answers the whole state in one call: the assessment with its flagged placements and the pillars set aside, the routine, the contract, today's ticks and the week.
 
 **What onboarding must not do:** show events, campaigns, cohorts, or clubs. The session shows none. Hiding them elsewhere until week one is not built; the apps keep their own on and off.
 

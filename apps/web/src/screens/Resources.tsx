@@ -1,4 +1,5 @@
-import type { Resource } from '@kreators/shared';
+import { knowledgeKindIcon, RELATIONSHIP_BY_KEY, type Resource } from '@kreators/shared';
+import { AppIcon } from '../components/AppIcon';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
@@ -10,7 +11,12 @@ import { api } from '../lib/api';
 import { useAuthed, useMe, useRefreshAll, useResources } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 
-const KIND_EMOJI = { article: '📖', exercise: '🧩', video: '🎬' } as const;
+
+/** A resource's tags are free text; a pillar key among them (parent_child, guru, self...) reads as that pillar's name, and
+ * anything else reads as plain words instead of a raw snake_case key. */
+function tagLabel(t: string): string {
+  return RELATIONSHIP_BY_KEY[t as keyof typeof RELATIONSHIP_BY_KEY]?.name ?? t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 export function Resources() {
   const { id } = useParams();
@@ -42,12 +48,12 @@ function List() {
       </header>
       {tags.length > 0 && (
         <div className="mt-md flex flex-wrap gap-xs" role="group" aria-label="Filter by tag">
-          <button type="button" aria-pressed={tag === ''} onClick={() => setTag('')} className={`rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tag === '' ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+          <button type="button" aria-pressed={tag === ''} onClick={() => setTag('')} className={`min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${tag === '' ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
             All
           </button>
           {tags.map((t) => (
-            <button key={t} type="button" aria-pressed={tag === t} onClick={() => setTag(t)} className={`rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tag === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
-              {t}
+            <button key={t} type="button" aria-pressed={tag === t} onClick={() => setTag(t)} className={`min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${tag === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+              {tagLabel(t)}
             </button>
           ))}
         </div>
@@ -56,8 +62,8 @@ function List() {
         {q.data?.resources.map((r) => (
           <li key={r.id}>
             <Link to={`/knowledge/${r.id}`} className="toy toy-soft flex items-start gap-sm rounded-tile bg-card p-sm">
-              <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-r4 text-[20px]" aria-hidden="true">
-                {KIND_EMOJI[r.kind]}
+              <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-r4 text-on-fill">
+                <AppIcon name={knowledgeKindIcon(r.kind)} size={20} />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-[16px] font-bold leading-snug">{r.title}</span>
@@ -165,7 +171,10 @@ function ResourceSheet({ resource, onClose, onSaved }: { resource: Resource | 'n
         <div className="grid grid-cols-3 gap-xs" role="group" aria-label="Kind">
           {(['article', 'exercise', 'video'] as const).map((k) => (
             <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={`min-h-[44px] rounded-pill border-2 text-[14px] font-bold ${kind === k ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
-              {KIND_EMOJI[k]} {k}
+              <span className="inline-flex items-center justify-center gap-xs">
+                <AppIcon name={knowledgeKindIcon(k)} size={16} />
+                {k}
+              </span>
             </button>
           ))}
         </div>

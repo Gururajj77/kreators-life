@@ -400,7 +400,7 @@ export const api = {
   agencyComments: (type: DocType, id: string) => request<{ comments: DocComment[] }>(`/agency/comments/${type}/${id}`),
   agencyCommentAdd: (type: DocType, id: string, body: string) => post<{ ok: true }>(`/agency/comments/${type}/${id}`, { body }),
   agencyCommentRemove: (id: string) => del<{ ok: true }>(`/agency/comments/${id}`),
-  agencyEmailCopy: (type: 'invoices' | 'contracts' | 'docs', id: string, to?: string) => post<EmailCopyResult>(`/agency/${type}/${id}/email`, to ? { to } : {}),
+  agencyEmailCopy: (type: 'invoices' | 'contracts' | 'docs', id: string, body: { to?: string; message?: string; subject?: string } = {}) => post<EmailCopyResult>(`/agency/${type}/${id}/email`, body),
   agencyDocLog: (type: DocType, id: string) => request<{ log: DocLogLine[] }>(`/agency/doc-log/${type}/${id}`),
   agencyDocs: (q = '') => request<{ page: AgencyPage; docs: AgencyDocListItem[]; counts: { status: string; n: number }[] }>(withQ('/agency/docs', q)),
   agencyDoc: (id: string) => request<{ doc: AgencyDocFull }>(`/agency/docs/${id}`),
@@ -522,7 +522,7 @@ export const api = {
   // studio, owner side
   studio: () => request<{ products: Product[]; orders: Order[]; analytics: StudioAnalytics; handle: string | null; referralCode: string | null }>('/studio'),
   createProduct: (body: Partial<Product>) => post<{ product: Product }>('/studio/products', body),
-  studioProduct: (id: string) => request<{ product: Product; lessons: Lesson[]; orders: Order[]; bookings: Booking[]; testimonials: Testimonial[] }>(`/studio/products/${id}`),
+  studioProduct: (id: string, pq = '') => request<{ product: Product; lessons: Lesson[]; orderPage: Page; orders: Order[]; bookingPage: Page; bookings: Booking[]; testimonials: Testimonial[] }>(withQ(`/studio/products/${id}`, pq)),
   updateProduct: (id: string, body: Partial<Product>) => patch<{ product: Product }>(`/studio/products/${id}`, body),
   deleteProduct: (id: string) => del<{ ok: true }>(`/studio/products/${id}`),
   createLesson: (productId: string, body: Partial<Lesson>) => post<{ lesson: Lesson }>(`/studio/products/${productId}/lessons`, body),
@@ -589,9 +589,9 @@ export const api = {
   completeEnrollment: (id: string) => post<{ ok: true }>(`/school/enrollments/${id}/complete`),
 
   // work
-  work: (pq = '') => request<{ page: Page; opportunities: Opportunity[]; applications: Application[]; drafts: Opportunity[]; canPost: boolean }>(withQ('/work', pq)),
+  work: (pq = '', draftPq = '') => request<{ page: Page; opportunities: Opportunity[]; applications: Application[]; draftPage: Page; drafts: Opportunity[]; canPost: boolean }>(withQ(withQ('/work', pq), draftPq)),
   createOpportunity: (body: Partial<Opportunity> & { title: string }) => post<{ ok: true; id: string }>('/work/opportunities', body),
-  opportunity: (id: string) => request<{ opportunity: Opportunity; applications: Application[]; owner: boolean }>(`/work/opportunities/${id}`),
+  opportunity: (id: string, pq = '') => request<{ opportunity: Opportunity; page: Page; applications: Application[]; owner: boolean }>(withQ(`/work/opportunities/${id}`, pq)),
   setOpportunity: (id: string, status: Opportunity['status'], clubOnly?: boolean) => patch<{ ok: true }>(`/work/opportunities/${id}`, clubOnly === undefined ? { status } : { status, clubOnly }),
   apply: (id: string, coverNote: string) => post<{ application: Application }>(`/work/opportunities/${id}/apply`, { coverNote }),
   setApplication: (id: string, body: { status: Application['status']; note?: string }) => post<{ ok: true }>(`/work/applications/${id}`, body),
@@ -610,7 +610,7 @@ export const api = {
   // kreators run
   run: (pq = '') => request<RunResponse>(withQ('/run', pq)),
   createRunClub: (body: { name: string; city: string; description?: string; pace?: RunPace; meets?: string; visibility?: 'public' | 'private' }) => post<{ club: RunClub | null }>('/run/clubs', body),
-  runClub: (id: string) => request<RunClubDetail>(`/run/clubs/${id}`),
+  runClub: (id: string, pq = '') => request<RunClubDetail>(withQ(`/run/clubs/${id}`, pq)),
   setRunClub: (id: string, body: { status?: 'active' | 'closed'; description?: string; meets?: string; pace?: RunPace; visibility?: 'public' | 'private' }) => patch<{ ok: true }>(`/run/clubs/${id}`, body),
   joinRunClub: (id: string) => post<{ ok: true }>(`/run/clubs/${id}/join`),
   leaveRunClub: (id: string) => post<{ ok: true }>(`/run/clubs/${id}/leave`),
@@ -633,8 +633,8 @@ export const api = {
   decideMembership: (id: string, body: { status: Membership['status']; note?: string; months?: number }) => post<{ ok: true }>(`/club/memberships/${id}`, body),
 
   // win: content rewards
-  win: (pq = '') => request<{ page: Page; bounties: Bounty[]; mine: BountySubmission[]; queue: BountySubmission[]; earned: number; reviewer: boolean; finance: boolean; canCreate: boolean }>(withQ('/win', pq)),
-  bounty: (id: string) => request<{ bounty: Bounty; submissions: BountySubmission[]; board: { name: string; views: number; status: string }[] }>(`/win/${id}`),
+  win: (pq = '', queuePq = '') => request<{ page: Page; bounties: Bounty[]; mine: BountySubmission[]; queuePage: Page; queue: BountySubmission[]; earned: number; reviewer: boolean; finance: boolean; canCreate: boolean }>(withQ(withQ('/win', pq), queuePq)),
+  bounty: (id: string, pq = '') => request<{ bounty: Bounty; page: Page; submissions: BountySubmission[]; board: { name: string; views: number; status: string }[] }>(withQ(`/win/${id}`, pq)),
   createBounty: (body: Partial<Bounty> & { title: string; organizationId?: string }) => post<{ ok: true; id: string }>('/win', body),
   editBounty: (id: string, body: Partial<Bounty>) => patch<{ ok: true; version: number; changed: string[] }>(`/win/${id}`, body),
   submitBounty: (id: string, url: string) => post<{ submission: BountySubmission | null }>(`/win/${id}/submit`, { url }),
@@ -646,7 +646,7 @@ export const api = {
   bond: () => request<{ optedIn: boolean; intros: Introduction[]; suggestions: { userId: string; name: string; handle: string | null; skills: string[]; context: string }[] }>('/bond'),
   proposeIntro: (recipientId: string, context: string) => post<{ ok: true }>('/bond/intros', { recipientId, context }),
   answerIntro: (id: string, status: 'accepted' | 'declined') => post<{ ok: true }>(`/bond/intros/${id}`, { status }),
-  friends: () => request<{ friends: Friend[] }>('/bond/friends'),
+  friends: (pq = '') => request<{ page: Page; open: Friend[]; friends: Friend[] }>(withQ('/bond/friends', pq)),
   addFriend: (userId: string) => post<{ ok: true; status: 'sent' | 'friends' }>('/bond/friends', { userId }),
   reminders: (day: string) => request<RemindersResponse>(`/reminders?day=${day}`),
   legal: () => request<LegalState>('/me/legal'),
@@ -659,9 +659,9 @@ export const api = {
   addReminder: (r: { title: string; time: string; days: number[] }) => post<{ reminder: CustomReminder }>('/reminders/custom', r),
   changeReminder: (id: string, r: Partial<{ title: string; time: string; days: number[]; enabled: boolean }>) => patch<{ reminder: CustomReminder }>(`/reminders/custom/${id}`, r),
   removeReminder: (id: string) => del<{ ok: true }>(`/reminders/custom/${id}`),
-  blocks: () => request<{ blocked: BlockedPerson[] }>('/bond/blocks'),
+  blocks: (pq = '') => request<{ page: Page; blocked: BlockedPerson[] }>(withQ('/bond/blocks', pq)),
   unblock: (userId: string) => del<{ ok: true }>(`/bond/block/${userId}`),
-  mutes: () => request<{ mutes: { userId: string; name: string; handle: string | null; reason: string; by: string; createdAt: string }[] }>('/community/mutes'),
+  mutes: (pq = '') => request<{ page: Page; mutes: { userId: string; name: string; handle: string | null; reason: string; by: string; createdAt: string }[] }>(withQ('/community/mutes', pq)),
   mute: (userId: string, reason = '') => post<{ ok: true }>(`/community/members/${userId}/mute`, { reason }),
   unmute: (userId: string) => del<{ ok: true }>(`/community/members/${userId}/mute`),
   mediaFor: (type: MediaOwner, id: string) => request<{ items: MediaItem[]; canEdit: boolean; max: number }>(`/media/for/${type}/${id}`),
@@ -683,7 +683,7 @@ export const api = {
   addFriendByCode: (code: string) => post<{ ok: true; status: 'sent' | 'friends' }>('/bond/friends', { code }),
   answerFriend: (id: string, status: 'accepted' | 'declined') => post<{ ok: true }>(`/bond/friends/${id}`, { status }),
   unfriend: (userId: string) => del<{ ok: true }>(`/bond/friends/${userId}`),
-  chats: () => request<{ chats: BondChat[] }>('/bond/chats'),
+  chats: (pq = '') => request<{ page: Page; chats: BondChat[] }>(withQ('/bond/chats', pq)),
   openChat: (body: { userId?: string; groupId?: string; alias?: string }) => post<{ chat: BondChat }>('/bond/chats', body),
   // chat channels: /community/channels (public, made by guides) and /bond/channels (private, made for friends)
   channels: (scope: ChannelScope, pq = '', all = false) => request<{ page: Page; channels: Channel[]; canCreate: boolean }>(withQ(`/${scope}/channels${all ? '?all=1' : ''}`, pq)),
@@ -767,7 +767,9 @@ export const api = {
   deleteSequence: (id: string) => del<{ ok: true }>(`/studio/sequences/${id}`),
   // the strategy session
   session: (date: string) => request<SessionResponse>(`/session?date=${date}`),
-  submitAssessment: (body: { placements: Placement[]; fears: Fear[]; insecurities: Insecurity[]; scores: Scores; behaviour: Partial<Record<RelationshipKey, number>>; realDay: RealDay }) => post<SessionResponse & { suggestedFocus: RelationshipKey[] }>('/session/assessment', body),
+  submitAssessment: (body: { placements: Placement[]; fears: Fear[]; insecurities: Insecurity[]; scores: Scores; behaviour: Partial<Record<RelationshipKey, number>>; realDay: RealDay; away?: RelationshipKey[] }) => post<SessionResponse & { suggestedFocus: RelationshipKey[] }>('/session/assessment', body),
+  /** Set love, teachers or faith aside on the map (not part of my life right now), or bring it back. */
+  setSessionAway: (relationship: RelationshipKey, away: boolean, date: string) => put<SessionResponse>('/session/away', { relationship, away, date }),
   submitPlan: (body: { focus: RelationshipKey[]; practices: Practices; contract: Pick<Contract, 'minDays' | 'checkinTime' | 'penalty' | 'signedName'>; date: string }) => post<SessionResponse>('/session/plan', body),
   markRoutineDay: (body: { date: string; dayType: DayType; steps: string[] }) => post<SessionResponse>('/session/day', body),
   updateRoutine: (body: { date: string; general?: RoutineBlock[]; exceptional?: RoutineBlock[] }) => patch<SessionResponse>('/session/routine', body),
@@ -935,7 +937,7 @@ export const adminApi = {
   modules: (key: string) => adminRequest<{ settings: ModuleSetting[] }>(key, '/modules'),
   setModuleSetting: (key: string, moduleKey: string, body: { enabled?: boolean; minRole?: Role; rollout?: number }) => adminRequest<{ setting: ModuleSetting }>(key, `/modules/${moduleKey}`, { method: 'POST', body: JSON.stringify(body) }),
   setPermissions: (key: string, id: string, permissions: Permission[]) => adminRequest<{ user: AdminUser }>(key, `/users/${id}/permissions`, { method: 'POST', body: JSON.stringify({ permissions }) }),
-  flags: (key: string) => adminRequest<{ settings: ModuleSetting[]; overrides: FlagOverride[] }>(key, '/flags'),
+  flags: (key: string, pq = '') => adminRequest<{ settings: ModuleSetting[]; page: Page; overrides: FlagOverride[]; overrideCounts: Record<string, number> }>(key, withQ('/flags', pq)),
   addOverride: (key: string, moduleKey: string, body: { subjectType: FlagOverride['subjectType']; subjectId: string; enabled: boolean; expiresAt?: string | null; reason?: string }) =>
     adminRequest<{ override: FlagOverride }>(key, `/flags/${moduleKey}/overrides`, { method: 'POST', body: JSON.stringify(body) }),
   removeOverride: (key: string, id: string) => adminRequest<{ ok: true }>(key, `/flags/overrides/${id}`, { method: 'DELETE' }),
@@ -1015,8 +1017,8 @@ export const publicApi = {
   agencyDocComment: (token: string, text: string) => publicSend<{ ok: true }>('POST', `/agency/doc/${encodeURIComponent(token)}/comments`, { body: text }),
   contractComment: (token: string, text: string) => publicSend<{ ok: true }>('POST', `/contracts/${encodeURIComponent(token)}/comments`, { body: text }),
   invoiceComment: (token: string, text: string) => publicSend<{ ok: true }>('POST', `/invoices/${encodeURIComponent(token)}/comments`, { body: text }),
-  explore: (opts: { q?: string; type?: ListingType; featured?: boolean; limit?: number } = {}) =>
-    publicRequest<{ listings: Listing[] }>(`/explore?${new URLSearchParams({ ...(opts.q ? { q: opts.q } : {}), ...(opts.type ? { type: opts.type } : {}), ...(opts.featured ? { featured: '1' } : {}), ...(opts.limit ? { limit: String(opts.limit) } : {}) })}`),
+  explore: (opts: { q?: string; type?: ListingType; featured?: boolean; pq?: string } = {}) =>
+    publicRequest<{ page: Page; listings: Listing[] }>(`/explore?${new URLSearchParams({ ...(opts.q ? { q: opts.q } : {}), ...(opts.type ? { type: opts.type } : {}), ...(opts.featured ? { featured: '1' } : {}), ...(opts.pq ? Object.fromEntries(new URLSearchParams(opts.pq)) : {}) })}`),
   listing: (type: ListingType, id: string) => publicRequest<{ listing: Listing }>(`/explore/${type}/${id}`),
   stats: () => publicRequest<PublicStats>('/explore/stats'),
   certificate: (code: string) => publicRequest<{ certificate: Certificate }>(`/certificates/${encodeURIComponent(code)}`),

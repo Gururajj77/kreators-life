@@ -158,8 +158,11 @@ export async function lockRowForToken(db: D1Database, token: string): Promise<Lo
 
 export type DocKind = 'contract' | 'invoice' | 'doc';
 /** The client a document link belongs to, or null when it belongs to none (an invoice made outside Agency, an unknown token). */
-async function clientOfDocument(db: D1Database, kind: DocKind, token: string): Promise<LockRow | null> {
-  if (!/^[A-Za-z0-9]{8,40}$/.test(token)) return null;
+async function clientOfDocument(db: D1Database, kind: DocKind, raw: string): Promise<LockRow | null> {
+  // The same token the document routes read: they look an invoice up in capitals, so the gate does too, and a lowercase copy
+  // of a locked client's link is locked like the real one.
+  const token = raw.toUpperCase();
+  if (!/^[A-Z0-9]{8,40}$/.test(token)) return null;
   const sql =
     kind === 'contract'
       ? 'SELECT c.id, c.name, c.portal_pass_hash, c.portal_pass_salt FROM agency_contracts k JOIN agency_clients c ON c.id = k.client_id WHERE k.token = ?'

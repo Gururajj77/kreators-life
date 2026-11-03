@@ -9,6 +9,8 @@ const MAX = 5;
 interface Kept {
   token: string;
   until: number;
+  /** The link it was unlocked at ("agency:<token>", "contracts:<token>"), so a locked answer there forgets only that one. */
+  link?: string;
 }
 
 function read(): Kept[] {
@@ -32,11 +34,11 @@ function write(list: Kept[]): void {
 }
 let memory: Kept[] = [];
 
-/** Keeps a session the server just gave. `expiresAt` is its ISO time. */
-export function keepPortalSession(token: string, expiresAt: string | null): void {
+/** Keeps a session the server just gave. `expiresAt` is its ISO time; `link` is the link it was unlocked at. */
+export function keepPortalSession(token: string, expiresAt: string | null, link?: string): void {
   const until = expiresAt ? Date.parse(expiresAt) : Date.now() + 12 * 3_600_000;
   const list = [...read(), ...memory].filter((k) => k.token !== token);
-  write([...list, { token, until: Number.isFinite(until) ? until : Date.now() + 12 * 3_600_000 }]);
+  write([...list, { token, until: Number.isFinite(until) ? until : Date.now() + 12 * 3_600_000, ...(link ? { link } : {}) }]);
 }
 
 /** The header value: the live tokens, comma separated, or an empty string. */
@@ -44,12 +46,11 @@ export function portalSessionHeader(): string {
   return [...read(), ...memory.filter((k) => k.until > Date.now())].map((k) => k.token).slice(-MAX).join(',');
 }
 
-/** Forgets every kept session (a locked answer came back, so they are no good). */
-export function forgetPortalSessions(): void {
-  memory = [];
-  try {
-    window.sessionStorage.removeItem(KEY);
-  } catch {
-    // nothing kept
-  }
+/**
+ * Forgets the sessions kept for one link, because a locked answer came back there (twelve hours passed, or the password changed). The
+ * sessions of other clients' links stay; an expired one drops out by itself when it is read.
+ */
+export function forgetPortalSessions(link: string): void {
+  memory = memory.filter((k) => k.link !== link);
+  write(read().filter((k) => k.link !== link));
 }

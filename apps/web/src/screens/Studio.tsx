@@ -1,7 +1,8 @@
-import { money, PRODUCT_KIND_META, PRODUCT_KINDS, type Booking, type Order, type Product, type ProductKind } from '@kreators/shared';
+import { money, PRODUCT_KIND_META, PRODUCT_KINDS, productHasOwnCover, type Booking, type Order, type Product, type ProductKind } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { AppIcon } from '../components/AppIcon';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { Button } from '../components/Button';
 import { AreaLine, Donut, Legend, StatTile } from '../components/Charts';
@@ -122,7 +123,7 @@ export function Studio({ tab = 'home' }: { tab?: 'home' | 'page' | 'bookings' | 
                 <li key={p.id}>
                   <Link to={`/shop/products/${p.id}`} className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm">
                     <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-[22px]" aria-hidden="true">
-                      {p.cover || PRODUCT_KIND_META[p.kind].emoji}
+                      {productHasOwnCover(p.kind, p.cover) ? p.cover : <AppIcon name={PRODUCT_KIND_META[p.kind].icon} size={22} />}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[16px] font-bold">{p.title}</span>
@@ -265,7 +266,7 @@ function NewProductSheet({ open, onClose, onCreated }: { open: boolean; onClose:
           <div className="mt-xs grid grid-cols-2 gap-xs">
             {PRODUCT_KINDS.map((k) => (
               <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={`min-h-[56px] rounded-tile border-2 p-xs text-left text-[14px] font-bold ${kind === k ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
-                <span aria-hidden="true">{PRODUCT_KIND_META[k].emoji} </span>
+                <AppIcon name={PRODUCT_KIND_META[k].icon} size={16} className="mr-xs inline-block align-[-3px]" />
                 {PRODUCT_KIND_META[k].name}
                 <span className={`block text-[12px] font-semibold ${kind === k ? 'text-on-ink/80' : 'text-ink-soft'}`}>{PRODUCT_KIND_META[k].blurb}</span>
               </button>

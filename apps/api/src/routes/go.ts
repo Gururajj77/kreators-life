@@ -1,4 +1,4 @@
-import { CONSENT_FIRST_COUNTRIES } from '@kreators/shared';
+import { CONSENT_FIRST_COUNTRIES, money } from '@kreators/shared';
 import { Hono } from 'hono';
 import type { AppEnv } from '../env';
 import { newId, nowIso } from '../db';
@@ -103,9 +103,23 @@ export async function handlePaymentEvent(db: D1Database, env: Env, parsed: { typ
   if (!o) return 'no order matches';
   const now = new Date().toISOString();
   if (parsed.type === 'payment.captured' || parsed.type === 'order.paid') {
-    if (o.status !== 'pending') return `already ${o.status}`;
+    // A payment can be captured after the cron gave up on the order (a slow UPI or bank approval) or after a failed first try on
+    // the same provider order. The money was taken, so the order is still fulfilled.
+    if (o.status !== 'pending' && o.status !== 'expired' && o.status !== 'failed') return o.status === 'paid' ? 'already paid' : `capture on an order that is ${o.status}`;
     if (parsed.amountCents !== null && parsed.amountCents !== o.cents) return `amount mismatch: ${parsed.amountCents} vs ${o.cents}`;
-    const stmts = [db.prepare("UPDATE orders SET status = 'paid', provider_payment_id = ?, paid_at = ? WHERE id = ? AND status = 'pending'").bind(parsed.providerPaymentId, now, o.id)];
+    // The status moves first, on its own, and only the event that moved it fulfils: payment.captured and order.paid for the
+    // same payment arrive under two event ids, often at once, and must make one DM request, one notice and one receipt.
+    const moved = await db
+      .prepare("UPDATE orders SET status = 'paid', provider_payment_id = ?, paid_at = ? WHERE id = ? AND status = ?")
+      .bind(parsed.providerPaymentId, now, o.id, o.status)
+      .run();
+    if (moved.meta.changes !== 1) return 'already paid';
+    const late = o.status !== 'pending';
+    if (late) {
+      // The code's use was given back when the order died; the buyer paid the price with the code, so the use is taken again.
+      const back = await db.prepare('UPDATE discount_redemptions SET released_at = NULL WHERE ref = ? AND released_at IS NOT NULL').bind(o.id).run();
+      if (back.meta.changes > 0) await db.prepare('UPDATE discount_codes SET used_count = used_count + 1 WHERE id = (SELECT code_id FROM discount_redemptions WHERE ref = ? LIMIT 1)').bind(o.id).run();
+    }
     if (o.product_kind === 'dm') {
       let question = '';
       try {
@@ -114,15 +128,17 @@ export async function handlePaymentEvent(db: D1Database, env: Env, parsed: { typ
         question = '';
       }
       const days = await db.prepare('SELECT response_days FROM products WHERE id = ?').bind(o.product_id).first<{ response_days: number | null }>();
-      stmts.push(db.prepare("INSERT INTO dm_requests (id, product_id, order_id, owner_id, buyer_id, question, answer, status, due_at, answered_at, created_at) VALUES (?, ?, ?, ?, ?, ?, '', 'open', ?, NULL, ?)").bind(crypto.randomUUID(), o.product_id, o.id, o.owner_id, o.buyer_id, question, new Date(Date.now() + (days?.response_days ?? 3) * 86_400_000).toISOString(), now));
+      await db
+        .prepare("INSERT INTO dm_requests (id, product_id, order_id, owner_id, buyer_id, question, answer, status, due_at, answered_at, created_at) SELECT ?, ?, ?, ?, ?, ?, '', 'open', ?, NULL, ? WHERE NOT EXISTS (SELECT 1 FROM dm_requests WHERE order_id = ?3)")
+        .bind(crypto.randomUUID(), o.product_id, o.id, o.owner_id, o.buyer_id, question, new Date(Date.now() + (days?.response_days ?? 3) * 86_400_000).toISOString(), now)
+        .run();
     }
-    await db.batch(stmts);
-    await logEvent(db, 'order', o.id, 'payment.captured', { paymentId: parsed.providerPaymentId, cents: parsed.amountCents });
+    await logEvent(db, 'order', o.id, 'payment.captured', { paymentId: parsed.providerPaymentId, cents: parsed.amountCents, ...(late ? { late: o.status } : {}) });
     await track(db, o.buyer_id, 'payment_succeeded', { productId: o.product_id, method: 'razorpay' });
-    await notify(db, o.owner_id, 'order', `${nameOf({ display_name: o.buyer_name })} got ${o.product_title}`, `${(o.cents / 100).toFixed(2)} ${o.currency}`, `/shop/products/${o.product_id}`);
+    await notify(db, o.owner_id, 'order', `${nameOf({ display_name: o.buyer_name })} got ${o.product_title}`, money(o.cents, o.currency), `/shop/products/${o.product_id}`);
     await notify(db, o.buyer_id, 'order', `Paid: ${o.product_title}`, 'It is in My purchases now.', '/library');
     const buyer = await db.prepare('SELECT email FROM users WHERE id = ?').bind(o.buyer_id).first<{ email: string | null }>();
-    await sendEmail(db, env, { userId: o.buyer_id, to: buyer?.email, subject: `Your receipt: ${o.product_title}`, body: `Paid ${(o.cents / 100).toFixed(2)} ${o.currency}. Find it under My purchases.` });
+    await sendEmail(db, env, { userId: o.buyer_id, to: buyer?.email, subject: `Your receipt: ${o.product_title}`, body: `Paid ${money(o.cents, o.currency)}. Find it under My purchases.` });
     return 'paid';
   }
   if (parsed.type === 'payment.failed') {
@@ -136,7 +152,8 @@ export async function handlePaymentEvent(db: D1Database, env: Env, parsed: { typ
   }
   if (parsed.type === 'refund.processed') {
     if (o.status === 'refunded') return 'already refunded';
-    await db.prepare("UPDATE orders SET status = 'refunded', refunded_at = ? WHERE id = ?").bind(now, o.id).run();
+    const refunded = await db.prepare("UPDATE orders SET status = 'refunded', refunded_at = ? WHERE id = ? AND status != 'refunded'").bind(now, o.id).run();
+    if (refunded.meta.changes !== 1) return 'already refunded';
     await logEvent(db, 'order', o.id, 'refund.processed');
     return 'refunded';
   }

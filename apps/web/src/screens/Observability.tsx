@@ -14,6 +14,7 @@ import { bento } from '../lib/bento';
 import { useAuthed, useMe } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { BuildMap } from '../components/BuildMap';
+import { AppIcon } from '../components/AppIcon';
 
 const field = 'w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px] font-semibold';
 const since = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
@@ -55,7 +56,7 @@ export function Observability() {
           const rel = RELATIONSHIP_BY_KEY[MODULE_GROUP_ACCENT[a.group]];
           return {
             key: a.key,
-            label: `${a.emoji} ${a.name}`,
+            label: a.name,
             value: data.totals.users ? a.on / data.totals.users : 0,
             text: `${a.on} ${a.on === 1 ? 'person' : 'people'}`,
             color: rel.color,
@@ -98,7 +99,7 @@ export function Observability() {
           <Section id="obs-games" title="Games" lede="How many people unlocked each game. Counts only, never who played what.">
             <div className="rounded-card bg-card p-md shadow-toy-soft">
               <HBars
-                rows={data.additions.games.map((g) => ({ key: g.key, label: `${g.emoji} ${g.name}`, value: data.totals.users ? g.unlocked / data.totals.users : 0, text: `${g.unlocked} ${g.unlocked === 1 ? 'person' : 'people'}`, color: RELATIONSHIP_BY_KEY.friendship.color }))}
+                rows={data.additions.games.map((g) => ({ key: g.key, label: g.name, value: data.totals.users ? g.unlocked / data.totals.users : 0, text: `${g.unlocked} ${g.unlocked === 1 ? 'person' : 'people'}`, color: RELATIONSHIP_BY_KEY.friendship.color }))}
                 label="People per game"
               />
             </div>
@@ -199,7 +200,7 @@ export function Observability() {
                       if (!m) return null;
                       return (
                         <span key={k} className="inline-flex min-h-[24px] items-center gap-xs rounded-pill bg-card-strong px-xs" style={{ color: `var(--deep-${MODULE_GROUP_ACCENT[m.group]})` }}>
-                          <span aria-hidden="true">{m.emoji}</span>
+                          <AppIcon name={m.icon} size={14} />
                           {m.name}
                         </span>
                       );

@@ -1,4 +1,4 @@
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, money, type FinanceDue, type FinanceGoal, type FinanceRecurring, type FinanceSplit, type FinanceSummary, type FinanceTransaction } from '@kreators/shared';
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, money, type FinanceDue, type FinanceGoal, type FinanceRecurring, type FinanceSplit, type FinanceSummary, type FinanceTransaction, typedCents } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { PeriodPanel } from '../components/PeriodPanel';
@@ -9,6 +9,7 @@ import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { Toggle } from '../components/Toggle';
 import { api } from '../lib/api';
+import { todayLocal } from '../lib/date';
 import { useAuthed } from '../lib/queries';
 
 const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
@@ -19,8 +20,11 @@ function shiftMonth(month: string, by: number): string {
   const [y, m] = month.split('-').map(Number);
   return new Date(Date.UTC(y ?? 2026, (m ?? 1) - 1 + by, 1)).toISOString().slice(0, 7);
 }
-const toCents = (v: string) => Math.round(Number(v.replace(/[^0-9.]/g, '')) * 100);
-const todayIso = () => new Date().toISOString().slice(0, 10);
+/** A typed amount in cents through `typedCents` ("1,250.50" and "₹1.005" read right, a minus kept); junk reads as 0, so the form stays shut. */
+const toCents = (v: string): number => {
+  const c = typedCents(v);
+  return Number.isInteger(c) ? c : 0;
+};
 
 type SheetKind = 'income' | 'expense' | 'budgets' | 'due' | 'recurring' | 'goal' | null;
 
@@ -247,14 +251,17 @@ function Stat({ label, value, tone }: { label: string; value: string; tone: stri
 }
 
 function MonthBars({ months, currency }: { months: FinanceSummary['months']; currency: string }) {
+  // Six months with nothing logged are all zero, not missing: a floor of one cent would print ₹0 at every y line. Read
+  // as no data instead, so the chart's own empty message shows rather than a flat zero axis repeated three times.
+  const allZero = months.every((m) => m.incomeCents === 0 && m.expenseCents === 0);
   const max = Math.max(1, ...months.flatMap((m) => [m.incomeCents, m.expenseCents]));
   const last = months.at(-1);
   return (
     <div className="mt-sm rounded-tile bg-card p-sm shadow-toy-soft">
       <MultiLine
         series={[
-          { values: months.map((m) => m.incomeCents), color: 'var(--color-r4)', label: 'in' },
-          { values: months.map((m) => m.expenseCents), color: 'var(--color-r2)', label: 'out' },
+          { values: months.map((m) => (allZero ? null : m.incomeCents)), color: 'var(--color-r4)', label: 'in' },
+          { values: months.map((m) => (allZero ? null : m.expenseCents)), color: 'var(--color-r2)', label: 'out' },
         ]}
         max={max}
         labels={months.map((m) => shortMonth(m.month))}
@@ -324,7 +331,7 @@ function TxRow({ t, currency, onChange }: { t: FinanceTransaction; currency: str
 function DueRow({ due, currency, onChange }: { due: FinanceDue; currency: string; onChange: () => void }) {
   const settle = useMutation({ mutationFn: () => api.settleDue(due.id), onSuccess: onChange });
   const del = useMutation({ mutationFn: () => api.deleteDue(due.id), onSuccess: onChange });
-  const overdue = due.status === 'open' && due.dueDate && due.dueDate < todayIso();
+  const overdue = due.status === 'open' && due.dueDate && due.dueDate < todayLocal();
   return (
     <li className={`rounded-tile bg-card p-sm shadow-toy-soft ${due.status === 'settled' ? 'opacity-70' : ''}`}>
       <div className="flex items-center gap-sm">
@@ -445,7 +452,7 @@ function AddSheet({ kind, onClose, onDone }: { kind: 'income' | 'expense' | null
   const [category, setCategory] = useState('');
   const [counterparty, setCounterparty] = useState('');
   const [note, setNote] = useState('');
-  const [date, setDate] = useState(todayIso);
+  const [date, setDate] = useState(todayLocal);
   const [splits, setSplits] = useState<{ name: string; amount: string }[]>([]);
   const cats = kind === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
   const cat = category || cats[0];

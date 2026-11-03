@@ -16,6 +16,8 @@ import { Pager, PagerBar, usePage } from '../components/Pager';
 import { Toggle } from '../components/Toggle';
 import { AnonToggle } from '../components/AnonToggle';
 import { ChannelsPanel, ChannelTabs } from '../components/Channels';
+import { AppIcon } from '../components/AppIcon';
+import { MoreMenu } from '../components/MoreMenu';
 
 /**
  * Six reactions under a post or a reply: the counts that have any, and a row to pick from. Picking yours again takes
@@ -28,7 +30,7 @@ function Reactions({ counts, mine, onPick, busy }: { counts: ReactionCounts; min
     <span className="flex flex-wrap items-center gap-xs">
       {shown.map((k) => (
         <button key={k} type="button" aria-pressed={mine === k} disabled={busy} onClick={() => onPick(k)} aria-label={`${REACTION_META[k].name}, ${counts[k]}`} className={`toy toy-soft inline-flex min-h-[40px] items-center gap-xs rounded-pill px-sm text-[14px] font-bold ${mine === k ? 'bg-r1/15' : 'bg-paper'}`}>
-          <span aria-hidden="true">{REACTION_META[k].emoji}</span> {counts[k]}
+          <AppIcon name={REACTION_META[k].icon} size={16} /> {counts[k]}
         </button>
       ))}
       <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="toy toy-soft inline-flex min-h-[40px] items-center rounded-pill bg-paper px-sm text-[14px] font-bold">
@@ -48,9 +50,9 @@ function Reactions({ counts, mine, onPick, busy }: { counts: ReactionCounts; min
                 setOpen(false);
                 onPick(k);
               }}
-              className={`toy toy-soft size-[40px] rounded-pill text-[18px] ${mine === k ? 'bg-r1/15' : 'bg-card'}`}
+              className={`toy toy-soft flex size-[44px] items-center justify-center rounded-pill ${mine === k ? 'bg-r1/15' : 'bg-card'}`}
             >
-              {REACTION_META[k].emoji}
+              <AppIcon name={REACTION_META[k].icon} size={20} />
             </button>
           ))}
         </span>
@@ -62,11 +64,12 @@ function Reactions({ counts, mine, onPick, busy }: { counts: ReactionCounts; min
 /** For guides: whether first posts wait, and the ones waiting now. */
 /** The members muted from Community, for anyone with the power to mute. Lifting a mute follows the same rank rule as setting it. */
 function MutedList() {
-  const q = useAuthed(['community-mutes'], api.mutes);
+  const pg = usePage('muted');
+  const q = useAuthed(['community-mutes', pg.query], () => api.mutes(pg.query));
   const refresh = useRefreshAll();
   const unmute = useMutation({ mutationFn: (id: string) => api.unmute(id), onSuccess: () => { void q.refetch(); refresh(); } });
   const list = q.data?.mutes ?? [];
-  if (list.length === 0) return null;
+  if (pg.page === 1 && list.length === 0) return null;
   return (
     <section className="mt-lg" aria-labelledby="muted-heading">
       <h2 id="muted-heading" className="text-[24px]">
@@ -86,6 +89,7 @@ function MutedList() {
         ))}
       </ul>
       {unmute.isError && <p role="alert" className="mt-xs m-0 text-[14px] font-bold">{unmute.error instanceof Error ? unmute.error.message : 'That did not work.'}</p>}
+      <Pager page={q.data?.page} prefix="muted" label="muted members" />
     </section>
   );
 }
@@ -289,37 +293,20 @@ function CommunityFeed() {
                   <span aria-hidden="true">💬</span> {p.replies}
                 </button>
               )}
-              {!p.held && (
-                <button type="button" aria-pressed={p.followingPost} onClick={() => followPost.mutate(p.id)} disabled={followPost.isPending} className={`toy inline-flex min-h-[40px] items-center rounded-pill border-2 px-sm text-[12px] font-extrabold ${p.followingPost ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-                  {p.followingPost ? 'Following the post' : 'Follow the post'}
-                </button>
-              )}
               <span className="flex-1" />
-              {isMod && !p.held && !p.hidden && (
-                <Button variant="ghost" onClick={() => pin.mutate({ id: p.id, pinned: !p.pinned })}>
-                  {p.pinned ? 'Unpin' : 'Pin'}
-                </Button>
-              )}
-              {p.mine && (
-                <Button variant="ghost" onClick={() => window.confirm('Delete your post?') && remove.mutate(p.id)}>
-                  Delete
-                </Button>
-              )}
-              {!p.mine && (
-                <Button variant="ghost" onClick={() => window.confirm(`Block ${p.authorName}? You will not see each other's posts, and any friendship ends. You can undo it under Bond.`) && block.mutate(p.id)}>
-                  Block
-                </Button>
-              )}
-              {me.data && me.data.user.id !== p.authorId && canMute(myRank, p.authorRank) && (
-                <Button variant="ghost" onClick={() => window.confirm(`Mute ${p.authorName} in Community? They can still read but cannot post or reply.`) && mute.mutate(p.authorId)}>
-                  Mute
-                </Button>
-              )}
-              {isMod && me.data?.user.id !== p.authorId && (
-                <Button variant="ghost" onClick={() => hide.mutate({ id: p.id, hidden: !p.hidden })}>
-                  {p.hidden ? 'Unhide' : 'Hide'}
-                </Button>
-              )}
+              {/* React and reply are the two actions most posts need; everything else (follow the post, pin, delete,
+                  block, mute, hide) sits behind one More button instead of a row of equal pills. */}
+              <MoreMenu
+                label={`More for ${p.authorName}'s post`}
+                items={[
+                  ...(!p.held ? [{ key: 'followPost', label: p.followingPost ? 'Following the post' : 'Follow the post', onSelect: () => followPost.mutate(p.id) }] : []),
+                  ...(isMod && !p.held && !p.hidden ? [{ key: 'pin', label: p.pinned ? 'Unpin' : 'Pin', onSelect: () => pin.mutate({ id: p.id, pinned: !p.pinned }) }] : []),
+                  ...(p.mine ? [{ key: 'delete', label: 'Delete', destructive: true, onSelect: () => window.confirm('Delete your post?') && remove.mutate(p.id) }] : []),
+                  ...(!p.mine ? [{ key: 'block', label: 'Block', destructive: true, onSelect: () => window.confirm(`Block ${p.authorName}? You will not see each other's posts, and any friendship ends. You can undo it under Bond.`) && block.mutate(p.id) }] : []),
+                  ...(me.data && me.data.user.id !== p.authorId && canMute(myRank, p.authorRank) ? [{ key: 'mute', label: 'Mute', destructive: true, onSelect: () => window.confirm(`Mute ${p.authorName} in Community? They can still read but cannot post or reply.`) && mute.mutate(p.authorId) }] : []),
+                  ...(isMod && me.data?.user.id !== p.authorId ? [{ key: 'hide', label: p.hidden ? 'Unhide' : 'Hide', onSelect: () => hide.mutate({ id: p.id, hidden: !p.hidden }) }] : []),
+                ]}
+              />
             </div>
           </li>
         ))}

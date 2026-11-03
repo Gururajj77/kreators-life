@@ -13,7 +13,7 @@ import { BADGES as ALL_BADGES, HOW_TO, kmLabel, MODULES as MODS, paceLabel, RUN_
 import { earningGuide, nextBadge, unlockFor } from './index';
 import { ageOn, birthDateProblem, MIN_AGE, normalizePhone, phoneProblem } from './index';
 import { BRAND_SOURCE_KINDS, BRAND_SOURCE_META, PIECE_KINDS, PIECE_META, RESEARCH_KINDS, RESEARCH_META, sourceKindOf, strategyPath, threadOrder, anonAliasFrom, MAX_REPLY_DEPTH } from './index';
-import { BAND_STATEMENTS, MAP_LEVELS, pickFocus, placementFlags, rampTime, routineFor, settleScore } from './index';
+import { AWAY_LEVEL, awayPlacement, BAND_STATEMENTS, levelByValue, MAP_LEVEL_WORDS, MAP_LEVELS, OPTIONAL_PILLARS, parseAway, pickFocus, picksOfPlacement, placementFlags, placementFromPicks, priorityOrder, rampTime, readFeelings, RELATIONSHIPS, routineFor, settleScore } from './index';
 import { characterHello, characterTitle, INSECURITY_WEIGHTS, mantraLine, scoreOfStars, STAR_WORDS, starsOf, weightWord } from './index';
 import { blockMinutes, minutesLabel, parseRoutineBlocks, stepsMinutes } from './index';
 import type { Placement } from './index';
@@ -582,6 +582,52 @@ describe('strategy session', () => {
     // guru at 350 less a weight of 9 is 260, still above friendship at 250; two heavy worries pull it under.
     expect(pickFocus(one, [{ text: 'awkward', weight: 9, relationship: 'guru' }])).toEqual(['lover_partner', 'friendship']);
     expect(pickFocus(one, [{ text: 'awkward', weight: 9, relationship: 'guru' }, { text: 'no mentor', weight: 6, relationship: 'guru' }])).toEqual(['lover_partner', 'guru']);
+  });
+  it('leaves a pillar that is not part of life out of the focus and the order', () => {
+    const all: Placement[] = [P('self', 310, 250), P('lover_partner', 250, 250), P('friendship', 250, 200), P('parent_child', 310, 310), P('servant_leader', 310, 250), P('guru', 250, 250), P('divine', 250, 250)];
+    const withLow = all.map((p) => (p.relationship === 'lover_partner' ? P('lover_partner', 350, 100) : p));
+    expect(pickFocus(withLow, [])[0]).toBe('lover_partner');
+    expect(pickFocus(withLow, [], ['lover_partner'])).not.toContain('lover_partner');
+    const order = priorityOrder(withLow, [], ['lover_partner', 'guru']);
+    expect(order.map((o) => o.key)).not.toContain('lover_partner');
+    expect(order.map((o) => o.key)).not.toContain('guru');
+    expect(order).toHaveLength(5);
+    expect(priorityOrder(withLow, [])[0]).toMatchObject({ key: 'lover_partner' });
+    expect(parseAway(['divine', 'self', 'divine', 'guru', 7])).toEqual(['guru', 'divine']);
+    expect(awayPlacement('divine')).toEqual({ relationship: 'divine', core: AWAY_LEVEL, floor: AWAY_LEVEL, evidence: '' });
+    expect(levelByValue(AWAY_LEVEL)?.name).toBe('Neutrality');
+    expect(OPTIONAL_PILLARS).toEqual(['lover_partner', 'guru', 'divine']);
+  });
+  it('turns several ticked levels into a core and a floor', () => {
+    expect(placementFromPicks('self', [])).toBeNull();
+    expect(placementFromPicks('self', [310])).toMatchObject({ core: 310, floor: 310 });
+    // Two stuck, two owning it: the tie goes to the higher band, the higher middle of 200 and 310; the floor is the lowest.
+    expect(placementFromPicks('self', [100, 150, 200, 310])).toMatchObject({ core: 310, floor: 100 });
+    // Three stuck and one owning it: the core stays in the stuck band, at its middle pick.
+    expect(placementFromPicks('self', [30, 100, 150, 350])).toMatchObject({ core: 100, floor: 30 });
+    expect(placementFromPicks('self', [999, 250, 250])).toMatchObject({ core: 250, floor: 250 });
+    const p = placementFromPicks('guru', [50, 440, 500], 'Taught a class');
+    expect(p).toMatchObject({ relationship: 'guru', core: 500, floor: 50, evidence: 'Taught a class' });
+    expect(placementFlags(p!)).toMatchObject({ required: true, volatile: true });
+    expect(picksOfPlacement({ core: 310, floor: 100 })).toEqual([100, 310]);
+    expect(picksOfPlacement({ core: 250, floor: 250 })).toEqual([250]);
+  });
+  it('reads levels from words a person typed, and only suggests them', () => {
+    expect(readFeelings('I feel guilty and scared, but I keep trying anyway')).toEqual([30, 100, 200]);
+    expect(readFeelings('Honestly I hate myself when I cancel on them')).toEqual([20]);
+    expect(readFeelings('I just don’t care any more, what is the point')).toEqual([50]);
+    expect(readFeelings('I am not scared of my boss')).toEqual([]);
+    expect(readFeelings('I never feel angry with him')).toEqual([]);
+    expect(readFeelings('We are close and I feel grateful')).toEqual([500]);
+    expect(readFeelings('It is fine, either way')).toEqual([250]);
+    expect(readFeelings('')).toEqual([]);
+    expect(readFeelings('a b c d e f g')).toEqual([]);
+    for (const v of Object.keys(MAP_LEVEL_WORDS)) expect(levelByValue(Number(v))).toBeTruthy();
+    expect(Object.keys(MAP_LEVEL_WORDS)).toHaveLength(MAP_LEVELS.length);
+    expect(readFeelings('sad angry scared jealous guilty ashamed').length).toBeLessThanOrEqual(4);
+  });
+  it('names the seven in plain words', () => {
+    expect(RELATIONSHIPS.map((r) => r.name)).toEqual(['Work and money', 'Friends', 'Family', 'Love', 'Yourself', 'Teachers', 'Faith']);
   });
   it('ramps the day thirty minutes a week and never past the target', () => {
     expect(rampTime('08:30', '06:30', 0, 'earlier')).toBe('08:30');
@@ -2361,5 +2407,32 @@ describe('the client pays the TDS (gross-up)', () => {
   });
   it('writes the note under the total with the rate', () => {
     expect(tdsGrossupNote(1000)).toBe('*Additional 10% adjusted on total invoice amount applicable for TDS deducted to be borne by the company as per the agreement terms.');
+  });
+});
+
+import { ICON_NAMES, isIconName, IDENTITIES as ICON_IDENTITIES, SETUP_GOALS as ICON_GOALS, SETUP_BLOCKERS as ICON_BLOCKERS, SETUP_GOAL_GROUPS, SETUP_ROLE_GROUPS, SETUP_BLOCKER_GROUPS, ROLE_META, BADGE_META, PERMISSION_META, PERMISSIONS, KNOWLEDGE_KIND_ICON, knowledgeKindIcon, REACTION_META } from './index';
+
+describe('icons', () => {
+  it('names every icon once', () => {
+    expect(new Set(ICON_NAMES).size).toBe(ICON_NAMES.length);
+  });
+  it('gives every app, tag, goal, blocker, group, role and permission a known icon', () => {
+    const rows: { key: string; icon: unknown }[] = [
+      ...MODS.map((m) => ({ key: m.key, icon: m.icon })),
+      ...ICON_IDENTITIES.map((i) => ({ key: i.key, icon: i.icon })),
+      ...ICON_GOALS.map((g) => ({ key: g.key, icon: g.icon })),
+      ...ICON_BLOCKERS.map((b) => ({ key: b.key, icon: b.icon })),
+      ...[...SETUP_GOAL_GROUPS, ...SETUP_ROLE_GROUPS, ...SETUP_BLOCKER_GROUPS].map((g) => ({ key: g.label, icon: g.icon })),
+      ...Object.entries(BADGE_META).map(([key, m]) => ({ key, icon: m.icon })),
+      ...Object.entries(ROLE_META).map(([key, m]) => ({ key, icon: m.icon })),
+      ...PERMISSIONS.map((p) => ({ key: p, icon: PERMISSION_META[p].icon })),
+      ...Object.entries(KNOWLEDGE_KIND_ICON).map(([key, icon]) => ({ key, icon })),
+      ...Object.entries(REACTION_META).map(([key, m]) => ({ key, icon: m.icon })),
+    ];
+    for (const r of rows) expect(isIconName(r.icon), r.key).toBe(true);
+  });
+  it('falls back to a plain page for a kind it does not know', () => {
+    expect(knowledgeKindIcon('constructor')).toBe('FileText');
+    expect(knowledgeKindIcon('video')).toBe('Video');
   });
 });

@@ -14,7 +14,8 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export function Button({ variant = 'primary', color, deep, size = 'md', full = false, className = '', style, children, ...rest }: Props) {
   const base = 'inline-flex items-center justify-center gap-xs rounded-pill font-semibold select-none disabled:opacity-50 disabled:pointer-events-none';
-  const sizing = size === 'lg' ? 'min-h-[56px] px-lg text-[18px]' : size === 'sm' ? 'min-h-[40px] px-sm text-[14px]' : 'min-h-[48px] px-md text-[16px]';
+  /* sm keeps its compact look through tight padding and line-height, not a bigger box, but the hit area is still 44px (HIG minimum). */
+  const sizing = size === 'lg' ? 'min-h-[56px] px-lg text-[18px]' : size === 'sm' ? 'min-h-[44px] px-sm text-[14px] leading-none' : 'min-h-[48px] px-md text-[16px]';
   const look = {
     primary: 'toy bg-ink text-on-ink',
     outline: 'toy toy-ink bg-card-strong text-ink border border-ink/30 hover:border-ink',

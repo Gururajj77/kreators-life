@@ -100,7 +100,9 @@ export function useCountdown(initialMs: number, onDone: (ms: number) => void) {
     },
     [total, running],
   );
-  return { total, left, running, atFull, start, pause, stop, sync, nudge };
+  /** The absolute end time right now, for a page that only reads this clock, never drives it (a chip shown on another page). */
+  const getEndsAt = useCallback(() => ends.current, []);
+  return { total, left, running, atFull, start, pause, stop, sync, nudge, getEndsAt };
 }
 
 /** A stopwatch on a start instant: it counts up from zero, pauses and resumes, and the time that passed while the tab slept is still counted. */
