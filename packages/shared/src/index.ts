@@ -7,6 +7,18 @@
 /** Said once, under the prompt card and in Help. The ideas come from these traditions, the wording is ours. */
 export const JOURNAL_PROMPT_CREDIT = "Prompt ideas follow the journaling methods in Keila Shaheen's journals. The wording is our own.";
 
+// India first, open to all: every date and number on screen is written the Indian way (13 Nov 2026, 12,34,567), and a day or a time
+// that has no zone of its own reads as India's. Someone abroad still picks their own zone and currency.
+/** The one locale for showing dates and numbers: Indian English (DD MMM YYYY, lakh and crore grouping). */
+export const LOCALE = 'en-IN';
+/** The zone a time falls back to when nobody gave one (an event without a zone, an account without one). */
+export const DEFAULT_ZONE = 'Asia/Kolkata';
+const COUNT_FORMAT = new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 0 });
+/** A whole count the Indian way: 1234567 is "12,34,567". */
+export function formatCount(n: number): string {
+  return COUNT_FORMAT.format(Number.isFinite(n) ? Math.round(n) : 0);
+}
+
 export type RelationshipKey =
   | 'servant_leader'
   | 'friendship'
@@ -1888,7 +1900,7 @@ export const seasonStart = (season: string): string => `${season}-01T00:00:00.00
 /** "October 2026". */
 export function seasonLabel(season: string): string {
   const [y, m] = season.split('-').map(Number);
-  return new Date(Date.UTC(y ?? 2026, (m ?? 1) - 1, 1)).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  return new Date(Date.UTC(y ?? 2026, (m ?? 1) - 1, 1)).toLocaleDateString(LOCALE, { month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
 /** The month before: "2026-10" for "2026-11", "2025-12" for "2026-01". */
 export function previousSeason(season: string): string {
@@ -3475,17 +3487,42 @@ export function birthDateProblem(birthDate: string, today = new Date().toISOStri
   return null;
 }
 
-/** Digits only, with a leading plus kept: "+91 98765-43210" becomes "+919876543210". */
+/** The line under a phone field. */
+export const PHONE_HINT = 'Your mobile number. Without a country code we read it as Indian (+91).';
+
+/**
+ * Digits only, with a leading plus kept: "+91 98765-43210" becomes "+919876543210". India first: a bare Indian mobile (ten digits
+ * starting 6 to 9, or eleven with a leading 0) gets +91; anything typed with a plus is kept as typed, so a number abroad is fine.
+ */
 export function normalizePhone(raw: string): string {
   const t = raw.trim();
-  return (t.startsWith('+') ? '+' : '') + t.replace(/\D/g, '');
+  const digits = t.replace(/\D/g, '');
+  if (t.startsWith('+')) return `+${digits}`;
+  const local = /^0[6-9]\d{9}$/.test(digits) ? digits.slice(1) : digits;
+  if (/^[6-9]\d{9}$/.test(local)) return `+91${local}`;
+  return digits;
 }
 
-/** Why a phone number will not do, or null when it is fine: 8 to 15 digits, a country code is welcome. */
+/** Why a phone number will not do, or null when it is fine: 8 to 15 digits; without a country code it is read as Indian. */
 export function phoneProblem(raw: string): string | null {
   const p = normalizePhone(raw);
-  if (!/^\+?\d{8,15}$/.test(p)) return 'Enter a phone number with the country code, like +91 98765 43210.';
+  if (!/^\+?\d{8,15}$/.test(p)) return 'Enter your mobile number, like 98765 43210, or with its country code, like +44 7700 900123.';
   return null;
+}
+
+/** India's 28 states and 8 union territories, for an address. */
+export const INDIAN_STATES = [
+  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand',
+  'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab', 'Rajasthan',
+  'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+  'Andaman and Nicobar Islands', 'Chandigarh', 'Dadra and Nagar Haveli and Daman and Diu', 'Delhi', 'Jammu and Kashmir', 'Ladakh',
+  'Lakshadweep', 'Puducherry',
+] as const;
+export type IndianState = (typeof INDIAN_STATES)[number];
+
+/** Why a PIN code will not do, or null: six digits, never starting with 0. */
+export function pinCodeProblem(raw: string): string | null {
+  return /^[1-9][0-9]{5}$/.test(raw.trim()) ? null : 'Enter a six-digit PIN code, like 560038.';
 }
 
 export function parsePublicSettings(raw: unknown): PublicSettings {
@@ -4102,8 +4139,12 @@ export function productPayWays(p: { pricePoints: number; priceCents: number; pwy
 
 export function money(cents: number, currency = 'INR'): string {
   const symbol = currency === 'INR' ? '₹' : currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : `${currency} `;
-  const abs = Math.abs(cents) / 100;
-  return `${cents < 0 ? '-' : ''}${symbol}${abs.toLocaleString(undefined, { minimumFractionDigits: abs % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 })}`;
+  // Integer cents in: the whole part and the cents are split as integers, so no float is ever rounded. Rupees group in
+  // lakh and crore (en-IN, 1,00,000); every other currency groups in thousands (en-US, 100,000), whatever the runtime.
+  const abs = Math.abs(Math.round(cents));
+  const rest = abs % 100;
+  const whole = ((abs - rest) / 100).toLocaleString(currency === 'INR' ? 'en-IN' : 'en-US', { maximumFractionDigits: 0 });
+  return `${cents < 0 ? '-' : ''}${symbol}${whole}${rest === 0 ? '' : `.${String(rest).padStart(2, '0')}`}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -4385,6 +4426,7 @@ export interface AvailabilityOverride {
 /** Minutes the zone is ahead of UTC at a given instant, via the platform's own tables. */
 export function zoneOffsetMinutes(zone: string, at: Date): number {
   try {
+    // en-US on purpose: these parts are parsed for zone maths, never shown.
     const parts = new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(at);
     const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
     const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
@@ -4432,6 +4474,7 @@ export function slotsFor(input: SlotInput): string[] {
   const weekday = new Date(dayStart.getTime() + 12 * 3600_000).getUTCDay();
   const localWeekday = (() => {
     try {
+      // en-US on purpose: these parts are parsed for zone maths, never shown.
       const w = new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: 'short' }).format(new Date(dayStart.getTime() + 12 * 3600_000));
       return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(w);
     } catch {
@@ -5634,8 +5677,8 @@ const cap100 = (v: number) => Math.max(0, Math.min(100, Math.round(v)));
  */
 export function trustScore(i: TrustInput): TrustScore {
   const parts: (TrustPart & { weight: number })[] = [
-    { label: 'Xp earned', value: `${i.xp.toLocaleString()} xp`, score: cap100(i.xp / 20), weight: 30 },
-    { label: 'Points earned', value: `${i.pointsEarned.toLocaleString()} points`, score: cap100(i.pointsEarned / 5), weight: 20 },
+    { label: 'Xp earned', value: `${formatCount(i.xp)} xp`, score: cap100(i.xp / 20), weight: 30 },
+    { label: 'Points earned', value: `${formatCount(i.pointsEarned)} points`, score: cap100(i.pointsEarned / 5), weight: 20 },
     { label: 'Best streak', value: `${i.bestStreak} ${i.bestStreak === 1 ? 'day' : 'days'} in a row`, score: cap100(i.bestStreak * 5), weight: 15 },
     { label: 'Time here', value: i.daysHere < 1 ? 'joined today' : `${i.daysHere} ${i.daysHere === 1 ? 'day' : 'days'}`, score: cap100(i.daysHere / 1.8), weight: 15 },
     { label: 'Sales', value: i.sold === 0 ? 'none yet' : `${i.sold} sold${i.rating ? `, rated ${i.rating.toFixed(1)}` : ''}`, score: i.sold === 0 ? 0 : cap100((cap100(i.sold * 10) + (i.rating ? (i.rating / 5) * 100 : 70)) / 2), weight: 10 },
@@ -6067,7 +6110,7 @@ export const TERMS: Record<string, string> = {
   map: 'Sixteen levels, from Shame to Oneness, that name how you act in each relationship. You see names, never numbers.',
   'life map': 'The page under Pillars that keeps everything the strategy session found: all seven on the map, your scores, what gets in the way, your routine and your contract.',
   assistant: 'The round button at the bottom right of every screen. Tap a flow to log something by answering a question or two, free for everyone. With a plan you can also type what you did, and it is done in the app for you, each change with an Undo.',
-  credits: 'What typing to the assistant runs on. One credit is a tenth of a US cent of model use, so a typical message is about 12 credits. A plan gives credits each month; top-ups and team grants add more that do not run out.',
+  credits: 'Credits are what typing to the assistant runs on; a typical message is about 12. A plan gives credits each month. Top-ups and team grants add more that do not run out.',
   'top-up': 'Extra credits on top of your plan. They stay until you use them, after the plan\'s own credits are gone.',
   core: 'Where you usually live on the map, in one relationship.',
   floor: 'Where you drop to under stress, in one relationship. A floor under Courage marks that pillar as a good place to start.',
@@ -6123,7 +6166,7 @@ export const HOW_TO: Record<string, HowTo> = {
       'Tap the round button at the bottom right of any screen. The assistant opens over the page, so you can watch each change land.',
       'Tap a flow to log something by answering a question or two: a check-in, a task, your sleep, money in or out. The flows are free for everyone.',
       'With a plan you can also type what you did, like “I edited the vlog and slept six hours”. It does it in the app as you, then lists each change with an Undo. Removing things and settling money wait for your Confirm.',
-      'Typing spends credits: one credit is a tenth of a US cent of model use, and a typical message is about 12. Pro gives 10,000 credits a month, Pro Max 100,000 and Ultra 400,000. Each plan also caps what one message and one day can spend.',
+      'Typing spends credits, and a typical message is about 12. Pro gives 10,000 credits a month, Pro Max 100,000 and Ultra 400,000. Each plan also caps what one message and one day can spend.',
       'It earns the same xp and points as a tap, waits the same waits, and never sees anything that is not yours. It reads your journal only when you ask about it.',
     ],
     terms: ['assistant', 'credits', 'top-up'],
@@ -8045,7 +8088,7 @@ export const isPaidPlan = (v: unknown): v is PaidPlan => (PAID_PLANS as readonly
 export interface Plan {
   key: PaidPlan;
   name: string;
-  /** What it costs, in US cents a period. */
+  /** What it costs, in paise (INR) a period. */
   priceCents: number;
   /** Credits for each period. They do not carry over. */
   credits: number;
@@ -8053,13 +8096,21 @@ export interface Plan {
 }
 /** A plan runs this many days, then ends unless it is renewed. */
 export const PLAN_DAYS = 30;
-export const PLAN_CURRENCY = 'USD';
-/** The only three plans. Each gives a fixed worth of model use a month, and the price on top pays for the rest. */
+/** Plans, top-ups and the live call are priced and charged in rupees (India first; the founder set the prices, 2026-11-03). */
+export const PLAN_CURRENCY = 'INR';
+/** The live strategy call, in paise: Rs 10,000. */
+export const LIVE_CALL_CENTS = 1_000_000;
+/** "10,000 credits a month, about 833 messages." Built from the credits, so the line never drifts from the plan. */
+const planBlurb = (credits: number): string =>
+  `${credits.toLocaleString('en-IN')} credits a month, about ${messagesFor(credits).toLocaleString('en-IN')} messages.`;
+/** The only three plans, priced in paise. Each gives a fixed number of credits a month. */
 export const PLANS: Readonly<Record<PaidPlan, Plan>> = {
-  pro: { key: 'pro', name: 'Pro', priceCents: 1_500, credits: 10_000, blurb: '10,000 credits a month: US$10 of model use.' },
-  pro_max: { key: 'pro_max', name: 'Pro Max', priceCents: 12_500, credits: 100_000, blurb: '100,000 credits a month: US$100 of model use.' },
-  ultra: { key: 'ultra', name: 'Ultra', priceCents: 50_000, credits: 400_000, blurb: '400,000 credits a month: US$400 of model use.' },
+  pro: { key: 'pro', name: 'Pro', priceCents: 129_900, credits: 10_000, blurb: planBlurb(10_000) },
+  pro_max: { key: 'pro_max', name: 'Pro Max', priceCents: 999_900, credits: 100_000, blurb: planBlurb(100_000) },
+  ultra: { key: 'ultra', name: 'Ultra', priceCents: 3_999_900, credits: 400_000, blurb: planBlurb(400_000) },
 };
+/** "₹1,299 for 30 days": a plan's price the way every screen says it. */
+export const planPriceLabel = (key: PaidPlan): string => `${money(PLANS[key].priceCents, PLAN_CURRENCY)} for ${PLAN_DAYS} days`;
 export const planName = (key: string): string => (isPaidPlan(key) ? PLANS[key].name : 'No plan');
 
 export interface TopUpPack {
@@ -8069,9 +8120,9 @@ export interface TopUpPack {
 }
 /** Extra credits on top of a plan. They stay until used. */
 export const TOPUP_PACKS: readonly TopUpPack[] = [
-  { key: 'small', priceCents: 1_000, credits: 8_000 },
-  { key: 'medium', priceCents: 2_500, credits: 20_000 },
-  { key: 'large', priceCents: 5_000, credits: 40_000 },
+  { key: 'small', priceCents: 79_900, credits: 8_000 },
+  { key: 'medium', priceCents: 199_900, credits: 20_000 },
+  { key: 'large', priceCents: 399_900, credits: 40_000 },
 ];
 /** True once a payment provider takes money for plans and top-ups. Until then the team switches plans on. */
 export const PAYMENTS_LIVE = false;
@@ -9812,6 +9863,7 @@ export interface DesignResult {
 
 const isZone = (zone: string): boolean => {
   try {
+    // en-US on purpose: these parts are parsed for zone maths, never shown.
     new Intl.DateTimeFormat('en-US', { timeZone: zone });
     return zone.length > 0 && zone.length <= 64;
   } catch {
@@ -11341,6 +11393,10 @@ export const AGENCY_NOTE_MAX = 500;
 export const AGENCY_MAX_MINUTES = 24 * 60;
 export const AGENCY_DEFAULT_WEEKLY_HOURS = 30;
 export const AGENCY_CURRENCIES = ['INR', 'USD', 'EUR', 'GBP', 'AED', 'AUD', 'CAD', 'SGD'] as const;
+/** The currencies a person can keep their money in (Profile, Finance). Rupees first and the default; anyone abroad can switch. */
+export const CURRENCIES = AGENCY_CURRENCIES;
+export type Currency = (typeof CURRENCIES)[number];
+export const isCurrency = (v: unknown): v is Currency => typeof v === 'string' && (CURRENCIES as readonly string[]).includes(v);
 
 export interface AgencySettings {
   currency: string;
@@ -12088,7 +12144,7 @@ export function kpiShown(unit: KpiUnit, value: number, currency: string): string
   if (unit === 'money') return money(value, currency);
   if (unit === 'hours') return minutesLabel2(value);
   if (unit === 'percent') return `${value}%`;
-  return value.toLocaleString();
+  return formatCount(value);
 }
 
 /** What a person types for a unit becomes the stored whole number: money to cents, hours to minutes. */
@@ -13464,7 +13520,7 @@ export interface PlanAttention {
   days: string[];
 }
 
-const dayName = (date: string): string => new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
+const dayName = (date: string): string => new Date(`${date}T00:00:00Z`).toLocaleDateString(LOCALE, { weekday: 'long', timeZone: 'UTC' });
 const hm = (min: number): string => (min >= 60 ? `${Math.floor(min / 60)}h${min % 60 ? ` ${min % 60}m` : ''}` : `${min}m`);
 const planAddDays = (date: string, n: number): string => new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
@@ -13819,7 +13875,7 @@ export function nextOnOrAfter(anchor: string, rule: Repeat | null, day: string):
 // ---------------------------------------------------------------------------
 
 /** The version of the terms and the privacy policy (the day they were last changed). A new version is shown to people once. */
-export const LEGAL_VERSION = '2026-11-01';
+export const LEGAL_VERSION = '2026-11-03';
 export const LEGAL_DOCS = [
   { key: 'terms', name: 'Terms of use', path: '/terms' },
   { key: 'privacy', name: 'Privacy policy', path: '/privacy' },
@@ -13845,8 +13901,12 @@ export function parseConsent(raw: unknown): ConsentChoices {
   const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   return { attribution: o.attribution === true, embeds: o.embeds === true, marketing: o.marketing === true };
 }
-/** Countries where a cookie that is not strictly needed waits for a yes: the EU, the rest of the EEA, the UK and Switzerland. */
-export const CONSENT_FIRST_COUNTRIES: readonly string[] = ['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'IS', 'LI', 'NO', 'GB', 'CH'];
+/**
+ * Countries where a cookie that is not strictly needed waits for a yes: India, the EU, the rest of the EEA, the UK and
+ * Switzerland. In India the Digital Personal Data Protection Act 2023 has personal data processed on consent (or a use
+ * the Act lists), and the click cookie is optional, so it waits for a yes there too.
+ */
+export const CONSENT_FIRST_COUNTRIES: readonly string[] = ['IN', 'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'IS', 'LI', 'NO', 'GB', 'CH'];
 
 /** How long each kind of thing is kept, and why. The privacy page, the cron's tidy-up and the docs all read this list. */
 export interface RetentionRule {
@@ -13863,7 +13923,7 @@ export const RETENTION: readonly RetentionRule[] = [
   { category: 'The app\'s own log (changes, refusals, errors, who did it)', keep: 'Thirty days', why: 'To find and fix problems and to spot abuse. Never holds what you wrote.' },
   { category: 'Emails we sent you (receipts, resets)', keep: 'Ninety days in the outbox, then deleted', why: 'To show what was sent if something goes wrong.' },
   { category: 'Raw payment messages from the payment provider', keep: 'One year, then the raw text is cleared and the order stays', why: 'To settle a dispute about a payment.' },
-  { category: 'Orders, invoices and money records', keep: 'Seven years, with your name taken off when you delete your account', why: 'Tax and accounting law in most places asks for it.' },
+  { category: 'Orders, invoices and money records', keep: 'Seven years, with your name taken off when you delete your account', why: 'The tax and accounting law where the business is registered asks for it.' },
   { category: 'Discount codes you used (which code, what it took off, when)', keep: 'Until you delete your account', why: 'To hold each code to its limits and to show what it cost.' },
   { category: 'Tracked link clicks (an address hash, never the address)', keep: 'Thirteen months', why: 'So a creator can compare this year with last year.' },
   { category: 'Your terms and privacy choices', keep: 'Until you delete your account', why: 'To show what you agreed to and when.' },
@@ -13903,6 +13963,10 @@ export interface BusinessInfo {
   email: string;
   registration: string;
   vat: string;
+  /** The Grievance Officer under India's DPDP Act and IT Rules: the first stop for a privacy or content complaint. Empty until the owner sets it. */
+  grievanceName: string;
+  grievanceEmail: string;
+  grievancePhone: string;
   /** The designated agent for copyright notices (the same entity unless the owner says otherwise). */
   dmcaAgent: string;
   dmcaAddress: string;

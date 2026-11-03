@@ -25,6 +25,10 @@ export interface Env {
   BUSINESS_EMAIL?: string;
   BUSINESS_REG?: string;
   BUSINESS_VAT?: string;
+  /** The Grievance Officer for people in India (DPDP Act 2023, IT Rules 2021): name, email and an optional phone. Shown as "not set yet" when empty. */
+  BUSINESS_GRIEVANCE_NAME?: string;
+  BUSINESS_GRIEVANCE_EMAIL?: string;
+  BUSINESS_GRIEVANCE_PHONE?: string;
   /** Who receives copyright notices (the business unless set), and "yes" once the agent is listed with the US Copyright Office. */
   DMCA_AGENT?: string;
   DMCA_ADDRESS?: string;

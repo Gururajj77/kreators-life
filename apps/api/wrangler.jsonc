@@ -28,6 +28,14 @@
       "/src/*", "/logs/*", "/tmp/*", "/temp/*"
     ]
   },
+  // The business behind kreators.app is set as Worker variables in the dashboard (or with "vars" here), never with a value in code.
+  // They are left commented out, because an empty "vars" entry would wipe a value set in the dashboard on the next deploy.
+  // "vars": {
+  //   "BUSINESS_NAME": "", "BUSINESS_ADDRESS": "", "BUSINESS_EMAIL": "", "BUSINESS_REG": "", "BUSINESS_VAT": "",
+  //   // The Grievance Officer for people in India (DPDP Act 2023, IT Rules 2021); the phone is optional.
+  //   "BUSINESS_GRIEVANCE_NAME": "", "BUSINESS_GRIEVANCE_EMAIL": "", "BUSINESS_GRIEVANCE_PHONE": "",
+  //   "DMCA_AGENT": "", "DMCA_ADDRESS": "", "DMCA_EMAIL": "", "DMCA_REGISTERED": ""
+  // },
   "d1_databases": [
     {
       "binding": "DB",
