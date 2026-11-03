@@ -33,7 +33,7 @@ import { Check as CheckGlyph } from 'lucide-react';
 import { AppIcon } from '../components/AppIcon';
 import { Icon } from '../components/Icon';
 import { ChatActions, ChatLinks, ChatScreen, ChoiceChips, ChoiceGroups, typingTime, type ChatChoice, type ChatChoiceGroup, type ChatLine } from '../components/Chat';
-import { api } from '../lib/api';
+import { api, errorText } from '../lib/api';
 import { explainTyped, isQuestion } from '../lib/explain';
 import { forgetKept, useKept, useKeptRef } from '../lib/kept';
 import { useModules } from '../lib/modules';
@@ -72,7 +72,6 @@ interface Chat {
 const EMPTY: SetupAnswers = { identities: [], goals: [], blockers: [] };
 
 const hello = characterHello;
-const err = (e: unknown) => (e instanceof Error ? e.message : 'That did not work.');
 const listed = (items: string[]) => (items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
 /** Chip labels joined into one line that reads like a sentence: "Earn from my content and learn a new skill". */
 const said = (labels: string[]) => listed(labels.map((l, i) => (i === 0 || /^I\b|^I'/.test(l) ? l : l.charAt(0).toLowerCase() + l.slice(1))));
@@ -161,11 +160,11 @@ function MatchList({ answers, available, onSend }: { answers: SetupAnswers; avai
         </>
       )}
       <div className="mt-xs flex flex-wrap gap-md">
-        <button type="button" onClick={() => setWhy(!why)} className="min-h-[32px] text-[14px] font-bold underline underline-offset-4">
+        <button type="button" onClick={() => setWhy(!why)} className="inline-flex min-h-[44px] items-center text-[14px] font-bold underline underline-offset-4">
           {why ? 'Hide the reasons' : 'Why these apps?'}
         </button>
         {!more && m.more.length > 0 && (
-          <button type="button" onClick={() => setMore(true)} className="min-h-[32px] text-[14px] font-bold underline underline-offset-4">
+          <button type="button" onClick={() => setMore(true)} className="inline-flex min-h-[44px] items-center text-[14px] font-bold underline underline-offset-4">
             Show {m.more.length} more
           </button>
         )}
@@ -364,7 +363,7 @@ export function SetupChat() {
         say(['Saved to your profile! 🎉 Where to next?'], { part: 'done', ask: { kind: 'chips', chips: after } });
       })
       .catch((e) => {
-        setNotice(err(e));
+        setNotice(errorText(e, 'That did not work.'));
         askProfile();
       });
   };
@@ -396,7 +395,7 @@ export function SetupChat() {
       })
       .catch((e) => {
         // Most often the email is taken or the password too common: back to the first card.
-        setNotice(err(e));
+        setNotice(errorText(e, 'That did not work.'));
         setChat((c) => ({ ...c, signIn: undefined }));
         askSignIn(['That did not go through. The note below says why.'], first.name ?? '');
       });
@@ -411,7 +410,7 @@ export function SetupChat() {
         finish(r.match, r.on, r.coach);
       })
       .catch((e) => {
-        setNotice(err(e));
+        setNotice(errorText(e, 'That did not work.'));
         showMatch(a, chatRef.current.asked, []);
       });
   };

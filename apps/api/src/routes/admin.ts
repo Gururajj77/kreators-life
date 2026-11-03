@@ -14,7 +14,7 @@ import { notify, pageOf, paged, httpUrl } from '../db';
 import type { AdminFunnel, AdminKyc, AdminOrder, OrderEvent, OutboxEmail, WebhookEvent } from '@kreators/shared';
 import type { Context } from 'hono';
 import type { AppEnv, UserRow } from '../env';
-import { audit, badgesNow, can, getUser, nameOf, newId, nowIso, num, oneOf, parseList, sessionUser, str } from '../db';
+import { actorOf, audit, badgesNow, can, getUser, nameOf, newId, nowIso, num, oneOf, parseList, sessionUser, str } from '../db';
 import { accountOf, addCredits, setPlan } from '../credits';
 import { setEventCode, setRunCode } from '../attendee';
 import { endLink, LINK, linkById, logCoach, type LinkRow } from '../coaching';
@@ -39,7 +39,6 @@ admin.use('*', async (c, next) => {
   return c.json({ error: 'forbidden' }, 403);
 });
 
-const actorOf = (c: { get: (k: 'user') => UserRow | undefined }) => c.get('user')?.id ?? null;
 
 /** Rows that need an author get the signed-in admin, else the first admin account, else the key itself. */
 async function authorFor(c: { get: (k: 'user') => UserRow | undefined; env: { DB: D1Database } }): Promise<string> {

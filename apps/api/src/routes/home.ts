@@ -260,6 +260,52 @@ home.get('/brief', async (c) => {
   const apps = Object.entries(access)
     .filter(([, a]) => a.on)
     .map(([k]) => k);
+  // Agency and channel facts are read only for the apps that are on, all owner-scoped (the session's id), counts and names only.
+  const agencyOn = apps.includes('agency');
+  const scopes = [apps.includes('community') ? 'community' : null, apps.includes('bond') ? 'bond' : null].filter((x): x is string => x !== null);
+  const fortnight = new Date(Date.now() - 14 * 86_400_000).toISOString();
+  const [changes, monthMade, unread, waitingAgency] = await Promise.all([
+    agencyOn
+      ? db
+          .prepare(
+            "SELECT COUNT(*) AS n, COUNT(DISTINCT i.client_id) AS clients, MIN(i.client_id) AS client_id FROM agency_notes n JOIN agency_items i ON i.id = n.item_id AND i.user_id = n.user_id WHERE n.user_id = ? AND n.kind = 'change' AND n.created_at >= ? AND i.stage = 'making'",
+          )
+          .bind(user.id, fortnight)
+          .first<{ n: number; clients: number; client_id: string | null }>()
+      : Promise.resolve(null),
+    agencyOn
+      ? db.prepare('SELECT y.client_id, y.n, k.name FROM agency_cycles y JOIN agency_clients k ON k.id = y.client_id AND k.user_id = y.user_id WHERE y.user_id = ? AND y.day = ? ORDER BY y.created_at DESC LIMIT 1').bind(user.id, date).first<{ client_id: string; n: number; name: string }>()
+      : Promise.resolve(null),
+    scopes.length
+      ? db
+          .prepare(
+            `SELECT COUNT(*) AS n, COUNT(DISTINCT ch.id) AS channels, MIN(ch.id) AS channel_id, MIN(ch.scope) AS scope
+             FROM channel_members m JOIN channels ch ON ch.id = m.channel_id AND ch.archived_at IS NULL
+             JOIN channel_messages x ON x.channel_id = m.channel_id AND x.created_at > m.last_read_at AND x.user_id != m.user_id AND x.deleted_at IS NULL
+             WHERE m.user_id = ?1 AND m.status = 'member' AND ch.scope IN (SELECT value FROM json_each(?2))
+               AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ?1 AND b.blocked_id = x.user_id) OR (b.blocker_id = x.user_id AND b.blocked_id = ?1))`,
+          )
+          .bind(user.id, JSON.stringify(scopes))
+          .first<{ n: number; channels: number; channel_id: string | null; scope: string | null }>()
+      : Promise.resolve(null),
+    // What else waits on the person across Agency today: one query of counts, the person's own rows, by the session's id.
+    agencyOn
+      ? db
+          .prepare(
+            `SELECT
+              (SELECT COUNT(*) FROM agency_items i JOIN agency_clients k ON k.id = i.client_id AND k.user_id = i.user_id WHERE i.user_id = ?1 AND i.stage NOT IN ('approved', 'published') AND i.due_date IS NOT NULL AND i.due_date <= ?2 AND k.status != 'ended') AS due,
+              (SELECT COUNT(DISTINCT i.client_id) FROM agency_items i JOIN agency_clients k ON k.id = i.client_id AND k.user_id = i.user_id WHERE i.user_id = ?1 AND i.stage NOT IN ('approved', 'published') AND i.due_date IS NOT NULL AND i.due_date <= ?2 AND k.status != 'ended') AS due_clients,
+              (SELECT MIN(i.client_id) FROM agency_items i JOIN agency_clients k ON k.id = i.client_id AND k.user_id = i.user_id WHERE i.user_id = ?1 AND i.stage NOT IN ('approved', 'published') AND i.due_date IS NOT NULL AND i.due_date <= ?2 AND k.status != 'ended') AS due_client,
+              (SELECT COUNT(*) FROM invoices WHERE user_id = ?1 AND status = 'sent' AND agency_client_id IS NOT NULL AND due_date IS NOT NULL AND due_date < ?2) AS overdue,
+              (SELECT COUNT(*) FROM agency_retainers WHERE user_id = ?1 AND status = 'chosen') AS chosen,
+              (SELECT r.client_id FROM agency_retainers r WHERE r.user_id = ?1 AND r.status = 'chosen' ORDER BY r.chosen_at LIMIT 1) AS chosen_client,
+              (SELECT k.name FROM agency_retainers r JOIN agency_clients k ON k.id = r.client_id AND k.user_id = r.user_id WHERE r.user_id = ?1 AND r.status = 'chosen' ORDER BY r.chosen_at LIMIT 1) AS chosen_name,
+              (SELECT COUNT(*) FROM agency_contracts WHERE user_id = ?1 AND status = 'sent') AS unsigned`,
+          )
+          .bind(user.id, date)
+          .first<{ due: number; due_clients: number; due_client: string | null; overdue: number; chosen: number; chosen_client: string | null; chosen_name: string | null; unsigned: number }>()
+      : Promise.resolve(null),
+  ]);
   const lp = levelProgress(user.xp);
   const when = next ? new Date(next.starts_at) : null;
   const hoursAway = when ? Math.round((when.getTime() - Date.now()) / 3600_000) : 0;
@@ -290,6 +336,22 @@ home.get('/brief', async (c) => {
     coachAsks: counts?.asks ?? 0,
     reviewDue: (counts?.reviewed ?? 0) === 0,
     apps,
+    agency: agencyOn
+      ? {
+          changeAsks: changes?.n ?? 0,
+          changeClientId: changes && changes.clients === 1 ? changes.client_id : null,
+          monthMade: monthMade ? { clientId: monthMade.client_id, clientName: monthMade.name, n: monthMade.n } : null,
+          piecesDueToday: waitingAgency?.due ?? 0,
+          piecesClientId: waitingAgency && waitingAgency.due_clients === 1 ? waitingAgency.due_client : null,
+          invoicesOverdue: waitingAgency?.overdue ?? 0,
+          retainersChosen: waitingAgency?.chosen ?? 0,
+          retainerChosen: waitingAgency?.chosen_client && waitingAgency.chosen_name ? { clientId: waitingAgency.chosen_client, clientName: waitingAgency.chosen_name } : null,
+          agreementsUnsigned: waitingAgency?.unsigned ?? 0,
+        }
+      : undefined,
+    channels: unread
+      ? { unread: unread.n, to: unread.channels === 1 && unread.channel_id ? (unread.scope === 'community' ? `/community?tab=channels&channel=${unread.channel_id}` : `/bond?channel=${unread.channel_id}#bond-channels`) : null }
+      : undefined,
   });
 
   // A life coach: students who have gone quiet or came in under their deal, and asks to answer. Only from what each shares.

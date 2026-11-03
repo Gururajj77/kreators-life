@@ -10,8 +10,11 @@ import { todayLocal } from '../lib/date';
 import { useRefreshAll } from '../lib/queries';
 import { useSession } from '../lib/store';
 import { TermsBox } from '../components/TermsBox';
+import { Icon } from '../components/Icon';
+import { MailCheck } from 'lucide-react';
+import { AnimatedIcon } from '../components/AnimatedIcon';
+import { FIELD_CARD } from '../lib/ui';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]';
 
 /** A password field with a show button, so a typo is seen before it is saved. */
 function PasswordField({ label, value, onChange, autoComplete, hint }: { label: string; value: string; onChange: (v: string) => void; autoComplete: string; hint?: string }) {
@@ -20,9 +23,9 @@ function PasswordField({ label, value, onChange, autoComplete, hint }: { label: 
     <label className="block">
       <span className="block text-[14px] font-bold">{label}</span>
       <span className="relative block">
-        <input type={shown ? 'text' : 'password'} required value={value} onChange={(e) => onChange(e.target.value)} autoComplete={autoComplete} maxLength={128} className={`${field} pr-xl`} />
-        <button type="button" onClick={() => setShown((s) => !s)} aria-pressed={shown} className="absolute top-1/2 right-xs -translate-y-1/2 rounded-pill px-xs text-[12px] font-extrabold text-ink-soft hover:text-ink">
-          {shown ? 'Hide' : 'Show'}
+        <input type={shown ? 'text' : 'password'} required value={value} onChange={(e) => onChange(e.target.value)} autoComplete={autoComplete} maxLength={128} className={`${FIELD_CARD} pr-xl`} />
+        <button type="button" onClick={() => setShown((s) => !s)} aria-pressed={shown} aria-label="Show password" title={shown ? 'Hide password' : 'Show password'} className="absolute top-1/2 right-xs inline-flex size-[44px] -translate-y-1/2 items-center justify-center rounded-pill text-ink-soft hover:text-ink">
+          <AnimatedIcon name="visibility" size={20} active={shown} interaction="click-toggle" />
         </button>
       </span>
       {hint && <span className="mt-xs block text-[12px] font-bold text-ink-soft">{hint}</span>}
@@ -123,26 +126,26 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
         {mode === 'signup' && (
           <label className="block">
             <span className="block text-[14px] font-bold">Name</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoComplete="nickname" className={field} />
+            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoComplete="nickname" className={FIELD_CARD} />
           </label>
         )}
         <label className="block">
           <span className="block text-[14px] font-bold">Email</span>
-          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" maxLength={254} className={field} />
+          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" maxLength={254} className={FIELD_CARD} />
         </label>
         <PasswordField label="Password" value={password} onChange={setPassword} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} hint={mode === 'signup' ? (weak ?? 'Eight characters or more. Not your email, not one from the usual guess lists.') : undefined} />
         {mode === 'signup' && <PasswordField label="Password, once more" value={confirm} onChange={setConfirm} autoComplete="new-password" hint={mismatch ? 'The two do not match yet.' : undefined} />}
         {mode === 'signup' && (
           <label className="block">
             <span className="block text-[14px] font-bold">Phone</span>
-            <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" maxLength={24} placeholder="+91 98765 43210" className={field} />
+            <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" maxLength={24} placeholder="+91 98765 43210" className={FIELD_CARD} />
             <span className="mt-xs block text-[12px] font-bold text-ink-soft">{phoneBad ?? 'Add the country code. We ask so everyone here is real. Never shown to anyone.'}</span>
           </label>
         )}
         {mode === 'signup' && (
           <label className="block">
             <span className="block text-[14px] font-bold">Date of birth</span>
-            <input type="date" required value={birthDate} onChange={(e) => setBirthDate(e.target.value)} autoComplete="bday" max={todayLocal()} className={field} />
+            <input type="date" required value={birthDate} onChange={(e) => setBirthDate(e.target.value)} autoComplete="bday" max={todayLocal()} className={FIELD_CARD} />
             <span className="mt-xs block text-[12px] font-bold text-ink-soft">{ageBad ?? `We ask so everyone here is ${MIN_AGE} or older. Nobody else sees it.`}</span>
           </label>
         )}
@@ -158,7 +161,7 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
       </form>
       {mode === 'signin' && (
         <p className="mt-sm m-0 text-center text-[14px] font-semibold">
-          <Link to="/forgot" className="underline underline-offset-4">
+          <Link to="/forgot" className="inline-flex min-h-[44px] min-w-[44px] items-center underline underline-offset-4">
             Forgot your password?
           </Link>
         </p>
@@ -167,21 +170,21 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
         {mode === 'signup' ? (
           <>
             Already have one?{' '}
-            <Link to={`/signin${loc.search}`} className="underline underline-offset-4">
+            <Link to={`/signin${loc.search}`} className="inline-flex min-h-[44px] min-w-[44px] items-center underline underline-offset-4">
               Sign in
             </Link>
           </>
         ) : (
           <>
             New here?{' '}
-            <Link to={`/start${loc.search}`} className="underline underline-offset-4">
+            <Link to={`/start${loc.search}`} className="inline-flex min-h-[44px] min-w-[44px] items-center underline underline-offset-4">
               Create an account
             </Link>
           </>
         )}
       </p>
       <p className="mt-sm m-0 text-center text-[14px] font-semibold">
-        <Link to={hasSession ? (next ?? '/home') : '/start'} className="underline underline-offset-4">
+        <Link to={hasSession ? (next ?? '/home') : '/start'} className="inline-flex min-h-[44px] min-w-[44px] items-center underline underline-offset-4">
           {hasSession ? 'Back to the app' : 'Continue without an account'}
         </Link>
       </p>
@@ -202,9 +205,7 @@ export function Forgot() {
       </div>
       {send.isSuccess ? (
         <div className="mt-lg rounded-card bg-card p-md shadow-toy-soft" role="status">
-          <p className="m-0 text-[24px]" aria-hidden="true">
-            📬
-          </p>
+          <Icon icon={MailCheck} size={32} />
           <h2 className="mt-xs text-[24px]">Check your mail</h2>
           <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
             If <span className="font-bold text-ink">{email}</span> has an account, a reset link is on its way. It works once, for {send.data.minutes} minutes.
@@ -223,7 +224,7 @@ export function Forgot() {
         >
           <label className="block">
             <span className="block text-[14px] font-bold">Email</span>
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" maxLength={254} className={field} />
+            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" maxLength={254} className={FIELD_CARD} />
           </label>
           {send.isError && (
             <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
@@ -234,7 +235,7 @@ export function Forgot() {
             {send.isPending ? 'Sending' : 'Email me a reset link'}
           </Button>
           <p className="m-0 text-center text-[14px] font-semibold">
-            <Link to="/signin" className="underline underline-offset-4">
+            <Link to="/signin" className="inline-flex min-h-[44px] min-w-[44px] items-center underline underline-offset-4">
               Back to sign in
             </Link>
           </p>

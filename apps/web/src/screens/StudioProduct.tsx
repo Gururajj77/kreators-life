@@ -1,4 +1,4 @@
-import { PRODUCT_KIND_META, productPayWays, type CourseDraft, type Lesson, type QuizQuestion , PUBLIC_BADGES, HONORS, FAQ_A_MAX, FAQ_Q_MAX, MAX_FAQ, type ProductFaq } from '@kreators/shared';
+import { PRODUCT_KIND_META, productPayWays, type CourseDraft, type Lesson, type QuizQuestion, PUBLIC_BADGES, HONORS, FAQ_A_MAX, FAQ_Q_MAX, MAX_FAQ, type ProductFaq, money } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -10,8 +10,8 @@ import { Sheet } from '../components/Sheet';
 import { Pager, usePage } from '../components/Pager';
 import { api } from '../lib/api';
 import { useAuthed, useRefreshAll, useStudio } from '../lib/queries';
+import { FIELD } from '../lib/ui';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 
 export function StudioProduct() {
   const { id = '' } = useParams();
@@ -182,28 +182,28 @@ export function StudioProduct() {
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Title</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={field} />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Description</span>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} rows={4} className={field} />
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} rows={4} className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Emoji cover</span>
-            <input value={cover} onChange={(e) => setCover(e.target.value)} maxLength={8} className={field} />
+            <input value={cover} onChange={(e) => setCover(e.target.value)} maxLength={8} className={FIELD} />
           </label>
           {priced && (
             <label className="block">
               <span className="block text-[14px] font-bold">{pwyw ? 'Minimum points' : 'Points price'}</span>
-              <input type="number" min={0} value={pricePoints} onChange={(e) => setPricePoints(e.target.value)} className={field} />
+              <input type="number" min={0} value={pricePoints} onChange={(e) => setPricePoints(e.target.value)} className={FIELD} />
             </label>
           )}
         </div>
         {priced && (
           <label className="block">
             <span className="block text-[14px] font-bold">Money price, in {p.currency} cents (test mode)</span>
-            <input type="number" min={0} value={priceCents} onChange={(e) => setPriceCents(e.target.value)} className={field} />
+            <input type="number" min={0} value={priceCents} onChange={(e) => setPriceCents(e.target.value)} className={FIELD} />
           </label>
         )}
         {priced && (
@@ -220,24 +220,24 @@ export function StudioProduct() {
           <div className="mt-xs grid grid-cols-2 gap-xs">
             <label className="block">
               <span className="block text-[14px] font-bold">Xp of at least</span>
-              <input type="number" min={0} value={minXp} onChange={(e) => setMinXp(e.target.value)} className={field} />
+              <input type="number" min={0} value={minXp} onChange={(e) => setMinXp(e.target.value)} className={FIELD} />
             </label>
             <label className="block">
               <span className="block text-[14px] font-bold">Points balance of at least</span>
-              <input type="number" min={0} value={minPoints} onChange={(e) => setMinPoints(e.target.value)} className={field} />
+              <input type="number" min={0} value={minPoints} onChange={(e) => setMinPoints(e.target.value)} className={FIELD} />
             </label>
             <label className="block">
               <span className="block text-[14px] font-bold">Holds the badge</span>
-              <select value={badge} onChange={(e) => setBadge(e.target.value)} className={field}>
+              <select value={badge} onChange={(e) => setBadge(e.target.value)} className={FIELD}>
                 <option value="">Any badge or none</option>
                 {PUBLIC_BADGES.map((b) => (
                   <option key={b.key} value={b.key}>
-                    {b.emoji} {b.name}
+                    {b.name}
                   </option>
                 ))}
                 {HONORS.map((h) => (
                   <option key={h.key} value={h.key}>
-                    {h.emoji} {h.name}
+                    {h.name}
                   </option>
                 ))}
               </select>
@@ -262,13 +262,13 @@ export function StudioProduct() {
         {(p.kind === 'digital' || p.kind === 'link') && (
           <label className="block">
             <span className="block text-[14px] font-bold">{p.kind === 'link' ? 'Link' : 'Download link, shown after purchase'}</span>
-            <input value={url} onChange={(e) => setUrl(e.target.value)} className={field} placeholder="https://" />
+            <input value={url} onChange={(e) => setUrl(e.target.value)} className={FIELD} placeholder="https://" />
           </label>
         )}
         {p.kind === 'locked' && (
           <label className="block">
             <span className="block text-[14px] font-bold">The post, shown only after purchase</span>
-            <textarea value={lockedBody} onChange={(e) => setLockedBody(e.target.value)} rows={8} maxLength={20000} className={field} placeholder="Text, links, a video address" />
+            <textarea value={lockedBody} onChange={(e) => setLockedBody(e.target.value)} rows={8} maxLength={20000} className={FIELD} placeholder="Text, links, a video address" />
           </label>
         )}
         {p.kind === 'bundle' && (
@@ -294,7 +294,7 @@ export function StudioProduct() {
         {p.kind === 'dm' && (
           <label className="block">
             <span className="block text-[14px] font-bold">Answer within this many days</span>
-            <input type="number" min={1} max={30} value={responseDays} onChange={(e) => setResponseDays(e.target.value)} className={field} />
+            <input type="number" min={1} max={30} value={responseDays} onChange={(e) => setResponseDays(e.target.value)} className={FIELD} />
             <span className="mt-xs block text-[12px] font-bold text-ink-soft">Questions arrive under Shop, Priority DMs.</span>
           </label>
         )}
@@ -302,19 +302,19 @@ export function StudioProduct() {
           <>
             <label className="block">
               <span className="block text-[14px] font-bold">Starts at</span>
-              <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className={field} />
+              <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className={FIELD} />
             </label>
             <label className="block">
               <span className="block text-[14px] font-bold">Capacity, blank for unlimited</span>
-              <input type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)} className={field} />
+              <input type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)} className={FIELD} />
             </label>
             <label className="block">
               <span className="block text-[14px] font-bold">Recording link, shown to ticket holders afterwards</span>
-              <input value={replayUrl} onChange={(e) => setReplayUrl(e.target.value)} className={field} placeholder="https://" />
+              <input value={replayUrl} onChange={(e) => setReplayUrl(e.target.value)} className={FIELD} placeholder="https://" />
             </label>
             <label className="block">
               <span className="block text-[14px] font-bold">Price for people who missed it, in points</span>
-              <input type="number" min={0} value={replayPoints} onChange={(e) => setReplayPoints(e.target.value)} className={field} />
+              <input type="number" min={0} value={replayPoints} onChange={(e) => setReplayPoints(e.target.value)} className={FIELD} />
               <span className="mt-xs block text-[12px] font-bold text-ink-soft">Zero means the replay is not for sale.</span>
             </label>
           </>
@@ -322,28 +322,28 @@ export function StudioProduct() {
         {(p.kind === 'event' || p.kind === 'session') && (
           <label className="block">
             <span className="block text-[14px] font-bold">Joining link, shown to ticket holders</span>
-            <input value={meetingUrl} onChange={(e) => setMeetingUrl(e.target.value)} className={field} placeholder="Zoom, Meet, anything" />
+            <input value={meetingUrl} onChange={(e) => setMeetingUrl(e.target.value)} className={FIELD} placeholder="Zoom, Meet, anything" />
           </label>
         )}
         {p.kind === 'session' && (
           <>
             <label className="block">
               <span className="block text-[14px] font-bold">Length in minutes</span>
-              <input type="number" min={5} max={600} value={durationMin} onChange={(e) => setDurationMin(e.target.value)} className={field} />
+              <input type="number" min={5} max={600} value={durationMin} onChange={(e) => setDurationMin(e.target.value)} className={FIELD} />
               <span className="mt-xs block text-[12px] font-bold text-ink-soft">Slots come from your availability under Shop, Bookings.</span>
             </label>
             <div className="grid grid-cols-3 gap-xs">
               <label className="block">
                 <span className="block text-[14px] font-bold">Buffer, minutes</span>
-                <input type="number" min={0} max={120} step={5} value={bufferMin} onChange={(e) => setBufferMin(e.target.value)} className={field} />
+                <input type="number" min={0} max={120} step={5} value={bufferMin} onChange={(e) => setBufferMin(e.target.value)} className={FIELD} />
               </label>
               <label className="block">
                 <span className="block text-[14px] font-bold">Notice, hours</span>
-                <input type="number" min={0} max={720} value={noticeHours} onChange={(e) => setNoticeHours(e.target.value)} className={field} />
+                <input type="number" min={0} max={720} value={noticeHours} onChange={(e) => setNoticeHours(e.target.value)} className={FIELD} />
               </label>
               <label className="block">
                 <span className="block text-[14px] font-bold">Book up to, days</span>
-                <input type="number" min={1} max={365} value={maxDaysAhead} onChange={(e) => setMaxDaysAhead(e.target.value)} className={field} />
+                <input type="number" min={1} max={365} value={maxDaysAhead} onChange={(e) => setMaxDaysAhead(e.target.value)} className={FIELD} />
               </label>
             </div>
             <span className="block text-[12px] font-bold text-ink-soft">Buffer keeps minutes free before and after each session. Notice is how soon someone can book. The last is how far ahead the calendar opens.</span>
@@ -352,7 +352,7 @@ export function StudioProduct() {
         {p.kind === 'membership' && (
           <label className="block">
             <span className="block text-[14px] font-bold">Lasts this many months, blank for forever</span>
-            <input type="number" min={1} max={36} value={periodMonths} onChange={(e) => setPeriodMonths(e.target.value)} className={field} placeholder="Forever" />
+            <input type="number" min={1} max={36} value={periodMonths} onChange={(e) => setPeriodMonths(e.target.value)} className={FIELD} placeholder="Forever" />
             <span className="mt-xs block text-[12px] font-bold text-ink-soft">When it runs out the member sees a Renew button and buys again.</span>
           </label>
         )}
@@ -371,7 +371,7 @@ export function StudioProduct() {
             ))}
           </div>
           {faq.length < MAX_FAQ && (
-            <Button variant="outline" className="mt-xs" onClick={() => setFaq((list) => [...list, { q: '', a: '' }])}>
+            <Button variant="outline" className="mt-xs" plusToX onClick={() => setFaq((list) => [...list, { q: '', a: '' }])}>
               Add a question
             </Button>
           )}
@@ -390,7 +390,7 @@ export function StudioProduct() {
               ))}
             </div>
             {intake.length < 8 && (
-              <Button variant="outline" className="mt-xs" onClick={() => setIntake((list) => [...list, ''])}>
+              <Button variant="outline" className="mt-xs" plusToX onClick={() => setIntake((list) => [...list, ''])}>
                 Add a question
               </Button>
             )}
@@ -486,11 +486,11 @@ export function StudioProduct() {
           >
             <label className="block min-w-0 flex-1">
               <span className="block text-[12px] font-bold">Code</span>
-              <input value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase())} maxLength={24} className={field} placeholder="LAUNCH20" />
+              <input value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase())} maxLength={24} className={FIELD} placeholder="LAUNCH20" />
             </label>
             <label className="block w-[96px]">
               <span className="block text-[12px] font-bold">% off</span>
-              <input type="number" min={1} max={100} value={couponOff} onChange={(e) => setCouponOff(e.target.value)} className={field} />
+              <input type="number" min={1} max={100} value={couponOff} onChange={(e) => setCouponOff(e.target.value)} className={FIELD} />
             </label>
             <Button type="submit" disabled={addCoupon.isPending}>
               Add
@@ -508,7 +508,7 @@ export function StudioProduct() {
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {d.orders.map((o) => (
               <li key={o.id} className="rounded-tile bg-card p-sm text-[14px] font-semibold shadow-toy-soft">
-                <span className="font-bold">{o.buyerName}</span>, {o.points > 0 ? `${o.points} points` : `${(o.cents / 100).toFixed(2)} ${o.currency}, ${o.status}`}
+                <span className="font-bold">{o.buyerName}</span>, {o.points > 0 ? `${o.points} points` : `${money(o.cents, o.currency)}, ${o.status}`}
                 {o.variant === 'replay' ? ', replay' : ''}
                 {o.sourceLabel ? `, via ${o.sourceLabel}` : ''}, {new Date(o.createdAt).toLocaleDateString()}
                 {o.intake.length > 0 && (
@@ -573,7 +573,7 @@ function DraftSheet({ productId, title, open, onClose, onSaved }: { productId: s
       <div className="flex flex-col gap-md">
         <label className="block">
           <span className="block text-[14px] font-bold">Your notes, a transcript, or an outline</span>
-          <textarea value={source} onChange={(e) => setSource(e.target.value)} rows={8} maxLength={20000} className={field} placeholder={'# Lesson one\nWhat it covers, in a few lines.\nWhich cut keeps the energy up?\n- Cut on action *\n- Cut at random'} />
+          <textarea value={source} onChange={(e) => setSource(e.target.value)} rows={8} maxLength={20000} className={FIELD} placeholder={'# Lesson one\nWhat it covers, in a few lines.\nWhich cut keeps the energy up?\n- Cut on action *\n- Cut at random'} />
           <span className="mt-xs block text-[12px] font-bold text-ink-soft">With AI on the server, lessons and quizzes are written from the notes. Without it, an outline is parsed: a line starting with # is a lesson, a line ending with ? is a question, lines starting with - are its options, and * marks the right one.</span>
         </label>
         <Button variant="outline" onClick={() => preview.mutate()} disabled={preview.isPending || source.trim().length < 20}>
@@ -665,19 +665,19 @@ function LessonSheet({ productId, lesson, onClose, onSaved }: { productId: strin
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Title</span>
-          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} required className={field} />
+          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} required className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Lesson text</span>
-          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} className={field} />
+          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Video link</span>
-          <input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} className={field} placeholder="Optional" />
+          <input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} className={FIELD} placeholder="Optional" />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Drip: unlock this many days after enrolling</span>
-          <input type="number" min={0} max={365} value={drip} onChange={(e) => setDrip(e.target.value)} className={field} />
+          <input type="number" min={0} max={365} value={drip} onChange={(e) => setDrip(e.target.value)} className={FIELD} />
         </label>
 
         <fieldset className="m-0 border-0 p-0">
@@ -688,7 +688,7 @@ function LessonSheet({ productId, lesson, onClose, onSaved }: { productId: strin
               <li key={i} className="rounded-tile bg-paper p-sm">
                 <label className="block">
                   <span className="block text-[12px] font-bold">Question {i + 1}</span>
-                  <input value={qn.q} onChange={(e) => setQ(i, { q: e.target.value })} maxLength={300} className={field} />
+                  <input value={qn.q} onChange={(e) => setQ(i, { q: e.target.value })} maxLength={300} className={FIELD} />
                 </label>
                 <div className="mt-xs flex flex-col gap-xs" role="radiogroup" aria-label={`Right answer for question ${i + 1}`}>
                   {qn.options.map((o, k) => (
@@ -717,14 +717,14 @@ function LessonSheet({ productId, lesson, onClose, onSaved }: { productId: strin
             ))}
           </ol>
           {quiz.length < 20 && (
-            <Button variant="outline" className="mt-xs" onClick={() => setQuiz((list) => [...list, blankQuestion()])}>
+            <Button variant="outline" className="mt-xs" plusToX onClick={() => setQuiz((list) => [...list, blankQuestion()])}>
               Add a question
             </Button>
           )}
           {quiz.length > 0 && (
             <label className="mt-sm block">
               <span className="block text-[14px] font-bold">Percent needed to pass, zero for no gate</span>
-              <input type="number" min={0} max={100} value={passScore} onChange={(e) => setPassScore(e.target.value)} className={field} />
+              <input type="number" min={0} max={100} value={passScore} onChange={(e) => setPassScore(e.target.value)} className={FIELD} />
             </label>
           )}
         </fieldset>

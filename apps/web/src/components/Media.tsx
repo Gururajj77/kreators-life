@@ -1,5 +1,7 @@
 import { videoEmbed, type MediaItem } from '@kreators/shared';
 import { EmbedGate } from './EmbedGate';
+import { Icon } from './Icon';
+import { Play } from 'lucide-react';
 
 /** One picture, GIF or video, sized to its column. Videos play in their own player; a picture that fails to load drops out. */
 export function MediaTile({ item, className = '' }: { item: MediaItem; className?: string }) {
@@ -58,6 +60,6 @@ export function MediaCover({ items, title }: { items?: MediaItem[]; title?: stri
   const pic = items?.find((m) => m.kind !== 'video');
   const video = items?.find((m) => m.kind === 'video');
   if (pic) return <img src={pic.url} alt={pic.caption || title || ''} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="mb-sm h-[160px] w-full rounded-tile bg-paper object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />;
-  if (video) return <div className="mb-sm flex h-[160px] w-full items-center justify-center rounded-tile bg-paper text-[32px]" aria-label={title ? `${title}: has a video` : 'Has a video'} role="img">▶</div>;
+  if (video) return <div className="mb-sm flex h-[160px] w-full items-center justify-center rounded-tile bg-paper" aria-label={title ? `${title}: has a video` : 'Has a video'} role="img"><Icon icon={Play} size={32} filled /></div>;
   return null;
 }

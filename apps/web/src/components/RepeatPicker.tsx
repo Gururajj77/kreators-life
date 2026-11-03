@@ -1,6 +1,6 @@
 import { REPEAT_KINDS, MAX_REPEAT_EVERY, repeatLabel, type Repeat, type RepeatKind } from '@kreators/shared';
+import { FIELD } from '../lib/ui';
 
-const FIELD = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const pad = (n: number) => String(n).padStart(2, '0');
 const daysIn = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate();

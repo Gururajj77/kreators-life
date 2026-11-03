@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { EVENT_TYPE_META, LISTING_TYPES, type Listing, type ListingType, type PublicStats } from '@kreators/shared';
+import { EVENT_TYPE_META, LISTING_TYPES, fact, type Listing, type ListingType, type PublicStats } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { nameOf, pageOf, paged } from '../db';
 import { mediaForListings } from './media';
@@ -24,6 +24,14 @@ interface Opts {
 const when = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 const money = (min: number | null, max: number | null, cur: string) => (min === null && max === null ? null : `${cur} ${min ?? ''}${min !== null && max !== null ? ' to ' : ''}${max ?? ''}`.trim());
 
+/**
+ * Why each kind reads up to 200 rows and the page is cut after the merge, not in SQL (decided 2026-11-03, P6):
+ * the public list is seven kinds merged into one order (featured first, then newest), and the search `q` matches the
+ * words the cards are built from (facts such as "closes 4 Nov" or "tables of 6"), which exist only after a row is read.
+ * A LIMIT/OFFSET per kind would page each kind on its own and the merged pages would skip and repeat cards. Only live
+ * things are read (open rewards, upcoming events and circles, published programs), so 200 of one kind is far past what
+ * is ever open at once; the person still sees the list ten to a hundred at a time through `pageOf` on the route.
+ */
 export async function listingsFor(db: D1Database, o: Opts): Promise<Listing[]> {
   const now = new Date().toISOString();
   const today = now.slice(0, 10);
@@ -45,7 +53,7 @@ export async function listingsFor(db: D1Database, o: Opts): Promise<Listing[]> {
             title: r.title,
             by: r.brand_name || r.organization_name || 'Kreators',
             blurb: r.brief,
-            facts: [r.deliverable, r.platform || 'Any platform', r.rate_per_thousand > 0 ? `${r.rate_per_thousand} pts per 1k views` : 'Fixed reward', r.max_payout_points > 0 ? `up to ${r.max_payout_points} pts` : '', `closes ${when(r.ends_at)}`].filter(Boolean),
+            facts: [...fact('category', r.deliverable), ...fact(r.platform ? 'place' : 'online', r.platform || 'Any platform'), ...fact('price', r.rate_per_thousand > 0 ? `${r.rate_per_thousand} pts per 1k views` : 'Fixed reward'), ...fact('price', r.max_payout_points > 0 ? `up to ${r.max_payout_points} pts` : ''), ...fact('when', `closes ${when(r.ends_at)}`)],
             path: `/win/${r.id}`,
             featured: r.featured === 1,
             live: r.status === 'open' && r.ends_at >= now,
@@ -71,7 +79,7 @@ export async function listingsFor(db: D1Database, o: Opts): Promise<Listing[]> {
             title: r.title,
             by: r.organization_name ?? 'Kreators',
             blurb: r.description,
-            facts: [r.opportunity_type.replace('_', ' '), r.location_mode === 'remote' ? 'Remote' : r.location_text || r.location_mode.replace('_', ' '), pay ?? '', r.deadline ? `apply by ${when(r.deadline)}` : ''].filter(Boolean),
+            facts: [...fact('category', r.opportunity_type.replace('_', ' ')), ...(r.location_mode === 'remote' ? fact('online', 'Remote') : fact('place', r.location_text || r.location_mode.replace('_', ' '))), ...fact('price', pay), ...fact('when', r.deadline ? `apply by ${when(r.deadline)}` : '')],
             path: `/work/${r.id}`,
             featured: r.featured === 1,
             live: r.status === 'published' && (!r.deadline || r.deadline >= today),
@@ -96,7 +104,7 @@ export async function listingsFor(db: D1Database, o: Opts): Promise<Listing[]> {
             title: r.title,
             by: nameOf({ display_name: r.host_name }),
             blurb: r.description,
-            facts: [EVENT_TYPE_META[r.event_type]?.name ?? r.event_type, new Date(r.starts_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), r.online_url ? 'Online' : r.venue || '', r.price_points > 0 ? `${r.price_points} pts` : 'Free'].filter(Boolean),
+            facts: [...fact('category', EVENT_TYPE_META[r.event_type]?.name ?? r.event_type), ...fact('when', new Date(r.starts_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })), ...(r.online_url ? fact('online', 'Online') : fact('place', r.venue)), ...(r.price_points > 0 ? fact('price', `${r.price_points} pts`) : fact('free', 'Free'))],
             path: `/party/${r.id}`,
             featured: r.featured === 1,
             live: r.status === 'published' && r.ends_at >= now,
@@ -121,7 +129,7 @@ export async function listingsFor(db: D1Database, o: Opts): Promise<Listing[]> {
             title: r.name,
             by: 'Kreators School',
             blurb: r.description,
-            facts: [r.delivery_mode.replace('_', ' '), r.price_points > 0 ? `${r.price_points} pts` : r.price_cents > 0 ? `${r.currency} ${(r.price_cents / 100).toFixed(0)}` : 'Free', r.cohorts > 0 ? `${r.cohorts} cohort${r.cohorts === 1 ? '' : 's'} open` : 'cohort dates soon'].filter(Boolean),
+            facts: [...fact(r.delivery_mode === 'online' ? 'online' : 'place', r.delivery_mode.replace('_', ' ')), ...(r.price_points > 0 ? fact('price', `${r.price_points} pts`) : r.price_cents > 0 ? fact('price', `${r.currency} ${(r.price_cents / 100).toFixed(0)}`) : fact('free', 'Free')), ...fact('availability', r.cohorts > 0 ? `${r.cohorts} cohort${r.cohorts === 1 ? '' : 's'} open` : 'cohort dates soon')],
             path: `/school`,
             featured: r.featured === 1,
             live: r.published === 1,
@@ -138,7 +146,7 @@ export async function listingsFor(db: D1Database, o: Opts): Promise<Listing[]> {
         const out: Listing[] = [];
         const rows = await db.prepare(`SELECT id, name, category, url, description, affiliate, verified, created_at FROM tools WHERE 1=1 ${o.includeHidden ? '' : 'AND verified = 1'}${idClause('id')} ORDER BY name LIMIT 200`).all<{ id: string; name: string; category: string; url: string; description: string; affiliate: number; verified: number; created_at: string }>();
         for (const r of rows.results) {
-          out.push({ type: 'tool', id: r.id, title: r.name, by: r.category, blurb: r.description, facts: [r.category, r.affiliate === 1 ? 'partner link' : 'verified'].filter(Boolean), path: '/tools', featured: false, live: r.verified === 1, endsAt: null, createdAt: r.created_at });
+          out.push({ type: 'tool', id: r.id, title: r.name, by: r.category, blurb: r.description, facts: [...fact('category', r.category), ...(r.affiliate === 1 ? fact('status', 'partner link') : fact('verified', 'Verified'))], path: '/tools', featured: false, live: r.verified === 1, endsAt: null, createdAt: r.created_at });
         }
         return out;
       })()
@@ -151,7 +159,7 @@ export async function listingsFor(db: D1Database, o: Opts): Promise<Listing[]> {
           .prepare(`SELECT c.id, c.name, c.brief, c.status, c.due_date, c.public, c.created_at, o.name AS organization_name FROM campaigns c JOIN organizations o ON o.id = c.organization_id WHERE 1=1 ${o.includeHidden ? '' : "AND c.public = 1 AND c.status IN ('brief','shortlist','approved')"}${idClause('c.id')} ORDER BY c.updated_at DESC LIMIT 100`)
           .all<{ id: string; name: string; brief: string; organization_name: string; status: string; due_date: string | null; public: number; created_at: string }>();
         for (const r of rows.results) {
-          out.push({ type: 'campaign', id: r.id, title: r.name, by: r.organization_name, blurb: r.brief, facts: [r.status, r.due_date ? `due ${when(r.due_date)}` : ''].filter(Boolean), path: `/army/${r.id}`, featured: false, live: r.public === 1 && ['brief', 'shortlist', 'approved'].includes(r.status), endsAt: r.due_date, createdAt: r.created_at });
+          out.push({ type: 'campaign', id: r.id, title: r.name, by: r.organization_name, blurb: r.brief, facts: [...fact('status', r.status), ...fact('when', r.due_date ? `due ${when(r.due_date)}` : '')], path: `/army/${r.id}`, featured: false, live: r.public === 1 && ['brief', 'shortlist', 'approved'].includes(r.status), endsAt: r.due_date, createdAt: r.created_at });
         }
         return out;
       })()
@@ -170,7 +178,7 @@ export async function listingsFor(db: D1Database, o: Opts): Promise<Listing[]> {
             title: r.title,
             by: [r.area, r.city].filter(Boolean).join(', '),
             blurb: `Anonymous group of ${r.group_size}, matched by interests that fit. Red if single, white if committed. Names stay hidden; the chat opens a day before.${r.venue_hint ? ` ${r.venue_hint}` : ''}`,
-            facts: [new Date(r.starts_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), ...(r.repeat === 'weekly' ? ['every week'] : []), `${r.signups} signed up`, `tables of ${r.group_size}`],
+            facts: [...fact('when', new Date(r.starts_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })), ...fact('when', r.repeat === 'weekly' ? 'every week' : ''), ...fact('availability', `${r.signups} signed up`), ...fact('category', `tables of ${r.group_size}`)],
             path: '/circles',
             featured: false,
             live: r.status === 'open' && r.starts_at >= now,
@@ -183,7 +191,7 @@ export async function listingsFor(db: D1Database, o: Opts): Promise<Listing[]> {
     : Promise.resolve<Listing[]>([]);
   const out = (await Promise.all([kind_reward, kind_opportunity, kind_event, kind_program, kind_tool, kind_campaign, kind_circle])).flat();
   let list = out;
-  if (q) list = list.filter((l) => [l.title, l.by, l.blurb, ...l.facts].join(' ').toLowerCase().includes(q));
+  if (q) list = list.filter((l) => [l.title, l.by, l.blurb, ...l.facts.map((f) => f.text)].join(' ').toLowerCase().includes(q));
   if (o.featuredOnly) list = list.filter((l) => l.featured);
   list.sort((a, b) => Number(b.featured) - Number(a.featured) || (b.createdAt < a.createdAt ? -1 : 1));
   const shown = list.slice(0, o.limit ?? 100);

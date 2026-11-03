@@ -14,8 +14,17 @@ const toI = (r: Row): Introduction => ({ id: r.id, requesterId: r.requester_user
 bond.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
+  // Introductions page with prefix `in`; a block either way is left out in SQL, so a page is never short because of it.
+  const inAsk = pageOf(c, 'in');
   const [intros, met, blocks] = await Promise.all([
-    db.prepare(`${SELECT} WHERE i.requester_user_id = ? OR i.recipient_user_id = ? ORDER BY i.created_at DESC LIMIT 100`).bind(user.id, user.id).all<Row>(),
+    db
+      .prepare(
+        `${SELECT} WHERE (i.requester_user_id = ?1 OR i.recipient_user_id = ?1)
+           AND NOT EXISTS (SELECT 1 FROM blocks k WHERE (k.blocker_id = ?1 AND k.blocked_id IN (i.requester_user_id, i.recipient_user_id)))
+         ORDER BY i.created_at DESC LIMIT ?2 OFFSET ?3`,
+      )
+      .bind(user.id, inAsk.limit, inAsk.offset)
+      .all<Row>(),
     user.open_to_intros === 1
       ? db
           .prepare(
@@ -29,9 +38,11 @@ bond.get('/', async (c) => {
     db.prepare('SELECT blocked_id FROM blocks WHERE blocker_id = ?').bind(user.id).all<{ blocked_id: string }>(),
   ]);
   const blocked = new Set(blocks.results.map((b) => b.blocked_id));
+  const introPage = paged(intros.results, inAsk);
   return c.json({
     optedIn: user.open_to_intros === 1,
-    intros: intros.results.map(toI).filter((i) => !blocked.has(i.requesterId) && !blocked.has(i.recipientId)),
+    intros: introPage.items.map(toI),
+    introPage: introPage.page,
     suggestions: met.results.filter((m) => !blocked.has(m.id)).map((m) => ({ userId: m.id, name: nameOf(m), handle: m.handle, skills: parseList(m.skills).slice(0, 3), context: `Met at ${m.event_title}` })),
   });
 });

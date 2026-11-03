@@ -1,5 +1,7 @@
 import { youtubeId, type LinkBlock } from '@kreators/shared';
 import { EmbedGate } from './EmbedGate';
+import { Icon } from './Icon';
+import { GalleryHorizontal, Play, ChevronRight } from 'lucide-react';
 
 /**
  * The link blocks on a public page, the way the creator stacked them: buttons, headers, text,
@@ -20,11 +22,9 @@ export function LinkBlocks({ blocks, onOpen }: { blocks: LinkBlock[]; onOpen?: (
         {blocks.map((b) => (
           <li key={b.id}>
             {b.type === 'link' && (
-              <a href={b.url} target="_blank" rel="noreferrer" onClick={open(b.id)} className={`toy flex min-h-[56px] items-center justify-between gap-sm rounded-pill px-md text-[16px] font-bold ${b.featured ? 'toy-soft bg-r3 text-on-yellow' : 'bg-card text-ink shadow-toy-soft'}`}>
+              <a href={b.url} target="_blank" rel="noreferrer" onClick={open(b.id)} className={`group toy flex min-h-[56px] items-center justify-between gap-sm rounded-pill px-md text-[16px] font-bold ${b.featured ? 'toy-soft bg-r3 text-on-yellow' : 'bg-card text-ink shadow-toy-soft'}`}>
                 <span className="min-w-0 flex-1 truncate text-center">{b.title || b.url}</span>
-                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-                  <path d="M9 5l7 7-7 7" />
-                </svg>
+                <Icon icon={ChevronRight} size={18} strokeWidth={3} className="transition-transform motion-safe:group-hover:translate-x-xs shrink-0" />
               </a>
             )}
             {b.type === 'header' && <h2 className="mt-sm text-center text-[18px]">{b.title}</h2>}
@@ -51,7 +51,7 @@ export function LinkBlocks({ blocks, onOpen }: { blocks: LinkBlock[]; onOpen?: (
                 </div>
               ) : (
                 <a href={b.url} target="_blank" rel="noreferrer" onClick={open(b.id)} className="toy flex min-h-[56px] items-center justify-center gap-xs rounded-pill bg-card px-md text-[16px] font-bold text-ink shadow-toy-soft">
-                  <span aria-hidden="true">▶️</span>
+                  <Icon icon={Play} size={16} filled />
                   {b.title || 'Watch'}
                 </a>
               ))}
@@ -63,7 +63,7 @@ export function LinkBlocks({ blocks, onOpen }: { blocks: LinkBlock[]; onOpen?: (
                   {b.items.map((it) => {
                     const card = (
                       <>
-                        {it.image ? <img src={it.image} alt={it.title} loading="lazy" decoding="async" onError={hide} className="block aspect-[4/5] w-full object-cover" /> : <span className="flex aspect-[4/5] w-full items-center justify-center bg-paper text-[32px]" aria-hidden="true">🎠</span>}
+                        {it.image ? <img src={it.image} alt={it.title} loading="lazy" decoding="async" onError={hide} className="block aspect-[4/5] w-full object-cover" /> : <span className="flex aspect-[4/5] w-full items-center justify-center bg-paper" aria-hidden="true"><Icon icon={GalleryHorizontal} size={32} /></span>}
                         {it.title && <span className="block p-sm text-[14px] font-bold">{it.title}</span>}
                       </>
                     );

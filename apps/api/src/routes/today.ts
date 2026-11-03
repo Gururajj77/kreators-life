@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
-import { MONTH_RE, MONTH_TASKS_MAX, monthShift, repeatLabel, type MonthProject, type MonthTask, type TodayMonthResponse, PLAN_DAY_MINUTES, planWeek, type PlanTask, MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, notToDoStreak, notToDoWeek, POINTS, RELATIONSHIPS, sparkFor, XP, zonedToUtc, type CheckinResponse, type NotToDo, type NotToDoStatus, type RelationshipKey, type TodayResponse } from '@kreators/shared';
+import { MONTH_RE, MONTH_TASKS_MAX, monthShift, repeatLabel, type MonthProject, type MonthTask, type TodayMonthResponse, PLAN_DAY_MINUTES, planWeek, type PlanTask, MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, notToDoStreak, notToDoWeek, POINTS, RELATIONSHIPS, sparkFor, XP, zonedToUtc, type CheckinResponse, type NotToDo, type NotToDoStatus, type RelationshipKey, TODAY_AGENCY_MAX, type TodayAgency, type TodayEvent, type TodayResponse } from '@kreators/shared';
 import type { AppEnv } from '../env';
+import { resolveAccess } from '../access';
 import { DATE_RE, dateNearToday, getUser, newId, notify, nowIso, shiftDate, toNode, type NodeRow, taskGate, withSubtasks } from '../db';
 
 export const today = new Hono<AppEnv>();
@@ -69,6 +70,78 @@ export async function notToDoList(db: D1Database, userId: string, date: string):
   return rows.results.map((r) => toNotToDo(r, byItem.get(r.id) ?? {}, date));
 }
 
+/**
+ * What the person signed up for that starts on their day: Party events they are registered for, runs of clubs they belong to and circle
+ * tables they are seated at. A title, a time and a link only; the person's own rows, by the session's id.
+ */
+export async function eventsOnDay(db: D1Database, userId: string, dayStart: string, dayEnd: string): Promise<TodayEvent[]> {
+  const rows = await db
+    .prepare(
+      `SELECT kind, title, starts_at, path FROM (
+         SELECT 'event' AS kind, e.title, e.starts_at, '/party/' || e.id AS path FROM events e JOIN event_registrations r ON r.event_id = e.id
+           WHERE r.user_id = ?1 AND r.status IN ('registered', 'attended') AND e.status = 'published' AND e.starts_at >= ?2 AND e.starts_at < ?3
+         UNION ALL SELECT 'circle', e.title, e.starts_at, '/circles/' || g.id FROM circle_events e JOIN circle_groups g ON g.event_id = e.id JOIN circle_members m ON m.group_id = g.id
+           WHERE m.user_id = ?1 AND e.status != 'cancelled' AND e.starts_at >= ?2 AND e.starts_at < ?3
+         UNION ALL SELECT 'run', r.title, r.starts_at, '/run/clubs/' || r.club_id FROM runs r JOIN run_members m ON m.club_id = r.club_id AND m.status = 'member' AND m.user_id = ?1
+           WHERE r.status IN ('published', 'done') AND r.starts_at >= ?2 AND r.starts_at < ?3
+       ) ORDER BY starts_at LIMIT 10`,
+    )
+    .bind(userId, dayStart, dayEnd)
+    .all<{ kind: TodayEvent['kind']; title: string; starts_at: string; path: string }>();
+  return rows.results.map((r) => ({ kind: r.kind, title: r.title, at: r.starts_at, path: r.path }));
+}
+
+/**
+ * Agency work waiting on the person on their day: pieces due that day or before and not yet approved, the changes clients asked for that
+ * are still in making, retainers a client chose that wait to be confirmed, and sent invoices due that day or before. Owner only (every
+ * query filters by the session's id), bounded to TODAY_AGENCY_MAX rows a list, titles, numbers and client names only: never a note,
+ * a fee or what a client wrote.
+ */
+export async function agencyToday(db: D1Database, userId: string, date: string): Promise<TodayAgency> {
+  const fortnight = new Date(Date.now() - 14 * 86_400_000).toISOString();
+  const [due, dueTotal, changes, retainers, invoices] = await Promise.all([
+    db
+      .prepare(
+        `SELECT i.id, i.title, i.client_id, i.due_date, k.name AS client FROM agency_items i JOIN agency_clients k ON k.id = i.client_id AND k.user_id = i.user_id
+         WHERE i.user_id = ? AND i.stage NOT IN ('approved', 'published') AND i.due_date IS NOT NULL AND i.due_date <= ? AND k.status != 'ended'
+         ORDER BY i.due_date ASC, i.created_at ASC LIMIT ?`,
+      )
+      .bind(userId, date, TODAY_AGENCY_MAX)
+      .all<{ id: string; title: string; client_id: string; due_date: string; client: string }>(),
+    db
+      .prepare("SELECT COUNT(*) AS n FROM agency_items i JOIN agency_clients k ON k.id = i.client_id AND k.user_id = i.user_id WHERE i.user_id = ? AND i.stage NOT IN ('approved', 'published') AND i.due_date IS NOT NULL AND i.due_date <= ? AND k.status != 'ended'")
+      .bind(userId, date)
+      .first<{ n: number }>(),
+    db
+      .prepare(
+        "SELECT COUNT(DISTINCT i.id) AS n, COUNT(DISTINCT i.client_id) AS clients, MIN(i.client_id) AS client_id FROM agency_notes n JOIN agency_items i ON i.id = n.item_id AND i.user_id = n.user_id WHERE n.user_id = ? AND n.kind = 'change' AND n.created_at >= ? AND i.stage = 'making'",
+      )
+      .bind(userId, fortnight)
+      .first<{ n: number; clients: number; client_id: string | null }>(),
+    db
+      .prepare("SELECT r.id, r.client_id, r.months, k.name AS client FROM agency_retainers r JOIN agency_clients k ON k.id = r.client_id AND k.user_id = r.user_id WHERE r.user_id = ? AND r.status = 'chosen' ORDER BY r.chosen_at ASC LIMIT ?")
+      .bind(userId, TODAY_AGENCY_MAX)
+      .all<{ id: string; client_id: string; months: number | null; client: string }>(),
+    db
+      .prepare(
+        `SELECT i.id, i.number, i.agency_client_id, i.due_date, i.total_cents, i.currency, COALESCE(k.name, i.client_name) AS client FROM invoices i
+         LEFT JOIN agency_clients k ON k.id = i.agency_client_id AND k.user_id = i.user_id
+         WHERE i.user_id = ? AND i.status = 'sent' AND i.agency_client_id IS NOT NULL AND i.due_date IS NOT NULL AND i.due_date <= ?
+         ORDER BY i.due_date ASC LIMIT ?`,
+      )
+      .bind(userId, date, TODAY_AGENCY_MAX)
+      .all<{ id: string; number: string; agency_client_id: string | null; due_date: string; total_cents: number; currency: string; client: string }>(),
+  ]);
+  return {
+    due: due.results.map((r) => ({ id: r.id, title: r.title, clientId: r.client_id, client: r.client, due: r.due_date, late: r.due_date < date })),
+    dueTotal: dueTotal?.n ?? due.results.length,
+    changeAsks: changes?.n ?? 0,
+    changeClientId: changes && changes.clients === 1 ? changes.client_id : null,
+    retainerToConfirm: retainers.results.map((r) => ({ id: r.id, clientId: r.client_id, client: r.client, months: r.months })),
+    invoicesDue: invoices.results.map((r) => ({ id: r.id, number: r.number, clientId: r.agency_client_id, client: r.client, due: r.due_date, late: r.due_date < date, cents: r.total_cents, currency: r.currency })),
+  };
+}
+
 today.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
@@ -76,7 +149,7 @@ today.get('/', async (c) => {
 
   // None of these reads waits on another, so they run together: one round trip of waiting instead of a dozen.
   const [dayStart, dayEnd] = dayBounds(date, user.timezone);
-  const [due, plan, back, backTotal, doneToday, recent, gate, relationship, sparkDone, notToDo] = await Promise.all([
+  const [due, plan, back, backTotal, doneToday, recent, gate, relationship, sparkDone, notToDo, events, access] = await Promise.all([
     db
       .prepare(
         `SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) IS NOT NULL AND COALESCE(do_date, due_date) <= ?
@@ -122,6 +195,8 @@ today.get('/', async (c) => {
       .bind(user.id, date)
       .first<{ relationship: RelationshipKey }>(),
     notToDoList(db, user.id, date),
+    eventsOnDay(db, user.id, dayStart, dayEnd),
+    resolveAccess(db, user).then((r) => r.access),
     // A gentle nudge in the inbox, once a day, when a reminder time is set and
     // the day's check-in has not happened yet.
     (async () => {
@@ -151,7 +226,10 @@ today.get('/', async (c) => {
       done: Boolean(sparkDone),
     },
     notToDo,
+    events,
   };
+  // Agency's work for the day is read only while Agency is on for the person; with it off the field is absent.
+  if (access.agency?.on === true) res.agency = await agencyToday(db, user.id, date);
   return c.json(res);
 });
 

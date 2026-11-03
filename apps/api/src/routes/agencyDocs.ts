@@ -15,7 +15,9 @@ import {
   INVOICE_STARTER_BY_KEY,
   invoiceTemplateDoc,
   MAX_TEMPLATES,
+  DOC_TEMPLATE_KINDS,
   TEMPLATE_KINDS,
+  type DocTemplateKind,
   TEMPLATE_NAME_MAX,
   templateSummary,
   type AgencyTemplate,
@@ -36,17 +38,23 @@ import {
   parseInvoiceDoc,
   type AgencyContract,
   type ContractAnswer,
+  type ContractClientFacts,
   type ContractDoc,
+  type ContractSection,
   type ContractListItem,
   type ContractStatus,
   type InvoiceDoc,
   type InvoiceItem,
   type PublicContract,
+  monthName,
+  tdsGrossupNote,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { audit, DATE_RE, dayFromDevice, nameOf, newId, notify, nowIso, num, oneOf, pageOf, paged, randomCode, shiftDate, str } from '../db';
+import { audit, dayFromDevice, nameOf, newId, notify, nowIso, num, oneOf, pageOf, paged, randomCode, shiftDate, str } from '../db';
+import { dateOrNull } from '../agencyUtil';
 import { createInvoice, INV_SELECT, nextNumberAfter, setInvoiceStatus, toInvoice, updateDraftInvoice, type InvRow } from './finance';
 import { billingOf, settingsFor } from './agency';
+import { parseEmailNote } from '@kreators/shared/agencyEmail';
 import { coverFrom, emailCopy, emailProblem, logDoc, maskEmail, ownLogo, publicUrl } from '../agencyPaper';
 
 /**
@@ -56,8 +64,8 @@ import { coverFrom, emailCopy, emailProblem, logDoc, maskEmail, ownLogo, publicU
 export const agencyDocs = new Hono<AppEnv>();
 export const contractsPublic = new Hono<AppEnv>();
 
-const dayOf = (c: { req: { query: (k: string) => string | undefined } }) => dayFromDevice(c.req.query('day'));
-const dateOrNull = (v: unknown): string | null => (typeof v === 'string' && DATE_RE.test(v) ? v : null);
+/** The day the request's device is on (`?day=`), else today in UTC: what a new invoice's dates count from. */
+const deviceDay = (c: { req: { query: (k: string) => string | undefined } }) => dayFromDevice(c.req.query('day'));
 
 export function itemsIn(v: unknown): InvoiceItem[] {
   return (Array.isArray(v) ? v : [])
@@ -67,12 +75,73 @@ export function itemsIn(v: unknown): InvoiceItem[] {
     .slice(0, MAX_INVOICE_LINES);
 }
 
-export interface ClientBits { id: string; name: string; contact_name: string; contact_email: string; billing_json: string }
+export interface ClientBits {
+  id: string;
+  name: string;
+  contact_name: string;
+  contact_email: string;
+  billing_json: string;
+  channels_json?: string;
+  pieces_per_month?: number;
+  hours_per_month?: number;
+  revisions_per_piece?: number;
+  retainer_cents?: number;
+}
 export async function clientBits(db: D1Database, userId: string, id: unknown): Promise<ClientBits | null> {
   if (typeof id !== 'string' || !id) return null;
-  return db.prepare('SELECT id, name, contact_name, contact_email, billing_json FROM agency_clients WHERE id = ? AND user_id = ?').bind(id, userId).first<ClientBits>();
+  return db
+    .prepare('SELECT id, name, contact_name, contact_email, billing_json, channels_json, pieces_per_month, hours_per_month, revisions_per_piece, retainer_cents FROM agency_clients WHERE id = ? AND user_id = ?')
+    .bind(id, userId)
+    .first<ClientBits>();
 }
 
+/** Everything a client's record already answers for a new document, so nothing it knows is asked again (contractVarsFor). */
+export function clientFacts(client: ClientBits, currency: string): ContractClientFacts {
+  let channels: string[] = [];
+  try {
+    const v = JSON.parse(client.channels_json || '[]') as unknown;
+    if (Array.isArray(v)) channels = v.filter((x): x is string => typeof x === 'string');
+  } catch {
+    channels = [];
+  }
+  return {
+    name: client.name,
+    address: billingOf(client).address,
+    contactName: client.contact_name,
+    channels,
+    piecesPerMonth: client.pieces_per_month ?? 0,
+    hoursPerMonth: client.hours_per_month ?? 0,
+    revisionsPerPiece: client.revisions_per_piece,
+    retainerCents: client.retainer_cents ?? 0,
+    currency,
+  };
+}
+
+
+/** A retainer agreement's fee table starts from the client's own retainer: its pieces a month and its monthly fee. Other tables stay as they are. */
+export function fillRetainerFee(sections: ContractSection[], client: ClientBits | null): ContractSection[] {
+  if (!client) return sections;
+  return sections.map((s) => {
+    if (s.kind !== 'packages' || s.id !== 'fees' || (s.packages ?? []).length !== 1) return s;
+    const p = s.packages![0]!;
+    if (p.name !== 'Monthly retainer') return s;
+    return { ...s, packages: [{ ...p, units: (client.pieces_per_month ?? 0) > 0 ? client.pieces_per_month! : p.units, feeCents: (client.retainer_cents ?? 0) > 0 ? client.retainer_cents! : p.feeCents }] };
+  });
+}
+
+/** A built-in invoice's lines, priced from what the client's record already says, so the first draft needs no typing. */
+export function starterItems(items: InvoiceItem[], key: string, client: ClientBits, month: string): InvoiceItem[] {
+  const fee = client.retainer_cents ?? 0;
+  const pieces = client.pieces_per_month ?? 0;
+  return items.map((i) => {
+    if (key === 'retainer') return { ...i, description: `Monthly retainer, ${monthName(month)}`, unitCents: fee > 0 ? fee : i.unitCents };
+    if (key === 'per-piece') return { ...i, quantity: pieces > 0 ? pieces : i.quantity, unitCents: fee > 0 && pieces > 0 ? Math.round(fee / pieces) : i.unitCents };
+    if (key === 'advance' && fee > 0) return { ...i, unitCents: fee };
+    // The one-line invoice starts at the month's fee too, so a first draft (and the email sent with it) never says "for ₹0".
+    if (key === 'standard' && fee > 0 && i.unitCents === 0) return { ...i, description: `Content services, ${monthName(month)}`, unitCents: fee };
+    return i;
+  });
+}
 
 // ---- the person's own templates
 
@@ -82,6 +151,11 @@ export function templateDoc(r: Pick<TemplateRow, 'kind' | 'doc_json' | 'items_js
   return r.kind === 'invoice' ? { invoice: parseInvoiceDoc(jsonOr<unknown>(r.doc_json, {})), contract: null, items } : { invoice: null, contract: parseContractDoc(jsonOr<unknown>(r.doc_json, null)), items };
 }
 function toTemplate(r: TemplateRow, scope: 'own' | 'house' = 'own'): AgencyTemplate {
+  if (r.kind === 'email') {
+    // An email note keeps its subject and words only; the summary is the subject, or the first line when there is none.
+    const note = parseEmailNote(jsonOr<unknown>(r.doc_json, {})) ?? { subject: '', message: '' };
+    return { id: r.id, scope, kind: r.kind, name: r.name, summary: note.subject || note.message.split('\n')[0]!.slice(0, 80), email: note, createdAt: r.created_at, updatedAt: r.updated_at };
+  }
   const t = templateDoc(r);
   const doc = (t.invoice ?? t.contract)!;
   return { id: r.id, scope, kind: r.kind, name: r.name, summary: doc ? templateSummary(r.kind, doc, t.items) : '', createdAt: r.created_at, updatedAt: r.updated_at };
@@ -89,8 +163,8 @@ function toTemplate(r: TemplateRow, scope: 'own' | 'house' = 'own'): AgencyTempl
 
 // ---- house templates: made by the super admin for every Agency user, read only here, copied into the person's own documents
 
-export interface HouseRow { id: string; kind: TemplateKind; name: string; doc_json: string; items_json: string; include_business: number; status: 'active' | 'retired'; created_by: string | null; created_at: string; updated_at: string }
-export async function activeHouse(db: D1Database, id: unknown, kind: TemplateKind): Promise<HouseRow | null> {
+export interface HouseRow { id: string; kind: DocTemplateKind; name: string; doc_json: string; items_json: string; include_business: number; status: 'active' | 'retired'; created_by: string | null; created_at: string; updated_at: string }
+export async function activeHouse(db: D1Database, id: unknown, kind: DocTemplateKind): Promise<HouseRow | null> {
   if (typeof id !== 'string' || !id) return null;
   return db.prepare("SELECT * FROM agency_house_templates WHERE id = ? AND kind = ? AND status = 'active'").bind(id, kind).first<HouseRow>();
 }
@@ -109,12 +183,12 @@ export function houseContract(row: HouseRow, profile: BusinessProfile): Contract
   const mine = parseDocStyle(profile.docStyle);
   return { ...doc, style: { ...parseDocStyle(doc.style), logo: mine.logo, footer: mine.footer } };
 }
-export async function ownTemplate(db: D1Database, userId: string, id: unknown, kind: TemplateKind): Promise<TemplateRow | null> {
+export async function ownTemplate(db: D1Database, userId: string, id: unknown, kind: DocTemplateKind): Promise<TemplateRow | null> {
   if (typeof id !== 'string' || !id) return null;
   return db.prepare('SELECT * FROM agency_templates WHERE id = ? AND user_id = ? AND kind = ?').bind(id, userId, kind).first<TemplateRow>();
 }
 /** What a template takes from an invoice or an agreement of the person's: its look and lines (never who it was for), or its sections (never the names). */
-export async function snapshotOf(db: D1Database, userId: string, kind: TemplateKind, fromId: string): Promise<{ doc: unknown; items: InvoiceItem[] } | null> {
+export async function snapshotOf(db: D1Database, userId: string, kind: DocTemplateKind, fromId: string): Promise<{ doc: unknown; items: InvoiceItem[] } | null> {
   if (kind === 'doc') {
     const row = await db.prepare('SELECT body_json FROM agency_docs WHERE id = ? AND user_id = ?').bind(fromId, userId).first<{ body_json: string }>();
     return row ? { doc: contractTemplateDoc(docOf(row.body_json)), items: [] } : null;
@@ -146,12 +220,30 @@ agencyDocs.get('/templates', async (c) => {
   return c.json({ templates: [...own.results.map((r) => toTemplate(r)), ...house.results.map((r) => toTemplate(r, 'house'))] });
 });
 
+/** How many own templates of a kind the person has: each kind holds up to `MAX_TEMPLATES`. */
+async function templateCount(db: D1Database, userId: string, kind: TemplateKind): Promise<number> {
+  const n = await db.prepare('SELECT COUNT(*) AS n FROM agency_templates WHERE user_id = ? AND kind = ?').bind(userId, kind).first<{ n: number }>();
+  return n?.n ?? 0;
+}
+
 // Save one of the person's invoices or agreements as a template, or replace what an existing template holds with it.
+// An email note (`kind: 'email'`) is kept from the words sent with it: `{ name, subject, message }`, plain text, through `parseEmailNote`.
 agencyDocs.post('/templates', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
-  let kind = oneOf(body.kind, TEMPLATE_KINDS, 'invoice');
+  if (body.kind === 'email') {
+    const name = str(body.name, TEMPLATE_NAME_MAX);
+    if (!name) return c.json({ error: 'give it a name' }, 400);
+    const note = parseEmailNote(body);
+    if (!note) return c.json({ error: 'write the email first' }, 400);
+    if ((await templateCount(db, user.id, 'email')) >= MAX_TEMPLATES) return c.json({ error: `up to ${MAX_TEMPLATES} email notes; remove one first` }, 400);
+    const id = newId();
+    const now = nowIso();
+    await db.prepare("INSERT INTO agency_templates (id, user_id, kind, name, doc_json, items_json, created_at, updated_at) VALUES (?, ?, 'email', ?, ?, '[]', ?, ?)").bind(id, user.id, name, JSON.stringify(note), now, now).run();
+    return c.json({ id }, 201);
+  }
+  let kind: DocTemplateKind = oneOf(body.kind, DOC_TEMPLATE_KINDS, 'invoice');
   // A house template can be copied into the person's own templates; the copy is theirs to change.
   const fromHouse = typeof body.houseId === 'string' ? await db.prepare("SELECT * FROM agency_house_templates WHERE id = ? AND status = 'active'").bind(body.houseId).first<HouseRow>() : null;
   if (typeof body.houseId === 'string' && !fromHouse) return c.json({ error: 'that house template is not here any more' }, 404);
@@ -160,8 +252,7 @@ agencyDocs.post('/templates', async (c) => {
   if (!name) return c.json({ error: 'give it a name' }, 400);
   const snap = fromHouse ? { doc: JSON.parse(fromHouse.doc_json) as unknown, items: itemsIn(jsonOr<unknown>(fromHouse.items_json, [])) } : typeof body.fromId === 'string' ? await snapshotOf(db, user.id, kind, body.fromId) : null;
   if (!snap) return c.json({ error: kind === 'invoice' ? 'pick one of your invoices' : kind === 'doc' ? 'pick one of your documents' : 'pick one of your agreements' }, 400);
-  const n = await db.prepare('SELECT COUNT(*) AS n FROM agency_templates WHERE user_id = ? AND kind = ?').bind(user.id, kind).first<{ n: number }>();
-  if ((n?.n ?? 0) >= MAX_TEMPLATES) return c.json({ error: `up to ${MAX_TEMPLATES} templates; remove one first` }, 400);
+  if ((await templateCount(db, user.id, kind)) >= MAX_TEMPLATES) return c.json({ error: `up to ${MAX_TEMPLATES} templates; remove one first` }, 400);
   const id = newId();
   const now = nowIso();
   await db.prepare('INSERT INTO agency_templates (id, user_id, kind, name, doc_json, items_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(id, user.id, kind, name, JSON.stringify(snap.doc), JSON.stringify(snap.items), now, now).run();
@@ -178,7 +269,15 @@ agencyDocs.patch('/templates/:id', async (c) => {
   if (!name) return c.json({ error: 'give it a name' }, 400);
   let doc = row.doc_json;
   let items = row.items_json;
-  if (typeof body.fromId === 'string') {
+  if (row.kind === 'email') {
+    // A note's words change only when new ones are sent; a rename alone keeps them.
+    if ('message' in body || 'subject' in body) {
+      const old = parseEmailNote(jsonOr<unknown>(row.doc_json, {})) ?? { subject: '', message: '' };
+      const note = parseEmailNote({ subject: 'subject' in body ? body.subject : old.subject, message: 'message' in body ? body.message : old.message });
+      if (!note) return c.json({ error: 'write the email first' }, 400);
+      doc = JSON.stringify(note);
+    }
+  } else if (typeof body.fromId === 'string') {
     const snap = await snapshotOf(db, user.id, row.kind, body.fromId);
     if (!snap) return c.json({ error: 'pick one of yours' }, 400);
     doc = JSON.stringify(snap.doc);
@@ -271,8 +370,10 @@ agencyDocs.post('/invoices', async (c) => {
     base = { ...t.invoice!, from: t.invoice!.from.name ? t.invoice!.from : settings.profile.from, bank: t.invoice!.bank.account || t.invoice!.bank.upi ? t.invoice!.bank : settings.profile.bank, to: billingOf(client) };
     starting = t.items;
   } else if (starter) {
-    base = { ...base, title: starter.title, footnote: starter.footnote || base.footnote };
-    starting = starter.items;
+    // The advance starter's TDS line carries the person's own rate, and is left off when they have none.
+    const footnote = starter.key === 'advance' ? (settings.profile.tdsBps > 0 ? tdsGrossupNote(settings.profile.tdsBps) : '') : starter.footnote;
+    base = { ...base, title: starter.title, footnote: footnote || base.footnote };
+    starting = starterItems(starter.items, starter.key, client, deviceDay(c).slice(0, 7));
   }
   const parsed = parseInvoiceDoc(body.doc, base);
   const doc = house ? parsed : await ownLogo(db, user.id, parsed, parseDocStyle(base.style).logo);
@@ -282,8 +383,8 @@ agencyDocs.post('/invoices', async (c) => {
     clientName: client.name,
     clientEmail: doc.to.email || client.contact_email,
     items,
-    dueDate: dateOrNull(body.dueDate) ?? shiftDate(dayOf(c), settings.profile.payDays),
-    issueDate: dateOrNull(body.issueDate) ?? dayOf(c),
+    dueDate: dateOrNull(body.dueDate) ?? shiftDate(deviceDay(c), settings.profile.payDays),
+    issueDate: dateOrNull(body.issueDate) ?? deviceDay(c),
     note: str(body.note, 500),
     currency: settings.currency,
     agencyClientId: client.id,
@@ -300,7 +401,7 @@ agencyDocs.post('/clients/:id/invoice', async (c) => {
   const row = await db.prepare('SELECT id, name, contact_name, contact_email, billing_json, retainer_cents FROM agency_clients WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).first<ClientBits & { retainer_cents: number }>();
   if (!row) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<{ month?: string }>().catch(() => ({}) as { month?: string });
-  const month = body.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(body.month) ? body.month : dayOf(c).slice(0, 7);
+  const month = body.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(body.month) ? body.month : deviceDay(c).slice(0, 7);
   const { start, end } = monthBounds(month);
   const fees = await db
     .prepare("SELECT title, fee_cents FROM agency_items WHERE client_id = ? AND user_id = ? AND stage = 'published' AND fee_cents > 0 AND published_day >= ? AND published_day <= ? ORDER BY published_day LIMIT 29")
@@ -315,8 +416,8 @@ agencyDocs.post('/clients/:id/invoice', async (c) => {
     clientName: row.name,
     clientEmail: row.contact_email,
     items,
-    dueDate: shiftDate(dayOf(c), settings.profile.payDays),
-    issueDate: dayOf(c),
+    dueDate: shiftDate(deviceDay(c), settings.profile.payDays),
+    issueDate: deviceDay(c),
     note: '',
     currency: settings.currency,
     agencyClientId: row.id,
@@ -381,7 +482,7 @@ agencyDocs.post('/invoices/:id/duplicate', async (c) => {
   if (!row) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
   const prev = toInvoice(row);
-  const issueDate = dateOrNull(body.issueDate) ?? dayOf(c);
+  const issueDate = dateOrNull(body.issueDate) ?? deviceDay(c);
   const gap = prev.dueDate ? Math.max(0, Math.round((Date.parse(`${prev.dueDate}T00:00:00Z`) - Date.parse(`${prev.issueDate}T00:00:00Z`)) / 86_400_000)) : null;
   const dueDate = 'dueDate' in body ? dateOrNull(body.dueDate) : gap === null ? null : shiftDate(issueDate, gap);
   const months = (Number(issueDate.slice(0, 4)) - Number(prev.issueDate.slice(0, 4))) * 12 + (Number(issueDate.slice(5, 7)) - Number(prev.issueDate.slice(5, 7)));
@@ -537,14 +638,14 @@ agencyDocs.post('/contracts', async (c) => {
   const n = await db.prepare('SELECT COUNT(*) AS n FROM agency_contracts WHERE user_id = ?').bind(user.id).first<{ n: number }>();
   if ((n?.n ?? 0) >= MAX_CONTRACTS) return c.json({ error: 'too many agreements; remove some first' }, 400);
   const settings = settings0 ?? (await settingsFor(db, user.id));
-  const billing = client ? billingOf(client) : null;
   // A built-in or own template takes the person's default look unless it has its own; a house template already carries the look it was given.
   const baseStyle = parseDocStyle(template.doc.style, parseDocStyle(settings.profile.docStyle));
   const doc: ContractDoc = await ownLogo(db, user.id, {
     ...structuredClone(template.doc),
     currency: settings.currency,
-    vars: contractVarsFor(settings.profile, client ? { name: client.name, address: billing?.address ?? '', contactName: client.contact_name } : null),
+    vars: contractVarsFor(settings.profile, client ? clientFacts(client, settings.currency) : null),
     style: baseStyle,
+    sections: fillRetainerFee(structuredClone(template.doc).sections, client),
   }, houseRow ? baseStyle.logo : '');
   const id = newId();
   const now = nowIso();
@@ -721,7 +822,8 @@ contractsPublic.get('/:token', async (c) => {
   const view: PublicContract = {
     ref: docRef('AGR', row.id),
     sentAt: row.sent_at,
-    ownerName: nameOf({ display_name: row.owner_name }),
+    // The client meets the business that sent it (the name on the paper), not the account's own display name.
+    ownerName: doc.vars?.providerBusiness?.trim() || nameOf({ display_name: row.owner_name }),
     status: row.status,
     revisedAt: row.revised_at,
     comments: comments.results.map((r): DocComment => ({ id: r.id, author: r.author, body: r.body, createdAt: r.created_at })),

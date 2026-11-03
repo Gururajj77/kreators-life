@@ -1,5 +1,5 @@
 import { parseDocStyle, type DocStyle } from '@kreators/shared';
-import { EMAIL_NOTE_MAX } from '@kreators/shared/agencyEmail';
+import { parseEmailNote } from '@kreators/shared/agencyEmail';
 import type { Env } from './env';
 import { newId, nowIso } from './db';
 import { sendEmail } from './ops';
@@ -58,10 +58,8 @@ export interface EmailedCopy {
  * shared notes keep to, and the subject made one line so it can never add a header. Nothing here is trusted as markup: the mail is plain text.
  */
 export function coverFrom(body: Record<string, unknown>): { message: string; subject: string } | null {
-  const message = typeof body.message === 'string' ? body.message.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim().slice(0, EMAIL_NOTE_MAX) : '';
-  if (!message) return null;
-  const subject = typeof body.subject === 'string' ? body.subject.replace(/[\u0000-\u001F\u007F]+/g, ' ').trim().slice(0, 200) : '';
-  return { message, subject };
+  // The same reader a saved email note goes through, so what is sent and what is kept follow one rule.
+  return parseEmailNote(body);
 }
 
 export async function emailCopy(db: D1Database, env: Env, userId: string, msg: { to: string; subject: string; intro: string; text: string; link: string; replyTo?: string }): Promise<EmailedCopy> {

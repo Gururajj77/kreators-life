@@ -29,8 +29,9 @@ import { Inert } from './Inert';
 import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
 import { Toggle } from './Toggle';
+import { FIELD } from '../lib/ui';
+import { FieldLabel } from './Field';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 
 const COPY = {
   addTitle: 'Add a deliverable',
@@ -70,16 +71,6 @@ export function parseMinutes(v: string): number {
   if (hours) return Math.round(Number(hours[1]) * 60);
   const n = Math.round(Number(t.replace(/m$/, '')));
   return Number.isFinite(n) && n > 0 ? n : 0;
-}
-
-function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
-  return (
-    <label className="mt-sm block text-[14px] font-bold">
-      {label}
-      {children}
-      {hint && <span className="mt-xs block text-[12px] font-semibold text-ink-soft">{hint}</span>}
-    </label>
-  );
 }
 
 /** One deliverable: its details, stage, notes thread, time, and the Army send and sync when it is linked. `item` null with `clientId` adds one. */
@@ -144,8 +135,8 @@ function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | 
         }}
       >
         {!item && !clientId && (
-          <Field label="Client">
-            <select value={client} onChange={(e) => setClient(e.target.value)} required className={field}>
+          <FieldLabel className="mt-sm" label="Client">
+            <select value={client} onChange={(e) => setClient(e.target.value)} required className={FIELD}>
               <option value="">{COPY.pickClient}</option>
               {clients.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -153,58 +144,58 @@ function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | 
                 </option>
               ))}
             </select>
-          </Field>
+          </FieldLabel>
         )}
         {item && <p className="m-0 text-[14px] font-bold text-ink-soft">For {item.clientName}</p>}
-        <Field label="What is it called?">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={AGENCY_TITLE_MAX} required className={field} />
-        </Field>
+        <FieldLabel className="mt-sm" label="What is it called?">
+          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={AGENCY_TITLE_MAX} required className={FIELD} />
+        </FieldLabel>
         <div className="grid gap-sm md:grid-cols-2">
-          <Field label="Kind">
-            <select value={kind} onChange={(e) => setKind(e.target.value as DeliverableKind)} className={field}>
+          <FieldLabel className="mt-sm" label="Kind">
+            <select value={kind} onChange={(e) => setKind(e.target.value as DeliverableKind)} className={FIELD}>
               {DELIVERABLE_KINDS.map((k) => (
                 <option key={k} value={k}>
                   {DELIVERABLE_KIND_NAME[k]}
                 </option>
               ))}
             </select>
-          </Field>
-          <Field label="Channel">
-            <input list={listId} value={platform} onChange={(e) => setPlatform(e.target.value)} maxLength={30} className={field} />
+          </FieldLabel>
+          <FieldLabel className="mt-sm" label="Channel">
+            <input list={listId} value={platform} onChange={(e) => setPlatform(e.target.value)} maxLength={30} className={FIELD} />
             <datalist id={listId}>
               {channelOptions.map((c) => (
                 <option key={c} value={c} />
               ))}
             </datalist>
-          </Field>
+          </FieldLabel>
         </div>
-        <Field label="Stage">
-          <select value={stage} onChange={(e) => setStage(e.target.value as DeliverableStage)} className={field}>
+        <FieldLabel className="mt-sm" label="Stage">
+          <select value={stage} onChange={(e) => setStage(e.target.value as DeliverableStage)} className={FIELD}>
             {DELIVERABLE_STAGES.map((s) => (
               <option key={s} value={s}>
                 {DELIVERABLE_STAGE_META[s].name}, {DELIVERABLE_STAGE_META[s].blurb}
               </option>
             ))}
           </select>
-        </Field>
+        </FieldLabel>
         <div className="grid gap-sm md:grid-cols-2">
-          <Field label="Due on">
-            <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className={field} />
-          </Field>
-          <Field label="Goes live on">
-            <input type="date" value={publish} onChange={(e) => setPublish(e.target.value)} className={field} />
-          </Field>
+          <FieldLabel className="mt-sm" label="Due on">
+            <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className={FIELD} />
+          </FieldLabel>
+          <FieldLabel className="mt-sm" label="Goes live on">
+            <input type="date" value={publish} onChange={(e) => setPublish(e.target.value)} className={FIELD} />
+          </FieldLabel>
         </div>
-        <Field label="Link" hint={COPY.linkHint}>
-          <input type="url" value={link} onChange={(e) => setLink(e.target.value)} maxLength={500} placeholder="https://" className={field} />
-        </Field>
-        <Field label="Fee" hint={COPY.feeHint}>
-          <input inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} aria-invalid={badFee || undefined} className={field} />
+        <FieldLabel className="mt-sm" label="Link" hint={COPY.linkHint}>
+          <input type="url" value={link} onChange={(e) => setLink(e.target.value)} maxLength={500} placeholder="https://" className={FIELD} />
+        </FieldLabel>
+        <FieldLabel className="mt-sm" label="Fee" hint={COPY.feeHint}>
+          <input inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} aria-invalid={badFee || undefined} className={FIELD} />
           {badFee && <p role="alert" className="mt-xs m-0 text-[14px] font-bold">Type the amount as a number, like 4000 or 4,000.50.</p>}
-        </Field>
-        <Field label="Notes, only for you" hint={COPY.notesHint}>
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={AGENCY_NOTES_MAX} className={field} />
-        </Field>
+        </FieldLabel>
+        <FieldLabel className="mt-sm" label="Notes, only for you" hint={COPY.notesHint}>
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={AGENCY_NOTES_MAX} className={FIELD} />
+        </FieldLabel>
         {save.isError && (
           <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
             {(save.error as Error).message || 'That did not save.'}
@@ -390,7 +381,7 @@ function Thread({ itemId, onDone }: { itemId: string; onDone: () => void }) {
       >
         <label className="block text-[14px] font-bold">
           Write a note
-          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={AGENCY_NOTE_MAX} className={field} />
+          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={AGENCY_NOTE_MAX} className={FIELD} />
         </label>
         <Toggle compact on={shared} onChange={setShared} label="Share with the client" />
         {add.isError && (
@@ -439,16 +430,16 @@ function TimeLog({ item, onDone }: { item: AgencyDeliverable; onDone: () => void
         }}
       >
         <div className="grid gap-sm md:grid-cols-2">
-          <Field label="How long?">
-            <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="text" placeholder="1:30" className={field} />
-          </Field>
-          <Field label="Day">
-            <input type="date" value={day} max={todayLocal()} onChange={(e) => setDay(e.target.value)} className={field} />
-          </Field>
+          <FieldLabel className="mt-sm" label="How long?">
+            <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="text" placeholder="1:30" className={FIELD} />
+          </FieldLabel>
+          <FieldLabel className="mt-sm" label="Day">
+            <input type="date" value={day} max={todayLocal()} onChange={(e) => setDay(e.target.value)} className={FIELD} />
+          </FieldLabel>
         </div>
-        <Field label="What was it?">
-          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} className={field} />
-        </Field>
+        <FieldLabel className="mt-sm" label="What was it?">
+          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} className={FIELD} />
+        </FieldLabel>
         <Toggle compact on={billable} onChange={setBillable} label="Counts as billable" />
         {log.isError && (
           <p role="alert" className="m-0 text-[14px] font-bold">

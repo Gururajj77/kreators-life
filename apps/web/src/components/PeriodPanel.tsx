@@ -11,7 +11,11 @@ import { Section, SeeAll } from './Section';
 
 export type SummaryPart = 'daily' | 'notToDo' | 'wellbeing' | 'journal' | 'finance' | 'shop' | 'school' | 'work' | 'people';
 
-export const money = (cents: number, currency: string) => `${currency} ${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+/** A whole-unit amount for a tile (no cents), unlike shared `money()`, which keeps them. */
+export const moneyRounded = (cents: number, currency: string) => `${currency} ${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+
+/** @deprecated The old name, kept only until ListingSheet (owned by another stream) imports `moneyRounded`; prefer shared `money()`. */
+export const money = moneyRounded;
 
 /** "up 3 on the week before", "same as the month before", or what was missing. */
 export function delta(now: number | null, before: number | null, previous: string, digits = 0): string {
@@ -66,15 +70,15 @@ export function SummaryTiles({ summary, parts }: { summary: ReviewSummary; parts
     }
     if (part === 'finance') {
       tiles.push(
-        { label: 'Income', value: money(now.incomeCents, currency), hint: delta(now.incomeCents / 100, before.incomeCents / 100, prev), to: '/finance' },
-        { label: 'Spent', value: money(now.expenseCents, currency), hint: delta(now.expenseCents / 100, before.expenseCents / 100, prev), to: '/finance' },
-        { label: 'Kept', value: money(now.incomeCents - now.expenseCents, currency), hint: delta((now.incomeCents - now.expenseCents) / 100, (before.incomeCents - before.expenseCents) / 100, prev), to: '/finance' },
+        { label: 'Income', value: moneyRounded(now.incomeCents, currency), hint: delta(now.incomeCents / 100, before.incomeCents / 100, prev), to: '/finance' },
+        { label: 'Spent', value: moneyRounded(now.expenseCents, currency), hint: delta(now.expenseCents / 100, before.expenseCents / 100, prev), to: '/finance' },
+        { label: 'Kept', value: moneyRounded(now.incomeCents - now.expenseCents, currency), hint: delta((now.incomeCents - now.expenseCents) / 100, (before.incomeCents - before.expenseCents) / 100, prev), to: '/finance' },
       );
     }
     if (part === 'shop') {
       tiles.push(
         { label: 'Orders', value: now.orders, hint: delta(now.orders, before.orders, prev), to: '/shop' },
-        { label: 'Sales', value: money(now.salesCents, currency), hint: now.salesPoints ? `plus ${now.salesPoints} points · ${delta(now.salesCents / 100, before.salesCents / 100, prev)}` : delta(now.salesCents / 100, before.salesCents / 100, prev), to: '/shop' },
+        { label: 'Sales', value: moneyRounded(now.salesCents, currency), hint: now.salesPoints ? `plus ${now.salesPoints} points · ${delta(now.salesCents / 100, before.salesCents / 100, prev)}` : delta(now.salesCents / 100, before.salesCents / 100, prev), to: '/shop' },
       );
     }
     if (part === 'school') {

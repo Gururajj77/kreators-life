@@ -15,9 +15,10 @@ import { useAuthed, useMe } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { BuildMap } from '../components/BuildMap';
 import { AppIcon } from '../components/AppIcon';
+import { longDate } from '../lib/date';
+import { StatusTag } from '../components/StatusTag';
+import { FIELD_FILTER } from '../lib/ui';
 
-const field = 'w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px] font-semibold';
-const since = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
 /**
  * Internal observability, for the team: who is here, which apps they have on, who holds which role,
@@ -156,7 +157,7 @@ export function Observability() {
           <Section id="obs-people" title="People" lede={`${data.total} ${data.total === 1 ? 'account' : 'accounts'}, newest first, with the apps each one has on.${isAdmin ? ' Change a role from the menu on a row.' : ' Only an admin changes roles.'}`}>
             <label className="block">
               <span className="sr-only">Search people by name or page name</span>
-              <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or page name" autoComplete="off" className={field} />
+              <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or page name" autoComplete="off" className={FIELD_FILTER} />
             </label>
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
               {data.users.map((u) => (
@@ -172,14 +173,14 @@ export function Observability() {
                       <span className="block truncate text-[16px] font-bold">{u.name}</span>
                       <span className="block text-[12px] font-bold text-ink-soft">
                         {u.handle ? `/u/${u.handle} · ` : ''}
-                        since {since(u.createdAt)}
+                        since {longDate(u.createdAt)}
                         {u.onboarded ? '' : ' · not set up yet'}
                       </span>
                     </span>
                     {isAdmin && u.id !== me.data?.user.id ? (
                       <label className="shrink-0">
                         <span className="sr-only">Role for {u.name}</span>
-                        <select value={u.role} onChange={(e) => setAsking({ user: u, role: e.target.value as Role })} className="min-h-[40px] rounded-pill border-2 border-line bg-card px-sm text-[14px] font-bold">
+                        <select value={u.role} onChange={(e) => setAsking({ user: u, role: e.target.value as Role })} className="min-h-[44px] rounded-pill border-2 border-line bg-card px-sm text-[14px] font-bold">
                           {ROLES.map((r) => (
                             <option key={r} value={r}>
                               {ROLE_META[r].name}
@@ -188,10 +189,10 @@ export function Observability() {
                         </select>
                       </label>
                     ) : (
-                      <span className="shrink-0 rounded-pill bg-paper px-sm text-[12px] font-extrabold leading-[28px] text-ink-soft">{ROLE_META[u.role].name}</span>
+                      <StatusTag tone="calm">{ROLE_META[u.role].name}</StatusTag>
                     )}
                   </div>
-                  <p className="mt-xs m-0 flex flex-wrap items-center gap-xs text-[12px] font-bold text-ink-soft">
+                  <p className="fill-row-all mt-xs m-0 flex flex-wrap items-center gap-xs text-[12px] font-bold text-ink-soft">
                     <span className="shrink-0">
                       {u.apps.length} {u.apps.length === 1 ? 'app' : 'apps'} on:
                     </span>

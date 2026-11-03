@@ -38,7 +38,7 @@ export function SignOut({ compact = false, className = '' }: { compact?: boolean
         type="button"
         onClick={() => setAsking(true)}
         disabled={signout.isPending}
-        className={`toy inline-flex items-center justify-center gap-xs rounded-pill border-2 border-r1/40 bg-transparent font-bold text-r1 hover:bg-r1/10 disabled:opacity-50 ${compact ? 'min-h-[40px] px-sm text-[14px]' : 'min-h-[48px] px-md text-[16px]'} ${className}`}
+        className={`toy inline-flex items-center justify-center gap-xs rounded-pill border-2 border-r1/40 bg-transparent font-bold text-r1 hover:bg-r1/10 disabled:opacity-50 ${compact ? 'min-h-[44px] px-sm text-[14px]' : 'min-h-[48px] px-md text-[16px]'} ${className}`}
         style={{ '--toy-color': 'var(--color-r1)' } as CSSProperties}
       >
         <DoorIcon size={compact ? 16 : 18} />

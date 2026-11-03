@@ -29,7 +29,7 @@ export interface EmailVars {
 
 export const emptyEmailVars = (): EmailVars => ({ names: '', engagement: '', attached: [], amount: '', period: '', dueBy: '', status: '', note: '', signName: '', signStudio: '', signPhone: '', signEmail: '' });
 
-export type EmailTemplateKey = 'begin' | 'monthly-invoice' | 'renewal' | 'signed-copy' | 'plan' | 'before-shoot' | 'payment-nudge' | 'payment-firm' | 'payment-thanks';
+export type EmailTemplateKey = 'begin' | 'monthly-invoice' | 'renewal' | 'signed-copy' | 'plan' | 'report' | 'before-shoot' | 'payment-nudge' | 'payment-firm' | 'payment-thanks';
 
 export interface EmailTemplate {
   key: EmailTemplateKey;
@@ -129,6 +129,22 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
       ]),
   },
   {
+    key: 'report',
+    name: 'Monthly report',
+    when: 'A month is done: the report of what was made and where each piece stands.',
+    subject: (v) => `Monthly report${present(v.period) ? `: ${v.period.trim()}` : ''}`,
+    body: (v) =>
+      joined([
+        hi(v),
+        `Here is the report${present(v.period) ? ` for ${v.period.trim()}` : ' for the month'}.`,
+        present(v.status) ? `Status of deliverables: ${v.status.trim()}` : '',
+        attachedBlock(v, 'Attached:'),
+        v.note,
+        'Have a look and tell me what you would like more of, or less of, next month.',
+        signoff(v, 'Best regards,'),
+      ]),
+  },
+  {
     key: 'before-shoot',
     name: 'Before the next shoot',
     when: 'You want the brief settled before a batch: the goal, the reaction, the product and the must-haves.',
@@ -200,12 +216,156 @@ export function fillEmail(key: string, vars: EmailVars): { subject: string; body
   return { subject: t.subject(vars).slice(0, 200), body: t.body(vars) };
 }
 
-/** The note a document most likely goes with, so the picker opens on a sensible one. */
-export function suggestEmailTemplate(kind: 'invoice' | 'contract' | 'doc', ctx: { retainerMonth?: boolean; signed?: boolean } = {}): EmailTemplateKey {
-  if (kind === 'invoice') return ctx.retainerMonth ? 'monthly-invoice' : 'begin';
-  if (kind === 'contract') return ctx.signed ? 'signed-copy' : 'begin';
+/** Where a client stands and what the document is, so the note offered first is the one this moment needs. */
+export interface EmailMoment {
+  /** The client's stage on the way from enquiry to monthly delivery (`AGENCY_STAGE_KEYS`). */
+  stage?: string;
+  /** An invoice that belongs to a retainer month. */
+  retainerMonth?: boolean;
+  /** An agreement the client has signed. */
+  signed?: boolean;
+  /** An invoice past its due day and not paid. */
+  overdue?: boolean;
+  /** An invoice that is paid. */
+  paid?: boolean;
+  /** The agreement's template (trial, retainer, project) or the document's kind (brief, trial_terms, retainer_proposal, monthly_report). */
+  docKind?: string;
+}
+
+const RUNNING = new Set(['retainer', 'delivery']);
+
+/** The note a document most likely goes with, by what it is and where the client stands. The person can still pick another. */
+export function suggestEmailTemplate(kind: 'invoice' | 'contract' | 'doc', ctx: EmailMoment = {}): EmailTemplateKey {
+  const running = Boolean(ctx.stage && RUNNING.has(ctx.stage));
+  if (kind === 'invoice') {
+    if (ctx.paid) return 'payment-thanks';
+    if (ctx.overdue) return 'payment-nudge';
+    return ctx.retainerMonth || running ? 'monthly-invoice' : 'begin';
+  }
+  if (kind === 'contract') {
+    if (ctx.signed) return 'signed-copy';
+    return ctx.docKind === 'retainer' && running ? 'renewal' : 'begin';
+  }
+  if (ctx.docKind === 'trial_terms') return 'before-shoot';
+  if (ctx.docKind === 'retainer_proposal') return running ? 'renewal' : 'plan';
+  if (ctx.docKind === 'monthly_report') return 'report';
   return 'plan';
+}
+
+/** What the records already know, from which every part of a note is written. Every part is optional. */
+export interface EmailFacts {
+  kind: 'invoice' | 'contract' | 'doc';
+  client?: { name: string; contactName: string; month?: { published: number; inReview: number; open: number } } | null;
+  profile?: { signerName: string; from: { name: string; phone: string; email: string } } | null;
+  /** The document's title, as it is printed. */
+  title?: string;
+  /** The invoice number, or the document's reference. */
+  number?: string;
+  /** Already written: "₹30,000". */
+  amount?: string;
+  /** Already written: "1 May 2026". */
+  dueBy?: string;
+  /** Already written: "May 2026". */
+  period?: string;
+  /** The agreement's template or the document's kind, as in `EmailMoment.docKind`. */
+  docKind?: string;
+  /** An invoice that is only an advance (the advance starter's title). */
+  advance?: boolean;
+}
+
+/** A value a note needs that no record holds yet, and where it is added once. */
+export interface EmailGap {
+  key: 'contactName' | 'signerName' | 'businessName' | 'phone' | 'email';
+  /** "the client's contact name". */
+  label: string;
+  /** Saved on the client, or in the business profile. */
+  where: 'client' | 'profile';
+}
+
+const ENGAGEMENT: Record<string, string> = Object.assign(Object.create(null), {
+  trial: 'trial engagement',
+  retainer: 'monthly content retainer',
+  project: 'content project',
+  brief: 'strategy session',
+  trial_terms: 'trial engagement',
+  retainer_proposal: 'monthly content retainer',
+  monthly_report: 'monthly content work',
+});
+
+const first = (name: string) => name.trim().split(/\s+/)[0] ?? '';
+
+/**
+ * Every variable of a note, from the records: who it greets (the contact's first name and the client's team), what the work is called
+ * (from the template or the kind), what is attached (from the document), the amount, the day and the period (from the document), how the
+ * work stands (from the month's counts) and the sign-off (from the business profile). What no record holds comes back in `missing`, once,
+ * so the screen can ask for it a single time and save it where it belongs; a note never shows a blank for it.
+ */
+export function emailVarsFor(f: EmailFacts): { vars: EmailVars; missing: EmailGap[] } {
+  const v = emptyEmailVars();
+  const missing: EmailGap[] = [];
+  const c = f.client;
+  const p = f.profile;
+  if (c) {
+    const who = first(c.contactName);
+    v.names = who ? `${who} and ${c.name.trim()} team` : `${c.name.trim()} team`;
+    if (!who) missing.push({ key: 'contactName', label: "the client's contact name", where: 'client' });
+    if (c.month) {
+      const m = c.month;
+      const bits = [m.published > 0 && `${m.published} published`, m.inReview > 0 && `${m.inReview} waiting for your review`, m.open > 0 && `${m.open} being made`].filter((x): x is string => Boolean(x));
+      v.status = bits.join(', ');
+    }
+  }
+  v.engagement = (f.docKind && ENGAGEMENT[f.docKind]) || (f.kind === 'invoice' ? (f.period ? `content work for ${f.period}` : 'content work') : (f.title ?? '').trim().toLowerCase());
+  const title = (f.title ?? '').trim();
+  if (f.kind === 'invoice') {
+    v.attached = [`The invoice${f.number ? ` ${f.number}` : ''}${f.amount ? ` for ${f.amount}` : ''}${f.advance ? ' (full advance)' : ''}`];
+  } else if (title) {
+    v.attached = [`The ${title}${f.number ? ` (${f.number})` : ''}`];
+  }
+  v.amount = f.amount ?? '';
+  v.dueBy = f.dueBy ?? '';
+  v.period = f.period ?? '';
+  if (p) {
+    v.signName = p.signerName.trim();
+    v.signStudio = p.from.name.trim();
+    v.signPhone = p.from.phone.trim();
+    v.signEmail = p.from.email.trim();
+    if (!v.signName) missing.push({ key: 'signerName', label: 'your name for the sign-off', where: 'profile' });
+    if (!v.signStudio) missing.push({ key: 'businessName', label: 'your business name', where: 'profile' });
+    if (!v.signPhone) missing.push({ key: 'phone', label: 'your phone', where: 'profile' });
+    if (!v.signEmail) missing.push({ key: 'email', label: 'your email', where: 'profile' });
+  }
+  return { vars: v, missing };
 }
 
 /** The longest note the server will send. */
 export const EMAIL_NOTE_MAX = 6000;
+
+/** The longest subject line a note keeps. */
+export const EMAIL_SUBJECT_MAX = 200;
+
+/** An email note as it is sent or kept as the owner's own template: a one-line subject and the words, plain text. */
+export interface SavedEmailNote {
+  subject: string;
+  message: string;
+}
+
+/**
+ * The one reader for a note's subject and words, used by the email routes and by a saved note: the words keep their line breaks (any
+ * Windows or old Mac line end becomes one), lose every control character but the tab and the line break, and stop at `EMAIL_NOTE_MAX`;
+ * the subject is one line (control characters and line breaks become a space) up to `EMAIL_SUBJECT_MAX`. Null when there are no words.
+ */
+export function parseEmailNote(v: unknown): SavedEmailNote | null {
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  const message =
+    typeof o.message === 'string'
+      ? o.message
+          .replace(/\r\n?/g, '\n')
+          .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+          .trim()
+          .slice(0, EMAIL_NOTE_MAX)
+      : '';
+  if (!message) return null;
+  const subject = typeof o.subject === 'string' ? o.subject.replace(/[\u0000-\u001F\u007F]+/g, ' ').replace(/ {2,}/g, ' ').trim().slice(0, EMAIL_SUBJECT_MAX) : '';
+  return { subject, message };
+}

@@ -10,34 +10,28 @@ import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useAuthed, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
+import { Icon } from '../components/Icon';
+import { Medal } from 'lucide-react';
+import { FIELD } from '../lib/ui';
+import { ErrorLine } from '../components/ErrorLine';
+import { StatusTag } from '../components/StatusTag';
+import type { TagTone } from '@kreators/shared';
+import { shortDate, localDateTimeValue } from '../lib/date';
+import { IconTag } from '../components/FactTag';
 
 type Rule = Pick<Bounty, 'ratePerThousand' | 'maxPayoutPoints' | 'minViews'>;
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+const day = shortDate;
 const n = (v: number) => v.toLocaleString();
 
-function Back({ to, label }: { to: string; label: string }) {
-  return (
-    <BackLink to={to}>{label}</BackLink>
-  );
-}
 
-function Err({ e }: { e: unknown }) {
-  if (!e) return null;
-  return (
-    <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-      {e instanceof Error ? e.message : 'That did not work.'}
-    </p>
-  );
-}
 
-const STATUS_TINT: Record<BountySubmission['status'], string> = {
-  submitted: 'var(--tint-yellow)',
-  verified: 'var(--tint-green)',
-  paid: 'var(--tint-green)',
-  rejected: 'var(--tint-red)',
-  disputed: 'var(--tint-orange)',
+const STATUS_TONE: Record<BountySubmission['status'], TagTone> = {
+  submitted: 'warn',
+  verified: 'good',
+  paid: 'good',
+  rejected: 'bad',
+  disputed: 'warn',
 };
 const STATUS_LABEL: Record<BountySubmission['status'], string> = {
   submitted: 'waiting for review',
@@ -48,11 +42,7 @@ const STATUS_LABEL: Record<BountySubmission['status'], string> = {
 };
 
 function StatusPill({ status }: { status: BountySubmission['status'] }) {
-  return (
-    <span className="rounded-pill px-xs text-[12px] font-extrabold leading-[20px]" style={{ background: STATUS_TINT[status] }}>
-      {STATUS_LABEL[status]}
-    </span>
-  );
+  return <StatusTag tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</StatusTag>;
 }
 
 function rateLine(b: Rule): string {
@@ -64,14 +54,14 @@ function BountyCard({ b }: { b: Bounty }) {
   return (
     <li>
       <Link to={`/win/${b.id}`} className="toy toy-soft flex items-start gap-sm rounded-tile bg-card p-sm">
-        <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-[22px]" aria-hidden="true">
-          🥇
+        <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper" aria-hidden="true">
+          <Icon icon={Medal} size={22} />
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-xs">
             <span className="text-[16px] font-bold">{b.title}</span>
             {b.featured && (
-              <span className="rounded-pill bg-r3 px-xs text-[12px] font-extrabold leading-[20px] text-ink-fixed">Featured</span>
+              <IconTag tone="warn" icon="Star">Featured</IconTag>
             )}
             {b.mine && <StatusPill status={b.mine.status} />}
           </span>
@@ -119,7 +109,7 @@ function ReviewBox({ s, rule, reviewer, finance, onDone }: { s: BountySubmission
           <div className="grid grid-cols-2 gap-xs">
             <label className="block">
               <span className="block text-[12px] font-bold">Confirmed views</span>
-              <input type="number" min={0} value={views} onChange={(e) => setViews(e.target.value)} className={field} />
+              <input type="number" min={0} value={views} onChange={(e) => setViews(e.target.value)} className={FIELD} />
             </label>
             <label className="block">
               <span className="block text-[12px] font-bold">Payout in points</span>
@@ -131,13 +121,13 @@ function ReviewBox({ s, rule, reviewer, finance, onDone }: { s: BountySubmission
                   setTouched(true);
                   setPayout(e.target.value);
                 }}
-                className={field}
+                className={FIELD}
               />
             </label>
           </div>
           <label className="block">
             <span className="block text-[12px] font-bold">Note to the creator</span>
-            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} className={field} />
+            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} className={FIELD} />
           </label>
           <div className="flex flex-wrap gap-xs">
             <Button onClick={() => review.mutate({ status: 'verified', evidenceViews: Number(views) || 0, evidenceNote: note, payoutPoints: Number(live) || 0 })} disabled={review.isPending}>
@@ -161,7 +151,7 @@ function ReviewBox({ s, rule, reviewer, finance, onDone }: { s: BountySubmission
                 setTouched(true);
                 setPayout(e.target.value);
               }}
-              className={field}
+              className={FIELD}
             />
           </label>
           <Button
@@ -174,7 +164,7 @@ function ReviewBox({ s, rule, reviewer, finance, onDone }: { s: BountySubmission
           </Button>
         </div>
       )}
-      <Err e={review.isError ? review.error : null} />
+      <ErrorLine e={review.isError ? review.error : null} />
     </div>
   );
 }
@@ -350,58 +340,58 @@ function LaunchSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Brand</span>
-          <input autoFocus value={brandName} onChange={(e) => setBrandName(e.target.value)} maxLength={80} className={field} />
+          <input autoFocus value={brandName} onChange={(e) => setBrandName(e.target.value)} maxLength={80} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Title</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={field} />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Brief</span>
-          <textarea value={brief} onChange={(e) => setBrief(e.target.value)} maxLength={5000} rows={4} className={field} />
+          <textarea value={brief} onChange={(e) => setBrief(e.target.value)} maxLength={5000} rows={4} className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Deliverable</span>
-            <input value={deliverable} onChange={(e) => setDeliverable(e.target.value)} maxLength={80} className={field} />
+            <input value={deliverable} onChange={(e) => setDeliverable(e.target.value)} maxLength={80} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Platform</span>
-            <input value={platform} onChange={(e) => setPlatform(e.target.value)} maxLength={60} placeholder="Any" className={field} />
+            <input value={platform} onChange={(e) => setPlatform(e.target.value)} maxLength={60} placeholder="Any" className={FIELD} />
           </label>
         </div>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Pool in points</span>
-            <input type="number" min={0} value={budgetPoints} onChange={(e) => setBudgetPoints(e.target.value)} className={field} />
+            <input type="number" min={0} value={budgetPoints} onChange={(e) => setBudgetPoints(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Points per 1k views</span>
-            <input type="number" min={0} value={ratePerThousand} onChange={(e) => setRate(e.target.value)} className={field} />
+            <input type="number" min={0} value={ratePerThousand} onChange={(e) => setRate(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Cap per creator</span>
-            <input type="number" min={0} value={maxPayoutPoints} onChange={(e) => setMax(e.target.value)} className={field} />
+            <input type="number" min={0} value={maxPayoutPoints} onChange={(e) => setMax(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Views before paying</span>
-            <input type="number" min={0} value={minViews} onChange={(e) => setMinViews(e.target.value)} className={field} />
+            <input type="number" min={0} value={minViews} onChange={(e) => setMinViews(e.target.value)} className={FIELD} />
           </label>
         </div>
         <label className="block">
           <span className="block text-[14px] font-bold">Closes</span>
-          <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className={field} />
+          <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className={FIELD} />
           <span className="mt-xs block text-[12px] font-bold text-ink-soft">Empty means thirty days from now.</span>
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Who can enter</span>
-          <input value={eligibility} onChange={(e) => setEligibility(e.target.value)} maxLength={1000} className={field} />
+          <input value={eligibility} onChange={(e) => setEligibility(e.target.value)} maxLength={1000} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Rules and brand do-nots</span>
-          <textarea value={rewardRule} onChange={(e) => setRewardRule(e.target.value)} maxLength={1000} rows={3} className={field} />
+          <textarea value={rewardRule} onChange={(e) => setRewardRule(e.target.value)} maxLength={1000} rows={3} className={FIELD} />
         </label>
-        <Err e={create.isError ? create.error : null} />
+        <ErrorLine e={create.isError ? create.error : null} />
         <Button type="submit" size="lg" full disabled={create.isPending || !title.trim()}>
           Open the pool
         </Button>
@@ -412,11 +402,7 @@ function LaunchSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
 
 /** Change a reward after launch. Every save bumps the version and tells everyone who already entered. */
 function EditSheet({ b, open, onClose, onSaved }: { b: Bounty; open: boolean; onClose: () => void; onSaved: () => void }) {
-  const local = (iso: string) => {
-    const d = new Date(iso);
-    const pad = (v: number) => String(v).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  };
+  const local = (iso: string) => localDateTimeValue(new Date(iso));
   const [brandName, setBrandName] = useState(b.brandName);
   const [title, setTitle] = useState(b.title);
   const [brief, setBrief] = useState(b.brief);
@@ -466,55 +452,55 @@ function EditSheet({ b, open, onClose, onSaved }: { b: Bounty; open: boolean; on
         </p>
         <label className="block">
           <span className="block text-[14px] font-bold">Brand</span>
-          <input value={brandName} onChange={(e) => setBrandName(e.target.value)} maxLength={80} className={field} />
+          <input value={brandName} onChange={(e) => setBrandName(e.target.value)} maxLength={80} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Title</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={field} />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Brief</span>
-          <textarea value={brief} onChange={(e) => setBrief(e.target.value)} maxLength={5000} rows={4} className={field} />
+          <textarea value={brief} onChange={(e) => setBrief(e.target.value)} maxLength={5000} rows={4} className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Deliverable</span>
-            <input value={deliverable} onChange={(e) => setDeliverable(e.target.value)} maxLength={80} className={field} />
+            <input value={deliverable} onChange={(e) => setDeliverable(e.target.value)} maxLength={80} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Platform</span>
-            <input value={platform} onChange={(e) => setPlatform(e.target.value)} maxLength={60} placeholder="Any" className={field} />
+            <input value={platform} onChange={(e) => setPlatform(e.target.value)} maxLength={60} placeholder="Any" className={FIELD} />
           </label>
         </div>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Pool in points</span>
-            <input type="number" min={0} value={budgetPoints} onChange={(e) => setBudgetPoints(e.target.value)} className={field} />
+            <input type="number" min={0} value={budgetPoints} onChange={(e) => setBudgetPoints(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Points per 1k views</span>
-            <input type="number" min={0} value={ratePerThousand} onChange={(e) => setRate(e.target.value)} className={field} />
+            <input type="number" min={0} value={ratePerThousand} onChange={(e) => setRate(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Cap per creator</span>
-            <input type="number" min={0} value={maxPayoutPoints} onChange={(e) => setMax(e.target.value)} className={field} />
+            <input type="number" min={0} value={maxPayoutPoints} onChange={(e) => setMax(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Views before paying</span>
-            <input type="number" min={0} value={minViews} onChange={(e) => setMinViews(e.target.value)} className={field} />
+            <input type="number" min={0} value={minViews} onChange={(e) => setMinViews(e.target.value)} className={FIELD} />
           </label>
         </div>
         <label className="block">
           <span className="block text-[14px] font-bold">Closes</span>
-          <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className={field} />
+          <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Who can enter</span>
-          <input value={eligibility} onChange={(e) => setEligibility(e.target.value)} maxLength={1000} className={field} />
+          <input value={eligibility} onChange={(e) => setEligibility(e.target.value)} maxLength={1000} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Rules and brand do-nots</span>
-          <textarea value={rewardRule} onChange={(e) => setRewardRule(e.target.value)} maxLength={1000} rows={3} className={field} />
+          <textarea value={rewardRule} onChange={(e) => setRewardRule(e.target.value)} maxLength={1000} rows={3} className={FIELD} />
         </label>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-[14px] font-bold">Status</legend>
@@ -526,7 +512,7 @@ function EditSheet({ b, open, onClose, onSaved }: { b: Bounty; open: boolean; on
             ))}
           </div>
         </fieldset>
-        <Err e={save.isError ? save.error : null} />
+        <ErrorLine e={save.isError ? save.error : null} />
         <Button type="submit" size="lg" full disabled={save.isPending || !title.trim()}>
           Save as version {b.version + 1}
         </Button>
@@ -589,7 +575,7 @@ function MySubmission({ s, onDone }: { s: BountySubmission; onDone: () => void }
           {why}
         </p>
       )}
-      <Err e={refresh.isError ? refresh.error : report.isError ? report.error : dispute.isError ? dispute.error : null} />
+      <ErrorLine e={refresh.isError ? refresh.error : report.isError ? report.error : dispute.isError ? dispute.error : null} />
       {s.status !== 'paid' && (
         <div className="mt-sm flex flex-wrap gap-xs">
           {auto && (
@@ -614,24 +600,24 @@ function MySubmission({ s, onDone }: { s: BountySubmission; onDone: () => void }
           <div className="grid grid-cols-2 gap-xs">
             <label className="block">
               <span className="block text-[12px] font-bold">Views</span>
-              <input type="number" min={0} value={views} onChange={(e) => setViews(e.target.value)} required className={field} />
+              <input type="number" min={0} value={views} onChange={(e) => setViews(e.target.value)} required className={FIELD} />
             </label>
             <label className="block">
               <span className="block text-[12px] font-bold">Likes</span>
-              <input type="number" min={0} value={likes} onChange={(e) => setLikes(e.target.value)} className={field} />
+              <input type="number" min={0} value={likes} onChange={(e) => setLikes(e.target.value)} className={FIELD} />
             </label>
             <label className="block">
               <span className="block text-[12px] font-bold">Comments</span>
-              <input type="number" min={0} value={comments} onChange={(e) => setComments(e.target.value)} className={field} />
+              <input type="number" min={0} value={comments} onChange={(e) => setComments(e.target.value)} className={FIELD} />
             </label>
             <label className="block">
               <span className="block text-[12px] font-bold">Shares</span>
-              <input type="number" min={0} value={shares} onChange={(e) => setShares(e.target.value)} className={field} />
+              <input type="number" min={0} value={shares} onChange={(e) => setShares(e.target.value)} className={FIELD} />
             </label>
           </div>
           <label className="block">
             <span className="block text-[12px] font-bold">Note, for example a link to a screenshot</span>
-            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} className={field} />
+            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} className={FIELD} />
           </label>
           <Button type="submit" disabled={report.isPending}>
             Send numbers
@@ -648,7 +634,7 @@ function MySubmission({ s, onDone }: { s: BountySubmission; onDone: () => void }
         >
           <label className="block">
             <span className="block text-[14px] font-bold">Disagree? Say why</span>
-            <textarea value={disputeNote} onChange={(e) => setDisputeNote(e.target.value)} maxLength={1000} rows={3} className={field} />
+            <textarea value={disputeNote} onChange={(e) => setDisputeNote(e.target.value)} maxLength={1000} rows={3} className={FIELD} />
           </label>
           <Button variant="outline" type="submit" disabled={dispute.isPending || !disputeNote.trim()}>
             Open a dispute
@@ -670,7 +656,7 @@ function EarnCalc({ b }: { b: Rule }) {
       <p className="m-0 text-[14px] font-extrabold">What could I earn?</p>
       <label className="mt-xs block">
         <span className="block text-[12px] font-bold text-ink-soft">If my post gets this many views</span>
-        <input type="number" min={0} inputMode="numeric" value={views} onChange={(e) => setViews(e.target.value)} className={field} />
+        <input type="number" min={0} inputMode="numeric" value={views} onChange={(e) => setViews(e.target.value)} className={FIELD} />
       </label>
       <div className="mt-xs flex flex-wrap gap-xs">
         {[1000, 10000, 100000, 1000000].map((x) => (
@@ -717,7 +703,7 @@ export function Reward() {
     return (
       <Screen>
         <header className="pt-lg">
-          <Back to="/win" label="Win" />
+          <BackLink to="/win">Win</BackLink>
           <h1 className="text-[30px]">That reward is gone</h1>
           <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{q.error instanceof Error ? q.error.message : 'It may have closed.'}</p>
         </header>
@@ -736,7 +722,7 @@ export function Reward() {
   return (
     <Screen>
       <header className="pt-lg">
-        <Back to="/win" label="Win" />
+        <BackLink to="/win">Win</BackLink>
         <p className="m-0 text-[14px] font-bold text-ink-soft">
           {b.brandName}
           {b.featured ? ', featured' : ''}
@@ -807,14 +793,14 @@ export function Reward() {
           >
             <label className="block">
               <span className="block text-[14px] font-bold">{b.mine ? 'Replace the link to your post' : 'The public link to your post'}</span>
-              <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} maxLength={500} placeholder="https://" className={field} />
+              <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} maxLength={500} placeholder="https://" className={FIELD} />
             </label>
             {platform && (
               <p className="m-0 text-[12px] font-bold text-ink-soft">
                 {SOCIAL_PLATFORM_META[platform].name}. {SOCIAL_PLATFORM_META[platform].auto ? 'Views are read automatically.' : 'You report the views; a reviewer confirms them.'}
               </p>
             )}
-            <Err e={submit.isError ? submit.error : null} />
+            <ErrorLine e={submit.isError ? submit.error : null} />
             <Button type="submit" full disabled={submit.isPending || !url.trim()}>
               {b.mine ? 'Update my entry' : 'Submit my video'}
             </Button>

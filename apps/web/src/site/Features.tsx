@@ -1,9 +1,10 @@
-import { MODULE_GROUPS, type ModuleGroup } from '@kreators/shared';
+import { BUMLING, MODULE_GROUPS, type ModuleGroup } from '@kreators/shared';
 import { Link } from 'react-router';
 import { FEATURES, SITE_FEATURES } from './content';
 import { BorderBeam } from '../components/fx/BorderBeam';
 import { Reveal } from '../components/fx/Reveal';
 import '../components/fx/spotlight';
+import { GuideLine } from './GuideLine';
 import { SiteLayout, useAppEntry } from './SiteLayout';
 import { AppIcon } from '../components/AppIcon';
 
@@ -28,7 +29,13 @@ export function Features() {
         <p className="m-0 type-eyebrow text-ink-mute">Features</p>
         <h1 className="type-hook mt-sm text-[clamp(40px,9vw,80px)]">Everything a creator needs, <em>one switch at a time</em></h1>
         <p className="type-context type-measure mt-md m-0 text-[20px] text-ink-soft">Courses in one app, gigs in another, money in a sheet. It adds up to ten logins and no plan. Here every app is a switch inside one place: keep what you use, and the rest stays out of the way.</p>
-        <p className="type-measure mt-sm m-0 text-[16px] font-semibold text-ink-soft">A short chat at the start switches on the ones that fit you. Tap any app below to see how it works.</p>
+        <div className="grid gap-md md:grid-cols-[3fr_2fr] md:items-end">
+          <p className="type-measure mt-sm m-0 text-[16px] font-semibold text-ink-soft">A short chat at the start switches on the ones that fit you. Tap any app below to see how it works.</p>
+          {/* Bumling, the app's own guide, keeps the header from sitting all on the left. */}
+          <GuideLine host={BUMLING.key} side="right" mood="excited" size={96}>
+            Tell me what you want to do, and I will switch on just those apps.
+          </GuideLine>
+        </div>
       </header>
       {groups.map((g) => {
         const list = SITE_FEATURES.filter((m) => m.group === g);
@@ -55,11 +62,12 @@ export function Features() {
         );
       })}
       <section className="mt-2xl">
-        <div className="relative rounded-card bg-ink p-lg text-on-ink">
+        {/* The card colour in both themes (bg-ink turns cream in dark mode, which made this a glaring white block on the dark page). */}
+        <div className="relative rounded-card border-2 border-line bg-card-strong p-lg text-ink shadow-toy-soft">
           <BorderBeam />
-          <h2 className="type-hook text-[clamp(32px,6vw,56px)] text-on-ink">Switch on only <em>what you need</em></h2>
-          <p className="type-context mt-sm m-0 text-[18px] text-on-ink/80">Answer a few questions and we switch on the apps that fit you. Change them any time, free.</p>
-          <Link to={entry === '/home' ? '/home' : '/start'} className="toy fx-shimmer mt-md inline-flex min-h-[56px] items-center rounded-pill bg-card px-lg text-[18px] font-bold text-ink">
+          <h2 className="type-hook text-[clamp(32px,6vw,56px)]">Switch on only <em>what you need</em></h2>
+          <p className="type-context mt-sm m-0 text-[18px] text-ink-soft">Answer a few questions and we switch on the apps that fit you. Change them any time, free.</p>
+          <Link to={entry === '/home' ? '/home' : '/start'} className="toy fx-shimmer mt-md inline-flex min-h-[56px] items-center rounded-pill bg-ink px-lg text-[18px] font-bold text-on-ink">
             Start free
           </Link>
         </div>

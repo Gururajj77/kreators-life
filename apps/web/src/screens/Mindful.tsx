@@ -18,6 +18,8 @@ import { useFocusPrefs } from '../lib/focusPrefs';
 import { playChime, unlockAudio, useAmbient } from '../lib/sound';
 import { useLogs, useRefreshAll, useWellbeing } from '../lib/queries';
 import { useFocusPortal } from '../lib/focusPortal';
+import { Icon } from '../components/Icon';
+import { Wind } from 'lucide-react';
 
 const LENGTHS = [1, 3, 5, 10];
 
@@ -128,7 +130,7 @@ export function Mindful() {
             <div className="mf-ruler mt-sm">
               <RulerPicker label="Breathing length" tone="night" accent="r4" min={1} max={30} step={1} labelEvery={5} majorStep={5} value={minutes} onChange={setMinutes} valueText={(v) => `${v} ${v === 1 ? 'minute' : 'minutes'}`} />
             </div>
-            <div className="mf-actions" role="group" aria-label="Quick lengths">
+            <div className="mf-actions fill-row" role="group" aria-label="Quick lengths">
               {LENGTHS.map((m) => (
                 <button key={m} type="button" aria-pressed={minutes === m} onClick={() => setMinutes(m)} className="mf-mini toy">
                   {m} min
@@ -200,8 +202,8 @@ export function Mindful() {
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {logs.data?.logs.map((l) => (
             <li key={l.id} className={`flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft`}>
-              <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-r4 text-[18px]" aria-hidden="true">
-                🧘
+              <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-r4 text-on-fill" aria-hidden="true">
+                <Icon icon={Wind} size={18} />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-[16px] font-bold">

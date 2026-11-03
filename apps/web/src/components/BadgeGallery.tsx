@@ -46,7 +46,7 @@ function Tile({ b, held, count, fresh, onOpen }: { b: Badge; held: HeldBadge | u
   const p = badgeProgress(b, count);
   return (
     <button type="button" onClick={onOpen} className="toy toy-soft flex min-h-[44px] w-full flex-col items-center gap-xs rounded-tile bg-card p-sm text-center">
-      <BadgeArt name={b.name} emoji={b.emoji} tier={b.tier} shape={BADGE_FAMILY_META[b.family].shape} earned={earned} size="md" shine={fresh} decorative />
+      <BadgeArt name={b.name} icon={b.icon} tier={b.tier} shape={BADGE_FAMILY_META[b.family].shape} earned={earned} size="md" shine={fresh} decorative />
       <span className="text-[14px] font-extrabold">{b.name}</span>
       <span className="text-[12px] font-bold text-ink-soft">
         {earned ? (held?.at ? `Earned ${day(held.at)}` : held?.given ? 'Given by the team' : 'Earned') : 'Locked'} · {BADGE_TIER_LABEL[b.tier]}
@@ -69,7 +69,7 @@ function Detail({ b, held, count, onClose }: { b: Badge | null; held: HeldBadge 
     <Sheet open={b !== null} onClose={onClose} title={b?.name ?? 'Badge'}>
       {b && p && (
         <div className="flex flex-col items-center gap-sm text-center">
-          <BadgeArt name={b.name} emoji={b.emoji} tier={b.tier} shape={BADGE_FAMILY_META[b.family].shape} earned={earned} size="lg" decorative />
+          <BadgeArt name={b.name} icon={b.icon} tier={b.tier} shape={BADGE_FAMILY_META[b.family].shape} earned={earned} size="lg" decorative />
           <p className="m-0 text-[14px] font-bold text-ink-soft">
             {BADGE_TIER_LABEL[b.tier]} · {b.family}
           </p>

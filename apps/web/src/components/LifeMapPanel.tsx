@@ -10,6 +10,8 @@ import { Ring } from './Ring';
 import { RoutinePanel } from './RoutinePanel';
 import { Section } from './Section';
 import { Toggle } from './Toggle';
+import { Icon } from './Icon';
+import { Star } from 'lucide-react';
 
 const avg = (vals: (number | undefined)[]) => {
   const v = vals.filter((x): x is number => typeof x === 'number');
@@ -22,7 +24,10 @@ function GaugeStars({ value, label, color }: { value: number | null; label: stri
   return (
     <div className="flex flex-col items-center gap-xs rounded-tile bg-card p-sm shadow-toy-soft">
       <Ring value={stars === null ? 0 : stars / 5} size={64} stroke={7} color={color} label={`${label}, ${stars ?? 'not rated'} of 5 stars`}>
-        <span className="font-display text-[16px] font-extrabold">{stars ?? '–'}★</span>
+        <span className="inline-flex items-center gap-[2px] font-display text-[16px] font-extrabold">
+          {stars ?? '–'}
+          <Icon icon={Star} size={14} filled color={color} />
+        </span>
       </Ring>
       <span className="text-[12px] font-bold text-ink-soft">{label}</span>
     </div>

@@ -11,11 +11,15 @@ import {
   type InvoiceShow,
   type InvoiceTotals,
 } from '@kreators/shared';
+import { ChevronRight } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Button } from './Button';
+import { Icon } from './Icon';
 import { Inert } from './Inert';
 import { invoiceStamp, PrintSheet } from './PrintSheet';
 import { Toggle } from './Toggle';
+import { FIELD, LABEL } from '../lib/ui';
+export { FIELD, LABEL } from '../lib/ui';
 
 /** What each look wears. Colours are theme tokens; a bar that holds text has its own text token so dark mode keeps it readable. */
 const LOOK: Record<InvoiceDesign, { bar: string; barText: string; head: string; headText: string; row: string; sum: string; words: string }> = {
@@ -37,7 +41,7 @@ const lines = (...parts: (string | undefined)[]) => parts.filter((p): p is strin
 function Party({ p }: { p: InvoiceParty }) {
   const rows = lines(...p.taxIds.map((t) => `${t.label}: ${t.value}`), ...p.address.split('\n'), p.email, p.phone);
   return (
-    <div className="text-[14px] font-semibold leading-snug">
+    <div className="text-[14px] font-normal leading-snug">
       {rows.map((r, i) => (
         <p key={i} className="m-0">
           <Inert text={r} />
@@ -96,7 +100,7 @@ export function InvoiceView({ invoice, totals }: { invoice: Invoice; totals?: In
           <h2 className="m-0 break-words font-display text-[24px] font-extrabold leading-tight text-ink-soft md:text-right">
             <Inert text={doc.title} />
           </h2>
-          <dl className="mt-xs mb-sm grid grid-cols-[auto_1fr] text-[14px] font-semibold">
+          <dl className="mt-xs mb-sm grid grid-cols-[auto_1fr] text-[14px] font-normal">
             {(
               [
                 ['Date', invoiceDate(invoice.issueDate)],
@@ -120,7 +124,7 @@ export function InvoiceView({ invoice, totals }: { invoice: Invoice; totals?: In
             Billed to: <Inert text={toName} />
           </p>
           {doc.to.line && (
-            <p className="m-0 text-[14px] font-semibold">
+            <p className="m-0 text-[14px] font-normal">
               <Inert text={doc.to.line} />
             </p>
           )}
@@ -129,24 +133,24 @@ export function InvoiceView({ invoice, totals }: { invoice: Invoice; totals?: In
       </div>
 
       <div className="mt-md overflow-x-auto">
-        <table className="w-full border-collapse text-[14px] font-semibold">
+        <table className="w-full border-collapse text-[14px] font-normal">
           <thead>
             <tr style={{ background: look.bar, color: look.barText }}>
-              <th className="px-sm py-xs text-left font-extrabold">Description</th>
-              <th className="px-sm py-xs text-right font-extrabold">Unit cost</th>
-              <th className="px-sm py-xs text-right font-extrabold">Qty</th>
-              <th className="px-sm py-xs text-right font-extrabold">Amount</th>
+              <th className="px-xs py-xs text-left font-extrabold sm:px-sm">Description</th>
+              <th className="whitespace-nowrap px-xs py-xs text-right font-extrabold sm:px-sm">Unit cost</th>
+              <th className="whitespace-nowrap px-xs py-xs text-right font-extrabold sm:px-sm">Qty</th>
+              <th className="whitespace-nowrap px-xs py-xs text-right font-extrabold sm:px-sm">Amount</th>
             </tr>
           </thead>
           <tbody>
             {invoice.items.map((it, i) => (
               <tr key={i} style={{ background: i % 2 === 0 ? look.row : 'transparent' }}>
-                <td className="px-sm py-xs">
+                <td className="px-xs py-xs sm:px-sm">
                   <Inert text={it.description} />
                 </td>
-                <td className="px-sm py-xs text-right">{money(it.unitCents, cur)}</td>
-                <td className="px-sm py-xs text-right">{it.quantity}</td>
-                <td className="px-sm py-xs text-right font-extrabold">{money(it.quantity * it.unitCents, cur)}</td>
+                <td className="whitespace-nowrap px-xs py-xs text-right sm:px-sm">{money(it.unitCents, cur)}</td>
+                <td className="whitespace-nowrap px-xs py-xs text-right sm:px-sm">{it.quantity}</td>
+                <td className="whitespace-nowrap px-xs py-xs text-right font-normal sm:px-sm">{money(it.quantity * it.unitCents, cur)}</td>
               </tr>
             ))}
           </tbody>
@@ -159,7 +163,7 @@ export function InvoiceView({ invoice, totals }: { invoice: Invoice; totals?: In
             <p className="m-0 px-sm text-[12px] font-extrabold uppercase leading-[32px] tracking-wide" style={{ background: look.head, color: look.headText }}>
               Bank account details
             </p>
-            <div className="p-sm text-[14px] font-semibold leading-snug">
+            <div className="p-sm text-[14px] font-normal leading-snug">
               {bankRows.map((r) => (
                 <p key={r} className="m-0">
                   <Inert text={r} />
@@ -171,7 +175,7 @@ export function InvoiceView({ invoice, totals }: { invoice: Invoice; totals?: In
           <div />
         )}
         <div className="min-w-0 p-sm" style={{ background: look.sum, border: doc.design === 'mono' ? '1px solid var(--color-line)' : undefined }}>
-          <dl className="m-0 grid grid-cols-[1fr_auto] gap-x-md text-[14px] font-semibold">
+          <dl className="m-0 grid grid-cols-[1fr_auto] gap-x-md text-[14px] font-normal">
             {sums.map(([k, v]) => (
               <div key={k} className="contents">
                 <dt className="text-right text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{k}</dt>
@@ -179,7 +183,7 @@ export function InvoiceView({ invoice, totals }: { invoice: Invoice; totals?: In
               </div>
             ))}
             <dt className="mt-sm text-right text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">Total</dt>
-            <dd className="m-0 mt-xs text-right font-display text-[26px] font-extrabold leading-none">{money(t.total, cur)}</dd>
+            <dd className="m-0 mt-xs text-right text-[26px] font-extrabold leading-none">{money(t.total, cur)}</dd>
             {(doc.tdsMode === 'show' || doc.tdsMode === 'grossup') && t.tdsDeducted > 0 && (
               <>
                 <dt className="mt-sm text-right text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">TDS to deduct ({doc.tdsBps / 100}%)</dt>
@@ -224,8 +228,6 @@ export function InvoiceView({ invoice, totals }: { invoice: Invoice; totals?: In
 
 // ---- form pieces the designer and Settings share
 
-export const FIELD = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-export const LABEL = 'block text-[14px] font-bold';
 
 export function Field({ label, id, value, onChange, placeholder, type = 'text', max, inputMode }: { label: string; id: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string; max?: number; inputMode?: 'text' | 'decimal' | 'numeric' }) {
   return (
@@ -313,9 +315,26 @@ export function Chips<T extends string | number>({ label, options, value, onChan
 
 /**
  * One part of a document, in a line or two, with a small Edit button that opens only that part's form in a sheet.
- * The page stays short: the document on top, then these cards.
+ * The page stays short: the document on top, then these cards. `row` draws it as one line of an inset list (`.fx-inset`): the whole
+ * line is the button (title, what is set now, a chevron), so a long list of parts is one calm group instead of a column of Edit pills.
  */
-export function SummaryCard({ title, summary, onEdit, editLabel = 'Edit', disabled = false }: { title: string; summary: ReactNode; onEdit: () => void; editLabel?: string; disabled?: boolean }) {
+export function SummaryCard({ title, summary, onEdit, editLabel = 'Edit', disabled = false, row = false, badge }: { title: string; summary: ReactNode; onEdit: () => void; editLabel?: string; disabled?: boolean; row?: boolean; /** A short tag after the title (a row only): "2 new". */ badge?: ReactNode }) {
+  if (row) {
+    return (
+      <li>
+        <button type="button" onClick={onEdit} disabled={disabled} aria-label={`${editLabel} ${title.toLowerCase()}`} className="fx-row text-ink disabled:opacity-60">
+          <span className="min-w-0 flex-1">
+            <span className="flex flex-wrap items-center gap-xs">
+              <span className="text-[16px] font-extrabold">{title}</span>
+              {badge}
+            </span>
+            <span className="mt-xs block text-[14px] font-semibold text-ink-soft">{summary}</span>
+          </span>
+          {!disabled && <Icon icon={ChevronRight} size={20} className="shrink-0 text-ink-mute" />}
+        </button>
+      </li>
+    );
+  }
   return (
     <li className="flex items-start justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="min-w-0">

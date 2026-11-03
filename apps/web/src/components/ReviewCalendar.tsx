@@ -1,6 +1,7 @@
 import { blockTimeLabel, PERIOD_KINDS, PERIOD_META, REVIEW_REMINDER_TIME, REVIEW_SCHEDULE_NAME_MAX, addDays, type Period, type PeriodKind, type Repeat, type ReviewSchedule } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
+import { Bell, Check, type LucideIcon } from 'lucide-react';
 import { api } from '../lib/api';
 import { prettyDate } from '../lib/date';
 import { useAuthed } from '../lib/queries';
@@ -13,8 +14,8 @@ import { RepeatPicker } from './RepeatPicker';
 import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
 import { Toggle } from './Toggle';
+import { FIELD } from '../lib/ui';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 /** The words on this panel, in short plain sentences. */
 const COPY = {
   lede: 'Pick a day to plan a look back. You get a note in your inbox on that day.',
@@ -45,10 +46,10 @@ export function ReviewCalendar({ today, onOpenPeriod }: { today: string; onOpenP
   const d = q.data;
   const refresh = () => qc.invalidateQueries({ queryKey: ['reviews', 'schedule'] });
 
-  const marks: Record<string, { color: string; emoji?: string }> = {};
+  const marks: Record<string, { color: string; icon?: LucideIcon }> = {};
   for (const [day, v] of Object.entries(d?.days ?? {})) {
-    if (v.written.length > 0) marks[day] = { color: 'var(--color-r4)', emoji: '✓' };
-    else if (v.scheduled.length > 0) marks[day] = { color: 'var(--color-r5)', emoji: '🔔' };
+    if (v.written.length > 0) marks[day] = { color: 'var(--color-r4)', icon: Check };
+    else if (v.scheduled.length > 0) marks[day] = { color: 'var(--color-r5)', icon: Bell };
   }
   const schedules = d?.schedules ?? [];
   const coming = schedules.filter((s) => s.enabled && s.nextOn).sort((a, b) => (a.nextOn ?? '').localeCompare(b.nextOn ?? '')).slice(0, 3);
@@ -253,17 +254,17 @@ function ScheduleForm({ state, today, onClose, onSaved }: { state: FormState | n
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">First day</span>
-            <input type="date" required value={day} onChange={(e) => setDay(e.target.value)} className={field} />
+            <input type="date" required value={day} onChange={(e) => setDay(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Time</span>
-            <input type="time" required value={time} onChange={(e) => setTime(e.target.value)} className={field} />
+            <input type="time" required value={time} onChange={(e) => setTime(e.target.value)} className={FIELD} />
           </label>
         </div>
         <RepeatPicker value={repeat} anchor={day} onChange={setRepeat} onAnchor={setDay} />
         <label className="block">
           <span className="block text-[14px] font-bold">Name (optional)</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={REVIEW_SCHEDULE_NAME_MAX} placeholder="Sunday look back" className={field} />
+          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={REVIEW_SCHEDULE_NAME_MAX} placeholder="Sunday look back" className={FIELD} />
         </label>
         <p className="m-0 text-[12px] font-semibold text-ink-soft">{COPY.note}</p>
         {problem && (

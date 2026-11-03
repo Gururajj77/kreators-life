@@ -1,10 +1,11 @@
-import { BADGE_BY_KEY, BADGE_FAMILY_META, BADGE_TIER_LABEL, HONOR_BY_KEY, type BadgeShape, type BadgeTier } from '@kreators/shared';
+import { BADGE_BY_KEY, BADGE_FAMILY_META, BADGE_TIER_LABEL, HONOR_BY_KEY, type BadgeShape, type BadgeTier, type IconName } from '@kreators/shared';
+import { appIcon } from '../lib/appIcons';
 import gsap from 'gsap';
 import { useEffect, useId, useRef } from 'react';
 
 /**
  * A badge drawn as a medal. The shape comes from the badge's family, the finish (bronze, silver, gold, platinum) from its tier, both in the
- * colour tokens in app.css, and the picture in the middle is the badge's own emoji. A locked medal is grey with a small padlock. `shine`
+ * colour tokens in app.css, and the picture in the middle is the badge's own lucide glyph, stroked in the tier's dark rim colour. A locked medal is grey with a small padlock. `shine`
  * plays once when a badge has just been earned (a pop and a sweep of light, never looping; under reduced motion it is only set, not played).
  * The words next to it (or the label it carries) say earned or locked, so the state never depends on colour.
  */
@@ -46,7 +47,7 @@ const SHAPES: Record<BadgeShape, { d: string; cy: number; tails?: string }> = {
 
 export function BadgeArt({
   name,
-  emoji,
+  icon,
   tier,
   shape,
   earned,
@@ -56,7 +57,7 @@ export function BadgeArt({
   className = '',
 }: {
   name: string;
-  emoji: string;
+  icon: IconName;
   tier: BadgeTier;
   shape: BadgeShape;
   earned: boolean;
@@ -71,6 +72,7 @@ export function BadgeArt({
   const root = useRef<SVGSVGElement>(null);
   const sweep = useRef<SVGRectElement>(null);
   const s = SHAPES[shape];
+  const Glyph = appIcon(icon);
   const finish = earned ? tier : 'locked';
   const px = PX[size];
   const state = earned ? 'earned' : 'locked';
@@ -140,9 +142,8 @@ export function BadgeArt({
           <rect ref={sweep} x="-40" y="-10" width="26" height="120" fill={`url(#${uid}s)`} opacity="0" />
         </g>
       </g>
-      <text className="badge-art-emoji" x="50" y={s.cy} textAnchor="middle" dominantBaseline="central" fontSize="34" aria-hidden="true">
-        {emoji}
-      </text>
+      {/* The glyph as a nested svg at the plate's centre, in the tier's ink (the rim's dark stop), so it reads on the light plate. */}
+      <Glyph className="badge-art-emoji" x={50 - 16} y={s.cy - 16} width={32} height={32} strokeWidth={2.2} color={`var(--badge-${finish}-b)`} aria-hidden="true" focusable="false" />
       {!earned && (
         <g aria-hidden="true">
           <circle cx="76" cy="76" r="15" style={{ fill: 'var(--card-strong)', stroke: 'var(--ink-soft)' }} strokeWidth="2" />
@@ -157,8 +158,8 @@ export function BadgeArt({
 /** A badge or an honor by its key, drawn as a medal. An honor wears a seal. Returns nothing for a key that is not known. */
 export function BadgeMedal({ k, earned = true, size = 'sm', shine = false, decorative = false, className = '' }: { k: string; earned?: boolean; size?: Size; shine?: boolean; decorative?: boolean; className?: string }) {
   const b = BADGE_BY_KEY[k];
-  if (b) return <BadgeArt name={b.name} emoji={b.emoji} tier={b.tier} shape={BADGE_FAMILY_META[b.family].shape} earned={earned} size={size} shine={shine} decorative={decorative} className={className} />;
+  if (b) return <BadgeArt name={b.name} icon={b.icon} tier={b.tier} shape={BADGE_FAMILY_META[b.family].shape} earned={earned} size={size} shine={shine} decorative={decorative} className={className} />;
   const h = HONOR_BY_KEY[k];
-  if (h) return <BadgeArt name={h.name} emoji={h.emoji} tier={h.tier} shape="seal" earned={earned} size={size} shine={shine} decorative={decorative} className={className} />;
+  if (h) return <BadgeArt name={h.name} icon={h.icon} tier={h.tier} shape="seal" earned={earned} size={size} shine={shine} decorative={decorative} className={className} />;
   return null;
 }

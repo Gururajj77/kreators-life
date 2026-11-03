@@ -2,7 +2,7 @@ import { KIND_META, PRODUCT_KIND_META, RELATIONSHIP_BY_KEY , HELP_FAQ, MODULES, 
 import { useId, useState } from 'react';
 import { Link } from 'react-router';
 import type { LucideIcon } from 'lucide-react';
-import { BookOpen, LifeBuoy, MessageCircle, NotebookPen, Recycle, ShoppingBag, ShoppingCart, SquareCheck, Toolbox, Footprints, UserRound } from 'lucide-react';
+import { BookOpen, Briefcase, FileSignature, FileText, Hash, LifeBuoy, MessageCircle, NotebookPen, Receipt, Recycle, ShoppingBag, ShoppingCart, SquareCheck, Toolbox, Footprints, UserRound } from 'lucide-react';
 import { appIcon } from '../lib/appIcons';
 import { AnimatedIcon } from './AnimatedIcon';
 import { Icon } from './Icon';
@@ -24,7 +24,7 @@ export function SearchBox({ placeholder = 'Search anything', autoFocus = false, 
   const needle = query.toLowerCase();
   const apps = live ? MODULES.filter((m) => !m.locked && (m.name.toLowerCase().includes(needle) || m.blurb.toLowerCase().includes(needle))).slice(0, 5) : [];
   const help = live ? HELP_FAQ.filter((f) => f.q.toLowerCase().includes(needle) || f.a.toLowerCase().includes(needle)).slice(0, 3) : [];
-  const total = (d ? d.tasks.length + d.journal.length + d.resources.length + d.products.length + d.people.length + d.items.length + d.listings.length + d.tools.length + d.posts.length + d.clubs.length : 0) + apps.length + help.length;
+  const total = (d ? d.tasks.length + d.journal.length + d.resources.length + d.products.length + d.people.length + d.items.length + d.listings.length + d.tools.length + d.posts.length + d.clubs.length + d.agencyClients.length + d.agencyInvoices.length + d.agencyContracts.length + d.agencyDocs.length + d.channels.length : 0) + apps.length + help.length;
 
   return (
     <div className="relative">
@@ -136,6 +136,41 @@ export function SearchBox({ placeholder = 'Search anything', autoFocus = false, 
             <Group title="Community">
               {d.posts.slice(0, 5).map((p) => (
                 <Row key={p.id} to={`/community?post=${p.id}`} title={p.body} sub={p.authorName} icon={MessageCircle} />
+              ))}
+            </Group>
+          )}
+          {d && d.channels.length > 0 && (
+            <Group title="Channels">
+              {d.channels.slice(0, 5).map((ch) => (
+                <Row key={ch.id} to={ch.scope === 'community' ? `/community?tab=channels&channel=${ch.id}` : `/bond?channel=${ch.id}#bond-channels`} title={ch.title} sub={`${ch.scope === 'community' ? 'Community' : 'Bond'}${ch.topic ? `, ${ch.topic}` : ''}`} icon={Hash} />
+              ))}
+            </Group>
+          )}
+          {d && d.agencyClients.length > 0 && (
+            <Group title="Agency clients">
+              {d.agencyClients.slice(0, 5).map((k) => (
+                <Row key={k.id} to={`/agency/${k.id}`} title={k.title} sub={k.status} icon={Briefcase} />
+              ))}
+            </Group>
+          )}
+          {d && d.agencyInvoices.length > 0 && (
+            <Group title="Invoices">
+              {d.agencyInvoices.slice(0, 5).map((i) => (
+                <Row key={i.id} to={`/agency/invoices/${i.id}`} title={i.title} sub={[i.client, i.status].filter(Boolean).join(', ')} icon={Receipt} />
+              ))}
+            </Group>
+          )}
+          {d && d.agencyContracts.length > 0 && (
+            <Group title="Agreements">
+              {d.agencyContracts.slice(0, 5).map((a) => (
+                <Row key={a.id} to={`/agency/contracts/${a.id}`} title={a.title} sub={[a.client, a.status].filter(Boolean).join(', ')} icon={FileSignature} />
+              ))}
+            </Group>
+          )}
+          {d && d.agencyDocs.length > 0 && (
+            <Group title="Documents">
+              {d.agencyDocs.slice(0, 5).map((x) => (
+                <Row key={x.id} to={`/agency/docs/${x.id}`} title={x.title} sub={[x.client, x.status].filter(Boolean).join(', ')} icon={FileText} />
               ))}
             </Group>
           )}

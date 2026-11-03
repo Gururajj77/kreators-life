@@ -5,6 +5,8 @@ import gsap from 'gsap';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { Button } from '../components/Button';
+import { FactTag } from '../components/FactTag';
+import { StatusTag } from '../components/StatusTag';
 import { AreaLine, Gauge, HBars, MultiLine, StatTile, WeekDots } from '../components/Charts';
 import { PlacementChart, ScoreRow } from '../components/LifeMap';
 import { CoachFace } from '../components/MyCoach';
@@ -14,11 +16,11 @@ import { Screen } from '../components/Screen';
 import { Section } from '../components/Section';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
-import { shortDay } from '../lib/date';
+import { shortDay, dateTime } from '../lib/date';
 import { useAuthed } from '../lib/queries';
+import { FIELD } from '../lib/ui';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-const when = (iso: string) => new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const when = dateTime;
 const say = (e: unknown) => (e instanceof Error ? e.message : 'That did not work.');
 const LAYERS: NodeKind[] = ['pillar', 'principle', 'value_goal', 'outcome'];
 const PART_SECTION_ID: Record<CoachSharePart, string> = { daily: 'daily-heading', pillars: 'pillars-heading', routine: 'routine-heading', lifeMap: 'map-heading', reflection: 'reflection-heading' };
@@ -64,11 +66,11 @@ function ShareBar({ share }: { share: CoachShare }) {
         <nav aria-label="What they share" className="scroll-row relative m-0 py-sm [mask-image:linear-gradient(to_right,black_calc(100%-32px),transparent)] md:px-lg md:[mask-image:none]">
           {COACH_SHARE_PARTS.map((k) =>
             share[k] ? (
-              <button key={k} type="button" onClick={() => jumpTo(PART_SECTION_ID[k])} className="toy toy-soft inline-flex min-h-[40px] shrink-0 items-center rounded-pill bg-card px-sm text-[12px] font-extrabold text-ink">
+              <button key={k} type="button" onClick={() => jumpTo(PART_SECTION_ID[k])} className="toy toy-soft inline-flex min-h-[44px] shrink-0 items-center rounded-pill bg-card px-sm text-[12px] font-extrabold text-ink">
                 {COACH_SHARE_META[k].name}
               </button>
             ) : (
-              <span key={k} title="They do not share this" className="inline-flex min-h-[40px] shrink-0 items-center rounded-pill bg-line px-sm text-[12px] font-extrabold text-ink-soft line-through">
+              <span key={k} title="They do not share this" className="inline-flex min-h-[44px] shrink-0 items-center rounded-pill bg-line px-sm text-[12px] font-extrabold text-ink-soft line-through">
                 {COACH_SHARE_META[k].name}
               </span>
             ),
@@ -90,20 +92,18 @@ function Problem({ e }: { e: unknown }) {
 
 /** A task as the coach sees it: the title, when it is due, whether the coach added it, and a way to change it while it is open. */
 function TaskLine({ t, onEdit }: { t: Node; onEdit?: () => void }) {
-  const tags = [t.fromCoach ? 'From a coach' : null, t.dueDate ? `${shortDay(t.dueDate)}${t.dueTime ? `, ${t.dueTime}` : ''}` : null].filter(Boolean);
+  const due = t.dueDate ? `${shortDay(t.dueDate)}${t.dueTime ? `, ${t.dueTime}` : ''}` : null;
+  const hasTags = t.fromCoach || due !== null;
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="flex items-start gap-xs">
         <span className="mt-xs size-[12px] shrink-0 rounded-pill" style={{ background: RELATIONSHIP_BY_KEY[t.relationship].color }} aria-hidden="true" />
         <span className={`min-w-0 flex-1 text-[14px] font-bold ${t.status === 'done' ? 'text-ink-soft line-through' : ''}`}>{t.title}</span>
       </div>
-      {(tags.length > 0 || (onEdit && t.status === 'active')) && (
+      {(hasTags || (onEdit && t.status === 'active')) && (
         <div className="mt-xs flex flex-wrap items-center justify-end gap-xs">
-          {tags.map((x) => (
-            <span key={x} className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[24px] text-ink-soft">
-              {x}
-            </span>
-          ))}
+          {t.fromCoach && <StatusTag tone="deep">From a coach</StatusTag>}
+          {due && <FactTag kind="when">{due}</FactTag>}
           {onEdit && t.status === 'active' && (
             <Button size="sm" variant="ghost" onClick={onEdit}>
               Change
@@ -148,7 +148,7 @@ function TaskSheet({ studentId, editing, projects, onClose, onDone }: { studentI
         {!task && (
           <label className="block">
             <span className="block text-[14px] font-bold">Under which project</span>
-            <select value={parentId} onChange={(e) => setParentId(e.target.value)} required className={field}>
+            <select value={parentId} onChange={(e) => setParentId(e.target.value)} required className={FIELD}>
               <option value="">Pick a project</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -160,25 +160,25 @@ function TaskSheet({ studentId, editing, projects, onClose, onDone }: { studentI
         )}
         <label className="block">
           <span className="block text-[14px] font-bold">The task</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={140} placeholder={KIND_META.task.prompt} className={field} />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={140} placeholder={KIND_META.task.prompt} className={FIELD} />
         </label>
         <div className="grid grid-cols-3 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Day</span>
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={field} />
+            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Time</span>
-            <input type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)} className={field} />
+            <input type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Minutes</span>
-            <input type="number" min={1} max={600} value={minutes} onChange={(e) => setMinutes(e.target.value)} className={field} />
+            <input type="number" min={1} max={600} value={minutes} onChange={(e) => setMinutes(e.target.value)} className={FIELD} />
           </label>
         </div>
         <label className="block">
           <span className="block text-[14px] font-bold">A note, optional</span>
-          <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={2} className={field} />
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={2} className={FIELD} />
         </label>
         <p className="m-0 text-[14px] font-semibold text-ink-soft">{task ? 'Renaming a task starts its wait again. The change goes in the change log and to their inbox.' : 'It shows as From your coach. It waits and pays like their own tasks, and only they tick it.'}</p>
         <Problem e={save.error} />
@@ -295,7 +295,7 @@ export function CoachStudent() {
           lede="Each pyramid top down: the foundation first, projects last. Add a task under a project, or change an open one."
           action={
             projects.length > 0 ? (
-              <Button size="sm" variant="outline" onClick={() => setEditing({ mode: 'add', parentId: '' })}>
+              <Button size="sm" variant="outline" plusToX onClick={() => setEditing({ mode: 'add', parentId: '' })}>
                 Add a task
               </Button>
             ) : undefined
@@ -341,7 +341,7 @@ export function CoachStudent() {
                             {p.status === 'done' ? ' (done)' : ''}
                           </p>
                           {p.status === 'active' && (
-                            <Button size="sm" variant="ghost" onClick={() => setEditing({ mode: 'add', parentId: p.id })}>
+                            <Button size="sm" variant="ghost" plusToX onClick={() => setEditing({ mode: 'add', parentId: p.id })}>
                               Add a task here
                             </Button>
                           )}
@@ -486,7 +486,7 @@ export function CoachStudent() {
             if (note.trim()) write.mutate();
           }}
         >
-          <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={COACH_NOTE_MAX} rows={3} placeholder="What you noticed, and one next step" aria-label="A note for your student" className={field} />
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={COACH_NOTE_MAX} rows={3} placeholder="What you noticed, and one next step" aria-label="A note for your student" className={FIELD} />
           <Button type="submit" className="mt-xs" disabled={write.isPending || !note.trim()}>
             Leave the note
           </Button>

@@ -1,4 +1,4 @@
-import { knowledgeKindIcon, RELATIONSHIP_BY_KEY, type Resource } from '@kreators/shared';
+import { knowledgeKindIcon, RELATIONSHIP_BY_KEY, RELATIONSHIPS, type Resource } from '@kreators/shared';
 import { AppIcon } from '../components/AppIcon';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
@@ -10,6 +10,8 @@ import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useAuthed, useMe, useRefreshAll, useResources } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
+import { useParamState } from '../lib/useParamState';
+import { FIELD } from '../lib/ui';
 
 
 /** A resource's tags are free text; a pillar key among them (parent_child, guru, self...) reads as that pillar's name, and
@@ -26,13 +28,14 @@ export function Resources() {
 
 function List() {
   const me = useMe();
-  const [tag, setTag] = useState('');
+  const [tag, setTag] = useParamState('tag', '');
   const pg = usePage();
   const q = useResources(tag || undefined, pg.query);
   const refresh = useRefreshAll();
   const canAuthor = me.data && me.data.user.role !== 'user';
   const [editing, setEditing] = useState<Resource | 'new' | null>(null);
-  const tags = Array.from(new Set((q.data?.resources ?? []).flatMap((r) => r.tags))).sort();
+  const isPillar = (t: string) => RELATIONSHIPS.some((r) => r.key === t);
+  const otherTags = Array.from(new Set([...(q.data?.resources ?? []).flatMap((r) => r.tags), ...(tag ? [tag] : [])])).filter((t) => !isPillar(t)).sort();
 
   return (
     <Screen>
@@ -46,18 +49,29 @@ function List() {
           </Button>
         )}
       </header>
-      {tags.length > 0 && (
-        <div className="mt-md flex flex-wrap gap-xs" role="group" aria-label="Filter by tag">
-          <button type="button" aria-pressed={tag === ''} onClick={() => setTag('')} className={`min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${tag === '' ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
-            All
-          </button>
-          {tags.map((t) => (
-            <button key={t} type="button" aria-pressed={tag === t} onClick={() => setTag(t)} className={`min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${tag === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
-              {tagLabel(t)}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* One quiet select instead of a wall of pills: the seven pillars by name, then any other topic the reads carry. The choice lives in the URL. */}
+      <label className="mt-md flex flex-wrap items-center gap-xs text-[14px] font-bold">
+        <span>Show</span>
+        <select value={tag} onChange={(e) => setTag(e.target.value)} className="min-h-[44px] min-w-0 rounded-pill border-2 border-line bg-card-strong px-sm text-[14px] font-bold text-ink">
+          <option value="">Everything</option>
+          <optgroup label="Pillars">
+            {RELATIONSHIPS.map((r) => (
+              <option key={r.key} value={r.key}>
+                {r.name}
+              </option>
+            ))}
+          </optgroup>
+          {otherTags.length > 0 && (
+            <optgroup label="Other topics">
+              {otherTags.map((t) => (
+                <option key={t} value={t}>
+                  {tagLabel(t)}
+                </option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+      </label>
       <ul className="mt-md flex list-none flex-col gap-xs p-0 m-0">
         {q.data?.resources.map((r) => (
           <li key={r.id}>
@@ -158,8 +172,7 @@ function ResourceSheet({ resource, onClose, onSaved }: { resource: Resource | 'n
       onClose();
     },
   });
-  const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-  return (
+    return (
     <Sheet open={resource !== null} onClose={onClose} title={existing ? 'Edit resource' : 'New resource'}>
       <form
         className="flex flex-col gap-md"
@@ -180,23 +193,23 @@ function ResourceSheet({ resource, onClose, onSaved }: { resource: Resource | 'n
         </div>
         <label className="block">
           <span className="block text-[14px] font-bold">Title</span>
-          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} required className={field} />
+          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} required className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">One-line summary</span>
-          <input value={summary} onChange={(e) => setSummary(e.target.value)} maxLength={300} className={field} />
+          <input value={summary} onChange={(e) => setSummary(e.target.value)} maxLength={300} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Body</span>
-          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={8} className={field} />
+          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={8} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Link or video URL</span>
-          <input value={url} onChange={(e) => setUrl(e.target.value)} className={field} placeholder="Optional" />
+          <input value={url} onChange={(e) => setUrl(e.target.value)} className={FIELD} placeholder="Optional" />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Tags, comma separated</span>
-          <input value={tags} onChange={(e) => setTags(e.target.value)} className={field} placeholder="stress, sleep" />
+          <input value={tags} onChange={(e) => setTags(e.target.value)} className={FIELD} placeholder="stress, sleep" />
         </label>
         <label className="flex items-center gap-sm text-[14px] font-bold">
           <input type="checkbox" checked={published} onChange={(e) => setPublished(e.target.checked)} className="size-[20px] accent-ink" />

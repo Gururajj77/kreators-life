@@ -1,35 +1,45 @@
-import { PORTAL_ACTIONS, PORTAL_NEVER, PORTAL_PARTS, type AgencyClient, type PortalActionKey, type PortalPartKey } from '@kreators/shared';
+import { PORTAL_ACTIONS, PORTAL_NEVER, PORTAL_PARTS, type AgencyClient, type ClientLifecycle, type PortalActionKey, type PortalPartKey } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { ExternalLink, Link2Off, RefreshCw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
+import { PortalSecurityCard } from './AgencyLifecycle';
 import { Button } from './Button';
+import { Fold } from './Fold';
+import { MoreMenu } from './MoreMenu';
+import { Sheet } from './Sheet';
 import { Toggle } from './Toggle';
+import { copyPlain } from '../lib/clipboard';
 
 const COPY = {
   off: 'Switch the link on to share it. Until then nobody can open this dashboard.',
   on: 'Anyone with this link sees the parts switched on below. They need no account.',
   never: 'These stay private, whatever you switch on.',
-  fresh: 'Make a fresh link',
-  freshAsk: 'Tap again to close the old link',
+  noPassword: 'Anyone with the link can open this. Set a password.',
+  freshTitle: 'Make a fresh link?',
   freshHint: 'A fresh link closes the old one at once. Send the new one to your client.',
   failed: 'That did not save. Try again.',
 };
 
+const ALL_SWITCHES = [...PORTAL_PARTS, ...PORTAL_ACTIONS];
+
 /**
- * The client link panel: one shareable dashboard per client. A switch makes or closes the link, a copy and a preview show what the
- * client will get, and every part and action is its own switch. What is off never leaves the server; the list at the foot says
- * what is never shown at all.
+ * The client link, summed up in one row: on or off, the password, how many parts the client sees, and Copy link. What they see and
+ * the password each open in their own sheet; a fresh link and the preview sit in More. What is off never leaves the server; the
+ * "Never shown" list in the switches sheet says what is never shown at all. The no-password warning always stays in sight.
  */
-export function ClientLink({ client }: { client: AgencyClient }) {
+export function ClientLink({ client, life }: { client: AgencyClient; life: ClientLifecycle }) {
   const qc = useQueryClient();
   const token = client.portalToken;
   const on = Boolean(token);
   const url = token ? `${window.location.origin}/a/${token}` : '';
+  const pwSet = life.password.set;
+  const shown = ALL_SWITCHES.filter((p) => client.portal[p.key]).length;
   const [copied, setCopied] = useState(false);
-  const [confirm, setConfirm] = useState(false);
+  const [manual, setManual] = useState(false);
+  const [sheet, setSheet] = useState<null | 'see' | 'password' | 'fresh'>(null);
   const timers = useRef<number[]>([]);
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
-  const later = (fn: () => void, ms: number) => timers.current.push(window.setTimeout(fn, ms));
 
   const send = useMutation({
     mutationFn: (body: { on?: boolean; fresh?: boolean; show?: Partial<Record<PortalPartKey | PortalActionKey, boolean>> }) => api.agencyPortal(client.id, body),
@@ -37,82 +47,137 @@ export function ClientLink({ client }: { client: AgencyClient }) {
   });
 
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(url);
-    } catch {
-      // A browser that blocks the clipboard: select the text so it can be copied by hand.
-      const field = document.getElementById(`link-${client.id}`) as HTMLInputElement | null;
-      field?.select();
+    if (await copyPlain(url)) {
+      setCopied(true);
+      timers.current.push(window.setTimeout(() => setCopied(false), 2500));
+    } else {
+      // A browser that blocks the clipboard: show the address so it can be copied by hand.
+      setManual(true);
     }
-    setCopied(true);
-    later(() => setCopied(false), 2500);
   };
 
-  const makeFresh = () => {
-    if (!confirm) {
-      setConfirm(true);
-      later(() => setConfirm(false), 4000);
-      return;
-    }
-    setConfirm(false);
-    send.mutate({ fresh: true });
-  };
+  const summary = [on ? 'on' : 'off', pwSet ? 'Password set' : 'No password', `${shown} of ${ALL_SWITCHES.length} parts shown`].join(' · ');
 
   return (
     <div className="rounded-card bg-card p-md shadow-toy-soft">
-      <Toggle compact on={on} onChange={(v) => send.mutate({ on: v })} disabled={send.isPending} label="Client link" hint={on ? COPY.on : COPY.off} />
-      {on && (
+      <div className="flex flex-wrap items-center gap-sm">
+        <div className="min-w-0 flex-1">
+          <h3 className="m-0 text-[16px] font-extrabold">Client link</h3>
+          <p className="m-0 text-[14px] font-semibold text-ink-soft">{summary}</p>
+        </div>
+        {on ? (
+          <Button size="sm" onClick={copy}>
+            {copied ? 'Copied' : 'Copy link'}
+          </Button>
+        ) : (
+          <Button size="sm" onClick={() => send.mutate({ on: true })} disabled={send.isPending}>
+            {send.isPending ? 'Switching on' : 'Switch it on'}
+          </Button>
+        )}
+        <MoreMenu
+          label="More for the client link"
+          items={[
+            ...(on
+              ? [
+                  { key: 'preview', label: 'Open preview', icon: ExternalLink, onSelect: () => window.open(url, '_blank', 'noopener') },
+                  { key: 'fresh', label: 'Make a fresh link', icon: RefreshCw, onSelect: () => setSheet('fresh') },
+                  { key: 'off', label: 'Switch the link off', icon: Link2Off, destructive: true, onSelect: () => send.mutate({ on: false }) },
+                ]
+              : []),
+          ]}
+        />
+      </div>
+
+      {!pwSet && (
+        <p role="note" className="mt-sm m-0 rounded-tile p-sm text-[14px] font-bold" style={{ background: 'var(--tint-yellow)' }}>
+          {COPY.noPassword}
+        </p>
+      )}
+      {!on && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{COPY.off}</p>}
+
+      {on && manual && (
         <div className="mt-sm">
           <label className="block text-[14px] font-bold" htmlFor={`link-${client.id}`}>
             Link to share
           </label>
-          <input id={`link-${client.id}`} readOnly value={url} onFocus={(e) => e.currentTarget.select()} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm font-mono text-[14px]" />
-          <div className="mt-sm flex flex-wrap gap-xs">
-            <Button size="sm" onClick={copy}>
-              {copied ? 'Copied' : 'Copy link'}
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => window.open(url, '_blank', 'noopener')}>
-              Open preview
-            </Button>
-            <Button size="sm" variant="outline" onClick={makeFresh} disabled={send.isPending}>
-              {confirm ? COPY.freshAsk : COPY.fresh}
-            </Button>
-          </div>
-          <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{COPY.freshHint}</p>
+          <input id={`link-${client.id}`} readOnly autoFocus value={url} onFocus={(e) => e.currentTarget.select()} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm font-mono text-[14px]" />
         </div>
       )}
+
+      <div className="mt-sm flex flex-wrap gap-xs">
+        <Button size="sm" variant="outline" onClick={() => setSheet('see')}>
+          Change what they see
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => setSheet('password')}>
+          {pwSet ? 'Password' : 'Set a password'}
+        </Button>
+      </div>
       {send.isError && (
         <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
           {COPY.failed}
         </p>
       )}
 
-      <h3 className="mt-md text-[16px]">What they can see</h3>
-      <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
-        {PORTAL_PARTS.map((p) => (
-          <li key={p.key}>
-            <Toggle compact on={client.portal[p.key]} onChange={(v) => send.mutate({ show: { [p.key]: v } })} disabled={!on || send.isPending} label={p.name} hint={p.blurb} />
-          </li>
-        ))}
-      </ul>
+      <Sheet open={sheet === 'see'} onClose={() => setSheet(null)} title="What your client sees">
+        <Toggle compact on={on} onChange={(v) => send.mutate({ on: v })} disabled={send.isPending} label="Client link" hint={on ? COPY.on : COPY.off} />
+        <h3 className="mt-md text-[16px]">What they can see</h3>
+        <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+          {PORTAL_PARTS.map((p) => (
+            <li key={p.key}>
+              <Toggle compact on={client.portal[p.key]} onChange={(v) => send.mutate({ show: { [p.key]: v } })} disabled={!on || send.isPending} label={p.name} hint={p.blurb} />
+            </li>
+          ))}
+        </ul>
+        <h3 className="mt-md text-[16px]">What they can do</h3>
+        <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+          {PORTAL_ACTIONS.map((p) => (
+            <li key={p.key}>
+              <Toggle compact on={client.portal[p.key]} onChange={(v) => send.mutate({ show: { [p.key]: v } })} disabled={!on || send.isPending} label={p.name} hint={p.blurb} />
+            </li>
+          ))}
+        </ul>
+        <Fold className="mt-md" title="Never shown">
+          <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.never}</p>
+          <ul className="mt-xs m-0 list-disc pl-md text-[14px] font-semibold text-ink-soft">
+            {PORTAL_NEVER.map((n) => (
+              <li key={n}>{n}</li>
+            ))}
+          </ul>
+        </Fold>
+        {send.isError && (
+          <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+            {COPY.failed}
+          </p>
+        )}
+        <div className="mt-md pb-xl">
+          <Button onClick={() => setSheet(null)}>Done</Button>
+        </div>
+      </Sheet>
 
-      <h3 className="mt-md text-[16px]">What they can do</h3>
-      <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
-        {PORTAL_ACTIONS.map((p) => (
-          <li key={p.key}>
-            <Toggle compact on={client.portal[p.key]} onChange={(v) => send.mutate({ show: { [p.key]: v } })} disabled={!on || send.isPending} label={p.name} hint={p.blurb} />
-          </li>
-        ))}
-      </ul>
-      {!on && <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{COPY.off}</p>}
+      <Sheet open={sheet === 'password'} onClose={() => setSheet(null)} title={`Password for ${client.name}`}>
+        <PortalSecurityCard client={client} life={life} />
+        <div className="mt-md pb-xl">
+          <Button onClick={() => setSheet(null)}>Done</Button>
+        </div>
+      </Sheet>
 
-      <h3 className="mt-md text-[16px]">Never shown</h3>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{COPY.never}</p>
-      <ul className="mt-xs m-0 list-disc pl-md text-[14px] font-semibold text-ink-soft">
-        {PORTAL_NEVER.map((n) => (
-          <li key={n}>{n}</li>
-        ))}
-      </ul>
+      <Sheet open={sheet === 'fresh'} onClose={() => setSheet(null)} title={COPY.freshTitle}>
+        <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.freshHint}</p>
+        <div className="mt-md flex flex-wrap gap-xs pb-xl">
+          <Button
+            onClick={() => {
+              send.mutate({ fresh: true });
+              setSheet(null);
+            }}
+            disabled={send.isPending}
+          >
+            Yes, make a fresh link
+          </Button>
+          <Button variant="outline" onClick={() => setSheet(null)}>
+            Keep this one
+          </Button>
+        </div>
+      </Sheet>
     </div>
   );
 }

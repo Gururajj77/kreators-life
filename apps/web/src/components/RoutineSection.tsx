@@ -3,9 +3,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
+import { chip } from './Chat';
 import { CheckRow } from './CheckRow';
+import { Icon } from './Icon';
+import { Compass } from 'lucide-react';
 
-const chip = (on: boolean) => `min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`;
 
 /**
  * The routine from the strategy session, on Daily: the morning steps as tick rows (done only when every one
@@ -27,8 +29,8 @@ export function RoutineSection({ date }: { date: string }) {
           Your routine
         </h2>
         <Link to="/session" className="toy toy-soft mt-sm flex items-center gap-sm rounded-tile bg-card p-sm text-ink">
-          <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-paper text-[20px]" aria-hidden="true">
-            🧭
+          <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink-soft" aria-hidden="true">
+            <Icon icon={Compass} size={20} />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[16px] font-bold">Run the strategy session</span>

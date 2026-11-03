@@ -32,6 +32,7 @@ import {
   type ReviewSummary,
   type ReviewTemplate,
   type ReviewsResponse,
+  monthShift,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { DATE_RE, dayFromDevice, newId, nowIso, shiftDate, str } from '../db';
@@ -322,7 +323,7 @@ reviews.get('/schedule', async (c) => {
   const monthQ = c.req.query('month');
   const month = monthQ && /^\d{4}-(0[1-9]|1[0-2])$/.test(monthQ) ? monthQ : dayFromDevice(c.req.query('day')).slice(0, 7);
   const from = `${month}-01`;
-  const to = shiftDate(`${shiftMonth(month, 1)}-01`, -1);
+  const to = shiftDate(`${monthShift(month, 1)}-01`, -1);
   const [rows, written] = await Promise.all([
     db.prepare('SELECT id, kind, name, anchor, time, repeat_json, enabled, next_on FROM review_schedules WHERE user_id = ? ORDER BY created_at LIMIT ?').bind(user.id, MAX_REVIEW_SCHEDULES).all<ScheduleRow>(),
     db.prepare('SELECT kind, period_start, period_end FROM reviews WHERE user_id = ? AND period_end >= ? AND period_end <= ?').bind(user.id, from, to).all<{ kind: PeriodKind; period_start: string; period_end: string }>(),
@@ -347,10 +348,6 @@ function scheduleFields(body: Record<string, unknown>, prev?: ScheduleRow) {
   const time = typeof body.time === 'string' && TIME_OK.test(body.time) ? body.time : (prev?.time ?? REVIEW_REMINDER_TIME);
   const repeat = 'repeat' in body ? parseRepeat(body.repeat) : parseRepeat(prev?.repeat_json ?? null);
   return { kind, anchor, time, repeat, name: str(body.name, REVIEW_SCHEDULE_NAME_MAX, prev?.name ?? ''), enabled: 'enabled' in body ? body.enabled !== false : (prev ? prev.enabled === 1 : true) };
-}
-function shiftMonth(month: string, n: number): string {
-  const [y, m] = month.split('-').map(Number);
-  return new Date(Date.UTC(y ?? 2026, (m ?? 1) - 1 + n, 1)).toISOString().slice(0, 7);
 }
 
 reviews.post('/schedule', async (c) => {

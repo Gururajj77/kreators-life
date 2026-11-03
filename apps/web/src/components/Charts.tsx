@@ -1,7 +1,10 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import type React from 'react';
 import { Link } from 'react-router';
+import { ChevronLeft, ChevronRight, type LucideIcon, ArrowRight } from 'lucide-react';
+import { Icon } from './Icon';
 import { MoodFace } from './MoodFace';
+import { tie } from '../lib/text';
 
 /**
  * The kit's chart vocabulary, drawn in SVG with the theme's tokens so every one works in light and dark.
@@ -56,23 +59,6 @@ function arc(cx: number, cy: number, r: number, from: number, to: number): strin
   const [ex, ey] = polar(cx, cy, r, to);
   const large = to - from > 180 ? 1 : 0;
   return `M${sx.toFixed(2)} ${sy.toFixed(2)} A${r} ${r} 0 ${large} 1 ${ex.toFixed(2)} ${ey.toFixed(2)}`;
-}
-
-/** Seven bars, one per day, the way the kit draws a week. */
-export function WeekBars({ values, max, color, labels, label }: { values: (number | null)[]; max: number; color: string; labels: string[]; label: string }) {
-  return (
-    <div role="img" aria-label={label} className="flex h-[96px] items-end gap-xs">
-      {values.map((v, i) => {
-        const h = v === null ? 0 : Math.max(6, Math.round((Math.min(v, max) / max) * 72));
-        return (
-          <div key={i} className="flex flex-1 flex-col items-center justify-end gap-xs">
-            <span className="block w-full rounded-pill" style={{ height: h, background: v === null ? 'var(--color-line)' : color }} />
-            <span className="text-[12px] font-bold text-ink-soft">{labels[i]}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 /** A small smooth line with a soft fill under it, for tracker rows. Missing days are skipped. */
@@ -250,7 +236,10 @@ export function MultiLine({ series, max, min = 0, labels, height = 160, label, y
  * A colour per bar lets a down day read orange against up days in green.
  */
 export function PillBars({ values, max, labels, colors, color, label, height = 120, allLabels = false, dots, onFill = false }: { values: (number | null)[]; max: number; labels: string[]; colors?: (string | undefined)[]; color: string; label: string; height?: number; allLabels?: boolean; dots?: (number | boolean)[]; onFill?: boolean }) {
-  const shown = new Set(allLabels ? values.map((_, i) => i) : [0, Math.floor((values.length - 1) / 2), values.length - 1]);
+  // Up to sixteen bars name every other one (a label never wraps; it spills over the empty cell beside it); more than that, the
+  // first, middle and last.
+  const n = values.length;
+  const shown = new Set(allLabels ? values.map((_, i) => i) : n <= 16 ? values.map((_, i) => i).filter((i) => i % 2 === 0) : [0, Math.floor((n - 1) / 2), n - 1]);
   return (
     <div role="img" aria-label={label}>
       <div className="flex items-end gap-xs" style={{ height }}>
@@ -269,36 +258,7 @@ export function PillBars({ values, max, labels, colors, color, label, height = 1
       </div>
       <div className="mt-xs flex gap-xs">
         {values.map((_, i) => (
-          <span key={i} className={`flex-1 text-center text-[12px] font-bold ${onFill ? 'text-on-fill opacity-80' : 'text-ink-soft'}`}>
-            {shown.has(i) ? labels[i] : ''}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** Any number of thin bars, oldest first. Kept for places that want the simple look. */
-export function Bars({ values, labels, color, label, highlight, dots, allLabels = false, colors }: { values: number[]; labels: string[]; color: string; label: string; highlight?: number; dots?: number[]; allLabels?: boolean; colors?: string[] }) {
-  const max = Math.max(1, ...values);
-  const shown = new Set(allLabels ? values.map((_, i) => i) : [0, Math.floor((values.length - 1) / 2), values.length - 1]);
-  return (
-    <div role="img" aria-label={label}>
-      <div className="flex h-[96px] items-end gap-xs">
-        {values.map((v, i) => {
-          const h = v === 0 ? 4 : Math.max(8, Math.round((v / max) * 80));
-          const dim = highlight !== undefined && i !== highlight;
-          return (
-            <div key={i} className="flex flex-1 flex-col items-center justify-end gap-xs">
-              {dots && dots[i] ? <span className="block size-[8px] rounded-pill" style={{ background: 'var(--color-ink)' }} aria-hidden="true" /> : null}
-              <span className="block w-full rounded-pill" style={{ height: h, background: v === 0 ? 'var(--color-line)' : (colors?.[i] ?? color), opacity: dim ? 0.55 : 1 }} />
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-xs flex gap-xs">
-        {values.map((_, i) => (
-          <span key={i} className="flex-1 text-center text-[12px] font-bold text-ink-soft">
+          <span key={i} className={`flex min-w-0 flex-1 justify-center whitespace-nowrap text-[12px] font-bold ${onFill ? 'text-on-fill opacity-80' : 'text-ink-soft'}`}>
             {shown.has(i) ? labels[i] : ''}
           </span>
         ))}
@@ -314,7 +274,7 @@ export function HBars({ rows, label }: { rows: { key: string; label: ReactNode; 
       {rows.map((r) => (
         <li key={r.key} className="flex items-center gap-sm">
           {r.lead}
-          <span className="w-[96px] shrink-0 truncate text-[14px] font-bold">{r.label}</span>
+          <span className="w-[96px] shrink-0 text-balance break-words sm:w-[136px] text-[14px] font-bold leading-tight">{typeof r.label === 'string' ? tie(r.label) : r.label}</span>
           <span className="h-[12px] min-w-0 flex-1 overflow-hidden rounded-pill bg-line">
             <span className="block h-full rounded-pill" style={{ width: `${Math.round(Math.max(0, Math.min(1, r.value)) * 100)}%`, background: r.color }} />
           </span>
@@ -461,7 +421,7 @@ export function CalendarGrid({
   selected,
 }: {
   month: string;
-  marks: Record<string, { color: string; emoji?: string; mood?: number }>;
+  marks: Record<string, { color: string; icon?: LucideIcon; mood?: number }>;
   label: string;
   today?: string;
   onFill?: boolean;
@@ -493,15 +453,17 @@ export function CalendarGrid({
       {onMonth && (
         <div className="mb-xs flex items-center justify-between">
           <button type="button" className={arrow} onClick={() => onMonth(shift(-1))} aria-label="Previous month">
-            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
+            <Icon icon={ChevronLeft} size={16} strokeWidth={3} />
           </button>
           <span className={`text-[16px] font-extrabold ${onFill ? 'text-on-fill' : ''}`} aria-live="polite">{name}</span>
           <button type="button" className={arrow} onClick={() => onMonth(shift(1))} disabled={nextBlocked} aria-label="Next month">
-            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+            <Icon icon={ChevronRight} size={16} strokeWidth={3} />
           </button>
         </div>
       )}
-      <div className="grid grid-cols-7 gap-xs">
+      {/* No column gap on a phone and the grid reaches 8px into the card's padding on each side, so each day's button is at
+          least 44px wide at 390px even inside a padded card; the gap comes back from sm. */}
+      <div className="-mx-xs grid grid-cols-7 gap-y-xs sm:mx-0 sm:gap-x-xs">
         {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
           <span key={i} className={`text-center text-[12px] font-extrabold ${onFill ? 'text-on-fill opacity-80' : 'text-ink-soft'}`}>
             {d}
@@ -525,7 +487,7 @@ export function CalendarGrid({
               }}
               title={key}
             >
-              {mark?.emoji ?? day}
+              {mark?.icon ? <Icon icon={mark.icon} size={14} strokeWidth={3} /> : day}
             </span>
           );
           const blocked = Boolean(maxDate && key > maxDate);
@@ -554,8 +516,8 @@ export function CalendarGrid({
   );
 }
 
-/** The kit's mood history: a face per day. */
-export function EmojiRow({ items, onFill = false, size = 36 }: { items: { label: string; emoji: string | null; color: string | null; mood?: number | null }[]; onFill?: boolean; size?: number }) {
+/** The kit's mood history: a face per day (`MoodFace`, never an emoji); a day with no mood is an empty circle. */
+export function EmojiRow({ items, onFill = false, size = 36 }: { items: { label: string; color: string | null; mood?: number | null }[]; onFill?: boolean; size?: number }) {
   return (
     <ul className="flex list-none justify-between gap-xs p-0 m-0">
       {items.map((it, i) => (
@@ -563,9 +525,7 @@ export function EmojiRow({ items, onFill = false, size = 36 }: { items: { label:
           {it.mood ? (
             <MoodFace value={it.mood} size={size} label={it.label} />
           ) : (
-            <span className="flex items-center justify-center rounded-pill text-[20px]" style={{ width: size, height: size, background: it.color ?? (onFill ? 'rgba(255,255,255,0.18)' : 'var(--color-paper)') }} aria-label={it.emoji ? it.label : 'not logged'}>
-              {it.emoji ?? ''}
-            </span>
+            <span className="flex items-center justify-center rounded-pill" style={{ width: size, height: size, background: it.color ?? (onFill ? 'rgba(255,255,255,0.18)' : 'var(--color-paper)') }} aria-label="not logged" />
           )}
           <span className={`text-[12px] font-bold ${onFill ? 'text-on-fill opacity-80' : 'text-ink-soft'}`}>{it.label}</span>
         </li>
@@ -581,9 +541,7 @@ export function PillChain({ items }: { items: { text: string; color: string; tex
       {items.map((it, i) => (
         <span key={i} className="flex items-center gap-xs">
           {i > 0 && (
-            <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="text-ink-mute">
-              <path d="M5 12h14M13 6l6 6-6 6" />
-            </svg>
+            <Icon icon={ArrowRight} size={12} strokeWidth={3} className="text-ink-mute" />
           )}
           <span className="inline-flex items-center gap-xs rounded-pill pr-xs pl-0 text-[12px] font-extrabold leading-[22px]" style={{ background: it.color, color: it.textColor }}>
             {it.mood ? <MoodFace value={it.mood} size={18} /> : null}

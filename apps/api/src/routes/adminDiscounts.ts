@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { DISCOUNT_AREAS, DISCOUNT_CODE_MAX, DISCOUNT_CODE_MIN, DISCOUNT_PER_PERSON_MAX, discountCodeKey, isDiscountArea, typedCents, typedPercentBps, type AdminDiscountCode, type DiscountArea } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { audit, can, newId, nowIso, pageOf, paged, randomCode, str } from '../db';
+import { actorOf, audit, can, newId, nowIso, pageOf, paged, randomCode, str } from '../db';
 import { areasOf, toAdminCode, type AdminCodeRow, type CodeRow } from '../discounts';
 
 /**
@@ -10,7 +10,6 @@ import { areasOf, toAdminCode, type AdminCodeRow, type CodeRow } from '../discou
  */
 export const adminDiscounts = new Hono<AppEnv>();
 
-const actorOf = (c: { get: (k: 'user') => UserRow | undefined }) => c.get('user')?.id ?? null;
 const mayManage = (c: { get: (k: 'user') => UserRow | undefined }): boolean => {
   const u = c.get('user');
   return !u || can(u, 'finance');

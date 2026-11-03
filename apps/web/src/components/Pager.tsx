@@ -1,6 +1,6 @@
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES, pageQuery, pageSizeOf, type Page, type PageSize } from '@kreators/shared';
 import { useSearchParams } from 'react-router';
-import { useParamState } from '../lib/useParamState';
+import { useParamState, writeParams } from '../lib/useParamState';
 import { Button } from './Button';
 
 /**
@@ -51,20 +51,8 @@ export function Pager({ page, prefix = '', label }: { page: Page | undefined; pr
     <PagerBar
       page={page}
       label={label}
-      // One update for both: two in a row each start from the old address, so the second would undo the first.
-      onPage={(p, s) =>
-        setParams(
-          (prev) => {
-            const next = new URLSearchParams(prev);
-            if (p === 1) next.delete(`${prefix}page`);
-            else next.set(`${prefix}page`, String(p));
-            if (s === DEFAULT_PAGE_SIZE) next.delete(`${prefix}size`);
-            else next.set(`${prefix}size`, String(s));
-            return next;
-          },
-          { replace: true, preventScrollReset: true },
-        )
-      }
+      // One update for both, composed with any other write in the same tick (a filter that also resets the page).
+      onPage={(p, s) => writeParams(setParams, { [`${prefix}page`]: p === 1 ? null : String(p), [`${prefix}size`]: s === DEFAULT_PAGE_SIZE ? null : String(s) })}
     />
   );
 }

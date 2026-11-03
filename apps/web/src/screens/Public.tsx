@@ -13,6 +13,11 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { captureRef, useSession } from '../lib/store';
+import { Stars } from '../components/Stars';
+import { IconTag } from '../components/FactTag';
+import { useMe } from '../lib/queries';
+import { useSeedOnce } from '../lib/useSeed';
+import { FIELD } from '../lib/ui';
 
 const SOCIAL_LABEL = { instagram: 'Instagram', youtube: 'YouTube', x: 'X', website: 'Website' } as const;
 type SocialKey = keyof typeof SOCIAL_LABEL;
@@ -60,8 +65,14 @@ export function Public() {
   const befriend = useMutation({ mutationFn: () => api.addFriend(q.data?.id ?? ''), onSuccess: () => q.refetch() });
   const accept = useMutation({ mutationFn: () => api.answerFriend(q.data?.friendRequestId ?? '', 'accepted'), onSuccess: () => q.refetch() });
   const chat = useMutation({ mutationFn: () => api.openChat({ userId: q.data?.id ?? '' }), onSuccess: (r) => nav(`/bond/chats/${r.chat.id}`) });
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  // A signed-in visitor's own name and email are filled in from their profile (they can change them); a visitor with no account types them.
+  const viewer = useMe().data?.user;
+  const [name, setName] = useState(viewer?.displayName ?? '');
+  const [email, setEmail] = useState(viewer?.email ?? '');
+  useSeedOnce(viewer, (u) => {
+    setName((n) => n || u.displayName);
+    setEmail((e) => e || (u.email ?? ''));
+  });
   const [message, setMessage] = useState('');
   const lead = useMutation({ mutationFn: () => api.lead(handle, { name, email, message }) });
   const d = q.data;
@@ -88,7 +99,7 @@ export function Public() {
             )}
             <div className="mt-sm flex items-center gap-xs">
               <h1 className="text-[30px]">{d.name}</h1>
-              {d.isPro && <span className="rounded-pill bg-r7 px-sm py-xs text-[12px] font-extrabold text-white">Pro</span>}
+              {d.isPro && <IconTag tone="deep" icon="Crown">Pro</IconTag>}
             </div>
             <p className="m-0 text-[14px] font-bold text-on-ink/70">
               {d.handle ? `@${d.handle}, ` : ''}
@@ -277,7 +288,7 @@ export function Public() {
                 {d.testimonials.map((t) => (
                   <li key={t.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
                     <p className="m-0 text-[14px] font-bold">
-                      {'★'.repeat(t.rating)} {t.authorName}, {t.productTitle}
+                      <Stars n={t.rating} /> {t.authorName}, {t.productTitle}
                     </p>
                     <p className="mt-xs m-0 text-[16px] font-semibold">{t.body}</p>
                   </li>
@@ -303,11 +314,11 @@ export function Public() {
               >
                 <label className="block">
                   <span className="block text-[14px] font-bold">Name</span>
-                  <input value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+                  <input value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} autoComplete="name" className={FIELD} />
                 </label>
                 <label className="block">
                   <span className="block text-[14px] font-bold">Email</span>
-                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" className={FIELD} />
                 </label>
                 <label className="block">
                   <span className="block text-[14px] font-bold">Message</span>

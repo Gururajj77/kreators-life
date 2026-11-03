@@ -1,5 +1,6 @@
 import { INTEREST_GROUPS, MAX_INTERESTS } from '@kreators/shared';
 import { Fold } from './Fold';
+import { AppIcon } from './AppIcon';
 
 /**
  * Interests in groups, the way a dating app lays them out: a heading per group and a chip per interest.
@@ -27,7 +28,7 @@ export function InterestPicker({ value, onChange, legend = 'Interests', hint }: 
         {INTEREST_GROUPS.map((g) => {
           const on = g.options.filter((o) => value.includes(o)).length;
           return (
-            <Fold key={g.key} title={<><span aria-hidden="true">{g.emoji}</span> {g.name}</>} hint={on > 0 ? `${on} on` : undefined} defaultOpen={on > 0}>
+            <Fold key={g.key} title={<span className="inline-flex items-center gap-xs"><AppIcon name={g.icon} size={18} />{g.name}</span>} hint={on > 0 ? `${on} on` : undefined} defaultOpen={on > 0}>
               <div className="flex flex-wrap gap-xs" role="group" aria-label={g.name}>
                 {g.options.map((o) => {
                   const picked = value.includes(o);

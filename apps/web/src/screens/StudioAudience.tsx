@@ -7,8 +7,11 @@ import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
+import { FIELD } from '../lib/ui';
+import { useCopy } from '../lib/clipboard';
 
 export function StudioAudience() {
+  const copier = useCopy();
   const me = useMe();
   const fp = usePage('f');
   const lp = usePage('l');
@@ -28,8 +31,7 @@ export function StudioAudience() {
   const d = q.data;
   const handle = me.data?.user.handle;
   const link = handle && d?.referralCode ? `${window.location.origin}/u/${handle}?ref=${d.referralCode}` : null;
-  const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-
+  
   return (
     <Screen>
       <header className="pt-lg">
@@ -65,11 +67,11 @@ export function StudioAudience() {
           </div>
           <label className="block">
             <span className="block text-[14px] font-bold">Title</span>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} className={field} />
+            <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Message</span>
-            <textarea value={body} onChange={(e) => setBody(e.target.value)} maxLength={2000} rows={4} className={field} />
+            <textarea value={body} onChange={(e) => setBody(e.target.value)} maxLength={2000} rows={4} className={FIELD} />
           </label>
           {send.isSuccess && <p className="m-0 text-[14px] font-bold">Sent to {send.data.sent} people.</p>}
           <Button type="submit" full disabled={send.isPending || !title.trim() || !body.trim()}>
@@ -88,8 +90,8 @@ export function StudioAudience() {
         {link ? (
           <>
             <p className="mt-sm m-0 break-all rounded-tile bg-card p-sm text-[14px] font-semibold">{link}</p>
-            <Button variant="outline" className="mt-sm" onClick={() => navigator.clipboard?.writeText(link)}>
-              Copy my link
+            <Button variant="outline" className="mt-sm" onClick={() => void copier.copy(link)}>
+              {copier.said === 'Copied' ? 'Copied' : 'Copy my link'}
             </Button>
           </>
         ) : (

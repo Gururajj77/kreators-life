@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { MAX_RUN_METRES, MAX_RUN_MINUTES, normalizeCode, RUN_CODE_WINDOW, RUN_PACES, RUN_REWARD, runEntryState, weekStreak, type Run, type RunClub, type RunClubDetail, type RunCollab, type RunCollabApplication, type RunCollabsResponse, type RunEntry, type RunResponse, type RunTracking } from '@kreators/shared';
+import { MAX_RUN_METRES, MAX_RUN_MINUTES, normalizeCode, RUN_CODE_WINDOW, RUN_PACES, RUN_REWARD, runEntryState, weekStreak, type Run, type RunClub, type RunClubDetail, type RunCollab, type RunCollabApplication, type RunCollabsResponse, type RunEntry, type RunResponse, type RunTracking, type Page } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
 import { newRunCode, setRunCode } from '../attendee';
 import { audit, badgesNow, can, diffBadges, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, orgIdsOf, orgRole, str, pageOf, paged } from '../db';
@@ -152,23 +152,35 @@ run.get('/clubs/:id', async (c) => {
   const host = hostOf(row, user);
   const month = `${now.slice(0, 7)}-01T00:00:00`;
   const entryAsk = pageOf(c, 'e');
-  const [runs, mine, board, collabs, entries] = await Promise.all([
-    db.prepare(`${RUN} WHERE r.club_id = ? ORDER BY r.starts_at DESC LIMIT 60`).bind(row.id).all<RunRow>(),
+  // Coming up (prefix ru, soonest first) and past (prefix rr, newest first) page apart, split in SQL the way `runEntryState` splits them:
+  // a run is past once it is cancelled or its start code has closed, RUN_CODE_WINDOW.after minutes after its end.
+  const upAsk = pageOf(c, 'ru');
+  const pastAsk = pageOf(c, 'rr');
+  const collabAsk = pageOf(c, 'rk');
+  const closedBefore = new Date(Date.now() - RUN_CODE_WINDOW.after * 60_000).toISOString();
+  const [upcoming, pastRuns, mine, board, collabs, entries] = await Promise.all([
+    db.prepare(`${RUN} WHERE r.club_id = ? AND r.status != 'cancelled' AND r.ends_at >= ? ORDER BY r.starts_at, r.id LIMIT ? OFFSET ?`).bind(row.id, closedBefore, upAsk.limit, upAsk.offset).all<RunRow>(),
+    db.prepare(`${RUN} WHERE r.club_id = ? AND (r.status = 'cancelled' OR r.ends_at < ?) ORDER BY r.starts_at DESC, r.id LIMIT ? OFFSET ?`).bind(row.id, closedBefore, pastAsk.limit, pastAsk.offset).all<RunRow>(),
     db.prepare(`${ENTRY} WHERE e.club_id = ? AND e.user_id = ?`).bind(row.id, user.id).all<EntryRow>(),
     db.prepare("SELECT e.user_id, u.display_name AS name, SUM(e.metres) AS metres, COUNT(*) AS runs FROM run_entries e JOIN users u ON u.id = e.user_id WHERE e.club_id = ? AND e.status = 'logged' AND e.logged_at >= ? GROUP BY e.user_id ORDER BY metres DESC LIMIT 20").bind(row.id, month).all<{ user_id: string; name: string; metres: number; runs: number }>(),
-    db.prepare(`${COLLAB} WHERE c.id IN (SELECT collab_id FROM run_collab_applications WHERE club_id = ? AND status = 'accepted') ORDER BY c.ends_at DESC LIMIT 20`).bind(row.id).all<CollabRow>(),
+    db.prepare(`${COLLAB} WHERE c.id IN (SELECT collab_id FROM run_collab_applications WHERE club_id = ? AND status = 'accepted') ORDER BY c.ends_at DESC, c.id LIMIT ? OFFSET ?`).bind(row.id, collabAsk.limit, collabAsk.offset).all<CollabRow>(),
     host ? db.prepare(`${ENTRY} WHERE e.club_id = ? ORDER BY e.logged_at DESC LIMIT ? OFFSET ?`).bind(row.id, entryAsk.limit, entryAsk.offset).all<EntryRow>() : Promise.resolve({ results: [] as EntryRow[] }),
   ]);
   const myEntries = new Map(mine.results.map((e) => [e.run_id, toEntry(e)]));
-  const all = runs.results.map((r) => toRun(r, myEntries.get(r.id) ?? null, host));
   const epg = paged(entries.results, entryAsk);
-  const detail: RunClubDetail = {
+  const up = paged(upcoming.results, upAsk);
+  const past = paged(pastRuns.results, pastAsk);
+  const kp = paged(collabs.results, collabAsk);
+  const detail: RunClubDetail & { runPage: Page; pastPage: Page; collabPage: Page } = {
     club,
     // A run stays on the list while its start code works, done or not; after that, or cancelled, it is past.
-    runs: all.filter((r) => r.status !== 'cancelled' && r.entryState !== 'closed').sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
-    past: all.filter((r) => r.status === 'cancelled' || r.entryState === 'closed'),
+    runs: up.items.map((r) => toRun(r, myEntries.get(r.id) ?? null, host)),
+    past: past.items.map((r) => toRun(r, myEntries.get(r.id) ?? null, host)),
+    runPage: up.page,
+    pastPage: past.page,
     board: board.results.map((b) => ({ userId: b.user_id, name: nameOf({ display_name: b.name }), metres: b.metres, runs: b.runs })),
-    collabs: collabs.results.map((k) => toCollab(k, [], false)),
+    collabs: kp.items.map((k) => toCollab(k, [], false)),
+    collabPage: kp.page,
     entryPage: epg.page,
     entries: epg.items.map(toEntry),
   };

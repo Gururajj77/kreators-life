@@ -47,11 +47,12 @@ import {
   stageIndex,
 } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { DATE_RE, dayFromDevice, newId, nameOf, notify, nowIso, num, oneOf, pageOf, paged, randomCode, shiftDate, str } from '../db';
+import { dayFromDevice, newId, nameOf, notify, nowIso, num, oneOf, pageOf, paged, randomCode, shiftDate, str } from '../db';
+import { dateOrNull, moneyIn } from '../agencyUtil';
 import { resolveAccess } from '../access';
 import { uploadVersion } from './army';
 import { lifecycleFor, syncStageFromAgreements, logStmt, type RetainerRow } from '../lifecycle';
-import { clearPortalSessions, newPortalPassword, passwordColumns, requirePortalAccess } from '../portalAccess';
+import { agencyFace, clearPortalSessions, closedLinkAnswer, newPortalPassword, passwordColumns, requirePortalAccess, retirePortalLink } from '../portalAccess';
 
 /**
  * Agency: a content agency's or a freelance creator's clients, the deliverables made for them, time, approvals and invoices.
@@ -62,10 +63,6 @@ export const agency = new Hono<AppEnv>();
 export const agencyPublic = new Hono<AppEnv>();
 
 const utcToday = () => new Date().toISOString().slice(0, 10);
-/** The person's day from the device, else today in UTC. A day more than a day ahead is not a real today. */
-const dayOf = dayFromDevice;
-const dateOrNull = (v: unknown): string | null => (typeof v === 'string' && DATE_RE.test(v) ? v : null);
-const moneyIn = (v: unknown): number => num(v, 0, 0, 1_000_000_000_00) ?? 0;
 
 // ---- rows
 
@@ -288,7 +285,7 @@ async function ownCampaign(c: { env: AppEnv['Bindings'] }, user: UserRow, campai
 agency.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const today = dayOf(c.req.query('day'));
+  const today = dayFromDevice(c.req.query('day'));
   const month = today.slice(0, 7);
   const { start, end } = monthBounds(month);
   const status = c.req.query('status');
@@ -429,13 +426,14 @@ agency.patch('/clients/:id', async (c) => {
 agency.delete('/clients/:id', async (c) => {
   const res = await c.env.DB.prepare('DELETE FROM agency_clients WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
   if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
+  await c.env.DB.prepare('DELETE FROM retired_portal_links WHERE client_id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
   return c.json({ ok: true });
 });
 
 agency.get('/clients/:id', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const today = dayOf(c.req.query('day'));
+  const today = dayFromDevice(c.req.query('day'));
   const { start, end } = monthBounds(today.slice(0, 7));
   // An agreement that was sent or signed since the last look moves the client on first.
   await syncStageFromAgreements(db, { userId: user.id, clientId: c.req.param('id') });
@@ -489,6 +487,8 @@ agency.post('/clients/:id/portal', async (c) => {
   await db.batch([
     db.prepare('UPDATE agency_clients SET portal_token = ?, portal_json = ?, updated_at = ? WHERE id = ? AND user_id = ?').bind(token, JSON.stringify(show), nowIso(), row.id, user.id),
     ...(closing ? [clearPortalSessions(db, row.id)] : []),
+    // The old link, renewed or closed, is remembered as a hash so it answers "this link was closed" (410), not "no page".
+    ...(row.portal_token && token !== row.portal_token ? [await retirePortalLink(db, row.id, user.id, row.portal_token)] : []),
   ]);
   return c.json({ portalToken: token, portal: show });
 });
@@ -528,7 +528,7 @@ agency.post('/clients/:id/army-import', async (c) => {
 agency.get('/items', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const today = dayOf(c.req.query('day'));
+  const today = dayFromDevice(c.req.query('day'));
   const ask = pageOf(c);
   const client = c.req.query('client');
   const stage = c.req.query('stage');
@@ -567,7 +567,7 @@ agency.get('/items', async (c) => {
 agency.get('/board', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const today = dayOf(c.req.query('day'));
+  const today = dayFromDevice(c.req.query('day'));
   const per = Math.max(5, Math.min(100, Math.floor(Number(c.req.query('per')) || 25)));
   const client = c.req.query('client');
   const channel = c.req.query('channel');
@@ -616,7 +616,7 @@ function httpsOrEmpty(v: unknown): string {
 agency.post('/items', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const today = dayOf(c.req.query('day'));
+  const today = dayFromDevice(c.req.query('day'));
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
   const client = typeof body.clientId === 'string' ? await clientRow(db, user.id, body.clientId) : null;
   if (!client) return c.json({ error: 'pick a client' }, 400);
@@ -636,7 +636,7 @@ agency.post('/items', async (c) => {
 agency.patch('/items/:id', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const today = dayOf(c.req.query('day'));
+  const today = dayFromDevice(c.req.query('day'));
   const prev = await db.prepare(`${ITEM_SELECT} WHERE i.id = ? AND i.user_id = ?`).bind(c.req.param('id'), user.id).first<ItemRow>();
   if (!prev) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
@@ -710,7 +710,7 @@ async function armyReady(c: { env: AppEnv['Bindings'] }, user: UserRow): Promise
 agency.post('/items/:id/army/send', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const today = dayOf(c.req.query('day'));
+  const today = dayFromDevice(c.req.query('day'));
   const item = await db.prepare('SELECT id, title, link, army_deliverable_id, stage FROM agency_items WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).first<{ id: string; title: string; link: string; army_deliverable_id: string | null; stage: DeliverableStage }>();
   if (!item) return c.json({ error: 'not found' }, 404);
   if (!item.army_deliverable_id) return c.json({ error: 'this deliverable is not linked to Army' }, 400);
@@ -731,7 +731,7 @@ agency.post('/items/:id/army/send', async (c) => {
 agency.post('/items/:id/army/sync', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const today = dayOf(c.req.query('day'));
+  const today = dayFromDevice(c.req.query('day'));
   const item = await db.prepare(`${ITEM_SELECT} WHERE i.id = ? AND i.user_id = ?`).bind(c.req.param('id'), user.id).first<ItemRow>();
   if (!item) return c.json({ error: 'not found' }, 404);
   if (!item.army_deliverable_id || !item.army_status) return c.json({ error: 'this deliverable is not linked to Army' }, 400);
@@ -802,7 +802,7 @@ const dayWords = (d: string): string => new Date(`${d}T00:00:00Z`).toLocaleDateS
 agencyPublic.get('/:token', async (c) => {
   const db = c.env.DB;
   const client = await portalClient(db, c.req.param('token'));
-  if (!client) return c.json({ error: 'no page at this link' }, 404);
+  if (!client) return (await closedLinkAnswer(c, c.req.param('token'))) ?? c.json({ error: 'no page at this link' }, 404);
   const denied = await requirePortalAccess(c, client.id);
   if (denied) return denied;
   await syncStageFromAgreements(db, { userId: client.user_id, clientId: client.id });
@@ -813,7 +813,9 @@ agencyPublic.get('/:token', async (c) => {
   type Waiting = { id: string; title: string; kind: DeliverableKind; platform: string; link: string; publish_date: string | null; revisions: number; allowed: number; trial: number };
   type Coming = { id: string; title: string; kind: DeliverableKind; platform: string; stage: DeliverableStage; publish_date: string | null; revisions: number; allowed: number };
   type Done = { id: string; title: string; kind: DeliverableKind; platform: string; link: string; published_at: string | null };
-  const [fresh, waiting, coming, done, count, channels, time, invoices, contracts, owing, signing, offer] = await Promise.all([
+  type PortalInvoiceRow = { number: string; total_cents: number; currency: string; status: PortalView['invoices'][number]['status']; issue_date: string; due_date: string | null; token: string };
+  type SentDoc = { title: string; kind: PortalView['docs'][number]['kind']; status: PortalView['docs'][number]['status']; token: string };
+  const [fresh, waiting, coming, done, count, channels, time, invoices, contracts, owing, signing, offer, face, docs] = await Promise.all([
     db.prepare('SELECT stage, lifecycle_json FROM agency_clients WHERE id = ?').bind(client.id).first<{ stage: string; lifecycle_json: string }>(),
     show.waiting ? db.prepare("SELECT id, title, kind, platform, link, publish_date, revisions, COALESCE(revisions_allowed, ?) AS allowed, trial FROM agency_items WHERE client_id = ? AND stage = 'review' ORDER BY COALESCE(publish_date, due_date, '9999-12-31') LIMIT 50").bind(client.revisions_per_piece, client.id).all<Waiting>() : none<Waiting>(),
     show.coming ? db.prepare("SELECT id, title, kind, platform, stage, publish_date, revisions, COALESCE(revisions_allowed, ?) AS allowed FROM agency_items WHERE client_id = ? AND stage IN ('script', 'making', 'approved') ORDER BY COALESCE(publish_date, due_date, '9999-12-31') LIMIT 30").bind(client.revisions_per_piece, client.id).all<Coming>() : none<Coming>(),
@@ -823,12 +825,16 @@ agencyPublic.get('/:token', async (c) => {
       ? db.prepare("SELECT platform, SUM(CASE WHEN stage = 'published' AND published_day >= ?2 AND published_day <= ?3 THEN 1 ELSE 0 END) AS published, SUM(CASE WHEN stage != 'published' THEN 1 ELSE 0 END) AS open FROM agency_items WHERE client_id = ?1 AND platform != '' GROUP BY platform ORDER BY published DESC").bind(client.id, start, end).all<{ platform: string; published: number; open: number }>()
       : none<{ platform: string; published: number; open: number }>(),
     show.hours ? db.prepare('SELECT COALESCE(SUM(minutes), 0) AS m FROM agency_time WHERE client_id = ? AND billable = 1 AND day >= ? AND day <= ?').bind(client.id, start, end).first<{ m: number }>() : Promise.resolve(null),
-    show.invoices ? db.prepare("SELECT number, total_cents, currency, status, issue_date, token FROM invoices WHERE agency_client_id = ? AND status != 'draft' ORDER BY created_at DESC LIMIT 12").bind(client.id).all<{ number: string; total_cents: number; currency: string; status: PortalView['invoices'][number]['status']; issue_date: string; token: string }>() : none<{ number: string; total_cents: number; currency: string; status: PortalView['invoices'][number]['status']; issue_date: string; token: string }>(),
+    show.invoices ? db.prepare("SELECT number, total_cents, currency, status, issue_date, due_date, token FROM invoices WHERE agency_client_id = ? AND status != 'draft' ORDER BY created_at DESC LIMIT 12").bind(client.id).all<PortalInvoiceRow>() : none<PortalInvoiceRow>(),
     show.contracts ? db.prepare("SELECT title, status, token FROM agency_contracts WHERE client_id = ? AND status IN ('sent', 'signed') AND token IS NOT NULL ORDER BY updated_at DESC LIMIT 12").bind(client.id).all<{ title: string; status: PortalView['contracts'][number]['status']; token: string }>() : none<{ title: string; status: PortalView['contracts'][number]['status']; token: string }>(),
     // What is owed, whatever is shown: a sent invoice that is not paid, and an agreement sent and not signed. Only a link, when the switch for it is on.
     db.prepare("SELECT number, token FROM invoices WHERE agency_client_id = ? AND status = 'sent' ORDER BY created_at DESC LIMIT 5").bind(client.id).all<{ number: string; token: string }>(),
     db.prepare("SELECT title, token FROM agency_contracts WHERE client_id = ? AND status = 'sent' AND token IS NOT NULL ORDER BY updated_at DESC LIMIT 3").bind(client.id).all<{ title: string; token: string }>(),
     db.prepare("SELECT * FROM agency_retainers WHERE client_id = ? AND status IN ('offered', 'chosen', 'active') ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'chosen' THEN 1 ELSE 2 END, created_at DESC LIMIT 1").bind(client.id).first<RetainerRow>(),
+    // Who sent the link: the business name, its logo and its email. Nothing else from the business profile.
+    agencyFace(db, client.user_id),
+    // Other documents sent to them (never a draft), with their link.
+    show.docs ? db.prepare("SELECT title, kind, status, token FROM agency_docs WHERE client_id = ? AND status IN ('sent', 'approved', 'revised') AND token IS NOT NULL ORDER BY updated_at DESC LIMIT 12").bind(client.id).all<SentDoc>() : none<SentDoc>(),
     // Open the link counts as a visit for the day. A day, nothing more.
     db.prepare("UPDATE agency_clients SET portal_last_opened_day = ? WHERE id = ? AND COALESCE(portal_last_opened_day, '') != ?").bind(todayUtc, client.id, todayUtc).run(),
   ]);
@@ -872,10 +878,12 @@ agencyPublic.get('/:token', async (c) => {
   for (const inv of owing.results) waitingOn.push({ key: `pay-${inv.token}`, title: `Pay invoice ${inv.number}`, line: 'Open it to see the amount and how to pay.', href: show.invoices ? `/i/${inv.token}` : null });
   if (offer?.status === 'offered') waitingOn.push({ key: 'retainer', title: 'Choose how many months', line: 'Pick the length of the retainer.', href: '#retainer-heading' });
   const others = waiting.results.filter((w) => w.trial !== 1).length;
-  if (others > 0) waitingOn.push({ key: 'review', title: others === 1 ? 'One piece to review' : `${others} pieces to review`, line: show.canApprove ? 'Approve it, or ask for a change.' : 'Have a look when you can.', href: '#waiting-heading' });
+  if (others > 0) waitingOn.push({ key: 'review', title: others === 1 ? 'One piece to review' : `${others} pieces to review`, line: show.canApprove ? (others === 1 ? 'Watch it, then approve it or ask for a change.' : 'Watch each one, then approve it or ask for a change.') : 'Have a look when you can.', href: '#waiting-heading' });
 
   const view: PortalView = {
-    agencyName: nameOf({ display_name: client.owner_name }),
+    agencyName: face.agencyName || nameOf({ display_name: client.owner_name }),
+    agencyLogo: face.agencyLogo,
+    agencyEmail: face.agencyEmail,
     clientName: client.name,
     show,
     stage,
@@ -890,8 +898,9 @@ agencyPublic.get('/:token', async (c) => {
     month: show.progress ? { published: count?.n ?? 0, planned: client.pieces_per_month } : null,
     channels: channels.results.map((x) => ({ channel: x.platform, published: x.published ?? 0, open: x.open ?? 0 })),
     hours: show.hours ? { usedMinutes: time?.m ?? 0, includedMinutes: client.hours_per_month * 60 } : null,
-    invoices: invoices.results.map((x) => ({ number: x.number, totalCents: x.total_cents, currency: x.currency, status: x.status, issueDate: x.issue_date, token: x.token })),
+    invoices: invoices.results.map((x) => ({ number: x.number, totalCents: x.total_cents, currency: x.currency, status: x.status, issueDate: x.issue_date, overdue: x.status === 'sent' && Boolean(x.due_date && x.due_date < todayUtc), token: x.token })),
     contracts: contracts.results.map((x) => ({ title: x.title, status: x.status, token: x.token })),
+    docs: docs.results.map((x) => ({ title: x.title, kind: x.kind, status: x.status, token: x.token })),
   };
   c.header('Cache-Control', 'no-store');
   return c.json(view);
@@ -903,7 +912,7 @@ agencyPublic.get('/:token', async (c) => {
 agencyPublic.post('/:token/items/:id', async (c) => {
   const db = c.env.DB;
   const client = await portalClient(db, c.req.param('token'));
-  if (!client) return c.json({ error: 'no page at this link' }, 404);
+  if (!client) return (await closedLinkAnswer(c, c.req.param('token'))) ?? c.json({ error: 'no page at this link' }, 404);
   const denied = await requirePortalAccess(c, client.id);
   if (denied) return denied;
   const show = portalOf(client.portal_json);

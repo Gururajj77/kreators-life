@@ -131,7 +131,7 @@ export function Mood() {
                   <EmojiRow
                     items={wb.data.week.map((w) => {
                       const m = w.mood === null ? null : (MOODS.find((x) => x.value === w.mood) ?? null);
-                      return { label: DAY[new Date(`${w.date}T00:00:00`).getDay()] ?? '', emoji: null, color: m?.color ?? null, mood: m?.value ?? null };
+                      return { label: DAY[new Date(`${w.date}T00:00:00`).getDay()] ?? '', color: m?.color ?? null, mood: m?.value ?? null };
                     })}
                   />
                 </div>

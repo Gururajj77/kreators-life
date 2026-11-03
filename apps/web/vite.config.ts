@@ -58,7 +58,9 @@ export default defineConfig({
           // lucide-react's shared drawing code is one small file; each icon stays beside the screen that imports it,
           // never one big file of every icon.
           if (/\/node_modules\/lucide-react\/dist\/esm\/(Icon|createLucideIcon|defaultAttributes|context|shared\/)/.test(id)) return 'vendor-icons';
-          // The animated icons' player and its eight animations load only through import(), after the first paint.
+          // The animated icons' player loads only through import(), after the first paint. Each animation (one to three kB)
+          // stays its own small file, fetched only when a screen shows that icon, so the registry can grow without one big file.
+          if (id.includes('/node_modules/react-useanimations/lib/')) return undefined;
           if (id.includes('/node_modules/react-useanimations/')) return 'vendor-useanimations';
           if (/\/node_modules\/(react|react-dom|scheduler|react-router)\//.test(id)) return 'vendor-react';
           if (id.includes('/node_modules/@tanstack/')) return 'vendor-query';

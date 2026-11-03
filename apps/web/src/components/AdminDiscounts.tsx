@@ -5,8 +5,8 @@ import { Button } from './Button';
 import { StatTile } from './Charts';
 import { DataTable, Select } from './DataTable';
 import { Sheet } from './Sheet';
+import { FIELD_44 } from '../lib/ui';
 
-const field = 'mt-xs min-h-[44px] w-full rounded-tile border-2 border-line bg-paper px-sm text-[16px]';
 const zone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 const isDay = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v;
 const nextDay = (v: string) => new Date(Date.parse(`${v}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
@@ -244,7 +244,7 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
               Code
             </label>
             <div className="flex gap-xs">
-              <input id="dc-code" value={form.code} onChange={(e) => set('code', e.target.value.toUpperCase())} maxLength={DISCOUNT_CODE_MAX} placeholder="SPRING25, or leave empty" autoComplete="off" className={field} />
+              <input id="dc-code" value={form.code} onChange={(e) => set('code', e.target.value.toUpperCase())} maxLength={DISCOUNT_CODE_MAX} placeholder="SPRING25, or leave empty" autoComplete="off" className={FIELD_44} />
               <Button type="button" variant="outline" className="mt-xs shrink-0" onClick={() => set('code', randomWord())}>
                 Make one
               </Button>
@@ -264,14 +264,14 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
             {form.kind === 'percent' ? (
               <label className="mt-sm block">
                 <span className="block text-[14px] font-bold">Percent off (0.01 to 100)</span>
-                <input inputMode="decimal" value={form.percent} onChange={(e) => set('percent', e.target.value)} className={field} />
+                <input inputMode="decimal" value={form.percent} onChange={(e) => set('percent', e.target.value)} className={FIELD_44} />
                 <span className="mt-xs block text-[12px] font-bold text-ink-soft">The amount off is rounded down. It works on prices in money and in points.</span>
               </label>
             ) : (
               <div className="mt-sm grid grid-cols-[1fr_120px] gap-xs">
                 <label className="block">
                   <span className="block text-[14px] font-bold">Amount off</span>
-                  <input inputMode="decimal" value={form.amount} onChange={(e) => set('amount', e.target.value)} placeholder="500" className={field} />
+                  <input inputMode="decimal" value={form.amount} onChange={(e) => set('amount', e.target.value)} placeholder="500" className={FIELD_44} />
                 </label>
                 <label className="block">
                   <span className="block text-[14px] font-bold">Money</span>
@@ -303,7 +303,7 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
             {form.areas.length === 1 && (
               <label className="mt-sm block">
                 <span className="block text-[14px] font-bold">Only one item (optional)</span>
-                <input value={form.itemId} onChange={(e) => set('itemId', e.target.value)} placeholder="An id, or pro, pro_max, ultra, small, medium, large" className={field} />
+                <input value={form.itemId} onChange={(e) => set('itemId', e.target.value)} placeholder="An id, or pro, pro_max, ultra, small, medium, large" className={FIELD_44} />
               </label>
             )}
           </fieldset>
@@ -311,28 +311,28 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
           <div className="grid grid-cols-2 gap-xs">
             <label className="block">
               <span className="block text-[14px] font-bold">Times it can be used</span>
-              <input inputMode="numeric" value={form.maxUses} onChange={(e) => set('maxUses', e.target.value)} placeholder="No limit" className={field} />
+              <input inputMode="numeric" value={form.maxUses} onChange={(e) => set('maxUses', e.target.value)} placeholder="No limit" className={FIELD_44} />
             </label>
             <label className="block">
               <span className="block text-[14px] font-bold">Times per person</span>
-              <input inputMode="numeric" value={form.perPersonLimit} onChange={(e) => set('perPersonLimit', e.target.value)} className={field} />
+              <input inputMode="numeric" value={form.perPersonLimit} onChange={(e) => set('perPersonLimit', e.target.value)} className={FIELD_44} />
             </label>
             <label className="block">
               <span className="block text-[14px] font-bold">First day</span>
-              <input type="date" value={form.startDay} onChange={(e) => set('startDay', e.target.value)} className={field} />
+              <input type="date" value={form.startDay} onChange={(e) => set('startDay', e.target.value)} className={FIELD_44} />
             </label>
             <label className="block">
               <span className="block text-[14px] font-bold">Last day</span>
-              <input type="date" value={form.endDay} onChange={(e) => set('endDay', e.target.value)} className={field} />
+              <input type="date" value={form.endDay} onChange={(e) => set('endDay', e.target.value)} className={FIELD_44} />
             </label>
           </div>
           <label className="block">
             <span className="block text-[14px] font-bold">Only for prices from (optional)</span>
-            <input inputMode="decimal" value={form.minAmount} onChange={(e) => set('minAmount', e.target.value)} placeholder="Any price" className={field} />
+            <input inputMode="decimal" value={form.minAmount} onChange={(e) => set('minAmount', e.target.value)} placeholder="Any price" className={FIELD_44} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Note for the team</span>
-            <input value={form.note} onChange={(e) => set('note', e.target.value)} maxLength={200} className={field} />
+            <input value={form.note} onChange={(e) => set('note', e.target.value)} maxLength={200} className={FIELD_44} />
           </label>
           <Button type="submit" size="lg" full disabled={busy || form.areas.length === 0}>
             Make the code

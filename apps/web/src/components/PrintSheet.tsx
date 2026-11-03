@@ -74,7 +74,8 @@ export function PrintSheet({ kind, title, subtitle, reference = '', date, dateLa
       <article className="legal-doc print-doc rounded-card bg-card-strong p-md text-ink shadow-toy-soft md:p-lg" aria-label={runTitle}>
         {stamp && (
           <div className="legal-stamp" aria-hidden="true">
-            <span>{STAMP_TEXT[stamp]}</span>
+            {/* A faint watermark, drawn from the attribute so it is decoration and not text; the status is said in words elsewhere on the page. */}
+            <span data-stamp={STAMP_TEXT[stamp]} />
           </div>
         )}
         {!boxes && (
@@ -101,7 +102,11 @@ export function PrintSheet({ kind, title, subtitle, reference = '', date, dateLa
         )}
         {titleBlock && (
           <div className="legal-head">
-            <h1 className="legal-title">{tie(title)}</h1>
+            {/* The last two words are tied, and on a narrow phone the title steps down in size so that pair fits on its line instead of
+                breaking ("Trial engagement / agreement"). On paper and on a laptop the size is the full 1.75em (the clamp's top). */}
+            <h1 className="legal-title" style={{ fontSize: 'clamp(1.2em, 5.6vw, 1.75em)' }}>
+              {tie(title)}
+            </h1>
             {subtitle && <p className="legal-subtitle">{subtitle}</p>}
             {(reference || date) && (
               <dl className="legal-meta">

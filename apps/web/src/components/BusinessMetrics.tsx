@@ -27,8 +27,8 @@ import { Sparkline } from './Charts';
 import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
 import { Toggle } from './Toggle';
+import { FIELD } from '../lib/ui';
 
-const field = 'mt-xs w-full min-h-[48px] rounded-tile border-2 border-line bg-paper px-sm text-[16px]';
 const STATUS: Record<KpiStatus, { tone: TagTone; word: string }> = {
   on: { tone: 'good', word: 'On target' },
   near: { tone: 'warn', word: 'Close' },
@@ -62,7 +62,7 @@ function NumberField({ unit, stored, onChange, label, id }: { unit: KpiUnit; sto
         const n = Number.parseFloat(v);
         onChange(v === '' ? null : Number.isFinite(n) && n >= 0 ? kpiFromInput(unit, n) : stored);
       }}
-      className={field}
+      className={FIELD}
     />
   );
 }
@@ -107,7 +107,7 @@ export function BusinessMetrics({ kind, date }: { kind: PeriodKind; date: string
           Business metrics
         </h2>
         {d.enabled && (
-          <Button size="sm" variant="outline" onClick={() => setEditing('new')} disabled={total >= MAX_KPIS}>
+          <Button size="sm" variant="outline" plusToX onClick={() => setEditing('new')} disabled={total >= MAX_KPIS}>
             Add a metric
           </Button>
         )}
@@ -203,7 +203,7 @@ function Card({ r, currency, date, onEdit }: { r: KpiReading; currency: string; 
           <label className="mt-xs block text-[14px] font-bold" htmlFor={`n-${k.id}`}>
             A note
           </label>
-          <input id={`n-${k.id}`} value={note} maxLength={KPI_NOTE_MAX} onChange={(e) => setNote(e.target.value)} className={field} />
+          <input id={`n-${k.id}`} value={note} maxLength={KPI_NOTE_MAX} onChange={(e) => setNote(e.target.value)} className={FIELD} />
           {save.isError && (
             <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
               {save.error instanceof ApiError ? save.error.message : 'That did not save. Try again.'}
@@ -301,7 +301,7 @@ function MetricSheet({ editing, kind, onClose, currency }: { editing: Kpi | 'new
                 const a = KPI_AUTO_BY_KEY[s];
                 if (a && !name.trim()) setName(a.name);
               }}
-              className={field}
+              className={FIELD}
             >
               <option value="manual">I type it in</option>
               {KPI_AUTO.map((a) => (
@@ -315,12 +315,12 @@ function MetricSheet({ editing, kind, onClose, currency }: { editing: Kpi | 'new
         <label className="mt-sm block text-[14px] font-bold" htmlFor="m-name">
           Name
         </label>
-        <input id="m-name" value={name} maxLength={KPI_NAME_MAX} onChange={(e) => setName(e.target.value)} placeholder={def?.name ?? 'Sales calls'} className={field} />
+        <input id="m-name" value={name} maxLength={KPI_NAME_MAX} onChange={(e) => setName(e.target.value)} placeholder={def?.name ?? 'Sales calls'} className={FIELD} />
         {!def && (
           <div className="mt-sm grid gap-sm md:grid-cols-2">
             <label className="block text-[14px] font-bold">
               What it counts
-              <select value={unit} onChange={(e) => setUnit(e.target.value as KpiUnit)} className={field}>
+              <select value={unit} onChange={(e) => setUnit(e.target.value as KpiUnit)} className={FIELD}>
                 {KPI_UNITS.map((u) => (
                   <option key={u} value={u}>
                     {KPI_UNIT_NAME[u]}
@@ -330,7 +330,7 @@ function MetricSheet({ editing, kind, onClose, currency }: { editing: Kpi | 'new
             </label>
             <label className="block text-[14px] font-bold">
               Which way is good
-              <select value={direction} onChange={(e) => setDirection(e.target.value as 'up' | 'down')} className={field}>
+              <select value={direction} onChange={(e) => setDirection(e.target.value as 'up' | 'down')} className={FIELD}>
                 <option value="up">More is better</option>
                 <option value="down">Less is better</option>
               </select>
@@ -341,7 +341,7 @@ function MetricSheet({ editing, kind, onClose, currency }: { editing: Kpi | 'new
         <label className="mt-sm block text-[14px] font-bold" htmlFor="m-cadence">
           How often
         </label>
-        <select id="m-cadence" value={cadence} onChange={(e) => setCadence(e.target.value as PeriodKind)} className={field}>
+        <select id="m-cadence" value={cadence} onChange={(e) => setCadence(e.target.value as PeriodKind)} className={FIELD}>
           {PERIOD_KINDS.map((k) => (
             <option key={k} value={k}>
               {PERIOD_META[k].short}

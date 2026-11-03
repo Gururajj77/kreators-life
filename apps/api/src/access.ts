@@ -38,6 +38,8 @@ export const MODULE_FOR_PREFIX: Record<string, readonly string[]> = {
   // under /me/coach, which is core, so switching Coaching off never stops anyone from saying no or ending it.
   coach: ['coaching'],
   assistant: ['assistant'],
+  // The feelings reader in the strategy session: the assistant's model, so the assistant's switch.
+  'assistant/feelings': ['assistant'],
   studio: ['shop'],
   'studio/links': ['content', 'automations'],
   'studio/content': ['content', 'automations'],

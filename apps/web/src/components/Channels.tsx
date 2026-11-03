@@ -17,7 +17,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
 import { useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ApiError, api } from '../lib/api';
+import { ApiError, api, errorText } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
 import { useSession } from '../lib/store';
 import { useParamState } from '../lib/useParamState';
@@ -28,20 +28,17 @@ import { Inert } from './Inert';
 import { Pager, usePage } from './Pager';
 import { Sheet } from './Sheet';
 import { SkeletonList } from './Skeleton';
+import { Icon } from './Icon';
+import { X } from 'lucide-react';
+import { FIELD } from '../lib/ui';
+import { dateTime } from '../lib/date';
+import { ErrorLine } from './ErrorLine';
+import { IconTag } from './FactTag';
+import { StatusTag } from './StatusTag';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-const when = (iso: string) => new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
-const msg = (e: unknown) => (e instanceof Error ? e.message : 'That did not work. Try again.');
+const when = dateTime;
 const RANK_WORD = { member: '', guide: 'Guide', staff: 'Staff', admin: 'Admin' } as const;
 
-function Err({ e }: { e: unknown }) {
-  if (!e) return null;
-  return (
-    <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-      {msg(e)}
-    </p>
-  );
-}
 
 /** The count of channels with something new, for a tab label. Asked once a minute while the tab is showing. */
 export function useChannelsUnread(scope: ChannelScope): number {
@@ -74,7 +71,7 @@ export function ChannelTabs() {
             ['channels', 'Channels'],
           ] as const
         ).map(([k, label]) => (
-          <button key={k} type="button" aria-pressed={tab === k} onClick={() => setTab(k)} className={`toy shrink-0 rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+          <button key={k} type="button" aria-pressed={tab === k} onClick={() => setTab(k)} className={`toy shrink-0 min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
             {label}
             {k === 'channels' && tab !== k && <Dot n={unread} />}
           </button>
@@ -112,16 +109,16 @@ function ChannelList({ scope, onOpen }: { scope: ChannelScope; onOpen: (id: stri
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-sm">
-        {scope === 'community' ? <p className="m-0 min-w-0 flex-1 text-[14px] font-semibold text-ink-soft">Rooms for one topic each. Join one to write in it. You can write under your name or a made-up one.</p> : <p className="m-0 min-w-0 flex-1 text-[14px] font-semibold text-ink-soft">Private rooms for you and your friends, up to {MAX_CHANNEL_MEMBERS} people. Names show here, unlike in chats.</p>}
+        {scope === 'community' ? <p className="m-0 min-w-0 flex-1 text-[14px] font-semibold text-ink-soft">Rooms for one topic each. Join one to write in it. You can write under your name or a made-up one.</p> : <span className="flex-1" aria-hidden="true" />}
         {q.data?.canCreate && <Button onClick={() => setMaking(true)}>New channel</Button>}
       </div>
       {isGuide && (
-        <label className="mt-sm flex items-center gap-xs text-[14px] font-bold text-ink-soft">
+        <label className="mt-sm flex min-h-[44px] cursor-pointer items-center gap-xs text-[14px] font-bold text-ink-soft">
           <input type="checkbox" checked={closed} onChange={(e) => setClosed(e.target.checked)} className="size-[18px] accent-ink" />
           Show closed channels
         </label>
       )}
-      {q.isError && <Err e={q.error} />}
+      {q.isError && <ErrorLine e={q.error} className="mt-xs" />}
       {q.isPending && <SkeletonList className="mt-md" count={3} lines={2} label="Loading channels" />}
       {q.data && list.length === 0 && (
         <div className="mt-md rounded-card border-2 border-dashed border-line p-md">
@@ -138,7 +135,7 @@ function ChannelList({ scope, onOpen }: { scope: ChannelScope; onOpen: (id: stri
                 <span className="flex items-center gap-xs">
                   <span className="truncate text-[16px] font-bold"># {c.name}</span>
                   <Dot n={c.unread} />
-                  {c.archived && <span className="rounded-pill bg-line px-xs text-[11px] font-extrabold leading-[18px] text-ink-soft">Closed</span>}
+                  {c.archived && <StatusTag tone="neutral">Closed</StatusTag>}
                 </span>
                 {c.topic && <span className="block text-[14px] font-semibold text-ink-soft">{c.topic}</span>}
                 <span className="block text-[12px] font-bold text-ink-soft">
@@ -166,7 +163,7 @@ function ChannelList({ scope, onOpen }: { scope: ChannelScope; onOpen: (id: stri
           </li>
         ))}
       </ul>
-      <Err e={join.isError ? join.error : decline.isError ? decline.error : null} />
+      <ErrorLine e={join.isError ? join.error : decline.isError ? decline.error : null} className="mt-xs" />
       <Pager page={q.data?.page} prefix="ch" label="channels" />
       <NewChannelSheet scope={scope} open={making} onClose={() => setMaking(false)} onMade={(id) => { refresh(); onOpen(id); }} />
     </div>
@@ -196,14 +193,14 @@ function NewChannelSheet({ scope, open, onClose, onMade }: { scope: ChannelScope
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Name</span>
-          <input autoFocus value={name} maxLength={MAX_CHANNEL_NAME} onChange={(e) => setName(e.target.value)} placeholder={scope === 'community' ? 'Morning pages' : 'Weekend plans'} className={field} />
+          <input autoFocus value={name} maxLength={MAX_CHANNEL_NAME} onChange={(e) => setName(e.target.value)} placeholder={scope === 'community' ? 'Morning pages' : 'Weekend plans'} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">What it is for (optional)</span>
-          <input value={topic} maxLength={MAX_CHANNEL_TOPIC} onChange={(e) => setTopic(e.target.value)} placeholder="One line so people know what to say here" className={field} />
+          <input value={topic} maxLength={MAX_CHANNEL_TOPIC} onChange={(e) => setTopic(e.target.value)} placeholder="One line so people know what to say here" className={FIELD} />
         </label>
         <p className="m-0 text-[12px] font-bold text-ink-soft">{scope === 'community' ? 'Anyone in Community can join and read. A guide can close it later.' : `Only people you ask in can see it. You can ask up to ${MAX_CHANNEL_MEMBERS - 1} friends.`}</p>
-        <Err e={make.isError ? make.error : null} />
+        <ErrorLine e={make.isError ? make.error : null} className="mt-xs" />
         <Button type="submit" size="lg" full disabled={make.isPending || !name.trim()}>
           Make the channel
         </Button>
@@ -439,8 +436,8 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
               {m.name}
               {m.owner && <span className="text-[11px] font-extrabold text-ink-soft">owner</span>}
               {ch?.owner && !m.owner && (
-                <button type="button" aria-label={`Take ${m.name} out`} disabled={removeMember.isPending} onClick={() => window.confirm(`Take ${m.name} out of ${ch.name}?`) && removeMember.mutate(m.userId)} className="toy toy-soft flex size-[32px] items-center justify-center rounded-pill bg-paper text-[14px]">
-                  <span aria-hidden="true">✕</span>
+                <button type="button" aria-label={`Take ${m.name} out`} disabled={removeMember.isPending} onClick={() => window.confirm(`Take ${m.name} out of ${ch.name}?`) && removeMember.mutate(m.userId)} className="toy toy-soft flex size-[44px] items-center justify-center rounded-pill bg-paper">
+                  <Icon icon={X} size={14} />
                 </button>
               )}
             </li>
@@ -514,7 +511,7 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
                     <span className="font-extrabold">
                       {l.mine ? 'You' : l.name}
                       {l.anonymous && <span className={`ml-xs rounded-pill px-xs text-[11px] leading-[18px] ${l.mine ? 'bg-on-ink/15' : 'bg-line text-ink-soft'}`}>{l.mine ? `Anonymous as ${l.name}` : 'Anonymous'}</span>}
-                      {l.rank && RANK_WORD[l.rank] && <span className="ml-xs rounded-pill bg-r3 px-xs text-[11px] leading-[18px] text-ink-fixed">{RANK_WORD[l.rank]}</span>}
+                      {l.rank && RANK_WORD[l.rank] && <IconTag className="ml-xs" tone="warn" icon="Shield">{RANK_WORD[l.rank]}</IconTag>}
                     </span>
                     <span className={`text-[12px] font-bold ${l.mine ? 'text-on-ink/70' : 'text-ink-soft'}`}>{when(l.createdAt)}</span>
                   </span>
@@ -543,7 +540,7 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
               </div>
             )}
           </div>
-          <Err e={unsay.isError ? unsay.error : report.isError ? report.error : block.isError ? block.error : mute.isError ? mute.error : null} />
+          <ErrorLine e={unsay.isError ? unsay.error : report.isError ? report.error : block.isError ? block.error : mute.isError ? mute.error : null} className="mt-xs" />
           {report.isSuccess && (
             <p role="status" className="mt-xs m-0 text-[14px] font-bold text-ink-soft">
               Thanks. The team has it.
@@ -556,7 +553,7 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
               <Button className="mt-xs" disabled={join.isPending} onClick={() => join.mutate()}>
                 Join {ch?.name}
               </Button>
-              <Err e={join.isError ? join.error : null} />
+              <ErrorLine e={join.isError ? join.error : null} className="mt-xs" />
             </div>
           )}
           {ch?.archived && <p className="mt-sm m-0 text-[14px] font-bold text-ink-soft">This channel is closed. You can still read it.</p>}
@@ -576,7 +573,7 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
               <ChatComposer placeholder={`Write in ${ch?.name ?? 'the channel'}`} maxLength={MAX_CHANNEL_MESSAGE} disabled={say.isPending} onSend={(t) => say.mutate(t)} />
               {failed && (
                 <div role="alert" className="mt-xs rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-                  <p className="m-0">That line did not send: {msg(say.error)}</p>
+                  <p className="m-0">That line did not send: {errorText(say.error, 'That did not work. Try again.')}</p>
                   <p className="mt-xs m-0 break-words font-semibold text-ink-soft">{failed}</p>
                   <Button size="sm" className="mt-xs" disabled={say.isPending} onClick={() => say.mutate(failed)}>
                     Try again
@@ -587,7 +584,7 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
           )}
         </>
       )}
-      <Err e={join.isError && !showJoin ? join.error : leave.isError ? leave.error : close.isError ? close.error : removeMember.isError ? removeMember.error : null} />
+      <ErrorLine e={join.isError && !showJoin ? join.error : leave.isError ? leave.error : close.isError ? close.error : removeMember.isError ? removeMember.error : null} className="mt-xs" />
       {ch && <EditChannelSheet scope={scope} channel={ch} open={editing} onClose={() => setEditing(false)} onSaved={refreshMeta} />}
       {ch && scope === 'bond' && <InviteSheet channel={ch} open={inviting} onClose={() => setInviting(false)} onAsked={refreshMeta} seats={members.length} />}
     </div>
@@ -618,7 +615,7 @@ function LineActions({
 }) {
   const [more, setMore] = useState(false);
   const tone = line.mine ? 'text-on-ink/80' : 'text-ink-soft';
-  const btn = `min-h-[32px] text-[12px] font-bold underline underline-offset-4 ${tone}`;
+  const btn = `inline-flex min-h-[44px] items-center text-[12px] font-bold underline underline-offset-4 ${tone}`;
   return (
     <span className="mt-xs flex flex-wrap items-center gap-sm">
       {canWrite && (
@@ -676,13 +673,13 @@ function EditChannelSheet({ scope, channel, open, onClose, onSaved }: { scope: C
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Name</span>
-          <input value={name} maxLength={MAX_CHANNEL_NAME} onChange={(e) => setName(e.target.value)} className={field} />
+          <input value={name} maxLength={MAX_CHANNEL_NAME} onChange={(e) => setName(e.target.value)} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">What it is for</span>
-          <input value={topic} maxLength={MAX_CHANNEL_TOPIC} onChange={(e) => setTopic(e.target.value)} className={field} />
+          <input value={topic} maxLength={MAX_CHANNEL_TOPIC} onChange={(e) => setTopic(e.target.value)} className={FIELD} />
         </label>
-        <Err e={save.isError ? save.error : null} />
+        <ErrorLine e={save.isError ? save.error : null} className="mt-xs" />
         <Button type="submit" size="lg" full disabled={save.isPending || !name.trim()}>
           Save
         </Button>
@@ -724,7 +721,7 @@ function InviteSheet({ channel, open, onClose, onAsked, seats }: { channel: Chan
         ))}
       </ul>
       <div className="mt-sm">
-        <Err e={ask.isError ? ask.error : null} />
+        <ErrorLine e={ask.isError ? ask.error : null} className="mt-xs" />
       </div>
     </Sheet>
   );

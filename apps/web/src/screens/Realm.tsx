@@ -22,6 +22,7 @@ import { useCelebrate } from '../components/Celebration';
 import { EvolutionReveal } from '../components/EvolutionReveal';
 import { BackLink } from '../components/PageHeader';
 import { PaceTag } from '../components/PaceTag';
+import { StatusTag } from '../components/StatusTag';
 import { Pyramid } from '../components/Pyramid';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
@@ -34,6 +35,9 @@ import { useAuthed, useMe, useNodes, useRefreshAll } from '../lib/queries';
 import { placementLine } from '../components/LifeMap';
 import { Link } from 'react-router';
 import { useActionQueue } from '../lib/useActionQueue';
+import { Icon } from '../components/Icon';
+import { Check } from 'lucide-react';
+import { Fold } from '../components/Fold';
 
 /** The layers above the tasks, top down like the pyramid: the foundation first, projects last. */
 const RUNGS = KINDS.filter((k) => k !== 'task');
@@ -197,7 +201,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
               ) : (
                 <p className="mt-sm m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft shadow-toy-soft">Nothing waiting. Add one below.</p>
               )}
-              <Button full className="mt-sm" onClick={() => setAdding('task')} disabled={projects.length === 0}>
+              <Button full className="mt-sm" plusToX expanded={adding === 'task'} onClick={() => setAdding('task')} disabled={projects.length === 0}>
                 Add a task
               </Button>
               {projects.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Tasks need a project. Open the pyramid below to add one.</p>}
@@ -227,26 +231,27 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                   const summary = items.length > 0 ? items.map((n) => n.title).join(', ') : locked && parent ? `Unlocks after your first ${KIND_META[parent].label.toLowerCase()}` : 'Nothing yet';
                   return (
                     <li key={kind}>
-                      <details className="rounded-tile bg-card shadow-toy-soft">
-                        <summary className="flex items-center gap-sm p-sm">
-                          <span
-                            className="flex size-[32px] shrink-0 items-center justify-center rounded-pill font-display text-[14px] font-extrabold"
-                            style={locked ? { background: 'var(--color-line)', color: 'var(--color-ink-soft)' } : { background: fillVar(rel), color: ON_FILL }}
-                            aria-hidden="true"
-                          >
-                            {meta.rung}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-[16px] font-bold">
-                              {meta.plural}
-                              {items.length > 0 && <span className="text-ink-mute"> {items.length}</span>}
+                      <Fold
+                        className="rounded-tile bg-card p-xs shadow-toy-soft"
+                        title={
+                          <span className="flex items-center gap-sm py-xs">
+                            <span
+                              className="flex size-[32px] shrink-0 items-center justify-center rounded-pill font-display text-[14px] font-extrabold"
+                              style={locked ? { background: 'var(--color-line)', color: 'var(--color-ink-soft)' } : { background: fillVar(rel), color: ON_FILL }}
+                              aria-hidden="true"
+                            >
+                              {meta.rung}
                             </span>
-                            <span className="block truncate text-[14px] font-semibold text-ink-soft">{summary}</span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-[16px] font-bold">
+                                {meta.plural}
+                                {items.length > 0 && <span className="text-ink-mute"> {items.length}</span>}
+                              </span>
+                              <span className="block truncate text-[14px] font-semibold text-ink-soft">{summary}</span>
+                            </span>
                           </span>
-                          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" className="chev shrink-0 transition-transform" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M6 9l6 6 6-6" />
-                          </svg>
-                        </summary>
+                        }
+                      >
                         <div className="border-t border-line p-sm">
                           <p className="m-0 text-[14px] font-semibold text-ink-soft">{meta.hint}</p>
                           {items.length > 0 && (
@@ -274,7 +279,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                                           />
                                         )}
                                       </span>
-                                      <span className="shrink-0 rounded-pill bg-card px-sm py-xs text-[12px] font-extrabold">{n.xp} xp</span>
+                                      <StatusTag tone="warn">{`${n.xp} xp`}</StatusTag>
                                     </button>
                                   </li>
                                 );
@@ -285,22 +290,23 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                             Add {meta.label.toLowerCase()}
                           </Button>
                         </div>
-                      </details>
+                      </Fold>
                     </li>
                   );
                 })}
                 {doneTasks.length > 0 && (
                   <li>
-                    <details className="rounded-tile bg-card shadow-toy-soft">
-                      <summary className="flex items-center gap-sm p-sm">
-                        <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-r4 font-display text-[14px] font-extrabold text-on-fill" aria-hidden="true">
-                          ✓
+                    <Fold
+                      className="rounded-tile bg-card p-xs shadow-toy-soft"
+                      title={
+                        <span className="flex items-center gap-sm py-xs">
+                          <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-r4 text-on-fill" aria-hidden="true">
+                            <Icon icon={Check} size={16} strokeWidth={3} />
+                          </span>
+                          <span className="min-w-0 flex-1 text-[16px] font-bold">Done tasks {doneTasks.length}</span>
                         </span>
-                        <span className="min-w-0 flex-1 text-[16px] font-bold">Done tasks {doneTasks.length}</span>
-                        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" className="chev shrink-0 transition-transform" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M6 9l6 6 6-6" />
-                        </svg>
-                      </summary>
+                      }
+                    >
                       <ul className="flex list-none flex-col gap-xs border-t border-line p-sm m-0">
                         <AnimatePresence initial={false}>
                           {doneTasks.map((n) => (
@@ -316,7 +322,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                           ))}
                         </AnimatePresence>
                       </ul>
-                    </details>
+                    </Fold>
                   </li>
                 )}
               </ol>

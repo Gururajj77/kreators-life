@@ -136,14 +136,15 @@ export function ConsentPopup() {
               </div>
             </div>
           ) : (
-            <div className="flex flex-col gap-xs">
+            // On the public site's laptop width the words and the three choices share one short line, so the bar covers less of the page.
+            <div className={`flex flex-col gap-xs ${token ? '' : 'md:mx-auto md:max-w-[1080px] md:flex-row md:items-center md:justify-between md:gap-md'}`}>
               <p className="m-0 text-[14px] font-semibold text-ink-soft">
                 A cookie, outside videos and email news stay off unless you say yes.{' '}
                 <Link to="/privacy" target="_blank" className="whitespace-nowrap underline underline-offset-4">
                   Privacy policy
                 </Link>
               </p>
-              <div className="flex flex-wrap items-center gap-xs">
+              <div className="flex shrink-0 flex-wrap items-center gap-xs">
                 <button type="button" onClick={() => setChoosing(true)} className="mr-auto min-h-[44px] rounded-pill px-xs text-[14px] font-bold text-ink-soft underline underline-offset-4 hover:text-ink">
                   Choose
                 </button>

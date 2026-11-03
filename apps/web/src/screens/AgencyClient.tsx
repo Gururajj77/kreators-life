@@ -1,28 +1,34 @@
-import { AGENCY_HEALTH_NAME, AGENCY_STATUS_NAME, CLIENT_HEALTH_TONE, CLIENT_STATUS_TONE, minutesLabel2, money, type AgencyClient as ClientData } from '@kreators/shared';
+import { AGENCY_HEALTH_NAME, AGENCY_STATUS_NAME, CLIENT_HEALTH_TONE, CLIENT_STATUS_TONE, minutesLabel2, money, stageIndex, type AgencyClient as ClientData } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Clock, ExternalLink, FilePlus, Pencil, ReceiptText } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { AgencyContracts } from '../components/AgencyContracts';
 import { ClientDocs } from '../components/AgencyDocs';
-import { LifecycleCard, PortalSecurityCard, RetainerCard } from '../components/AgencyLifecycle';
-import { StageBar } from '../components/StageBar';
+import { LifecycleCard, RetainerCard } from '../components/AgencyLifecycle';
 import { AgencyInvoices } from '../components/AgencyInvoices';
 import { AgencyPipeline } from '../components/AgencyPipeline';
 import { Button } from '../components/Button';
 import { StatTile } from '../components/Charts';
 import { ClientLink } from '../components/ClientLink';
 import { ClientSheet } from '../components/ClientSheet';
+import { Fold } from '../components/Fold';
+import { Segmented } from '../components/fx/Segmented';
 import { Inert } from '../components/Inert';
+import { MoreMenu } from '../components/MoreMenu';
 import { BackLink } from '../components/PageHeader';
 import { Ring } from '../components/Ring';
 import { Screen } from '../components/Screen';
 import { Section } from '../components/Section';
+import { Sheet } from '../components/Sheet';
+import { Busy, Skeleton, SkeletonCard } from '../components/Skeleton';
 import { StatusTag } from '../components/StatusTag';
 import { Toggle } from '../components/Toggle';
 import { api } from '../lib/api';
 import { bento } from '../lib/bento';
 import { prettyDate, todayLocal } from '../lib/date';
 import { useAuthed } from '../lib/queries';
+import { useParamState } from '../lib/useParamState';
 
 const COPY = {
   loading: 'Loading this client.',
@@ -31,15 +37,21 @@ const COPY = {
   timeLede: 'Hours you spent for this client. Billable hours count towards what they pay for.',
   timeFailed: 'That did not save. Check the time and try again.',
   timeEmpty: 'No time logged yet.',
-  invoiceLede: 'Drafts, sent and paid. Open one to design it, send it or copy it for next month.',
   agreementLede: 'Trial terms, retainers and project agreements for this client.',
-  linkLede: 'One page your client can open to see their work. You choose what shows, and a password keeps it private.',
-  lifecycleLede: 'From the first enquiry to monthly delivery. The client sees the same bar at their link.',
-  retainerLede: 'After the pilot: the client picks how many months, and each month makes its own invoice and pieces.',
-  billingLede: 'What goes under "Billed to" on invoices and in agreements.',
-  noBilling: 'No billing details yet. Add them so invoices fill in by themselves.',
+  linkLede: 'What your client sees at their link.',
+  retainerLede: 'The client picks the months; each month bills itself.',
+  retainerLater: 'A retainer can be offered after the pilot month.',
   invoiceFailed: 'Could not make the invoice. Set a retainer or a fee on a published deliverable first.',
 };
+
+const SEGMENTS = [
+  { value: 'work', label: 'Work' },
+  { value: 'money', label: 'Money' },
+  { value: 'paper', label: 'Paper' },
+  { value: 'link', label: 'Link' },
+] as const;
+type Segment = (typeof SEGMENTS)[number]['value'];
+const isSegment = (v: string): v is Segment => SEGMENTS.some((s) => s.value === v);
 
 /** "90", "1:30", "1h 30m", "1.5h" or "45m" as whole minutes, or null when it is not a time. */
 function parseDuration(text: string): number | null {
@@ -52,15 +64,23 @@ function parseDuration(text: string): number | null {
   return /^\d+$/.test(t) ? Number(t) : null;
 }
 
-/** The dashboard for one client: the numbers, the pipeline, time, invoices, agreements and the link the client can open. */
+/**
+ * The dashboard for one client: the header with one fact line and a More menu, one stage card, three numbers, then four segments
+ * kept in the URL (`cseg`): Work (the pipeline, channels and time), Money (invoices and, from the pilot on, the retainer), Paper
+ * (agreements and documents) and Link (what the client sees at their link).
+ */
 export function AgencyClient() {
   const { id = '' } = useParams();
   const nav = useNavigate();
   const qc = useQueryClient();
   const today = todayLocal();
   const q = useAuthed(['agency', 'client', id], () => api.agencyClient(id));
-  const items = useAuthed(['agency', 'items', 'client', id, 'time'], () => api.agencyItems(`client=${id}&size=100`));
+  const [segRaw, setSeg] = useParamState('cseg', 'work');
+  const seg: Segment = isSegment(segRaw) ? segRaw : 'work';
   const [editing, setEditing] = useState(false);
+  const [timing, setTiming] = useState(false);
+  const [newInvoice, setNewInvoice] = useState(false);
+  const items = useAuthed(['agency', 'items', 'client', id, 'time'], () => api.agencyItems(`client=${id}&size=100`), timing);
   const invalidate = () => qc.invalidateQueries({ queryKey: ['agency'] });
 
   const [minutesText, setMinutesText] = useState('');
@@ -73,6 +93,7 @@ export function AgencyClient() {
     onSuccess: () => {
       setMinutesText('');
       setNote('');
+      setTiming(false);
       invalidate();
     },
   });
@@ -83,7 +104,17 @@ export function AgencyClient() {
   if (q.isPending) {
     return (
       <Screen columns={false}>
-        <p className="pt-lg m-0 text-[16px] font-semibold text-ink-soft">{COPY.loading}</p>
+        <Busy label={COPY.loading} className="pt-lg">
+          <Skeleton className="h-[16px] w-[96px]" />
+          <Skeleton className="mt-sm h-[36px] w-2/3" />
+          <Skeleton className="mt-sm h-[16px] w-1/2" />
+          <SkeletonCard lines={3} className="mt-md" />
+          <div className="mt-md grid grid-cols-2 gap-sm md:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className={`h-[96px] rounded-card ${bento(i, 3, 2, 3)}`} />
+            ))}
+          </div>
+        </Busy>
       </Screen>
     );
   }
@@ -101,30 +132,48 @@ export function AgencyClient() {
   }
 
   const c: ClientData = d.client;
+  const life = d.lifecycle;
   const cur = d.settings.currency;
   const m = c.month;
   const planned = c.piecesPerMonth;
   const included = c.hoursPerMonth * 60;
+  const retainerReady = stageIndex(life.stage) >= stageIndex('pilot') || life.retainer !== null;
   const tiles = [
-    { label: 'Retainer a month', value: money(c.retainerCents, cur), hint: c.retainerCents === 0 ? 'None set' : undefined },
     {
       label: 'Published this month',
       value: planned > 0 ? `${m.published} of ${planned}` : String(m.published),
       hint: planned > 0 ? 'Against the plan' : 'No monthly plan set',
       ring: planned > 0 ? Math.min(1, m.published / planned) : null,
     },
-    { label: 'Hours this month', value: minutesLabel2(m.minutes), hint: included > 0 ? `of ${minutesLabel2(included)} they pay for` : 'No hours set' },
-    { label: 'Billable hours', value: minutesLabel2(m.billableMinutes), hint: included > 0 && m.billableMinutes > included ? 'Over the hours' : 'This month' },
-    { label: 'Waiting for them', value: String(m.inReview), hint: 'In review' },
-    { label: 'Late', value: String(m.overdue), hint: m.overdue > 0 ? 'Past their day' : 'None' },
+    {
+      label: 'Hours this month',
+      value: minutesLabel2(m.minutes),
+      hint: `${included > 0 ? `of ${minutesLabel2(included)} included, ` : ''}${minutesLabel2(m.billableMinutes)} billable${included > 0 && m.billableMinutes > included ? ', over the hours' : ''}`,
+      ring: null,
+    },
+    { label: 'For them to look at', value: `${m.inReview} waiting, ${m.overdue} late`, hint: m.overdue > 0 ? 'Late means past their day' : 'In review now', ring: null },
   ];
+  const facts = [
+    [c.contactName, c.contactEmail].filter(Boolean).join(', '),
+    c.channels.join(', '),
+    c.retainerCents > 0 ? `${money(c.retainerCents, cur)} a month` : '',
+    c.renewalDate ? `renews ${prettyDate(c.renewalDate)}` : '',
+  ].filter(Boolean);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     logTime.mutate();
   };
   const minutes = parseDuration(minutesText);
   const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-  const b = c.billing;
+  const portalUrl = c.portalToken ? `${window.location.origin}/a/${c.portalToken}` : '';
+  const openTime = () => {
+    setSeg('work');
+    setTiming(true);
+  };
+  const invoiceMonth = () => {
+    setSeg('money');
+    makeInvoice.mutate();
+  };
 
   return (
     <Screen columns={false}>
@@ -132,39 +181,44 @@ export function AgencyClient() {
         <BackLink to="/agency">Agency</BackLink>
         <div className="flex items-start justify-between gap-sm">
           <h1 className="min-w-0 text-[30px]">{c.name}</h1>
-          <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-            Edit
-          </Button>
+          <MoreMenu
+            label={`More for ${c.name}`}
+            items={[
+              { key: 'edit', label: 'Edit client', icon: Pencil, onSelect: () => setEditing(true) },
+              { key: 'billing', label: 'Billing details', icon: ReceiptText, onSelect: () => setEditing(true) },
+              ...(portalUrl ? [{ key: 'link', label: 'Open client link', icon: ExternalLink, onSelect: () => window.open(portalUrl, '_blank', 'noopener') }] : []),
+              { key: 'time', label: 'Log time', icon: Clock, onSelect: openTime },
+              { key: 'invoice', label: 'Invoice this month', icon: FilePlus, onSelect: invoiceMonth, disabled: makeInvoice.isPending },
+            ]}
+          />
         </div>
         <div className="mt-xs flex flex-wrap items-center gap-xs">
           <StatusTag tone={CLIENT_STATUS_TONE[c.status]}>{AGENCY_STATUS_NAME[c.status]}</StatusTag>
           <StatusTag tone={CLIENT_HEALTH_TONE[c.health]}>{AGENCY_HEALTH_NAME[c.health]}</StatusTag>
           {c.campaignName && <StatusTag tone="info">{`Army: ${c.campaignName}`}</StatusTag>}
         </div>
-        {(c.contactName || c.contactEmail) && (
+        {facts.length > 0 && (
           <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-            <Inert text={[c.contactName, c.contactEmail].filter(Boolean).join(', ')} />
+            <Inert text={facts.join(' · ')} />
           </p>
         )}
-        {c.channels.length > 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{`Channels: ${c.channels.join(', ')}`}</p>}
-        {c.renewalDate && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{`Renews ${prettyDate(c.renewalDate)}`}</p>}
-        {c.flags.length > 0 && (
-          <ul className="mt-sm m-0 list-none rounded-tile p-sm text-[14px] font-bold" style={{ background: 'var(--tint-yellow)' }}>
-            {c.flags.map((f) => (
-              <li key={f}>{f}</li>
-            ))}
-          </ul>
+        {c.notes && (
+          <Fold className="mt-sm" title="Notes">
+            <p className="m-0 whitespace-pre-wrap text-[14px] font-semibold text-ink-soft">
+              <Inert text={c.notes} />
+            </p>
+          </Fold>
         )}
       </header>
 
-      <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-        <StageBar stage={d.lifecycle.stage} />
+      <div className="mt-md">
+        <LifecycleCard client={c} life={life} compact />
       </div>
 
       <div className="mt-md grid grid-cols-2 gap-sm md:grid-cols-3">
         {tiles.map((t, i) => (
           <StatTile key={t.label} label={t.label} value={t.value} hint={t.hint} className={bento(i, tiles.length, 2, 3)}>
-            {t.ring !== undefined && t.ring !== null && (
+            {t.ring !== null && (
               <span className="mt-xs block">
                 <Ring value={t.ring} size={40} stroke={5} color="var(--color-r4)" label={`${m.published} of ${planned} published`} />
               </span>
@@ -173,48 +227,121 @@ export function AgencyClient() {
         ))}
       </div>
 
-      <Section id="lifecycle-heading" title="The way through" lede={COPY.lifecycleLede}>
-        <LifecycleCard client={c} life={d.lifecycle} />
-      </Section>
+      <div className="mt-lg">
+        <Segmented label="Show" value={seg} onChange={(v) => setSeg(v)} options={SEGMENTS} />
+      </div>
 
-      <Section id="link-heading" title="Client link" lede={COPY.linkLede}>
-        <div className="flex flex-col gap-sm">
-          <PortalSecurityCard client={c} life={d.lifecycle} />
-          <ClientLink client={c} />
-        </div>
-      </Section>
+      {seg === 'work' && (
+        <>
+          <Section id="pipeline-heading" title="Pipeline">
+            {/* A phone always opens it as a list (`useView`); a laptop opens the board unless the URL says otherwise. */}
+            <AgencyPipeline clientId={id} />
+          </Section>
 
-      <Section id="retainer-heading" title="Retainer" lede={COPY.retainerLede}>
-        <RetainerCard client={c} life={d.lifecycle} currency={cur} />
-      </Section>
+          {d.byChannel.length > 0 && (
+            <Fold className="mt-md" title="By channel" hint={String(d.byChannel.length)}>
+              <ul className="flex list-none flex-col gap-xs p-0 m-0">
+                {d.byChannel.map((ch) => {
+                  const total = Math.max(1, ch.published + ch.open);
+                  return (
+                    <li key={ch.channel} className="rounded-tile bg-card p-sm shadow-toy-soft">
+                      <div className="flex items-baseline justify-between gap-sm">
+                        <span className="min-w-0 text-[16px] font-bold">{ch.channel}</span>
+                        <span className="shrink-0 text-[14px] font-bold text-ink-soft">{`${ch.published} live, ${ch.open} open`}</span>
+                      </div>
+                      <div className="mt-xs h-[8px] overflow-hidden rounded-pill bg-line" role="img" aria-label={`${ch.published} of ${total} live`}>
+                        <div className="h-full rounded-pill" style={{ width: `${Math.round((ch.published / total) * 100)}%`, background: 'var(--color-r4)' }} />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Fold>
+          )}
 
-      <Section id="pipeline-heading" title="Pipeline">
-        <AgencyPipeline clientId={id} />
-      </Section>
-
-      {d.byChannel.length > 0 && (
-        <Section id="channels-heading" title="By channel" lede="What went live this month and what is still open, on each channel.">
-          <ul className="flex list-none flex-col gap-xs p-0 m-0">
-            {d.byChannel.map((ch) => {
-              const total = Math.max(1, ch.published + ch.open);
-              return (
-                <li key={ch.channel} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                  <div className="flex items-baseline justify-between gap-sm">
-                    <span className="min-w-0 text-[16px] font-bold">{ch.channel}</span>
-                    <span className="shrink-0 text-[14px] font-bold text-ink-soft">{`${ch.published} live, ${ch.open} open`}</span>
+          <Section
+            id="time-heading"
+            title="Time"
+            lede={COPY.timeLede}
+            action={
+              <Button size="sm" variant="outline" onClick={() => setTiming(true)}>
+                Log time
+              </Button>
+            }
+          >
+            <ul className="flex list-none flex-col gap-xs p-0 m-0">
+              {d.time.map((t) => (
+                <li key={t.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+                  <div className="min-w-0 flex-1">
+                    <p className="m-0 text-[16px] font-bold">
+                      {minutesLabel2(t.minutes)}
+                      <span className="ml-xs text-[14px] font-semibold text-ink-soft">{prettyDate(t.day)}</span>
+                    </p>
+                    {(t.itemTitle || t.note) && (
+                      <p className="m-0 text-[14px] font-semibold text-ink-soft">
+                        <Inert text={[t.itemTitle, t.note].filter(Boolean).join(', ')} />
+                      </p>
+                    )}
                   </div>
-                  <div className="mt-xs h-[8px] overflow-hidden rounded-pill bg-line" role="img" aria-label={`${ch.published} of ${total} live`}>
-                    <div className="h-full rounded-pill" style={{ width: `${Math.round((ch.published / total) * 100)}%`, background: 'var(--color-r4)' }} />
-                  </div>
+                  <StatusTag tone={t.billable ? 'good' : 'neutral'}>{t.billable ? 'Billable' : 'Not billable'}</StatusTag>
+                  <Button variant="ghost" size="sm" onClick={() => removeTime.mutate(t.id)} disabled={removeTime.isPending} aria-label={`Remove ${minutesLabel2(t.minutes)} on ${t.day}`}>
+                    Remove
+                  </Button>
                 </li>
-              );
-            })}
-          </ul>
+              ))}
+            </ul>
+            {d.time.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.timeEmpty}</p>}
+          </Section>
+        </>
+      )}
+
+      {seg === 'money' && (
+        <>
+          <Section
+            id="invoices-heading"
+            title="Invoices"
+            action={
+              <div className="flex items-center gap-xs">
+                <Button size="sm" onClick={() => makeInvoice.mutate()} disabled={makeInvoice.isPending}>
+                  {makeInvoice.isPending ? 'Making' : 'Invoice this month'}
+                </Button>
+                <MoreMenu label="More for invoices" items={[{ key: 'new', label: 'New invoice', icon: FilePlus, onSelect: () => setNewInvoice(true) }]} />
+              </div>
+            }
+          >
+            {makeInvoice.isError && (
+              <p role="alert" className="mb-sm m-0 text-[14px] font-bold">
+                {COPY.invoiceFailed}
+              </p>
+            )}
+            <AgencyInvoices clientId={id} adding={newInvoice} onAdding={setNewInvoice} />
+          </Section>
+
+          <Section id="retainer-heading" title="Retainer" lede={retainerReady ? COPY.retainerLede : undefined}>
+            {retainerReady ? <RetainerCard client={c} life={life} currency={cur} /> : <p className="m-0 text-[12px] font-bold text-ink-soft">{COPY.retainerLater}</p>}
+          </Section>
+        </>
+      )}
+
+      {seg === 'paper' && (
+        <>
+          <Section id="agreements-heading" title="Agreements" lede={COPY.agreementLede}>
+            <AgencyContracts clientId={id} />
+          </Section>
+          <div className="mt-lg">
+            <ClientDocs clientId={id} />
+          </div>
+        </>
+      )}
+
+      {seg === 'link' && (
+        <Section id="link-heading" title="Client link" lede={COPY.linkLede}>
+          <ClientLink client={c} life={life} />
         </Section>
       )}
 
-      <Section id="time-heading" title="Time" lede={COPY.timeLede}>
-        <form onSubmit={submit} className="rounded-card bg-card p-md shadow-toy-soft">
+      <Sheet open={timing} onClose={() => setTiming(false)} title="Log time">
+        <form onSubmit={submit}>
           <div className="grid grid-cols-2 gap-sm">
             <label className="block text-[14px] font-bold">
               How long
@@ -248,97 +375,13 @@ export function AgencyClient() {
               {COPY.timeFailed}
             </p>
           )}
-          <div className="mt-sm">
+          <div className="mt-md pb-xl">
             <Button type="submit" disabled={logTime.isPending || !minutes || !day}>
               {logTime.isPending ? 'Saving' : 'Log time'}
             </Button>
           </div>
         </form>
-        <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-          {d.time.map((t) => (
-            <li key={t.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-              <div className="min-w-0 flex-1">
-                <p className="m-0 text-[16px] font-bold">
-                  {minutesLabel2(t.minutes)}
-                  <span className="ml-xs text-[14px] font-semibold text-ink-soft">{prettyDate(t.day)}</span>
-                </p>
-                {(t.itemTitle || t.note) && (
-                  <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                    <Inert text={[t.itemTitle, t.note].filter(Boolean).join(', ')} />
-                  </p>
-                )}
-              </div>
-              <StatusTag tone={t.billable ? 'good' : 'neutral'}>{t.billable ? 'Billable' : 'Not billable'}</StatusTag>
-              <Button variant="outline" size="sm" onClick={() => removeTime.mutate(t.id)} disabled={removeTime.isPending} aria-label={`Remove ${minutesLabel2(t.minutes)} on ${t.day}`}>
-                Remove
-              </Button>
-            </li>
-          ))}
-        </ul>
-        {d.time.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{COPY.timeEmpty}</p>}
-      </Section>
-
-      <Section
-        id="invoices-heading"
-        title="Invoices"
-        lede={COPY.invoiceLede}
-        action={
-          <Button size="sm" onClick={() => makeInvoice.mutate()} disabled={makeInvoice.isPending}>
-            {makeInvoice.isPending ? 'Making' : 'Invoice this month'}
-          </Button>
-        }
-      >
-        {makeInvoice.isError && (
-          <p role="alert" className="mb-sm m-0 text-[14px] font-bold">
-            {COPY.invoiceFailed}
-          </p>
-        )}
-        <AgencyInvoices clientId={id} />
-      </Section>
-
-      <Section id="agreements-heading" title="Agreements" lede={COPY.agreementLede}>
-        <AgencyContracts clientId={id} />
-      </Section>
-
-      <div className="mt-lg">
-        <ClientDocs clientId={id} />
-      </div>
-
-      <Section id="billing-heading" title="Billing details and notes" lede={COPY.billingLede} action={<Button variant="outline" size="sm" onClick={() => setEditing(true)}>Edit</Button>}>
-        <div className="rounded-card bg-card p-md shadow-toy-soft">
-          {b.name || b.line || b.address || b.taxIds.length > 0 || b.phone ? (
-            <dl className="m-0 grid grid-cols-1 gap-xs text-[14px] font-semibold text-ink-soft md:grid-cols-2">
-              {[
-                ['Name', b.name],
-                ['Legal name', b.line],
-                ['Address', b.address],
-                ['Email', b.email],
-                ['Phone', b.phone],
-                ...b.taxIds.map((t) => [t.label, t.value] as [string, string]),
-              ]
-                .filter(([, v]) => v)
-                .map(([k, v]) => (
-                  <div key={`${k}-${v}`}>
-                    <dt className="font-extrabold text-ink">{k}</dt>
-                    <dd className="m-0">
-                      <Inert text={v ?? ''} />
-                    </dd>
-                  </div>
-                ))}
-            </dl>
-          ) : (
-            <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.noBilling}</p>
-          )}
-          {c.notes && (
-            <div className="mt-md">
-              <p className="m-0 text-[14px] font-extrabold">Notes</p>
-              <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold text-ink-soft">
-                <Inert text={c.notes} />
-              </p>
-            </div>
-          )}
-        </div>
-      </Section>
+      </Sheet>
 
       <ClientSheet
         open={editing}

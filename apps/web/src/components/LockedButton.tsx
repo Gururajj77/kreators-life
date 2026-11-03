@@ -1,10 +1,13 @@
 import { unlockAt, type Unlock } from '@kreators/shared';
-import { Lock } from 'lucide-react';
-import { Icon } from './Icon';
+import { AnimatedIcon } from './AnimatedIcon';
 
-/** A small padlock, drawn so it takes the colour of the text around it. */
+/**
+ * A small padlock, drawn so it takes the colour of the text around it. It is the useanimations lock, resting closed:
+ * pointing at the locked button (or reaching it with the keyboard) lifts the shackle a little and lets it fall back, a nudge
+ * that it opens later, never that it is open now.
+ */
 export function Padlock({ size = 16 }: { size?: number }) {
-  return <Icon icon={Lock} size={size} />;
+  return <AnimatedIcon name="lock" size={size} interaction="hover-bounce" />;
 }
 
 /**

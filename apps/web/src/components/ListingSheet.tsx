@@ -1,4 +1,4 @@
-import { PREOWNED_CONDITION_META, type PreownedOffer } from '@kreators/shared';
+import { PREOWNED_CONDITION_META, typedCents, type PreownedOffer } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Inert } from './Inert';
 import { useState, type FormEvent } from 'react';
@@ -10,8 +10,9 @@ import { MediaSection } from './MediaSection';
 import { money } from './PeriodPanel';
 import { Sheet } from './Sheet';
 import { TrustBadge } from './TrustBadge';
+import { FIELD } from '../lib/ui';
+import { FactTag } from './FactTag';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const offerWord: Record<PreownedOffer['status'], string> = { open: 'waiting', accepted: 'accepted', declined: 'declined', withdrawn: 'withdrawn' };
 
 interface Props {
@@ -40,10 +41,27 @@ export function ListingSheet({ id, onClose, feature }: Props) {
   const [soldFor, setSoldFor] = useState('');
   const thread = useQuery({ queryKey: ['market', 'thread', id, buyer], queryFn: () => api.marketMessages(id!, buyer!), enabled: Boolean(token && id && buyer && l?.mine), refetchInterval: 10_000 });
 
-  const offer = useMutation({ mutationFn: () => api.marketOffer(id!, Math.round(Number(cents) * 100), note), onSuccess: () => { setCents(''); setNote(''); refresh(); } });
+  // A typed amount is read from its digits with `typedCents` ("1,250.50" reads right); anything that is not an amount is refused here
+  // with a line to read, so NaN or null never reaches the server.
+  const offer = useMutation({
+    mutationFn: () => {
+      const c = typedCents(cents);
+      if (!Number.isInteger(c) || c <= 0) throw new Error('Type an amount above zero, like 1500 or 1,500.50.');
+      return api.marketOffer(id!, c, note);
+    },
+    onSuccess: () => { setCents(''); setNote(''); refresh(); },
+  });
   const decide = useMutation({ mutationFn: (v: { offerId: string; action: 'accept' | 'decline' | 'withdraw' }) => api.marketDecide(v.offerId, v.action), onSuccess: refresh });
   const send = useMutation({ mutationFn: () => api.marketSend(id!, text, l?.mine ? (buyer ?? undefined) : undefined), onSuccess: () => { setText(''); refresh(); void thread.refetch(); } });
-  const sold = useMutation({ mutationFn: () => api.marketSold(id!, soldFor ? Math.round(Number(soldFor) * 100) : null), onSuccess: refresh });
+  const sold = useMutation({
+    mutationFn: () => {
+      if (!soldFor.trim()) return api.marketSold(id!, null);
+      const c = typedCents(soldFor);
+      if (!Number.isInteger(c) || c < 0) throw new Error('Type what it sold for, like 1500, or leave it empty.');
+      return api.marketSold(id!, c);
+    },
+    onSuccess: refresh,
+  });
   const status = useMutation({ mutationFn: (s: 'live' | 'withdrawn') => api.marketUpdateListing(id!, { status: s }), onSuccess: refresh });
   const promote = useMutation({ mutationFn: () => api.marketFeature('listing', id!), onSuccess: refresh });
   const remove = useMutation({ mutationFn: () => api.marketRemoveListing(id!), onSuccess: () => { refresh(); onClose(); } });
@@ -70,7 +88,7 @@ export function ListingSheet({ id, onClose, feature }: Props) {
               {l.originalCents && l.originalCents > l.priceCents && (
                 <>
                   <span className="text-[14px] font-bold text-ink-mute line-through">{money(l.originalCents, l.currency)}</span>
-                  <span className="rounded-pill bg-r4 px-xs text-[12px] font-extrabold leading-[20px] text-on-fill">Save {money(l.originalCents - l.priceCents, l.currency)}</span>
+                  <FactTag kind="free">{`Save ${money(l.originalCents - l.priceCents, l.currency)}`}</FactTag>
                 </>
               )}
             </div>
@@ -132,11 +150,11 @@ export function ListingSheet({ id, onClose, feature }: Props) {
                     <label className="block text-[14px] font-bold" htmlFor="offer-cents">
                       How much, in {l.currency}
                     </label>
-                    <input id="offer-cents" type="number" min={1} step="1" inputMode="numeric" value={cents} onChange={(e) => setCents(e.target.value)} placeholder={String(Math.round(l.priceCents / 100))} className={field} />
+                    <input id="offer-cents" type="text" inputMode="decimal" autoComplete="off" value={cents} onChange={(e) => setCents(e.target.value)} placeholder={String(Math.round(l.priceCents / 100))} className={FIELD} />
                     <label className="mt-sm block text-[14px] font-bold" htmlFor="offer-note">
                       A line for the seller
                     </label>
-                    <input id="offer-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} placeholder="Can pick up this weekend" className={field} />
+                    <input id="offer-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} placeholder="Can pick up this weekend" className={FIELD} />
                     {err(offer)}
                     <Button type="submit" className="mt-sm" disabled={!cents || offer.isPending}>
                       Make the offer
@@ -207,7 +225,7 @@ export function ListingSheet({ id, onClose, feature }: Props) {
                   >
                     <label className="min-w-0 flex-1">
                       <span className="block text-[14px] font-bold">Sold for, in {l.currency}</span>
-                      <input type="number" min={0} inputMode="numeric" value={soldFor} onChange={(e) => setSoldFor(e.target.value)} placeholder={String(Math.round((accepted?.cents ?? l.priceCents) / 100))} className={field} />
+                      <input type="text" inputMode="decimal" autoComplete="off" value={soldFor} onChange={(e) => setSoldFor(e.target.value)} placeholder={String(Math.round((accepted?.cents ?? l.priceCents) / 100))} className={FIELD} />
                     </label>
                     <Button type="submit" disabled={sold.isPending}>
                       Mark as sold

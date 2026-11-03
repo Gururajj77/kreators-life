@@ -2,6 +2,9 @@ import type { Page, PageSize } from '@kreators/shared';
 import { useMemo, useState, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { Button } from './Button';
 import { PagerBar } from './Pager';
+import { Icon } from './Icon';
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
+import { FIELD_CELL } from '../lib/ui';
 
 export type CellValue = string | number | boolean | null | undefined;
 
@@ -62,7 +65,6 @@ interface Props<T> {
 }
 
 const text = (v: CellValue) => (v === null || v === undefined ? '' : typeof v === 'boolean' ? (v ? 'yes' : 'no') : String(v));
-const field = 'min-h-[44px] w-full min-w-[120px] rounded-tile border-2 border-line bg-paper px-sm text-[14px] font-bold';
 
 function compare(a: CellValue, b: CellValue): number {
   if (a === b) return 0;
@@ -191,7 +193,7 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
         onKeyDown={(ev) => {
           if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur();
         }}
-        className={field}
+        className={FIELD_CELL}
       />
     );
   };
@@ -241,8 +243,11 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
           <thead>
             <tr className="border-b-2 border-line">
               {selectable && (
-                <th scope="col" className="w-[56px] px-sm py-sm">
-                  <input type="checkbox" checked={allOnPagePicked} onChange={togglePage} aria-label="Tick every row shown" className="size-[20px] accent-ink" />
+                <th scope="col" className="w-[56px] px-xs py-0">
+                  {/* The box is small; the label round it is the 44px target. */}
+                  <label className="inline-flex size-[44px] cursor-pointer items-center justify-center">
+                    <input type="checkbox" checked={allOnPagePicked} onChange={togglePage} aria-label="Tick every row shown" className="size-[20px] accent-ink" />
+                  </label>
                 </th>
               )}
               {columns.map((c) => {
@@ -252,11 +257,9 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
                     {c.sortable === false ? (
                       c.label
                     ) : (
-                      <button type="button" onClick={() => toggleSort(c)} className={`inline-flex min-h-[44px] items-center gap-xs rounded-pill hover:text-ink ${active ? 'text-ink' : ''}`}>
+                      <button type="button" onClick={() => toggleSort(c)} className={`inline-flex min-h-[44px] min-w-[44px] items-center gap-xs rounded-pill hover:text-ink ${active ? 'text-ink' : ''}`}>
                         {c.label}
-                        <span aria-hidden="true" className="text-[10px]">
-                          {active ? (sort.dir === 'asc' ? '▲' : '▼') : '△'}
-                        </span>
+                        <Icon icon={active ? (sort.dir === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown} size={12} className={active ? '' : 'opacity-60'} />
                       </button>
                     )}
                   </th>
@@ -297,7 +300,8 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
                   }
                   className={`border-t border-line align-middle ${onRowClick ? 'cursor-pointer hover:bg-paper' : ''} ${isActive ? 'bg-paper' : ''}`}>
                   {selectable && (
-                    <td className="px-sm py-sm" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-xs py-0" onClick={(e) => e.stopPropagation()}>
+                      <label className="inline-flex size-[44px] cursor-pointer items-center justify-center">
                       <input
                         type="checkbox"
                         checked={picked.has(k)}
@@ -310,6 +314,7 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
                         aria-label="Tick this row"
                         className="size-[20px] accent-ink"
                       />
+                      </label>
                     </td>
                   )}
                   {columns.map((c) => (

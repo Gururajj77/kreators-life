@@ -1,5 +1,6 @@
-import { contractParties, docDateTime, fillContractText, hasPartiesSection, money, packageRate, parseDocStyle, sectionPrints, stripNumber, type ContractAnswer, type ContractDoc, type ContractSection } from '@kreators/shared';
+import { contractGapNote, contractParties, docDateTime, fillContractText, hasPartiesSection, money, packageRate, parseDocStyle, sectionPrints, stripNumber, type ContractAnswer, type ContractDoc, type ContractSection, type DocAudience } from '@kreators/shared';
 import { Fragment, type ReactNode } from 'react';
+import { FIELD } from '../lib/ui';
 import { Inert } from './Inert';
 import { PrintSheet, type SheetStamp } from './PrintSheet';
 
@@ -35,10 +36,10 @@ function inline(text: string, key: string): ReactNode[] {
 
 /**
  * The words of one section: paragraphs split by a blank line, lines inside a paragraph kept as lines, "- " bullets and **bold**.
- * Blanks like {{client}} are filled from the variables; one that is missing shows as a line to write on.
+ * Blanks like {{client}} are filled from the variables; a missing one is left out with its label, never drawn as underscores.
  */
-function Words({ text, vars }: { text: string; vars: Record<string, string> }) {
-  const filled = fillContractText(text, vars).replace(/\r\n/g, '\n');
+function Words({ text, vars, audience }: { text: string; vars: Record<string, string>; audience: DocAudience }) {
+  const filled = fillContractText(text, vars, audience).replace(/\r\n/g, '\n');
   const blocks = filled.split(/\n{2,}/).filter((b) => b.trim());
   return (
     <>
@@ -141,7 +142,6 @@ function Packages({ s, doc }: { s: ContractSection; doc: ContractDoc }) {
 }
 
 const blankAnswer: ContractAnswer = { picked: [], other: '', text: '' };
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 
 function Brief({ s, answers, onAnswer }: { s: ContractSection; answers: Record<string, ContractAnswer>; onAnswer?: (id: string, a: ContractAnswer) => void }) {
   const live = Boolean(onAnswer);
@@ -161,14 +161,14 @@ function Brief({ s, answers, onAnswer }: { s: ContractSection; answers: Record<s
                   const on = a.picked.includes(o);
                   return (
                     <li key={o}>
-                      <label className={`flex min-h-[40px] items-center gap-xs text-[16px] font-semibold ${live ? 'cursor-pointer' : ''}`}>
+                      <label className={`flex min-h-[44px] items-center gap-sm text-[16px] font-semibold ${live ? 'cursor-pointer' : ''}`}>
                         <input
                           type={q.multi ? 'checkbox' : 'radio'}
                           name={`q-${q.id}`}
                           checked={on}
                           disabled={!live}
                           onChange={() => set({ picked: q.multi ? (on ? a.picked.filter((x) => x !== o) : [...a.picked, o]) : [o] })}
-                          className="size-[20px] shrink-0 accent-[var(--color-ink)]"
+                          className="size-[24px] shrink-0 accent-[var(--color-ink)]"
                         />
                         <span>
                           <Inert text={o} />
@@ -178,7 +178,7 @@ function Brief({ s, answers, onAnswer }: { s: ContractSection; answers: Record<s
                   );
                 })}
                 {q.other && (
-                  <li className="flex min-h-[40px] items-center gap-xs text-[16px] font-semibold">
+                  <li className="flex min-h-[44px] items-center gap-xs text-[16px] font-semibold">
                     <span>Other:</span>
                     {live ? (
                       <input value={a.other} onChange={(e) => set({ other: e.target.value })} maxLength={200} aria-label={`Other, ${q.label}`} className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-xs text-[16px]" />
@@ -191,7 +191,7 @@ function Brief({ s, answers, onAnswer }: { s: ContractSection; answers: Record<s
             )}
             {q.text &&
               (live ? (
-                <textarea value={a.text} onChange={(e) => set({ text: e.target.value })} rows={4} maxLength={1500} aria-label={q.label} className={field} />
+                <textarea value={a.text} onChange={(e) => set({ text: e.target.value })} rows={4} maxLength={1500} aria-label={q.label} className={FIELD} />
               ) : (
                 <p className="mt-xs m-0 min-h-[64px] whitespace-pre-wrap rounded-tile border border-line p-sm text-[16px] font-semibold">{a.text ? <Inert text={a.text} /> : ''}</p>
               ))}
@@ -254,6 +254,8 @@ interface Props {
   stamp?: SheetStamp | null;
   /** An agreement, or one of the other documents (a summary, trial terms, a proposal, a report). */
   kind?: 'agreement' | 'document';
+  /** The owner's page carries one note of what is missing; the client's page (the default) leaves every empty line and part out. */
+  audience?: DocAudience;
 }
 
 /** The sender's name and address for the top of the first page, from the names filled in. */
@@ -264,8 +266,12 @@ function letterheadOf(doc: ContractDoc): { name: string; lines: string[] } {
 }
 
 /** An agreement (or any sectioned document) as a page: the letterhead, the title block, then every section in order. It prints as a legal document (PrintSheet). */
-export function ContractView({ doc, answers = {}, onAnswer, acceptance, signLine, reference, date, stamp, kind = 'agreement' }: Props) {
+export function ContractView({ doc, answers = {}, onAnswer, acceptance, signLine, reference, date, stamp, kind = 'agreement', audience = 'client' }: Props) {
   const style = parseDocStyle(doc.style);
+  const gapNote = audience === 'owner' ? contractGapNote(doc) : null;
+  // A part with nothing written in it yet is the owner's to write: the owner sees it marked, the client never sees it.
+  const empty = (s: ContractSection) => s.kind === 'text' && !fillContractText(s.body, doc.vars, audience).trim();
+  const sections = audience === 'client' ? doc.sections.filter((s) => !empty(s)) : doc.sections;
   return (
     <PrintSheet
       kind={kind}
@@ -278,14 +284,20 @@ export function ContractView({ doc, answers = {}, onAnswer, acceptance, signLine
       letterhead={letterheadOf(doc)}
       parties={hasPartiesSection(doc) ? [] : contractParties(doc)}
     >
-      {doc.sections.map((s) => (
+      {gapNote && (
+        <p className="legal-clause italic" role="note">
+          {gapNote}
+        </p>
+      )}
+      {sections.map((s) => (
         <section key={s.id} className={sectionPrints(s) ? 'legal-sec' : 'legal-sec legal-noprint'} aria-label={s.heading || 'Section'}>
           {s.heading && <h2 className="legal-sec-h">{style.heading === 'numbered' ? stripNumber(s.heading) : s.heading}</h2>}
           {s.body && (
             <div>
-              <Words text={s.body} vars={doc.vars} />
+              <Words text={s.body} vars={doc.vars} audience={audience} />
             </div>
           )}
+          {empty(s) && <p className="legal-clause italic">Not written yet. Write this part before you send it.</p>}
           {s.kind === 'packages' && <Packages s={s} doc={doc} />}
           {s.kind === 'brief' && <Brief s={s} answers={answers} onAnswer={onAnswer} />}
           {s.kind === 'signatures' && <Signatures doc={doc} acceptance={acceptance} signLine={signLine} />}

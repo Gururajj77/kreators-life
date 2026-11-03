@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router';
 import { AppIcon } from '../components/AppIcon';
 import { Pager, usePage } from '../components/Pager';
 import { publicApi } from '../lib/api';
+import { chip } from '../lib/ui';
 import { ListingCard } from './ListingCard';
 import { SiteLayout } from './SiteLayout';
 
@@ -33,7 +34,10 @@ export function Explore() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debounced]);
 
-  const results = useQuery({ queryKey: ['explore', debounced, type ?? '', pg.query], queryFn: () => publicApi.explore({ q: debounced, type, pq: pg.query }) });
+  const results = useQuery({
+    queryKey: ['explore', debounced, type ?? '', pg.query],
+    queryFn: () => publicApi.explore({ q: debounced, type, pq: pg.query }),
+  });
   const list = results.data?.listings ?? [];
 
   const setType = (t: ListingType | undefined) => {
@@ -48,7 +52,9 @@ export function Explore() {
     <SiteLayout>
       <header className="pt-lg">
         <h1 className="type-hook text-[clamp(40px,9vw,72px)]">Explore</h1>
-        <p className="mt-xs m-0 max-w-[640px] text-[16px] font-semibold text-ink-soft">Content rewards, opportunities, events, programs, tools and campaigns. Search here, then sign in to join, apply or submit. You come straight back to the one you picked.</p>
+        <p className="mt-xs m-0 max-w-[640px] text-[16px] font-semibold text-ink-soft">
+          Content rewards, opportunities, events, programs, tools and campaigns. Search here, then sign in to join, apply or submit. You come straight back to the one you picked.
+        </p>
         <label className="mt-md block">
           <span className="sr-only">Search listings</span>
           <input
@@ -59,16 +65,19 @@ export function Explore() {
             className="w-full rounded-pill border-2 border-line bg-card px-md py-sm text-[18px] font-semibold shadow-toy-soft"
           />
         </label>
-        <div className="mt-sm flex flex-wrap gap-xs" role="group" aria-label="Type">
-          <button type="button" aria-pressed={!type} onClick={() => setType(undefined)} className={`toy min-h-[40px] rounded-pill border-2 px-sm text-[14px] font-bold ${!type ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-            Everything
-          </button>
-          {LISTING_TYPES.map((t) => (
-            <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)} className={`toy min-h-[40px] rounded-pill border-2 px-sm text-[14px] font-bold ${type === t ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-              <AppIcon name={LISTING_TYPE_META[t].icon} size={16} className="mr-xs inline-block align-[-3px]" />
-              {LISTING_TYPE_META[t].plural}
+        {/* One line that scrolls sideways on a narrow screen, so no type is ever left alone on a second line. */}
+        <div className="mt-sm">
+          <div className="scroll-row" role="group" aria-label="Type">
+            <button type="button" aria-pressed={!type} onClick={() => setType(undefined)} className={chip(!type)}>
+              Everything
             </button>
-          ))}
+            {LISTING_TYPES.map((t) => (
+              <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)} className={`${chip(type === t)} gap-xs whitespace-nowrap`}>
+                <AppIcon name={LISTING_TYPE_META[t].icon} size={16} />
+                {LISTING_TYPE_META[t].plural}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 

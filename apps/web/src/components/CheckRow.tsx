@@ -1,4 +1,5 @@
-import { useId, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import gsap from 'gsap';
 import { Check, Clock } from 'lucide-react';
 import { Icon } from './Icon';
 
@@ -47,6 +48,26 @@ export function CheckRow({
   large = false,
 }: Props) {
   const id = useId();
+  // When the box goes from empty to ticked, the tick draws itself in (its stroke runs from start to end); never on the first paint,
+  // and under reduced motion it is only set.
+  const box = useRef<HTMLSpanElement>(null);
+  const was = useRef(checked);
+  useEffect(() => {
+    const before = was.current;
+    was.current = checked;
+    if (!checked || before) return;
+    const path = box.current?.querySelector('path');
+    if (!path) return;
+    const len = path.getTotalLength();
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      gsap.set(path, { strokeDasharray: 'none', strokeDashoffset: 0 });
+      return;
+    }
+    const tween = gsap.fromTo(path, { strokeDasharray: len, strokeDashoffset: len }, { strokeDashoffset: 0, duration: 0.3, ease: 'power2.out', onComplete: () => void gsap.set(path, { strokeDasharray: 'none' }) });
+    return () => {
+      tween.kill();
+    };
+  }, [checked]);
   // After a tap on a locked row, show the live reason. It updates as a wait
   // counts down and disappears on its own once the row unlocks.
   const [asked, setAsked] = useState(false);
@@ -79,6 +100,7 @@ export function CheckRow({
             aria-busy={busy || undefined}
           />
           <span
+            ref={box}
             aria-hidden="true"
             className={`check-box flex shrink-0 items-center justify-center rounded-[10px] border-[3px] ${large ? 'size-[40px]' : 'size-[32px]'} ${busy ? 'animate-pulse' : ''}`}
             style={{

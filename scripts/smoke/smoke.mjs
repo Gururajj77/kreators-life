@@ -2,6 +2,7 @@
 // Node imports the shared model straight from TypeScript (--experimental-strip-types).
 import { LOVE_PAIRS, MIND_SCREENS, TYPE_NAMES, TYPE_SCREENS, DISCOVER_CORE_STEPS, DISCOVER_SCENES, DISCOVER_STEPS, EQ_FEELINGS, EQ_PEOPLE, EQ_READING, PUZZLES_SHOWN, puzzleAt, RELATIONSHIPS, QUESTIONS, XP, POINTS, WAIT, RUN_REWARD, SOCIAL_REWARDS, MAX_NOT_TO_DO, MODULES, FEATURE_FEE_POINTS, matchSetup, parseSetup, setupSwitchable } from '../../packages/shared/src/index.ts';
 import { LIMITS, ROUTE_LIMITS } from '../../apps/api/src/limits.ts';
+import { DISCOVER_KEYS } from '../../apps/api/src/discoverKeys.ts';
 import { LEGAL_VERSION } from '../../packages/shared/src/index.ts';
 import { contractAsText, invoiceAsText, money } from '../../packages/shared/src/index.ts';
 import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, PLANS } from '../../packages/shared/src/index.ts';
@@ -1672,7 +1673,7 @@ section('Engagement');
     })(),
     puzzleMs: Array.from({ length: PUZZLES_SHOWN }, () => 4000),
     words: Array.from({ length: 3 }, () => ({ most: [0, 1, 2], least: [3, 4, 5] })),
-    scenes: DISCOVER_SCENES.map((s) => ({ most: s.key.indexOf(4), least: s.key.indexOf(1) })),
+    scenes: DISCOVER_SCENES.map((_, i) => ({ most: DISCOVER_KEYS.scenes[i].indexOf(4), least: DISCOVER_KEYS.scenes[i].indexOf(1) })),
   };
   const dzPart = await api('PUT', '/discover/draft', { answers: { ...dzAnswers, triads: [{ most: 0, least: 0 }, ...dzAnswers.triads.slice(1)], scenes: [] } }, R.token);
   check('a half-finished quiz is saved, and a bad answer is dropped', dzPart.status === 200 && dzPart.json.progress?.done === DISCOVER_CORE_STEPS - 1 - 6, dzPart.json.progress);
@@ -1686,8 +1687,8 @@ section('Engagement');
   const eqAnswers = {
     ...dzAnswers,
     feelings: EQ_FEELINGS.map((screen) => screen.map((it) => (it.sign === 1 ? 4 : 0))),
-    reading: EQ_READING.map((q) => q.key),
-    people: EQ_PEOPLE.map((q) => ({ most: q.key.indexOf(4), least: q.key.indexOf(1) })),
+    reading: EQ_READING.map((_, i) => DISCOVER_KEYS.reading[i]),
+    people: EQ_PEOPLE.map((_, i) => ({ most: DISCOVER_KEYS.people[i].indexOf(4), least: DISCOVER_KEYS.people[i].indexOf(1) })),
   };
   const dzEq = await api('POST', '/discover/submit', { answers: eqAnswers }, R.token);
   check('with the emotional intelligence part answered, it is scored too, and each part reads out', dzEq.status === 201 && dzEq.json.result?.eq?.overall === 100 && Object.keys(dzEq.json.result.eq.dims).length === 5 && dzEq.json.result.eq.reading.right === 6, dzEq.json.result?.eq);
@@ -2031,9 +2032,17 @@ section('Agency');
   const notWaiting = await pub('POST', `/agency/${tok}/items/${id2}`, { decision: 'approve' });
   check('a second approval of the same thing is refused', notWaiting.status === 400, notWaiting.json);
   const fresh = await api('POST', `/agency/clients/${cid}/portal`, { fresh: true }, O.token);
-  check('a fresh link kills the old one', fresh.json.portalToken !== tok && (await pub('GET', `/agency/${tok}`)).status === 404);
+  const oldLink = await pub('GET', `/agency/${tok}`);
+  check('a fresh link kills the old one, which says it was closed (410), not "no page"', fresh.json.portalToken !== tok && oldLink.status === 410 && oldLink.json.error === 'closed' && 'agencyEmail' in oldLink.json, oldLink);
+  check('the closed answer names only the business, never the client or what was on the page', !/Acme|Launch video|PRIVATE|waiting/.test(JSON.stringify(oldLink.json)), oldLink.json);
+  const oldAct = await pub('POST', `/agency/${tok}/items/${id2}`, { decision: 'comment', note: 'late' });
+  const oldUnlock = await pub('POST', `/agency/${tok}/unlock`, { password: 'whatever-it-was' });
+  const oldRetainer = await pub('POST', `/agency/${tok}/retainer`, { months: 3 });
+  check('an answer, an unlock or a retainer pick on the old link is 410 too', oldAct.status === 410 && oldUnlock.status === 410 && oldRetainer.status === 410, [oldAct.status, oldUnlock.status, oldRetainer.status]);
+  check('an unknown link is still a plain 404', (await pub('GET', '/agency/ABCDEFGHJKLMNPQZ')).status === 404);
   const closed = await api('POST', `/agency/clients/${cid}/portal`, { on: false }, O.token);
-  check('switching the link off closes it', closed.json.portalToken === null && (await pub('GET', `/agency/${fresh.json.portalToken}`)).status === 404);
+  const closedLink = await pub('GET', `/agency/${fresh.json.portalToken}`);
+  check('switching the link off closes it, and the link says so (410)', closed.json.portalToken === null && closedLink.status === 410 && closedLink.json.error === 'closed', closedLink);
 
   // time
   const t1 = await api('POST', '/agency/time', { clientId: cid, itemId: id2, day: today, minutes: 90, billable: true, note: 'Edit' }, O.token);
@@ -2048,6 +2057,8 @@ section('Agency');
 
   // settings and the profile
   const prof = await api('PUT', '/agency/settings', { currency: 'INR', weeklyHours: 25, profile: { from: { name: 'Studio Test', line: 'Prop. Test for Studio', taxIds: [{ label: 'PAN', value: 'ABCDE1234F' }], address: '1 Test Road', email: 'me@studio.test', phone: '+91 90000 00000' }, bank: { bankName: 'Test Bank', holder: 'Test Person', account: '99887766', ifsc: 'tbnk0000001', upi: 'me@upi' }, invoicePrefix: 'tst', payDays: 10, gstBps: 1800, tdsBps: 1000, tdsMode: 'grossup', signerName: 'Test Person', signerTitle: 'Founder', jurisdiction: 'Bengaluru, Karnataka' } }, O.token);
+  const closedNow = await pub('GET', `/agency/${tok}`);
+  check('a closed link gives the business email from Agency settings, for the mailto', closedNow.status === 410 && closedNow.json.agencyEmail === 'me@studio.test' && closedNow.json.agencyName === 'Studio Test', closedNow.json);
   check('the business profile is saved and cleaned', prof.json.settings?.profile.invoicePrefix === 'TST' && prof.json.settings.profile.bank.ifsc === 'TBNK0000001' && prof.json.settings.weeklyHours === 25, prof.json.settings);
   check('another person has none of it', (await api('GET', '/agency', undefined, X.token)).json.settings.profile.bank.account === '');
 
@@ -3082,10 +3093,10 @@ section('Agency lifecycle');
   const on = await api('POST', `/agency/clients/${cid}/portal`, { on: true, show: { contracts: true, invoices: true } }, O.token);
   const tok = on.json.portalToken;
 
-  // The lock answers with the client's name and nothing else.
+  // The lock answers with the client's name and who sent the link (the business name and its logo, for the branded lock screen), nothing else.
   const locked = await P('GET', `/agency/${tok}`);
-  check('a link with a password answers locked, with the name only', locked.status === 401 && locked.json.error === 'locked' && locked.json.clientName === 'Lifecycle Labs' && Object.keys(locked.json).sort().join() === 'clientName,error', locked.json);
-  check('and says nothing of the work', !/waiting|coming|invoices|stage|agencyName/.test(JSON.stringify(locked.json)));
+  check('a link with a password answers locked, with the names only', locked.status === 401 && locked.json.error === 'locked' && locked.json.clientName === 'Lifecycle Labs' && Object.keys(locked.json).sort().join() === 'agencyLogo,agencyName,clientName,error', locked.json);
+  check('and says nothing of the work', !/waiting|coming|invoices|stage|retainer|portal/.test(JSON.stringify(locked.json)));
   check('a made-up session does not open it', (await P('GET', `/agency/${tok}`, undefined, { session: 'a'.repeat(64) })).status === 401);
   // A wrong password and a link that does not exist answer the same words.
   const wrongIp = LIP(31);
@@ -3268,6 +3279,8 @@ section('Agency lifecycle');
 
 
 // ---------------------------------------------------------------- Agency documents: the legal page, text version, email a copy, other kinds, house templates
+import { AGENCY_DOC_KINDS, CONTRACT_TEMPLATES, INVOICE_STARTERS } from '../../packages/shared/src/index.ts';
+import { EMAIL_TEMPLATES, emailVarsFor, fillEmail } from '../../packages/shared/src/agencyEmail.ts';
 section('Agency documents');
 {
   const AD = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 31) & 255}`;
@@ -3417,6 +3430,85 @@ section('Agency documents');
   const dHouse = await api('POST', '/admin/agency/templates', { kind: 'doc', name: `House brief ${stamp}`, fromId: (await api('POST', '/agency/docs', { kind: 'brief', clientId: fcid }, A.token)).json.id, includeBusiness: false }, A.token);
   const dUsed = await api('POST', '/agency/docs', { houseId: dHouse.json.id, clientId: cid }, O.token);
   check('a house document is copied the same way', dUsed.status === 201 && (await api('GET', `/agency/docs/${dUsed.json.id}`, undefined, O.token)).json.doc?.kind === 'brief', dUsed.json);
+  // House templates live for everyone, so the run takes away the ones it made: a rerun without --fresh then sees only its own.
+  for (const id of [hid, house2.json.id, kcHouse.json.id, dHouse.json.id].filter(Boolean)) await api('PATCH', `/admin/agency/templates/${id}`, { status: 'retired' }, A.token);
+  // Runs made before this sweep left theirs active, so any smoke-named house template still active is retired too (only these names).
+  for (let pg = 1; pg <= 20; pg += 1) {
+    const hl = await api('GET', `/admin/agency/templates?size=100&page=${pg}`, undefined, A.token);
+    for (const t of hl.json.templates ?? []) {
+      if (t.status === 'active' && /^House (invoice|with details|agreement|brief) [0-9a-z]+$/.test(t.name)) await api('PATCH', `/admin/agency/templates/${t.id}`, { status: 'retired' }, A.token);
+    }
+    if (!hl.json.page?.more) break;
+  }
+  check('the house templates this run made are retired again', !(await api('GET', '/agency/templates', undefined, X.token)).json.templates?.some((t) => t.scope === 'house' && /^House (invoice|with details|agreement|brief) [0-9a-z]+$/.test(t.name)));
+
+  // Filled once, never asked again: a fresh owner sets the business profile once and adds a client once, and then every agreement,
+  // every other document, every invoice starter and every email note opens with no blank, no placeholder and nothing to retype.
+  {
+    const F = await join('docfill');
+    await api('PUT', '/agency/settings', { currency: 'INR', profile: { from: { name: 'Fill Studio', line: '', taxIds: [], address: '9 Fill Road, Pune', email: 'fill@studio.test', phone: '+91 90000 11111' }, bank: { bankName: 'Fill Bank', holder: 'Fill Person', account: '12121212', ifsc: 'fill0000001', upi: '' }, signerName: 'Fill Person', signerTitle: 'Founder', jurisdiction: 'Pune', payDays: 10 } }, F.token);
+    const fc = (await api('POST', '/agency/clients', { name: 'Full Co', contactName: 'Mira Das', contactEmail: 'mira@full.test', channels: ['YouTube', 'Instagram'], retainerCents: 6000000, piecesPerMonth: 8, hoursPerMonth: 20 }, F.token)).json.id;
+    // The add-client form saves the billing part straight after, the same way.
+    await api('PATCH', `/agency/clients/${fc}`, { name: 'Full Co', billing: { name: 'Full Co', line: '', taxIds: [{ label: 'GSTIN', value: '27ABCDE1234F1Z5' }], address: '5 Full Street, Mumbai', email: '', phone: '' } }, F.token);
+    const typed = { projectWhat: 'Launch videos', deliveryDate: '1 Dec 2026', trialPieces: '2', trialFee: 'None', sessionDate: '3 Nov 2026' };
+    const unsigned = (t) => t.split('\n').filter((l) => !/^(Signature|Date): _+$/.test(l)).join('\n');
+    const blank = /__|\{|\}|TBD|undefined/;
+    const papers = [];
+    for (const t of CONTRACT_TEMPLATES) {
+      const r = await api('POST', '/agency/contracts', { templateKey: t.key, clientId: fc }, F.token);
+      const k = (await api('GET', `/agency/contracts/${r.json.id}`, undefined, F.token)).json.contract;
+      papers.push({ name: `agreement ${t.key}`, kind: 'contract', doc: k.doc, docKind: t.key });
+    }
+    for (const kind of AGENCY_DOC_KINDS) {
+      const r = await api('POST', `/agency/docs?day=${today}`, { kind, clientId: fc }, F.token);
+      const d = (await api('GET', `/agency/docs/${r.json.id}`, undefined, F.token)).json.doc;
+      papers.push({ name: `document ${kind}`, kind: 'doc', doc: d.doc, docKind: kind });
+    }
+    const asked = papers.flatMap((p) => Object.entries(p.doc.vars).filter(([key, v]) => !v && !(key in typed)).map(([key]) => `${p.name}: ${key}`));
+    const named = papers.flatMap((p) => p.doc.sections.flatMap((s) => [...s.body.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1])).filter((key) => !p.doc.vars[key] && !(key in typed)).map((key) => `${p.name}: ${key}`));
+    check('every agreement and document starts filled from the profile and the client, asking only what no record holds', named.length === 0, named.slice(0, 8));
+    void asked;
+    const dirty = [];
+    for (const p of papers) {
+      for (const audience of ['owner', 'client']) {
+        const text = unsigned(contractAsText({ ...p.doc, vars: { ...p.doc.vars, ...typed } }, { audience }));
+        if (blank.test(text)) dirty.push(`${p.name} (${audience}): ${text.match(/.{0,30}(__|\{|\}|TBD|undefined).{0,30}/)?.[0]}`);
+      }
+    }
+    check('no agreement or document has a blank, a brace or a TBD, for the owner or the client', dirty.length === 0, dirty.slice(0, 6));
+    const fee = [];
+    for (const st of INVOICE_STARTERS) {
+      const r = await api('POST', `/agency/invoices?day=${today}`, { clientId: fc, starter: st.key }, F.token);
+      const inv = r.json.invoice;
+      const text = invoiceAsText(inv);
+      if (r.status !== 201 || blank.test(text) || (st.key === 'retainer' && inv.items[0].unitCents !== 6000000) || (st.key === 'per-piece' && inv.items[0].quantity !== 8)) fee.push(`${st.key}: ${r.status} ${inv?.items?.[0]?.unitCents}`);
+      papers.push({ name: `invoice ${st.key}`, kind: 'invoice', invoice: inv });
+    }
+    check('every invoice starter is priced from the client\'s retainer and has no blank', fee.length === 0, fee);
+    const page = (await api('GET', `/agency/clients/${fc}`, undefined, F.token)).json;
+    const prof = page.settings.profile;
+    const mails = [];
+    for (const p of papers) {
+      const { vars, missing } = emailVarsFor({
+        kind: p.kind,
+        client: { name: page.client.name, contactName: page.client.contactName, month: page.client.month },
+        profile: prof,
+        title: p.doc?.title ?? p.invoice?.doc.title,
+        number: p.invoice?.number,
+        amount: p.invoice ? money(p.invoice.totalCents, p.invoice.currency) : '',
+        dueBy: p.invoice?.dueDate ?? '',
+        period: 'November 2026',
+        docKind: p.docKind,
+      });
+      if (missing.length) mails.push(`${p.name}: missing ${missing.map((m) => m.key).join(', ')}`);
+      for (const t of EMAIL_TEMPLATES) {
+        const m = fillEmail(t.key, vars);
+        if (blank.test(`${m.subject}\n${m.body}`) || !m.body.startsWith('Hi Mira and Full Co team,') || !m.body.includes('Fill Person')) mails.push(`${p.name} / ${t.key}`);
+      }
+    }
+    check('every email note for every paper is written from the records, with nothing missing', mails.length === 0, mails.slice(0, 6));
+    await api('DELETE', '/me', { confirm: 'DELETE' }, F.token);
+  }
 
   // export and delete
   const exp = await api('GET', '/me/export', undefined, O.token);
@@ -3577,6 +3669,130 @@ section('Money guards: two taps pay once, nothing is refunded that was not paid'
   const doors = mounts.flatMap(([file, name, base]) => [...fs.readFileSync(new URL(file, root), 'utf8').matchAll(new RegExp(`^${name}\\.(post|patch|put|delete)\\('([^']*)'`, 'gm'))].map((m) => ({ method: m[1].toUpperCase(), path: `${base}${m[2] === '/' ? '' : m[2]}` })));
   const missing = doors.filter((d) => !ROUTE_LIMITS.some((r) => r.method === d.method && r.path === d.path));
   check('every Agency and business-metric write has a rate limit', doors.length > 30 && missing.length === 0, missing.map((d) => `${d.method} ${d.path}`));
+}
+
+// ---------------------------------------------------------------- feelings reader
+section('Feelings reader');
+{
+  // "Read with AI" on the strategy session's map card: a plan, a model that keeps nothing, credits through the one ledger, and the words never kept.
+  const { ASSISTANT_MODELS } = await import('../../packages/shared/src/index.ts');
+  const P = await signup(`feelings-${stamp}@smoke.test`, `Lantern-${stamp}-pass`, 'Smoke feelings');
+  const privateModel = ASSISTANT_MODELS.find((m) => m.private)?.id;
+  const keeper = ASSISTANT_MODELS.find((m) => !m.private)?.id;
+  const mark = `quietfeel${stamp}`;
+  const status = await api('GET', '/assistant', undefined, P.token);
+  const mock = status.json?.model === 'smoke-mock';
+  const noPlan = await api('POST', '/assistant/feelings', { text: `I get scared ${mark}`, relationship: 'self', model: privateModel }, P.token);
+  check('reading with AI needs a plan: no plan is refused with the paywall', mock ? noPlan.status === 402 && noPlan.json.paywall === 'plan' : [402, 503].includes(noPlan.status), noPlan.json);
+  await admin('POST', `/admin/users/${P.user.id}/plan`, { plan: 'pro', days: 30 });
+  const kept = await api('POST', '/assistant/feelings', { text: `I get scared ${mark}`, relationship: 'self', model: keeper }, P.token);
+  check('a model that keeps data is refused with 400', kept.status === 400, kept.json);
+  const tooShort = await api('POST', '/assistant/feelings', { text: 'hi', model: privateModel }, P.token);
+  check('a line under three letters is refused', tooShort.status === 400, tooShort.json);
+  if (!mock) console.log('  (the feelings reader checks need the mock model that blueprint.sh starts; skipped)');
+  else {
+    // The stand-in model answers a "DO [...]" line with exactly those tool calls, so this is the model calling suggest_levels.
+    const words = `DO ${JSON.stringify([{ name: 'suggest_levels', args: { levels: [100, 150, 999, 'x'], said: mark } }])}`;
+    const before = ((await api('GET', '/credits/ledger?size=100', undefined, P.token)).json.entries ?? []).filter((e) => e.agent === 'feelings').length;
+    const read = await api('POST', '/assistant/feelings', { text: words, relationship: 'family', model: privateModel }, P.token);
+    check('a private model returns only real map levels', read.status === 200 && JSON.stringify(read.json.levels) === '[100,150]' && typeof read.json.model === 'string', read.json);
+    check('the model is offered only the one tool, and the words go in once', (mockModel.last?.tools ?? []).map((t) => t.function?.name).join() === 'suggest_levels' && JSON.stringify(mockModel.last?.messages ?? []).split(mark).length === 2, mockModel.last?.tools);
+    const after = ((await api('GET', '/credits/ledger?size=100', undefined, P.token)).json.entries ?? []).filter((e) => e.agent === 'feelings');
+    check('one use row in the credit ledger, by the feelings reader', after.length - before === 1 && after[0]?.reason === 'usage', after.length - before);
+    const exported = JSON.stringify((await api('GET', '/me/export', undefined, P.token)).json ?? {});
+    check('the words are not kept: nothing in the export or the assistant actions', !exported.includes(mark), '');
+    const logs = await api('GET', `/internal/logs?q=${mark}`, undefined, A.token);
+    check('and nothing in the app log', logs.status === 200 && !JSON.stringify(logs.json).includes(mark), logs.status);
+  }
+  const off = await api('POST', '/assistant/feelings', {}, null);
+  check('no session means 401', off.status === 401, off.status);
+}
+
+// ---------------------------------------------------------------- Agency across the app (emergence) and its assistant tools
+section('Agency across the app');
+{
+  // One piece of client work, typed once in Agency, shows on Daily, in the inbox, in Finance, in the private calendar link, in search and in
+  // the brief. The owner's zone is one where it is past 09:00 now, so the morning inbox note is due whenever this runs.
+  const zones = ['Pacific/Kiritimati', 'Asia/Tokyo', 'Asia/Kolkata', 'Europe/London', 'America/New_York', 'America/Los_Angeles', 'Pacific/Honolulu', 'Pacific/Pago_Pago'];
+  const localOf = (zone) => {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date());
+    const get = (k) => parts.find((x) => x.type === k)?.value ?? '';
+    return { day: `${get('year')}-${get('month')}-${get('day')}`, minutes: Number(get('hour')) * 60 + Number(get('minute')) };
+  };
+  const zone = zones.find((z) => localOf(z).minutes >= 9 * 60 + 30 && localOf(z).minutes < 23 * 60) ?? 'Asia/Kolkata';
+  const D = localOf(zone).day;
+  const E = await signup(`emerge-${stamp}@smoke.test`, `Meadow-${stamp}-pass`, 'Smoke emerge');
+  await api('PATCH', '/me', { displayName: 'Smoke emerge', timezone: zone }, E.token);
+  for (const key of ['agency', 'finance']) await api('PATCH', '/me/modules', { key, on: true }, E.token);
+  const brand = `Emergeco${stamp}`;
+  const k = await api('POST', '/agency/clients', { name: brand, contactName: 'Nia', contactEmail: 'nia@emerge.test', retainerCents: 3000000, piecesPerMonth: 4 }, E.token);
+  check('an Agency client is made for the emergence checks', k.status === 201 && k.json.id, k.json);
+  const kid = k.json.id;
+  const piece = await api('POST', `/agency/items?day=${D}`, { clientId: kid, title: 'Emerge reel', kind: 'short', platform: 'Instagram', stage: 'making', dueDate: D }, E.token);
+  check('a piece due today is made', piece.status === 201, piece.json);
+  const daily = await api('GET', `/today?date=${D}`, undefined, E.token);
+  check('Daily lists the client piece due today, with its client', daily.status === 200 && daily.json.agency?.due?.some((x) => x.id === piece.json.id && x.client === brand && x.late === false), daily.json.agency);
+  await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+  await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+  const inbox = (await api('GET', '/inbox?tab=agency', undefined, E.token)).json.notifications ?? [];
+  const dueNotes = inbox.filter((n) => n.id === `agency-due-${E.user.id}-${D}`);
+  check('the inbox has one Agency note for the piece due today, however often the cron runs', dueNotes.length === 1 && /Emerge reel is due today/.test(dueNotes[0].title) && dueNotes[0].link === `/agency/${kid}`, inbox.map((n) => `${n.id} ${n.title}`));
+  const inv = await api('POST', `/agency/invoices?day=${D}`, { clientId: kid, dueDate: D, items: [{ description: 'Emerge month', quantity: 1, unitCents: 1500000 }] }, E.token);
+  const sentInv = await api('PATCH', `/agency/invoices/${inv.json.invoice?.id}`, { status: 'sent' }, E.token);
+  check('an Agency invoice due today is sent', inv.status === 201 && sentInv.json.invoice?.status === 'sent', sentInv.json);
+  const fin = await api('GET', `/finance?day=${D}`, undefined, E.token);
+  check('Finance counts the sent Agency invoice as owed to you', fin.status === 200 && (fin.json.owedToYou ?? []).some((o) => o.count >= 1 && o.cents >= 1500000), fin.json.owedToYou);
+  const daily2 = await api('GET', `/today?date=${D}`, undefined, E.token);
+  check('Daily lists the invoice due today', (daily2.json.agency?.invoicesDue ?? []).some((x) => x.number === inv.json.invoice.number), daily2.json.agency?.invoicesDue);
+  const cal = await api('POST', '/me/calendar', { on: true }, E.token);
+  const ics = await (await fetch(`${ORIGIN}/api/public/calendar/${cal.json.token}.ics`)).text();
+  const unfolded = ics.replace(/\r?\n[ \t]/g, '');
+  check('the private calendar link carries the piece and the invoice, never a fee or a note', unfolded.includes('Emerge reel') && unfolded.includes(inv.json.invoice.number) && !unfolded.includes('15,000') && !unfolded.includes('nia@emerge.test'), unfolded.slice(0, 400));
+  await api('POST', '/me/calendar', { on: false }, E.token);
+  const found = await api('GET', `/search?q=${brand}`, undefined, E.token);
+  check('search finds the client and its invoice', found.status === 200 && found.json.agencyClients?.some((x) => x.id === kid) && found.json.agencyInvoices?.some((x) => x.id === inv.json.invoice.id), { c: found.json.agencyClients, i: found.json.agencyInvoices });
+  const stranger = await signup(`emerge-x-${stamp}@smoke.test`, `Meadow-${stamp}-pass`, 'Smoke stranger');
+  await api('PATCH', '/me/modules', { key: 'agency', on: true }, stranger.token);
+  check('nobody else finds it', ((await api('GET', `/search?q=${brand}`, undefined, stranger.token)).json.agencyClients ?? []).length === 0);
+  const brief = await api('GET', `/home/brief?date=${D}&hour=10`, undefined, E.token);
+  const lines = [...(brief.json.brief?.signals ?? []), ...(brief.json.brief?.actions ?? [])];
+  check('the brief says a client piece is due today', lines.some((l) => l.key === 'agency-due'), lines.map((l) => l.key));
+  await api('PATCH', '/me/modules', { key: 'agency', on: false }, E.token);
+  const off = await api('GET', `/today?date=${D}`, undefined, E.token);
+  check('with Agency off, Daily shows no client work', !off.json.agency, off.json.agency);
+  await api('PATCH', '/me/modules', { key: 'agency', on: true }, E.token);
+
+  // The assistant's Agency tools: each goes through the route a tap uses and comes back with Undo.
+  const status = await api('GET', '/assistant', undefined, E.token);
+  if (status.json?.model !== 'smoke-mock') console.log('  (the assistant Agency checks need the mock model that blueprint.sh starts; skipped)');
+  else {
+    await admin('POST', `/admin/users/${E.user.id}/plan`, { plan: 'pro', days: 30 });
+    const DO = (...calls) => `DO ${JSON.stringify(calls)}`;
+    const say = (text) => api('POST', '/assistant', { messages: [{ role: 'user', text }], context: { path: '/agency', date: D, timeZone: zone } }, E.token);
+    const items = async () => (await api('GET', `/agency/items?client=${kid}&size=100&day=${D}`, undefined, E.token)).json.items ?? [];
+    const undo = (r) => api('POST', `/assistant/actions/${r?.id}/undo`, { date: D }, E.token);
+    const add = await say(DO({ name: 'add_agency_deliverable', args: { clientId: kid, title: 'Assistant reel', stage: 'idea' } }));
+    const r1 = add.json?.receipts?.[0];
+    check('add_agency_deliverable writes through POST /agency/items, with Undo', add.status === 200 && r1?.status === 'done' && r1.undo === true && (await items()).some((x) => x.title === 'Assistant reel'), add.json);
+    const u1 = await undo(r1);
+    check('its Undo deletes the piece', u1.json?.receipt?.status === 'undone' && !(await items()).some((x) => x.title === 'Assistant reel'), u1.json);
+    const mv = await say(DO({ name: 'move_agency_deliverable', args: { itemId: piece.json.id, clientId: kid, stage: 'review' } }));
+    const r2 = mv.json?.receipts?.[0];
+    check('move_agency_deliverable changes the stage, with Undo', r2?.status === 'done' && r2.undo === true && (await items()).find((x) => x.id === piece.json.id)?.stage === 'review', mv.json);
+    const u2 = await undo(r2);
+    check('its Undo puts the stage back', u2.json?.receipt?.status === 'undone' && (await items()).find((x) => x.id === piece.json.id)?.stage === 'making', u2.json);
+    const notes = async () => (await api('GET', `/agency/items/${piece.json.id}/notes`, undefined, E.token)).json.notes ?? [];
+    const nt = await say(DO({ name: 'add_agency_note', args: { itemId: piece.json.id, text: `Brighter opening ${stamp}` } }));
+    const r3 = nt.json?.receipts?.[0];
+    check('add_agency_note adds a private note, with Undo', r3?.status === 'done' && r3.undo === true && (await notes()).some((n) => n.body === `Brighter opening ${stamp}` && n.shared === false), nt.json);
+    const u3 = await undo(r3);
+    check('its Undo removes the note', u3.json?.receipt?.status === 'undone' && !(await notes()).some((n) => n.body === `Brighter opening ${stamp}`), u3.json);
+    const kept = JSON.stringify((await api('GET', '/me/export', undefined, E.token)).json?.assistantActions ?? []);
+    check('the assistant log keeps the label, never the note\'s words', !kept.includes(`Brighter opening ${stamp}`), '');
+    const theirs = await api('POST', '/agency/clients', { name: `Other${stamp}` }, stranger.token);
+    const cross = await say(DO({ name: 'move_agency_deliverable', args: { itemId: piece.json.id, clientId: theirs.json.id, stage: 'review' } }));
+    check('a tool cannot reach another person\'s client', (cross.json?.receipts ?? []).every((r) => r.status !== 'done') && (await items()).find((x) => x.id === piece.json.id)?.stage === 'making', cross.json);
+  }
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

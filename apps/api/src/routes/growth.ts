@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { CONTENT_KINDS, LINK_SOURCES, detectPlatform, type ContentItem, type Customer, type DmAutomation, type DmRequest, type DmSend, type Funnel, type FunnelStep, type PayoutSummary, type Sequence, type TrackedLink } from '@kreators/shared';
+import { CONTENT_KINDS, LINK_SOURCES, detectPlatform, type ContentItem, type Customer, type DmAutomation, type DmRequest, type DmSend, type Funnel, type FunnelStep, type Page, type PayoutSummary, type Sequence, type TrackedLink } from '@kreators/shared';
 import type { AppEnv, Env } from '../env';
 import { nameOf, newId, notify, nowIso, num, oneOf, parseList, randomCode, str, pageOf, paged } from '../db';
 import { fetchMetrics } from '../social';
@@ -152,11 +152,14 @@ const toSend = (r: SendRow): DmSend => ({ id: r.id, automationId: r.automation_i
 growth.get('/automations', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
+  // The sends log pages with prefix ds.
+  const dsAsk = pageOf(c, 'ds');
   const [rows, sends] = await Promise.all([
     db.prepare(`${AUTO_SELECT} WHERE a.owner_id = ? ORDER BY a.created_at DESC`).bind(user.id).all<AutoRow>(),
-    db.prepare('SELECT s.* FROM dm_sends s JOIN dm_automations a ON a.id = s.automation_id WHERE a.owner_id = ? ORDER BY s.created_at DESC LIMIT 100').bind(user.id).all<SendRow>(),
+    db.prepare('SELECT s.* FROM dm_sends s JOIN dm_automations a ON a.id = s.automation_id WHERE a.owner_id = ? ORDER BY s.created_at DESC, s.id LIMIT ? OFFSET ?').bind(user.id, dsAsk.limit, dsAsk.offset).all<SendRow>(),
   ]);
-  return c.json({ automations: rows.results.map(toAuto), sends: sends.results.map(toSend), metaConnected: Boolean(c.env.META_ACCESS_TOKEN) });
+  const sp = paged(sends.results, dsAsk);
+  return c.json({ automations: rows.results.map(toAuto), sends: sp.items.map(toSend), sendPage: sp.page, metaConnected: Boolean(c.env.META_ACCESS_TOKEN) });
 });
 
 growth.post('/automations', async (c) => {
@@ -457,21 +460,34 @@ growth.post('/orders/:id/refund', async (c) => {
 growth.get('/payouts', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const rows = await db.prepare(`${ORDER_SELECT} WHERE o.owner_id = ? ORDER BY o.created_at DESC LIMIT 300`).bind(user.id).all<OrderRow & { platform_fee_points: number }>();
-  const summary: PayoutSummary = { feeBps: user.fee_bps ?? 500, grossPoints: 0, feePoints: 0, affiliatePoints: 0, netPoints: 0, refundedPoints: 0, testCents: 0, rows: [] };
-  for (const r of rows.results) {
-    const affiliate = r.affiliate_code ? Math.round(r.points * 0.2) : 0;
-    const fee = r.platform_fee_points ?? 0;
-    const net = r.points - affiliate - fee;
-    if (r.status === 'refunded') summary.refundedPoints += r.points;
-    else {
-      summary.grossPoints += r.points;
-      summary.feePoints += fee;
-      summary.affiliatePoints += affiliate;
-      summary.netPoints += net;
-      summary.testCents += r.cents;
-    }
-    summary.rows.push({ orderId: r.id, productTitle: r.product_title, buyerName: nameOf({ display_name: r.buyer_name }), points: r.points, fee, affiliate, net, status: r.status, createdAt: r.created_at });
+  // The rows page with prefix po; the totals are added up in SQL over every order, so they never depend on the page.
+  // An affiliate's share is a fifth of the points, rounded per order like the row shows it (a fifth of a whole number never ends in .5).
+  const poAsk = pageOf(c, 'po');
+  const share = "CASE WHEN o.affiliate_code IS NOT NULL AND o.affiliate_code != '' THEN CAST(ROUND(o.points * 0.2) AS INTEGER) ELSE 0 END";
+  const [rows, sums] = await Promise.all([
+    db.prepare(`${ORDER_SELECT} WHERE o.owner_id = ? ORDER BY o.created_at DESC, o.id LIMIT ? OFFSET ?`).bind(user.id, poAsk.limit, poAsk.offset).all<OrderRow & { platform_fee_points: number }>(),
+    db
+      .prepare(
+        `SELECT
+          COALESCE(SUM(CASE WHEN o.status = 'refunded' THEN o.points ELSE 0 END), 0) AS refunded,
+          COALESCE(SUM(CASE WHEN o.status != 'refunded' THEN o.points ELSE 0 END), 0) AS gross,
+          COALESCE(SUM(CASE WHEN o.status != 'refunded' THEN COALESCE(o.platform_fee_points, 0) ELSE 0 END), 0) AS fee,
+          COALESCE(SUM(CASE WHEN o.status != 'refunded' THEN ${share} ELSE 0 END), 0) AS affiliate,
+          COALESCE(SUM(CASE WHEN o.status != 'refunded' THEN o.cents ELSE 0 END), 0) AS cents
+         FROM orders o WHERE o.owner_id = ?`,
+      )
+      .bind(user.id)
+      .first<{ refunded: number; gross: number; fee: number; affiliate: number; cents: number }>(),
+  ]);
+  const pg = paged(rows.results, poAsk);
+  const gross = sums?.gross ?? 0;
+  const fee = sums?.fee ?? 0;
+  const affiliate = sums?.affiliate ?? 0;
+  const summary: PayoutSummary & { page: Page } = { feeBps: user.fee_bps ?? 500, grossPoints: gross, feePoints: fee, affiliatePoints: affiliate, netPoints: gross - affiliate - fee, refundedPoints: sums?.refunded ?? 0, testCents: sums?.cents ?? 0, rows: [], page: pg.page };
+  for (const r of pg.items) {
+    const aff = r.affiliate_code ? Math.round(r.points * 0.2) : 0;
+    const f = r.platform_fee_points ?? 0;
+    summary.rows.push({ orderId: r.id, productTitle: r.product_title, buyerName: nameOf({ display_name: r.buyer_name }), points: r.points, fee: f, affiliate: aff, net: r.points - aff - f, status: r.status, createdAt: r.created_at });
   }
   return c.json(summary);
 });

@@ -5,6 +5,11 @@ import {
   amountInWords,
   CONTRACT_TEMPLATES,
   contractAsText,
+  contractGapNote,
+  contractGaps,
+  contractVarsFor,
+  fillContractText,
+  emptyProfile,
   contractParties,
   defaultDocStyle,
   docDate,
@@ -243,6 +248,47 @@ describe('other kinds of document', () => {
     expect(text).toContain('- Founder story reel');
     expect(text).toContain('sent back for changes 2 times');
     expect(text).not.toMatch(/undefined|fee/i);
+  });
+});
+
+describe('a document filled from the client and the profile', () => {
+  const profile = { ...emptyProfile(), signerName: 'Asha Rao', signerTitle: 'Founder', jurisdiction: 'Mumbai', from: { ...emptyParty(), name: 'Asha Studio', address: '12 Hill Road, Mumbai', email: 'asha@example.com', phone: '+91 98000 00000' } };
+  const client = { name: 'Acme Foods', address: '4 Park Street, Kolkata', contactName: 'Ravi Kumar', channels: ['YouTube', 'Instagram'], piecesPerMonth: 8, hoursPerMonth: 20, revisionsPerPiece: 2, retainerCents: 5500000, currency: 'INR' };
+  const typed = { projectWhat: 'Launch videos', deliveryDate: '1 Dec 2026', trialPieces: '2', trialFee: 'None', sessionDate: '3 Nov 2026' };
+  // A signing line is meant to be written on; everything else must be filled.
+  const unsigned = (t: string) => t.split('\n').filter((l) => !/^(Signature|Date): _+$/.test(l)).join('\n');
+  it('leaves no blank, placeholder or brace in any agreement or document kind for a fully filled client', () => {
+    const vars = { ...contractVarsFor(profile, client), ...typed };
+    expect(vars.channels).toBe('YouTube, Instagram');
+    expect(vars.pieces).toBe('8');
+    const docs = [...CONTRACT_TEMPLATES.map((t) => t.doc), ...AGENCY_DOC_KINDS.map((k) => agencyDocStarter(k))];
+    for (const d of docs) {
+      const doc = { ...d, vars };
+      expect(contractGaps(doc), d.title).toEqual([]);
+      for (const audience of ['owner', 'client'] as const) {
+        const text = unsigned(contractAsText(doc, { audience }));
+        expect(text, `${d.title} ${audience}`).not.toMatch(/__|\{|\}|TBD/);
+      }
+    }
+  });
+  it('a missing value never shows as underscores: the client copy drops the line, the owner copy carries one note', () => {
+    const vars = contractVarsFor({ ...profile, from: { ...profile.from, phone: '' } }, { ...client, contactName: '' });
+    const doc = { ...CONTRACT_TEMPLATES.find((t) => t.key === 'retainer')!.doc, vars };
+    const forClient = contractAsText(doc, { audience: 'client' });
+    expect(unsigned(forClient)).not.toContain('__');
+    expect(forClient).toContain('Email: asha@example.com');
+    expect(forClient).not.toMatch(/Phone:|Point of contact:/);
+    const forOwner = contractAsText(doc, { audience: 'owner' });
+    expect(forOwner).toContain('Your business details are not set (phone): add them once in Settings.');
+    expect(forOwner).toContain("The client's point of contact is not set");
+    expect(contractGapNote({ ...doc, vars: { ...vars, providerPhone: '1', clientContact: 'Ravi' } })).toBeNull();
+    expect(fillContractText('**Service provider:** {{provider}}, {{providerTitle}}, {{providerBusiness}}', { provider: 'Asha', providerBusiness: 'Studio' }, 'client')).toBe('**Service provider:** Asha, Studio');
+    expect(fillContractText('Point of contact: {{clientContact}} (authorised to speak for the client)\nNext', {}, 'client')).toBe('Next');
+  });
+  it('a part nobody has written is left out of the client copy', () => {
+    const doc = { ...agencyDocStarter('brief'), vars: { ...contractVarsFor(profile, client), sessionDate: '3 Nov 2026' } };
+    expect(contractAsText(doc, { audience: 'client' })).not.toContain('WHAT WE AGREED');
+    expect(contractAsText(doc, { audience: 'owner' })).toContain('Not written yet.');
   });
 });
 

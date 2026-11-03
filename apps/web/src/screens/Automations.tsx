@@ -1,17 +1,18 @@
 import type { DmAutomation, Funnel, FunnelStep, FunnelStepKind, Sequence } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
+import { ArrowRight } from 'lucide-react';
 import { useState } from 'react';
+import { Icon } from '../components/Icon';
+import { Pager, usePage } from '../components/Pager';
 import { Button } from '../components/Button';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { Toggle } from '../components/Toggle';
-import { api } from '../lib/api';
+import { api, errorText } from '../lib/api';
 import { useAuthed, useStudio } from '../lib/queries';
+import { FIELD, chip } from '../lib/ui';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-const chip = (on: boolean) => `min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`;
-const err = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 const STEP_KINDS: { kind: FunnelStepKind; name: string }[] = [
   { kind: 'content', name: 'Post' },
@@ -23,7 +24,8 @@ const STEP_KINDS: { kind: FunnelStepKind; name: string }[] = [
 ];
 
 export function Automations() {
-  const autos = useAuthed(['automations'], api.automations);
+  const ds = usePage('ds');
+  const autos = useAuthed(['automations', ds.query], () => api.automations(ds.query));
   const funnels = useAuthed(['funnels'], api.funnels);
   const sequences = useAuthed(['sequences'], api.sequences);
   const content = useAuthed(['content', 'revenue'], () => api.content('revenue'));
@@ -63,7 +65,7 @@ export function Automations() {
             <AutomationCard key={a.id} a={a} onChange={() => void autos.refetch()} />
           ))}
         </ul>
-        {autos.data && autos.data.sends.length > 0 && (
+        {autos.data && (autos.data.sends.length > 0 || autos.data.sendPage.page > 1) && (
           <div className="mt-md">
             <h3 className="text-[18px]">Recent matches</h3>
             <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
@@ -74,6 +76,7 @@ export function Automations() {
                 </li>
               ))}
             </ul>
+            <Pager page={autos.data.sendPage} prefix="ds" label="matches" />
           </div>
         )}
       </section>
@@ -190,7 +193,7 @@ function AutomationCard({ a, onChange }: { a: DmAutomation; onChange: () => void
       >
         <label className="block min-w-0 flex-1">
           <span className="block text-[12px] font-bold">Test with a comment</span>
-          <input value={comment} onChange={(e) => setComment(e.target.value)} maxLength={300} placeholder="Type what a viewer might comment" className={field} />
+          <input value={comment} onChange={(e) => setComment(e.target.value)} maxLength={300} placeholder="Type what a viewer might comment" className={FIELD} />
         </label>
         <Button type="submit" variant="outline" disabled={test.isPending || !comment.trim()}>
           Test
@@ -199,7 +202,7 @@ function AutomationCard({ a, onChange }: { a: DmAutomation; onChange: () => void
       {test.isSuccess && <p className="mt-xs m-0 text-[14px] font-bold">{test.data.matched > 0 ? `Matched. A DM was ${a.active ? 'queued' : 'not sent because the automation is paused'}.` : 'No keyword in that comment.'}</p>}
       {(toggle.isError || remove.isError || test.isError) && (
         <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-          {err(toggle.error ?? remove.error ?? test.error, 'That did not work.')}
+          {errorText(toggle.error ?? remove.error ?? test.error, 'That did not work.')}
         </p>
       )}
       <Button variant="ghost" className="mt-xs" disabled={remove.isPending} onClick={() => window.confirm('Remove this automation?') && remove.mutate()}>
@@ -223,7 +226,7 @@ function FunnelCard({ f, onChange }: { f: Funnel; onChange: () => void }) {
             <li key={`${s.kind}-${s.ref}-${i}`} className="flex shrink-0 items-center gap-xs">
               {i > 0 && (
                 <span className="text-[12px] font-bold text-ink-mute" aria-label={drop === null ? 'next step' : `${drop} percent drop off`}>
-                  {drop === null ? '→' : `−${Math.max(0, drop)}% →`}
+                  {drop === null ? <Icon icon={ArrowRight} size={14} /> : <span className="inline-flex items-center gap-xs">−{Math.max(0, drop)}% <Icon icon={ArrowRight} size={14} /></span>}
                 </span>
               )}
               <div className="min-w-[96px] rounded-tile bg-paper p-xs">
@@ -296,7 +299,7 @@ function NewAutomationSheet({ open, onClose, products, items, onDone }: { open: 
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Post</span>
-          <select value={contentItemId} onChange={(e) => setContentItemId(e.target.value)} className={field}>
+          <select value={contentItemId} onChange={(e) => setContentItemId(e.target.value)} className={FIELD}>
             <option value="">Every post</option>
             {items.map((i) => (
               <option key={i.id} value={i.id}>
@@ -307,20 +310,20 @@ function NewAutomationSheet({ open, onClose, products, items, onDone }: { open: 
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Keywords, comma separated</span>
-          <input autoFocus value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="guide, link" required className={field} />
+          <input autoFocus value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="guide, link" required className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Message to send</span>
-          <textarea value={dmMessage} onChange={(e) => setDmMessage(e.target.value)} rows={4} maxLength={900} required className={field} />
+          <textarea value={dmMessage} onChange={(e) => setDmMessage(e.target.value)} rows={4} maxLength={900} required className={FIELD} />
           <span className="mt-xs block text-[12px] font-bold text-ink-soft">The tracked link is added at the end.</span>
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Public replies, one per line, up to five</span>
-          <textarea value={replies} onChange={(e) => setReplies(e.target.value)} rows={3} placeholder="Sent you a DM!" className={field} />
+          <textarea value={replies} onChange={(e) => setReplies(e.target.value)} rows={3} placeholder="Sent you a DM!" className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">The link opens</span>
-          <select value={productId} onChange={(e) => setProductId(e.target.value)} className={field}>
+          <select value={productId} onChange={(e) => setProductId(e.target.value)} className={FIELD}>
             <option value="">Your page</option>
             {products.map((p) => (
               <option key={p.id} value={p.id}>
@@ -331,7 +334,7 @@ function NewAutomationSheet({ open, onClose, products, items, onDone }: { open: 
         </label>
         {create.isError && (
           <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-            {err(create.error, 'Could not create it.')}
+            {errorText(create.error, 'Could not create it.')}
           </p>
         )}
         <Button type="submit" size="lg" full disabled={create.isPending || !ready}>
@@ -378,7 +381,7 @@ function NewFunnelSheet({ open, onClose, options, onDone }: { open: boolean; onC
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Name</span>
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required className={field} placeholder="Reel to resume template" />
+          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required className={FIELD} placeholder="Reel to resume template" />
         </label>
         <ol className="flex list-none flex-col gap-sm p-0 m-0">
           {steps.map((s, i) => (
@@ -395,7 +398,7 @@ function NewFunnelSheet({ open, onClose, options, onDone }: { open: boolean; onC
                 value={s.ref}
                 onChange={(e) => setStep(i, { ref: e.target.value, label: options[s.kind].find((o) => o.id === e.target.value)?.label ?? '' })}
                 aria-label={`Step ${i + 1} target`}
-                className={field}
+                className={FIELD}
               >
                 <option value="">Choose</option>
                 {options[s.kind].map((o) => (
@@ -420,7 +423,7 @@ function NewFunnelSheet({ open, onClose, options, onDone }: { open: boolean; onC
         )}
         {create.isError && (
           <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-            {err(create.error, 'Could not create it.')}
+            {errorText(create.error, 'Could not create it.')}
           </p>
         )}
         <Button type="submit" size="lg" full disabled={create.isPending || !ready}>
@@ -456,7 +459,7 @@ function NewSequenceSheet({ open, onClose, products, onDone }: { open: boolean; 
       >
         <label className="block">
           <span className="block text-[14px] font-bold">After buying</span>
-          <select value={productId} onChange={(e) => setProductId(e.target.value)} className={field}>
+          <select value={productId} onChange={(e) => setProductId(e.target.value)} className={FIELD}>
             <option value="">Any product</option>
             {products.map((p) => (
               <option key={p.id} value={p.id}>
@@ -467,22 +470,22 @@ function NewSequenceSheet({ open, onClose, products, onDone }: { open: boolean; 
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Days to wait</span>
-          <input type="number" min={0} max={365} value={delay} onChange={(e) => setDelay(e.target.value)} className={field} />
+          <input type="number" min={0} max={365} value={delay} onChange={(e) => setDelay(e.target.value)} className={FIELD} />
           <span className="mt-xs block text-[12px] font-bold text-ink-soft">
             Delivered to the buyer's Inbox {days} {days === 1 ? 'day' : 'days'} after purchase.
           </span>
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Title</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={field} />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Message</span>
-          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} maxLength={2000} required className={field} />
+          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} maxLength={2000} required className={FIELD} />
         </label>
         {create.isError && (
           <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-            {err(create.error, 'Could not create it.')}
+            {errorText(create.error, 'Could not create it.')}
           </p>
         )}
         <Button type="submit" size="lg" full disabled={create.isPending || !title.trim() || !body.trim()}>

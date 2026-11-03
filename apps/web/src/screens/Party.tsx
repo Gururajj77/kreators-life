@@ -13,24 +13,16 @@ import { api } from '../lib/api';
 import { useAuthed, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { attendeeBody, AttendeeFields, attendeeProblem, ClaimCard, HostCodeCard } from '../components/AttendeeCode';
+import { AppIcon } from '../components/AppIcon';
+import { FIELD } from '../lib/ui';
+import { ErrorLine } from '../components/ErrorLine';
+import { eventTime, localDateTimeValue } from '../lib/date';
+import { FactTag, IconTag } from '../components/FactTag';
+import { StatusTag } from '../components/StatusTag';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-const when = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const when = eventTime;
 
-function Back({ to, label }: { to: string; label: string }) {
-  return (
-    <BackLink to={to}>{label}</BackLink>
-  );
-}
 
-function Err({ e }: { e: unknown }) {
-  if (!e) return null;
-  return (
-    <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-      {e instanceof Error ? e.message : 'That did not work.'}
-    </p>
-  );
-}
 
 function seats(e: PartyEvent): string {
   if (e.capacity === null) return 'Open to all';
@@ -43,9 +35,7 @@ function MineBadge({ mine }: { mine: EventRegistration | null }) {
   if (!mine || mine.status === 'cancelled') return null;
   const label = mine.status === 'waitlisted' ? 'Waitlisted' : mine.status === 'attended' ? 'Attended' : "You're in";
   return (
-    <span className="rounded-pill px-xs text-[12px] font-extrabold leading-[20px]" style={{ background: mine.status === 'waitlisted' ? 'var(--tint-yellow)' : 'var(--tint-green)' }}>
-      {label}
-    </span>
+    <StatusTag tone={mine.status === 'waitlisted' ? 'warn' : 'good'}>{label}</StatusTag>
   );
 }
 
@@ -54,8 +44,8 @@ function EventCard({ e }: { e: PartyEvent }) {
   return (
     <li>
       <Link to={`/party/${e.id}`} className="toy toy-soft flex items-start gap-sm rounded-tile bg-card p-sm">
-        <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-[22px]" aria-hidden="true">
-          {meta.emoji}
+        <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper" aria-hidden="true">
+          <AppIcon name={meta.icon} size={22} />
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-xs">
@@ -71,7 +61,7 @@ function EventCard({ e }: { e: PartyEvent }) {
         </span>
         <span className="flex shrink-0 flex-col items-end gap-xs">
           <span className="text-[14px] font-extrabold">{e.pricePoints > 0 ? `${e.pricePoints} pts` : 'Free'}</span>
-          {e.attendeeXp ? <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold">+{e.attendeeXp} xp</span> : null}
+          {e.attendeeXp ? <IconTag tone="calm" icon="Zap">{`+${e.attendeeXp} xp`}</IconTag> : null}
         </span>
       </Link>
     </li>
@@ -204,8 +194,8 @@ function HostSheet({ open, onClose, canHostAll }: { open: boolean; onClose: () =
           <legend className="text-[14px] font-bold">What kind</legend>
           <div className="mt-xs flex flex-wrap gap-xs">
             {types.map((t) => (
-              <button key={t} type="button" aria-pressed={eventType === t} onClick={() => setEventType(t)} className={`toy rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${eventType === t ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-                <span aria-hidden="true">{EVENT_TYPE_META[t].emoji} </span>
+              <button key={t} type="button" aria-pressed={eventType === t} onClick={() => setEventType(t)} className={`toy inline-flex min-h-[44px] items-center gap-xs rounded-pill border-2 px-sm text-[14px] font-bold ${eventType === t ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                <AppIcon name={EVENT_TYPE_META[t].icon} size={16} />
                 {EVENT_TYPE_META[t].name}
               </button>
             ))}
@@ -214,38 +204,38 @@ function HostSheet({ open, onClose, canHostAll }: { open: boolean; onClose: () =
         </fieldset>
         <label className="block">
           <span className="block text-[14px] font-bold">Title</span>
-          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={field} />
+          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">What to expect</span>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={3000} rows={3} className={field} />
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={3000} rows={3} className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Starts</span>
-            <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required className={field} />
+            <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Minutes</span>
-            <input type="number" min={15} max={10080} value={minutes} onChange={(e) => setMinutes(e.target.value)} className={field} />
+            <input type="number" min={15} max={10080} value={minutes} onChange={(e) => setMinutes(e.target.value)} className={FIELD} />
           </label>
         </div>
         <label className="block">
           <span className="block text-[14px] font-bold">Venue</span>
-          <input value={venue} onChange={(e) => setVenue(e.target.value)} maxLength={200} placeholder="Leave empty for online" className={field} />
+          <input value={venue} onChange={(e) => setVenue(e.target.value)} maxLength={200} placeholder="Leave empty for online" className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Online link</span>
-          <input type="url" value={onlineUrl} onChange={(e) => setOnlineUrl(e.target.value)} maxLength={500} placeholder="https://" className={field} />
+          <input type="url" value={onlineUrl} onChange={(e) => setOnlineUrl(e.target.value)} maxLength={500} placeholder="https://" className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Seats</span>
-            <input type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)} placeholder="No limit" className={field} />
+            <input type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)} placeholder="No limit" className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Price in points</span>
-            <input type="number" min={0} value={pricePoints} onChange={(e) => setPricePoints(e.target.value)} className={field} />
+            <input type="number" min={0} value={pricePoints} onChange={(e) => setPricePoints(e.target.value)} className={FIELD} />
           </label>
         </div>
         <fieldset className="m-0 border-0 p-0">
@@ -258,14 +248,14 @@ function HostSheet({ open, onClose, canHostAll }: { open: boolean; onClose: () =
                 ['private', 'People with the link'],
               ] as [PartyEvent['visibility'], string][]
             ).map(([v, label]) => (
-              <button key={v} type="button" aria-pressed={visibility === v} onClick={() => setVisibility(v)} className={`toy rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${visibility === v ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+              <button key={v} type="button" aria-pressed={visibility === v} onClick={() => setVisibility(v)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${visibility === v ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                 {label}
               </button>
             ))}
           </div>
         </fieldset>
         <AttendeeFields xp={attendeeXp} onXp={setAttendeeXp} code={attendeeCode} onCode={setAttendeeCode} />
-        <Err e={create.isError ? create.error : null} />
+        <ErrorLine e={create.isError ? create.error : null} />
         <Button type="submit" size="lg" full disabled={create.isPending || !title.trim() || !startsAt || attendeeProblem(attendeeXp, attendeeCode) !== null}>
           Publish event
         </Button>
@@ -322,7 +312,7 @@ export function EventPage() {
     return (
       <Screen>
         <header className="pt-lg">
-          <Back to="/party" label="Party" />
+          <BackLink to="/party">Party</BackLink>
           <h1 className="text-[30px]">Not for you, or gone</h1>
           <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{q.error instanceof Error ? q.error.message : 'This event is private, Club-only, or no longer exists.'}</p>
         </header>
@@ -340,19 +330,19 @@ export function EventPage() {
   return (
     <Screen>
       <header className="pt-lg">
-        <Back to="/party" label="Party" />
-        <p className="m-0 text-[14px] font-bold text-ink-soft">
-          <span aria-hidden="true">{meta.emoji} </span>
-          {meta.name}, hosted by {e.hostName}
-          {e.status !== 'published' ? `, ${e.status}` : ''}
+        <BackLink to="/party">Party</BackLink>
+        <p className="m-0 flex flex-wrap items-center gap-xs text-[14px] font-bold text-ink-soft">
+          <AppIcon name={meta.icon} size={16} />
+          <span>
+            {meta.name}, hosted by {e.hostName}
+            {e.status !== 'published' ? `, ${e.status}` : ''}
+          </span>
         </p>
         <h1 className="text-[30px]">{e.title}</h1>
         <div className="mt-xs flex flex-wrap items-center gap-xs">
           <MineBadge mine={mine} />
           {e.visibility !== 'public' && (
-            <span className="rounded-pill px-xs text-[12px] font-extrabold leading-[20px]" style={{ background: 'var(--tint-purple)' }}>
-              {e.visibility === 'club' ? 'Club only' : 'Private'}
-            </span>
+            <IconTag tone="deep" icon="Lock">{e.visibility === 'club' ? 'Club only' : 'Private'}</IconTag>
           )}
         </div>
       </header>
@@ -404,12 +394,12 @@ export function EventPage() {
           )}
           {!mine ? (
             <div className="mt-sm flex flex-col gap-sm rounded-card bg-card p-md shadow-toy-soft">
-              <label className="flex items-center gap-sm text-[14px] font-bold">
+              <label className="flex min-h-[44px] cursor-pointer items-center gap-sm text-[14px] font-bold">
                 <input type="checkbox" checked={networking} onChange={(ev) => setNetworking(ev.target.checked)} className="size-[20px] accent-ink" />
                 Happy to be introduced to other guests
               </label>
               {e.pricePoints > 0 && <DiscountField area="event" itemId={id} value={discount?.code ?? ''} check={discount} onChange={(_c, check) => setDiscount(check)} />}
-              <Err e={rsvp.isError ? rsvp.error : null} />
+              <ErrorLine e={rsvp.isError ? rsvp.error : null} />
               <Button size="lg" full onClick={() => rsvp.mutate()} disabled={rsvp.isPending}>
                 {e.capacity !== null && e.registered >= e.capacity ? 'Join the waitlist' : e.pricePoints > 0 ? `RSVP for ${discount && discount.offPoints > 0 ? discount.payPoints : e.pricePoints} points` : 'RSVP'}
               </Button>
@@ -418,7 +408,7 @@ export function EventPage() {
             <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
               <p className="m-0 text-[16px] font-bold">{mine.status === 'waitlisted' ? 'You are on the waitlist.' : 'You are registered.'}</p>
               <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{mine.networkingOptIn ? 'Open to introductions at this event.' : 'Not open to introductions at this event.'}</p>
-              <Err e={cancel.isError ? cancel.error : null} />
+              <ErrorLine e={cancel.isError ? cancel.error : null} />
               <Button variant="outline" className="mt-sm" onClick={() => cancel.mutate()} disabled={cancel.isPending}>
                 Cancel my RSVP
               </Button>
@@ -453,13 +443,13 @@ export function EventPage() {
               </div>
               <label className="block">
                 <span className="block text-[14px] font-bold">A few words</span>
-                <textarea value={comment} onChange={(ev) => setComment(ev.target.value)} maxLength={1000} rows={3} className={field} />
+                <textarea value={comment} onChange={(ev) => setComment(ev.target.value)} maxLength={1000} rows={3} className={FIELD} />
               </label>
-              <label className="flex items-center gap-sm text-[14px] font-bold">
+              <label className="flex min-h-[44px] cursor-pointer items-center gap-sm text-[14px] font-bold">
                 <input type="checkbox" checked={networking} onChange={(ev) => setNetworking(ev.target.checked)} className="size-[20px] accent-ink" />
                 Introduce me to people I met here
               </label>
-              <Err e={feedback.isError ? feedback.error : null} />
+              <ErrorLine e={feedback.isError ? feedback.error : null} />
               <Button type="submit" full disabled={feedback.isPending || rating === 0}>
                 Send feedback
               </Button>
@@ -511,7 +501,7 @@ export function EventPage() {
               </Button>
             </div>
           )}
-          <Err e={setStatus.isError ? setStatus.error : checkin.isError ? checkin.error : null} />
+          <ErrorLine e={setStatus.isError ? setStatus.error : checkin.isError ? checkin.error : null} />
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {d.registrations.length === 0 && <li className="text-[14px] font-semibold text-ink-soft">Nobody registered yet.</li>}
             {d.registrations.map((r) => (
@@ -540,11 +530,7 @@ export function EventPage() {
 }
 
 /** The datetime-local value for an instant, in the device's own time. */
-const localInput = (iso: string) => {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
+const localInput = (iso: string) => localDateTimeValue(new Date(iso));
 
 /** Make the same event again on a new date: a week later to start with. Guests do not carry over; the xp does, with a new code. */
 function DuplicateEvent({ id, startsAt }: { id: string; startsAt: string }) {
@@ -571,7 +557,7 @@ function DuplicateEvent({ id, startsAt }: { id: string; startsAt: string }) {
           <span className="block text-[14px] font-bold">Starts</span>
           <input type="datetime-local" value={when} onChange={(ev) => setWhen(ev.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
         </label>
-        <Err e={copy.isError ? copy.error : null} />
+        <ErrorLine e={copy.isError ? copy.error : null} />
         <Button size="lg" full className="mt-md" disabled={copy.isPending || !when} onClick={() => copy.mutate()}>
           Make the new event
         </Button>

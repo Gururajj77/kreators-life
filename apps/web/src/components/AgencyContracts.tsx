@@ -7,25 +7,18 @@ import { useAuthed } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
 import { tie } from '../lib/text';
 import { AgencyDocsList } from './AgencyDocs';
-import { AgencyInvoices } from './AgencyInvoices';
+import { AgencyInvoices, FILTER_SELECT, PaperLoading, PaperRowMenu } from './AgencyInvoices';
 import { Button } from './Button';
-import { DocRowActions } from './DocActions';
-import { Fold } from './Fold';
+import { Segmented } from './fx/Segmented';
 import { KanbanBoard } from './KanbanBoard';
 import { Pager, usePage } from './Pager';
 import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
 import { useView, ViewToggle } from './ViewToggle';
+import { FIELD } from '../lib/ui';
 
-const BLURB: Record<ContractStatus, string> = {
-  draft: 'Being written.',
-  sent: 'Waiting for the client.',
-  signed: 'Accepted. A record.',
-  void: 'Put away.',
-};
 const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 const TEMPLATE_NAME: Record<string, string> = Object.fromEntries(CONTRACT_TEMPLATES.map((t) => [t.key, t.name]));
-const field = 'mt-xs w-full min-h-[48px] rounded-pill border-2 border-line bg-paper px-sm text-[16px]';
 
 /** Where an agreement can go from a board: draft and sent move between themselves and to void. A signed one is a record; only the client signs. */
 function canMove(from: string, to: string): boolean {
@@ -33,45 +26,51 @@ function canMove(from: string, to: string): boolean {
   return to === 'draft' || to === 'sent' || to === 'void';
 }
 
-const SEGMENTS = [
-  ['agreements', 'Agreements'],
-  ['invoices', 'Invoices'],
-  ['other', 'Other documents'],
+/** The three kinds of paper on Agency's Paperwork tab, in the order of the segmented control. */
+export const PAPER_SEGMENTS = [
+  { value: 'invoices', label: 'Invoices' },
+  { value: 'agreements', label: 'Agreements' },
+  { value: 'other', label: 'Documents' },
 ] as const;
+export type PaperSegment = (typeof PAPER_SEGMENTS)[number]['value'];
+/** Which kind of paper is showing, kept in the URL as `agseg`. */
+export function usePaperSegment(): [PaperSegment, (v: PaperSegment) => void] {
+  const [raw, set] = useParamState('agseg', 'invoices');
+  const seg = (PAPER_SEGMENTS.find((x) => x.value === raw)?.value ?? 'invoices') as PaperSegment;
+  return [seg, set];
+}
 
 /**
- * All the paper in one place: agreements, invoices, and the other documents (a strategy session summary, trial terms, a retainer proposal,
- * a monthly report). A segmented filter chooses which; each has its own list or board.
+ * All the paper in one place: invoices, agreements, and the other documents (a strategy session summary, trial terms, a retainer
+ * proposal, a monthly report). A segmented control chooses which; each has its own list or board. On the Agency screen the header holds
+ * the one New invoice or New agreement button and passes `adding` and `onAdding`; the other documents keep their own New document.
  */
-export function AgencyContracts({ clientId }: { clientId?: string }) {
-  const [seg, setSeg] = useParamState('agseg', 'agreements');
+export function AgencyContracts({ clientId, adding, onAdding }: { clientId?: string; adding?: boolean; onAdding?: (open: boolean) => void }) {
+  const [seg, setSeg] = usePaperSegment();
   // On one client's page the invoices and the other documents have their own blocks, so only the agreements are here.
   if (clientId) return <AgencyAgreements clientId={clientId} />;
   return (
     <div>
-      <div role="group" aria-label="Kind of paper" className="scroll-row flex gap-xs">
-        {SEGMENTS.map(([k, name]) => (
-          <button key={k} type="button" aria-pressed={seg === k} onClick={() => setSeg(k)} className={`toy min-h-[44px] shrink-0 rounded-pill border-2 px-md text-[14px] font-bold ${seg === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-            {name}
-          </button>
-        ))}
-      </div>
+      <Segmented label="Kind of paper" value={seg} onChange={setSeg} options={PAPER_SEGMENTS} />
       <div className="mt-sm">
-        {seg === 'invoices' ? <AgencyInvoices /> : seg === 'other' ? <AgencyDocsList /> : <AgencyAgreements />}
+        {seg === 'invoices' ? <AgencyInvoices adding={adding} onAdding={onAdding} /> : seg === 'other' ? <AgencyDocsList /> : <AgencyAgreements adding={adding} onAdding={onAdding} />}
       </div>
     </div>
   );
 }
 
-/** The agreements pipeline: a list or a board, for every client or for one. */
-export function AgencyAgreements({ clientId }: { clientId?: string }) {
+/** The agreements pipeline: a list or a board, for every client or for one. `adding` and `onAdding` hand the New agreement button to a header. */
+export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clientId?: string; adding?: boolean; onAdding?: (open: boolean) => void }) {
   const qc = useQueryClient();
   const nav = useNavigate();
   const [view, setView] = useView('ag', 'board');
   const [per, setPer] = useState(25);
   const [status, setStatus] = useParamState('agstatus', 'all');
   const pg = usePage('ag');
-  const [adding, setAdding] = useState(false);
+  const [own, setOwn] = useState(false);
+  const adding = onAdding ? Boolean(outside) : own;
+  const setAdding = (v: boolean) => (onAdding ? onAdding(v) : setOwn(v));
+  const [rowNote, setRowNote] = useState<{ id: string; text: string } | null>(null);
   // What the new agreement starts from: a built-in template ('key:trial') or one of the person's own ('own:<id>').
   const [template, setTemplate] = useState<string>(`key:${CONTRACT_TEMPLATES[0]?.key ?? 'trial'}`);
   const [pickClient, setPickClient] = useState('');
@@ -82,7 +81,7 @@ export function AgencyAgreements({ clientId }: { clientId?: string }) {
   const listQuery = `page=${pg.page}&size=${pg.size}${status !== 'all' ? `&status=${status}` : ''}${clientQ}`;
   const list = useAuthed(['agency', 'contracts', 'list', clientId ?? '', status, pg.page, pg.size], () => api.agencyContracts(listQuery), view === 'list');
   const clients = useAuthed(['agency', 'clients-pick'], () => api.agency('csize=100'), adding && !clientId);
-  const templates = useAuthed(['agency', 'templates', 'contract'], () => api.agencyTemplates('contract'));
+  const templates = useAuthed(['agency', 'templates', 'contract'], () => api.agencyTemplates('contract'), adding);
   const mine = (templates.data?.templates ?? []).filter((t) => t.scope === 'own');
   const house = (templates.data?.templates ?? []).filter((t) => t.scope === 'house');
 
@@ -115,24 +114,20 @@ export function AgencyAgreements({ clientId }: { clientId?: string }) {
     move.mutate({ id: item.id, to });
   };
 
-  const columns = (board.data?.columns ?? ([] as BoardColumn<ContractListItem>[])).map((c) => ({ ...c, name: CONTRACT_STATUS_NAME[c.stage as ContractStatus] ?? c.stage, blurb: BLURB[c.stage as ContractStatus] }));
+  const columns = (board.data?.columns ?? ([] as BoardColumn<ContractListItem>[])).map((c) => ({ ...c, name: CONTRACT_STATUS_NAME[c.stage as ContractStatus] ?? c.stage }));
   const counts = new Map((list.data?.counts ?? []).map((c) => [c.status, c.n]));
   const total = [...counts.values()].reduce((a, b) => a + b, 0);
 
   return (
     <section aria-labelledby="agreements-heading">
       <div className="flex flex-wrap items-center justify-between gap-sm">
-        <span />
-        <div className="flex flex-wrap items-center gap-xs">
-          <ViewToggle view={view} onChange={setView} label="How to see agreements" />
-          <Button size="sm" onClick={() => setAdding(true)}>
+        <ViewToggle view={view} onChange={setView} label="How to see agreements" />
+        {!onAdding && (
+          <Button size="sm" plusToX onClick={() => setAdding(true)}>
             New agreement
           </Button>
-        </div>
+        )}
       </div>
-      {!clientId && (
-  <p className="mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">Start from a template, fill in the blanks, send the client a link. They read it, answer the brief and accept by typing their name.</p>
-      )}
 
       {note && (
         <p role="status" className="mt-sm m-0 rounded-tile p-sm text-[14px] font-bold" style={{ background: 'var(--tint-yellow)' }}>
@@ -142,7 +137,7 @@ export function AgencyAgreements({ clientId }: { clientId?: string }) {
 
       {view === 'board' ? (
         <div className="mt-sm">
-          {board.isPending && <p className="m-0 text-[14px] font-semibold text-ink-soft">Loading…</p>}
+          {board.isPending && <PaperLoading label="Loading agreements" />}
           {board.isError && (
             <p role="alert" className="m-0 text-[14px] font-bold">
               Could not load the board. Try again in a moment.
@@ -155,51 +150,69 @@ export function AgencyAgreements({ clientId }: { clientId?: string }) {
               canMoveTo={(_item, from, to) => canMove(from, to)}
               onMore={() => setPer((n) => n + 25)}
               empty="None yet"
+              itemLabel={(c) => c.title}
               card={(c) => <Card c={c} />}
             />
           )}
         </div>
       ) : (
         <div className="mt-sm">
-          <div role="group" aria-label="Filter by status" className="flex flex-wrap gap-xs">
-            {(['all', ...CONTRACT_STATUSES] as const).map((s) => (
-              <button
-                key={s}
-                type="button"
-                aria-pressed={status === s}
-                onClick={() => {
-                  setStatus(s);
-                  pg.reset();
-                }}
-                className={`toy min-h-[44px] rounded-pill border-2 px-md text-[14px] font-bold ${status === s ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
-              >
-                {s === 'all' ? `All ${total}` : `${CONTRACT_STATUS_NAME[s]} ${counts.get(s) ?? 0}`}
-              </button>
+          <select
+            aria-label="Agreement status"
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              pg.reset();
+            }}
+            className={FILTER_SELECT}
+          >
+            <option value="all">Status: All{list.data ? ` (${total})` : ''}</option>
+            {CONTRACT_STATUSES.map((st) => (
+              <option key={st} value={st}>
+                Status: {CONTRACT_STATUS_NAME[st]}
+                {list.data ? ` (${counts.get(st) ?? 0})` : ''}
+              </option>
             ))}
-          </div>
-          {list.isPending && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Loading…</p>}
+          </select>
+          {list.isPending && (
+            <div className="mt-sm">
+              <PaperLoading label="Loading agreements" />
+            </div>
+          )}
+          {list.isError && (
+            <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+              Could not load the agreements. Try again in a moment.
+            </p>
+          )}
           {list.data && list.data.contracts.length === 0 && <p className="mt-sm m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft shadow-toy-soft">No agreements here yet. Start one from a template.</p>}
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {list.data?.contracts.map((c) => (
-              <li key={c.id}>
-                <Link to={`/agency/contracts/${c.id}`} className="toy toy-soft flex flex-wrap items-center justify-between gap-sm rounded-tile bg-card p-sm">
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[16px] font-extrabold">{tie(c.title)}</span>
-                    <span className="block text-[14px] font-semibold text-ink-soft">
-                      {[c.clientName || 'No client yet', TEMPLATE_NAME[c.templateKey] ?? 'Your own', c.signedAt ? `Signed ${day(c.signedAt)}` : c.sentAt ? `Sent ${day(c.sentAt)}` : `Changed ${day(c.updatedAt)}`].join(' · ')}
+              <li key={c.id} className="rounded-tile bg-card shadow-toy-soft">
+                <div className="flex items-center gap-xs pr-xs">
+                  <Link to={`/agency/contracts/${c.id}`} className="toy flex min-w-0 flex-1 flex-wrap items-center justify-between gap-sm rounded-tile p-sm text-ink no-underline">
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[16px] font-extrabold">{tie(c.title)}</span>
+                      <span className="block text-[14px] font-semibold text-ink-soft">
+                        {[c.clientName || 'No client yet', TEMPLATE_NAME[c.templateKey] ?? 'Your own', c.signedAt ? `Signed ${day(c.signedAt)}` : c.sentAt ? `Sent ${day(c.sentAt)}` : `Changed ${day(c.updatedAt)}`].join(' · ')}
+                      </span>
                     </span>
-                  </span>
-                  <StatusTag tone={CONTRACT_STATUS_TONE[c.status]}>{CONTRACT_STATUS_NAME[c.status]}</StatusTag>
-                </Link>
-                <div className="mt-xs px-sm">
-                  <DocRowActions
+                    <StatusTag tone={CONTRACT_STATUS_TONE[c.status]}>{CONTRACT_STATUS_NAME[c.status]}</StatusTag>
+                  </Link>
+                  <PaperRowMenu
                     path={`/agency/contracts/${c.id}`}
+                    name={c.title}
+                    onNote={(text) => setRowNote(text ? { id: c.id, text } : null)}
                     getText={async () => {
                       const { contract } = await api.agencyContract(c.id);
                       return contractAsText(contract.doc, { reference: docRef('AGR', contract.id), date: contract.sentAt ?? contract.createdAt, answers: contract.answers, acceptance: contract.acceptance });
                     }}
                   />
                 </div>
+                {rowNote?.id === c.id && (
+                  <p role="status" className="m-0 px-sm pb-sm text-[12px] font-bold">
+                    {rowNote.text}
+                  </p>
+                )}
               </li>
             ))}
           </ul>
@@ -207,14 +220,12 @@ export function AgencyAgreements({ clientId }: { clientId?: string }) {
         </div>
       )}
 
-      <TemplatesFold templates={mine} />
-
       <Sheet open={adding} onClose={() => setAdding(false)} title="New agreement">
         <p className="m-0 text-[14px] font-semibold text-ink-soft">Pick a place to start. Your details and the client's fill in for you, and every part can be changed.</p>
         {!clientId && (
           <label className="mt-sm block text-[14px] font-bold" htmlFor="new-agreement-client">
             For which client
-            <select id="new-agreement-client" value={pickClient} onChange={(e) => setPickClient(e.target.value)} className={field}>
+            <select id="new-agreement-client" value={pickClient} onChange={(e) => setPickClient(e.target.value)} className={FIELD}>
               <option value="">No client yet</option>
               {clients.data?.clients.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -287,9 +298,11 @@ function Choice({ on, onPick, name, blurb, house = false }: { on: boolean; onPic
   );
 }
 
-/** The person's own agreement templates: rename or remove. They are made from any agreement with "Save as template". */
-function TemplatesFold({ templates }: { templates: AgencyTemplate[] }) {
+/** The person's own agreement templates: rename or remove. They are made from any agreement with "Save as template". Shown in Agency settings. */
+export function AgreementTemplates() {
   const qc = useQueryClient();
+  const q = useAuthed(['agency', 'templates', 'contract'], () => api.agencyTemplates('contract'));
+  const templates: AgencyTemplate[] = (q.data?.templates ?? []).filter((t) => t.scope === 'own');
   const [editing, setEditing] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [armed, setArmed] = useState<string | null>(null);
@@ -312,9 +325,19 @@ function TemplatesFold({ templates }: { templates: AgencyTemplate[] }) {
     window.setTimeout(() => setArmed((a) => (a === id ? null : a)), 4000);
   };
   return (
-    <Fold className="mt-md" title="Your agreement templates" hint={String(templates.length)}>
+    <div>
       <p className="m-0 text-[14px] font-semibold text-ink-soft">Make one from any agreement: open it and tap "Save as template". It keeps the sections, not the names filled in.</p>
-      {templates.length === 0 && <p className="mt-xs m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft shadow-toy-soft">No templates of your own yet.</p>}
+      {q.isPending && (
+        <div className="mt-xs">
+          <PaperLoading label="Loading your templates" />
+        </div>
+      )}
+      {q.isError && (
+        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+          Could not load your templates. Try again.
+        </p>
+      )}
+      {q.data && templates.length === 0 && <p className="mt-xs m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft shadow-toy-soft">No templates of your own yet.</p>}
       <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
         {templates.map((t) => (
           <li key={t.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
@@ -360,22 +383,18 @@ function TemplatesFold({ templates }: { templates: AgencyTemplate[] }) {
           </li>
         ))}
       </ul>
-    </Fold>
+    </div>
   );
 }
 
+/** A card on the agreement board: the title and one line with the client and the day. The column already says its status. */
 function Card({ c }: { c: ContractListItem }) {
   return (
     <div>
       <Link to={`/agency/contracts/${c.id}`} className="block text-[16px] font-extrabold underline-offset-4 hover:underline">
         {tie(c.title)}
       </Link>
-      <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{c.clientName || 'No client yet'}</p>
-      <p className="mt-xs m-0 text-[12px] font-semibold text-ink-mute">{TEMPLATE_NAME[c.templateKey] ?? 'Your own'}</p>
-      <div className="mt-xs flex flex-wrap items-center gap-xs">
-        <StatusTag tone={CONTRACT_STATUS_TONE[c.status]}>{CONTRACT_STATUS_NAME[c.status]}</StatusTag>
-        <span className="text-[12px] font-semibold text-ink-soft">{c.signedAt ? `Signed ${day(c.signedAt)}` : c.sentAt ? `Sent ${day(c.sentAt)}` : day(c.updatedAt)}</span>
-      </div>
+      <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{tie(`${c.clientName || 'No client yet'}, ${c.signedAt ? `signed ${day(c.signedAt)}` : c.sentAt ? `sent ${day(c.sentAt)}` : `changed ${day(c.updatedAt)}`}`)}</p>
     </div>
   );
 }

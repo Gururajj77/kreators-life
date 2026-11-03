@@ -9,8 +9,8 @@ import { Toggle } from '../components/Toggle';
 import { api } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
+import { FIELD_FILTER } from '../lib/ui';
 
-const field = 'w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px] font-semibold';
 const LEVELS: [string, string][] = [
   ['', 'All'],
   ['error', 'Errors'],
@@ -91,11 +91,11 @@ export function Logs() {
           <div className="mt-sm grid grid-cols-1 gap-xs md:grid-cols-[1fr_220px_220px]">
             <label className="block">
               <span className="sr-only">Search the log by path, message or name</span>
-              <input type="search" value={text} onChange={(e) => setText(e.target.value)} placeholder="Search a path, a message or a name" autoComplete="off" className={field} />
+              <input type="search" value={text} onChange={(e) => setText(e.target.value)} placeholder="Search a path, a message or a name" autoComplete="off" className={FIELD_FILTER} />
             </label>
             <label className="block">
               <span className="sr-only">Person</span>
-              <select value={actor} onChange={(e) => { setActor(e.target.value); pg.reset(); }} className={field}>
+              <select value={actor} onChange={(e) => { setActor(e.target.value); pg.reset(); }} className={FIELD_FILTER}>
                 <option value="">Everyone</option>
                 {data.actors.map((a) => (
                   <option key={a.id} value={a.id}>
@@ -107,7 +107,7 @@ export function Logs() {
             </label>
             <label className="block">
               <span className="sr-only">Area</span>
-              <select value={area} onChange={(e) => { setArea(e.target.value); pg.reset(); }} className={field}>
+              <select value={area} onChange={(e) => { setArea(e.target.value); pg.reset(); }} className={FIELD_FILTER}>
                 <option value="">Every area</option>
                 {data.areas.map((a) => (
                   <option key={a} value={a}>

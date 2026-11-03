@@ -1,4 +1,4 @@
-import { PRIORITIES, addDays, priorityTag, repeatLabel, type Node, type Priority, type Repeat } from '@kreators/shared';
+import { PRIORITIES, addDays, priorityTag, repeatLabel, openDay, type Node, type Priority, type Repeat } from '@kreators/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -9,9 +9,10 @@ import { useRefreshAll } from '../lib/queries';
 import { RepeatPicker } from './RepeatPicker';
 import { RulerPicker } from './RulerPicker';
 import { Toggle } from './Toggle';
+import { FIELD } from '../lib/ui';
+import { StatusTag } from './StatusTag';
 
-const FIELD = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-const CHIP = 'rounded-pill px-xs text-[12px] font-extrabold leading-[20px]';
+const CHIP = 'inline-flex shrink-0 items-center rounded-pill px-sm text-[12px] font-extrabold leading-[24px]';
 const ESTIMATES = [15, 25, 45, 60, 90];
 
 /** A priority tag in its colour: P0 red, P1 orange, P2 purple, P3 grey. */
@@ -29,31 +30,30 @@ export function PriorityChip({ priority }: { priority: Priority | null }) {
  * Habit (it comes back on its own), From pillar (the strategy session or the vibe check made it) and From your coach.
  */
 export function TaskTags({ task }: { task: Node }) {
-  const plain = `${CHIP} bg-paper text-ink-soft`;
   return (
     <>
       <PriorityChip priority={task.priority} />
       {task.remind && (
-        <span className={`${plain} inline-flex items-center gap-xs`}>
-          <Icon icon={Bell} size={12} /> Remember
-        </span>
+        <StatusTag tone="warn" mark={<Icon icon={Bell} size={12} />}>
+          Remember
+        </StatusTag>
       )}
       {task.forReview && (
-        <span className={`${plain} inline-flex items-center gap-xs`}>
-          <Icon icon={ClipboardCheck} size={12} /> For review
-        </span>
+        <StatusTag tone="info" mark={<Icon icon={ClipboardCheck} size={12} />}>
+          For review
+        </StatusTag>
       )}
       {task.repeat && (
-        <span className={`${plain} inline-flex items-center gap-xs`} title={repeatLabel(task.repeat, task.doDate ?? task.dueDate)}>
-          <Icon icon={RepeatIcon} size={12} /> Habit
-        </span>
+        <StatusTag tone="good" mark={<Icon icon={RepeatIcon} size={12} />} title={repeatLabel(task.repeat, openDay(task))}>
+          Habit
+        </StatusTag>
       )}
       {task.fromPillar && (
-        <span className={`${plain} inline-flex items-center gap-xs`}>
-          <Icon icon={Landmark} size={12} /> From pillar
-        </span>
+        <StatusTag tone="calm" mark={<Icon icon={Landmark} size={12} />}>
+          From pillar
+        </StatusTag>
       )}
-      {task.fromCoach && <span className={plain}>From your coach</span>}
+      {task.fromCoach && <StatusTag tone="deep">From your coach</StatusTag>}
     </>
   );
 }

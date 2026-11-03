@@ -3,9 +3,9 @@ import { useMutation } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router';
-import { Check, Repeat as RepeatIcon } from 'lucide-react';
+import { Check, Repeat as RepeatIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '../lib/api';
-import { dueLabel, prettyDate } from '../lib/date';
+import { dueLabel, prettyDate, weekday } from '../lib/date';
 import { printAs } from '../lib/printDoc';
 import { useAuthed, useRefreshAll } from '../lib/queries';
 import { useActionQueue } from '../lib/useActionQueue';
@@ -18,6 +18,8 @@ import { Icon } from './Icon';
 import { Sheet } from './Sheet';
 import { Skeleton } from './Skeleton';
 import { planBody, planOf, planProblem, PriorityChip, TaskPlanFields, type Plan } from './TaskPlan';
+import { FactTag } from './FactTag';
+import { StatusTag } from './StatusTag';
 
 const COPY = {
   lede: 'Tap a day to see its tasks or add one. A task sits on its do date, or on its due date when it has no do date.',
@@ -29,7 +31,6 @@ const COPY = {
 } as const;
 
 const monthName = (month: string, long = true) => new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 1).toLocaleDateString(undefined, { month: long ? 'long' : 'short', year: 'numeric' });
-const weekday = (day: string, style: 'long' | 'short' | 'narrow') => new Date(`${day}T00:00:00`).toLocaleDateString(undefined, { weekday: style });
 const dayNumber = (day: string) => Number(day.slice(8, 10));
 
 /** The month calendar on Daily: every day a button with the tasks planned on it. Tap a day to see them, tick them or add one; print the month on paper. */
@@ -58,17 +59,13 @@ export function TaskMonth({ today }: { today: string }) {
       <p className="m-0 text-balance text-[14px] font-semibold text-ink-soft">{COPY.lede}</p>
       <div className="mt-sm flex items-center justify-between gap-xs">
         <button type="button" className={arrow} onClick={() => setMonth(monthShift(month, -1))} aria-label="Previous month">
-          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 6l-6 6 6 6" />
-          </svg>
+          <Icon icon={ChevronLeft} size={16} strokeWidth={3} />
         </button>
         <span className="text-center text-[16px] font-extrabold" aria-live="polite">
           {monthName(month)}
         </span>
         <button type="button" className={arrow} onClick={() => setMonth(monthShift(month, 1))} aria-label="Next month">
-          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 6l6 6-6 6" />
-          </svg>
+          <Icon icon={ChevronRight} size={16} strokeWidth={3} />
         </button>
       </div>
 
@@ -159,7 +156,6 @@ function DayTask({ t, today, queue }: { t: MonthTask; today: string; queue: Retu
   const early = !done && Boolean(t.doDate && t.doDate > today);
   const due = done ? null : dueLabel(t.dueDate, today);
   const when = [t.time ? timeLabel(t.time) : null, t.estimateMin ? `${t.estimateMin} min` : null].filter(Boolean).join(' · ');
-  const chip = 'rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft';
   const tick = () =>
     queue.run(t.id, async () => {
       if (done) {
@@ -187,12 +183,12 @@ function DayTask({ t, today, queue }: { t: MonthTask; today: string; queue: Retu
           <span className="flex flex-wrap justify-end gap-xs">
             <PriorityChip priority={t.priority} />
             {t.repeat && (
-              <span className={`${chip} inline-flex items-center gap-xs`} title={t.repeat}>
-                <Icon icon={RepeatIcon} size={12} /> Habit
-              </span>
+              <StatusTag tone="good" mark={<Icon icon={RepeatIcon} size={12} />} title={t.repeat}>
+                Habit
+              </StatusTag>
             )}
-            {when && !done && <span className={chip}>{when}</span>}
-            {due?.overdue && <span className="rounded-pill bg-r1 px-xs text-[12px] font-extrabold leading-[20px] text-on-fill">{due.text}</span>}
+            {when && !done && <FactTag kind="when">{when}</FactTag>}
+            {due?.overdue && <StatusTag tone="bad">{due.text}</StatusTag>}
           </span>
         }
       />
@@ -215,7 +211,7 @@ function DaySheet({ day, tasks, projects, today, queue, onClose }: { day: string
               ))}
             </ul>
           )}
-          <Fold key={day} title="Add a task on this day" defaultOpen={tasks.length === 0}>
+          <Fold key={day} title="Add a task on this day" adds defaultOpen={tasks.length === 0}>
             <AddOnDay day={day} today={today} projects={projects} />
           </Fold>
         </div>

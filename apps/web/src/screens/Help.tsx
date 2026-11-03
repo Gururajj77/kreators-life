@@ -7,17 +7,11 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
+import { Fold } from '../components/Fold';
+import { FIELD } from '../lib/ui';
+import { ErrorLine } from '../components/ErrorLine';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 
-function Err({ e }: { e: unknown }) {
-  if (!e) return null;
-  return (
-    <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-      {e instanceof Error ? e.message : 'That did not work. Check your connection and try again.'}
-    </p>
-  );
-}
 
 const STATUS_TINT: Record<SupportTicket['status'], string> = { open: 'var(--tint-yellow)', answered: 'var(--tint-green)', closed: 'var(--tint-brown)' };
 
@@ -60,12 +54,12 @@ function Ticket({ t, agent, onChange }: { t: SupportTicket; agent: boolean; onCh
         >
           <label className="block">
             <span className="block text-[12px] font-bold">Reply</span>
-            <textarea value={reply} onChange={(e) => setReply(e.target.value)} maxLength={4000} rows={3} className={field} />
+            <textarea value={reply} onChange={(e) => setReply(e.target.value)} maxLength={4000} rows={3} className={FIELD} />
           </label>
           <div className="flex flex-wrap items-end gap-xs">
             <label className="block">
               <span className="block text-[12px] font-bold">Then mark it</span>
-              <select value={status} onChange={(e) => setStatus(e.target.value as SupportTicket['status'])} className={field}>
+              <select value={status} onChange={(e) => setStatus(e.target.value as SupportTicket['status'])} className={FIELD}>
                 <option value="answered">answered</option>
                 <option value="closed">closed</option>
                 <option value="open">still open</option>
@@ -75,7 +69,7 @@ function Ticket({ t, agent, onChange }: { t: SupportTicket; agent: boolean; onCh
               Send
             </Button>
           </div>
-          <Err e={send.isError ? send.error : null} />
+          <ErrorLine e={send.isError ? send.error : null} />
         </form>
       )}
     </li>
@@ -165,17 +159,9 @@ export function Help() {
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {HELP_FAQ.map((f) => (
             <li key={f.q}>
-              <details className="rounded-tile bg-card shadow-toy-soft">
-                <summary className="flex min-h-[56px] items-center gap-sm rounded-tile p-sm">
-                  <span className="min-w-0 flex-1 text-[16px] font-bold">{f.q}</span>
-                  <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-paper" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="20" height="20" className="chev transition-transform" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
-                  </span>
-                </summary>
+              <Fold title={f.q}>
                 <p className="prose-long m-0 px-sm pb-sm text-[16px] font-semibold leading-relaxed text-ink-soft">{f.a}</p>
-              </details>
+              </Fold>
             </li>
           ))}
         </ul>
@@ -206,13 +192,13 @@ export function Help() {
         >
           <label className="block">
             <span className="block text-[14px] font-bold">Subject</span>
-            <input value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={120} required className={field} />
+            <input value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={120} required className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">What happened</span>
-            <textarea value={body} onChange={(e) => setBody(e.target.value)} maxLength={4000} rows={4} required className={field} />
+            <textarea value={body} onChange={(e) => setBody(e.target.value)} maxLength={4000} rows={4} required className={FIELD} />
           </label>
-          <Err e={open.isError ? open.error : null} />
+          <ErrorLine e={open.isError ? open.error : null} />
           <Button type="submit" full disabled={open.isPending || !subject.trim() || !body.trim()}>
             Send
           </Button>

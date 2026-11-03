@@ -8,6 +8,7 @@ import {
   TDS_MODE_NAME,
   TDS_MODES,
   TDS_RATES_BPS,
+  docStyleSummary,
   emptyProfile,
   parseDocStyle,
   type BusinessProfile,
@@ -15,23 +16,93 @@ import {
   type TdsMode,
 } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Building2, ChevronRight, Clock, FileSignature, FileText, Landmark, Library, Palette, Receipt, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router';
 import { api } from '../lib/api';
-import { useAuthed } from '../lib/queries';
+import { useAuthed, useMe } from '../lib/queries';
+import { AgreementTemplates } from './AgencyContracts';
+import { InvoiceTemplates, PaperLoading } from './AgencyInvoices';
 import { Button } from './Button';
-import { DocStyleCard, DocStyleSheet } from './DocStyleSheet';
+import { DocStyleSheet } from './DocStyleSheet';
+import { Icon } from './Icon';
 import { Inert } from './Inert';
-import { BankFields, Chips, Field, FIELD, LABEL, PartyFields, ShowSwitches, SummaryCard } from './InvoiceView';
+import { BankFields, Chips, Field, FIELD, LABEL, PartyFields, ShowSwitches } from './InvoiceView';
+import { Busy, Skeleton } from './Skeleton';
 import { Sheet } from './Sheet';
+import { StatusTag } from './StatusTag';
 
 const GST = GST_RATES_BPS.map((b) => ({ value: b, name: b === 0 ? 'None' : `${b / 100}%` }));
 const TDS = TDS_RATES_BPS.map((b) => ({ value: b, name: b === 0 ? 'None' : `${b / 100}%` }));
 
-type Part = 'from' | 'bank' | 'defaults' | 'show' | 'agree' | 'hours';
+type Part = 'from' | 'bank' | 'invoices' | 'agree' | 'hours';
+type Library = 'invoice' | 'contract' | 'house';
+const KIND_NAME: Record<string, string> = { invoice: 'Invoice', contract: 'Agreement', doc: 'Document' };
+
+/** One row of the settings list: an icon, the title, what is set now, and a chevron. The whole row is the button. */
+function Row({ icon, title, summary, onOpen }: { icon: LucideIcon; title: string; summary: ReactNode; onOpen: () => void }) {
+  return (
+    <li>
+      <button type="button" onClick={onOpen} className="fx-row text-ink">
+        <span className="flex h-[40px] w-[48px] shrink-0 items-center justify-center text-ink-soft">
+          <Icon icon={icon} size={20} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[16px] font-extrabold">{title}</span>
+          <span className="mt-xs block text-[14px] font-semibold text-ink-soft">{summary}</span>
+        </span>
+        <Icon icon={ChevronRight} size={20} className="text-ink-mute" />
+      </button>
+    </li>
+  );
+}
+
+/** The house templates every Agency user can start from: read only here; a super admin makes and retires them in Admin. */
+function HouseTemplates() {
+  const me = useMe();
+  const inv = useAuthed(['agency', 'templates', 'invoice'], () => api.agencyTemplates('invoice'));
+  const con = useAuthed(['agency', 'templates', 'contract'], () => api.agencyTemplates('contract'));
+  const doc = useAuthed(['agency', 'templates', 'doc'], () => api.agencyTemplates('doc'));
+  const list = [...(inv.data?.templates ?? []), ...(con.data?.templates ?? []), ...(doc.data?.templates ?? [])].filter((t) => t.scope === 'house');
+  const seen = new Set<string>();
+  const house = list.filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)));
+  return (
+    <div>
+      <p className="m-0 text-[14px] font-semibold text-ink-soft">Starting points from the kreators.app team. Pick one when you start a new invoice, agreement or document; you get your own copy to change.</p>
+      {(inv.isPending || con.isPending || doc.isPending) && (
+        <div className="mt-xs">
+          <PaperLoading label="Loading house templates" />
+        </div>
+      )}
+      {(inv.isError || con.isError || doc.isError) && (
+        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+          Could not load the house templates. Try again.
+        </p>
+      )}
+      {inv.data && con.data && doc.data && house.length === 0 && <p className="mt-xs m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft">No house templates yet.</p>}
+      <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+        {house.map((t) => (
+          <li key={t.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
+            <span className="flex flex-wrap items-center gap-xs text-[16px] font-extrabold">
+              {t.name}
+              <StatusTag tone="info">{KIND_NAME[t.kind] ?? 'Template'}</StatusTag>
+            </span>
+            <span className="mt-xs block text-[14px] font-semibold text-ink-soft">{t.summary}</span>
+          </li>
+        ))}
+      </ul>
+      {me.data?.user.role === 'admin' && (
+        <p className="mt-sm m-0 text-[14px] font-bold">
+          <Link to="/admin?tab=agencyhouse">Manage house templates in Admin</Link>
+        </p>
+      )}
+    </div>
+  );
+}
 
 /**
  * The person's business details: what every invoice and agreement starts from. They stay on the person's own account.
- * The page is a short list of cards; each has an Edit button that opens only its own form, which saves by itself.
+ * The page is an inset grouped list; tapping a row opens only its own form in a sheet, which saves by itself.
  */
 export function AgencySettings() {
   const qc = useQueryClient();
@@ -43,6 +114,7 @@ export function AgencySettings() {
   const [note, setNote] = useState('');
   const [styleOpen, setStyleOpen] = useState(false);
   const [docStyle, setDocStyle] = useState<DocStyle>(parseDocStyle(undefined));
+  const [library, setLibrary] = useState<Library | null>(null);
   const saved = q.data?.settings;
 
   const open = (p: Part) => {
@@ -73,7 +145,14 @@ export function AgencySettings() {
       </p>
     );
   }
-  if (!saved) return <p className="mt-md m-0 text-[16px] font-semibold text-ink-soft">Loading…</p>;
+  if (!saved)
+    return (
+      <Busy label="Loading your business details" className="mt-md flex flex-col gap-xs">
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-[56px] w-full" />
+        ))}
+      </Busy>
+    );
 
   const p = saved.profile;
   const tail = p.bank.account.replace(/\s/g, '').slice(-4);
@@ -107,25 +186,42 @@ export function AgencySettings() {
         </p>
       )}
 
-      <ul className="mt-md m-0 flex list-none flex-col gap-xs p-0" aria-label="Your business details">
-        <SummaryCard title="Who invoices come from" onEdit={() => open('from')} summary={p.from.name ? <Inert text={p.from.line ? `${p.from.name}, ${p.from.line}` : p.from.name} /> : 'Not filled in yet'} />
-        <SummaryCard title="Bank details" onEdit={() => open('bank')} summary={p.bank.bankName || tail ? <Inert text={`${p.bank.bankName || 'Bank'}${tail ? `, ends ${tail}` : ''}`} /> : 'Not filled in yet'} />
-        <SummaryCard
-          title="Starting point for every invoice"
-          onEdit={() => open('defaults')}
-          summary={`${p.title}, ${INVOICE_DESIGN_META[p.design].name} look, next number ${example}, ${p.payDays} days to pay, ${p.gstBps > 0 ? `GST ${p.gstBps / 100}%` : 'no GST'}, ${p.tdsBps > 0 && p.tdsMode !== 'none' ? `TDS ${p.tdsBps / 100}%` : 'no TDS'}`}
+      <h3 className="mt-md mb-xs text-[16px] font-extrabold">Your business</h3>
+      <ul className="fx-inset" aria-label="Your business details">
+        <Row icon={Building2} title="Who invoices come from" onOpen={() => open('from')} summary={p.from.name ? <Inert text={p.from.line ? `${p.from.name}, ${p.from.line}` : p.from.name} /> : 'Not filled in yet'} />
+        <Row icon={Landmark} title="Bank details" onOpen={() => open('bank')} summary={p.bank.bankName || tail ? <Inert text={`${p.bank.bankName || 'Bank'}${tail ? `, ends ${tail}` : ''}`} /> : 'Not filled in yet'} />
+        <Row
+          icon={Receipt}
+          title="New invoices"
+          onOpen={() => open('invoices')}
+          summary={`${p.title}, ${INVOICE_DESIGN_META[p.design].name} look, next number ${example}, ${p.payDays} days to pay, ${p.gstBps > 0 ? `GST ${p.gstBps / 100}%` : 'no GST'}, ${p.tdsBps > 0 && p.tdsMode !== 'none' ? `TDS ${p.tdsBps / 100}%` : 'no TDS'}. The client sees ${shownCount} of ${INVOICE_SHOW_PARTS.length} parts.`}
         />
-        <SummaryCard title="What a client sees on a new invoice" onEdit={() => open('show')} summary={`${shownCount} of ${INVOICE_SHOW_PARTS.length} shown. You can change them on each invoice.`} />
-        <SummaryCard title="For agreements" onEdit={() => open('agree')} summary={p.signerName ? <Inert text={`${p.signerName}${p.signerTitle ? `, ${p.signerTitle}` : ''}${p.jurisdiction ? `. Courts of ${p.jurisdiction}` : ''}`} /> : 'Not filled in yet'} />
-        <DocStyleCard
-          style={parseDocStyle(p.docStyle)}
-          onEdit={() => {
+        <Row icon={FileSignature} title="For agreements" onOpen={() => open('agree')} summary={p.signerName ? <Inert text={`${p.signerName}${p.signerTitle ? `, ${p.signerTitle}` : ''}${p.jurisdiction ? `. Courts of ${p.jurisdiction}` : ''}`} /> : 'Not filled in yet'} />
+        <Row
+          icon={Palette}
+          title="Document style"
+          summary={docStyleSummary(parseDocStyle(p.docStyle))}
+          onOpen={() => {
             setDocStyle(parseDocStyle(p.docStyle));
             setStyleOpen(true);
           }}
         />
-        <SummaryCard title="Currency and hours" onEdit={() => open('hours')} summary={`${saved.currency}, ${saved.weeklyHours} hours a week`} />
+        <Row icon={Clock} title="Currency and hours" onOpen={() => open('hours')} summary={`${saved.currency}, ${saved.weeklyHours} hours a week`} />
       </ul>
+
+      <h3 className="mt-md mb-xs text-[16px] font-extrabold">Templates</h3>
+      <ul className="fx-inset" aria-label="Templates">
+        <Row icon={Receipt} title="Invoice templates" summary="Your own starting points for an invoice" onOpen={() => setLibrary('invoice')} />
+        <Row icon={FileText} title="Agreement templates" summary="Your own starting points for an agreement" onOpen={() => setLibrary('contract')} />
+        <Row icon={Library} title="House templates" summary="Starting points from the kreators.app team" onOpen={() => setLibrary('house')} />
+      </ul>
+      <Sheet open={library !== null} onClose={() => setLibrary(null)} title={library === 'invoice' ? 'Invoice templates' : library === 'contract' ? 'Agreement templates' : 'House templates'}>
+        <div className="pb-xl">
+          {library === 'invoice' && <InvoiceTemplates />}
+          {library === 'contract' && <AgreementTemplates />}
+          {library === 'house' && <HouseTemplates />}
+        </div>
+      </Sheet>
 
       <DocStyleSheet open={styleOpen} onClose={() => setStyleOpen(false)} value={docStyle} onChange={setDocStyle} asDefault />
       {sheetOf('from', 'Who invoices come from', <PartyFields idp="set-from" value={profile.from} onChange={(from) => set({ from })} nameLabel="Name or brand" lineLabel="Line under the name" lineHint="Prop. Your name for Your brand" />)}
@@ -136,9 +232,10 @@ export function AgencySettings() {
         </>
       ))}
       {sheetOf(
-        'defaults',
-        'Starting point for every invoice',
+        'invoices',
+        'New invoices',
         <>
+          <p className="mt-0 mb-sm text-[14px] font-semibold text-ink-soft">What every new invoice starts with. You can change any of it on each invoice.</p>
           <div className="grid gap-sm md:grid-cols-2">
             <div className="min-w-0">
               <label htmlFor="set-title" className={LABEL}>
@@ -194,13 +291,7 @@ export function AgencySettings() {
             </label>
             <textarea id="set-footer" rows={2} maxLength={300} value={profile.footer} onChange={(e) => set({ footer: e.target.value })} className={FIELD} />
           </div>
-        </>,
-      )}
-      {sheetOf(
-        'show',
-        'What a client sees on a new invoice',
-        <>
-          <p className="mt-0 mb-sm text-[14px] font-semibold text-ink-soft">The starting switches. You can change them on each invoice.</p>
+          <h3 className="mt-md mb-xs text-[16px] font-extrabold">What the client sees</h3>
           <ShowSwitches value={profile.show} onChange={(show) => set({ show })} />
         </>,
       )}

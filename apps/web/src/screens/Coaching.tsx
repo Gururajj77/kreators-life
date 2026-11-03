@@ -14,10 +14,12 @@ import { Section } from '../components/Section';
 import { Toggle } from '../components/Toggle';
 import { api } from '../lib/api';
 import { useAuthed, useRefreshAll } from '../lib/queries';
+import { shortDate, dateTime } from '../lib/date';
+import { FIELD_LINE } from '../lib/ui';
+import { StatusTag } from '../components/StatusTag';
 
-const field = 'w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-const when = (iso: string) => new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const day = shortDate;
+const when = dateTime;
 const say = (e: unknown) => (e instanceof Error ? e.message : 'That did not work.');
 
 function Problem({ e }: { e: unknown }) {
@@ -53,7 +55,7 @@ export function Coaching() {
         </p>
       </header>
       {h?.coach && <CoachSide hub={h} onChange={() => void hub.refetch()} />}
-      <MyCoachSection id="my-coach" title={h?.coach ? 'Your own life coach' : 'Your life coach'} />
+      <MyCoachSection id="my-coach" title={h?.coach ? 'Your own life coach' : 'Your life coach'} inCoaching />
       <CoachNotes />
       <Directory />
       {h && !h.coach && <BecomeCoach askedAt={h.profile.askedAt} about={h.profile.about} onChange={() => void hub.refetch()} />}
@@ -81,7 +83,7 @@ function RosterRow({ r }: { r: CoachRosterRow }) {
           )}
           {(r.redWeek || (r.focus && r.focus.length > 0)) && (
             <span className="mt-xs flex flex-wrap gap-xs">
-              {r.redWeek && <span className="rounded-pill bg-r1 px-xs text-[12px] font-extrabold leading-[24px] text-on-fill">Below the plan last week</span>}
+              {r.redWeek && <StatusTag tone="bad">Below the plan last week</StatusTag>}
               {r.focus?.map((k) => (
                 <span key={k} className="rounded-pill px-xs text-[12px] font-extrabold leading-[24px]" style={{ background: RELATIONSHIP_BY_KEY[k].color, color: RELATIONSHIP_BY_KEY[k].text }}>
                   {RELATIONSHIP_BY_KEY[k].name}
@@ -168,7 +170,7 @@ function CoachSide({ hub, onChange }: { hub: CoachHub; onChange: () => void }) {
         </Section>
       )}
 
-      <Section id="ask-heading" title="Ask someone to be your student" lede="By their email, @handle or friend code. They say yes or no on their Profile tab, and pick what you see.">
+      <Section id="ask-heading" title="Ask someone to be your student" lede="By their email, @username or friend code. They say yes or no on their Profile tab, and pick what you see.">
         <form
           className="grid grid-cols-[1fr_auto] gap-xs"
           onSubmit={(e) => {
@@ -177,7 +179,7 @@ function CoachSide({ hub, onChange }: { hub: CoachHub; onChange: () => void }) {
             if (who.trim()) ask.mutate();
           }}
         >
-          <input value={who} onChange={(e) => setWho(e.target.value)} placeholder="Email, @handle or friend code" aria-label="Their email, handle or friend code" autoCapitalize="none" autoComplete="off" className={field} />
+          <input value={who} onChange={(e) => setWho(e.target.value)} placeholder="Email, @username or friend code" aria-label="Email, @username or friend code" autoCapitalize="none" autoComplete="off" className={FIELD_LINE} />
           <Button type="submit" disabled={ask.isPending || !who.trim()}>
             Ask
           </Button>
@@ -202,7 +204,7 @@ function CoachSide({ hub, onChange }: { hub: CoachHub; onChange: () => void }) {
       )}
 
       <Section id="line-heading" title="Your line in the directory" lede="What you help with, in a sentence or two. Students find you by it.">
-        <textarea value={about} onChange={(e) => setAbout(e.target.value)} maxLength={COACH_ABOUT_MAX} rows={3} placeholder="I help creators keep a steady routine and finish what they start." aria-label="What you help with" className={field} />
+        <textarea value={about} onChange={(e) => setAbout(e.target.value)} maxLength={COACH_ABOUT_MAX} rows={3} placeholder="I help creators keep a steady routine and finish what they start." aria-label="What you help with" className={FIELD_LINE} />
         <div className="mt-xs flex flex-wrap items-center gap-xs">
           <Button variant="outline" disabled={save.isPending || about === hub.profile.about} onClick={() => save.mutate({ about })}>
             Save my line
@@ -298,7 +300,7 @@ function BecomeCoach({ askedAt, about: saved, onChange }: { askedAt: string | nu
         <p className="m-0 rounded-tile bg-card p-sm text-[14px] font-bold shadow-toy-soft">Your ask has been with the team since {day(askedAt)}. The answer lands in your inbox.</p>
       ) : (
         <>
-          <textarea value={about} onChange={(e) => setAbout(e.target.value)} maxLength={COACH_ABOUT_MAX} rows={3} placeholder="Who you coach, and how" aria-label="Who you coach, and how" className={field} />
+          <textarea value={about} onChange={(e) => setAbout(e.target.value)} maxLength={COACH_ABOUT_MAX} rows={3} placeholder="Who you coach, and how" aria-label="Who you coach, and how" className={FIELD_LINE} />
           <Button className="mt-xs" variant="outline" disabled={apply.isPending} onClick={() => apply.mutate()}>
             Ask the team
           </Button>

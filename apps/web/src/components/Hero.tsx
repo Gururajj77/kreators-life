@@ -8,11 +8,37 @@ import { Avatar, type Mood } from './Avatar';
  * seven characters standing on the right. Dark elements never sit on a colour; buttons on it are
  * white with dark text (see Button "light").
  */
-export function Hero({ color, deep, children, className = '', yellow = false, character, mood = 'happy', characterSize = 80 }: { color: string; deep?: string; children: ReactNode; className?: string; yellow?: boolean; character?: RelationshipKey; mood?: Mood; characterSize?: number }) {
+export function Hero({
+  color,
+  deep,
+  children,
+  className = '',
+  yellow = false,
+  character,
+  mood = 'happy',
+  characterSize = 80,
+}: {
+  color: string;
+  deep?: string;
+  children: ReactNode;
+  className?: string;
+  yellow?: boolean;
+  character?: RelationshipKey;
+  mood?: Mood;
+  characterSize?: number;
+}) {
   // The fill is the theme token for the colour, so a relationship's hero always has the contrast the token is tuned for.
   const fill = fillFor(color);
   return (
-    <section className={`relative overflow-hidden rounded-card p-md ${yellow ? 'text-on-yellow' : 'text-on-fill'} ${className}`} style={{ background: `linear-gradient(135deg, ${fill}, color-mix(in oklab, ${fill} 72%, var(--fill-shade)))`, '--toy-color': deep ?? 'var(--color-shadow)' } as CSSProperties}>
+    <section
+      className={`relative overflow-hidden rounded-card p-md ${yellow ? 'text-on-yellow' : 'text-on-fill'} ${className}`}
+      style={
+        {
+          background: `linear-gradient(135deg, ${fill}, color-mix(in oklab, ${fill} 72%, var(--fill-shade)))`,
+          '--toy-color': deep ?? 'var(--color-shadow)',
+        } as CSSProperties
+      }
+    >
       <HeroBlobs seed={color} />
       <div className="relative flex items-center gap-sm">
         <div className="min-w-0 flex-1">{children}</div>
@@ -112,7 +138,21 @@ const FLOWER_SHAPE: Record<FlowerKind, () => ReactNode> = {
  * whatever holds it (`max-w-full`), so no petal is ever cut off; the edges fade out instead of ending. Which flower it is comes from
  * `kind`, or from `seed` (the same text always picks the same flower). Decorative only, very faint, kept to a corner away from words.
  */
-export function Posy({ kind, seed, tone = 'white', className = '', opacity = 0.14, flip = false }: { kind?: FlowerKind; seed?: string; tone?: 'white' | 'ink'; className?: string; opacity?: number; flip?: boolean }) {
+export function Posy({
+  kind,
+  seed,
+  tone = 'white',
+  className = '',
+  opacity = 0.14,
+  flip = false,
+}: {
+  kind?: FlowerKind;
+  seed?: string;
+  tone?: 'white' | 'ink';
+  className?: string;
+  opacity?: number;
+  flip?: boolean;
+}) {
   const flower = kind ?? flowerFor(seed ?? 'kreators');
   const k = opacity / 0.14;
   const o = tone === 'ink' ? 0.55 : 1;
@@ -121,7 +161,12 @@ export function Posy({ kind, seed, tone = 'white', className = '', opacity = 0.1
     <svg
       viewBox="0 0 200 170"
       className={`pointer-events-none absolute h-auto w-[200px] max-w-full ${className}`}
-      style={{ color: tone === 'ink' ? 'var(--color-ink)' : 'white', WebkitMaskImage: mask, maskImage: mask, transform: flip ? 'scaleX(-1)' : undefined }}
+      style={{
+        color: tone === 'ink' ? 'var(--color-ink)' : 'white',
+        WebkitMaskImage: mask,
+        maskImage: mask,
+        transform: flip ? 'scaleX(-1)' : undefined,
+      }}
       aria-hidden="true"
     >
       <g fill="currentColor" opacity={0.085 * k * o} transform="translate(104 88)">
@@ -134,11 +179,17 @@ export function Posy({ kind, seed, tone = 'white', className = '', opacity = 0.1
 /** A thin rule with one small blossom in the middle: a quiet full stop for the end of a page. */
 export function Ornament({ className = '' }: { className?: string }) {
   return (
-    <svg viewBox="0 0 220 28" className={`mx-auto h-[28px] w-[220px] max-w-full text-ink ${className}`} aria-hidden="true">
-      <g fill="currentColor" opacity="0.22">
-        <rect x="8" y="13.2" width="78" height="1.6" rx="0.8" />
-        <rect x="134" y="13.2" width="78" height="1.6" rx="0.8" />
-        <g transform="translate(110 14) scale(0.3)">{FLOWER_SHAPE.blossom()}</g>
+    <svg viewBox="0 0 260 44" className={`mx-auto h-[44px] w-[260px] max-w-full text-ink ${className}`} aria-hidden="true">
+      <g fill="currentColor" opacity="0.4">
+        <rect x="8" y="21.1" width="92" height="1.8" rx="0.9" />
+        <rect x="160" y="21.1" width="92" height="1.8" rx="0.9" />
+      </g>
+      {/* A crisp flower: five petals in the pillar colours (red to violet, five of the seven), a gold heart. Drawn in colour so it reads on light and dark. */}
+      <g transform="translate(130 22)">
+        {['--color-r1', '--color-r2', '--color-r4', '--color-r5', '--color-r6'].map((c, i) => (
+          <ellipse key={c} cx="0" cy="-9" rx="6.2" ry="8.8" fill={`var(${c})`} transform={`rotate(${i * 72})`} />
+        ))}
+        <circle r="4.8" fill="var(--color-r3)" />
       </g>
     </svg>
   );

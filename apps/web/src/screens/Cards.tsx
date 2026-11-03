@@ -6,6 +6,7 @@ import { Button } from '../components/Button';
 import { useCelebrate } from '../components/Celebration';
 import { HeroBlobs } from '../components/Hero';
 import { LockedButton } from '../components/LockedButton';
+import { ConfirmSpend } from '../components/ConfirmSpend';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
@@ -34,6 +35,7 @@ export function Cards() {
   const refresh = useRefreshAll();
   const celebrate = useCelebrate();
   const [error, setError] = useState<string | null>(null);
+  const [asking, setAsking] = useState<{ key: string; name: string; cost: number } | null>(null);
   const unlock = useMutation({
     mutationFn: (key: string) => api.redeem(gameRewardKey(key)),
     onSuccess: (r) => {
@@ -91,11 +93,9 @@ export function Cards() {
                     <Button
                       disabled={unlock.isPending}
                       aria-label={`Unlock ${g.name} for ${g.cost} points`}
-                      onClick={() => {
-                        if (window.confirm(`Unlock ${g.name} for ${g.cost} points? It is yours for good.`)) unlock.mutate(g.key);
-                      }}
+                      onClick={() => setAsking({ key: g.key, name: g.name, cost: g.cost })}
                     >
-                      Unlock for {g.cost} pts
+                      Unlock {g.cost} pts
                     </Button>
                   ) : (
                     <LockedButton unlock={g.unlock} />
@@ -106,6 +106,15 @@ export function Cards() {
           </ul>
         </>
       )}
+      <ConfirmSpend
+        open={asking !== null}
+        onClose={() => setAsking(null)}
+        title={`Unlock ${asking?.name ?? ''}?`}
+        body={asking ? `It costs ${asking.cost} points and is yours for good. It cannot be cancelled.` : ''}
+        action={`Unlock ${asking?.cost ?? 0} pts`}
+        busy={unlock.isPending}
+        onConfirm={() => asking && unlock.mutate(asking.key)}
+      />
     </Screen>
   );
 }

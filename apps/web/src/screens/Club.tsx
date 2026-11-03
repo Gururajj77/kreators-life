@@ -7,17 +7,10 @@ import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
+import { FIELD } from '../lib/ui';
+import { ErrorLine } from '../components/ErrorLine';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 
-function Err({ e }: { e: unknown }) {
-  if (!e) return null;
-  return (
-    <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-      {e instanceof Error ? e.message : 'That did not work.'}
-    </p>
-  );
-}
 
 const STATUS_COPY: Record<Membership['status'], { title: string; blurb: string; tint: string }> = {
   applied: { title: 'Application in review', blurb: 'A reviewer reads every application. You will hear back in your Inbox.', tint: 'var(--tint-yellow)' },
@@ -105,10 +98,10 @@ export function Club() {
             >
               <label className="block">
                 <span className="block text-[14px] font-bold">Why the Club, and what you are working on</span>
-                <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} rows={5} placeholder="Link to your best work if you like." className={field} />
+                <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} rows={5} placeholder="Link to your best work if you like." className={FIELD} />
               </label>
               <p className="m-0 text-[12px] font-bold text-ink-soft">Reviewers see your profile, portfolio and this note. Never your journal or wellbeing.</p>
-              <Err e={apply.isError ? apply.error : null} />
+              <ErrorLine e={apply.isError ? apply.error : null} />
               <Button type="submit" size="lg" full disabled={apply.isPending}>
                 {mine ? 'Apply again' : 'Apply to join'}
               </Button>
@@ -144,7 +137,7 @@ function ReviewQueue({ queue, staff, page, onChange }: { queue: Membership[]; st
       {m.note && <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold">{m.note}</p>}
       <label className="mt-sm block">
         <span className="block text-[12px] font-bold">Note to them</span>
-        <input value={notes[m.id] ?? ''} onChange={(e) => setNotes((n) => ({ ...n, [m.id]: e.target.value }))} maxLength={1000} className={field} />
+        <input value={notes[m.id] ?? ''} onChange={(e) => setNotes((n) => ({ ...n, [m.id]: e.target.value }))} maxLength={1000} className={FIELD} />
       </label>
       <div className="mt-sm flex flex-wrap gap-xs">
         {m.status === 'applied' && (
@@ -171,7 +164,7 @@ function ReviewQueue({ queue, staff, page, onChange }: { queue: Membership[]; st
       {(m.status === 'approved' || m.status === 'active') && (
         <label className="mt-sm block">
           <span className="block text-[12px] font-bold">Named manager</span>
-          <select value={m.managerId ?? ''} onChange={(e) => setManager.mutate({ id: m.id, managerId: e.target.value || null })} disabled={setManager.isPending} className={field}>
+          <select value={m.managerId ?? ''} onChange={(e) => setManager.mutate({ id: m.id, managerId: e.target.value || null })} disabled={setManager.isPending} className={FIELD}>
             <option value="">Nobody yet</option>
             {staff.map((s) => (
               <option key={s.id} value={s.id}>
@@ -190,7 +183,7 @@ function ReviewQueue({ queue, staff, page, onChange }: { queue: Membership[]; st
       </h2>
       <label className="mt-sm block">
         <span className="block text-[14px] font-bold">Approvals run for</span>
-        <select value={months} onChange={(e) => setMonths(e.target.value)} className={field}>
+        <select value={months} onChange={(e) => setMonths(e.target.value)} className={FIELD}>
           {['3', '6', '12', '24'].map((m) => (
             <option key={m} value={m}>
               {m} months
@@ -198,8 +191,8 @@ function ReviewQueue({ queue, staff, page, onChange }: { queue: Membership[]; st
           ))}
         </select>
       </label>
-      <Err e={decide.isError ? decide.error : null} />
-      <Err e={setManager.isError ? setManager.error : null} />
+      <ErrorLine e={decide.isError ? decide.error : null} />
+      <ErrorLine e={setManager.isError ? setManager.error : null} />
       {applied.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No new applications.</p>}
       <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">{applied.map(row)}</ul>
       {others.length > 0 && (

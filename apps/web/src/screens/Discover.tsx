@@ -41,6 +41,7 @@ import { useParamState } from '../lib/useParamState';
 import { api } from '../lib/api';
 import { useDiscover, useRefreshAll } from '../lib/queries';
 import { MoreScreen, MoreSection } from '../components/DiscoverMore';
+import { IconTag } from '../components/FactTag';
 
 /** Every step of the quiz in order, with where its answer lives. */
 interface Step {
@@ -423,7 +424,7 @@ function Quiz({ answers, setAnswers, onLeave, onDone, busy, error }: { answers: 
       <div className="rounded-card bg-card p-md shadow-toy-soft">
         <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">Part {intro + 1} of {DISCOVER_SECTIONS.length}</p>
         <h2 className="mt-xs text-[24px]">{s.name}</h2>
-        <span className="mt-xs inline-block rounded-pill bg-paper px-sm text-[12px] font-extrabold">{s.count} questions</span>
+        <IconTag className="mt-xs" tone="calm" icon="ListChecks">{`${s.count} questions`}</IconTag>
         <p className="mt-sm m-0 text-[16px] font-semibold">{s.blurb}</p>
         <Button className="mt-md" onClick={() => setIntro(null)}>
           Start this part
@@ -921,7 +922,13 @@ export function Discover() {
         <>
           <section className="relative mt-md overflow-hidden rounded-card p-md text-on-fill" style={fillOf(RELATIONSHIP_BY_KEY.self.color)} aria-labelledby="quiz-head">
             <HeroBlobs seed="discover" />
-            <h2 id="quiz-head" className="relative text-[22px]">{prog.done === 0 ? 'Find out what you are good at' : `${prog.done} of ${DISCOVER_STEPS} answered`}</h2>
+            <div className="relative flex items-start justify-between gap-sm">
+              <h2 id="quiz-head" className="min-w-0 text-[22px]">{prog.done === 0 ? 'Find out what you are good at' : `${prog.done} of ${DISCOVER_STEPS} answered`}</h2>
+              {/* Dew, guide to yourself: Discover is about knowing yourself, and a coloured card carries its guide. */}
+              <span className="shrink-0" aria-hidden="true">
+                <Avatar relationship="self" size={64} decorative mood={prog.done === 0 ? 'happy' : 'excited'} />
+              </span>
+            </div>
             <p className="relative mt-xs m-0 text-[14px] font-semibold">Five parts: pick what is most and least like you, solve pattern puzzles that adjust to you, choose words that fit you and judge real situations. Then, if you like, add emotional intelligence. It saves as you go, so you can stop and come back.</p>
             <div className="relative mt-sm flex flex-wrap gap-xs">
               <Button variant="light" onClick={() => setMode('quiz')}>

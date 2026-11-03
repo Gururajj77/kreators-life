@@ -14,6 +14,8 @@ import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { fillVar, ON_FILL } from '../lib/relFill';
 import { useAuthed, useMe } from '../lib/queries';
+import { Icon } from '../components/Icon';
+import { ChevronRight } from 'lucide-react';
 
 /** One pillar card. With a strategy session behind it, the card carries the pillar's map line: floor to core, the Courage mark, and a focus tag. */
 function Floor({ r, state, delay, placement, focus }: { r: Relationship; state: RelationshipState | undefined; delay: number; placement: Placement | null; focus: boolean }) {
@@ -74,12 +76,12 @@ function Floor({ r, state, delay, placement, focus }: { r: Relationship; state: 
 /** The pillars' own setup: before the strategy session, one card that starts it. After it, the pillar cards carry the map themselves. */
 function StartSessionCard() {
   return (
-    <Link to="/session" className="toy toy-soft mt-md flex items-center gap-sm rounded-card bg-ink p-md text-on-ink">
+    <Link to="/session" className="group toy toy-soft mt-md flex items-center gap-sm rounded-card bg-ink p-md text-on-ink">
       <span className="min-w-0 flex-1">
         <span className="block font-display text-[18px] font-extrabold">Set up your pillars: the strategy session</span>
         <span className="mt-xs block text-[14px] font-semibold text-on-ink/70">A few minutes with all seven characters. Place each relationship on the map, then leave with a routine, a contract and your first pyramids.</span>
       </span>
-      <span aria-hidden="true" className="text-[22px]">→</span>
+      <Icon icon={ChevronRight} size={22} className="transition-transform motion-safe:group-hover:translate-x-xs row-chevron" />
     </Link>
   );
 }

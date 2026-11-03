@@ -16,11 +16,12 @@ import {
   stageIndex,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { DATE_RE, dayFromDevice, newId, notify, nowIso, num, shiftDate } from '../db';
+import { dayFromDevice, newId, notify, nowIso, num, shiftDate } from '../db';
+import { dateOrNull, moneyIn } from '../agencyUtil';
 import { clientRow } from './agency';
 import { runAgencyCycles } from '../agencyCycles';
 import { applyStageEvent, logStmt, moveStage, type RetainerRow } from '../lifecycle';
-import { clearPortalSessions, lockRowForToken, newPortalPassword, passwordColumns, requirePortalAccess, unlockPortal } from '../portalAccess';
+import { clearPortalSessions, closedLinkAnswer, lockRowForToken, newPortalPassword, passwordColumns, requirePortalAccess, unlockPortal } from '../portalAccess';
 
 /**
  * Agency lifecycle, the owner's side: move a client along, set the days and tick the checklist, put a password on the client's link, add
@@ -30,8 +31,6 @@ import { clearPortalSessions, lockRowForToken, newPortalPassword, passwordColumn
 export const agencyLife = new Hono<AppEnv>();
 export const agencyLifePublic = new Hono<AppEnv>();
 
-const dateOrNull = (v: unknown): string | null => (typeof v === 'string' && DATE_RE.test(v) ? v : null);
-const moneyIn = (v: unknown): number => num(v, 0, 0, 1_000_000_000_00) ?? 0;
 const bodyOf = (c: { req: { json: <T>() => Promise<T> } }) => c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
 
 /** Whether an offer is open or a retainer runs, for the stage move rules. */
@@ -287,6 +286,10 @@ agencyLife.post('/retainers/:id/withdraw', async (c) => {
 agencyLifePublic.post('/:token/unlock', async (c) => {
   const token = c.req.param('token');
   const client = await lockRowForToken(c.env.DB, token);
+  if (!client) {
+    const closed = await closedLinkAnswer(c, token);
+    if (closed) return closed;
+  }
   return unlockPortal(c, client, client?.id ?? token);
 });
 
@@ -294,7 +297,7 @@ agencyLifePublic.post('/:token/unlock', async (c) => {
 agencyLifePublic.post('/:token/retainer', async (c) => {
   const db = c.env.DB;
   const lock = await lockRowForToken(db, c.req.param('token'));
-  if (!lock) return c.json({ error: 'no page at this link' }, 404);
+  if (!lock) return (await closedLinkAnswer(c, c.req.param('token'))) ?? c.json({ error: 'no page at this link' }, 404);
   const denied = await requirePortalAccess(c, lock.id);
   if (denied) return denied;
   const client = await db.prepare('SELECT user_id, name FROM agency_clients WHERE id = ?').bind(lock.id).first<{ user_id: string; name: string }>();

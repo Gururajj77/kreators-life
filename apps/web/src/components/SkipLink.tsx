@@ -10,7 +10,7 @@ export function SkipLink() {
         main.focus({ preventScroll: true });
         main.scrollIntoView({ block: 'start' });
       }}
-      className="toy toy-soft sr-only rounded-pill bg-card-strong px-md py-sm text-[14px] font-extrabold text-ink focus:not-sr-only focus:fixed focus:top-sm focus:left-sm focus:z-[60]"
+      className="toy toy-soft sr-only rounded-pill bg-card-strong px-md py-sm text-[14px] font-extrabold text-ink focus:not-sr-only focus:inline-flex focus:min-h-[44px] focus:items-center focus:fixed focus:top-sm focus:left-sm focus:z-[60]"
     >
       Skip to main content
     </a>

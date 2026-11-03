@@ -79,6 +79,8 @@ const browser = await puppeteer.launch({ executablePath: chromePath(), headless:
 const probeHits = [];
 try {
   const page = await browser.newPage();
+  // Each run is its own address, like the API checks, so the per-address limits (a client link's unlock) never trip a rerun.
+  await page.setExtraHTTPHeaders({ 'CF-Connecting-IP': `10.95.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}` });
   // Clear the service worker and its caches so every shot sees the latest build.
   await page.goto(`${ORIGIN}/`, { waitUntil: 'networkidle0' });
   await page.evaluate(async () => {

@@ -10,14 +10,20 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { Toggle } from '../components/Toggle';
+import { Fold } from '../components/Fold';
+import { Icon } from '../components/Icon';
+import { Check } from 'lucide-react';
 import { attendeeBody, AttendeeFields, attendeeProblem, ClaimCard, HostCodeCard, type CodeChange } from '../components/AttendeeCode';
 import { Pager, usePage } from '../components/Pager';
 import { api } from '../lib/api';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
+import { useSeedOnce } from '../lib/useSeed';
 import { useNow } from '../lib/useNow';
+import { FIELD } from '../lib/ui';
+import { eventTime } from '../lib/date';
+import { StatusTag } from '../components/StatusTag';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-const when = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const when = eventTime;
 const weekly = (iso: string) => `Every ${new Date(iso).toLocaleDateString(undefined, { weekday: 'long' })} at ${new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
 const countdown = (iso: string, now: number) => {
   const ms = new Date(iso).getTime() - now;
@@ -190,11 +196,7 @@ function JoinSheet({ event, onClose, busy, error, onJoin }: { event: CircleEvent
               <label className={`toy toy-soft flex cursor-pointer items-center gap-sm rounded-tile bg-card p-sm ${on ? 'outline-[3px] outline-ink' : ''}`}>
                 <input type="radio" name="status" className="sr-only" checked={on} onChange={() => setStatus(k)} />
                 <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill border-[3px] border-ink" style={{ background: k === 'single' ? 'var(--color-r1)' : k === 'committed' ? 'var(--color-card)' : 'transparent' }} aria-hidden="true">
-                  {on && (
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke={k === 'single' ? 'var(--color-on-ink)' : 'var(--color-ink-fixed)'} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M5 12.5l4.5 4.5L19 7.5" />
-                    </svg>
-                  )}
+                  {on && <Icon icon={Check} size={18} strokeWidth={3.5} color={k === 'single' ? 'var(--color-on-ink)' : 'var(--color-ink-fixed)'} />}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[16px] font-bold">
@@ -232,19 +234,16 @@ function HostCard({ e, busy, onMatch, onCode }: { e: CircleEvent; busy: boolean;
           </p>
           {e.repeat === 'weekly' && <p className="m-0 text-[12px] font-extrabold text-ink-mute">{weekly(e.startsAt)}</p>}
         </div>
-        <span className={`shrink-0 rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${e.status === 'matched' ? 'bg-r4 text-on-fill' : 'bg-paper text-ink-soft'}`}>{e.status === 'matched' ? 'tables set' : 'signups'}</span>
+        <StatusTag tone={e.status === 'matched' ? 'good' : 'info'}>{e.status === 'matched' ? 'tables set' : 'signups'}</StatusTag>
       </div>
       {e.status === 'open' && e.signups >= 3 && (
         <Button variant="outline" className="mt-xs" onClick={onMatch} disabled={busy}>
           Set the tables now
         </Button>
       )}
-      <details className="mt-sm group">
-        <summary className="toy toy-flat inline-flex min-h-[40px] cursor-pointer list-none items-center rounded-pill px-sm text-[14px] font-bold">{e.hostCode ? `Attendee code, +${e.hostCode.xp} xp` : 'Attendee code'}</summary>
-        <div className="mt-xs">
-          <HostCodeCard value={e.hostCode} startsAt={e.startsAt} onSave={onCode} guests="people seated" />
-        </div>
-      </details>
+      <Fold className="mt-sm" title={e.hostCode ? `Attendee code, +${e.hostCode.xp} xp` : 'Attendee code'}>
+        <HostCodeCard value={e.hostCode} startsAt={e.startsAt} onSave={onCode} guests="people seated" />
+      </Fold>
     </li>
   );
 }
@@ -265,7 +264,7 @@ function EventCard({ e, ready, busy, onJoin, onLeave }: { e: CircleEvent; ready:
           {e.venueHint && <p className="m-0 text-[14px] font-semibold text-ink-soft">{e.venueHint}</p>}
           {e.attendeeXp ? <p className="m-0 mt-xs text-[12px] font-extrabold text-ink-soft">+{e.attendeeXp} xp for the people seated, with the code at the meetup</p> : null}
         </div>
-        <span className={`shrink-0 rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${e.status === 'matched' ? 'bg-r4 text-on-fill' : open ? 'bg-paper text-ink-soft' : 'bg-line text-ink'}`}>{e.status === 'matched' ? 'tables set' : open ? `closes in ${countdown(new Date(closes).toISOString(), now)}` : 'closed'}</span>
+        <StatusTag tone={e.status === 'matched' ? 'good' : open ? 'warn' : 'neutral'}>{e.status === 'matched' ? 'tables set' : open ? `closes in ${countdown(new Date(closes).toISOString(), now)}` : 'closed'}</StatusTag>
       </div>
       <div className="mt-xs flex flex-wrap gap-xs">
         {e.myGroupId ? (
@@ -292,9 +291,15 @@ function EventCard({ e, ready, busy, onJoin, onLeave }: { e: CircleEvent; ready:
 }
 
 function CreateSheet({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: (codeError: string | null) => void }) {
+  const me = useMe();
   const [title, setTitle] = useState('');
-  const [city, setCity] = useState('');
-  const [area, setArea] = useState('');
+  // A new circle starts in the host's own city and area, from Profile; events staff change it for another city.
+  const [city, setCity] = useState(me.data?.user.city ?? '');
+  const [area, setArea] = useState(me.data?.user.area ?? '');
+  useSeedOnce(me.data?.user, (u) => {
+    setCity((c) => c || u.city);
+    setArea((a) => a || u.area);
+  });
   const [startsAt, setStartsAt] = useState('');
   const [venueHint, setVenueHint] = useState('');
   const [groupSize, setGroupSize] = useState('5');
@@ -320,29 +325,29 @@ function CreateSheet({ open, onClose, onDone }: { open: boolean; onClose: () => 
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Title</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={120} placeholder="Wednesday creators table" className={field} />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={120} placeholder="Wednesday creators table" className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">City</span>
-            <input value={city} onChange={(e) => setCity(e.target.value)} required maxLength={80} className={field} />
+            <input value={city} onChange={(e) => setCity(e.target.value)} required maxLength={80} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Area (optional)</span>
-            <input value={area} onChange={(e) => setArea(e.target.value)} maxLength={80} className={field} />
+            <input value={area} onChange={(e) => setArea(e.target.value)} maxLength={80} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Starts</span>
-            <input type="datetime-local" required value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className={field} />
+            <input type="datetime-local" required value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">People per table</span>
-            <input type="number" min={3} max={8} value={groupSize} onChange={(e) => setGroupSize(e.target.value)} className={field} />
+            <input type="number" min={3} max={8} value={groupSize} onChange={(e) => setGroupSize(e.target.value)} className={FIELD} />
           </label>
         </div>
         <label className="block">
           <span className="block text-[14px] font-bold">Venue hint</span>
-          <input value={venueHint} onChange={(e) => setVenueHint(e.target.value)} maxLength={200} placeholder="A cafe near the metro; each table picks the exact one" className={field} />
+          <input value={venueHint} onChange={(e) => setVenueHint(e.target.value)} maxLength={200} placeholder="A cafe near the metro; each table picks the exact one" className={FIELD} />
         </label>
         <Toggle on={repeat} onChange={setRepeat} label="Every week at this time. The next one opens on its own once tables are set." />
         <AttendeeFields xp={attendeeXp} onXp={setAttendeeXp} code={attendeeCode} onCode={setAttendeeCode} one="person seated" many="people seated" note={repeat ? 'Each week’s circle keeps this xp, with a new random code.' : undefined} />
@@ -461,7 +466,7 @@ export function CircleGroup() {
                 <span className="block truncate text-[14px] font-semibold text-ink-soft">{m.interests.join(', ') || 'interests hidden'}</span>
               </span>
               {!m.isMe && (
-                <button type="button" onClick={() => chat.mutate(m.alias)} disabled={chat.isPending} className="toy toy-soft shrink-0 rounded-pill bg-paper px-sm text-[12px] font-extrabold leading-[32px]">
+                <button type="button" onClick={() => chat.mutate(m.alias)} disabled={chat.isPending} className="toy toy-soft inline-flex min-h-[44px] shrink-0 items-center rounded-pill bg-paper px-sm text-[14px] font-extrabold">
                   Chat
                 </button>
               )}
@@ -561,11 +566,11 @@ export function CircleGroup() {
         >
           <label className="block">
             <span className="block text-[14px] font-bold">Where</span>
-            <input value={venue} onChange={(e) => setVenue(e.target.value)} maxLength={200} className={field} />
+            <input value={venue} onChange={(e) => setVenue(e.target.value)} maxLength={200} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Details</span>
-            <textarea value={plan} onChange={(e) => setPlan(e.target.value)} maxLength={500} rows={3} placeholder="7 pm, ask for the table under the alias Quiet Ember" className={field} />
+            <textarea value={plan} onChange={(e) => setPlan(e.target.value)} maxLength={500} rows={3} placeholder="7 pm, ask for the table under the alias Quiet Ember" className={FIELD} />
           </label>
           <Button type="submit" size="lg" full disabled={savePlan.isPending}>
             Save for the table

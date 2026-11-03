@@ -24,7 +24,8 @@ for (const shot of list) {
     for (let i = 0; i < count; i += 1) {
       const info = await page.evaluate(async (s, idx) => {
         const el = [...document.querySelectorAll(s)][idx];
-        if (!el || el.disabled || el.getAttribute('aria-disabled') === 'true') return null;
+        // Nothing a person cannot reach: disabled, or parked inert (FocusRoundsHost keeps the focus clock mounted off the page).
+        if (!el || el.disabled || el.getAttribute('aria-disabled') === 'true' || el.closest('[inert], [aria-hidden="true"]')) return null;
         const r0 = el.getBoundingClientRect();
         if (r0.width === 0 || r0.height === 0) return null;
         el.scrollIntoView({ block: 'center' });

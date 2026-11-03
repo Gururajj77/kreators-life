@@ -54,3 +54,18 @@ export function forgetPortalSessions(link: string): void {
   memory = memory.filter((k) => k.link !== link);
   write(read().filter((k) => k.link !== link));
 }
+
+/** Whether this tab still keeps a session for a link: read before `forgetPortalSessions`, so a lock screen that came back can say why. */
+export function hadPortalSession(link: string): boolean {
+  return [...readAll(), ...memory].some((k) => k.link === link);
+}
+
+/** Every kept entry, expired or not, so a session that just ran out still counts as one the tab had. */
+function readAll(): Kept[] {
+  try {
+    const raw = JSON.parse(window.sessionStorage.getItem(KEY) ?? '[]') as unknown;
+    return Array.isArray(raw) ? raw.filter((k): k is Kept => Boolean(k) && typeof (k as Kept).token === 'string') : [];
+  } catch {
+    return [];
+  }
+}

@@ -12,7 +12,6 @@ import { Person } from '../components/Person';
 import { RoleBadge } from '../components/RoleBadge';
 import { SignOut } from '../components/SignOut';
 import { EvolutionReveal } from '../components/EvolutionReveal';
-import { useGuide } from '../components/Guide';
 import { Toggle } from '../components/Toggle';
 import { useGroupOrder, useModules } from '../lib/modules';
 import { useSession } from '../lib/store';
@@ -28,6 +27,7 @@ import { PrivacyChoices } from '../components/PrivacyChoices';
 import { UserRound, WandSparkles } from 'lucide-react';
 import { AppIcon } from '../components/AppIcon';
 import { Icon } from '../components/Icon';
+import { StatTile } from '../components/Charts';
 
 const BadgeGallery = lazyNamed(() => import('../components/BadgeGallery'), 'BadgeGallery');
 
@@ -37,20 +37,11 @@ export function You() {
   return <YouView key={me.data.user.id} data={me.data} />;
 }
 
-function Stat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <p className="m-0 font-display text-[24px] font-extrabold leading-none">{value}</p>
-      <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{label}</p>
-    </div>
-  );
-}
 
 function YouView({ data }: { data: MeResponse }) {
   const { user, relationships, badges, honors, identity, stats } = data;
   const refresh = useRefreshAll();
   const nav = useNavigate();
-  const guide = useGuide();
   const setToken = useSession((s) => s.setToken);
   const { modules } = useModules();
   const featureGroups = useGroupOrder(['earn', 'creator', 'community', 'wellbeing', 'core', 'manage']);
@@ -191,7 +182,7 @@ function YouView({ data }: { data: MeResponse }) {
         <h2 id="look-heading" className="text-[24px]">
           Appearance
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Dark mode keeps the same colors and turns them inside out: cream becomes deep brown, pale tints become deep tints.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Dark mode keeps the same colors on a deep slate.</p>
         <div className="mt-sm grid grid-cols-3 gap-xs" role="group" aria-label="Theme">
           {(
             [
@@ -440,9 +431,9 @@ function YouView({ data }: { data: MeResponse }) {
           </div>
         </div>
         <div className="mt-sm grid grid-cols-3 gap-xs">
-          <Stat label="xp" value={user.xp} />
-          <Stat label="best streak" value={user.bestStreak} />
-          <Stat label="tasks done" value={stats.tasksDone} />
+          <StatTile label="xp" value={user.xp} />
+          <StatTile label="best streak" value={user.bestStreak} />
+          <StatTile label="tasks done" value={stats.tasksDone} />
         </div>
       </section>
 
@@ -464,7 +455,7 @@ function YouView({ data }: { data: MeResponse }) {
             const on = awarded.has(h.key);
             return (
               <li key={h.key} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-                <BadgeArt name={h.name} emoji={h.emoji} tier={h.tier} shape="seal" earned={on} size="sm" decorative />
+                <BadgeArt name={h.name} icon={h.icon} tier={h.tier} shape="seal" earned={on} size="sm" decorative />
                 <span className="min-w-0">
                   <span className="block text-[14px] font-extrabold">{h.name}</span>
                   <span className="block text-[12px] font-semibold text-ink-soft">{on ? (h.source === 'time' ? 'Unlocked' : 'Awarded') : `Locked · ${h.how}`}</span>
@@ -534,14 +525,14 @@ function YouView({ data }: { data: MeResponse }) {
                   type="button"
                   aria-pressed={type === t}
                   onClick={() => setType(t)}
-                  className={`rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${type === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}
+                  className={`min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${type === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}
                 >
                   {t}
                 </button>
               ))}
             </div>
           </fieldset>
-          <label className="flex items-center gap-sm text-[14px] font-bold">
+          <label className="flex min-h-[44px] cursor-pointer items-center gap-sm text-[14px] font-bold">
             <input type="checkbox" checked={optIn} onChange={(e) => setOptIn(e.target.checked)} className="size-[20px] accent-ink" />
             Show me on the leaderboard
           </label>
@@ -569,12 +560,9 @@ function YouView({ data }: { data: MeResponse }) {
         <div className="mt-sm flex flex-wrap gap-xs">
           <Button
             variant="outline"
-            onClick={() => {
-              guide.reset();
-              nav('/home');
-            }}
+            onClick={() => nav('/today#how-heading')}
           >
-            Show how it works again
+            Show how Daily works
           </Button>
           <Button
             variant="ghost"

@@ -1,25 +1,26 @@
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, money, type FinanceDue, type FinanceGoal, type FinanceRecurring, type FinanceSplit, type FinanceSummary, type FinanceTransaction, typedCents } from '@kreators/shared';
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, money, MONTH_RE, monthShift, type FinanceDue, type FinanceGoal, type FinanceRecurring, type FinanceSplit, type FinanceSummary, type FinanceTransaction, typedCents } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { Button } from '../components/Button';
-import { Donut, Legend, MultiLine } from '../components/Charts';
+import { Donut, Legend, MultiLine, StatTile } from '../components/Charts';
+import { Pager, usePage } from '../components/Pager';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { Toggle } from '../components/Toggle';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
+import { FIELD } from '../lib/ui';
+import { useParamState } from '../lib/useParamState';
+import { Fold } from '../components/Fold';
+
 import { useAuthed } from '../lib/queries';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const monthName = (m: string) => new Date(`${m}-01T00:00:00`).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
 const shortMonth = (m: string) => new Date(`${m}-01T00:00:00`).toLocaleDateString(undefined, { month: 'short' });
 const day = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-function shiftMonth(month: string, by: number): string {
-  const [y, m] = month.split('-').map(Number);
-  return new Date(Date.UTC(y ?? 2026, (m ?? 1) - 1 + by, 1)).toISOString().slice(0, 7);
-}
+const shiftMonth = monthShift;
 /** A typed amount in cents through `typedCents` ("1,250.50" and "₹1.005" read right, a minus kept); junk reads as 0, so the form stays shut. */
 const toCents = (v: string): number => {
   const c = typedCents(v);
@@ -30,11 +31,15 @@ type SheetKind = 'income' | 'expense' | 'budgets' | 'due' | 'recurring' | 'goal'
 
 /** Money in, money out, who it was with, what is owed, what repeats, and where you are heading. Private to the person. */
 export function Finance() {
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
-  const q = useAuthed(['finance', month], () => api.finance(month));
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  // The month lives in the URL, so Back and a link keep it; changing it also drops the entries' page, in one navigation (writeParams composes the two).
+  const [monthRaw, setMonth] = useParamState('month', thisMonth);
+  const month = MONTH_RE.test(monthRaw) && monthRaw <= thisMonth ? monthRaw : thisMonth;
+  const txPage = usePage('tx');
+  const duPage = usePage('du');
+  const q = useAuthed(['finance', month, txPage.query, duPage.query], () => api.finance(month, txPage.query, duPage.query));
   const d = q.data;
   const [sheet, setSheet] = useState<SheetKind>(null);
-  const thisMonth = new Date().toISOString().slice(0, 7);
   const refetch = () => void q.refetch();
 
   return (
@@ -51,23 +56,26 @@ export function Finance() {
             <Stat label="platform points, all time" value={d.totals.platformPoints.toLocaleString()} tone="var(--tint-purple)" />
           </div>
         )}
+        {/* Logging money is what Finance is for, so Money in and Money out are the two solid buttons; the rest are quieter. */}
         <div className="mt-md grid grid-cols-2 gap-xs">
-          <Button variant="outline" full onClick={() => setSheet('income')}>
+          <Button full onClick={() => setSheet('income')}>
             Money in
           </Button>
-          <Button variant="outline" full onClick={() => setSheet('expense')}>
+          <Button full onClick={() => setSheet('expense')}>
             Money out
           </Button>
-          <Button variant="outline" full onClick={() => setSheet('due')}>
+        </div>
+        <div className="mt-xs grid grid-cols-2 gap-xs md:grid-cols-4">
+          <Button variant="outline" size="sm" full onClick={() => setSheet('due')}>
             Owed
           </Button>
-          <Button variant="outline" full onClick={() => setSheet('recurring')}>
+          <Button variant="outline" size="sm" full onClick={() => setSheet('recurring')}>
             Monthly
           </Button>
-          <Button variant="outline" full onClick={() => setSheet('goal')}>
+          <Button variant="outline" size="sm" full onClick={() => setSheet('goal')}>
             Goal
           </Button>
-          <Button variant="outline" full onClick={() => setSheet('budgets')}>
+          <Button variant="outline" size="sm" full onClick={() => setSheet('budgets')}>
             Budgets
           </Button>
         </div>
@@ -84,13 +92,13 @@ export function Finance() {
           <PeriodPanel id="finance-period" parts={['finance', 'shop']} />
           <section className="mt-lg" aria-labelledby="month-heading">
             <div className="flex items-center justify-between gap-xs">
-              <button type="button" onClick={() => setMonth(shiftMonth(month, -1))} aria-label="Previous month" className="toy toy-soft flex size-[44px] items-center justify-center rounded-pill bg-card text-[18px] font-extrabold">
+              <button type="button" onClick={() => { setMonth(shiftMonth(month, -1)); txPage.reset(); }} aria-label="Previous month" className="toy toy-soft flex size-[44px] items-center justify-center rounded-pill bg-card text-[18px] font-extrabold">
                 ‹
               </button>
               <h2 id="month-heading" className="m-0 text-[24px]">
                 {monthName(month)}
               </h2>
-              <button type="button" onClick={() => setMonth(shiftMonth(month, 1))} disabled={month >= thisMonth} aria-label="Next month" className="toy toy-soft flex size-[44px] items-center justify-center rounded-pill bg-card text-[18px] font-extrabold disabled:opacity-40">
+              <button type="button" onClick={() => { setMonth(shiftMonth(month, 1)); txPage.reset(); }} disabled={month >= thisMonth} aria-label="Next month" className="toy toy-soft flex size-[44px] items-center justify-center rounded-pill bg-card text-[18px] font-extrabold disabled:opacity-40">
                 ›
               </button>
             </div>
@@ -114,9 +122,23 @@ export function Finance() {
                   <span className="font-extrabold text-ink">{money(d.owedToMeCents, d.currency)}</span> coming to you, <span className="font-extrabold text-ink">{money(d.iOweCents, d.currency)}</span> to pay out.
                 </>
               ) : (
-                'Nothing outstanding. Add what someone owes you, or what you owe someone, and settle it when the money moves.'
+                d.owedToYou.length > 0 ? 'Your sent invoices are below. Add anything else someone owes you, or you owe, and settle it when the money moves.' : 'Nothing outstanding. Add what someone owes you, or what you owe someone, and settle it when the money moves.'
               )}
             </p>
+            {d.owedToYou.length > 0 && (
+              <div className="mt-sm grid grid-cols-1 gap-xs sm:grid-cols-2" aria-label="Agency invoices owed to you">
+                {d.owedToYou.map((o) => (
+                  <StatTile
+                    key={o.currency}
+                    to="/agency?tab=invoices"
+                    label="Owed to you, invoices"
+                    value={money(o.cents, o.currency)}
+                    tone="var(--tint-sky)"
+                    hint={`${o.count} sent and not paid${o.overdue > 0 ? `, ${o.overdue} past due` : ''}. Paid ones count as income.`}
+                  />
+                ))}
+              </div>
+            )}
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
               {d.dues
                 .filter((x) => x.status === 'open')
@@ -125,8 +147,7 @@ export function Finance() {
                 ))}
             </ul>
             {d.dues.some((x) => x.status === 'settled') && (
-              <details className="mt-xs">
-                <summary className="cursor-pointer text-[14px] font-bold text-ink-soft">Settled</summary>
+              <Fold className="mt-xs" title="Settled" hint={String(d.dues.filter((x) => x.status === 'settled').length)}>
                 <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
                   {d.dues
                     .filter((x) => x.status === 'settled')
@@ -134,8 +155,9 @@ export function Finance() {
                       <DueRow key={x.id} due={x} currency={d.currency} onChange={refetch} />
                     ))}
                 </ul>
-              </details>
+              </Fold>
             )}
+            <Pager page={d.duePage} prefix="du" label="dues" />
           </section>
 
           <section className="mt-lg" aria-labelledby="goals-heading">
@@ -228,6 +250,7 @@ export function Finance() {
                 <TxRow key={t.id} t={t} currency={d.currency} onChange={refetch} />
               ))}
             </ul>
+            <Pager page={d.txPage} prefix="tx" label="entries" />
           </section>
 
           <AddSheet kind={sheet === 'income' || sheet === 'expense' ? sheet : null} onClose={() => setSheet(null)} onDone={refetch} />
@@ -305,7 +328,7 @@ function TxRow({ t, currency, onChange }: { t: FinanceTransaction; currency: str
         </span>
         <span className="shrink-0 text-[16px] font-extrabold">{money(t.kind === 'income' ? t.amountCents : -t.amountCents, t.currency || currency)}</span>
         {t.source === 'manual' && (
-          <button type="button" onClick={() => del.mutate()} disabled={del.isPending} aria-label="Remove" className="toy toy-soft flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink-soft">
+          <button type="button" onClick={() => del.mutate()} disabled={del.isPending} aria-label="Remove" className="toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink-soft">
             ×
           </button>
         )}
@@ -317,7 +340,7 @@ function TxRow({ t, currency, onChange }: { t: FinanceTransaction; currency: str
               <span>
                 {s.name}’s share {money(s.cents, t.currency || currency)}
               </span>
-              <button type="button" onClick={() => paySplit.mutate(i)} disabled={paySplit.isPending} className={`toy toy-soft min-h-[32px] rounded-pill px-sm text-[12px] font-extrabold ${s.status === 'paid' ? 'bg-r4 text-on-fill' : 'bg-paper'}`}>
+              <button type="button" onClick={() => paySplit.mutate(i)} disabled={paySplit.isPending} className={`toy toy-soft min-h-[44px] rounded-pill px-sm text-[12px] font-extrabold ${s.status === 'paid' ? 'bg-r4 text-on-fill' : 'bg-paper'}`}>
                 {s.status === 'paid' ? 'Paid' : 'Mark paid'}
               </button>
             </li>
@@ -329,7 +352,7 @@ function TxRow({ t, currency, onChange }: { t: FinanceTransaction; currency: str
 }
 
 function DueRow({ due, currency, onChange }: { due: FinanceDue; currency: string; onChange: () => void }) {
-  const settle = useMutation({ mutationFn: () => api.settleDue(due.id), onSuccess: onChange });
+  const settle = useMutation({ mutationFn: () => api.settleDue(due.id, todayLocal()), onSuccess: onChange });
   const del = useMutation({ mutationFn: () => api.deleteDue(due.id), onSuccess: onChange });
   const overdue = due.status === 'open' && due.dueDate && due.dueDate < todayLocal();
   return (
@@ -438,7 +461,7 @@ function CategoryChips({ cats, value, onChange }: { cats: readonly string[]; val
       <legend className="text-[14px] font-bold">Category</legend>
       <div className="mt-xs flex flex-wrap gap-xs">
         {cats.map((c) => (
-          <button key={c} type="button" aria-pressed={value === c} onClick={() => onChange(c)} className={`rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${value === c ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+          <button key={c} type="button" aria-pressed={value === c} onClick={() => onChange(c)} className={`min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${value === c ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
             {c}
           </button>
         ))}
@@ -481,22 +504,22 @@ function AddSheet({ kind, onClose, onDone }: { kind: 'income' | 'expense' | null
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Amount</span>
-            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" autoFocus required className={field} />
+            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" autoFocus required className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">{kind === 'expense' ? 'To whom' : 'From whom'}</span>
-            <input value={counterparty} onChange={(e) => setCounterparty(e.target.value)} maxLength={80} placeholder={kind === 'expense' ? 'Editor, landlord, a tool' : 'A brand, a client'} className={field} />
+            <input value={counterparty} onChange={(e) => setCounterparty(e.target.value)} maxLength={80} placeholder={kind === 'expense' ? 'Editor, landlord, a tool' : 'A brand, a client'} className={FIELD} />
           </label>
         </div>
         <CategoryChips cats={cats} value={cat} onChange={setCategory} />
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Date</span>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={field} />
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Note</span>
-            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} className={field} />
+            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} className={FIELD} />
           </label>
         </div>
         <fieldset className="m-0 border-0 p-0">
@@ -579,22 +602,22 @@ function DueSheet({ open, onClose, onDone }: { open: boolean; onClose: () => voi
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Who</span>
-            <input value={counterparty} onChange={(e) => setCounterparty(e.target.value)} required maxLength={80} autoFocus className={field} />
+            <input value={counterparty} onChange={(e) => setCounterparty(e.target.value)} required maxLength={80} autoFocus className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Amount</span>
-            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" required className={field} />
+            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" required className={FIELD} />
           </label>
         </div>
         <CategoryChips cats={cats} value={cat} onChange={setCategory} />
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Due by</span>
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={field} />
+            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Note</span>
-            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} className={field} />
+            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} className={FIELD} />
           </label>
         </div>
         <Toggle on={recurring} onChange={setRecurring} label="Every month" hint="When you settle it, next month’s comes up by itself." />
@@ -654,22 +677,22 @@ function RecurringSheet({ open, onClose, onDone }: { open: boolean; onClose: () 
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Amount</span>
-            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" required autoFocus className={field} />
+            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" required autoFocus className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Day of the month</span>
-            <input type="number" min={1} max={28} value={dayOfMonth} onChange={(e) => setDayOfMonth(e.target.value)} className={field} />
+            <input type="number" min={1} max={28} value={dayOfMonth} onChange={(e) => setDayOfMonth(e.target.value)} className={FIELD} />
           </label>
         </div>
         <CategoryChips cats={cats} value={cat} onChange={setCategory} />
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">{kind === 'expense' ? 'To whom' : 'From whom'}</span>
-            <input value={counterparty} onChange={(e) => setCounterparty(e.target.value)} maxLength={80} className={field} />
+            <input value={counterparty} onChange={(e) => setCounterparty(e.target.value)} maxLength={80} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Note</span>
-            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} className={field} />
+            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} className={FIELD} />
           </label>
         </div>
         <p className="m-0 text-[14px] font-semibold text-ink-soft">Posted to your entries on that day each month, starting with the next one.</p>
@@ -706,7 +729,7 @@ function GoalSheet({ open, onClose, onDone }: { open: boolean; onClose: () => vo
       >
         <label className="block">
           <span className="block text-[14px] font-bold">What for</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={120} autoFocus placeholder="A new camera, three months of rent" className={field} />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={120} autoFocus placeholder="A new camera, three months of rent" className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs" role="group" aria-label="Kind">
           {(
@@ -724,11 +747,11 @@ function GoalSheet({ open, onClose, onDone }: { open: boolean; onClose: () => vo
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Target</span>
-            <input inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="0.00" required className={field} />
+            <input inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="0.00" required className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">By (optional)</span>
-            <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} className={field} />
+            <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} className={FIELD} />
           </label>
         </div>
         <Button type="submit" size="lg" full disabled={add.isPending || !title.trim() || toCents(target) <= 0}>

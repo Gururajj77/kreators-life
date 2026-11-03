@@ -5,6 +5,9 @@ import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
 import { tie } from '../lib/text';
+import { shortDay } from '../lib/date';
+import { Busy, Skeleton } from './Skeleton';
+import { FILTER_SELECT } from './AgencyInvoices';
 import { Button } from './Button';
 import { DeliverableSheet } from './DeliverableSheet';
 import { KanbanBoard } from './KanbanBoard';
@@ -13,23 +16,34 @@ import { StatusTag } from './StatusTag';
 import { useView, ViewToggle } from './ViewToggle';
 
 const COPY = {
-  lede: 'Every deliverable moves from idea to published. Drag a card, or use "Move to".',
   noClients: 'Add a client first. A deliverable always belongs to one.',
   emptyList: 'No deliverables match this.',
   emptyAll: 'No deliverables yet. Add the first one.',
   boardFail: 'Could not load the board. Try again in a moment.',
 } as const;
 
-const select = 'min-h-[44px] rounded-pill border-2 border-line bg-card px-sm text-[14px] font-bold text-ink';
+const select = FILTER_SELECT;
 const ARMY_TONE: Record<string, 'neutral' | 'info' | 'good' | 'warn'> = { open: 'neutral', submitted: 'info', approved: 'good', changes: 'warn' };
 const ARMY_NAME: Record<string, string> = { open: 'Army: open', submitted: 'Army: sent', approved: 'Army: approved', changes: 'Army: changes' };
 
-const shortDay = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 const dayLine = (i: AgencyDeliverable) => (i.publishDate ? `Goes live ${shortDay(i.publishDate)}` : i.dueDate ? `Due ${shortDay(i.dueDate)}` : '');
 
-/** What a deliverable shows on a card or a row: its name and the small facts under it. */
-function Facts({ item, showClient, showStage }: { item: AgencyDeliverable; showClient: boolean; showStage: boolean }) {
+/** What a deliverable shows on a card or a row: its name and the small facts under it. On the board (`compact`) that is one line. */
+function Facts({ item, showClient, showStage, compact = false }: { item: AgencyDeliverable; showClient: boolean; showStage: boolean; compact?: boolean }) {
   const day = dayLine(item);
+  if (compact)
+    return (
+      <>
+        <span className="block text-[16px] font-extrabold leading-snug">{item.title}</span>
+        {(item.overdue || (item.armyDeliverableId && item.army)) && (
+          <span className="mt-xs flex flex-wrap items-center gap-xs">
+            {item.overdue && <StatusTag tone="bad">Late</StatusTag>}
+            {item.armyDeliverableId && item.army && <StatusTag tone={ARMY_TONE[item.army.status] ?? 'neutral'}>{ARMY_NAME[item.army.status] ?? 'Army'}</StatusTag>}
+          </span>
+        )}
+        <span className="mt-xs block text-[12px] font-bold text-ink-soft">{tie([showClient ? item.clientName : DELIVERABLE_KIND_NAME[item.kind], day].filter(Boolean).join(', '))}</span>
+      </>
+    );
   return (
     <>
       <span className="block text-[16px] font-extrabold leading-snug">{item.title}</span>
@@ -52,10 +66,25 @@ function Facts({ item, showClient, showStage }: { item: AgencyDeliverable; showC
   );
 }
 
-/** The deliverables pipeline for every client, or for one: filters, a list or a board, and the detail sheet. */
-export function AgencyPipeline({ clientId }: { clientId?: string }) {
+/** Placeholder rows while a list or a board loads. */
+function Loading() {
+  return (
+    <Busy label="Loading deliverables" className="flex flex-col gap-xs">
+      {[0, 1, 2].map((i) => (
+        <Skeleton key={i} className="h-[64px] w-full" />
+      ))}
+    </Busy>
+  );
+}
+
+/**
+ * The deliverables pipeline for every client, or for one: filters, a list or a board, and the detail sheet.
+ * On the Agency screen the header holds the one Add deliverable button, so it passes `adding` and `onAdding` and this draws no button of
+ * its own; on a client's page it draws its own. `defaultView` is where it starts when the URL does not say (a phone always starts on the list).
+ */
+export function AgencyPipeline({ clientId, defaultView = 'board', adding, onAdding }: { clientId?: string; defaultView?: 'list' | 'board'; adding?: boolean; onAdding?: (open: boolean) => void }) {
   const qc = useQueryClient();
-  const [view, setView] = useView('p', 'board');
+  const [view, setView] = useView('p', defaultView);
   const [clientRaw, setClientRaw] = useParamState('pclient', '');
   const [channel, setChannel] = useParamState('pchannel', '');
   const [stageRaw, setStageRaw] = useParamState('pstage', '');
@@ -102,25 +131,32 @@ export function AgencyPipeline({ clientId }: { clientId?: string }) {
     setSelected(item);
     setOpen(true);
   };
+  // When the Agency header owns the Add deliverable button, its tap opens a blank sheet here.
+  const outside = Boolean(onAdding && adding);
   const all = [...(boardQ.data?.columns.flatMap((c) => c.items) ?? []), ...(listQ.data?.items ?? [])];
-  const current = selected ? (all.find((i) => i.id === selected.id) ?? selected) : null;
+  const current = outside ? null : selected ? (all.find((i) => i.id === selected.id) ?? selected) : null;
+  const closeSheet = () => {
+    setOpen(false);
+    onAdding?.(false);
+  };
 
-  const columns = (boardQ.data?.columns ?? []).map((c) => ({ ...c, name: DELIVERABLE_STAGE_META[c.stage as DeliverableStage].name, blurb: DELIVERABLE_STAGE_META[c.stage as DeliverableStage].blurb }));
+  const columns = (boardQ.data?.columns ?? []).map((c) => ({ ...c, name: DELIVERABLE_STAGE_META[c.stage as DeliverableStage].name }));
   const counts = listQ.data?.counts;
   const total = counts ? Object.values(counts).reduce((a, n) => a + n, 0) : 0;
   const noClients = clientsQ.isSuccess && clients.length === 0;
 
   return (
     <div>
-      <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.lede}</p>
-      <div className="mt-sm flex flex-wrap items-center justify-between gap-sm">
+      <div className="flex flex-wrap items-center justify-between gap-sm">
         <ViewToggle view={view} onChange={setView} label="Deliverables view" />
-        <Button size="sm" disabled={noClients} onClick={() => openItem(null)}>
-          Add deliverable
-        </Button>
+        {!onAdding && (
+          <Button size="sm" plusToX disabled={noClients} onClick={() => openItem(null)}>
+            Add deliverable
+          </Button>
+        )}
       </div>
       {noClients && <p className="mt-xs m-0 text-[14px] font-bold">{COPY.noClients}</p>}
-      <div className="mt-sm flex flex-wrap gap-xs">
+      <div className="fill-row mt-sm flex flex-wrap gap-xs">
         {!clientId && (
           <select
             aria-label="Client"
@@ -155,6 +191,25 @@ export function AgencyPipeline({ clientId }: { clientId?: string }) {
             </option>
           ))}
         </select>
+        {view === 'list' && (
+          <select
+            aria-label="Stage"
+            value={stage}
+            onChange={(e) => {
+              setStageRaw(e.target.value);
+              pg.reset();
+            }}
+            className={select}
+          >
+            <option value="">Stage: All{counts ? ` (${total})` : ''}</option>
+            {DELIVERABLE_STAGES.map((s) => (
+              <option key={s} value={s}>
+                Stage: {DELIVERABLE_STAGE_META[s].name}
+                {counts ? ` (${counts[s]})` : ''}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {view === 'board' ? (
@@ -164,18 +219,19 @@ export function AgencyPipeline({ clientId }: { clientId?: string }) {
               {COPY.boardFail}
             </p>
           )}
-          {boardQ.isPending && <p className="m-0 text-[14px] font-semibold text-ink-soft">Loading…</p>}
+          {boardQ.isPending && <Loading />}
           {boardQ.data && (
             <KanbanBoard
               columns={columns}
               empty="Nothing here"
+              itemLabel={(item) => item.title}
               onMove={(item, from, to) => {
                 if (from !== to) move.mutate({ item, to: to as DeliverableStage });
               }}
               onMore={() => setPer((p) => p + 25)}
               card={(item) => (
                 <button type="button" onClick={() => openItem(item)} className="block w-full text-left">
-                  <Facts item={item} showClient={!clientId} showStage={false} />
+                  <Facts item={item} showClient={!clientId} showStage={false} compact />
                 </button>
               )}
             />
@@ -183,41 +239,13 @@ export function AgencyPipeline({ clientId }: { clientId?: string }) {
         </div>
       ) : (
         <div className="mt-sm">
-          <div role="group" aria-label="Stage" className="scroll-row flex gap-xs">
-            <button
-              type="button"
-              aria-pressed={stage === ''}
-              onClick={() => {
-                setStageRaw('');
-                pg.reset();
-              }}
-              className={`toy min-h-[44px] shrink-0 rounded-pill border-2 px-md text-[14px] font-bold ${stage === '' ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
-            >
-              All{counts ? ` ${total}` : ''}
-            </button>
-            {DELIVERABLE_STAGES.map((s) => (
-              <button
-                key={s}
-                type="button"
-                aria-pressed={stage === s}
-                onClick={() => {
-                  setStageRaw(s);
-                  pg.reset();
-                }}
-                className={`toy min-h-[44px] shrink-0 rounded-pill border-2 px-md text-[14px] font-bold ${stage === s ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
-              >
-                {DELIVERABLE_STAGE_META[s].name}
-                {counts ? ` ${counts[s]}` : ''}
-              </button>
-            ))}
-          </div>
-          {listQ.isPending && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Loading…</p>}
+          {listQ.isPending && <Loading />}
           {listQ.isError && (
-            <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+            <p role="alert" className="m-0 text-[14px] font-bold">
               {COPY.boardFail}
             </p>
           )}
-          <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+          <ul className="flex list-none flex-col gap-xs p-0 m-0">
             {listQ.data?.items.map((item) => (
               <li key={item.id}>
                 <button type="button" onClick={() => openItem(item)} className="toy toy-soft block w-full rounded-tile bg-card p-sm text-left">
@@ -226,7 +254,7 @@ export function AgencyPipeline({ clientId }: { clientId?: string }) {
               </li>
             ))}
           </ul>
-          {listQ.data && listQ.data.items.length === 0 && <p className="mt-sm m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft">{total === 0 ? COPY.emptyAll : COPY.emptyList}</p>}
+          {listQ.data && listQ.data.items.length === 0 && <p className="m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft">{total === 0 ? COPY.emptyAll : COPY.emptyList}</p>}
           <Pager page={listQ.data?.page} prefix="p" label="deliverables" />
         </div>
       )}
@@ -236,7 +264,7 @@ export function AgencyPipeline({ clientId }: { clientId?: string }) {
           That move did not save, so the card went back.
         </p>
       )}
-      <DeliverableSheet open={open} item={current} clientId={clientId ?? (clientRaw || undefined)} clients={clients} onClose={() => setOpen(false)} />
+      <DeliverableSheet open={open || outside} item={current} clientId={clientId ?? (clientRaw || undefined)} clients={clients} onClose={closeSheet} />
     </div>
   );
 }

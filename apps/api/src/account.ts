@@ -22,6 +22,7 @@ export async function deleteAccount(db: D1Database, userId: string): Promise<voi
     db.prepare('DELETE FROM custom_reminders WHERE user_id = ?').bind(userId),
     // Agency: the clients, deliverables, time, agreements and metrics go. An invoice stays for the books with the totals, and loses who it was for, the bank and the link.
     db.prepare('DELETE FROM portal_sessions WHERE client_id IN (SELECT id FROM agency_clients WHERE user_id = ?)').bind(userId),
+    db.prepare('DELETE FROM retired_portal_links WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM agency_cycles WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM agency_retainers WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM agency_log WHERE user_id = ?').bind(userId),

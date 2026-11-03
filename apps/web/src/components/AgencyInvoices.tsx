@@ -5,44 +5,88 @@ import { Link, useNavigate } from 'react-router';
 import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
-import { tie } from '../lib/text';
 import { Button } from './Button';
-import { DocRowActions } from './DocActions';
-import { Fold } from './Fold';
+import { Copy, Mail, Printer } from 'lucide-react';
+import { copyPlain } from '../lib/clipboard';
+import { MoreMenu } from './MoreMenu';
+import { Busy, Skeleton } from './Skeleton';
 import { Inert } from './Inert';
-import { Field, invoiceDate } from './InvoiceView';
+import { Field } from './InvoiceView';
+import { shortDate } from '../lib/date';
 import { KanbanBoard } from './KanbanBoard';
 import { Pager, usePage } from './Pager';
 import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
 import { useView, ViewToggle } from './ViewToggle';
 
-const BLURB: Record<Invoice['status'], string> = {
-  draft: 'Still being made. Your client cannot see it.',
-  sent: 'With your client.',
-  paid: 'Money received. It is booked as income.',
-  void: 'Cancelled, kept for the record.',
-};
 const PER_STEP = 25;
 
+/** A select in a filter row; the right padding keeps the words clear of its arrow. */
+export const FILTER_SELECT = 'min-h-[44px] max-w-full rounded-pill border-2 border-line bg-card pl-sm pr-xl text-[14px] font-bold text-ink';
+
+/** Placeholder rows while a list or a board of paper loads. */
+export function PaperLoading({ label }: { label: string }) {
+  return (
+    <Busy label={label} className="flex flex-col gap-xs">
+      {[0, 1, 2].map((i) => (
+        <Skeleton key={i} className="h-[64px] w-full" />
+      ))}
+    </Busy>
+  );
+}
+
+/**
+ * The quiet actions of one invoice, agreement or document row, behind one More button: download or print (the page opens and asks the
+ * browser to print, where Save as PDF lives), copy the text, and email a copy (the page opens on its email sheet).
+ */
+export function PaperRowMenu({ path, name, getText, onNote }: { path: string; name: string; getText: () => Promise<string>; onNote: (note: string) => void }) {
+  const nav = useNavigate();
+  return (
+    <MoreMenu
+      label={`More for ${name}`}
+      items={[
+        { key: 'print', label: 'Download or print', icon: Printer, onSelect: () => nav(`${path}?print=1`) },
+        {
+          key: 'copy',
+          label: 'Copy text',
+          icon: Copy,
+          onSelect: async () => {
+            try {
+              onNote((await copyPlain(await getText())) ? 'Copied.' : 'Open it to copy the text.');
+            } catch {
+              onNote('That did not load. Try again.');
+            }
+            window.setTimeout(() => onNote(''), 3000);
+          },
+        },
+        { key: 'email', label: 'Email a copy', icon: Mail, onSelect: () => nav(`${path}?email=1`) },
+      ]}
+    />
+  );
+}
+
+/** A card on the invoice board: the number, a Revised tag when it has one, and one line with who it is for and the amount. */
 function Card({ inv }: { inv: Invoice }) {
   return (
     <Link to={`/agency/invoices/${inv.id}`} className="block text-ink no-underline">
-      <span className="block text-[14px] font-extrabold">{inv.number}</span>
-      <span className="block text-[14px] font-semibold text-ink-soft">
-        <Inert text={inv.clientName} />
-      </span>
-      <span className="mt-xs block font-display text-[20px] font-extrabold leading-none">{money(inv.totalCents, inv.currency)}</span>
+      <span className="block text-[16px] font-extrabold">{inv.number}</span>
+      {inv.revisedAt && (
+        <span className="mt-xs flex">
+          <StatusTag tone="warn">Revised</StatusTag>
+        </span>
+      )}
       <span className="mt-xs block text-[12px] font-bold text-ink-soft">
-        {tie(`${invoiceDate(inv.issueDate)}${inv.dueDate ? `, due ${invoiceDate(inv.dueDate)}` : ''}`)}
+        <Inert text={inv.clientName} />, {money(inv.totalCents, inv.currency)}
       </span>
-      {inv.revisedAt && <StatusTag tone="warn">Revised</StatusTag>}
     </Link>
   );
 }
 
-/** The invoices pipeline: a board by status or a paged list, for every client or one. */
-export function AgencyInvoices({ clientId }: { clientId?: string }) {
+/**
+ * The invoices pipeline: a board by status or a paged list, for every client or one. On the Agency screen the header holds the one New
+ * invoice button (`adding`, `onAdding`); on a client's page this draws its own.
+ */
+export function AgencyInvoices({ clientId, adding: outside, onAdding }: { clientId?: string; adding?: boolean; onAdding?: (open: boolean) => void }) {
   const [view, setView] = useView('inv');
   const qc = useQueryClient();
   const nav = useNavigate();
@@ -50,7 +94,10 @@ export function AgencyInvoices({ clientId }: { clientId?: string }) {
   const [status, setStatus] = useParamState('invstatus', 'all');
   const { page, size, reset } = usePage('inv');
   const [msg, setMsg] = useState('');
-  const [adding, setAdding] = useState(false);
+  const [rowNote, setRowNote] = useState<{ id: string; text: string } | null>(null);
+  const [own, setOwn] = useState(false);
+  const adding = onAdding ? Boolean(outside) : own;
+  const setAdding = (v: boolean) => (onAdding ? onAdding(v) : setOwn(v));
   const clientQ = clientId ? `client=${clientId}` : '';
   const refresh = () => qc.invalidateQueries({ queryKey: ['agency'] });
 
@@ -74,7 +121,7 @@ export function AgencyInvoices({ clientId }: { clientId?: string }) {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-sm">
         <ViewToggle view={view} onChange={setView} label="Invoices view" />
-        <Button onClick={() => setAdding(true)}>New invoice</Button>
+        {!onAdding && <Button onClick={() => setAdding(true)}>New invoice</Button>}
       </div>
       {msg && (
         <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
@@ -89,10 +136,12 @@ export function AgencyInvoices({ clientId }: { clientId?: string }) {
               Could not load the invoices. Try again.
             </p>
           )}
+          {board.isPending && <PaperLoading label="Loading invoices" />}
           {board.data && (
             <KanbanBoard
-              columns={board.data.columns.map((c) => ({ ...c, stage: c.stage, name: INVOICE_STATUS_NAME[c.stage as Invoice['status']], blurb: BLURB[c.stage as Invoice['status']], note: c.cents > 0 ? money(c.cents) : undefined }))}
+              columns={board.data.columns.map((c) => ({ ...c, stage: c.stage, name: INVOICE_STATUS_NAME[c.stage as Invoice['status']], note: c.cents > 0 ? money(c.cents) : undefined }))}
               card={(inv) => <Card inv={inv} />}
+              itemLabel={(inv) => inv.number}
               onMore={() => setPer((n) => n + PER_STEP)}
               onMove={(inv, from, to) => {
                 if (from === 'void') {
@@ -110,16 +159,28 @@ export function AgencyInvoices({ clientId }: { clientId?: string }) {
 
       {view === 'list' && (
         <div className="mt-sm">
-          <div role="group" aria-label="Invoice status" className="scroll-row flex gap-xs">
-            {[{ key: 'all', name: 'All', n: total }, ...INVOICE_STATUSES.map((s) => ({ key: s as string, name: INVOICE_STATUS_NAME[s], n: counts.get(s) ?? 0 }))].map((s) => (
-              <button key={s.key} type="button" aria-pressed={status === s.key} onClick={() => {
-                setStatus(s.key);
-                reset();
-              }} className={`toy min-h-[44px] shrink-0 rounded-pill border-2 px-md text-[14px] font-bold ${status === s.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-                {s.name} {s.n}
-              </button>
+          <select
+            aria-label="Invoice status"
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              reset();
+            }}
+            className={FILTER_SELECT}
+          >
+            <option value="all">Status: All{list.data ? ` (${total})` : ''}</option>
+            {INVOICE_STATUSES.map((st) => (
+              <option key={st} value={st}>
+                Status: {INVOICE_STATUS_NAME[st]}
+                {list.data ? ` (${counts.get(st) ?? 0})` : ''}
+              </option>
             ))}
-          </div>
+          </select>
+          {list.isPending && (
+            <div className="mt-sm">
+              <PaperLoading label="Loading invoices" />
+            </div>
+          )}
           {list.isError && (
             <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
               Could not load the invoices. Try again.
@@ -129,39 +190,42 @@ export function AgencyInvoices({ clientId }: { clientId?: string }) {
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {list.data?.invoices.map((inv) => (
               <li key={inv.id} className="rounded-tile bg-card shadow-toy-soft">
-                <Link to={`/agency/invoices/${inv.id}`} className="toy flex flex-wrap items-center gap-sm rounded-tile p-sm text-ink no-underline">
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[16px] font-extrabold">{inv.number}</span>
-                    <span className="block text-[14px] font-semibold text-ink-soft">
-                      <Inert text={inv.clientName} />, {invoiceDate(inv.issueDate)}
-                      {inv.dueDate ? `, due ${invoiceDate(inv.dueDate)}` : ''}
+                <div className="flex items-center gap-xs pr-xs">
+                  <Link to={`/agency/invoices/${inv.id}`} className="toy flex min-w-0 flex-1 flex-wrap items-center gap-sm rounded-tile p-sm text-ink no-underline">
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[16px] font-extrabold">{inv.number}</span>
+                      <span className="block text-[14px] font-semibold text-ink-soft">
+                        <Inert text={inv.clientName} />, {shortDate(inv.issueDate)}
+                        {inv.dueDate ? `, due ${shortDate(inv.dueDate)}` : ''}
+                      </span>
                     </span>
-                  </span>
-                  <span className="flex items-center gap-xs">
-                    {inv.revisedAt && <StatusTag tone="warn">Revised</StatusTag>}
-                    <StatusTag tone={INVOICE_STATUS_TONE[inv.status]}>{INVOICE_STATUS_NAME[inv.status]}</StatusTag>
-                  </span>
-                  <span className="font-display text-[20px] font-extrabold">{money(inv.totalCents, inv.currency)}</span>
-                </Link>
-                <div className="px-sm pb-sm">
-                  <DocRowActions
+                    <span className="flex items-center gap-xs">
+                      {inv.revisedAt && <StatusTag tone="warn">Revised</StatusTag>}
+                      <StatusTag tone={INVOICE_STATUS_TONE[inv.status]}>{INVOICE_STATUS_NAME[inv.status]}</StatusTag>
+                    </span>
+                    <span className="font-display text-[20px] font-extrabold">{money(inv.totalCents, inv.currency)}</span>
+                  </Link>
+                  <PaperRowMenu
                     path={`/agency/invoices/${inv.id}`}
+                    name={inv.number}
+                    onNote={(text) => setRowNote(text ? { id: inv.id, text } : null)}
                     getText={async () => {
                       const { invoice } = await api.agencyInvoice(inv.id);
                       return invoiceAsText(invoiceForClient(invoice));
                     }}
                   />
                 </div>
+                {rowNote?.id === inv.id && (
+                  <p role="status" className="m-0 px-sm pb-sm text-[12px] font-bold">
+                    {rowNote.text}
+                  </p>
+                )}
               </li>
             ))}
           </ul>
           <Pager page={list.data?.page} prefix="inv" label="invoices" />
         </div>
       )}
-
-      <Fold className="mt-md" title="Your invoice templates" hint="starting points">
-        <TemplateList />
-      </Fold>
 
       <NewInvoice
         open={adding}
@@ -262,8 +326,11 @@ function NewInvoice({ open, clientId, onClose, onMade }: { open: boolean; client
   );
 }
 
-/** The person's own invoice templates: rename in two steps, remove with two taps. They are made from an invoice with Save as template. */
-function TemplateList() {
+/**
+ * The person's own invoice templates: rename in two steps, remove with two taps. They are made from an invoice with Save as template.
+ * Shown in Agency settings, under Templates.
+ */
+export function InvoiceTemplates() {
   const qc = useQueryClient();
   const q = useAuthed(['agency', 'templates', 'invoice'], () => api.agencyTemplates('invoice'));
   const [renaming, setRenaming] = useState<AgencyTemplate | null>(null);

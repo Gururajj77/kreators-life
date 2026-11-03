@@ -1,90 +1,115 @@
-import { docDate, type DocType } from '@kreators/shared';
-import { EMAIL_NOTE_MAX, EMAIL_TEMPLATES, emailTemplate, emptyEmailVars, fillEmail, suggestEmailTemplate, type EmailVars } from '@kreators/shared/agencyEmail';
+import { docDate, MAX_TEMPLATES, TEMPLATE_NAME_MAX, type AgencySettings, type DocType } from '@kreators/shared';
+import { EMAIL_NOTE_MAX, EMAIL_SUBJECT_MAX, EMAIL_TEMPLATES, emailTemplate, emailVarsFor, fillEmail, suggestEmailTemplate, type EmailGap, type EmailVars } from '@kreators/shared/agencyEmail';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useCallback, useEffect, useId, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../lib/api';
+import { copyPlain, useCopy } from '../lib/clipboard';
 import { printAs } from '../lib/printDoc';
 import { useAuthed } from '../lib/queries';
+import { FIELD, LABEL, SELECT_SM } from '../lib/ui';
+import { AnimatedIcon } from './AnimatedIcon';
 import { Button } from './Button';
-import { Fold } from './Fold';
 import { Field } from './InvoiceView';
 import { Sheet } from './Sheet';
 
-/** Copy plain text to the clipboard. Says whether it worked, so the screen can point at the text version when it did not. */
-export async function copyPlain(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
+/** The one print button a document has. A PDF is the browser's own print and save, so "Download PDF" and "Print" were one action twice. */
+export function PrintButton({ onPrint, size = 'md', variant = 'outline', full = false }: { onPrint: () => void; size?: 'sm' | 'md'; variant?: 'outline' | 'primary'; full?: boolean }) {
+  const hint = useId();
+  return (
+    <>
+      <Button size={size} variant={variant} full={full} onClick={onPrint} aria-describedby={hint}>
+        <AnimatedIcon name="download" size={18} />
+        Download or print
+      </Button>
+      <span id={hint} className="sr-only">
+        Opens the print window. Choose Save as PDF there to download it.
+      </span>
+    </>
+  );
 }
 
 /**
- * The buttons every document has, in one place: Download PDF and Print (the browser's own print, named by the document), and for the owner
- * Copy text and Email a copy. A client sees Download PDF and Print only where the document allows it; pass no `text` and no `onEmail` there.
+ * The print button where a client reads a document (an invoice, an agreement or another document): shown only where the document allows
+ * it. The owner's pages have it beside Share instead, with the link, the text and the email inside the Share sheet.
  */
-export function DocActions({ fileName, canDownload = true, text, onEmail, onPrint, className = '' }: { fileName: string; canDownload?: boolean; text?: string; onEmail?: () => void; /** Print in some other way (an invoice prints the client's version). */ onPrint?: () => void; className?: string }) {
-  const print = onPrint ?? (() => printAs(fileName));
-  const [note, setNote] = useState('');
-  const copy = async () => {
-    setNote((await copyPlain(text ?? '')) ? 'Copied. Paste it into your email.' : 'Copying did not work here. Open the text version below and copy it by hand.');
-    window.setTimeout(() => setNote(''), 4000);
-  };
+export function DocActions({ fileName, canDownload = true, onPrint, className = '' }: { fileName: string; canDownload?: boolean; /** Print in some other way (an invoice prints the client's version). */ onPrint?: () => void; className?: string }) {
+  if (!canDownload) return null;
   return (
     <div className={`no-print ${className}`}>
-      <div className="flex flex-wrap gap-xs">
-        {canDownload && (
-          <Button size="sm" variant="outline" onClick={print}>
-            Download PDF
-          </Button>
-        )}
-        {canDownload && (
-          <Button size="sm" variant="outline" onClick={print}>
-            Print
-          </Button>
-        )}
-        {text !== undefined && (
-          <Button size="sm" variant="outline" onClick={copy}>
-            Copy text
-          </Button>
-        )}
-        {onEmail && (
-          <Button size="sm" variant="outline" onClick={onEmail}>
-            Email a copy
-          </Button>
-        )}
-      </div>
-      {note && (
-        <p role="status" className="mt-xs m-0 text-[14px] font-bold">
-          {note}
-        </p>
-      )}
-      {canDownload && <p className="mt-xs m-0 text-[12px] font-semibold text-ink-mute">"Download PDF" opens the print window. Choose "Save as PDF" there.</p>}
+      <PrintButton size="sm" onPrint={onPrint ?? (() => printAs(fileName))} />
     </div>
   );
 }
 
-/** The text that Copy text and Email a copy use, shown as it is, so it can be read and selected before it is pasted anywhere. */
-export function DocTextFold({ text, title = 'Text version', hint = 'to paste into an email' }: { text: string; title?: string; hint?: string }) {
+/**
+ * On a phone, a long agreement puts its answer form thousands of pixels down: this bar stays at the foot of the screen and jumps to the
+ * form (`targetId`, its heading), then moves the keyboard to the first field. It hides itself while the form is on screen, and on a laptop.
+ */
+export function JumpToBar({ targetId, label }: { targetId: string; label: string }) {
+  const [shown, setShown] = useState(true);
+  useEffect(() => {
+    const el = document.getElementById(targetId);
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const form = el.closest('form') ?? el;
+    const io = new IntersectionObserver(([e]) => setShown(!e?.isIntersecting), { threshold: 0.05 });
+    io.observe(form);
+    return () => io.disconnect();
+  }, [targetId]);
+  if (!shown) return null;
+  const jump = () => {
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' });
+    const first = (el.closest('form') ?? el.parentElement)?.querySelector<HTMLElement>('input, textarea, button');
+    window.setTimeout(() => first?.focus({ preventScroll: true }), still ? 0 : 400);
+  };
   return (
-    <Fold className="no-print mt-md" title={title} hint={hint}>
-      <pre className="legal-text" tabIndex={0} aria-label="The document as plain text">
-        {text}
-      </pre>
-    </Fold>
+    <div className="no-print sticky bottom-[calc(var(--spacing-sm)+env(safe-area-inset-bottom))] z-30 mt-md md:hidden">
+      <Button full onClick={jump}>
+        {label}
+      </Button>
+    </div>
   );
 }
 
-/** What a document knows that its email note can start from. Every part is optional and every one can be changed in the sheet. */
+/** A destructive step asked once more in a sheet: what will happen, a red button that does it and a quiet one that does not. */
+export function ConfirmSheet({ open, onClose, title, body, action, onConfirm, busy = false }: { open: boolean; onClose: () => void; title: string; body: string; action: string; onConfirm: () => void; busy?: boolean }) {
+  return (
+    <Sheet open={open} onClose={onClose} title={title}>
+      <div className="grid gap-md pb-xl">
+        <p className="m-0 text-[16px] font-semibold text-ink-soft">{body}</p>
+        <div className="flex flex-wrap gap-xs">
+          <button
+            type="button"
+            onClick={() => {
+              onConfirm();
+              onClose();
+            }}
+            disabled={busy}
+            className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-[16px] font-semibold text-on-fill disabled:opacity-50"
+            style={{ '--toy-color': 'var(--deep-servant_leader)' } as CSSProperties}
+          >
+            {action}
+          </button>
+          <Button variant="outline" onClick={onClose}>
+            Keep it
+          </Button>
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
+/** What a document knows that its email note is written from: the client and the profile are read from the records. */
 export interface EmailContext {
   kind: 'invoice' | 'contract' | 'doc';
-  /** Who the note greets, from the client's contact: "Parag". */
-  names?: string;
-  engagement?: string;
-  /** What goes with the note, one per line: "The invoice EX-001 for ₹54,000". */
-  attached?: string[];
+  /** The client the document is for: their contact, stage and month come from their record. */
+  clientId?: string | null;
+  /** The document's title, as printed. */
+  title?: string;
+  /** The invoice number or the document's reference. */
+  number?: string;
   amount?: string;
   period?: string;
   dueBy?: string;
@@ -92,94 +117,337 @@ export interface EmailContext {
   signed?: boolean;
   /** An invoice that belongs to a retainer month. */
   retainerMonth?: boolean;
+  overdue?: boolean;
+  paid?: boolean;
+  advance?: boolean;
+  /** The agreement's template or the document's kind. */
+  docKind?: string;
 }
 
-const SELECT = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
+/** A saved note is picked by its id, kept apart from the built-in keys. */
+const OWN = 'own:';
+
+/** The records a note is written from: the client's page (their contact, stage and month, and the settings) or, with no client, the settings alone. */
+function useEmailFacts(ctx: EmailContext) {
+  const page = useAuthed(['agency', 'client', ctx.clientId ?? ''], () => api.agencyClient(ctx.clientId ?? ''), Boolean(ctx.clientId));
+  const overview = useAuthed(['agency', 'settings'], () => api.agency(), !ctx.clientId);
+  const settings = page.data?.settings ?? overview.data?.settings;
+  const client = page.data?.client;
+  const facts = emailVarsFor({
+    kind: ctx.kind,
+    client: client ? { name: client.name, contactName: client.contactName, month: client.month } : null,
+    profile: settings ? settings.profile : null,
+    title: ctx.title,
+    number: ctx.number,
+    amount: ctx.amount,
+    dueBy: ctx.dueBy,
+    period: ctx.period,
+    docKind: ctx.docKind,
+    advance: ctx.advance,
+  });
+  const suggested = suggestEmailTemplate(ctx.kind, { stage: client?.stage, retainerMonth: ctx.retainerMonth, signed: ctx.signed, overdue: ctx.overdue, paid: ctx.paid, docKind: ctx.docKind });
+  return { ...facts, suggested, ready: Boolean(settings) && (!ctx.clientId || Boolean(client)), client, settings };
+}
 
 /**
- * Write the email: pick a note (the first send, this month's invoice, a renewal, a payment reminder and the rest), fill the few details, and the
- * words are written out for you to change. The sender's name, studio, phone and email come from Agency settings. Nothing is sent until you tap.
+ * A value a note needs that no record holds: one line, typed once, saved where it belongs (the client's record or the business profile),
+ * and every note and document after it fills from there.
  */
-function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subject: string; body: string }) => void }) {
-  const settings = useAuthed(['agency', 'settings'], () => api.agency());
-  const profile = settings.data?.settings.profile;
-  const [key, setKey] = useState<string>(() => suggestEmailTemplate(ctx.kind, { retainerMonth: ctx.retainerMonth, signed: ctx.signed }));
-  const [vars, setVars] = useState<EmailVars>(() => ({ ...emptyEmailVars(), names: ctx.names ?? '', engagement: ctx.engagement ?? '', attached: ctx.attached ?? [], amount: ctx.amount ?? '', period: ctx.period ?? '', dueBy: ctx.dueBy ?? '' }));
-  const [signed, setSigned] = useState(false);
-  const [subject, setSubject] = useState('');
-  const [body, setBody] = useState('');
-  const [typed, setTyped] = useState(false);
-  // The sender's lines arrive with the settings, once.
-  useEffect(() => {
-    if (!profile || signed) return;
-    setSigned(true);
-    setVars((v) => ({ ...v, signName: profile.signerName || '', signStudio: profile.from.name, signPhone: profile.from.phone, signEmail: profile.from.email }));
-  }, [profile, signed]);
-  // The words follow the note and the details until the person types in them; "Start again" gives the control back.
-  useEffect(() => {
-    if (typed) return;
-    const f = fillEmail(key, vars);
-    setSubject(f.subject);
-    setBody(f.body);
-  }, [key, vars, typed]);
-  useEffect(() => onChange({ subject, body }), [subject, body, onChange]);
-  const set = (patch: Partial<EmailVars>) => setVars((v) => ({ ...v, ...patch }));
-  const t = emailTemplate(key);
+function AddOnce({ gap, clientId, settings }: { gap: EmailGap; clientId?: string | null; settings?: AgencySettings }) {
+  const qc = useQueryClient();
+  const id = useId();
+  const [value, setValue] = useState('');
+  const [err, setErr] = useState('');
+  const save = useMutation({
+    mutationFn: async () => {
+      const v = value.trim();
+      if (gap.where === 'client') {
+        if (!clientId) throw new Error('Pick a client first.');
+        await api.agencyClientUpdate(clientId, { contactName: v });
+        return;
+      }
+      if (!settings) throw new Error('Your settings are still loading.');
+      const pr = settings.profile;
+      const from = { ...pr.from, ...(gap.key === 'businessName' ? { name: v } : gap.key === 'phone' ? { phone: v } : gap.key === 'email' ? { email: v } : {}) };
+      await api.agencySettings({ profile: { ...pr, from, signerName: gap.key === 'signerName' ? v : pr.signerName } });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['agency'] }),
+    onError: (e: Error) => setErr(e.message),
+  });
+  return (
+    <form
+      className="flex flex-wrap items-end gap-xs"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (value.trim()) save.mutate();
+      }}
+    >
+      <label htmlFor={id} className="min-w-0 flex-1 basis-[220px]">
+        <span className={LABEL}>{`Add ${gap.label} once`}</span>
+        <input id={id} value={value} onChange={(e) => setValue(e.target.value)} maxLength={120} type={gap.key === 'email' ? 'email' : 'text'} className={FIELD} />
+      </label>
+      <Button size="sm" type="submit" disabled={!value.trim() || save.isPending}>
+        {save.isPending ? 'Saving' : gap.where === 'client' ? 'Save to the client' : 'Save to your profile'}
+      </Button>
+      {err && <p role="alert" className="m-0 w-full text-[14px] font-bold text-r1">{err}</p>}
+    </form>
+  );
+}
+
+/** The lines asking for what no record holds yet. Nothing when every value is there. */
+function AddOnceLines({ missing, clientId, settings }: { missing: EmailGap[]; clientId?: string | null; settings?: AgencySettings }) {
+  if (missing.length === 0) return null;
+  return (
+    <div className="grid gap-sm rounded-tile bg-paper p-sm">
+      {missing.map((g) => (
+        <AddOnce key={g.key} gap={g} clientId={clientId} settings={settings} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The email that goes with a document, written and ready: the note this moment needs (by the kind of document and where the client stands),
+ * every part filled from the client, the document and the business profile, shown as "Subject:" and the words, and one Copy that copies
+ * exactly that. Another note can be picked from the small list. What no record holds is asked once, never left as a blank.
+ */
+export function ReadyEmail({ ctx, onCopied }: { ctx: EmailContext; onCopied?: (ok: boolean) => void }) {
+  const f = useEmailFacts(ctx);
+  const pickId = useId();
+  const [key, setKey] = useState<string | null>(null);
+  const { copy, said } = useCopy();
+  const chosen = key ?? f.suggested;
+  const mail = fillEmail(chosen, f.vars);
+  const all = `Subject: ${mail.subject}\n\n${mail.body}`;
+  if (!f.ready) return <p className="m-0 text-[14px] font-semibold text-ink-soft">Writing the email from your records.</p>;
   return (
     <div className="grid gap-sm">
-      <div>
-        <label htmlFor="email-note-key" className="block text-[14px] font-bold">
-          Which note
+      <div className="flex flex-wrap items-center gap-xs">
+        <label htmlFor={pickId} className="text-[14px] font-bold">
+          Note
         </label>
-        <select id="email-note-key" value={key} onChange={(e) => { setKey(e.target.value); setTyped(false); }} className={SELECT}>
-          {EMAIL_TEMPLATES.map((n) => (
-            <option key={n.key} value={n.key}>
-              {n.name}
+        <select id={pickId} value={chosen} onChange={(e) => setKey(e.target.value)} className={`${SELECT_SM} min-w-0 max-w-full flex-1`}>
+          {EMAIL_TEMPLATES.map((t) => (
+            <option key={t.key} value={t.key}>
+              {t.name}
             </option>
           ))}
         </select>
-        <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{t.when}</p>
       </div>
-      <Fold title="Fill in the details" hint="names, amount, day">
-        <div className="grid gap-sm md:grid-cols-2">
-          <Field id="en-names" label="Who it greets" value={vars.names} onChange={(v) => set({ names: v })} max={120} placeholder="Parag and Circle team" />
-          <Field id="en-eng" label="What the work is called" value={vars.engagement} onChange={(v) => set({ engagement: v })} max={120} placeholder="one month Voxpop trial engagement" />
-          <Field id="en-amt" label="Amount" value={vars.amount} onChange={(v) => set({ amount: v })} max={40} placeholder="₹30,000" />
-          <Field id="en-per" label="Month or period" value={vars.period} onChange={(v) => set({ period: v })} max={60} placeholder="May 2026" />
-          <Field id="en-due" label="Pay by or due on" value={vars.dueBy} onChange={(v) => set({ dueBy: v })} max={40} placeholder="1 May 2026" />
-          <Field id="en-status" label="How the work stands" value={vars.status} onChange={(v) => set({ status: v })} max={160} placeholder="shoot completed, editing in progress" />
-        </div>
-        <div className="mt-sm">
-          <label htmlFor="en-att" className="block text-[14px] font-bold">
-            What is attached, one line each
-          </label>
-          <textarea id="en-att" rows={3} value={vars.attached.join('\n')} onChange={(e) => set({ attached: e.target.value.split('\n').slice(0, 8) })} className={SELECT} placeholder="The Service Agreement for the one month trial" />
-        </div>
-        <div className="mt-sm">
-          <label htmlFor="en-more" className="block text-[14px] font-bold">
-            Anything else to add
-          </label>
-          <textarea id="en-more" rows={2} value={vars.note} maxLength={1200} onChange={(e) => set({ note: e.target.value })} className={SELECT} />
-        </div>
-      </Fold>
-      <Field id="en-subject" label="Subject" value={subject} onChange={(v) => { setSubject(v); setTyped(true); }} max={200} />
-      <div>
-        <label htmlFor="en-body" className="block text-[14px] font-bold">
-          The email
-        </label>
-        <textarea id="en-body" rows={14} value={body} maxLength={EMAIL_NOTE_MAX} onChange={(e) => { setBody(e.target.value); setTyped(true); }} className={`${SELECT} font-medium leading-snug [text-wrap:wrap]`} />
-        {typed && (
-          <button type="button" onClick={() => setTyped(false)} className="toy-flat mt-xs rounded-pill px-sm py-xs text-[12px] font-bold">
-            Start again from the note
-          </button>
+      <AddOnceLines missing={f.missing} clientId={ctx.clientId} settings={f.settings} />
+      <pre className="legal-text" tabIndex={0} aria-label="The email, ready to paste">
+        {all}
+      </pre>
+      <div className="flex flex-wrap items-center gap-xs">
+        <Button
+          size="sm"
+          onClick={async () => {
+            const ok = await copy(all);
+            onCopied?.(ok);
+          }}
+        >
+          <AnimatedIcon name="copy" size={18} active={Boolean(said)} />
+          Copy the email
+        </Button>
+        {said && (
+          <span role="status" className="text-[14px] font-bold">
+            {said}
+          </span>
         )}
       </div>
     </div>
   );
 }
 
+/**
+ * Write the email: the note this moment needs is picked and filled from the records (the client, the document, the business profile);
+ * another can be picked, the words changed, and any note kept as your own ("Save this note"), renamed or removed. What no record holds is
+ * asked once and saved where it belongs. Nothing is sent until you tap.
+ */
+function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subject: string; body: string }) => void }) {
+  const qc = useQueryClient();
+  const f = useEmailFacts(ctx);
+  const mine = useAuthed(['agency', 'templates', 'email'], () => api.agencyTemplates('email'));
+  const own = (mine.data?.templates ?? []).filter((t) => t.scope === 'own' && t.kind === 'email' && t.email);
+  const [chosenKey, setKey] = useState<string | null>(null);
+  const key = chosenKey ?? f.suggested;
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [typed, setTyped] = useState(false);
+  // Saving, renaming and removing a note of your own: one small form at a time, and Remove asks twice.
+  const [naming, setNaming] = useState<'save' | 'rename' | null>(null);
+  const [name, setName] = useState('');
+  const [armed, setArmed] = useState(false);
+  const [msg, setMsg] = useState('');
+  const picked = key.startsWith(OWN) ? own.find((t) => `${OWN}${t.id}` === key) : undefined;
+  const varsKey = JSON.stringify(f.vars);
+  // The words follow the note and the records until the person types in them; "Start again" gives the control back. A saved note is its
+  // own words, as it was kept.
+  useEffect(() => {
+    if (typed) return;
+    if (key.startsWith(OWN)) {
+      if (!picked?.email) return;
+      setSubject(picked.email.subject);
+      setBody(picked.email.message);
+      return;
+    }
+    const filled = fillEmail(key, JSON.parse(varsKey) as EmailVars);
+    setSubject(filled.subject);
+    setBody(filled.body);
+  }, [key, varsKey, typed, picked]);
+  useEffect(() => onChange({ subject, body }), [subject, body, onChange]);
+  const t = picked ? null : emailTemplate(key);
+  const refresh = () => qc.invalidateQueries({ queryKey: ['agency', 'templates', 'email'] });
+  const sameName = own.find((n) => n.name.trim().toLowerCase() === name.trim().toLowerCase());
+  const keep = useMutation({
+    mutationFn: async () => {
+      if (naming === 'rename' && picked) {
+        const change = { name: name.trim() };
+        await api.agencyTemplateUpdate(picked.id, change);
+        return { id: picked.id, note: 'Renamed.' };
+      }
+      // A note with the same name is replaced, so saving again after a change keeps one copy.
+      const words = { name: name.trim(), subject, message: body };
+      if (sameName) {
+        await api.agencyTemplateUpdate(sameName.id, words);
+        return { id: sameName.id, note: `Saved over "${sameName.name}".` };
+      }
+      const r = await api.agencyTemplateAdd({ kind: 'email' as const, ...words });
+      return { id: r.id, note: 'Saved. It is under Your notes from now on.' };
+    },
+    onSuccess: async (r) => {
+      await refresh();
+      setNaming(null);
+      setMsg(r.note);
+      setKey(`${OWN}${r.id}`);
+      setTyped(false);
+    },
+    onError: (e: Error) => setMsg(e.message),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => api.agencyTemplateRemove(id),
+    onSuccess: async () => {
+      await refresh();
+      setArmed(false);
+      setMsg('Removed.');
+      setKey(null);
+      setTyped(false);
+    },
+    onError: (e: Error) => setMsg(e.message),
+  });
+  return (
+    <div className="grid gap-sm">
+      <div>
+        <label htmlFor="email-note-key" className={LABEL}>
+          Which note
+        </label>
+        <select
+          id="email-note-key"
+          value={key}
+          onChange={(e) => {
+            setKey(e.target.value);
+            setTyped(false);
+            setNaming(null);
+            setArmed(false);
+            setMsg('');
+          }}
+          className={FIELD}
+        >
+          <optgroup label="Notes to start from">
+            {EMAIL_TEMPLATES.map((n) => (
+              <option key={n.key} value={n.key}>
+                {n.name}
+              </option>
+            ))}
+          </optgroup>
+          {own.length > 0 && (
+            <optgroup label="Your notes">
+              {own.map((n) => (
+                <option key={n.id} value={`${OWN}${n.id}`}>
+                  {n.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+        {t && <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{t.when}</p>}
+        {picked && (
+          <div className="mt-xs flex flex-wrap gap-xs">
+            <Button size="sm" variant="outline" onClick={() => { setName(picked.name); setNaming('rename'); setMsg(''); }}>
+              Rename
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="!text-r1"
+              disabled={remove.isPending}
+              onClick={() => {
+                if (armed) remove.mutate(picked.id);
+                else {
+                  setArmed(true);
+                  window.setTimeout(() => setArmed(false), 4000);
+                }
+              }}
+            >
+              {armed ? 'Tap again to remove it' : 'Remove'}
+            </Button>
+          </div>
+        )}
+      </div>
+      {!picked && <AddOnceLines missing={f.missing} clientId={ctx.clientId} settings={f.settings} />}
+      <Field id="en-subject" label="Subject" value={subject} onChange={(v) => { setSubject(v); setTyped(true); }} max={EMAIL_SUBJECT_MAX} />
+      <div>
+        <label htmlFor="en-body" className={LABEL}>
+          The email
+        </label>
+        <textarea id="en-body" rows={14} value={body} maxLength={EMAIL_NOTE_MAX} onChange={(e) => { setBody(e.target.value); setTyped(true); }} className={`${FIELD} font-medium leading-snug [text-wrap:wrap]`} />
+        <div className="mt-xs flex flex-wrap gap-xs">
+          {typed && (
+            <Button size="sm" variant="ghost" onClick={() => setTyped(false)}>
+              Start again from the note
+            </Button>
+          )}
+          {naming === null && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!body.trim() || own.length >= MAX_TEMPLATES}
+              onClick={() => {
+                setName(picked ? picked.name : (t?.name ?? 'My note').slice(0, TEMPLATE_NAME_MAX));
+                setNaming('save');
+                setMsg('');
+              }}
+            >
+              Save this note as a template
+            </Button>
+          )}
+        </div>
+      </div>
+      {naming && (
+        <div className="grid gap-xs rounded-tile bg-paper p-sm">
+          <Field id="en-save-name" label={naming === 'rename' ? 'New name' : 'Name for this note'} value={name} onChange={setName} max={TEMPLATE_NAME_MAX} />
+          {naming === 'save' && sameName && <p className="m-0 text-[14px] font-semibold text-ink-soft">{`You have a note called "${sameName.name}". Saving puts these words in it.`}</p>}
+          <div className="flex flex-wrap gap-xs">
+            <Button size="sm" onClick={() => keep.mutate()} disabled={!name.trim() || keep.isPending}>
+              {keep.isPending ? 'Saving' : naming === 'rename' ? 'Rename it' : 'Save the note'}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setNaming(null)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+      {msg && (
+        <p role="status" className="m-0 text-[14px] font-bold">
+          {msg}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** Email a note and the client's link. The server sends it (ten an hour at most) and says plainly when email is not set up. */
-export function EmailCopySheet({ open, onClose, route, id, defaultTo, text, context, noLinkYet = false }: { open: boolean; onClose: () => void; route: 'invoices' | 'contracts' | 'docs'; id: string; defaultTo: string; text: string; context: EmailContext; noLinkYet?: boolean }) {
+export function EmailCopySheet({ open, onClose, route, id, defaultTo, context, noLinkYet = false }: { open: boolean; onClose: () => void; route: 'invoices' | 'contracts' | 'docs'; id: string; defaultTo: string; context: EmailContext; noLinkYet?: boolean }) {
   const qc = useQueryClient();
   const [to, setTo] = useState(defaultTo);
   const [msg, setMsg] = useState('');
@@ -201,7 +469,7 @@ export function EmailCopySheet({ open, onClose, route, id, defaultTo, text, cont
     },
     onError: (e) => setMsg(e instanceof ApiError ? e.message : 'That did not go. Try again.'),
   });
-  const copyNote = async () => setMsg((await copyPlain(`${note.subject}\n\n${note.body}`)) ? 'Copied the subject and the email. Paste them into your own email.' : 'Copying did not work here. Select the text and copy it by hand.');
+  const copyNote = async () => setMsg((await copyPlain(`Subject: ${note.subject}\n\n${note.body}`)) ? 'Copied the subject and the email. Paste them into your own email.' : 'Copying did not work here. Select the text and copy it by hand.');
   return (
     <Sheet open={open} onClose={onClose} title="Email a copy">
       <div className="grid gap-sm pb-xl">
@@ -216,13 +484,11 @@ export function EmailCopySheet({ open, onClose, route, id, defaultTo, text, cont
         )}
         <div className="flex flex-wrap gap-xs">
           <Button onClick={() => send.mutate()} disabled={send.isPending || noLinkYet || !note.body.trim()}>
+            <AnimatedIcon name={send.isPending ? 'loading' : 'mail'} size={18} />
             {send.isPending ? 'Sending' : 'Send the email'}
           </Button>
           <Button variant="outline" onClick={copyNote}>
             Copy the email
-          </Button>
-          <Button variant="outline" onClick={async () => setMsg((await copyPlain(text)) ? 'Copied the document text. Paste it into your own email.' : 'Copying did not work here.')}>
-            Copy the document text
           </Button>
         </div>
       </div>
@@ -245,48 +511,5 @@ export function DocLog({ type, id }: { type: DocType; id: string }) {
         </li>
       ))}
     </ul>
-  );
-}
-
-/**
- * Buttons on a list row: Download PDF and Print open the document with `?print=1`, which opens the print window as soon as it has loaded;
- * Copy text fetches the document and copies its text version; Email a copy opens the document's email sheet.
- */
-export function DocRowActions({ path, getText }: { path: string; getText: () => Promise<string> }) {
-  const nav = useNavigate();
-  const [note, setNote] = useState('');
-  return (
-    <div className="no-print">
-      <div className="flex flex-wrap gap-xs">
-        <Button size="sm" variant="outline" onClick={() => nav(`${path}?print=1`)}>
-          Download PDF
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => nav(`${path}?print=1`)}>
-          Print
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={async () => {
-            try {
-              setNote((await copyPlain(await getText())) ? 'Copied.' : 'Open it to copy the text.');
-            } catch {
-              setNote('That did not load. Try again.');
-            }
-            window.setTimeout(() => setNote(''), 3000);
-          }}
-        >
-          Copy text
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => nav(`${path}?email=1`)}>
-          Email a copy
-        </Button>
-      </div>
-      {note && (
-        <p role="status" className="mt-xs m-0 text-[12px] font-bold">
-          {note}
-        </p>
-      )}
-    </div>
   );
 }

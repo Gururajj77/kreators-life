@@ -1,9 +1,12 @@
 import {
   centsFrom,
+  DELIVERABLE_KINDS,
+  DELIVERABLE_STAGES,
   EXPENSE_CATEGORIES,
   INCOME_CATEGORIES,
   KIND_META,
   money,
+  openDay,
   MOODS,
   NOT_TO_DO_TITLE_MAX,
   parentKind,
@@ -23,6 +26,7 @@ import {
   TIME_RE,
   WAIT,
   type AgencyClientPage,
+  type AgencyDeliverable,
   type AgencyOverview,
   type CommunityPost,
   type CommunityReply,
@@ -31,6 +35,7 @@ import {
   type FinanceGoal,
   type FinanceSummary,
   type FinanceTransaction,
+  type Invoice,
   type JournalEntry,
   type LogKind,
   type Node,
@@ -205,6 +210,7 @@ const R = {
   journal: ['journal', 'home', 'life', 'reviews'],
   money: ['finance', 'home', 'life', 'reviews'],
   reviews: ['reviews'],
+  agency: ['agency', 'today', 'home', 'inbox'],
 } as const;
 
 /** The layers in the person's words, mapped to the keys the app stores. */
@@ -301,7 +307,7 @@ export const TOOLS: readonly Tool[] = [
           tasks: t.tasks.map((n) => {
             const wait = n.readyAt ? Math.ceil((Date.parse(n.readyAt) - now) / 60_000) : 0;
             const later = Boolean(n.doDate && n.doDate > io.date);
-            return { id: n.id, title: n.title, pillar: pillarName(n.relationship), doDate: n.doDate, due: n.dueDate, priority: n.priority === null ? null : `P${n.priority}`, remember: n.remind, repeats: n.repeat ? repeatLabel(n.repeat, n.doDate ?? n.dueDate) : null, time: n.dueTime, minutes: n.estimateMin, canTickNow: !later && wait <= 0, ...(later ? { waitsForDay: n.doDate } : wait > 0 ? { readyInMinutes: wait } : {}) };
+            return { id: n.id, title: n.title, pillar: pillarName(n.relationship), doDate: n.doDate, due: n.dueDate, priority: n.priority === null ? null : `P${n.priority}`, remember: n.remind, repeats: n.repeat ? repeatLabel(n.repeat, openDay(n)) : null, time: n.dueTime, minutes: n.estimateMin, canTickNow: !later && wait <= 0, ...(later ? { waitsForDay: n.doDate } : wait > 0 ? { readyInMinutes: wait } : {}) };
           }),
           notScheduled: t.backlogTotal,
           notToDo: t.notToDo.map((i) => ({ id: i.id, title: i.title, today: i.today, yesterday: i.week[5] ?? null, streak: i.streak })),
@@ -428,7 +434,7 @@ export const TOOLS: readonly Tool[] = [
     params: { type: 'object', properties: { month: { type: 'string', description: 'YYYY-MM. This month if left out.' } } },
     run: async (a, io) => {
       const month = /^\d{4}-\d{2}$/.test(str(a.month)) ? str(a.month) : io.date.slice(0, 7);
-      const f = must(await io.call({ method: 'GET', path: `/finance?month=${month}` })) as FinanceSummary;
+      const f = must(await io.call({ method: 'GET', path: `/finance?month=${month}&dusize=100` })) as FinanceSummary;
       const m = (c: number) => money(c, f.currency);
       return {
         data: {
@@ -881,7 +887,7 @@ export const TOOLS: readonly Tool[] = [
     params: { type: 'object', properties: { dueId: id('due') }, required: ['dueId'] },
     describe: async (a, io) => {
       const want = seg(a.dueId);
-      const f = must(await io.call({ method: 'GET', path: `/finance?month=${io.date.slice(0, 7)}` })) as FinanceSummary;
+      const f = must(await io.call({ method: 'GET', path: `/finance?month=${io.date.slice(0, 7)}&dusize=100` })) as FinanceSummary;
       const d = f.dues.find((x) => x.id === want && x.status === 'open');
       if (!d) throw new ToolError('Could not find that open due. Look it up again with get_finance.');
       const amount = money(d.amountCents, d.currency);
@@ -889,7 +895,7 @@ export const TOOLS: readonly Tool[] = [
     },
     run: async (a, io) => {
       const dueId = seg(a.dueId);
-      must(await io.call({ method: 'POST', path: `/finance/dues/${dueId}/settle` }));
+      must(await io.call({ method: 'POST', path: `/finance/dues/${dueId}/settle?day=${io.date}` }));
       return { label: 'Settled what was owed', data: { settled: true } };
     },
   },
@@ -1268,6 +1274,138 @@ export const TOOLS: readonly Tool[] = [
           invoices: r.invoices.map((inv) => ({ id: inv.id, number: inv.number, status: inv.status, cents: inv.totalCents, currency: inv.currency })),
         },
       };
+    },
+  },
+  {
+    name: 'list_agency_invoices',
+    risk: 'read',
+    needs: ['agency'],
+    refresh: [],
+    title: 'Look at Agency invoices',
+    description: 'The Agency invoices, newest first: number, client, status (draft, sent, paid, void) and total, with the count and sum for each status. Optionally only one status or one client.',
+    params: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['draft', 'sent', 'paid', 'void'], description: 'Only invoices with this status.' },
+        clientId: id('client'),
+      },
+    },
+    run: async (a, io) => {
+      const q = new URLSearchParams({ size: '50' });
+      const status = str(a.status);
+      if (['draft', 'sent', 'paid', 'void'].includes(status)) q.set('status', status);
+      if (a.clientId) q.set('client', seg(a.clientId));
+      const r = must(await io.call({ method: 'GET', path: `/agency/invoices?${q.toString()}` })) as { page: { more: boolean }; invoices: Invoice[]; counts: { status: string; n: number; cents: number }[] };
+      const currency = r.invoices[0]?.currency ?? 'INR';
+      return {
+        data: {
+          invoices: r.invoices.map((inv) => ({ id: inv.id, number: inv.number, client: inv.clientName, status: inv.status, total: money(inv.totalCents, inv.currency), due: inv.dueDate })),
+          byStatus: r.counts.map((x) => ({ status: x.status, count: x.n, total: money(x.cents, currency) })),
+          more: r.page.more,
+        },
+      };
+    },
+  },
+
+  // ---- Agency writes: each one is an Agency route the screens already use, so the owner filter, the module gate and the limits apply.
+  {
+    name: 'add_agency_deliverable',
+    risk: 'write',
+    needs: ['agency'],
+    refresh: R.agency,
+    title: 'Add a deliverable',
+    description: 'Add a piece of client work (a deliverable) under one Agency client: a title, optionally the kind, the stage (idea unless they say), a due day and a publish day. Look the client up with list_agency_clients first.',
+    params: {
+      type: 'object',
+      properties: {
+        clientId: id('client'),
+        title: { type: 'string', maxLength: 120 },
+        kind: { type: 'string', enum: DELIVERABLE_KINDS },
+        stage: { type: 'string', enum: DELIVERABLE_STAGES },
+        dueDate: { type: 'string', description: 'YYYY-MM-DD, today or tomorrow.' },
+        publishDate: { type: 'string', description: 'YYYY-MM-DD, today or tomorrow.' },
+      },
+      required: ['clientId', 'title'],
+    },
+    run: async (a, io) => {
+      const body: Record<string, unknown> = { clientId: seg(a.clientId), title: str(a.title) };
+      if (a.kind) body.kind = str(a.kind);
+      if (a.stage) body.stage = str(a.stage);
+      const due = dateArg(a.dueDate, io);
+      const live = dateArg(a.publishDate, io);
+      if (due !== undefined) body.dueDate = due;
+      if (live !== undefined) body.publishDate = live;
+      const r = must(await io.call({ method: 'POST', path: `/agency/items?day=${io.date}`, body })) as { id: string };
+      return { label: `Added ${quote(str(a.title))}`, undo: { method: 'DELETE', path: `/agency/items/${seg(r.id)}` }, data: { id: r.id, title: str(a.title) } };
+    },
+  },
+  {
+    name: 'move_agency_deliverable',
+    risk: 'write',
+    needs: ['agency'],
+    refresh: R.agency,
+    title: 'Move a deliverable',
+    description: `Move one deliverable to another stage (${DELIVERABLE_STAGES.join(', ')}). Give the client id too, so it is found among that client's pieces.`,
+    params: { type: 'object', properties: { itemId: id('deliverable'), clientId: id('client'), stage: { type: 'string', enum: DELIVERABLE_STAGES } }, required: ['itemId', 'clientId', 'stage'] },
+    run: async (a, io) => {
+      const itemId = seg(a.itemId);
+      const list = must(await io.call({ method: 'GET', path: `/agency/items?client=${seg(a.clientId)}&size=100&day=${io.date}` })) as { items: AgencyDeliverable[] };
+      const prev = list.items.find((x) => x.id === itemId);
+      if (!prev) throw new ToolError('Could not find that deliverable under that client. Look it up again with get_agency_client.');
+      const stage = str(a.stage);
+      must(await io.call({ method: 'PATCH', path: `/agency/items/${itemId}?day=${io.date}`, body: { stage } }));
+      return { label: `Moved ${quote(prev.title)} to ${stage}`, undo: { method: 'PATCH', path: `/agency/items/${itemId}?day=${io.date}`, body: { stage: prev.stage } }, data: { title: prev.title, from: prev.stage, to: stage } };
+    },
+  },
+  {
+    name: 'add_agency_note',
+    risk: 'write',
+    needs: ['agency'],
+    refresh: R.agency,
+    title: 'Add a note to a deliverable',
+    description: 'Add a note to one deliverable’s thread. It stays private unless shared is true, which shows it to the client at their link.',
+    params: { type: 'object', properties: { itemId: id('deliverable'), text: { type: 'string', maxLength: 1000 }, shared: { type: 'boolean', description: 'Show it to the client. False unless they say so.' } }, required: ['itemId', 'text'] },
+    run: async (a, io) => {
+      const itemId = seg(a.itemId);
+      const r = must(await io.call({ method: 'POST', path: `/agency/items/${itemId}/notes`, body: { body: str(a.text), shared: a.shared === true } })) as { id: string };
+      return { label: a.shared === true ? 'Added a note the client can see' : 'Added a private note', undo: { method: 'DELETE', path: `/agency/notes/${seg(r.id)}` }, data: { added: true, shared: a.shared === true } };
+    },
+  },
+  {
+    name: 'mark_agency_invoice_sent',
+    risk: 'write',
+    needs: ['agency'],
+    refresh: R.agency,
+    title: 'Mark an invoice sent',
+    description: 'Mark one Agency invoice as sent, so its client link opens and it counts as owed. Look it up with list_agency_invoices first.',
+    params: { type: 'object', properties: { invoiceId: id('invoice') }, required: ['invoiceId'] },
+    run: async (a, io) => {
+      const invoiceId = seg(a.invoiceId);
+      const prev = (must(await io.call({ method: 'GET', path: `/agency/invoices/${invoiceId}` })) as { invoice: Invoice }).invoice;
+      if (prev.status === 'sent') return { label: `Invoice ${prev.number} was already sent`, data: { number: prev.number, status: 'sent' } };
+      if (prev.status !== 'draft') throw new ToolError(`Invoice ${prev.number} is ${prev.status}; only a draft is marked sent.`);
+      must(await io.call({ method: 'PATCH', path: `/agency/invoices/${invoiceId}`, body: { status: 'sent' } }));
+      return { label: `Marked invoice ${prev.number} sent`, undo: { method: 'PATCH', path: `/agency/invoices/${invoiceId}`, body: { status: 'draft' } }, data: { number: prev.number, status: 'sent' } };
+    },
+  },
+  {
+    name: 'mark_agency_invoice_paid',
+    risk: 'confirm',
+    needs: ['agency'],
+    refresh: [...R.agency, ...R.money],
+    title: 'Mark an invoice paid',
+    description: 'Mark one sent Agency invoice as paid: it is written into Finance as income. Waits for the person to confirm.',
+    params: { type: 'object', properties: { invoiceId: id('invoice') }, required: ['invoiceId'] },
+    describe: async (a, io) => {
+      const inv = (must(await io.call({ method: 'GET', path: `/agency/invoices/${seg(a.invoiceId)}` })) as { invoice: Invoice }).invoice;
+      return `Mark invoice ${inv.number} for ${inv.clientName} paid: ${money(inv.totalCents, inv.currency)} goes into Finance as income`;
+    },
+    run: async (a, io) => {
+      const invoiceId = seg(a.invoiceId);
+      const prev = (must(await io.call({ method: 'GET', path: `/agency/invoices/${invoiceId}` })) as { invoice: Invoice }).invoice;
+      if (prev.status !== 'sent') throw new ToolError(`Invoice ${prev.number} is ${prev.status}; only a sent one is marked paid.`);
+      must(await io.call({ method: 'PATCH', path: `/agency/invoices/${invoiceId}`, body: { status: 'paid' } }));
+      return { label: `Marked invoice ${prev.number} paid`, undo: { method: 'PATCH', path: `/agency/invoices/${invoiceId}`, body: { status: 'sent' } }, data: { number: prev.number, status: 'paid' } };
     },
   },
 ];

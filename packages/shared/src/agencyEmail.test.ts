@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EMAIL_NOTE_MAX, EMAIL_TEMPLATES, emailTemplate, emptyEmailVars, fillEmail, suggestEmailTemplate, type EmailVars } from './agencyEmail';
+import { EMAIL_NOTE_MAX, EMAIL_SUBJECT_MAX, EMAIL_TEMPLATES, emailTemplate, emptyEmailVars, fillEmail, emailVarsFor, parseEmailNote, suggestEmailTemplate, type EmailVars } from './agencyEmail';
 
 const full: EmailVars = {
   names: 'Parag and Circle team',
@@ -72,5 +72,62 @@ describe('agency email notes', () => {
     expect(suggestEmailTemplate('invoice', { retainerMonth: true })).toBe('monthly-invoice');
     expect(suggestEmailTemplate('invoice')).toBe('begin');
     expect(suggestEmailTemplate('contract', { signed: true })).toBe('signed-copy');
+  });
+});
+
+describe('a saved email note', () => {
+  it('keeps the words and their line breaks, and one line of subject', () => {
+    expect(parseEmailNote({ subject: 'Invoice\r\nfor May', message: 'Hi Parag,\r\n\r\nThe invoice is attached.\rThanks' })).toEqual({ subject: 'Invoice for May', message: 'Hi Parag,\n\nThe invoice is attached.\nThanks' });
+  });
+  it('drops control characters but keeps tabs', () => {
+    expect(parseEmailNote({ subject: 'A\u0007B', message: 'one\u0000two\tthree\u001b' })).toEqual({ subject: 'A B', message: 'onetwo\tthree' });
+  });
+  it('holds the words and the subject to their limits', () => {
+    const n = parseEmailNote({ subject: 'x'.repeat(EMAIL_SUBJECT_MAX + 50), message: 'y'.repeat(EMAIL_NOTE_MAX + 50) })!;
+    expect(n.subject.length).toBe(EMAIL_SUBJECT_MAX);
+    expect(n.message.length).toBe(EMAIL_NOTE_MAX);
+  });
+  it('refuses a note with no words, and anything that is not one', () => {
+    expect(parseEmailNote({ subject: 'Hello', message: '   \n ' })).toBeNull();
+    expect(parseEmailNote(null)).toBeNull();
+    expect(parseEmailNote('Hello')).toBeNull();
+    expect(parseEmailNote({ subject: 3, message: 'Hi' })).toEqual({ subject: '', message: 'Hi' });
+  });
+});
+
+describe('a note written from the records', () => {
+  const client = { name: 'Circle', contactName: 'Parag Shah', month: { published: 3, inReview: 1, open: 2 } };
+  const profile = { signerName: 'Asha Rao', from: { name: 'Asha Studio', phone: '+91 98000 00000', email: 'asha@example.com' } };
+  it('fills every part from the client, the profile and the document, and every note has no blank in it', () => {
+    const { vars, missing } = emailVarsFor({ kind: 'invoice', client, profile, number: 'KR-0007', amount: '₹30,000', dueBy: '1 May 2026', period: 'May 2026' });
+    expect(missing).toEqual([]);
+    expect(vars.names).toBe('Parag and Circle team');
+    expect(vars.attached).toEqual(['The invoice KR-0007 for ₹30,000']);
+    expect(vars.status).toBe('3 published, 1 waiting for your review, 2 being made');
+    for (const t of EMAIL_TEMPLATES) {
+      const { subject, body } = fillEmail(t.key, vars);
+      expect(`${subject}\n${body}`, t.key).not.toMatch(/__|\{|\}|TBD|undefined/);
+      expect(body, t.key).toContain('Asha Rao');
+      expect(body.startsWith('Hi Parag and Circle team,'), t.key).toBe(true);
+    }
+  });
+  it('names what is missing once, where it is saved, and still writes no blank', () => {
+    const { vars, missing } = emailVarsFor({ kind: 'contract', docKind: 'trial', title: 'Trial engagement agreement', client: { name: 'Circle', contactName: '' }, profile: { ...profile, from: { ...profile.from, phone: '' } } });
+    expect(missing.map((m) => [m.key, m.where])).toEqual([['contactName', 'client'], ['phone', 'profile']]);
+    expect(vars.engagement).toBe('trial engagement');
+    const { body } = fillEmail('begin', vars);
+    expect(body.startsWith('Hi Circle team,')).toBe(true);
+    expect(body).toContain('• The Trial engagement agreement');
+    expect(body).not.toMatch(/__|\|  |\| $/m);
+  });
+  it('offers the note the moment needs', () => {
+    expect(suggestEmailTemplate('invoice', { paid: true })).toBe('payment-thanks');
+    expect(suggestEmailTemplate('invoice', { overdue: true })).toBe('payment-nudge');
+    expect(suggestEmailTemplate('invoice', { stage: 'delivery' })).toBe('monthly-invoice');
+    expect(suggestEmailTemplate('invoice', { stage: 'agreement_sent' })).toBe('begin');
+    expect(suggestEmailTemplate('contract', { docKind: 'retainer', stage: 'retainer' })).toBe('renewal');
+    expect(suggestEmailTemplate('doc', { docKind: 'trial_terms' })).toBe('before-shoot');
+    expect(suggestEmailTemplate('doc', { docKind: 'monthly_report' })).toBe('report');
+    expect(suggestEmailTemplate('doc', { docKind: 'brief' })).toBe('plan');
   });
 });

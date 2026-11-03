@@ -1,6 +1,6 @@
-import { rulerIndex, rulerTicks, rulerValueAt } from '@kreators/shared';
+import { rulerClamp, rulerIndex, rulerTicks, rulerValueAt } from '@kreators/shared';
 import gsap from 'gsap';
-import { useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { prefersReducedMotion } from './fx/env';
 import { tick as buzz } from './fx/haptics';
 import { tickSound, unlockAudio } from '../lib/sound';
@@ -52,11 +52,24 @@ export function RulerPicker({ label, value, onChange, onCommit, min, max, step, 
   const last = ticks.length - 1;
   const top = ticks[last]?.value ?? min;
   const rest = defaultValue ?? ticks[Math.floor(last / 2)]?.value ?? min;
-  const shownValue = value ?? rest;
+  // A value from outside is held to the ruler (inside min and max, on a tick) before it is drawn, so a stray saved number never sits off the marks.
+  const shownValue = value === null ? rest : rulerClamp(value, min, max, step);
   const floatIdx = rulerIndex(shownValue, min, max, step);
   const nearest = Math.round(floatIdx);
 
   const root = useRef<HTMLDivElement>(null);
+  // How many ticks fit either side of the marker. A label further out than that would be cut by the view's edge on a narrow phone, so it
+  // is not drawn (the ticks still are, fading out).
+  const [reach, setReach] = useState(Number.POSITIVE_INFINITY);
+  useLayoutEffect(() => {
+    const el = root.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const measure = () => setReach(Math.max(2, Math.floor(el.clientWidth / 2 / GAP) - 2));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const track = useRef<HTMLDivElement>(null);
   const shown = useRef(floatIdx); // where the track is drawn, in ticks (fractional while dragging)
   const drag = useRef<{ x0: number; idx0: number; moved: boolean } | null>(null);
@@ -229,7 +242,7 @@ export function RulerPicker({ label, value, onChange, onCommit, min, max, step, 
             const d = Math.abs(i - nearest);
             const on = value !== null && i === nearest;
             // The chosen tick always names itself; the labelled ticks within two marks of it step aside so no two numbers touch.
-            const label = on || (t.major && !(value !== null && !ticks[nearest]?.major && d <= 2));
+            const label = on || (t.major && d <= reach && !(value !== null && !ticks[nearest]?.major && d <= 2));
             return (
               <span key={t.value} className="rp-tick" data-on={on ? '' : undefined} style={{ '--o': Math.max(0.16, 1 - d * 0.1), '--h': `${Math.max(12, 34 - d * 3)}px` } as CSSProperties}>
                 <i className="rp-line" />

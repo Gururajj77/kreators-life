@@ -305,7 +305,9 @@
 }
 
 @layer base {
-  /* Every select draws its own chevron, 12px in from the edge, with 32px kept clear so the text never runs under it. */
+  /* Every select draws its own chevron, 12px in from the edge, with 32px kept clear so the text never runs under it.
+     The space is !important: a padding utility on the select (px-sm) sits in a later layer and would otherwise let long text
+     run under the chevron. */
   select {
     appearance: none;
     -webkit-appearance: none;
@@ -313,7 +315,8 @@
     background-repeat: no-repeat;
     background-position: right 12px center;
     background-size: 14px 14px;
-    padding-right: 32px;
+    padding-right: 32px !important;
+    text-overflow: ellipsis;
   }
   select:disabled {
     opacity: 0.7;
@@ -363,6 +366,10 @@
       radial-gradient(56rem 44rem at 82% 108%, var(--glow-2), transparent 62%),
       radial-gradient(44rem 36rem at -4% 96%, var(--glow-4), transparent 62%),
       linear-gradient(165deg, var(--page-base-a), var(--page-base-b));
+    /* The wash ends in a fade, never a line: where the fixed layer stops (a full-page shot, a phone whose toolbar slides away, the long
+       public pages in dark mode) its last stretch melts into the page's own base on html instead of meeting it at a hard edge. */
+    -webkit-mask-image: linear-gradient(to bottom, black 0, black 82%, transparent 100%);
+    mask-image: linear-gradient(to bottom, black 0, black 82%, transparent 100%);
   }
   /* Headings, captions and fold-out titles share their words evenly over their lines. */
   h1,
@@ -398,11 +405,17 @@
     font: inherit;
     color: inherit;
   }
-  /* The ring every control shows when the keyboard is on it: ink-soft is 3:1 or better on the page, on a card and on a coloured fill,
-     in both modes. The corners are the control's own. */
+  /* The ring every control shows when the keyboard is on it, 3:1 or better on the page and on a card in both modes; the
+     corners are the control's own. It is the system's focus blue (deep sky, lighter in dark mode), never ink: a dark ring
+     beside a solid ink pill read as a second picked pill. */
   :focus-visible {
-    outline: 3px solid var(--color-ink-soft);
+    outline: 3px solid var(--deep-self);
     outline-offset: 3px;
+  }
+  /* A mouse or a finger never draws the ring: only the keyboard does. A focused control that was clicked looks like any
+     other until it is picked, so focus never passes for selection. */
+  :focus:not(:focus-visible) {
+    outline: none;
   }
   /* The tab bar (72px), the assistant's button (above it) and the sticky chrome never cover a control the keyboard scrolls to. */
   html {
@@ -424,18 +437,6 @@
 @media (max-width: 767.98px), (max-height: 479.98px) {
   .screen > header:first-child {
     padding-top: 64px;
-  }
-  /* The assistant's open panel fills the page from just under the logo row down to the tab bar. */
-  section[aria-label^='Bumling AI assistant'] {
-    top: calc(var(--spacing-xl) + env(safe-area-inset-top));
-    bottom: calc(var(--spacing-xl) + 1px + env(safe-area-inset-bottom));
-    left: 0;
-    right: 0;
-    height: auto;
-    border-width: 0;
-    border-top-width: 2px;
-    border-radius: 0;
-    box-shadow: none;
   }
 }
 
@@ -459,23 +460,24 @@
   .screen-even {
     align-items: stretch;
   }
-  .screen-even > section:not(.span-all) {
+  /* `.contents` wrappers (Home's "More on Home") drop out of the layout but not out of the DOM, so they are matched as well. */
+  :is(.screen-even, .screen-even > .contents) > section:not(.span-all) {
     display: flex;
     flex-direction: column;
   }
-  .screen-even > section:not(.span-all) > :last-child {
+  :is(.screen-even, .screen-even > .contents) > section:not(.span-all) > :last-child {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
   }
-  .screen-even > section:not(.span-all) > :last-child > :first-child {
+  :is(.screen-even, .screen-even > .contents) > section:not(.span-all) > :last-child > :first-child {
     flex: 1 1 auto;
   }
-  .screen-even > section:not(.span-all) > :last-child > ul.flex > li {
+  :is(.screen-even, .screen-even > .contents) > section:not(.span-all) > :last-child > ul.flex > li {
     flex: 1 1 auto;
   }
   /* A card in a grid of cards (the reads under Knowledge) fills its cell, so cards in one row are one height. */
-  .screen-even > section:not(.span-all) > :last-child > ul > li > :first-child {
+  :is(.screen-even, .screen-even > .contents) > section:not(.span-all) > :last-child > ul > li > :first-child {
     height: 100%;
   }
 }
@@ -561,7 +563,7 @@
   box-shadow: none;
 }
 .toy:active:not(:disabled) {
-  transform: translateY(2px);
+  /* The press itself (squeeze and spring) is the motion kit's `.toy:active` further down; this one only settles the shadow. */
   box-shadow:
     0 0 0 1px var(--edge),
     0 1px 2px color-mix(in oklab, var(--toy-color) 12%, transparent);
@@ -582,6 +584,11 @@
       0 0 0 1px var(--edge),
       0 4px 8px var(--shade-1),
       0 16px 32px -8px var(--shade-2);
+  }
+  /* Hover is a tint, never an outline or a dark edge: an unpicked pill or a glass card takes a wash of the screen's accent,
+     so it reads as "you can tap this", and only a picked one is solid. */
+  :is(.toy-soft, .toy-flat):is(.bg-card, .bg-paper, .bg-card-strong):not([aria-pressed='true'], [aria-selected='true'], [aria-current='page']):hover:not(:disabled) {
+    background-color: color-mix(in oklab, var(--tint) 14%, var(--card-strong));
   }
   .toy-flat:hover:not(:disabled) {
     transform: none;
@@ -638,9 +645,9 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  /* The pressed state's `transform: none` is with the motion kit's reduced-motion rules, beside the press it stills. */
   .toy,
-  .toy:hover:not(:disabled),
-  .toy:active:not(:disabled) {
+  .toy:hover:not(:disabled) {
     transform: none;
   }
   .toy:hover .avatar-hop {
@@ -670,6 +677,24 @@
   .scroll-row::-webkit-scrollbar {
     display: none;
   }
+  /* A row of tags in a card that may run past its edge: the last 24px (the bleed and a little more) fade out, so a cut tag
+     reads as "scrolls sideways" rather than broken. Tags that fit end before the fade starts. */
+  .scroll-fade {
+    mask-image: linear-gradient(to right, black calc(100% - 24px), transparent);
+  }
+  /* A wrapping row of pills or buttons that fills each line on a phone, so a pill that wraps onto a line of its own
+     spans the row instead of standing alone (the lone-pill rule; scripts/smoke/lone-probe.js). */
+  @media (max-width: 639.98px) {
+    .fill-row > * {
+      flex: 1 1 auto;
+      justify-content: center;
+    }
+  }
+  /* The same at every width, for chips in a card or a form, where a row that fits on one line may fill it too. */
+  .fill-row-all > * {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
 }
 
 /* A disabled control is exempt from the contrast rule, but it stays legible: never thinner than 70%, whatever disabled:opacity-* says. */
@@ -682,15 +707,13 @@
 summary {
   list-style: none;
   cursor: pointer;
+  transition: background-color 120ms ease;
 }
 summary::-webkit-details-marker {
   display: none;
 }
 details[open] .chev {
   transform: rotate(180deg);
-}
-summary {
-  transition: background-color 120ms ease;
 }
 /* A click leaves no box behind; only the keyboard draws the ring. An open row stays tinted. */
 summary:focus {
@@ -817,14 +840,10 @@ details[open] > summary {
   max-width: 65ch;
 }
 
-/* Every tip is the same pale purple card; the tint turns deep purple in dark mode with the rest of the family. */
+/* Callout colours: each is its relationship colour thinned into the card, so it stays pale in light mode and deep in dark mode.
+   Every tip is the same pale purple card; the tint turns deep purple in dark mode with the rest of the family. */
 .tip-card {
-  background-color: var(--tint-purple);
   color: var(--color-ink);
-}
-
-/* Callout colours: each is its relationship colour thinned into the card, so it stays pale in light mode and deep in dark mode. */
-.tip-card {
   background-color: color-mix(in oklab, var(--color-r6) 14%, var(--color-card-strong));
 }
 .tip-yellow {
@@ -910,11 +929,8 @@ nav {
   --color-on-fill: var(--color-on-yellow);
 }
 
-/* Red text on the light page: the fill red is 4.4:1 on glass, so text in it takes the deep red (8:1). */
+/* Red text on the light page: the fill red is 4.4:1 on glass, so text in it takes the deep red (8:1). (The system-dark case is in the block below.) */
 :root:not([data-theme='dark']) :is(.text-r1, .hover\:text-r1:hover) { color: var(--deep-servant_leader); }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) :is(.text-r1, .hover\:text-r1:hover) { color: var(--deep-servant_leader); }
-}
 
 /* Coloured text on the page: the deeper fills are for fills; on the dark page text in a relationship colour takes the light end of its own family. */
 :root[data-theme='dark'] :is(.text-r1, .hover\:text-r1:hover) { color: var(--deep-servant_leader); }
@@ -1030,67 +1046,6 @@ input[type='radio'] {
   color: var(--color-on-fill);
 }
 
-/* Print and save as PDF: an invoice or an agreement prints as the page itself. Anything with .no-print (menus, buttons, the thread)
-   is left out, and .print-doc is left as the one thing on the sheet. Colours stay (a coloured bar prints as a bar). */
-@media print {
-  .no-print,
-  nav,
-  [data-assistant],
-  [data-reminders] {
-    display: none !important;
-  }
-  html,
-  body {
-    background: #fff !important;
-  }
-  body::before {
-    display: none !important;
-  }
-  .print-doc {
-    box-shadow: none !important;
-    border-radius: 0 !important;
-    margin: 0 !important;
-    max-width: none !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-  @page {
-    margin: 12mm;
-  }
-  /* A .print-doc page that holds no legal sheet (the client dashboard at /a/:token): the site's own header and footer stay off the paper,
-     and the theme's colours go back to their light values, so a dark-mode reader does not print pale ink on white. */
-  body:has(.print-doc):not(:has(.legal-root)) header:not(.print-doc *),
-  body:has(.print-doc):not(:has(.legal-root)) footer:not(.print-doc *) {
-    display: none !important;
-  }
-  html:has(.print-doc):not(:has(.legal-root)) {
-    color-scheme: light;
-    --ink: #25293a;
-    --ink-soft: #444a5f;
-    --ink-mute: #565c72;
-    --on-ink: #ffffff;
-    --paper: #f3f4f9;
-    --card: #ffffff;
-    --card-strong: #ffffff;
-    --line: #d7dae8;
-    --color-ink: #25293a;
-    --color-ink-soft: #444a5f;
-    --color-ink-mute: #565c72;
-    --color-on-ink: #ffffff;
-    --color-paper: #f3f4f9;
-    --color-card: #ffffff;
-    --color-card-strong: #ffffff;
-    --color-line: #d7dae8;
-    --tint-red: #fde8ee;
-    --tint-orange: #fdeee0;
-    --tint-yellow: #fbf3cf;
-    --tint-green: #e6f2e4;
-    --tint-brown: #ece3de;
-    --tint-sky: #dcebf8;
-    --tint-indigo: #e1e4fa;
-    --tint-purple: #ece8fb;
-  }
-}
 
 /* A badge not earned yet: the picture fades, the words stay at full strength so they can be read. */
 .badge-locked > :first-child {
@@ -1101,63 +1056,6 @@ input[type='radio'] {
    is on the page: black on white, square corners, no glass or gradients, on a landscape page of its own (a named page, so other prints keep theirs). */
 .month-print-sheet {
   display: none;
-}
-@media print {
-  @page month {
-    size: landscape;
-    margin: 10mm;
-  }
-  body.printing-month > *:not(.month-print-sheet) {
-    display: none !important;
-  }
-  body.printing-month .month-print-sheet {
-    display: block;
-    page: month;
-    color: black;
-    background: white;
-    font-size: 9pt;
-    line-height: 1.25;
-  }
-  body.printing-month .mp-title {
-    font-size: 18pt;
-    font-weight: 800;
-    margin-bottom: 4mm;
-  }
-  body.printing-month .mp-week {
-    display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-    break-inside: avoid;
-  }
-  body.printing-month .mp-head span {
-    border: 1px solid black;
-    padding: 1mm 2mm;
-    font-weight: 800;
-    text-align: center;
-  }
-  body.printing-month .mp-day {
-    border: 1px solid black;
-    min-height: 28mm;
-    padding: 1mm 2mm;
-    overflow-wrap: anywhere;
-  }
-  body.printing-month .mp-out {
-    background: white;
-  }
-  body.printing-month .mp-num {
-    display: block;
-    font-weight: 800;
-    font-size: 11pt;
-  }
-  body.printing-month .mp-task {
-    margin: 0 0 0.8mm;
-  }
-  body.printing-month .mp-done {
-    text-decoration: line-through;
-  }
-  body.printing-month .mp-legend {
-    margin: 3mm 0 0;
-    font-size: 8pt;
-  }
 }
 
 /* ------------------------------------------------------------------------------------------------
@@ -1543,13 +1441,6 @@ input[type='radio'] {
     transition: none !important;
   }
 }
-@media print {
-  .fx-reveal,
-  .fx-text:not([data-on]) .fx-word {
-    opacity: 1;
-    transform: none;
-  }
-}
 
 /* ------------------------------------------------------------------------------------------------
    Apple-leaning layer of the motion kit (2026-11-02; Human Interface Guidelines as inspiration, no Apple assets, fonts or symbols).
@@ -1580,9 +1471,6 @@ input[type='radio'] {
   font-size: var(--text-large-title);
   line-height: 1.1;
   letter-spacing: -0.02em;
-}
-.type-footnote {
-  font-size: var(--text-footnote);
 }
 
 /* A press: a quick squeeze to 97% while held, a spring back on release. Buttons squeeze more than cards and rows. */
@@ -1921,6 +1809,38 @@ ol.grid > li > .toy:only-child {
   counter-reset: legal-sec;
   overflow-wrap: anywhere;
 }
+/* A document is paper. Invoices, agreements and the other documents are always white with dark ink, in dark mode too, so the page on the
+   screen is the page that prints. The theme's colours reach the document through variables, so they are set back to their light values
+   on the sheet itself (the aliases that Tailwind reads as well as the base ones). The app around the sheet keeps its theme. */
+.legal-doc {
+  color-scheme: light;
+  --ink: #25293a;
+  --ink-soft: #444a5f;
+  --ink-mute: #565c72;
+  --on-ink: #ffffff;
+  --paper: #f3f4f9;
+  --card: #ffffff;
+  --card-strong: #ffffff;
+  --line: #d7dae8;
+  --color-ink: #25293a;
+  --color-ink-soft: #444a5f;
+  --color-ink-mute: #565c72;
+  --color-on-ink: #ffffff;
+  --color-paper: #f3f4f9;
+  --color-card: #ffffff;
+  --color-card-strong: #ffffff;
+  --color-line: #d7dae8;
+  --tint-red: #fde8ee;
+  --tint-orange: #fdeee0;
+  --tint-yellow: #fbf3cf;
+  --tint-green: #e6f2e4;
+  --tint-sky: #dcebf8;
+  --tint-indigo: #e1e4fa;
+  --tint-purple: #ece8fb;
+  background-color: #ffffff;
+  background-image: none;
+  color: #25293a;
+}
 .legal-doc h1, .legal-doc h2, .legal-doc h3 { font-family: inherit; }
 .legal-letterhead { display: flex; align-items: center; gap: var(--spacing-sm); padding-bottom: var(--spacing-sm); margin-bottom: var(--spacing-md); border-bottom: 2px solid var(--doc-accent); }
 .legal-logo { display: block; max-height: 56px; max-width: 160px; object-fit: contain; }
@@ -1938,7 +1858,8 @@ ol.grid > li > .toy:only-child {
 .legal-sec-h { margin: 0; padding-bottom: 4px; border-bottom: 1px solid var(--doc-accent); font-size: 1.15em; font-weight: 700; font-variant: small-caps; letter-spacing: 0.05em; line-height: 1.3; }
 .legal-root[data-heading='numbered'] .legal-sec-h { counter-increment: legal-sec; }
 .legal-root[data-heading='numbered'] .legal-sec-h::before { content: counter(legal-sec) '. '; }
-.legal-clause { margin: var(--spacing-xs) 0 0; text-align: left; hyphens: auto; }
+/* A title shares its words over its lines (balance, above); a clause is a long read, so it keeps full lines but never ends on one word. */
+.legal-clause { margin: var(--spacing-xs) 0 0; text-align: left; hyphens: auto; text-wrap: pretty; }
 .legal-list { margin: var(--spacing-xs) 0 0; padding: 0; list-style: none; }
 .legal-list li { display: flex; gap: var(--spacing-xs); margin-top: 4px; }
 .legal-doc strong { font-weight: 700; }
@@ -1952,63 +1873,21 @@ ol.grid > li > .toy:only-child {
 .legal-sign-line { display: flex; gap: var(--spacing-xs); margin: var(--spacing-xs) 0 0; }
 .legal-sign-line > span:last-child { flex: 1; min-width: 0; border-bottom: 1px solid var(--color-ink-mute); padding-bottom: 2px; }
 .legal-sign-accepted { margin: var(--spacing-xs) 0 0; font-size: 0.85em; color: var(--color-ink-soft); }
+/* On a phone the two signature blocks stack, so a title like "Founder" is never broken mid-word in a half-width column. */
+.legal-sign-line > span:first-child { white-space: nowrap; }
+@media screen and (max-width: 520px) {
+  .legal-sign { grid-template-columns: 1fr; }
+}
 .legal-stamp { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; pointer-events: none; z-index: 0; }
+.legal-stamp > span::before { content: attr(data-stamp); }
 .legal-stamp > span { transform: rotate(-24deg); font-family: var(--doc-font); font-size: clamp(40px, 12vw, 96px); font-weight: 700; letter-spacing: 0.12em; color: var(--color-ink); opacity: 0.06; border: 6px solid currentColor; padding: 0 var(--spacing-md); border-radius: 12px; white-space: nowrap; }
 .legal-doc > *:not(.legal-stamp) { position: relative; z-index: 1; }
 .legal-run-head, .legal-run-foot { display: none; }
+/* A section marked "not printed" stays on the screen and at the client's link and leaves the printed page; one line says where it went.
+   The print note is for paper only. */
+.legal-print-note { display: none; }
 .legal-text { margin: var(--spacing-xs) 0 0; padding: var(--spacing-sm); max-height: 420px; overflow: auto; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; line-height: 1.5; border-radius: var(--radius-tile); background: var(--color-paper); user-select: text; }
 
-@media print {
-  html, body { background: #fff !important; color: #000 !important; }
-  /* The page frame (the sidebar's offset, the column width, the gutters) is not part of the sheet either. */
-  main:has(.legal-root) { margin: 0 !important; padding: 0 !important; max-width: none !important; width: auto !important; }
-  .legal-root { --doc-accent: #333; }
-  .legal-root[data-accent='navy'] { --doc-accent: #1f2d63; }
-  .legal-root[data-accent='green'] { --doc-accent: #1f5a3c; }
-  .legal-root[data-accent='plum'] { --doc-accent: #5a2c56; }
-  .legal-root[data-accent='clay'] { --doc-accent: #84472b; }
-  .legal-root[data-accent='slate'] { --doc-accent: #454f63; }
-  .legal-doc, .legal-doc *:not(.legal-invoice):not(.legal-invoice *) {
-    background: transparent !important;
-    background-image: none !important;
-    box-shadow: none !important;
-    text-shadow: none !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    color: #000 !important;
-    border-color: #777 !important;
-    -webkit-print-color-adjust: economy;
-    print-color-adjust: economy;
-  }
-  /* A screen's own heading above the document ("The invoice") is not part of the sheet. */
-  .legal-host > div:first-child { display: none !important; }
-  .legal-host, .legal-host > div { margin: 0 !important; }
-  .legal-doc { padding: 0 !important; font-size: var(--doc-fs-print); line-height: 1.45; width: auto; }
-  .legal-doc .legal-letterhead { border-bottom: 1pt solid var(--doc-accent) !important; margin-bottom: 8mm; padding-bottom: 3mm; }
-  .legal-doc .legal-letterhead-lines, .legal-doc .legal-subtitle, .legal-doc .legal-sign-accepted { color: #333 !important; }
-  .legal-doc .legal-title, .legal-doc .legal-sec-h { color: var(--doc-accent) !important; }
-  .legal-doc .legal-sec-h { border-bottom: 0.5pt solid var(--doc-accent) !important; break-after: avoid; page-break-after: avoid; }
-  .legal-doc .legal-meta { border-color: var(--doc-accent) !important; }
-  .legal-doc .legal-sec { margin-top: 6mm; padding-top: 0; }
-  .legal-doc .legal-clause, .legal-doc .legal-list li { orphans: 3; widows: 3; break-inside: avoid; page-break-inside: avoid; }
-  .legal-doc .legal-sign, .legal-doc .legal-sign-block, .legal-doc .legal-parties, .legal-doc tr, .legal-doc fieldset { break-inside: avoid; page-break-inside: avoid; }
-  .legal-doc .legal-sign { margin-top: 8mm; }
-  .legal-doc .legal-sign-line { margin-top: 7mm; }
-  .legal-doc thead { display: table-header-group; }
-  .legal-doc table { border-collapse: collapse; width: 100%; }
-  .legal-doc table:not(.legal-invoice table) :is(th, td) { border: 0.5pt solid #777 !important; }
-  /* The invoice prints the way it looks on the screen: its own bars, tints and sizes, on white. The browser is told to keep the colours
-     (without it a print dialog drops every fill unless "Background graphics" is ticked). */
-  .legal-doc .legal-invoice, .legal-doc .legal-invoice * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .legal-doc input[type='radio'], .legal-doc input[type='checkbox'] { accent-color: #000; }
-  /* "DRAFT", "PAID" and the rest: a faint stamp across the middle of every page. */
-  .legal-doc .legal-stamp { position: fixed; inset: 0; z-index: 0; }
-  .legal-doc .legal-stamp > span { color: #000 !important; opacity: 0.07; border-color: #000 !important; font-size: 90pt; }
-  /* Where the browser cannot draw page margin boxes, a running title and footer stand in, fixed to every page. */
-  .legal-root[data-boxes='0'] .legal-run-head { display: block; position: fixed; top: 0; left: 0; right: 0; font-size: 8pt; color: #555 !important; border-bottom: 0.5pt solid #777; background: #fff !important; }
-  .legal-root[data-boxes='0'] .legal-run-foot { display: flex; justify-content: space-between; position: fixed; bottom: 0; left: 0; right: 0; font-size: 8pt; color: #555 !important; border-top: 0.5pt solid #777; background: #fff !important; }
-  .legal-root[data-boxes='0'] .legal-doc { padding-top: 8mm !important; padding-bottom: 8mm !important; }
-}
 
 /* ===== The ruler and the focus panel (2026-11-02, Mindful) =====
    components/RulerPicker.tsx draws `.rp`; components/FocusRounds.tsx and screens/Mindful.tsx draw the night-slate panel (`.mf-*`).
@@ -2615,56 +2494,197 @@ ol.grid > li > .toy:only-child {
   }
 }
 
-/* Wrapping for the document pages: a title shares its words over its lines, a clause is a long read so it keeps full lines but never ends on one word. */
-.legal-title {
-  text-wrap: balance;
-}
-.legal-clause {
-  text-wrap: pretty;
-}
-
-/* A document is paper. Invoices, agreements and the other documents are always white with dark ink, in dark mode too, so the page on the
-   screen is the page that prints. The theme's colours reach the document through variables, so they are set back to their light values
-   on the sheet itself (the aliases that Tailwind reads as well as the base ones). The app around the sheet keeps its theme. */
-.legal-doc {
-  color-scheme: light;
-  --ink: #25293a;
-  --ink-soft: #444a5f;
-  --ink-mute: #565c72;
-  --on-ink: #ffffff;
-  --paper: #f3f4f9;
-  --card: #ffffff;
-  --card-strong: #ffffff;
-  --line: #d7dae8;
-  --color-ink: #25293a;
-  --color-ink-soft: #444a5f;
-  --color-ink-mute: #565c72;
-  --color-on-ink: #ffffff;
-  --color-paper: #f3f4f9;
-  --color-card: #ffffff;
-  --color-card-strong: #ffffff;
-  --color-line: #d7dae8;
-  --tint-red: #fde8ee;
-  --tint-orange: #fdeee0;
-  --tint-yellow: #fbf3cf;
-  --tint-green: #e6f2e4;
-  --tint-sky: #dcebf8;
-  --tint-indigo: #e1e4fa;
-  --tint-purple: #ece8fb;
-  background-color: #ffffff;
-  background-image: none;
-  color: #25293a;
-}
-
+/* ==========================================================================================================
+   Print. The one print section, in this order: what never prints (base), Daily's month, a .print-doc page (the client dashboard at
+   /a/:token), then a page that holds a document sheet (.legal-root: invoices, agreements and the other documents). It sits at the end of
+   the file so a screen rule never outweighs it. This is the one place raw black, white and rule colours are allowed.
+   ========================================================================================================== */
 @media print {
+  /* ---- Base: an invoice or an agreement prints as the page itself. Anything with .no-print (menus, buttons, the thread) is left out,
+     and .print-doc is left as the one thing on the sheet. Colours stay (a coloured bar prints as a bar). */
+  .no-print,
+  nav,
+  [data-assistant],
+  [data-reminders] {
+    display: none !important;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  /* The page wash and any glow drawn on the root: never on paper. */
+  html::before,
+  html::after,
+  body::before,
+  body::after {
+    display: none !important;
+  }
+  .print-doc {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  @page {
+    margin: 12mm;
+  }
+  /* Motion kit: whatever waits to rise in on scroll prints as it would end. */
+  .fx-reveal,
+  .fx-text:not([data-on]) .fx-word {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* ---- Month calendar on Daily: Print this month gives the body `printing-month`, and then only `.month-print-sheet` is on the page:
+     black on white, square corners, no glass or gradients, on a landscape page of its own (a named page, so other prints keep theirs). */
+  @page month {
+    size: landscape;
+    margin: 10mm;
+  }
+  body.printing-month > *:not(.month-print-sheet) {
+    display: none !important;
+  }
+  body.printing-month .month-print-sheet {
+    display: block;
+    page: month;
+    color: black;
+    background: white;
+    font-size: 9pt;
+    line-height: 1.25;
+  }
+  body.printing-month .mp-title {
+    font-size: 18pt;
+    font-weight: 800;
+    margin-bottom: 4mm;
+  }
+  body.printing-month .mp-week {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    break-inside: avoid;
+  }
+  body.printing-month .mp-head span {
+    border: 1px solid black;
+    padding: 1mm 2mm;
+    font-weight: 800;
+    text-align: center;
+  }
+  body.printing-month .mp-day {
+    border: 1px solid black;
+    min-height: 28mm;
+    padding: 1mm 2mm;
+    overflow-wrap: anywhere;
+  }
+  body.printing-month .mp-out {
+    background: white;
+  }
+  body.printing-month .mp-num {
+    display: block;
+    font-weight: 800;
+    font-size: 11pt;
+  }
+  body.printing-month .mp-task {
+    margin: 0 0 0.8mm;
+  }
+  body.printing-month .mp-done {
+    text-decoration: line-through;
+  }
+  body.printing-month .mp-legend {
+    margin: 3mm 0 0;
+    font-size: 8pt;
+  }
+
+  /* ---- A .print-doc page. */
+  /* A .print-doc page that holds no legal sheet (the client dashboard at /a/:token): the site's own header and footer stay off the paper,
+     and the theme's colours go back to their light values, so a dark-mode reader does not print pale ink on white. */
+  body:has(.print-doc):not(:has(.legal-root)) header:not(.print-doc *),
+  body:has(.print-doc):not(:has(.legal-root)) footer:not(.print-doc *) {
+    display: none !important;
+  }
+  html:has(.print-doc):not(:has(.legal-root)) {
+    color-scheme: light;
+    --ink: #25293a;
+    --ink-soft: #444a5f;
+    --ink-mute: #565c72;
+    --on-ink: #ffffff;
+    --paper: #f3f4f9;
+    --card: #ffffff;
+    --card-strong: #ffffff;
+    --line: #d7dae8;
+    --color-ink: #25293a;
+    --color-ink-soft: #444a5f;
+    --color-ink-mute: #565c72;
+    --color-on-ink: #ffffff;
+    --color-paper: #f3f4f9;
+    --color-card: #ffffff;
+    --color-card-strong: #ffffff;
+    --color-line: #d7dae8;
+    --tint-red: #fde8ee;
+    --tint-orange: #fdeee0;
+    --tint-yellow: #fbf3cf;
+    --tint-green: #e6f2e4;
+    --tint-brown: #ece3de;
+    --tint-sky: #dcebf8;
+    --tint-indigo: #e1e4fa;
+    --tint-purple: #ece8fb;
+  }
+
+  /* ---- A page that holds a document sheet (.legal-root). */
+  html:has(.legal-root), body:has(.legal-root) { color: #000 !important; }
+  /* The page frame (the sidebar's offset, the column width, the gutters) is not part of the sheet either. */
+  main:has(.legal-root) { margin: 0 !important; padding: 0 !important; max-width: none !important; width: auto !important; }
+  .legal-root { --doc-accent: #333; }
+  .legal-root[data-accent='navy'] { --doc-accent: #1f2d63; }
+  .legal-root[data-accent='green'] { --doc-accent: #1f5a3c; }
+  .legal-root[data-accent='plum'] { --doc-accent: #5a2c56; }
+  .legal-root[data-accent='clay'] { --doc-accent: #84472b; }
+  .legal-root[data-accent='slate'] { --doc-accent: #454f63; }
+  .legal-doc, .legal-doc *:not(.legal-invoice):not(.legal-invoice *) {
+    background: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    color: #000 !important;
+    border-color: #777 !important;
+    -webkit-print-color-adjust: economy;
+    print-color-adjust: economy;
+  }
+  /* A screen's own heading above the document ("The invoice") is not part of the sheet. */
+  .legal-host > div:first-child { display: none !important; }
+  .legal-host, .legal-host > div { margin: 0 !important; }
+  .legal-doc { padding: 0 !important; font-size: var(--doc-fs-print); line-height: 1.45; width: auto; }
+  .legal-doc .legal-letterhead { border-bottom: 1pt solid var(--doc-accent) !important; margin-bottom: 8mm; padding-bottom: 3mm; }
+  .legal-doc .legal-letterhead-lines, .legal-doc .legal-subtitle, .legal-doc .legal-sign-accepted { color: #333 !important; }
+  .legal-doc .legal-title, .legal-doc .legal-sec-h { color: var(--doc-accent) !important; }
+  .legal-doc .legal-sec-h { border-bottom: 0.5pt solid var(--doc-accent) !important; break-after: avoid; page-break-after: avoid; }
+  .legal-doc .legal-meta { border-color: var(--doc-accent) !important; }
+  .legal-doc .legal-sec { margin-top: 6mm; padding-top: 0; }
+  .legal-doc .legal-clause, .legal-doc .legal-list li { orphans: 3; widows: 3; break-inside: avoid; page-break-inside: avoid; }
+  .legal-doc .legal-sign, .legal-doc .legal-sign-block, .legal-doc .legal-parties, .legal-doc tr, .legal-doc fieldset { break-inside: avoid; page-break-inside: avoid; }
+  .legal-doc .legal-sign { margin-top: 8mm; }
+  .legal-doc .legal-sign-line { margin-top: 7mm; }
+  .legal-doc thead { display: table-header-group; }
+  .legal-doc table { border-collapse: collapse; width: 100%; }
+  .legal-doc table:not(.legal-invoice table) :is(th, td) { border: 0.5pt solid #777 !important; }
+  /* The invoice prints the way it looks on the screen: its own bars, tints and sizes, on white. The browser is told to keep the colours
+     (without it a print dialog drops every fill unless "Background graphics" is ticked). */
+  .legal-doc .legal-invoice, .legal-doc .legal-invoice * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .legal-doc input[type='radio'], .legal-doc input[type='checkbox'] { accent-color: #000; }
+  /* "DRAFT", "PAID" and the rest: a faint stamp across the middle of every page. */
+  .legal-doc .legal-stamp { position: fixed; inset: 0; z-index: 0; }
+  .legal-doc .legal-stamp > span { color: #000 !important; opacity: 0.045; border-color: #000 !important; font-size: 72pt; }
+  /* Where the browser cannot draw page margin boxes, a running title and footer stand in, fixed to every page. */
+  .legal-root[data-boxes='0'] .legal-run-head { display: block; position: fixed; top: 0; left: 0; right: 0; font-size: 8pt; color: #555 !important; border-bottom: 0.5pt solid #777; background: #fff !important; }
+  .legal-root[data-boxes='0'] .legal-run-foot { display: flex; justify-content: space-between; position: fixed; bottom: 0; left: 0; right: 0; font-size: 8pt; color: #555 !important; border-top: 0.5pt solid #777; background: #fff !important; }
+  .legal-root[data-boxes='0'] .legal-doc { padding-top: 8mm !important; padding-bottom: 8mm !important; }
   /* Only the document prints. Everything that is not the sheet, not inside it and not holding it is gone (the headings, the editor, the menus,
      the buttons, the sidebar), what holds it loses its frame (offsets, gutters, the page wash), so the paper is the sheet and nothing else.
      Only on a page that holds a sheet (`body:has(.legal-root)`): the month calendar and the client dashboard (.print-doc) print by the
      blocks further up, and would be blank under this rule. */
   body:has(.legal-root) *:not(:has(.legal-root)):not(.legal-root):not(.legal-root *) {
-    display: none !important;
-  }
-  html::before, html::after, body::before, body::after {
     display: none !important;
   }
   body:has(.legal-root) *:has(.legal-root):not(.legal-root) {
@@ -2685,13 +2705,38 @@ ol.grid > li > .toy:only-child {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
-}
-
-/* A section marked "not printed" stays on the screen and at the client's link and leaves the printed page; one line says where it went.
-   The print note is for paper only. */
-.legal-print-note { display: none; }
-@media print {
   /* Kept in the flow but unseen and without height, so the numbers of the sections that print stay the numbers the text refers to ("section 6"). */
   .legal-doc .legal-noprint { position: absolute !important; visibility: hidden !important; height: 0 !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; }
   .legal-doc .legal-print-note { display: block; margin-top: 8mm; font-size: 8.5pt; font-style: italic; color: #555 !important; }
 }
+
+/* The wordmark's dot: the seven pillar colours, red to violet, in one small round. */
+.brand-dot {
+  display: inline-block;
+  /* Never under 5px, so the seven colours still read in the 16px phone corner. */
+  width: max(5px, 0.32em);
+  height: max(5px, 0.32em);
+  margin: 0 0.06em;
+  border-radius: 999px;
+  background: conic-gradient(var(--color-r1), var(--color-r2), var(--color-r3), var(--color-r4), var(--color-r5), var(--color-r6), var(--color-r7), var(--color-r1));
+}
+
+/* site poster */
+/* The seven at the foot of the landing page's last card: each is drawn whole and pushed 40% down, so the card's
+   own edge (overflow hidden) cuts them off and they seem to peek up from below it. Only transform moves. */
+.peek-guide {
+  transform: translateY(32%);
+  transition: transform 0.5s var(--ease-open, ease) var(--peek-delay, 0s);
+}
+@media (hover: hover) and (pointer: fine) {
+  .peek-row:hover .peek-guide { transform: translateY(16%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .peek-guide { transition: none; }
+}
+
+/* animated icons */
+/* components/AnimatedIcon.tsx. Seven of the useanimations icons cut a gap round a slash with a "knockout" stroke in the
+   page colour (the player's default is the system Canvas, a white bar on glass or a dark one in light mode). On glass there
+   is no one colour under the icon, so the knockout draws nothing and the slash simply crosses the glyph, like a lucide icon. */
+.ua-knock { --ua-knockout: transparent; }

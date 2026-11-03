@@ -5,6 +5,7 @@ import { useSession } from '../lib/store';
 import { Button } from './Button';
 import { Fold } from './Fold';
 import { Toggle } from './Toggle';
+import { copyPlain } from '../lib/clipboard';
 
 /** The words on this card, in short plain sentences. */
 const COPY = {
@@ -49,10 +50,7 @@ export function CalendarLink() {
   const on = q.data?.enabled === true;
   const url = on && q.data?.token ? `${window.location.origin}/api/public/calendar/${q.data.token}.ics` : '';
   const copy = () => {
-    void navigator.clipboard
-      ?.writeText(url)
-      .then(() => setCopied(true))
-      .catch(() => undefined);
+    void copyPlain(url).then((ok) => ok && setCopied(true));
   };
 
   return (

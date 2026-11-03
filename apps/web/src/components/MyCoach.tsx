@@ -28,7 +28,8 @@ export function CoachFace({ name, badge, size = 40 }: { name: string; badge: Coa
  * as switches, and ending it. On the Profile tab and in Coaching, both reading the same data, so a change in one
  * shows in the other. Its calls live under /me/coach, which no app switch can close.
  */
-export function MyCoachSection({ id = 'coach', title = 'Your life coach' }: { id?: string; title?: string }) {
+// `inCoaching`: on the Coaching page itself, whose lede already says this, so the block skips it and points down to the list of coaches.
+export function MyCoachSection({ id = 'coach', title = 'Your life coach', inCoaching = false }: { id?: string; title?: string; inCoaching?: boolean }) {
   const pg = usePage('coach');
   const q = useAuthed(['my-coach', pg.query], () => api.myCoach(pg.query));
   const refresh = useRefreshAll();
@@ -53,14 +54,16 @@ export function MyCoachSection({ id = 'coach', title = 'Your life coach' }: { id
       <h2 id={`${id}-heading`} className="text-[24px]">
         {title}
       </h2>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-        A life coach is someone the team chose; their badge says Life coach. They see only the parts you switch on, never your journal, and you can end it any time.
-      </p>
+      {!inCoaching && (
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+          A life coach is someone the team chose; their badge says Life coach. They see only the parts you switch on, never your journal, and you can end it any time.
+        </p>
+      )}
       {q.data && links.length === 0 && (
         <p className="mt-sm m-0 text-[14px] font-semibold">
           No life coach yet.{' '}
-          <Link to="/coaching" className="font-bold underline underline-offset-4">
-            Find one in Coaching
+          <Link to={inCoaching ? '#directory-heading' : '/coaching'} className="font-bold underline underline-offset-4">
+            {inCoaching ? 'Find one below' : 'Find one in Coaching'}
           </Link>
           .
         </p>
@@ -126,7 +129,7 @@ export function MyCoachSection({ id = 'coach', title = 'Your life coach' }: { id
           {error instanceof Error ? error.message : 'That did not work. Check your connection and try again.'}
         </p>
       )}
-      <Nudge className="mt-xs" text={`Up to ${MAX_COACHES} coaches at once. Every ask, yes, note and task change is in the change log under Coaching.`} />
+      <Nudge className="mt-xs" text={`Up to ${MAX_COACHES} coaches at once. Every ask, yes, note and task change is in the change log ${inCoaching ? 'further down this page' : 'under Coaching'}.`} />
       <Sheet open={Boolean(ending)} onClose={() => setEnding(null)} title={`End coaching with ${ending?.coach.name ?? 'your coach'}?`}>
         <p className="m-0 text-[16px] font-semibold">They stop seeing your progress at once and are told. Their notes and the change log stay with you.</p>
         <div className="mt-md flex flex-col gap-xs">

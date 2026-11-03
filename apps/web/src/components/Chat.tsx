@@ -37,8 +37,6 @@ export interface ChatVoice {
   name: string;
   /** The voice's badge, a shared icon key. */
   icon?: IconName;
-  /** @deprecated An emoji badge, kept only until every caller passes `icon`. */
-  emoji?: string;
 }
 
 export interface ChatChoice {
@@ -46,8 +44,6 @@ export interface ChatChoice {
   label: string;
   /** A small icon before the label, a shared icon key. */
   icon?: IconName;
-  /** @deprecated Text before the label, kept only until every caller passes `icon` (wave 2 removes it). */
-  emoji?: string;
   /** A mood from 1 to 5: the choice wears that mood's face (moods are `MoodFace`, never emoji). */
   mood?: number;
   /** A line under the label turns the choice into a card; on a pick-some pill it sits small after the label. */
@@ -60,18 +56,18 @@ export interface ChatChoiceGroup {
   choices: ChatChoice[];
 }
 
-/** What sits before a choice's label: its icon, or (until every caller has moved) its old emoji. */
-function Mark({ c, size = 16 }: { c: { icon?: IconName; emoji?: string; mood?: number }; size?: number }) {
+/** What sits before a choice's label: its mood face or its icon, never an emoji. */
+function Mark({ c, size = 16 }: { c: { icon?: IconName; mood?: number }; size?: number }) {
   if (c.mood) return <MoodFace value={c.mood} size={size + 4} className="mr-xs inline-block align-[-5px]" />;
   if (c.icon) return <AppIcon name={c.icon} size={size} className="mr-xs inline-block align-[-3px]" />;
-  return c.emoji ? <>{`${c.emoji} `}</> : null;
+  return null;
 }
 
 /** How long a line takes to type: longer lines take longer, up to a cap. */
 export const typingTime = (line: string | { node: ReactNode }) => (typeof line === 'string' ? Math.min(1800, 450 + line.length * 14) : 500);
 
 /** A pill that is picked or not: soft until it is picked, then ink. */
-export const chip = (on: boolean) => `toy min-h-[40px] rounded-pill border-2 px-sm text-[14px] font-bold disabled:opacity-60 ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`;
+export const chip = (on: boolean) => `toy min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold disabled:opacity-60 ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`;
 
 /** The person's line opens a turn; the guide's lines after it belong to that turn. */
 function turnsOf(log: ChatLine[]): ChatLine[][] {
@@ -87,7 +83,7 @@ export const countTurns = (log: ChatLine[]) => turnsOf(log).length;
 function Badge({ voice }: { voice: ChatVoice }) {
   return (
     <span aria-hidden="true" className="flex size-[24px] shrink-0 items-center justify-center rounded-pill bg-card text-[14px] text-ink-soft shadow-toy-soft">
-      {voice.icon ? <AppIcon name={voice.icon} size={14} /> : voice.emoji}
+      {voice.icon ? <AppIcon name={voice.icon} size={14} /> : null}
     </span>
   );
 }
@@ -393,7 +389,7 @@ export function ChoiceGroups({
               {g.label}
             </p>
           )}
-          <div className={`${g.label ? 'mt-xs ' : ''}flex flex-wrap gap-xs`}>
+          <div className={`${g.label ? 'mt-xs ' : ''}fill-row-all flex flex-wrap gap-xs`}>
             {g.choices.map((c) => {
               const on = chosen.includes(c.value);
               const fixed = locked.includes(c.value);
@@ -435,7 +431,7 @@ export function ChatLinks({ items }: { items: { label: string; onClick: () => vo
   return (
     <div className="mt-sm flex flex-wrap items-center gap-md">
       {items.map((it) => (
-        <button key={it.label} type="button" onClick={it.onClick} className="min-h-[32px] text-[12px] font-bold text-ink-soft underline underline-offset-4">
+        <button key={it.label} type="button" onClick={it.onClick} className="inline-flex min-h-[44px] items-center text-[12px] font-bold text-ink-soft underline underline-offset-4">
           {it.label}
         </button>
       ))}

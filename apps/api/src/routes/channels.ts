@@ -6,22 +6,19 @@ import {
   channelNameProblem,
   channelSlug,
   cleanChannelMessage,
-  communityRankOf,
   MAX_CHANNEL_MEMBERS,
   MAX_CHANNEL_TOPIC,
   MAX_CHANNELS_JOINED,
   MAX_CHANNELS_OWNED,
   MAX_COMMUNITY_CHANNELS,
   mentionsIn,
-  roleRank,
   type Channel,
   type ChannelLine,
   type ChannelMember,
   type ChannelScope,
-  type CommunityRank,
 } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { anonAlias, audit, can, nameOf, newId, notify, notifyMany, nowIso, pageOf, paged, parseList, str } from '../db';
+import { anonAlias, audit, isGuide, isStaff, nameOf, newId, notify, notifyMany, nowIso, pageOf, paged, rankOf, str } from '../db';
 import { blockBehind } from './community';
 
 /**
@@ -65,9 +62,6 @@ interface MsgRow {
   permissions: string;
 }
 
-const isGuide = (u: UserRow) => can(u, 'moderation');
-const isStaff = (u: UserRow) => roleRank(u.role) >= roleRank('sub_admin');
-const rankOf = (u: { role: UserRow['role']; permissions: string }): CommunityRank => communityRankOf({ role: u.role, permissions: parseList(u.permissions) });
 
 /** ?1 is always the person reading. */
 const NOT_BLOCKED = (col: string) => `NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ?1 AND b.blocked_id = ${col}) OR (b.blocker_id = ${col} AND b.blocked_id = ?1))`;

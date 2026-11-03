@@ -11,17 +11,10 @@ import { api } from '../lib/api';
 import { FeaturedTag } from './Store';
 import { useAuthed } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
+import { FIELD } from '../lib/ui';
+import { ErrorLine } from '../components/ErrorLine';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 
-function Err({ e }: { e: unknown }) {
-  if (!e) return null;
-  return (
-    <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-      {e instanceof Error ? e.message : 'That did not work.'}
-    </p>
-  );
-}
 
 function ToolRow({ t, reviewer, onChange }: { t: Tool; reviewer: boolean; onChange: () => void }) {
   const set = useMutation({ mutationFn: (body: { verified?: boolean; affiliate?: boolean; featured?: boolean }) => api.setTool(t.id, body), onSuccess: onChange });
@@ -80,7 +73,7 @@ function ToolRow({ t, reviewer, onChange }: { t: Tool; reviewer: boolean; onChan
           >
             Remove
           </Button>
-          <Err e={set.isError ? set.error : remove.isError ? remove.error : null} />
+          <ErrorLine e={set.isError ? set.error : remove.isError ? remove.error : null} />
         </div>
       )}
     </li>
@@ -196,17 +189,17 @@ function SuggestSheet({ open, onClose, onDone, categories, reviewer }: { open: b
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Name</span>
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required className={field} />
+          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Link</span>
-          <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} maxLength={500} required placeholder="https://" className={field} />
+          <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} maxLength={500} required placeholder="https://" className={FIELD} />
         </label>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-[14px] font-bold">Category</legend>
           <div className="mt-xs flex flex-wrap gap-xs">
             {categories.map((c) => (
-              <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)} className={`toy rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${category === c ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+              <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${category === c ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                 {c}
               </button>
             ))}
@@ -214,25 +207,25 @@ function SuggestSheet({ open, onClose, onDone, categories, reviewer }: { open: b
         </fieldset>
         <label className="block">
           <span className="block text-[14px] font-bold">What it is good for</span>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} rows={3} className={field} />
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} rows={3} className={FIELD} />
         </label>
         {reviewer && (
           <div className="grid grid-cols-2 gap-xs">
             <label className="block">
               <span className="block text-[14px] font-bold">Xp of at least</span>
-              <input type="number" min={0} value={minXp} onChange={(e) => setMinXp(e.target.value)} className={field} />
+              <input type="number" min={0} value={minXp} onChange={(e) => setMinXp(e.target.value)} className={FIELD} />
             </label>
             <label className="block">
               <span className="block text-[14px] font-bold">Points balance of at least</span>
-              <input type="number" min={0} value={minPoints} onChange={(e) => setMinPoints(e.target.value)} className={field} />
+              <input type="number" min={0} value={minPoints} onChange={(e) => setMinPoints(e.target.value)} className={FIELD} />
             </label>
             <label className="block">
               <span className="block text-[14px] font-bold">Holds the badge</span>
-              <select value={badge} onChange={(e) => setBadge(e.target.value)} className={field}>
+              <select value={badge} onChange={(e) => setBadge(e.target.value)} className={FIELD}>
                 <option value="">Any badge or none</option>
                 {PUBLIC_BADGES.map((b) => (
                   <option key={b.key} value={b.key}>
-                    {b.emoji} {b.name}
+                    {b.name}
                   </option>
                 ))}
               </select>
@@ -240,7 +233,7 @@ function SuggestSheet({ open, onClose, onDone, categories, reviewer }: { open: b
           </div>
         )}
         <p className="m-0 text-[12px] font-bold text-ink-soft">A reviewer checks it before it shows to everyone. You see it straight away.</p>
-        <Err e={suggest.isError ? suggest.error : null} />
+        <ErrorLine e={suggest.isError ? suggest.error : null} />
         <Button type="submit" size="lg" full disabled={suggest.isPending || !name.trim() || !url.trim()}>
           Send suggestion
         </Button>

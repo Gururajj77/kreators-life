@@ -4,6 +4,9 @@ import { useNow } from '../lib/useNow';
 import { Button } from './Button';
 import { useCelebrate } from './Celebration';
 import { Nudge } from './Nudge';
+import { Icon } from './Icon';
+import { Check } from 'lucide-react';
+import { FIELD_SOLID } from '../lib/ui';
 
 /**
  * Attendee codes, drawn the same way in Party, Run and Circles. The host sets the guests’ xp before the event starts
@@ -11,7 +14,6 @@ import { Nudge } from './Nudge';
  * the event’s window, and get the xp. The rule lives in shared and on the server; this is only how it looks.
  */
 
-const field = 'w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 
 export interface CodeChange {
   xp?: number;
@@ -51,11 +53,11 @@ export function AttendeeFields({ xp, onXp, code, onCode, one = 'guest', many = '
       <div className="mt-xs grid grid-cols-2 gap-xs">
         <label className="block">
           <span className="block text-[12px] font-bold text-ink-soft">Xp</span>
-          <input type="number" inputMode="numeric" min={1} max={ATTENDEE_XP_MAX} value={xp} onChange={(e) => onXp(e.target.value)} placeholder="None" className={`mt-xs ${field}`} />
+          <input type="number" inputMode="numeric" min={1} max={ATTENDEE_XP_MAX} value={xp} onChange={(e) => onXp(e.target.value)} placeholder="None" className={`mt-xs ${FIELD_SOLID}`} />
         </label>
         <label className="block">
           <span className="block text-[12px] font-bold text-ink-soft">Your own code</span>
-          <input value={code} onChange={(e) => onCode(normalizeCode(e.target.value))} minLength={ATTENDEE_CODE_MIN} maxLength={ATTENDEE_CODE_MAX} placeholder="Random" autoCapitalize="characters" className={`mt-xs ${field} uppercase placeholder:normal-case`} />
+          <input value={code} onChange={(e) => onCode(normalizeCode(e.target.value))} minLength={ATTENDEE_CODE_MIN} maxLength={ATTENDEE_CODE_MAX} placeholder="Random" autoCapitalize="characters" className={`mt-xs ${FIELD_SOLID} uppercase placeholder:normal-case`} />
         </label>
       </div>
       <Problem text={problem} />
@@ -107,11 +109,11 @@ export function HostCodeCard({ value, startsAt, onSave, guests = 'guests', child
         <div className="mt-sm grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[12px] font-bold text-ink-soft">Xp each</span>
-            <input type="number" inputMode="numeric" min={1} max={ATTENDEE_XP_MAX} value={xp} onChange={(e) => setXp(e.target.value)} className={`mt-xs ${field}`} />
+            <input type="number" inputMode="numeric" min={1} max={ATTENDEE_XP_MAX} value={xp} onChange={(e) => setXp(e.target.value)} className={`mt-xs ${FIELD_SOLID}`} />
           </label>
           <label className="block">
             <span className="block text-[12px] font-bold text-ink-soft">Your own code</span>
-            <input value={own} onChange={(e) => setOwn(normalizeCode(e.target.value))} maxLength={ATTENDEE_CODE_MAX} placeholder="Random" autoCapitalize="characters" className={`mt-xs ${field} uppercase placeholder:normal-case`} />
+            <input value={own} onChange={(e) => setOwn(normalizeCode(e.target.value))} maxLength={ATTENDEE_CODE_MAX} placeholder="Random" autoCapitalize="characters" className={`mt-xs ${FIELD_SOLID} uppercase placeholder:normal-case`} />
           </label>
         </div>
         <Problem text={problem} />
@@ -139,7 +141,7 @@ export function HostCodeCard({ value, startsAt, onSave, guests = 'guests', child
       <div className="mt-sm grid grid-cols-[1fr_auto] gap-xs">
         <label className="block">
           <span className="sr-only">Xp each</span>
-          <input type="number" inputMode="numeric" min={1} max={ATTENDEE_XP_MAX} value={xp} onChange={(e) => setXp(e.target.value)} disabled={locked || busy} aria-label="Xp each" className={field} />
+          <input type="number" inputMode="numeric" min={1} max={ATTENDEE_XP_MAX} value={xp} onChange={(e) => setXp(e.target.value)} disabled={locked || busy} aria-label="Xp each" className={FIELD_SOLID} />
         </label>
         <Button variant="outline" disabled={locked || busy || Number(xp) === value.xp || !(Number(xp) >= 1)} onClick={() => void save({ xp: Number(xp) })}>
           Set xp
@@ -147,7 +149,7 @@ export function HostCodeCard({ value, startsAt, onSave, guests = 'guests', child
       </div>
       {locked && <p className="m-0 mt-xs text-[12px] font-semibold text-ink-soft">The xp is fixed: the code is open.</p>}
       <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
-        <input value={own} onChange={(e) => setOwn(normalizeCode(e.target.value))} maxLength={ATTENDEE_CODE_MAX} placeholder="Your own code" aria-label="Your own code" autoCapitalize="characters" disabled={busy} className={`${field} uppercase placeholder:normal-case`} />
+        <input value={own} onChange={(e) => setOwn(normalizeCode(e.target.value))} maxLength={ATTENDEE_CODE_MAX} placeholder="Your own code" aria-label="Your own code" autoCapitalize="characters" disabled={busy} className={`${FIELD_SOLID} uppercase placeholder:normal-case`} />
         <Button variant="outline" disabled={busy || own.length < ATTENDEE_CODE_MIN} onClick={() => void save({ code: own })}>
           Use it
         </Button>
@@ -189,7 +191,7 @@ export function ClaimCard({ view, onClaim }: { view: AttendeeCodeView; onClaim: 
     <div className="rounded-card bg-card p-md shadow-toy-soft">
       <div className="flex items-center justify-between gap-sm">
         <p className="m-0 text-[16px] font-extrabold">{view.claimed ? 'You got the xp for coming' : 'Got the code?'}</p>
-        <p className="m-0 shrink-0 rounded-pill bg-paper px-sm py-xs text-[14px] font-extrabold">{view.claimed ? '✓ ' : '+'}{view.xp} xp</p>
+        <p className="m-0 inline-flex shrink-0 items-center gap-xs rounded-pill bg-paper px-sm py-xs text-[14px] font-extrabold">{view.claimed ? <Icon icon={Check} size={14} strokeWidth={3} label="claimed" /> : '+'}{view.xp} xp</p>
       </div>
       {view.claimed ? (
         <p className="m-0 mt-xs text-[14px] font-semibold text-ink-soft">It is in your xp. A code counts once per person.</p>
@@ -205,7 +207,7 @@ export function ClaimCard({ view, onClaim }: { view: AttendeeCodeView; onClaim: 
             if (code.length >= ATTENDEE_CODE_MIN && !busy) void claim();
           }}
         >
-          <input value={code} onChange={(e) => setCode(normalizeCode(e.target.value))} maxLength={ATTENDEE_CODE_MAX} placeholder="The host's code" aria-label="The host's code" autoCapitalize="characters" autoComplete="off" className={`${field} uppercase tracking-wider placeholder:normal-case placeholder:tracking-normal`} />
+          <input value={code} onChange={(e) => setCode(normalizeCode(e.target.value))} maxLength={ATTENDEE_CODE_MAX} placeholder="The host's code" aria-label="The host's code" autoCapitalize="characters" autoComplete="off" className={`${FIELD_SOLID} uppercase tracking-wider placeholder:normal-case placeholder:tracking-normal`} />
           <Button type="submit" disabled={busy || code.length < ATTENDEE_CODE_MIN}>
             Get {view.xp} xp
           </Button>

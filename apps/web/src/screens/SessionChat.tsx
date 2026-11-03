@@ -52,6 +52,7 @@ import {
   type RelationshipKey,
   type Scores,
   type Host,
+  type IconName,
   type Question,
   characterHello,
 } from '@kreators/shared';
@@ -65,15 +66,17 @@ import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { Fold } from '../components/Fold';
 import { Icon } from '../components/Icon';
+import { AnimatedIcon } from '../components/AnimatedIcon';
 import { Toggle } from '../components/Toggle';
 import { ConsciousnessMap, PlacementChart } from '../components/LifeMap';
 import { Pyramid } from '../components/Pyramid';
 import { Sheet } from '../components/Sheet';
-import { ChatActions, ChatLinks, ChatScreen, ChoiceChips, ChoiceGroups, typingTime } from '../components/Chat';
-import { api } from '../lib/api';
+import { ChatActions, ChatLinks, ChatScreen, ChoiceChips, ChoiceGroups, chip, typingTime } from '../components/Chat';
+import { api, errorText } from '../lib/api';
+import { FIELD } from '../lib/ui';
 import { todayLocal } from '../lib/date';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
-import { useSession } from '../lib/store';
+import { useAssistantModel, useSession } from '../lib/store';
 import { explainTyped } from '../lib/explain';
 import { forgetKept, useKept, useKeptRef } from '../lib/kept';
 
@@ -114,7 +117,7 @@ interface Msg {
   node?: ReactNode;
 }
 /** A chip with a blurb is drawn as a card, the way the card flow drew it; without one it is a pill. */
-type Chip = { label: string; value: string; emoji?: string; blurb?: string };
+type Chip = { label: string; value: string; icon?: IconName; blurb?: string };
 type Send = (value: Record<string, string>, label: string) => void;
 type Ask =
   | { kind: 'chips'; chips: Chip[]; more?: string }
@@ -176,7 +179,6 @@ interface Chat {
   ask: Ask | null;
 }
 
-const err = (e: unknown) => (e instanceof Error ? e.message : 'That did not work.');
 const who = (k: RelationshipKey) => RELATIONSHIP_BY_KEY[k].character;
 /** A pillar's name as it reads in a sentence, in quotes so a name like “With the divine” reads right. */
 const pillar = (k: RelationshipKey) => `“${RELATIONSHIP_BY_KEY[k].name}”`;
@@ -198,8 +200,6 @@ const DONE_CHIPS: Chip[] = [
 /** How a host introduces itself: its name and what it looks after. */
 const hello = characterHello;
 const placedOf = (d: Data) => RELATIONSHIPS.map((r) => d.placements[r.key]).filter((p): p is Placement => Boolean(p));
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-const pill = (on: boolean) => `min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`;
 const card = (on: boolean) => `toy toy-flat w-full rounded-tile border-2 p-sm text-left ${on ? 'border-ink bg-card' : 'border-line bg-card'}`;
 const levelName = (v: number | undefined) => (v === undefined ? '' : (levelByValue(v)?.name ?? ''));
 
@@ -242,7 +242,7 @@ function OwnAnswerCard({ foundation, onSend }: { foundation: boolean; onSend: Se
     <div className="rounded-tile bg-card p-sm shadow-toy-soft">
       <label className="block">
         <span className="block text-[14px] font-bold">{foundation ? 'Your foundation' : 'Your answer'}</span>
-        <input value={text} onChange={(e) => setText(e.target.value)} maxLength={120} placeholder={foundation ? 'Like: Sunday lunch with family, every week' : 'In a few words'} className={field} />
+        <input value={text} onChange={(e) => setText(e.target.value)} maxLength={120} placeholder={foundation ? 'Like: Sunday lunch with family, every week' : 'In a few words'} className={FIELD} />
       </label>
       <ChatActions full skip="Go back" onSkip={() => onSend({ back: '1' }, 'Go back to the choices')} next="Use my words" ready={text.trim().length > 1} onNext={() => onSend({ text: text.trim() }, text.trim())} />
     </div>
@@ -275,6 +275,29 @@ function MapForm({ initial, initialAway, onSend }: { initial: Partial<Record<Rel
   const [at, setAt] = useState(() => Math.max(0, RELATIONSHIPS.findIndex((r) => !done(r.key))));
   const [words, setWords] = useState('');
   const [suggested, setSuggested] = useState<number[] | null>(null);
+  // "Read with AI": only with a plan and a model that keeps nothing. The rules above stay the default and free.
+  const status = useAuthed(['assistant'], api.assistantStatus);
+  const picked = useAssistantModel((m) => m.model);
+  const privateModels = (status.data?.connected ? status.data.models : []).filter((m) => m.private);
+  const aiModel = privateModels.find((m) => m.id === picked) ?? privateModels[0] ?? null;
+  const canAi = Boolean(aiModel && status.data && status.data.account.plan !== 'none' && status.data.account.total > 0);
+  const [reading, setReading] = useState(false);
+  const [readBy, setReadBy] = useState<string | null>(null);
+  const [aiNote, setAiNote] = useState('');
+  const readWithAi = async () => {
+    if (!aiModel) return;
+    setReading(true);
+    setAiNote('');
+    try {
+      const out = await api.readFeelingsAi({ text: words, relationship: r.key, model: aiModel.id });
+      setSuggested(out.levels);
+      setReadBy(out.model);
+    } catch (e) {
+      setAiNote(errorText(e, 'The AI could not read that. Tap Read my words instead.'));
+    } finally {
+      setReading(false);
+    }
+  };
   const top = useRef<HTMLDivElement>(null);
   const r = RELATIONSHIPS[at]!;
   const mine = picks[r.key] ?? [];
@@ -285,6 +308,8 @@ function MapForm({ initial, initialAway, onSend }: { initial: Partial<Record<Rel
     setAt(i);
     setWords('');
     setSuggested(null);
+    setReadBy(null);
+    setAiNote('');
     top.current?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   };
   const toggle = (v: number) => setPicks((p) => ({ ...p, [r.key]: mine.includes(v) ? mine.filter((x) => x !== v) : [...mine, v] }));
@@ -374,16 +399,36 @@ function MapForm({ initial, initialAway, onSend }: { initial: Partial<Record<Rel
               </div>
             ))}
             <Fold className="mt-sm" title="Say it in your own words">
-              <p className="m-0 mb-xs text-[14px] text-ink-soft">I read your words and suggest feelings. You choose which to tick.</p>
+              <p className="m-0 mb-xs text-[14px] text-ink-soft">I read your words and suggest feelings. You choose which to tick. Read my words is free and stays on this page.</p>
               <label className="block">
                 <span className="sr-only">How {r.name.toLowerCase()} feels for you</span>
-                <textarea value={words} onChange={(e) => setWords(e.target.value)} rows={2} maxLength={600} placeholder="Like: I get scared to call, but I keep trying" className={field} />
+                <textarea value={words} onChange={(e) => setWords(e.target.value)} rows={2} maxLength={600} placeholder="Like: I get scared to call, but I keep trying" className={FIELD} />
               </label>
-              <div className="mt-xs flex">
-                <Button type="button" variant="outline" disabled={words.trim().length < 3} onClick={() => setSuggested(readFeelings(words))}>
+              <div className="mt-xs flex flex-wrap gap-xs">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={words.trim().length < 3}
+                  onClick={() => {
+                    setSuggested(readFeelings(words));
+                    setReadBy(null);
+                    setAiNote('');
+                  }}
+                >
                   Read my words
                 </Button>
+                {canAi && (
+                  <Button type="button" variant="outline" disabled={words.trim().length < 3 || reading} onClick={() => void readWithAi()}>
+                    {reading ? 'Reading' : 'Read with AI'}
+                  </Button>
+                )}
               </div>
+              {canAi && <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Read with AI sends your words to {aiModel!.name}. Uses a few credits. The model keeps nothing.</p>}
+              {aiNote && (
+                <p className="mt-xs m-0 text-[14px] font-semibold" role="alert">
+                  {aiNote}
+                </p>
+              )}
               {suggested && (
                 <div className="mt-xs" role="status">
                   {suggested.length === 0 ? (
@@ -391,6 +436,7 @@ function MapForm({ initial, initialAway, onSend }: { initial: Partial<Record<Rel
                   ) : (
                     <>
                       <p className="m-0 text-[14px] font-semibold">That sounds like {listOf(suggested.map((v) => levelName(v)))}. Is that right?</p>
+                      {readBy && <p className="m-0 text-[12px] font-semibold text-ink-soft">Read with AI by {readBy}.</p>}
                       <div className="mt-xs flex flex-wrap gap-xs">
                         <Button
                           type="button"
@@ -439,7 +485,7 @@ function EvidenceForm({ keys, onSend }: { keys: RelationshipKey[]; onSend: Send 
                 <Avatar relationship={k} size={24} decorative still />
                 {RELATIONSHIP_BY_KEY[k].name}: one thing from last week that shows it
               </span>
-              <textarea value={v[k] ?? ''} onChange={(e) => setV({ ...v, [k]: e.target.value })} rows={2} maxLength={500} placeholder="What you did, not what you believe" className={field} />
+              <textarea value={v[k] ?? ''} onChange={(e) => setV({ ...v, [k]: e.target.value })} rows={2} maxLength={500} placeholder="What you did, not what you believe" className={FIELD} />
             </label>
           </li>
         ))}
@@ -465,7 +511,7 @@ function WayForm({ onSend }: { onSend: Send }) {
   const pillarSelect = (value: RelationshipKey, onChange: (k: RelationshipKey) => void, label: string) => (
     <label className="block text-[12px] font-bold text-ink-soft">
       {label}
-      <select value={value} onChange={(e) => onChange(e.target.value as RelationshipKey)} className={field}>
+      <select value={value} onChange={(e) => onChange(e.target.value as RelationshipKey)} className={FIELD}>
         {RELATIONSHIPS.map((r) => (
           <option key={r.key} value={r.key}>
             {r.name}
@@ -480,7 +526,7 @@ function WayForm({ onSend }: { onSend: Send }) {
       <p className="m-0 text-[14px] font-bold">Fears. What shows up when you are about to act?</p>
       <div className="mt-xs flex flex-wrap gap-xs">
         {FEAR_OPTIONS.map((f) => (
-          <button key={f} type="button" aria-pressed={has(f)} className={pill(has(f))} onClick={() => toggle(f)}>
+          <button key={f} type="button" aria-pressed={has(f)} className={chip(has(f))} onClick={() => toggle(f)}>
             {f}
           </button>
         ))}
@@ -500,7 +546,7 @@ function WayForm({ onSend }: { onSend: Send }) {
                 {pillarSelect(f.relationship, (k) => setFears(fears.map((x, j) => (j === i ? { ...x, relationship: k } : x))), 'Pulls down')}
                 <label className="block text-[12px] font-bold text-ink-soft">
                   Drives your decisions?
-                  <select value={f.drives} onChange={(e) => setFears(fears.map((x, j) => (j === i ? { ...x, drives: e.target.value as Drives } : x)))} className={field}>
+                  <select value={f.drives} onChange={(e) => setFears(fears.map((x, j) => (j === i ? { ...x, drives: e.target.value as Drives } : x)))} className={FIELD}>
                     {DRIVES.map((d) => (
                       <option key={d} value={d}>
                         {d === 'yes' ? 'Yes, often' : d === 'sometimes' ? 'Sometimes' : 'Not really'}
@@ -525,7 +571,7 @@ function WayForm({ onSend }: { onSend: Send }) {
                   How heavy does it feel?
                   <span className="mt-xs flex flex-wrap gap-xs" role="group" aria-label="How heavy it feels">
                     {INSECURITY_WEIGHTS.map((w) => (
-                      <button key={w.weight} type="button" aria-pressed={weightWord(it.weight) === w.name} className={pill(weightWord(it.weight) === w.name)} onClick={() => setIns(ins.map((x, j) => (j === i ? { ...x, weight: w.weight } : x)))}>
+                      <button key={w.weight} type="button" aria-pressed={weightWord(it.weight) === w.name} className={chip(weightWord(it.weight) === w.name)} onClick={() => setIns(ins.map((x, j) => (j === i ? { ...x, weight: w.weight } : x)))}>
                         {w.name}
                       </button>
                     ))}
@@ -552,10 +598,10 @@ function Stars({ value, onChange, label, color }: { value: number; onChange: (st
   return (
     <div role="radiogroup" aria-label={label} className="flex items-center gap-[2px]">
       {[1, 2, 3, 4, 5].map((n) => (
-        <button key={n} type="button" role="radio" aria-checked={value === n} aria-label={`${n} ${n === 1 ? 'star' : 'stars'}: ${STAR_WORDS[n - 1]}`} onClick={() => onChange(n)} className="toy toy-flat flex size-[40px] items-center justify-center rounded-pill">
-          <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
-            <path d="M12 2.8l2.8 5.7 6.3.9-4.6 4.4 1.1 6.2L12 17.1 6.4 20l1.1-6.2-4.6-4.4 6.3-.9z" strokeWidth="1.6" strokeLinejoin="round" style={n <= value ? { fill: color, stroke: color } : { fill: 'none', stroke: 'var(--color-ink-mute)' }} />
-          </svg>
+        <button key={n} type="button" role="radio" aria-checked={value === n} aria-label={`${n} ${n === 1 ? 'star' : 'stars'}: ${STAR_WORDS[n - 1]}`} onClick={() => onChange(n)} className="toy toy-flat flex size-[44px] items-center justify-center rounded-pill">
+          <span style={{ color: n <= value ? color : 'var(--color-ink-mute)' }}>
+            <AnimatedIcon name="star" size={28} active={n <= value} />
+          </span>
         </button>
       ))}
     </div>
@@ -603,7 +649,7 @@ function DayForm({ initial, onSend }: { initial: RealDay; onSend: Send }) {
   const t = (key: keyof RealDay, label: string) => (
     <label key={key} className="block">
       <span className="block text-[14px] font-bold">{label}</span>
-      <input type="time" value={d[key]} onChange={(e) => setD({ ...d, [key]: e.target.value })} className={field} />
+      <input type="time" value={d[key]} onChange={(e) => setD({ ...d, [key]: e.target.value })} className={FIELD} />
     </label>
   );
   return (
@@ -617,11 +663,11 @@ function DayForm({ initial, onSend }: { initial: RealDay; onSend: Send }) {
       <div className="mt-xs grid gap-xs md:grid-cols-2">
         <label className="block">
           <span className="block text-[14px] font-bold">Gym or movement, if any</span>
-          <input type="time" value={d.gym} onChange={(e) => setD({ ...d, gym: e.target.value })} className={field} />
+          <input type="time" value={d.gym} onChange={(e) => setD({ ...d, gym: e.target.value })} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">The last hour before sleep is usually</span>
-          <input value={d.evening} onChange={(e) => setD({ ...d, evening: e.target.value })} maxLength={200} placeholder="Scrolling, a show, work mail" className={field} />
+          <input value={d.evening} onChange={(e) => setD({ ...d, evening: e.target.value })} maxLength={200} placeholder="Scrolling, a show, work mail" className={FIELD} />
         </label>
       </div>
       <ChatActions full next="That is my day" onNext={() => onSend({ ...d }, `Up at ${d.wake}, lights out ${d.sleep}, work ${d.workStart} to ${d.workEnd}${d.gym ? `, gym ${d.gym}` : ''}${d.evening ? `, evenings: ${d.evening}` : ''}`)} />
@@ -637,7 +683,7 @@ function RoutineCard({ data }: { data: Data }) {
     <div>
       <div className="flex gap-xs">
         {(['general', 'exceptional'] as const).map((d) => (
-          <button key={d} type="button" className={pill(dayType === d)} onClick={() => setDayType(d)}>
+          <button key={d} type="button" className={chip(dayType === d)} onClick={() => setDayType(d)}>
             {d === 'general' ? 'A normal day' : 'An exceptional day'}
           </button>
         ))}
@@ -692,13 +738,13 @@ function PracticesForm({ focus, onSend }: { focus: RelationshipKey[]; onSend: Se
       {own && (
         <label className="mt-xs block">
           <span className="block text-[14px] font-bold">Your mantra</span>
-          <input value={p.ownMantra ?? ''} onChange={(e) => setP({ ...p, ownMantra: e.target.value })} maxLength={OWN_MANTRA_MAX} placeholder="The words you want to repeat" className={field} />
+          <input value={p.ownMantra ?? ''} onChange={(e) => setP({ ...p, ownMantra: e.target.value })} maxLength={OWN_MANTRA_MAX} placeholder="The words you want to repeat" className={FIELD} />
         </label>
       )}
       <p className="mt-md m-0 text-[14px] font-bold">Breathing, three rounds</p>
       <div className="mt-xs flex flex-wrap gap-xs">
         {BREATHING.map((b) => (
-          <button key={b.key} type="button" aria-pressed={p.breathing === b.key} className={pill(p.breathing === b.key)} onClick={() => setP({ ...p, breathing: b.key })} title={b.blurb}>
+          <button key={b.key} type="button" aria-pressed={p.breathing === b.key} className={chip(p.breathing === b.key)} onClick={() => setP({ ...p, breathing: b.key })} title={b.blurb}>
             {b.name}
           </button>
         ))}
@@ -706,11 +752,11 @@ function PracticesForm({ focus, onSend }: { focus: RelationshipKey[]; onSend: Se
       <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{BREATHING.find((b) => b.key === p.breathing)?.blurb}</p>
       <label className="mt-md block">
         <span className="block text-[14px] font-bold">Your line, on waking and before sleep</span>
-        <textarea value={p.affirmation} onChange={(e) => setP({ ...p, affirmation: e.target.value })} rows={2} maxLength={240} className={field} />
+        <textarea value={p.affirmation} onChange={(e) => setP({ ...p, affirmation: e.target.value })} rows={2} maxLength={240} className={FIELD} />
       </label>
       <label className="mt-xs block">
         <span className="block text-[14px] font-bold">One page a morning, from</span>
-        <input value={p.reading} onChange={(e) => setP({ ...p, reading: e.target.value })} maxLength={120} placeholder="A book, a scripture, a long essay" className={field} />
+        <input value={p.reading} onChange={(e) => setP({ ...p, reading: e.target.value })} maxLength={120} placeholder="A book, a scripture, a long essay" className={FIELD} />
       </label>
       <ChatActions
         full
@@ -730,14 +776,14 @@ function ContractForm({ initial, placeholder, onSend }: { initial: Data['contrac
       <p className="m-0 text-[14px] font-bold">Days a week, at least</p>
       <div className="mt-xs flex flex-wrap gap-xs">
         {[3, 4, 5, 6, 7].map((n) => (
-          <button key={n} type="button" aria-pressed={c.minDays === n} className={pill(c.minDays === n)} onClick={() => setC({ ...c, minDays: n })}>
+          <button key={n} type="button" aria-pressed={c.minDays === n} className={chip(c.minDays === n)} onClick={() => setC({ ...c, minDays: n })}>
             {n}
           </button>
         ))}
       </div>
       <label className="mt-md block">
         <span className="block text-[14px] font-bold">Daily check-in time</span>
-        <input type="time" value={c.checkinTime} onChange={(e) => setC({ ...c, checkinTime: e.target.value })} className={field} />
+        <input type="time" value={c.checkinTime} onChange={(e) => setC({ ...c, checkinTime: e.target.value })} className={FIELD} />
         <span className="mt-xs block text-[12px] font-bold text-ink-soft">A reminder lands in your inbox at this time on any day you have not checked in.</span>
       </label>
       <p className="mt-md m-0 text-[14px] font-bold">When a week falls short</p>
@@ -754,7 +800,7 @@ function ContractForm({ initial, placeholder, onSend }: { initial: Data['contrac
       <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">Weekly check on Sunday night, five minutes. Monthly review in thirty days. The app keeps both dates.</p>
       <label className="mt-xs block">
         <span className="block text-[14px] font-bold">Type your name to sign</span>
-        <input value={c.signedName} onChange={(e) => setC({ ...c, signedName: e.target.value })} maxLength={80} placeholder={placeholder} className={field} />
+        <input value={c.signedName} onChange={(e) => setC({ ...c, signedName: e.target.value })} maxLength={80} placeholder={placeholder} className={FIELD} />
       </label>
       {/* The live call, once and optional: a line in the plan rather than a step of its own. */}
       <div className="mt-md">
@@ -775,7 +821,7 @@ function PicksForm({ focus, result, own: ownWords = {}, onSend }: { focus: Relat
     return (
       <label className="block text-[12px] font-bold text-ink-soft">
         {f === 'valueGoal' ? KIND_META.value_goal.label : KIND_META.project.label}
-        <select value={isOwn ? '__own' : cur} onChange={(e) => { if (e.target.value === '__own') { setOwn({ ...own, [`${k}.${f}`]: true }); setV({ ...v, [k]: { ...v[k], [f]: '' } }); } else { setOwn({ ...own, [`${k}.${f}`]: false }); setV({ ...v, [k]: { ...v[k], [f]: e.target.value } }); } }} className={field}>
+        <select value={isOwn ? '__own' : cur} onChange={(e) => { if (e.target.value === '__own') { setOwn({ ...own, [`${k}.${f}`]: true }); setV({ ...v, [k]: { ...v[k], [f]: '' } }); } else { setOwn({ ...own, [`${k}.${f}`]: false }); setV({ ...v, [k]: { ...v[k], [f]: e.target.value } }); } }} className={FIELD}>
           {list.map((o) => (
             <option key={o} value={o}>
               {o}
@@ -783,7 +829,7 @@ function PicksForm({ focus, result, own: ownWords = {}, onSend }: { focus: Relat
           ))}
           <option value="__own">Write my own</option>
         </select>
-        {isOwn && <input value={cur} onChange={(e) => setV({ ...v, [k]: { ...v[k], [f]: e.target.value } })} maxLength={120} placeholder="Your words" className={field} />}
+        {isOwn && <input value={cur} onChange={(e) => setV({ ...v, [k]: { ...v[k], [f]: e.target.value } })} maxLength={120} placeholder="Your words" className={FIELD} />}
       </label>
     );
   };
@@ -961,7 +1007,7 @@ export function SessionChat() {
         resumeRef.current(['Your account is made. Everything you tell me from now on is saved to it.']);
       })
       .catch((e) => {
-        setNotice(err(e));
+        setNotice(errorText(e, 'That did not work.'));
         say('bumling', ['That did not go through. The note below says why.'], { stage: { part: 'account' }, ask: { kind: 'form', render: (send) => <AccountForm initialName={rec.name ?? ''} onSend={send} /> } });
       });
   };
@@ -1020,7 +1066,7 @@ export function SessionChat() {
     if (!q) return goSteps(chatRef.current.data);
     const r = RELATIONSHIP_BY_KEY[q.relationship];
     // A pick question can always be answered in your own words; a scale stays a scale.
-    const chips: Chip[] = q.format === 'pick' && q.options ? [...q.options.map((o, i) => ({ label: o.label, value: String(i), emoji: o.emoji })), { label: 'Write my own', value: 'own', emoji: '✍️' }] : q.format === 'scale' && q.scale ? q.scale.labels.map((l, i) => ({ label: l, value: String(i) })) : [{ label: 'Yes', value: '1' }, { label: 'Not yet', value: '0' }];
+    const chips: Chip[] = q.format === 'pick' && q.options ? [...q.options.map((o, i) => ({ label: o.label, value: String(i) })), { label: 'Write my own', value: 'own', icon: 'PenLine' }] : q.format === 'scale' && q.scale ? q.scale.labels.map((l, i) => ({ label: l, value: String(i) })) : [{ label: 'Yes', value: '1' }, { label: 'Not yet', value: '0' }];
     const lead = intro ? [r.greeting] : [];
     const foundation = q.role === 'foundation' ? ['This one becomes the foundation of my pyramid, its first layer. The rest is built from it.'] : [];
     say(q.relationship, [...lead, ...foundation, q.prompt], { stage: { part: 'pillars', id, history }, ask: { kind: 'chips', chips } });
@@ -1061,7 +1107,7 @@ export function SessionChat() {
         say('bumling', ['Saved to your profile! 🎉', 'Ready to see your pillars?'], { stage: { part: 'done' }, ask: { kind: 'chips', chips: DONE_CHIPS.filter((c) => c.value !== 'profile') } });
       })
       .catch((e) => {
-        setNotice(err(e));
+        setNotice(errorText(e, 'That did not work.'));
         goProfile();
       });
   };
@@ -1074,7 +1120,7 @@ export function SessionChat() {
       .submitAssessment({ placements: placedOf(data), away: data.away, fears: data.fears, insecurities: data.insecurities, scores: data.scores, behaviour: data.behaviour, realDay: data.realDay })
       .then((r) => goFocus(r.suggestedFocus, data))
       .catch((e) => {
-        setNotice(err(e));
+        setNotice(errorText(e, 'That did not work.'));
         goDay();
       });
   };
@@ -1089,7 +1135,7 @@ export function SessionChat() {
         goPillars(data, ['Signed! Your plan is saved, and Daily will show your routine from tomorrow morning.', ...(call ? ['I opened the details for a live call. Read them when you like; the chat waits here.'] : [])]);
       })
       .catch((e) => {
-        setNotice(err(e));
+        setNotice(errorText(e, 'That did not work.'));
         goContract();
       });
   };
@@ -1104,7 +1150,7 @@ export function SessionChat() {
         goSteps(next);
       })
       .catch((e) => {
-        setNotice(err(e));
+        setNotice(errorText(e, 'That did not work.'));
         goPillars(data);
       });
   };
@@ -1118,7 +1164,7 @@ export function SessionChat() {
         goDone(data);
       })
       .catch((e) => {
-        setNotice(err(e));
+        setNotice(errorText(e, 'That did not work.'));
         goSteps(data);
       });
   };

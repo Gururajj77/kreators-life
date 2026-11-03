@@ -1,7 +1,7 @@
 import { GETTING_STARTED_DAYS, type BriefLine } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Link } from 'react-router';
-import { Check } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 import { api } from '../lib/api';
 import { Icon } from './Icon';
 import { useAuthed } from '../lib/queries';
@@ -70,9 +70,7 @@ export function DailyBrief({ date, hour }: { date: string; hour: number }) {
             </span>
             <span className="flex shrink-0 items-center gap-xs text-[14px] font-extrabold text-ink-soft">
               {g.done} of {g.items.length}
-              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={g.folded ? '' : 'rotate-180'}>
-                <path d="M6 9l6 6 6-6" />
-              </svg>
+              <Icon icon={ChevronDown} size={14} strokeWidth={3} />
             </span>
           </button>
           {!g.folded && (

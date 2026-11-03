@@ -8,15 +8,17 @@ import { CheckRow } from '../components/CheckRow';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
-import { api } from '../lib/api';
-import { todayLocal } from '../lib/date';
+import { api, errorText } from '../lib/api';
+import { todayLocal, clockTime, longDate, toDate } from '../lib/date';
 import { useAuthed, useLibrary, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
+import { Icon } from '../components/Icon';
+import { Play, Star } from 'lucide-react';
+import { FIELD } from '../lib/ui';
+import { StatusTag } from '../components/StatusTag';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-const err = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
-const clock = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+const clock = clockTime;
+const day = longDate;
 
 /** The newest purchase of a product; for memberships it carries the expiry. */
 function latestOrder(orders: Order[] | undefined, productId: string): Order | null {
@@ -76,7 +78,7 @@ function Mine() {
                   })()}
                 </span>
               </span>
-              {p.kind === 'membership' && expired(latestOrder(d.orders, p.id)) && <span className="shrink-0 rounded-pill bg-r3 px-xs text-[12px] font-extrabold leading-[20px] text-ink-fixed">Renew</span>}
+              {p.kind === 'membership' && expired(latestOrder(d.orders, p.id)) && <StatusTag tone="warn">Renew</StatusTag>}
             </Link>
           </li>
         ))}
@@ -181,7 +183,7 @@ function RescheduleSheet({ booking, onClose, onDone }: { booking: Booking | null
           </p>
           <label className="block">
             <span className="block text-[14px] font-bold">Day</span>
-            <input type="date" value={date} min={todayLocal()} onChange={(e) => setDate(e.target.value)} className={field} />
+            <input type="date" value={date} min={todayLocal()} onChange={(e) => setDate(e.target.value)} className={FIELD} />
           </label>
           {slots.data && <p className="m-0 text-[12px] font-bold text-ink-soft">Times shown in your zone; the host is in {slots.data.zone}.</p>}
           {slots.data && slots.data.slots.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">No free slots that day. Try another.</p>}
@@ -194,7 +196,7 @@ function RescheduleSheet({ booking, onClose, onDone }: { booking: Booking | null
           </div>
           {move.isError && (
             <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-              {err(move.error, 'Could not move it.')}
+              {errorText(move.error, 'Could not move it.')}
             </p>
           )}
         </div>
@@ -248,7 +250,7 @@ function Owned({ id }: { id: string }) {
           </Link>
         </div>
       )}
-      {q.isError && !(lapsed && myOrder) && <p className="mt-md font-bold">{err(q.error, 'Not available.')}</p>}
+      {q.isError && !(lapsed && myOrder) && <p className="mt-md font-bold">{errorText(q.error, 'Not available.')}</p>}
       {p && (
         <>
           {p.kind === 'digital' && p.url && (
@@ -354,16 +356,16 @@ function Owned({ id }: { id: string }) {
                       checked={Boolean(l.completedAt)}
                       onToggle={() => !l.completedAt && done.mutate(l.id)}
                       title={l.title}
-                      subtitle={l.unlocked ? (l.body ? l.body.slice(0, 160) : undefined) : `Unlocks ${new Date(l.unlocksOn ?? '').toLocaleDateString()}`}
-                      lockedMessage={l.unlocked ? null : `This lesson unlocks on ${new Date(l.unlocksOn ?? '').toLocaleDateString()}.`}
+                      subtitle={l.unlocked ? (l.body ? l.body.slice(0, 160) : undefined) : `Unlocks ${toDate(l.unlocksOn ?? '').toLocaleDateString()}`}
+                      lockedMessage={l.unlocked ? null : `This lesson unlocks on ${toDate(l.unlocksOn ?? '').toLocaleDateString()}.`}
                       strike
                       color="var(--color-r4)"
                       deep="var(--deep-lover_partner)"
                       text="var(--color-ink-fixed)"
                       aside={
                         l.unlocked && l.videoUrl ? (
-                          <a href={l.videoUrl} target="_blank" rel="noreferrer" className="toy toy-soft flex w-[48px] shrink-0 items-center justify-center rounded-tile bg-card text-[18px]" aria-label={`Watch ${l.title}`}>
-                            ▶
+                          <a href={l.videoUrl} target="_blank" rel="noreferrer" className="toy toy-soft flex w-[48px] shrink-0 items-center justify-center rounded-tile bg-card" aria-label={`Watch ${l.title}`}>
+                            <Icon icon={Play} size={18} filled />
                           </a>
                         ) : undefined
                       }
@@ -388,7 +390,7 @@ function Owned({ id }: { id: string }) {
                       <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{allDone ? 'Every lesson is done. Claim it.' : 'Finish every lesson and pass every gated quiz, then claim it here.'}</p>
                       {claim.isError && (
                         <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-                          {err(claim.error, 'Not yet.')}
+                          {errorText(claim.error, 'Not yet.')}
                         </p>
                       )}
                       <Button className="mt-sm" onClick={() => claim.mutate()} disabled={claim.isPending}>
@@ -412,12 +414,12 @@ function Owned({ id }: { id: string }) {
               {p.intake.map((qn, i) => (
                 <label key={i} className="mt-sm block">
                   <span className="block text-[14px] font-bold">{qn}</span>
-                  <input value={intake[i] ?? ''} onChange={(e) => setIntake((list) => p.intake.map((_, j) => (j === i ? e.target.value : (list[j] ?? ''))))} maxLength={500} className={field} />
+                  <input value={intake[i] ?? ''} onChange={(e) => setIntake((list) => p.intake.map((_, j) => (j === i ? e.target.value : (list[j] ?? ''))))} maxLength={500} className={FIELD} />
                 </label>
               ))}
               <label className="mt-sm block">
                 <span className="block text-[14px] font-bold">Day</span>
-                <input type="date" value={date} min={todayLocal()} onChange={(e) => setDate(e.target.value)} className={field} />
+                <input type="date" value={date} min={todayLocal()} onChange={(e) => setDate(e.target.value)} className={FIELD} />
               </label>
               {slots.data && slots.data.slots.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No free slots that day. Try another.</p>}
               {!intakeReady && <p className="mt-sm m-0 text-[14px] font-bold text-ink-soft">Answer the questions above, then pick a time.</p>}
@@ -431,7 +433,7 @@ function Owned({ id }: { id: string }) {
               {book.isSuccess && <p className="mt-sm m-0 text-[14px] font-bold">Requested. You will hear back in your inbox.</p>}
               {book.isError && (
                 <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-                  {err(book.error, 'Could not book.')}
+                  {errorText(book.error, 'Could not book.')}
                 </p>
               )}
             </section>
@@ -453,13 +455,13 @@ function Owned({ id }: { id: string }) {
               >
                 <div className="flex gap-xs" role="group" aria-label="Rating">
                   {[1, 2, 3, 4, 5].map((n) => (
-                    <button key={n} type="button" aria-pressed={rating === n} onClick={() => setRating(n)} className={`size-[44px] rounded-pill text-[20px] ${n <= rating ? 'bg-r3 text-ink-fixed' : 'bg-paper'}`} aria-label={`${n} stars`}>
-                      ★
+                    <button key={n} type="button" aria-pressed={rating === n} onClick={() => setRating(n)} className={`flex size-[44px] items-center justify-center rounded-pill ${n <= rating ? 'bg-r3 text-ink-fixed' : 'bg-paper'}`} aria-label={`${n} stars`}>
+                      <Icon icon={Star} size={20} filled={n <= rating} />
                     </button>
                   ))}
                 </div>
                 <textarea value={reviewText} onChange={(e) => setReviewText(e.target.value)} rows={3} maxLength={600} aria-label="Your review" placeholder="A few honest words" className="w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
-                {review.isError && <p className="m-0 text-[14px] font-bold">{err(review.error, 'Could not send.')}</p>}
+                {review.isError && <p className="m-0 text-[14px] font-bold">{errorText(review.error, 'Could not send.')}</p>}
                 <Button type="submit" full disabled={review.isPending || !reviewText.trim()}>
                   Send review
                 </Button>
@@ -519,7 +521,7 @@ function Quiz({ lesson, onDone }: { lesson: Lesson; onDone: () => void }) {
           ))}
           {submit.isError && (
             <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-              {err(submit.error, 'Could not check that.')}
+              {errorText(submit.error, 'Could not check that.')}
             </p>
           )}
           {result ? (

@@ -82,7 +82,7 @@ internal.get('/observability', async (c) => {
   const extra = (k: string) => extraRows.results.find((r) => r.kind === k)?.n ?? 0;
   const lg = (l: string) => logRows.results.find((r) => r.level === l)?.n ?? 0;
   const additions: ObservedAdditions = {
-    games: CARD_GAMES.map((g) => ({ key: g.key, name: g.name, emoji: g.emoji, unlocked: unlocks.results.find((r) => r.game_key === g.key)?.n ?? 0 })),
+    games: CARD_GAMES.map((g) => ({ key: g.key, name: g.name, unlocked: unlocks.results.find((r) => r.game_key === g.key)?.n ?? 0 })),
     discover: { results: dz?.results ?? 0, people: dz?.people ?? 0, withEq: dz?.with_eq ?? 0, assistantOn: dset?.assistant_on ?? 0, stepsOff: dset?.steps_off ?? 0, addons: { type: extra('type'), love: extra('love'), mind: extra('mind'), design: extra('design') }, mindOn: dset?.mind_on ?? 0 },
     agency: { people: ag?.people ?? 0, clients: ag?.clients ?? 0, deliverables: ag?.deliverables ?? 0, published: ag?.published ?? 0, invoices: ag?.invoices ?? 0, agreementsSigned: ag?.signed ?? 0, clientLinksOn: ag?.links ?? 0, metricsOn: ag?.metrics ?? 0 },
     grants: { xp: grant('user.xp'), badges: grant('user.badge'), points: grant('user.points'), honors: grant('user.honor') },

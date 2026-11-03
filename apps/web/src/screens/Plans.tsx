@@ -10,6 +10,8 @@ import { Section } from '../components/Section';
 import { api } from '../lib/api';
 import { prettyDate, shortDay } from '../lib/date';
 import { useAuthed } from '../lib/queries';
+import { Icon } from '../components/Icon';
+import { Check } from 'lucide-react';
 
 /**
  * Plans and credits: what typing to the assistant runs on. Numbers first (what is left, the plan, today, the last
@@ -133,8 +135,10 @@ export function Plans() {
                       </th>
                       {PAID_PLANS.map((k) => (
                         <th key={k} scope="col" className={`py-xs pr-sm text-[12px] font-extrabold uppercase tracking-wide ${a.plan === k ? 'text-ink' : 'text-ink-soft'}`}>
-                          {PLANS[k].name}
-                          {a.plan === k ? ' ✓' : ''}
+                          <span className="inline-flex items-center gap-xs">
+                            {PLANS[k].name}
+                            {a.plan === k && <Icon icon={Check} size={14} strokeWidth={3} label="your plan" />}
+                          </span>
                         </th>
                       ))}
                     </tr>

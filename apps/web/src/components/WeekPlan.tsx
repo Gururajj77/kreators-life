@@ -1,7 +1,7 @@
 import { PLAN_DAY_MINUTES, RELATIONSHIP_BY_KEY, minutesLabel2, type FocusTask, type Node, type PlanAttention, type PlanStrength, type RelationshipKey, type WeekPlan as WeekPlanData, type WeekPlanSuggestion } from '@kreators/shared';
 import { useEffect, useState } from 'react';
 import { api, type TaskPlanBody } from '../lib/api';
-import { prettyDate, todayLocal } from '../lib/date';
+import { prettyDate, todayLocal, weekday } from '../lib/date';
 import { useAuthed, useRefreshAll } from '../lib/queries';
 import { tie } from '../lib/text';
 import { Button } from './Button';
@@ -70,7 +70,6 @@ const saveHours = (n: number) => {
   }
 };
 
-const weekday = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' });
 const dayOption = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
 const tone = (s: PlanStrength) => (s.label === 'Strong' ? 'good' : s.label === 'Fair' ? 'warn' : 'neutral');
 
@@ -459,7 +458,7 @@ function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: number,
             ))}
           </ul>
         )}
-        <Fold className="mt-xs" title={COPY.ownFold} open={ownOpen} onOpenChange={setOwnOpen}>
+        <Fold className="mt-xs" title={COPY.ownFold} adds open={ownOpen} onOpenChange={setOwnOpen}>
           <AddOwn
             day={ownDay || lightest}
             today={today}

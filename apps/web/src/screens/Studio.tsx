@@ -9,12 +9,13 @@ import { AreaLine, Donut, Legend, StatTile } from '../components/Charts';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
-import { api } from '../lib/api';
+import { api, downloadCsv as fetchCsv, errorText } from '../lib/api';
 import { useAuthed, useMe, useRefreshAll, useStudio } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
-import { useSession } from '../lib/store';
+import { Stars } from '../components/Stars';
+import { FIELD } from '../lib/ui';
+import { useCopy } from '../lib/clipboard';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const STATUS_PILL: Record<Order['status'], string> = {
   paid: 'bg-r4 text-on-fill',
   test: 'bg-paper text-ink-soft',
@@ -56,7 +57,7 @@ export function Studio({ tab = 'home' }: { tab?: 'home' | 'page' | 'bookings' | 
               ['dm', 'Priority DMs', '/shop/dm'],
             ] as const
           ).map(([k, label, to]) => (
-            <Link key={k} to={to} aria-current={tab === k ? 'page' : undefined} className={`inline-flex min-h-[44px] shrink-0 items-center rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === k ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+            <Link key={k} to={to} aria-current={tab === k ? 'page' : undefined} className={`inline-flex min-h-[44px] shrink-0 items-center min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === k ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
               {label}
             </Link>
           ))}
@@ -69,14 +70,14 @@ export function Studio({ tab = 'home' }: { tab?: 'home' | 'page' | 'bookings' | 
           <section className="span-all mt-md" aria-label="Numbers">
             <div className="grid grid-cols-2 gap-xs md:grid-cols-4">
               <StatTile label="orders" value={d.analytics.orders} hint={`${d.analytics.attributed} via links, ${d.analytics.direct} from your page`} tone="var(--tint-purple)" to="/shop/content" />
-              <StatTile label="points earned" value={d.analytics.pointsEarned.toLocaleString()} hint={d.analytics.centsEarned > 0 ? `plus ${(d.analytics.centsEarned / 100).toFixed(2)} in money orders` : d.analytics.affiliatePoints > 0 ? `${d.analytics.affiliatePoints} from referrals` : 'from sales'} tone="var(--tint-green)" to="/shop/customers" />
+              <StatTile label="points earned" value={d.analytics.pointsEarned.toLocaleString()} hint={d.analytics.centsEarned > 0 ? `plus ${money(d.analytics.centsEarned)} in money orders` : d.analytics.affiliatePoints > 0 ? `${d.analytics.affiliatePoints} from referrals` : 'from sales'} tone="var(--tint-green)" to="/shop/customers" />
               <StatTile label="page views" value={d.analytics.views} hint={`${d.analytics.clicks} link clicks`} to="/shop/page" />
               <StatTile label="followers" value={d.analytics.followers} hint={`${d.analytics.leads} ${d.analytics.leads === 1 ? 'lead' : 'leads'}`} to="/shop/audience" />
             </div>
             <div className="mt-xs rounded-card bg-card p-md shadow-toy-soft">
               <div className="flex items-baseline justify-between gap-sm">
                 <p className="m-0 text-[14px] font-bold">Orders, last 14 days</p>
-                <Link to="/shop/content" className="text-[12px] font-bold text-ink-mute underline-offset-4 hover:underline">
+                <Link to="/shop/content" className="inline-flex min-h-[44px] items-center text-[12px] font-bold text-ink-mute underline-offset-4 hover:underline">
                   Which post made the sale
                 </Link>
               </div>
@@ -100,7 +101,8 @@ export function Studio({ tab = 'home' }: { tab?: 'home' | 'page' | 'bookings' | 
             </div>
           </section>
 
-          <PeriodPanel id="shop-period" parts={['shop', 'finance']} />
+          {/* The orders and points tiles above already show the shop's numbers, so the period block adds only money in and out. */}
+          <PeriodPanel id="shop-period" parts={['finance']} />
           <section className="mt-lg" aria-labelledby="products-heading">
             <div className="flex items-center justify-between gap-sm">
               <h2 id="products-heading" className="text-[24px]">
@@ -161,7 +163,6 @@ export function Studio({ tab = 'home' }: { tab?: 'home' | 'page' | 'bookings' | 
 
 /** Every order, filtered, with a CSV for the accountant. */
 function SalesSection() {
-  const token = useSession((s) => s.token);
   const [status, setStatus] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -172,17 +173,9 @@ function SalesSection() {
     setCsvError(null);
     try {
       const qs = new URLSearchParams({ ...(status ? { status } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}) }).toString();
-      const res = await fetch(`${api.salesCsvUrl}${qs ? `&${qs}` : ''}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-      if (!res.ok) throw new Error('Could not build the file.');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'sales.csv';
-      a.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+      await fetchCsv(`${api.salesCsvUrl}${qs ? `&${qs}` : ''}`, 'sales.csv');
     } catch (e) {
-      setCsvError(e instanceof Error ? e.message : 'Could not download.');
+      setCsvError(errorText(e, 'Could not download.'));
     }
   };
   const orders = sales.data?.orders ?? [];
@@ -199,7 +192,7 @@ function SalesSection() {
       <div className="mt-sm grid grid-cols-3 gap-xs">
         <label className="block">
           <span className="block text-[12px] font-bold">Status</span>
-          <select value={status} onChange={(e) => setStatus(e.target.value)} className={field}>
+          <select value={status} onChange={(e) => setStatus(e.target.value)} className={FIELD}>
             <option value="">All</option>
             <option value="paid">Paid</option>
             <option value="test">Test</option>
@@ -210,11 +203,11 @@ function SalesSection() {
         </label>
         <label className="block">
           <span className="block text-[12px] font-bold">From</span>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={field} />
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[12px] font-bold">To</span>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={field} />
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={FIELD} />
         </label>
       </div>
       {csvError && (
@@ -233,7 +226,7 @@ function SalesSection() {
               <span className={`shrink-0 rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${STATUS_PILL[o.status]}`}>{o.status}</span>
             </div>
             <p className="m-0 text-[14px] font-semibold text-ink-soft">
-              {new Date(o.createdAt).toLocaleDateString()}. {o.points > 0 ? `${o.points} points` : `${(o.cents / 100).toFixed(2)} ${o.currency}${o.provider === 'razorpay' ? '' : ', test'}`}
+              {new Date(o.createdAt).toLocaleDateString()}. {o.points > 0 ? `${o.points} points` : `${money(o.cents, o.currency)}${o.provider === 'razorpay' ? '' : ', test'}`}
               {o.couponCode ? `, coupon ${o.couponCode}` : ''}
               {o.affiliateCode ? ', via affiliate' : ''}
               {o.sourceLabel ? `, from ${o.sourceLabel}` : ', profile direct'}
@@ -298,6 +291,7 @@ function NewProductSheet({ open, onClose, onCreated }: { open: boolean; onClose:
 }
 
 function PageTab() {
+  const copier = useCopy();
   const me = useMe();
   const refresh = useRefreshAll();
   const user = me.data?.user;
@@ -343,8 +337,8 @@ function PageTab() {
           <p className="m-0 text-[14px] font-bold">Your link</p>
           <p className="m-0 break-all text-[16px] font-semibold">{link}</p>
           <div className="mt-sm flex gap-xs">
-            <Button variant="outline" onClick={() => navigator.clipboard?.writeText(link)}>
-              Copy
+            <Button variant="outline" onClick={() => void copier.copy(link)}>
+              {copier.said === 'Copied' ? 'Copied' : 'Copy'}
             </Button>
             <Link to={`/u/${user?.handle}`} className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
               Open
@@ -540,7 +534,7 @@ function ReviewsTab() {
         {q.data?.testimonials.map((t) => (
           <li key={t.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
             <p className="m-0 text-[16px] font-bold">
-              {'★'.repeat(t.rating)} {t.authorName} on {t.productTitle}
+              <Stars n={t.rating} /> {t.authorName} on {t.productTitle}
             </p>
             <p className="mt-xs m-0 text-[16px] font-semibold">{t.body}</p>
             <Button variant={t.approved ? 'ghost' : 'primary'} className="mt-sm" onClick={() => approve.mutate({ id: t.id, approved: !t.approved })}>

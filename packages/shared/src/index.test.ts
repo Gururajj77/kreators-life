@@ -13,7 +13,7 @@ import { BADGES as ALL_BADGES, HOW_TO, kmLabel, MODULES as MODS, paceLabel, RUN_
 import { earningGuide, nextBadge, unlockFor } from './index';
 import { ageOn, birthDateProblem, MIN_AGE, normalizePhone, phoneProblem } from './index';
 import { BRAND_SOURCE_KINDS, BRAND_SOURCE_META, PIECE_KINDS, PIECE_META, RESEARCH_KINDS, RESEARCH_META, sourceKindOf, strategyPath, threadOrder, anonAliasFrom, MAX_REPLY_DEPTH } from './index';
-import { AWAY_LEVEL, awayPlacement, BAND_STATEMENTS, levelByValue, MAP_LEVEL_WORDS, MAP_LEVELS, OPTIONAL_PILLARS, parseAway, pickFocus, picksOfPlacement, placementFlags, placementFromPicks, priorityOrder, rampTime, readFeelings, RELATIONSHIPS, routineFor, settleScore } from './index';
+import { AWAY_LEVEL, awayPlacement, BAND_STATEMENTS, levelByValue, MAP_LEVEL_WORDS, MAP_LEVELS, OPTIONAL_PILLARS, parseAway, pickFocus, picksOfPlacement, placementFlags, placementFromPicks, priorityOrder, rampTime, readFeelings, feelingsFromModel, feelingsPrompt, RELATIONSHIPS, routineFor, settleScore } from './index';
 import { characterHello, characterTitle, INSECURITY_WEIGHTS, mantraLine, scoreOfStars, STAR_WORDS, starsOf, weightWord } from './index';
 import { blockMinutes, minutesLabel, parseRoutineBlocks, stepsMinutes } from './index';
 import type { Placement } from './index';
@@ -21,6 +21,8 @@ import { CARD_GAMES, analyseDiscover, discoverProfile, profileForAssistant, styl
 import { FEATURE_FEE_POINTS, isFeatured, parseImageUrls, STORE_STAGE_META, PREOWNED_CONDITION_META } from './index';
 import { builtInTemplate, parseReviewPrompts, periodDays, periodFor, periodLabel, periodShift } from './index';
 import { MAX_NOT_TO_DO, notToDoStreak, notToDoWeek, shiftDay } from './index';
+// Discover's answer keys live on the server only (P138); the tests read the same file the Worker does.
+import { DISCOVER_KEYS as K } from '../../../apps/api/src/discoverKeys';
 import { AGENT_LIMITS, AGENTS, ASSISTANT_MODELS, centsFrom, creditsFor, FALLBACK_PRICE, isPaidPlan, messagesFor, microsFrom, MODEL_PRICES, PAID_PLANS, PLANS, priceOf, spendSplit, TOPUP_PACKS } from './index';
 import { describe, expect, it } from 'vitest';
 import { bountyPayout, COMPLEMENTS, dressCodeFor, feeBps, greetingFor, INTEREST_GROUPS, INTERESTS, ladderOptions, MAX_INTERESTS, MODULE_GROUPS, MODULES, moduleState, nextWeek, passwordProblem, matchCircles, matchScore, money, nudgeFor, rolloutBucket, slotsFor, timeLabel, zonedToUtc } from './index';
@@ -234,32 +236,45 @@ describe('apps', () => {
       expect(down.slice(0, 4)).toEqual([3, 2, 1, 1]);
       expect(puzzleSequence(picks)).toEqual(puzzleSequence(picks));
     });
+    it('keeps the answer keys off the shared lists the web loads, one key for every situation and scene (P138)', () => {
+      for (const list of [DISCOVER_SCENES, EQ_READING, EQ_PEOPLE] as readonly object[][]) for (const item of list) expect('key' in item).toBe(false);
+      expect(K.scenes).toHaveLength(DISCOVER_SCENES.length);
+      expect(K.reading).toHaveLength(EQ_READING.length);
+      expect(K.people).toHaveLength(EQ_PEOPLE.length);
+      K.scenes.forEach((k, i) => expect([...k].sort()).toEqual([1, 2, 3, 4].slice(0, DISCOVER_SCENES[i]!.options.length)));
+      K.reading.forEach((k, i) => expect(k).toBeLessThan(EQ_READING[i]!.options.length));
+      K.people.forEach((k, i) => {
+        expect(k).toHaveLength(EQ_PEOPLE[i]!.options.length);
+        expect(k).toContain(4);
+        expect(k).toContain(1);
+      });
+    });
     it('scores emotional intelligence, and only counts it when it is all answered', () => {
       const a = emptyDiscoverAnswers();
       expect(eqComplete(a)).toBe(false);
-      expect(scoreDiscover(a).eq).toBeUndefined();
+      expect(scoreDiscover(a, K).eq).toBeUndefined();
       a.feelings = EQ_FEELINGS.map((screen) => screen.map((it) => (it.sign === 1 ? 4 : 0)));
-      a.reading = EQ_READING.map((q) => q.key);
-      a.people = EQ_PEOPLE.map((q) => ({ most: q.key.indexOf(4), least: q.key.indexOf(1) }));
+      a.reading = [...K.reading];
+      a.people = K.people.map((k) => ({ most: k.indexOf(4), least: k.indexOf(1) }));
       expect(eqComplete(a)).toBe(true);
       expect(discoverComplete(a)).toBe(false);
-      const top = scoreEq(a);
+      const top = scoreEq(a, K);
       expect(top.overall).toBe(100);
       expect(top.reading.right).toBe(6);
       const low = emptyDiscoverAnswers();
       low.feelings = EQ_FEELINGS.map((screen) => screen.map((it) => (it.sign === 1 ? 0 : 4)));
-      low.reading = EQ_READING.map((q) => (q.key + 1) % 4);
-      low.people = EQ_PEOPLE.map((q) => ({ most: q.key.indexOf(1), least: q.key.indexOf(4) }));
-      expect(scoreEq(low).overall).toBeLessThan(10);
+      low.reading = K.reading.map((k) => (k + 1) % 4);
+      low.people = K.people.map((k) => ({ most: k.indexOf(1), least: k.indexOf(4) }));
+      expect(scoreEq(low, K).overall).toBeLessThan(10);
       // Seeing yourself higher than you chose shows up as a gap to practise.
-      const gap = scoreEq({ ...a, people: low.people });
+      const gap = scoreEq({ ...a, people: low.people }, K);
       expect(analyseEq(gap).dims.some((d) => d.gap !== null)).toBe(true);
       expect(analyseEq(top).dims).toHaveLength(5);
     });
     it('reads a result in detail: five traits, the two that stand out, reasoning by kind', () => {
       const picks: (number | null)[] = [];
       for (let i = 0; i < PUZZLES_SHOWN; i += 1) picks.push(i < 7 ? puzzleAt(picks, i).answer : (puzzleAt(picks, i).answer + 1) % 5);
-      const res = scoreDiscover({ ...emptyDiscoverAnswers(), puzzles: picks });
+      const res = scoreDiscover({ ...emptyDiscoverAnswers(), puzzles: picks }, K);
       const a = analyseDiscover(res);
       expect(a.personality).toHaveLength(5);
       expect(a.reasoning.right).toBe(res.puzzles.right);
@@ -275,7 +290,7 @@ describe('apps', () => {
       for (const t of ['low', 'mid', 'high'] as const) expect(['low', 'mid', 'high']).toContain(t);
     });
     it('says the bands the same way everywhere, and levels at the right counts', () => {
-      const base = scoreDiscover(emptyDiscoverAnswers());
+      const base = scoreDiscover(emptyDiscoverAnswers(), K);
       const level = (right: number) => analyseDiscover({ ...base, puzzles: { right, of: 10, score: right * 10 } }).reasoning.level;
       expect([level(0), level(2), level(3), level(5), level(6), level(8), level(9), level(10)]).toEqual(['Just starting', 'Just starting', 'Steady', 'Steady', 'Strong', 'Strong', 'Sharp', 'Sharp']);
       const high = analyseDiscover({ ...base, traits: { o: 70, c: 30, e: 50, a: 90, s: 41 } });
@@ -283,7 +298,7 @@ describe('apps', () => {
       expect(high.pattern).toMatch(/warm/);
     });
     it('turns a result into a small profile, tips for the assistant and next steps, and never the answers', () => {
-      const res = scoreDiscover(emptyDiscoverAnswers());
+      const res = scoreDiscover(emptyDiscoverAnswers(), K);
       const p = discoverProfile({ ...res, traits: { o: 80, c: 20, e: 50, a: 50, s: 20 } }, '2026-10-31T10:00:00.000Z');
       expect(p.bands).toEqual({ o: 'high', c: 'low', e: 'mid', a: 'mid', s: 'low' });
       expect(styleHints(p).join(' ')).toMatch(/tiny/);
@@ -301,6 +316,23 @@ describe('apps', () => {
       expect(off.actions.some((x) => x.key.startsWith('style') || x.key === 'strength-grow')).toBe(false);
       expect(briefFor({ ...facts, apps: [] , discover: { taken: false, profile: null } }).actions.map((x) => x.key)).not.toContain('discover');
     });
+    it('tells the brief about waiting client changes, a retainer month and unread channels, only while those apps are on (P227)', () => {
+      const facts = { ...BASE_FACTS, checkedIn: true, tasksDue: 0, smallActDone: true, tasksOverdue: 0, streak: 0, notToDoSlipped: 0, routineWeek: null, contractDays: null, coachNotes: 0, coachAsks: 0, nextEvent: null, stressAvg: null, sleepAvg: null, sleepAvgBefore: null, moodAvg: null, moodAvgBefore: null };
+      const agency = { changeAsks: 2, changeClientId: 'k1', monthMade: { clientId: 'k2', clientName: 'Acme', n: 3 } };
+      const on = briefFor({ ...facts, apps: ['agency', 'community'], agency, channels: { unread: 5, to: null } });
+      const sig = Object.fromEntries(on.signals.map((x) => [x.key, x]));
+      expect(sig['agency-change']?.to).toBe('/agency/k1');
+      expect(sig['agency-change']?.text).toMatch(/2 changes/);
+      expect(sig['agency-month']?.text).toBe('Month 3 for Acme is set up: its pieces and its invoice.');
+      expect(sig['agency-month']?.to).toBe('/agency/k2');
+      expect(on.actions.map((x) => x.key)).toContain('agency-change');
+      // The fourth signal (unread lines) is lower than the three Agency ones, so it shows once there is room.
+      const quiet = briefFor({ ...facts, apps: ['community'], channels: { unread: 1, to: '/community?tab=channels&channel=c1' } });
+      expect(quiet.signals.find((x) => x.key === 'channels')).toMatchObject({ text: '1 new line in your channels.', to: '/community?tab=channels&channel=c1' });
+      const off = briefFor({ ...facts, apps: [], agency, channels: { unread: 5, to: null } });
+      expect([...off.signals, ...off.actions].some((x) => x.key.startsWith('agency') || x.key === 'channels')).toBe(false);
+      expect(briefFor({ ...facts, apps: ['bond'], channels: { unread: 2, to: null } }).signals.find((x) => x.key === 'channels')?.to).toBe('/bond#bond-channels');
+    });
     it('weighs every strength out of one', () => {
       for (const w of Object.values(DISCOVER_WEIGHTS)) expect(Object.values(w).reduce((n, x) => n + x, 0)).toBeCloseTo(1, 5);
     });
@@ -317,20 +349,20 @@ describe('apps', () => {
       expect(parseDiscoverAnswers(null)).toEqual(emptyDiscoverAnswers());
     });
     it('scores the extremes the way they should', () => {
-      const blank = scoreDiscover(emptyDiscoverAnswers());
+      const blank = scoreDiscover(emptyDiscoverAnswers(), K);
       expect(Object.values(blank.traits).every((n) => n === 50)).toBe(true);
       expect(blank.puzzles.score).toBe(0);
       // Someone who always calls the most effective answer most effective, and puzzles right.
       const best = emptyDiscoverAnswers();
       for (let i = 0; i < PUZZLES_SHOWN; i += 1) best.puzzles[i] = puzzleAt(best.puzzles, i).answer;
-      best.scenes = DISCOVER_SCENES.map((s) => ({ most: s.key.indexOf(4), least: s.key.indexOf(1) }));
-      const good = scoreDiscover(best);
+      best.scenes = K.scenes.map((k) => ({ most: k.indexOf(4), least: k.indexOf(1) }));
+      const good = scoreDiscover(best, K);
       expect(good.puzzles.score).toBeGreaterThanOrEqual(90);
       expect(good.puzzles.right).toBe(PUZZLES_SHOWN);
       expect(good.judgment).toBe(100);
       const worst = emptyDiscoverAnswers();
-      worst.scenes = DISCOVER_SCENES.map((s) => ({ most: s.key.indexOf(1), least: s.key.indexOf(4) }));
-      expect(scoreDiscover(worst).judgment).toBe(0);
+      worst.scenes = K.scenes.map((k) => ({ most: k.indexOf(1), least: k.indexOf(4) }));
+      expect(scoreDiscover(worst, K).judgment).toBe(0);
       // Always choosing the warm statement as most and the hard one as least raises Warmth.
       const warm = emptyDiscoverAnswers();
       warm.triads = DISCOVER_TRIADS.map((ids) => {
@@ -339,8 +371,8 @@ describe('apps', () => {
         const least = kind.find((k) => k.v === -1)?.i ?? kind.find((k) => k.i !== most && k.v === 0)?.i ?? (most === 0 ? 1 : 0);
         return { most, least: least === most ? (most + 1) % 3 : least };
       });
-      expect(scoreDiscover(warm).traits.a).toBeGreaterThan(60);
-      expect(new Set(scoreDiscover(warm).top).size).toBe(3);
+      expect(scoreDiscover(warm, K).traits.a).toBeGreaterThan(60);
+      expect(new Set(scoreDiscover(warm, K).top).size).toBe(3);
     });
   });
   it('keeps internal tools behind a team role, and gives every group a name', () => {
@@ -626,6 +658,16 @@ describe('strategy session', () => {
     expect(Object.keys(MAP_LEVEL_WORDS)).toHaveLength(MAP_LEVELS.length);
     expect(readFeelings('sad angry scared jealous guilty ashamed').length).toBeLessThanOrEqual(4);
   });
+  it('takes only real map levels from what the AI reader answers', () => {
+    expect(feelingsFromModel({ levels: [150, 100, 100, 999, '30', 'x', 12.5] })).toEqual([30, 100, 150]);
+    expect(feelingsFromModel('I would say 100 and 200, maybe 1000')).toEqual([100, 200]);
+    expect(feelingsFromModel([20, 30, 50, 75, 100])).toEqual([20, 30, 50, 75]);
+    expect(feelingsFromModel(null)).toEqual([]);
+    expect(feelingsFromModel({ levels: 'all' })).toEqual([]);
+    const prompt = feelingsPrompt('your family');
+    for (const l of MAP_LEVELS) expect(prompt).toContain(`${l.value} ${l.name}`);
+    expect(prompt).toContain('about your family');
+  });
   it('names the seven in plain words', () => {
     expect(RELATIONSHIPS.map((r) => r.name)).toEqual(['Work and money', 'Friends', 'Family', 'Love', 'Yourself', 'Teachers', 'Faith']);
   });
@@ -652,7 +694,7 @@ describe('strategy session', () => {
   });
 });
 
-import { cleanIdentity, goalsFor, IDENTITIES, identityLine, matchSetup, parseIdentities, parseSetup, readAbout, SETUP_APP_LINES, SETUP_APPS_MAX, SETUP_APPS_MIN, SETUP_BLOCKER_GROUPS, SETUP_BLOCKERS, SETUP_COMBOS, SETUP_GOAL_GROUPS, SETUP_GOALS, SETUP_ROLE_GROUPS, setupSwitchable } from './index';
+import { cleanIdentity, IDENTITIES, identityLine, matchSetup, parseIdentities, parseSetup, readAbout, SETUP_APP_LINES, SETUP_APPS_MAX, SETUP_APPS_MIN, SETUP_BLOCKER_GROUPS, SETUP_BLOCKERS, SETUP_COMBOS, SETUP_GOAL_GROUPS, SETUP_GOALS, SETUP_ROLE_GROUPS, setupSwitchable } from './index';
 
 describe('setup', () => {
   it('only names apps, tags, goals and blockers that exist', () => {
@@ -762,12 +804,6 @@ describe('setup', () => {
     once(SETUP_ROLE_GROUPS, IDENTITIES.filter((i) => i.kind === 'role').map((i) => i.key));
     once(SETUP_BLOCKER_GROUPS, SETUP_BLOCKERS.map((b) => b.key));
     for (const m of MODS.filter(setupSwitchable)) expect(SETUP_APP_LINES[m.key], m.key).toBeTruthy();
-  });
-
-  it('puts the goals that fit your tags first', () => {
-    expect(goalsFor(['student'])[0]?.key).toBe('learn');
-    expect(['grow', 'sell']).toContain(goalsFor(['founder'])[0]?.key);
-    expect(goalsFor([]).map((g) => g.key)).toEqual(SETUP_GOALS.map((g) => g.key));
   });
 });
 
@@ -1607,11 +1643,11 @@ describe('the contract templates', () => {
 });
 
 describe('the client dashboard link', () => {
-  it('starts with the five plain parts on and the three that name money or hours off', () => {
+  it('starts with the plain parts on and the four that name money, hours or agreements off', () => {
     const d = defaultPortalShow();
-    for (const k of ['waiting', 'coming', 'published', 'progress', 'notes']) expect(d[k as keyof typeof d], k).toBe(true);
+    for (const k of ['waiting', 'coming', 'published', 'progress', 'notes', 'docs']) expect(d[k as keyof typeof d], k).toBe(true);
     for (const k of ['channels', 'hours', 'invoices', 'contracts']) expect(d[k as keyof typeof d], k).toBe(false);
-    expect(PORTAL_PARTS.length).toBe(9);
+    expect(PORTAL_PARTS.length).toBe(10);
   });
   it('takes a saved switch only when it is a real true or false', () => {
     expect(parsePortalShow({ hours: true, canApprove: false, waiting: 'yes', nonsense: true })).toMatchObject({ hours: true, canApprove: false, waiting: true });
@@ -2325,7 +2361,8 @@ describe('badges', () => {
       expect(BADGE_STAT_UNIT[b.stat], b.key).toBeTruthy();
       expect(Number.isInteger(b.min) && b.min >= 1, b.key).toBe(true);
       expect(b.how.length, b.key).toBeGreaterThan(8);
-      expect(b.emoji, b.key).toBeTruthy();
+      // The medal's centre is a lucide glyph the web knows, never an emoji.
+      expect(isIconName(b.icon), b.key).toBe(true);
     }
     for (const f of BADGE_FAMILIES) expect(ALL_BADGES.some((b) => b.family === f), f).toBe(true);
     for (const t of BADGE_TIERS) expect(ALL_BADGES.some((b) => b.tier === t), t).toBe(true);
@@ -2411,6 +2448,7 @@ describe('the client pays the TDS (gross-up)', () => {
 });
 
 import { ICON_NAMES, isIconName, IDENTITIES as ICON_IDENTITIES, SETUP_GOALS as ICON_GOALS, SETUP_BLOCKERS as ICON_BLOCKERS, SETUP_GOAL_GROUPS, SETUP_ROLE_GROUPS, SETUP_BLOCKER_GROUPS, ROLE_META, BADGE_META, PERMISSION_META, PERMISSIONS, KNOWLEDGE_KIND_ICON, knowledgeKindIcon, REACTION_META } from './index';
+import { HONORS as ICON_HONORS, REWARD_GROUPS as ICON_REWARD_GROUPS, LINK_BLOCK_META as ICON_LINK_BLOCK_META, BRAND_SOURCE_META as ICON_BRAND_SOURCE_META, PIECE_META as ICON_PIECE_META, INTEREST_GROUPS as ICON_INTEREST_GROUPS, LIFE_AREAS as ICON_LIFE_AREAS, EVENT_TYPE_META as ICON_EVENT_TYPE_META, EXTRA_KINDS as ICON_EXTRA_KINDS, LOVE_LANGUAGES as ICON_LOVE_LANGUAGES, AMBIENT_SOUNDS as ICON_AMBIENT_SOUNDS } from './index';
 
 describe('icons', () => {
   it('names every icon once', () => {
@@ -2428,6 +2466,18 @@ describe('icons', () => {
       ...PERMISSIONS.map((p) => ({ key: p, icon: PERMISSION_META[p].icon })),
       ...Object.entries(KNOWLEDGE_KIND_ICON).map(([key, icon]) => ({ key, icon })),
       ...Object.entries(REACTION_META).map(([key, m]) => ({ key, icon: m.icon })),
+      // The registries that used to carry an emoji and are now drawn as lucide icons.
+      ...ICON_HONORS.map((h) => ({ key: h.key, icon: h.icon })),
+      ...ICON_REWARD_GROUPS.map((g) => ({ key: g.key, icon: g.icon })),
+      ...Object.entries(ICON_LINK_BLOCK_META).map(([key, m]) => ({ key, icon: m.icon })),
+      ...Object.entries(ICON_BRAND_SOURCE_META).map(([key, m]) => ({ key, icon: m.icon })),
+      ...Object.entries(ICON_PIECE_META).map(([key, m]) => ({ key, icon: m.icon })),
+      ...ICON_INTEREST_GROUPS.map((g) => ({ key: g.key, icon: g.icon })),
+      ...Object.entries(ICON_LIFE_AREAS).map(([key, m]) => ({ key, icon: m.icon })),
+      ...Object.entries(ICON_EVENT_TYPE_META).map(([key, m]) => ({ key, icon: m.icon })),
+      ...ICON_EXTRA_KINDS.map((k) => ({ key: k.key, icon: k.icon })),
+      ...Object.entries(ICON_LOVE_LANGUAGES).map(([key, m]) => ({ key, icon: m.icon })),
+      ...ICON_AMBIENT_SOUNDS.map((a) => ({ key: a.key, icon: a.icon })),
     ];
     for (const r of rows) expect(isIconName(r.icon), r.key).toBe(true);
   });

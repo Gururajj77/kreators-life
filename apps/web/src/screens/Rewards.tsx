@@ -10,6 +10,8 @@ import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useCardGames, useRefreshAll, useRewards } from '../lib/queries';
 import { LockedButton } from '../components/LockedButton';
+import { ConfirmSpend } from '../components/ConfirmSpend';
+import { AppIcon } from '../components/AppIcon';
 
 export function Rewards() {
   const q = useRewards();
@@ -17,6 +19,8 @@ export function Rewards() {
   const refresh = useRefreshAll();
   const celebrate = useCelebrate();
   const [error, setError] = useState<string | null>(null);
+  // The reward waiting on the confirm sheet: a game unlocks for good, gear is a reservation until a drop ships.
+  const [asking, setAsking] = useState<{ key: string; name: string; cost: number; game: boolean } | null>(null);
 
   const redeem = useMutation({
     mutationFn: (key: string) => api.redeem(key),
@@ -41,7 +45,7 @@ export function Rewards() {
   return (
     <Screen>
       <header className="pt-lg">
-        <BackLink to="/you">You</BackLink>
+        <BackLink to="/you">Profile</BackLink>
         <h1 className="text-[30px]">Rewards</h1>
       </header>
 
@@ -92,8 +96,10 @@ export function Rewards() {
               return (
                 <div key={g.key} id={g.key} className="mt-md">
                   <h3 className="text-[18px]">
-                    <span aria-hidden="true">{g.emoji} </span>
-                    {g.name}
+                    <span className="inline-flex items-center gap-xs">
+                      <AppIcon name={g.icon} size={20} />
+                      {g.name}
+                    </span>
                   </h3>
                   <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{g.blurb}</p>
                   <ul className={g.key === 'games' ? 'mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-3' : 'mt-sm flex list-none flex-col gap-xs p-0 m-0'}>
@@ -101,7 +107,7 @@ export function Rewards() {
                       const can = data.points >= r.cost;
                       const tile = g.key === 'games';
                       return (
-                        <li key={r.key} className={tile ? 'flex flex-col items-stretch gap-sm rounded-tile bg-card p-sm shadow-toy-soft' : 'flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft'}>
+                        <li key={r.key} className={tile ? 'flex flex-col items-stretch gap-sm rounded-tile bg-card p-sm shadow-toy-soft' : 'flex flex-wrap items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft sm:flex-nowrap'}>
                           <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill text-[24px]" style={{ background: r.kind === 'event' ? 'var(--tint-purple)' : 'var(--tint-yellow)' }} aria-hidden="true">
                             {r.emoji}
                           </span>
@@ -125,14 +131,12 @@ export function Rewards() {
                           ) : (
                             <Button
                               variant={can ? 'primary' : 'outline'}
-                              className={tile ? 'w-full shrink-0' : 'shrink-0'}
+                              className={tile ? 'w-full shrink-0' : 'w-full shrink-0 sm:w-auto'}
                               disabled={!can || redeem.isPending}
                               aria-label={r.game ? `Unlock ${r.name} for ${r.cost} points` : `Reserve ${r.name} for ${r.cost} points`}
-                              onClick={() => {
-                                if (window.confirm(r.game ? `Unlock ${r.name} for ${r.cost} points? It is yours for good.` : `Reserve ${r.name} for ${r.cost} points?`)) redeem.mutate(r.key);
-                              }}
+                              onClick={() => setAsking({ key: r.key, name: r.name, cost: r.cost, game: Boolean(r.game) })}
                             >
-                              {r.game ? `Unlock ${r.cost} pts` : `${r.cost} pts`}
+                              {r.game ? `Unlock ${r.cost} pts` : `Reserve ${r.cost} pts`}
                             </Button>
                           )}
                         </li>
@@ -174,6 +178,15 @@ export function Rewards() {
           )}
         </>
       )}
+      <ConfirmSpend
+        open={asking !== null}
+        onClose={() => setAsking(null)}
+        title={asking?.game ? `Unlock ${asking.name}?` : `Reserve ${asking?.name ?? ''}?`}
+        body={asking ? (asking.game ? `It costs ${asking.cost} points and is yours for good. It cannot be cancelled.` : `It costs ${asking.cost} points. It stays a reservation until the next drop ships, and you can cancel it until then.`) : ''}
+        action={asking?.game ? `Unlock ${asking.cost} pts` : `Reserve ${asking?.cost ?? 0} pts`}
+        busy={redeem.isPending}
+        onConfirm={() => asking && redeem.mutate(asking.key)}
+      />
     </Screen>
   );
 }

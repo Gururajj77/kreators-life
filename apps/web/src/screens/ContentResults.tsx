@@ -6,27 +6,17 @@ import { Button } from '../components/Button';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
-import { api } from '../lib/api';
+import { api, errorText } from '../lib/api';
 import { useAuthed, useStudio } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
+import { FIELD } from '../lib/ui';
+import { copyPlain } from '../lib/clipboard';
+import { StatTile } from '../components/Charts';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const chip = (on: boolean) => `min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`;
 
-function Back() {
-  return <BackLink to="/shop/content">Content</BackLink>;
-}
 
-function Stat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <p className="m-0 font-display text-[24px] font-extrabold leading-none">{value}</p>
-      <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{label}</p>
-    </div>
-  );
-}
 
-const err = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 /** Which post made money: tracked links and the posts behind them. The brand folders live one level up. */
 export function ContentResults() {
@@ -46,15 +36,15 @@ export function ContentResults() {
   return (
     <Screen>
       <header className="pt-lg">
-        <Back />
+        <BackLink to="/shop/content">Content</BackLink>
         <h1 className="text-[30px]">Posts and links</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Which post made money. Share the /go link instead of the plain one and every sale is credited to the post it came from.</p>
       </header>
 
       <section className="mt-md grid grid-cols-3 gap-xs" aria-label="Numbers">
-        <Stat label="sales from links" value={attributed} />
-        <Stat label="profile direct" value={direct} />
-        <Stat label="points via links" value={d?.items.reduce((a, i) => a + i.revenuePoints, 0) ?? 0} />
+        <StatTile label="sales from links" value={attributed} />
+        <StatTile label="profile direct" value={direct} />
+        <StatTile label="points via links" value={d?.items.reduce((a, i) => a + i.revenuePoints, 0) ?? 0} />
       </section>
 
       <section className="mt-lg" aria-labelledby="posts-heading">
@@ -169,7 +159,7 @@ function ContentCard({ item, onChange }: { item: ContentItem; onChange: () => vo
       </dl>
       {refresh.isError && (
         <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-          {err(refresh.error, 'Could not read the numbers.')}
+          {errorText(refresh.error, 'Could not read the numbers.')}
         </p>
       )}
       {refresh.isSuccess && !typing && <p className="mt-sm m-0 text-[14px] font-bold">{refresh.data.why}</p>}
@@ -183,15 +173,15 @@ function ContentCard({ item, onChange }: { item: ContentItem; onChange: () => vo
         >
           <label className="block w-[96px]">
             <span className="block text-[12px] font-bold">Views</span>
-            <input type="number" min={0} value={views} onChange={(e) => setViews(e.target.value)} className={field} />
+            <input type="number" min={0} value={views} onChange={(e) => setViews(e.target.value)} className={FIELD} />
           </label>
           <label className="block w-[96px]">
             <span className="block text-[12px] font-bold">Likes</span>
-            <input type="number" min={0} value={likes} onChange={(e) => setLikes(e.target.value)} className={field} />
+            <input type="number" min={0} value={likes} onChange={(e) => setLikes(e.target.value)} className={FIELD} />
           </label>
           <label className="block w-[96px]">
             <span className="block text-[12px] font-bold">Comments</span>
-            <input type="number" min={0} value={comments} onChange={(e) => setComments(e.target.value)} className={field} />
+            <input type="number" min={0} value={comments} onChange={(e) => setComments(e.target.value)} className={FIELD} />
           </label>
           <Button type="submit" disabled={refresh.isPending}>
             Save
@@ -231,13 +221,10 @@ function LinkCard({ link, goBase, onChange }: { link: TrackedLink; goBase: strin
       .catch(() => setQrError('Could not draw the code.'));
   }, [qrOpen, qr, url]);
   const copy = async () => {
-    try {
-      await navigator.clipboard?.writeText(url);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // Clipboard blocked: the link is visible to select by hand.
-    }
+    // Clipboard blocked: the link is visible to select by hand.
+    if (!(await copyPlain(url))) return;
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
   };
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
@@ -297,12 +284,12 @@ function AddPostSheet({ open, onClose, products, onDone }: { open: boolean; onCl
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Public link to the post</span>
-          <input autoFocus value={url} onChange={(e) => setUrl(e.target.value)} required placeholder="https://" className={field} />
+          <input autoFocus value={url} onChange={(e) => setUrl(e.target.value)} required placeholder="https://" className={FIELD} />
           <span className="mt-xs block text-[12px] font-bold text-ink-soft">YouTube numbers are read automatically. For Instagram, TikTok and others, type the views yourself.</span>
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Caption or a short name</span>
-          <input value={caption} onChange={(e) => setCaption(e.target.value)} maxLength={300} className={field} />
+          <input value={caption} onChange={(e) => setCaption(e.target.value)} maxLength={300} className={FIELD} />
         </label>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-[14px] font-bold">Kind</legend>
@@ -316,7 +303,7 @@ function AddPostSheet({ open, onClose, products, onDone }: { open: boolean; onCl
         </fieldset>
         <label className="block">
           <span className="block text-[14px] font-bold">Tracked link opens</span>
-          <select value={productId} onChange={(e) => setProductId(e.target.value)} className={field}>
+          <select value={productId} onChange={(e) => setProductId(e.target.value)} className={FIELD}>
             <option value="">Your page</option>
             {products.map((p) => (
               <option key={p.id} value={p.id}>
@@ -327,11 +314,11 @@ function AddPostSheet({ open, onClose, products, onDone }: { open: boolean; onCl
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Views so far, if the platform cannot be read</span>
-          <input type="number" min={0} value={views} onChange={(e) => setViews(e.target.value)} className={field} placeholder="Optional" />
+          <input type="number" min={0} value={views} onChange={(e) => setViews(e.target.value)} className={FIELD} placeholder="Optional" />
         </label>
         {add.isError && (
           <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-            {err(add.error, 'Could not add it.')}
+            {errorText(add.error, 'Could not add it.')}
           </p>
         )}
         <Button type="submit" size="lg" full disabled={add.isPending || !url.trim()}>
@@ -365,11 +352,11 @@ function NewLinkSheet({ open, onClose, products, items, onDone }: { open: boolea
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Label</span>
-          <input autoFocus value={label} onChange={(e) => setLabel(e.target.value)} maxLength={80} placeholder="Bio link, newsletter footer" className={field} />
+          <input autoFocus value={label} onChange={(e) => setLabel(e.target.value)} maxLength={80} placeholder="Bio link, newsletter footer" className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Opens</span>
-          <select value={productId} onChange={(e) => setProductId(e.target.value)} className={field}>
+          <select value={productId} onChange={(e) => setProductId(e.target.value)} className={FIELD}>
             <option value="">Your page</option>
             {products.map((p) => (
               <option key={p.id} value={p.id}>
@@ -391,7 +378,7 @@ function NewLinkSheet({ open, onClose, products, items, onDone }: { open: boolea
         {items.length > 0 && (
           <label className="block">
             <span className="block text-[14px] font-bold">Tie it to a post</span>
-            <select value={contentItemId} onChange={(e) => setContentItemId(e.target.value)} className={field}>
+            <select value={contentItemId} onChange={(e) => setContentItemId(e.target.value)} className={FIELD}>
               <option value="">None</option>
               {items.map((i) => (
                 <option key={i.id} value={i.id}>
@@ -403,7 +390,7 @@ function NewLinkSheet({ open, onClose, products, items, onDone }: { open: boolea
         )}
         {create.isError && (
           <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-            {err(create.error, 'Could not create it.')}
+            {errorText(create.error, 'Could not create it.')}
           </p>
         )}
         <Button type="submit" size="lg" full disabled={create.isPending}>

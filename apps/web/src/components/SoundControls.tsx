@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { bento } from '../lib/bento';
 import { playBeats, startAmbient, unlockAudio, type Ambient } from '../lib/sound';
 import { Toggle } from './Toggle';
+import { AppIcon } from './AppIcon';
 
 /** The words on this panel, in short plain sentences. */
 const COPY = {
@@ -106,9 +107,7 @@ export function SoundControls({ settings, onChange, breaks = false, part = 'all'
               onClick={() => set({ ambient: s.key })}
               className={`toy flex min-h-[64px] flex-col items-center justify-center gap-xs rounded-tile border-2 p-xs text-[14px] font-bold disabled:opacity-60 ${bento(i, AMBIENT_SOUNDS.length, 3, 5)} ${settings.ambient === s.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
             >
-              <span aria-hidden="true" className="text-[20px] leading-none">
-                {s.emoji}
-              </span>
+              <AppIcon name={s.icon} size={20} />
               {s.name}
             </button>
           ))}

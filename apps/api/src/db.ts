@@ -1,5 +1,5 @@
 import { anonAliasFrom, isRealDay, pageSizeOf, parseIdentities, parseRepeat, parsePriority, parseIntake, parseLinkBlocks, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
-import { BADGE_STATS, BADGES, badgesFrom, EMPTY_SOCIALS, isPrivateBadge, parsePublicSettings, HONORS, isStaffFor, levelFromXp, PERMISSIONS, RELATIONSHIPS, roleRank, taskReadyAt, timeHonors, type BadgeFacts, type BadgesResponse, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
+import { BADGE_STATS, BADGES, badgesFrom, communityRankOf, type CommunityRank, EMPTY_SOCIALS, isPrivateBadge, parsePublicSettings, HONORS, isStaffFor, levelFromXp, PERMISSIONS, RELATIONSHIPS, roleRank, taskReadyAt, timeHonors, type BadgeFacts, type BadgesResponse, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
 import type { Context, Next } from 'hono';
 import type { AppEnv } from './env';
 import type { UserRow } from './env';
@@ -168,6 +168,15 @@ export const nameOf = (r: { display_name: string }) => r.display_name || 'Anonym
 export function can(user: UserRow, perm: Permission): boolean {
   return isStaffFor({ role: user.role, permissions: parseList(user.permissions) }, perm);
 }
+
+/** A guide in Community and its channels: anyone holding the moderation permission (every admin does). The one guide rule. */
+export const isGuide = (user: UserRow): boolean => can(user, 'moderation');
+/** The team: an admin or a sub admin, whatever permissions they hold. Staff see an anonymous writer's id so a report can be acted on. */
+export const isStaff = (user: Pick<UserRow, 'role'>): boolean => roleRank(user.role) >= roleRank('sub_admin');
+/** Where a person sits for muting in Community (member, guide, staff, admin), from their role and permissions. */
+export const rankOf = (user: Pick<UserRow, 'role' | 'permissions'>): CommunityRank => communityRankOf({ role: user.role, permissions: parseList(user.permissions) });
+/** The signed-in person behind an admin request, or null when the admin key made it. */
+export const actorOf = (c: { get: (k: 'user') => UserRow | undefined }): string | null => c.get('user')?.id ?? null;
 
 export async function audit(db: D1Database, actorId: string | null, action: string, resourceType: string, resourceId: string | null, before: unknown = '', after: unknown = ''): Promise<void> {
   const str = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v ?? '')).slice(0, 2000);
@@ -431,12 +440,6 @@ export async function grantedBadges(db: D1Database, userId: string): Promise<str
   const rows = await db.prepare('SELECT badge_key FROM badge_grants WHERE user_id = ?').bind(userId).all<{ badge_key: string }>();
   return rows.results.map((r) => r.badge_key);
 }
-/** The badges the app counts plus the ones given by hand, in catalog order. */
-export const withGranted = (earned: readonly string[], granted: readonly string[]): string[] => {
-  const have = new Set([...earned, ...granted]);
-  return BADGES.map((b) => b.key).filter((k) => have.has(k));
-};
-
 /** Earned dates were first kept on this day. An older account seen for the first time gets the badges it already had with no date. */
 const BADGE_DATES_FROM = '2026-11-02';
 

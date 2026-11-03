@@ -272,11 +272,11 @@ function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEn
         </label>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-[14px] font-bold">Stressor</legend>
-          <div className="mt-xs flex flex-wrap gap-xs">
+          <div className="fill-row mt-xs flex flex-wrap gap-xs">
             {STRESSORS.map((s) => {
               const on = stressors.includes(s);
               return (
-                <button key={s} type="button" aria-pressed={on} onClick={() => setStressors((p) => (on ? p.filter((x) => x !== s) : [...p, s]))} className={`rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+                <button key={s} type="button" aria-pressed={on} onClick={() => setStressors((p) => (on ? p.filter((x) => x !== s) : [...p, s]))} className={`min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
                   {s}
                 </button>
               );

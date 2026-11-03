@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { analyseDiscover, discoverComplete, discoverProfile, discoverProgress, emptyDiscoverAnswers, parseDiscoverAnswers, scoreDiscover, styleHints, type DiscoverAnswers, type DiscoverProfile, type DiscoverResult, EXTRA_KINDS, extraHints, learnedForAssistant, analyseLove, analyseMind, analyseType, emptyExtra, extraComplete, extraProgress, extrasProfile, isExtraKind, parseExtra, scoreExtra, type ExtraKind, type ExtrasProfile, type LoveResult, type MindResult, type TypeResult, type DesignResult, analyseDesign, designChart, designCompare } from '@kreators/shared';
+import { DISCOVER_KEYS } from '../discoverKeys';
 import type { AppEnv } from '../env';
 import { newId, nowIso } from '../db';
 
@@ -74,7 +75,7 @@ discover.post('/submit', async (c) => {
     const p = discoverProgress(answers);
     return c.json({ error: `${p.total - p.done} questions are still open.`, progress: p }, 400);
   }
-  const result = scoreDiscover(answers);
+  const result = scoreDiscover(answers, DISCOVER_KEYS);
   const id = newId();
   const now = nowIso();
   await db.batch([

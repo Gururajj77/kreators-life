@@ -7,7 +7,7 @@ import { ThemeToggle } from './components/ThemeToggle';
 import { Gate } from './components/Gate';
 import { HowTo } from './components/HowTo';
 import { TabBar } from './components/TabBar';
-import { Assistant } from './components/Assistant';
+import { Assistant } from './components/AssistantButton';
 import { ReminderBubble } from './components/Reminders';
 import { ConsentPopup } from './components/ConsentPopup';
 import { RouteFallback } from './components/RouteFallback';

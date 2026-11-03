@@ -7,44 +7,35 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { Toggle } from '../components/Toggle';
-import { api } from '../lib/api';
+import { api, errorText } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { MediaSection } from '../components/MediaSection';
+import { FIELD } from '../lib/ui';
+import { StatusTag } from '../components/StatusTag';
+import type { TagTone } from '@kreators/shared';
+import { shortDate } from '../lib/date';
+import { ErrorLine } from '../components/ErrorLine';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-const fmtDate = (d: string | null) => (d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'no date');
+const fmtDate = (d: string | null) => (d ? shortDate(d) : 'no date');
 const fmtWhen = (d: string) => new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-const errText = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
-function Err({ error, fallback = 'That did not work.' }: { error: unknown; fallback?: string }) {
-  if (!error) return null;
-  return (
-    <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-      {errText(error, fallback)}
-    </p>
-  );
-}
 
-const STATUS_TINT: Record<CampaignStatus, string> = {
-  lead: 'var(--tint-brown)',
-  brief: 'var(--tint-orange)',
-  scoping: 'var(--tint-orange)',
-  shortlist: 'var(--tint-yellow)',
-  approved: 'var(--tint-green)',
-  production: 'var(--tint-purple)',
-  review: 'var(--tint-purple)',
-  delivered: 'var(--tint-green)',
-  reported: 'var(--tint-green)',
-  cancelled: 'var(--tint-red)',
+const STATUS_TONE: Record<CampaignStatus, TagTone> = {
+  lead: 'neutral',
+  brief: 'warn',
+  scoping: 'warn',
+  shortlist: 'warn',
+  approved: 'good',
+  production: 'info',
+  review: 'info',
+  delivered: 'good',
+  reported: 'good',
+  cancelled: 'bad',
 };
 
 function StatusPill({ status }: { status: CampaignStatus }) {
-  return (
-    <span className="rounded-pill px-xs text-[12px] font-extrabold leading-[20px]" style={{ background: STATUS_TINT[status] }}>
-      {CAMPAIGN_STATUS_META[status]}
-    </span>
-  );
+  return <StatusTag tone={STATUS_TONE[status]}>{CAMPAIGN_STATUS_META[status]}</StatusTag>;
 }
 
 // ---------------------------------------------------------------------------
@@ -97,7 +88,7 @@ export function Army() {
             ))}
           </ul>
           <div className="mt-xs">
-            <Err error={answer.error} />
+            <ErrorLine e={answer.error} />
           </div>
         </section>
       )}
@@ -227,7 +218,7 @@ function OrgCard({ org }: { org: Organization }) {
             >
               <label className="block min-w-0 flex-1">
                 <span className="block text-[14px] font-bold">Add a teammate by email</span>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@brand.com" className={field} />
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@brand.com" className={FIELD} />
               </label>
               <Button type="submit" disabled={add.isPending || !email.trim()}>
                 Add
@@ -235,7 +226,7 @@ function OrgCard({ org }: { org: Organization }) {
             </form>
           )}
           <div className="mt-xs">
-            <Err error={add.error ?? remove.error} />
+            <ErrorLine e={add.error ?? remove.error} />
           </div>
         </div>
       )}
@@ -264,7 +255,7 @@ function NewOrgSheet({ open, onClose, onCreated }: { open: boolean; onClose: () 
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Name</span>
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required className={field} />
+          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required className={FIELD} />
         </label>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-[14px] font-bold">What kind of team is it?</legend>
@@ -276,7 +267,7 @@ function NewOrgSheet({ open, onClose, onCreated }: { open: boolean; onClose: () 
             ))}
           </div>
         </fieldset>
-        <Err error={create.error} fallback="Could not create it." />
+        <ErrorLine e={create.error} />
         <Button type="submit" size="lg" full disabled={create.isPending || !name.trim()}>
           Create brand
         </Button>
@@ -330,7 +321,7 @@ function NewCampaignSheet({ open, orgs, staff, onClose, onCreated }: { open: boo
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Brand</span>
-          <select value={orgId} onChange={(e) => setOrganizationId(e.target.value)} className={field}>
+          <select value={orgId} onChange={(e) => setOrganizationId(e.target.value)} className={FIELD}>
             {choices.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.name}
@@ -340,43 +331,43 @@ function NewCampaignSheet({ open, orgs, staff, onClose, onCreated }: { open: boo
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Name</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required className={field} />
+          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Brief</span>
-          <textarea value={brief} onChange={(e) => setBrief(e.target.value)} rows={4} maxLength={5000} placeholder="What the brand wants made, for whom, and in what tone" className={field} />
+          <textarea value={brief} onChange={(e) => setBrief(e.target.value)} rows={4} maxLength={5000} placeholder="What the brand wants made, for whom, and in what tone" className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Budget</span>
-            <input type="number" min={0} value={budget} onChange={(e) => setBudget(e.target.value)} className={field} />
+            <input type="number" min={0} value={budget} onChange={(e) => setBudget(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Currency</span>
-            <input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} maxLength={3} className={field} />
+            <input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} maxLength={3} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Start</span>
-            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={field} />
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Due</span>
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={field} />
+            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={FIELD} />
           </label>
         </div>
         <label className="block">
           <span className="block text-[14px] font-bold">Usage rights</span>
-          <textarea value={usage} onChange={(e) => setUsage(e.target.value)} rows={2} maxLength={1000} placeholder="Where and for how long the brand may use the work" className={field} />
+          <textarea value={usage} onChange={(e) => setUsage(e.target.value)} rows={2} maxLength={1000} placeholder="Where and for how long the brand may use the work" className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Exclusivity</span>
-          <textarea value={exclusivity} onChange={(e) => setExclusivity(e.target.value)} rows={2} maxLength={1000} placeholder="Any period the creator must not work with competitors" className={field} />
+          <textarea value={exclusivity} onChange={(e) => setExclusivity(e.target.value)} rows={2} maxLength={1000} placeholder="Any period the creator must not work with competitors" className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Restrictions</span>
-          <textarea value={restrictions} onChange={(e) => setRestrictions(e.target.value)} rows={2} maxLength={1000} placeholder="Things that must not appear" className={field} />
+          <textarea value={restrictions} onChange={(e) => setRestrictions(e.target.value)} rows={2} maxLength={1000} placeholder="Things that must not appear" className={FIELD} />
         </label>
-        <Err error={create.error} fallback="Could not create it." />
+        <ErrorLine e={create.error} />
         <Button type="submit" size="lg" full disabled={create.isPending || !name.trim() || !orgId}>
           {staff ? 'Create brief' : 'Send to the team'}
         </Button>
@@ -411,7 +402,7 @@ export function Campaign() {
         <header className="pt-lg">
           <BackLink to="/army">Army</BackLink>
         </header>
-        <p className="mt-md font-bold">{errText(q.error, 'That campaign is not yours or does not exist.')}</p>
+        <p className="mt-md font-bold">{errorText(q.error, 'That campaign is not yours or does not exist.')}</p>
       </Screen>
     );
   }
@@ -515,11 +506,11 @@ export function Campaign() {
           )}
           {who === 'brand' && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">You can approve the shortlist or cancel. The team moves the other steps.</p>}
           <div className="mt-sm">
-            <Err error={setStatus.error} />
+            <ErrorLine e={setStatus.error} />
           </div>
           <div className="mt-sm">
             <Toggle on={isPublic} onChange={(on) => publish.mutate(on)} label="Show on the public site" hint="Listed under Campaigns so creators can discover it. The brief itself stays private." disabled={publish.isPending} />
-            <Err error={publish.error} />
+            <ErrorLine e={publish.error} />
           </div>
         </section>
       )}
@@ -579,7 +570,7 @@ export function Campaign() {
           ))}
         </ul>
         <div className="mt-xs">
-          <Err error={answer.error} />
+          <ErrorLine e={answer.error} />
         </div>
       </section>
 
@@ -646,7 +637,7 @@ function DeliverableCard({ deliverable: del, who, onChange }: { deliverable: Del
   });
   const canUpload = (who === 'creator' || who === 'staff') && del.status !== 'approved';
   const canReview = who === 'brand' || who === 'staff';
-  const tint = del.status === 'approved' ? 'var(--tint-green)' : del.status === 'changes' ? 'var(--tint-orange)' : del.status === 'submitted' ? 'var(--tint-yellow)' : 'var(--tint-brown)';
+  const tone: TagTone = del.status === 'approved' ? 'good' : del.status === 'changes' ? 'warm' : del.status === 'submitted' ? 'warn' : 'neutral';
   const statusLabel = { open: 'Waiting for work', submitted: 'Waiting for review', changes: 'Changes requested', approved: 'Approved' }[del.status];
   return (
     <div className="rounded-tile bg-card p-sm shadow-toy-soft">
@@ -658,9 +649,9 @@ function DeliverableCard({ deliverable: del, who, onChange }: { deliverable: Del
             {del.dueAt ? `, due ${fmtDate(del.dueAt)}` : ''}
           </p>
         </div>
-        <span className="shrink-0 rounded-pill px-xs text-[12px] font-extrabold leading-[20px]" style={{ background: tint }}>
+        <StatusTag tone={tone}>
           {statusLabel}
-        </span>
+        </StatusTag>
       </div>
       {del.finalUrl && (
         <a href={del.finalUrl} target="_blank" rel="noreferrer" className="toy toy-soft mt-sm inline-flex min-h-[44px] items-center rounded-pill bg-paper px-md text-[14px] font-bold">
@@ -687,7 +678,7 @@ function DeliverableCard({ deliverable: del, who, onChange }: { deliverable: Del
                 <div className="mt-sm">
                   <label className="block">
                     <span className="block text-[12px] font-bold">Comment</span>
-                    <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} maxLength={2000} className={field} />
+                    <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} maxLength={2000} className={FIELD} />
                   </label>
                   <div className="mt-xs flex gap-xs">
                     <Button onClick={() => review.mutate({ versionId: v.id, status: 'approved' })} disabled={review.isPending}>
@@ -713,11 +704,11 @@ function DeliverableCard({ deliverable: del, who, onChange }: { deliverable: Del
         >
           <label className="block">
             <span className="block text-[12px] font-bold">Link to the work</span>
-            <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" className={field} />
+            <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[12px] font-bold">Note</span>
-            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} placeholder="What changed, or what to look at" className={field} />
+            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} placeholder="What changed, or what to look at" className={FIELD} />
           </label>
           <Button type="submit" variant="outline" disabled={upload.isPending || !url.trim()}>
             Upload a version
@@ -725,7 +716,7 @@ function DeliverableCard({ deliverable: del, who, onChange }: { deliverable: Del
         </form>
       )}
       <div className="mt-xs">
-        <Err error={upload.error ?? review.error} />
+        <ErrorLine e={upload.error ?? review.error} />
       </div>
     </div>
   );
@@ -754,23 +745,23 @@ function AddDeliverableSheet({ campaignId, open, onClose, onAdded }: { campaignI
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Title</span>
-          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} required placeholder="One 60 second video" className={field} />
+          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} required placeholder="One 60 second video" className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Format</span>
-            <input value={format} onChange={(e) => setFormat(e.target.value)} maxLength={60} placeholder="Reel, post, story" className={field} />
+            <input value={format} onChange={(e) => setFormat(e.target.value)} maxLength={60} placeholder="Reel, post, story" className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Platform</span>
-            <input value={platform} onChange={(e) => setPlatform(e.target.value)} maxLength={60} placeholder="Instagram" className={field} />
+            <input value={platform} onChange={(e) => setPlatform(e.target.value)} maxLength={60} placeholder="Instagram" className={FIELD} />
           </label>
         </div>
         <label className="block">
           <span className="block text-[14px] font-bold">Due</span>
-          <input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} className={field} />
+          <input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} className={FIELD} />
         </label>
-        <Err error={add.error} fallback="Could not add it." />
+        <ErrorLine e={add.error} />
         <Button type="submit" size="lg" full disabled={add.isPending || !title.trim()}>
           Add
         </Button>
@@ -803,24 +794,24 @@ function AssignSheet({ campaignId, open, onClose, onAssigned }: { campaignId: st
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Creator</span>
-          <input autoFocus value={creator} onChange={(e) => setCreator(e.target.value)} maxLength={120} required placeholder="Email, page name or id" className={field} />
+          <input autoFocus value={creator} onChange={(e) => setCreator(e.target.value)} maxLength={120} required placeholder="Email, page name or id" className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Role</span>
-          <input value={role} onChange={(e) => setRole(e.target.value)} maxLength={60} className={field} />
+          <input value={role} onChange={(e) => setRole(e.target.value)} maxLength={60} className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Fee</span>
-            <input type="number" min={0} value={fee} onChange={(e) => setFee(e.target.value)} className={field} />
+            <input type="number" min={0} value={fee} onChange={(e) => setFee(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Currency</span>
-            <input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} maxLength={3} className={field} />
+            <input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} maxLength={3} className={FIELD} />
           </label>
         </div>
         <p className="m-0 text-[14px] font-semibold text-ink-soft">They get an offer in their inbox and accept the terms before they see anything else.</p>
-        <Err error={assign.error} fallback="Could not assign them." />
+        <ErrorLine e={assign.error} />
         <Button type="submit" size="lg" full disabled={assign.isPending || !creator.trim()}>
           Send the offer
         </Button>

@@ -9,7 +9,7 @@ import { Screen } from '../components/Screen';
 import { SkeletonList } from '../components/Skeleton';
 import { Sheet } from '../components/Sheet';
 import type { LucideIcon } from 'lucide-react';
-import { AlarmClock, Archive, ArchiveRestore, AtSign, Bell, CalendarCheck, Footprints, Handshake, Mail, Medal, Megaphone, MessageCircle, MessagesSquare, PartyPopper, ShieldAlert, ShoppingBag, Star, Target, UserPlus, UsersRound, Wrench } from 'lucide-react';
+import { AlarmClock, ArchiveRestore, AtSign, Bell, BriefcaseBusiness, CalendarCheck, Footprints, Handshake, Mail, Medal, Megaphone, MessageCircle, MessagesSquare, PartyPopper, ReceiptText, ShieldAlert, ShoppingBag, Star, Target, UserPlus, UsersRound, Wrench } from 'lucide-react';
 import { AnimatedIcon } from '../components/AnimatedIcon';
 import { Icon } from '../components/Icon';
 import { api } from '../lib/api';
@@ -18,7 +18,7 @@ import { Pager, usePage } from '../components/Pager';
 import { useParamState } from '../lib/useParamState';
 
 /** The icon for each kind of note; a kind this list does not know gets the bell. */
-const ICON: Record<string, LucideIcon> = { reply: MessageCircle, mention: AtSign, thread: MessagesSquare, order: ShoppingBag, lead: Mail, booking: CalendarCheck, follow: UserPlus, broadcast: Megaphone, reminder: AlarmClock, review: Star, affiliate: Handshake, moderation: ShieldAlert, coach: Target, team: Wrench, party: PartyPopper, circle: UsersRound, run: Footprints, season: Medal };
+const ICON: Record<string, LucideIcon> = { reply: MessageCircle, mention: AtSign, thread: MessagesSquare, order: ShoppingBag, lead: Mail, booking: CalendarCheck, follow: UserPlus, broadcast: Megaphone, reminder: AlarmClock, review: Star, affiliate: Handshake, moderation: ShieldAlert, coach: Target, team: Wrench, party: PartyPopper, circle: UsersRound, run: Footprints, season: Medal, agency: BriefcaseBusiness, invoice: ReceiptText };
 const iconFor = (kind: string): LucideIcon => (Object.hasOwn(ICON, kind) ? ICON[kind]! : Bell);
 const SHOWS: [InboxShow, string][] = [
   ['inbox', 'Inbox'],
@@ -76,12 +76,12 @@ export function Inbox() {
           Daily reminder
         </h2>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          {me.data?.user.reminderTime ? `Set for ${me.data.user.reminderTime} in ${me.data.user.timezone}. ` : 'Off. '}A nudge lands here at that time on any day you have not checked in yet.
+          {me.data?.user.reminderTime ? `Set for ${me.data.user.reminderTime} in ${me.data.user.timezone}. A nudge lands here at that time on any day you have not checked in yet.` : 'Off. Pick a time, and a nudge lands here then on any day you have not checked in yet.'}
         </p>
         <div className="mt-sm flex gap-xs">
           <input type="time" value={time} onChange={(e) => setTime(e.target.value)} aria-label="Reminder time" className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
           <Button onClick={() => saveTime.mutate(time || null)} disabled={saveTime.isPending || time === (me.data?.user.reminderTime ?? '')}>
-            {saveTime.isPending ? 'Saving' : time ? 'Save' : 'Turn off'}
+            {saveTime.isPending ? 'Saving' : !time && me.data?.user.reminderTime ? 'Turn off' : 'Save'}
           </Button>
         </div>
       </section>
@@ -93,7 +93,7 @@ export function Inbox() {
         <div className="mt-sm">
           <div className="scroll-row" role="group" aria-label="Tabs">
             {(q.data?.tabs ?? [{ tab: 'all' as InboxTab, unread: 0 }]).map((t) => (
-              <button key={t.tab} type="button" aria-pressed={tab === t.tab} onClick={() => setTab(t.tab)} className={`toy shrink-0 rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === t.tab ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+              <button key={t.tab} type="button" aria-pressed={tab === t.tab} onClick={() => setTab(t.tab)} className={`toy shrink-0 min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === t.tab ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                 {INBOX_TAB_META[t.tab].name}
                 {t.unread > 0 ? ` (${t.unread})` : ''}
               </button>
@@ -102,12 +102,13 @@ export function Inbox() {
         </div>
         <div className="mt-xs flex flex-wrap items-center gap-xs" role="group" aria-label="Show">
           {SHOWS.map(([k, label]) => (
-            <button key={k} type="button" aria-pressed={show === k} onClick={() => setShow(k)} className={`toy rounded-pill border-2 px-sm py-xs text-[12px] font-extrabold ${show === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={k} type="button" aria-pressed={show === k} onClick={() => setShow(k)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-[12px] font-extrabold ${show === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {label}
             </button>
           ))}
           {show !== 'archived' && list.some((n) => n.readAt) && (
             <Button size="sm" variant="ghost" onClick={() => archiveRead.mutate()} disabled={archiveRead.isPending}>
+              <AnimatedIcon name={archiveRead.isPending ? 'loading' : 'archive'} size={16} />
               Archive the read ones
             </Button>
           )}
@@ -118,7 +119,7 @@ export function Inbox() {
           )}
         </div>
         {q.isPending && <SkeletonList className="mt-sm" count={4} lines={2} label="Loading your inbox" />}
-        {!q.isPending && list.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{show === 'archived' ? 'Nothing archived here.' : show === 'unread' ? 'All caught up.' : 'Nothing yet. This is where replies, orders, bookings and team notes land.'}</p>}
+        {!q.isPending && list.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{show === 'archived' ? 'Nothing archived here.' : show === 'unread' ? 'All caught up.' : tab === 'agency' ? 'Nothing from your clients yet. Approvals, change asks, months made and invoices due land here.' : 'Nothing yet. This is where replies, orders, bookings and team notes land.'}</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {list.map((n) => {
             const inner = (
@@ -156,7 +157,7 @@ export function Inbox() {
                   title={n.archivedAt ? 'Bring back' : 'Archive'}
                   className="toy toy-soft flex w-[48px] shrink-0 flex-col items-center justify-center gap-xs rounded-tile bg-card text-ink-soft hover:text-ink"
                 >
-                  <Icon icon={n.archivedAt ? ArchiveRestore : Archive} size={20} />
+                  {n.archivedAt ? <Icon icon={ArchiveRestore} size={20} /> : <AnimatedIcon name="archive" size={20} />}
                   {n.archivedAt && <span className="text-[12px] font-extrabold">Restore</span>}
                 </button>
                 {n.archivedAt && (

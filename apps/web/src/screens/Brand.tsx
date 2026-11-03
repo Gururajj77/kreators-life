@@ -8,15 +8,19 @@ import { BackLink } from '../components/PageHeader';
 import { Pager, usePage } from '../components/Pager';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
-import { api } from '../lib/api';
+import { api, errorText } from '../lib/api';
 import { useAuthed } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
 import { ToolsLine } from './Content';
+import { AppIcon } from '../components/AppIcon';
+import { Icon } from '../components/Icon';
+import { Check } from 'lucide-react';
+import { FIELD, chip } from '../lib/ui';
+import { copyPlain } from '../lib/clipboard';
+import { dateTime } from '../lib/date';
+import { ErrorLine } from '../components/ErrorLine';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-const chip = (on: boolean) => `min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`;
-const err = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
-const when = (iso: string) => new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+const when = dateTime;
 const n = (v: number | undefined) => (typeof v === 'number' && v > 0 ? v.toLocaleString() : '');
 const TABS = [
   { key: 'sources', label: 'Links' },
@@ -26,14 +30,6 @@ const TABS = [
 ] as const;
 type Tab = (typeof TABS)[number]['key'];
 
-function Err({ e, fallback = 'That did not work.' }: { e: unknown; fallback?: string }) {
-  if (!e) return null;
-  return (
-    <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-      {err(e, fallback)}
-    </p>
-  );
-}
 
 type Preset = { research?: ResearchKind; piece?: PieceKind; query?: string; at: number };
 
@@ -58,7 +54,7 @@ function StrategyPath({ brand, counts, onGo }: { brand: { niche: string; voice: 
           <li key={s.key}>
             <button type="button" onClick={() => onGo(s.go)} className={`toy toy-flat flex min-h-[44px] w-full items-start gap-sm rounded-tile p-xs text-left ${s === next ? 'bg-paper' : ''}`}>
               <span aria-hidden="true" className={`mt-[2px] flex size-[28px] shrink-0 items-center justify-center rounded-pill text-[14px] font-extrabold ${s.done ? 'bg-r4 text-on-fill' : s === next ? 'bg-ink text-on-ink' : 'bg-line text-ink-soft'}`}>
-                {s.done ? '✓' : i + 1}
+                {s.done ? <Icon icon={Check} size={14} strokeWidth={3} /> : i + 1}
               </span>
               <span className="min-w-0">
                 <span className={`block text-[16px] font-bold ${s.done ? 'text-ink-soft' : ''}`}>{s.title}</span>
@@ -93,7 +89,7 @@ export function Brand() {
         <header className="pt-lg">
           <BackLink to="/shop/content">Content</BackLink>
           <h1 className="text-[30px]">That folder is gone</h1>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{err(q.error, 'It may have been removed.')}</p>
+          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{errorText(q.error, 'It may have been removed.')}</p>
         </header>
       </Screen>
     );
@@ -210,17 +206,17 @@ function SourcesTab({ id, sources, onChange, onOpenRun }: { id: string; sources:
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Link</span>
-          <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} maxLength={500} placeholder="https://" required className={field} />
+          <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} maxLength={500} placeholder="https://" required className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Label</span>
-          <input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={120} placeholder="Their YouTube, our site, top reel" className={field} />
+          <input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={120} placeholder="Their YouTube, our site, top reel" className={FIELD} />
         </label>
         <label className="toy flex min-h-[48px] cursor-pointer items-center gap-sm rounded-tile bg-paper p-sm">
           <input type="checkbox" checked={competitor} onChange={(e) => setCompetitor(e.target.checked)} className="size-[20px] accent-ink" />
           <span className="text-[14px] font-bold">This is a competitor</span>
         </label>
-        <Err e={add.isError ? add.error : null} fallback="Could not add it." />
+        <ErrorLine e={add.isError ? add.error : null} className="mt-sm" />
         <Button type="submit" disabled={add.isPending || !url.trim()}>
           Add link
         </Button>
@@ -230,8 +226,8 @@ function SourcesTab({ id, sources, onChange, onOpenRun }: { id: string; sources:
         {sources.map((s) => (
           <li key={s.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
             <div className="flex items-start gap-sm">
-              <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-paper text-[20px]" aria-hidden="true">
-                {BRAND_SOURCE_META[s.kind].emoji}
+              <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-paper" aria-hidden="true">
+                <AppIcon name={BRAND_SOURCE_META[s.kind].icon} size={20} />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[16px] font-bold">{s.label || s.url}</span>
@@ -256,7 +252,7 @@ function SourcesTab({ id, sources, onChange, onOpenRun }: { id: string; sources:
           </li>
         ))}
       </ul>
-      <Err e={read.isError ? read.error : null} fallback="Could not read it." />
+      <ErrorLine e={read.isError ? read.error : null} className="mt-sm" />
     </section>
   );
 }
@@ -303,12 +299,12 @@ function ResearchTab({ id, runs, preset, reach, onChange, onOpen }: { id: string
         <p className="m-0 text-[12px] font-bold text-ink-soft">{RESEARCH_META[kind].blurb}</p>
         <label className="block">
           <span className="block text-[14px] font-bold">{RESEARCH_META[kind].needsQuery ? 'What to look for' : 'The link'}</span>
-          <input value={query} onChange={(e) => setQuery(e.target.value)} maxLength={500} placeholder={RESEARCH_META[kind].needsQuery ? 'phone videography for street food' : 'https://'} required className={field} />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} maxLength={500} placeholder={RESEARCH_META[kind].needsQuery ? 'phone videography for street food' : 'https://'} required className={FIELD} />
         </label>
         {RESEARCH_META[kind].needsQuery && (
           <label className="block">
             <span className="block text-[14px] font-bold">How many</span>
-            <select value={limit} onChange={(e) => setLimit(e.target.value)} className={field}>
+            <select value={limit} onChange={(e) => setLimit(e.target.value)} className={FIELD}>
               {['5', '10', '15', '25'].map((v) => (
                 <option key={v} value={v}>
                   {v}
@@ -317,7 +313,7 @@ function ResearchTab({ id, runs, preset, reach, onChange, onOpen }: { id: string
             </select>
           </label>
         )}
-        <Err e={go.isError ? go.error : null} fallback="The run failed." />
+        <ErrorLine e={go.isError ? go.error : null} className="mt-sm" />
         <Button type="submit" disabled={go.isPending || !query.trim()}>
           {go.isPending ? 'Looking' : 'Run it'}
         </Button>
@@ -378,8 +374,8 @@ function CreateTab({ id, runs, preset, writer, onMade }: { id: string; runs: Res
         {PIECE_KINDS.map((k) => (
           <li key={k}>
             <button type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={`toy toy-flat flex w-full items-start gap-sm rounded-tile border-2 p-sm text-left ${kind === k ? 'border-ink bg-card' : 'border-line bg-card'}`}>
-              <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-paper text-[20px]" aria-hidden="true">
-                {PIECE_META[k].emoji}
+              <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-paper" aria-hidden="true">
+                <AppIcon name={PIECE_META[k].icon} size={20} />
               </span>
               <span className="min-w-0">
                 <span className="block text-[16px] font-bold">{PIECE_META[k].name}</span>
@@ -398,7 +394,7 @@ function CreateTab({ id, runs, preset, writer, onMade }: { id: string; runs: Res
       >
         <label className="block">
           <span className="block text-[14px] font-bold">The brief</span>
-          <textarea value={brief} onChange={(e) => setBrief(e.target.value)} rows={4} maxLength={4000} placeholder={PIECE_META[kind].askFor} className={field} />
+          <textarea value={brief} onChange={(e) => setBrief(e.target.value)} rows={4} maxLength={4000} placeholder={PIECE_META[kind].askFor} className={FIELD} />
         </label>
         <label className="toy flex min-h-[44px] cursor-pointer items-center gap-sm rounded-tile bg-paper p-xs">
           <input type="checkbox" checked={research} onChange={(e) => setResearch(e.target.checked)} className="size-[20px] accent-ink" />
@@ -424,7 +420,7 @@ function CreateTab({ id, runs, preset, writer, onMade }: { id: string; runs: Res
             </ul>
           </fieldset>
         )}
-        <Err e={make.isError ? make.error : null} fallback="Could not write it." />
+        <ErrorLine e={make.isError ? make.error : null} className="mt-sm" />
         <Button type="submit" size="lg" full disabled={make.isPending}>
           {make.isPending ? 'Writing, this takes a minute' : `Write the ${PIECE_META[kind].name.toLowerCase()}`}
         </Button>
@@ -444,8 +440,8 @@ function PiecesTab({ pieces, onOpen }: { pieces: BrandPiece[]; onOpen: (p: Brand
         {pieces.map((p) => (
           <li key={p.id}>
             <button type="button" onClick={() => onOpen(p)} className="toy toy-soft flex w-full items-start gap-sm rounded-tile bg-card p-sm text-left text-ink">
-              <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-paper text-[20px]" aria-hidden="true">
-                {PIECE_META[p.kind].emoji}
+              <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-paper" aria-hidden="true">
+                <AppIcon name={PIECE_META[p.kind].icon} size={20} />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[16px] font-bold">{p.title}</span>
@@ -510,13 +506,9 @@ function PieceSheet({ id, piece, onClose, onChange }: { id: string; piece: Brand
   });
   const copy = async () => {
     if (!piece) return;
-    try {
-      await navigator.clipboard.writeText(piece.body);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // no clipboard here
-    }
+    if (!(await copyPlain(piece.body))) return;
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
   };
   return (
     <Sheet open={piece !== null} onClose={onClose} title={piece?.title ?? ''}>
@@ -567,21 +559,21 @@ function EditBrandSheet({ open, id, brand, onClose, onSaved }: { open: boolean; 
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Brand</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required className={field} />
+          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Niche</span>
-          <input value={niche} onChange={(e) => setNiche(e.target.value)} maxLength={120} className={field} />
+          <input value={niche} onChange={(e) => setNiche(e.target.value)} maxLength={120} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">What it is</span>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={2000} className={field} />
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={2000} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">How it sounds</span>
-          <textarea value={voice} onChange={(e) => setVoice(e.target.value)} rows={2} maxLength={1000} className={field} />
+          <textarea value={voice} onChange={(e) => setVoice(e.target.value)} rows={2} maxLength={1000} className={FIELD} />
         </label>
-        <Err e={save.isError ? save.error : null} fallback="Could not save." />
+        <ErrorLine e={save.isError ? save.error : null} className="mt-sm" />
         <Button type="submit" size="lg" full disabled={save.isPending || !name.trim()}>
           Save
         </Button>

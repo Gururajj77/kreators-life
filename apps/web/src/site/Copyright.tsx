@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { Button } from '../components/Button';
 import { A, Bullets, Fact, H, LegalPage, Mail, P, Strong, contactEmail, useBusiness } from './legalBits';
+import { FIELD } from '../lib/ui';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 
 interface Blank {
   name: string;
@@ -59,23 +59,23 @@ function NoticeForm({ kind }: { kind: 'notice' | 'counter' }) {
       <label className="block text-[14px] font-bold" htmlFor={id('name')}>
         Your full name
       </label>
-      <input id={id('name')} required value={v.name} onChange={set('name')} maxLength={120} autoComplete="name" className={field} />
+      <input id={id('name')} required value={v.name} onChange={set('name')} maxLength={120} autoComplete="name" className={FIELD} />
       <label className="mt-sm block text-[14px] font-bold" htmlFor={id('email')}>
         Your email
       </label>
-      <input id={id('email')} required type="email" value={v.email} onChange={set('email')} maxLength={200} autoComplete="email" className={field} />
+      <input id={id('email')} required type="email" value={v.email} onChange={set('email')} maxLength={200} autoComplete="email" className={FIELD} />
       <label className="mt-sm block text-[14px] font-bold" htmlFor={id('work')}>
         {counter ? 'What was removed, and where it was shown before' : 'The work that was copied'}
       </label>
-      <textarea id={id('work')} required value={v.work} onChange={set('work')} rows={3} maxLength={1000} className={field} />
+      <textarea id={id('work')} required value={v.work} onChange={set('work')} rows={3} maxLength={1000} className={FIELD} />
       <label className="mt-sm block text-[14px] font-bold" htmlFor={id('urls')}>
         {counter ? 'The addresses where it was shown' : 'The addresses (links) on kreators.app where it is shown'}
       </label>
-      <textarea id={id('urls')} required value={v.urls} onChange={set('urls')} rows={3} maxLength={2000} className={field} />
+      <textarea id={id('urls')} required value={v.urls} onChange={set('urls')} rows={3} maxLength={2000} className={FIELD} />
       <label className="mt-sm block text-[14px] font-bold" htmlFor={id('statement')}>
         {counter ? 'Your statement, with your address and phone number' : 'Your statement'}
       </label>
-      <textarea id={id('statement')} value={v.statement} onChange={set('statement')} rows={4} maxLength={1000} className={field} />
+      <textarea id={id('statement')} value={v.statement} onChange={set('statement')} rows={4} maxLength={1000} className={FIELD} />
       <p className="mt-xs m-0 text-[12px] font-semibold text-ink-mute">
         {counter
           ? 'Say that you believe, in good faith, that it was removed by mistake or because it was wrongly identified, that this is true under penalty of perjury, and that you accept the courts of your home country for any claim.'
@@ -84,7 +84,7 @@ function NoticeForm({ kind }: { kind: 'notice' | 'counter' }) {
       <label className="mt-sm block text-[14px] font-bold" htmlFor={id('signature')}>
         Your signature (type your full name)
       </label>
-      <input id={id('signature')} required value={v.signature} onChange={set('signature')} maxLength={120} className={field} />
+      <input id={id('signature')} required value={v.signature} onChange={set('signature')} maxLength={120} className={FIELD} />
       {error && (
         <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
           {error}

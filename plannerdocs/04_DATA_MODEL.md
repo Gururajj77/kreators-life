@@ -287,7 +287,13 @@ The export (`GET /me/export`) is one JSON file; the keys are the groups above (`
 | 0059 | legal_consent | terms acceptances, privacy choices and their log, data requests, copyright notices |
 | 0060 | performance_indexes | 22 indexes on existing tables, three redundant ones dropped, the `web_vitals` table and its two indexes |
 | 0061 | discount_codes | discount codes the team makes and their redemptions; list and discount columns on orders; the price paid on a ticket |
+| 0062 | channels | `channels`, `channel_members`, `channel_messages` (Community and Bond chat channels) |
+| 0063 | agency_lifecycle | stage, stage days, lifecycle, the client link's password and changes per piece on `agency_clients`; portal sessions, retainers and months |
 | 0064 | agency_documents | `agency_docs` (the other kinds of document), `agency_house_templates` (made by a super admin) and `agency_doc_log` (what was emailed or approved, owner only) |
+| 0065 | badge_awards | `badge_awards` (a badge written down when first earned) |
+| 0066 | session_away | `assessments.away_json` (pillars set aside as not part of life right now) |
+| 0067 | safety_indexes | two unique indexes: one paid question per order, one income line per invoice |
+| 0068 | card_games_groups | FunFlow's cards cleaned up, Animal Sounds back as its own card, the Group Night deck; no new table |
 
 ## What changed since this was written
 
@@ -295,3 +301,12 @@ The export (`GET /me/export`) is one JSON file; the keys are the groups above (`
 - 2026-11-01: added the access table (13) and the migration index; retention and deletion now follow `account.ts` and `POST /me/reset` line by line.
 - 2026-11-01 (later): migration 0058 (water gaps; no table) takes the count to 58 migrations, still 177 tables. No table or column was added by the bug sweep: the monthly and yearly repeat `anchor` lives inside `nodes.repeat_json`; the Water and reminders box's new "Tasks from Daily" list is read from `nodes`; a sold product is archived (`products.status`) instead of deleted. The reported-but-not-changed gaps about delete and export are under Known gaps.
 - 2026-11-01 (later, the legal, security and performance pass): migrations 0059 and 0060 take the count to 60 migrations and 183 tables. 0059 adds `terms_acceptances`, `user_consents`, `consent_records`, `data_requests` and `copyright_notices` (section 2). 0060 adds `web_vitals` and 22 indexes found by reading every WHERE, JOIN and ORDER BY in the API, among them `organization_members (user_id, status)` (read on every gated request), `follows (owner_id, follower_id)`, a partial unread index on `notifications`, `nodes (user_id, kind, status, completed_at)`, `xp_events` and `points_ledger` by person and time or reason, a partial index for the leaderboard pool, and `created_at` indexes for the retention sweeps; it drops three indexes that a new one starts with (`idx_xp_user`, `idx_points_user`, `idx_nodes_user_kind`). Retention is now written down and run (section 15). Export and delete cover more (section 13); the Known gaps shrank to match. The business details shown on the legal pages (`BUSINESS_*`, `DMCA_*`) are Worker variables, not tables.
+
+## 2026-11-03 additions
+
+- **Migration 0067 `0067_safety_indexes.sql`.** Two unique indexes, each the database's last guard behind a check the code already makes, with duplicates removed first (the earliest row kept): `idx_dm_requests_order` on `dm_requests(order_id)` (one paid question per order), and `idx_fin_tx_invoice_once` on `finance_transactions(user_id, source, ref) WHERE source = 'invoice' AND ref IS NOT NULL` (an invoice is booked as income once; partial because a `recurring` row reuses its entry's id as `ref` every month).
+- **`agency_templates` kind `email`.** Beside `invoice`, `contract` and `doc`, a person's own email note is a template of kind `email` (`TEMPLATE_KINDS` in shared), holding `{ name, subject, message }` as plain text; the routes are in `routes/agencyDocs.ts`.
+- **Discover answer keys** are no longer in shared: `DISCOVER_SCENES`, `EQ_READING` and `EQ_PEOPLE` carry the words only, and the keys are `DISCOVER_KEYS` in `apps/api/src/discoverKeys.ts` (`DiscoverKeys` type in shared), passed to `scoreDiscover` and `scoreEq`. Stored results are unchanged.
+- **Migration 0068 `0068_card_games_groups.sql`.** Data only, in `cards` and `card_decks`: FunFlow's cards with stray glyphs rewritten with their examples in `list_json`, Animal Sounds as its own card, and a fifth deck, Group Night (`groupnight`, 4 to 10 or more).
+- **No migration for the interface pass.** Icons, the Agency screens, onboarding chips and the HIG rules changed no table; `agency_templates` kind `email` uses the existing columns.
+- **Paged lists.** Finance's month entries (`tx`) and dues (`du`), Bond's introductions (`in`), a run club's coming runs (`ru`), past runs (`rr`) and collabs (`rk`), Auto-DM's sends (`ds`) and the payouts rows (`po`) are served a page at a time with `pageOf` and `paged`; the sums beside them (the month's in and out, what is owed, the payout totals) are added up in SQL over every row.

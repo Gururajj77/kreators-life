@@ -47,6 +47,8 @@ export const LIMITS = {
   upload: { max: 30, windowSec: 3600 },
   /** Messages typed to the assistant. Each one is a model call paid in credits; the plan's own caps come on top. */
   assistant: { max: 60, windowSec: 3600 },
+  /** "Read with AI" on the strategy session's map card. A model call paid in credits, a line at a time. */
+  feelings: { max: 30, windowSec: 3600 },
   /** Coaching asks: a coach asking a student, a student asking a coach, and asking the team to be made a life coach. */
   coachAsk: { max: 20, windowSec: 3600 },
   /** What a life coach writes for a student: notes, and tasks added or changed. */
@@ -146,6 +148,7 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/run/runs/:id/entry', limit: 'entry' },
   { method: 'POST', path: '/studio/brands', limit: 'create' },
   { method: 'POST', path: '/assistant', limit: 'assistant' },
+  { method: 'POST', path: '/assistant/feelings', limit: 'feelings' },
   { method: 'POST', path: '/party/events/:id/claim', limit: 'claim' },
   { method: 'POST', path: '/circles/events/:id/claim', limit: 'claim' },
   { method: 'POST', path: '/party/events/:id/duplicate', limit: 'create' },

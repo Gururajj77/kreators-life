@@ -1,6 +1,8 @@
-import { ATTENDEE_CODE_MAX, ATTENDEE_CODE_MIN, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, attendeeXpLocked, BADGES, kmLabel, normalizeCode, paceLabel, RELATIONSHIP_BY_KEY, RUN_BADGES, RUN_PACE_META, RUN_PACES, RUN_REWARD, type Run as RunItem, type RunClub, type RunCollab, type RunCollabApplication, type RunPace, type RunResponse, type RunTracking } from '@kreators/shared';
+import { ATTENDEE_CODE_MAX, ATTENDEE_CODE_MIN, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, attendeeXpLocked, BADGES, kmLabel, normalizeCode, paceLabel, RELATIONSHIP_BY_KEY, RUN_BADGES, RUN_PACE_META, RUN_PACES, RUN_REWARD, type Run as RunItem, type RunClub, type RunCollab, type RunCollabApplication, type RunPace, type RunResponse, type RunTracking, type TagTone } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
+import { Footprints, Gift } from 'lucide-react';
 import { Fragment, useState } from 'react';
+import { Icon } from '../components/Icon';
 import { EventPanel } from '../components/EventPanel';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { BadgeMedal } from '../components/BadgeArt';
@@ -13,16 +15,20 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
-import { shortDay } from '../lib/date';
+import { shortDay, eventTime } from '../lib/date';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
 import { useNow } from '../lib/useNow';
 import { Pager, usePage } from '../components/Pager';
+import { FIELD } from '../lib/ui';
+import { ErrorLine } from '../components/ErrorLine';
+import { StatusTag } from '../components/StatusTag';
+import { FactTag, IconTag } from '../components/FactTag';
+import { useSeedOnce } from '../lib/useSeed';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-const when = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 const REL = RELATIONSHIP_BY_KEY.friendship;
 const pill = (tint: string) => ({ background: `var(--tint-${tint})` });
+const TINT_TONE: Record<'green' | 'red' | 'yellow' | 'purple' | 'sky', TagTone> = { green: 'good', red: 'bad', yellow: 'warn', purple: 'deep', sky: 'info' };
 
 type Tab = 'clubs' | 'tracking' | 'collabs';
 const TABS: { key: Tab; label: string }[] = [
@@ -31,20 +37,12 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'collabs', label: 'Brand collabs' },
 ];
 
-function Err({ e }: { e: unknown }) {
-  if (!e) return null;
-  return (
-    <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-      {e instanceof Error ? e.message : 'That did not work.'}
-    </p>
-  );
-}
 
 function Choice<T extends string>({ options, value, onChange, label }: { options: { key: T; label: string }[]; value: T; onChange: (v: T) => void; label: string }) {
   return (
     <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label={label}>
       {options.map((o) => (
-        <button key={o.key} type="button" aria-pressed={value === o.key} onClick={() => onChange(o.key)} className={`toy rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${value === o.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+        <button key={o.key} type="button" aria-pressed={value === o.key} onClick={() => onChange(o.key)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${value === o.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
           {o.label}
         </button>
       ))}
@@ -55,7 +53,7 @@ function Choice<T extends string>({ options, value, onChange, label }: { options
 function Giveaway({ giveaway, brand, count }: { giveaway: string; brand?: string; count?: number }) {
   return (
     <span className="inline-flex max-w-full items-center gap-xs rounded-pill px-sm text-[12px] font-extrabold leading-[24px]" style={pill('yellow')}>
-      <span aria-hidden="true">🎁</span>
+      <Icon icon={Gift} size={14} />
       <span className="truncate">
         {count && count > 0 ? `${count} × ` : ''}
         {giveaway}
@@ -70,25 +68,25 @@ function ClubCard({ k }: { k: RunClub }) {
     <li>
       <Link to={`/run/clubs/${k.id}`} className="toy toy-soft flex items-start gap-sm rounded-tile bg-card p-sm">
         <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill text-[22px]" style={{ background: `var(--soft-${REL.key})` }} aria-hidden="true">
-          🏃
+          <Icon icon={Footprints} size={22} />
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-xs">
             <span className="text-[16px] font-bold">{k.name}</span>
             {k.host ? (
-              <span className="rounded-pill px-xs text-[12px] font-extrabold leading-[20px]" style={pill('green')}>
+              <StatusTag tone={TINT_TONE['green']}>
                 You host
-              </span>
+              </StatusTag>
             ) : k.mine ? (
-              <span className="rounded-pill px-xs text-[12px] font-extrabold leading-[20px]" style={pill('green')}>
+              <StatusTag tone={TINT_TONE['green']}>
                 Member
-              </span>
+              </StatusTag>
             ) : null}
           </span>
           <span className="block text-[14px] font-semibold text-ink-soft">
             {k.city}, {RUN_PACE_META[k.pace].name.toLowerCase()}, {k.members} {k.members === 1 ? 'runner' : 'runners'}
           </span>
-          <span className="block text-[14px] font-semibold text-ink-soft">{k.nextRunAt ? `Next run ${when(k.nextRunAt)}` : k.meets || 'No run on the calendar yet'}</span>
+          <span className="block text-[14px] font-semibold text-ink-soft">{k.nextRunAt ? `Next run ${eventTime(k.nextRunAt)}` : k.meets || 'No run on the calendar yet'}</span>
         </span>
       </Link>
     </li>
@@ -109,7 +107,7 @@ function UpcomingRow({ r }: { r: RunItem }) {
         <span className="min-w-0 flex-1">
           <span className="block text-[16px] font-bold">{r.title}</span>
           <span className="block text-[14px] font-semibold text-ink-soft">
-            {when(r.startsAt)}, {kmLabel(r.metres)}
+            {eventTime(r.startsAt)}, {kmLabel(r.metres)}
             {r.meetingPoint ? `, ${r.meetingPoint}` : ''}
           </span>
           <span className="block text-[14px] font-semibold text-ink-soft">{stateLine(r)}</span>
@@ -142,7 +140,7 @@ export function Run() {
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Run clubs near you. The host shows a start code at the line. Enter it and your run is logged once, with kilometres, xp and points.</p>
         <div className="mt-md flex flex-wrap gap-xs" role="group" aria-label="Sections">
           {TABS.map((t) => (
-            <button key={t.key} type="button" aria-pressed={tab === t.key} onClick={() => setTab(t.key)} className={`toy rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === t.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={t.key} type="button" aria-pressed={tab === t.key} onClick={() => setTab(t.key)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === t.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {t.label}
               {t.key === 'collabs' && d && d.collabsOpen > 0 ? ` · ${d.collabsOpen}` : ''}
             </button>
@@ -313,8 +311,10 @@ function CollabCard({ k, myClubs, onApply, onChange }: { k: RunCollab; myClubs: 
       {k.mine.length > 0 && (
         <ul className="mt-sm flex list-none flex-wrap gap-xs p-0 m-0">
           {k.mine.map((a) => (
-            <li key={a.id} className="rounded-pill px-xs text-[12px] font-extrabold leading-[20px]" style={pill(a.status === 'accepted' ? 'green' : a.status === 'declined' ? 'red' : 'purple')}>
+            <li key={a.id} className="flex">
+              <StatusTag tone={TINT_TONE[a.status === 'accepted' ? 'green' : a.status === 'declined' ? 'red' : 'purple']}>
               {a.status === 'accepted' ? 'Accepted' : a.status === 'declined' ? 'Not this time' : 'Applied'}: {a.clubName}
+            </StatusTag>
             </li>
           ))}
         </ul>
@@ -327,7 +327,7 @@ function CollabCard({ k, myClubs, onApply, onChange }: { k: RunCollab; myClubs: 
           </Button>
         )}
       </div>
-      <Err e={close.isError ? close.error : null} />
+      <ErrorLine e={close.isError ? close.error : null} />
     </li>
   );
 }
@@ -354,12 +354,12 @@ function ApplicationRow({ a, onChange }: { a: RunCollabApplication & { collabTit
             </Button>
           </>
         ) : (
-          <span className="rounded-pill px-xs text-[12px] font-extrabold leading-[20px]" style={pill(a.status === 'accepted' ? 'green' : 'red')}>
+          <StatusTag tone={TINT_TONE[a.status === 'accepted' ? 'green' : 'red']}>
             {a.status === 'accepted' ? 'Accepted' : 'Declined'}
-          </span>
+          </StatusTag>
         )}
       </div>
-      <Err e={decide.isError ? decide.error : null} />
+      <ErrorLine e={decide.isError ? decide.error : null} />
     </li>
   );
 }
@@ -413,8 +413,11 @@ function CollabsTab() {
 function StartClubSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const nav = useNavigate();
   const refresh = useRefreshAll();
+  const me = useMe();
   const [name, setName] = useState('');
-  const [city, setCity] = useState('');
+  // The club's city starts as the person's own, from Profile; they can change it for this club.
+  const [city, setCity] = useState(me.data?.user.city ?? '');
+  useSeedOnce(me.data?.user, (u) => setCity((c) => c || u.city));
   const [description, setDescription] = useState('');
   const [pace, setPace] = useState<RunPace>('all');
   const [meets, setMeets] = useState('');
@@ -438,11 +441,11 @@ function StartClubSheet({ open, onClose }: { open: boolean; onClose: () => void 
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Name</span>
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required className={field} />
+          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">City</span>
-          <input value={city} onChange={(e) => setCity(e.target.value)} maxLength={80} required className={field} />
+          <input value={city} onChange={(e) => setCity(e.target.value)} maxLength={80} required className={FIELD} />
         </label>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-[14px] font-bold">Pace</legend>
@@ -451,11 +454,11 @@ function StartClubSheet({ open, onClose }: { open: boolean; onClose: () => void 
         </fieldset>
         <label className="block">
           <span className="block text-[14px] font-bold">When and where you usually meet</span>
-          <input value={meets} onChange={(e) => setMeets(e.target.value)} maxLength={200} placeholder="Sundays 6am, Cubbon Park gate" className={field} />
+          <input value={meets} onChange={(e) => setMeets(e.target.value)} maxLength={200} placeholder="Sundays 6am, Cubbon Park gate" className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">About the club</span>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} rows={3} className={field} />
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} rows={3} className={FIELD} />
         </label>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-[14px] font-bold">Who can find it</legend>
@@ -469,7 +472,7 @@ function StartClubSheet({ open, onClose }: { open: boolean; onClose: () => void 
             onChange={setVisibility}
           />
         </fieldset>
-        <Err e={create.isError ? create.error : null} />
+        <ErrorLine e={create.isError ? create.error : null} />
         <Button type="submit" size="lg" full disabled={create.isPending || !name.trim() || !city.trim()}>
           Start the club
         </Button>
@@ -514,7 +517,7 @@ function PostCollabSheet({ open, onClose, onDone }: { open: boolean; onClose: ()
         {orgs.length > 0 && (
           <label className="block">
             <span className="block text-[14px] font-bold">Brand</span>
-            <select value={organizationId} onChange={(e) => setOrganizationId(e.target.value)} className={field}>
+            <select value={organizationId} onChange={(e) => setOrganizationId(e.target.value)} className={FIELD}>
               {orgs.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.name}
@@ -527,46 +530,46 @@ function PostCollabSheet({ open, onClose, onDone }: { open: boolean; onClose: ()
         {!organizationId && (
           <label className="block">
             <span className="block text-[14px] font-bold">Brand name</span>
-            <input value={brandName} onChange={(e) => setBrandName(e.target.value)} maxLength={80} className={field} />
+            <input value={brandName} onChange={(e) => setBrandName(e.target.value)} maxLength={80} className={FIELD} />
           </label>
         )}
         <label className="block">
           <span className="block text-[14px] font-bold">Title</span>
-          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required placeholder="Sunday long run with Stride shoes" className={field} />
+          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required placeholder="Sunday long run with Stride shoes" className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">What runners can win</span>
-          <input value={giveaway} onChange={(e) => setGiveaway(e.target.value)} maxLength={300} required placeholder="A pair of shoes for the first twenty at the line" className={field} />
+          <input value={giveaway} onChange={(e) => setGiveaway(e.target.value)} maxLength={300} required placeholder="A pair of shoes for the first twenty at the line" className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">How many</span>
-            <input type="number" min={0} value={giveawayCount} onChange={(e) => setGiveawayCount(e.target.value)} placeholder="Not counted" className={field} />
+            <input type="number" min={0} value={giveawayCount} onChange={(e) => setGiveawayCount(e.target.value)} placeholder="Not counted" className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">City</span>
-            <input value={city} onChange={(e) => setCity(e.target.value)} maxLength={80} placeholder="Anywhere" className={field} />
+            <input value={city} onChange={(e) => setCity(e.target.value)} maxLength={80} placeholder="Anywhere" className={FIELD} />
           </label>
         </div>
         <label className="block">
           <span className="block text-[14px] font-bold">What the brand gives</span>
-          <textarea value={brief} onChange={(e) => setBrief(e.target.value)} maxLength={3000} rows={3} className={field} />
+          <textarea value={brief} onChange={(e) => setBrief(e.target.value)} maxLength={3000} rows={3} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">What the brand asks</span>
-          <textarea value={asks} onChange={(e) => setAsks(e.target.value)} maxLength={1000} rows={2} placeholder="A photo at the start line, tagged" className={field} />
+          <textarea value={asks} onChange={(e) => setAsks(e.target.value)} maxLength={1000} rows={2} placeholder="A photo at the start line, tagged" className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Open from</span>
-            <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required className={field} />
+            <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Until</span>
-            <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} required className={field} />
+            <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} required className={FIELD} />
           </label>
         </div>
-        <Err e={post.isError ? post.error : null} />
+        <ErrorLine e={post.isError ? post.error : null} />
         <Button type="submit" size="lg" full disabled={post.isPending || !title.trim() || !giveaway.trim()}>
           Post the collab
         </Button>
@@ -611,9 +614,9 @@ function ApplySheet({ collab, clubs, onClose, onDone }: { collab: RunCollab | nu
           {open.length === 1 && <p className="m-0 text-[14px] font-bold">Applying with {open[0]?.name}.</p>}
           <label className="block">
             <span className="block text-[14px] font-bold">A note for the brand</span>
-            <textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} rows={3} placeholder="How many run with you, where, and when" className={field} />
+            <textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} rows={3} placeholder="How many run with you, where, and when" className={FIELD} />
           </label>
-          <Err e={apply.isError ? apply.error : null} />
+          <ErrorLine e={apply.isError ? apply.error : null} />
           <Button type="submit" size="lg" full disabled={apply.isPending || !chosen}>
             Send the application
           </Button>
@@ -673,7 +676,7 @@ function RunCard({ r, host, member, onLog, onRecode, onStatus, busy }: { r: RunI
     <li className="rounded-card bg-card p-md shadow-toy-soft">
       <p className="m-0 text-[16px] font-bold">{r.title}</p>
       <p className="m-0 text-[14px] font-semibold text-ink-soft">
-        {when(r.startsAt)} to {new Date(r.endsAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}, {kmLabel(r.metres)}
+        {eventTime(r.startsAt)} to {new Date(r.endsAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}, {kmLabel(r.metres)}
         {r.meetingPoint ? `, ${r.meetingPoint}` : ''}
       </p>
       <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
@@ -695,7 +698,7 @@ function RunCard({ r, host, member, onLog, onRecode, onStatus, busy }: { r: RunI
           <RunCodeEditor r={r} onRecode={onRecode} busy={busy} />
         </div>
       )}
-      <div className="mt-sm flex flex-wrap gap-xs">
+      <div className="fill-row mt-sm flex flex-wrap gap-xs">
         {/* Whoever is shown the code (the host, the team) shows it; they never log the run. */}
         {member && !r.mine && !r.code && r.entryState === 'open' && (
           <Button onClick={onLog} disabled={busy}>
@@ -754,20 +757,20 @@ function EntrySheet({ run, onClose, onDone }: { run: RunItem | null; onClose: ()
           <p className="m-0 text-[14px] font-semibold text-ink-soft">{run.title}. The host shows the start code at the line.</p>
           <label className="block">
             <span className="block text-[14px] font-bold">Start code</span>
-            <input autoFocus value={code} onChange={(e) => setCode(normalizeCode(e.target.value))} maxLength={ATTENDEE_CODE_MAX} autoCapitalize="characters" autoComplete="off" spellCheck={false} required className={`${field} font-display text-[28px] font-extrabold tracking-[0.2em]`} />
+            <input autoFocus value={code} onChange={(e) => setCode(normalizeCode(e.target.value))} maxLength={ATTENDEE_CODE_MAX} autoCapitalize="characters" autoComplete="off" spellCheck={false} required className={`${FIELD} font-display text-[28px] font-extrabold tracking-[0.2em]`} />
           </label>
           <div className="grid grid-cols-2 gap-xs">
             <label className="block">
               <span className="block text-[14px] font-bold">Kilometres</span>
-              <input type="number" min={0} max={100} step={0.1} value={km} onChange={(e) => setKm(e.target.value)} placeholder={String(planned)} className={field} />
+              <input type="number" min={0} max={100} step={0.1} value={km} onChange={(e) => setKm(e.target.value)} placeholder={String(planned)} className={FIELD} />
             </label>
             <label className="block">
               <span className="block text-[14px] font-bold">Minutes</span>
-              <input type="number" min={0} max={600} value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="Optional" className={field} />
+              <input type="number" min={0} max={600} value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="Optional" className={FIELD} />
             </label>
           </div>
           <Nudge text={`Logs once per run. ${run?.xp ?? RUN_REWARD.xp} xp and ${RUN_REWARD.points} points, up to ${RUN_REWARD.perDay} runs a day. Minutes count as movement in Life.`} />
-          <Err e={log.isError ? log.error : null} />
+          <ErrorLine e={log.isError ? log.error : null} />
           <Button type="submit" size="lg" full disabled={log.isPending || code.length < ATTENDEE_CODE_MIN}>
             Log my run
           </Button>
@@ -816,32 +819,32 @@ function AddRunSheet({ open, clubId, collabs, onClose, onDone }: { open: boolean
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Title</span>
-          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Sunday long run" className={field} />
+          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Sunday long run" className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Starts</span>
-            <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required className={field} />
+            <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Minutes</span>
-            <input type="number" min={10} max={1440} value={minutes} onChange={(e) => setMinutes(e.target.value)} className={field} />
+            <input type="number" min={10} max={1440} value={minutes} onChange={(e) => setMinutes(e.target.value)} className={FIELD} />
           </label>
         </div>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Kilometres</span>
-            <input type="number" min={0.1} max={100} step={0.1} value={km} onChange={(e) => setKm(e.target.value)} className={field} />
+            <input type="number" min={0.1} max={100} step={0.1} value={km} onChange={(e) => setKm(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Meeting point</span>
-            <input value={meetingPoint} onChange={(e) => setMeetingPoint(e.target.value)} maxLength={200} className={field} />
+            <input value={meetingPoint} onChange={(e) => setMeetingPoint(e.target.value)} maxLength={200} className={FIELD} />
           </label>
         </div>
         {collabs.length > 0 && (
           <label className="block">
             <span className="block text-[14px] font-bold">Brand collab</span>
-            <select value={collabId} onChange={(e) => setCollabId(e.target.value)} className={field}>
+            <select value={collabId} onChange={(e) => setCollabId(e.target.value)} className={FIELD}>
               <option value="">None</option>
               {collabs.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -854,11 +857,11 @@ function AddRunSheet({ open, clubId, collabs, onClose, onDone }: { open: boolean
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Xp for each runner</span>
-            <input type="number" inputMode="numeric" min={1} max={ATTENDEE_XP_MAX} value={xp} onChange={(e) => setXp(e.target.value)} className={field} />
+            <input type="number" inputMode="numeric" min={1} max={ATTENDEE_XP_MAX} value={xp} onChange={(e) => setXp(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Your own code</span>
-            <input value={own} onChange={(e) => setOwn(normalizeCode(e.target.value))} maxLength={ATTENDEE_CODE_MAX} placeholder="Random" autoCapitalize="characters" className={`${field} uppercase placeholder:normal-case`} />
+            <input value={own} onChange={(e) => setOwn(normalizeCode(e.target.value))} maxLength={ATTENDEE_CODE_MAX} placeholder="Random" autoCapitalize="characters" className={`${FIELD} uppercase placeholder:normal-case`} />
           </label>
         </div>
         <p className="m-0 text-[12px] font-bold text-ink-soft">Up to {ATTENDEE_XP_MAX} xp, fixed thirty minutes before the start, when the code opens. You get a start code (six letters, or your own word) that only you see. Members log the run by entering it at the line.</p>
@@ -867,7 +870,7 @@ function AddRunSheet({ open, clubId, collabs, onClose, onDone }: { open: boolean
             {late}
           </p>
         )}
-        <Err e={add.isError ? add.error : null} />
+        <ErrorLine e={add.isError ? add.error : null} />
         <Button type="submit" size="lg" full disabled={add.isPending || !startsAt}>
           Add the run
         </Button>
@@ -879,7 +882,11 @@ function AddRunSheet({ open, clubId, collabs, onClose, onDone }: { open: boolean
 export function RunClubPage() {
   const { id = '' } = useParams();
   const epg = usePage('e');
-  const q = useAuthed(['run-club', id, epg.query], () => api.runClub(id, epg.query));
+  const rupg = usePage('ru');
+  const rrpg = usePage('rr');
+  const rkpg = usePage('rk');
+  const pq = [epg.query, rupg.query, rrpg.query, rkpg.query].join('&');
+  const q = useAuthed(['run-club', id, pq], () => api.runClub(id, pq));
   const refresh = useRefreshAll();
   const celebrate = useCelebrate();
   const [adding, setAdding] = useState(false);
@@ -917,7 +924,7 @@ export function RunClubPage() {
       <header className="pt-lg">
         <BackLink to="/run">Kreators Run</BackLink>
         <p className="m-0 text-[14px] font-bold text-ink-soft">
-          <span aria-hidden="true">🏃 </span>
+          <Icon icon={Footprints} size={14} className="mr-xs inline align-middle" />
           {k.city}, {RUN_PACE_META[k.pace].name.toLowerCase()}, hosted by {k.hostName}
           {k.status === 'closed' ? ', closed' : ''}
         </p>
@@ -925,18 +932,16 @@ export function RunClubPage() {
         {k.meets && <p className="mt-xs m-0 text-[16px] font-semibold">{k.meets}</p>}
         {k.description && <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold text-ink-soft">{k.description}</p>}
         <div className="mt-sm flex flex-wrap items-center gap-xs">
-          <span className="rounded-pill bg-card px-xs text-[12px] font-extrabold leading-[20px] shadow-toy-soft">
-            {k.members} {k.members === 1 ? 'runner' : 'runners'}
-          </span>
+          <IconTag tone="calm" icon="Users">{`${k.members} ${k.members === 1 ? 'runner' : 'runners'}`}</IconTag>
           {k.visibility === 'private' && (
-            <span className="rounded-pill px-xs text-[12px] font-extrabold leading-[20px]" style={pill('purple')}>
+            <StatusTag tone={TINT_TONE['purple']}>
               Private
-            </span>
+            </StatusTag>
           )}
           {k.host && (
-            <span className="rounded-pill px-xs text-[12px] font-extrabold leading-[20px]" style={pill('green')}>
+            <StatusTag tone={TINT_TONE['green']}>
               You host this
-            </span>
+            </StatusTag>
           )}
         </div>
         <div className="mt-md flex flex-wrap gap-xs">
@@ -965,7 +970,7 @@ export function RunClubPage() {
             </>
           )}
         </div>
-        <Err e={join.isError ? join.error : leave.isError ? leave.error : close.isError ? close.error : null} />
+        <ErrorLine e={join.isError ? join.error : leave.isError ? leave.error : close.isError ? close.error : null} />
       </header>
 
       <section className="mt-lg" aria-labelledby="club-runs">
@@ -973,7 +978,7 @@ export function RunClubPage() {
           Next runs
         </h2>
         {d.runs.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{k.host ? 'No run on the calendar. Add one and you get its start code.' : 'No run on the calendar yet. The host adds them here.'}</p>}
-        <Err e={recode.isError ? recode.error : setRun.isError ? setRun.error : null} />
+        <ErrorLine e={recode.isError ? recode.error : setRun.isError ? setRun.error : null} />
         <ul className="mt-sm flex list-none flex-col gap-sm p-0 m-0">
           {d.runs.map((r) => (
             <Fragment key={r.id}>
@@ -982,9 +987,10 @@ export function RunClubPage() {
             </Fragment>
           ))}
         </ul>
+        <Pager page={d.runPage} prefix="ru" label="next runs" />
       </section>
 
-      {d.collabs.length > 0 && (
+      {(d.collabs.length > 0 || d.collabPage.page > 1) && (
         <section className="mt-lg" aria-labelledby="club-collabs">
           <h2 id="club-collabs" className="text-[24px]">
             Brand collabs
@@ -1003,6 +1009,7 @@ export function RunClubPage() {
               </li>
             ))}
           </ul>
+          <Pager page={d.collabPage} prefix="rk" label="brand collabs" />
         </section>
       )}
 
@@ -1025,14 +1032,14 @@ export function RunClubPage() {
             Entries
           </h2>
           <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Every entry logged with a start code. Void one that should not be there and its points come back out.</p>
-          <Err e={voidEntry.isError ? voidEntry.error : null} />
+          <ErrorLine e={voidEntry.isError ? voidEntry.error : null} />
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {d.entries.map((e) => (
               <li key={e.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <span className="min-w-0 flex-1">
                   <span className="block text-[16px] font-bold">{e.name}</span>
                   <span className="block text-[14px] font-semibold text-ink-soft">
-                    {when(e.loggedAt)}, {kmLabel(e.metres)}
+                    {eventTime(e.loggedAt)}, {kmLabel(e.metres)}
                     {e.minutes > 0 ? `, ${e.minutes} min` : ''}
                     {e.status === 'void' ? ', voided' : ''}
                   </span>
@@ -1049,7 +1056,7 @@ export function RunClubPage() {
         </section>
       )}
 
-      {d.past.length > 0 && (
+      {(d.past.length > 0 || d.pastPage.page > 1) && (
         <section className="mt-lg" aria-labelledby="club-past">
           <h2 id="club-past" className="text-[24px]">
             Past runs
@@ -1059,13 +1066,14 @@ export function RunClubPage() {
               <li key={r.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
                 <span className="block text-[16px] font-bold">{r.title}</span>
                 <span className="block text-[14px] font-semibold text-ink-soft">
-                  {when(r.startsAt)}, {kmLabel(r.metres)}, {r.entries} {r.entries === 1 ? 'runner' : 'runners'}
+                  {eventTime(r.startsAt)}, {kmLabel(r.metres)}, {r.entries} {r.entries === 1 ? 'runner' : 'runners'}
                   {r.status !== 'published' ? `, ${r.status}` : ''}
                   {r.mine ? `, you ran ${kmLabel(r.mine.metres)}` : ''}
                 </span>
               </li>
             ))}
           </ul>
+          <Pager page={d.pastPage} prefix="rr" label="past runs" />
         </section>
       )}
 

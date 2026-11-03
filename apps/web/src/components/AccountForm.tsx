@@ -1,10 +1,32 @@
 import { birthDateProblem, passwordProblem, phoneProblem } from '@kreators/shared';
 import { useState } from 'react';
 import { todayLocal } from '../lib/date';
+import { FIELD, FIELD_LINE } from '../lib/ui';
+import { AnimatedIcon } from './AnimatedIcon';
 import { ChatActions } from './Chat';
 import { TermsBox } from './TermsBox';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
+/**
+ * A new password field with a show and hide button inside its right edge (the animated eye). The button is 44px and
+ * names what it does; the field keeps room for it so typed text never runs under it.
+ */
+function PasswordField({ value, onChange, what }: { value: string; onChange: (e: { target: { value: string } }) => void; what: string }) {
+  const [shown, setShown] = useState(false);
+  return (
+    <span className="relative mt-xs block">
+      <input type={shown ? 'text' : 'password'} value={value} onChange={onChange} autoComplete="new-password" maxLength={128} autoCapitalize="off" spellCheck={false} className={`${FIELD_LINE} pr-xl`} />
+      <button
+        type="button"
+        onClick={() => setShown((x) => !x)}
+        aria-label={shown ? `Hide ${what}` : `Show ${what}`}
+        aria-pressed={shown}
+        className="toy toy-flat absolute right-xs top-1/2 flex min-h-[44px] min-w-[44px] -translate-y-1/2 items-center justify-center rounded-pill text-ink-soft"
+      >
+        <AnimatedIcon name="visibility" size={20} active={shown} interaction="click-toggle" />
+      </button>
+    </span>
+  );
+}
 
 /**
  * The account, made inside a conversation: the same fields and rules as the sign-up page. The setup chat shows
@@ -25,30 +47,30 @@ export function AccountForm({ initialName, onSend }: { initialName: string; onSe
       <div className="grid gap-xs md:grid-cols-2">
         <label className="block">
           <span className="block text-[14px] font-bold">What should we call you?</span>
-          <input value={v.name} onChange={set('name')} maxLength={40} autoComplete="nickname" className={field} />
+          <input value={v.name} onChange={set('name')} maxLength={40} autoComplete="nickname" className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Email</span>
-          <input type="email" value={v.email} onChange={set('email')} autoComplete="email" maxLength={254} className={field} />
+          <input type="email" value={v.email} onChange={set('email')} autoComplete="email" maxLength={254} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Password</span>
-          <input type="password" value={v.password} onChange={set('password')} autoComplete="new-password" maxLength={128} className={field} />
+          <PasswordField value={v.password} onChange={set('password')} what="password" />
           {hint(weak ?? 'Eight characters or more. Not your email, not one from the usual guess lists.')}
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Password, once more</span>
-          <input type="password" value={v.confirm} onChange={set('confirm')} autoComplete="new-password" maxLength={128} className={field} />
+          <PasswordField value={v.confirm} onChange={set('confirm')} what="password" />
           {hint(mismatch ? 'The two do not match yet.' : null)}
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Phone</span>
-          <input type="tel" value={v.phone} onChange={set('phone')} autoComplete="tel" maxLength={24} placeholder="+91 98765 43210" className={field} />
+          <input type="tel" value={v.phone} onChange={set('phone')} autoComplete="tel" maxLength={24} placeholder="+91 98765 43210" className={FIELD} />
           {hint(badPhone)}
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Date of birth</span>
-          <input type="date" value={v.birthDate} onChange={set('birthDate')} autoComplete="bday" max={todayLocal()} className={field} />
+          <input type="date" value={v.birthDate} onChange={set('birthDate')} autoComplete="bday" max={todayLocal()} className={FIELD} />
           {hint(badBirth ?? 'Eighteen or over. Never shown to anyone.')}
         </label>
       </div>
@@ -80,20 +102,20 @@ export function SignInCard({ initialName, onSend }: { initialName: string; onSen
       <div className="grid gap-xs md:grid-cols-2">
         <label className="block">
           <span className="block text-[14px] font-bold">Your name</span>
-          <input value={v.name} onChange={set('name')} maxLength={40} autoComplete="nickname" className={field} />
+          <input value={v.name} onChange={set('name')} maxLength={40} autoComplete="nickname" className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Email</span>
-          <input type="email" value={v.email} onChange={set('email')} autoComplete="email" maxLength={254} className={field} />
+          <input type="email" value={v.email} onChange={set('email')} autoComplete="email" maxLength={254} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Password</span>
-          <input type="password" value={v.password} onChange={set('password')} autoComplete="new-password" maxLength={128} className={field} />
+          <PasswordField value={v.password} onChange={set('password')} what="password" />
           {hint(weak ?? 'Eight or more letters, numbers or signs.')}
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Password again</span>
-          <input type="password" value={v.confirm} onChange={set('confirm')} autoComplete="new-password" maxLength={128} className={field} />
+          <PasswordField value={v.confirm} onChange={set('confirm')} what="password" />
           {hint(mismatch ? 'These two do not match yet.' : null)}
         </label>
       </div>
@@ -121,12 +143,12 @@ export function PrivateCard({ onSend }: { onSend: (value: Record<string, string>
       <div className="grid gap-xs md:grid-cols-2">
         <label className="block">
           <span className="block text-[14px] font-bold">Phone</span>
-          <input type="tel" value={v.phone} onChange={set('phone')} autoComplete="tel" maxLength={24} placeholder="+91 98765 43210" className={field} />
+          <input type="tel" value={v.phone} onChange={set('phone')} autoComplete="tel" maxLength={24} placeholder="+91 98765 43210" className={FIELD} />
           {hint(badPhone)}
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Date of birth</span>
-          <input type="date" value={v.birthDate} onChange={set('birthDate')} autoComplete="bday" max={todayLocal()} className={field} />
+          <input type="date" value={v.birthDate} onChange={set('birthDate')} autoComplete="bday" max={todayLocal()} className={FIELD} />
           {hint(badBirth)}
         </label>
       </div>

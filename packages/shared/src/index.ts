@@ -312,7 +312,6 @@ export type Branch = 'low' | 'high';
 
 export interface FlowOption {
   label: string;
-  emoji: string;
   /** Contribution to the relationship score, 0 to 4. Foundation options carry none. */
   points?: number;
   /** Question to go to next. Null ends this floor. */
@@ -353,143 +352,143 @@ const scale = (
   scale: { labels, reverse, nextLow: `${relationship}.pl`, nextHigh: `${relationship}.ph` },
 });
 
-const probe = (id: string, relationship: RelationshipKey, prompt: string, options: [string, string, number][]): Question => ({
+const probe = (id: string, relationship: RelationshipKey, prompt: string, options: [string, number][]): Question => ({
   id,
   relationship,
   role: 'probe',
   format: 'pick',
   prompt,
-  options: options.map(([label, emoji, points]) => ({ label, emoji, points, next: `${relationship}.f` })),
+  options: options.map(([label, points]) => ({ label, points, next: `${relationship}.f` })),
 });
 
-const foundation = (relationship: RelationshipKey, prompt: string, options: [string, string, string][]): Question => ({
+const foundation = (relationship: RelationshipKey, prompt: string, options: [string, string][]): Question => ({
   id: `${relationship}.f`,
   relationship,
   role: 'foundation',
   format: 'pick',
   prompt,
-  options: options.map(([pillar, label, emoji]) => ({ label, emoji, pillar, next: null })),
+  options: options.map(([pillar, label]) => ({ label, pillar, next: null })),
 });
 
 export const QUESTIONS: readonly Question[] = [
   // Ember
   scale('servant_leader.g', 'servant_leader', 'When people who count on you ask for something, how often do you follow through?', ['Never', 'Rarely', 'Sometimes', 'Usually', 'Always']),
   probe('servant_leader.pl', 'servant_leader', 'What usually gets in the way of helping them?', [
-    ['I don’t really know what they need', '🤷', 1],
-    ['I know, but my own plans win', '🎯', 2],
-    ['No time. My own list eats everything', '⏰', 1],
+    ['I don’t really know what they need', 1],
+    ['I know, but my own plans win', 2],
+    ['No time. My own list eats everything', 1],
   ]),
   probe('servant_leader.ph', 'servant_leader', 'What keeps you helping even when it is not fun?', [
-    ['They tell me it helped', '💌', 4],
-    ['It is just who I am', '🧭', 4],
-    ['Honestly, the recognition', '🏅', 2],
+    ['They tell me it helped', 4],
+    ['It is just who I am', 4],
+    ['Honestly, the recognition', 2],
   ]),
   foundation('servant_leader', 'Pick the foundation that must never crack:', [
-    ['serve_first', 'Serve first, then ask', '🤝'],
-    ['answer_everything', 'Every real question gets a real answer', '💬'],
-    ['lift_others', 'Lift other people up', '🪜'],
+    ['serve_first', 'Serve first, then ask'],
+    ['answer_everything', 'Every real question gets a real answer'],
+    ['lift_others', 'Lift other people up'],
   ]),
   // Pip
   scale('friendship.g', 'friendship', 'How many friends could you call at 2am after a rough day?', ['None', 'One', 'Two', 'A few', 'A crew']),
   probe('friendship.pl', 'friendship', 'What happened to the friendships?', [
-    ['Work ate my calendar', '⏰', 1],
-    ['I moved, or they did', '📦', 2],
-    ['I only talk in group chats now', '💬', 1],
+    ['Work ate my calendar', 1],
+    ['I moved, or they did', 2],
+    ['I only talk in group chats now', 1],
   ]),
   probe('friendship.ph', 'friendship', 'What keeps your friendships alive?', [
-    ['We have rituals, like a weekly call', '🔁', 4],
-    ['We show up for the big stuff', '🎂', 3],
-    ['We just never stopped talking', '💞', 4],
+    ['We have rituals, like a weekly call', 4],
+    ['We show up for the big stuff', 3],
+    ['We just never stopped talking', 4],
   ]),
   foundation('friendship', 'Pick the foundation that must never crack:', [
-    ['be_present', 'Be present, not just reachable', '🫶'],
-    ['show_up', 'Show up in person, on time', '🚪'],
-    ['rituals', 'Keep one friendship ritual alive', '🔁'],
+    ['be_present', 'Be present, not just reachable'],
+    ['show_up', 'Show up in person, on time'],
+    ['rituals', 'Keep one friendship ritual alive'],
   ]),
   // Sunny
   scale('parent_child.g', 'parent_child', 'How often do you talk with family about something that is not logistics?', ['Never', 'Monthly', 'Weekly', 'Most days', 'Daily']),
   probe('parent_child.pl', 'parent_child', 'What makes it hard?', [
-    ['We only talk about plans and money', '📋', 1],
-    ['They don’t get what I do', '🤷', 1],
-    ['I keep saying I’ll call later', '⏳', 2],
+    ['We only talk about plans and money', 1],
+    ['They don’t get what I do', 1],
+    ['I keep saying I’ll call later', 2],
   ]),
   probe('parent_child.ph', 'parent_child', 'What makes it easy?', [
-    ['We have a standing call', '📞', 4],
-    ['I tell them news first', '🎁', 4],
-    ['We live close and just drop by', '🏡', 3],
+    ['We have a standing call', 4],
+    ['I tell them news first', 4],
+    ['We live close and just drop by', 3],
   ]),
   foundation('parent_child', 'Pick the foundation that must never crack:', [
-    ['first_call', 'Family gets the first call', '📞'],
-    ['be_there', 'Be there for the family moments', '🏡'],
-    ['real_questions', 'Ask real questions, not updates', '❓'],
+    ['first_call', 'Family gets the first call'],
+    ['be_there', 'Be there for the family moments'],
+    ['real_questions', 'Ask real questions, not updates'],
   ]),
   // Clover
   scale('lover_partner.g', 'lover_partner', 'Phone-free time with your partner, or a date, this week?', ['None', 'Once', 'Twice', 'Most days', 'Every day']),
   probe('lover_partner.pl', 'lover_partner', 'What is stealing that time?', [
-    ['Screens, even in bed', '📱', 1],
-    ['Working late every night', '💼', 1],
-    ['I am single and not making time to date', '🌱', 2],
+    ['Screens, even in bed', 1],
+    ['Working late every night', 1],
+    ['I am single and not making time to date', 2],
   ]),
   probe('lover_partner.ph', 'lover_partner', 'What protects that time?', [
-    ['Phones in another room at dinner', '🍽️', 4],
-    ['We plan dates like appointments', '📅', 4],
-    ['We share the same goals', '🤝', 3],
+    ['Phones in another room at dinner', 4],
+    ['We plan dates like appointments', 4],
+    ['We share the same goals', 3],
   ]),
   foundation('lover_partner', 'Pick the foundation that must never crack:', [
-    ['daily_love', 'Love is daily, not a highlight reel', '💗'],
-    ['phones_down', 'Phones down when we are together', '📵'],
-    ['chosen', 'Choose them out loud', '🗣️'],
+    ['daily_love', 'Love is daily, not a highlight reel'],
+    ['phones_down', 'Phones down when we are together'],
+    ['chosen', 'Choose them out loud'],
   ]),
   // Dew
   scale('self.g', 'self', 'Hours of sleep last night?', ['Under 5', '5 to 6', '6 to 7', '7 to 8', '8 plus']),
   probe('self.pl', 'self', 'What keeps you up?', [
-    ['Working late', '🌙', 1],
-    ['Scrolling in bed', '📱', 1],
-    ['My head will not stop', '🌀', 2],
+    ['Working late', 1],
+    ['Scrolling in bed', 1],
+    ['My head will not stop', 2],
   ]),
   probe('self.ph', 'self', 'What is your rest secret?', [
-    ['A hard stop every night', '⏹️', 4],
-    ['No screens in bed', '🛏️', 4],
-    ['I move my body every day', '🏃', 3],
+    ['A hard stop every night', 4],
+    ['No screens in bed', 4],
+    ['I move my body every day', 3],
   ]),
   foundation('self', 'Pick the foundation that must never crack:', [
-    ['rest_is_work', 'Rest is part of the work', '😴'],
-    ['kind_inner_voice', 'Talk to myself like a friend', '💬'],
-    ['move_daily', 'Move every day', '🏃'],
+    ['rest_is_work', 'Rest is part of the work'],
+    ['kind_inner_voice', 'Talk to myself like a friend'],
+    ['move_daily', 'Move every day'],
   ]),
   // Sage
   scale('guru.g', 'guru', 'When did you last ask a mentor a real question?', ['This week', 'This month', 'This quarter', 'This year', 'Never'], true),
   probe('guru.pl', 'guru', 'What stops you?', [
-    ['I don’t have anyone to ask', '🔍', 1],
-    ['I feel like I should already know', '😶', 1],
-    ['I admire people but never reach out', '👀', 2],
+    ['I don’t have anyone to ask', 1],
+    ['I feel like I should already know', 1],
+    ['I admire people but never reach out', 2],
   ]),
   probe('guru.ph', 'guru', 'How do you learn best?', [
-    ['I ask, then I do', '🙋', 4],
-    ['I study and copy the method', '📚', 4],
-    ['I take courses and finish them', '🎓', 3],
+    ['I ask, then I do', 4],
+    ['I study and copy the method', 4],
+    ['I take courses and finish them', 3],
   ]),
   foundation('guru', 'Pick the foundation that must never crack:', [
-    ['learn_on_purpose', 'Learn on purpose, not by accident', '🎯'],
-    ['find_a_guru', 'Have someone to ask', '🧭'],
-    ['teach_to_learn', 'Teach what I learn', '🧑‍🏫'],
+    ['learn_on_purpose', 'Learn on purpose, not by accident'],
+    ['find_a_guru', 'Have someone to ask'],
+    ['teach_to_learn', 'Teach what I learn'],
   ]),
   // Lumen
   scale('divine.g', 'divine', 'How often do you pause for something bigger than your to-do list? Prayer, meditation, nature, awe.', ['Never', 'Rarely', 'Weekly', 'Most days', 'Daily']),
   probe('divine.pl', 'divine', 'What gets in the way?', [
-    ['I forget it exists', '🫥', 1],
-    ['It feels unproductive', '⏱️', 1],
-    ['I want to, I just don’t have a practice', '🌱', 2],
+    ['I forget it exists', 1],
+    ['It feels unproductive', 1],
+    ['I want to, I just don’t have a practice', 2],
   ]),
   probe('divine.ph', 'divine', 'What is your practice?', [
-    ['Prayer or meditation', '🙏', 4],
-    ['Nature and awe', '🌄', 4],
-    ['Gratitude, written down', '📓', 3],
+    ['Prayer or meditation', 4],
+    ['Nature and awe', 4],
+    ['Gratitude, written down', 3],
   ]),
   foundation('divine', 'Pick the foundation that must never crack:', [
-    ['bigger_than_me', 'Something is bigger than my to-do list', '🌌'],
-    ['daily_pause', 'A daily pause that is mine', '🕯️'],
-    ['gratitude', 'Say thanks before I ask', '🙏'],
+    ['bigger_than_me', 'Something is bigger than my to-do list'],
+    ['daily_pause', 'A daily pause that is mine'],
+    ['gratitude', 'Say thanks before I ask'],
   ]),
 ];
 
@@ -863,7 +862,8 @@ export const BADGE_STAT_UNIT: Record<BadgeStat, { one: string; many: string; per
 export interface Badge {
   key: string;
   name: string;
-  emoji: string;
+  /** The lucide glyph at the medal's centre (drawn by the web's BadgeArt). */
+  icon: IconName;
   /** How to earn it, with the exact number. */
   how: string;
   tier: BadgeTier;
@@ -873,78 +873,78 @@ export interface Badge {
   min: number;
 }
 
-const badge = (key: string, name: string, emoji: string, family: BadgeFamily, tier: BadgeTier, stat: BadgeStat, min: number, how: string): Badge => ({ key, name, emoji, how, tier, family, stat, min });
+const badge = (key: string, name: string, icon: IconName, family: BadgeFamily, tier: BadgeTier, stat: BadgeStat, min: number, how: string): Badge => ({ key, name, icon, how, tier, family, stat, min });
 
 /** In the order the gallery shows them: family by family, the easiest first. The first two stay First tick and Three in a row. */
 export const BADGES: readonly Badge[] = [
-  badge('first_task', 'First tick', '✅', 'Daily habits', 'bronze', 'tasks_done', 1, 'Complete your first task'),
-  badge('streak_3', 'Three in a row', '🔥', 'Daily habits', 'bronze', 'best_streak', 3, 'Check in three days running'),
-  badge('streak_7', 'Full week', '🌈', 'Daily habits', 'silver', 'best_streak', 7, 'Check in seven days running'),
-  badge('ten_tasks', 'Ripple maker', '🌊', 'Daily habits', 'bronze', 'tasks_done', 10, 'Complete ten tasks'),
-  badge('spark_5', 'Good hands', '⚡', 'Daily habits', 'bronze', 'sparks_done', 5, 'Do five small acts'),
-  badge('tasks_100', 'Hundred ticks', '💯', 'Daily habits', 'silver', 'tasks_done', 100, 'Complete one hundred tasks'),
-  badge('streak_30', 'Thirty days', '🌕', 'Daily habits', 'gold', 'best_streak', 30, 'Check in thirty days running'),
-  badge('tasks_500', 'Five hundred ticks', '🏔️', 'Daily habits', 'platinum', 'tasks_done', 500, 'Complete five hundred tasks'),
-  badge('streak_100', 'Hundred days', '👑', 'Daily habits', 'platinum', 'best_streak', 100, 'Check in one hundred days running'),
+  badge('first_task', 'First tick', 'CircleCheck', 'Daily habits', 'bronze', 'tasks_done', 1, 'Complete your first task'),
+  badge('streak_3', 'Three in a row', 'Flame', 'Daily habits', 'bronze', 'best_streak', 3, 'Check in three days running'),
+  badge('streak_7', 'Full week', 'Rainbow', 'Daily habits', 'silver', 'best_streak', 7, 'Check in seven days running'),
+  badge('ten_tasks', 'Ripple maker', 'WavesHorizontal', 'Daily habits', 'bronze', 'tasks_done', 10, 'Complete ten tasks'),
+  badge('spark_5', 'Good hands', 'Zap', 'Daily habits', 'bronze', 'sparks_done', 5, 'Do five small acts'),
+  badge('tasks_100', 'Hundred ticks', 'BadgeCheck', 'Daily habits', 'silver', 'tasks_done', 100, 'Complete one hundred tasks'),
+  badge('streak_30', 'Thirty days', 'MoonStar', 'Daily habits', 'gold', 'best_streak', 30, 'Check in thirty days running'),
+  badge('tasks_500', 'Five hundred ticks', 'Mountain', 'Daily habits', 'platinum', 'tasks_done', 500, 'Complete five hundred tasks'),
+  badge('streak_100', 'Hundred days', 'Crown', 'Daily habits', 'platinum', 'best_streak', 100, 'Check in one hundred days running'),
 
-  badge('pillar_1', 'First pillar', '🏛️', 'Pillars', 'bronze', 'pillars_set', 1, 'Set up your first pillar'),
-  badge('project_clear', 'Project cleared', '🏁', 'Pillars', 'bronze', 'projects_cleared', 1, 'Finish every task in a project'),
-  badge('project_5', 'Project closer', '🗂️', 'Pillars', 'silver', 'projects_cleared', 5, 'Finish every task in five projects'),
-  badge('project_10', 'Ten projects cleared', '🧱', 'Pillars', 'gold', 'projects_cleared', 10, 'Finish every task in ten projects'),
-  badge('all_seven', 'All seven', '🏰', 'Pillars', 'gold', 'pillars_set', 7, 'Set up every one of the seven pillars'),
-  badge('seven_sided', 'Seven-sided', '🌐', 'Pillars', 'platinum', 'tasks_pillars', 7, 'Complete a task in every one of the seven pillars'),
+  badge('pillar_1', 'First pillar', 'Landmark', 'Pillars', 'bronze', 'pillars_set', 1, 'Set up your first pillar'),
+  badge('project_clear', 'Project cleared', 'Flag', 'Pillars', 'bronze', 'projects_cleared', 1, 'Finish every task in a project'),
+  badge('project_5', 'Project closer', 'FolderCheck', 'Pillars', 'silver', 'projects_cleared', 5, 'Finish every task in five projects'),
+  badge('project_10', 'Ten projects cleared', 'BrickWall', 'Pillars', 'gold', 'projects_cleared', 10, 'Finish every task in ten projects'),
+  badge('all_seven', 'All seven', 'Castle', 'Pillars', 'gold', 'pillars_set', 7, 'Set up every one of the seven pillars'),
+  badge('seven_sided', 'Seven-sided', 'Globe', 'Pillars', 'platinum', 'tasks_pillars', 7, 'Complete a task in every one of the seven pillars'),
 
-  badge('not_to_do_7', 'Held the line', '🛑', 'Focus', 'bronze', 'not_to_do_kept', 7, 'Keep seven days on your not to do list'),
-  badge('not_to_do_30', 'Stayed away', '🚧', 'Focus', 'silver', 'not_to_do_kept', 30, 'Keep thirty days on your not to do list'),
-  badge('focus_1', 'First focus round', '🎧', 'Focus', 'bronze', 'focus_rounds', 1, 'Finish a focus round in Mindful minutes'),
-  badge('focus_10h', 'Ten hours of focus', '🔭', 'Focus', 'gold', 'focus_minutes', 600, 'Focus for ten hours in total'),
-  badge('focus_50h', 'Fifty hours of focus', '🧠', 'Focus', 'platinum', 'focus_minutes', 3000, 'Focus for fifty hours in total'),
+  badge('not_to_do_7', 'Held the line', 'OctagonX', 'Focus', 'bronze', 'not_to_do_kept', 7, 'Keep seven days on your not to do list'),
+  badge('not_to_do_30', 'Stayed away', 'Construction', 'Focus', 'silver', 'not_to_do_kept', 30, 'Keep thirty days on your not to do list'),
+  badge('focus_1', 'First focus round', 'Headphones', 'Focus', 'bronze', 'focus_rounds', 1, 'Finish a focus round in Mindful minutes'),
+  badge('focus_10h', 'Ten hours of focus', 'Telescope', 'Focus', 'gold', 'focus_minutes', 600, 'Focus for ten hours in total'),
+  badge('focus_50h', 'Fifty hours of focus', 'Brain', 'Focus', 'platinum', 'focus_minutes', 3000, 'Focus for fifty hours in total'),
 
-  badge('journal_1', 'First page', '📓', 'Reflection', 'bronze', 'journal_entries', 1, 'Write your first journal entry'),
-  badge('journal_10', 'Ten pages', '📖', 'Reflection', 'silver', 'journal_entries', 10, 'Write ten journal entries'),
-  badge('journal_50', 'Fifty pages', '🖋️', 'Reflection', 'gold', 'journal_entries', 50, 'Write fifty journal entries'),
-  badge('review_1', 'First review', '🔍', 'Reflection', 'bronze', 'reviews_written', 1, 'Save your first review'),
-  badge('review_4', 'Four reviews', '🪞', 'Reflection', 'silver', 'reviews_written', 4, 'Save four reviews'),
-  badge('mood_7', 'Seven moods', '🙂', 'Reflection', 'bronze', 'mood_days', 7, 'Log your mood on seven different days'),
-  badge('mindful_10', 'Ten still moments', '🌬️', 'Reflection', 'silver', 'mindful_logs', 10, 'Log ten mindful minutes sessions'),
-  badge('discover_1', 'Know yourself', '🧭', 'Reflection', 'bronze', 'discover_taken', 1, 'Finish the Discover quiz'),
+  badge('journal_1', 'First page', 'NotebookPen', 'Reflection', 'bronze', 'journal_entries', 1, 'Write your first journal entry'),
+  badge('journal_10', 'Ten pages', 'BookOpen', 'Reflection', 'silver', 'journal_entries', 10, 'Write ten journal entries'),
+  badge('journal_50', 'Fifty pages', 'Feather', 'Reflection', 'gold', 'journal_entries', 50, 'Write fifty journal entries'),
+  badge('review_1', 'First review', 'ScanSearch', 'Reflection', 'bronze', 'reviews_written', 1, 'Save your first review'),
+  badge('review_4', 'Four reviews', 'ClipboardCheck', 'Reflection', 'silver', 'reviews_written', 4, 'Save four reviews'),
+  badge('mood_7', 'Seven moods', 'FaceSlightlySmiling', 'Reflection', 'bronze', 'mood_days', 7, 'Log your mood on seven different days'),
+  badge('mindful_10', 'Ten still moments', 'Wind', 'Reflection', 'silver', 'mindful_logs', 10, 'Log ten mindful minutes sessions'),
+  badge('discover_1', 'Know yourself', 'Compass', 'Reflection', 'bronze', 'discover_taken', 1, 'Finish the Discover quiz'),
 
-  badge('post_1', 'First post', '💬', 'Community', 'bronze', 'posts', 1, 'Write a post in Community'),
-  badge('post_10', 'Ten posts', '📣', 'Community', 'silver', 'posts', 10, 'Write ten posts in Community'),
-  badge('reply_5', 'Good neighbour', '🏡', 'Community', 'bronze', 'replies', 5, 'Reply to five posts'),
-  badge('reply_25', 'Helpful voice', '🗣️', 'Community', 'silver', 'replies', 25, 'Reply to twenty-five posts'),
-  badge('friend_1', 'First friend', '🤝', 'Community', 'bronze', 'friends', 1, 'Make your first friend in Bond'),
-  badge('friend_5', 'Five friends', '🫂', 'Community', 'silver', 'friends', 5, 'Make five friends in Bond'),
-  badge('follower_10', 'Ten followers', '👥', 'Community', 'silver', 'followers', 10, 'Get ten followers on your public page'),
-  badge('referral_1', 'Brought a friend', '🎁', 'Community', 'bronze', 'referrals', 1, 'Have a friend sign up with your link and an email'),
-  badge('event_1', 'Showed up', '🎟️', 'Community', 'bronze', 'events_claimed', 1, 'Claim an attendee code at an event'),
+  badge('post_1', 'First post', 'MessageCircle', 'Community', 'bronze', 'posts', 1, 'Write a post in Community'),
+  badge('post_10', 'Ten posts', 'Megaphone', 'Community', 'silver', 'posts', 10, 'Write ten posts in Community'),
+  badge('reply_5', 'Good neighbour', 'House', 'Community', 'bronze', 'replies', 5, 'Reply to five posts'),
+  badge('reply_25', 'Helpful voice', 'Speech', 'Community', 'silver', 'replies', 25, 'Reply to twenty-five posts'),
+  badge('friend_1', 'First friend', 'Handshake', 'Community', 'bronze', 'friends', 1, 'Make your first friend in Bond'),
+  badge('friend_5', 'Five friends', 'UsersRound', 'Community', 'silver', 'friends', 5, 'Make five friends in Bond'),
+  badge('follower_10', 'Ten followers', 'Users', 'Community', 'silver', 'followers', 10, 'Get ten followers on your public page'),
+  badge('referral_1', 'Brought a friend', 'Gift', 'Community', 'bronze', 'referrals', 1, 'Have a friend sign up with your link and an email'),
+  badge('event_1', 'Showed up', 'Ticket', 'Community', 'bronze', 'events_claimed', 1, 'Claim an attendee code at an event'),
 
-  badge('product_1', 'First product', '🛍️', 'Creator', 'bronze', 'products_live', 1, 'Put a product live in your Shop'),
-  badge('product_5', 'Five products', '🧰', 'Creator', 'silver', 'products_live', 5, 'Have five products live in your Shop'),
-  badge('sale_1', 'First sale', '💰', 'Creator', 'silver', 'sales', 1, 'Make your first sale'),
-  badge('sale_10', 'Ten sales', '💸', 'Creator', 'gold', 'sales', 10, 'Make ten sales'),
-  badge('win_1', 'First reward', '🏆', 'Creator', 'bronze', 'bounties_paid', 1, 'Get paid for a post in Win'),
-  badge('win_5', 'Five rewards', '🎖️', 'Creator', 'silver', 'bounties_paid', 5, 'Get paid for five posts in Win'),
+  badge('product_1', 'First product', 'ShoppingBag', 'Creator', 'bronze', 'products_live', 1, 'Put a product live in your Shop'),
+  badge('product_5', 'Five products', 'Store', 'Creator', 'silver', 'products_live', 5, 'Have five products live in your Shop'),
+  badge('sale_1', 'First sale', 'Coins', 'Creator', 'silver', 'sales', 1, 'Make your first sale'),
+  badge('sale_10', 'Ten sales', 'Banknote', 'Creator', 'gold', 'sales', 10, 'Make ten sales'),
+  badge('win_1', 'First reward', 'Trophy', 'Creator', 'bronze', 'bounties_paid', 1, 'Get paid for a post in Win'),
+  badge('win_5', 'Five rewards', 'Award', 'Creator', 'silver', 'bounties_paid', 5, 'Get paid for five posts in Win'),
 
-  badge('finance_1', 'First entry', '📒', 'Money', 'bronze', 'finance_entries', 1, 'Add your first entry in Finance'),
-  badge('goal_done', 'Goal reached', '🏦', 'Money', 'silver', 'finance_goals_done', 1, 'Reach a savings goal in Finance'),
-  badge('invoice_1', 'First invoice paid', '🧾', 'Money', 'silver', 'invoices_paid', 1, 'Mark your first invoice as paid'),
-  badge('invoice_10', 'Ten invoices paid', '📈', 'Money', 'gold', 'invoices_paid', 10, 'Mark ten invoices as paid'),
+  badge('finance_1', 'First entry', 'NotebookText', 'Money', 'bronze', 'finance_entries', 1, 'Add your first entry in Finance'),
+  badge('goal_done', 'Goal reached', 'PiggyBank', 'Money', 'silver', 'finance_goals_done', 1, 'Reach a savings goal in Finance'),
+  badge('invoice_1', 'First invoice paid', 'Receipt', 'Money', 'silver', 'invoices_paid', 1, 'Mark your first invoice as paid'),
+  badge('invoice_10', 'Ten invoices paid', 'ChartLine', 'Money', 'gold', 'invoices_paid', 10, 'Mark ten invoices as paid'),
 
-  badge('run_1', 'First run', '🏃', 'Fitness', 'bronze', 'runs_logged', 1, 'Log a run with a start code'),
-  badge('run_10', 'Ten runs', '👟', 'Fitness', 'silver', 'runs_logged', 10, 'Log ten runs with your clubs'),
-  badge('run_42k', 'Marathon distance', '🛣️', 'Fitness', 'silver', 'run_metres', 42_195, 'Run 42.2 kilometres in total with your clubs'),
-  badge('run_100k', 'Hundred k', '🏅', 'Fitness', 'gold', 'run_metres', 100_000, 'Run a hundred kilometres with your clubs'),
-  badge('run_500k', 'Five hundred k', '🌍', 'Fitness', 'platinum', 'run_metres', 500_000, 'Run five hundred kilometres with your clubs'),
+  badge('run_1', 'First run', 'Footprints', 'Fitness', 'bronze', 'runs_logged', 1, 'Log a run with a start code'),
+  badge('run_10', 'Ten runs', 'PersonStanding', 'Fitness', 'silver', 'runs_logged', 10, 'Log ten runs with your clubs'),
+  badge('run_42k', 'Marathon distance', 'Route', 'Fitness', 'silver', 'run_metres', 42_195, 'Run 42.2 kilometres in total with your clubs'),
+  badge('run_100k', 'Hundred k', 'Medal', 'Fitness', 'gold', 'run_metres', 100_000, 'Run a hundred kilometres with your clubs'),
+  badge('run_500k', 'Five hundred k', 'Earth', 'Fitness', 'platinum', 'run_metres', 500_000, 'Run five hundred kilometres with your clubs'),
 
-  badge('lesson_1', 'First lesson', '📚', 'Learning', 'bronze', 'lessons_done', 1, 'Finish a lesson in School'),
-  badge('lesson_10', 'Ten lessons', '🎒', 'Learning', 'silver', 'lessons_done', 10, 'Finish ten lessons in School'),
-  badge('cert_1', 'Certified', '🎓', 'Learning', 'gold', 'certificates', 1, 'Earn a School certificate'),
+  badge('lesson_1', 'First lesson', 'BookBookmark', 'Learning', 'bronze', 'lessons_done', 1, 'Finish a lesson in School'),
+  badge('lesson_10', 'Ten lessons', 'Backpack', 'Learning', 'silver', 'lessons_done', 10, 'Finish ten lessons in School'),
+  badge('cert_1', 'Certified', 'GraduationCap', 'Learning', 'gold', 'certificates', 1, 'Earn a School certificate'),
 
-  badge('level_5', 'Level five', '⭐', 'Milestones', 'silver', 'level', 5, 'Reach level five'),
-  badge('club_member', 'Club member', '🪪', 'Milestones', 'silver', 'club', 1, 'Be accepted into the Club'),
-  badge('level_10', 'Level ten', '🌠', 'Milestones', 'gold', 'level', 10, 'Reach level ten'),
-  badge('level_20', 'Level twenty', '🚀', 'Milestones', 'platinum', 'level', 20, 'Reach level twenty'),
+  badge('level_5', 'Level five', 'Star', 'Milestones', 'silver', 'level', 5, 'Reach level five'),
+  badge('club_member', 'Club member', 'IdCard', 'Milestones', 'silver', 'club', 1, 'Be accepted into the Club'),
+  badge('level_10', 'Level ten', 'Sparkle', 'Milestones', 'gold', 'level', 10, 'Reach level ten'),
+  badge('level_20', 'Level twenty', 'Rocket', 'Milestones', 'platinum', 'level', 20, 'Reach level twenty'),
 ];
 
 export const BADGE_BY_KEY: Record<string, Badge> = byKey(BADGES.map((b) => [b.key, b]));
@@ -1096,7 +1096,8 @@ export interface AppUsage {
 /** Numbers for the newer apps. Counts only: never a person, never what they wrote or answered. */
 export interface ObservedAdditions {
   /** How many people unlocked each game. */
-  games: { key: string; name: string; emoji: string; unlocked: number }[];
+  /** Per game: its key and name and how many unlocked it. No emoji: the screen draws its own icon (2026-11-03). */
+  games: { key: string; name: string; unlocked: number }[];
   discover: { results: number; people: number; withEq: number; assistantOn: number; stepsOff: number; addons: { type: number; love: number; mind: number; design: number }; mindOn: number };
   /** Agency: counts only, never a client, a name or an amount. */
   agency: { people: number; clients: number; deliverables: number; published: number; invoices: number; agreementsSigned: number; clientLinksOn: number; metricsOn: number };
@@ -1234,6 +1235,33 @@ export interface TodayResponse {
   timePlan: { plannedMin: number; doneMin: number; timed: number };
   /** Things to stay away from, each with its streak. Extra to the three boxes. */
   notToDo: NotToDo[];
+  /** Party events, runs and circle tables the person signed up for that start on their day, in time order. Title, time and a link only. */
+  events: TodayEvent[];
+  /** Agency work waiting on the person today. Present only while Agency is on for them; owner only, titles and client names, never a fee. */
+  agency?: TodayAgency;
+}
+
+/** Something the person signed up for that starts today. */
+export interface TodayEvent {
+  kind: 'event' | 'run' | 'circle';
+  title: string;
+  /** UTC ISO start. */
+  at: string;
+  path: string;
+}
+
+/** The most rows of each agency list Daily shows; the counts say when there are more. */
+export const TODAY_AGENCY_MAX = 8;
+
+/** Agency on Daily: pieces due today or late, changes clients asked for, retainers a client chose, invoices due or past due. */
+export interface TodayAgency {
+  due: { id: string; title: string; clientId: string; client: string; due: string; late: boolean }[];
+  dueTotal: number;
+  /** Pieces a client sent back with a change ask in the last fortnight that are still in making. */
+  changeAsks: number;
+  changeClientId: string | null;
+  retainerToConfirm: { id: string; clientId: string; client: string; months: number | null }[];
+  invoicesDue: { id: string; number: string; clientId: string | null; client: string; due: string; late: boolean; cents: number; currency: string }[];
 }
 
 /** The not-to-do list on Daily: things to stay away from, each with its own streak. */
@@ -1253,11 +1281,9 @@ export interface NotToDo {
   createdAt: string;
 }
 
-/** A YYYY-MM-DD day moved by whole days. */
+/** A YYYY-MM-DD day moved by whole days: the same as `addDays` (the one day arithmetic, further down); kept as a name because the period and not-to-do rules read better with it. */
 export function shiftDay(day: string, by: number): string {
-  const d = new Date(`${day}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + by);
-  return d.toISOString().slice(0, 10);
+  return addDays(day, by);
 }
 
 /**
@@ -1584,7 +1610,8 @@ export function evolutionFor(stages: readonly EvolutionStage[], xp: number, ageD
 export interface Honor {
   key: string;
   name: string;
-  emoji: string;
+  /** The lucide glyph inside its seal. */
+  icon: IconName;
   source: 'admin' | 'time' | 'season';
   /** The finish its medal is drawn in. */
   tier: BadgeTier;
@@ -1594,15 +1621,15 @@ export interface Honor {
 }
 
 export const HONORS: readonly Honor[] = [
-  { key: 'pro', name: 'Pro', emoji: '💎', source: 'admin', tier: 'platinum', how: 'Given by the kreators.app team to pro members' },
-  { key: 'founder', name: 'Founding member', emoji: '🏗️', source: 'admin', tier: 'gold', how: 'For the first hundred climbers' },
-  { key: 'community_star', name: 'Community star', emoji: '🌟', source: 'admin', tier: 'gold', how: 'For lifting other people up' },
-  { key: 'collab', name: 'Team player', emoji: '🤝', source: 'admin', tier: 'silver', how: 'For working with others in a way that moved people' },
-  { key: 'week_in', name: 'One week in', emoji: '🌱', source: 'time', tier: 'bronze', days: 7, how: 'Unlocks seven days after you start' },
-  { key: 'month_in', name: 'One month in', emoji: '🌿', source: 'time', tier: 'silver', days: 30, how: 'Unlocks thirty days after you start' },
-  { key: 'season_in', name: 'One season in', emoji: '🌳', source: 'time', tier: 'gold', days: 90, how: 'Unlocks ninety days after you start' },
-  { key: 'year_in', name: 'One year in', emoji: '🌲', source: 'time', tier: 'platinum', days: 365, how: 'Unlocks a year after you start' },
-  { key: 'season_top', name: 'Season top three', emoji: '🏅', source: 'season', tier: 'gold', how: 'Finished a monthly season in the top three on the leaderboard' },
+  { key: 'pro', name: 'Pro', icon: 'Gem', source: 'admin', tier: 'platinum', how: 'Given by the kreators.app team to pro members' },
+  { key: 'founder', name: 'Founding member', icon: 'BuildingComplex', source: 'admin', tier: 'gold', how: 'For the first hundred climbers' },
+  { key: 'community_star', name: 'Community star', icon: 'Sparkles', source: 'admin', tier: 'gold', how: 'For lifting other people up' },
+  { key: 'collab', name: 'Team player', icon: 'Handshake', source: 'admin', tier: 'silver', how: 'For working with others in a way that moved people' },
+  { key: 'week_in', name: 'One week in', icon: 'Sprout', source: 'time', tier: 'bronze', days: 7, how: 'Unlocks seven days after you start' },
+  { key: 'month_in', name: 'One month in', icon: 'Leaf', source: 'time', tier: 'silver', days: 30, how: 'Unlocks thirty days after you start' },
+  { key: 'season_in', name: 'One season in', icon: 'TreeDeciduous', source: 'time', tier: 'gold', days: 90, how: 'Unlocks ninety days after you start' },
+  { key: 'year_in', name: 'One year in', icon: 'TreePine', source: 'time', tier: 'platinum', days: 365, how: 'Unlocks a year after you start' },
+  { key: 'season_top', name: 'Season top three', icon: 'Medal', source: 'season', tier: 'gold', how: 'Finished a monthly season in the top three on the leaderboard' },
 ];
 
 export const HONOR_BY_KEY: Record<string, Honor> = byKey(HONORS.map((h) => [h.key, h]));
@@ -1620,7 +1647,7 @@ export function timeHonors(createdAt: string, now: Date = new Date()): string[] 
 
 /**
  * Card games, played in the app. Each game is unlocked once with points (see REWARDS in index.ts) and then played for good.
- * The card text lives in apps/api/src/cards-data.json and is only served to someone who unlocked the game (or to the team);
+ * The card text lives in D1 (`card_games`, `card_decks` and `cards`, seeded by migration 0042) and is only served by `GET /cards/:key` to someone who unlocked the game (or to the team);
  * this file holds what the client needs before that: the name, the line, the picture and the price.
  */
 export interface CardGameInfo {
@@ -1731,16 +1758,16 @@ export interface Reward {
 }
 
 /** The shelves of the catalog, in the order they are shown. */
-export const REWARD_GROUPS: readonly { key: RewardGroup; name: string; emoji: string; blurb: string }[] = [
-  { key: 'books', name: 'Books', emoji: '📚', blurb: 'Three books by Shubham Aggarwal, who builds kreators.app.' },
-  { key: 'games', name: 'Games', emoji: '🃏', blurb: 'Unlock a game once with points and play it in the app: shuffle, flip and draw. Nothing is posted to you.' },
-  { key: 'apparel', name: 'Apparel and wearables', emoji: '👕', blurb: 'Wear it, and people ask what it is.' },
-  { key: 'tech', name: 'Tech accessories', emoji: '📱', blurb: 'Small things you use every day.' },
-  { key: 'drinkware', name: 'Drinkware', emoji: '☕', blurb: 'Keep a drink with you, again and again.' },
-  { key: 'stationery', name: 'Office and stationery', emoji: '📝', blurb: 'For your desk and your plans.' },
-  { key: 'lifestyle', name: 'Lifestyle and wellness', emoji: '🧼', blurb: 'Look after yourself, at home or on the road.' },
-  { key: 'novelty', name: 'Novelty and fun', emoji: '🎮', blurb: 'Just for the joy of it.' },
-  { key: 'experiences', name: 'Experiences', emoji: '🎟️', blurb: 'Time with real people.' },
+export const REWARD_GROUPS: readonly { key: RewardGroup; name: string; icon: IconName; blurb: string }[] = [
+  { key: 'books', name: 'Books', icon: 'BookOpen', blurb: 'Three books by Shubham Aggarwal, who builds kreators.app.' },
+  { key: 'games', name: 'Games', icon: 'Spade', blurb: 'Unlock a game once with points and play it in the app: shuffle, flip and draw. Nothing is posted to you.' },
+  { key: 'apparel', name: 'Apparel and wearables', icon: 'Shirt', blurb: 'Wear it, and people ask what it is.' },
+  { key: 'tech', name: 'Tech accessories', icon: 'Smartphone', blurb: 'Small things you use every day.' },
+  { key: 'drinkware', name: 'Drinkware', icon: 'Coffee', blurb: 'Keep a drink with you, again and again.' },
+  { key: 'stationery', name: 'Office and stationery', icon: 'PenLine', blurb: 'For your desk and your plans.' },
+  { key: 'lifestyle', name: 'Lifestyle and wellness', icon: 'Leaf', blurb: 'Look after yourself, at home or on the road.' },
+  { key: 'novelty', name: 'Novelty and fun', icon: 'Gamepad2', blurb: 'Just for the joy of it.' },
+  { key: 'experiences', name: 'Experiences', icon: 'Ticket', blurb: 'Time with real people.' },
 ];
 
 export const REWARDS: readonly Reward[] = [
@@ -1974,17 +2001,22 @@ export function isRole(v: unknown): v is Role {
 // ---------------------------------------------------------------------------
 
 export const ICON_NAMES = [
-  'Aperture', 'ArrowRight', 'Backpack', 'BadgeDollarSign', 'Ban', 'Banknote', 'BatteryLow', 'Bell', 'BookOpen', 'Bot', 'Brain', 'Briefcase',
-  'BriefcaseBusiness', 'CalendarClock', 'CalendarRange', 'Camera', 'Cast', 'Check', 'CircleAlert', 'CircleCheck', 'CircleCheckBig',
-  'CirclePlus', 'CircleQuestionMark', 'Clapperboard', 'ClipboardCheck', 'Coins', 'Compass', 'CreditCard', 'Dumbbell',
-  'EighthNotes', 'FaceGrinning', 'FaceSlightlySmiling', 'FileDown', 'FileText', 'Flame', 'Flower2', 'FolderKanban', 'Footprints', 'Gamepad2', 'GraduationCap',
-  'HandCoins', 'HandHeart', 'HandHelping', 'Handshake', 'Headphones', 'Heart', 'HeartPulse', 'Hourglass', 'House', 'IdCard', 'KeyRound', 'Landmark',
-  'LayoutList', 'LifeBuoy', 'Lightbulb', 'Link', 'ListChecks', 'ListPlus', 'Lock', 'Luggage', 'Mail', 'Medal', 'Megaphone', 'MessageCircle', 'MessageCircleHeart', 'MessagesSquare', 'MicSignal',
-  'MicVocal', 'Minus', 'Moon', 'MoonStar', 'NotebookPen', 'Package', 'Palette', 'PartyPopper', 'PenLine', 'PiggyBank', 'Plane', 'Presentation', 'Puzzle',
-  'RadioTower', 'Recycle', 'Repeat', 'Rocket', 'Scissors', 'Search', 'SearchCheck', 'Share2', 'Shield', 'ShieldCheck', 'ShoppingBag', 'ShoppingCart',
-  'Signpost', 'Smartphone', 'Spade', 'Sparkle', 'Sparkles', 'SquareCheck', 'Sprout', 'Sun', 'Sunrise', 'Tag', 'Target', 'Telescope', 'ThumbsUp', 'Ticket', 'Toolbox', 'Tornado',
-  'TrendingUp', 'Triangle', 'Trophy', 'Tv', 'Type', 'Undo2', 'UserRound', 'UsersRound', 'Video', 'Wallet', 'WalletMinimal', 'WandSparkles',
-  'WavesHorizontal', 'Wind', 'X',
+  'Activity', 'Anchor', 'Aperture', 'ArrowRight', 'AtSign', 'Award', 'Backpack', 'BadgeCheck', 'BadgeDollarSign', 'Ban', 'Banknote', 'BatteryLow',
+  'Bell', 'BellRing', 'BookBookmark', 'BookOpen', 'Bot', 'Brain', 'BrickWall', 'Briefcase', 'BriefcaseBusiness', 'BuildingComplex', 'CalendarClock',
+  'CalendarDays', 'CalendarRange', 'Camera', 'Cast', 'Castle', 'ChartLine', 'Check', 'CircleAlert', 'CircleCheck', 'CircleCheckBig', 'CirclePlus',
+  'CircleQuestionMark', 'Clapperboard', 'ClipboardCheck', 'CloudRain', 'Coffee', 'Coins', 'Compass', 'Construction', 'CreditCard', 'Crown', 'Disc3',
+  'Dumbbell', 'Earth', 'EighthNote', 'EighthNotes', 'FaceGrinning', 'FaceSlightlySmiling', 'Feather', 'FileDown', 'FileText', 'Flag', 'Flame',
+  'FlaskConical', 'Flower2', 'FolderCheck', 'FolderKanban', 'Footprints', 'GalleryHorizontal', 'Gamepad2', 'Gem', 'Gift', 'Globe', 'GraduationCap',
+  'Hammer', 'HandCoins', 'HandHeart', 'HandHelping', 'Handshake', 'Headphones', 'Heart', 'HeartPulse', 'Hourglass', 'House', 'IdCard', 'Image',
+  'KeyRound', 'Landmark', 'LayoutList', 'Leaf', 'LetterH', 'LifeBuoy', 'Lightbulb', 'Link', 'ListChecks', 'ListPlus', 'Lock', 'Luggage', 'Mail',
+  'Map', 'Medal', 'Megaphone', 'MessageCircle', 'MessageCircleHeart', 'MessagesSquare', 'MicSignal', 'MicVocal', 'Minus', 'Moon', 'MoonStar',
+  'Mountain', 'Newspaper', 'NotebookPen', 'NotebookText', 'OctagonX', 'Orbit', 'Package', 'Palette', 'PartyPopper', 'PenLine', 'PersonStanding',
+  'PiggyBank', 'Plane', 'Presentation', 'Puzzle', 'RadioTower', 'Rainbow', 'Receipt', 'Recycle', 'Repeat', 'Rocket', 'Route', 'ScanSearch',
+  'Scissors', 'Search', 'SearchCheck', 'Share2', 'Shield', 'ShieldCheck', 'Shirt', 'ShoppingBag', 'ShoppingCart', 'Signpost', 'Smartphone', 'Spade',
+  'Sparkle', 'Sparkles', 'Speech', 'Sprout', 'SquareCheck', 'SquarePlay', 'Star', 'Store', 'Sun', 'Sunrise', 'Swords', 'Tag', 'Target', 'Telescope',
+  'Tent', 'ThumbsUp', 'Ticket', 'Toolbox', 'Tornado', 'TreeDeciduous', 'TreePine', 'TrendingUp', 'Triangle', 'Trophy', 'Tv', 'Type', 'Undo2',
+  'UserRound', 'Users', 'UsersRound', 'UtensilsCrossed', 'Video', 'VolumeX', 'Wallet', 'WalletMinimal', 'WandSparkles', 'WavesHorizontal', 'Wind',
+  'X', 'Zap',
 ] as const;
 export type IconName = (typeof ICON_NAMES)[number];
 export const isIconName = (v: unknown): v is IconName => typeof v === 'string' && (ICON_NAMES as readonly string[]).includes(v);
@@ -2233,18 +2265,17 @@ export type LogKind = 'mood' | 'sleep' | 'stress' | 'mindful' | 'move';
 export interface MoodOption {
   value: number;
   name: string;
-  emoji: string;
   color: string;
   text: string;
 }
 
 /** The kit's five moods and their colors, bottom to top. */
 export const MOODS: readonly MoodOption[] = [
-  { value: 1, name: 'Low', emoji: '😞', color: '#7F45E2', text: '#FFFFFF' },
-  { value: 2, name: 'Sad', emoji: '😔', color: '#FB8728', text: '#FFFFFF' },
-  { value: 3, name: 'Neutral', emoji: '😐', color: '#926247', text: '#FFFFFF' },
-  { value: 4, name: 'Happy', emoji: '🙂', color: '#FACC15', text: '#262626' },
-  { value: 5, name: 'Overjoyed', emoji: '😄', color: '#9BB068', text: '#FFFFFF' },
+  { value: 1, name: 'Low', color: '#7F45E2', text: '#FFFFFF' },
+  { value: 2, name: 'Sad', color: '#FB8728', text: '#FFFFFF' },
+  { value: 3, name: 'Neutral', color: '#926247', text: '#FFFFFF' },
+  { value: 4, name: 'Happy', color: '#FACC15', text: '#262626' },
+  { value: 5, name: 'Overjoyed', color: '#9BB068', text: '#FFFFFF' },
 ];
 
 export const STRESSORS = ['Work', 'Money', 'Family', 'Health', 'Loneliness', 'Relationship', 'Sleep', 'Something else'] as const;
@@ -2526,7 +2557,7 @@ export interface Notification {
  * Inbox tabs, by what a note is about. All holds everything; Team is only offered to staff and admins. A kind that is
  * in no tab shows under All only.
  */
-export const INBOX_TABS = ['all', 'replies', 'following', 'events', 'coaching', 'team'] as const;
+export const INBOX_TABS = ['all', 'replies', 'following', 'events', 'coaching', 'agency', 'team'] as const;
 export type InboxTab = (typeof INBOX_TABS)[number];
 export const INBOX_TAB_META: Record<InboxTab, { name: string; kinds: readonly string[] }> = {
   all: { name: 'All', kinds: [] },
@@ -2534,6 +2565,8 @@ export const INBOX_TAB_META: Record<InboxTab, { name: string; kinds: readonly st
   following: { name: 'Following', kinds: ['thread', 'follow', 'broadcast'] },
   events: { name: 'Events', kinds: ['party', 'circle', 'run', 'event'] },
   coaching: { name: 'Coaching', kinds: ['coach'] },
+  // Client answers, months made, invoices due and past due. Offered only while Agency is on for the person.
+  agency: { name: 'Agency', kinds: ['agency'] },
   // Notes about work waiting for the team, such as an ask to be made a life coach.
   team: { name: 'Team', kinds: ['team'] },
 };
@@ -2636,13 +2669,13 @@ export interface LinkBlock {
 export const MAX_LINK_BLOCKS = 30;
 export const MAX_CAROUSEL_ITEMS = 10;
 
-export const LINK_BLOCK_META: Record<LinkBlockType, { name: string; emoji: string; blurb: string }> = {
-  link: { name: 'Link', emoji: '🔗', blurb: 'A button that opens any page.' },
-  header: { name: 'Header', emoji: '🏷️', blurb: 'A title that groups the links under it.' },
-  text: { name: 'Text', emoji: '✍️', blurb: 'A short paragraph in your words.' },
-  image: { name: 'Image', emoji: '🖼️', blurb: 'One picture, with a link if you want.' },
-  video: { name: 'Video', emoji: '▶️', blurb: 'A YouTube video that plays on your page.' },
-  carousel: { name: 'Carousel', emoji: '🎠', blurb: 'Cards people swipe through, each with a link.' },
+export const LINK_BLOCK_META: Record<LinkBlockType, { name: string; icon: IconName; blurb: string }> = {
+  link: { name: 'Link', icon: 'Link', blurb: 'A button that opens any page.' },
+  header: { name: 'Header', icon: 'LetterH', blurb: 'A title that groups the links under it.' },
+  text: { name: 'Text', icon: 'Type', blurb: 'A short paragraph in your words.' },
+  image: { name: 'Image', icon: 'Image', blurb: 'One picture, with a link if you want.' },
+  video: { name: 'Video', icon: 'SquarePlay', blurb: 'A YouTube video that plays on your page.' },
+  carousel: { name: 'Carousel', icon: 'GalleryHorizontal', blurb: 'Cards people swipe through, each with a link.' },
 };
 
 const httpsUrl = (v: unknown): string => (typeof v === 'string' && /^https:\/\/[^\s\u0000-\u001f\u007f]{1,500}$/.test(v.trim()) ? v.trim() : '');
@@ -2967,6 +3000,42 @@ export function readFeelings(text: string): number[] {
   return [...found].sort((a, b) => a - b).slice(0, 4);
 }
 
+/**
+ * "Read with AI": the same suggestion, from a model, for someone with a plan and only through a model that keeps
+ * nothing (`POST /assistant/feelings`). The rules above stay the default and free. The words are never stored or
+ * logged; what comes back is only level numbers, and the person still ticks the ones that fit.
+ */
+export interface FeelingsReadResult {
+  /** Level values from MAP_LEVELS, lowest first, at most four. */
+  levels: number[];
+  /** The model that read it, said under the suggestion. */
+  model: string;
+  credits: { spent: number; left: number };
+}
+/** The most characters of someone's words the AI reader sends. */
+export const FEELINGS_TEXT_MAX = 600;
+/** What the feelings reader tells the model: the level names and their lines, and to answer with numbers only. */
+export function feelingsPrompt(relationship?: string): string {
+  const lines = MAP_LEVELS.map((l) => `${l.value} ${l.name}: "${l.sounds}"`).join('\n');
+  return `You read how someone feels${relationship ? ` about ${relationship}` : ''} and match it to levels on a map of feelings. The levels are:\n${lines}\n\nCall suggest_levels with the one to four level numbers their words point to most. A feeling they say they do not have does not count. Never write anything else.`;
+}
+/**
+ * The levels in a model's answer: the `levels` of a suggest_levels call, or numbers in plain text. Only values in
+ * MAP_LEVELS count, each once, lowest first, at most four. Anything else is dropped.
+ */
+export function feelingsFromModel(answer: unknown): number[] {
+  let raw: unknown[] = [];
+  if (typeof answer === 'string') raw = answer.match(/\b\d{2,3}\b/g)?.map(Number) ?? [];
+  else if (Array.isArray(answer)) raw = answer;
+  else if (answer && typeof answer === 'object' && Array.isArray((answer as { levels?: unknown }).levels)) raw = (answer as { levels: unknown[] }).levels;
+  const found = new Set<number>();
+  for (const v of raw) {
+    const n = typeof v === 'number' ? v : typeof v === 'string' && /^\s*\d{2,3}\s*$/.test(v) ? Number(v) : NaN;
+    if (Number.isInteger(n) && levelByValue(n)) found.add(n);
+  }
+  return [...found].sort((a, b) => a - b).slice(0, 4);
+}
+
 export const BLOCK_KEYS = ['morning', 'nutrition', 'work', 'skills', 'social', 'sleep'] as const;
 export type BlockKey = (typeof BLOCK_KEYS)[number];
 export interface RoutineBlock {
@@ -3200,15 +3269,15 @@ export const BRIEF_MAX = 4000;
 
 export const BRAND_SOURCE_KINDS = ['site', 'youtube', 'instagram', 'x', 'tiktok', 'reddit', 'article', 'competitor'] as const;
 export type BrandSourceKind = (typeof BRAND_SOURCE_KINDS)[number];
-export const BRAND_SOURCE_META: Record<BrandSourceKind, { name: string; emoji: string }> = {
-  site: { name: 'Website', emoji: '🌐' },
-  youtube: { name: 'YouTube', emoji: '▶️' },
-  instagram: { name: 'Instagram', emoji: '📸' },
-  x: { name: 'X', emoji: '✖️' },
-  tiktok: { name: 'TikTok', emoji: '🎵' },
-  reddit: { name: 'Reddit', emoji: '👽' },
-  article: { name: 'Article', emoji: '📰' },
-  competitor: { name: 'Competitor', emoji: '🥊' },
+export const BRAND_SOURCE_META: Record<BrandSourceKind, { name: string; icon: IconName }> = {
+  site: { name: 'Website', icon: 'Globe' },
+  youtube: { name: 'YouTube', icon: 'SquarePlay' },
+  instagram: { name: 'Instagram', icon: 'Camera' },
+  x: { name: 'X', icon: 'AtSign' },
+  tiktok: { name: 'TikTok', icon: 'EighthNote' },
+  reddit: { name: 'Reddit', icon: 'MessagesSquare' },
+  article: { name: 'Article', icon: 'Newspaper' },
+  competitor: { name: 'Competitor', icon: 'Swords' },
 };
 /** Which kind a link is, from its address. A competitor is a choice, never a guess. */
 export function sourceKindOf(url: string): BrandSourceKind {
@@ -3238,16 +3307,16 @@ export const RESEARCH_META: Record<ResearchKind, { name: string; blurb: string; 
 
 export const PIECE_KINDS = ['audit', 'plan', 'calendar', 'ideas', 'hooks', 'script', 'post', 'analysis', 'playbook'] as const;
 export type PieceKind = (typeof PIECE_KINDS)[number];
-export const PIECE_META: Record<PieceKind, { name: string; emoji: string; blurb: string; askFor: string }> = {
-  audit: { name: 'Strategy audit', emoji: '🔍', blurb: 'What the brand does now, what wins in its niche, the gaps, and ten moves in order.', askFor: 'Anything the audit should weigh, like a launch date or a platform you care about most.' },
-  plan: { name: 'Marketing plan', emoji: '🗺️', blurb: 'Positioning, who it is for, three content pillars, channels and cadence, the first 30, 60 and 90 days, and the numbers to watch.', askFor: 'The goal, the budget if any, and the time you can give it each week.' },
-  calendar: { name: 'Four-week calendar', emoji: '📅', blurb: 'Four weeks of posts: day, platform, format, hook and call to action.', askFor: 'How many posts a week, and on which platforms.' },
-  ideas: { name: 'Video ideas', emoji: '💡', blurb: 'Fifteen ideas, each with its angle, hook, format and the research that says it should work.', askFor: 'A theme, a product to push, or nothing at all.' },
-  hooks: { name: 'Hooks', emoji: '🪝', blurb: 'Twenty opening lines in the patterns the outliers used, grouped by type, each with why it works.', askFor: 'The topic of the video the hooks are for.' },
-  script: { name: 'Short-form script', emoji: '🎬', blurb: 'A 30 to 60 second script: the hook, the setup, the payoff, the call to action. Remix a winner, start from scratch, or fix a draft.', askFor: 'The idea, or paste a draft to fix, or name the research item to remix.' },
-  post: { name: 'Posts and captions', emoji: '✍️', blurb: 'Captions and threads ready to post, one per platform you name.', askFor: 'What the post is about and which platforms.' },
-  playbook: { name: 'What is working', emoji: '📘', blurb: 'The patterns behind the winners: hook types, structures, lengths and topics, counted, each with the video that shows it, and what to copy and what to skip.', askFor: 'The platform and format you want the patterns for, like YouTube Shorts under a minute.' },
-  analysis: { name: 'Why it worked', emoji: '🧪', blurb: 'One video or post taken apart: the hook, the structure, the format, the style, and what to take from it.', askFor: 'Which research item to take apart, or paste the transcript.' },
+export const PIECE_META: Record<PieceKind, { name: string; icon: IconName; blurb: string; askFor: string }> = {
+  audit: { name: 'Strategy audit', icon: 'ScanSearch', blurb: 'What the brand does now, what wins in its niche, the gaps, and ten moves in order.', askFor: 'Anything the audit should weigh, like a launch date or a platform you care about most.' },
+  plan: { name: 'Marketing plan', icon: 'Map', blurb: 'Positioning, who it is for, three content pillars, channels and cadence, the first 30, 60 and 90 days, and the numbers to watch.', askFor: 'The goal, the budget if any, and the time you can give it each week.' },
+  calendar: { name: 'Four-week calendar', icon: 'CalendarDays', blurb: 'Four weeks of posts: day, platform, format, hook and call to action.', askFor: 'How many posts a week, and on which platforms.' },
+  ideas: { name: 'Video ideas', icon: 'Lightbulb', blurb: 'Fifteen ideas, each with its angle, hook, format and the research that says it should work.', askFor: 'A theme, a product to push, or nothing at all.' },
+  hooks: { name: 'Hooks', icon: 'Anchor', blurb: 'Twenty opening lines in the patterns the outliers used, grouped by type, each with why it works.', askFor: 'The topic of the video the hooks are for.' },
+  script: { name: 'Short-form script', icon: 'Clapperboard', blurb: 'A 30 to 60 second script: the hook, the setup, the payoff, the call to action. Remix a winner, start from scratch, or fix a draft.', askFor: 'The idea, or paste a draft to fix, or name the research item to remix.' },
+  post: { name: 'Posts and captions', icon: 'PenLine', blurb: 'Captions and threads ready to post, one per platform you name.', askFor: 'What the post is about and which platforms.' },
+  playbook: { name: 'What is working', icon: 'BookBookmark', blurb: 'The patterns behind the winners: hook types, structures, lengths and topics, counted, each with the video that shows it, and what to copy and what to skip.', askFor: 'The platform and format you want the patterns for, like YouTube Shorts under a minute.' },
+  analysis: { name: 'Why it worked', icon: 'FlaskConical', blurb: 'One video or post taken apart: the hook, the structure, the format, the style, and what to take from it.', askFor: 'Which research item to take apart, or paste the transcript.' },
 };
 
 export interface Brand {
@@ -3997,6 +4066,11 @@ export interface FinanceSummary {
   dues: FinanceDue[];
   owedToMeCents: number;
   iOweCents: number;
+  /**
+   * Agency invoices sent and not yet paid, owed to the person, one line a currency (whole cents, never mixed across currencies), with how
+   * many and how many are past their due day. A paid one is already income in the transactions; a draft or a void one is not owed.
+   */
+  owedToYou: { currency: string; cents: number; count: number; overdue: number }[];
   recurring: FinanceRecurring[];
   goals: FinanceGoal[];
 }
@@ -4041,16 +4115,16 @@ export function money(cents: number, currency = 'INR'): string {
  * who make content. Up to ten can be on at once. Circles seat people whose interests fit: the same ones, or pairs that gel.
  */
 export const INTEREST_GROUPS = [
-  { key: 'creative', name: 'Creative', emoji: '🎨', options: ['Photography', 'Video', 'Writing', 'Art & design', 'Music making', 'Dance', 'Comedy', 'Film making', 'Podcasting', 'Fashion'] },
-  { key: 'sport', name: 'Sport & fitness', emoji: '🏃', options: ['Gym', 'Running', 'Yoga', 'Football', 'Cricket', 'Basketball', 'Badminton', 'Cycling', 'Swimming', 'Hiking'] },
-  { key: 'food', name: 'Food & drink', emoji: '🍜', options: ['Cooking', 'Baking', 'Coffee', 'Tea', 'Street food', 'Trying new places'] },
-  { key: 'music', name: 'Music & nights out', emoji: '🎧', options: ['Live music', 'Hip hop', 'Indie', 'Pop', 'Bollywood', 'Karaoke', 'Open mics', 'Festivals'] },
-  { key: 'screens', name: 'Screens & pages', emoji: '🎮', options: ['Gaming', 'Anime', 'Movies', 'Series', 'Books', 'Comics', 'Board games'] },
-  { key: 'outdoors', name: 'Travel & outdoors', emoji: '🏕️', options: ['Travel', 'Road trips', 'Beaches', 'Camping', 'Nature', 'Stargazing'] },
-  { key: 'learning', name: 'Learning & tech', emoji: '💡', options: ['Tech', 'Coding', 'Science', 'Finance', 'Business', 'Languages', 'History'] },
-  { key: 'wellness', name: 'Wellness & mind', emoji: '🌿', options: ['Meditation', 'Journaling', 'Spirituality', 'Sleep', 'Mental health', 'Skincare'] },
-  { key: 'causes', name: 'Causes & community', emoji: '🤝', options: ['Volunteering', 'Climate', 'Animals', 'Education', 'Social causes', 'Mentoring'] },
-  { key: 'home', name: 'Home & life', emoji: '🏠', options: ['Plants', 'Pets', 'Parenting', 'DIY', 'Thrifting', 'Cars & bikes'] },
+  { key: 'creative', name: 'Creative', icon: 'Palette', options: ['Photography', 'Video', 'Writing', 'Art & design', 'Music making', 'Dance', 'Comedy', 'Film making', 'Podcasting', 'Fashion'] },
+  { key: 'sport', name: 'Sport & fitness', icon: 'Dumbbell', options: ['Gym', 'Running', 'Yoga', 'Football', 'Cricket', 'Basketball', 'Badminton', 'Cycling', 'Swimming', 'Hiking'] },
+  { key: 'food', name: 'Food & drink', icon: 'UtensilsCrossed', options: ['Cooking', 'Baking', 'Coffee', 'Tea', 'Street food', 'Trying new places'] },
+  { key: 'music', name: 'Music & nights out', icon: 'EighthNotes', options: ['Live music', 'Hip hop', 'Indie', 'Pop', 'Bollywood', 'Karaoke', 'Open mics', 'Festivals'] },
+  { key: 'screens', name: 'Screens & pages', icon: 'Gamepad2', options: ['Gaming', 'Anime', 'Movies', 'Series', 'Books', 'Comics', 'Board games'] },
+  { key: 'outdoors', name: 'Travel & outdoors', icon: 'Tent', options: ['Travel', 'Road trips', 'Beaches', 'Camping', 'Nature', 'Stargazing'] },
+  { key: 'learning', name: 'Learning & tech', icon: 'Lightbulb', options: ['Tech', 'Coding', 'Science', 'Finance', 'Business', 'Languages', 'History'] },
+  { key: 'wellness', name: 'Wellness & mind', icon: 'Leaf', options: ['Meditation', 'Journaling', 'Spirituality', 'Sleep', 'Mental health', 'Skincare'] },
+  { key: 'causes', name: 'Causes & community', icon: 'HandHelping', options: ['Volunteering', 'Climate', 'Animals', 'Education', 'Social causes', 'Mentoring'] },
+  { key: 'home', name: 'Home & life', icon: 'House', options: ['Plants', 'Pets', 'Parenting', 'DIY', 'Thrifting', 'Cars & bikes'] },
 ] as const;
 export type InterestGroup = (typeof INTEREST_GROUPS)[number];
 export type Interest = InterestGroup['options'][number];
@@ -4263,12 +4337,12 @@ export interface CircleGroup {
 
 export type LifeAreaKey = 'physical' | 'financial' | 'emotional' | 'mental' | 'spiritual';
 
-export const LIFE_AREAS: Record<LifeAreaKey, { name: string; emoji: string; blurb: string; path: string; relationship: RelationshipKey }> = {
-  physical: { name: 'Physical', emoji: '🏃', blurb: 'Sleep, movement and breath.', path: '/wellbeing', relationship: 'self' },
-  financial: { name: 'Financial', emoji: '💰', blurb: 'What comes in, what goes out, where you are heading.', path: '/finance', relationship: 'servant_leader' },
-  emotional: { name: 'Emotional', emoji: '💛', blurb: 'Mood, what you wrote, and the people pillars.', path: '/mood', relationship: 'lover_partner' },
-  mental: { name: 'Mental', emoji: '🧠', blurb: 'Stress, focus, and what you are learning.', path: '/stress', relationship: 'guru' },
-  spiritual: { name: 'Spiritual', emoji: '✨', blurb: 'Stillness, awe, and the top two pillars.', path: '/mindful', relationship: 'divine' },
+export const LIFE_AREAS: Record<LifeAreaKey, { name: string; icon: IconName; blurb: string; path: string; relationship: RelationshipKey }> = {
+  physical: { name: 'Physical', icon: 'Activity', blurb: 'Sleep, movement and breath.', path: '/wellbeing', relationship: 'self' },
+  financial: { name: 'Financial', icon: 'Wallet', blurb: 'What comes in, what goes out, where you are heading.', path: '/finance', relationship: 'servant_leader' },
+  emotional: { name: 'Emotional', icon: 'Heart', blurb: 'Mood, what you wrote, and the people pillars.', path: '/mood', relationship: 'lover_partner' },
+  mental: { name: 'Mental', icon: 'Brain', blurb: 'Stress, focus, and what you are learning.', path: '/stress', relationship: 'guru' },
+  spiritual: { name: 'Spiritual', icon: 'Sparkles', blurb: 'Stillness, awe, and the top two pillars.', path: '/mindful', relationship: 'divine' },
 };
 
 export interface LifePart {
@@ -4642,6 +4716,13 @@ export interface SearchResults {
   tools: { id: string; title: string; category: string }[];
   posts: { id: string; body: string; authorName: string }[];
   clubs: { id: string; title: string; city: string }[];
+  /** Agency, the person's own only and only while Agency is on for them. `client` is the client's name, when the record has one. */
+  agencyClients: { id: string; title: string; status: string }[];
+  agencyInvoices: { id: string; title: string; client: string; status: string }[];
+  agencyContracts: { id: string; title: string; client: string; status: string }[];
+  agencyDocs: { id: string; title: string; client: string; status: string }[];
+  /** Channels by name or topic: Community's open ones (while Community is on) and the Bond ones the person is in (while Bond is on). Never the lines. */
+  channels: { id: string; title: string; topic: string; scope: 'community' | 'bond' }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -4917,12 +4998,12 @@ export interface Application {
 export const EVENT_TYPES = ['meetup', 'party', 'workshop', 'camp', 'day'] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
-export const EVENT_TYPE_META: Record<EventType, { name: string; emoji: string; staffOnly: boolean }> = {
-  meetup: { name: 'Meetup', emoji: '☕', staffOnly: false },
-  party: { name: 'Party', emoji: '🎉', staffOnly: true },
-  workshop: { name: 'Workshop', emoji: '🛠️', staffOnly: true },
-  camp: { name: 'Camp', emoji: '⛺', staffOnly: true },
-  day: { name: 'Kreators Day', emoji: '🌞', staffOnly: true },
+export const EVENT_TYPE_META: Record<EventType, { name: string; icon: IconName; staffOnly: boolean }> = {
+  meetup: { name: 'Meetup', icon: 'Coffee', staffOnly: false },
+  party: { name: 'Party', icon: 'PartyPopper', staffOnly: true },
+  workshop: { name: 'Workshop', icon: 'Hammer', staffOnly: true },
+  camp: { name: 'Camp', icon: 'Tent', staffOnly: true },
+  day: { name: 'Kreators Day', icon: 'Sun', staffOnly: true },
 };
 
 export interface PartyEvent {
@@ -5373,6 +5454,34 @@ export const LISTING_TYPE_META: Record<ListingType, ListingTypeMeta> = {
 };
 export const LISTING_TYPES = Object.keys(LISTING_TYPE_META) as ListingType[];
 
+/**
+ * What a fact on a listing card is about. The server names the kind; the card picks the look from `FACT_KIND_META`,
+ * so "Free", "Online", "closes 4 Nov" and "Verified" never look like the same grey chip.
+ */
+export const FACT_KINDS = ['price', 'free', 'place', 'online', 'when', 'availability', 'verified', 'category', 'status'] as const;
+export type FactKind = (typeof FACT_KINDS)[number];
+export interface ListingFact {
+  kind: FactKind;
+  text: string;
+}
+/** The tone and the icon each kind of fact wears. The word is always shown too, so colour and icon are never the only sign. */
+export const FACT_KIND_META: Record<FactKind, { tone: TagTone; icon: IconName; name: string }> = {
+  price: { tone: 'warn', icon: 'Coins', name: 'Price or pay' },
+  free: { tone: 'good', icon: 'Gift', name: 'Free' },
+  place: { tone: 'warm', icon: 'Map', name: 'Where' },
+  online: { tone: 'info', icon: 'Globe', name: 'Online' },
+  when: { tone: 'calm', icon: 'CalendarClock', name: 'When' },
+  availability: { tone: 'deep', icon: 'Users', name: 'Places left' },
+  verified: { tone: 'good', icon: 'BadgeCheck', name: 'Checked' },
+  category: { tone: 'neutral', icon: 'Tag', name: 'Kind' },
+  status: { tone: 'info', icon: 'Flag', name: 'Status' },
+};
+/** One fact, or nothing when its text is empty (so a producer can write `fact('place', r.venue)` and drop the blanks). */
+export function fact(kind: FactKind, text: string | null | undefined): ListingFact[] {
+  const t = (text ?? '').trim();
+  return t ? [{ kind, text: t }] : [];
+}
+
 export interface Listing {
   type: ListingType;
   id: string;
@@ -5380,8 +5489,8 @@ export interface Listing {
   /** Who it is from: a brand, a host, the team. */
   by: string;
   blurb: string;
-  /** Short facts shown as chips: pay, dates, place. */
-  facts: string[];
+  /** Short facts shown as tags: pay, dates, place. Each says what kind of fact it is, so it can look like what it means. */
+  facts: ListingFact[];
   /** The page inside the app. */
   path: string;
   featured: boolean;
@@ -5639,7 +5748,7 @@ export function earningGuide(): { title: string; lines: EarningLine[] }[] {
     title: 'Badges',
     lines: BADGE_FAMILIES.map((f) => {
       const own = BADGES.filter((b) => b.family === f);
-      return { what: `${own[0]?.emoji ?? ''} ${f}`, pays: `${own.length} badges, no xp`, how: BADGE_FAMILY_META[f].blurb };
+      return { what: f, pays: `${own.length} badges, no xp`, how: BADGE_FAMILY_META[f].blurb };
     }),
   },
   ];
@@ -5911,6 +6020,7 @@ export const TERMS: Record<string, string> = {
   deliverable: 'One item of content you make for a client: a video, a post, a script, a newsletter. It moves from idea to published.',
   'client link': 'A page you can share with a client. They see what is waiting for them and can approve it or send it back. Nothing else.',
   utilisation: 'The share of your working hours that you spent on work a client pays for.',
+  paperwork: 'In Agency, the invoices, agreements and other documents you send a client, kept in one place.',
   'first pass': 'A piece the client approved without sending it back.',
   trust: 'A score out of 100 from what a seller earned here: xp, points, streaks, time, sales and honors.',
   featured: 'A week at the top of the Store or Tools. Staff give it; a seller pays 200 points.',
@@ -5983,7 +6093,7 @@ export const TERM_GROUPS: { name: string; terms: string[] }[] = [
   { name: 'Daily and progress', terms: ['small act', 'check-in', 'daily three', 'do date', 'due date', 'priority', 'habit', 'subtask', 'remember', 'not scheduled', 'daily brief', 'not-to-do', 'kept day', 'streak', 'xp', 'points', 'level', 'who you are becoming', 'life score', 'five areas of life', 'period', 'review', 'season'] },
   { name: 'You and your page', terms: ['strength', 'personality type', 'love language', 'signs', 'human design', 'gate', 'channel', 'sidereal', 'numerology', 'master number', 'username', 'identity tag', 'setup chat', 'public page', 'badge', 'honor', 'trust', 'unlock'] },
   { name: 'Friends and community', terms: ['friend code', 'chat channel', 'alias', 'circle', 'reaction', 'mention', 'guide', 'life coach', 'student', 'change log', 'run club', 'start code', 'attendee code', 'deck', 'focus mode', 'focus session'] },
-  { name: 'Learn and earn', terms: ['cohort', 'campaign', 'bounty', 'Club', 'collab', 'giveaway', 'retainer', 'deliverable', 'client link', 'utilisation', 'first pass', 'plan strength', 'pace'] },
+  { name: 'Learn and earn', terms: ['cohort', 'campaign', 'bounty', 'Club', 'collab', 'giveaway', 'retainer', 'deliverable', 'client link', 'utilisation', 'paperwork', 'first pass', 'plan strength', 'pace'] },
   { name: 'Shop and store', terms: ['featured', 'partner link', 'pre-owned', 'kit', 'offer', 'discount code'] },
   { name: 'Content', terms: ['brand folder', 'outlier', 'hook', 'piece'] },
   { name: 'Assistant and plans', terms: ['bumling', 'assistant', 'Pro', 'credits', 'top-up'] },
@@ -6121,9 +6231,9 @@ export const HOW_TO: Record<string, HowTo> = {
       'Every deliverable is one piece of content and has a stage: idea, script, making, review, approved, published. Move it along as you work; it has a due date and a day to go live.',
       'Switch on a client link and the client can open one page, read what is waiting for them and approve it or send it back with a note. They never see your fees, hours or notes.',
       'Log the time you spend. The page shows hours this month against what the client pays for, and your week against the hours you set.',
-      'Make an invoice from a client page for the retainer and the deliverables you finished. Reviews can show these numbers as business metrics if you switch that on.',
+      'Paperwork holds your invoices, agreements and other documents. Make an invoice from a client page for the retainer and the pieces you finished. Your business details and templates sit under the gear, Agency settings. Reviews can show these numbers as business metrics if you switch that on.',
     ],
-    terms: ['retainer', 'deliverable', 'client link', 'utilisation'],
+    terms: ['retainer', 'deliverable', 'client link', 'utilisation', 'paperwork'],
   },
   party: {
     steps: [
@@ -7115,9 +7225,34 @@ export interface BriefFacts {
   apps: readonly string[];
   /** What Discover taught the app, when the person took it and allows next steps to use it. profile is null when they have not, or switched it off. */
   discover?: { taken: boolean; profile: DiscoverProfile | null; extras?: ExtrasProfile | null };
+  /**
+   * Agency, read only while Agency is on: changes clients asked for that still wait (a piece sent back to making, with its
+   * `change` note in the last fortnight), `changeClientId` when they are all one client's; and a retainer month made today.
+   */
+  agency?: {
+    changeAsks: number;
+    changeClientId: string | null;
+    monthMade: { clientId: string; clientName: string; n: number } | null;
+    /** Pieces due on the person's day (or before) and not yet approved, and the client when they are all one client's. */
+    piecesDueToday?: number;
+    piecesClientId?: string | null;
+    /** Sent invoices past their due day. */
+    invoicesOverdue?: number;
+    /** Retainers a client chose that wait for the owner to confirm, and the client when there is one. */
+    retainerChosen?: { clientId: string; clientName: string } | null;
+    retainersChosen?: number;
+    /** Agreements sent and not yet signed. */
+    agreementsUnsigned?: number;
+  };
+  /** Unread lines in the channels the person is in (Community and Bond, only the apps that are on), and `to` when they are all in one channel. */
+  channels?: { unread: number; to: string | null };
 }
 
 const BRIEF_SIZE = 3;
+/** Hours of sleep a night (the week's average) under which the brief suggests a Yourself pillar step. */
+export const BRIEF_SLEEP_LOW = 6.5;
+/** The week's average mood (1 to 5) at or under which the brief suggests a Friends pillar step. */
+export const BRIEF_MOOD_LOW = 2.5;
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const one1 = (n: number) => Math.round(n * 10) / 10;
 
@@ -7146,6 +7281,17 @@ export function briefFor(f: BriefFacts): { signals: BriefLine[]; actions: BriefL
   if (f.nextEvent) sig(68, 'event', 'neutral', `${f.nextEvent.title} is ${f.nextEvent.when}.`, f.nextEvent.to);
   if (f.coachNotes > 0) sig(72, 'coach-note', 'neutral', f.coachNotes === 1 ? 'Your life coach left you a note.' : `Your life coach left you ${f.coachNotes} notes.`, '/coaching');
   if (f.coachAsks > 0) sig(74, 'coach-ask', 'neutral', f.coachAsks === 1 ? 'A life coach asked to work with you.' : `${f.coachAsks} life coaches asked to work with you.`, '/you#coach');
+  const ag = on('agency') ? f.agency : undefined;
+  const agTo = ag?.changeClientId ? `/agency/${ag.changeClientId}` : '/agency';
+  if (ag && ag.changeAsks > 0) sig(78, 'agency-change', 'watch', ag.changeAsks === 1 ? 'A client asked for a change to a piece.' : `Clients asked for ${ag.changeAsks} changes to pieces.`, agTo);
+  if (ag?.retainersChosen && ag.retainersChosen > 0)
+    sig(82, 'agency-retainer', 'watch', ag.retainersChosen === 1 && ag.retainerChosen ? `${ag.retainerChosen.clientName} chose a retainer. Confirm it to start.` : `${plural(ag.retainersChosen, 'client')} chose a retainer. Confirm to start.`, ag.retainersChosen === 1 && ag.retainerChosen ? `/agency/${ag.retainerChosen.clientId}` : '/agency');
+  if (ag?.piecesDueToday && ag.piecesDueToday > 0) sig(76, 'agency-due', 'watch', `${plural(ag.piecesDueToday, 'piece')} for clients ${ag.piecesDueToday === 1 ? 'is' : 'are'} due today or late.`, ag.piecesClientId ? `/agency/${ag.piecesClientId}` : '/today');
+  if (ag?.invoicesOverdue && ag.invoicesOverdue > 0) sig(73, 'agency-invoice', 'watch', `${plural(ag.invoicesOverdue, 'invoice')} ${ag.invoicesOverdue === 1 ? 'is' : 'are'} past due.`, '/agency?tab=invoices');
+  if (ag?.agreementsUnsigned && ag.agreementsUnsigned > 0) sig(52, 'agency-agreement', 'neutral', `${plural(ag.agreementsUnsigned, 'agreement')} sent and not signed yet.`, '/agency?tab=agreements');
+  if (ag?.monthMade) sig(62, 'agency-month', 'good', `Month ${ag.monthMade.n} for ${ag.monthMade.clientName} is set up: its pieces and its invoice.`, `/agency/${ag.monthMade.clientId}`);
+  const ch = on('community') || on('bond') ? f.channels : undefined;
+  if (ch && ch.unread > 0) sig(42, 'channels', 'neutral', `${plural(ch.unread, 'new line')} in your channels.`, ch.to ?? (on('community') ? '/community?tab=channels' : '/bond#bond-channels'));
   sig(10, 'level', 'neutral', `Level ${f.level}. ${f.xpToNext} xp to the next one.`, '/you');
 
   if (!f.checkedIn) act(100, 'checkin', 'Check in on Daily. It keeps your streak.', '/today');
@@ -7153,11 +7299,20 @@ export function briefFor(f: BriefFacts): { signals: BriefLine[]; actions: BriefL
   if (!f.smallActDone) act(80, 'act', 'Do today’s small act. It takes a minute.', '/today');
   if (f.coachAsks > 0) act(88, 'coach-ask', 'Answer the coach who asked: yes or no, on your Profile tab.', '/you#coach');
   if (f.coachNotes > 0 && on('coaching')) act(76, 'coach-note', 'Read your coach’s note.', '/coaching');
+  if (ag && ag.changeAsks > 0) act(74, 'agency-change', ag.changeAsks === 1 ? 'Make the change your client asked for, then send the piece back for review.' : 'Work through the changes your clients asked for.', agTo);
+  if (ag?.retainersChosen && ag.retainersChosen > 0) act(86, 'agency-retainer', 'Confirm the retainer your client chose, so its first month is made.', ag.retainersChosen === 1 && ag.retainerChosen ? `/agency/${ag.retainerChosen.clientId}` : '/agency');
+  if (ag?.piecesDueToday && ag.piecesDueToday > 0) act(78, 'agency-due', ag.piecesDueToday === 1 ? 'Finish the client piece due today and send it for review.' : 'Work through the client pieces due today, oldest first.', '/today');
+  if (ag?.invoicesOverdue && ag.invoicesOverdue > 0) act(68, 'agency-invoice', 'Send a reminder for the invoice past due, or mark it paid if it came in.', '/agency?tab=invoices');
   if (f.tasksOverdue > 0) act(70, 'overdue', 'Move or finish the tasks past their day.', '/tower');
   if (f.reviewDue && on('reviews')) act(65, 'review', 'Write last week’s review. Five minutes, and the numbers are filled in.', '/reviews');
   if (f.stressAvg !== null && f.stressAvg >= 4 && on('mindful')) act(72, 'breathe', 'Take five minutes with the breathing timer.', '/mindful');
   if (f.sleepAvg !== null && f.sleepAvgBefore !== null && f.sleepAvg < f.sleepAvgBefore - 0.5 && on('sleep')) act(60, 'sleep', 'Log tonight’s sleep, and aim for lights out on time.', '/sleep');
   if (f.nextEvent) act(55, 'event', `Check the plan for ${f.nextEvent.title}.`, f.nextEvent.to);
+  // Wellbeing feeds the pillars (the owner's own numbers, for the owner's own brief): a short-sleep week, a low mood week or a high-stress
+  // week each suggest one step in the pillar that looks after it. Rules only; the numbers never leave this brief.
+  if (f.sleepAvg !== null && f.sleepAvg < BRIEF_SLEEP_LOW) act(57, 'pillar-sleep', `Under ${BRIEF_SLEEP_LOW} hours a night this week. Add one task to your Yourself pillar: lights out at the same time three nights running.`, '/realm/self');
+  if (f.moodAvg !== null && f.moodAvg <= BRIEF_MOOD_LOW) act(56, 'pillar-mood', 'A low week for your mood. Add one task to your Friends pillar: see or call one friend this week.', '/realm/friendship');
+  if (f.stressAvg !== null && f.stressAvg >= 4 && !on('mindful')) act(56, 'pillar-stress', 'Stress has been high. Add one task to your Yourself pillar: ten minutes outside, phone away, each day this week.', '/realm/self');
   // Next steps that emerge from what Discover learned about this person: their quietest strength, and the shape of their traits.
   const d = f.discover;
   if (d && !d.taken && on('discover')) act(48, 'discover', 'Take the Discover quiz: puzzles, personality and strengths. Your next steps get personal.', '/discover');
@@ -7549,20 +7704,6 @@ export function identityLine(a: SetupAnswers): string {
   return `${s.charAt(0).toUpperCase()}${s.slice(1)}.`;
 }
 
-/** The goals in the order that fits these tags: the ones a tag or a pair points at come first. */
-export function goalsFor(identities: readonly string[]): SetupGoal[] {
-  const tags = identities.map((k) => IDENTITY_BY_KEY[k]).filter((o): o is IdentityOption => Boolean(o));
-  const fit = (g: SetupGoal) => {
-    let f = 0;
-    for (const t of tags) for (const [app, w] of Object.entries(g.apps)) f += Math.min(w, t.apps[app] ?? 0);
-    for (const c of SETUP_COMBOS) if (c.when.includes(g.key) && c.when.some((k) => identities.includes(k))) f += 3;
-    return f;
-  };
-  return SETUP_GOALS.map((g, i) => ({ g, i, f: fit(g) }))
-    .sort((x, y) => y.f - x.f || x.i - y.i)
-    .map((x) => x.g);
-}
-
 /**
  * The one matching rule. Every tag, goal and thing in the way weighs the apps (a goal counts double), every pair
  * in SETUP_COMBOS that is all there adds its own weight, and the apps that clear SETUP_PASS come on, best first,
@@ -7938,10 +8079,11 @@ export const PAYMENTS_LIVE = false;
 export const MAX_CREDIT_GRANT = 1_000_000;
 
 /** The agents that spend credits. More join this list as they move onto a model. */
-export const AGENTS = ['assistant'] as const;
+export const AGENTS = ['assistant', 'feelings'] as const;
 export type AgentKey = (typeof AGENTS)[number];
 export const AGENT_META: Readonly<Record<AgentKey, { name: string; blurb: string }>> = {
   assistant: { name: 'Assistant', blurb: 'Does things in the app when you type what you want.' },
+  feelings: { name: 'Feelings reader', blurb: 'Reads your own words in the strategy session and suggests levels on the map. Only a model that keeps nothing.' },
 };
 export interface AgentLimit {
   /** How much the agent reads per message, in tokens: its own rules, its tools, the chat so far and what it looks up. */
@@ -7955,9 +8097,10 @@ export interface AgentLimit {
 }
 /** Each plan's limits, per agent. One place to change them. */
 export const AGENT_LIMITS: Readonly<Record<PaidPlan, Record<AgentKey, AgentLimit>>> = {
-  pro: { assistant: { contextTokens: 16_000, perMessage: 60, perDay: 1_000, steps: 6 } },
-  pro_max: { assistant: { contextTokens: 64_000, perMessage: 250, perDay: 8_000, steps: 10 } },
-  ultra: { assistant: { contextTokens: 128_000, perMessage: 600, perDay: 30_000, steps: 12 } },
+  // The feelings reader reads one short line and answers with numbers: one step, a small context, a few credits.
+  pro: { assistant: { contextTokens: 16_000, perMessage: 60, perDay: 1_000, steps: 6 }, feelings: { contextTokens: 2_000, perMessage: 10, perDay: 200, steps: 1 } },
+  pro_max: { assistant: { contextTokens: 64_000, perMessage: 250, perDay: 8_000, steps: 10 }, feelings: { contextTokens: 3_000, perMessage: 20, perDay: 800, steps: 1 } },
+  ultra: { assistant: { contextTokens: 128_000, perMessage: 600, perDay: 30_000, steps: 12 }, feelings: { contextTokens: 4_000, perMessage: 40, perDay: 2_000, steps: 1 } },
 };
 /** About what one assistant message costs, to say how far credits go. A guess, and said as one. */
 export const TYPICAL_MESSAGE_CREDITS = 12;
@@ -8177,41 +8320,47 @@ export const DISCOVER_WORDS: readonly (readonly DiscoverWord[])[] = [
 
 export interface DiscoverScene {
   situation: string;
-  /** The options, as people read them. */
+  /** The options, as people read them. How effective each one is lives on the server only (`DiscoverKeys`). */
   options: readonly string[];
-  /** How effective each option is, 1 (least) to 4 (most), from the team's own reading of the situation. */
-  key: readonly number[];
+}
+
+/**
+ * The answer keys for the situations and the emotional intelligence scenes: how effective each option is, 1 (least) to 4 (most),
+ * and which feeling a reading scene shows. They live on the server only (apps/api/src/discoverKeys.ts), so the web bundle never
+ * carries them and nobody can read the best answers out of the page; the scoring takes them as an argument.
+ */
+export interface DiscoverKeys {
+  /** One per DISCOVER_SCENES entry, in order: the effectiveness of each option. */
+  scenes: readonly (readonly number[])[];
+  /** One per EQ_READING scene: the index of the right feeling. */
+  reading: readonly number[];
+  /** One per EQ_PEOPLE situation: the effectiveness of each option. */
+  people: readonly (readonly number[])[];
 }
 export const DISCOVER_SCENES: readonly DiscoverScene[] = [
   {
     situation: 'A brand asks you to redo a video you thought was finished. You think the notes are unfair. What would you do?',
     options: ['Redo it quickly and say nothing, to keep them happy.', 'Ask what the main goal is, fix the notes that serve it and explain the ones that do not.', 'Tell them the video was fine and the notes are wrong.', 'Thank them, say you will review it, and reply tomorrow with what you can do.'],
-    key: [2, 4, 1, 3],
   },
   {
     situation: 'A close friend keeps cancelling plans at the last minute, and you feel hurt. What would you do?',
     options: ['Stop inviting them.', 'Tell them kindly that it hurts and ask what is going on.', 'Keep making plans and say it is fine, even though it is not.', 'Suggest a smaller, easier plan and see how they respond.'],
-    key: [1, 4, 2, 3],
   },
   {
     situation: 'A teammate presents your idea in a meeting as if it were theirs. What would you do?',
     options: ['Say in the meeting, “Glad you liked my idea.”', 'Talk to them privately, say what you noticed and ask them to credit you next time.', 'Let it go. It does not matter.', 'Share your next idea in writing with the whole team first.'],
-    key: [2, 4, 1, 3],
   },
   {
     situation: 'Your partner says you are always on your phone. You are in the middle of a launch and stressed. What would you do?',
     options: ['Say you are busy and it will pass.', 'Agree it is true, say when the launch ends and set one phone-free hour each evening.', 'Snap: “I am doing this for us.”', 'Put the phone away for the night but feel resentful.'],
-    key: [2, 4, 1, 3],
   },
   {
     situation: 'A younger sibling asks for help just as you are up against a deadline. What would you do?',
     options: ['Say “not now” and close the door.', 'Stop work and help for a long time, then rush the deadline.', 'Say you can give ten minutes now and a full hour once you have finished.', 'Pass them on to someone else.'],
-    key: [1, 2, 4, 3],
   },
   {
     situation: 'A mentor gives you harsh but useful feedback on your work. What would you do?',
     options: ['Defend each point.', 'Thank them, write the points down and pick one to act on this week.', 'Take it all in and change a few things right away.', 'Feel hurt and avoid them for a while.'],
-    key: [2, 4, 3, 1],
   },
 ];
 
@@ -8457,25 +8606,25 @@ export const EQ_FEELINGS: readonly (readonly { dim: EqDim; sign: 1 | -1; text: s
 export const EQ_SCALE = ['Not like me', 'A little like me', 'Somewhat like me', 'Quite like me', 'Very like me'] as const;
 
 /** Six short scenes: what is the person feeling? */
-export const EQ_READING: readonly { scene: string; options: readonly string[]; key: number }[] = [
-  { scene: 'Sam goes quiet after being left out of a group chat, and says, “It’s fine.”', options: ['Excited', 'Hurt', 'Bored', 'Proud'], key: 1 },
-  { scene: 'Ana’s hands shake before she goes on stage, but she smiles and says she can’t wait.', options: ['Angry', 'Sad', 'Nervous and excited', 'Calm and sure'], key: 2 },
-  { scene: 'Ravi just won a small award. He looks around the room to see who noticed.', options: ['Guilty', 'Proud', 'Afraid', 'Bored'], key: 1 },
-  { scene: 'Mia snaps at everyone the day before an exam, then says sorry and sits alone.', options: ['Joyful', 'Jealous', 'Calm', 'Stressed'], key: 3 },
-  { scene: 'Leo hears his friend say, “Sorry, I forgot your birthday,” and looks at the floor.', options: ['Relieved', 'Disappointed', 'Amused', 'Proud'], key: 1 },
-  { scene: 'Priya is asked to lead the team and says yes quickly, then goes to wash her face.', options: ['Bored', 'Angry', 'Nervous and overwhelmed', 'Sad'], key: 2 },
+export const EQ_READING: readonly { scene: string; options: readonly string[] }[] = [
+  { scene: 'Sam goes quiet after being left out of a group chat, and says, “It’s fine.”', options: ['Excited', 'Hurt', 'Bored', 'Proud'] },
+  { scene: 'Ana’s hands shake before she goes on stage, but she smiles and says she can’t wait.', options: ['Angry', 'Sad', 'Nervous and excited', 'Calm and sure'] },
+  { scene: 'Ravi just won a small award. He looks around the room to see who noticed.', options: ['Guilty', 'Proud', 'Afraid', 'Bored'] },
+  { scene: 'Mia snaps at everyone the day before an exam, then says sorry and sits alone.', options: ['Joyful', 'Jealous', 'Calm', 'Stressed'] },
+  { scene: 'Leo hears his friend say, “Sorry, I forgot your birthday,” and looks at the floor.', options: ['Relieved', 'Disappointed', 'Amused', 'Proud'] },
+  { scene: 'Priya is asked to lead the team and says yes quickly, then goes to wash her face.', options: ['Bored', 'Angry', 'Nervous and overwhelmed', 'Sad'] },
 ];
 
-/** Eight situations, each tagged with the part it tests. Keyed 1 (least) to 4 (most effective) by the team. */
-export const EQ_PEOPLE: readonly { dim: EqDim; situation: string; options: readonly string[]; key: readonly number[] }[] = [
-  { dim: 'm', situation: 'You get harsh feedback on something you worked hard on, and your face goes hot. What do you do first?', options: ['Reply right away to defend yourself.', 'Take a breath, wait an hour, then read it again.', 'Quietly decide the person is wrong.', 'Agree with everything to end the talk.'], key: [1, 4, 2, 2] },
-  { dim: 'a', situation: 'You feel low all day for no clear reason. What helps most?', options: ['Scroll until it passes.', 'Push on and ignore it.', 'Stop, and ask what happened today and what you need.', 'Snap at someone to feel better.'], key: [1, 2, 4, 1] },
-  { dim: 'd', situation: 'Your video flops after weeks of work. What do you do?', options: ['Blame the algorithm.', 'Delete it and say nothing.', 'Quit the format.', 'Study what worked in better ones, change one thing and post again.'], key: [2, 2, 1, 4] },
-  { dim: 'e', situation: 'A friend cancels plans again and says they are “just tired”. Their voice sounds flat.', options: ['Tell them they are always flaky.', 'Say “fine” and move on.', 'Ask if something else is going on and offer a quieter plan.', 'Stop texting until they text first.'], key: [1, 2, 4, 2] },
-  { dim: 's', situation: 'Two people on your team argue, and both look at you.', options: ['Leave the room.', 'Tell them to stop.', 'Pick the side you like.', 'Let each finish, ask what each needs and look for the overlap.'], key: [2, 2, 1, 4] },
-  { dim: 'a', situation: 'You notice you have been short with your partner all week because of work stress.', options: ['Say sorry, explain the stress without blaming them and plan time together.', 'Hope they have not noticed.', 'Explain that work comes first.', 'Ask them to be more understanding.'], key: [4, 1, 2, 2] },
-  { dim: 'd', situation: 'You are two weeks into a new habit and miss a day.', options: ['Double it tomorrow to catch up.', 'Count the whole thing as failed.', 'Wait for next Monday to restart.', 'Note why you missed and do the next day as planned.'], key: [2, 1, 2, 4] },
-  { dim: 's', situation: 'Someone tells you something private and starts to cry.', options: ['Change the subject to cheer them up.', 'Offer a quick fix.', 'Stay with them, listen and say you are glad they told you.', 'Tell them it is not a big deal.'], key: [2, 3, 4, 1] },
+/** Eight situations, each tagged with the part it tests. Keyed 1 (least) to 4 (most effective) by the team, on the server (`DiscoverKeys`). */
+export const EQ_PEOPLE: readonly { dim: EqDim; situation: string; options: readonly string[] }[] = [
+  { dim: 'm', situation: 'You get harsh feedback on something you worked hard on, and your face goes hot. What do you do first?', options: ['Reply right away to defend yourself.', 'Take a breath, wait an hour, then read it again.', 'Quietly decide the person is wrong.', 'Agree with everything to end the talk.'] },
+  { dim: 'a', situation: 'You feel low all day for no clear reason. What helps most?', options: ['Scroll until it passes.', 'Push on and ignore it.', 'Stop, and ask what happened today and what you need.', 'Snap at someone to feel better.'] },
+  { dim: 'd', situation: 'Your video flops after weeks of work. What do you do?', options: ['Blame the algorithm.', 'Delete it and say nothing.', 'Quit the format.', 'Study what worked in better ones, change one thing and post again.'] },
+  { dim: 'e', situation: 'A friend cancels plans again and says they are “just tired”. Their voice sounds flat.', options: ['Tell them they are always flaky.', 'Say “fine” and move on.', 'Ask if something else is going on and offer a quieter plan.', 'Stop texting until they text first.'] },
+  { dim: 's', situation: 'Two people on your team argue, and both look at you.', options: ['Leave the room.', 'Tell them to stop.', 'Pick the side you like.', 'Let each finish, ask what each needs and look for the overlap.'] },
+  { dim: 'a', situation: 'You notice you have been short with your partner all week because of work stress.', options: ['Say sorry, explain the stress without blaming them and plan time together.', 'Hope they have not noticed.', 'Explain that work comes first.', 'Ask them to be more understanding.'] },
+  { dim: 'd', situation: 'You are two weeks into a new habit and miss a day.', options: ['Double it tomorrow to catch up.', 'Count the whole thing as failed.', 'Wait for next Monday to restart.', 'Note why you missed and do the next day as planned.'] },
+  { dim: 's', situation: 'Someone tells you something private and starts to cry.', options: ['Change the subject to cheer them up.', 'Offer a quick fix.', 'Stay with them, listen and say you are glad they told you.', 'Tell them it is not a big deal.'] },
 ];
 
 // ---- the eight parts, the answers and the scoring ----
@@ -8658,7 +8807,7 @@ export function puzzleSummary(a: DiscoverAnswers): NonNullable<DiscoverResult['p
 }
 
 /** Emotional intelligence: each part is half how you see yourself and half how you chose in the situations (and, for reading people, the scenes). */
-export function scoreEq(a: DiscoverAnswers): EqResult {
+export function scoreEq(a: DiscoverAnswers, keys: DiscoverKeys): EqResult {
   const self: Record<EqDim, number[]> = { a: [], m: [], d: [], e: [], s: [] };
   EQ_FEELINGS.forEach((screen, i) =>
     screen.forEach((item, k) => {
@@ -8669,9 +8818,10 @@ export function scoreEq(a: DiscoverAnswers): EqResult {
   const sj: Record<EqDim, number[]> = { a: [], m: [], d: [], e: [], s: [] };
   EQ_PEOPLE.forEach((q, i) => {
     const pick = a.people[i];
-    if (pick) sj[q.dim].push(((q.key[pick.most]! - q.key[pick.least]! + 3) / 6) * 100);
+    const key = keys.people[i];
+    if (pick && key) sj[q.dim].push(((key[pick.most]! - key[pick.least]! + 3) / 6) * 100);
   });
-  const readRight = EQ_READING.filter((q, i) => a.reading[i] === q.key).length;
+  const readRight = EQ_READING.filter((_, i) => keys.reading[i] !== undefined && a.reading[i] === keys.reading[i]).length;
   const dims = Object.fromEntries(
     EQ_DIMS.map((d) => {
       const s = mean(self[d.key]);
@@ -8692,7 +8842,7 @@ export function scoreEq(a: DiscoverAnswers): EqResult {
  * DISCOVER_WEIGHTS over those numbers. Emotional intelligence, when answered, is scored on its own (scoreEq). No number
  * is compared with other people.
  */
-export function scoreDiscover(a: DiscoverAnswers): DiscoverResult {
+export function scoreDiscover(a: DiscoverAnswers, keys: DiscoverKeys): DiscoverResult {
   const raw: Record<Trait, number> = { o: 0, c: 0, e: 0, a: 0, s: 0 };
   const seen: Record<Trait, number> = { o: 0, c: 0, e: 0, a: 0, s: 0 };
   DISCOVER_TRIADS.forEach((ids, i) => {
@@ -8723,14 +8873,15 @@ export function scoreDiscover(a: DiscoverAnswers): DiscoverResult {
   const puzzles = puzzleSummary(a);
   const gap = DISCOVER_SCENES.reduce((n, s, i) => {
     const pick = a.scenes[i];
-    return pick ? n + (s.key[pick.most]! - s.key[pick.least]!) : n;
+    const key = keys.scenes[i];
+    return pick && key ? n + (key[pick.most]! - key[pick.least]!) : n;
   }, 0);
   const judgment = clamp100(((gap + 3 * DISCOVER_SCENES.length) / (6 * DISCOVER_SCENES.length)) * 100);
   const measures = { ...traits, p: puzzles.score, j: judgment };
   const strengths = (Object.keys(DISCOVER_WEIGHTS) as RelationshipKey[])
     .map((key) => ({ key, score: clamp100((Object.keys(measures) as (keyof typeof measures)[]).reduce((n, m) => n + DISCOVER_WEIGHTS[key][m] * measures[m], 0)) }))
     .sort((x, y) => y.score - x.score || x.key.localeCompare(y.key));
-  return { traits, puzzles, judgment, strengths, top: strengths.slice(0, 3).map((s) => s.key), growth: strengths[strengths.length - 1]!.key, ...(eqComplete(a) ? { eq: scoreEq(a) } : {}) };
+  return { traits, puzzles, judgment, strengths, top: strengths.slice(0, 3).map((s) => s.key), growth: strengths[strengths.length - 1]!.key, ...(eqComplete(a) ? { eq: scoreEq(a, keys) } : {}) };
 }
 
 // ---- the detailed analysis, written from a result: personality by trait and reasoning by kind of puzzle ----
@@ -8934,11 +9085,11 @@ export function analyseDiscover(result: DiscoverResult): DiscoverAnalysis {
 // and is owner only like the journal.
 
 export type ExtraKind = 'type' | 'love' | 'mind' | 'design';
-export const EXTRA_KINDS: readonly { key: ExtraKind; name: string; blurb: string; emoji: string; steps: number }[] = [
-  { key: 'type', name: '16 personality types', blurb: 'A free check in the style of the Myers-Briggs (MBTI) test. Twenty-four lines to rate give a four-letter type from sixteen, such as INFP or ESTJ, with how clear each side is and what it means for you.', emoji: '🧩', steps: 6 },
-  { key: 'love', name: 'Love languages', blurb: 'Twenty choices between two lines: ten about how you like to be shown love, ten about how you show it. They can differ, and the gap is useful.', emoji: '💞', steps: 20 },
-  { key: 'design', name: 'Human design', blurb: 'Enter your birth date, time and zone. It works out your chart in the tropical and the sidereal zodiac, reads it in three layers (body, mind, purpose) and turns it into goals you can do and count. A system for reflection, not science.', emoji: '🪐', steps: 1 },
-  { key: 'mind', name: 'How your mind works', blurb: 'Twenty-four lines on how often something is true: attention, energy and impulse, and patterns and senses. A self-check, never a diagnosis.', emoji: '🧠', steps: 6 },
+export const EXTRA_KINDS: readonly { key: ExtraKind; name: string; blurb: string; icon: IconName; steps: number }[] = [
+  { key: 'type', name: '16 personality types', blurb: 'A free check in the style of the Myers-Briggs (MBTI) test. Twenty-four lines to rate give a four-letter type from sixteen, such as INFP or ESTJ, with how clear each side is and what it means for you.', icon: 'Puzzle', steps: 6 },
+  { key: 'love', name: 'Love languages', blurb: 'Twenty choices between two lines: ten about how you like to be shown love, ten about how you show it. They can differ, and the gap is useful.', icon: 'Heart', steps: 20 },
+  { key: 'design', name: 'Human design', blurb: 'Enter your birth date, time and zone. It works out your chart in the tropical and the sidereal zodiac, reads it in three layers (body, mind, purpose) and turns it into goals you can do and count. A system for reflection, not science.', icon: 'Orbit', steps: 1 },
+  { key: 'mind', name: 'How your mind works', blurb: 'Twenty-four lines on how often something is true: attention, energy and impulse, and patterns and senses. A self-check, never a diagnosis.', icon: 'Brain', steps: 6 },
 ];
 export const isExtraKind = (v: unknown): v is ExtraKind => EXTRA_KINDS.some((k) => k.key === v);
 
@@ -9085,12 +9236,12 @@ export function analyseType(r: TypeResult): TypeAnalysis {
 
 export type LoveKey = 'words' | 'time' | 'gifts' | 'acts' | 'touch';
 export const LOVE_KEYS: readonly LoveKey[] = ['words', 'time', 'gifts', 'acts', 'touch'];
-export const LOVE_LANGUAGES: Record<LoveKey, { name: string; emoji: string; blurb: string; ask: string; give: string; watch: string; helps: RelationshipKey }> = {
-  words: { name: 'Words of affirmation', emoji: '💬', blurb: 'Kind, clear words tell you that you matter.', ask: 'Say: “It means a lot when you tell me what you like about me.”', give: 'Be specific. “Thank you for staying late, it helped me” lands better than “good job”.', watch: 'Harsh words cut deeper for you, and silence can feel like a no.', helps: 'friendship' },
-  time: { name: 'Quality time', emoji: '⏳', blurb: 'Full attention is how you feel close to someone.', ask: 'Say: “I would love an hour with just the two of us, phones away.”', give: 'Put the phone down and look at them. Ten full minutes beat a distracted evening.', watch: 'Cancelled plans and half-listening hurt more than people know.', helps: 'lover_partner' },
-  gifts: { name: 'Thoughtful gifts', emoji: '🎁', blurb: 'A small thing that shows someone thought of you means a lot.', ask: 'Say: “A little surprise that shows you thought of me makes my week.”', give: 'It is the thought, not the price. A note, a snack or a photo is enough.', watch: 'A forgotten day that matters to you can sting.', helps: 'parent_child' },
-  acts: { name: 'Acts of service', emoji: '🛠️', blurb: 'Help with a real job tells you someone cares.', ask: 'Say: “It would mean a lot if you took one job off my plate this week.”', give: 'Do the job they dread, without being asked, and do not keep score.', watch: 'Broken promises to help, or being left with everything, feel like neglect.', helps: 'servant_leader' },
-  touch: { name: 'Physical touch', emoji: '🤝', blurb: 'A hug, a hand or sitting close helps you feel safe and loved.', ask: 'Say: “A long hug really helps me when I am having a hard day.”', give: 'Ask or watch what they like. A hug, a hand on the shoulder or sitting close, only if it is welcome.', watch: 'Distance can feel like coldness. Always check what feels right to the other person.', helps: 'lover_partner' },
+export const LOVE_LANGUAGES: Record<LoveKey, { name: string; icon: IconName; blurb: string; ask: string; give: string; watch: string; helps: RelationshipKey }> = {
+  words: { name: 'Words of affirmation', icon: 'MessageCircle', blurb: 'Kind, clear words tell you that you matter.', ask: 'Say: “It means a lot when you tell me what you like about me.”', give: 'Be specific. “Thank you for staying late, it helped me” lands better than “good job”.', watch: 'Harsh words cut deeper for you, and silence can feel like a no.', helps: 'friendship' },
+  time: { name: 'Quality time', icon: 'Hourglass', blurb: 'Full attention is how you feel close to someone.', ask: 'Say: “I would love an hour with just the two of us, phones away.”', give: 'Put the phone down and look at them. Ten full minutes beat a distracted evening.', watch: 'Cancelled plans and half-listening hurt more than people know.', helps: 'lover_partner' },
+  gifts: { name: 'Thoughtful gifts', icon: 'Gift', blurb: 'A small thing that shows someone thought of you means a lot.', ask: 'Say: “A little surprise that shows you thought of me makes my week.”', give: 'It is the thought, not the price. A note, a snack or a photo is enough.', watch: 'A forgotten day that matters to you can sting.', helps: 'parent_child' },
+  acts: { name: 'Acts of service', icon: 'HandHelping', blurb: 'Help with a real job tells you someone cares.', ask: 'Say: “It would mean a lot if you took one job off my plate this week.”', give: 'Do the job they dread, without being asked, and do not keep score.', watch: 'Broken promises to help, or being left with everything, feel like neglect.', helps: 'servant_leader' },
+  touch: { name: 'Physical touch', icon: 'HandHeart', blurb: 'A hug, a hand or sitting close helps you feel safe and loved.', ask: 'Say: “A long hug really helps me when I am having a hard day.”', give: 'Ask or watch what they like. A hug, a hand on the shoulder or sitting close, only if it is welcome.', watch: 'Distance can feel like coldness. Always check what feels right to the other person.', helps: 'lover_partner' },
 };
 /** Ten pairs: every language against every other once. Each language shows up four times, so a score runs from 0 to 4. */
 export const LOVE_PAIRS: readonly (readonly [LoveKey, LoveKey])[] = [
@@ -10985,13 +11136,13 @@ export function lineForDay(day: string): DailyLine & { round: number; position: 
 
 export type AmbientKind = 'off' | 'rain' | 'ocean' | 'wind' | 'hum' | 'lofi';
 /** Serene background sounds, made in the browser (no files to download), played while a timer runs. */
-export const AMBIENT_SOUNDS: readonly { key: AmbientKind; name: string; blurb: string; emoji: string }[] = [
-  { key: 'off', name: 'Off', blurb: 'Quiet.', emoji: '🔇' },
-  { key: 'rain', name: 'Rain', blurb: 'Soft rain on leaves.', emoji: '🌧️' },
-  { key: 'ocean', name: 'Ocean', blurb: 'Slow waves, in and out.', emoji: '🌊' },
-  { key: 'wind', name: 'Wind', blurb: 'Wind that rises and falls.', emoji: '🍃' },
-  { key: 'hum', name: 'Soft hum', blurb: 'A low, warm hum, like a singing bowl.', emoji: '🔔' },
-  { key: 'lofi', name: 'Lo-fi', blurb: 'Slow, mellow chords with a little vinyl crackle. Made in your browser, no song to license.', emoji: '🎧' },
+export const AMBIENT_SOUNDS: readonly { key: AmbientKind; name: string; blurb: string; icon: IconName }[] = [
+  { key: 'off', name: 'Off', blurb: 'Quiet.', icon: 'VolumeX' },
+  { key: 'rain', name: 'Rain', blurb: 'Soft rain on leaves.', icon: 'CloudRain' },
+  { key: 'ocean', name: 'Ocean', blurb: 'Slow waves, in and out.', icon: 'WavesHorizontal' },
+  { key: 'wind', name: 'Wind', blurb: 'Wind that rises and falls.', icon: 'Wind' },
+  { key: 'hum', name: 'Soft hum', blurb: 'A low, warm hum, like a singing bowl.', icon: 'BellRing' },
+  { key: 'lofi', name: 'Lo-fi', blurb: 'Slow, mellow chords with a little vinyl crackle. Made in your browser, no song to license.', icon: 'Disc3' },
 ];
 export const isAmbientKind = (v: unknown): v is AmbientKind => AMBIENT_SOUNDS.some((s) => s.key === v);
 
@@ -11172,7 +11323,8 @@ export const PIPELINE_VIEWS = ['list', 'board'] as const;
 export type PipelineView = (typeof PIPELINE_VIEWS)[number];
 
 /** A status tag: its words and which relationship colour it wears (a token, never a hex). */
-export type TagTone = 'neutral' | 'info' | 'good' | 'warn' | 'bad';
+/** The five status tones, plus three calm colours (`calm` indigo, `warm` orange, `deep` purple) for tags that are facts, not states. */
+export type TagTone = 'neutral' | 'info' | 'good' | 'warn' | 'bad' | 'calm' | 'warm' | 'deep';
 
 export const DELIVERABLE_STAGE_TONE: Record<DeliverableStage, TagTone> = { idea: 'neutral', script: 'neutral', making: 'info', review: 'warn', approved: 'good', published: 'good' };
 export const CLIENT_STATUS_TONE: Record<AgencyClientStatus, TagTone> = { lead: 'info', active: 'good', paused: 'warn', ended: 'neutral' };
@@ -11353,6 +11505,7 @@ export const PORTAL_PARTS = [
   { key: 'hours', name: 'Hours', blurb: 'Hours worked this month against the hours they pay for.', on: false },
   { key: 'invoices', name: 'Invoices', blurb: 'Number, amount and status, with the link to each. Drafts are never shown.', on: false },
   { key: 'contracts', name: 'Agreements', blurb: 'Agreements sent to them, with the link to read and sign.', on: false },
+  { key: 'docs', name: 'Other documents', blurb: 'Proposals, trial terms and reports you sent them, with the link to each.', on: true },
 ] as const;
 export type PortalPartKey = (typeof PORTAL_PARTS)[number]['key'];
 /** What the person at the link may do, apart from looking. */
@@ -11378,6 +11531,10 @@ export function parsePortalShow(v: unknown): PortalShow {
 /** What a client sees at their link: only the parts that are switched on, and never fees, private notes or other clients. */
 export interface PortalView {
   agencyName: string;
+  /** The business's own logo upload, by id ('' when none), served from /api/public/media/:id. */
+  agencyLogo: string;
+  /** The business email in Agency settings, so the client knows who to write to ('' when not set). */
+  agencyEmail: string;
   clientName: string;
   show: PortalShow;
   /** Where they are on the way from first contact to monthly delivery. */
@@ -11398,8 +11555,10 @@ export interface PortalView {
   month: { published: number; planned: number } | null;
   channels: { channel: string; published: number; open: number }[];
   hours: { usedMinutes: number; includedMinutes: number } | null;
-  invoices: { number: string; totalCents: number; currency: string; status: Invoice['status']; issueDate: string; token: string }[];
+  invoices: { number: string; totalCents: number; currency: string; status: Invoice['status']; issueDate: string; /** Sent, not paid, and past its due day. The day itself stays on the invoice, behind its own switch. */ overdue: boolean; token: string }[];
   contracts: { title: string; status: ContractStatus; token: string }[];
+  /** Other documents sent to them (a proposal, trial terms, a report), when that part is on. Drafts are never shown. */
+  docs: { title: string; kind: AgencyDocKind; status: AgencyDocStatus; token: string }[];
 }
 
 /** The retainer period for a month: first and last day. */
@@ -11682,7 +11841,6 @@ export function makePortalPassword(rand: (n: number) => number): string {
 
 // ---- changes (revisions) on a piece
 
-export const DEFAULT_REVISIONS_PER_PIECE = 2;
 export const REVISIONS_MAX = 20;
 /** The kinds of line in a piece's thread. A change request spends one change; a paid change is only a note to the owner. */
 export const NOTE_KINDS = ['note', 'comment', 'change', 'paid_change'] as const;
@@ -11833,6 +11991,15 @@ export interface ClientLifecycle {
 export interface PortalLock {
   error: 'locked';
   clientName: string;
+  /** Who sent the link: the business name and its logo upload ('' when none). */
+  agencyName: string;
+  agencyLogo: string;
+}
+/** A link that was closed or replaced by a fresh one: who to ask, and nothing more. */
+export interface PortalClosed {
+  error: 'closed';
+  agencyName: string;
+  agencyEmail: string;
 }
 /** One thing waiting on the client, with where to do it. */
 export interface PortalWaitingOn {
@@ -12328,7 +12495,18 @@ export const CONTRACT_VARS = [
   { key: 'clientContact', label: 'Point of contact', from: 'client' },
   { key: 'brands', label: 'Brand or brands', from: 'typed' },
   { key: 'jurisdiction', label: 'Courts of', from: 'profile' },
+  { key: 'pieces', label: 'Pieces a month', from: 'client' },
+  { key: 'channels', label: 'Channels', from: 'client' },
+  { key: 'hours', label: 'Hours a month', from: 'client' },
+  { key: 'revisions', label: 'Changes included in each piece', from: 'client' },
+  { key: 'monthlyFee', label: 'Monthly fee', from: 'client' },
+  { key: 'projectWhat', label: 'What the work is', from: 'typed' },
+  { key: 'deliveryDate', label: 'Delivery date', from: 'typed' },
+  { key: 'trialPieces', label: 'Number of trial pieces', from: 'typed' },
+  { key: 'trialFee', label: 'Trial fee, if any', from: 'typed' },
+  { key: 'sessionDate', label: 'Date of the session', from: 'typed' },
 ] as const;
+export type ContractVarKey = (typeof CONTRACT_VARS)[number]['key'];
 
 const uid = (p: string, i: number) => `${p}${i + 1}`;
 const text = (id: string, heading: string, body: string): ContractSection => ({ id, heading, kind: 'text', body });
@@ -12407,7 +12585,7 @@ export const CONTRACT_TEMPLATES: readonly ContractTemplate[] = [
       vars: {},
       sections: [
         text('parties', '1. Parties', '**Service provider:** {{provider}}, {{providerTitle}}, {{providerBusiness}}\n{{providerAddress}}\nEmail: {{providerEmail}} | Phone: {{providerPhone}}\n\n**Client:** {{client}}\nAddress: {{clientAddress}}\nBrand or brands covered: {{brands}}\nPoint of contact: {{clientContact}}'),
-        text('scope', '2. What is included each month', 'The service provider makes the content set out below each month, for the brand or brands named above:\n\n- Number and kind of pieces: ______\n- Channels: ______\n- Hours of work included: ______\n\nAnything beyond this is quoted in writing before it starts. Unused pieces and hours do not carry over unless both parties agree in writing.'),
+        text('scope', '2. What is included each month', 'The service provider makes the content set out below each month, for the brand or brands named above:\n\n- Pieces a month: {{pieces}}\n- Channels: {{channels}}\n- Hours of work included a month: {{hours}}\n\nAnything beyond this is quoted in writing before it starts. Unused pieces and hours do not carry over unless both parties agree in writing.'),
         {
           id: 'fees',
           heading: '3. Fee',
@@ -12437,7 +12615,7 @@ export const CONTRACT_TEMPLATES: readonly ContractTemplate[] = [
       vars: {},
       sections: [
         text('parties', '1. Parties', '**Service provider:** {{provider}}, {{providerTitle}}, {{providerBusiness}}\n{{providerAddress}}\nEmail: {{providerEmail}} | Phone: {{providerPhone}}\n\n**Client:** {{client}}\nAddress: {{clientAddress}}\nBrand or brands: {{brands}}\nPoint of contact: {{clientContact}}'),
-        text('scope', '2. The work', 'The service provider will make the following for the client:\n\n- What: ______\n- How many: ______\n- Where it will be used: ______\n- Delivery date: ______\n\nAny change to this is agreed in writing before it starts.'),
+        text('scope', '2. The work', 'The service provider will make the following for the client:\n\n- What: {{projectWhat}}\n- How many: {{pieces}}\n- Where it will be used: {{channels}}\n- Delivery date: {{deliveryDate}}\n\nAny change to this is agreed in writing before it starts.'),
         {
           id: 'fees',
           heading: '3. Fee and payment',
@@ -12457,13 +12635,84 @@ export const CONTRACT_TEMPLATES: readonly ContractTemplate[] = [
 export const CONTRACT_TEMPLATE_BY_KEY: Record<string, ContractTemplate> = byKey(CONTRACT_TEMPLATES.map((t) => [t.key, t]));
 
 const BLANK = '__________';
-/** Fills {{name}} from the variables; a missing one becomes a blank line to write on. */
-export function fillContractText(body: string, vars: Record<string, string>): string {
-  return body.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => (vars[k] && vars[k]!.trim() ? vars[k]!.trim() : BLANK));
+/** Who reads the filled words: the owner (who also gets one notice of what is missing, `contractGapNote`) or the client. */
+export type DocAudience = 'owner' | 'client';
+const GONE = '\u0000';
+/** A line that, once its missing words are gone, is only a label ("Email:", "**Client:**", "Point of contact: (authorised ...)"). */
+const LABEL_ONLY = /^\s*(?:[-*]\s+)?(?:\*\*)?[^:]{0,80}?:(?:\*\*)?\s*(?:\([^)]*\))?\s*[.,;]?\s*$/;
+function tidyPart(p: string): string | null {
+  if (!p.includes(GONE)) return p;
+  const s = p
+    .replace(/\u0000/g, '')
+    .replace(/,(\s*,)+/g, ',')
+    .replace(/:(\*\*)?\s*,\s*/g, ':$1 ')
+    .replace(/\s*,\s*(?=$|\()/g, ' ')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trimEnd();
+  if (!s.trim() || LABEL_ONLY.test(s) || /^\s*(?:[-*]\s*)?[,.;|\s]*$/.test(s)) return null;
+  return s;
+}
+/**
+ * Fills {{name}} from the variables. Without an audience a missing one is a blank line to write on (the old behaviour, kept for the
+ * editor's one-line previews). With one, a missing value never shows as underscores: its words go, and a line left holding only a label
+ * ("Phone:") goes with them, so the client reads a clean page and the owner reads the same page plus one notice of what to add.
+ */
+export function fillContractText(body: string, vars: Record<string, string>, audience?: DocAudience): string {
+  const has = (k: string) => Boolean(vars[k] && vars[k]!.trim());
+  if (!audience) return body.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => (has(k) ? vars[k]!.trim() : BLANK));
+  const raw = body.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => (has(k) ? vars[k]!.trim() : GONE));
+  if (!raw.includes(GONE)) return raw;
+  return raw
+    .split('\n')
+    .map((line) => {
+      if (!line.includes(GONE)) return line;
+      const parts = line.split(' | ').map(tidyPart).filter((x): x is string => x !== null);
+      return parts.length ? parts.join(' | ') : null;
+    })
+    .filter((l): l is string => l !== null)
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n');
+}
+
+/** Every variable a document names (in its sections and its brief) that has no value yet, once each, in the order of CONTRACT_VARS. */
+export function contractGaps(doc: Pick<ContractDoc, 'sections' | 'vars'>): { key: string; label: string; from: 'profile' | 'client' | 'typed' }[] {
+  const named = new Set<string>();
+  for (const s of doc.sections) {
+    for (const m of s.body.matchAll(/\{\{(\w+)\}\}/g)) named.add(m[1]!);
+    for (const q of s.questions ?? []) for (const m of q.label.matchAll(/\{\{(\w+)\}\}/g)) named.add(m[1]!);
+  }
+  return CONTRACT_VARS.filter((v) => named.has(v.key) && !(doc.vars[v.key] ?? '').trim()).map((v) => ({ key: v.key, label: v.label, from: v.from }));
+}
+
+/** The one owner-only notice a document carries in place of blanks: what is missing and where it is added once. Null when nothing is. */
+export function contractGapNote(doc: Pick<ContractDoc, 'sections' | 'vars'>): string | null {
+  const gaps = contractGaps(doc);
+  if (!gaps.length) return null;
+  const of = (from: string) => gaps.filter((g) => g.from === from).map((g) => g.label.replace(/^Your /, '').toLowerCase());
+  const parts = [
+    of('profile').length ? `Your business details are not set (${of('profile').join(', ')}): add them once in Settings.` : '',
+    of('client').length ? `The client's ${of('client').join(', ')} ${of('client').length === 1 ? 'is' : 'are'} not set: add ${of('client').length === 1 ? 'it' : 'them'} once on the client's page.` : '',
+    of('typed').length ? `Still to fill in: ${of('typed').join(', ')}.` : '',
+  ].filter(Boolean);
+  return `${parts.join(' ')} Your client does not see this note, and the empty lines are left out of their copy.`;
+}
+
+/** What a client's record gives a document, beyond its name, address and contact. Every part is optional. */
+export interface ContractClientFacts {
+  name: string;
+  address: string;
+  contactName: string;
+  channels?: string[];
+  piecesPerMonth?: number;
+  hoursPerMonth?: number;
+  revisionsPerPiece?: number;
+  retainerCents?: number;
+  currency?: string;
 }
 
 /** The variables a new contract starts with, from the person's profile and the client's details. */
-export function contractVarsFor(profile: BusinessProfile, client: { name: string; address: string; contactName: string } | null): Record<string, string> {
+export function contractVarsFor(profile: BusinessProfile, client: ContractClientFacts | null): Record<string, string> {
+  const n = (v: number | undefined) => (typeof v === 'number' && v > 0 ? String(v) : '');
   return {
     provider: profile.signerName,
     providerTitle: profile.signerTitle,
@@ -12476,6 +12725,11 @@ export function contractVarsFor(profile: BusinessProfile, client: { name: string
     clientContact: client?.contactName ?? '',
     brands: client?.name ?? '',
     jurisdiction: profile.jurisdiction,
+    pieces: n(client?.piecesPerMonth),
+    channels: (client?.channels ?? []).filter(Boolean).join(', '),
+    hours: n(client?.hoursPerMonth),
+    revisions: typeof client?.revisionsPerPiece === 'number' ? String(client.revisionsPerPiece) : '',
+    monthlyFee: client?.retainerCents && client.retainerCents > 0 ? money(client.retainerCents, client.currency || 'INR') : '',
   };
 }
 
@@ -12587,7 +12841,11 @@ export interface PublicContract {
 // Templates: built-in starting points, and the person's own
 // ---------------------------------------------------------------------------
 
-export const TEMPLATE_KINDS = ['invoice', 'contract', 'doc'] as const;
+/** The kinds of paper a template can be made from (and a house template can be): an invoice, an agreement or another document. */
+export const DOC_TEMPLATE_KINDS = ['invoice', 'contract', 'doc'] as const;
+export type DocTemplateKind = (typeof DOC_TEMPLATE_KINDS)[number];
+/** Every kind of own template: the three kinds of paper, and an email note the owner wrote and kept (`email`, plain subject and words). */
+export const TEMPLATE_KINDS = [...DOC_TEMPLATE_KINDS, 'email'] as const;
 export type TemplateKind = (typeof TEMPLATE_KINDS)[number];
 /** Up to this many of their own, for each kind. */
 export const MAX_TEMPLATES = 30;
@@ -12602,6 +12860,8 @@ export interface AgencyTemplate {
   name: string;
   /** One plain line on what is in it: "3 lines, GST 18%" or "9 sections". */
   summary: string;
+  /** Only on an email note: the subject and the words it keeps. */
+  email?: { subject: string; message: string };
   createdAt: string;
   updatedAt: string;
 }
@@ -12630,7 +12890,7 @@ export function invoiceTemplateDoc(doc: InvoiceDoc): InvoiceDoc {
 export function contractTemplateDoc(doc: ContractDoc): ContractDoc {
   return { ...doc, vars: {} };
 }
-export function templateSummary(kind: TemplateKind, doc: InvoiceDoc | ContractDoc, items: readonly InvoiceItem[]): string {
+export function templateSummary(kind: DocTemplateKind, doc: InvoiceDoc | ContractDoc, items: readonly InvoiceItem[]): string {
   if (kind === 'invoice') {
     const d = doc as InvoiceDoc;
     const bits = [`${items.length} ${items.length === 1 ? 'line' : 'lines'}`];
@@ -12765,8 +13025,8 @@ export function contractParties(doc: Pick<ContractDoc, 'vars'>): DocParty[] {
 export const hasPartiesSection = (doc: Pick<ContractDoc, 'sections'>): boolean => doc.sections.some((s) => s.id === 'parties');
 
 /** One section's words as plain text: blanks filled, **bold** marks removed, bullets kept as "- ". */
-export function plainWords(body: string, vars: Record<string, string>): string {
-  return fillContractText(body, vars)
+export function plainWords(body: string, vars: Record<string, string>, audience: DocAudience = 'client'): string {
+  return fillContractText(body, vars, audience)
     .replace(/\r\n?/g, '\n')
     .replace(/\*\*(.+?)\*\*/g, '$1')
     .replace(/\*\*/g, '')
@@ -12784,6 +13044,8 @@ export interface DocTextExtras {
   answers?: Record<string, ContractAnswer>;
   acceptance?: { name: string; title: string; at: string } | null;
   parties?: DocParty[];
+  /** The client's copy (the default) leaves out every empty line; the owner's copy carries one note of what is missing instead. */
+  audience?: DocAudience;
 }
 
 /**
@@ -12796,14 +13058,20 @@ export function contractAsText(doc: ContractDoc, extras: DocTextExtras = {}): st
   if (doc.subtitle) out.push(doc.subtitle);
   const meta = [extras.reference ? `Reference: ${extras.reference}` : '', extras.date ? `Date: ${docDate(extras.date)}` : ''].filter(Boolean);
   if (meta.length) out.push(meta.join('   '));
+  const audience = extras.audience ?? 'client';
+  const gapNote = audience === 'owner' ? contractGapNote(doc) : null;
+  if (gapNote) out.push('', `Note for you: ${gapNote}`);
   const parties = extras.parties ?? (hasPartiesSection(doc) ? [] : contractParties(doc));
   for (const p of parties) out.push('', `${p.label}:`, ...p.lines);
   let n = 0;
   for (const s of doc.sections) {
+    const words = plainWords(s.body, doc.vars, audience);
+    // A part with nothing written in it yet is the owner's to write; the client's copy leaves it out.
+    if (s.kind === 'text' && !words && audience === 'client') continue;
     n += 1;
     out.push('', docHeadingText(style, s.heading || 'Section', n).toUpperCase());
-    const words = plainWords(s.body, doc.vars);
     if (words) out.push('', words);
+    else if (s.kind === 'text') out.push('', 'Not written yet.');
     if (s.kind === 'packages') {
       const unit = s.unitName || 'pieces';
       const one = unit.endsWith('s') ? unit.slice(0, -1) : unit;
@@ -12815,7 +13083,7 @@ export function contractAsText(doc: ContractDoc, extras: DocTextExtras = {}): st
     if (s.kind === 'brief') {
       for (const q of s.questions ?? []) {
         const a = extras.answers?.[q.id];
-        out.push('', plainWords(q.label, doc.vars));
+        out.push('', plainWords(q.label, doc.vars, audience));
         for (const o of q.options) out.push(`  [${a?.picked.includes(o) ? 'x' : ' '}] ${o}`);
         if (q.other) out.push(`  Other: ${a?.other ?? ''}`.trimEnd());
         if (q.text) out.push(`  Answer: ${a?.text ?? ''}`.trimEnd());
@@ -12942,7 +13210,7 @@ export interface DocLogLine {
 /** A house template, as the admin's list reads it. */
 export interface HouseTemplate {
   id: string;
-  kind: TemplateKind;
+  kind: DocTemplateKind;
   name: string;
   summary: string;
   includeBusiness: boolean;
@@ -12951,7 +13219,6 @@ export interface HouseTemplate {
   updatedAt: string;
 }
 
-const BLANKS = '______';
 const sec = (id: string, heading: string, body: string): ContractSection => ({ id, heading, kind: 'text', body });
 const APPROVAL = (heading: string, body: string): ContractSection => ({ id: 'sign', heading, kind: 'signatures', body });
 
@@ -12997,7 +13264,7 @@ export function retainerProposalDoc(input: Partial<RetainerInput> = {}): Contrac
     sections: [
       sec('summary', 'Summary', 'Prepared for {{client}} by {{providerBusiness}}.\n\nThis is a proposal for monthly content work for the brand or brands: {{brands}}. Pick one of the options below and approve this page to go ahead.'),
       { id: 'options', heading: 'Options and fee', kind: 'packages', body: `The monthly fee is the same in every option${r.monthlyFeeCents > 0 ? '' : ' (to be filled in)'}; a longer option is simply paid for more months. The fee is paid in advance, on or before the first day of each month. Fees do not include taxes such as GST.`, unitName: 'months', packages: r.months.map((m) => ({ name: `${m} ${m === 1 ? 'month' : 'months'}`, units: m, feeCents: r.monthlyFeeCents * m })) },
-      sec('included', 'What is delivered each month', r.deliverables.length ? r.deliverables.map((d) => `- ${d}`).join('\n') : `- Number and kind of pieces: ${BLANKS}\n- Channels: ${BLANKS}\n- Hours of work included: ${BLANKS}`),
+      sec('included', 'What is delivered each month', r.deliverables.length ? r.deliverables.map((d) => `- ${d}`).join('\n') : '- Pieces a month: {{pieces}}\n- Channels: {{channels}}\n- Hours of work included a month: {{hours}}'),
       sec('revisions', 'Revisions', rounds),
       ...(r.notes ? [sec('notes', 'Notes', r.notes)] : []),
       APPROVAL('Approval', 'By approving, the client confirms they have read this proposal and wish to go ahead with the option they chose.'),
@@ -13039,7 +13306,7 @@ export function monthlyReportDoc(f: MonthlyReportFacts): ContractDoc {
       sec('delivered', 'What was delivered', n === 0 ? 'Nothing was published this month.' : `${shown.map((p) => `- ${p.title}`).join('\n')}${n > shown.length ? `\n- and ${n - shown.length} more` : ''}`),
       sec('changes', 'Changes used', `Pieces were sent back for changes ${f.revisionsUsed} ${f.revisionsUsed === 1 ? 'time' : 'times'} this month. Small edit-level changes such as text, trims, order and captions are part of the process. A new concept, format, set-up, new footage or a reshoot is discussed separately before it is started.`),
       sec('invoices', 'Invoices', `${f.invoicesRaised} ${f.invoicesRaised === 1 ? 'invoice was' : 'invoices were'} raised this month and ${f.invoicesPaid} ${f.invoicesPaid === 1 ? 'was' : 'were'} paid.`),
-      sec('next', `Plan for next month`, `- Focus: ${BLANKS}\n- Pieces planned: ${BLANKS}\n- Shoot or delivery dates: ${BLANKS}\n- What we need from you: ${BLANKS}`),
+      sec('next', 'Plan for next month', ''),
       APPROVAL('Received', 'The client confirms they have read this report.'),
     ],
   };
@@ -13066,13 +13333,13 @@ const STARTERS: Record<AgencyDocKind, () => ContractDoc> = {
     vars: {},
     style: defaultDocStyle(),
     sections: [
-      sec('about', 'The session', `**Client:** {{client}}\n**Brand or brands:** {{brands}}\n**Point of contact:** {{clientContact}}\n**Prepared by:** {{provider}}, {{providerBusiness}}\n\nDate of the session: ${BLANKS}\nPeople in the session: ${BLANKS}`),
-      sec('agreed', 'What we agreed', `- ${BLANKS}\n- ${BLANKS}\n- ${BLANKS}`),
-      sec('goals', 'Goals', `The main goal for the next ${BLANKS} months:\n\n- Goal one: ${BLANKS} (how we will tell: ${BLANKS})\n- Goal two: ${BLANKS} (how we will tell: ${BLANKS})\n\nResults depend on the platform, the audience, the account, ad spend and the offer, so no particular views, reach, sales or return can be promised.`),
-      sec('audience', 'Audience', `Who we are speaking to: ${BLANKS}\nWhat they care about: ${BLANKS}\nWhere they spend their time: ${BLANKS}`),
-      sec('channels', 'Channels', `- Channel: ${BLANKS}, how often: ${BLANKS}\n- Channel: ${BLANKS}, how often: ${BLANKS}`),
-      sec('pillars', 'Content pillars', `- Pillar one: ${BLANKS}\n- Pillar two: ${BLANKS}\n- Pillar three: ${BLANKS}`),
-      sec('next', 'Next steps', `- ${BLANKS}, by ${BLANKS}\n- ${BLANKS}, by ${BLANKS}\n- ${BLANKS}, by ${BLANKS}`),
+      sec('about', 'The session', '**Client:** {{client}}\n**Brand or brands:** {{brands}}\n**Point of contact:** {{clientContact}}\n**Prepared by:** {{provider}}, {{providerBusiness}}\n\nDate of the session: {{sessionDate}}\nPeople in the session: {{clientContact}}, {{provider}}'),
+      sec('agreed', 'What we agreed', ''),
+      sec('goals', 'Goals', 'Results depend on the platform, the audience, the account, ad spend and the offer, so no particular views, reach, sales or return can be promised.'),
+      sec('audience', 'Audience', ''),
+      sec('channels', 'Channels', '- {{channels}}\n- Pieces a month: {{pieces}}'),
+      sec('pillars', 'Content pillars', ''),
+      sec('next', 'Next steps', ''),
       APPROVAL('Approval', 'By approving, the client confirms this summary reflects the session. A change can be asked for in writing.'),
     ],
   }),
@@ -13085,7 +13352,7 @@ const STARTERS: Record<AgencyDocKind, () => ContractDoc> = {
     vars: {},
     style: defaultDocStyle(),
     sections: [
-      sec('details', 'Trial details', `**Client:** {{client}}\n**Brand or brands for this trial:** {{brands}}\n**Point of contact:** {{clientContact}}\n\nNumber of trial pieces: ${BLANKS}\nTrial fee, if any: ${BLANKS}\nShoot or delivery dates: ${BLANKS}`),
+      sec('details', 'Trial details', '**Client:** {{client}}\n**Brand or brands for this trial:** {{brands}}\n**Point of contact:** {{clientContact}}\n\nNumber of trial pieces: {{trialPieces}}\nTrial fee, if any: {{trialFee}}\nShoot or delivery dates: {{deliveryDate}}'),
       trialPart('purpose', 'Purpose of the trial'),
       trialPart('ownership', 'Trial content, ownership and use'),
       trialPart('after', 'What happens after the trial'),
@@ -13407,6 +13674,11 @@ export interface IcsTask {
   dueTime: string | null;
   estimateMin: number | null;
   priority: Priority | null;
+  /** The calendar's description line, when it is not a pillar task: a short plain line, never a note, an amount or what anyone wrote. */
+  description?: string;
+  /** For something with a fixed instant (an event someone signed up for): its UTC start and end, used instead of `day` and `dueTime`. */
+  startsAt?: string;
+  endsAt?: string;
 }
 /** Text for a calendar file: backslash, semicolon, comma and line breaks escaped. */
 export const icsEscape = (t: string): string => t.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r\n|\r|\n/g, '\\n');
@@ -13430,6 +13702,14 @@ export function icsFold(line: string): string {
   parts.push(cur);
   return parts.join('\r\n ');
 }
+/** The description a calendar shows for each kind of entry that is not a pillar task. */
+export const ICS_CATEGORY_LINE: Record<string, string> = {
+  Reviews: 'A review you scheduled in kreators.app',
+  Agency: 'Client work from Agency in kreators.app',
+  Events: 'Something you signed up for in kreators.app',
+};
+/** A task's calendar title: its own words, marked when it was brought to a review, so the calendar and the review say the same thing. */
+export const icsTaskTitle = (title: string, forReview: boolean): string => (forReview ? `${title} (for review)` : title);
 const icsStamp = (d: Date): string => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
 const icsDay = (day: string): string => day.replace(/-/g, '');
 /**
@@ -13443,7 +13723,11 @@ export function buildCalendar(tasks: readonly IcsTask[], zone: string, now: Date
     const pillar = t.relationship ? (RELATIONSHIP_BY_KEY[t.relationship]?.name ?? '') : '';
     lines.push('BEGIN:VEVENT', `UID:${t.id}@kreators.app`, `DTSTAMP:${icsStamp(now)}`);
     const m = t.dueTime ? /^([01]\d|2[0-3]):([0-5]\d)$/.exec(t.dueTime) : null;
-    if (m) {
+    const fixed = t.startsAt && !Number.isNaN(Date.parse(t.startsAt)) ? new Date(t.startsAt) : null;
+    if (fixed) {
+      const until = t.endsAt && Date.parse(t.endsAt) > fixed.getTime() ? new Date(t.endsAt) : new Date(fixed.getTime() + (t.estimateMin ?? 60) * 60_000);
+      lines.push(`DTSTART:${icsStamp(fixed)}`, `DTEND:${icsStamp(until)}`);
+    } else if (m) {
       const start = zonedToUtc(t.day, Number(m[1]) * 60 + Number(m[2]), zone);
       const end = new Date(start.getTime() + (t.estimateMin ?? PLAN_DEFAULT_MINUTES) * 60_000);
       lines.push(`DTSTART:${icsStamp(start)}`, `DTEND:${icsStamp(end)}`);
@@ -13451,8 +13735,8 @@ export function buildCalendar(tasks: readonly IcsTask[], zone: string, now: Date
       lines.push(`DTSTART;VALUE=DATE:${icsDay(t.day)}`, `DTEND;VALUE=DATE:${icsDay(planAddDays(t.day, 1))}`);
     }
     lines.push(`SUMMARY:${icsEscape(t.title)}`);
-    if (pillar) lines.push(`CATEGORIES:${icsEscape(pillar)}`, `DESCRIPTION:${icsEscape(`From your ${pillar} pillar`)}`);
-    else if (t.category) lines.push(`CATEGORIES:${icsEscape(t.category)}`, `DESCRIPTION:${icsEscape('A review you scheduled in kreators.app')}`);
+    if (pillar) lines.push(`CATEGORIES:${icsEscape(pillar)}`, `DESCRIPTION:${icsEscape(t.description ?? `From your ${pillar} pillar`)}`);
+    else if (t.category) lines.push(`CATEGORIES:${icsEscape(t.category)}`, `DESCRIPTION:${icsEscape(t.description ?? ICS_CATEGORY_LINE[t.category] ?? 'From kreators.app')}`);
     if (t.priority !== null) lines.push(`PRIORITY:${t.priority === 0 ? 1 : t.priority === 1 ? 3 : t.priority === 2 ? 5 : 9}`);
     lines.push('END:VEVENT');
   }

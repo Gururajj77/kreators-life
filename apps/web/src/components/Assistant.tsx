@@ -43,23 +43,24 @@ import { useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
 import { useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowRight, Check, CircleAlert, CircleQuestionMark, Minus, Undo2, WandSparkles, type LucideIcon } from 'lucide-react';
+import { ArrowRight, Check, CircleAlert, CircleQuestionMark, Minus, Undo2, WandSparkles, X, type LucideIcon } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { ChatActions, ChatComposer, ChatLinks, ChatTurns, ChoiceChips, ChoiceGroups, chip, countTurns, typingTime, useChatMotion } from './Chat';
 import { AppIcon } from './AppIcon';
 import { Icon } from './Icon';
+import { AnimatedIcon } from './AnimatedIcon';
 import { api, ApiError } from '../lib/api';
 import { prettyDate, todayLocal } from '../lib/date';
 import { explainTyped, isQuestion } from '../lib/explain';
-import { useModule, useModules } from '../lib/modules';
+import { useModules } from '../lib/modules';
 import { forgetKept, useKept, useKeptRef } from '../lib/kept';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
 import { useAssistantModel } from '../lib/store';
 import { useDialogFocus } from '../lib/useDialogFocus';
-import { Avatar } from './Avatar';
 import { Markdown } from './Markdown';
 import { StartOver } from './StartOver';
 import { MoodFace } from './MoodFace';
+import { FIELD } from '../lib/ui';
 
 /**
  * The assistant: the round button at the bottom right of every screen in the app, and the panel it opens over the
@@ -125,7 +126,6 @@ const ORIGIN: Record<TalkOrigin, { name: string; to: string; host: Host }> = {
   other: { name: 'this screen', to: '', host: 'bumling' },
 };
 const who = hostName;
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const errorText = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong.');
 
 interface Msg {
@@ -172,7 +172,7 @@ function TaskForm({ projects, today, onSend }: { projects: Node[]; today: string
       {projects.length > 1 && (
         <label className="block">
           <span className="block text-[14px] font-bold">Which project does it move?</span>
-          <select value={parentId} onChange={(e) => setParentId(e.target.value)} className={field}>
+          <select value={parentId} onChange={(e) => setParentId(e.target.value)} className={FIELD}>
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.title}
@@ -183,20 +183,20 @@ function TaskForm({ projects, today, onSend }: { projects: Node[]; today: string
       )}
       <label className="block">
         <span className="block text-[14px] font-bold">The task</span>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} placeholder={KIND_META.task.prompt} className={field} />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} placeholder={KIND_META.task.prompt} className={FIELD} />
       </label>
       <div className="grid grid-cols-1 gap-sm sm:grid-cols-3">
         <label className="block">
           <span className="block text-[14px] font-bold">Due</span>
-          <input type="date" value={due} min={today} onChange={(e) => setDue(e.target.value)} className={field} />
+          <input type="date" value={due} min={today} onChange={(e) => setDue(e.target.value)} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Time, if any</span>
-          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={field} />
+          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Minutes, if any</span>
-          <input type="number" min={5} max={600} step={5} value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="20" className={field} />
+          <input type="number" min={5} max={600} step={5} value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="20" className={FIELD} />
         </label>
       </div>
     </CardShell>
@@ -212,13 +212,13 @@ function LayerForm({ kind, parents, onSend }: { kind: NodeKind; parents: Node[];
     <CardShell send={`Add the ${meta.label.toLowerCase()}`} disabled={!title.trim() || Boolean(up && !parentId)} onSubmit={() => onSend({ parentId: up ? parentId : null, title: title.trim() }, title.trim())}>
       <label className="block">
         <span className="block text-[14px] font-bold">{meta.hint}</span>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} placeholder={meta.prompt} className={field} />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} placeholder={meta.prompt} className={FIELD} />
         <span className="mt-xs block text-[12px] font-semibold text-ink-soft">For example: {meta.example}</span>
       </label>
       {up && parents.length > 1 && (
         <label className="block">
           <span className="block text-[14px] font-bold">Which {KIND_META[up].label.toLowerCase()} does it hold up?</span>
-          <select value={parentId} onChange={(e) => setParentId(e.target.value)} className={field}>
+          <select value={parentId} onChange={(e) => setParentId(e.target.value)} className={FIELD}>
             {parents.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.title}
@@ -238,11 +238,11 @@ function NotToDoForm({ onSend }: { onSend: (v: { title: string; relationship: Re
     <CardShell send="Add it to the list" disabled={!title.trim()} onSubmit={() => onSend({ title: title.trim(), relationship: rel || null }, title.trim())}>
       <label className="block">
         <span className="block text-[14px] font-bold">What will you stay away from?</span>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={NOT_TO_DO_TITLE_MAX} placeholder="Phone in bed" className={field} />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={NOT_TO_DO_TITLE_MAX} placeholder="Phone in bed" className={FIELD} />
       </label>
       <label className="block">
         <span className="block text-[14px] font-bold">Which pillar does it protect? Optional.</span>
-        <select value={rel} onChange={(e) => setRel(e.target.value as RelationshipKey | '')} className={field}>
+        <select value={rel} onChange={(e) => setRel(e.target.value as RelationshipKey | '')} className={FIELD}>
           <option value="">No pillar</option>
           {RELATIONSHIPS.map((r) => (
             <option key={r.key} value={r.key}>
@@ -318,7 +318,7 @@ function JournalForm({ onSend }: { onSend: (v: { title: string; body: string; em
     <CardShell send="Save the entry" disabled={!body.trim()} onSubmit={() => onSend({ title: title.trim(), body: body.trim(), emotion }, title.trim() || `${body.trim().slice(0, 60)}${body.trim().length > 60 ? '…' : ''}`)}>
       <label className="block">
         <span className="block text-[14px] font-bold">A title. Optional.</span>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Today" className={field} />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Today" className={FIELD} />
       </label>
       <label className="block">
         <span className="block text-[14px] font-bold">What is on your mind?</span>
@@ -330,7 +330,7 @@ function JournalForm({ onSend }: { onSend: (v: { title: string; body: string; em
             grow(e.currentTarget);
           }}
           placeholder="Write it the way you would say it."
-          className={`${field} resize-none overflow-hidden`}
+          className={`${FIELD} resize-none overflow-hidden`}
         />
       </label>
       <div>
@@ -377,11 +377,11 @@ function MoneyForm({ onSend }: { onSend: (v: { kind: 'income' | 'expense'; cents
       <div className="grid grid-cols-1 gap-sm sm:grid-cols-2">
         <label className="block">
           <span className="block text-[14px] font-bold">How much</span>
-          <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="1250" className={field} />
+          <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="1250" className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">What for</span>
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className={field}>
+          <select value={category} onChange={(e) => setCategory(e.target.value)} className={FIELD}>
             {cats.map((c) => (
               <option key={c} value={c}>
                 {c}
@@ -391,11 +391,11 @@ function MoneyForm({ onSend }: { onSend: (v: { kind: 'income' | 'expense'; cents
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Who, if anyone</span>
-          <input value={counterparty} onChange={(e) => setCounterparty(e.target.value)} maxLength={80} placeholder={kind === 'income' ? 'A brand' : 'A shop'} className={field} />
+          <input value={counterparty} onChange={(e) => setCounterparty(e.target.value)} maxLength={80} placeholder={kind === 'income' ? 'A brand' : 'A shop'} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">A note, if any</span>
-          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} className={field} />
+          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} className={FIELD} />
         </label>
       </div>
     </CardShell>
@@ -428,7 +428,7 @@ function ReviewForm({ prompts, start, onSend }: { prompts: string[]; start: { an
               setAnswers((a) => a.map((x, j) => (j === i ? v : x)));
               grow(e.currentTarget);
             }}
-            className={`${field} resize-none overflow-hidden`}
+            className={`${FIELD} resize-none overflow-hidden`}
           />
         </label>
       ))}
@@ -445,7 +445,7 @@ function ReviewForm({ prompts, start, onSend }: { prompts: string[]; start: { an
       </div>
       <label className="block">
         <span className="block text-[14px] font-bold">The one thing worth keeping. Optional.</span>
-        <input value={highlight} onChange={(e) => setHighlight(e.target.value)} maxLength={REVIEW_HIGHLIGHT_MAX} placeholder="Shipped the first video" className={field} />
+        <input value={highlight} onChange={(e) => setHighlight(e.target.value)} maxLength={REVIEW_HIGHLIGHT_MAX} placeholder="Shipped the first video" className={FIELD} />
       </label>
     </CardShell>
   );
@@ -470,19 +470,19 @@ function DueForm({ today, onSend }: { today: string; onSend: (v: { direction: 'o
       <div className="grid grid-cols-1 gap-sm sm:grid-cols-2">
         <label className="block">
           <span className="block text-[14px] font-bold">Who</span>
-          <input value={counterparty} onChange={(e) => setCounterparty(e.target.value)} maxLength={80} placeholder="A brand or a friend" className={field} />
+          <input value={counterparty} onChange={(e) => setCounterparty(e.target.value)} maxLength={80} placeholder="A brand or a friend" className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">How much</span>
-          <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="5000" className={field} />
+          <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="5000" className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Due by, if any</span>
-          <input type="date" value={dueDate} min={today} onChange={(e) => setDueDate(e.target.value)} className={field} />
+          <input type="date" value={dueDate} min={today} onChange={(e) => setDueDate(e.target.value)} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">A note, if any</span>
-          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} className={field} />
+          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} className={FIELD} />
         </label>
       </div>
     </CardShell>
@@ -507,15 +507,15 @@ function GoalForm({ today, onSend }: { today: string; onSend: (v: { title: strin
       <div className="grid grid-cols-1 gap-sm sm:grid-cols-3">
         <label className="block">
           <span className="block text-[14px] font-bold">What for</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} placeholder="A new camera" className={field} />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} placeholder="A new camera" className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">How much</span>
-          <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="60000" className={field} />
+          <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="60000" className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">By when, if any</span>
-          <input type="date" value={deadline} min={today} onChange={(e) => setDeadline(e.target.value)} className={field} />
+          <input type="date" value={deadline} min={today} onChange={(e) => setDeadline(e.target.value)} className={FIELD} />
         </label>
       </div>
     </CardShell>
@@ -529,7 +529,7 @@ function AmountForm({ send, onSend }: { send: string; onSend: (cents: number, la
     <CardShell send={send} disabled={cents === null} onSubmit={() => cents !== null && onSend(cents, money(cents))}>
       <label className="block">
         <span className="block text-[14px] font-bold">How much</span>
-        <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="2000" className={field} />
+        <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="2000" className={FIELD} />
       </label>
     </CardShell>
   );
@@ -579,14 +579,13 @@ function CloseButton({ onClose }: { onClose: () => void }) {
       onPointerLeave={() => show(false)}
       onFocus={(e) => e.currentTarget.matches(':focus-visible') && show(true)}
       onBlur={() => show(false)}
-      className="toy toy-soft inline-flex h-[40px] min-w-[40px] shrink-0 items-center justify-center rounded-pill bg-card px-sm text-ink-soft hover:text-ink"
+      aria-label="Close"
+      className="toy toy-soft inline-flex h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-pill bg-card px-sm text-ink-soft hover:text-ink"
     >
       <span ref={label} className="block overflow-hidden whitespace-nowrap text-[14px] font-bold" style={{ width: 0, opacity: 0 }}>
         Close
       </span>
-      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" className="shrink-0">
-        <path d="M6 6l12 12M18 6 6 18" />
-      </svg>
+      <Icon icon={X} size={16} strokeWidth={2.8} />
     </button>
   );
 }
@@ -662,7 +661,8 @@ function Receipts({ scope, ids }: { scope: string; ids: string[] }) {
               )}
             </span>
             {r.undo && (
-              <button type="button" disabled={busy === r.id} onClick={() => void act(r.id, () => api.assistantUndo(r.id, todayLocal()))} className="toy toy-soft min-h-[32px] shrink-0 rounded-pill border-2 border-line bg-paper px-sm text-[12px] font-bold disabled:opacity-60">
+              <button type="button" disabled={busy === r.id} onClick={() => void act(r.id, () => api.assistantUndo(r.id, todayLocal()))} className="toy toy-soft inline-flex min-h-[44px] shrink-0 items-center gap-xs rounded-pill border-2 border-line bg-paper px-sm text-[12px] font-bold disabled:opacity-60">
+                {busy === r.id && <AnimatedIcon name="loading" size={14} />}
                 Undo
               </button>
             )}
@@ -712,7 +712,7 @@ function PlanCard({ reason }: { reason: AssistantPaywall }) {
 // The panel.
 // ---------------------------------------------------------------------------
 
-function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focusIn: boolean }) {
+export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focusIn: boolean }) {
   const nav = useNavigate();
   const loc = useLocation();
   const panel = useRef<HTMLElement>(null);
@@ -1293,7 +1293,7 @@ function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focusIn: bo
               you(c.label);
               wait(f, 'Settling');
               try {
-                await api.settleDue(c.value);
+                await api.settleDue(c.value, todayLocal());
                 done(f, ['Settled.']);
               } catch (e) {
                 failed(f, e);
@@ -1535,7 +1535,9 @@ function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focusIn: bo
     <section
       ref={panel}
       aria-label={`Bumling AI assistant, with ${who(host)}`}
-      className="fixed inset-x-sm bottom-[calc(var(--spacing-xl)+var(--spacing-md)+env(safe-area-inset-bottom))] z-40 flex h-[max(50dvh,320px)] flex-col overflow-hidden rounded-card border-2 border-line bg-card-strong shadow-toy-soft md:left-auto md:right-md md:bottom-md md:h-[min(640px,calc(100dvh-32px))] md:w-[400px]"
+      // On a phone the panel fills the page from just under the logo row to the tab bar, on a fill with nothing showing
+      // through (the card colour laid over the page's own base); on a laptop it is the 400px card in the corner.
+      className="fixed inset-x-0 top-[calc(var(--spacing-xl)+env(safe-area-inset-top))] bottom-[calc(var(--spacing-xl)+1px+env(safe-area-inset-bottom))] z-40 flex h-auto flex-col overflow-hidden rounded-none border-x-0 border-t-2 border-b-0 border-line shadow-none [background:linear-gradient(var(--card-strong),var(--card-strong)),var(--page-base-a)] md:inset-x-auto md:top-auto md:right-md md:bottom-md md:h-[min(640px,calc(100dvh-32px))] md:w-[400px] md:rounded-card md:border-2 md:bg-card-strong md:shadow-toy-soft"
     >
       <header className="flex items-center gap-xs border-b-2 border-line py-xs pr-sm pl-md">
         {/* The name and the line under it wrap on a narrow phone rather than being cut short. */}
@@ -1551,7 +1553,7 @@ function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focusIn: bo
           {/* The picker sits beside "Model" when there is room for its longest name, and on a line of its own when not. */}
           <label className="flex flex-wrap items-center gap-xs text-[12px] font-bold text-ink-soft">
             <span className="shrink-0">Model</span>
-            <select value={model.id} onChange={(e) => setPicked(e.target.value)} disabled={thinking} className="min-h-[32px] min-w-0 flex-1 basis-[240px] rounded-pill border-2 border-line bg-card px-xs text-[12px] font-bold text-ink">
+            <select value={model.id} onChange={(e) => setPicked(e.target.value)} disabled={thinking} className="min-h-[44px] min-w-0 flex-1 basis-[240px] rounded-pill border-2 border-line bg-card px-xs text-[12px] font-bold text-ink">
               {models.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}, {m.by}
@@ -1573,109 +1575,5 @@ function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focusIn: bo
         <ChatComposer placeholder={canType ? 'Add or change something' : status.data?.connected ? 'Needs a plan' : 'Ask what something means'} onStop={thinking ? stop : undefined} stopping={stopping} onSend={(t) => void send(t)} disabled={thinking || ask?.kind === 'wait'} maxLength={2000} />
       </div>
     </section>
-  );
-}
-
-/**
- * The round button at the bottom right, on every screen inside the app: above the tab bar on a phone, in the
- * corner on a laptop. Bumling sits in it, bobbing and blinking, and gives a small hop every few seconds; pointing at
- * it (or reaching it with the keyboard) makes him jump and brings up "Chat with AI assistant" above it; a phone never shows
- * that text by itself, because space is tight. It opens the
- * panel over the page. Hidden on the Companion, which is a chat of its own, and when the team has switched the
- * assistant off. Motion is GSAP; with reduced motion he stays put and the bubble just appears.
- */
-export function Assistant() {
-  const me = useMe();
-  const loc = useLocation();
-  const mod = useModule('assistant');
-  const [open, setOpen] = useKept(`assistant-open:${me.data?.user.id ?? 'none'}`, 'open', false);
-  const button = useRef<HTMLButtonElement>(null);
-  // Opened with the button: focus goes into the panel, and comes back to the button when it folds away.
-  const byButton = useRef(false);
-  const body = useRef<HTMLSpanElement>(null);
-  const tip = useRef<HTMLSpanElement>(null);
-  const [eager, setEager] = useState(false);
-  const reduce = useReducedMotion();
-
-  // When the panel folds away after the button opened it, focus goes back to the button.
-  useEffect(() => {
-    if (open || !byButton.current) return;
-    byButton.current = false;
-    button.current?.focus({ preventScroll: true });
-  }, [open]);
-
-  // He pops in, then every few seconds gives a little hop and a wiggle, so the button reads as someone to talk to.
-  useLayoutEffect(() => {
-    const el = button.current;
-    const him = body.current;
-    if (!el || !him) return;
-    if (reduce) {
-      gsap.set(el, { scale: 1, opacity: 1 });
-      gsap.set(him, { y: 0, rotation: 0 });
-      return;
-    }
-    // Once in, the inline transform goes, so the button's own hover lift (the toy class) works again.
-    gsap.fromTo(el, { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.35, ease: 'back.out(2.2)', onComplete: () => void gsap.set(el, { clearProps: 'transform,opacity' }) });
-    const idle = gsap
-      .timeline({ repeat: -1, repeatDelay: 5, delay: 2 })
-      .to(him, { y: -7, duration: 0.18, ease: 'power2.out' })
-      .to(him, { y: 0, duration: 0.32, ease: 'bounce.out' })
-      .to(him, { rotation: -10, duration: 0.1, ease: 'sine.inOut' }, '-=0.1')
-      .to(him, { rotation: 8, duration: 0.12, ease: 'sine.inOut' })
-      .to(him, { rotation: 0, duration: 0.14, ease: 'sine.out' });
-    return () => {
-      idle.kill();
-    };
-  }, [open, reduce]);
-
-  /** The bubble above the button, and his jump, when a mouse points at it or the keyboard reaches it. */
-  const point = (on: boolean) => {
-    setEager(on);
-    const t = tip.current;
-    const him = body.current;
-    if (!t || !him) return;
-    if (reduce) {
-      gsap.set(t, { autoAlpha: on ? 1 : 0, y: 0 });
-      return;
-    }
-    gsap.to(t, { autoAlpha: on ? 1 : 0, y: on ? 0 : 6, duration: 0.2, ease: 'power2.out', overwrite: true });
-    if (on) gsap.fromTo(him, { y: 0, scale: 1 }, { y: -6, scale: 1.08, duration: 0.18, ease: 'power2.out', yoyo: true, repeat: 1, overwrite: 'auto' });
-  };
-
-  // The bubble and the jump belong to a mouse pointing at the button (or the keyboard reaching it). A phone never gets them on its own: that space is the page's.
-  if (!mod?.available || loc.pathname.startsWith('/companion')) return null;
-  if (open) return <AssistantPanel onClose={() => setOpen(false)} focusIn={byButton.current} />;
-  return (
-    <div className="fixed right-md bottom-[calc(var(--spacing-xl)+var(--spacing-lg)+env(safe-area-inset-bottom))] z-40 md:bottom-md">
-      <span
-        ref={tip}
-        id="assistant-tip"
-        role="tooltip"
-        className="tip-card pointer-events-none absolute right-0 bottom-full mb-sm whitespace-nowrap rounded-pill border border-line px-sm py-xs text-[14px] font-bold shadow-toy-soft"
-        style={{ opacity: 0, visibility: 'hidden' }}
-      >
-        Chat with AI assistant
-        <span aria-hidden="true" className="tip-card absolute top-full right-[22px] -mt-[5px] size-[10px] rotate-45 border-r border-b border-line" />
-      </span>
-      <button
-        ref={button}
-        type="button"
-        onClick={() => {
-          byButton.current = true;
-          setOpen(true);
-        }}
-        onPointerEnter={(e) => e.pointerType !== 'touch' && point(true)}
-        onPointerLeave={() => point(false)}
-        onFocus={(e) => e.currentTarget.matches(':focus-visible') && point(true)}
-        onBlur={() => point(false)}
-        aria-label="Open the assistant"
-        aria-describedby="assistant-tip"
-        className="toy toy-soft flex size-[60px] items-center justify-center rounded-pill border-2 border-line bg-card"
-      >
-        <span ref={body} className="flex" aria-hidden="true">
-          <Avatar relationship="bumling" size={40} mood={eager ? 'excited' : 'happy'} decorative />
-        </span>
-      </button>
-    </div>
   );
 }

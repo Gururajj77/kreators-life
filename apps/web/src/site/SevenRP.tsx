@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 import { LIFE_AREAS, RELATIONSHIPS, type AppModule, type LifeAreaKey } from '@kreators/shared';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Fold } from '../components/Fold';
 import { Segmented } from '../components/fx/Segmented';
@@ -19,7 +19,14 @@ import { AppIcon } from '../components/AppIcon';
  * shows a blank band, and `prefers-reduced-motion` drops the lift and renders straight in its resting place. */
 export function useRise() {
   const reduce = useReducedMotion();
-  return reduce ? { initial: { opacity: 1, y: 0 } } : { initial: { opacity: 1, y: 20 }, whileInView: { y: 0 }, viewport: { once: true, margin: '-60px' }, transition: { duration: 0.5 } };
+  return reduce
+    ? { initial: { opacity: 1, y: 0 } }
+    : {
+        initial: { opacity: 1, y: 20 },
+        whileInView: { y: 0 },
+        viewport: { once: true, margin: '-60px' },
+        transition: { duration: 0.5 },
+      };
 }
 
 /** The seven pillars stacked, each with its character on top: red at the bottom, violet at the top. */
@@ -37,9 +44,23 @@ export function Tower() {
             style={{ width: `${width}%`, background: r.color }}
             initial={reduce ? false : { opacity: 0, scale: 0.6, y: -30 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ delay: 0.1 + i * 0.08, type: 'spring', stiffness: 260, damping: 18 }}
+            transition={{
+              delay: 0.1 + i * 0.08,
+              type: 'spring',
+              stiffness: 260,
+              damping: 18,
+            }}
           >
-            <motion.div className="absolute -top-[30px]" animate={reduce ? undefined : { y: [0, -6, 0] }} transition={{ duration: 2.4 + i * 0.2, repeat: Infinity, ease: 'easeInOut', delay: i * 0.3 }}>
+            <motion.div
+              className="absolute -top-[30px]"
+              animate={reduce ? undefined : { y: [0, -6, 0] }}
+              transition={{
+                duration: 2.4 + i * 0.2,
+                repeat: Infinity,
+                ease: 'easeInOut',
+                delay: i * 0.3,
+              }}
+            >
               <Avatar relationship={r.key} size={44} decorative />
             </motion.div>
           </motion.div>
@@ -80,7 +101,13 @@ function AppTile({ m }: { m: AppModule }) {
 }
 
 function AppGrid({ items }: { items: AppModule[] }) {
-  return <ul className="m-0 grid list-none grid-cols-2 gap-xs p-0 sm:grid-cols-3">{items.map((m) => <AppTile key={m.key} m={m} />)}</ul>;
+  return (
+    <ul className="m-0 grid list-none grid-cols-2 gap-xs p-0 sm:grid-cols-3">
+      {items.map((m) => (
+        <AppTile key={m.key} m={m} />
+      ))}
+    </ul>
+  );
 }
 
 /**
@@ -112,7 +139,13 @@ function Explorer({ picks, value, onPick, label }: { picks: Choice[]; value: str
       {/* On a phone: one row of pills that scrolls sideways. From the tablet width up: an inset list. */}
       <div className="scroll-row md:hidden" role="group" aria-label={label}>
         {picks.map((p) => (
-          <button key={p.key} type="button" aria-pressed={p.key === current.key} onClick={() => onPick(p.key)} className="toy inline-flex min-h-[44px] shrink-0 items-center gap-xs rounded-pill bg-card-strong px-sm text-[14px] font-bold aria-pressed:bg-ink aria-pressed:text-on-ink">
+          <button
+            key={p.key}
+            type="button"
+            aria-pressed={p.key === current.key}
+            onClick={() => onPick(p.key)}
+            className="toy inline-flex min-h-[44px] shrink-0 items-center gap-xs rounded-pill bg-card-strong px-sm text-[14px] font-bold aria-pressed:bg-ink aria-pressed:text-on-ink"
+          >
             <span className="h-[12px] w-[12px] rounded-full" style={{ background: p.relationship.color }} aria-hidden="true" />
             {p.name}
           </button>
@@ -128,7 +161,13 @@ function Explorer({ picks, value, onPick, label }: { picks: Choice[]; value: str
                 aria-pressed={on}
                 onClick={() => onPick(p.key)}
                 className="flex min-h-[56px] w-full items-center gap-sm rounded-inner-sm px-sm text-left transition-colors hover:bg-paper aria-pressed:bg-paper"
-                style={on ? ({ boxShadow: `inset 3px 0 0 ${p.relationship.color}` } as CSSProperties) : undefined}
+                style={
+                  on
+                    ? ({
+                        boxShadow: `inset 3px 0 0 ${p.relationship.color}`,
+                      } as CSSProperties)
+                    : undefined
+                }
               >
                 <Avatar relationship={p.relationship.key} size={32} decorative />
                 <span className="min-w-0 flex-1">
@@ -141,7 +180,13 @@ function Explorer({ picks, value, onPick, label }: { picks: Choice[]; value: str
         })}
       </ul>
 
-      <div ref={panel} id="pillar-panel" aria-live="polite" className="fx-spot wash rounded-card bg-card p-md shadow-toy-soft md:p-lg" style={{ '--wash': r.color } as CSSProperties}>
+      <div
+        ref={panel}
+        id="pillar-panel"
+        aria-live="polite"
+        className="fx-spot wash rounded-card bg-card p-md shadow-toy-soft md:p-lg"
+        style={{ '--wash': r.color } as CSSProperties}
+      >
         <div className="flex items-center gap-md">
           <Avatar relationship={r.key} size={96} mood="excited" />
           <div className="min-w-0">
@@ -176,8 +221,21 @@ function Explorer({ picks, value, onPick, label }: { picks: Choice[]; value: str
  * same seven read as the five areas of life. One story shows at a time; the rest are a tap away.
  */
 export function SevenRP() {
-  const [viewRaw, setView] = useParamState('view', 'seven');
-  const view = viewRaw === 'five' ? 'five' : 'seven';
+  const [params, setParams] = useSearchParams();
+  const view = params.get('view') === 'five' ? 'five' : 'seven';
+  // The view and the pick change in one write: two writes in one tap each start from the same old URL, so the second
+  // (dropping the pick) put the old view back and "Five areas of life" never stuck.
+  const setView = (v: string) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (v === 'five') next.set('view', 'five');
+        else next.delete('view');
+        next.delete('pillar');
+        return next;
+      },
+      { replace: true, preventScrollReset: true },
+    );
   const [pick, setPick] = useParamState('pillar', RELATIONSHIPS[0]!.key);
   const entry = useAppEntry();
   const rise = useRise();
@@ -197,7 +255,17 @@ export function SevenRP() {
     const meta = LIFE_AREAS[k];
     const r = RELATIONSHIPS.find((x) => x.key === meta.relationship)!;
     const features = featuresForLifeArea(k);
-    return { key: k, name: meta.name, short: `${features.length} apps`, relationship: r, eyebrow: 'Area of life', headline: meta.name, line: meta.blurb, features, isArea: true };
+    return {
+      key: k,
+      name: meta.name,
+      short: `${features.length} apps`,
+      relationship: r,
+      eyebrow: 'Area of life',
+      headline: meta.name,
+      line: meta.blurb,
+      features,
+      isArea: true,
+    };
   });
   const picks = view === 'seven' ? sevenPicks : fivePicks;
   // A choice from the other view, or a word nobody sent, falls back to the first one.
@@ -211,15 +279,14 @@ export function SevenRP() {
           <h1 className="type-hook mt-sm text-[clamp(40px,9vw,80px)]">
             <TextReveal parts={[{ text: 'Seven relationships' }, { text: 'make a life', em: true }]} />
           </h1>
-          <p className="mt-md m-0 max-w-[520px] text-balance text-[18px] font-semibold leading-snug text-ink-soft">Each relationship is a pillar with its own guide. Pick one to see the apps that serve it.</p>
+          <p className="mt-md m-0 max-w-[520px] text-balance text-[18px] font-semibold leading-snug text-ink-soft">
+            Each relationship is a pillar with its own guide. Pick one to see the apps that serve it.
+          </p>
           <Segmented
             className="mt-md"
             label="View"
             value={view}
-            onChange={(v) => {
-              setView(v);
-              setPick('');
-            }}
+            onChange={setView}
             options={[
               { value: 'seven', label: 'Seven relationships' },
               { value: 'five', label: 'Five areas of life' },
@@ -237,9 +304,14 @@ export function SevenRP() {
 
       <section className="mt-2xl text-center">
         <motion.div {...rise} className="rounded-card bg-ink p-lg text-on-ink">
-          <h2 className="type-hook text-[clamp(32px,6vw,56px)] text-on-ink [&_em]:text-on-ink/70!">Find out where <em>yours stand</em></h2>
+          <h2 className="type-hook text-[clamp(32px,6vw,56px)] text-on-ink [&_em]:text-on-ink/70!">
+            Find out where <em>yours stand</em>
+          </h2>
           <p className="mt-xs m-0 text-balance text-[16px] font-semibold text-on-ink/80">A short chat places all seven, then builds a pillar for the ones that need you most.</p>
-          <Link to={entry === '/home' ? '/home' : '/start'} className="toy fx-shimmer mt-md inline-flex min-h-[56px] items-center rounded-pill bg-card px-lg text-[18px] font-bold text-ink">
+          <Link
+            to={entry === '/home' ? '/home' : '/start'}
+            className="toy fx-shimmer mt-md inline-flex min-h-[56px] items-center rounded-pill bg-card px-lg text-[18px] font-bold text-ink"
+          >
             Start free
           </Link>
         </motion.div>

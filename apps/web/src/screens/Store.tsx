@@ -6,7 +6,7 @@ import { LockedButton } from '../components/LockedButton';
 import { ListingSheet } from '../components/ListingSheet';
 import { MediaSection } from '../components/MediaSection';
 import { BackLink } from '../components/PageHeader';
-import { money } from '../components/PeriodPanel';
+import { moneyRounded as money } from '../components/PeriodPanel';
 import { Screen } from '../components/Screen';
 import { SkeletonList } from '../components/Skeleton';
 import { Sheet } from '../components/Sheet';
@@ -14,9 +14,12 @@ import { api } from '../lib/api';
 import { useParamState } from '../lib/useParamState';
 import { useAuthed, useMe } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
+import { chip, FIELD } from '../lib/ui';
+import { ErrorLine } from '../components/ErrorLine';
+import { FactTag, IconTag } from '../components/FactTag';
+import { StatusTag } from '../components/StatusTag';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-const pill = (on: boolean) => `toy min-h-[40px] shrink-0 rounded-pill border-2 px-sm text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card text-ink'}`;
+const pill = chip;
 const BUDGETS: { label: string; cents: number | null }[] = [
   { label: 'Any budget', cents: null },
   { label: 'Under 10k', cents: 1_000_000 },
@@ -27,7 +30,11 @@ const BUDGETS: { label: string; cents: number | null }[] = [
 
 /** The yellow tag and the yellow edge: how a featured spot stands out everywhere. */
 export function FeaturedTag() {
-  return <span className="rounded-pill bg-r3 px-xs text-[12px] font-extrabold leading-[20px] text-on-yellow">Featured</span>;
+  return (
+    <IconTag tone="warn" icon="Star">
+      Featured
+    </IconTag>
+  );
 }
 export const cardClass = (featured: boolean) => `rounded-card bg-card p-sm ${featured ? 'border-2 border-r3 shadow-toy' : 'border-2 border-transparent shadow-toy-soft'}`;
 
@@ -78,7 +85,7 @@ export function Store() {
         <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Store</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Gear and software for creators. New things come through partner links, so kreators.app may earn a share. Pre-owned things come from other creators: make an offer, talk it over, meet up. Kits say what to buy at your stage, within a budget.</p>
-        <div className="mt-md flex flex-wrap gap-xs">
+        <div className="fill-row mt-md flex flex-wrap gap-xs">
           <Button onClick={() => setSelling(true)}>Sell something</Button>
           {admin && (
             <>
@@ -221,7 +228,7 @@ export function Store() {
                       <span className="block text-[16px] font-bold">{o.listingTitle}</span>
                       <span className="block text-[14px] font-semibold text-ink-soft">Your offer {money(o.cents, 'INR')}</span>
                     </span>
-                    <span className="shrink-0 rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[24px] text-ink-soft">{o.status}</span>
+                    <StatusTag tone={o.status === 'accepted' ? 'good' : o.status === 'declined' ? 'bad' : o.status === 'open' ? 'info' : 'neutral'}>{o.status}</StatusTag>
                   </button>
                 </li>
               ))}
@@ -253,8 +260,8 @@ function ItemBody({ item }: { item: StoreItem }) {
       {item.imageUrl && <img src={item.imageUrl} alt={item.title} loading="lazy" decoding="async" className="aspect-video w-full rounded-tile bg-paper object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />}
       <div className="flex flex-wrap items-center gap-xs">
         {isFeatured(item.featuredUntil) && <FeaturedTag />}
-        <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">{item.category}</span>
-        {item.stage !== 'any' && <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">{STORE_STAGE_META[item.stage].name}</span>}
+        <FactTag kind="category">{item.category}</FactTag>
+        {item.stage !== 'any' && <IconTag tone="calm" icon="Sprout">{STORE_STAGE_META[item.stage].name}</IconTag>}
       </div>
       <span className="block text-[16px] font-bold">{item.title}</span>
       {item.description && <span className="block text-[14px] font-semibold text-ink-soft">{item.description}</span>}
@@ -279,8 +286,8 @@ function KitBody({ kit }: { kit: StoreKit }) {
     <div className="flex flex-col gap-xs">
       <div className="flex flex-wrap items-center gap-xs">
         {isFeatured(kit.featuredUntil) && <FeaturedTag />}
-        <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">{STORE_STAGE_META[kit.stage].name}</span>
-        {kit.budgetCents > 0 && <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">Budget {money(kit.budgetCents, kit.currency)}</span>}
+        <IconTag tone="calm" icon="Sprout">{STORE_STAGE_META[kit.stage].name}</IconTag>
+        {kit.budgetCents > 0 && <FactTag kind="price">{`Budget ${money(kit.budgetCents, kit.currency)}`}</FactTag>}
       </div>
       <span className="block text-[18px] font-bold">{kit.title}</span>
       {kit.description && <span className="block text-[14px] font-semibold text-ink-soft">{kit.description}</span>}
@@ -311,15 +318,17 @@ function ListingButton({ l, onOpen }: { l: PreownedListing; onOpen: (id: string)
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-xs">
             {isFeatured(l.featuredUntil) && l.status === 'live' && <FeaturedTag />}
-            <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">{PREOWNED_CONDITION_META[l.condition].name}</span>
-            {l.isKit && <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">Whole setup</span>}
-            <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft" title={l.sellerTrust.label}>
-              Trust {l.sellerTrust.score}
-            </span>
-            {l.status === 'sold' && <span className="rounded-pill bg-ink px-xs text-[12px] font-extrabold leading-[20px] text-on-ink">Sold{l.soldCents ? ` for ${money(l.soldCents, l.currency)}` : ''}</span>}
-            {l.status === 'agreed' && <span className="rounded-pill bg-ink px-xs text-[12px] font-extrabold leading-[20px] text-on-ink">Offer accepted</span>}
-            {l.status === 'withdrawn' && <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">Taken down</span>}
+            <IconTag tone="info" icon="Sparkle">{PREOWNED_CONDITION_META[l.condition].name}</IconTag>
+            {l.isKit && <FactTag kind="category">Whole setup</FactTag>}
+            <IconTag tone="good" icon="ShieldCheck" title={l.sellerTrust.label}>{`Trust ${l.sellerTrust.score}`}</IconTag>
           </span>
+          {l.status !== 'live' && (
+            <span className="mt-xs flex flex-wrap items-center gap-xs">
+              {l.status === 'sold' && <StatusTag tone="good">Sold{l.soldCents ? ` for ${money(l.soldCents, l.currency)}` : ''}</StatusTag>}
+              {l.status === 'agreed' && <StatusTag tone="info">Offer accepted</StatusTag>}
+              {l.status === 'withdrawn' && <StatusTag tone="bad">Taken down</StatusTag>}
+            </span>
+          )}
           <span className="mt-xs block text-[16px] font-bold">{l.title}</span>
           <Price cents={l.priceCents} original={l.originalCents} currency={l.currency} />
           <span className="block text-[12px] font-bold text-ink-soft">
@@ -349,13 +358,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       {children}
     </label>
   );
-}
-function Err({ m }: { m: { isError: boolean; error: unknown } }) {
-  return m.isError ? (
-    <p role="alert" className="m-0 text-[14px] font-bold">
-      {m.error instanceof Error ? m.error.message : 'That did not work.'}
-    </p>
-  ) : null;
 }
 
 function SellSheet({ open, onClose, onSaved, city }: { open: boolean; onClose: () => void; onSaved: () => void; city: string }) {
@@ -412,7 +414,7 @@ function SellSheet({ open, onClose, onSaved, city }: { open: boolean; onClose: (
       >
         <p className="m-0 text-[14px] font-semibold text-ink-soft">Say what it is, what state it is in and what you want for it. Buyers make offers and ask questions here; you settle the handover between you.</p>
         <Field label="What is it">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Sony ZV-E10 body" className={field} />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Sony ZV-E10 body" className={FIELD} />
         </Field>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-[14px] font-bold">Category</legend>
@@ -436,32 +438,32 @@ function SellSheet({ open, onClose, onSaved, city }: { open: boolean; onClose: (
         </fieldset>
         <div className="grid grid-cols-2 gap-xs">
           <Field label="Asking price, INR">
-            <input type="number" min={1} inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} className={field} />
+            <input type="number" min={1} inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} className={FIELD} />
           </Field>
           <Field label="What it cost new">
-            <input type="number" min={0} inputMode="numeric" value={original} onChange={(e) => setOriginal(e.target.value)} className={field} />
+            <input type="number" min={0} inputMode="numeric" value={original} onChange={(e) => setOriginal(e.target.value)} className={FIELD} />
           </Field>
           <Field label="Bought in">
-            <input type="number" min={1990} max={2100} inputMode="numeric" value={year} onChange={(e) => setYear(e.target.value)} placeholder="2025" className={field} />
+            <input type="number" min={1990} max={2100} inputMode="numeric" value={year} onChange={(e) => setYear(e.target.value)} placeholder="2025" className={FIELD} />
           </Field>
           <Field label="City">
-            <input value={where} onChange={(e) => setWhere(e.target.value)} maxLength={80} className={field} />
+            <input value={where} onChange={(e) => setWhere(e.target.value)} maxLength={80} className={FIELD} />
           </Field>
         </div>
         <Field label="What comes with it">
-          <input value={includes} onChange={(e) => setIncludes(e.target.value)} maxLength={300} placeholder="Box, charger, two batteries" className={field} />
+          <input value={includes} onChange={(e) => setIncludes(e.target.value)} maxLength={300} placeholder="Box, charger, two batteries" className={FIELD} />
         </Field>
         <Field label="Anything a buyer should know">
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={3000} placeholder="Shutter count, marks, repairs." className={field} />
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={3000} placeholder="Shutter count, marks, repairs." className={FIELD} />
         </Field>
         <Field label="Picture links, one per line (https)">
-          <textarea value={images} onChange={(e) => setImages(e.target.value)} rows={2} className={field} />
+          <textarea value={images} onChange={(e) => setImages(e.target.value)} rows={2} className={FIELD} />
         </Field>
         <label className="flex min-h-[44px] items-center gap-sm">
           <input type="checkbox" checked={isKit} onChange={(e) => setIsKit(e.target.checked)} className="size-[20px]" />
           <span className="text-[14px] font-bold">This is a whole setup sold together</span>
         </label>
-        <Err m={save} />
+        <ErrorLine e={save.isError ? save.error : null} />
         <Button type="submit" size="lg" full disabled={save.isPending || !title.trim() || !price}>
           List it
         </Button>
@@ -504,17 +506,17 @@ function ItemSheet({ open, onClose, onSaved }: { open: boolean; onClose: () => v
       >
         <p className="m-0 text-[14px] font-semibold text-ink-soft">Team only. The link is the partner link; people go through it when they tap Get it.</p>
         <Field label="Name">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} className={field} />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} className={FIELD} />
         </Field>
         <Field label="Partner link">
-          <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} maxLength={500} placeholder="https://" className={field} />
+          <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} maxLength={500} placeholder="https://" className={FIELD} />
         </Field>
         <div className="grid grid-cols-2 gap-xs">
           <Field label="Price, INR">
-            <input type="number" min={0} inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} className={field} />
+            <input type="number" min={0} inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} className={FIELD} />
           </Field>
           <Field label="Stage">
-            <select value={stage} onChange={(e) => setStage(e.target.value as StoreStage)} className={field}>
+            <select value={stage} onChange={(e) => setStage(e.target.value as StoreStage)} className={FIELD}>
               {STORE_STAGES.map((s) => (
                 <option key={s} value={s}>
                   {STORE_STAGE_META[s].name}
@@ -534,30 +536,30 @@ function ItemSheet({ open, onClose, onSaved }: { open: boolean; onClose: () => v
           </div>
         </fieldset>
         <Field label="Picture link (https)">
-          <input type="url" value={image} onChange={(e) => setImage(e.target.value)} maxLength={500} className={field} />
+          <input type="url" value={image} onChange={(e) => setImage(e.target.value)} maxLength={500} className={FIELD} />
         </Field>
         <Field label="Why it is on the shelf">
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={2000} className={field} />
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={2000} className={FIELD} />
         </Field>
         <div className="grid grid-cols-2 gap-xs">
           <Field label="Xp of at least">
-            <input type="number" min={0} value={minXp} onChange={(e) => setMinXp(e.target.value)} className={field} />
+            <input type="number" min={0} value={minXp} onChange={(e) => setMinXp(e.target.value)} className={FIELD} />
           </Field>
           <Field label="Points balance of at least">
-            <input type="number" min={0} value={minPoints} onChange={(e) => setMinPoints(e.target.value)} className={field} />
+            <input type="number" min={0} value={minPoints} onChange={(e) => setMinPoints(e.target.value)} className={FIELD} />
           </Field>
           <Field label="Holds the badge">
-            <select value={badge} onChange={(e) => setBadge(e.target.value)} className={field}>
+            <select value={badge} onChange={(e) => setBadge(e.target.value)} className={FIELD}>
               <option value="">Any badge or none</option>
               {PUBLIC_BADGES.map((b) => (
                 <option key={b.key} value={b.key}>
-                  {b.emoji} {b.name}
+                  {b.name}
                 </option>
               ))}
             </select>
           </Field>
         </div>
-        <Err m={save} />
+        <ErrorLine e={save.isError ? save.error : null} />
         <Button type="submit" size="lg" full disabled={save.isPending || !title.trim() || !url.trim()}>
           Put it in the store
         </Button>
@@ -597,11 +599,11 @@ function KitSheet({ open, onClose, onSaved, items, listings }: { open: boolean; 
       >
         <p className="m-0 text-[14px] font-semibold text-ink-soft">Team only. Pick the pieces someone at this stage should buy within this budget. New gear and pre-owned pieces both go in.</p>
         <Field label="Name">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Starter kit under 50k" className={field} />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Starter kit under 50k" className={FIELD} />
         </Field>
         <div className="grid grid-cols-2 gap-xs">
           <Field label="Stage">
-            <select value={stage} onChange={(e) => setStage(e.target.value as StoreStage)} className={field}>
+            <select value={stage} onChange={(e) => setStage(e.target.value as StoreStage)} className={FIELD}>
               {STORE_STAGES.map((s) => (
                 <option key={s} value={s}>
                   {STORE_STAGE_META[s].name}
@@ -610,11 +612,11 @@ function KitSheet({ open, onClose, onSaved, items, listings }: { open: boolean; 
             </select>
           </Field>
           <Field label="Budget, INR">
-            <input type="number" min={0} inputMode="numeric" value={budget} onChange={(e) => setBudget(e.target.value)} className={field} />
+            <input type="number" min={0} inputMode="numeric" value={budget} onChange={(e) => setBudget(e.target.value)} className={FIELD} />
           </Field>
         </div>
         <Field label="Who it is for">
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} maxLength={2000} className={field} />
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} maxLength={2000} className={FIELD} />
         </Field>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-[14px] font-bold">Pieces</legend>
@@ -642,7 +644,7 @@ function KitSheet({ open, onClose, onSaved, items, listings }: { open: boolean; 
           </ul>
         </fieldset>
         <p className="m-0 text-[14px] font-extrabold">Comes to {money(total, 'INR')}</p>
-        <Err m={save} />
+        <ErrorLine e={save.isError ? save.error : null} />
         <Button type="submit" size="lg" full disabled={save.isPending || !title.trim() || picked.length === 0}>
           Make the kit
         </Button>

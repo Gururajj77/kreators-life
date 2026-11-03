@@ -7,14 +7,19 @@ import { Button } from '../components/Button';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
-import { api } from '../lib/api';
-import { todayLocal } from '../lib/date';
-import { useAuthed } from '../lib/queries';
+import { api, errorText } from '../lib/api';
+import { todayLocal, shortDate } from '../lib/date';
+import { useAuthed, useMe } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
+import { FIELD } from '../lib/ui';
+import { Fold } from '../components/Fold';
+import { StatusTag } from '../components/StatusTag';
+import type { TagTone } from '@kreators/shared';
+import { ErrorLine } from '../components/ErrorLine';
+import { FactTag, IconTag } from '../components/FactTag';
+import { useSeedOnce } from '../lib/useSeed';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-const fmtDate = (d: string | null) => (d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : null);
-const errText = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
+const fmtDate = (d: string | null) => (d ? shortDate(d) : null);
 const typeName = (t: string) => t.replace('_', ' ');
 const locationText = (o: OpportunityT) => (o.locationMode === 'remote' ? 'Remote' : o.locationText || (o.locationMode === 'on_site' ? 'On site' : 'Hybrid'));
 const payText = (o: OpportunityT) => {
@@ -23,32 +28,20 @@ const payText = (o: OpportunityT) => {
   return `${o.currency} ${o.compensationMin ?? o.compensationMax}`;
 };
 
-const STATUS_TINT: Record<ApplicationStatus, string> = {
-  draft: 'var(--tint-brown)',
-  submitted: 'var(--tint-yellow)',
-  reviewing: 'var(--tint-orange)',
-  shortlisted: 'var(--tint-purple)',
-  selected: 'var(--tint-green)',
-  rejected: 'var(--tint-red)',
-  withdrawn: 'var(--tint-brown)',
-  completed: 'var(--tint-green)',
+const STATUS_TONE: Record<ApplicationStatus, TagTone> = {
+  draft: 'neutral',
+  submitted: 'warn',
+  reviewing: 'warn',
+  shortlisted: 'info',
+  selected: 'good',
+  rejected: 'bad',
+  withdrawn: 'neutral',
+  completed: 'good',
 };
 
-function Err({ error, fallback = 'That did not work.' }: { error: unknown; fallback?: string }) {
-  if (!error) return null;
-  return (
-    <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-      {errText(error, fallback)}
-    </p>
-  );
-}
 
 function StatusPill({ status }: { status: ApplicationStatus }) {
-  return (
-    <span className="rounded-pill px-xs text-[12px] font-extrabold leading-[20px]" style={{ background: STATUS_TINT[status] }}>
-      {status}
-    </span>
-  );
+  return <StatusTag tone={STATUS_TONE[status]}>{status}</StatusTag>;
 }
 
 function Facts({ o }: { o: OpportunityT }) {
@@ -61,9 +54,9 @@ function Chips({ items }: { items: string[] }) {
   return (
     <span className="mt-xs flex flex-wrap gap-xs">
       {items.map((s) => (
-        <span key={s} className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px]">
+        <FactTag key={s} kind="category">
           {s}
-        </span>
+        </FactTag>
       ))}
     </span>
   );
@@ -107,8 +100,8 @@ export function Work() {
                     <span className="block text-[14px] font-semibold text-ink-soft">{o.organizationName}</span>
                   </span>
                   <span className="flex shrink-0 gap-xs">
-                    {o.clubOnly && <span className="rounded-pill bg-r2 px-xs text-[12px] font-extrabold leading-[20px] text-on-fill">Club only</span>}
-                    {o.myApplication && <span className="rounded-pill bg-r4 px-xs text-[12px] font-extrabold leading-[20px] text-on-fill">Applied</span>}
+                    {o.clubOnly && <IconTag tone="deep" icon="Lock">Club only</IconTag>}
+                    {o.myApplication && <StatusTag tone="good">Applied</StatusTag>}
                   </span>
                 </span>
                 <Facts o={o} />
@@ -174,7 +167,7 @@ export function Work() {
           </ul>
           <Pager page={d?.draftPage} prefix="d" label="your listings" />
           <div className="mt-xs">
-            <Err error={setStatus.error} />
+            <ErrorLine e={setStatus.error} />
           </div>
         </section>
       )}
@@ -199,7 +192,10 @@ function PostSheet({ open, onClose, onPosted }: { open: boolean; onClose: () => 
   const [type, setType] = useState<OpportunityT['opportunityType']>('gig');
   const [skills, setSkills] = useState<string[]>([]);
   const [locationMode, setLocationMode] = useState<OpportunityT['locationMode']>('remote');
-  const [locationText, setLocationText] = useState('');
+  // An on-site or hybrid post starts in the poster's own city, from Profile.
+  const me = useMe();
+  const [locationText, setLocationText] = useState(me.data?.user.city ?? '');
+  useSeedOnce(me.data?.user, (u) => setLocationText((t) => t || u.city));
   const [min, setMin] = useState('');
   const [max, setMax] = useState('');
   const [currency, setCurrency] = useState('INR');
@@ -244,7 +240,7 @@ function PostSheet({ open, onClose, onPosted }: { open: boolean; onClose: () => 
       >
         <label className="block">
           <span className="block text-[14px] font-bold">From</span>
-          <select value={organizationId} onChange={(e) => setOrganizationId(e.target.value)} className={field}>
+          <select value={organizationId} onChange={(e) => setOrganizationId(e.target.value)} className={FIELD}>
             <option value="">The team</option>
             {orgs.data?.organizations.map((o) => (
               <option key={o.id} value={o.id}>
@@ -255,11 +251,11 @@ function PostSheet({ open, onClose, onPosted }: { open: boolean; onClose: () => 
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Title</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={field} />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Description</span>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} maxLength={5000} className={field} />
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} maxLength={5000} className={FIELD} />
         </label>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-[14px] font-bold">Type</legend>
@@ -290,33 +286,33 @@ function PostSheet({ open, onClose, onPosted }: { open: boolean; onClose: () => 
               </button>
             ))}
           </div>
-          {locationMode !== 'remote' && <input value={locationText} onChange={(e) => setLocationText(e.target.value)} maxLength={120} placeholder="City" className={field} aria-label="City" />}
+          {locationMode !== 'remote' && <input value={locationText} onChange={(e) => setLocationText(e.target.value)} maxLength={120} placeholder="City" className={FIELD} aria-label="City" />}
         </fieldset>
         <div className="grid grid-cols-3 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Pay from</span>
-            <input type="number" min={0} value={min} onChange={(e) => setMin(e.target.value)} className={field} />
+            <input type="number" min={0} value={min} onChange={(e) => setMin(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">To</span>
-            <input type="number" min={0} value={max} onChange={(e) => setMax(e.target.value)} className={field} />
+            <input type="number" min={0} value={max} onChange={(e) => setMax(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Currency</span>
-            <input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} maxLength={3} className={field} />
+            <input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} maxLength={3} className={FIELD} />
           </label>
         </div>
         <label className="block">
           <span className="block text-[14px] font-bold">Deliverables</span>
-          <textarea value={deliverables} onChange={(e) => setDeliverables(e.target.value)} rows={2} maxLength={2000} className={field} />
+          <textarea value={deliverables} onChange={(e) => setDeliverables(e.target.value)} rows={2} maxLength={2000} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Apply by</span>
-          <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} className={field} />
+          <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Who can apply</span>
-          <textarea value={eligibility} onChange={(e) => setEligibility(e.target.value)} rows={2} maxLength={1000} className={field} />
+          <textarea value={eligibility} onChange={(e) => setEligibility(e.target.value)} rows={2} maxLength={1000} className={FIELD} />
         </label>
         <label className="toy flex min-h-[48px] cursor-pointer items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
           <input type="checkbox" checked={clubOnly} onChange={(e) => setClubOnly(e.target.checked)} className="size-[20px] accent-ink" />
@@ -325,7 +321,7 @@ function PostSheet({ open, onClose, onPosted }: { open: boolean; onClose: () => 
             <span className="block text-[14px] font-semibold text-ink-soft">Only Club members see it and can apply. Their first look.</span>
           </span>
         </label>
-        <Err error={create.error} fallback="Could not post it." />
+        <ErrorLine e={create.error} />
         <Button type="submit" size="lg" full disabled={create.isPending || !title.trim()}>
           Save as draft
         </Button>
@@ -354,9 +350,9 @@ export function Opportunity() {
     return (
       <Screen>
         <header className="pt-lg">
-          <Back />
+          <BackLink to="/work">Work</BackLink>
         </header>
-        <p className="mt-md font-bold">{errText(q.error, 'That opportunity is not open or does not exist.')}</p>
+        <p className="mt-md font-bold">{errorText(q.error, 'That opportunity is not open or does not exist.')}</p>
       </Screen>
     );
   }
@@ -369,7 +365,7 @@ export function Opportunity() {
   return (
     <Screen>
       <header className="pt-lg">
-        <Back />
+        <BackLink to="/work">Work</BackLink>
         <p className="m-0 text-[14px] font-bold text-ink-soft">
           {o.organizationName}, {typeName(o.opportunityType)}
           {o.clubOnly ? ', Club only' : ''}
@@ -417,7 +413,7 @@ export function Opportunity() {
                   Withdraw
                 </Button>
               )}
-              <Err error={setApp.error} />
+              <ErrorLine e={setApp.error} />
             </div>
           ) : closed ? (
             <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Applications are closed.</p>
@@ -431,10 +427,10 @@ export function Opportunity() {
             >
               <label className="block">
                 <span className="block text-[14px] font-bold">A short note</span>
-                <textarea value={coverNote} onChange={(e) => setCoverNote(e.target.value)} rows={4} maxLength={2000} placeholder="Why you, in a few lines" className={field} />
+                <textarea value={coverNote} onChange={(e) => setCoverNote(e.target.value)} rows={4} maxLength={2000} placeholder="Why you, in a few lines" className={FIELD} />
               </label>
               <p className="m-0 text-[14px] font-semibold text-ink-soft">Your public portfolio and skills go with it. One application per person.</p>
-              <Err error={apply.error} fallback="Could not apply." />
+              <ErrorLine e={apply.error} />
               <Button type="submit" size="lg" full disabled={apply.isPending}>
                 Send application
               </Button>
@@ -473,7 +469,7 @@ export function Opportunity() {
                 <span className="block text-[14px] font-semibold text-ink-soft">Only Club members see it and can apply.</span>
               </span>
             </label>
-            <Err error={setStatus.error} />
+            <ErrorLine e={setStatus.error} />
           </section>
           <section className="mt-lg" aria-labelledby="applicants-heading">
             <h2 id="applicants-heading" className="text-[24px]">
@@ -482,7 +478,7 @@ export function Opportunity() {
             {d.applications.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No one has applied yet.</p>}
             <label className="mt-sm block">
               <span className="block text-[14px] font-bold">Note to send with a decision</span>
-              <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Optional" className={field} />
+              <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Optional" className={FIELD} />
             </label>
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
               {d.applications.map((a) => (
@@ -493,7 +489,7 @@ export function Opportunity() {
             </ul>
             <Pager page={d.page} label="applicants" />
             <div className="mt-xs">
-              <Err error={setApp.error} />
+              <ErrorLine e={setApp.error} />
             </div>
           </section>
         </>
@@ -521,10 +517,9 @@ function ApplicantCard({ a, onDecide, busy }: { a: Application; onDecide: (statu
       <p className="m-0 text-[14px] font-semibold text-ink-soft">Applied {fmtDate(a.submittedAt)}</p>
       {a.coverNote && <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold">{a.coverNote}</p>}
       {a.portfolioSnapshot && (
-        <details className="mt-xs">
-          <summary className="min-h-[44px] cursor-pointer text-[14px] font-bold leading-[44px]">Skills and portfolio at the time</summary>
+        <Fold className="mt-xs" title="Skills and portfolio at the time">
           <p className="m-0 whitespace-pre-wrap break-all text-[14px] font-semibold text-ink-soft">{a.portfolioSnapshot}</p>
-        </details>
+        </Fold>
       )}
       {!['withdrawn', 'completed'].includes(a.status) && (
         <div className="mt-sm flex flex-wrap gap-xs">
@@ -541,8 +536,3 @@ function ApplicantCard({ a, onDecide, busy }: { a: Application; onDecide: (statu
   );
 }
 
-function Back() {
-  return (
-    <BackLink to="/work">Work</BackLink>
-  );
-}

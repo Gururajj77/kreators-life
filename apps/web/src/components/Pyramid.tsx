@@ -90,7 +90,7 @@ export function Pyramid({ relationship, words = {}, autoplay = false, compact = 
         type={onSelect ? undefined : 'button'}
         onClick={onSelect ? undefined : () => setPlayed((n) => n + 1)}
         aria-label={onSelect ? undefined : 'Tick a task and watch the glow run up the pyramid'}
-        className={`relative mx-auto flex w-full max-w-[420px] flex-col items-center gap-xs border-0 bg-transparent p-0 text-inherit ${onSelect ? '' : 'cursor-pointer'}`}
+        className={`relative mx-auto flex w-full max-w-[420px] flex-col items-center gap-xs overflow-visible border-0 bg-transparent px-0 pt-xs pb-0 text-inherit ${onSelect ? '' : 'cursor-pointer'}`}
       >
         {LAYERS.map((k, i) => {
           const meta = KIND_META[k];
@@ -123,7 +123,7 @@ export function Pyramid({ relationship, words = {}, autoplay = false, compact = 
               {k === 'task' && (
                 // The tick that lands on the task, at the point.
                 <span data-tick className="absolute -top-xs -right-xs z-10 flex size-[32px] items-center justify-center rounded-pill bg-card shadow-toy-soft" style={{ transform: 'scale(0)' }} aria-hidden="true">
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke={rel.color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke={rel.color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" data-keep="tick">
                     <path d="M5 12.5l4.5 4.5L19 7.5" />
                   </svg>
                 </span>

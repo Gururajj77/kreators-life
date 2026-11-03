@@ -9,6 +9,7 @@ import { useAuthed, useMe } from '../lib/queries';
 import { useDebounced } from '../lib/useDebounced';
 import { Pager, usePage } from '../components/Pager';
 import { tie } from '../lib/text';
+import { StatusTag } from '../components/StatusTag';
 
 /** Each permission's queue tile: where it opens and what is waiting. Its icon is the permission's own, from `PERMISSION_META` in shared. */
 const PERMISSION_TILES: Record<Permission, { name: string; blurb: string; to: string; queue?: (q: Queues) => number }> = {
@@ -117,7 +118,7 @@ export function Manage() {
                   {m.name}
                   {m.handle ? <span className="font-semibold text-ink-soft"> @{m.handle}</span> : ''}
                 </span>
-                {m.role !== 'user' && <span className="rounded-pill bg-r6 px-xs text-[11px] font-extrabold leading-[18px] text-white">{ROLE_META[m.role].name}</span>}
+                {m.role !== 'user' && <StatusTag tone="calm">{ROLE_META[m.role].name}</StatusTag>}
               </p>
               <p className="m-0 text-[14px] font-semibold text-ink-soft">
                 {m.xp} xp, streak {m.streak}, joined {new Date(m.createdAt).toLocaleDateString()}

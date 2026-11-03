@@ -24,6 +24,8 @@ import { InterestPicker } from '../components/InterestPicker';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
+import { Icon } from '../components/Icon';
+import { House, Landmark, LayoutGrid, Sun, X } from 'lucide-react';
 import { CheckRow } from '../components/CheckRow';
 import { OnboardingTroupe } from '../components/OnboardingTroupe';
 import { Pyramid } from '../components/Pyramid';
@@ -31,6 +33,7 @@ import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { useMe, useRefreshAll } from '../lib/queries';
+import { useSeedOnce } from '../lib/useSeed';
 
 const STEPS_PER_FLOOR = 3;
 const STEP_OF_ROLE = { gauge: 1, probe: 2, foundation: 3 } as const;
@@ -61,9 +64,7 @@ function CloseVibe({ inline = false }: { inline?: boolean }) {
   };
   return (
     <button type="button" aria-label="Close" onClick={leave} className={`toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-card text-ink-soft hover:text-ink ${inline ? '' : 'safe-top fixed top-sm right-md z-30'}`}>
-      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M6 6l12 12M18 6L6 18" />
-      </svg>
+      <Icon icon={X} size={20} strokeWidth={3} />
     </button>
   );
 }
@@ -167,7 +168,7 @@ export function VibeCheck() {
                   type="button"
                   aria-pressed={focus === t}
                   onClick={() => setFocus(t)}
-                  className={`rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${focus === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}
+                  className={`min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${focus === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}
                 >
                   {t}
                 </button>
@@ -354,9 +355,6 @@ function QuestionStage({
                       className="toy toy-soft flex w-full items-center gap-sm rounded-card border-[3px] bg-card p-md text-left"
                       style={{ borderColor: value === i ? rel.color : 'transparent' }}
                     >
-                      <span className="text-[30px]" aria-hidden="true">
-                        {o.emoji}
-                      </span>
                       <span className="text-[18px] font-bold leading-tight">{o.label}</span>
                     </button>
                   ))}
@@ -580,9 +578,16 @@ function Ladders({ result, floors: asked, onDone }: { result: OnboardingResponse
 /** Interests and place, so circles can seat you with people nearby whose work fits yours. */
 function AboutYou({ onNext }: { onNext: () => void }) {
   const refresh = useRefreshAll();
-  const [interests, setInterests] = useState<string[]>([]);
-  const [city, setCity] = useState('');
-  const [area, setArea] = useState('');
+  const me = useMe();
+  // What Profile or the setup chat already holds is filled in, never asked again: interests, city and area.
+  const [interests, setInterests] = useState<string[]>(me.data?.user.interests ?? []);
+  const [city, setCity] = useState(me.data?.user.city ?? '');
+  const [area, setArea] = useState(me.data?.user.area ?? '');
+  useSeedOnce(me.data?.user, (u) => {
+    setInterests((i) => (i.length ? i : u.interests));
+    setCity((c) => c || u.city);
+    setArea((a) => a || u.area);
+  });
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
   const save = useMutation({
@@ -659,7 +664,7 @@ function Picker({ label, options, chosen, color, deep, onPick }: { label: string
       </p>
       <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label={label}>
         {options.map((o) => (
-          <button key={o} type="button" aria-pressed={chosen === o} onClick={() => onPick(o)} className="toy toy-soft rounded-pill border-2 px-sm py-xs text-left text-[14px] font-bold" style={chosen === o ? { background: color, borderColor: color, color: 'var(--color-on-fill)' } : { background: 'var(--color-card)', borderColor: 'transparent' }}>
+          <button key={o} type="button" aria-pressed={chosen === o} onClick={() => onPick(o)} className="toy toy-soft min-h-[44px] rounded-pill border-2 px-sm py-xs text-left text-[14px] font-bold" style={chosen === o ? { background: color, borderColor: color, color: 'var(--color-on-fill)' } : { background: 'var(--color-card)', borderColor: 'transparent' }}>
             {o}
           </button>
         ))}
@@ -724,15 +729,17 @@ function Learn({ result, floors, onNext }: { result: OnboardingResponse; floors:
       title: 'Four places',
       body: (
         <ul className="m-0 flex list-none flex-col gap-xs p-0">
-          {[
-            ['☀️', 'Daily', 'Three boxes a day: check in, one small act, one task.'],
-            ['🏰', 'Pillars', 'One pyramid per relationship. Tap a pillar to see it or change it.'],
-            ['🏠', 'Home', 'Your numbers first, then where to go next.'],
-            ['🧩', 'Apps', 'Switch on only what you need.'],
-          ].map(([emoji, name, line]) => (
+          {(
+            [
+              [Sun, 'Daily', 'Three boxes a day: check in, one small act, one task.'],
+              [Landmark, 'Pillars', 'One pyramid per relationship. Tap a pillar to see it or change it.'],
+              [House, 'Home', 'Your numbers first, then where to go next.'],
+              [LayoutGrid, 'Apps', 'Switch on only what you need.'],
+            ] as const
+          ).map(([glyph, name, line]) => (
             <li key={name} className="flex items-center gap-sm">
-              <span className="flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-paper text-[18px]" aria-hidden="true">
-                {emoji}
+              <span className="flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink-soft" aria-hidden="true">
+                <Icon icon={glyph} size={18} />
               </span>
               <span className="min-w-0 text-[14px] font-semibold text-ink-soft">
                 <span className="font-bold text-ink">{name}. </span>

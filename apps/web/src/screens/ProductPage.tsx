@@ -1,4 +1,4 @@
-import { PRODUCT_KIND_META, productHasOwnCover, productPayWays, unlockAt, type DiscountCheck } from '@kreators/shared';
+import { PRODUCT_KIND_META, productHasOwnCover, productPayWays, unlockAt, type DiscountCheck, money } from '@kreators/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
@@ -14,8 +14,10 @@ import { Screen } from '../components/Screen';
 import { api, publicApi } from '../lib/api';
 import { useMe, useRefreshAll } from '../lib/queries';
 import { storedRef, useSession } from '../lib/store';
+import { Stars } from '../components/Stars';
+import { FIELD } from '../lib/ui';
+import { Fold } from '../components/Fold';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 
 interface RazorpayOptions {
   key: string;
@@ -171,7 +173,7 @@ export function ProductPage() {
   const buyLabel = (label: string) => (p?.pricePoints === 0 && !p?.pwyw ? `${label} for free` : payPoints === 0 ? `${label} for free` : `${label} for ${payPoints} points`);
   const busy = buy.isPending || pendingOrder !== null;
   const payCents = p ? (discount && discount.offCents > 0 ? discount.payCents : p.priceCents) : 0;
-  const moneyLabel = p ? `${(payCents / 100).toFixed(2)} ${p.currency}` : '';
+  const moneyLabel = p ? money(payCents, p.currency) : '';
 
   return (
     <Screen tabs={false}>
@@ -238,27 +240,27 @@ export function ProductPage() {
               {p.pwyw && !replayForSale && (
                 <label className="mt-sm block">
                   <span className="block text-[14px] font-bold">What you want to pay, in points</span>
-                  <input type="number" min={p.pricePoints} value={offer} onChange={(e) => setOffer(e.target.value)} placeholder={String(p.pricePoints)} className={field} />
+                  <input type="number" min={p.pricePoints} value={offer} onChange={(e) => setOffer(e.target.value)} placeholder={String(p.pricePoints)} className={FIELD} />
                   <span className="mt-xs block text-[12px] font-bold text-ink-soft">At least {p.pricePoints}.</span>
                 </label>
               )}
               {p.kind === 'dm' && (
                 <label className="mt-sm block">
                   <span className="block text-[14px] font-bold">Your question</span>
-                  <textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={4} maxLength={2000} required className={field} placeholder="Be specific. You get one written answer." />
+                  <textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={4} maxLength={2000} required className={FIELD} placeholder="Be specific. You get one written answer." />
                 </label>
               )}
               {needsIntake &&
                 p.intake.map((qn, i) => (
                   <label key={i} className="mt-sm block">
                     <span className="block text-[14px] font-bold">{qn}</span>
-                    <input value={intake[i] ?? ''} onChange={(e) => setIntake((list) => p.intake.map((_, j) => (j === i ? e.target.value : (list[j] ?? ''))))} maxLength={500} required className={field} />
+                    <input value={intake[i] ?? ''} onChange={(e) => setIntake((list) => p.intake.map((_, j) => (j === i ? e.target.value : (list[j] ?? ''))))} maxLength={500} required className={FIELD} />
                   </label>
                 ))}
               {!replayForSale && (
                 <label className="mt-sm block">
                   <span className="block text-[14px] font-bold">Creator coupon</span>
-                  <input value={coupon} onChange={(e) => setCoupon(e.target.value.toUpperCase())} placeholder="Optional" className={field} />
+                  <input value={coupon} onChange={(e) => setCoupon(e.target.value.toUpperCase())} placeholder="Optional" className={FIELD} />
                 </label>
               )}
               {!replayForSale && d.unlock.ok && (p.pricePoints > 0 || p.priceCents > 0) && (
@@ -316,10 +318,9 @@ export function ProductPage() {
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                 {p.faq.map((f) => (
                   <li key={f.q}>
-                    <details className="rounded-tile bg-card p-sm shadow-toy-soft">
-                      <summary className="toy flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-sm text-[16px] font-bold">{f.q}</summary>
-                      <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold text-ink-soft">{f.a}</p>
-                    </details>
+                    <Fold title={f.q}>
+                      <p className="m-0 whitespace-pre-wrap px-sm text-[14px] font-semibold text-ink-soft">{f.a}</p>
+                    </Fold>
                   </li>
                 ))}
               </ul>
@@ -335,7 +336,7 @@ export function ProductPage() {
                 {d.testimonials.map((t) => (
                   <li key={t.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
                     <p className="m-0 text-[14px] font-bold">
-                      {'★'.repeat(t.rating)} {t.authorName}
+                      <Stars n={t.rating} /> {t.authorName}
                     </p>
                     <p className="mt-xs m-0 text-[16px] font-semibold">{t.body}</p>
                   </li>

@@ -7,13 +7,15 @@ import { useSession } from '../lib/store';
 import { Button } from './Button';
 import { MediaGallery } from './Media';
 import { Sheet } from './Sheet';
+import { Icon } from './Icon';
+import { ArrowDown, ArrowUp, Play } from 'lucide-react';
+import { FIELD } from '../lib/ui';
 
 interface Draft {
   url: string;
   caption: string;
 }
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const kindOf = (url: string) => mediaFromLink(url)?.kind ?? 'image';
 
 /**
@@ -91,27 +93,27 @@ export function MediaSection({ type, id, title = 'Pictures and videos' }: { type
               <li key={`${d.url}-${i}`} className="rounded-tile bg-paper p-sm">
                 <div className="flex items-center gap-sm">
                   {kindOf(d.url) === 'video' ? (
-                    <span className="flex size-[56px] shrink-0 items-center justify-center rounded-tile bg-card text-[22px]" aria-hidden="true">▶</span>
+                    <span className="flex size-[56px] shrink-0 items-center justify-center rounded-tile bg-card" aria-hidden="true"><Icon icon={Play} size={22} filled /></span>
                   ) : (
                     <img src={d.url} alt={d.caption || `${kindOf(d.url) === 'gif' ? 'GIF' : 'Picture'} ${i + 1}${i === 0 ? ', the cover' : ''}`} width={56} height={56} loading="lazy" decoding="async" className="size-[56px] shrink-0 rounded-tile bg-card object-cover" />
                   )}
                   <span className="min-w-0 flex-1 truncate text-[12px] font-bold text-ink-soft">{kindOf(d.url) === 'video' ? 'Video' : kindOf(d.url) === 'gif' ? 'GIF' : 'Picture'}{i === 0 ? ' · cover' : ''}</span>
-                  <Button variant="ghost" size="sm" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up">↑</Button>
-                  <Button variant="ghost" size="sm" onClick={() => move(i, 1)} disabled={i === draft.length - 1} aria-label="Move down">↓</Button>
+                  <Button variant="ghost" size="sm" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up"><Icon icon={ArrowUp} size={16} /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => move(i, 1)} disabled={i === draft.length - 1} aria-label="Move down"><Icon icon={ArrowDown} size={16} /></Button>
                   <Button variant="ghost" size="sm" onClick={() => setDraft((x) => x.filter((_, k) => k !== i))}>Remove</Button>
                 </div>
-                <input value={d.caption} maxLength={MAX_MEDIA_CAPTION} onChange={(e) => setDraft((x) => x.map((y, k) => (k === i ? { ...y, caption: e.target.value } : y)))} placeholder="Caption (optional)" aria-label={`Caption ${i + 1}`} className={field} />
+                <input value={d.caption} maxLength={MAX_MEDIA_CAPTION} onChange={(e) => setDraft((x) => x.map((y, k) => (k === i ? { ...y, caption: e.target.value } : y)))} placeholder="Caption (optional)" aria-label={`Caption ${i + 1}`} className={FIELD} />
               </li>
             ))}
           </ul>
           <label className="block">
             <span className="block text-[14px] font-bold">Upload a picture or GIF</span>
-            <input type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif" disabled={upload.isPending || draft.length >= max} onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ''; }} className={field} />
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif" disabled={upload.isPending || draft.length >= max} onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ''; }} className={FIELD} />
           </label>
           <div>
             <label className="block">
               <span className="block text-[14px] font-bold">Or paste a link</span>
-              <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://… picture, GIF or video" inputMode="url" autoCapitalize="none" className={field} />
+              <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://… picture, GIF or video" inputMode="url" autoCapitalize="none" className={FIELD} />
             </label>
             <Button variant="outline" size="sm" className="mt-xs" onClick={add} disabled={!link.trim()}>Add the link</Button>
           </div>

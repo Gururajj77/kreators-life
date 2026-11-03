@@ -7,24 +7,19 @@ import { DiscountField } from '../components/DiscountField';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
-import { api } from '../lib/api';
+import { api, errorText } from '../lib/api';
 import { useAuthed } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
+import { money } from '@kreators/shared';
+import { FIELD } from '../lib/ui';
+import { shortDate } from '../lib/date';
+import { ErrorLine } from '../components/ErrorLine';
+import { StatusTag } from '../components/StatusTag';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-const fmtDate = (d: string) => new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-const errText = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
+const fmtDate = shortDate;
 const modeName = (m: Program['deliveryMode']) => ({ online: 'Online', in_person: 'In person', hybrid: 'Hybrid' })[m];
-const priceText = (p: Program) => (p.pricePoints > 0 ? `${p.pricePoints} points` : p.priceCents > 0 ? `${p.currency} ${(p.priceCents / 100).toFixed(0)}` : 'Free');
+const priceText = (p: Program) => (p.pricePoints > 0 ? `${p.pricePoints} points` : p.priceCents > 0 ? money(p.priceCents, p.currency) : 'Free');
 
-function Err({ error, fallback = 'That did not work.' }: { error: unknown; fallback?: string }) {
-  if (!error) return null;
-  return (
-    <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-      {errText(error, fallback)}
-    </p>
-  );
-}
 
 export function School() {
   const pg = usePage();
@@ -111,7 +106,7 @@ function ProgramCard({ program: p, staff, myIds, onChange }: { program: Program;
             {!p.published ? ', draft' : ''}
           </p>
         </div>
-        {!p.published && <span className="shrink-0 rounded-pill bg-r3 px-xs text-[12px] font-extrabold leading-[20px] text-ink-fixed">Draft</span>}
+        {!p.published && <StatusTag tone="neutral">Draft</StatusTag>}
       </div>
       {p.description && <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold">{p.description}</p>}
       {p.outcomes && (
@@ -148,7 +143,7 @@ function ProgramCard({ program: p, staff, myIds, onChange }: { program: Program;
         ))}
       </ul>
       <div className="mt-xs">
-        <Err error={enroll.error ?? publish.error} />
+        <ErrorLine e={enroll.error ?? publish.error} />
       </div>
       {staff && (
         <div className="mt-sm flex flex-wrap gap-xs">
@@ -236,7 +231,7 @@ function StaffSheet({ program, tool, onClose, onDone }: { program: Program; tool
       >
         <label className="block">
           <span className="block text-[14px] font-bold">{tool === 'cohort' ? 'Cohort name' : 'Title'}</span>
-          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} required className={field} />
+          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} required className={FIELD} />
         </label>
         {tool === 'lesson' && (
           <>
@@ -252,11 +247,11 @@ function StaffSheet({ program, tool, onClose, onDone }: { program: Program; tool
             </fieldset>
             <label className="block">
               <span className="block text-[14px] font-bold">Link to a video or reading</span>
-              <input type="url" value={ref} onChange={(e) => setRef(e.target.value)} placeholder="https://" className={field} />
+              <input type="url" value={ref} onChange={(e) => setRef(e.target.value)} placeholder="https://" className={FIELD} />
             </label>
             <label className="block">
               <span className="block text-[14px] font-bold">Text</span>
-              <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} maxLength={20000} className={field} />
+              <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} maxLength={20000} className={FIELD} />
             </label>
           </>
         )}
@@ -264,15 +259,15 @@ function StaffSheet({ program, tool, onClose, onDone }: { program: Program; tool
           <>
             <label className="block">
               <span className="block text-[14px] font-bold">Instructions</span>
-              <textarea value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={4} maxLength={5000} className={field} />
+              <textarea value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={4} maxLength={5000} className={FIELD} />
             </label>
             <label className="block">
               <span className="block text-[14px] font-bold">How it is judged</span>
-              <textarea value={rubric} onChange={(e) => setRubric(e.target.value)} rows={3} maxLength={2000} className={field} />
+              <textarea value={rubric} onChange={(e) => setRubric(e.target.value)} rows={3} maxLength={2000} className={FIELD} />
             </label>
             <label className="block">
               <span className="block text-[14px] font-bold">Days to hand it in</span>
-              <input type="number" min={1} max={365} value={dueDays} onChange={(e) => setDueDays(e.target.value)} className={field} />
+              <input type="number" min={1} max={365} value={dueDays} onChange={(e) => setDueDays(e.target.value)} className={FIELD} />
             </label>
           </>
         )}
@@ -281,21 +276,21 @@ function StaffSheet({ program, tool, onClose, onDone }: { program: Program; tool
             <div className="grid grid-cols-2 gap-xs">
               <label className="block">
                 <span className="block text-[14px] font-bold">Starts</span>
-                <input type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} required className={field} />
+                <input type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} required className={FIELD} />
               </label>
               <label className="block">
                 <span className="block text-[14px] font-bold">Ends</span>
-                <input type="datetime-local" value={endAt} onChange={(e) => setEndAt(e.target.value)} required className={field} />
+                <input type="datetime-local" value={endAt} onChange={(e) => setEndAt(e.target.value)} required className={FIELD} />
               </label>
             </div>
             <label className="block">
               <span className="block text-[14px] font-bold">Seats</span>
-              <input type="number" min={1} max={1000} value={capacity} onChange={(e) => setCapacity(e.target.value)} className={field} />
+              <input type="number" min={1} max={1000} value={capacity} onChange={(e) => setCapacity(e.target.value)} className={FIELD} />
             </label>
             <p className="m-0 text-[14px] font-semibold text-ink-soft">You become its manager: you schedule sessions, give feedback and mark completion.</p>
           </>
         )}
-        <Err error={addLesson.error ?? addAssignment.error ?? openCohort.error} fallback="Could not save it." />
+        <ErrorLine e={addLesson.error ?? addAssignment.error ?? openCohort.error} />
         <Button type="submit" size="lg" full disabled={busy || !title.trim()}>
           {tool ? titles[tool] : 'Save'}
         </Button>
@@ -331,15 +326,15 @@ function NewProgramSheet({ open, onClose, onCreated }: { open: boolean; onClose:
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Name</span>
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required className={field} />
+          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Description</span>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} maxLength={5000} className={field} />
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} maxLength={5000} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Price in points</span>
-          <input type="number" min={0} value={price} onChange={(e) => setPrice(e.target.value)} className={field} />
+          <input type="number" min={0} value={price} onChange={(e) => setPrice(e.target.value)} className={FIELD} />
           <span className="mt-xs block text-[12px] font-bold text-ink-soft">Zero makes it free.</span>
         </label>
         <fieldset className="m-0 border-0 p-0">
@@ -354,17 +349,17 @@ function NewProgramSheet({ open, onClose, onCreated }: { open: boolean; onClose:
         </fieldset>
         <label className="block">
           <span className="block text-[14px] font-bold">What people leave with</span>
-          <textarea value={outcomes} onChange={(e) => setOutcomes(e.target.value)} rows={2} maxLength={2000} className={field} />
+          <textarea value={outcomes} onChange={(e) => setOutcomes(e.target.value)} rows={2} maxLength={2000} className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">What they need before starting</span>
-          <textarea value={prerequisites} onChange={(e) => setPrerequisites(e.target.value)} rows={2} maxLength={1000} className={field} />
+          <textarea value={prerequisites} onChange={(e) => setPrerequisites(e.target.value)} rows={2} maxLength={1000} className={FIELD} />
         </label>
         <label className="flex min-h-[44px] items-center gap-sm text-[14px] font-bold">
           <input type="checkbox" checked={published} onChange={(e) => setPublished(e.target.checked)} className="size-[20px] accent-ink" />
           Publish right away
         </label>
-        <Err error={create.error} fallback="Could not create it." />
+        <ErrorLine e={create.error} />
         <Button type="submit" size="lg" full disabled={create.isPending || !name.trim()}>
           Create program
         </Button>

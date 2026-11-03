@@ -4,6 +4,8 @@ import { Link, useParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { publicApi } from '../lib/api';
 import { SiteLayout } from './SiteLayout';
+import { Icon } from '../components/Icon';
+import { ChevronLeft } from 'lucide-react';
 
 /** Anyone with the code can check a certificate is real. */
 export function CertificatePage() {
@@ -14,9 +16,7 @@ export function CertificatePage() {
     <SiteLayout wide={false}>
       <div className="pt-lg">
         <Link to="/" className="inline-flex min-h-[44px] items-center gap-xs text-[14px] font-bold text-ink-soft">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
+          <Icon icon={ChevronLeft} size={18} strokeWidth={3} />
           kreators.app
         </Link>
         {q.isPending && <p className="m-0 text-[16px] font-semibold text-ink-soft">Checking…</p>}

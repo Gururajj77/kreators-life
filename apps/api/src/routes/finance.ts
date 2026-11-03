@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import { DOC_COMMENT_MAX, emptyInvoiceDoc, invoiceForClient, EXPENSE_CATEGORIES, INCOME_CATEGORIES, INVOICE_STATUSES, invoiceTotals, parseInvoiceDoc, type InvoiceDoc, type FinanceBudget, type FinanceDue, type FinanceGoal, type FinanceRecurring, type FinanceSplit, type FinanceSummary, type FinanceTransaction, type Invoice, type InvoiceItem } from '@kreators/shared';
+import { DOC_COMMENT_MAX, monthShift, emptyInvoiceDoc, invoiceForClient, EXPENSE_CATEGORIES, INCOME_CATEGORIES, INVOICE_STATUSES, invoiceTotals, parseInvoiceDoc, type InvoiceDoc, type FinanceBudget, type FinanceDue, type FinanceGoal, type FinanceRecurring, type FinanceSplit, type FinanceSummary, type FinanceTransaction, type Invoice, type InvoiceItem, type Page } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { DATE_RE, nameOf, newId, notify, nowIso, num, oneOf, randomCode, str } from '../db';
+import { DATE_RE, dayFromDevice, nameOf, newId, notify, nowIso, num, oneOf, pageOf, paged, randomCode, str } from '../db';
 
 /** Finance: a creator's money in and out, budgets and invoices. Nothing here touches points or payouts. */
 export const finance = new Hono<AppEnv>();
@@ -88,19 +88,19 @@ export const toInvoice = (r: InvRow): Invoice => ({ id: r.id, number: r.number, 
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const monthOf = (v: string | undefined) => (v && MONTH_RE.test(v) ? v : new Date().toISOString().slice(0, 7));
-function shiftMonth(month: string, by: number): string {
-  const [y, m] = month.split('-').map(Number);
-  const d = new Date(Date.UTC(y ?? 2026, (m ?? 1) - 1 + by, 1));
-  return d.toISOString().slice(0, 7);
-}
+const shiftMonth = monthShift;
 
 finance.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const month = monthOf(c.req.query('month'));
   const from = shiftMonth(month, -5);
-  const [tx, byMonth, budgets, invoices, points, totals, dues, recurring, goals] = await Promise.all([
-    db.prepare('SELECT * FROM finance_transactions WHERE user_id = ? AND date LIKE ? ORDER BY date DESC, created_at DESC LIMIT 300').bind(user.id, `${month}%`).all<TxRow>(),
+  // The month's entries and every due are paged (prefixes tx and du); the month's sums and what is owed are added up in SQL, so they cover every row, not one page.
+  const txAsk = pageOf(c, 'tx');
+  const duAsk = pageOf(c, 'du');
+  const today = new Date().toISOString().slice(0, 10);
+  const [tx, byMonth, budgets, invoices, points, totals, dues, recurring, goals, monthCats, owedSums, agencyOwed] = await Promise.all([
+    db.prepare('SELECT * FROM finance_transactions WHERE user_id = ? AND date LIKE ? ORDER BY date DESC, created_at DESC LIMIT ? OFFSET ?').bind(user.id, `${month}%`, txAsk.limit, txAsk.offset).all<TxRow>(),
     db.prepare("SELECT substr(date, 1, 7) AS m, kind, SUM(amount_cents) AS cents FROM finance_transactions WHERE user_id = ? AND substr(date, 1, 7) >= ? AND substr(date, 1, 7) <= ? GROUP BY m, kind").bind(user.id, from, month).all<{ m: string; kind: 'income' | 'expense'; cents: number }>(),
     db.prepare('SELECT category, monthly_cents FROM finance_budgets WHERE user_id = ?').bind(user.id).all<{ category: string; monthly_cents: number }>(),
     db.prepare(`${INV_SELECT} WHERE i.user_id = ? ORDER BY i.created_at DESC LIMIT 100`).bind(user.id).all<InvRow>(),
@@ -114,7 +114,7 @@ finance.get('/', async (c) => {
       )
       .bind(user.id)
       .first<{ income: number; expense: number; points: number }>(),
-    db.prepare("SELECT * FROM finance_dues WHERE user_id = ? ORDER BY CASE status WHEN 'open' THEN 0 ELSE 1 END, due_date IS NULL, due_date LIMIT 200").bind(user.id).all<DueRow>(),
+    db.prepare("SELECT * FROM finance_dues WHERE user_id = ? ORDER BY CASE status WHEN 'open' THEN 0 ELSE 1 END, due_date IS NULL, due_date, created_at LIMIT ? OFFSET ?").bind(user.id, duAsk.limit, duAsk.offset).all<DueRow>(),
     db.prepare('SELECT * FROM finance_recurring WHERE user_id = ? ORDER BY active DESC, next_date').bind(user.id).all<RecRow>(),
     db
       .prepare(
@@ -123,15 +123,26 @@ finance.get('/', async (c) => {
       )
       .bind(user.id)
       .all<GoalRow>(),
+    db.prepare('SELECT kind, category, SUM(amount_cents) AS cents, MIN(currency) AS currency FROM finance_transactions WHERE user_id = ? AND date LIKE ? GROUP BY kind, category').bind(user.id, `${month}%`).all<{ kind: 'income' | 'expense'; category: string; cents: number; currency: string }>(),
+    db
+      .prepare("SELECT COALESCE(SUM(CASE WHEN direction = 'owed' THEN amount_cents END), 0) AS owed, COALESCE(SUM(CASE WHEN direction = 'owe' THEN amount_cents END), 0) AS owe FROM finance_dues WHERE user_id = ? AND status = 'open'")
+      .bind(user.id)
+      .first<{ owed: number; owe: number }>(),
+    // Agency invoices sent and not paid: owed to the person, summed in SQL by currency so a page limit never hides one.
+    db
+      .prepare(
+        "SELECT currency, COALESCE(SUM(total_cents), 0) AS cents, COUNT(*) AS n, SUM(CASE WHEN due_date IS NOT NULL AND due_date < ? THEN 1 ELSE 0 END) AS overdue FROM invoices WHERE user_id = ? AND status = 'sent' AND agency_client_id IS NOT NULL GROUP BY currency ORDER BY cents DESC",
+      )
+      .bind(today, user.id)
+      .all<{ currency: string; cents: number; n: number; overdue: number }>(),
   ]);
-  const list = tx.results.map(toTx);
-  const incomeCents = list.filter((t) => t.kind === 'income').reduce((a, t) => a + t.amountCents, 0);
-  const expenseCents = list.filter((t) => t.kind === 'expense').reduce((a, t) => a + t.amountCents, 0);
+  const txPaged = paged(tx.results, txAsk);
+  const duePaged = paged(dues.results, duAsk);
+  const list = txPaged.items.map(toTx);
   const cat = new Map<string, { category: string; kind: 'income' | 'expense'; cents: number }>();
-  for (const t of list) {
-    const k = `${t.kind}:${t.category}`;
-    cat.set(k, { category: t.category, kind: t.kind, cents: (cat.get(k)?.cents ?? 0) + t.amountCents });
-  }
+  for (const r of monthCats.results) cat.set(`${r.kind}:${r.category}`, { category: r.category, kind: r.kind, cents: r.cents });
+  const incomeCents = monthCats.results.filter((r) => r.kind === 'income').reduce((a, r) => a + r.cents, 0);
+  const expenseCents = monthCats.results.filter((r) => r.kind === 'expense').reduce((a, r) => a + r.cents, 0);
   const months: FinanceSummary['months'] = [];
   for (let i = 5; i >= 0; i -= 1) {
     const m = shiftMonth(month, -i);
@@ -139,9 +150,8 @@ finance.get('/', async (c) => {
   }
   const budgetList: FinanceBudget[] = budgets.results.map((b) => ({ category: b.category, monthlyCents: b.monthly_cents, spentCents: cat.get(`expense:${b.category}`)?.cents ?? 0 }));
   const inv = invoices.results.map(toInvoice);
-  const today = new Date().toISOString().slice(0, 10);
-  const currency = list[0]?.currency ?? inv[0]?.currency ?? 'INR';
-  const summary: FinanceSummary = {
+  const currency = list[0]?.currency ?? monthCats.results[0]?.currency ?? inv[0]?.currency ?? 'INR';
+  const summary: FinanceSummary & { txPage: Page; duePage: Page } = {
     month,
     currency,
     incomeCents,
@@ -156,11 +166,14 @@ finance.get('/', async (c) => {
     transactions: list,
     invoices: inv,
     totals: { incomeCents: totals?.income ?? 0, expenseCents: totals?.expense ?? 0, netCents: (totals?.income ?? 0) - (totals?.expense ?? 0), platformPoints: totals?.points ?? 0 },
-    dues: dues.results.map(toDue),
-    owedToMeCents: dues.results.filter((d) => d.status === 'open' && d.direction === 'owed').reduce((a, d) => a + d.amount_cents, 0),
-    iOweCents: dues.results.filter((d) => d.status === 'open' && d.direction === 'owe').reduce((a, d) => a + d.amount_cents, 0),
+    dues: duePaged.items.map(toDue),
+    owedToMeCents: owedSums?.owed ?? 0,
+    iOweCents: owedSums?.owe ?? 0,
+    owedToYou: agencyOwed.results.map((r) => ({ currency: r.currency, cents: r.cents, count: r.n, overdue: r.overdue ?? 0 })),
     recurring: recurring.results.map(toRec),
     goals: goals.results.map(toGoal),
+    txPage: txPaged.page,
+    duePage: duePaged.page,
   };
   return c.json(summary);
 });
@@ -226,9 +239,12 @@ finance.post('/dues/:id/settle', async (c) => {
   const d = await db.prepare("SELECT * FROM finance_dues WHERE id = ? AND user_id = ? AND status = 'open'").bind(c.req.param('id'), user.id).first<DueRow>();
   if (!d) return c.json({ error: 'not found, or already settled' }, 404);
   const now = nowIso();
-  const today = now.slice(0, 10);
+  // The person's own day, from the device (?day=), so a due settled late in the evening is booked on their day, not the server's.
+  const today = dayFromDevice(c.req.query('day'));
+  // The status moves first and only from open: two taps at once settle (and book the money) once.
+  const moved = await db.prepare("UPDATE finance_dues SET status = 'settled', settled_at = ? WHERE id = ? AND user_id = ? AND status = 'open'").bind(now, d.id, user.id).run();
+  if (moved.meta.changes !== 1) return c.json({ error: 'not found, or already settled' }, 409);
   const stmts = [
-    db.prepare("UPDATE finance_dues SET status = 'settled', settled_at = ? WHERE id = ?").bind(now, d.id),
     db
       .prepare("INSERT INTO finance_transactions (id, user_id, kind, amount_cents, currency, category, counterparty, note, date, source, ref, splits_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'due', ?, '[]', ?)")
       .bind(newId(), user.id, d.direction === 'owe' ? 'expense' : 'income', d.amount_cents, d.currency, d.category || (d.direction === 'owe' ? 'Other expense' : 'Other income'), d.counterparty, d.note || (d.direction === 'owe' ? 'Paid what was due' : 'Received what was due'), today, d.id, now),
@@ -421,7 +437,8 @@ export async function setInvoiceStatus(db: D1Database, userId: string, invoiceId
   if (status === 'paid' && prev.status !== 'paid') {
     stmts.push(
       db
-        .prepare("INSERT INTO finance_transactions (id, user_id, kind, amount_cents, currency, category, note, date, source, ref, created_at) VALUES (?, ?, 'income', ?, ?, 'Brand deal', ?, ?, 'invoice', ?, ?)")
+        // OR IGNORE: migration 0067's unique index on (user_id, source, ref) for invoices is the last guard, so a booking that is already there is a no-op, never a 500.
+        .prepare("INSERT OR IGNORE INTO finance_transactions (id, user_id, kind, amount_cents, currency, category, note, date, source, ref, created_at) VALUES (?, ?, 'income', ?, ?, 'Brand deal', ?, ?, 'invoice', ?, ?)")
         .bind(newId(), userId, prev.total_cents, prev.currency, `Invoice ${prev.number}, ${prev.client_name}`, now.slice(0, 10), prev.id, now),
     );
   }

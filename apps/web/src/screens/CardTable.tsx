@@ -12,6 +12,7 @@ import { Sheet } from '../components/Sheet';
 import { useCardGame } from '../lib/queries';
 import { WaterButton } from '../components/Reminders';
 import { useFocus } from '../lib/store';
+import { AnimatedIcon } from '../components/AnimatedIcon';
 
 const reduced = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -191,9 +192,6 @@ function TableCard({ game, deck, card, t, size, box, onRaise, onMove, onFlip, on
   );
 }
 
-const ICON_ENTER = 'M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3';
-const ICON_EXIT = 'M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3';
-
 /** The fullscreen button: corner brackets pointing out to enter, pointing in to leave. */
 function FocusButton({ on, onClick }: { on: boolean; onClick: () => void }) {
   return (
@@ -205,9 +203,8 @@ function FocusButton({ on, onClick }: { on: boolean; onClick: () => void }) {
       title={on ? 'Leave focus mode (Esc)' : 'Focus mode'}
       className="toy toy-soft flex min-h-[44px] min-w-[44px] items-center justify-center gap-xs rounded-pill border border-line bg-card-strong px-sm text-[14px] font-bold text-ink"
     >
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <path d={on ? ICON_EXIT : ICON_ENTER} />
-      </svg>
+      {/* The animated maximize/minimize icon: corners out to enter, in to leave (the still lucide glyph until it loads). */}
+      <AnimatedIcon name="maximizeMinimize" size={22} active={on} />
       <span className="hidden sm:inline">{on ? 'Leave focus' : 'Focus mode'}</span>
     </button>
   );
@@ -511,10 +508,7 @@ export function CardTable() {
     <Screen howTo={false} tabs={!focus} wide={focus} className="focus-scope">
       <header className={`focus-dimmable pt-lg ${focus ? 'hidden' : ''}`}>
         <BackLink to="/cards">Games</BackLink>
-        <h1 className="text-[30px]">
-          <span aria-hidden="true">{info?.emoji} </span>
-          {info?.name ?? 'Card game'}
-        </h1>
+        <h1 className="text-[30px]">{info?.name ?? 'Card game'}</h1>
         {info && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{info.tagline}</p>}
       </header>
       {q.isPending && (

@@ -6,6 +6,7 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
+import { Fold } from '../components/Fold';
 
 export function DmInbox() {
   const q = useAuthed(['dm-requests'], api.dmRequests);
@@ -39,18 +40,10 @@ export function DmInbox() {
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {closed.map((r) => (
               <li key={r.id}>
-                <details className="rounded-tile bg-card p-sm shadow-toy-soft">
-                  <summary className="cursor-pointer text-[16px] font-bold">
-                    {r.buyerName}, {r.productTitle}
-                    <span className="font-semibold text-ink-soft">
-                      {' '}
-                      {r.status}
-                      {r.answeredAt ? ` ${new Date(r.answeredAt).toLocaleDateString()}` : ''}
-                    </span>
-                  </summary>
+                <Fold title={`${r.buyerName}, ${r.productTitle}`} hint={`${r.status}${r.answeredAt ? ` ${new Date(r.answeredAt).toLocaleDateString()}` : ''}`}>
                   <p className="mt-sm m-0 whitespace-pre-wrap text-[14px] font-semibold">{r.question}</p>
                   {r.answer && <p className="mt-sm m-0 whitespace-pre-wrap rounded-tile bg-paper p-sm text-[14px] font-semibold">{r.answer}</p>}
-                </details>
+                </Fold>
               </li>
             ))}
           </ul>

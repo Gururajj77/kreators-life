@@ -8,6 +8,9 @@ import { useCelebrate } from './Celebration';
 import { WeekDots } from './Charts';
 import { CheckRow } from './CheckRow';
 import { Sheet } from './Sheet';
+import { Icon } from './Icon';
+import { Ellipsis } from 'lucide-react';
+import { FIELD } from '../lib/ui';
 
 type Queue = ReturnType<typeof useActionQueue>;
 
@@ -17,7 +20,6 @@ interface Props {
   queue: Queue;
 }
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 
 /**
  * The not-to-do block, the same one on Daily (under Tasks) and on Pillars (under the seven pillars). It reads
@@ -113,11 +115,7 @@ export function NotToDoList({ items, date, queue }: Props) {
                       aria-label={`More for "${item.title}"`}
                       className="toy toy-soft flex w-[48px] shrink-0 items-center justify-center rounded-tile bg-card text-ink-soft hover:text-ink"
                     >
-                      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="currentColor">
-                        <circle cx="6" cy="12" r="2" />
-                        <circle cx="12" cy="12" r="2" />
-                        <circle cx="18" cy="12" r="2" />
-                      </svg>
+                      <Icon icon={Ellipsis} size={20} />
                     </button>
                   }
                 />
@@ -138,11 +136,11 @@ export function NotToDoList({ items, date, queue }: Props) {
           <label className="block text-[14px] font-bold" htmlFor="ntd-title">
             Not to do
           </label>
-          <input id="ntd-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={NOT_TO_DO_TITLE_MAX} placeholder="No phone in bed" autoFocus className={field} />
+          <input id="ntd-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={NOT_TO_DO_TITLE_MAX} placeholder="No phone in bed" autoFocus className={FIELD} />
           <label className="mt-sm block text-[14px] font-bold" htmlFor="ntd-area">
             Pillar
           </label>
-          <select id="ntd-area" value={area} onChange={(e) => setArea(e.target.value as RelationshipKey | '')} className={field}>
+          <select id="ntd-area" value={area} onChange={(e) => setArea(e.target.value as RelationshipKey | '')} className={FIELD}>
             <option value="">Any pillar</option>
             {RELATIONSHIPS.map((r) => (
               <option key={r.key} value={r.key}>

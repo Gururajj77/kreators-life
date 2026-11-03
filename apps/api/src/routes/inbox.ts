@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { INBOX_TAB_META, INBOX_TABS, isInboxTab, roleRank, type InboxShow, type InboxTab, type Notification } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { nowIso, pageOf, paged } from '../db';
+import { resolveAccess } from '../access';
 
 export const inbox = new Hono<AppEnv>();
 
@@ -28,8 +29,11 @@ inbox.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const staff = roleRank(user.role) >= roleRank('sub_admin');
+  // Agency is a tab only while Agency is on for the person; its notes still show under All when it is off.
+  const agencyOn = (await resolveAccess(db, user)).access.agency?.on === true;
+  const offered = (k: InboxTab) => (k !== 'team' || staff) && (k !== 'agency' || agencyOn);
   const asked = c.req.query('tab');
-  const tab: InboxTab = isInboxTab(asked) && (asked !== 'team' || staff) ? asked : 'all';
+  const tab: InboxTab = isInboxTab(asked) && offered(asked) ? asked : 'all';
   const showRaw = c.req.query('show');
   const show: InboxShow = showRaw === 'unread' || showRaw === 'archived' ? showRaw : 'inbox';
   const ask = pageOf(c);
@@ -40,7 +44,7 @@ inbox.get('/', async (c) => {
     db.prepare(`SELECT * FROM notifications WHERE user_id = ?${t.sql}${state} ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(user.id, ...t.binds, ask.limit, ask.offset).all<Row>(),
     db.prepare('SELECT kind, COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL AND archived_at IS NULL GROUP BY kind').bind(user.id).all<{ kind: string; n: number }>(),
   ]);
-  const tabs = INBOX_TABS.filter((k) => k !== 'team' || staff).map((k) => {
+  const tabs = INBOX_TABS.filter(offered).map((k) => {
     const kinds = INBOX_TAB_META[k].kinds;
     return { tab: k, unread: unreadRows.results.filter((r) => kinds.length === 0 || kinds.includes(r.kind)).reduce((a, r) => a + r.n, 0) };
   });

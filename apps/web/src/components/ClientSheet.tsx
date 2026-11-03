@@ -1,14 +1,17 @@
-import { AGENCY_CHANNELS, AGENCY_CLIENT_STATUSES, AGENCY_HEALTH, AGENCY_HEALTH_NAME, AGENCY_NAME_MAX, AGENCY_NOTES_MAX, AGENCY_STATUS_NAME, type AgencyClient, type AgencyClientStatus, type AgencyHealth, type InvoiceParty, typedCents } from '@kreators/shared';
+import { AGENCY_CHANNELS, AGENCY_CLIENT_STATUSES, AGENCY_HEALTH, AGENCY_HEALTH_NAME, AGENCY_NAME_MAX, AGENCY_NOTES_MAX, AGENCY_STATUS_NAME, type AgencyClient, type AgencyClientStatus, type AgencyHealth, type InvoiceParty, REVISIONS_MAX, typedCents } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
 import { Button } from './Button';
+import { Fold } from './Fold';
 import { Sheet } from './Sheet';
 import { Toggle } from './Toggle';
+import { FIELD } from '../lib/ui';
+import { FieldLabel } from './Field';
+import { copyPlain } from '../lib/clipboard';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 
 const COPY = {
   addTitle: 'Add a client',
@@ -23,6 +26,9 @@ const COPY = {
   saveFail: 'That did not save. Check the name and try again.',
 } as const;
 
+/** The label a GST number is kept under, so the short form's field and the invoice's tax numbers are one value. */
+const GST_LABEL = 'GSTIN';
+
 const toMajor = (cents: number): string => (cents === 0 ? '' : cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2));
 /** A typed amount in cents (`typedCents`: "30,000" and "₹30,000" read as 30000); NaN for junk or a minus, so the form can say so. Blank is 0. */
 const toCents = (v: string): number => {
@@ -33,16 +39,6 @@ const whole = (v: string): number => {
   const n = Math.round(Number(v));
   return Number.isFinite(n) && n > 0 ? n : 0;
 };
-
-function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
-  return (
-    <label className="mt-sm block text-[14px] font-bold">
-      {label}
-      {children}
-      {hint && <span className="mt-xs block text-[12px] font-semibold text-ink-soft">{hint}</span>}
-    </label>
-  );
-}
 
 function Chips<T extends string>({ label, options, value, name, onChange }: { label: string; options: readonly T[]; value: T; name: (v: T) => string; onChange: (v: T) => void }) {
   return (
@@ -91,9 +87,26 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
   const [askPassword, setAskPassword] = useState(true);
   const [made, setMade] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [revisions, setRevisions] = useState('2');
+  const [revisionsSeen, setRevisionsSeen] = useState(false);
 
   const detail = useAuthed(['agency', 'client', client?.id ?? 'new'], () => api.agencyClient(client!.id), Boolean(client));
   const campaigns = detail.data?.campaigns ?? [];
+  const overview = useAuthed(['agency', 'settings'], () => api.agency());
+  const currency = detail.data?.settings.currency ?? overview.data?.settings.currency ?? 'INR';
+  const savedRevisions = detail.data?.lifecycle.revisionsPerPiece;
+  // A client's changes a piece come with their page; the field starts from it once.
+  useEffect(() => {
+    if (revisionsSeen || savedRevisions === undefined) return;
+    setRevisionsSeen(true);
+    setRevisions(String(savedRevisions));
+  }, [savedRevisions, revisionsSeen]);
+  const gst = billing.taxIds.find((t) => t.label === GST_LABEL)?.value ?? '';
+  const setGst = (v: string) => {
+    const rest = billing.taxIds.filter((t) => t.label !== GST_LABEL);
+    setBilling({ ...billing, taxIds: v ? [{ label: GST_LABEL, value: v }, ...rest].slice(0, 4) : rest });
+  };
+  const revisionCount = Math.min(REVISIONS_MAX, Math.max(0, Math.round(Number(revisions || '0'))));
   const invalidate = () => qc.invalidateQueries({ queryKey: ['agency'] });
 
   const badRetainer = Number.isNaN(toCents(retainer));
@@ -116,10 +129,12 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
     mutationFn: async () => {
       if (client) {
         await api.agencyClientUpdate(client.id, { ...body(), billing, campaignId: campaignId || null });
+        if (savedRevisions !== undefined && revisionCount !== savedRevisions) await api.agencyLifecycleSave(client.id, { revisionsPerPiece: revisionCount });
         return;
       }
       const added = await api.agencyClientAdd({ ...body(), ...(askPassword ? { portalPassword: 'generate' as const } : {}) });
       if (billingFilled) await api.agencyClientUpdate(added.id, { billing });
+      if (revisionCount !== 2) await api.agencyLifecycleSave(added.id, { revisionsPerPiece: revisionCount });
       return added.password ?? null;
     },
     onSuccess: (password) => {
@@ -159,14 +174,7 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
         <input readOnly value={made} aria-label="The password" onFocus={(e) => e.currentTarget.select()} className="mt-sm w-full rounded-tile border-2 border-line bg-paper px-sm py-sm font-mono text-[16px]" />
         <div className="mt-sm flex flex-wrap gap-xs">
           <Button
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(made);
-                setCopied(true);
-              } catch {
-                setCopied(false);
-              }
-            }}
+            onClick={async () => setCopied(await copyPlain(made))}
           >
             {copied ? 'Copied' : 'Copy'}
           </Button>
@@ -185,19 +193,23 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
         if (name.trim() && !badRetainer) save.mutate();
       }}
     >
-      <Field label={COPY.name}>
-        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={AGENCY_NAME_MAX} required className={field} />
-      </Field>
+      <FieldLabel className="mt-sm" label={COPY.name}>
+        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={AGENCY_NAME_MAX} required className={FIELD} />
+      </FieldLabel>
       <div className="grid gap-sm md:grid-cols-2">
-        <Field label="Contact name">
-          <input value={contactName} onChange={(e) => setContactName(e.target.value)} maxLength={AGENCY_NAME_MAX} className={field} />
-        </Field>
-        <Field label="Contact email">
-          <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} maxLength={120} className={field} />
-        </Field>
+        <FieldLabel className="mt-sm" label="Contact name" hint="Who your emails greet.">
+          <input value={contactName} onChange={(e) => setContactName(e.target.value)} maxLength={AGENCY_NAME_MAX} autoComplete="off" className={FIELD} />
+        </FieldLabel>
+        <FieldLabel className="mt-sm" label="Contact email" hint="Where documents are emailed.">
+          <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} maxLength={120} autoComplete="off" className={FIELD} />
+        </FieldLabel>
+        <FieldLabel className="mt-sm" label="Phone, optional">
+          <input value={billing.phone} onChange={(e) => setBilling({ ...billing, phone: e.target.value })} maxLength={40} inputMode="tel" className={FIELD} />
+        </FieldLabel>
+        <FieldLabel className="mt-sm" label="GST number, optional">
+          <input value={gst} onChange={(e) => setGst(e.target.value)} maxLength={40} className={FIELD} />
+        </FieldLabel>
       </div>
-      <Chips label="Status" options={AGENCY_CLIENT_STATUSES} value={status} name={(s) => AGENCY_STATUS_NAME[s]} onChange={setStatus} />
-      <Chips label="How it is going" options={AGENCY_HEALTH} value={health} name={(h) => AGENCY_HEALTH_NAME[h]} onChange={setHealth} />
 
       <div className="mt-sm">
         <p className="m-0 text-[14px] font-bold">Channels you make for</p>
@@ -240,24 +252,24 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
         </div>
       </div>
 
-      <div className="grid gap-sm md:grid-cols-3">
-        <Field label="Retainer a month" hint={COPY.money}>
-          <input inputMode="decimal" value={retainer} onChange={(e) => setRetainer(e.target.value)} aria-invalid={badRetainer || undefined} className={field} />
+      <div className="grid gap-sm md:grid-cols-2">
+        <FieldLabel className="mt-sm" label={`Retainer a month, in ${currency}`} hint={COPY.money}>
+          <input inputMode="decimal" value={retainer} onChange={(e) => setRetainer(e.target.value)} aria-invalid={badRetainer || undefined} className={FIELD} />
           {badRetainer && <p role="alert" className="mt-xs m-0 text-[14px] font-bold">Type the amount as a number, like 4000 or 4,000.50.</p>}
-        </Field>
-        <Field label="Deliverables a month">
-          <input inputMode="numeric" value={pieces} onChange={(e) => setPieces(e.target.value)} className={field} />
-        </Field>
-        <Field label="Hours a month">
-          <input inputMode="numeric" value={hours} onChange={(e) => setHours(e.target.value)} className={field} />
-        </Field>
+        </FieldLabel>
+        <FieldLabel className="mt-sm" label="Deliverables a month">
+          <input inputMode="numeric" value={pieces} onChange={(e) => setPieces(e.target.value)} className={FIELD} />
+        </FieldLabel>
+        <FieldLabel className="mt-sm" label="Hours a month">
+          <input inputMode="numeric" value={hours} onChange={(e) => setHours(e.target.value)} className={FIELD} />
+        </FieldLabel>
+        <FieldLabel className="mt-sm" label="Changes included in each piece">
+          <input inputMode="numeric" value={revisions} onChange={(e) => setRevisions(e.target.value.replace(/[^0-9]/g, ''))} className={FIELD} />
+        </FieldLabel>
       </div>
-      <Field label="Renews on">
-        <input type="date" value={renewal} onChange={(e) => setRenewal(e.target.value)} className={field} />
-      </Field>
-      <Field label="Notes, only for you">
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={AGENCY_NOTES_MAX} className={field} />
-      </Field>
+      <FieldLabel className="mt-sm" label="Billing address" hint={COPY.billing}>
+        <textarea value={billing.address} onChange={(e) => setBilling({ ...billing, address: e.target.value })} rows={2} maxLength={300} className={FIELD} />
+      </FieldLabel>
 
       {!client && (
         <div className="mt-md">
@@ -265,46 +277,52 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
         </div>
       )}
 
-      <h3 className="mt-md text-[18px]">Billing details</h3>
-      <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.billing}</p>
-      <div className="grid gap-sm md:grid-cols-2">
-        <Field label="Name on the invoice">
-          <input value={billing.name} onChange={(e) => setBilling({ ...billing, name: e.target.value })} maxLength={120} placeholder={name} className={field} />
-        </Field>
-        <Field label="Legal name">
-          <input value={billing.line} onChange={(e) => setBilling({ ...billing, line: e.target.value })} maxLength={160} className={field} />
-        </Field>
-      </div>
-      <Field label="Address">
-        <textarea value={billing.address} onChange={(e) => setBilling({ ...billing, address: e.target.value })} rows={2} maxLength={300} className={field} />
-      </Field>
-      <div className="grid gap-sm md:grid-cols-2">
-        <Field label="Billing email">
-          <input type="email" value={billing.email} onChange={(e) => setBilling({ ...billing, email: e.target.value })} maxLength={120} placeholder={contactEmail} className={field} />
-        </Field>
-        <Field label="Phone">
-          <input value={billing.phone} onChange={(e) => setBilling({ ...billing, phone: e.target.value })} maxLength={40} className={field} />
-        </Field>
-      </div>
-      <div className="mt-sm">
-        <p className="m-0 text-[14px] font-bold">Tax numbers</p>
-        {billing.taxIds.map((t, i) => (
-          <div key={i} className="mt-xs flex gap-xs">
-            <input value={t.label} onChange={(e) => setId(i, { label: e.target.value })} maxLength={20} placeholder="GSTIN" aria-label="Tax number name" className="min-h-[44px] w-[28%] rounded-tile border-2 border-line bg-paper px-sm text-[16px]" />
-            <input value={t.value} onChange={(e) => setId(i, { value: e.target.value })} maxLength={40} placeholder="The number" aria-label="Tax number" className="min-h-[44px] min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm text-[16px]" />
-            <Button variant="outline" size="sm" onClick={() => setBilling({ ...billing, taxIds: billing.taxIds.filter((_, j) => j !== i) })} aria-label="Remove this number">
-              Remove
-            </Button>
-          </div>
-        ))}
-        {billing.taxIds.length < 4 && (
-          <div className="mt-xs">
-            <Button variant="outline" size="sm" onClick={() => setBilling({ ...billing, taxIds: [...billing.taxIds, { label: '', value: '' }] })}>
-              Add a tax number
-            </Button>
-          </div>
+      <Fold className="mt-md" title="More details" hint={client ? 'status, billing names, renewal, notes' : 'billing names, renewal, notes'}>
+        {client && (
+          <>
+            <Chips label="Status" options={AGENCY_CLIENT_STATUSES} value={status} name={(s) => AGENCY_STATUS_NAME[s]} onChange={setStatus} />
+            <Chips label="How it is going" options={AGENCY_HEALTH} value={health} name={(h) => AGENCY_HEALTH_NAME[h]} onChange={setHealth} />
+          </>
         )}
-      </div>
+        <div className="grid gap-sm md:grid-cols-2">
+          <FieldLabel className="mt-sm" label="Name on the invoice">
+            <input value={billing.name} onChange={(e) => setBilling({ ...billing, name: e.target.value })} maxLength={120} placeholder={name} className={FIELD} />
+          </FieldLabel>
+          <FieldLabel className="mt-sm" label="Legal name">
+            <input value={billing.line} onChange={(e) => setBilling({ ...billing, line: e.target.value })} maxLength={160} className={FIELD} />
+          </FieldLabel>
+          <FieldLabel className="mt-sm" label="Billing email">
+            <input type="email" value={billing.email} onChange={(e) => setBilling({ ...billing, email: e.target.value })} maxLength={120} placeholder={contactEmail} className={FIELD} />
+          </FieldLabel>
+          <FieldLabel className="mt-sm" label="Renews on">
+            <input type="date" value={renewal} onChange={(e) => setRenewal(e.target.value)} className={FIELD} />
+          </FieldLabel>
+        </div>
+        <div className="mt-sm">
+          <p className="m-0 text-[14px] font-bold">Other tax numbers</p>
+          {billing.taxIds.map((t, i) =>
+            t.label === GST_LABEL ? null : (
+              <div key={i} className="mt-xs flex gap-xs">
+                <input value={t.label} onChange={(e) => setId(i, { label: e.target.value })} maxLength={20} placeholder="PAN" aria-label="Tax number name" className="min-h-[44px] w-[28%] rounded-tile border-2 border-line bg-paper px-sm text-[16px]" />
+                <input value={t.value} onChange={(e) => setId(i, { value: e.target.value })} maxLength={40} placeholder="The number" aria-label="Tax number" className="min-h-[44px] min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm text-[16px]" />
+                <Button variant="outline" size="sm" onClick={() => setBilling({ ...billing, taxIds: billing.taxIds.filter((_, j) => j !== i) })} aria-label="Remove this number">
+                  Remove
+                </Button>
+              </div>
+            ),
+          )}
+          {billing.taxIds.length < 4 && (
+            <div className="mt-xs">
+              <Button variant="outline" size="sm" onClick={() => setBilling({ ...billing, taxIds: [...billing.taxIds, { label: '', value: '' }] })}>
+                Add a tax number
+              </Button>
+            </div>
+          )}
+        </div>
+        <FieldLabel className="mt-sm" label="Notes, only for you">
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={AGENCY_NOTES_MAX} className={FIELD} />
+        </FieldLabel>
+      </Fold>
 
       {client && (
         <>
@@ -312,8 +330,8 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
           <p className="m-0 text-[14px] font-semibold text-ink-soft">{campaigns.length === 0 && !detail.isPending ? COPY.armyNone : COPY.army}</p>
           {campaigns.length > 0 && (
             <>
-              <Field label="Campaign">
-                <select value={campaignId} onChange={(e) => setCampaignId(e.target.value)} className={field}>
+              <FieldLabel className="mt-sm" label="Campaign">
+                <select value={campaignId} onChange={(e) => setCampaignId(e.target.value)} className={FIELD}>
                   <option value="">No campaign</option>
                   {campaigns.map((k) => (
                     <option key={k.id} value={k.id}>
@@ -321,7 +339,7 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
                     </option>
                   ))}
                 </select>
-              </Field>
+              </FieldLabel>
               <div className="mt-xs flex flex-wrap items-center gap-sm">
                 <Button variant="outline" size="sm" disabled={!campaignId || campaignId !== (client.campaignId ?? '') || importIt.isPending} onClick={() => importIt.mutate()}>
                   Add its deliverables

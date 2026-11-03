@@ -1,6 +1,6 @@
 import { DOC_ACCENTS, DOC_FONTS, DOC_FOOTER_MAX, DOC_HEADINGS, DOC_MARGINS, DOC_PAGES, DOC_SIGN_LAYOUTS, DOC_SIZES, DOC_STYLE_NAMES, docStyleSummary, emptyProfile, parseDocStyle, type DocStyle } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
 import { shrinkImage } from '../lib/shrink';
@@ -12,8 +12,8 @@ import { Toggle } from './Toggle';
 const opts = <K extends keyof typeof DOC_STYLE_NAMES>(group: K, keys: readonly string[]) => keys.map((k) => ({ value: k, name: (DOC_STYLE_NAMES[group] as Record<string, string>)[k] ?? k }));
 
 /** The summary card every editor shows for the page's look. */
-export function DocStyleCard({ style, disabled, onEdit }: { style: DocStyle; disabled?: boolean; onEdit: () => void }) {
-  return <SummaryCard title="Document style" disabled={disabled} onEdit={onEdit} summary={docStyleSummary(parseDocStyle(style))} />;
+export function DocStyleCard({ style, disabled, onEdit, row = false }: { style: DocStyle; disabled?: boolean; onEdit: () => void; /** One line of an inset list instead of a card. */ row?: boolean }) {
+  return <SummaryCard row={row} title="Document style" disabled={disabled} onEdit={onEdit} summary={docStyleSummary(parseDocStyle(style))} />;
 }
 
 /**
@@ -21,7 +21,7 @@ export function DocStyleCard({ style, disabled, onEdit }: { style: DocStyle; dis
  * size, margins, the footer line, page numbers and how the signature blocks sit. Each choice is a key the page maps to a value in code.
  * "Make this my default" keeps the look in the business profile, so every new document starts with it.
  */
-export function DocStyleSheet({ open, onClose, value, onChange, disabled = false, asDefault = false }: { open: boolean; onClose: () => void; value: DocStyle; onChange: (s: DocStyle) => void; disabled?: boolean; /** In Agency settings: the one button saves the look as the default for new documents. */ asDefault?: boolean }) {
+export function DocStyleSheet({ open, onClose, value, onChange, disabled = false, asDefault = false, title = 'Document style', before }: { open: boolean; onClose: () => void; value: DocStyle; onChange: (s: DocStyle) => void; disabled?: boolean; /** In Agency settings: the one button saves the look as the default for new documents. */ asDefault?: boolean; title?: string; /** Choices that come first in the same sheet (an invoice's design and its two lines), so the whole look is one place. */ before?: ReactNode }) {
   const qc = useQueryClient();
   const s = parseDocStyle(value);
   const set = (patch: Partial<DocStyle>) => onChange(parseDocStyle({ ...s, ...patch }));
@@ -52,9 +52,10 @@ export function DocStyleSheet({ open, onClose, value, onChange, disabled = false
     }
   };
   return (
-    <Sheet open={open} onClose={onClose} title="Document style">
+    <Sheet open={open} onClose={onClose} title={title}>
       <fieldset disabled={disabled} className="m-0 grid gap-sm border-0 p-0 pb-xl">
         <p className="m-0 text-[14px] font-semibold text-ink-soft">How this document looks on paper and as a PDF. The preview changes as you choose.</p>
+        {before}
         <Toggle on={s.letterhead} onChange={(on) => set({ letterhead: on })} label="Letterhead" hint="Your business name and address at the top of the first page." />
         {s.letterhead && (
           <div>

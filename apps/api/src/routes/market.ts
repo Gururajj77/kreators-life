@@ -22,7 +22,7 @@ import {
   type StoreStage,
 } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { nameOf, newId, notify, nowIso, num, oneOf, str, pageOf, paged } from '../db';
+import { isStaff, nameOf, newId, notify, nowIso, num, oneOf, str, pageOf, paged } from '../db';
 import { trustForMany } from '../rewards';
 import { haveFor } from '../unlocks';
 import { isUnlockBadgeKey, unlockFor } from '@kreators/shared';
@@ -31,7 +31,6 @@ import { trustScore, type TrustScore } from '@kreators/shared';
 /** The Store: staff add new gear with partner links, anyone sells pre-owned gear, kits group both by budget. */
 export const market = new Hono<AppEnv>();
 
-const isStaff = (u: UserRow) => u.role === 'admin' || u.role === 'sub_admin';
 export const featureUntil = () => new Date(Date.now() + FEATURE_DAYS * 86_400_000).toISOString();
 const https = (v: unknown) => (typeof v === 'string' && /^https?:\/\/\S+$/.test(v.trim()) ? v.trim().slice(0, 500) : '');
 

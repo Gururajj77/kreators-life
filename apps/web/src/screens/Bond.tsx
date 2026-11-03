@@ -1,5 +1,7 @@
 import type { BondChat, Friend, Introduction } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
+import { MessageCircle, UsersRound } from 'lucide-react';
+import { Icon } from '../components/Icon';
 import { Inert } from '../components/Inert';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -14,18 +16,14 @@ import { ChannelsPanel } from '../components/Channels';
 import { Pager, usePage } from '../components/Pager';
 import { api } from '../lib/api';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
+import { FIELD } from '../lib/ui';
+import { ErrorLine } from '../components/ErrorLine';
+import { useCopy } from '../lib/clipboard';
+import { dateTime } from '../lib/date';
+import { AnimatedIcon } from '../components/AnimatedIcon';
+import { StatusTag } from '../components/StatusTag';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-const when = (iso: string) => new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 
-function Err({ e }: { e: unknown }) {
-  if (!e) return null;
-  return (
-    <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-      {e instanceof Error ? e.message : 'That did not work.'}
-    </p>
-  );
-}
 
 interface Person {
   userId: string;
@@ -39,7 +37,8 @@ interface Person {
 export function Bond() {
   const me = useMe();
   const nav = useNavigate();
-  const q = useAuthed(['bond'], api.bond);
+  const inPage = usePage('in');
+  const q = useAuthed(['bond', inPage.query], () => api.bond(inPage.query));
   const frPage = usePage('fr');
   const fr = useAuthed(['bond-friends', frPage.query], () => api.friends(frPage.query));
   const chPage = usePage('ch');
@@ -64,7 +63,7 @@ export function Bond() {
   });
   const answerFriend = useMutation({ mutationFn: ({ id, status }: { id: string; status: 'accepted' | 'declined' }) => api.answerFriend(id, status), onSuccess: () => fr.refetch() });
   const [codeIn, setCodeIn] = useState('');
-  const [copied, setCopied] = useState(false);
+  const { copy, said } = useCopy();
   const addByCode = useMutation({
     mutationFn: () => api.addFriendByCode(codeIn),
     onSuccess: () => {
@@ -111,7 +110,7 @@ export function Bond() {
           </ul>
         )}
         <Pager page={ch.data?.page} prefix="ch" label="chats" />
-        <Err e={openChat.isError ? openChat.error : null} />
+        <ErrorLine e={openChat.isError ? openChat.error : null} />
       </Section>
 
       <Section id="bond-channels" title="Channels" lede="Private rooms for you and friends you ask in. Unlike chats, names show here.">
@@ -144,14 +143,13 @@ export function Bond() {
                 variant="outline"
                 onClick={() => {
                   const code = me.data?.user.friendCode;
-                  if (!code) return;
-                  navigator.clipboard?.writeText(code).then(() => setCopied(true), () => undefined);
-                  window.setTimeout(() => setCopied(false), 2000);
+                  if (code) void copy(code);
                 }}
               >
-                {copied ? 'Copied' : 'Copy'}
+                {said === 'Copied' ? 'Copied' : 'Copy'}
               </Button>
             </div>
+            {said && said !== 'Copied' && <p role="status" className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{said}</p>}
             <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Share it with someone you know. They type it here and you get a request. Your username is @{me.data?.user.handle ?? '…'}.</p>
           </div>
           <form
@@ -162,15 +160,16 @@ export function Bond() {
           >
             <label className="block">
               <span className="block text-[14px] font-bold">Add a friend by code</span>
-              <input value={codeIn} onChange={(e) => setCodeIn(e.target.value.toUpperCase())} maxLength={12} autoCapitalize="characters" autoComplete="off" placeholder="Their code" className={field} />
+              <input value={codeIn} onChange={(e) => setCodeIn(e.target.value.toUpperCase())} maxLength={12} autoCapitalize="characters" autoComplete="off" placeholder="Their code" className={FIELD} />
             </label>
             <div className="mt-xs">
               <Button type="submit" disabled={addByCode.isPending || !codeIn.trim()}>
+                <AnimatedIcon name="userPlus" size={18} interaction="hover-replay" playWhen={addByCode.isSuccess} />
                 Send request
               </Button>
             </div>
             {addByCode.isSuccess && <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{addByCode.data.status === 'friends' ? 'You are friends now.' : 'Request sent. They will see it under Bond.'}</p>}
-            <Err e={addByCode.isError ? addByCode.error : null} />
+            <ErrorLine e={addByCode.isError ? addByCode.error : null} />
           </form>
         </div>
         {pending.length > 0 && (
@@ -220,7 +219,7 @@ export function Bond() {
 
       <Section id="bond-intros" title="Introductions" lede="For people you met at events. Your details only move after the other person says yes.">
         <Toggle on={optedIn} onChange={(on) => optIn.mutate(on)} disabled={optIn.isPending} label="Open to introductions" hint="Switch this on to see who else from your events is open to meeting." />
-        <Err e={optIn.isError ? optIn.error : null} />
+        <ErrorLine e={optIn.isError ? optIn.error : null} />
         {q.isError && (
           <div className="mt-md rounded-card bg-card p-md shadow-toy-soft" role="alert">
             <p className="m-0 font-bold">Could not load introductions.</p>
@@ -288,9 +287,7 @@ export function Bond() {
                   <span className="min-w-0 flex-1">
                     <span className="block text-[16px] font-bold">
                       {p.name}{' '}
-                      <span className="rounded-pill px-xs text-[12px] font-extrabold leading-[20px]" style={{ background: i.status === 'accepted' ? 'var(--tint-green)' : i.status === 'declined' ? 'var(--tint-red)' : 'var(--tint-yellow)' }}>
-                        {i.status === 'proposed' ? 'waiting' : i.status}
-                      </span>
+                      <StatusTag tone={i.status === 'accepted' ? 'good' : i.status === 'declined' ? 'bad' : 'warn'}>{i.status === 'proposed' ? 'waiting' : i.status}</StatusTag>
                     </span>
                     <span className="block text-[14px] font-semibold text-ink-soft">
                       {outgoing ? 'You asked' : 'They asked'} on {new Date(i.createdAt).toLocaleDateString()}
@@ -305,6 +302,7 @@ export function Bond() {
             })}
           </ul>
         )}
+        <Pager page={d?.introPage} prefix="in" label="introductions" />
       </Section>
 
       <AskSheet person={asking} onClose={() => setAsking(null)} onDone={() => q.refetch()} />
@@ -317,13 +315,13 @@ function ChatRow({ c }: { c: BondChat }) {
   return (
     <Link to={`/bond/chats/${c.id}`} className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm text-ink">
       <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-[20px]" aria-hidden="true">
-        {c.source === 'circle' ? '🫧' : '💬'}
+        <Icon icon={c.source === 'circle' ? UsersRound : MessageCircle} size={20} />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-[16px] font-bold">{c.theirAlias}</span>
         <span className="block truncate text-[14px] font-semibold text-ink-soft">{c.lastBody || 'No messages yet. Say hello.'}</span>
       </span>
-      <span className="shrink-0 text-[12px] font-bold text-ink-soft">{c.lastMessageAt ? when(c.lastMessageAt) : ''}</span>
+      <span className="shrink-0 text-[12px] font-bold text-ink-soft">{c.lastMessageAt ? dateTime(c.lastMessageAt) : ''}</span>
     </Link>
   );
 }
@@ -398,7 +396,7 @@ export function BondChatScreen() {
           Send
         </Button>
       </form>
-      <Err e={say.isError ? say.error : null} />
+      <ErrorLine e={say.isError ? say.error : null} />
     </Screen>
   );
 }
@@ -424,10 +422,10 @@ function AskSheet({ person, onClose, onDone }: { person: Person | null; onClose:
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Why you would like to meet</span>
-          <textarea autoFocus value={context} onChange={(e) => setContext(e.target.value)} maxLength={500} rows={3} placeholder="Where you met and what you could do together." className={field} />
+          <textarea autoFocus value={context} onChange={(e) => setContext(e.target.value)} maxLength={500} rows={3} placeholder="Where you met and what you could do together." className={FIELD} />
         </label>
         <p className="m-0 text-[12px] font-bold text-ink-soft">They see your name and this note. Nothing else moves until they say yes.</p>
-        <Err e={ask.isError ? ask.error : null} />
+        <ErrorLine e={ask.isError ? ask.error : null} />
         <Button type="submit" size="lg" full disabled={ask.isPending}>
           Send the request
         </Button>
@@ -458,9 +456,9 @@ function BlockSheet({ person, onClose, onDone }: { person: Person | null; onClos
         <p className="m-0 text-[14px] font-semibold text-ink-soft">They will not be able to ask for introductions to you, and they drop out of your suggestions. They are not told.</p>
         <label className="block">
           <span className="block text-[14px] font-bold">Reason, for the team only</span>
-          <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} className={field} />
+          <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} className={FIELD} />
         </label>
-        <Err e={block.isError ? block.error : null} />
+        <ErrorLine e={block.isError ? block.error : null} />
         <Button type="submit" full disabled={block.isPending}>
           Block
         </Button>

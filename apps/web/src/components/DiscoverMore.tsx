@@ -65,6 +65,9 @@ import { HeroBlobs } from './Hero';
 import { BackLink } from './PageHeader';
 import { Section } from './Section';
 import { Toggle } from './Toggle';
+import { AppIcon } from './AppIcon';
+import { FIELD } from '../lib/ui';
+import { StatusTag } from './StatusTag';
 
 const ACCENT: Record<ExtraKind, RelationshipKey> = { type: 'self', love: 'lover_partner', mind: 'guru', design: 'divine' };
 const fillOf = (color: string): CSSProperties => ({ background: `linear-gradient(135deg, ${color}, color-mix(in oklab, ${color} 72%, var(--fill-shade)))` });
@@ -84,13 +87,14 @@ export function MoreSection({ onOpen }: { onOpen: (k: ExtraKind) => void }) {
           const rel = RELATIONSHIP_BY_KEY[ACCENT[k.key]];
           return (
             <li key={k.key} className="flex flex-col rounded-card bg-card p-md shadow-toy-soft">
-              <span className="flex size-[48px] items-center justify-center rounded-pill text-[24px]" style={fillOf(rel.color)} aria-hidden="true">
-                {k.emoji}
+              <span className="flex size-[48px] items-center justify-center rounded-pill" style={fillOf(rel.color)} aria-hidden="true">
+                <AppIcon name={k.icon} size={24} />
               </span>
               <h3 className="mt-sm text-[18px]">{k.name}</h3>
               <p className="mt-xs m-0 flex-1 text-[14px] font-semibold text-ink-soft">{k.blurb}</p>
               <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{done && st?.takenAt ? `Taken ${when(st.takenAt)}` : started ? `${st!.progress.done} of ${st!.progress.total} done` : 'Not taken yet'}</p>
-              <Button className="mt-sm" variant={done ? 'outline' : 'primary'} onClick={() => onOpen(k.key)}>
+              {/* Outline on purpose: the main quiz's button is the one primary action on Discover. */}
+              <Button className="mt-sm" variant="outline" onClick={() => onOpen(k.key)}>
                 {done ? 'See my result' : started ? 'Carry on' : 'Start'}
               </Button>
             </li>
@@ -237,7 +241,7 @@ function LoveView({ result }: { result: LoveResult }) {
           <Section key={dir} id={`love-${dir}`} title={title} lede="Out of four.">
             <ul className="m-0 flex list-none flex-col gap-xs p-0">
               {list.map((x) => (
-                <Bar key={x.key} label={`${LOVE_LANGUAGES[x.key].emoji} ${LOVE_LANGUAGES[x.key].name}`} value={x.score} max={4} color={color} right={`${x.score}`} />
+                <Bar key={x.key} label={LOVE_LANGUAGES[x.key].name} value={x.score} max={4} color={color} right={`${x.score}`} />
               ))}
             </ul>
           </Section>
@@ -249,8 +253,9 @@ function LoveView({ result }: { result: LoveResult }) {
             const l = LOVE_LANGUAGES[k];
             return (
               <li key={k} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <h3 className="text-[18px]">
-                  {l.emoji} {l.name}
+                <h3 className="flex items-center gap-xs text-[18px]">
+                  <AppIcon name={l.icon} size={20} />
+                  {l.name}
                 </h3>
                 <p className="mt-xs m-0 text-[14px] font-semibold">{l.blurb}</p>
                 <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">Ask for it: </span>{l.ask}</p>
@@ -283,7 +288,7 @@ function MindView({ result }: { result: MindResult }) {
             <li key={x.key} className="rounded-tile bg-card p-sm shadow-toy-soft">
               <span className="flex items-baseline justify-between gap-sm">
                 <h3 className="text-[18px]">{x.name}</h3>
-                <span className="shrink-0 rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[22px]">{BAND_WORD[x.band]}</span>
+                <StatusTag tone="calm">{BAND_WORD[x.band]}</StatusTag>
               </span>
               <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{x.blurb}</p>
               <span className="mt-xs block h-[8px] rounded-pill" style={{ background: 'var(--color-line)' }}>
@@ -613,7 +618,6 @@ function DesignForm({ initial, birthDate, onDone }: { initial: DesignInput; birt
     onError: (e) => setError(e instanceof Error ? e.message : 'Could not work it out.'),
   });
   const problem = designInputProblem(parseDesignInput(input));
-  const FIELD = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
   return (
     <form
       className="mt-md flex flex-col gap-md"

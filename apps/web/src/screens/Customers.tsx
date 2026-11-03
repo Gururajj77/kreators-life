@@ -6,13 +6,12 @@ import { Button } from '../components/Button';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
-import { api, publicApi } from '../lib/api';
+import { api, downloadCsv as fetchCsv, errorText, publicApi } from '../lib/api';
 import { useAuthed, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
-import { useSession } from '../lib/store';
+import { FIELD } from '../lib/ui';
+import { StatusTag } from '../components/StatusTag';
 
-const err = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
@@ -33,11 +32,11 @@ const KYC_PILL: Record<KycProfile['status'], { label: string; cls: string }> = {
 export function Customers() {
   const pg = usePage();
   const customers = useAuthed(['customers', pg.query], () => api.customers(pg.query));
-  const payouts = useAuthed(['payouts'], api.payouts);
+  const po = usePage('po');
+  const payouts = useAuthed(['payouts', po.query], () => api.payouts(po.query));
   const kyc = useAuthed(['kyc'], api.kyc);
   const config = useQuery({ queryKey: ['payments-config'], queryFn: publicApi.config, staleTime: 60_000 });
   const refresh = useRefreshAll();
-  const token = useSession((s) => s.token);
   const [refunding, setRefunding] = useState<{ id: string; title: string } | null>(null);
   const [reason, setReason] = useState('');
   const [csvError, setCsvError] = useState<string | null>(null);
@@ -54,17 +53,9 @@ export function Customers() {
   const downloadCsv = async () => {
     setCsvError(null);
     try {
-      const res = await fetch(api.customersCsvUrl, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-      if (!res.ok) throw new Error('Could not build the file.');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'customers.csv';
-      a.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+      await fetchCsv(api.customersCsvUrl, 'customers.csv');
     } catch (e) {
-      setCsvError(err(e, 'Could not download.'));
+      setCsvError(errorText(e, 'Could not download.'));
     }
   };
 
@@ -121,7 +112,7 @@ export function Customers() {
           Payouts
         </h2>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          Payments: <span className={`rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${live ? 'bg-r4 text-on-fill' : 'bg-r3 text-ink-fixed'}`}>{live ? 'live' : 'test mode'}</span>. Points move the moment someone buys.{' '}
+          Payments: <StatusTag tone={live ? 'good' : 'warn'}>{live ? 'live' : 'test mode'}</StatusTag>. Points move the moment someone buys.{' '}
           {live ? 'Money is collected by the provider and paid out to the account below once it is approved.' : 'Money stays in test mode until a payment provider is connected.'} The platform keeps {p ? (p.feeBps / 100).toFixed(p.feeBps % 100 === 0 ? 0 : 2) : '…'}% of each sale.
         </p>
 
@@ -155,6 +146,7 @@ export function Customers() {
             </li>
           ))}
         </ul>
+        <Pager page={p?.page} prefix="po" label="sales" />
       </section>
 
       <Sheet open={refunding !== null} onClose={() => setRefunding(null)} title="Refund in full">
@@ -170,11 +162,11 @@ export function Customers() {
           </p>
           <label className="block">
             <span className="block text-[14px] font-bold">Reason, shown to no one but you</span>
-            <input autoFocus value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} className={field} />
+            <input autoFocus value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} className={FIELD} />
           </label>
           {refund.isError && (
             <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-              {err(refund.error, 'Could not refund.')}
+              {errorText(refund.error, 'Could not refund.')}
             </p>
           )}
           <Button type="submit" size="lg" full disabled={refund.isPending}>
@@ -229,29 +221,29 @@ function KycSection({ kyc, onChange }: { kyc: KycProfile | null; onChange: () =>
         >
           <label className="block">
             <span className="block text-[14px] font-bold">Legal name, as on your PAN</span>
-            <input value={legalName} onChange={(e) => setLegalName(e.target.value)} required maxLength={120} className={field} />
+            <input value={legalName} onChange={(e) => setLegalName(e.target.value)} required maxLength={120} className={FIELD} />
           </label>
           <div className="grid grid-cols-2 gap-xs">
             <label className="block">
               <span className="block text-[14px] font-bold">PAN</span>
-              <input value={pan} onChange={(e) => setPan(e.target.value.toUpperCase())} required maxLength={10} placeholder="ABCDE1234F" className={field} />
+              <input value={pan} onChange={(e) => setPan(e.target.value.toUpperCase())} required maxLength={10} placeholder="ABCDE1234F" className={FIELD} />
             </label>
             <label className="block">
               <span className="block text-[14px] font-bold">IFSC</span>
-              <input value={ifsc} onChange={(e) => setIfsc(e.target.value.toUpperCase())} required maxLength={11} placeholder="HDFC0001234" className={field} />
+              <input value={ifsc} onChange={(e) => setIfsc(e.target.value.toUpperCase())} required maxLength={11} placeholder="HDFC0001234" className={FIELD} />
             </label>
           </div>
           <label className="block">
             <span className="block text-[14px] font-bold">Bank account number</span>
-            <input value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} required maxLength={34} inputMode="numeric" className={field} />
+            <input value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} required maxLength={34} inputMode="numeric" className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Address</span>
-            <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} maxLength={300} className={field} />
+            <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} maxLength={300} className={FIELD} />
           </label>
           {submit.isError && (
             <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-              {err(submit.error, 'Could not send that.')}
+              {errorText(submit.error, 'Could not send that.')}
             </p>
           )}
           <Button type="submit" disabled={submit.isPending}>

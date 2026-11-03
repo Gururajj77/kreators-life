@@ -1,20 +1,21 @@
-import type { ContractAnswer } from '@kreators/shared';
+import { contractAsText, docDateTime, type ContractAnswer } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 import { Button } from '../components/Button';
 import { ContractView, paperDate } from '../components/ContractView';
-import { DocActions } from '../components/DocActions';
+import { DocActions, JumpToBar } from '../components/DocActions';
+import { Busy, Skeleton, SkeletonCard } from '../components/Skeleton';
 import type { SheetStamp } from '../components/PrintSheet';
 import { Inert } from '../components/Inert';
+import { CopyTextButton, LinkTrouble } from '../components/PortalLock';
 import { ApiError, publicApi } from '../lib/api';
 import { fileTitle } from '../lib/printDoc';
 import { SiteLayout } from './SiteLayout';
+import { FIELD } from '../lib/ui';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const COPY = {
-  none: 'No agreement at this link. Ask the person who sent it for a fresh link.',
-  typed: 'Typing your name is your acceptance of this agreement.',
+  typed: 'Typing your name is your acceptance of this agreement. It is typed acceptance, not a certified e-signature.',
   agree: 'I have read this agreement and I agree to it.',
 };
 
@@ -50,15 +51,15 @@ export function ContractPublic() {
   const stamp: SheetStamp | null = d?.status === 'signed' ? 'signed' : d?.revisedAt ? 'revised' : null;
 
   return (
-    <SiteLayout wide={false}>
+    <SiteLayout wide={false} minimal>
       <div className="pt-lg">
-        {q.isPending && <p className="m-0 text-[16px] font-semibold text-ink-soft">Loading…</p>}
-        {q.isError && (
-          <div role="alert" className="rounded-card bg-card p-md shadow-toy-soft">
-            <h1 className="text-[30px]">Not found</h1>
-            <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">{COPY.none}</p>
-          </div>
+        {q.isPending && (
+          <Busy label="Loading the agreement" className="grid gap-md">
+            <Skeleton className="h-[48px] w-1/2" />
+            <SkeletonCard lines={10} />
+          </Busy>
         )}
+        {q.isError && <LinkTrouble error={q.error} what="agreement" onRetry={() => void q.refetch()} />}
         {d && (
           <>
             <div className="no-print mb-md flex flex-wrap items-center justify-between gap-sm">
@@ -66,7 +67,10 @@ export function ContractPublic() {
                 From <strong className="text-ink">{d.ownerName}</strong>
                 {d.revisedAt ? ` · Revised ${paperDate(d.revisedAt)}` : ''}
               </p>
-              <DocActions fileName={fileTitle('Agreement', d.doc.vars.client, d.doc.title)} />
+              <span className="flex flex-wrap items-center gap-sm">
+                <DocActions fileName={fileTitle('Agreement', d.doc.vars.client, d.doc.title)} />
+                <CopyTextButton text={() => contractAsText(d.doc, { reference: d.ref, date: d.sentAt ?? undefined, answers, acceptance: d.acceptance })} />
+              </span>
             </div>
 
             <ContractView
@@ -82,8 +86,8 @@ export function ContractPublic() {
 
             {d.status === 'signed' && d.acceptance && (
               <p role="status" className="mt-md m-0 rounded-tile p-sm text-[16px] font-bold" style={{ background: 'var(--tint-green)' }}>
-                Accepted by {d.acceptance.name}
-                {d.acceptance.title ? `, ${d.acceptance.title}` : ''} on {paperDate(d.acceptance.at)}.
+                Accepted electronically by {d.acceptance.name}
+                {d.acceptance.title ? `, ${d.acceptance.title}` : ''} on {docDateTime(d.acceptance.at)}. Typed acceptance, not a certified e-signature.
               </p>
             )}
 
@@ -103,11 +107,11 @@ export function ContractPublic() {
                 <label className="mt-sm block text-[14px] font-bold" htmlFor="k-name">
                   Your full name
                 </label>
-                <input id="k-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoComplete="name" className={field} />
+                <input id="k-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoComplete="name" className={FIELD} />
                 <label className="mt-sm block text-[14px] font-bold" htmlFor="k-title">
                   Your title
                 </label>
-                <input id="k-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} autoComplete="organization-title" className={field} />
+                <input id="k-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} autoComplete="organization-title" className={FIELD} />
                 <label className="mt-sm flex min-h-[44px] cursor-pointer items-center gap-xs text-[16px] font-bold">
                   <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="size-[20px] shrink-0 accent-[var(--color-ink)]" />
                   {COPY.agree}
@@ -124,6 +128,8 @@ export function ContractPublic() {
                 </div>
               </form>
             )}
+
+            {d.status === 'sent' && <JumpToBar targetId="accept-heading" label={(d.doc.sections ?? []).some((x) => x.kind === 'brief') ? 'Answer and sign' : 'Sign this agreement'} />}
 
             {d.doc.show.comments && (
               <section className="no-print mt-lg" aria-labelledby="ask-heading">
@@ -152,7 +158,7 @@ export function ContractPublic() {
                   <label className="block text-[14px] font-bold" htmlFor="k-ask">
                     What would you like changed?
                   </label>
-                  <textarea id="k-ask" value={ask} onChange={(e) => { setAsk(e.target.value); setSent(false); }} rows={3} maxLength={600} className={field} />
+                  <textarea id="k-ask" value={ask} onChange={(e) => { setAsk(e.target.value); setSent(false); }} rows={3} maxLength={600} className={FIELD} />
                   {comment.isError && (
                     <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
                       {comment.error instanceof ApiError ? comment.error.message : 'That did not send. Try again.'}

@@ -20,13 +20,13 @@ import { useAuthed } from '../lib/queries';
 import { tie } from '../lib/text';
 import { useParamState } from '../lib/useParamState';
 import { Button } from './Button';
-import { DocRowActions } from './DocActions';
+import { PaperRowMenu } from './AgencyInvoices';
 import { Field } from './InvoiceView';
 import { Pager, usePage } from './Pager';
 import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
+import { FIELD } from '../lib/ui';
 
-const field = 'mt-xs w-full min-h-[48px] rounded-pill border-2 border-line bg-paper px-sm text-[16px]';
 
 /** One pickable starting point. A house template wears a small badge. */
 export function PickCard({ on, onPick, name, blurb, house = false }: { on: boolean; onPick: () => void; name: string; blurb: string; house?: boolean }) {
@@ -86,7 +86,7 @@ export function NewDocSheet({ open, onClose, clientId, retainer }: { open: boole
         {!clientId && (
           <label className="block text-[14px] font-bold" htmlFor="new-doc-client">
             For which client
-            <select id="new-doc-client" value={client} onChange={(e) => setClient(e.target.value)} className={field}>
+            <select id="new-doc-client" value={client} onChange={(e) => setClient(e.target.value)} className={FIELD}>
               <option value="">No client yet</option>
               {clients.data?.clients.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -109,7 +109,7 @@ export function NewDocSheet({ open, onClose, clientId, retainer }: { open: boole
             <label htmlFor="new-doc-month" className="block text-[14px] font-bold">
               Which month
             </label>
-            <input id="new-doc-month" type="month" value={month} onChange={(e) => setMonth(e.target.value)} className={field} />
+            <input id="new-doc-month" type="month" value={month} onChange={(e) => setMonth(e.target.value)} className={FIELD} />
             <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">The numbers come from this client's pieces and invoices. Counts and titles only: no fees, no private notes.</p>
           </div>
         )}
@@ -172,6 +172,7 @@ export function AgencyDocsList({ clientId, retainer }: { clientId?: string; reta
   const [kind, setKind] = useParamState('adkind', 'all');
   const pg = usePage('ad');
   const [adding, setAdding] = useState(false);
+  const [rowNote, setRowNote] = useState('');
   const query = `page=${pg.page}&size=${pg.size}${kind !== 'all' ? `&kind=${kind}` : ''}${clientId ? `&client=${clientId}` : ''}`;
   const list = useAuthed(['agency', 'docs', 'list', clientId ?? '', kind, pg.page, pg.size], () => api.agencyDocs(query));
   const text = async (id: string) => {
@@ -180,24 +181,34 @@ export function AgencyDocsList({ clientId, retainer }: { clientId?: string; reta
   };
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-sm">
-        <div role="group" aria-label="Kind of document" className="scroll-row flex gap-xs">
-          {([['all', 'All'], ...AGENCY_DOC_KINDS.map((k) => [k, AGENCY_DOC_KIND_META[k].name] as const)] as const).map(([k, name]) => (
-            <button
-              key={k}
-              type="button"
-              aria-pressed={kind === k}
-              onClick={() => {
-                setKind(k);
+      {/* The kind filter is only worth its space once there are more documents than fit on a page; a chosen kind keeps it in sight. */}
+      <div className="flex flex-wrap items-end justify-between gap-sm">
+        {(kind !== 'all' || pg.page > 1 || (list.data && (list.data.docs.length > 10 || list.data.page.more))) ? (
+          <div className="min-w-0">
+            <label htmlFor={`adkind-${clientId ?? 'all'}`} className="block text-[14px] font-bold">
+              Kind of document
+            </label>
+            <select
+              id={`adkind-${clientId ?? 'all'}`}
+              value={kind}
+              onChange={(e) => {
+                setKind(e.target.value);
                 pg.reset();
               }}
-              className={`toy min-h-[44px] shrink-0 rounded-pill border-2 px-md text-[14px] font-bold ${kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+              className="mt-xs min-h-[44px] w-full max-w-[320px] rounded-tile border-2 border-line bg-paper px-sm text-[16px]"
             >
-              {name}
-            </button>
-          ))}
-        </div>
-        <Button size="sm" onClick={() => setAdding(true)}>
+              <option value="all">All</option>
+              {AGENCY_DOC_KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {AGENCY_DOC_KIND_META[k].name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <span />
+        )}
+        <Button size="sm" plusToX onClick={() => setAdding(true)}>
           New document
         </Button>
       </div>
@@ -209,20 +220,23 @@ export function AgencyDocsList({ clientId, retainer }: { clientId?: string; reta
       {list.data && list.data.docs.length === 0 && <p className="mt-sm m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft shadow-toy-soft">No documents here yet. Start one from a template.</p>}
       <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
         {list.data?.docs.map((d: AgencyDocListItem) => (
-          <li key={d.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-            <Link to={`/agency/docs/${d.id}`} className="flex flex-wrap items-center justify-between gap-sm text-ink no-underline">
+          <li key={d.id} className="flex items-center gap-xs rounded-tile bg-card p-sm shadow-toy-soft">
+            <Link to={`/agency/docs/${d.id}`} className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-sm text-ink no-underline">
               <span className="min-w-0 flex-1">
                 <span className="block text-[16px] font-extrabold">{tie(d.title)}</span>
-                <span className="block text-[14px] font-semibold text-ink-soft">{[AGENCY_DOC_KIND_META[d.kind]?.name, d.clientName || 'No client yet', d.approvedAt ? `Approved ${day(d.approvedAt)}` : d.sentAt ? `Sent ${day(d.sentAt)}` : `Changed ${day(d.updatedAt)}`].filter(Boolean).join(' · ')}</span>
+                <span className="block text-[14px] font-semibold text-ink-soft">{[AGENCY_DOC_KIND_META[d.kind]?.name.trim().toLowerCase() === d.title.trim().toLowerCase() ? '' : AGENCY_DOC_KIND_META[d.kind]?.name, d.clientName || 'No client yet', d.approvedAt ? `Approved ${day(d.approvedAt)}` : d.sentAt ? `Sent ${day(d.sentAt)}` : `Changed ${day(d.updatedAt)}`].filter(Boolean).join(' · ')}</span>
               </span>
               <StatusTag tone={AGENCY_DOC_STATUS_TONE[d.status]}>{AGENCY_DOC_STATUS_NAME[d.status]}</StatusTag>
             </Link>
-            <div className="mt-xs">
-              <DocRowActions path={`/agency/docs/${d.id}`} getText={() => text(d.id)} />
-            </div>
+            <PaperRowMenu path={`/agency/docs/${d.id}`} name={d.title} getText={() => text(d.id)} onNote={setRowNote} />
           </li>
         ))}
       </ul>
+      {rowNote && (
+        <p role="status" className="mt-xs m-0 text-[14px] font-bold">
+          {rowNote}
+        </p>
+      )}
       <Pager page={list.data?.page} prefix="ad" label="documents" />
       <NewDocSheet open={adding} onClose={() => setAdding(false)} clientId={clientId} retainer={retainer} />
     </div>
@@ -240,7 +254,6 @@ export function ClientDocs({ clientId, retainer }: { clientId: string; retainer?
       <h2 id={`client-docs-${clientId}`} className="text-[24px]">
         Documents
       </h2>
-      <p className="mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">A strategy session summary, trial terms, a retainer proposal and a monthly report for this client. Each one prints as a PDF and can be emailed.</p>
       <div className="mt-sm">
         <AgencyDocsList clientId={clientId} retainer={retainer} />
       </div>

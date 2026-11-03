@@ -47,9 +47,9 @@ export function Stress() {
           Right now
         </h2>
         <p className="mt-md text-center font-display text-[36px] font-extrabold leading-none">{STRESS_LEVELS[level - 1]}</p>
-        <input type="range" min={1} max={5} value={level} onChange={(e) => setLevel(Number(e.target.value))} aria-label="Stress level" className="mt-md w-full accent-ink" />
+        <input type="range" min={1} max={5} value={level} onChange={(e) => setLevel(Number(e.target.value))} aria-label="Stress level" className="mt-md h-[44px] w-full cursor-pointer accent-ink" />
         <p className="mt-md m-0 text-[14px] font-bold">What is behind it</p>
-        <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label="Stressors">
+        <div className="fill-row mt-xs flex flex-wrap gap-xs" role="group" aria-label="Stressors">
           {STRESSORS.map((s) => {
             const on = picked.includes(s);
             return (
@@ -58,7 +58,7 @@ export function Stress() {
                 type="button"
                 aria-pressed={on}
                 onClick={() => setPicked((p) => (on ? p.filter((x) => x !== s) : [...p, s]))}
-                className={`rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}
+                className={`min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}
               >
                 {s}
               </button>

@@ -12,13 +12,14 @@ import {
 } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
-import { api } from '../lib/api';
+import { api, errorText } from '../lib/api';
+import { FIELD } from '../lib/ui';
 import { useRefreshAll } from '../lib/queries';
 import { Button } from './Button';
 import { chip } from './Chat';
+import { Icon } from './Icon';
+import { Pencil, X } from 'lucide-react';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px] text-ink';
-const err = (e: unknown) => (e instanceof Error ? e.message : 'Try again.');
 
 /**
  * The routine on the life map, for a general day and for an exceptional one: each block with its times and how
@@ -70,10 +71,7 @@ export function RoutinePanel({ general, exceptional, date }: { general: RoutineB
         </div>
         {!draft && (
           <Button variant="outline" size="sm" className="ml-auto" onClick={start} aria-label="Edit my routine">
-            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 20h4L19 9l-4-4L4 16z" />
-              <path d="M13.5 6.5l4 4" />
-            </svg>
+            <Icon icon={Pencil} size={16} strokeWidth={2.4} />
             Edit
           </Button>
         )}
@@ -121,11 +119,11 @@ export function RoutinePanel({ general, exceptional, date }: { general: RoutineB
                 <div className="mt-xs grid grid-cols-2 gap-xs">
                   <label className="block text-[12px] font-bold text-ink-soft">
                     Starts
-                    <input type="time" value={b.start} onChange={(e) => edit(b.key, { start: e.target.value })} className={field} />
+                    <input type="time" value={b.start} onChange={(e) => edit(b.key, { start: e.target.value })} className={`${FIELD} text-ink`} />
                   </label>
                   <label className="block text-[12px] font-bold text-ink-soft">
                     Ends
-                    <input type="time" value={b.end} onChange={(e) => edit(b.key, { end: e.target.value })} className={field} />
+                    <input type="time" value={b.end} onChange={(e) => edit(b.key, { end: e.target.value })} className={`${FIELD} text-ink`} />
                   </label>
                 </div>
                 {b.key === 'morning' ? (
@@ -175,9 +173,7 @@ export function RoutinePanel({ general, exceptional, date }: { general: RoutineB
                             aria-label={`Remove step ${i + 1}`}
                             className="toy toy-soft flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-card text-ink-soft hover:text-ink disabled:opacity-40"
                           >
-                            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
-                              <path d="M6 6l12 12M18 6 6 18" />
-                            </svg>
+                            <Icon icon={X} size={16} strokeWidth={2.8} />
                           </button>
                         </li>
                       ))}
@@ -202,7 +198,7 @@ export function RoutinePanel({ general, exceptional, date }: { general: RoutineB
                 ) : (
                   <label className="mt-sm block text-[12px] font-bold text-ink-soft">
                     What happens here
-                    <input value={b.note} onChange={(e) => edit(b.key, { note: e.target.value })} maxLength={ROUTINE_NOTE_MAX} className={field} />
+                    <input value={b.note} onChange={(e) => edit(b.key, { note: e.target.value })} maxLength={ROUTINE_NOTE_MAX} className={`${FIELD} text-ink`} />
                   </label>
                 )}
               </li>
@@ -210,7 +206,7 @@ export function RoutinePanel({ general, exceptional, date }: { general: RoutineB
           </ol>
           {save.isError && (
             <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-              That did not save. {err(save.error)}
+              That did not save. {errorText(save.error, 'Try again.')}
             </p>
           )}
           <div className="mt-sm flex flex-wrap items-center gap-sm">

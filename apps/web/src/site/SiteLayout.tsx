@@ -1,7 +1,6 @@
-import { RELATIONSHIPS } from '@kreators/shared';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router';
-import { Avatar } from '../components/Avatar';
+import { BrandMark } from '../components/BrandMark';
 import { Ornament, Posy } from '../components/Hero';
 import { useSession } from '../lib/store';
 import { useTheme } from '../lib/theme';
@@ -17,24 +16,24 @@ export function useAppEntry(): string {
 
 export function Logo() {
   return (
-    <Link to="/" className="inline-flex min-h-[44px] shrink-0 items-center gap-xs whitespace-nowrap font-display text-[20px] font-extrabold tracking-tight">
-      <span className="flex items-end gap-[2px] max-[380px]:hidden" aria-hidden="true">
-        {RELATIONSHIPS.slice(0, 3).map((r, i) => (
-          <Avatar key={r.key} relationship={r.key} size={18 + i * 4} decorative still />
-        ))}
-      </span>
-      kreators.app
+    <Link to="/" className="inline-flex min-h-[44px] shrink-0 items-center whitespace-nowrap text-[22px]">
+      <BrandMark />
     </Link>
   );
 }
 
-export function SiteLayout({ children, wide = true }: { children: ReactNode; wide?: boolean }) {
+/**
+ * The public site's frame. `minimal` is for pages a client opens from a link (the agency client page, invoices, agreements, documents):
+ * the header keeps only the logo and the theme switch, with no Explore, Sign in or Go to app; the footer and its privacy links stay.
+ */
+export function SiteLayout({ children, wide = true, minimal = false }: { children: ReactNode; wide?: boolean; minimal?: boolean }) {
   const entry = useAppEntry();
   const token = useSession((s) => s.token);
   const themeMode = useTheme((s) => s.mode);
   const setThemeMode = useTheme((s) => s.setMode);
   // Two classes, because Tailwind 4 orders `inline-flex` after `hidden`: a link that carries both would always show.
-  const navBase = 'relative min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill px-sm text-[16px] font-bold text-ink-soft transition-colors hover:text-ink aria-[current=page]:text-ink';
+  const navBase =
+    'relative min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill px-sm text-[16px] font-bold text-ink-soft transition-colors hover:text-ink aria-[current=page]:text-ink';
   // Phones keep only the logo, "Go to app" and the theme button; the rest comes back from the laptop breakpoint.
   const navWide = `hidden lg:inline-flex ${navBase}`;
   // The header frosts once the page has moved: a one-pixel marker at the very top tells us when it has left the screen (no scroll listener).
@@ -54,50 +53,57 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
     <div className="min-h-dvh text-ink">
       <div ref={top} aria-hidden="true" className="pointer-events-none absolute top-0 left-0 h-xs w-xs" />
       <header data-scrolled={scrolled ? '' : undefined} className="fx-header safe-top relative z-30 md:sticky md:top-0">
-        <div className={`mx-auto flex min-w-0 ${wide ? 'max-w-[1080px]' : 'max-w-[720px]'} items-center justify-between gap-sm px-md py-xs`}>
+        {/* The header and the footer are the same width on every page, like the home page; only the reading column narrows. */}
+        <div className="mx-auto flex min-w-0 max-w-[1080px] items-center justify-between gap-sm px-md py-xs">
           <Logo />
-          <nav ref={slide.ref} aria-label="Site" className="fx-slide fx-slide-paper flex min-w-0 items-center gap-xs">
-            <NavLink to="/explore" className={navWide}>
-              Explore
-            </NavLink>
-            {wide && (
+          {minimal ? (
+            <ThemeToggle />
+          ) : (
+            <nav ref={slide.ref} aria-label="Site" className="fx-slide fx-slide-paper flex min-w-0 items-center gap-xs">
+              <NavLink to="/explore" className={navWide}>
+                Explore
+              </NavLink>
               <NavLink to="/features" end className={navWide}>
                 Features
               </NavLink>
-            )}
-            {wide && (
               <NavLink to="/7rp" className={navWide}>
                 7RP
               </NavLink>
-            )}
-            {wide && (
               <a href="/#brands" className={navWide}>
                 For brands
               </a>
-            )}
-            {!token && (
-              <Link to="/signin" className={navWide}>
-                Sign in
+              {!token && (
+                <Link to="/signin" className={navWide}>
+                  Sign in
+                </Link>
+              )}
+              <Link
+                to={entry}
+                className="toy inline-flex min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink max-[380px]:px-sm"
+              >
+                Go to app
               </Link>
-            )}
-            <Link to={entry} className="toy inline-flex min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink max-[380px]:px-sm">
-              Go to app
-            </Link>
-            <ThemeToggle />
-          </nav>
+              <ThemeToggle />
+            </nav>
+          )}
         </div>
       </header>
-      <main className={`mx-auto ${wide ? 'max-w-[1080px]' : 'max-w-[720px]'} px-md md:px-lg lg:px-xl pb-2xl`}>{children}</main>
+      <main className={`mx-auto ${wide ? 'max-w-[1080px]' : 'max-w-[720px]'} px-md md:px-lg lg:px-xl pb-xl`}>{children}</main>
       <footer
         className="relative mt-xl overflow-hidden rounded-t-card bg-card shadow-toy-soft"
         // Like land under a dusk sky: indigo and sky blue above, then green, then the brown earth at the bottom, so the page ends on something solid.
-        style={{ backgroundImage: 'linear-gradient(180deg, color-mix(in oklab, var(--color-r6) 14%, transparent), color-mix(in oklab, var(--color-r5) 12%, transparent) 30%, color-mix(in oklab, var(--color-r4) 12%, transparent) 62%, color-mix(in oklab, var(--color-earth) 20%, transparent))' }}
+        style={{
+          backgroundImage:
+            'linear-gradient(180deg, color-mix(in oklab, var(--color-r6) 14%, transparent), color-mix(in oklab, var(--color-r5) 12%, transparent) 30%, color-mix(in oklab, var(--color-r4) 12%, transparent) 62%, color-mix(in oklab, var(--color-earth) 20%, transparent))',
+        }}
       >
         <Posy tone="ink" kind="lotus" className="right-0 bottom-0" />
-        <div className={`relative mx-auto flex ${wide ? 'max-w-[1080px]' : 'max-w-[720px]'} flex-col gap-md px-md py-lg md:flex-row md:items-start md:justify-between`}>
+        <div className="relative mx-auto flex max-w-[1080px] flex-col gap-md px-md py-lg md:flex-row md:items-start md:justify-between">
           <div>
             <Logo />
-            <p className="mt-xs m-0 max-w-[420px] text-[14px] font-semibold text-ink-soft">A daily game for the seven relationships that make a life, with the tools a creator needs built in. One small act a day, for all seven. Free to start, free to stay.</p>
+            <p className="mt-xs m-0 max-w-[420px] text-[14px] font-semibold text-ink-soft">
+              A daily game for the seven relationships that make a life, with the tools a creator needs built in. One small act a day, for all seven. Free to start, free to stay.
+            </p>
           </div>
           <nav aria-label="Footer" className="grid grid-cols-2 gap-xs text-[14px] font-bold text-ink-soft sm:grid-cols-3">
             <Link to="/explore" className="min-h-[44px] hover:text-ink">
@@ -142,7 +148,7 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
             <Link to="/licences" className="min-h-[44px] hover:text-ink">
               Licences
             </Link>
-            <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kreators:open-consent'))} className="min-h-[44px] text-left hover:text-ink">
+            <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kreators:open-consent'))} className="flex min-h-[44px] items-start text-left hover:text-ink">
               Privacy choices
             </button>
           </nav>
@@ -158,7 +164,9 @@ export function SiteLayout({ children, wide = true }: { children: ReactNode; wid
           />
         </div>
         <Ornament className="mt-xs" />
-        <p className="relative m-0 px-md text-center text-[12px] font-semibold text-ink-mute">Your journal and wellbeing numbers are never shown to brands, staff, the leaderboard or Club selection.</p>
+        <p className="relative m-0 px-md text-center text-[12px] font-semibold text-ink-mute">
+          Your journal and wellbeing numbers are never shown to brands, staff, the leaderboard or Club selection.
+        </p>
         <p className="relative m-0 px-md pb-lg text-center text-[12px] font-semibold text-ink-mute">
           Built with ❤️ by{' '}
           <a href="https://brandingbum.com" target="_blank" rel="noopener noreferrer" className="font-bold underline underline-offset-4 hover:text-ink">

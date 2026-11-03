@@ -8,8 +8,11 @@ import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
+import { Icon } from '../components/Icon';
+import { ChevronDown } from 'lucide-react';
+import { FIELD } from '../lib/ui';
+import { ErrorLine } from '../components/ErrorLine';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 
 const COPY = {
   tv: {
@@ -51,14 +54,6 @@ const STAGE_TINT: Record<ProposalStage, string> = {
   released: 'var(--tint-green)',
 };
 
-function Err({ e }: { e: unknown }) {
-  if (!e) return null;
-  return (
-    <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-      {e instanceof Error ? e.message : 'That did not work.'}
-    </p>
-  );
-}
 
 function StagePill({ stage }: { stage: ProposalStage }) {
   return (
@@ -93,9 +88,7 @@ function ProposalCard({ p, reviewer, onChange }: { p: Proposal; reviewer: boolea
             updated {new Date(p.updatedAt).toLocaleDateString()}
           </span>
         </span>
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" className={`shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M6 9l6 6 6-6" />
-        </svg>
+        <Icon icon={ChevronDown} size={20} strokeWidth={3} className={`shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
         <div className="mt-sm">
@@ -120,7 +113,7 @@ function ProposalCard({ p, reviewer, onChange }: { p: Proposal; reviewer: boolea
             >
               <label className="block">
                 <span className="block text-[12px] font-bold">Move to</span>
-                <select value={stage} onChange={(e) => setStage(e.target.value as ProposalStage)} className={field}>
+                <select value={stage} onChange={(e) => setStage(e.target.value as ProposalStage)} className={FIELD}>
                   {PROPOSAL_STAGES.map((s) => (
                     <option key={s} value={s}>
                       {STAGE_LABEL[s]}
@@ -130,9 +123,9 @@ function ProposalCard({ p, reviewer, onChange }: { p: Proposal; reviewer: boolea
               </label>
               <label className="block">
                 <span className="block text-[12px] font-bold">Note to them</span>
-                <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} className={field} />
+                <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} className={FIELD} />
               </label>
-              <Err e={move.isError ? move.error : null} />
+              <ErrorLine e={move.isError ? move.error : null} />
               <Button type="submit" disabled={move.isPending || stage === p.stage}>
                 Record decision
               </Button>
@@ -219,24 +212,24 @@ function ProposeSheet({ kind, open, onClose, onDone }: { kind: 'tv' | 'fund'; op
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Title</span>
-          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={field} />
+          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">{copy.pitchLabel}</span>
-          <textarea value={pitch} onChange={(e) => setPitch(e.target.value)} maxLength={8000} rows={8} required className={field} />
+          <textarea value={pitch} onChange={(e) => setPitch(e.target.value)} maxLength={8000} rows={8} required className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">{copy.budgetLabel}</span>
-            <input type="number" min={0} value={budgetAmount} onChange={(e) => setBudget(e.target.value)} className={field} />
+            <input type="number" min={0} value={budgetAmount} onChange={(e) => setBudget(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Currency</span>
-            <input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} maxLength={3} className={field} />
+            <input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} maxLength={3} className={FIELD} />
           </label>
         </div>
         <p className="m-0 text-[12px] font-bold text-ink-soft">Every stage change comes with a note from the person who made it. You will hear in your Inbox.</p>
-        <Err e={propose.isError ? propose.error : null} />
+        <ErrorLine e={propose.isError ? propose.error : null} />
         <Button type="submit" size="lg" full disabled={propose.isPending || !title.trim() || !pitch.trim()}>
           Submit
         </Button>

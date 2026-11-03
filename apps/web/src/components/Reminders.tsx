@@ -3,22 +3,21 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
 import { api } from '../lib/api';
-import { todayLocal } from '../lib/date';
+import { dayLabel, todayLocal } from '../lib/date';
 import { useSession } from '../lib/store';
 import { useDialogFocus } from '../lib/useDialogFocus';
 import { Button } from './Button';
 import { RulerPicker } from './RulerPicker';
 import { Sheet } from './Sheet';
+import { Icon } from './Icon';
+import { ChevronDown, Droplet } from 'lucide-react';
+import { FIELD } from '../lib/ui';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'That did not work. Try again.');
 const litres = (ml: number) => (ml >= 1000 ? `${(ml / 1000).toFixed(ml % 1000 === 0 ? 0 : 2).replace(/0$/, '')} L` : `${ml} ml`);
 
 /** "Tue 3 Nov" for a day typed as YYYY-MM-DD. */
-const shortDay = (d: string) => {
-  const [y, m, n] = d.split('-').map(Number);
-  return new Date(y ?? 2000, (m ?? 1) - 1, n ?? 1).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
-};
+const shortDay = dayLabel;
 
 /**
  * A water number (the daily goal or a glass, in ml): a ruler to scrub, and the exact number to type beside it. The ruler saves once it
@@ -82,9 +81,7 @@ function useReminders() {
 
 function Drop({ size = 20 }: { size?: number }) {
   return (
-    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 2.5c3.2 4.1 6 7.2 6 10.5a6 6 0 0 1-12 0C6 9.700 8.800 6.600 12 2.500z" />
-    </svg>
+    <Icon icon={Droplet} size={size} filled />
   );
 }
 
@@ -177,7 +174,7 @@ export function RemindersPanel({ bento = false }: { bento?: boolean }) {
         >
           <label className="min-w-0 flex-1">
             <span className="sr-only">Another amount in ml</span>
-            <input value={ml} onChange={(e) => setMl(e.target.value.replace(/\D/g, ''))} inputMode="numeric" placeholder="Another amount, in ml" className={`${field} !mt-0 !py-xs`} />
+            <input value={ml} onChange={(e) => setMl(e.target.value.replace(/\D/g, ''))} inputMode="numeric" placeholder="Another amount, in ml" className={`${FIELD} !mt-0 !py-xs`} />
           </label>
           <Button size="sm" variant="outline" type="submit" disabled={drink.isPending || !ml}>
             Add
@@ -197,7 +194,7 @@ export function RemindersPanel({ bento = false }: { bento?: boolean }) {
             </span>
           </span>
         </label>
-        <button type="button" aria-expanded={showSet} onClick={() => setShowSet((v) => !v)} className="mt-xs min-h-[36px] text-[12px] font-bold text-ink-soft underline underline-offset-4">
+        <button type="button" aria-expanded={showSet} onClick={() => setShowSet((v) => !v)} className="mt-xs inline-flex min-h-[44px] items-center text-[12px] font-bold text-ink-soft underline underline-offset-4">
           {showSet ? 'Hide water settings' : 'Water settings'}
         </button>
         {showSet && (
@@ -206,7 +203,7 @@ export function RemindersPanel({ bento = false }: { bento?: boolean }) {
             <WaterNumber label="A glass (ml)" value={w.glassMl} min={WATER_GLASS_MIN} max={WATER_GLASS_MAX} step={50} labelEvery={250} onSave={(n) => settle.mutate({ glassMl: n })} />
             <label className="block">
               <span className="block text-[12px] font-bold">How often</span>
-              <select value={w.everyMin} onChange={(e) => settle.mutate({ everyMin: Number(e.target.value) })} className={field}>
+              <select value={w.everyMin} onChange={(e) => settle.mutate({ everyMin: Number(e.target.value) })} className={FIELD}>
                 {WATER_EVERY_CHOICES.map((m) => (
                   <option key={m} value={m}>
                     {m / 60} hours
@@ -217,11 +214,11 @@ export function RemindersPanel({ bento = false }: { bento?: boolean }) {
             <div className="grid grid-cols-2 gap-xs">
               <label className="block">
                 <span className="block text-[12px] font-bold">From</span>
-                <input type="time" defaultValue={w.from} onBlur={(e) => e.target.value && e.target.value !== w.from && settle.mutate({ from: e.target.value })} className={field} />
+                <input type="time" defaultValue={w.from} onBlur={(e) => e.target.value && e.target.value !== w.from && settle.mutate({ from: e.target.value })} className={FIELD} />
               </label>
               <label className="block">
                 <span className="block text-[12px] font-bold">To</span>
-                <input type="time" defaultValue={w.to} onBlur={(e) => e.target.value && e.target.value !== w.to && settle.mutate({ to: e.target.value })} className={field} />
+                <input type="time" defaultValue={w.to} onBlur={(e) => e.target.value && e.target.value !== w.to && settle.mutate({ to: e.target.value })} className={FIELD} />
               </label>
             </div>
           </div>
@@ -259,18 +256,18 @@ export function RemindersPanel({ bento = false }: { bento?: boolean }) {
           >
             <label className="block">
               <span className="block text-[12px] font-bold">Remind me to</span>
-              <input value={title} maxLength={REMINDER_TITLE_MAX} onChange={(e) => setTitle(e.target.value)} placeholder="Stretch for five minutes" className={field} />
+              <input value={title} maxLength={REMINDER_TITLE_MAX} onChange={(e) => setTitle(e.target.value)} placeholder="Stretch for five minutes" className={FIELD} />
             </label>
             <label className="block">
               <span className="block text-[12px] font-bold">At</span>
-              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={field} />
+              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={FIELD} />
             </label>
             <div role="group" aria-label="Days" className="grid grid-cols-7 gap-xs">
               {WEEKDAY_NAMES.map((n, i) => {
                 const d = i + 1;
                 const on = days.includes(d);
                 return (
-                  <button key={n} type="button" aria-pressed={on} onClick={() => setDays((x) => (on ? x.filter((y) => y !== d) : [...x, d].sort()))} className={`min-h-[40px] min-w-0 rounded-pill border-2 px-0 text-[12px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+                  <button key={n} type="button" aria-pressed={on} onClick={() => setDays((x) => (on ? x.filter((y) => y !== d) : [...x, d].sort()))} className={`min-h-[44px] min-w-0 rounded-pill border-2 px-0 text-[12px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
                     <span className="sm:hidden">{n.slice(0, 2)}</span>
                     <span className="hidden sm:inline">{n}</span>
                   </button>
@@ -287,7 +284,7 @@ export function RemindersPanel({ bento = false }: { bento?: boolean }) {
             </div>
           </form>
         ) : (
-          <Button size="sm" variant="outline" className="mt-xs" onClick={() => setAdding(true)} disabled={custom.length >= MAX_CUSTOM_REMINDERS}>
+          <Button size="sm" variant="outline" className="mt-xs" plusToX expanded={adding} onClick={() => setAdding(true)} disabled={custom.length >= MAX_CUSTOM_REMINDERS}>
             Add a reminder
           </Button>
         )}
@@ -322,7 +319,7 @@ export function RemindersPanel({ bento = false }: { bento?: boolean }) {
             >
               <label className="block">
                 <span className="block text-[12px] font-bold">Task</span>
-                <select value={pickId} onChange={(e) => setPickId(e.target.value)} className={field}>
+                <select value={pickId} onChange={(e) => setPickId(e.target.value)} className={FIELD}>
                   <option value="">{open.isLoading ? 'Loading' : pickable.length === 0 ? 'No open tasks' : 'Pick a task'}</option>
                   {pickable.map((t) => (
                     <option key={t.id} value={t.id}>
@@ -334,13 +331,13 @@ export function RemindersPanel({ bento = false }: { bento?: boolean }) {
               {chosen && !chosen.dueDate && (
                 <label className="block">
                   <span className="block text-[12px] font-bold">On</span>
-                  <input type="date" value={pickDay} min={day} onChange={(e) => setPickDay(e.target.value)} className={field} />
+                  <input type="date" value={pickDay} min={day} onChange={(e) => setPickDay(e.target.value)} className={FIELD} />
                   <span className="mt-xs block text-[12px] font-semibold text-ink-soft">It will show on Daily from that day.</span>
                 </label>
               )}
               <label className="block">
                 <span className="block text-[12px] font-bold">At</span>
-                <input type="time" value={pickTime} onChange={(e) => setPickTime(e.target.value)} className={field} />
+                <input type="time" value={pickTime} onChange={(e) => setPickTime(e.target.value)} className={FIELD} />
               </label>
               <div className="flex gap-xs">
                 <Button size="sm" type="submit" disabled={remember.isPending || !chosen || !REMINDER_TIME.test(pickTime) || (!chosen.dueDate && pickDay < day)}>
@@ -352,7 +349,7 @@ export function RemindersPanel({ bento = false }: { bento?: boolean }) {
               </div>
             </form>
           ) : (
-            <Button size="sm" variant="outline" className="mt-xs" onClick={() => { setPickDay(day); setPicking(true); }}>
+            <Button size="sm" variant="outline" className="mt-xs" plusToX expanded={picking} onClick={() => { setPickDay(day); setPicking(true); }}>
               Remind me about a task
             </Button>
           )}
@@ -386,9 +383,7 @@ export function RemindersSection({ always = false }: { always?: boolean }) {
             <span className="block text-[16px] font-extrabold">Water and reminders</span>
             <span className="block text-[14px] font-bold text-ink-soft">{w ? `${w.glasses} of ${w.goalGlasses} glasses today · ${litres(w.ml)} of ${litres(w.goalMl)}` : 'Loading'}</span>
           </span>
-          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={`shrink-0 ${open ? 'rotate-180' : ''}`}>
-            <path d="M6 9l6 6 6-6" />
-          </svg>
+          <Icon icon={ChevronDown} size={16} strokeWidth={3} className={`shrink-0 ${open ? 'rotate-180' : ''}`} />
         </button>
         <div className="flex gap-xs sm:shrink-0">
           <Button size="md" className="flex-1 sm:flex-none" onClick={() => drink.mutate()} disabled={drink.isPending || !w} aria-label="Add a glass of water">

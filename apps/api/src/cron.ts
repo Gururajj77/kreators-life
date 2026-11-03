@@ -1,17 +1,18 @@
 import { releaseDeadOrders } from './discounts';
 import type { Env } from './env';
-import { nowIso } from './db';
+import { getUser, nowIso } from './db';
 import { runSequences } from './routes/growth';
 import { runRecurring } from './routes/finance';
 import { matchDueCircles, rollWeeklyCircles } from './routes/circles';
 import { fetchMetrics } from './social';
 import { closeSeason, sendEventReminders } from './engage';
-import { RETENTION_DAYS, nextOccurrence, nextOnOrAfter, parseRepeat, pastWaterNote, PERIOD_META, reviewPeriodFor, zonedToUtc, type PeriodKind } from '@kreators/shared';
+import { money, RETENTION_DAYS, nextOccurrence, nextOnOrAfter, parseRepeat, pastWaterNote, PERIOD_META, reviewPeriodFor, zonedToUtc, type PeriodKind } from '@kreators/shared';
 import { flaggedFor } from './routes/reviews';
 import { securityAlerts } from './alerts';
 import { runAgencyCycles } from './agencyCycles';
 import { syncStageFromAgreements } from './lifecycle';
-import { pruneExpiredPortalSessions } from './portalAccess';
+import { pruneExpiredPortalSessions, pruneRetiredPortalLinks } from './portalAccess';
+import { resolveAccess } from './access';
 
 /** The cron runs every fifteen minutes, so 23:45 is the last tick of a day: a reminder set for 23:46 to 23:59 goes out then and not at 00:00, when its day has already turned over. */
 const LAST_TICK = 23 * 60 + 45;
@@ -28,7 +29,7 @@ export async function runScheduled(env: Env, cron: string = ''): Promise<{ seque
     const water = await sendWaterAndCustom(db, { water: true, custom: false });
     return { sequences: 0, recurring: 0, circles: 0, weekly: 0, content: 0, submissions: 0, reminders: water, events: 0, season: 0, agency: 0 };
   }
-  const reminders = (await sendReminders(db)) + (await sendWaterAndCustom(db, { water: cron !== MAIN_CRON, custom: true })) + (await sendTaskReminders(db)) + (await sendReviewReminders(db));
+  const reminders = (await sendReminders(db)) + (await sendWaterAndCustom(db, { water: cron !== MAIN_CRON, custom: true })) + (await sendTaskReminders(db)) + (await sendReviewReminders(db)) + (await sendInvoiceNotes(db).catch(() => 0)) + (await sendAgencyDueNotes(db).catch(() => 0));
   await clearPastWaterNotes(db);
   await tidyOld(db);
   await securityAlerts(db).catch(() => 0);
@@ -40,6 +41,7 @@ export async function runScheduled(env: Env, cron: string = ''): Promise<{ seque
   const agencyMade = await runAgencyCycles(db).catch(() => 0);
   await syncStageFromAgreements(db).catch(() => 0);
   await pruneExpiredPortalSessions(db).catch(() => undefined);
+  await pruneRetiredPortalLinks(db).catch(() => undefined);
   const circles = await matchDueCircles(db);
   const weekly = await rollWeeklyCircles(db);
   // Money orders nobody paid for within half an hour are closed so the product is buyable again.
@@ -223,8 +225,9 @@ export async function sendTaskReminders(db: D1Database): Promise<number> {
     if (since < 0 || since > 60) continue;
     const tag = t.priority === null ? '' : `P${t.priority} `;
     const res = await db
-      .prepare("INSERT OR IGNORE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', ?, ?, '/today', NULL, ?)")
-      .bind(`task-${t.id}-${day}`, t.user_id, `Remember: ${t.title}`.slice(0, 160), `${tag}Planned for today${t.due_date && t.do_date ? `, due ${t.due_date}` : ''}. Tap to open Daily.`.trim(), nowIso())
+      .prepare("INSERT OR IGNORE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', ?, ?, ?, NULL, ?)")
+      // The note opens Daily on this task, with its plan open, so the inbox line and the Remember tag are one thing.
+      .bind(`task-${t.id}-${day}`, t.user_id, `Remember: ${t.title}`.slice(0, 160), `${tag}Planned for today${t.due_date && t.do_date ? `, due ${t.due_date}` : ''}. Tap to open it.`.trim(), `/today?task=${t.id}`, nowIso())
       .run();
     if (res.meta.changes) sent += 1;
   }
@@ -310,3 +313,109 @@ export async function sendReviewReminders(db: D1Database): Promise<number> {
   }
   return sent;
 }
+
+/** The person's own day and minute of the day in their zone, or null when the zone is not one the runtime knows. */
+function localNow(zone: string, now: Date): { day: string; minutes: number } | null {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now);
+    const get = (k: string) => parts.find((p) => p.type === k)?.value ?? '';
+    return { day: `${get('year')}-${get('month')}-${get('day')}`, minutes: Number(get('hour')) * 60 + Number(get('minute')) };
+  } catch {
+    return null;
+  }
+}
+
+/** The morning time an invoice note goes out, in the owner's zone. */
+export const INVOICE_NOTE_TIME = 9 * 60;
+/** A late note that was missed while nothing ran still goes within this many days of the due day, never for an invoice long past. */
+const INVOICE_LATE_REACH = 7;
+
+/**
+ * Invoices the person sent and nobody has paid: one inbox note on the due day and one on the first day after it ("past due"), from 09:00 in
+ * the owner's zone. The ids `invoice-<id>-due` and `invoice-<id>-late` make each one once, however often the cron runs. An agency invoice
+ * is noted only while Agency is on for its owner and lands in the Agency tab; the note names the number, the client and the amount, and
+ * goes to the owner only. A paid, void or draft invoice is never noted.
+ */
+export async function sendInvoiceNotes(db: D1Database, now: Date = new Date()): Promise<number> {
+  const back = new Date(now.getTime() - (INVOICE_LATE_REACH + 2) * 86_400_000).toISOString().slice(0, 10);
+  const ahead = new Date(now.getTime() + 86_400_000).toISOString().slice(0, 10);
+  const rows = await db
+    .prepare(
+      `SELECT i.id, i.user_id, i.number, i.due_date, i.total_cents, i.currency, i.agency_client_id, COALESCE(k.name, i.client_name) AS client, u.timezone
+       FROM invoices i JOIN users u ON u.id = i.user_id LEFT JOIN agency_clients k ON k.id = i.agency_client_id AND k.user_id = i.user_id
+       WHERE i.status = 'sent' AND i.due_date IS NOT NULL AND i.due_date >= ? AND i.due_date <= ? LIMIT 2000`,
+    )
+    .bind(back, ahead)
+    .all<{ id: string; user_id: string; number: string; due_date: string; total_cents: number; currency: string; agency_client_id: string | null; client: string; timezone: string | null }>();
+  const agencyOn = new Map<string, boolean>();
+  const isAgencyOn = async (userId: string) => {
+    if (!agencyOn.has(userId)) {
+      const u = await getUser(db, userId);
+      agencyOn.set(userId, u ? (await resolveAccess(db, u)).access.agency?.on === true : false);
+    }
+    return agencyOn.get(userId) ?? false;
+  };
+  let sent = 0;
+  for (const r of rows.results) {
+    const at = localNow(r.timezone || 'Asia/Kolkata', now);
+    if (!at || at.minutes < INVOICE_NOTE_TIME) continue;
+    const late = r.due_date < at.day;
+    if (!late && r.due_date !== at.day) continue;
+    if (late && r.due_date < shiftDay(at.day, -INVOICE_LATE_REACH)) continue;
+    const isAgency = r.agency_client_id !== null;
+    if (isAgency && !(await isAgencyOn(r.user_id))) continue;
+    const title = late ? `Invoice ${r.number} is past due` : `Invoice ${r.number} is due today`;
+    const body = `${money(r.total_cents, r.currency)} from ${r.client || 'your client'}, due ${r.due_date}. ${late ? 'Send a reminder, or mark it paid if it came in.' : 'Mark it paid when it comes in.'}`;
+    const res = await db
+      .prepare('INSERT OR IGNORE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)')
+      .bind(`invoice-${r.id}-${late ? 'late' : 'due'}`, r.user_id, isAgency ? 'agency' : 'invoice', title.slice(0, 160), body.slice(0, 300), isAgency ? `/agency/invoices/${r.id}` : '/finance', nowIso())
+      .run();
+    if (res.meta.changes) sent += 1;
+  }
+  return sent;
+}
+
+/**
+ * Agency pieces due today: one inbox line a person a day (id `agency-due-<user>-<day>`, so once however often the cron runs), from 09:00 in
+ * the owner's zone, only while Agency is on for them, naming the piece and its client when there is one and the count when there are more.
+ * A piece already approved or published, or a client that ended, is never counted. It links to that client's page, or the pipeline.
+ * The same pieces sit on Daily (`agencyToday` in routes/today.ts) and in the calendar link, so it is one thing in three places.
+ */
+export async function sendAgencyDueNotes(db: D1Database, now: Date = new Date()): Promise<number> {
+  const from = new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10);
+  const to = new Date(now.getTime() + 86_400_000).toISOString().slice(0, 10);
+  const rows = await db
+    .prepare(
+      `SELECT i.user_id, i.title, i.client_id, i.due_date, k.name AS client, u.timezone FROM agency_items i
+       JOIN agency_clients k ON k.id = i.client_id AND k.user_id = i.user_id JOIN users u ON u.id = i.user_id
+       WHERE i.stage NOT IN ('approved', 'published') AND i.due_date >= ? AND i.due_date <= ? AND k.status != 'ended'
+       ORDER BY i.user_id, i.created_at LIMIT 3000`,
+    )
+    .bind(from, to)
+    .all<{ user_id: string; title: string; client_id: string; due_date: string; client: string; timezone: string | null }>();
+  const byUser = new Map<string, { day: string; items: { title: string; client_id: string; client: string }[] }>();
+  for (const r of rows.results) {
+    const at = localNow(r.timezone || 'Asia/Kolkata', now);
+    if (!at || at.minutes < INVOICE_NOTE_TIME || r.due_date !== at.day) continue;
+    const one = byUser.get(r.user_id) ?? { day: at.day, items: [] };
+    one.items.push({ title: r.title, client_id: r.client_id, client: r.client });
+    byUser.set(r.user_id, one);
+  }
+  let sent = 0;
+  for (const [userId, { day, items }] of byUser) {
+    const u = await getUser(db, userId);
+    if (!u || (await resolveAccess(db, u)).access.agency?.on !== true) continue;
+    const first = items[0]!;
+    const oneClient = items.every((x) => x.client_id === first.client_id);
+    const title = items.length === 1 ? `${first.title} is due today` : `${items.length} pieces are due today`;
+    const body = items.length === 1 ? `For ${first.client}. Move it on in Agency, or change its due day.` : `${items.slice(0, 3).map((x) => `${x.title} (${x.client})`).join(', ')}${items.length > 3 ? ` and ${items.length - 3} more` : ''}.`;
+    const res = await db
+      .prepare("INSERT OR IGNORE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'agency', ?, ?, ?, NULL, ?)")
+      .bind(`agency-due-${userId}-${day}`, userId, title.slice(0, 160), body.slice(0, 300), oneClient ? `/agency/${first.client_id}` : '/agency?tab=pipeline', nowIso())
+      .run();
+    if (res.meta.changes) sent += 1;
+  }
+  return sent;
+}
+
+const shiftDay = (day: string, n: number) => new Date(Date.parse(`${day}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);

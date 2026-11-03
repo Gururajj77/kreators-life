@@ -1,12 +1,15 @@
 import { MODULES, RELATIONSHIPS } from '@kreators/shared';
 import { BUILD_FILES, BUILD_SECTIONS, itemsOf, percentOf, type BuildCard, type BuildItem, type BuildState } from '../lib/buildMap';
 import { Section } from './Section';
+import { Icon } from './Icon';
+import { AppIcon } from './AppIcon';
+import { ArrowRight, Check, CircleAlert, FlaskConical, type LucideIcon } from 'lucide-react';
 
-const STATE: Record<BuildState, { name: string; glyph: string; bg: string; edge: string }> = {
-  ok: { name: 'Built and checked', glyph: '✓', bg: 'var(--tint-green)', edge: 'var(--color-r4)' },
-  key: { name: 'Needs a key', glyph: '!', bg: 'var(--tint-yellow)', edge: 'var(--color-r3)' },
-  test: { name: 'Test mode or not tried live', glyph: '~', bg: 'var(--tint-orange)', edge: 'var(--color-r2)' },
-  off: { name: 'Not built', glyph: '', bg: 'transparent', edge: 'var(--color-line)' },
+const STATE: Record<BuildState, { name: string; glyph: LucideIcon | null; bg: string; edge: string }> = {
+  ok: { name: 'Built and checked', glyph: Check, bg: 'var(--tint-green)', edge: 'var(--color-r4)' },
+  key: { name: 'Needs a key', glyph: CircleAlert, bg: 'var(--tint-yellow)', edge: 'var(--color-r3)' },
+  test: { name: 'Test mode or not tried live', glyph: FlaskConical, bg: 'var(--tint-orange)', edge: 'var(--color-r2)' },
+  off: { name: 'Not built', glyph: null, bg: 'transparent', edge: 'var(--color-line)' },
 };
 const colorOf = (floor: number) => `var(--color-r${floor})`;
 
@@ -27,13 +30,16 @@ function Ring({ value, color }: { value: number; color: string }) {
 function Block({ item }: { item: BuildItem }) {
   const [label, state, note] = item;
   const s = STATE[state];
+  const mod = note ? MODULES.find((m) => m.path === note) : undefined;
   return (
     <li className="flex items-start gap-xs rounded-tile border px-xs py-xs text-[14px] font-semibold" style={{ background: s.bg, borderColor: s.edge, borderStyle: state === 'off' ? 'dashed' : 'solid' }}>
-      <span className="mt-[2px] w-[14px] shrink-0 text-center text-[12px] font-extrabold" aria-hidden="true">
-        {s.glyph}
+      <span className="mt-[2px] flex w-[14px] shrink-0 justify-center" aria-hidden="true">
+        {s.glyph && <Icon icon={s.glyph} size={14} strokeWidth={3} />}
       </span>
       <span className="min-w-0">
         <span className="sr-only">{s.name}: </span>
+        {/* An item whose note is an app's path wears that app's icon (the labels hold no emoji). */}
+        {mod && <AppIcon name={mod.icon} size={14} className="mr-xs inline-block align-[-2px]" />}
         {label}
         {note && <span className="block text-[12px] font-bold text-ink-soft">{note}</span>}
       </span>
@@ -45,7 +51,7 @@ function Card({ card, color }: { card: BuildCard; color: string }) {
   const all = itemsOf(card);
   const pipe = card.visual === 'pipe';
   return (
-    <article className={`rounded-card bg-card p-md shadow-toy-soft ${card.wide ? 'md:col-span-2' : ''}`}>
+    <article className={`mb-sm break-inside-avoid rounded-card bg-card p-md shadow-toy-soft ${card.wide ? 'md:[column-span:all]' : ''}`}>
       <div className="flex items-center gap-sm">
         <Ring value={percentOf(all)} color={color} />
         <div className="min-w-0">
@@ -54,7 +60,7 @@ function Card({ card, color }: { card: BuildCard; color: string }) {
         </div>
       </div>
       {pipe ? (
-        <ol className="mt-sm flex list-none flex-wrap items-center gap-xs p-0 m-0">
+        <ol className="fill-row-all mt-sm flex list-none flex-wrap items-center gap-xs p-0 m-0">
           {card.items.map((it, i) => {
             const s = STATE[it[1]];
             return (
@@ -64,9 +70,7 @@ function Card({ card, color }: { card: BuildCard; color: string }) {
                   {it[0]}
                 </span>
                 {i < card.items.length - 1 && (
-                  <span className="text-ink-mute" aria-hidden="true">
-                    →
-                  </span>
+                  <Icon icon={ArrowRight} size={14} className="text-ink-mute" />
                 )}
               </li>
             );
@@ -147,7 +151,8 @@ export function BuildMap() {
             {s.name} <span className="text-[16px] font-bold text-ink-mute">{percentOf(all)}%</span>
           </h2>
           <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{s.blurb}</p>
-          <div className="mt-sm grid grid-cols-1 gap-sm md:grid-cols-2">
+          {/* Two columns that fill top down (masonry), so a short card is never paired beside a long one with a gap under it. */}
+          <div className="mt-sm md:columns-2 md:gap-sm">
             {s.cards.map((c) => (
               <Card key={c.title} card={c} color={colorOf(s.floor)} />
             ))}

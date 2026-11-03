@@ -1,8 +1,9 @@
-import { RELATIONSHIP_BY_KEY, TASK_SORTS, addDays, isTaskSort, sortTasks, type Node } from '@kreators/shared';
+import { RELATIONSHIP_BY_KEY, TASK_SORTS, addDays, openDay, isTaskSort, sortTasks, type Node } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
+import { AgencyToday, TodayEvents } from '../components/AgencyToday';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { useCelebrate } from '../components/Celebration';
@@ -10,7 +11,6 @@ import { CheckRow } from '../components/CheckRow';
 import { DayBlocks } from '../components/DayBlocks';
 import { EvolutionReveal } from '../components/EvolutionReveal';
 import { Fold } from '../components/Fold';
-import { GuideCard, useGuide } from '../components/Guide';
 import { Icon } from '../components/Icon';
 import { Flame } from 'lucide-react';
 import { NotToDoBlock } from '../components/NotToDoList';
@@ -34,8 +34,14 @@ import { useParamState } from '../lib/useParamState';
 const TaskMonth = lazyNamed(() => import('../components/TaskMonth'), 'TaskMonth');
 
 /** A task on Daily with its plan panel one tap away. */
-function DailyTask({ t, date, queue, onToggle, subtitle }: { t: Node; date: string; queue: ReturnType<typeof useActionQueue>; onToggle: () => void; subtitle: string }) {
-  const [open, setOpen] = useState(false);
+function DailyTask({ t, date, queue, onToggle, subtitle, focus = false }: { t: Node; date: string; queue: ReturnType<typeof useActionQueue>; onToggle: () => void; subtitle: string; focus?: boolean }) {
+  // A reminder note opens Daily on its task (`?task=<id>`): that task starts with its plan open and is scrolled into view, once.
+  const [open, setOpen] = useState(focus);
+  useEffect(() => {
+    if (!focus) return;
+    const el = document.getElementById(`task-plan-${t.id}`);
+    el?.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }, [focus, t.id]);
   return (
     <TaskRow
       task={t}
@@ -46,7 +52,13 @@ function DailyTask({ t, date, queue, onToggle, subtitle }: { t: Node; date: stri
       onToggle={onToggle}
       onEdit={() => setOpen((v) => !v)}
       editLabel={open ? 'Close the plan for' : 'Plan'}
-      panel={open ? <TaskPanel task={t} today={date} /> : null}
+      panel={
+        open ? (
+          <div id={`task-plan-${t.id}`}>
+            <TaskPanel task={t} today={date} />
+          </div>
+        ) : null
+      }
     />
   );
 }
@@ -89,8 +101,9 @@ export function Today() {
   const me = useMe();
   const refresh = useRefreshAll();
   const celebrate = useCelebrate();
-  const guide = useGuide();
   const queue = useActionQueue(refresh);
+  const [search] = useSearchParams();
+  const focusTask = search.get('task');
 
   const checkIn = () =>
     queue.run('checkin', async () => {
@@ -167,8 +180,6 @@ export function Today() {
       </header>
 
       <RemindersSection />
-
-      {!guide.seen && <GuideCard onDismiss={guide.dismiss} />}
 
       {isPending && (
         <SkeletonList className="mt-md" count={3} lines={3} label="Loading your day" />
@@ -280,12 +291,12 @@ export function Today() {
                 </div>
               </div>
             )}
-            <DayBlocks tasks={tasks.filter((t) => (t.doDate ?? t.dueDate) === date)} />
+            <DayBlocks tasks={tasks.filter((t) => openDay(t) === date)} />
             {tasks.length > 0 ? (
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                 <AnimatePresence initial={false}>
                   {tasks.map((t) => (
-                    <DailyTask key={t.id} t={t} date={date} queue={queue} onToggle={() => tick(t.id)} subtitle={RELATIONSHIP_BY_KEY[t.relationship].name} />
+                    <DailyTask key={t.id} t={t} date={date} queue={queue} focus={t.id === focusTask} onToggle={() => tick(t.id)} subtitle={RELATIONSHIP_BY_KEY[t.relationship].name} />
                   ))}
                 </AnimatePresence>
               </ul>
@@ -316,11 +327,7 @@ export function Today() {
               </div>
             )}
             {waiting > 0 && (
-              <details className="mt-md rounded-card bg-card p-sm shadow-toy-soft">
-                <summary className="toy flex min-h-[48px] cursor-pointer list-none items-center justify-between gap-sm text-[16px] font-bold">
-                  <span>Not scheduled yet</span>
-                  <span className="text-[14px] text-ink-soft">{waiting}</span>
-                </summary>
+              <Fold className="mt-md" title="Not scheduled yet" hint={String(waiting)}>
                 <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">These have no date yet. They stay out of Tasks until you pick a do date or a due date; then one moves up.</p>
                 <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
                   {backlog.map((t) => (
@@ -328,7 +335,7 @@ export function Today() {
                   ))}
                 </ul>
                 {waiting > backlog.length && <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Showing {backlog.length} of {waiting}. Pillars lists the rest.</p>}
-              </details>
+              </Fold>
             )}
             {done.length > 0 && (
               <div role="group" className="mt-md" aria-labelledby="done-heading">
@@ -363,6 +370,9 @@ export function Today() {
               </div>
             )}
           </section>
+
+          {data.agency && <AgencyToday agency={data.agency} />}
+          <TodayEvents events={data.events ?? []} />
 
           <NotToDoBlock />
         </>

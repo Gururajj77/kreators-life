@@ -7,12 +7,13 @@ import { Screen } from '../components/Screen';
 import { Pager, usePage } from '../components/Pager';
 import { StatTile } from '../components/Charts';
 import { Section } from '../components/Section';
-import { useLeaderboard, useAuthed } from '../lib/queries';
+import { useLeaderboard, useAuthed, useMe } from '../lib/queries';
 import { bento } from '../lib/bento';
 import { api } from '../lib/api';
 import { Medal } from 'lucide-react';
 import { AppIcon } from '../components/AppIcon';
 import { Icon } from '../components/Icon';
+import { IconTag } from '../components/FactTag';
 
 const SORTS: { key: LeaderboardSort; label: string; stat: (e: LeaderboardEntry) => string }[] = [
   { key: 'xp', label: 'All time', stat: (e) => `${e.xp} xp` },
@@ -56,7 +57,7 @@ function Entry({ e, stat }: { e: LeaderboardEntry; stat: string }) {
             {e.name}
             {e.isMe ? ' (you)' : ''}
           </span>
-          {e.isPro && <span className="shrink-0 rounded-pill bg-r7 px-xs text-[12px] font-extrabold text-white">Pro</span>}
+          {e.isPro && <IconTag tone="deep" icon="Crown">Pro</IconTag>}
         </span>
         <span className={`block text-[14px] font-semibold ${e.isMe ? 'text-on-ink/80' : 'text-ink-soft'}`}>
           {stage?.name ?? 'Seed'}, level {e.level}
@@ -138,7 +139,10 @@ export function Leaderboard() {
   const blocks = useAuthed(['leaderboard', 'blocks'], api.leaderboardBlocks);
   const choices: LeaderboardOption[] = scope === 'all' ? [] : (options.data?.[scope] ?? []);
   // A board with nobody on it is still listed, but the first pick is one that has people.
-  const value = scope === 'all' ? '' : valueRaw || (choices.find((o) => o.count > 0) ?? choices[0])?.value || '';
+  // The city board opens on the person's own city when it is on the list (Profile already knows it), else the first that has people.
+  const myCity = (useMe().data?.user.city ?? '').trim().toLowerCase();
+  const own = scope === 'city' && myCity ? choices.find((o) => o.value.toLowerCase() === myCity) : undefined;
+  const value = scope === 'all' ? '' : valueRaw || own?.value || (choices.find((o) => o.count > 0) ?? choices[0])?.value || '';
   const q = useLeaderboard(by, scope, value, paging.query);
   const sort = SORTS.find((s) => s.key === by) ?? SORTS[0]!;
   const pillarBoard = scope === 'pillar';

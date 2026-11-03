@@ -1,7 +1,7 @@
 import { BREAK_BEATS, FOCUS_PRESETS, FOCUS_QUALITY, focusQualityName, RELATIONSHIP_BY_KEY, type FocusSettings } from '@kreators/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
-import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
@@ -18,6 +18,9 @@ import { RulerPicker } from './RulerPicker';
 import { Sheet } from './Sheet';
 import { SoundControls } from './SoundControls';
 import { Toggle } from './Toggle';
+import { Icon as LucideGlyph } from './Icon';
+import { AnimatedIcon } from './AnimatedIcon';
+import { EighthNotes, Target } from 'lucide-react';
 
 type Phase = 'focus' | 'short' | 'long';
 type Mode = 'timer' | 'pomodoro' | 'stopwatch';
@@ -91,54 +94,23 @@ const SHORT_CHOICES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30] as con
 const LONG_CHOICES = [5, 10, 15, 20, 25, 30, 40, 45, 60, 90, 120] as const;
 const EVERY_CHOICES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
 
-/** Small line icons for the round buttons. Each is drawn on a 24 box, with the stroke taking the button's colour. */
-function Icon({ name }: { name: 'gear' | 'sound' | 'mute' | 'music' | 'task' }) {
-  const paths: Record<typeof name, ReactNode> = {
-    gear: (
-      <>
-        <circle cx="12" cy="12" r="3" />
-        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
-      </>
-    ),
-    sound: (
-      <>
-        <path d="M11 5 6 9H3v6h3l5 4z" />
-        <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" />
-      </>
-    ),
-    mute: (
-      <>
-        <path d="M11 5 6 9H3v6h3l5 4z" />
-        <path d="m16 9 6 6M22 9l-6 6" />
-      </>
-    ),
-    music: (
-      <>
-        <path d="M9 18V5l11-2v13" />
-        <circle cx="6" cy="18" r="3" />
-        <circle cx="17" cy="16" r="3" />
-      </>
-    ),
-    task: (
-      <>
-        <circle cx="12" cy="12" r="9" />
-        <circle cx="12" cy="12" r="4.5" />
-        <circle cx="12" cy="12" r="0.8" />
-      </>
-    ),
-  };
-  return (
-    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      {paths[name]}
-    </svg>
-  );
+/**
+ * The round buttons' glyphs: lucide icons through the one wrapper; settings is the animated gear and the sound switch the animated
+ * speaker from useanimations (a still glyph until they load). The speaker is the one master switch: its waves go and a slash
+ * crosses it when sounds are turned off, and come back when they are turned on.
+ */
+function RoundGlyph({ name }: { name: 'gear' | 'sound' | 'mute' | 'music' | 'task' }) {
+  if (name === 'gear') return <AnimatedIcon name="settings" size={20} />;
+  if (name === 'sound' || name === 'mute') return <AnimatedIcon name="volume" size={20} active={name === 'mute'} />;
+  const glyph = { music: EighthNotes, task: Target }[name];
+  return <LucideGlyph icon={glyph} size={20} />;
 }
 
 /** A round glass button that floats by the panel: a name for screen readers, and the same name as a tooltip on hover and keyboard focus. */
 function RoundButton({ at, label, icon, onClick, opens = false }: { at: 'tl' | 'tr' | 'br' | 'bc'; label: string; icon: 'gear' | 'sound' | 'mute' | 'music' | 'task'; onClick: () => void; /** It opens a dialog. */ opens?: boolean }) {
   return (
     <button type="button" className="mf-round toy" data-at={at} data-tip={label} aria-label={label} aria-haspopup={opens ? 'dialog' : undefined} onClick={onClick}>
-      <Icon name={icon} />
+      <RoundGlyph name={icon} />
     </button>
   );
 }
@@ -609,13 +581,14 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
             </p>
           )}
 
-          <div className="mf-actions" role="group" aria-label="Clock actions">
+          <div className="mf-actions fill-row" role="group" aria-label="Clock actions">
             {mode === 'pomodoro' && (
               <>
-                <button type="button" className="mf-mini toy" onClick={() => finish(false)} aria-label="Skip to the next part">
+                <button type="button" className="mf-mini toy inline-flex min-w-[44px] items-center gap-xs" onClick={() => finish(false)} aria-label="Skip to the next part">
+                  <AnimatedIcon name="skipForward" size={16} />
                   Skip
                 </button>
-                <button type="button" className="mf-mini toy" onClick={reset} aria-label="Start again from session one">
+                <button type="button" className="mf-mini toy min-w-[44px]" onClick={reset} aria-label="Start again from session one">
                   Reset
                 </button>
               </>
@@ -623,7 +596,7 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
             {mode === 'timer' && (
               <button
                 type="button"
-                className="mf-mini toy"
+                className="mf-mini toy min-w-[44px]"
                 disabled={timer.atFull}
                 onClick={() => {
                   timer.stop();
@@ -636,12 +609,12 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
             )}
             {mode === 'stopwatch' && (
               <>
-                <button type="button" className="mf-mini toy" disabled={stopwatch.ms === 0} onClick={stopStopwatch} aria-label="Stop the stopwatch and save the whole minutes">
+                <button type="button" className="mf-mini toy min-w-[44px]" disabled={stopwatch.ms === 0} onClick={stopStopwatch} aria-label="Stop the stopwatch and save the whole minutes">
                   Stop
                 </button>
                 <button
                   type="button"
-                  className="mf-mini toy"
+                  className="mf-mini toy min-w-[44px]"
                   disabled={stopwatch.ms === 0}
                   onClick={() => {
                     stopwatch.reset();
@@ -657,7 +630,7 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
               <span className="mf-nudge" role="group" aria-label={`Adjust this ${mode === 'timer' ? 'timer' : LABEL[phase].toLowerCase()}`}>
                 <span className="mf-nudge-label">This part</span>
                 {[-5, -1, 1, 5].map((m) => (
-                  <button key={m} type="button" className="mf-mini toy" onClick={() => (mode === 'timer' ? timer.nudge(m * 60_000) : nudge(m * 60_000))} aria-label={`${m > 0 ? 'Add' : 'Take off'} ${Math.abs(m)} ${Math.abs(m) === 1 ? 'minute' : 'minutes'}`}>
+                  <button key={m} type="button" className="mf-mini toy min-w-[44px]" onClick={() => (mode === 'timer' ? timer.nudge(m * 60_000) : nudge(m * 60_000))} aria-label={`${m > 0 ? 'Add' : 'Take off'} ${Math.abs(m)} ${Math.abs(m) === 1 ? 'minute' : 'minutes'}`}>
                     {m > 0 ? `+${m}` : `−${-m}`}
                   </button>
                 ))}
@@ -692,7 +665,7 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
                   <p className="m-0 text-[14px] font-bold" role="status">
                     Rated {focusQualityName(rate.value)}
                   </p>
-                  <button type="button" className="mf-mini toy" onClick={() => setRate({ ...rate, mode: 'ask' })}>
+                  <button type="button" className="mf-mini toy min-w-[44px]" onClick={() => setRate({ ...rate, mode: 'ask' })}>
                     Change
                   </button>
                 </div>
@@ -701,11 +674,11 @@ export function FocusRounds({ onLog, onRound }: { onLog: (minutes: number, kind:
                   <p className="m-0 text-[14px] font-extrabold">How focused were you?</p>
                   <div className="mt-xs flex flex-wrap gap-xs">
                     {FOCUS_QUALITY.map((q) => (
-                      <button key={q.value} type="button" disabled={!rate.id} onClick={() => rateIt(q.value)} aria-pressed={rate.value === q.value} className="mf-mini toy">
+                      <button key={q.value} type="button" disabled={!rate.id} onClick={() => rateIt(q.value)} aria-pressed={rate.value === q.value} className="mf-mini toy min-w-[44px]">
                         {q.name}
                       </button>
                     ))}
-                    <button type="button" className="mf-mini toy" onClick={() => setRate(null)}>
+                    <button type="button" className="mf-mini toy min-w-[44px]" onClick={() => setRate(null)}>
                       Skip
                     </button>
                   </div>

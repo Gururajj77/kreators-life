@@ -1,10 +1,12 @@
 import { BADGE_META, badgeRoleOf, MODULE_GROUPS, type ModuleGroup } from '@kreators/shared';
-import { useEffect, useState } from 'react';
-import { ChevronDown, CircleUserRound, House, Landmark, LayoutGrid, Sun } from 'lucide-react';
-import { AnimatedIcon } from './AnimatedIcon';
+import { useEffect, useState, type ReactNode } from 'react';
+import { CircleUserRound, Landmark, LayoutGrid } from 'lucide-react';
+import { AnimatedIcon, type AnimatedName } from './AnimatedIcon';
 import { AppIcon } from './AppIcon';
 import { FocusPill } from './FocusPill';
+import { Fold } from './Fold';
 import { Icon } from './Icon';
+import { StatusTag } from './StatusTag';
 import { useFocusSession } from '../lib/focusSession';
 import { useSlider } from './fx/useSlider';
 import { Link, NavLink, useLocation } from 'react-router';
@@ -18,13 +20,50 @@ import { ThemeToggle } from './ThemeToggle';
 
 // The five tabs wear the same icons as their apps in the registry (Home, Daily, Pillars), then Apps and Profile.
 // lucide draws outlines only, so the tab you are on is shown by the sliding ink circle behind it, not by a fill.
-const TABS = [
-  { to: '/home', label: 'Home', icon: <Icon icon={House} size={24} /> },
-  { to: '/today', label: 'Daily', icon: <Icon icon={Sun} size={24} /> },
-  { to: '/tower', label: 'Pillars', icon: <Icon icon={Landmark} size={24} /> },
-  { to: '/apps', label: 'Apps', icon: <Icon icon={LayoutGrid} size={24} /> },
-  { to: '/you', label: 'Profile', icon: <Icon icon={CircleUserRound} size={24} /> },
+// Home (a house) and Daily (a sun) have a matching useanimations drawing, so they play once when the tab becomes the page you
+// are on and when the pointer or the keyboard reaches them; Pillars, Apps and Profile have no matching animation and stay lucide.
+const TABS: { to: string; label: string; icon: (on: boolean, size: number) => ReactNode }[] = [
+  { to: '/home', label: 'Home', icon: (on, size) => <AnimatedIcon name="home" size={size} playWhen={on} /> },
+  { to: '/today', label: 'Daily', icon: (on, size) => <AnimatedIcon name="sun" size={size} playWhen={on} /> },
+  { to: '/tower', label: 'Pillars', icon: (_, size) => <Icon icon={Landmark} size={size} /> },
+  { to: '/apps', label: 'Apps', icon: (_, size) => <Icon icon={LayoutGrid} size={size} /> },
+  { to: '/you', label: 'Profile', icon: (_, size) => <Icon icon={CircleUserRound} size={size} /> },
 ];
+
+// An app in the sidebar plays its icon when its registry icon has a matching animation (the same picture, moving).
+// The Inbox bell stays still on purpose: the useanimations bells end on a struck-through bell, which reads as "muted".
+const ANIMATED_APP_ICON: Record<string, AnimatedName> = {
+  House: 'home',
+  Sun: 'sun',
+  Compass: 'explore',
+  Moon: 'moon',
+  Wind: 'wind',
+  BookOpen: 'bookOpen',
+  ShoppingBag: 'shoppingBag',
+  ShoppingCart: 'shoppingCart',
+  TrendingUp: 'trendingUp',
+  Target: 'target',
+  Tv: 'tv',
+  Link: 'link',
+  Settings: 'settings',
+};
+
+function NavAppIcon({ name, size, on }: { name: string; size: number; on: boolean }) {
+  const animated = ANIMATED_APP_ICON[name];
+  return animated ? <AnimatedIcon name={animated} size={size} playWhen={on} /> : <AppIcon name={name} size={size} />;
+}
+
+/** The unread count beside the Inbox in a list: a tag in the red tone, the number its word. */
+function UnreadTag({ n }: { n: number }) {
+  return (
+    <StatusTag tone="bad" className="ml-auto" title={`${n} unread`}>
+      {n > 9 ? '9+' : n}
+      <span className="sr-only"> unread</span>
+    </StatusTag>
+  );
+}
+
+const inside = (path: string, at: string) => at === path || at.startsWith(`${path}/`);
 
 const SIDEBAR_GROUPS: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'core', 'manage'];
 
@@ -42,9 +81,20 @@ export function TabBar() {
   // Phone: the sidebar's app groups live behind a menu button at the top right.
   const [menu, setMenu] = useState(false);
   useEffect(() => setMenu(false), [loc.pathname]);
+  // Laptop: the sidebar's groups start folded and the group of the app you are in opens; a tap opens or folds any of them,
+  // and moving to another page opens that page's group without folding what you opened.
+  const groupOf = (at: string) => sidebarApps.find((m) => inside(m.path, at))?.group;
+  const [openGroups, setOpenGroups] = useState<Partial<Record<ModuleGroup, boolean>>>(() => {
+    const g = groupOf(loc.pathname);
+    return g ? { [g]: true } : {};
+  });
+  const here = groupOf(loc.pathname);
+  useEffect(() => {
+    if (here) setOpenGroups((s) => (s[here] ? s : { ...s, [here]: true }));
+  }, [loc.pathname, here]);
   const badge = (to: string) =>
     to === '/apps' && unread > 0 ? (
-      <span className="absolute -top-[2px] -right-[2px] flex min-w-[18px] items-center justify-center rounded-pill bg-r1 px-[4px] text-[11px] font-extrabold leading-[18px] text-white" aria-label={`${unread} unread`}>
+      <span className="absolute -top-[2px] -right-[2px] flex min-w-[18px] items-center justify-center rounded-pill bg-r1 px-[4px] text-[11px] font-extrabold leading-[18px] text-on-fill" aria-label={`${unread} unread`}>
         {unread > 9 ? '9+' : unread}
       </span>
     ) : null;
@@ -64,7 +114,7 @@ export function TabBar() {
                 {({ isActive }) => (
                   <>
                     <span className={`tab-icon relative flex size-[36px] items-center justify-center rounded-pill transition-colors ${isActive ? (bottom.ready ? 'text-on-ink' : 'bg-ink text-on-ink') : ''}`}>
-                      {t.icon}
+                      {t.icon(isActive, 24)}
                       {badge(t.to)}
                     </span>
                     {t.label}
@@ -81,7 +131,7 @@ export function TabBar() {
           <FocusPill compact />
         ) : (
           <Link to="/home" aria-label="kreators.app, home" className="toy toy-soft flex min-h-[44px] min-w-[44px] items-center justify-center gap-xs whitespace-nowrap rounded-pill bg-card-strong px-sm font-display text-[16px] font-extrabold tracking-tight">
-            <BrandMark size={14} compact />
+            <BrandMark compact />
           </Link>
         )}
       </div>
@@ -117,9 +167,13 @@ export function TabBar() {
                 {list.map((m) => (
                   <li key={m.key}>
                     <NavLink to={m.path} className={({ isActive }) => `toy flex min-h-[48px] items-center gap-sm rounded-pill px-sm text-[16px] font-bold transition-colors ${isActive ? 'bg-ink text-on-ink' : 'text-ink hover:bg-paper'}`}>
-                      <AppIcon name={m.icon} size={20} />
-                      <span className="truncate">{m.name}</span>
-                      {m.key === 'notifications' && unread > 0 && <span className="ml-auto rounded-pill bg-r1 px-xs text-[11px] font-extrabold leading-[18px] text-on-fill">{unread > 9 ? '9+' : unread}</span>}
+                      {({ isActive }) => (
+                        <>
+                          <NavAppIcon name={m.icon} size={20} on={isActive} />
+                          <span className="truncate">{m.name}</span>
+                          {m.key === 'notifications' && unread > 0 && <UnreadTag n={unread} />}
+                        </>
+                      )}
                     </NavLink>
                   </li>
                 ))}
@@ -159,38 +213,48 @@ export function TabBar() {
           {TABS.map((t) => (
             <li key={t.to}>
               <NavLink to={t.to} className={({ isActive }) => `tab relative flex min-h-[48px] items-center gap-sm rounded-pill px-sm text-[16px] font-bold transition-colors ${isActive ? (side.ready ? 'text-on-ink' : 'bg-ink text-on-ink') : 'text-ink-soft hover:bg-paper hover:text-ink'}`}>
-                <span className="relative flex size-[28px] items-center justify-center">
-                  {t.icon}
-                  {badge(t.to)}
-                </span>
-                {t.label}
+                {({ isActive }) => (
+                  <>
+                    <span className="relative flex size-[28px] items-center justify-center">
+                      {t.icon(isActive, 24)}
+                      {badge(t.to)}
+                    </span>
+                    {t.label}
+                  </>
+                )}
               </NavLink>
             </li>
           ))}
         </ul>
         {/* The apps that are on, under their category, folded away until you open one or step inside it. Switch more on from Apps. */}
-        <div className="mt-md flex flex-col gap-sm">
+        <div className="mt-md flex flex-col gap-xs">
           {groupOrder.map((g) => {
             const list = sidebarApps.filter((m) => m.group === g);
             if (list.length === 0) return null;
             return (
-              <details key={g} open={list.some((m) => loc.pathname === m.path || loc.pathname.startsWith(`${m.path}/`))} className="group">
-                <summary className="flex min-h-[40px] cursor-pointer items-center justify-between rounded-pill px-xs text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
-                  {MODULE_GROUPS[g]}
-                  <Icon icon={ChevronDown} size={14} className="chev" />
-                </summary>
-                <ul className="mt-xs flex list-none flex-col gap-xs p-0 pb-xs m-0">
+              <Fold
+                key={g}
+                tone="plain"
+                open={openGroups[g] ?? false}
+                onOpenChange={(o) => setOpenGroups((s) => ({ ...s, [g]: o }))}
+                title={<span className="text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{MODULE_GROUPS[g]}</span>}
+              >
+                <ul className="flex list-none flex-col gap-xs p-0 pb-xs m-0">
                   {list.map((m) => (
                     <li key={m.key}>
-                      <NavLink to={m.path} className={({ isActive }) => `tab flex min-h-[40px] items-center gap-xs rounded-pill px-sm text-[14px] font-bold transition-colors ${isActive ? 'bg-paper text-ink' : 'text-ink-soft hover:bg-paper hover:text-ink'}`}>
-                        <AppIcon name={m.icon} size={18} />
-                        <span className="truncate">{m.name}</span>
-                        {m.key === 'notifications' && unread > 0 && <span className="ml-auto rounded-pill bg-r1 px-xs text-[11px] font-extrabold leading-[18px] text-on-fill">{unread > 9 ? '9+' : unread}</span>}
+                      <NavLink to={m.path} className={({ isActive }) => `tab flex min-h-[44px] items-center gap-xs rounded-pill px-sm text-[14px] font-bold transition-colors ${isActive ? 'bg-line text-ink' : 'text-ink-soft hover:bg-paper hover:text-ink'}`}>
+                        {({ isActive }) => (
+                          <>
+                            <NavAppIcon name={m.icon} size={18} on={isActive} />
+                            <span className="truncate">{m.name}</span>
+                            {m.key === 'notifications' && unread > 0 && <UnreadTag n={unread} />}
+                          </>
+                        )}
                       </NavLink>
                     </li>
                   ))}
                 </ul>
-              </details>
+              </Fold>
             );
           })}
         </div>

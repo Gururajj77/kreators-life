@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { tick } from './fx/haptics';
+import { Icon } from './Icon';
+import { ChevronDown } from 'lucide-react';
 
 export interface ChipOption {
   value: number;
@@ -62,9 +64,7 @@ export function ChipSelect({ label, value, valueLabel, options, onChange }: { la
       </span>
       <button ref={chip} type="button" className="mf-set-chip toy" aria-haspopup="listbox" aria-expanded={open} aria-labelledby={`${id}-l ${id}-v`} onClick={() => (open ? close(false) : openIt())}>
         <span id={`${id}-v`}>{valueLabel}</span>
-        <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M6 9l6 6 6-6" />
-        </svg>
+        <Icon icon={ChevronDown} size={10} strokeWidth={3.5} />
       </button>
       {open && (
         <ul

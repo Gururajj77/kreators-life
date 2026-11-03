@@ -1,12 +1,14 @@
 import { RELATIONSHIP_BY_KEY, timeLabel, type Node } from '@kreators/shared';
 import { motion, useReducedMotion } from 'motion/react';
 import type { ReactNode } from 'react';
-import { ListChecks } from 'lucide-react';
+import { ListChecks, Pencil } from 'lucide-react';
 import { dueLabel } from '../lib/date';
 import { minutesUntil, useNow } from '../lib/useNow';
 import { CheckRow } from './CheckRow';
 import { Icon } from './Icon';
 import { TaskTags } from './TaskPlan';
+import { FactTag, IconTag } from './FactTag';
+import { StatusTag } from './StatusTag';
 
 interface Props {
   task: Node;
@@ -33,24 +35,20 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
   const due = done ? null : dueLabel(task.dueDate, today);
   const early = !done && Boolean(task.doDate && task.doDate > today);
   const steps = task.subtaskTotal ? (
-    <span className="inline-flex items-center gap-xs rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">
-      <Icon icon={ListChecks} size={12} /> {task.subtaskDone ?? 0}/{task.subtaskTotal}
-    </span>
+    <StatusTag tone="neutral" mark={<Icon icon={ListChecks} size={12} />} title="Subtasks done">
+      {task.subtaskDone ?? 0}/{task.subtaskTotal}
+    </StatusTag>
   ) : null;
 
   const when = [task.dueTime ? timeLabel(task.dueTime) : null, task.estimateMin ? `${task.estimateMin} min` : null].filter(Boolean).join(' · ');
-  const timeChip = when && !done ? <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">{when}</span> : null;
+  const timeChip = when && !done ? <FactTag kind="when">{when}</FactTag> : null;
   // A task a life coach added says so; it ticks and pays like any other.
   const hasMarks = task.priority !== null || task.remind || Boolean(task.repeat) || Boolean(task.fromPillar) || Boolean(task.fromCoach) || Boolean(task.forReview);
   const badge =
     wait > 0 ? (
-      <span className="rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[20px] text-ink-soft">Ready in {wait} min</span>
+      <IconTag tone="neutral" icon="Hourglass">{`Ready in ${wait} min`}</IconTag>
     ) : due ? (
-      <span
-        className={`rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${due.overdue ? 'bg-r1 text-on-fill' : due.text === 'Today' ? 'bg-ink text-on-ink' : 'bg-paper text-ink-soft'}`}
-      >
-        {due.overdue || due.text === 'Today' ? due.text : `Due ${due.text}`}
-      </span>
+      <StatusTag tone={due.overdue ? 'bad' : due.text === 'Today' ? 'warn' : 'neutral'}>{due.overdue || due.text === 'Today' ? due.text : `Due ${due.text}`}</StatusTag>
     ) : null;
 
   return (
@@ -90,10 +88,7 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
               aria-label={`${editLabel ?? 'Edit'} "${task.title}"`}
               className="toy toy-soft flex w-[48px] shrink-0 items-center justify-center rounded-tile bg-card text-ink-soft hover:text-ink"
             >
-              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 20h4L19 9l-4-4L4 16v4z" />
-                <path d="M13.5 6.5l4 4" />
-              </svg>
+              <Icon icon={Pencil} size={20} strokeWidth={2.6} />
             </button>
           ) : undefined
         }

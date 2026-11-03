@@ -18,6 +18,16 @@ import { AnonToggle } from '../components/AnonToggle';
 import { ChannelsPanel, ChannelTabs } from '../components/Channels';
 import { AppIcon } from '../components/AppIcon';
 import { MoreMenu } from '../components/MoreMenu';
+import { Icon } from '../components/Icon';
+import { MessageCircle } from 'lucide-react';
+import { AnimatedIcon } from '../components/AnimatedIcon';
+import { IconTag } from '../components/FactTag';
+
+/** A reaction's icon. Love is the animated heart: it fills and beats when it is picked. */
+function ReactionGlyph({ kind, size, picked }: { kind: ReactionKind; size: number; picked: boolean }) {
+  if (kind === 'love') return <AnimatedIcon name="heart" size={size} active={picked} playWhen={picked} />;
+  return <AppIcon name={REACTION_META[kind].icon} size={size} />;
+}
 
 /**
  * Six reactions under a post or a reply: the counts that have any, and a row to pick from. Picking yours again takes
@@ -29,11 +39,11 @@ function Reactions({ counts, mine, onPick, busy }: { counts: ReactionCounts; min
   return (
     <span className="flex flex-wrap items-center gap-xs">
       {shown.map((k) => (
-        <button key={k} type="button" aria-pressed={mine === k} disabled={busy} onClick={() => onPick(k)} aria-label={`${REACTION_META[k].name}, ${counts[k]}`} className={`toy toy-soft inline-flex min-h-[40px] items-center gap-xs rounded-pill px-sm text-[14px] font-bold ${mine === k ? 'bg-r1/15' : 'bg-paper'}`}>
-          <AppIcon name={REACTION_META[k].icon} size={16} /> {counts[k]}
+        <button key={k} type="button" aria-pressed={mine === k} disabled={busy} onClick={() => onPick(k)} aria-label={`${REACTION_META[k].name}, ${counts[k]}`} className={`toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill px-sm text-[14px] font-bold ${mine === k ? 'bg-r1/15' : 'bg-paper'}`}>
+          <ReactionGlyph kind={k} size={16} picked={mine === k} /> {counts[k]}
         </button>
       ))}
-      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="toy toy-soft inline-flex min-h-[40px] items-center rounded-pill bg-paper px-sm text-[14px] font-bold">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="toy toy-soft inline-flex min-h-[44px] items-center rounded-pill bg-paper px-sm text-[14px] font-bold">
         {mine ? 'Change' : 'React'}
       </button>
       {open && (
@@ -52,7 +62,7 @@ function Reactions({ counts, mine, onPick, busy }: { counts: ReactionCounts; min
               }}
               className={`toy toy-soft flex size-[44px] items-center justify-center rounded-pill ${mine === k ? 'bg-r1/15' : 'bg-card'}`}
             >
-              <AppIcon name={REACTION_META[k].icon} size={20} />
+              <ReactionGlyph kind={k} size={20} picked={mine === k} />
             </button>
           ))}
         </span>
@@ -205,13 +215,13 @@ function CommunityFeed() {
       <div className="mt-md">
       <div className="scroll-row" role="group" aria-label="Show">
         {FEED_FILTERS.map((f) => (
-          <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)} className={`toy shrink-0 rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${filter === f ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+          <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)} className={`toy shrink-0 min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${filter === f ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
             {FEED_FILTER_META[f]}
           </button>
         ))}
         <span className="w-[1px] shrink-0 bg-line" aria-hidden="true" />
         {FEED_SORTS.map((s) => (
-          <button key={s} type="button" aria-pressed={sort === s} onClick={() => setSort(s)} className={`toy shrink-0 rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${sort === s ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+          <button key={s} type="button" aria-pressed={sort === s} onClick={() => setSort(s)} className={`toy shrink-0 min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${sort === s ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
             {FEED_SORT_META[s]}
           </button>
         ))}
@@ -221,7 +231,7 @@ function CommunityFeed() {
         <div className="mt-xs">
         <div className="scroll-row" role="group" aria-label="Browse by">
           {['', ...POST_CATEGORIES].map((c) => (
-            <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)} className={`toy shrink-0 rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${category === c ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)} className={`toy shrink-0 min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${category === c ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {c || 'Everything'}
             </button>
           ))}
@@ -245,7 +255,7 @@ function CommunityFeed() {
         </p>
       )}
       {isMod && (
-        <label className="mt-sm flex items-center gap-xs text-[14px] font-bold text-ink-soft">
+        <label className="mt-sm flex min-h-[44px] cursor-pointer items-center gap-xs text-[14px] font-bold text-ink-soft">
           <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} className="size-[18px] accent-ink" />
           Show hidden posts
         </label>
@@ -266,12 +276,12 @@ function CommunityFeed() {
                   {p.anonymous ? (
                     <span className="truncate text-[16px] font-bold">{p.authorName}</span>
                   ) : (
-                    <Link to={p.authorHandle ? `/u/${p.authorHandle}` : `/people/${p.authorId}`} className="truncate text-[16px] font-bold">
+                    <Link to={p.authorHandle ? `/u/${p.authorHandle}` : `/people/${p.authorId}`} className="inline-flex min-h-[44px] min-w-0 items-center truncate text-[16px] font-bold">
                       {p.authorName}
                     </Link>
                   )}
-                  {p.anonymous && <span className="rounded-pill bg-line px-xs text-[11px] font-extrabold leading-[18px] text-ink-soft">Anonymous{p.mine ? ', you' : ''}</span>}
-                  {p.authorPro && <span className="rounded-pill bg-r7 px-xs text-[11px] font-extrabold leading-[18px] text-white">Pro</span>}
+                  {p.anonymous && <IconTag tone="neutral" icon="UserRound">{p.mine ? 'Anonymous, you' : 'Anonymous'}</IconTag>}
+                  {p.authorPro && <IconTag tone="deep" icon="Crown">Pro</IconTag>}
                 </span>
                 <span className="block text-[12px] font-bold text-ink-soft">
                   {p.category}, {new Date(p.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
@@ -280,7 +290,7 @@ function CommunityFeed() {
                 </span>
               </span>
               {!p.mine && !p.anonymous && (
-                <button type="button" aria-pressed={p.authorFollowing} onClick={() => follow.mutate(p.authorId)} disabled={follow.isPending} className={`toy shrink-0 rounded-pill border-2 px-sm py-xs text-[12px] font-extrabold ${p.authorFollowing ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                <button type="button" aria-pressed={p.authorFollowing} onClick={() => follow.mutate(p.authorId)} disabled={follow.isPending} className={`toy shrink-0 min-h-[44px] rounded-pill border-2 px-sm py-xs text-[12px] font-extrabold ${p.authorFollowing ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                   {p.authorFollowing ? 'Following' : 'Follow'}
                 </button>
               )}
@@ -289,8 +299,8 @@ function CommunityFeed() {
             <div className="mt-sm flex flex-wrap items-center gap-xs">
               {!p.held && <Reactions counts={p.reactions} mine={p.myReaction} busy={like.isPending} onPick={(kind) => like.mutate({ id: p.id, kind })} />}
               {!p.held && (
-                <button type="button" onClick={() => setOpen(p)} className="toy toy-soft inline-flex min-h-[40px] items-center gap-xs rounded-pill bg-paper px-sm text-[14px] font-bold">
-                  <span aria-hidden="true">💬</span> {p.replies}
+                <button type="button" onClick={() => setOpen(p)} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-paper px-sm text-[14px] font-bold">
+                  <Icon icon={MessageCircle} size={16} /> {p.replies}
                 </button>
               )}
               <span className="flex-1" />
@@ -418,7 +428,7 @@ function RepliesSheet({ post, onClose, onSaved }: { post: CommunityPost | null; 
                 <li key={r.id} style={{ marginLeft: `calc(var(--spacing-md) * ${r.depth})` }} className={`rounded-tile bg-card p-sm shadow-toy-soft ${r.depth > 0 ? 'border-l-4 border-line' : ''}`}>
                   <p className="m-0 text-[14px] font-bold">
                     {r.authorName}
-                    {r.anonymous && <span className="ml-xs rounded-pill bg-line px-xs text-[11px] font-extrabold leading-[18px] text-ink-soft">Anonymous{r.mine ? ', you' : ''}</span>}{' '}
+                    {r.anonymous && <IconTag className="ml-xs" tone="neutral" icon="UserRound">{r.mine ? 'Anonymous, you' : 'Anonymous'}</IconTag>}{' '}
                     <span className="font-semibold text-ink-soft">{new Date(r.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                   </p>
                   <p className="mt-xs m-0 text-[16px] font-semibold"><Inert text={r.body} /></p>

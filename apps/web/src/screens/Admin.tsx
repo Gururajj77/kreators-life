@@ -1,5 +1,5 @@
-import { DEFAULT_PAGE_SIZE, pageQuery, type Page, type PageSize } from '@kreators/shared';
-import { MAX_CREDIT_GRANT, PAID_PLANS, PLAN_DAYS, planName, type PlanKey } from '@kreators/shared';
+import { DEFAULT_PAGE_SIZE, pageQuery, type Page, type PageSize, money } from '@kreators/shared';
+import { MAX_CREDIT_GRANT, PAID_PLANS, PLAN_DAYS, planName, type PlanKey, type TagTone } from '@kreators/shared';
 import { ATTENDEE_XP_MAX, codeProblem, normalizeCode, type AdminAttendeeCode } from '@kreators/shared';
 import { MAX_COACHES, type AdminCoachAsk, type AdminCoachLink } from '@kreators/shared';
 import {
@@ -47,8 +47,13 @@ import { AdminHouseTemplates } from '../components/AdminHouseTemplates';
 import { Toggle } from '../components/Toggle';
 import { AppIcon } from '../components/AppIcon';
 import { AnimatedIcon } from '../components/AnimatedIcon';
+import { Icon } from '../components/Icon';
+import { X } from 'lucide-react';
 import { adminApi } from '../lib/api';
 import { useMe } from '../lib/queries';
+import { FIELD } from '../lib/ui';
+import { dateTime, longDate } from '../lib/date';
+import { StatusTag } from '../components/StatusTag';
 
 const ADMIN_HONORS = HONORS.filter((h) => h.source === 'admin' && h.key !== 'pro');
 const KEY_STORE = 'kreators.adminKey';
@@ -72,8 +77,8 @@ const PLAN_KEYS: PlanKey[] = ['none', ...PAID_PLANS];
 const PLAN_OPTIONS = PLAN_KEYS.map((k) => ({ value: planName(k), label: planName(k) }));
 const planByName = (name: string): PlanKey => PLAN_KEYS.find((k) => planName(k) === name) ?? 'none';
 const creditsOf = (u: AdminUser) => u.planCredits + u.extraCredits;
-const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '');
-const day = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+const when = (iso: string | null | undefined) => (iso ? dateTime(iso) : '');
+const day = (iso: string | null | undefined) => (iso ? longDate(iso) : '');
 
 function readKey(): string {
   try {
@@ -83,14 +88,15 @@ function readKey(): string {
   }
 }
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 const Label = ({ children, text }: { children: ReactNode; text: string }) => (
   <label className="block">
     <span className="block text-[14px] font-bold">{text}</span>
     {children}
   </label>
 );
-const Pill = ({ children, tone = 'bg-paper text-ink-soft' }: { children: ReactNode; tone?: string }) => <span className={`inline-flex rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${tone}`}>{children}</span>;
+/** A state in an admin table, in the one tag vocabulary: the old fill classes say which tone (green good, red bad, yellow waiting). */
+const pillTone = (classes: string): TagTone => (classes.includes('bg-r4') ? 'good' : classes.includes('bg-r1') ? 'bad' : classes.includes('bg-r3') ? 'warn' : classes.includes('bg-r6') || classes.includes('bg-r5') ? 'info' : 'neutral');
+const Pill = ({ children, tone = 'bg-paper text-ink-soft' }: { children: ReactNode; tone?: string }) => <StatusTag tone={pillTone(tone)}>{children}</StatusTag>;
 
 /**
  * The admin console. Every list is a table: sort by any column, search, filter by a column’s values,
@@ -390,7 +396,7 @@ export function Admin() {
           <div className="mt-md">
           <nav className="scroll-row md:flex-wrap md:overflow-visible" aria-label="Admin sections">
             {tabs.map(([k, label]) => (
-              <button key={k} type="button" aria-pressed={tab === k} onClick={() => openTab(k)} className={`toy shrink-0 rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+              <button key={k} type="button" aria-pressed={tab === k} onClick={() => openTab(k)} className={`toy shrink-0 min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                 {label}
               </button>
             ))}
@@ -447,7 +453,7 @@ export function Admin() {
                     { key: 'perms', label: 'Permissions', get: (u) => (u.role === 'admin' ? 'all' : u.permissions.map((p) => PERMISSION_NAMES[p]).join(', ')), wide: true, wrap: true },
                     { key: 'xp', label: 'XP', get: (u) => u.xp, align: 'right' },
                     { key: 'points', label: 'Points', get: (u) => u.points, align: 'right' },
-                    { key: 'honors', label: 'Honors', get: (u) => u.honors.map((h) => HONOR_BY_KEY[h]?.name ?? h).join(', '), render: (u) => <span aria-label={u.honors.map((h) => HONOR_BY_KEY[h]?.name ?? h).join(', ')}>{u.honors.map((h) => HONOR_BY_KEY[h]?.emoji ?? '').join(' ')}</span>, wide: true },
+                    { key: 'honors', label: 'Honors', get: (u) => u.honors.map((h) => HONOR_BY_KEY[h]?.name ?? h).join(', '), render: (u) => <span role="img" aria-label={u.honors.map((h) => HONOR_BY_KEY[h]?.name ?? h).join(', ')} className="inline-flex gap-xs">{u.honors.map((h) => <AppIcon key={h} name={HONOR_BY_KEY[h]?.icon} size={16} />)}</span>, wide: true },
                     { key: 'joined', label: 'Joined', get: (u) => u.createdAt.slice(0, 10), render: (u) => day(u.createdAt), wide: true },
                     {
                       key: 'delete',
@@ -512,7 +518,7 @@ export function Admin() {
                           aria-pressed={on}
                           disabled={busy || (selected.role === 'admin' && p !== 'coach')}
                           onClick={() => run(async () => applyUser((await adminApi.setPermissions(key, selected.id, on ? selected.permissions.filter((x) => x !== p) : [...selected.permissions, p])).user))}
-                          className={`toy rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on || (selected.role === 'admin' && p !== 'coach') ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+                          className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on || (selected.role === 'admin' && p !== 'coach') ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
                         >
                           {PERMISSION_NAMES[p]}
                         </button>
@@ -524,8 +530,10 @@ export function Admin() {
                   <div className="mt-xs flex flex-wrap gap-xs">
                     {selected.honors.length === 0 && <span className="text-[14px] font-semibold text-ink-soft">None yet.</span>}
                     {selected.honors.map((h) => (
-                      <button key={h} type="button" disabled={busy} onClick={() => run(async () => applyUser((await adminApi.revokeHonor(key, selected.id, h)).user))} className="toy toy-soft rounded-pill bg-paper px-sm py-xs text-[14px] font-bold" aria-label={`Remove ${HONOR_BY_KEY[h]?.name ?? h}`}>
-                        {HONOR_BY_KEY[h]?.emoji} {HONOR_BY_KEY[h]?.name ?? h} ×
+                      <button key={h} type="button" disabled={busy} onClick={() => run(async () => applyUser((await adminApi.revokeHonor(key, selected.id, h)).user))} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-paper px-sm text-[14px] font-bold" aria-label={`Remove ${HONOR_BY_KEY[h]?.name ?? h}`}>
+                        <AppIcon name={HONOR_BY_KEY[h]?.icon} size={16} />
+                        {HONOR_BY_KEY[h]?.name ?? h}
+                        <Icon icon={X} size={14} />
                       </button>
                     ))}
                   </div>
@@ -533,7 +541,7 @@ export function Admin() {
                     <select value={honor} onChange={(e) => setHonor(e.target.value)} aria-label="Honor" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]">
                       {ADMIN_HONORS.map((h) => (
                         <option key={h.key} value={h.key}>
-                          {h.emoji} {h.name}
+                          {h.name}
                         </option>
                       ))}
                     </select>
@@ -541,7 +549,7 @@ export function Admin() {
                       Grant
                     </Button>
                   </div>
-                  <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional)" aria-label="Note" className={field} />
+                  <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional)" aria-label="Note" className={FIELD} />
 
                   <p className="mt-md m-0 text-[14px] font-bold">Points</p>
                   <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
@@ -565,8 +573,10 @@ export function Admin() {
                   <div className="mt-xs flex flex-wrap gap-xs">
                     {selected.grantedBadges.length === 0 && <span className="text-[14px] font-semibold text-ink-soft">None given.</span>}
                     {selected.grantedBadges.map((b) => (
-                      <button key={b} type="button" disabled={busy} onClick={() => run(async () => applyUser((await adminApi.revokeBadge(key, selected.id, b)).user))} className="toy toy-soft rounded-pill bg-paper px-sm py-xs text-[14px] font-bold">
-                        {BADGES.find((x) => x.key === b)?.emoji} {BADGES.find((x) => x.key === b)?.name ?? b} ×
+                      <button key={b} type="button" disabled={busy} onClick={() => run(async () => applyUser((await adminApi.revokeBadge(key, selected.id, b)).user))} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-paper px-sm text-[14px] font-bold" aria-label={`Remove ${BADGES.find((x) => x.key === b)?.name ?? b}`}>
+                        <AppIcon name={BADGES.find((x) => x.key === b)?.icon} size={16} />
+                        {BADGES.find((x) => x.key === b)?.name ?? b}
+                        <Icon icon={X} size={14} />
                       </button>
                     ))}
                   </div>
@@ -574,7 +584,7 @@ export function Admin() {
                     <select value={badgeKey} onChange={(e) => setBadgeKey(e.target.value)} aria-label="Badge" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]">
                       {BADGES.map((b) => (
                         <option key={b.key} value={b.key}>
-                          {b.emoji} {b.name} ({b.family})
+                          {b.name} ({b.family})
                         </option>
                       ))}
                     </select>
@@ -607,7 +617,7 @@ export function Admin() {
                       Add credits
                     </Button>
                   </div>
-                  <input value={grantNote} onChange={(e) => setGrantNote(e.target.value)} placeholder="Why, for the history (optional)" aria-label="Why the credits" className={field} />
+                  <input value={grantNote} onChange={(e) => setGrantNote(e.target.value)} placeholder="Why, for the history (optional)" aria-label="Why the credits" className={FIELD} />
 
                   <Button variant="ghost" className="mt-md" disabled={busy} onClick={() => run(async () => { await refreshFlags(); setPreview(await adminApi.previewAccess(key, selected.id)); })}>
                     What does this person see?
@@ -649,7 +659,7 @@ export function Admin() {
                                 </span>
                               </label>
                               {mine.length > 0 && (
-                                <button type="button" onClick={() => void reset()} disabled={busy} className="min-h-[36px] shrink-0 rounded-pill px-xs text-[12px] font-bold text-ink-soft underline underline-offset-4">
+                                <button type="button" onClick={() => void reset()} disabled={busy} className="inline-flex min-h-[44px] shrink-0 items-center rounded-pill px-xs text-[12px] font-bold text-ink-soft underline underline-offset-4">
                                   Reset
                                 </button>
                               )}
@@ -732,21 +742,21 @@ export function Admin() {
                   }}
                 >
                   <Label text="For">
-                    <select value={ovSubjectType} onChange={(e) => setOvSubjectType(e.target.value as FlagOverride['subjectType'])} className={field}>
+                    <select value={ovSubjectType} onChange={(e) => setOvSubjectType(e.target.value as FlagOverride['subjectType'])} className={FIELD}>
                       <option value="user">One person (user id)</option>
                       <option value="role">A role (user, sub_admin, admin)</option>
                       <option value="organization">A brand (organization id)</option>
                     </select>
                   </Label>
                   <Label text="Id">
-                    <input value={ovSubjectId} onChange={(e) => setOvSubjectId(e.target.value)} required className={field} />
+                    <input value={ovSubjectId} onChange={(e) => setOvSubjectId(e.target.value)} required className={FIELD} />
                   </Label>
                   <Toggle on={ovEnabled} onChange={setOvEnabled} label={ovEnabled ? 'Force on' : 'Force off'} />
                   <Label text="Expires in days (blank for never)">
-                    <input type="number" min={1} value={ovDays} onChange={(e) => setOvDays(e.target.value)} className={field} />
+                    <input type="number" min={1} value={ovDays} onChange={(e) => setOvDays(e.target.value)} className={FIELD} />
                   </Label>
                   <Label text="Reason">
-                    <input value={ovReason} onChange={(e) => setOvReason(e.target.value)} className={field} />
+                    <input value={ovReason} onChange={(e) => setOvReason(e.target.value)} className={FIELD} />
                   </Label>
                   <Button type="submit" full disabled={busy || !ovSubjectId.trim()}>
                     Save override
@@ -783,13 +793,13 @@ export function Admin() {
                     { key: 'type', label: 'Type', get: (l) => LISTING_TYPE_META[l.type].name, filter: true, render: (l) => <span className="inline-flex items-center gap-xs"><AppIcon name={LISTING_TYPE_META[l.type].icon} size={16} /> {LISTING_TYPE_META[l.type].name}</span> },
                     { key: 'title', label: 'Title', get: (l) => l.title, wrap: true, render: (l) => <span className="font-bold">{l.title}</span> },
                     { key: 'by', label: 'By', get: (l) => l.by, filter: true, wide: true },
-                    { key: 'facts', label: 'Facts', get: (l) => l.facts.join(', '), wide: true, wrap: true },
+                    { key: 'facts', label: 'Facts', get: (l) => l.facts.map((f) => f.text).join(', '), wide: true, wrap: true },
                     { key: 'live', label: 'Live', get: (l) => l.live, filter: true, edit: { kind: 'toggle', onEdit: (l, v) => run(async () => { await adminApi.setListing(key, l.type, l.id, { live: Boolean(v) }); await refreshListings(); }) } },
                     { key: 'featured', label: 'Featured', get: (l) => l.featured, filter: true, edit: { kind: 'toggle', disabled: (l) => l.type === 'tool' || l.type === 'campaign' || l.type === 'circle', onEdit: (l, v) => run(async () => { await adminApi.setListing(key, l.type, l.id, { featured: Boolean(v) }); await refreshListings(); }) } },
                     { key: 'created', label: 'Created', get: (l) => l.createdAt.slice(0, 10), render: (l) => day(l.createdAt), wide: true },
                   ]}
                   actions={(l) => (
-                    <Link to={l.path} className="inline-flex min-h-[40px] items-center text-[14px] font-bold text-ink-soft underline-offset-4 hover:underline">
+                    <Link to={l.path} className="inline-flex min-h-[44px] items-center text-[14px] font-bold text-ink-soft underline-offset-4 hover:underline">
                       Open
                     </Link>
                   )}
@@ -822,52 +832,52 @@ export function Admin() {
                     }}
                   >
                     <Label text="Title">
-                      <input required value={String(form.title ?? '')} onChange={(e) => setForm({ ...form, title: e.target.value })} className={field} />
+                      <input required value={String(form.title ?? '')} onChange={(e) => setForm({ ...form, title: e.target.value })} className={FIELD} />
                     </Label>
                     {creating === 'reward' && (
                       <>
                         <Label text="Brand name">
-                          <input value={String(form.brandName ?? '')} onChange={(e) => setForm({ ...form, brandName: e.target.value })} className={field} />
+                          <input value={String(form.brandName ?? '')} onChange={(e) => setForm({ ...form, brandName: e.target.value })} className={FIELD} />
                         </Label>
                         <Label text="Brief">
-                          <textarea rows={4} value={String(form.brief ?? '')} onChange={(e) => setForm({ ...form, brief: e.target.value })} className={field} />
+                          <textarea rows={4} value={String(form.brief ?? '')} onChange={(e) => setForm({ ...form, brief: e.target.value })} className={FIELD} />
                         </Label>
                         <div className="grid grid-cols-2 gap-xs">
                           <Label text="Deliverable">
-                            <input value={String(form.deliverable ?? 'Short video')} onChange={(e) => setForm({ ...form, deliverable: e.target.value })} className={field} />
+                            <input value={String(form.deliverable ?? 'Short video')} onChange={(e) => setForm({ ...form, deliverable: e.target.value })} className={FIELD} />
                           </Label>
                           <Label text="Platform (blank for any)">
-                            <input value={String(form.platform ?? '')} onChange={(e) => setForm({ ...form, platform: e.target.value })} placeholder="instagram, youtube" className={field} />
+                            <input value={String(form.platform ?? '')} onChange={(e) => setForm({ ...form, platform: e.target.value })} placeholder="instagram, youtube" className={FIELD} />
                           </Label>
                           <Label text="Pool (points)">
-                            <input type="number" min={0} value={String(form.budgetPoints ?? '')} onChange={(e) => setForm({ ...form, budgetPoints: e.target.value })} className={field} />
+                            <input type="number" min={0} value={String(form.budgetPoints ?? '')} onChange={(e) => setForm({ ...form, budgetPoints: e.target.value })} className={FIELD} />
                           </Label>
                           <Label text="Points per 1k views">
-                            <input type="number" min={0} value={String(form.ratePerThousand ?? '')} onChange={(e) => setForm({ ...form, ratePerThousand: e.target.value })} className={field} />
+                            <input type="number" min={0} value={String(form.ratePerThousand ?? '')} onChange={(e) => setForm({ ...form, ratePerThousand: e.target.value })} className={FIELD} />
                           </Label>
                           <Label text="Cap per creator (0 = none)">
-                            <input type="number" min={0} value={String(form.maxPayoutPoints ?? '')} onChange={(e) => setForm({ ...form, maxPayoutPoints: e.target.value })} className={field} />
+                            <input type="number" min={0} value={String(form.maxPayoutPoints ?? '')} onChange={(e) => setForm({ ...form, maxPayoutPoints: e.target.value })} className={FIELD} />
                           </Label>
                           <Label text="Minimum views">
-                            <input type="number" min={0} value={String(form.minViews ?? '1000')} onChange={(e) => setForm({ ...form, minViews: e.target.value })} className={field} />
+                            <input type="number" min={0} value={String(form.minViews ?? '1000')} onChange={(e) => setForm({ ...form, minViews: e.target.value })} className={FIELD} />
                           </Label>
                         </div>
                         <Label text="Closes on">
-                          <input type="datetime-local" value={String(form.endsAtLocal ?? '')} onChange={(e) => setForm({ ...form, endsAtLocal: e.target.value, endsAt: e.target.value ? new Date(e.target.value).toISOString() : '' })} className={field} />
+                          <input type="datetime-local" value={String(form.endsAtLocal ?? '')} onChange={(e) => setForm({ ...form, endsAtLocal: e.target.value, endsAt: e.target.value ? new Date(e.target.value).toISOString() : '' })} className={FIELD} />
                         </Label>
                         <Label text="Who can take part">
-                          <input value={String(form.eligibility ?? '')} onChange={(e) => setForm({ ...form, eligibility: e.target.value })} className={field} />
+                          <input value={String(form.eligibility ?? '')} onChange={(e) => setForm({ ...form, eligibility: e.target.value })} className={FIELD} />
                         </Label>
                       </>
                     )}
                     {creating === 'opportunity' && (
                       <>
                         <Label text="Description">
-                          <textarea rows={4} value={String(form.description ?? '')} onChange={(e) => setForm({ ...form, description: e.target.value })} className={field} />
+                          <textarea rows={4} value={String(form.description ?? '')} onChange={(e) => setForm({ ...form, description: e.target.value })} className={FIELD} />
                         </Label>
                         <div className="grid grid-cols-2 gap-xs">
                           <Label text="Type">
-                            <select value={String(form.opportunityType ?? 'gig')} onChange={(e) => setForm({ ...form, opportunityType: e.target.value })} className={field}>
+                            <select value={String(form.opportunityType ?? 'gig')} onChange={(e) => setForm({ ...form, opportunityType: e.target.value })} className={FIELD}>
                               {OPPORTUNITY_TYPES.map((t) => (
                                 <option key={t} value={t}>
                                   {t.replace('_', ' ')}
@@ -876,38 +886,38 @@ export function Admin() {
                             </select>
                           </Label>
                           <Label text="Where">
-                            <select value={String(form.locationMode ?? 'remote')} onChange={(e) => setForm({ ...form, locationMode: e.target.value })} className={field}>
+                            <select value={String(form.locationMode ?? 'remote')} onChange={(e) => setForm({ ...form, locationMode: e.target.value })} className={FIELD}>
                               <option value="remote">Remote</option>
                               <option value="on_site">On site</option>
                               <option value="hybrid">Hybrid</option>
                             </select>
                           </Label>
                           <Label text="Pay from">
-                            <input type="number" min={0} value={String(form.compensationMin ?? '')} onChange={(e) => setForm({ ...form, compensationMin: e.target.value })} className={field} />
+                            <input type="number" min={0} value={String(form.compensationMin ?? '')} onChange={(e) => setForm({ ...form, compensationMin: e.target.value })} className={FIELD} />
                           </Label>
                           <Label text="Pay to">
-                            <input type="number" min={0} value={String(form.compensationMax ?? '')} onChange={(e) => setForm({ ...form, compensationMax: e.target.value })} className={field} />
+                            <input type="number" min={0} value={String(form.compensationMax ?? '')} onChange={(e) => setForm({ ...form, compensationMax: e.target.value })} className={FIELD} />
                           </Label>
                         </div>
                         <Label text="Skills (comma separated)">
-                          <input value={String(form.skillsRequired ?? '')} onChange={(e) => setForm({ ...form, skillsRequired: e.target.value })} className={field} />
+                          <input value={String(form.skillsRequired ?? '')} onChange={(e) => setForm({ ...form, skillsRequired: e.target.value })} className={FIELD} />
                         </Label>
                         <Label text="Apply by">
-                          <input type="date" value={String(form.deadline ?? '')} onChange={(e) => setForm({ ...form, deadline: e.target.value })} className={field} />
+                          <input type="date" value={String(form.deadline ?? '')} onChange={(e) => setForm({ ...form, deadline: e.target.value })} className={FIELD} />
                         </Label>
                         <Label text="Place (if on site)">
-                          <input value={String(form.locationText ?? '')} onChange={(e) => setForm({ ...form, locationText: e.target.value })} className={field} />
+                          <input value={String(form.locationText ?? '')} onChange={(e) => setForm({ ...form, locationText: e.target.value })} className={FIELD} />
                         </Label>
                       </>
                     )}
                     {creating === 'event' && (
                       <>
                         <Label text="Description">
-                          <textarea rows={3} value={String(form.description ?? '')} onChange={(e) => setForm({ ...form, description: e.target.value })} className={field} />
+                          <textarea rows={3} value={String(form.description ?? '')} onChange={(e) => setForm({ ...form, description: e.target.value })} className={FIELD} />
                         </Label>
                         <div className="grid grid-cols-2 gap-xs">
                           <Label text="Type">
-                            <select value={String(form.eventType ?? 'meetup')} onChange={(e) => setForm({ ...form, eventType: e.target.value })} className={field}>
+                            <select value={String(form.eventType ?? 'meetup')} onChange={(e) => setForm({ ...form, eventType: e.target.value })} className={FIELD}>
                               {EVENT_TYPES.map((t) => (
                                 <option key={t} value={t}>
                                   {t}
@@ -916,37 +926,37 @@ export function Admin() {
                             </select>
                           </Label>
                           <Label text="Length (minutes)">
-                            <input type="number" min={15} value={String(form.minutes ?? '120')} onChange={(e) => setForm({ ...form, minutes: e.target.value })} className={field} />
+                            <input type="number" min={15} value={String(form.minutes ?? '120')} onChange={(e) => setForm({ ...form, minutes: e.target.value })} className={FIELD} />
                           </Label>
                           <Label text="Seats (blank for unlimited)">
-                            <input type="number" min={1} value={String(form.capacity ?? '')} onChange={(e) => setForm({ ...form, capacity: e.target.value })} className={field} />
+                            <input type="number" min={1} value={String(form.capacity ?? '')} onChange={(e) => setForm({ ...form, capacity: e.target.value })} className={FIELD} />
                           </Label>
                           <Label text="Ticket (points)">
-                            <input type="number" min={0} value={String(form.pricePoints ?? '0')} onChange={(e) => setForm({ ...form, pricePoints: e.target.value })} className={field} />
+                            <input type="number" min={0} value={String(form.pricePoints ?? '0')} onChange={(e) => setForm({ ...form, pricePoints: e.target.value })} className={FIELD} />
                           </Label>
                         </div>
                         <Label text="Starts">
-                          <input type="datetime-local" required value={String(form.startsAtLocal ?? '')} onChange={(e) => setForm({ ...form, startsAtLocal: e.target.value, startsAt: e.target.value ? new Date(e.target.value).toISOString() : '' })} className={field} />
+                          <input type="datetime-local" required value={String(form.startsAtLocal ?? '')} onChange={(e) => setForm({ ...form, startsAtLocal: e.target.value, startsAt: e.target.value ? new Date(e.target.value).toISOString() : '' })} className={FIELD} />
                         </Label>
                         <Label text="Venue">
-                          <input value={String(form.venue ?? '')} onChange={(e) => setForm({ ...form, venue: e.target.value })} className={field} />
+                          <input value={String(form.venue ?? '')} onChange={(e) => setForm({ ...form, venue: e.target.value })} className={FIELD} />
                         </Label>
                         <Label text="Online link">
-                          <input value={String(form.onlineUrl ?? '')} onChange={(e) => setForm({ ...form, onlineUrl: e.target.value })} className={field} />
+                          <input value={String(form.onlineUrl ?? '')} onChange={(e) => setForm({ ...form, onlineUrl: e.target.value })} className={FIELD} />
                         </Label>
                       </>
                     )}
                     {creating === 'program' && (
                       <>
                         <Label text="Description">
-                          <textarea rows={3} value={String(form.description ?? '')} onChange={(e) => setForm({ ...form, description: e.target.value })} className={field} />
+                          <textarea rows={3} value={String(form.description ?? '')} onChange={(e) => setForm({ ...form, description: e.target.value })} className={FIELD} />
                         </Label>
                         <div className="grid grid-cols-2 gap-xs">
                           <Label text="Price (points)">
-                            <input type="number" min={0} value={String(form.pricePoints ?? '0')} onChange={(e) => setForm({ ...form, pricePoints: e.target.value })} className={field} />
+                            <input type="number" min={0} value={String(form.pricePoints ?? '0')} onChange={(e) => setForm({ ...form, pricePoints: e.target.value })} className={FIELD} />
                           </Label>
                           <Label text="Delivery">
-                            <select value={String(form.deliveryMode ?? 'online')} onChange={(e) => setForm({ ...form, deliveryMode: e.target.value })} className={field}>
+                            <select value={String(form.deliveryMode ?? 'online')} onChange={(e) => setForm({ ...form, deliveryMode: e.target.value })} className={FIELD}>
                               <option value="online">Online</option>
                               <option value="in_person">In person</option>
                               <option value="hybrid">Hybrid</option>
@@ -954,10 +964,10 @@ export function Admin() {
                           </Label>
                         </div>
                         <Label text="Outcomes">
-                          <textarea rows={2} value={String(form.outcomes ?? '')} onChange={(e) => setForm({ ...form, outcomes: e.target.value })} className={field} />
+                          <textarea rows={2} value={String(form.outcomes ?? '')} onChange={(e) => setForm({ ...form, outcomes: e.target.value })} className={FIELD} />
                         </Label>
                         <Label text="Prerequisites">
-                          <input value={String(form.prerequisites ?? '')} onChange={(e) => setForm({ ...form, prerequisites: e.target.value })} className={field} />
+                          <input value={String(form.prerequisites ?? '')} onChange={(e) => setForm({ ...form, prerequisites: e.target.value })} className={FIELD} />
                         </Label>
                       </>
                     )}
@@ -965,20 +975,20 @@ export function Admin() {
                       <>
                         <div className="grid grid-cols-2 gap-xs">
                           <Label text="City">
-                            <input required value={String(form.city ?? '')} onChange={(e) => setForm({ ...form, city: e.target.value })} className={field} />
+                            <input required value={String(form.city ?? '')} onChange={(e) => setForm({ ...form, city: e.target.value })} className={FIELD} />
                           </Label>
                           <Label text="Area (optional)">
-                            <input value={String(form.area ?? '')} onChange={(e) => setForm({ ...form, area: e.target.value })} className={field} />
+                            <input value={String(form.area ?? '')} onChange={(e) => setForm({ ...form, area: e.target.value })} className={FIELD} />
                           </Label>
                           <Label text="Starts">
-                            <input type="datetime-local" required value={String(form.startsAtLocal ?? '')} onChange={(e) => setForm({ ...form, startsAtLocal: e.target.value, startsAt: e.target.value ? new Date(e.target.value).toISOString() : '' })} className={field} />
+                            <input type="datetime-local" required value={String(form.startsAtLocal ?? '')} onChange={(e) => setForm({ ...form, startsAtLocal: e.target.value, startsAt: e.target.value ? new Date(e.target.value).toISOString() : '' })} className={FIELD} />
                           </Label>
                           <Label text="People per table">
-                            <input type="number" min={3} max={8} value={String(form.groupSize ?? '5')} onChange={(e) => setForm({ ...form, groupSize: e.target.value })} className={field} />
+                            <input type="number" min={3} max={8} value={String(form.groupSize ?? '5')} onChange={(e) => setForm({ ...form, groupSize: e.target.value })} className={FIELD} />
                           </Label>
                         </div>
                         <Label text="Venue hint">
-                          <input value={String(form.venueHint ?? '')} onChange={(e) => setForm({ ...form, venueHint: e.target.value })} placeholder="A cafe near the metro; the table picks the exact one" className={field} />
+                          <input value={String(form.venueHint ?? '')} onChange={(e) => setForm({ ...form, venueHint: e.target.value })} placeholder="A cafe near the metro; the table picks the exact one" className={FIELD} />
                         </Label>
                         <Toggle on={form.repeat === 'weekly'} onChange={(on) => setForm({ ...form, repeat: on ? 'weekly' : 'none' })} label="Every week at this time. The next one opens on its own once tables are set." />
                       </>
@@ -986,10 +996,10 @@ export function Admin() {
                     {creating === 'tool' && (
                       <>
                         <Label text="Link">
-                          <input type="url" required value={String(form.url ?? '')} onChange={(e) => setForm({ ...form, url: e.target.value })} className={field} />
+                          <input type="url" required value={String(form.url ?? '')} onChange={(e) => setForm({ ...form, url: e.target.value })} className={FIELD} />
                         </Label>
                         <Label text="Category">
-                          <select value={String(form.category ?? 'Editing')} onChange={(e) => setForm({ ...form, category: e.target.value })} className={field}>
+                          <select value={String(form.category ?? 'Editing')} onChange={(e) => setForm({ ...form, category: e.target.value })} className={FIELD}>
                             {TOOL_CATEGORIES.map((t) => (
                               <option key={t} value={t}>
                                 {t}
@@ -998,7 +1008,7 @@ export function Admin() {
                           </select>
                         </Label>
                         <Label text="Description">
-                          <input value={String(form.description ?? '')} onChange={(e) => setForm({ ...form, description: e.target.value })} className={field} />
+                          <input value={String(form.description ?? '')} onChange={(e) => setForm({ ...form, description: e.target.value })} className={FIELD} />
                         </Label>
                         <Toggle on={form.affiliate === true} onChange={(on) => setForm({ ...form, affiliate: on })} label="Partner link" hint="We may earn when people sign up through it." />
                       </>
@@ -1095,7 +1105,7 @@ export function Admin() {
                     { key: 'product', label: 'Product', get: (o) => o.productTitle, wrap: true, render: (o) => <><span className="block font-bold">{o.productTitle}</span><span className="block text-[12px] font-bold text-ink-mute">#{o.id.slice(0, 8)}</span></> },
                     { key: 'buyer', label: 'Buyer', get: (o) => `${o.buyerName} ${o.buyerEmail ?? ''}`.trim(), render: (o) => <><span className="block">{o.buyerName}</span>{o.buyerEmail && <span className="block text-[12px] font-bold text-ink-soft">{o.buyerEmail}</span>}</> },
                     { key: 'from', label: 'From', get: (o) => (o.ownerHandle ? `@${o.ownerHandle}` : o.ownerName), filter: true, wide: true },
-                    { key: 'amount', label: 'Amount', get: (o) => (o.points > 0 ? o.points : o.cents / 100), align: 'right', render: (o) => (o.points > 0 ? `${o.points} pts` : `${(o.cents / 100).toFixed(2)} ${o.currency}`) },
+                    { key: 'amount', label: 'Amount', get: (o) => (o.points > 0 ? o.points : o.cents / 100), align: 'right', render: (o) => (o.points > 0 ? `${o.points} pts` : money(o.cents, o.currency)) },
                     { key: 'provider', label: 'Provider', get: (o) => o.provider, filter: true, wide: true },
                     { key: 'status', label: 'Status', get: (o) => o.status, filter: true, render: (o) => <Pill tone={statusTone(o.status)}>{o.status}</Pill> },
                     { key: 'created', label: 'Created', get: (o) => o.createdAt, render: (o) => when(o.createdAt) },
@@ -1145,7 +1155,7 @@ export function Admin() {
                   {orderDetail.order.status !== 'refunded' && (
                     <div className="mt-md">
                       <Label text="Refund reason">
-                        <input value={refundReason} onChange={(e) => setRefundReason(e.target.value)} className={field} />
+                        <input value={refundReason} onChange={(e) => setRefundReason(e.target.value)} className={FIELD} />
                       </Label>
                       {refundError && (
                         <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
@@ -1226,7 +1236,7 @@ export function Admin() {
               <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Only the last digits are stored here. Approve once the bank account and PAN match the legal name. Type a note in the row before deciding, if the person should hear why.</p>
               <div className="mt-sm flex flex-wrap gap-xs" role="group" aria-label="Status">
                 {(['pending', 'approved', 'rejected'] as const).map((s) => (
-                  <button key={s} type="button" aria-pressed={kycStatus === s} onClick={() => { setKycStatus(s); void loadKyc(s); }} className={`toy min-h-[40px] rounded-pill border-2 px-sm text-[14px] font-bold ${kycStatus === s ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                  <button key={s} type="button" aria-pressed={kycStatus === s} onClick={() => { setKycStatus(s); void loadKyc(s); }} className={`toy inline-flex min-h-[44px] items-center rounded-pill border-2 px-sm text-[14px] font-bold ${kycStatus === s ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                     {s}
                   </button>
                 ))}

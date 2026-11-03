@@ -6,7 +6,7 @@ import { todayLocal } from './date';
 import { portalSessionHeader } from './portalSession';
 import type { AgencyStageKey, LifecycleDates, RetainerOption } from '@kreators/shared';
 import type { AdminAttendeeCode, AttendeeCodeHost, AttendeeCodeView } from '@kreators/shared';
-import type { AssistantContext, AssistantReceipt, AssistantReply, AssistantStatus, AssistantTurn, CreditEntry, CreditsResponse, PlanKey } from '@kreators/shared';
+import type { AssistantContext, AssistantReceipt, AssistantReply, AssistantStatus, AssistantTurn, CreditEntry, CreditsResponse, FeelingsReadResult, PlanKey } from '@kreators/shared';
 import type { Brand, BrandDetail, BrandPiece, BrandSource, PieceKind, ResearchKind, ResearchRun } from '@kreators/shared';
 import type { Contract, DayType, Fear, Insecurity, Placement, Practices, RealDay, RoutineBlock, Scores, SessionResponse } from '@kreators/shared';
 import type { FeedFilter, FeedSort, SocialAward, TrustScore } from '@kreators/shared';
@@ -195,6 +195,28 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await res.json()) as T;
 }
 
+/** The words of an error for a person to read: the server's own line when there is one, else the fallback. */
+export function errorText(e: unknown, fallback: string): string {
+  return e instanceof Error && e.message ? e.message : fallback;
+}
+
+/**
+ * Fetch a file the server builds for the signed-in person (a CSV) and hand it to the browser as a download.
+ * `url` is the full /api address; the session token goes in the header, never in the address.
+ */
+export async function downloadCsv(url: string, fileName: string): Promise<void> {
+  const token = useSession.getState().token;
+  const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) throw new Error('Could not build the file.');
+  const blob = await res.blob();
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = fileName;
+  a.click();
+  window.setTimeout(() => URL.revokeObjectURL(href), 2000);
+}
+
 /** What a person has agreed to and chosen, from GET /me/legal. */
 export interface LegalState {
   legalVersion: string;
@@ -295,6 +317,8 @@ export const api = {
   assistantSend: (body: { messages: AssistantTurn[]; context: AssistantContext; model?: string; runId?: string }) => post<AssistantReply>('/assistant', body),
   /** Stop a message that is still running: it ends before its next model call or tool, keeping what was already done. */
   assistantStop: (runId: string) => post<{ ok: true }>('/assistant/stop', { runId }),
+  /** "Read with AI" on the strategy session's map card: a plan and a model that keeps nothing; the words are never kept. */
+  readFeelingsAi: (body: { text: string; relationship?: string; model?: string }) => post<FeelingsReadResult>('/assistant/feelings', body),
   assistantConfirm: (id: string, date: string) => post<{ receipt: AssistantReceipt }>(`/assistant/actions/${id}/confirm`, { date }),
   assistantCancel: (id: string) => post<{ receipt: AssistantReceipt }>(`/assistant/actions/${id}/cancel`),
   assistantUndo: (id: string, date: string) => post<{ receipt: AssistantReceipt }>(`/assistant/actions/${id}/undo`, { date }),
@@ -379,8 +403,9 @@ export const api = {
   agencyTimeAdd: (body: { clientId: string; itemId?: string | null; day: string; minutes: number; billable: boolean; note?: string }) => post<{ id: string }>('/agency/time', body),
   agencyTimeRemove: (id: string) => del<{ ok: true }>(`/agency/time/${id}`),
   agencyTemplates: (kind?: TemplateKind) => request<{ templates: AgencyTemplate[] }>(`/agency/templates${kind ? `?kind=${kind}` : ''}`),
-  agencyTemplateAdd: (body: { kind: TemplateKind; name: string; fromId?: string; houseId?: string }) => post<{ id: string }>('/agency/templates', body),
-  agencyTemplateUpdate: (id: string, body: { name?: string; fromId?: string }) => patch<{ ok: true }>(`/agency/templates/${id}`, body),
+  /** A template of the person's own. For an email note (kind 'email', P231) `subject` and `message` carry the words; the route is agency-docs'. */
+  agencyTemplateAdd: (body: { kind: TemplateKind; name: string; fromId?: string; houseId?: string; subject?: string; message?: string }) => post<{ id: string }>('/agency/templates', body),
+  agencyTemplateUpdate: (id: string, body: { name?: string; fromId?: string; subject?: string; message?: string }) => patch<{ ok: true }>(`/agency/templates/${id}`, body),
   agencyTemplateRemove: (id: string) => del<{ ok: true }>(`/agency/templates/${id}`),
   agencyInvoices: (q = '') => request<{ page: AgencyPage; invoices: Invoice[]; counts: { status: string; n: number; cents: number }[] }>(withQ('/agency/invoices', q)),
   agencyInvoiceBoard: (q = '') => request<{ columns: (BoardColumn<Invoice> & { cents: number })[] }>(withQ('/agency/invoices/board', q)),
@@ -610,7 +635,7 @@ export const api = {
   // kreators run
   run: (pq = '') => request<RunResponse>(withQ('/run', pq)),
   createRunClub: (body: { name: string; city: string; description?: string; pace?: RunPace; meets?: string; visibility?: 'public' | 'private' }) => post<{ club: RunClub | null }>('/run/clubs', body),
-  runClub: (id: string, pq = '') => request<RunClubDetail>(withQ(`/run/clubs/${id}`, pq)),
+  runClub: (id: string, pq = '') => request<RunClubDetail & { runPage: Page; pastPage: Page; collabPage: Page }>(withQ(`/run/clubs/${id}`, pq)),
   setRunClub: (id: string, body: { status?: 'active' | 'closed'; description?: string; meets?: string; pace?: RunPace; visibility?: 'public' | 'private' }) => patch<{ ok: true }>(`/run/clubs/${id}`, body),
   joinRunClub: (id: string) => post<{ ok: true }>(`/run/clubs/${id}/join`),
   leaveRunClub: (id: string) => post<{ ok: true }>(`/run/clubs/${id}/leave`),
@@ -643,7 +668,7 @@ export const api = {
   disputeBounty: (submissionId: string, note: string) => post<{ ok: true }>(`/win/submissions/${submissionId}/dispute`, { note }),
 
   // bond
-  bond: () => request<{ optedIn: boolean; intros: Introduction[]; suggestions: { userId: string; name: string; handle: string | null; skills: string[]; context: string }[] }>('/bond'),
+  bond: (inq = '') => request<{ optedIn: boolean; intros: Introduction[]; introPage: Page; suggestions: { userId: string; name: string; handle: string | null; skills: string[]; context: string }[] }>(withQ('/bond', inq)),
   proposeIntro: (recipientId: string, context: string) => post<{ ok: true }>('/bond/intros', { recipientId, context }),
   answerIntro: (id: string, status: 'accepted' | 'declined') => post<{ ok: true }>(`/bond/intros/${id}`, { status }),
   friends: (pq = '') => request<{ page: Page; open: Friend[]; friends: Friend[] }>(withQ('/bond/friends', pq)),
@@ -753,7 +778,7 @@ export const api = {
   addContent: (body: { url: string; kind?: ContentItem['kind']; caption?: string; views?: number; productId?: string | null; withLink?: boolean }) => post<{ item: ContentItem | null; why: string }>('/studio/content', body),
   refreshContent: (id: string, body?: { views: number; likes?: number; comments?: number }) => post<{ item: ContentItem | null; why: string }>(`/studio/content/${id}/refresh`, body ?? {}),
   deleteContent: (id: string) => del<{ ok: true }>(`/studio/content/${id}`),
-  automations: () => request<{ automations: DmAutomation[]; sends: DmSend[]; metaConnected: boolean }>('/studio/automations'),
+  automations: (dsq = '') => request<{ automations: DmAutomation[]; sends: DmSend[]; sendPage: Page; metaConnected: boolean }>(withQ('/studio/automations', dsq)),
   createAutomation: (body: { contentItemId?: string | null; keywords: string[]; dmMessage: string; publicReplies?: string[]; productId?: string | null }) => post<{ automation: DmAutomation | null }>('/studio/automations', body),
   setAutomation: (id: string, active: boolean) => patch<{ ok: true }>(`/studio/automations/${id}`, { active }),
   deleteAutomation: (id: string) => del<{ ok: true }>(`/studio/automations/${id}`),
@@ -792,7 +817,7 @@ export const api = {
   customers: (pq = '') => request<{ page: Page; customers: Customer[] }>(withQ('/studio/customers', pq)),
   customersCsvUrl: '/api/studio/customers?format=csv',
   refund: (orderId: string, reason: string) => post<{ order: Order | null }>(`/studio/orders/${orderId}/refund`, { reason }),
-  payouts: () => request<PayoutSummary>('/studio/payouts'),
+  payouts: (poq = '') => request<PayoutSummary & { page: Page }>(withQ('/studio/payouts', poq)),
   dmRequests: () => request<{ requests: DmRequest[] }>('/studio/dm'),
   answerDm: (id: string, answer: string) => post<{ ok: true }>(`/studio/dm/${id}/answer`, { answer }),
 
@@ -810,11 +835,12 @@ export const api = {
   life: () => request<LifeSummary>('/life'),
 
   // finance
-  finance: (month?: string) => request<FinanceSummary>(`/finance${month ? `?month=${month}` : ''}`),
+  /** One month in Finance; the month's entries page with prefix tx and the dues with prefix du. */
+  finance: (month?: string, txq = '', duq = '') => request<FinanceSummary & { txPage: Page; duePage: Page }>(withQ(withQ(`/finance${month ? `?month=${month}` : ''}`, txq), duq)),
   addTransaction: (body: { kind: 'income' | 'expense'; amountCents: number; currency?: string; category: string; counterparty?: string; note?: string; date?: string; splits?: FinanceSplit[] }) => post<{ transaction: FinanceTransaction }>('/finance/transactions', body),
   updateTransaction: (id: string, body: { counterparty?: string; note?: string; splits?: FinanceSplit[] }) => patch<{ transaction: FinanceTransaction }>(`/finance/transactions/${id}`, body),
   addDue: (body: { direction: 'owe' | 'owed'; counterparty: string; amountCents: number; currency?: string; category?: string; note?: string; dueDate?: string | null; recurring?: 'none' | 'monthly' }) => post<{ due: FinanceDue }>('/finance/dues', body),
-  settleDue: (id: string) => post<{ ok: true }>(`/finance/dues/${id}/settle`),
+  settleDue: (id: string, day: string) => post<{ ok: true }>(`/finance/dues/${id}/settle?day=${day}`),
   deleteDue: (id: string) => del<{ ok: true }>(`/finance/dues/${id}`),
   addRecurring: (body: { kind: 'income' | 'expense'; amountCents: number; currency?: string; category: string; counterparty?: string; note?: string; dayOfMonth: number }) => post<{ recurring: FinanceRecurring }>('/finance/recurring', body),
   setRecurring: (id: string, active: boolean) => patch<{ ok: true }>(`/finance/recurring/${id}`, { active }),
@@ -1008,7 +1034,7 @@ export const publicApi = {
   portalDecide: (token: string, id: string, body: { decision: 'approve' | 'changes' | 'paid_change' | 'comment'; note?: string; where?: string }) => publicSend<{ ok: true }>('POST', `/agency/${encodeURIComponent(token)}/items/${id}`, body),
   portalUnlock: (token: string, password: string) => publicSend<{ open: boolean; session: string | null; expiresAt: string | null }>('POST', `/agency/${encodeURIComponent(token)}/unlock`, { password }),
   portalRetainer: (token: string, months: number) => publicSend<{ ok: true }>('POST', `/agency/${encodeURIComponent(token)}/retainer`, { months }),
-  linkLock: (kind: LockedLink, token: string) => publicRequest<{ locked: boolean; clientName?: string }>(`/${kind}/${encodeURIComponent(token)}/lock`),
+  linkLock: (kind: LockedLink, token: string) => publicRequest<{ locked: boolean; clientName?: string; agencyName?: string; agencyLogo?: string }>(`/${kind}/${encodeURIComponent(token)}/lock`),
   linkUnlock: (kind: LockedLink, token: string, password: string) => publicSend<{ open: boolean; session: string | null; expiresAt: string | null }>('POST', `/${kind}/${encodeURIComponent(token)}/unlock`, { password }),
   contract: (token: string) => publicRequest<PublicContract>(`/contracts/${encodeURIComponent(token)}`),
   contractAccept: (token: string, body: { name: string; title: string; agree: boolean; answers: Record<string, ContractAnswer> }) => publicSend<{ ok: true }>('POST', `/contracts/${encodeURIComponent(token)}/accept`, body),

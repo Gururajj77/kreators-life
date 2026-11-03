@@ -1,6 +1,7 @@
 import { LISTING_TYPE_META, MODULE_BY_KEY, type Listing } from '@kreators/shared';
 import { Link } from 'react-router';
 import { AppIcon } from '../components/AppIcon';
+import { FactTag, IconTag } from '../components/FactTag';
 import { MediaCover } from '../components/Media';
 import { useSession } from '../lib/store';
 
@@ -11,31 +12,42 @@ export function ListingCard({ listing, showFeature = true }: { listing: Listing;
   const module = MODULE_BY_KEY[meta.moduleKey];
   const to = token ? listing.path : `/signin?next=${encodeURIComponent(listing.path)}`;
   return (
-    <li className="flex flex-col rounded-tile bg-card p-md shadow-toy-soft">
+    <li className="flex min-w-0 flex-col rounded-tile bg-card p-md shadow-toy-soft">
       <MediaCover items={listing.media} title={listing.title} />
       <div className="flex items-start gap-sm">
         <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-[22px]" aria-hidden="true">
           <AppIcon name={meta.icon} size={22} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="m-0 type-eyebrow text-ink-mute">
-            {meta.name}
-            {listing.featured && <span className="ml-xs rounded-pill bg-r3 px-xs text-[11px] leading-[18px] text-ink-fixed">Featured</span>}
-            {!listing.live && <span className="ml-xs rounded-pill bg-line px-xs text-[11px] leading-[18px] text-ink">Not live</span>}
+          <p className="m-0 flex flex-wrap items-center gap-xs type-eyebrow text-ink-mute">
+            <span>{meta.name}</span>
+            {listing.featured && (
+              <IconTag tone="warn" icon="Star">
+                Featured
+              </IconTag>
+            )}
+            {!listing.live && (
+              <IconTag tone="neutral" icon="Lock">
+                Not live
+              </IconTag>
+            )}
           </p>
           <h3 className="m-0 text-[18px] font-extrabold leading-tight">{listing.title}</h3>
           <p className="m-0 text-[14px] font-semibold text-ink-soft">{listing.by}</p>
         </div>
       </div>
-      {listing.blurb && <p className="mt-sm m-0 line-clamp-3 text-[14px] font-semibold leading-snug text-ink-soft">{listing.blurb}</p>}
+      {listing.blurb && <p className="mt-sm m-0 text-[14px] font-semibold leading-snug text-ink-soft text-pretty">{listing.blurb}</p>}
       {listing.facts.length > 0 && (
-        <ul className="mt-sm flex list-none flex-wrap gap-xs p-0 m-0">
-          {listing.facts.map((f) => (
-            <li key={f} className="rounded-pill bg-paper px-xs text-[12px] font-bold leading-[24px] text-ink-soft">
-              {f}
+        // One line that scrolls sideways, never a wrapped row that leaves one tag alone on the line under it.
+        <div className="mt-sm">
+          <ul className="scroll-row scroll-fade list-none" aria-label="Facts">
+          {listing.facts.map((f, i) => (
+            <li key={`${f.kind}-${i}`} className="flex shrink-0">
+              <FactTag kind={f.kind}>{f.text}</FactTag>
             </li>
           ))}
-        </ul>
+          </ul>
+        </div>
       )}
       <div className="mt-md flex flex-1 flex-wrap items-end justify-between gap-xs">
         {showFeature && module ? (

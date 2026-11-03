@@ -1,4 +1,5 @@
 import { videoEmbed, type CohortSession, type CourseAssignment, type Enrollment, type Submission } from '@kreators/shared';
+import type { TagTone } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useParams } from 'react-router';
@@ -10,26 +11,21 @@ import { Sheet } from '../components/Sheet';
 import { Tip, Term } from '../components/Tip';
 import { MediaSection } from '../components/MediaSection';
 import { MediaTile } from '../components/Media';
-import { api } from '../lib/api';
+import { api, errorText } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
+import { FIELD } from '../lib/ui';
+import { Fold } from '../components/Fold';
+import { shortDate } from '../lib/date';
+import { ErrorLine } from '../components/ErrorLine';
+import { StatusTag } from '../components/StatusTag';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-const fmtDate = (d: string) => new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+const fmtDate = shortDate;
 const fmtWhen = (d: string) => new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-const errText = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 const isLive = (s: CohortSession) => {
   const now = Date.now();
   return now >= new Date(s.startsAt).getTime() - 15 * 60_000 && now <= new Date(s.endsAt).getTime() + 60 * 60_000;
 };
 
-function Err({ error, fallback = 'That did not work.' }: { error: unknown; fallback?: string }) {
-  if (!error) return null;
-  return (
-    <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-      {errText(error, fallback)}
-    </p>
-  );
-}
 
 function Progress({ p }: { p: Enrollment['progress'] }) {
   return (
@@ -58,9 +54,9 @@ export function Cohort() {
     return (
       <Screen>
         <header className="pt-lg">
-          <Back />
+          <BackLink to="/school">School</BackLink>
         </header>
-        <p className="mt-md font-bold">{errText(q.error, 'You are not in this cohort.')}</p>
+        <p className="mt-md font-bold">{errorText(q.error, 'You are not in this cohort.')}</p>
       </Screen>
     );
   }
@@ -73,7 +69,7 @@ export function Cohort() {
   return (
     <Screen>
       <header className="pt-lg">
-        <Back />
+        <BackLink to="/school">School</BackLink>
         <p className="m-0 text-[14px] font-bold text-ink-soft">
           {k.programName}, <Term word="cohort">cohort</Term> run by {k.managerName}
         </p>
@@ -162,7 +158,7 @@ export function Cohort() {
                     {fmtWhen(s.startsAt)} to {new Date(s.endsAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
-                {s.attended && <span className="shrink-0 rounded-pill bg-r4 px-xs text-[12px] font-extrabold leading-[20px] text-on-fill">You were here</span>}
+                {s.attended && <StatusTag tone="good">You were here</StatusTag>}
               </div>
               <div className="mt-sm flex flex-wrap gap-xs">
                 {s.onlineUrl && (
@@ -178,10 +174,7 @@ export function Cohort() {
               </div>
               {!s.attended && d.myStatus === 'enrolled' && !isLive(s) && new Date(s.startsAt).getTime() > Date.now() && <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Check-in opens fifteen minutes before it starts.</p>}
               {d.manager && s.attendance && (
-                <details className="mt-sm">
-                  <summary className="min-h-[44px] cursor-pointer text-[14px] font-bold leading-[44px]">
-                    Attendance, {s.attendance.length} of {d.enrollments.length}
-                  </summary>
+                <Fold className="mt-sm" title={`Attendance, ${s.attendance.length} of ${d.enrollments.length}`}>
                   <ul className="flex list-none flex-col gap-xs p-0 m-0">
                     {d.enrollments.map((e) => {
                       const here = s.attendance?.some((a) => a.userId === e.learnerId);
@@ -199,13 +192,13 @@ export function Cohort() {
                       );
                     })}
                   </ul>
-                </details>
+                </Fold>
               )}
             </li>
           ))}
         </ul>
         <div className="mt-xs">
-          <Err error={attend.error} />
+          <ErrorLine e={attend.error} />
         </div>
       </section>
 
@@ -220,9 +213,7 @@ export function Cohort() {
               <li key={e.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
                 <div className="flex items-center justify-between gap-sm">
                   <p className="m-0 text-[16px] font-bold">{e.learnerName}</p>
-                  <span className="shrink-0 rounded-pill px-xs text-[12px] font-extrabold leading-[20px]" style={{ background: e.status === 'completed' ? 'var(--tint-green)' : 'var(--tint-yellow)' }}>
-                    {e.status}
-                  </span>
+                  <StatusTag tone={e.status === 'completed' ? 'good' : 'warn'}>{e.status}</StatusTag>
                 </div>
                 <Progress p={e.progress} />
                 <p className="m-0 text-[12px] font-bold text-ink-soft">
@@ -237,7 +228,7 @@ export function Cohort() {
             ))}
           </ul>
           <div className="mt-xs">
-            <Err error={complete.error} />
+            <ErrorLine e={complete.error} />
           </div>
         </section>
       )}
@@ -259,7 +250,7 @@ function AssignmentCard({ a, cohortId, mine, all, canRun, enrolled, onChange }: 
   const [url, setUrl] = useState(mine?.url ?? '');
   const [text, setText] = useState(mine?.text ?? '');
   const submit = useMutation({ mutationFn: () => api.submitAssignment(a.id, { cohortId, url: url || undefined, text: text || undefined }), onSuccess: () => onChange() });
-  const tint = mine?.status === 'approved' ? 'var(--tint-green)' : mine?.status === 'changes' ? 'var(--tint-orange)' : mine ? 'var(--tint-yellow)' : 'var(--tint-brown)';
+  const tone: TagTone = mine?.status === 'approved' ? 'good' : mine?.status === 'changes' ? 'warm' : mine ? 'warn' : 'neutral';
   const label = mine ? ({ submitted: 'Waiting for feedback', changes: 'Changes asked', approved: 'Approved' } as const)[mine.status] : 'Not handed in';
   const waiting = all.filter((s) => s.status === 'submitted').length;
   return (
@@ -270,11 +261,11 @@ function AssignmentCard({ a, cohortId, mine, all, canRun, enrolled, onChange }: 
           <p className="m-0 text-[14px] font-semibold text-ink-soft">Due {a.dueDays} days in</p>
         </div>
         {!canRun && (
-          <span className="shrink-0 rounded-pill px-xs text-[12px] font-extrabold leading-[20px]" style={{ background: tint }}>
+          <StatusTag tone={tone}>
             {label}
-          </span>
+          </StatusTag>
         )}
-        {canRun && waiting > 0 && <span className="shrink-0 rounded-pill bg-r3 px-xs text-[12px] font-extrabold leading-[20px] text-ink-fixed">{waiting} to review</span>}
+        {canRun && waiting > 0 && <StatusTag tone="warn">{waiting} to review</StatusTag>}
       </div>
       {a.instructions && <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold">{a.instructions}</p>}
       {a.rubric && (
@@ -305,16 +296,16 @@ function AssignmentCard({ a, cohortId, mine, all, canRun, enrolled, onChange }: 
         >
           <label className="block">
             <span className="block text-[12px] font-bold">Link to your work</span>
-            <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" className={field} />
+            <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[12px] font-bold">Or write it here</span>
-            <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} maxLength={5000} className={field} />
+            <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} maxLength={5000} className={FIELD} />
           </label>
           <Button type="submit" variant={mine ? 'outline' : 'primary'} disabled={submit.isPending || (!url.trim() && !text.trim())}>
             {mine ? 'Hand in again' : 'Hand in'}
           </Button>
-          <Err error={submit.error} fallback="Could not hand it in." />
+          <ErrorLine e={submit.error} />
         </form>
       )}
       {canRun && all.length > 0 && (
@@ -372,11 +363,11 @@ function SubmissionReview({ s, onChange }: { s: Submission; onChange: () => void
         <div className="mt-sm">
           <label className="block">
             <span className="block text-[12px] font-bold">Feedback</span>
-            <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} maxLength={3000} className={field} />
+            <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} maxLength={3000} className={FIELD} />
           </label>
           <label className="mt-xs block">
             <span className="block text-[12px] font-bold">Grade, optional</span>
-            <input value={grade} onChange={(e) => setGrade(e.target.value)} maxLength={20} placeholder="A, 8/10, pass" className={field} />
+            <input value={grade} onChange={(e) => setGrade(e.target.value)} maxLength={20} placeholder="A, 8/10, pass" className={FIELD} />
           </label>
           <div className="mt-xs flex gap-xs">
             <Button onClick={() => feedback.mutate('approved')} disabled={feedback.isPending || !comment.trim()}>
@@ -387,7 +378,7 @@ function SubmissionReview({ s, onChange }: { s: Submission; onChange: () => void
             </Button>
           </div>
           <div className="mt-xs">
-            <Err error={feedback.error} />
+            <ErrorLine e={feedback.error} />
           </div>
         </div>
       )}
@@ -419,23 +410,23 @@ function ScheduleSheet({ cohortId, open, onClose, onDone }: { cohortId: string; 
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Title</span>
-          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={field} />
+          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">Starts</span>
-            <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required className={field} />
+            <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Minutes</span>
-            <input type="number" min={15} max={600} value={minutes} onChange={(e) => setMinutes(e.target.value)} className={field} />
+            <input type="number" min={15} max={600} value={minutes} onChange={(e) => setMinutes(e.target.value)} className={FIELD} />
           </label>
         </div>
         <label className="block">
           <span className="block text-[14px] font-bold">Joining link</span>
-          <input type="url" value={onlineUrl} onChange={(e) => setOnlineUrl(e.target.value)} placeholder="https://" className={field} />
+          <input type="url" value={onlineUrl} onChange={(e) => setOnlineUrl(e.target.value)} placeholder="https://" className={FIELD} />
         </label>
-        <Err error={schedule.error} fallback="Could not schedule it." />
+        <ErrorLine e={schedule.error} />
         <Button type="submit" size="lg" full disabled={schedule.isPending || !title.trim() || !startsAt}>
           Schedule
         </Button>
@@ -444,8 +435,3 @@ function ScheduleSheet({ cohortId, open, onClose, onDone }: { cohortId: string; 
   );
 }
 
-function Back() {
-  return (
-    <BackLink to="/school">School</BackLink>
-  );
-}

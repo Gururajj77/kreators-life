@@ -18,9 +18,10 @@ import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { prettyDate, todayLocal } from '../lib/date';
 import { useAuthed } from '../lib/queries';
+import { FIELD } from '../lib/ui';
+import { FactTag } from '../components/FactTag';
 
 const PARTS: readonly SummaryPart[] = ['daily', 'notToDo', 'wellbeing', 'journal', 'finance', 'shop', 'school', 'work', 'people'];
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
 
 /** Weekly, monthly, quarterly and mid-year reviews: the numbers from every app for the period, and what you make of them. */
 export function Reviews() {
@@ -210,7 +211,7 @@ export function Reviews() {
                   <label className="block text-[14px] font-bold" htmlFor="review-template">
                     Questions from
                   </label>
-                  <select id="review-template" value={template?.id ?? ''} onChange={(e) => setTemplateId(e.target.value)} className={field}>
+                  <select id="review-template" value={template?.id ?? ''} onChange={(e) => setTemplateId(e.target.value)} className={FIELD}>
                     {d.templates.map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.name}
@@ -231,7 +232,7 @@ export function Reviews() {
                       onChange={(e) => setAnswers((a) => prompts.map((_, j) => (j === i ? e.target.value : (a[j] ?? ''))))}
                       rows={3}
                       maxLength={REVIEW_ANSWER_MAX}
-                      className={field}
+                      className={FIELD}
                     />
                   </li>
                 ))}
@@ -255,7 +256,7 @@ export function Reviews() {
               <label className="mt-md block text-[14px] font-bold" htmlFor="review-highlight">
                 The one thing to remember
               </label>
-              <input id="review-highlight" value={highlight} onChange={(e) => setHighlight(e.target.value)} maxLength={REVIEW_HIGHLIGHT_MAX} placeholder="One line" className={field} />
+              <input id="review-highlight" value={highlight} onChange={(e) => setHighlight(e.target.value)} maxLength={REVIEW_HIGHLIGHT_MAX} placeholder="One line" className={FIELD} />
               {save.isError && (
                 <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
                   That did not save. Try again.
@@ -279,7 +280,7 @@ export function Reviews() {
               <h2 id="templates-heading" className="text-[24px]">
                 Templates
               </h2>
-              <Button variant="outline" size="sm" onClick={() => setEditing('new')}>
+              <Button variant="outline" size="sm" plusToX onClick={() => setEditing('new')}>
                 New template
               </Button>
             </div>
@@ -320,7 +321,7 @@ export function Reviews() {
                           <span className="block text-[16px] font-bold">{periodLabel({ kind: r.kind, start: r.start, end: r.end })}</span>
                           <span className="block truncate text-[14px] font-semibold text-ink-soft">{r.highlight || PERIOD_META[r.kind].name}</span>
                         </span>
-                        <span className="shrink-0 rounded-pill bg-paper px-xs text-[12px] font-extrabold leading-[24px] text-ink-soft">{PERIOD_META[r.kind].short}</span>
+                        <FactTag kind="when">{PERIOD_META[r.kind].short}</FactTag>
                       </button>
                     </li>
                   );
@@ -378,13 +379,13 @@ function TemplateEditor({ editing, kind, onClose, onSaved }: { editing: ReviewTe
         <label className="block text-[14px] font-bold" htmlFor="tpl-name">
           Name
         </label>
-        <input id="tpl-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={REVIEW_NAME_MAX} placeholder="Money month" className={field} />
+        <input id="tpl-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={REVIEW_NAME_MAX} placeholder="Money month" className={FIELD} />
         {!existing && (
           <>
             <label className="mt-sm block text-[14px] font-bold" htmlFor="tpl-kind">
               Comes back every
             </label>
-            <select id="tpl-kind" value={cadence} onChange={(e) => setCadence(e.target.value as PeriodKind)} className={field}>
+            <select id="tpl-kind" value={cadence} onChange={(e) => setCadence(e.target.value as PeriodKind)} className={FIELD}>
               {PERIOD_KINDS.map((k) => (
                 <option key={k} value={k}>
                   {PERIOD_META[k].short.toLowerCase()}
@@ -396,7 +397,7 @@ function TemplateEditor({ editing, kind, onClose, onSaved }: { editing: ReviewTe
         <label className="mt-sm block text-[14px] font-bold" htmlFor="tpl-prompts">
           Questions, one per line
         </label>
-        <textarea id="tpl-prompts" value={text} onChange={(e) => setText(e.target.value)} rows={6} placeholder={'What did you earn?\nWhat did you waste?'} className={field} />
+        <textarea id="tpl-prompts" value={text} onChange={(e) => setText(e.target.value)} rows={6} placeholder={'What did you earn?\nWhat did you waste?'} className={FIELD} />
         {(save.isError || remove.isError) && (
           <p role="alert" className="m-0 text-[14px] font-bold">
             That did not save. Try again.

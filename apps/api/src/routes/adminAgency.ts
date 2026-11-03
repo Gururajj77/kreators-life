@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { contractTemplateDoc, houseDoc, houseInvoiceDoc, parseContractDoc, parseInvoiceDoc, TEMPLATE_KINDS, TEMPLATE_NAME_MAX, templateSummary, type ContractDoc, type HouseTemplate, type InvoiceDoc, type InvoiceItem, type TemplateKind } from '@kreators/shared';
+import { contractTemplateDoc, houseDoc, houseInvoiceDoc, parseContractDoc, parseInvoiceDoc, DOC_TEMPLATE_KINDS, TEMPLATE_NAME_MAX, templateSummary, type ContractDoc, type DocTemplateKind, type HouseTemplate, type InvoiceDoc, type InvoiceItem } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { audit, newId, nowIso, oneOf, pageOf, paged, str } from '../db';
 import { rateLimit } from '../ops';
@@ -27,7 +27,7 @@ function toHouse(r: HouseRow): HouseTemplate {
 }
 
 /** The house version of one of the admin's own documents: no names filled in, and no business details unless asked. */
-async function houseSnapshot(db: D1Database, userId: string, kind: TemplateKind, fromId: string, includeBusiness: boolean): Promise<{ doc: InvoiceDoc | ContractDoc; items: InvoiceItem[] } | null> {
+async function houseSnapshot(db: D1Database, userId: string, kind: DocTemplateKind, fromId: string, includeBusiness: boolean): Promise<{ doc: InvoiceDoc | ContractDoc; items: InvoiceItem[] } | null> {
   const snap = await snapshotOf(db, userId, kind, fromId);
   if (!snap) return null;
   if (kind === 'invoice') return { doc: houseInvoiceDoc(parseInvoiceDoc(snap.doc), includeBusiness), items: snap.items };
@@ -47,7 +47,7 @@ adminAgency.post('/templates', rateLimit('create'), async (c) => {
   const user = superAdmin(c);
   if (!user) return c.json({ error: 'only a super admin makes a house template; sign in as the admin' }, 403);
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
-  const kind = oneOf(body.kind, TEMPLATE_KINDS, 'invoice');
+  const kind = oneOf(body.kind, DOC_TEMPLATE_KINDS, 'invoice');
   const name = str(body.name, TEMPLATE_NAME_MAX);
   if (!name) return c.json({ error: 'give it a name' }, 400);
   const include = body.includeBusiness === true;

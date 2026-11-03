@@ -6,6 +6,7 @@ import {
   contractAsText,
   contractVarsFor,
   DOC_COMMENT_MAX,
+  docDate,
   docRef,
   isAgencyDocKind,
   MAX_AGENCY_DOCS,
@@ -28,7 +29,7 @@ import type { AppEnv } from '../env';
 import { audit, dayFromDevice, nameOf, newId, notify, nowIso, oneOf, pageOf, paged, randomCode, str } from '../db';
 import { coverFrom, emailCopy, logDoc, maskEmail, ownLogo, publicUrl } from '../agencyPaper';
 import { billingOf, settingsFor } from './agency';
-import { activeHouse, clientBits, docOf, houseContract, jsonOr, ownTemplate, recipientFor, templateDoc } from './agencyDocs';
+import { activeHouse, clientBits, clientFacts, docOf, houseContract, jsonOr, ownTemplate, recipientFor, templateDoc } from './agencyDocs';
 
 /**
  * Agency's other documents: a strategy session summary, trial video terms, a retainer proposal and a monthly report. They are sectioned
@@ -161,15 +162,26 @@ agencyOther.post('/', async (c) => {
       if (!client) return c.json({ error: 'a monthly report is for one client; pick one' }, 400);
       const month = typeof body.month === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(body.month) ? body.month : dayFromDevice(c.req.query('day')).slice(0, 7);
       doc = await reportFacts(db, user.id, client.id, client.name, month);
-    } else doc = agencyDocStarter(kind, kind === 'retainer_proposal' ? parseRetainerInput(body.retainer) : undefined);
+    } else if (kind === 'retainer_proposal') {
+      // The proposal is priced from the client's retainer and their changes a piece, unless the form sent its own.
+      const asked = parseRetainerInput(body.retainer);
+      const sent = body.retainer && typeof body.retainer === 'object' ? (body.retainer as Record<string, unknown>) : {};
+      doc = agencyDocStarter(kind, {
+        ...asked,
+        monthlyFeeCents: asked.monthlyFeeCents > 0 ? asked.monthlyFeeCents : (client?.retainer_cents ?? 0),
+        revisionRounds: 'revisionRounds' in sent ? asked.revisionRounds : (client?.revisions_per_piece ?? asked.revisionRounds),
+      });
+    } else doc = agencyDocStarter(kind);
   }
-  const billing = client ? billingOf(client) : null;
   const mine = parseDocStyle(settings.profile.docStyle);
+  const vars = contractVarsFor(settings.profile, client ? clientFacts(client, settings.currency) : null);
+  // A strategy session summary is written on the day of the session, so it starts dated today (the device's day).
+  if (kind === 'brief') vars.sessionDate = docDate(dayFromDevice(c.req.query('day')));
   const withStyle: ContractDoc = {
     ...structuredClone(doc),
     templateKey: kind,
     currency: settings.currency,
-    vars: contractVarsFor(settings.profile, client ? { name: client.name, address: billing?.address ?? '', contactName: client.contact_name } : null),
+    vars,
     style: fromTemplate ? parseDocStyle(doc.style, mine) : mine,
   };
   const final = house ? withStyle : await ownLogo(db, user.id, withStyle, parseDocStyle(doc.style).logo);
@@ -288,7 +300,8 @@ docsPublic.get('/:token', async (c) => {
     : { results: [] as { id: string; author: 'me' | 'client'; body: string; created_at: string }[] };
   const view: PublicAgencyDoc = {
     ref: docRef(AGENCY_DOC_KIND_META[row.kind]?.refPrefix ?? 'DOC', row.id),
-    ownerName: nameOf({ display_name: row.owner_name }),
+    // The client meets the business that sent it (the name on the paper), not the account's own display name.
+    ownerName: doc.vars?.providerBusiness?.trim() || nameOf({ display_name: row.owner_name }),
     kind: row.kind,
     status: row.status,
     sentAt: row.sent_at,

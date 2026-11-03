@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
-import { canMute, communityRankOf, FEED_FILTERS, MAX_REPLY_DEPTH, threadOrder, FEED_SORTS, isReaction, MAX_PINNED, mentionsIn, POST_CATEGORIES, roleRank, type CommunityPost, type CommunityReply, type FeedFilter, type FeedSort, type ReactionCounts, type ReactionKind } from '@kreators/shared';
+import { canMute, communityRankOf, FEED_FILTERS, MAX_REPLY_DEPTH, threadOrder, FEED_SORTS, isReaction, MAX_PINNED, mentionsIn, POST_CATEGORIES, type CommunityPost, type CommunityReply, type FeedFilter, type FeedSort, type ReactionCounts, type ReactionKind } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { anonAlias, audit, nameOf, newId, notify, notifyMany, nowIso, oneOf, parseList, requireRole, pageOf, paged } from '../db';
+import { anonAlias, audit, isGuide, isStaff, nameOf, newId, notify, notifyMany, nowIso, oneOf, parseList, rankOf, pageOf, paged } from '../db';
 import { rewardSocial } from '../rewards';
 
 export const community = new Hono<AppEnv>();
@@ -89,7 +89,7 @@ const toPost = (r: PostRow): CommunityPost => ({
  */
 async function presentPosts(c: Context<AppEnv>, rows: PostRow[]): Promise<CommunityPost[]> {
   const viewer = c.get('user');
-  const staff = roleRank(viewer.role) >= roleRank('sub_admin');
+  const staff = isStaff(viewer);
   return Promise.all(
     rows.map(async (r) => {
       const p = toPost(r);
@@ -101,7 +101,6 @@ async function presentPosts(c: Context<AppEnv>, rows: PostRow[]): Promise<Commun
 }
 const presentPost = async (c: Context<AppEnv>, row: PostRow | null) => (row ? ((await presentPosts(c, [row]))[0] ?? null) : null);
 
-const isGuide = (user: UserRow) => roleRank(user.role) >= roleRank('sub_admin');
 /** Whether guides hold a new member's first post until they say okay. Off until a guide switches it on. */
 export async function holdsFirstPosts(db: D1Database): Promise<boolean> {
   const row = await db.prepare("SELECT value FROM community_settings WHERE key = 'hold_first_posts'").first<{ value: string }>();
@@ -135,7 +134,7 @@ community.get('/', async (c) => {
   const user = c.get('user');
   const category = (c.req.query('category') ?? '').trim();
   const productId = (c.req.query('product') ?? '').trim();
-  const showHidden = c.req.query('all') === '1' && roleRank(user.role) >= roleRank('sub_admin');
+  const showHidden = c.req.query('all') === '1' && isGuide(user);
   const sort: FeedSort = oneOf(c.req.query('sort'), FEED_SORTS, 'recent');
   const filter: FeedFilter = oneOf(c.req.query('filter'), FEED_FILTERS, 'all');
   const clauses: string[] = [];
@@ -274,7 +273,7 @@ const REPLY_SELECT = `SELECT r.*, u.display_name AS author_name,
 /** A reply as it leaves the server: anonymous ones carry the made-up name for this post and no id (staff keep it, for reports). */
 async function presentReplies(c: Context<AppEnv>, rows: ReplyRow[]): Promise<CommunityReply[]> {
   const viewer = c.get('user');
-  const staff = roleRank(viewer.role) >= roleRank('sub_admin');
+  const staff = isStaff(viewer);
   return Promise.all(
     rows.map(async (r): Promise<CommunityReply> => {
       const mine = r.user_id === viewer.id;
@@ -409,7 +408,6 @@ community.post('/follow/:userId', async (c) => {
 
 // Muting a member: a guide (the moderation permission), staff or an admin, and only someone of a lower rank.
 // Lifting it follows the same rule, so a guide cannot undo what an admin did.
-const rankOf = (u: UserRow) => communityRankOf({ role: u.role, permissions: parseList(u.permissions) });
 
 community.get('/mutes', async (c) => {
   const me = c.get('user');
@@ -446,8 +444,13 @@ community.delete('/members/:userId/mute', async (c) => {
 });
 
 // Moderation, for guides and admins.
+// A guide is `isGuide` (the moderation permission; every admin holds it), the same rule the channels use.
 export const moderate = new Hono<AppEnv>();
-moderate.use('*', requireRole('sub_admin'));
+moderate.use('*', async (c, next) => {
+  const user = c.get('user');
+  if (!user || !isGuide(user)) return c.json({ error: 'you do not have access to that' }, 403);
+  await next();
+});
 
 moderate.post('/posts/:id', async (c) => {
   const db = c.env.DB;

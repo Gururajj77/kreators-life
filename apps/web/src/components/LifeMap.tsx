@@ -110,7 +110,7 @@ const DIMENSIONS: readonly { lines: string[]; narrow?: string[]; from: number; t
   { lines: ['I AM Presence'], from: 700, to: 600 },
   { lines: ['5th Dimension'], from: 540, to: 540 },
   { lines: ['New Humanity', 'Consciousness'], from: 500, to: 400 },
-  { lines: ['4th Dimension'], from: 350, to: 200, light: true },
+  { lines: ['4th Dimension'], narrow: ['4th', 'Dimension'], from: 350, to: 200, light: true },
   { lines: ['3rd Dimension'], narrow: ['3rd', 'Dimension'], from: 175, to: 20, light: true, top: true },
 ];
 const CATEGORIES: readonly { lines: string[]; band: MapBand; from: number; to: number; color: string }[] = [
@@ -185,18 +185,19 @@ const WIDE: Layout = {
   sides: true,
   max: 720,
 };
+// On a phone the words are at least 11px at a 390px screen (11.5 units of a 344-unit picture in a column of about 326px), so the
+// funnel is narrower, the heads are short, and the category words move under the picture as a legend (see ConsciousnessMap).
 const NARROW: Layout = {
-  w: 340,
+  w: 344,
   fx: 1,
-  fw: 150,
+  fw: 120,
   heads: [
-    ['Dimension, Vibration & Color', 76],
-    ['Level of Consciousness', 212],
-    ['Category', 306],
+    ['Dimension', 61],
+    ['Level of Consciousness', 228],
   ],
-  sizes: { head: 8.5, level: 9.5, dim: 9.5, cat: 11, band: 9, note: 8.5 },
-  catX: 329,
-  spanX: 336,
+  sizes: { head: 11.5, level: 11.5, dim: 11.5, cat: 11.5, band: 11.5, note: 11.5 },
+  catX: 334,
+  spanX: 338,
   noteX: 300,
   noteBelow: true,
   sides: false,
@@ -282,7 +283,18 @@ function ScaleDrawing({ L }: { L: Layout }) {
         const words = (!L.sides && d.narrow) || d.lines;
         if (!words.length) return null;
         const y = d.top ? top(d.from) + R * (words.length > 1 ? 1.1 : 1) : middle(d.from, d.to);
-        return <g key={d.from}>{lines(words, L.fx + L.fw / 2, y, sizes.dim, 'middle', 'font-bold', { fill: d.light ? 'var(--color-ink-fixed)' : 'var(--color-on-fill)' })}</g>;
+        const cx = L.fx + L.fw / 2;
+        if (!d.light) return <g key={d.from}>{lines(words, cx, y, sizes.dim, 'middle', 'font-bold', { fill: 'var(--color-on-fill)' })}</g>;
+        // A light band (gold, lime, yellow) puts its words on a small card-coloured chip in the theme's own ink, so they read in
+        // both themes whatever sits under the picture.
+        const cw = Math.max(...words.map((t) => t.length)) * sizes.dim * 0.6 + 10;
+        const ch = words.length * (sizes.dim + 3) + 4;
+        return (
+          <g key={d.from}>
+            <rect x={cx - cw / 2} y={y - ch / 2} width={cw} height={ch} rx={ch / 2 > 10 ? 8 : ch / 2} style={{ fill: 'var(--color-card-strong)' }} fillOpacity={0.92} />
+            {lines(words, cx, y, sizes.dim, 'middle', 'font-bold', { fill: 'var(--color-ink)' })}
+          </g>
+        );
       })}
 
       {/* Every level, beside its slice. */}
@@ -309,10 +321,14 @@ function ScaleDrawing({ L }: { L: Layout }) {
             <Span x={L.spanX} y1={top(c.from) + 2} y2={bottom(c.to) - 2} color={c.color} />
             {/* The words in ink, so they read on the page in both themes; the colour is on the span beside them. Fill is set inline (not a
                 className) so it always wins over any other rule and never picks up the span's own colour. */}
-            {lines(c.lines, L.catX, y - 6, sizes.cat, 'end', 'font-bold', { fill: 'var(--color-ink)' })}
-            <text x={L.catX} y={y + (c.lines.length * (sizes.cat + 3)) / 2 + 4} fontSize={sizes.band} textAnchor="end" className="font-semibold" style={{ fill: 'var(--color-ink-soft)' }}>
-              {MAP_BAND_META[c.band].name}
-            </text>
+            {L.sides && (
+              <>
+                {lines(c.lines, L.catX, y - 6, sizes.cat, 'end', 'font-bold', { fill: 'var(--color-ink)' })}
+                <text x={L.catX} y={y + (c.lines.length * (sizes.cat + 3)) / 2 + 4} fontSize={sizes.band} textAnchor="end" className="font-semibold" style={{ fill: 'var(--color-ink-soft)' }}>
+                  {MAP_BAND_META[c.band].name}
+                </text>
+              </>
+            )}
           </g>
         );
       })}
@@ -348,6 +364,19 @@ export function ConsciousnessMap() {
       <div className="mt-sm">
         <ScaleDrawing L={narrow ? NARROW : WIDE} />
       </div>
+      {narrow && (
+        // On a phone the three categories are a legend under the picture, matched to the coloured spans at its right edge.
+        <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
+          {CATEGORIES.map((c) => (
+            <li key={c.band} className="flex items-center gap-sm text-[14px] font-bold">
+              <span aria-hidden="true" className="h-[16px] w-[4px] shrink-0 rounded-pill" style={{ background: c.color }} />
+              <span>
+                {c.lines.join(' ')} <span className="font-semibold text-ink-soft">({MAP_BAND_META[c.band].name})</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </figure>
   );
 }

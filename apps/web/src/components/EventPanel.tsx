@@ -7,9 +7,11 @@ import { useSession } from '../lib/store';
 import { AnonToggle } from './AnonToggle';
 import { Button } from './Button';
 import { Section } from './Section';
+import { FIELD } from '../lib/ui';
+import { dateTime } from '../lib/date';
+import { IconTag } from './FactTag';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-const when = (iso: string) => new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+const when = dateTime;
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'That did not work. Try again.');
 const friendWord: Record<EventPerson['friend'], string> = { none: '', sent: 'Request sent', pending: 'Asked you', friends: 'Friends' };
 
@@ -68,11 +70,11 @@ export function EventPanel({ app, id }: { app: EventApp; id: string }) {
           <form className="mt-sm rounded-tile bg-card p-sm shadow-toy-soft" onSubmit={(e) => { e.preventDefault(); share.mutate(); }}>
             <label className="block">
               <span className="block text-[14px] font-bold">{d.photos ? 'Change the folder link' : 'Link to the photo folder'}</span>
-              <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Google Drive, Google Photos, Dropbox, iCloud, OneDrive or WeTransfer" inputMode="url" autoCapitalize="none" className={field} />
+              <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Google Drive, Google Photos, Dropbox, iCloud, OneDrive or WeTransfer" inputMode="url" autoCapitalize="none" className={FIELD} />
             </label>
             <label className="mt-sm block">
               <span className="block text-[14px] font-bold">A line for guests (optional)</span>
-              <input value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="Open until the end of the month" className={field} />
+              <input value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="Open until the end of the month" className={FIELD} />
             </label>
             <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Set the folder to "anyone with the link can view" so guests can open it.</p>
             <Button type="submit" className="mt-sm" disabled={share.isPending || !url.trim()}>Share the folder</Button>
@@ -120,16 +122,16 @@ export function EventPanel({ app, id }: { app: EventApp; id: string }) {
                 <span className="font-extrabold">
                   {m.mine ? 'You' : m.name}
                   {m.anonymous && <span className={`ml-xs rounded-pill px-xs text-[11px] leading-[18px] ${m.mine ? 'bg-on-ink/15' : 'bg-line text-ink-soft'}`}>{m.mine ? `Anonymous as ${m.name}` : 'Anonymous'}</span>}
-                  {m.host && <span className="ml-xs rounded-pill bg-r3 px-xs text-[11px] leading-[18px] text-ink-fixed">Host</span>}
+                  {m.host && <IconTag className="ml-xs" tone="warn" icon="Crown">Host</IconTag>}
                 </span>
                 <span className={`text-[12px] font-bold ${m.mine ? 'text-on-ink/70' : 'text-ink-soft'}`}>{when(m.createdAt)}</span>
               </span>
               <span className="block whitespace-pre-wrap font-semibold"><Inert text={m.body} /></span>
-              <button type="button" onClick={() => setTo(m)} className={`mt-xs mr-sm min-h-[32px] text-[12px] font-bold underline underline-offset-4 ${m.mine ? 'text-on-ink/80' : 'text-ink-soft'}`}>
+              <button type="button" onClick={() => setTo(m)} className={`mt-xs mr-sm inline-flex min-h-[44px] items-center text-[12px] font-bold underline underline-offset-4 ${m.mine ? 'text-on-ink/80' : 'text-ink-soft'}`}>
                 Reply
               </button>
               {(m.mine || host) && (
-                <button type="button" onClick={() => unsay.mutate(m.id)} className={`mt-xs min-h-[32px] text-[12px] font-bold underline underline-offset-4 ${m.mine ? 'text-on-ink/80' : 'text-ink-soft'}`}>
+                <button type="button" onClick={() => unsay.mutate(m.id)} className={`mt-xs inline-flex min-h-[44px] items-center text-[12px] font-bold underline underline-offset-4 ${m.mine ? 'text-on-ink/80' : 'text-ink-soft'}`}>
                   Take down
                 </button>
               )}
@@ -146,7 +148,7 @@ export function EventPanel({ app, id }: { app: EventApp; id: string }) {
         <form className="mt-sm flex gap-xs" onSubmit={(e) => { e.preventDefault(); if (text.trim()) say.mutate(); }}>
           <label className="min-w-0 flex-1">
             <span className="sr-only">Your message</span>
-            <input value={text} maxLength={MAX_EVENT_MESSAGE} onChange={(e) => setText(e.target.value)} placeholder="Write to the guests" className={field + ' !mt-0'} />
+            <input value={text} maxLength={MAX_EVENT_MESSAGE} onChange={(e) => setText(e.target.value)} placeholder="Write to the guests" className={FIELD + ' !mt-0'} />
           </label>
           <Button type="submit" disabled={say.isPending || !text.trim()}>Send</Button>
         </form>

@@ -8,6 +8,8 @@ import { publicApi } from '../lib/api';
 import { useSession } from '../lib/store';
 import { featureFor, SITE_FEATURES } from './content';
 import { ListingCard } from './ListingCard';
+import { GuideLine } from './GuideLine';
+import { useRise } from './SevenRP';
 import { SiteLayout } from './SiteLayout';
 import { ChevronLeft } from 'lucide-react';
 import { AppIcon } from '../components/AppIcon';
@@ -18,8 +20,13 @@ export function Feature() {
   const { key = '' } = useParams();
   const token = useSession((s) => s.token);
   const found = featureFor(key);
+  const rise = useRise();
   const listingType = found?.copy.listing;
-  const listings = useQuery({ queryKey: ['explore', 'feature', listingType ?? ''], queryFn: () => publicApi.explore({ type: listingType }), enabled: Boolean(listingType) });
+  const listings = useQuery({
+    queryKey: ['explore', 'feature', listingType ?? ''],
+    queryFn: () => publicApi.explore({ type: listingType }),
+    enabled: Boolean(listingType),
+  });
   if (!found) return <Navigate to="/" replace />;
   const { module, copy } = found;
   const lead = RELATIONSHIP_BY_KEY[copy.relationships[0] ?? 'self'];
@@ -28,7 +35,12 @@ export function Feature() {
 
   return (
     <SiteLayout>
-      <motion.header initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="wash mt-lg grid gap-md rounded-card bg-card p-md shadow-toy-soft md:grid-cols-[2fr_1fr] md:items-center md:p-lg" style={{ '--wash': lead.color } as CSSProperties}>
+      <motion.header
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="wash mt-lg grid gap-md rounded-card bg-card p-md shadow-toy-soft md:grid-cols-[3fr_2fr] md:items-center md:p-lg"
+        style={{ '--wash': lead.color } as CSSProperties}
+      >
         <div>
           <Link to="/features" className="inline-flex min-h-[44px] items-center gap-xs text-[14px] font-bold text-ink-soft">
             <Icon icon={ChevronLeft} size={18} />
@@ -38,9 +50,6 @@ export function Feature() {
             <AppIcon name={module.icon} size={40} />
           </p>
           <h1 className="type-hook mt-xs text-[clamp(40px,9vw,80px)]">{module.name}</h1>
-          <p className="mt-xs m-0 text-[20px] font-extrabold" style={{ color: `var(--deep-${lead.key})` }}>
-            {copy.tagline}
-          </p>
           <p className="mt-sm m-0 max-w-[560px] text-[16px] font-semibold leading-snug text-ink-soft">{copy.pitch}</p>
           <div className="mt-md flex flex-wrap gap-sm">
             <Link to={open} className="toy inline-flex min-h-[56px] items-center rounded-pill bg-ink px-lg text-[18px] font-bold text-on-ink">
@@ -53,14 +62,20 @@ export function Feature() {
             )}
           </div>
         </div>
-        <div className="flex justify-center" aria-hidden="true">
-          <Avatar relationship={lead.key} size={180} mood="excited" />
-        </div>
+        {/* The guide of the app's first pillar says what it is for, in one line: the tagline, in their voice. */}
+        <GuideLine host={lead.key} side="right" mood="excited" size={128} className="justify-self-stretch">
+          {copy.tagline}
+        </GuideLine>
       </motion.header>
 
       <section className="bento mt-lg" aria-label="How it goes">
         {copy.steps.map((s, i) => (
-          <motion.div key={s} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }} className={`rounded-tile bg-card p-md shadow-toy-soft ${i === 0 ? 'bento-w2' : ''}`}>
+          // Only the lift animates; a step is never hidden, so a step below the fold (or a screenshot) never shows an empty card.
+          <motion.div
+            key={s}
+            {...rise}
+            className={`rounded-tile bg-card p-md shadow-toy-soft ${i === 0 ? 'bento-w2' : ''}`}
+          >
             {/* The deep token, not the raw relationship colour: the raw colour reads too faint on a thin glass card in dark mode. */}
             <p className="m-0 type-hook text-[32px] leading-none" style={{ color: `var(--deep-${lead.key})` }}>
               {i + 1}
@@ -79,11 +94,11 @@ export function Feature() {
             const r = RELATIONSHIP_BY_KEY[k];
             return (
               <li key={k}>
-                <a href={`/7rp#${k}`} className="toy toy-soft inline-flex min-h-[48px] items-center gap-xs rounded-pill bg-card pr-md pl-xs text-[14px] font-bold">
+                <Link to={`/7rp?pillar=${k}`} className="toy toy-soft inline-flex min-h-[48px] items-center gap-xs rounded-pill bg-card pr-md pl-xs text-[14px] font-bold">
                   <Avatar relationship={k} size={32} decorative />
                   {r.name}
                   <span className="text-ink-soft">pillar {r.floor}</span>
-                </a>
+                </Link>
               </li>
             );
           })}
@@ -100,7 +115,11 @@ export function Feature() {
               See all in Explore
             </Link>
           </div>
-          {listings.data && listings.data.listings.length === 0 && <p className="mt-sm m-0 rounded-tile bg-card p-md text-[16px] font-semibold text-ink-soft shadow-toy-soft">None listed at the moment. New ones appear here the moment they are published.</p>}
+          {listings.data && listings.data.listings.length === 0 && (
+            <p className="mt-sm m-0 rounded-tile bg-card p-md text-[16px] font-semibold text-ink-soft shadow-toy-soft">
+              None listed at the moment. New ones appear here the moment they are published.
+            </p>
+          )}
           {listings.data && listings.data.listings.length > 0 && (
             <ul className="mt-sm grid list-none gap-sm p-0 m-0 md:grid-cols-2 lg:grid-cols-3">
               {listings.data.listings.slice(0, 12).map((l) => (

@@ -8,11 +8,12 @@ import { BackLink } from '../components/PageHeader';
 import { Pager, usePage } from '../components/Pager';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
-import { api } from '../lib/api';
+import { api, errorText } from '../lib/api';
 import { useAuthed } from '../lib/queries';
+import { Icon } from '../components/Icon';
+import { Folder, TrendingUp } from 'lucide-react';
+import { FIELD } from '../lib/ui';
 
-const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
-const err = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 /** What the server can do today, said before anyone waits for it. */
 export function ToolsLine({ tools }: { tools: { reach: boolean; writer: 'claude' | 'workers-ai' | 'none' } }) {
@@ -59,7 +60,7 @@ export function Content() {
             New brand
           </Button>
         </div>
-        {q.isError && <p className="mt-sm m-0 font-bold">{err(q.error, 'Could not load.')}</p>}
+        {q.isError && <p className="mt-sm m-0 font-bold">{errorText(q.error, 'Could not load.')}</p>}
         {d && d.brands.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No folders yet. Make one for your own brand, or for a client.</p>}
         <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
           {d?.brands.map((b) => (
@@ -77,8 +78,8 @@ export function Content() {
           Results
         </h2>
         <Link to="/shop/content/results" className="toy toy-soft mt-sm flex items-center gap-sm rounded-tile bg-card p-sm text-ink">
-          <span className="flex size-[48px] shrink-0 items-center justify-center rounded-pill bg-paper text-[24px]" aria-hidden="true">
-            📈
+          <span className="flex size-[48px] shrink-0 items-center justify-center rounded-pill bg-paper" aria-hidden="true">
+            <Icon icon={TrendingUp} size={24} />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[16px] font-bold">Posts and tracked links</span>
@@ -95,8 +96,8 @@ export function Content() {
 function BrandCard({ b }: { b: Brand }) {
   return (
     <Link to={`/shop/content/${b.id}`} className="toy toy-soft flex items-start gap-sm rounded-tile bg-card p-sm text-ink">
-      <span className="flex size-[48px] shrink-0 items-center justify-center rounded-pill bg-paper text-[24px]" aria-hidden="true">
-        📁
+      <span className="flex size-[48px] shrink-0 items-center justify-center rounded-pill bg-paper" aria-hidden="true">
+        <Icon icon={Folder} size={24} />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[16px] font-bold">{b.name}</span>
@@ -136,23 +137,23 @@ export function NewBrandSheet({ open, onClose, onMade }: { open: boolean; onClos
       >
         <label className="block">
           <span className="block text-[14px] font-bold">Brand</span>
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required className={field} />
+          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Niche</span>
-          <input value={niche} onChange={(e) => setNiche(e.target.value)} maxLength={120} placeholder="Street food in Bengaluru, phone videography, running shoes" className={field} />
+          <input value={niche} onChange={(e) => setNiche(e.target.value)} maxLength={120} placeholder="Street food in Bengaluru, phone videography, running shoes" className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">What it is</span>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={2000} placeholder="What the brand sells, who buys it, what it wants from content." className={field} />
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={2000} placeholder="What the brand sells, who buys it, what it wants from content." className={FIELD} />
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">How it sounds</span>
-          <textarea value={voice} onChange={(e) => setVoice(e.target.value)} rows={2} maxLength={1000} placeholder="Warm and direct. Jokes allowed. Never says 'game-changer'." className={field} />
+          <textarea value={voice} onChange={(e) => setVoice(e.target.value)} rows={2} maxLength={1000} placeholder="Warm and direct. Jokes allowed. Never says 'game-changer'." className={FIELD} />
         </label>
         {make.isError && (
           <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
-            {err(make.error, 'Could not make the folder.')}
+            {errorText(make.error, 'Could not make the folder.')}
           </p>
         )}
         <Button type="submit" size="lg" full disabled={make.isPending || !name.trim()}>

@@ -12,6 +12,9 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed, useWellbeing } from '../lib/queries';
+import { AppIcon } from '../components/AppIcon';
+import { Icon } from '../components/Icon';
+import { ChevronRight } from 'lucide-react';
 
 /** Five areas of a life on one screen, each part opening the place where you act on it. */
 export function Life() {
@@ -127,8 +130,8 @@ function AreaCard({ area }: { area: LifeArea }) {
             <span className="font-display text-[20px] font-extrabold">{area.score}</span>
           </Ring>
           <div className="min-w-0 flex-1">
-            <h2 id={`area-${area.key}`} className="m-0 text-[24px]">
-              <span aria-hidden="true">{meta.emoji} </span>
+            <h2 id={`area-${area.key}`} className="m-0 flex items-center gap-xs text-[24px]">
+              <AppIcon name={meta.icon} size={24} />
               {meta.name}
             </h2>
             <p className="m-0 text-[14px] font-semibold text-ink-soft">{meta.blurb}</p>
@@ -143,7 +146,7 @@ function AreaCard({ area }: { area: LifeArea }) {
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {area.parts.map((p) => (
             <li key={p.label}>
-              <Link to={p.path} className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm" title={p.hint}>
+              <Link to={p.path} className="group toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm" title={p.hint}>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[16px] font-bold">{p.label}</span>
                   <span className="block text-[14px] font-semibold text-ink-soft">{p.value}</span>
@@ -154,9 +157,7 @@ function AreaCard({ area }: { area: LifeArea }) {
                     <span className="block h-full rounded-pill" style={{ width: `${p.score ?? 0}%`, background: rel.color }} />
                   </span>
                 </span>
-                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-ink-mute">
-                  <path d="M9 5l7 7-7 7" />
-                </svg>
+                <Icon icon={ChevronRight} size={18} strokeWidth={3} className="transition-transform motion-safe:group-hover:translate-x-xs shrink-0 text-ink-mute" />
               </Link>
             </li>
           ))}

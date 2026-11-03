@@ -83,7 +83,7 @@ export function Wellbeing() {
               <EmojiRow
                 items={d.week.map((w) => {
                   const m = w.mood === null ? null : (MOODS.find((x) => x.value === w.mood) ?? null);
-                  return { label: new Date(`${w.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' }).slice(0, 2), emoji: null, color: m?.color ?? null, mood: m?.value ?? null };
+                  return { label: new Date(`${w.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' }).slice(0, 2), color: m?.color ?? null, mood: m?.value ?? null };
                 })}
               />
             </div>
