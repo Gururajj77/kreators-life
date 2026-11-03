@@ -1,4 +1,4 @@
-import { IDENTITY_STAGES, LEADERBOARD_POOL, LEADERBOARD_SCOPES, isLeaderboardScope, type LeaderboardBlock, type LeaderboardEntry, type LeaderboardOption, type LeaderboardScope, type LeaderboardSort } from '@kreators/shared';
+import { IDENTITY_STAGES, LEADERBOARD_POOL, LEADERBOARD_SCOPES, isLeaderboardScope, type LeaderboardBlock, type LeaderboardEntry, type LeaderboardOption, type LeaderboardScope, type LeaderboardSort, LOCALE } from '@kreators/shared';
 import { useSearchParams } from 'react-router';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
@@ -7,6 +7,7 @@ import { Screen } from '../components/Screen';
 import { Pager, usePage } from '../components/Pager';
 import { StatTile } from '../components/Charts';
 import { Section } from '../components/Section';
+import { Fold } from '../components/Fold';
 import { useLeaderboard, useAuthed, useMe } from '../lib/queries';
 import { bento } from '../lib/bento';
 import { api } from '../lib/api';
@@ -14,6 +15,7 @@ import { Medal } from 'lucide-react';
 import { AppIcon } from '../components/AppIcon';
 import { Icon } from '../components/Icon';
 import { IconTag } from '../components/FactTag';
+import { TabRow } from '../components/TabRow';
 
 const SORTS: { key: LeaderboardSort; label: string; stat: (e: LeaderboardEntry) => string }[] = [
   { key: 'xp', label: 'All time', stat: (e) => `${e.xp} xp` },
@@ -161,26 +163,17 @@ export function Leaderboard() {
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Leaderboard</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          See where you stand on a board for each goal, pillar, city and more. This month is a season: everyone starts level on the first, and the top three when it ends get the Season top three honor. People appear only after they opt in under Profile. Journal and wellbeing never count.
-        </p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">See where you stand by goal, pillar, city and more.</p>
+        <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-[12px] font-bold text-ink-soft">
+          <li>Each month is a season, and its top three get the Season top three honor.</li>
+          <li>You show only after you opt in under Profile.</li>
+          <li>Journal and wellbeing never count.</li>
+        </ul>
       </header>
 
       <section className="mt-md" aria-label="Choose a board">
         <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">Board</p>
-        <div className="scroll-row mt-xs flex gap-xs" role="group" aria-label="Board type">
-          {LEADERBOARD_SCOPES.map((s) => (
-            <Chip
-              key={s.key}
-              on={scope === s.key}
-              onClick={() => {
-                patch({ scope: s.key, value: '' });
-              }}
-            >
-              {s.label}
-            </Chip>
-          ))}
-        </div>
+        <TabRow className="mt-xs" pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`} label="Board type" items={LEADERBOARD_SCOPES} value={scope} onChange={(k) => patch({ scope: k, value: '' })} />
         {scope !== 'all' && (
           <label className="mt-sm block">
             <span className="block text-[14px] font-bold">Which {SCOPE_NOUN[scope]}</span>
@@ -266,7 +259,7 @@ export function Leaderboard() {
             <Pager page={q.data.page} label="people" />
             {by === 'season' && (
               <p className="mt-sm m-0 text-[14px] font-bold text-ink-soft">
-                {q.data.season.label}, ends {new Date(q.data.season.endsAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}.
+                {q.data.season.label}, ends {new Date(q.data.season.endsAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' })}.
               </p>
             )}
           </section>
@@ -278,7 +271,11 @@ export function Leaderboard() {
                   <BlockCard key={b.value} b={b} onOpen={() => open(b)} className={bento(i, arr.length, 1, 2)} />
                 ))}
               </ul>
-              {goalBlocks.some((b) => b.people === 0) && <p className="mt-sm m-0 text-[12px] font-bold text-ink-soft">No one yet on: {goalBlocks.filter((b) => b.people === 0).map((b) => b.label).join(', ')}.</p>}
+              {goalBlocks.some((b) => b.people === 0) && (
+                <Fold className="mt-sm" title="Boards with no one yet" hint={String(goalBlocks.filter((b) => b.people === 0).length)}>
+                  <p className="m-0 text-[12px] font-bold text-ink-soft">{goalBlocks.filter((b) => b.people === 0).map((b) => b.label).join(', ')}.</p>
+                </Fold>
+              )}
             </Section>
           )}
           {pillarBlocks.some((b) => b.people > 0) && (

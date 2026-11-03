@@ -13,7 +13,9 @@ The business that runs kreators.app is never written in code. It is set as Worke
 `GET /public/business`; an empty field shows "not set yet" on every policy page, never an invented value.
 
 - [ ] `BUSINESS_NAME`, `BUSINESS_ADDRESS`, `BUSINESS_EMAIL` (the legal name, a postal address, a contact inbox)
-- [ ] `BUSINESS_REG` (company registration), `BUSINESS_VAT` (GST or VAT number), if there are any
+- [ ] `BUSINESS_REG` (CIN or company registration), `BUSINESS_VAT` (GSTIN, or a VAT number), if there are any
+- [ ] `BUSINESS_GRIEVANCE_NAME`, `BUSINESS_GRIEVANCE_EMAIL` and, if wanted, `BUSINESS_GRIEVANCE_PHONE`: the Grievance Officer for people in India (DPDP Act 2023, IT Rules 2021). Shown on `/contact`, `/privacy`, `/copyright` and pointed to from the privacy popup; "not set yet" until set. **Open**
+- [ ] Confirm how long money records must be kept under Indian tax and company law (the policy says seven years and "what the law asks where the business is registered" until then), and whether to state a reply time for privacy requests (none is stated now). **Open**
 - [ ] `DMCA_AGENT`, `DMCA_ADDRESS`, `DMCA_EMAIL`, and `DMCA_REGISTERED` once the agent is registered (part 8)
 - Set them with `pnpm cf:secret <NAME>` or as plain vars in `wrangler.jsonc`, then check `/contact`, `/terms`, `/privacy` and `/copyright` show them.
 
@@ -25,6 +27,14 @@ The business that runs kreators.app is never written in code. It is set as Worke
 - [x] 04 Acceptance records: `recordAcceptance` writes one append-only row per document and version in `terms_acceptances` (migration 0059); `LEGAL_VERSION` in shared is the day the documents last changed; older accounts see the one-time notice (`POST /me/legal/accept`).
 - [x] 05 Refund policy: `/refunds`.
 - [ ] 06 Business contact details: `/contact` reads `GET /public/business`. **Open** until the variables above are set.
+
+## India first: DPDP Act and rupee prices
+
+- [x] Consent notice: `/privacy` is the notice, in English, with a DPDP ground for each use (consent, or a use the Act allows) beside the GDPR ground for the EU and UK.
+- [x] Rights of the data principal: a summary of the data and who it was shared with (the export), correction, completion, updating and erasure (Profile), withdrawal as easy as consent (Profile, Privacy choices), grievance redressal and naming a nominee, then the Data Protection Board of India.
+- [ ] Grievance Officer: the three `BUSINESS_GRIEVANCE_*` variables above. **Open**
+- [x] India in `CONSENT_FIRST_COUNTRIES`, so `/go` sets `kl_click` in India only after a yes.
+- [x] Prices in INR with GST shown: `PLANS` and `TOPUP_PACKS` in rupees, and `/pricing` and `/terms` say "Prices are in Indian rupees. GST is added where it applies and shown before you pay."
 
 ## Part 2. Consent, cookies and marketing
 

@@ -1,4 +1,4 @@
-import { birthDateProblem, passwordProblem, phoneProblem } from '@kreators/shared';
+import { birthDateProblem, passwordProblem, PHONE_HINT, phoneProblem } from '@kreators/shared';
 import { useState } from 'react';
 import { todayLocal } from '../lib/date';
 import { FIELD, FIELD_LINE } from '../lib/ui';
@@ -66,7 +66,7 @@ export function AccountForm({ initialName, onSend }: { initialName: string; onSe
         <label className="block">
           <span className="block text-[14px] font-bold">Phone</span>
           <input type="tel" value={v.phone} onChange={set('phone')} autoComplete="tel" maxLength={24} placeholder="+91 98765 43210" className={FIELD} />
-          {hint(badPhone)}
+          {hint(badPhone ?? PHONE_HINT)}
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Date of birth</span>
@@ -144,7 +144,7 @@ export function PrivateCard({ onSend }: { onSend: (value: Record<string, string>
         <label className="block">
           <span className="block text-[14px] font-bold">Phone</span>
           <input type="tel" value={v.phone} onChange={set('phone')} autoComplete="tel" maxLength={24} placeholder="+91 98765 43210" className={FIELD} />
-          {hint(badPhone)}
+          {hint(badPhone ?? PHONE_HINT)}
         </label>
         <label className="block">
           <span className="block text-[14px] font-bold">Date of birth</span>

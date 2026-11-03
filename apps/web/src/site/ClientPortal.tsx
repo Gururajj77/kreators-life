@@ -25,11 +25,10 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { ChevronRight } from 'lucide-react';
 import { Button } from '../components/Button';
-import { Icon } from '../components/Icon';
 import { Inert } from '../components/Inert';
-import { AgencyMark, LinkTrouble, PortalLock } from '../components/PortalLock';
+import { AgencyMark, LinkTrouble, PasswordAsk, PortalLock } from '../components/PortalLock';
+import { ClientOnboarding } from '../components/ClientOnboarding';
 import { StageBar } from '../components/StageBar';
 import { Busy, Skeleton, SkeletonCard } from '../components/Skeleton';
 import { StatusTag } from '../components/StatusTag';
@@ -72,6 +71,8 @@ const STAGE_COPY: Record<AgencyStageKey, { now: string; you: string; we: string;
   retainer: { now: 'Your retainer has started.', you: 'Pay each month and review each piece.', we: '{a} makes the month and sends its invoice.', next: 'This month\'s pieces show up here as they are ready.' },
   delivery: { now: 'Your monthly work is under way.', you: 'Review each piece, ask for a change if you need one, and pay on time.', we: '{a} makes the pieces, answers your changes and sends the invoice.', next: 'New pieces show up here when they are ready for you.' },
 };
+/** The stages whose next line is about pieces showing up for review. */
+const PIECE_STAGES: ReadonlySet<AgencyStageKey> = new Set<AgencyStageKey>(['trial', 'pilot', 'retainer', 'delivery']);
 const fill = (line: string, agency: string) => line.replace('{a}', agency || 'Your team');
 
 const dot = (s: string | null) => (s ? prettyDate(s.slice(0, 10)) : '');
@@ -485,6 +486,7 @@ export function ClientPortal() {
           agencyLogo={String(data.agencyLogo ?? '')}
           ended={ended}
           link={link}
+          ask={{ kind: 'agency', token }}
           unlock={(pw) => publicApi.portalUnlock(token, pw)}
           onOpen={() => {
             setEnded(false);
@@ -495,9 +497,12 @@ export function ClientPortal() {
     );
   }
 
-  const docs = v ? docRows(v) : [];
-  const showDocs = Boolean(v && (v.show.contracts || v.show.invoices || v.show.docs));
-  const words = v ? STAGE_COPY[v.stage] : null;
+  // Before the onboarding form is sent the server sends only who it is from and the form, so nothing of the dashboard is read.
+  const onboarding = Boolean(v?.onboarding?.needed && !v.onboarding.done);
+  const dash = v && !onboarding ? v : undefined;
+  const docs = dash ? docRows(dash) : [];
+  const showDocs = Boolean(dash && (dash.show.contracts || dash.show.invoices || dash.show.docs));
+  const words = dash ? STAGE_COPY[dash.stage] : null;
 
   return (
     <SiteLayout wide={false} minimal>
@@ -510,12 +515,23 @@ export function ClientPortal() {
           </Busy>
         )}
         {q.isError && <LinkTrouble error={q.error} onRetry={() => void q.refetch()} />}
-        {v && words && (
+        {v && onboarding && (
+          <>
+            <header>
+              <AgencyMark name={v.agencyName} logo={v.agencyLogo} />
+              <h1 className="mt-md text-[30px]">{`Hello, ${v.clientName}`}</h1>
+              <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">A short form first. Then your page opens.</p>
+            </header>
+            <ClientOnboarding token={token} agencyName={v.agencyName} clientName={v.clientName} onDone={() => void qc.invalidateQueries({ queryKey: ['agency', 'portal', token] })} />
+            <PasswordAsk kind="agency" token={token} agencyName={v.agencyName} />
+          </>
+        )}
+        {v && dash && words && (
           <article className="print-doc">
             <header>
               <AgencyMark name={v.agencyName} logo={v.agencyLogo} />
               <h1 className="mt-md text-[30px]">{`Hello, ${v.clientName}`}</h1>
-              <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">{`Here is where your work with ${v.agencyName || 'your team'} stands, and what you can do now.`}</p>
+              <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">Where your work stands, and what to do next.</p>
             </header>
             {said && (
               <p role="status" className="mt-md m-0 rounded-tile p-sm text-[14px] font-bold" style={{ background: 'var(--tint-green)' }}>
@@ -580,7 +596,10 @@ export function ClientPortal() {
               <section className="mt-lg" aria-labelledby="waiting-heading">
                 <Heading id="waiting-heading" title="Pieces to review" lede={v.waiting.length > 0 ? (v.show.canApprove ? COPY.waitingLede : COPY.waitingViewOnly) : undefined} />
                 {v.waiting.length === 0 ? (
-                  <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{`${COPY.nothingWaiting} ${fill(words.next, v.agencyName)}`}</p>
+                  <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">
+                    {/* The stage's next line names pieces only from the trial on; before that it is about the step card above, said there. */}
+                    {PIECE_STAGES.has(v.stage) ? `${COPY.nothingWaiting} ${fill(words.next, v.agencyName)}` : COPY.nothingWaiting}
+                  </p>
                 ) : (
                   <ul className="mt-sm flex flex-col gap-sm p-0 m-0">
                     {v.waiting.map((w) => {
@@ -724,25 +743,29 @@ export function ClientPortal() {
 
             {showDocs && (
               <section className="mt-lg" aria-labelledby="docs-heading">
-                <Heading id="docs-heading" title="Your documents" lede={docs.length > 0 ? 'Agreements, invoices and other papers. Open one to read it, print it or copy its text.' : undefined} />
+                <Heading id="docs-heading" title="Your documents" />
                 {docs.length === 0 ? (
                   <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{COPY.docsEmpty}</p>
                 ) : (
                   <ul className="mt-sm flex flex-col gap-xs p-0 m-0">
                     {docs.map((d) => (
                       <Card key={d.key}>
-                        <Link to={d.href} className="flex min-h-[44px] items-center justify-between gap-sm text-ink">
-                          <span className="min-w-0">
-                            <span className="block text-[16px] font-bold">
-                              <Inert text={d.title} />
+                        <div className="flex flex-wrap items-center justify-between gap-sm">
+                          <Link to={d.href} className="flex min-h-[44px] min-w-0 flex-[1_1_220px] items-center gap-xs text-ink">
+                            <span className="min-w-0">
+                              <span className="block text-[16px] font-bold">
+                                <Inert text={d.title} />
+                              </span>
+                              {d.line !== d.title && <span className="block text-[14px] font-semibold text-ink-soft">{d.line}</span>}
                             </span>
-                            {d.line !== d.title && <span className="block text-[14px] font-semibold text-ink-soft">{d.line}</span>}
-                          </span>
+                          </Link>
                           <span className="flex shrink-0 items-center gap-xs">
                             <StatusTag tone={d.tone}>{d.status}</StatusTag>
-                            <Icon icon={ChevronRight} size={20} className="text-ink-mute" />
+                            <Link to={`${d.href}?print=1`} className={`${linkButton} no-print`} aria-label={`Download ${d.title}`}>
+                              Download
+                            </Link>
                           </span>
-                        </Link>
+                        </div>
                       </Card>
                     ))}
                   </ul>
@@ -760,6 +783,7 @@ export function ClientPortal() {
                 </a>
               )}
             </div>
+            <PasswordAsk kind="agency" token={token} agencyName={v.agencyName} />
           </article>
         )}
       </div>

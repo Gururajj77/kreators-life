@@ -20,8 +20,8 @@ import { resolveAccess } from '../access';
 import { hashPassword, randomHex, safeEqual } from './auth';
 import { sendEmail, track } from '../ops';
 import { deleteAccount } from '../account';
-import { parseSocials } from '../db';
-import { isAutoHandle, MAX_INTERESTS, parseIdentities, parseLinkBlocks, passwordProblem, TRACKED_EVENTS, type TrackedEvent } from '@kreators/shared';
+import { currencyOf, parseSocials } from '../db';
+import { isAutoHandle, isCurrency, MAX_INTERESTS, parseIdentities, parseLinkBlocks, passwordProblem, TRACKED_EVENTS, type TrackedEvent } from '@kreators/shared';
 import type { Organization, PortfolioItem } from '@kreators/shared';
 
 export const me = new Hono<AppEnv>();
@@ -186,14 +186,16 @@ me.patch('/', async (c) => {
       return user.timezone || 'Asia/Kolkata';
     }
   })();
+  // The currency their own money is kept in: rupees by default, any of CURRENCIES for someone abroad. Anything else keeps what was there.
+  const currency = isCurrency(body.currency) ? body.currency : currencyOf(user);
   const avatarUrl = 'avatarUrl' in body ? (/^https?:\/\//.test(str(body.avatarUrl, 500)) ? str(body.avatarUrl, 500) : '') : user.avatar_url;
   const socials = body.socials && typeof body.socials === 'object' ? JSON.stringify(parseSocials(JSON.stringify(body.socials))) : user.socials_json;
   const publicJson = body.publicSettings && typeof body.publicSettings === 'object' ? JSON.stringify(parsePublicSettings({ ...publicOf(user), ...(body.publicSettings as Record<string, unknown>) })) : user.public_json;
   // Link blocks: cleaned in shared, every block gets an id here so clicks can be counted.
   const links = Array.isArray(body.links) ? JSON.stringify(parseLinkBlocks(body.links).map((b) => ({ ...b, id: b.id || newId().slice(0, 12) }))) : user.links_json;
   await db
-    .prepare('UPDATE users SET display_name = ?, creator_type = ?, leaderboard_opt_in = ?, bio = ?, reminder_time = ?, handle = ?, skills = ?, categories = ?, goals = ?, experience_level = ?, availability = ?, location = ?, open_to_intros = ?, interests = ?, identities = ?, city = ?, area = ?, lat = ?, lng = ?, timezone = ?, avatar_url = ?, socials_json = ?, public_json = ?, links_json = ?, phone = ? WHERE id = ?')
-    .bind(displayName, focus, optIn, bio, reminderTime, handle, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, identities, city, area, lat, lng, timezone, avatarUrl, socials, publicJson, links, phone, user.id)
+    .prepare('UPDATE users SET display_name = ?, creator_type = ?, leaderboard_opt_in = ?, bio = ?, reminder_time = ?, handle = ?, skills = ?, categories = ?, goals = ?, experience_level = ?, availability = ?, location = ?, open_to_intros = ?, interests = ?, identities = ?, city = ?, area = ?, lat = ?, lng = ?, timezone = ?, currency = ?, avatar_url = ?, socials_json = ?, public_json = ?, links_json = ?, phone = ? WHERE id = ?')
+    .bind(displayName, focus, optIn, bio, reminderTime, handle, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, identities, city, area, lat, lng, timezone, currency, avatarUrl, socials, publicJson, links, phone, user.id)
     .run();
   if (handle && isAutoHandle(user.handle) && !isAutoHandle(handle)) await track(db, user.id, 'profile_published', { minutesSinceSignup: Math.round((Date.now() - new Date(user.created_at).getTime()) / 60_000) });
   const fresh = await getUser(db, user.id);
@@ -295,7 +297,8 @@ me.get('/export', async (c) => {
     ['customReminders', 'SELECT * FROM custom_reminders WHERE user_id = ?'],
     ['agencySettings', 'SELECT * FROM agency_settings WHERE user_id = ?'],
     // The password hash and salt of a client link are never exported, nor are portal sessions.
-    ['agencyClients', 'SELECT id, user_id, name, contact_name, contact_email, status, health, channels_json, retainer_cents, pieces_per_month, hours_per_month, renewal_date, notes, campaign_id, billing_json, portal_token, portal_json, created_at, updated_at, stage, stage_since, lifecycle_json, ticks_json, revisions_per_piece, (portal_pass_hash IS NOT NULL) AS portal_has_password, portal_pass_set_at, portal_last_opened_day FROM agency_clients WHERE user_id = ?'],
+    ['agencyClients', 'SELECT id, user_id, name, contact_name, contact_email, status, health, channels_json, retainer_cents, pieces_per_month, hours_per_month, renewal_date, notes, campaign_id, billing_json, portal_token, portal_json, created_at, updated_at, stage, stage_since, lifecycle_json, ticks_json, revisions_per_piece, (portal_pass_hash IS NOT NULL) AS portal_has_password, portal_pass_set_at, portal_last_opened_day, onboarding_json, onboarded_at, onboarding_needed FROM agency_clients WHERE user_id = ?'],
+    ['agencyPasswordRequests', 'SELECT * FROM agency_password_requests WHERE user_id = ?'],
     ['agencyRetainers', 'SELECT * FROM agency_retainers WHERE user_id = ?'],
     ['agencyCycles', 'SELECT * FROM agency_cycles WHERE user_id = ?'],
     ['agencyLog', 'SELECT * FROM agency_log WHERE user_id = ?'],

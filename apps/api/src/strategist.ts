@@ -1,7 +1,7 @@
 // The SDK is about 1 MB of the Worker; it is loaded the first time a piece is written with Claude, not on every cold start.
 import type Anthropic from '@anthropic-ai/sdk';
 import { isTimeout, TIMEOUT, withTimeout } from './http';
-import { PIECE_META, type BrandPiece, type PieceKind, type ResearchItem } from '@kreators/shared';
+import { formatCount, PIECE_META, type BrandPiece, type PieceKind, type ResearchItem } from '@kreators/shared';
 import type { Env } from './env';
 
 /**
@@ -18,7 +18,7 @@ export interface Context {
   runs: { kind: string; query: string; items: ResearchItem[] }[];
 }
 
-const n = (v: number | undefined) => (typeof v === 'number' && v > 0 ? v.toLocaleString() : '');
+const n = (v: number | undefined) => (typeof v === 'number' && v > 0 ? formatCount(v) : '');
 
 /** Everything the writer may lean on, bounded so a long run never blows the request up. */
 export function digest(ctx: Context, maxChars = 60_000): string {

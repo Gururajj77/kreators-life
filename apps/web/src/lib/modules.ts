@@ -1,4 +1,4 @@
-import { matchSetup, MODULES, moduleState, setupSwitchable, type AppModule, type ModuleAccess, type ModuleGroup } from '@kreators/shared';
+import { inGroupOrder, matchSetup, MODULES, moduleState, setupSwitchable, type AppModule, type ModuleAccess, type ModuleGroup } from '@kreators/shared';
 import { useMemo } from 'react';
 import { usageScore } from './context';
 import { useMe } from './queries';
@@ -44,13 +44,11 @@ export function useModules(): { modules: ModuleView[]; ready: boolean } {
 }
 
 /**
- * The groups in the order that suits this person: the group holding their highest-context app first. The team's own group stays last.
- * A group with nothing in it keeps its place at the end.
+ * The groups in the one order every list uses (MODULE_GROUP_ORDER in shared: Contribution, Reflection, Connection, Creation, Essentials,
+ * Operations). Only the apps inside a group follow what fits the person.
  */
 export function useGroupOrder(groups: readonly ModuleGroup[]): ModuleGroup[] {
-  const { modules } = useModules();
-  const best = (g: ModuleGroup) => Math.max(-1, ...modules.filter((m) => m.group === g && m.on && !m.locked).map((m) => m.rank));
-  return [...groups].sort((a, b) => Number(a === 'manage') - Number(b === 'manage') || best(b) - best(a));
+  return inGroupOrder(groups);
 }
 
 export function useModule(key: string): ModuleView | null {

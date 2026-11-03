@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import {
   AGENCY_CLIENT_STATUSES,
+  LOCALE,
   AGENCY_CURRENCIES,
   AGENCY_DEFAULT_WEEKLY_HOURS,
   AGENCY_HEALTH,
@@ -14,6 +15,8 @@ import {
   DELIVERABLE_KINDS,
   parseParty,
   parsePortalShow,
+  parseOnboarding,
+  portalPasswordProblem,
   type PortalShow,
   parseProfile,
   type InvoiceParty,
@@ -71,6 +74,7 @@ interface ClientRow {
   pieces_per_month: number; hours_per_month: number; renewal_date: string | null; notes: string; campaign_id: string | null; billing_json: string; portal_token: string | null; portal_json: string; created_at: string; campaign_name?: string | null;
   stage: string; stage_since: string | null; lifecycle_json: string; ticks_json: string; revisions_per_piece: number;
   portal_pass_hash: string | null; portal_pass_salt: string | null; portal_pass_set_at: string | null; portal_last_opened_day: string | null;
+  onboarding_json: string; onboarded_at: string | null; onboarding_needed: number;
 }
 interface ItemRow {
   id: string; client_id: string; client_name: string; title: string; kind: DeliverableKind; platform: string; stage: DeliverableStage; due_date: string | null; publish_date: string | null; link: string; notes: string;
@@ -180,6 +184,15 @@ function flagsFor(r: ClientRow, m: MonthStats, today: string): string[] {
   }
   if (r.health === 'red') flags.push('marked at risk');
   return flags;
+}
+
+/** What the client typed in the onboarding form, read through the one reader (an unreadable value is an empty form). */
+export function onboardingOf(raw: string | null | undefined) {
+  try {
+    return parseOnboarding(JSON.parse(raw || '{}'));
+  } catch {
+    return parseOnboarding({});
+  }
 }
 
 function portalOf(raw: string): PortalShow {
@@ -374,31 +387,35 @@ function clientFields(body: Record<string, unknown>, prev?: ClientRow) {
   };
 }
 
+// A new client is added with the least: the brand, the client's email and the password the owner sets for their link (or 'generate'
+// for one made here and shown once). The link is switched on at once and the client is asked to fill in the onboarding form there.
 agency.post('/clients', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
   const f = clientFields(body);
   if (!f.name) return c.json({ error: 'who is the client?' }, 400);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.contactEmail)) return c.json({ error: "type the client's email" }, 400);
+  const generated = body.portalPassword === 'generate';
+  const password = generated ? newPortalPassword(f.name) : typeof body.portalPassword === 'string' ? body.portalPassword : '';
+  if (!password) return c.json({ error: 'set a password for their page' }, 400);
+  const problem = portalPasswordProblem(password, f.name);
+  if (problem) return c.json({ error: problem }, 400);
   const n = await db.prepare('SELECT COUNT(*) AS n FROM agency_clients WHERE user_id = ?').bind(user.id).first<{ n: number }>();
   if ((n?.n ?? 0) >= AGENCY_MAX_CLIENTS) return c.json({ error: `up to ${AGENCY_MAX_CLIENTS} clients` }, 400);
   const id = newId();
   const now = nowIso();
-  await db
-    .prepare('INSERT INTO agency_clients (id, user_id, name, contact_name, contact_email, status, health, channels_json, retainer_cents, pieces_per_month, hours_per_month, renewal_date, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(id, user.id, f.name, f.contactName, f.contactEmail, f.status, f.health, JSON.stringify(f.channels), f.retainerCents, f.piecesPerMonth, f.hoursPerMonth, f.renewalDate, f.notes, now, now)
-    .run();
-  // A new client starts with a password on its link when asked (the form asks by default). The password is shown once and kept as a hash.
-  if (body.portalPassword === 'generate') {
-    const password = newPortalPassword();
-    const col = await passwordColumns(password);
-    await db.batch([
-      db.prepare('UPDATE agency_clients SET portal_pass_hash = ?, portal_pass_salt = ?, portal_pass_set_at = ? WHERE id = ? AND user_id = ?').bind(col.hash, col.salt, now, id, user.id),
-      logStmt(db, user.id, id, 'me', 'password', 'A password was set for the client link.'),
-    ]);
-    return c.json({ id, password }, 201);
-  }
-  return c.json({ id }, 201);
+  const token = randomCode(16);
+  const col = await passwordColumns(password);
+  // One batch: the client, its password (only the hash), the link switched on (with its agreements and invoices shown, so what the
+  // form makes is there to download), the form asked for, and the log line (never the word).
+  await db.batch([
+    db
+      .prepare('INSERT INTO agency_clients (id, user_id, name, contact_name, contact_email, status, health, channels_json, retainer_cents, pieces_per_month, hours_per_month, renewal_date, notes, portal_pass_hash, portal_pass_salt, portal_pass_set_at, portal_token, portal_json, onboarding_needed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)')
+      .bind(id, user.id, f.name, f.contactName, f.contactEmail, f.status, f.health, JSON.stringify(f.channels), f.retainerCents, f.piecesPerMonth, f.hoursPerMonth, f.renewalDate, f.notes, col.hash, col.salt, now, token, JSON.stringify(parsePortalShow({ contracts: true, invoices: true })), now, now),
+    logStmt(db, user.id, id, 'me', 'password', 'A password was set for the client link.'),
+  ]);
+  return c.json(generated ? { id, portalToken: token, password } : { id, portalToken: token }, 201);
 });
 
 agency.patch('/clients/:id', async (c) => {
@@ -416,9 +433,11 @@ agency.patch('/clients/:id', async (c) => {
     else return c.json({ error: 'you are not a creator on that campaign' }, 403);
   }
   const billing = 'billing' in body ? JSON.stringify(parseParty(body.billing)) : prev.billing_json;
+  // What the client told you in the onboarding form, corrected by you: the same reader as the client's own save.
+  const onboardingJson = 'onboarding' in body ? JSON.stringify(parseOnboarding(body.onboarding)) : prev.onboarding_json;
   await db
-    .prepare('UPDATE agency_clients SET name = ?, contact_name = ?, contact_email = ?, status = ?, health = ?, channels_json = ?, retainer_cents = ?, pieces_per_month = ?, hours_per_month = ?, renewal_date = ?, notes = ?, campaign_id = ?, billing_json = ?, updated_at = ? WHERE id = ? AND user_id = ?')
-    .bind(f.name, f.contactName, f.contactEmail, f.status, f.health, JSON.stringify(f.channels), f.retainerCents, f.piecesPerMonth, f.hoursPerMonth, f.renewalDate, f.notes, campaignId, billing, nowIso(), prev.id, user.id)
+    .prepare('UPDATE agency_clients SET name = ?, contact_name = ?, contact_email = ?, status = ?, health = ?, channels_json = ?, retainer_cents = ?, pieces_per_month = ?, hours_per_month = ?, renewal_date = ?, notes = ?, campaign_id = ?, billing_json = ?, onboarding_json = ?, updated_at = ? WHERE id = ? AND user_id = ?')
+    .bind(f.name, f.contactName, f.contactEmail, f.status, f.health, JSON.stringify(f.channels), f.retainerCents, f.piecesPerMonth, f.hoursPerMonth, f.renewalDate, f.notes, campaignId, billing, onboardingJson, nowIso(), prev.id, user.id)
     .run();
   return c.json({ ok: true });
 });
@@ -426,7 +445,11 @@ agency.patch('/clients/:id', async (c) => {
 agency.delete('/clients/:id', async (c) => {
   const res = await c.env.DB.prepare('DELETE FROM agency_clients WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
   if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
-  await c.env.DB.prepare('DELETE FROM retired_portal_links WHERE client_id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM retired_portal_links WHERE client_id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id),
+    c.env.DB.prepare('DELETE FROM agency_password_requests WHERE client_id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id),
+    c.env.DB.prepare('DELETE FROM portal_sessions WHERE client_id = ?').bind(c.req.param('id')),
+  ]);
   return c.json({ ok: true });
 });
 
@@ -469,6 +492,7 @@ agency.get('/clients/:id', async (c) => {
     time: time.results.map((t): AgencyTimeEntry => ({ id: t.id, clientId: t.client_id, clientName: row.name, itemId: t.item_id, itemTitle: t.item_title ?? '', day: t.day, minutes: t.minutes, billable: t.billable === 1, note: t.note })),
     invoices: invoices.results.map((i): AgencyInvoiceRow => ({ id: i.id, number: i.number, totalCents: i.total_cents, currency: i.currency, status: i.status, issueDate: i.issue_date, token: i.token })),
     lifecycle,
+    onboarding: { needed: row.onboarding_needed === 1, done: Boolean(row.onboarded_at), at: row.onboarded_at, answers: row.onboarded_at || row.onboarding_json !== '{}' ? onboardingOf(row.onboarding_json) : null },
   };
   return c.json(body);
 });
@@ -785,17 +809,17 @@ agency.delete('/time/:id', async (c) => {
 
 // ---- the client's link
 
-interface PortalClient { id: string; user_id: string; name: string; pieces_per_month: number; hours_per_month: number; portal_json: string; owner_name: string; revisions_per_piece: number }
+interface PortalClient { id: string; user_id: string; name: string; pieces_per_month: number; hours_per_month: number; portal_json: string; owner_name: string; revisions_per_piece: number; onboarding_needed: number; onboarded_at: string | null }
 async function portalClient(db: D1Database, token: string): Promise<PortalClient | null> {
   if (!/^[A-Z0-9]{16}$/.test(token)) return null;
   return db
-    .prepare('SELECT c.id, c.user_id, c.name, c.pieces_per_month, c.hours_per_month, c.portal_json, c.revisions_per_piece, u.display_name AS owner_name FROM agency_clients c JOIN users u ON u.id = c.user_id WHERE c.portal_token = ?')
+    .prepare('SELECT c.id, c.user_id, c.name, c.pieces_per_month, c.hours_per_month, c.portal_json, c.revisions_per_piece, c.onboarding_needed, c.onboarded_at, u.display_name AS owner_name FROM agency_clients c JOIN users u ON u.id = c.user_id WHERE c.portal_token = ?')
     .bind(token)
     .first<PortalClient>();
 }
 export { portalClient };
 
-const dayWords = (d: string): string => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const dayWords = (d: string): string => new Date(`${d}T00:00:00Z`).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 
 // The client's dashboard: only the parts the owner switched on. Fees, private notes, time entries and other clients are never in it.
 // A client with a password gets the lock answer until they unlock the link (see portalAccess.ts).
@@ -807,6 +831,19 @@ agencyPublic.get('/:token', async (c) => {
   if (denied) return denied;
   await syncStageFromAgreements(db, { userId: client.user_id, clientId: client.id });
   const show = portalOf(client.portal_json);
+  const onboarding = { needed: client.onboarding_needed === 1, done: Boolean(client.onboarded_at) };
+  // Before the form is sent, the page is the form: only who sent it, the client's name, the stage and the form. No part is read, so nothing leaks early.
+  if (onboarding.needed && !onboarding.done) {
+    // Opening the form is a visit too, so the owner sees the link was opened before the form is sent. A day, nothing more.
+    const today0 = utcToday();
+    const [fresh0, face0] = await Promise.all([
+      db.prepare('SELECT stage FROM agency_clients WHERE id = ?').bind(client.id).first<{ stage: string }>(),
+      agencyFace(db, client.user_id),
+      db.prepare("UPDATE agency_clients SET portal_last_opened_day = ? WHERE id = ? AND COALESCE(portal_last_opened_day, '') != ?").bind(today0, client.id, today0).run(),
+    ]);
+    c.header('Cache-Control', 'no-store');
+    return c.json({ agencyName: face0.agencyName || nameOf({ display_name: client.owner_name }), agencyLogo: face0.agencyLogo, agencyEmail: face0.agencyEmail, clientName: client.name, stage: parseStage(fresh0?.stage), onboarding });
+  }
   const todayUtc = utcToday();
   const { start, end } = monthBounds(todayUtc.slice(0, 7));
   const none = <T,>() => Promise.resolve({ results: [] as T[] });
@@ -887,6 +924,7 @@ agencyPublic.get('/:token', async (c) => {
     clientName: client.name,
     show,
     stage,
+    onboarding,
     waitingOn,
     strategy: at >= stageIndex('agreement_signed') && (life.strategyDay || life.strategyLink) ? { day: life.strategyDay, link: life.strategyLink } : null,
     trial: stage === 'trial' ? { due: life.trialDue, rules: TRIAL_RULES } : null,

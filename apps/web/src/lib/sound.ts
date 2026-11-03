@@ -1,4 +1,4 @@
-import { FOCUS_DEFAULTS, parseFocusSettings, type AmbientKind } from '@kreators/shared';
+import { BREATH_SAY, FOCUS_DEFAULTS, parseFocusSettings, type AmbientKind, type BreathCue, type BreathStepKind } from '@kreators/shared';
 import { useEffect, useRef } from 'react';
 
 /**
@@ -56,6 +56,50 @@ export function playChime(): void {
   const t = c.currentTime + 0.05;
   bell(c, t, 660, 0.16);
   bell(c, t + 0.3, 880, 0.16);
+}
+
+/** The pitch of each breathing step: rising for in, level for a hold, falling for out. */
+const STEP_HZ: Record<BreathStepKind, number> = { in: 523, hold: 659, out: 392, rest: 440 };
+/**
+ * Marks a breathing step: a soft short tone, a bell, or a voice saying the step ("In", "Hold", "Out") through the browser's own speech
+ * (no service is called). The caller checks the master switch; `volume` is 0 to 100, like the background sound.
+ */
+export function playBreathCue(kind: BreathStepKind, cue: BreathCue, volume = 60): void {
+  if (cue === 'off') return;
+  const level = Math.max(0.05, Math.min(1, volume / 100));
+  if (cue === 'voice') {
+    try {
+      const say = window.speechSynthesis;
+      if (!say) return;
+      say.cancel();
+      const u = new SpeechSynthesisUtterance(BREATH_SAY[kind]);
+      u.rate = 0.85;
+      u.pitch = 1;
+      u.volume = level;
+      say.speak(u);
+    } catch {
+      // no speech here
+    }
+    return;
+  }
+  const c = audio();
+  if (!c) return;
+  void c.resume().catch(() => undefined);
+  const t = c.currentTime + 0.03;
+  if (cue === 'bell') {
+    bell(c, t, STEP_HZ[kind], 0.16 * level);
+    return;
+  }
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = STEP_HZ[kind];
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(0.12 * level, t + 0.04);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+  osc.connect(gain).connect(c.destination);
+  osc.start(t);
+  osc.stop(t + 0.75);
 }
 
 /** The master switch as this device last saw it (the copy lib/focusPrefs.ts keeps by person); on when there is no copy yet. */

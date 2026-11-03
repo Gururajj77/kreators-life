@@ -1,4 +1,5 @@
-import { PRODUCT_KIND_META, productHasOwnCover, type Page, type Product } from '@kreators/shared';
+import { PRODUCT_KIND_META, productHasOwnCover, type Page, type Product, LOCALE } from '@kreators/shared';
+import { dateTime } from '../lib/date';
 import { Link } from 'react-router';
 import { AppIcon } from '../components/AppIcon';
 import { BackLink } from '../components/PageHeader';
@@ -29,7 +30,7 @@ export function Sessions() {
                 <span className="block truncate text-[16px] font-bold">{p.title}</span>
                 <span className="block text-[14px] font-semibold text-ink-soft">
                   {p.ownerName}
-                  {p.kind === 'session' ? `, ${p.durationMin} min` : p.startsAt ? `, ${new Date(p.startsAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : ''}
+                  {p.kind === 'session' ? `, ${p.durationMin} min` : p.startsAt ? `, ${new Date(p.startsAt).toLocaleDateString(LOCALE, { month: 'short', day: 'numeric' })}` : ''}
                 </span>
               </span>
               <span className="shrink-0 text-[14px] font-extrabold">{p.pricePoints === 0 && p.priceCents === 0 ? 'Free' : `${p.pricePoints} pts`}</span>
@@ -53,7 +54,7 @@ export function Sessions() {
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {upcoming.map((b) => (
               <li key={b.id} className="text-[14px] font-semibold">
-                <span className="font-bold">{b.productTitle}</span> with {b.ownerName}, {new Date(b.startsAt).toLocaleString()} UTC, {b.status}
+                <span className="font-bold">{b.productTitle}</span> with {b.ownerName}, {dateTime(b.startsAt)} your time, {b.status}
               </li>
             ))}
           </ul>

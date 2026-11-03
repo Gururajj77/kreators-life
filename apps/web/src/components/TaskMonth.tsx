@@ -1,4 +1,4 @@
-import { PRIORITIES, RELATIONSHIP_BY_KEY, MONTH_TASKS_MAX, monthGrid, monthShift, priorityTag, timeLabel, type MonthProject, type MonthTask } from '@kreators/shared';
+import { PRIORITIES, RELATIONSHIP_BY_KEY, MONTH_TASKS_MAX, monthGrid, monthShift, priorityTag, timeLabel, type MonthProject, type MonthTask, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -30,7 +30,7 @@ const COPY = {
   more: `This month has more than ${MONTH_TASKS_MAX} tasks. The first ${MONTH_TASKS_MAX} are shown.`,
 } as const;
 
-const monthName = (month: string, long = true) => new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 1).toLocaleDateString(undefined, { month: long ? 'long' : 'short', year: 'numeric' });
+const monthName = (month: string, long = true) => new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 1).toLocaleDateString(LOCALE, { month: long ? 'long' : 'short', year: 'numeric' });
 const dayNumber = (day: string) => Number(day.slice(8, 10));
 
 /** The month calendar on Daily: every day a button with the tasks planned on it. Tap a day to see them, tick them or add one; print the month on paper. */
@@ -166,7 +166,7 @@ function DayTask({ t, today, queue }: { t: MonthTask; today: string; queue: Retu
       celebrate({ title: r.capped ? 'Done. Daily xp limit reached, so this one was for you' : 'Ripple', totalXp: r.totalXp, ripple: r.ripple, newBadges: r.newBadges, projectCleared: r.projectCleared, color: RELATIONSHIP_BY_KEY[r.node.relationship].color });
     });
   return (
-    <li>
+    <li data-pillar={rel.key}>
       <CheckRow
         checked={done}
         onToggle={tick}
@@ -329,7 +329,7 @@ function MonthPrint({ month, weeks, byDay, more }: { month: string; weeks: strin
         ☐ to do &nbsp; ☑ done &nbsp; {PRIORITIES.map((p) => `${p.tag} ${p.name.toLowerCase()}`).join(' · ')}
         {more ? ` · The first ${MONTH_TASKS_MAX} tasks of the month` : ''}
       </p>
-      <p className="mp-legend">Printed from kreators.app on {new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+      <p className="mp-legend">Printed from kreators.app on {new Date().toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', year: 'numeric' })}</p>
     </div>,
     document.body,
   );

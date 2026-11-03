@@ -118,11 +118,13 @@ Typing to the assistant is the one paid thing in the app. It costs credits becau
 
 | Plan | Price | Credits a month |
 | --- | --- | --- |
-| Pro | US$15 | 10,000 |
-| Pro Max | US$125 | 100,000 |
-| Ultra | US$500 | 400,000 |
+| Pro | ₹1,499 | 10,000 |
+| Pro Max | ₹12,499 | 100,000 |
+| Ultra | ₹49,999 | 400,000 |
 
-- **Top-ups** (`TOPUP_PACKS`) are extra credits that stay until used and are spent after the plan's: US$10 for 8,000, US$25 for 20,000, US$50 for 40,000.
+- Plans, top-ups and the live strategy call are priced and charged in rupees (`PLAN_CURRENCY` INR, prices in paise; the founder set them on 2026-11-03, replacing the dollar prices). A credit is still counted from the model's cost in US micro-dollars, which is cost, not price. Every screen says a plan's price through `planPriceLabel` ("₹1,499 for 30 days"). The live strategy call is `LIVE_CALL_CENTS`, ₹10,000.
+
+- **Top-ups** (`TOPUP_PACKS`) are extra credits that stay until used and are spent after the plan's: ₹899 for 8,000, ₹2,299 for 20,000, ₹4,499 for 40,000.
 - **Limits per plan** (`AGENT_LIMITS`, for the assistant): tokens read per message 16,000 / 64,000 / 128,000; credits per message 60 / 250 / 600; credits per 24 hours 1,000 / 8,000 / 30,000; steps per message 6 / 10 / 12.
 - **The ledger** (`apps/api/src/credits.ts`, tables `credit_accounts` and `credit_ledger`): every grant, every use with its tokens, every expiry. A message is refused with a paywall (402 `plan` or `credits`, 429 `day`), stopped before a model call that could pass what it may spend, and charged once at the end, plan credits first, never below zero.
 - **Not live yet:** `PAYMENTS_LIVE` is false. Plans and top-ups are shown and picked on `/plans`, but `POST /credits/checkout` answers that nothing was charged. Only an admin starts a plan (`POST /admin/users/:id/plan`) or adds credits (`POST /admin/users/:id/credits`, up to `MAX_CREDIT_GRANT`); both are audited.

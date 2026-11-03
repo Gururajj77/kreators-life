@@ -138,12 +138,15 @@ export function ConsentPopup() {
           ) : (
             // On the public site's laptop width the words and the three choices share one short line, so the bar covers less of the page.
             <div className={`flex flex-col gap-xs ${token ? '' : 'md:mx-auto md:max-w-[1080px] md:flex-row md:items-center md:justify-between md:gap-md'}`}>
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                A cookie, outside videos and email news stay off unless you say yes.{' '}
-                <Link to="/privacy" target="_blank" className="whitespace-nowrap underline underline-offset-4">
-                  Privacy policy
-                </Link>
-              </p>
+              <div className="min-w-0">
+                <p className="m-0 text-[14px] font-semibold text-ink-soft">
+                  A cookie, outside videos and email news stay off unless you say yes.{' '}
+                  <Link to="/privacy" target="_blank" className="whitespace-nowrap underline underline-offset-4">
+                    Privacy policy
+                  </Link>
+                </p>
+                <GrievanceLine />
+              </div>
               <div className="flex shrink-0 flex-wrap items-center gap-xs">
                 <button type="button" onClick={() => setChoosing(true)} className="mr-auto min-h-[44px] rounded-pill px-xs text-[14px] font-bold text-ink-soft underline underline-offset-4 hover:text-ink">
                   Choose
@@ -162,6 +165,7 @@ export function ConsentPopup() {
 
       <Sheet open={sheetOpen} onClose={closeSheet} title="Your privacy choices">
         <p className="m-0 text-[14px] font-semibold text-ink-soft">All three start off. You can change them any time under Profile, Privacy choices.</p>
+        <GrievanceLine />
         <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
           {CONSENT_PURPOSES.map((p) => {
             const off = p.key === 'attribution' && gpc;
@@ -188,5 +192,18 @@ export function ConsentPopup() {
         </div>
       </Sheet>
     </>
+  );
+}
+
+/** The one quiet line on who to ask: taking a choice back is one tap, and a question goes to the Grievance Officer (DPDP Act). */
+function GrievanceLine() {
+  return (
+    <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">
+      You can change these any time. Questions go to our{' '}
+      <Link to="/contact" className="underline underline-offset-4">
+        Grievance Officer
+      </Link>
+      .
+    </p>
   );
 }

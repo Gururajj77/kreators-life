@@ -9,7 +9,7 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api, errorText } from '../lib/api';
-import { todayLocal, clockTime, longDate, toDate } from '../lib/date';
+import { todayLocal, clockTime, longDate, toDate, dateTime } from '../lib/date';
 import { useAuthed, useLibrary, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { Icon } from '../components/Icon';
@@ -96,7 +96,7 @@ function Mine() {
                   {b.productTitle} with {b.ownerName}
                 </p>
                 <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                  {new Date(b.startsAt).toLocaleString()} in your zone, {b.status}
+                  {dateTime(b.startsAt)} in your zone, {b.status}
                 </p>
                 {b.meetingUrl && b.status === 'confirmed' && (
                   <a href={b.meetingUrl} target="_blank" rel="noreferrer" className="toy mt-sm inline-flex min-h-[44px] items-center rounded-pill bg-ink px-md text-[14px] font-bold text-on-ink">
@@ -130,7 +130,7 @@ function Mine() {
             {dms.data.requests.map((r) => (
               <li key={r.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
                 <p className="m-0 text-[14px] font-bold text-ink-soft">
-                  To {r.ownerName}, {r.productTitle}. {r.status === 'open' ? `Answer promised by ${new Date(r.dueAt).toLocaleDateString()}` : r.status === 'answered' ? `Answered ${new Date(r.answeredAt ?? r.createdAt).toLocaleDateString()}` : 'Refunded'}.
+                  To {r.ownerName}, {r.productTitle}. {r.status === 'open' ? `Answer promised by ${longDate(r.dueAt)}` : r.status === 'answered' ? `Answered ${longDate(r.answeredAt ?? r.createdAt)}` : 'Refunded'}.
                 </p>
                 <p className="mt-xs m-0 whitespace-pre-wrap text-[16px] font-semibold">{r.question}</p>
                 {r.answer && <p className="mt-sm m-0 whitespace-pre-wrap rounded-tile bg-paper p-sm text-[16px] font-semibold">{r.answer}</p>}
@@ -149,7 +149,7 @@ function Mine() {
               <li key={c.code} className="rounded-tile bg-card p-sm shadow-toy-soft">
                 <p className="m-0 text-[16px] font-bold">{c.productTitle}</p>
                 <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                  By {c.ownerName}, issued {new Date(c.issuedAt).toLocaleDateString()}. Code {c.code}.
+                  By {c.ownerName}, issued {longDate(c.issuedAt)}. Code {c.code}.
                 </p>
                 <Link to={`/c/${c.code}`} className="mt-xs inline-flex min-h-[44px] items-center font-bold underline underline-offset-4">
                   Open the certificate page
@@ -179,7 +179,7 @@ function RescheduleSheet({ booking, onClose, onDone }: { booking: Booking | null
       {booking && (
         <div className="flex flex-col gap-md">
           <p className="m-0 text-[14px] font-semibold text-ink-soft">
-            {booking.productTitle} with {booking.ownerName}, now {new Date(booking.startsAt).toLocaleString()}. Moving it asks {booking.ownerName} to confirm again. Not possible within two hours of the start.
+            {booking.productTitle} with {booking.ownerName}, now {dateTime(booking.startsAt)}. Moving it asks {booking.ownerName} to confirm again. Not possible within two hours of the start.
           </p>
           <label className="block">
             <span className="block text-[14px] font-bold">Day</span>
@@ -302,7 +302,7 @@ function Owned({ id }: { id: string }) {
                   .filter((r) => r.productId === p.id)
                   .map((r) => (
                     <li key={r.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                      <p className="m-0 text-[14px] font-bold text-ink-soft">{r.status === 'open' ? `Answer promised by ${new Date(r.dueAt).toLocaleDateString()}` : r.status === 'answered' ? `Answered ${new Date(r.answeredAt ?? r.createdAt).toLocaleDateString()}` : 'Refunded'}</p>
+                      <p className="m-0 text-[14px] font-bold text-ink-soft">{r.status === 'open' ? `Answer promised by ${longDate(r.dueAt)}` : r.status === 'answered' ? `Answered ${longDate(r.answeredAt ?? r.createdAt)}` : 'Refunded'}</p>
                       <p className="mt-xs m-0 whitespace-pre-wrap text-[16px] font-semibold">{r.question}</p>
                       {r.answer && <p className="mt-sm m-0 whitespace-pre-wrap rounded-tile bg-paper p-sm text-[16px] font-semibold">{r.answer}</p>}
                     </li>
@@ -312,7 +312,7 @@ function Owned({ id }: { id: string }) {
           )}
           {p.kind === 'event' && (
             <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-              <p className="m-0 text-[16px] font-bold">{p.startsAt ? new Date(p.startsAt).toLocaleString() : 'Date to be announced'}</p>
+              <p className="m-0 text-[16px] font-bold">{p.startsAt ? dateTime(p.startsAt) : 'Date to be announced'}</p>
               {p.meetingUrl ? (
                 <a href={p.meetingUrl} target="_blank" rel="noreferrer" className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
                   Join the event
@@ -351,13 +351,13 @@ function Owned({ id }: { id: string }) {
               </h2>
               <ol className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                 {lessons.map((l) => (
-                  <li key={l.id}>
+                  <li key={l.id} data-pillar="lover_partner">
                     <CheckRow
                       checked={Boolean(l.completedAt)}
                       onToggle={() => !l.completedAt && done.mutate(l.id)}
                       title={l.title}
-                      subtitle={l.unlocked ? (l.body ? l.body.slice(0, 160) : undefined) : `Unlocks ${toDate(l.unlocksOn ?? '').toLocaleDateString()}`}
-                      lockedMessage={l.unlocked ? null : `This lesson unlocks on ${toDate(l.unlocksOn ?? '').toLocaleDateString()}.`}
+                      subtitle={l.unlocked ? (l.body ? l.body.slice(0, 160) : undefined) : `Unlocks ${longDate(l.unlocksOn ?? '')}`}
+                      lockedMessage={l.unlocked ? null : `This lesson unlocks on ${longDate(l.unlocksOn ?? '')}.`}
                       strike
                       color="var(--color-r4)"
                       deep="var(--deep-lover_partner)"

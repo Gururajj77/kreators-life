@@ -1,4 +1,4 @@
-import { PLAN_DAY_MINUTES, RELATIONSHIP_BY_KEY, minutesLabel2, type FocusTask, type Node, type PlanAttention, type PlanStrength, type RelationshipKey, type WeekPlan as WeekPlanData, type WeekPlanSuggestion } from '@kreators/shared';
+import { PLAN_DAY_MINUTES, RELATIONSHIP_BY_KEY, minutesLabel2, type FocusTask, type Node, type PlanAttention, type PlanStrength, type RelationshipKey, type WeekPlan as WeekPlanData, type WeekPlanSuggestion, LOCALE } from '@kreators/shared';
 import { useEffect, useState } from 'react';
 import { api, type TaskPlanBody } from '../lib/api';
 import { prettyDate, todayLocal, weekday } from '../lib/date';
@@ -70,7 +70,7 @@ const saveHours = (n: number) => {
   }
 };
 
-const dayOption = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+const dayOption = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', day: 'numeric', month: 'short' });
 const tone = (s: PlanStrength) => (s.label === 'Strong' ? 'good' : s.label === 'Fair' ? 'warn' : 'neutral');
 
 /** One reading of how strong a plan is: a ring with the score, the label, and the three parts as small bars. */
@@ -187,7 +187,7 @@ function AddOwn({ day, today, taken, onAdd }: { day: string; today: string; take
         )}
         {!tasks.isPending && choices.length === 0 && <li className="text-[12px] font-bold text-ink-soft">{COPY.noTasks}</li>}
         {choices.map((t) => (
-          <li key={t.id}>
+          <li key={t.id} data-pillar={t.relationship}>
             <button type="button" onClick={() => setChosen(t)} className="toy toy-flat flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile bg-paper px-sm text-left text-[14px] font-bold">
               <span className="flex min-w-0 items-center gap-xs">
                 <span className="inline-block size-[10px] shrink-0 rounded-pill" style={{ background: RELATIONSHIP_BY_KEY[t.relationship].color }} aria-hidden="true" />
@@ -359,7 +359,7 @@ function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: number,
         ) : (
           <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
             {plan.suggestions.map((s: WeekPlanSuggestion) => (
-              <li key={s.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+              <li key={s.id} data-pillar={s.relationship} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <input type="checkbox" checked={on[s.id] ?? false} onChange={(e) => setOn((o) => ({ ...o, [s.id]: e.target.checked }))} aria-label={`Keep ${s.title}`} className="size-[24px] shrink-0" />
                 <div className="flex min-w-0 flex-1 items-start gap-xs">
                   <span className="flex h-[22px] shrink-0 items-center">
@@ -439,7 +439,7 @@ function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: number,
         {own.length > 0 && (
           <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
             {own.map((o) => (
-              <li key={o.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+              <li key={o.id} data-pillar={o.relationship} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <div className="min-w-0 flex-1">
                   <p className="m-0 flex items-center gap-xs text-[16px] font-bold leading-snug">
                     <span className="inline-block size-[10px] shrink-0 rounded-pill" style={{ background: RELATIONSHIP_BY_KEY[o.relationship].color }} aria-hidden="true" />

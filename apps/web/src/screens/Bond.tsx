@@ -19,7 +19,7 @@ import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
 import { FIELD } from '../lib/ui';
 import { ErrorLine } from '../components/ErrorLine';
 import { useCopy } from '../lib/clipboard';
-import { dateTime } from '../lib/date';
+import { dateTime, longDate } from '../lib/date';
 import { AnimatedIcon } from '../components/AnimatedIcon';
 import { StatusTag } from '../components/StatusTag';
 
@@ -118,7 +118,7 @@ export function Bond() {
       </Section>
 
       {(blocked.data?.blocked.length ?? 0) > 0 && (
-        <Section id="bond-blocked" title="People you blocked" lede="They cannot see your posts or ask you to be friends, and you do not see theirs. Anyone can lift a block.">
+        <Section id="bond-blocked" title="People you blocked" lede="Neither of you sees the other’s posts or friend asks. Lift a block any time.">
           <ul className="flex list-none flex-col gap-xs p-0 m-0">
             {blocked.data?.blocked.map((b) => (
               <li key={b.userId} className="flex items-center justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
@@ -175,7 +175,7 @@ export function Bond() {
         {pending.length > 0 && (
           <ul className="mb-sm flex list-none flex-col gap-xs p-0 m-0" aria-label="Friend requests">
             {pending.map((f) => (
-              <li key={f.requestId} className="rounded-tile p-sm" style={{ background: 'var(--tint-yellow)' }}>
+              <li key={f.requestId} data-pillar="parent_child" className="rounded-tile p-sm" style={{ background: 'var(--tint-yellow)' }}>
                 <p className="m-0 text-[16px] font-bold">{f.name} would like to be friends</p>
                 <div className="mt-xs flex flex-wrap gap-xs">
                   <Button onClick={() => answerFriend.mutate({ id: f.requestId, status: 'accepted' })} disabled={answerFriend.isPending}>
@@ -290,7 +290,7 @@ export function Bond() {
                       <StatusTag tone={i.status === 'accepted' ? 'good' : i.status === 'declined' ? 'bad' : 'warn'}>{i.status === 'proposed' ? 'waiting' : i.status}</StatusTag>
                     </span>
                     <span className="block text-[14px] font-semibold text-ink-soft">
-                      {outgoing ? 'You asked' : 'They asked'} on {new Date(i.createdAt).toLocaleDateString()}
+                      {outgoing ? 'You asked' : 'They asked'} on {longDate(i.createdAt)}
                       {i.status === 'accepted' ? '. Contact details are in your Inbox.' : ''}
                     </span>
                   </span>
@@ -453,7 +453,7 @@ function BlockSheet({ person, onClose, onDone }: { person: Person | null; onClos
           block.mutate();
         }}
       >
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">They will not be able to ask for introductions to you, and they drop out of your suggestions. They are not told.</p>
+        <p className="m-0 text-[14px] font-semibold text-ink-soft">They cannot ask for introductions to you or show in your suggestions. They are not told.</p>
         <label className="block">
           <span className="block text-[14px] font-bold">Reason, for the team only</span>
           <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} className={FIELD} />

@@ -80,7 +80,7 @@ function SharePassword({ clientId, savedClientId, clientName }: { clientId: stri
 
 /**
  * Everything about sharing one document, in one sheet: the client's link (copy it, open it as the client), whether the client's password
- * guards it, Email a copy, Download or print, and the email to send with it, written from the records and ready to copy. The document's
+ * guards it, Email a copy, Download, and the email to send with it, written from the records and ready to copy. The document's
  * own text is only a secondary copy here ("Copy the full text") and the PDF.
  */
 export function ShareSheet({
@@ -118,7 +118,7 @@ export function ShareSheet({
   const [copied, setCopied] = useState<'link' | 'text' | null>(null);
   const say = (what: 'link' | 'text', ok: boolean) => {
     setCopied(ok ? what : null);
-    setNote(ok ? (what === 'link' ? 'Link copied.' : 'Copied the full text.') : what === 'link' ? 'Copying did not work here. Select the link and copy it by hand.' : 'Copying did not work here. Use Download or print instead.');
+    setNote(ok ? (what === 'link' ? 'Link copied.' : 'Copied the full text.') : what === 'link' ? 'Copying did not work here. Select the link and copy it by hand.' : 'Copying did not work here. Use Download instead.');
     window.setTimeout(() => {
       setNote('');
       setCopied(null);
@@ -189,7 +189,7 @@ export function ShareSheet({
             >
               <AnimatedIcon name="download" size={20} className="shrink-0" />
               <span className="min-w-0 flex-1">
-                <span className="block text-[16px] font-bold">Download or print</span>
+                <span className="block text-[16px] font-bold">Download</span>
                 <span className="block text-[12px] font-semibold text-ink-mute">Choose Save as PDF in the print window to download it.</span>
               </span>
             </button>

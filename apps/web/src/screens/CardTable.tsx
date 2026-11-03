@@ -11,8 +11,13 @@ import { Section } from '../components/Section';
 import { Sheet } from '../components/Sheet';
 import { useCardGame } from '../lib/queries';
 import { WaterButton } from '../components/Reminders';
+import { FocusPill } from '../components/FocusPill';
 import { useFocus } from '../lib/store';
 import { AnimatedIcon } from '../components/AnimatedIcon';
+import { TabRow } from '../components/TabRow';
+import { Segmented } from '../components/fx/Segmented';
+import { fillVar } from '../lib/relFill';
+import { tie } from '../lib/text';
 
 const reduced = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -35,49 +40,171 @@ interface OnTable {
   flipped: boolean;
   /** Where it was dealt from, for the first move only. */
   from: { x: number; y: number };
+  /** Dealt when no spot was left that kept every other card's title in sight (the table was full). */
+  crowded?: boolean;
 }
 
-const fill = (color: string): CSSProperties => ({ background: `linear-gradient(135deg, ${color}, color-mix(in oklab, ${color} 72%, var(--fill-shade)))` });
+/** The share of a card's height, from the top, that holds its deck band and title: no new card may land on it. */
+const BAND = 0.38;
+const GAP = 8;
 
-/** The back of every card in a game: its colour, its flower, its name. A deck can add its own line. */
-function Cover({ game, deck, size }: { game: CardGamePlay; deck?: PlayDeck; size: number }) {
+/**
+ * Where a new card goes. First a spot clear of every card and the pile (their boxes do not touch, with 8px between), the one
+ * highest up and nearest the middle across. When none is left the card is cascaded: it sits a band and a title below a card already there and 12px to
+ * the right, so that card's deck band and title stay readable and tappable; it never lands on any card's band or on the pile.
+ * Only when even that is gone is the table full, and the card takes the spot that covers the least of anyone's band.
+ */
+function placeCard(cards: { x: number; y: number }[], pile: { x: number; y: number; w: number; h: number }, w: number, h: number, box: { w: number; h: number }, lookahead = true): { x: number; y: number; crowded: boolean } {
+  const maxX = Math.max(0, box.w - w - GAP);
+  const maxY = Math.max(0, box.h - h - GAP);
+  const band = Math.round(h * BAND);
+  const rects = [{ ...pile, band: pile.h }, ...cards.map((c) => ({ x: c.x, y: c.y, w, h, band }))];
+  const mid = { x: maxX / 2, y: maxY / 2 };
+  const span = (a0: number, a1: number, b0: number, b1: number) => Math.max(0, Math.min(a1, b1) - Math.max(a0, b0));
+  const clear = (x: number, y: number) => rects.every((r) => x >= r.x + r.w + GAP || x + w + GAP <= r.x || y >= r.y + r.h + GAP || y + h + GAP <= r.y);
+  const bandCover = (x: number, y: number) => rects.reduce((t, r) => { const ox = span(x, x + w, r.x, r.x + r.w); const oy = span(y, y + h, r.y, r.y + r.band); return ox > 0 && oy > 0 ? t + ox * oy : t; }, 0);
+  const bodyCover = (x: number, y: number) => rects.reduce((t, r) => t + span(x, x + w, r.x, r.x + r.w) * span(y, y + h, r.y, r.y + r.h), 0);
+  // Top first, then nearest the middle across, so the cards fill the table from the top down and nothing drifts to one side.
+  const toMid = (x: number, y: number) => Math.abs(x - mid.x) + y * 2;
+  const axis = (max: number) => {
+    const out: number[] = [];
+    for (let v = Math.min(GAP, max); v < max; v += GAP) out.push(v);
+    out.push(max);
+    return out;
+  };
+  const xs = axis(maxX);
+  const ys = axis(maxY);
+
+  // On a narrow table (a phone) room is tight, so of the spots this rule allows the one that leaves room for the most cards after
+  // it is taken (counted by dealing on with the plain rule); ties, and every wide table, go to the spot nearest the middle.
+  const look = lookahead && box.w < 520;
+  const roomAfter = (s: { x: number; y: number }) => {
+    const next = [...cards, s];
+    for (let n = 0; n < 10; n += 1) {
+      const p = placeCard(next, pile, w, h, box, false);
+      if (p.crowded) return n;
+      next.push(p);
+    }
+    return 10;
+  };
+  const pick = <T extends { x: number; y: number; o: number; d: number }>(list: T[]): T | null => {
+    if (list.length === 0) return null;
+    const sorted = [...list].sort((a, b) => a.o - b.o || a.d - b.d);
+    if (!look) return sorted[0]!;
+    let top = sorted[0]!;
+    let most = -1;
+    for (const s of sorted.filter((_, i) => i % 2 === 0 || list.length < 40)) {
+      const r = roomAfter(s);
+      if (r > most) {
+        most = r;
+        top = s;
+      }
+    }
+    return top;
+  };
+
+  const clearSpots: { x: number; y: number; o: number; d: number }[] = [];
+  for (const y of ys) for (const x of xs) if (clear(x, y)) clearSpots.push({ x, y, o: 0, d: toMid(x, y) });
+  const best = pick(clearSpots);
+  if (best) return { x: best.x, y: best.y, crowded: false };
+
+  // The cascade: below each card's band, a little to the right (or to the left where the right edge is near).
+  const cascades: { x: number; y: number; o: number; d: number }[] = [];
+  for (const c of cards) {
+    const y = c.y + band;
+    if (y > maxY) continue;
+    for (const x of [c.x + 12, c.x - 12]) {
+      if (x < 0 || x > maxX) continue;
+      if (bandCover(x, y) > 0) continue;
+      cascades.push({ x, y, o: bodyCover(x, y), d: toMid(x, y) });
+    }
+  }
+  const cascade = pick(cascades);
+  if (cascade) return { x: cascade.x, y: cascade.y, crowded: false };
+
+  // Any spot that still leaves every band in sight, then, with the table full, the one that hides the least.
+  let free: { x: number; y: number; o: number; d: number } | null = null;
+  let least: { x: number; y: number; o: number; d: number } | null = null;
+  for (const y of ys) for (const x of xs) {
+    const b = bandCover(x, y);
+    const d = toMid(x, y);
+    if (b === 0) { const o = bodyCover(x, y); if (!free || o < free.o || (o === free.o && d < free.d)) free = { x, y, o, d }; }
+    else if (!least || b < least.o || (b === least.o && d < least.d)) least = { x, y, o: b, d };
+  }
+  if (free) return { x: free.x, y: free.y, crowded: false };
+  return { x: least?.x ?? 0, y: least?.y ?? 0, crowded: true };
+}
+
+/** A relationship's fill from its theme token (lib/relFill.ts), deepening toward --fill-shade. The token in the inline style is what
+ *  app.css reads to turn `--color-on-fill` dark on orange and yellow, so text in it always reads. */
+const fill = (rel: { floor: number }): CSSProperties => {
+  const c = fillVar(rel);
+  return { background: `linear-gradient(135deg, ${c}, color-mix(in oklab, ${c} 72%, var(--fill-shade)))` };
+};
+
+/** True while the box's content is taller than the box, measured again whenever the box or anything in it changes size. */
+function useCut<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [cut, setCut] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const check = () => setCut(el.scrollHeight > el.clientHeight + 1);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    for (const k of el.children) ro.observe(k);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, cut] as const;
+}
+
+/** The back of every card in a game: its colour, its flower, its name. A deck can add its own line. On the pile the count badge sits in
+ *  the bottom corner, so the words end above it (`badge`). */
+function Cover({ game, deck, size, badge = false }: { game: CardGamePlay; deck?: PlayDeck; size: number; badge?: boolean }) {
   const rel = RELATIONSHIP_BY_KEY[game.accent];
   return (
-    <div className="relative flex size-full flex-col items-center justify-center gap-xs overflow-hidden rounded-tile p-sm text-center text-on-fill" style={fill(rel.color)}>
+    <div className={`relative flex size-full flex-col items-center justify-center gap-xs overflow-hidden rounded-tile p-sm text-center text-on-fill ${badge ? 'pb-lg' : ''}`} style={fill(rel)}>
       <HeroBlobs seed={game.key} opacity={0.2} />
       <span className="relative leading-none" style={{ fontSize: size * 0.28 }} aria-hidden="true">
         {game.emoji}
       </span>
-      <span className="relative font-display font-extrabold leading-[1.15]" style={{ fontSize: Math.max(14, size * 0.1) }}>
-        {game.name}
+      {/* A long name (The Relationship Method Challenge) is set a size smaller, so its last two words fit one line together and none is left alone. */}
+      <span className="relative text-balance font-display font-extrabold leading-[1.15]" style={{ fontSize: game.name.length > 24 ? Math.max(12, size * 0.087) : Math.max(14, size * 0.1) }}>
+        {game.name.length > 24 ? tie(game.name) : game.name}
       </span>
-      {deck && <span className="relative text-[12px] font-bold opacity-90">{deck.name}</span>}
-      {deck?.hint && <span className="relative text-[12px] font-semibold leading-[1.3]">{deck.hint}</span>}
+      {deck && <span className="relative text-balance text-[12px] font-bold opacity-90">{deck.name}</span>}
+      {deck?.hint && <span className="relative text-balance text-[12px] font-semibold leading-[1.3]">{deck.hint}</span>}
     </div>
   );
 }
 
-/** One side of a card with words on it. */
+/** One side of a card with words on it. What does not fit is cut by the body's box with a fade, and Read all shows whenever anything is cut. */
 function Face({ game, deck, label, title, text, list, size, onRead }: { game: CardGamePlay; deck: PlayDeck; label?: string; title?: string; text: string; list?: string[]; size: number; onRead: () => void }) {
   const rel = RELATIONSHIP_BY_KEY[game.accent];
   const long = text.length + (list?.join('').length ?? 0) > 150;
+  const [body, cut] = useCut<HTMLDivElement>();
+  const more = cut || (list?.length ?? 0) > 2;
   return (
-    <div className="flex size-full flex-col overflow-hidden rounded-tile border border-line bg-card-strong text-ink">
-      <div className="flex items-center justify-between gap-xs px-sm py-xs text-on-fill" style={fill(rel.color)}>
+    <div data-card-face className="flex size-full flex-col overflow-hidden rounded-tile border border-line bg-card-strong text-ink">
+      <div className="flex items-center justify-between gap-xs px-sm py-xs text-on-fill" style={fill(rel)}>
         <span className="truncate text-[12px] font-extrabold">{deck.name}</span>
-        {label && <span className="shrink-0 rounded-pill bg-white/20 px-xs text-[12px] font-extrabold">{label}</span>}
+        {label && <span className="shrink-0 rounded-pill bg-on-fill/20 px-xs text-[12px] font-extrabold">{label}</span>}
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-xs p-sm">
-        {title && <p className="m-0 font-display font-extrabold leading-[1.2]" style={{ fontSize: Math.max(15, size * 0.095) }}>{title}</p>}
-        {text && <p className="m-0 font-semibold leading-[1.35]" style={{ fontSize: Math.max(13, size * (long ? 0.066 : 0.08)), display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: list ? 4 : long ? 7 : 9, overflow: 'hidden' }}>{text}</p>}
-        {list && list.length > 0 && (
-          <ul className="m-0 list-disc pl-md font-semibold text-ink-soft" style={{ fontSize: Math.max(12, size * 0.062) }}>
-            {list.slice(0, 2).map((x) => (
-              <li key={x} className="line-clamp-2">{x}</li>
-            ))}
-          </ul>
-        )}
-        {(long || (list && list.length > 2)) && (
+        <div ref={body} data-card-body className="relative flex min-h-0 flex-1 flex-col gap-xs overflow-hidden">
+          {title && <p className="m-0 font-display font-extrabold leading-[1.2]" style={{ fontSize: Math.max(15, size * 0.095) }}>{title}</p>}
+          {text && <p className="m-0 font-semibold leading-[1.35]" style={{ fontSize: Math.max(13, size * (long ? 0.066 : 0.08)) }}>{text}</p>}
+          {list && list.length > 0 && (
+            <ul className="m-0 list-disc pl-md font-semibold text-ink-soft" style={{ fontSize: Math.max(12, size * 0.062) }}>
+              {list.slice(0, 2).map((x) => (
+                <li key={x}>{x}</li>
+              ))}
+            </ul>
+          )}
+          {cut && <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-lg" style={{ background: 'linear-gradient(to bottom, transparent, var(--card-strong))' }} />}
+        </div>
+        {more && (
           <button
             type="button"
             onPointerDown={(e) => e.stopPropagation()}
@@ -177,6 +304,8 @@ function TableCard({ game, deck, card, t, size, box, onRaise, onMove, onFlip, on
       onPointerUp={up}
       onPointerCancel={up}
       onKeyDown={key}
+      data-table-card
+      data-crowded={t.crowded ? '1' : undefined}
       className="absolute top-0 left-0 cursor-grab touch-none select-none outline-none active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-ink"
       style={{ width: size, height: h, zIndex: t.z, perspective: 900 }}
     >
@@ -268,55 +397,14 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
       return;
     }
     setPiles((p) => ({ ...p, [deck.key]: pile.slice(0, -1) }));
-    setTable((cur) => {
-      // Cards go anywhere on the table, the whole of it. Each new card takes the open spot nearest the middle that keeps clear of
-      // every other card and the pile; only once nothing is clear does it fall back to the least crowded spot, and a last check
-      // steps it off anything it still lands on, so a card already on the table is never hidden as an unreachable layer under a new one.
-      const n = uid.current;
-      const maxX = Math.max(0, box.w - size - 8);
-      const maxY = Math.max(0, box.h - height - 8);
-      const step = Math.max(24, Math.round(size * 0.3));
-      const others = [{ x: pileX, y: pileY }, ...cur.map((c) => ({ x: c.x, y: c.y }))];
-      const mid = { x: maxX / 2, y: maxY / 2 };
-      const minClear = size * 0.55;
-      let best = { x: 8, y: 8, score: -Infinity };
-      let bestClear = { x: 8, y: 8, score: -Infinity };
-      for (let gy = 8; gy <= maxY || gy === 8; gy += step) {
-        if (gy > maxY && gy !== 8) break;
-        for (let gx = 8; gx <= maxX || gx === 8; gx += step) {
-          if (gx > maxX && gx !== 8) break;
-          // How far the nearest card is, counted only up to a card and a bit: past that, the spot is as good as any.
-          const near = Math.min(...others.map((o) => Math.hypot(o.x - gx, o.y - gy)));
-          const score = Math.min(near, size * 1.1) - 0.5 * Math.hypot(gx - mid.x, gy - mid.y);
-          if (score > best.score) best = { x: gx, y: gy, score };
-          if (near >= minClear && score > bestClear.score) bestClear = { x: gx, y: gy, score };
-        }
-      }
-      const chosen = bestClear.score > -Infinity ? bestClear : best;
-      const jx = ((n * 7) % 13) - 6;
-      const jy = ((n * 11) % 13) - 6;
-      let x = Math.max(0, Math.min(maxX, chosen.x + jx));
-      let y = Math.max(0, Math.min(maxY, chosen.y + jy));
-      const nearestTo = (px: number, py: number) => Math.min(...others.map((o) => Math.hypot(o.x - px, o.y - py)));
-      const hardFloor = Math.max(18, size * 0.14);
-      if (nearestTo(x, y) < hardFloor) {
-        const bump = 26;
-        const dirs: [number, number][] = [[bump, 0], [-bump, 0], [0, bump], [0, -bump], [bump, bump], [-bump, -bump], [bump, -bump], [-bump, bump]];
-        for (const [dx, dy] of dirs) {
-          const nx = Math.max(0, Math.min(maxX, x + dx));
-          const ny = Math.max(0, Math.min(maxY, y + dy));
-          if (nearestTo(nx, ny) >= hardFloor) {
-            x = nx;
-            y = ny;
-            break;
-          }
-        }
-      }
-      zTop.current += 1;
-      return [...cur, { uid: uid.current++, deck: deck.key, idx, x: Math.round(x), y: Math.round(y), z: zTop.current, flipped: false, from: { x: pileX, y: pileY } }];
-    });
+    // Cards go anywhere on the table, the whole of it: a clear spot first, then a cascade that keeps every title in sight (placeCard).
+    // The pile is counted with the 6px its stacked backs stand out by.
+    const spot = placeCard(table, { x: pileX, y: pileY, w: size + 6, h: height + 6 }, size, height, box);
+    zTop.current += 1;
+    const card: OnTable = { uid: uid.current++, deck: deck.key, idx, x: Math.round(spot.x), y: Math.round(spot.y), z: zTop.current, flipped: false, from: { x: pileX, y: pileY }, crowded: spot.crowded };
+    setTable((cur) => [...cur, card]);
     setSaid(`Drew a card from ${deck.name}. ${pile.length - 1} left.`);
-  }, [piles, deck, size, height, box.w, box.h]);
+  }, [piles, deck, size, height, box, table]);
 
   const shuffle = () => {
     // Every card of this deck on the table goes back, and the pile is shuffled.
@@ -343,6 +431,28 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
   const read = useCallback((card: PlayCard, d: PlayDeck, side: 'a' | 'b') => setReading({ card, deck: d, side }), []);
 
   const byKey = useMemo(() => Object.fromEntries(game.decks.map((d) => [d.key, d])), [game]);
+  const counts = game.decks.map((d) => piles[d.key]?.length ?? 0).join(',');
+  const deckTabs = useMemo(
+    () =>
+      game.decks.map((d) => ({
+        key: d.key,
+        name: d.name,
+        label: (
+          <>
+            {d.name} <span className="font-semibold opacity-70">{piles[d.key]?.length ?? 0}</span>
+          </>
+        ),
+      })),
+    [game, counts], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  // How to play, house rules and special cards are one block with tabs, most important first; a tab shows only when it has something.
+  const guide = [
+    { value: 'how' as const, label: 'How to play' },
+    ...(game.rules && game.rules.length > 0 ? [{ value: 'rules' as const, label: 'House rules' }] : []),
+    ...(game.special && game.special.length > 0 ? [{ value: 'special' as const, label: 'Special cards' }] : []),
+  ];
+  const [guideTab, setGuideTab] = useState<'how' | 'rules' | 'special'>('how');
+  const shownGuide = guide.some((g) => g.value === guideTab) ? guideTab : 'how';
 
   // In focus mode the whole table is one screen-sized column: the buttons on top, the table filling what is left, so on a phone it never runs past the screen.
   return (
@@ -351,15 +461,18 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
       style={focus ? { paddingTop: 'calc(var(--spacing-md) + env(safe-area-inset-top))', paddingBottom: 'calc(var(--spacing-md) + env(safe-area-inset-bottom))' } : undefined}
     >
       {/* A game with one deck has nothing to choose, so in focus mode the lone button (it only repeats the name) goes. Several decks keep theirs. */}
-      <div className={`scroll-row flex shrink-0 gap-xs ${focus ? '' : 'mt-md'} ${focus && game.decks.length === 1 ? 'hidden' : ''}`} role="group" aria-label="Decks">
-        {game.decks.map((d) => (
-          <button key={d.key} type="button" aria-pressed={d.key === deck.key} onClick={() => setDeckKey(d.key)} className={`toy min-h-[44px] shrink-0 rounded-pill border-2 px-md text-[14px] font-bold ${d.key === deck.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-            {d.name} <span className="font-semibold opacity-70">{piles[d.key]?.length ?? 0}</span>
-          </button>
-        ))}
-      </div>
+      {/* The decks as one row: as many as fit, the rest behind More, the picked one always in view (TabRow keeps these pills' own look). */}
+      <TabRow
+        label="Decks"
+        items={deckTabs}
+        value={deck.key}
+        onChange={setDeckKey}
+        className={`shrink-0 ${focus ? '' : 'mt-md'} ${focus && game.decks.length === 1 ? 'hidden' : ''}`}
+        pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+      />
 
-      <div className={`flex shrink-0 flex-wrap items-center gap-xs ${focus ? '' : 'mt-sm'}`}>
+      {/* Two rows, so nothing is ever left alone on a line: the four deck actions, then the count with water and focus mode at the right. */}
+      <div className={`fill-row flex shrink-0 flex-wrap items-center gap-xs ${focus ? '' : 'mt-sm'}`}>
         <Button size="sm" onClick={draw} disabled={left === 0}>
           Draw a card
         </Button>
@@ -372,8 +485,12 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
         <Button size="sm" variant="ghost" onClick={clear} disabled={table.length === 0}>
           Clear table
         </Button>
-        <span className="text-[14px] font-bold text-ink-soft">{left} left in {deck.name}</span>
-        <div className="ml-auto flex items-center gap-xs">
+      </div>
+      <div className={`flex shrink-0 items-center justify-between gap-xs ${focus ? '' : 'mt-xs'}`}>
+        <span className="min-w-0 text-[14px] font-bold text-ink-soft">{left} left in {deck.name}</span>
+        <div className="flex shrink-0 items-center gap-xs">
+          {/* Focus mode takes the menu (and with it the corner pill) away, so a running focus clock shows here, small, instead. */}
+          {focus && <FocusPill compact />}
           <WaterButton />
           <FocusButton on={focus} onClick={() => onFocus(!focus)} />
         </div>
@@ -395,7 +512,7 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
             <>
               {[2, 1, 0].filter((k) => k < left).map((k) => (
                 <span key={k} className="absolute inset-0" style={{ transform: `translate(${k * 3}px, ${k * 3}px)`, zIndex: 3 - k }}>
-                  <Cover game={game} deck={deck} size={size} />
+                  <Cover game={game} deck={deck} size={size} badge />
                 </span>
               ))}
               <span className="absolute right-xs bottom-xs rounded-pill bg-card-strong px-xs text-[12px] font-extrabold text-ink" style={{ zIndex: 5 }}>{left}</span>
@@ -414,30 +531,31 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
       {!focus && (
       <>
       <Section id="how-to-play" title="How to play" className="focus-dimmable">
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">{game.howTo}</p>
+        <div className="rounded-card bg-card p-md shadow-toy-soft">
+          {guide.length > 1 && <Segmented label="How to play" value={shownGuide} onChange={setGuideTab} options={guide} className="mb-sm" />}
+          {shownGuide === 'how' && <p className="m-0 text-[14px] font-semibold text-ink-soft">{game.howTo}</p>}
+          {shownGuide === 'rules' && game.rules && (
+            <ul className="m-0 list-none divide-y divide-line p-0">
+              {game.rules.map((s) => (
+                <li key={s} className="py-sm text-[14px] font-semibold first:pt-0 last:pb-0">{s}</li>
+              ))}
+            </ul>
+          )}
+          {shownGuide === 'special' && game.special && (
+            <>
+              <ul className="m-0 list-none divide-y divide-line p-0">
+                {game.special.map((s) => (
+                  <li key={s} className="py-sm text-[14px] font-semibold first:pt-0 last:pb-0">{s}</li>
+                ))}
+              </ul>
+              {game.specialNote && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{game.specialNote}</p>}
+              <Button className="mt-sm" size="sm" variant="outline" onClick={() => setSpecial(game.special![Math.floor(Math.random() * game.special!.length)]!)}>
+                Draw a special card
+              </Button>
+            </>
+          )}
+        </div>
       </Section>
-      {game.special && game.special.length > 0 && (
-        <Section id="special-cards" title="Special cards" className="focus-dimmable">
-          <ul className="m-0 flex list-none flex-col gap-xs p-0">
-            {game.special.map((s) => (
-              <li key={s} className="rounded-tile bg-card p-sm text-[14px] font-semibold shadow-toy-soft">{s}</li>
-            ))}
-          </ul>
-          {game.specialNote && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{game.specialNote}</p>}
-          <Button className="mt-sm" size="sm" variant="outline" onClick={() => setSpecial(game.special![Math.floor(Math.random() * game.special!.length)]!)}>
-            Draw a special card
-          </Button>
-        </Section>
-      )}
-      {game.rules && game.rules.length > 0 && (
-        <Section id="house-rules" title="House rules" className="focus-dimmable">
-          <ul className="m-0 flex list-none flex-col gap-xs p-0">
-            {game.rules.map((s) => (
-              <li key={s} className="rounded-tile bg-card p-sm text-[14px] font-semibold shadow-toy-soft">{s}</li>
-            ))}
-          </ul>
-        </Section>
-      )}
 
       </>
       )}
@@ -508,8 +626,8 @@ export function CardTable() {
     <Screen howTo={false} tabs={!focus} wide={focus} className="focus-scope">
       <header className={`focus-dimmable pt-lg ${focus ? 'hidden' : ''}`}>
         <BackLink to="/cards">Games</BackLink>
-        <h1 className="text-[30px]">{info?.name ?? 'Card game'}</h1>
-        {info && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{info.tagline}</p>}
+        <h1 className="text-balance text-[30px]">{tie(info?.name ?? 'Card game')}</h1>
+        {info && <p className="mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">{info.tagline}</p>}
       </header>
       {q.isPending && (
         <p className="mt-md text-[14px] font-bold text-ink-soft" role="status">

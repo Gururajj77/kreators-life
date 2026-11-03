@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { latestExtras, latestProfile, settingsOf } from './discover';
-import { briefFor, gettingStarted, isAutoHandle, levelProgress, nudgeFor, parseCoachShare, periodFor, RELATIONSHIPS, type BriefLine, type DailyBrief, type HomeFloor, type HomeResponse, type HomeUpNext, type RelationshipKey } from '@kreators/shared';
+import { briefFor, LOCALE, gettingStarted, isAutoHandle, levelProgress, nudgeFor, parseCoachShare, periodFor, RELATIONSHIPS, type BriefLine, type DailyBrief, type HomeFloor, type HomeResponse, type HomeUpNext, type RelationshipKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { can, nameOf, nowIso, parseList, shiftDate } from '../db';
+import { can, liveUser, nameOf, nowIso, parseList, shiftDate } from '../db';
 import { resolveAccess } from '../access';
 import { isCoach, LINK, type LinkRow } from '../coaching';
 import { lifeSummary } from './life';
@@ -15,7 +15,7 @@ import { summaryFor } from './wellbeing';
 export const home = new Hono<AppEnv>();
 
 /** A plain day for a note, not a raw ISO string ("chat opens 2026-11-04"). */
-const dayOf = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+const dayOf = (iso: string) => new Date(iso).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' });
 
 home.get('/', async (c) => {
   const db = c.env.DB;
@@ -379,7 +379,7 @@ home.get('/brief', async (c) => {
           (SELECT COUNT(*) FROM coach_profiles p JOIN users u ON u.id = p.user_id WHERE p.asked_at IS NOT NULL AND u.permissions NOT LIKE '%"coach"%') AS coach_asks,
           (SELECT COUNT(*) FROM community_posts WHERE held_at IS NOT NULL AND hidden_at IS NULL) AS held,
           (SELECT COUNT(*) FROM support_tickets WHERE status = 'open') AS tickets,
-          (SELECT COUNT(*) FROM users WHERE created_at >= ?) AS joined`,
+          (SELECT COUNT(*) FROM users u WHERE u.created_at >= ? AND ${liveUser()}) AS joined`,
       )
       .bind(`${week}T00:00:00`)
       .first<{ coach_asks: number; held: number; tickets: number; joined: number }>();

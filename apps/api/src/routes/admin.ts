@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { attendeeXpLocked, BADGES, type AdminCoachAsk, type AdminCoachLink, EVENT_TYPES, HONOR_BY_KEY, isPaidPlan, type AdminAttendeeCode, type AttendeeCodeApp, isRole, MAX_CREDIT_GRANT, PLAN_DAYS, LISTING_TYPES, MODULE_BY_KEY, MODULES, OPPORTUNITY_TYPES, PERMISSIONS, TOOL_CATEGORIES, type AdminRedemption, type AdminUser, type AuditLog, type FlagOverride, type ListingType, type ModuleSetting, type Permission } from '@kreators/shared';
+import { attendeeXpLocked, BADGES, DEFAULT_ZONE, type AdminCoachAsk, type AdminCoachLink, EVENT_TYPES, HONOR_BY_KEY, isPaidPlan, type AdminAttendeeCode, type AttendeeCodeApp, isRole, MAX_CREDIT_GRANT, PLAN_DAYS, LISTING_TYPES, MODULE_BY_KEY, MODULES, OPPORTUNITY_TYPES, PERMISSIONS, TOOL_CATEGORIES, type AdminRedemption, type AdminUser, type AuditLog, type FlagOverride, type ListingType, type ModuleSetting, type Permission } from '@kreators/shared';
 import { forgetAccessContext, resolveAccess } from '../access';
 import { listingsFor } from './explore';
 import { deleteAccount } from '../account';
@@ -10,7 +10,7 @@ import { handleComment } from './growth';
 import { providerFor } from '../payments';
 import { toKyc, type KycRow } from './kyc';
 import { logEvent, sendEmail, track } from '../ops';
-import { notify, pageOf, paged, httpUrl } from '../db';
+import { liveUser, notify, pageOf, paged, httpUrl } from '../db';
 import type { AdminFunnel, AdminKyc, AdminOrder, OrderEvent, OutboxEmail, WebhookEvent } from '@kreators/shared';
 import type { Context } from 'hono';
 import type { AppEnv, UserRow } from '../env';
@@ -437,7 +437,7 @@ admin.get('/funnels', async (c) => {
     {
       name: 'Signup to first sale',
       steps: [
-        { label: 'Finished the vibe check', count: await one('SELECT COUNT(*) AS n FROM users WHERE onboarded_at IS NOT NULL') },
+        { label: 'Finished the vibe check', count: await one(`SELECT COUNT(*) AS n FROM users u WHERE u.onboarded_at IS NOT NULL AND ${liveUser()}`) },
         { label: 'Added an email', count: await one('SELECT COUNT(*) AS n FROM users WHERE email IS NOT NULL') },
         { label: 'Published a page', count: await one("SELECT COUNT(*) AS n FROM users WHERE handle IS NOT NULL AND handle NOT LIKE 'user!_%' ESCAPE '!'") },
         { label: 'Has a live product', count: await one("SELECT COUNT(DISTINCT owner_id) AS n FROM products WHERE status = 'live'") },
@@ -515,9 +515,11 @@ admin.post('/listings', async (c) => {
   } else if (type === 'event') {
     const start = new Date(str(body.startsAt, 40) || Date.now() + 7 * 86_400_000);
     if (Number.isNaN(start.getTime())) return c.json({ error: 'a valid start time' }, 400);
+    // An event without a zone takes its host's, then India's.
+    const hostZone = str(body.timezone, 60) || (await db.prepare('SELECT timezone FROM users WHERE id = ?').bind(author).first<{ timezone: string | null }>())?.timezone || DEFAULT_ZONE;
     await db
       .prepare('INSERT INTO events (id, title, description, event_type, host_user_id, venue, online_url, timezone, starts_at, ends_at, capacity, price_points, visibility, status, created_at, featured) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, title, str(body.description, 3000), oneOf(body.eventType, EVENT_TYPES, 'meetup'), author, str(body.venue, 200), httpUrl(body.onlineUrl, 500) || null, str(body.timezone, 60, 'UTC') || 'UTC', start.toISOString(), new Date(start.getTime() + (num(body.minutes, 120, 15, 7 * 24 * 60) ?? 120) * 60_000).toISOString(), num(body.capacity, null, 1, 100000), num(body.pricePoints, 0, 0) ?? 0, 'public', publish ? 'published' : 'draft', now, body.featured === true ? 1 : 0)
+      .bind(id, title, str(body.description, 3000), oneOf(body.eventType, EVENT_TYPES, 'meetup'), author, str(body.venue, 200), httpUrl(body.onlineUrl, 500) || null, hostZone, start.toISOString(), new Date(start.getTime() + (num(body.minutes, 120, 15, 7 * 24 * 60) ?? 120) * 60_000).toISOString(), num(body.capacity, null, 1, 100000), num(body.pricePoints, 0, 0) ?? 0, 'public', publish ? 'published' : 'draft', now, body.featured === true ? 1 : 0)
       .run();
   } else if (type === 'program') {
     await db
@@ -583,10 +585,10 @@ admin.get('/users', async (c) => {
   const q = (c.req.query('q') ?? '').trim();
   const ask = pageOf(c);
   const rows = q
-    ? await c.env.DB.prepare(`${USER_SELECT} WHERE u.display_name LIKE ? OR u.id LIKE ? OR u.email LIKE ? OR u.handle LIKE ? ORDER BY u.xp DESC LIMIT ? OFFSET ?`)
+    ? await c.env.DB.prepare(`${USER_SELECT} WHERE ${liveUser()} AND (u.display_name LIKE ? OR u.id LIKE ? OR u.email LIKE ? OR u.handle LIKE ?) ORDER BY u.xp DESC LIMIT ? OFFSET ?`)
         .bind(`%${q}%`, `${q}%`, `%${q}%`, `%${q}%`, ask.limit, ask.offset)
         .all<UserListRow>()
-    : await c.env.DB.prepare(`${USER_SELECT} ORDER BY u.created_at DESC LIMIT ? OFFSET ?`).bind(ask.limit, ask.offset).all<UserListRow>();
+    : await c.env.DB.prepare(`${USER_SELECT} WHERE ${liveUser()} ORDER BY u.created_at DESC LIMIT ? OFFSET ?`).bind(ask.limit, ask.offset).all<UserListRow>();
   const pg = paged(rows.results, ask);
   return c.json({ page: pg.page, users: pg.items.map(toAdminUser) });
 });

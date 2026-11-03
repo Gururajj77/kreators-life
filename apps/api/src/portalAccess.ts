@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Context, Next } from 'hono';
-import { DOC_LOGO_RE, makePortalPassword, parseProfile } from '@kreators/shared';
+import { DOC_LOGO_RE, makePortalPassword, parseProfile, portalPasswordProblem, invoiceFromProfile } from '@kreators/shared';
 import type { AppEnv } from './env';
 import { LIMITS } from './limits';
 import { limited, sha } from './ops';
@@ -82,9 +82,10 @@ export async function agencyFace(db: D1Database, userId: string): Promise<{ agen
     /* an unreadable profile is an empty one */
   }
   const logo = profile.docStyle?.logo ?? '';
-  const email = profile.from.email.trim();
+  const from = invoiceFromProfile(profile);
+  const email = from.email;
   return {
-    agencyName: profile.from.name.trim() || (r ? nameOf(r) : ''),
+    agencyName: from.name || (r ? nameOf(r) : ''),
     agencyLogo: DOC_LOGO_RE.test(logo) ? logo : '',
     agencyEmail: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email.slice(0, 200) : '',
   };
@@ -133,8 +134,14 @@ export function randomInt(n: number): number {
     if (buf[0]! < limit) return buf[0]! % n;
   }
 }
-/** A readable password for the owner to hand over: four words and two digits. Shown once. */
-export const newPortalPassword = (): string => makePortalPassword(randomInt);
+/** A readable password for the owner to hand over: four words and two digits. Shown once. Drawn again while a word is part of the
+ *  client's name, so a generated one is never refused by the rule it must meet. */
+export function newPortalPassword(clientName = ''): string {
+  for (;;) {
+    const word = makePortalPassword(randomInt);
+    if (!portalPasswordProblem(word, clientName)) return word;
+  }
+}
 
 /** The hash and salt to keep for a password. The same PBKDF2 as every password here. */
 export async function passwordColumns(password: string): Promise<{ hash: string; salt: string }> {
@@ -202,7 +209,7 @@ export async function lockRowForToken(db: D1Database, token: string): Promise<Lo
 
 export type DocKind = 'contract' | 'invoice' | 'doc';
 /** The client a document link belongs to, or null when it belongs to none (an invoice made outside Agency, an unknown token). */
-async function clientOfDocument(db: D1Database, kind: DocKind, raw: string): Promise<LockRow | null> {
+export async function clientOfDocument(db: D1Database, kind: DocKind, raw: string): Promise<LockRow | null> {
   // The same token the document routes read: they look an invoice up in capitals, so the gate does too, and a lowercase copy
   // of a locked client's link is locked like the real one.
   const token = raw.toUpperCase();

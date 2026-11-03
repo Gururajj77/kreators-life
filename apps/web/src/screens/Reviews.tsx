@@ -1,4 +1,4 @@
-import { MOODS, PERIOD_KINDS, PERIOD_META, periodFor, periodLabel, RELATIONSHIP_BY_KEY, RELATIONSHIPS, REVIEW_ANSWER_MAX, REVIEW_HIGHLIGHT_MAX, REVIEW_NAME_MAX, type Period, type PeriodKind, type ReviewFlagged, type ReviewTemplate } from '@kreators/shared';
+import { MOODS, PERIOD_KINDS, PERIOD_META, periodFor, periodLabel, RELATIONSHIP_BY_KEY, RELATIONSHIPS, REVIEW_ANSWER_MAX, REVIEW_HIGHLIGHT_MAX, REVIEW_NAME_MAX, type Period, type PeriodKind, type ReviewFlagged, type ReviewTemplate, LOCALE, formatCount } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router';
@@ -88,7 +88,7 @@ export function Reviews() {
   const meta = PERIOD_META[period.kind];
   const ratingMeta = rating ? MOODS.find((m) => m.value === rating) : null;
   const areaSegments = s ? RELATIONSHIPS.filter((r) => (s.xpByArea[r.key] ?? 0) > 0).map((r) => ({ value: s.xpByArea[r.key] ?? 0, color: r.color, label: r.name })) : [];
-  const labels = s ? s.series.map((p, i, all) => (period.kind === 'week' ? new Date(`${p.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' }) : i === 0 || i === all.length - 1 || i % Math.ceil(all.length / 6) === 0 ? String(Number(p.date.slice(8, 10))) : '')) : [];
+  const labels = s ? s.series.map((p, i, all) => (period.kind === 'week' ? new Date(`${p.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short' }) : i === 0 || i === all.length - 1 || i % Math.ceil(all.length / 6) === 0 ? String(Number(p.date.slice(8, 10))) : '')) : [];
 
   return (
     <Screen columns={false}>
@@ -108,7 +108,7 @@ export function Reviews() {
             </p>
             <div className="mt-sm flex flex-wrap gap-md">
               {[
-                ['Xp', s.now.xp.toLocaleString()],
+                ['Xp', formatCount(s.now.xp)],
                 ['Tasks', String(s.now.tasksDone)],
                 ['Check-ins', `${s.now.checkins} of ${s.now.days}`],
               ].map(([k, v]) => (
@@ -152,7 +152,7 @@ export function Reviews() {
                 {flagged.map((f) => {
                   const added = Boolean(prompts.length) && (answers[slotFor(f)] ?? '').includes(lineFor(f));
                   return (
-                    <li key={f.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+                    <li key={f.id} data-pillar={f.relationship} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                       <span aria-hidden="true" className="size-[12px] shrink-0 rounded-pill" style={{ background: RELATIONSHIP_BY_KEY[f.relationship]?.color }} />
                       <span className="min-w-0 flex-1">
                         <span className="block text-[16px] font-bold">

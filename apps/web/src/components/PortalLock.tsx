@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useParams } from 'react-router';
+import { PASSWORD_REQUEST_REASON_MAX } from '@kreators/shared';
 import { Copy } from 'lucide-react';
 import { SiteLayout } from '../site/SiteLayout';
 import { ApiError, publicApi, type LockedLink } from '../lib/api';
@@ -17,8 +18,77 @@ const COPY = {
   wrong: 'That password did not work. Check it and try again.',
   slow: 'Too many tries. Wait a few minutes, then try again.',
   failed: 'That did not go through. Try again in a moment.',
-  stuck: 'If you were not given a password, ask the person who sent you this link.',
+  stuck: 'No password yet? Ask the person who sent you this link.',
+  ask: 'Lost it, or think it was shared?',
+  askLede: 'Ask for a new one. They set it and send it to you.',
+  reasonLabel: 'Why, if you like',
+  reasonHint: 'I think it was shared',
+  askSend: 'Ask for a new password',
 } as const;
+
+/** Which kind of link a lock screen stands in front of, as the password ask names it. */
+export type AskKind = 'agency' | 'contract' | 'invoice' | 'doc';
+const ASK_KIND: Record<LockedLink, AskKind> = { contracts: 'contract', invoices: 'invoice', 'agency/doc': 'doc' };
+
+/**
+ * "Lost it, or think it was shared?": a quiet link that opens a short form to ask the owner for a new password, with an optional reason.
+ * Only the owner can set a password; this only tells them. The answer is the same whatever the link, so it never confirms one.
+ */
+export function PasswordAsk({ kind, token, agencyName }: { kind: AskKind; token: string; agencyName: string }) {
+  const id = useId();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState('');
+  const who = agencyName || 'They';
+  if (done) {
+    return (
+      <p role="status" className="no-print mt-sm m-0 text-[14px] font-bold">
+        {`Requested. ${who} will send you a new one.`}
+      </p>
+    );
+  }
+  const send = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      await publicApi.passwordRequest(kind, token, reason.trim());
+      setDone(true);
+    } catch (err) {
+      setError(err instanceof ApiError && err.status === 429 ? COPY.slow : COPY.failed);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="no-print mt-sm">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls={`${id}-ask`} className="min-h-[44px] bg-transparent p-0 text-[14px] font-semibold text-ink-soft underline underline-offset-4 hover:text-ink">
+        {COPY.ask}
+      </button>
+      {open && (
+        <form id={`${id}-ask`} onSubmit={send} className="mt-xs rounded-tile bg-paper p-sm">
+          <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.askLede}</p>
+          <label htmlFor={`${id}-r`} className="mt-sm block text-[14px] font-bold">
+            {COPY.reasonLabel}
+          </label>
+          <input id={`${id}-r`} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={PASSWORD_REQUEST_REASON_MAX} placeholder={COPY.reasonHint} className="mt-xs min-h-[44px] w-full rounded-tile border-2 border-line bg-card px-sm text-[16px]" />
+          {error && (
+            <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+              {error}
+            </p>
+          )}
+          <div className="mt-sm">
+            <Button type="submit" size="sm" variant="outline" disabled={busy}>
+              {busy ? 'Sending' : COPY.askSend}
+            </Button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
 
 /** The business behind a client link: its own logo upload, when it has one, and its name. */
 export function AgencyMark({ name, logo, size = 'md' }: { name: string; logo: string; size?: 'sm' | 'md' }) {
@@ -37,7 +107,7 @@ export function AgencyMark({ name, logo, size = 'md' }: { name: string; logo: st
  * and logo) and who it is for, and the same words answer a wrong password and a link that is not there. `unlock` makes the call; this
  * keeps the session it returns for the tab (sessionStorage), so a reload in the same tab stays open and a new tab asks again.
  */
-export function PortalLock({ clientName, agencyName = '', agencyLogo = '', ended = false, link, unlock, onOpen }: { clientName: string; agencyName?: string; agencyLogo?: string; /** The tab held a session that the server no longer takes. */ ended?: boolean; link: string; unlock: (password: string) => Promise<{ session: string | null; expiresAt: string | null }>; onOpen: () => void }) {
+export function PortalLock({ clientName, agencyName = '', agencyLogo = '', ended = false, link, unlock, onOpen, ask }: { clientName: string; agencyName?: string; agencyLogo?: string; /** The tab held a session that the server no longer takes. */ ended?: boolean; link: string; unlock: (password: string) => Promise<{ session: string | null; expiresAt: string | null }>; onOpen: () => void; /** Which link this is, so the client can ask the owner for a new password. */ ask?: { kind: AskKind; token: string } }) {
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const [password, setPassword] = useState('');
@@ -110,6 +180,11 @@ export function PortalLock({ clientName, agencyName = '', agencyLogo = '', ended
         </div>
         <p className="mt-sm m-0 text-[12px] font-semibold text-ink-soft">{COPY.stuck}</p>
       </form>
+      {ask && (
+        <div className="mx-auto max-w-[480px] px-sm">
+          <PasswordAsk kind={ask.kind} token={ask.token} agencyName={agencyName} />
+        </div>
+      )}
     </div>
   );
 }
@@ -204,7 +279,7 @@ export function PortalDocGate({ kind, children }: { kind: LockedLink; children: 
   if (locked) {
     return (
       <SiteLayout wide={false} minimal>
-        <PortalLock clientName={q.data?.clientName ?? ''} agencyName={q.data?.agencyName ?? ''} agencyLogo={q.data?.agencyLogo ?? ''} ended={ended} link={link} unlock={(pw) => publicApi.linkUnlock(kind, token, pw)} onOpen={() => { setEnded(false); void q.refetch(); }} />
+        <PortalLock clientName={q.data?.clientName ?? ''} agencyName={q.data?.agencyName ?? ''} agencyLogo={q.data?.agencyLogo ?? ''} ended={ended} link={link} ask={{ kind: ASK_KIND[kind], token }} unlock={(pw) => publicApi.linkUnlock(kind, token, pw)} onOpen={() => { setEnded(false); void q.refetch(); }} />
       </SiteLayout>
     );
   }

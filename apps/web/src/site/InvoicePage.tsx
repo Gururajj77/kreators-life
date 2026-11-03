@@ -11,7 +11,7 @@ import { CopyTextButton, LinkTrouble } from '../components/PortalLock';
 import { StatusTag } from '../components/StatusTag';
 import { todayLocal } from '../lib/date';
 import { publicApi, type PublicInvoice } from '../lib/api';
-import { fileTitle } from '../lib/printDoc';
+import { fileTitle, useAutoPrint } from '../lib/printDoc';
 import { SiteLayout } from './SiteLayout';
 
 /**
@@ -53,6 +53,8 @@ export function InvoicePage() {
   const q = useQuery({ queryKey: ['invoice', token], queryFn: () => publicApi.invoice(token), retry: false });
   const d = q.data;
   const inv = d?.invoice;
+  // "Download" on the client's page opens this with ?print=1: the print window opens once the invoice is here, if it may be downloaded.
+  useAutoPrint(Boolean(inv && d?.canDownload), fileTitle(inv?.doc.title || 'Invoice', inv?.number));
   const [text, setText] = useState('');
   const [done, setDone] = useState('');
   const [asking, setAsking] = useState(false);

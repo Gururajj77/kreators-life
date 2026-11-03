@@ -1,4 +1,5 @@
-import { AGENCY_CHANNELS, AGENCY_CLIENT_STATUSES, AGENCY_HEALTH, AGENCY_HEALTH_NAME, AGENCY_NAME_MAX, AGENCY_NOTES_MAX, AGENCY_STATUS_NAME, type AgencyClient, type AgencyClientStatus, type AgencyHealth, type InvoiceParty, REVISIONS_MAX, typedCents } from '@kreators/shared';
+import { AGENCY_CHANNELS, AGENCY_CLIENT_STATUSES, AGENCY_HEALTH, AGENCY_HEALTH_NAME, AGENCY_NAME_MAX, AGENCY_NOTES_MAX, AGENCY_STATUS_NAME, type AgencyClient, type AgencyClientStatus, type AgencyHealth, type BusinessProfile, type InvoiceParty, INDIAN_STATES, PHONE_HINT, makePortalPassword, pinCodeProblem, portalPasswordProblem, REVISIONS_MAX, typedCents } from '@kreators/shared';
+import { emptyEmailVars, fillEmail } from '@kreators/shared/agencyEmail';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
@@ -7,14 +8,19 @@ import { useAuthed } from '../lib/queries';
 import { Button } from './Button';
 import { Fold } from './Fold';
 import { Sheet } from './Sheet';
-import { Toggle } from './Toggle';
 import { FIELD } from '../lib/ui';
 import { FieldLabel } from './Field';
-import { copyPlain } from '../lib/clipboard';
+import { useCopy } from '../lib/clipboard';
+import { AnimatedIcon } from './AnimatedIcon';
 
 
 const COPY = {
   addTitle: 'Add a client',
+  addName: 'Brand name',
+  addEmail: "Client's email",
+  addPassword: 'Password for their page',
+  addPasswordHint: 'You set it. They type it to open their page.',
+  separately: 'Send the password separately, by a different channel.',
   editTitle: 'Change this client',
   name: 'Who is the client? Their brand or business name.',
   money: 'Type amounts in whole units, like 50000.',
@@ -26,8 +32,37 @@ const COPY = {
   saveFail: 'That did not save. Check the name and try again.',
 } as const;
 
+// A billing address keeps its state and PIN code inside the one address text, "street, city, State PIN", so nothing new is stored.
+const STATES_LONGEST = [...INDIAN_STATES].sort((a, b) => b.length - a.length);
+function splitAddress(text: string): { rest: string; state: string; pin: string } {
+  let rest = text.trim();
+  let pin = '';
+  const m = /\s*(\d{6})$/.exec(rest);
+  if (m) {
+    pin = m[1] ?? '';
+    rest = rest.slice(0, m.index);
+  }
+  const state = STATES_LONGEST.find((st) => rest.endsWith(st)) ?? '';
+  if (state) rest = rest.slice(0, rest.length - state.length);
+  return { rest: rest.replace(/[,\s]+$/, ''), state, pin };
+}
+const joinAddress = (a: { rest: string; state: string; pin: string }) => [a.rest.trim(), [a.state, a.pin.trim()].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+
 /** The label a GST number is kept under, so the short form's field and the invoice's tax numbers are one value. */
 const GST_LABEL = 'GSTIN';
+
+/** A whole number from 0 to n - 1 from the browser's own random source, for a made-up password. */
+function randomBelow(n: number): number {
+  const limit = Math.floor(0x1_0000_0000 / n) * n;
+  const buf = new Uint32Array(1);
+  for (;;) {
+    crypto.getRandomValues(buf);
+    if (buf[0]! < limit) return buf[0]! % n;
+  }
+}
+
+/** A server's short answer as a sentence: "set a password" becomes "Set a password." */
+const sentence = (m: string): string => `${m.charAt(0).toUpperCase()}${m.slice(1)}${/[.!?]$/.test(m) ? '' : '.'}`;
 
 const toMajor = (cents: number): string => (cents === 0 ? '' : cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2));
 /** A typed amount in cents (`typedCents`: "30,000" and "₹30,000" read as 30000); NaN for junk or a minus, so the form can say so. Blank is 0. */
@@ -81,12 +116,20 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
   const [notes, setNotes] = useState(client?.notes ?? '');
   const [billing, setBilling] = useState<InvoiceParty>(client?.billing ?? { name: '', line: '', taxIds: [], address: '', email: '', phone: '' });
   const [campaignId, setCampaignId] = useState(client?.campaignId ?? '');
+  const [addr, setAddr] = useState(() => splitAddress(client?.billing.address ?? ''));
+  const setAddrPart = (part: Partial<typeof addr>) => {
+    const next = { ...addr, ...part };
+    setAddr(next);
+    setBilling((b) => ({ ...b, address: joinAddress(next).slice(0, 300) }));
+  };
+  const badPin = addr.pin ? pinCodeProblem(addr.pin) : null;
   const [confirm, setConfirm] = useState(false);
   const [imported, setImported] = useState<number | null>(null);
-  // A new client starts with a password on its link unless the owner says otherwise; the generated one is shown once, here.
-  const [askPassword, setAskPassword] = useState(true);
-  const [made, setMade] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  // A new client always has a password on its link: the owner types one or taps Make one. It is never put in the email.
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const passwordBad = password ? portalPasswordProblem(password, name) : null;
+  const [made, setMade] = useState<{ token: string; password: string } | null>(null);
   const [revisions, setRevisions] = useState('2');
   const [revisionsSeen, setRevisionsSeen] = useState(false);
 
@@ -132,14 +175,14 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
         if (savedRevisions !== undefined && revisionCount !== savedRevisions) await api.agencyLifecycleSave(client.id, { revisionsPerPiece: revisionCount });
         return;
       }
-      const added = await api.agencyClientAdd({ ...body(), ...(askPassword ? { portalPassword: 'generate' as const } : {}) });
+      const added = await api.agencyClientAdd({ ...body(), portalPassword: password });
       if (billingFilled) await api.agencyClientUpdate(added.id, { billing });
       if (revisionCount !== 2) await api.agencyLifecycleSave(added.id, { revisionsPerPiece: revisionCount });
-      return added.password ?? null;
+      return { token: added.portalToken, password };
     },
-    onSuccess: (password) => {
+    onSuccess: (r) => {
       invalidate();
-      if (password) setMade(password);
+      if (r) setMade(r);
       else onClose();
     },
   });
@@ -166,45 +209,81 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
   };
   const setId = (i: number, patch: Partial<{ label: string; value: string }>) => setBilling({ ...billing, taxIds: billing.taxIds.map((t, j) => (j === i ? { ...t, ...patch } : t)) });
 
-  if (made) {
-    return (
-      <div>
-        <p className="m-0 text-[16px] font-bold">{`${name.trim()} is added, with a password on their link.`}</p>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Here is the password. It is shown once, and we keep only a scrambled copy. Send it to your client separately from the link. You can make a new one any time from their page.</p>
-        <input readOnly value={made} aria-label="The password" onFocus={(e) => e.currentTarget.select()} className="mt-sm w-full rounded-tile border-2 border-line bg-paper px-sm py-sm font-mono text-[16px]" />
-        <div className="mt-sm flex flex-wrap gap-xs">
-          <Button
-            onClick={async () => setCopied(await copyPlain(made))}
-          >
-            {copied ? 'Copied' : 'Copy'}
-          </Button>
-          <Button variant="outline" onClick={onClose}>
-            I have saved it
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  if (made) return <Invite name={name.trim()} contactName={contactName.trim()} token={made.token} password={made.password} profile={overview.data?.settings.profile ?? null} onClose={onClose} />;
 
   return (
     <form
       onSubmit={(e: FormEvent) => {
         e.preventDefault();
-        if (name.trim() && !badRetainer) save.mutate();
+        if (name.trim() && !badRetainer && !badPin && (client || (contactEmail.trim() && password && !passwordBad))) save.mutate();
       }}
     >
-      <FieldLabel className="mt-sm" label={COPY.name}>
-        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={AGENCY_NAME_MAX} required className={FIELD} />
+      <FieldLabel className="mt-sm" label={client ? COPY.name : COPY.addName}>
+        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={AGENCY_NAME_MAX} required autoComplete="off" className={FIELD} />
       </FieldLabel>
+      {!client && (
+        <>
+          <FieldLabel className="mt-sm" label={COPY.addEmail}>
+            <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} maxLength={120} required autoComplete="off" className={FIELD} />
+          </FieldLabel>
+          <div className="mt-sm">
+            <label htmlFor="new-client-pw" className="block text-[14px] font-bold">
+              {COPY.addPassword}
+            </label>
+            <span className="block text-[12px] font-semibold text-ink-soft">{COPY.addPasswordHint}</span>
+            <div className="mt-xs flex gap-xs">
+              <input
+                id="new-client-pw"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                maxLength={200}
+                required
+                autoComplete="new-password"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                aria-invalid={passwordBad ? true : undefined}
+                aria-describedby={passwordBad ? 'new-client-pw-e' : undefined}
+                className="min-h-[48px] min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm font-mono text-[16px]"
+              />
+              <Button type="button" variant="outline" size="sm" onClick={() => setShowPassword((v) => !v)} aria-pressed={showPassword} aria-controls="new-client-pw" aria-label={showPassword ? 'Hide the password' : 'Show the password'}>
+                <AnimatedIcon name="visibility" size={20} active={showPassword} />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setPassword(makePortalPassword(randomBelow));
+                  setShowPassword(true);
+                }}
+              >
+                Make one
+              </Button>
+            </div>
+            {passwordBad && (
+              <p id="new-client-pw-e" role="alert" className="mt-xs m-0 text-[12px] font-bold">
+                {passwordBad}
+              </p>
+            )}
+          </div>
+        </>
+      )}
+      {(() => {
+        const details = (
+          <>
       <div className="grid gap-sm md:grid-cols-2">
         <FieldLabel className="mt-sm" label="Contact name" hint="Who your emails greet.">
           <input value={contactName} onChange={(e) => setContactName(e.target.value)} maxLength={AGENCY_NAME_MAX} autoComplete="off" className={FIELD} />
         </FieldLabel>
-        <FieldLabel className="mt-sm" label="Contact email" hint="Where documents are emailed.">
-          <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} maxLength={120} autoComplete="off" className={FIELD} />
-        </FieldLabel>
-        <FieldLabel className="mt-sm" label="Phone, optional">
-          <input value={billing.phone} onChange={(e) => setBilling({ ...billing, phone: e.target.value })} maxLength={40} inputMode="tel" className={FIELD} />
+        {client && (
+          <FieldLabel className="mt-sm" label="Contact email" hint="Where documents are emailed.">
+            <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} maxLength={120} autoComplete="off" className={FIELD} />
+          </FieldLabel>
+        )}
+        <FieldLabel className="mt-sm" label="Phone, optional" hint={PHONE_HINT}>
+          <input value={billing.phone} onChange={(e) => setBilling({ ...billing, phone: e.target.value })} maxLength={40} inputMode="tel" placeholder="+91 98765 43210" className={FIELD} />
         </FieldLabel>
         <FieldLabel className="mt-sm" label="GST number, optional">
           <input value={gst} onChange={(e) => setGst(e.target.value)} maxLength={40} className={FIELD} />
@@ -268,16 +347,29 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
         </FieldLabel>
       </div>
       <FieldLabel className="mt-sm" label="Billing address" hint={COPY.billing}>
-        <textarea value={billing.address} onChange={(e) => setBilling({ ...billing, address: e.target.value })} rows={2} maxLength={300} className={FIELD} />
+        <textarea value={addr.rest} onChange={(e) => setAddrPart({ rest: e.target.value })} rows={2} maxLength={260} placeholder="Building, street, city" className={FIELD} />
       </FieldLabel>
+      <div className="grid gap-sm md:grid-cols-2">
+        <FieldLabel className="mt-sm" label="State, optional">
+          <select value={addr.state} onChange={(e) => setAddrPart({ state: e.target.value })} className={FIELD}>
+            <option value="">Not in India, or not set</option>
+            {INDIAN_STATES.map((st) => (
+              <option key={st} value={st}>
+                {st}
+              </option>
+            ))}
+          </select>
+        </FieldLabel>
+        <FieldLabel className="mt-sm" label="PIN code, optional">
+          <input value={addr.pin} onChange={(e) => setAddrPart({ pin: e.target.value.replace(/\D/g, '').slice(0, 6) })} inputMode="numeric" maxLength={6} placeholder="560038" aria-invalid={badPin ? true : undefined} className={FIELD} />
+          {badPin && <span className="mt-xs block text-[12px] font-semibold text-ink-soft">{badPin}</span>}
+        </FieldLabel>
+      </div>
 
-      {!client && (
-        <div className="mt-md">
-          <Toggle on={askPassword} onChange={setAskPassword} label="Ask for a password at their link" hint="Recommended. We make one and show it once, so you can send it to them. Without it, anyone with the link can open their page." />
-        </div>
-      )}
-
-      <Fold className="mt-md" title="More details" hint={client ? 'status, billing names, renewal, notes' : 'billing names, renewal, notes'}>
+          </>
+        );
+        const more = (
+          <>
         {client && (
           <>
             <Chips label="Status" options={AGENCY_CLIENT_STATUSES} value={status} name={(s) => AGENCY_STATUS_NAME[s]} onChange={setStatus} />
@@ -322,7 +414,23 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
         <FieldLabel className="mt-sm" label="Notes, only for you">
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={AGENCY_NOTES_MAX} className={FIELD} />
         </FieldLabel>
-      </Fold>
+          </>
+        );
+        // Adding: the three fields above, and everything else optional behind one fold. Changing: the details, then the fold.
+        return client ? (
+          <>
+            {details}
+            <Fold className="mt-md" title="More details" hint="status, billing names, renewal, notes">
+              {more}
+            </Fold>
+          </>
+        ) : (
+          <Fold className="mt-md" title="More details" hint="optional: contact, channels, fees, billing">
+            {details}
+            {more}
+          </Fold>
+        );
+      })()}
 
       {client && (
         <>
@@ -363,12 +471,12 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
 
       {(save.isError || remove.isError) && (
         <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
-          {COPY.saveFail}
+          {!client && save.error instanceof Error && save.error.message ? sentence(save.error.message) : COPY.saveFail}
         </p>
       )}
       <div className="mt-md flex flex-wrap items-center gap-xs">
-        <Button type="submit" disabled={save.isPending || !name.trim() || badRetainer}>
-          {save.isPending ? 'Saving' : client ? 'Save changes' : 'Add the client'}
+        <Button type="submit" disabled={save.isPending || !name.trim() || badRetainer || Boolean(badPin) || (!client && (!contactEmail.trim() || !password || Boolean(passwordBad)))}>
+          {save.isPending ? 'Saving' : client ? 'Save changes' : 'Add'}
         </Button>
         {client &&
           (confirm ? (
@@ -388,5 +496,59 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
           ))}
       </div>
     </form>
+  );
+}
+
+/**
+ * After a client is added: the note to send them (the link to their page, never the password), Copy link, and the password once, to
+ * send by a different channel. The note is the `portal-invite` one, filled from the business profile.
+ */
+function Invite({ name, contactName, token, password, profile, onClose }: { name: string; contactName: string; token: string; password: string; profile: BusinessProfile | null; onClose: () => void }) {
+  const link = `${window.location.origin}/a/${token}`;
+  const first = contactName.split(/\s+/)[0] ?? '';
+  const mail = fillEmail('portal-invite', {
+    ...emptyEmailVars(),
+    names: first ? `${first} and ${name} team` : `${name} team`,
+    link,
+    signName: profile?.signerName ?? '',
+    signStudio: profile?.from.name ?? '',
+    signPhone: profile?.from.phone ?? '',
+    signEmail: profile?.from.email ?? '',
+  });
+  const note = useCopy();
+  const linkCopy = useCopy();
+  const pw = useCopy();
+  return (
+    <div className="pb-xl">
+      <p className="m-0 text-[16px] font-bold">{`${name} is added. Their page is ready.`}</p>
+      <pre className="legal-text mt-sm" tabIndex={0} aria-label="The email to send, ready to paste">
+        {`Subject: ${mail.subject}\n\n${mail.body}`}
+      </pre>
+      <div className="mt-sm flex flex-wrap items-center gap-xs">
+        <Button size="sm" onClick={() => void note.copy(`Subject: ${mail.subject}\n\n${mail.body}`)}>
+          Copy the email
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => void linkCopy.copy(link)}>
+          Copy link
+        </Button>
+        {(note.said || linkCopy.said) && (
+          <span role="status" className="text-[14px] font-bold">
+            {note.said || linkCopy.said}
+          </span>
+        )}
+      </div>
+      <p className="mt-md m-0 text-[14px] font-bold">{COPY.separately}</p>
+      <div className="mt-xs flex gap-xs">
+        <input readOnly value={password} aria-label="Their password" onFocus={(e) => e.currentTarget.select()} className="min-h-[44px] min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm font-mono text-[16px]" />
+        <Button size="sm" variant="outline" onClick={() => void pw.copy(password)}>
+          {pw.said ? 'Copied' : 'Copy'}
+        </Button>
+      </div>
+      <div className="mt-md">
+        <Button variant="outline" onClick={onClose}>
+          Done
+        </Button>
+      </div>
+    </div>
   );
 }

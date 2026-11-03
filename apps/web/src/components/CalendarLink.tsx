@@ -104,12 +104,14 @@ export function CalendarLink() {
             </Fold>
           </div>
         )}
-        <div className="mt-sm flex flex-col gap-xs text-[14px] font-semibold text-ink-soft">
-          <p className="m-0">{COPY.inside}</p>
-          <p className="m-0">{COPY.never}</p>
-          <p className="m-0">{COPY.oneWay}</p>
-          <p className="m-0">{COPY.updates}</p>
-        </div>
+        <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{COPY.never}</p>
+        <Fold className="mt-xs" title="What it shows">
+          <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+            <li>{COPY.inside}</li>
+            <li>{COPY.oneWay}</li>
+            <li>{COPY.updates}</li>
+          </ul>
+        </Fold>
       </div>
     </section>
   );

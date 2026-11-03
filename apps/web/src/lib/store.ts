@@ -1,5 +1,5 @@
 import { forgetKept } from './kept';
-import { useFocusSession } from './focusSession';
+import { forgetFocusRun, useFocusSession } from './focusSession';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -38,6 +38,7 @@ export const useSession = create<SessionState>()(
         if (!token) {
           forgetKept();
           useFocusSession.getState().clear();
+          forgetFocusRun();
         }
         set({ token });
       },

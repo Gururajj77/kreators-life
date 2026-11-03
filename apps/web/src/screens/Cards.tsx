@@ -11,18 +11,19 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useCardGames, useRefreshAll } from '../lib/queries';
+import { fillVar } from '../lib/relFill';
 
 /** The cover of a game: its colour as a gradient, its emoji, its name, and what it takes to play. */
 export function GameCover({ game, className = '' }: { game: CardGameCard; className?: string }) {
   const rel = RELATIONSHIP_BY_KEY[game.accent];
   return (
-    <div className={`relative overflow-hidden rounded-card p-md text-on-fill ${className}`} style={{ background: `linear-gradient(135deg, ${rel.color}, color-mix(in oklab, ${rel.color} 72%, var(--fill-shade)))` } as CSSProperties}>
+    <div className={`relative overflow-hidden rounded-card p-md text-on-fill ${className}`} style={{ background: `linear-gradient(135deg, ${fillVar(rel)}, color-mix(in oklab, ${fillVar(rel)} 72%, var(--fill-shade)))` } as CSSProperties}>
       <HeroBlobs seed={game.key} />
       <span className="relative block text-[40px] leading-none" aria-hidden="true">
         {game.emoji}
       </span>
-      <h2 className="relative mt-sm text-[22px] leading-[1.2]">{game.name}</h2>
-      <p className="relative mt-xs m-0 text-[14px] font-semibold">{game.tagline}</p>
+      <h2 className="relative mt-sm text-balance text-[22px] leading-[1.2]">{game.name}</h2>
+      <p className="relative mt-xs m-0 text-balance text-[14px] font-semibold">{game.tagline}</p>
       <p className="relative mt-xs m-0 text-[12px] font-bold opacity-90">
         {game.decks.length === 1 ? '1 deck' : `${game.decks.length} decks`}, {game.total} cards
       </p>
@@ -41,7 +42,7 @@ export function Cards() {
     onSuccess: (r) => {
       refresh();
       setError(null);
-      celebrate({ title: `Unlocked. ${r.points} points left`, color: '#FACC15' });
+      celebrate({ title: `Unlocked. ${r.points} points left`, color: 'var(--color-r3)' });
     },
     onError: (e) => setError(e instanceof Error ? e.message : 'Could not unlock that.'),
   });
@@ -80,10 +81,10 @@ export function Cards() {
           <p className="mt-md m-0 text-[14px] font-bold text-ink-soft">
             You have {data.points} points and {mine.length} of {data.games.length} games. <Link to="/rewards#games" className="underline underline-offset-4">See them in Rewards</Link>
           </p>
-          <ul className="mt-sm grid list-none grid-cols-1 gap-sm p-0 m-0 md:grid-cols-3">
+          <ul className="mt-sm grid list-none grid-cols-1 gap-sm p-0 m-0 lg:grid-cols-3">
             {data.games.map((g) => {
               return (
-                <li key={g.key} className="flex flex-col gap-xs">
+                <li key={g.key} data-pillar={g.accent} className="flex flex-col gap-xs">
                   <GameCover game={g} className="flex-1" />
                   {g.unlocked ? (
                     <Link to={`/cards/${g.key}`} aria-label={`Play ${g.name}`} className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink">

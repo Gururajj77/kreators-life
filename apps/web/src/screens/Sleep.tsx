@@ -1,4 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
+import { LOCALE } from '@kreators/shared';
 import { useState } from 'react';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { Button } from '../components/Button';
@@ -44,7 +45,7 @@ export function Sleep() {
         </Hero>
       )}
 
-      <section className="mt-md rounded-card p-md" style={{ background: 'var(--tint-purple)' }} aria-labelledby="log-heading">
+      <section data-pillar="divine" className="mt-md rounded-card p-md" style={{ background: 'var(--tint-purple)' }} aria-labelledby="log-heading">
         <h2 id="log-heading" className="text-[24px]">
           Last night
         </h2>
@@ -107,7 +108,7 @@ export function Sleep() {
                 <span className="block text-[16px] font-bold">
                   {l.value} hours, {QUALITY[Number(l.extra.quality ?? 3) - 1]?.toLowerCase()}
                 </span>
-                <span className="block text-[14px] font-semibold text-ink-soft">{new Date(`${l.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                <span className="block text-[14px] font-semibold text-ink-soft">{new Date(`${l.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
               </span>
             </li>
           ))}

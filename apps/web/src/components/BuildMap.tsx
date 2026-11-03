@@ -1,5 +1,6 @@
 import { MODULES, RELATIONSHIPS } from '@kreators/shared';
 import { BUILD_FILES, BUILD_SECTIONS, itemsOf, percentOf, type BuildCard, type BuildItem, type BuildState } from '../lib/buildMap';
+import { tie } from '../lib/text';
 import { Section } from './Section';
 import { Icon } from './Icon';
 import { AppIcon } from './AppIcon';
@@ -41,7 +42,7 @@ function Block({ item }: { item: BuildItem }) {
         {/* An item whose note is an app's path wears that app's icon (the labels hold no emoji). */}
         {mod && <AppIcon name={mod.icon} size={14} className="mr-xs inline-block align-[-2px]" />}
         {label}
-        {note && <span className="block text-[12px] font-bold text-ink-soft">{note}</span>}
+        {note && <span className="block text-balance text-[12px] font-bold text-ink-soft">{tie(note)}</span>}
       </span>
     </li>
   );
@@ -55,7 +56,7 @@ function Card({ card, color }: { card: BuildCard; color: string }) {
       <div className="flex items-center gap-sm">
         <Ring value={percentOf(all)} color={color} />
         <div className="min-w-0">
-          <h3 className="text-[18px] leading-tight">{card.title}</h3>
+          <h3 className="text-[18px] leading-tight">{tie(card.title)}</h3>
           {card.route && <p className="m-0 flex flex-col break-words font-mono text-[12px] font-bold text-ink-mute">{card.route.split(", ").map((r) => <span key={r}>{r}</span>)}</p>}
         </div>
       </div>
@@ -119,13 +120,13 @@ export function BuildMap() {
           ].map(([b, l]) => (
             <div key={String(l)} className="rounded-tile bg-card p-sm shadow-toy-soft">
               <span className="block font-display text-[24px] font-extrabold leading-none">{b}</span>
-              <span className="mt-xs block text-[12px] font-bold text-ink-soft">{l}</span>
+              <span className="mt-xs block text-balance text-[12px] font-bold text-ink-soft">{tie(String(l))}</span>
             </div>
           ))}
         </div>
-        <ul className="mt-sm flex list-none flex-wrap gap-xs p-0 m-0" aria-label="What the colours mean">
+        <ul className="fill-row-all mt-sm flex list-none flex-wrap gap-xs p-0 m-0" aria-label="What the colours mean">
           {(Object.keys(STATE) as BuildState[]).map((k) => (
-            <li key={k} className="rounded-pill border px-sm py-xs text-[12px] font-extrabold" style={{ background: STATE[k].bg, borderColor: STATE[k].edge, borderStyle: k === 'off' ? 'dashed' : 'solid' }}>
+            <li key={k} className="rounded-pill border px-sm py-xs text-center text-[12px] font-extrabold" style={{ background: STATE[k].bg, borderColor: STATE[k].edge, borderStyle: k === 'off' ? 'dashed' : 'solid' }}>
               {STATE[k].name}
             </li>
           ))}

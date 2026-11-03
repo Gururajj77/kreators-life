@@ -1,4 +1,4 @@
-import { REPEAT_KINDS, MAX_REPEAT_EVERY, repeatLabel, type Repeat, type RepeatKind } from '@kreators/shared';
+import { REPEAT_KINDS, MAX_REPEAT_EVERY, repeatLabel, type Repeat, type RepeatKind, LOCALE } from '@kreators/shared';
 import { FIELD } from '../lib/ui';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -89,7 +89,7 @@ export function RepeatPicker({ value, anchor, onChange, onAnchor, note = '' }: {
               <span className="mt-xs block text-[12px] font-semibold text-ink-soft">A day past the end of a short month falls on its last day.</span>
             </label>
           )}
-          {rule.kind === 'yearly' && valid && <p className="m-0 text-[14px] font-bold">On {new Date(`${anchor}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}</p>}
+          {rule.kind === 'yearly' && valid && <p className="m-0 text-[14px] font-bold">On {new Date(`${anchor}T00:00:00`).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long' })}</p>}
           <label className="block">
             <span className="block text-[14px] font-bold">Stop after (optional)</span>
             <input type="date" value={rule.until ?? ''} onChange={(e) => setRule({ until: e.target.value || null })} className={FIELD} />

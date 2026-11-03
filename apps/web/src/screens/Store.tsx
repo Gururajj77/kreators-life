@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { Button } from '../components/Button';
 import { LockedButton } from '../components/LockedButton';
 import { ListingSheet } from '../components/ListingSheet';
+import { FadeImage } from '../components/Media';
 import { MediaSection } from '../components/MediaSection';
 import { BackLink } from '../components/PageHeader';
 import { moneyRounded as money } from '../components/PeriodPanel';
@@ -84,7 +85,8 @@ export function Store() {
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Store</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Gear and software for creators. New things come through partner links, so kreators.app may earn a share. Pre-owned things come from other creators: make an offer, talk it over, meet up. Kits say what to buy at your stage, within a budget.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Gear new from partners, or pre-owned from other creators.</p>
+        <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Partner link. Kreators may earn a share.</p>
         <div className="fill-row mt-md flex flex-wrap gap-xs">
           <Button onClick={() => setSelling(true)}>Sell something</Button>
           {admin && (
@@ -176,7 +178,7 @@ export function Store() {
         <h2 id="new-heading" className="text-[24px]">
           New
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Picked by the team. The link takes you to the seller's site; kreators.app may earn a share of what you buy.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Picked by the team. Each link opens the seller's site.</p>
         {items.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{d?.items.length ? 'Nothing here for these filters.' : 'Nothing on the shelf yet.'}</p>}
         <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
           {items.map((i) => (
@@ -193,7 +195,7 @@ export function Store() {
         <h2 id="preowned-heading" className="text-[24px]">
           Pre-owned
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">From other creators. Tap one to make an offer or ask a question. Sold ones stay for two weeks so you can see what things go for.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Tap one to make an offer or ask a question. Sold ones stay two weeks, so you see prices.</p>
         {listings.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{d?.listings.length ? 'Nothing here for these filters.' : 'Nothing listed yet. Yours could be first.'}</p>}
         <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
           {listings.map((l) => (
@@ -257,7 +259,7 @@ function Price({ cents, original, currency }: { cents: number; original?: number
 function ItemBody({ item }: { item: StoreItem }) {
   return (
     <div className="flex flex-col gap-xs">
-      {item.imageUrl && <img src={item.imageUrl} alt={item.title} loading="lazy" decoding="async" className="aspect-video w-full rounded-tile bg-paper object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />}
+      {item.imageUrl && <FadeImage src={item.imageUrl} alt={item.title} loading="lazy" decoding="async" frame="aspect-video w-full rounded-tile bg-paper" className="h-full w-full object-cover" />}
       <div className="flex flex-wrap items-center gap-xs">
         {isFeatured(item.featuredUntil) && <FeaturedTag />}
         <FactTag kind="category">{item.category}</FactTag>
@@ -314,7 +316,7 @@ function ListingButton({ l, onOpen }: { l: PreownedListing; onOpen: (id: string)
   return (
     <button type="button" onClick={() => onOpen(l.id)} className={`toy w-full text-left text-ink ${cardClass(isFeatured(l.featuredUntil) && l.status === 'live')}`}>
       <span className="flex gap-sm">
-        {l.images[0] && <img src={l.images[0]} alt={l.title} loading="lazy" decoding="async" className="size-[80px] shrink-0 rounded-tile bg-paper object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />}
+        {l.images[0] && <FadeImage src={l.images[0]} alt={l.title} loading="lazy" decoding="async" frame="size-[80px] shrink-0 rounded-tile bg-paper" className="h-full w-full object-cover" />}
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-xs">
             {isFeatured(l.featuredUntil) && l.status === 'live' && <FeaturedTag />}
@@ -412,7 +414,7 @@ function SellSheet({ open, onClose, onSaved, city }: { open: boolean; onClose: (
           save.mutate();
         }}
       >
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">Say what it is, what state it is in and what you want for it. Buyers make offers and ask questions here; you settle the handover between you.</p>
+        <p className="m-0 text-[14px] font-semibold text-ink-soft">Say what it is, its state and your price. You and the buyer settle the handover.</p>
         <Field label="What is it">
           <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Sony ZV-E10 body" className={FIELD} />
         </Field>
@@ -597,7 +599,7 @@ function KitSheet({ open, onClose, onSaved, items, listings }: { open: boolean; 
           save.mutate();
         }}
       >
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">Team only. Pick the pieces someone at this stage should buy within this budget. New gear and pre-owned pieces both go in.</p>
+        <p className="m-0 text-[14px] font-semibold text-ink-soft">Team only. Pick what to buy at this stage, in this budget, new or pre-owned.</p>
         <Field label="Name">
           <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Starter kit under 50k" className={FIELD} />
         </Field>

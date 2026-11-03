@@ -1,4 +1,4 @@
-import { RELATIONSHIP_BY_KEY } from '@kreators/shared';
+import { RELATIONSHIP_BY_KEY, LOCALE } from '@kreators/shared';
 import { useEffect, useState } from 'react';
 import { Button } from '../components/Button';
 import { StatTile } from '../components/Charts';
@@ -19,7 +19,7 @@ const LEVELS: [string, string][] = [
 ];
 const TONE = { error: RELATIONSHIP_BY_KEY.servant_leader.color, warn: RELATIONSHIP_BY_KEY.friendship.color, info: RELATIONSHIP_BY_KEY.self.color } as const;
 const WORD = { error: 'Error', warn: 'Refused', info: 'Change' } as const;
-const clock = (iso: string) => new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' });
+const clock = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' });
 
 /**
  * The app's own log, as data: what happened, where, by whom and how it went, newest first. For super admins, because it names people.

@@ -12,14 +12,14 @@ import { Button } from './Button';
 import { Field } from './InvoiceView';
 import { Sheet } from './Sheet';
 
-/** The one print button a document has. A PDF is the browser's own print and save, so "Download PDF" and "Print" were one action twice. */
+/** The one print button a document has, "Download". A PDF is the browser's own print and save (the hint says so), so Download and Print are one action. */
 export function PrintButton({ onPrint, size = 'md', variant = 'outline', full = false }: { onPrint: () => void; size?: 'sm' | 'md'; variant?: 'outline' | 'primary'; full?: boolean }) {
   const hint = useId();
   return (
     <>
       <Button size={size} variant={variant} full={full} onClick={onPrint} aria-describedby={hint}>
         <AnimatedIcon name="download" size={18} />
-        Download or print
+        Download
       </Button>
       <span id={hint} className="sr-only">
         Opens the print window. Choose Save as PDF there to download it.

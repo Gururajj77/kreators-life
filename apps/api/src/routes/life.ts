@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
-import { levelFromXp, wellbeingLabel, type LifeArea, type LifePart, type LifeSummary, type RelationshipKey } from '@kreators/shared';
+import { levelFromXp, money, wellbeingLabel, type LifeArea, type LifePart, type LifeSummary, type RelationshipKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
+import { currencyOf } from '../db';
 
 /** One dashboard for the five areas of a life, each part pointing at the screen where you act on it. */
 export const life = new Hono<AppEnv>();
@@ -31,10 +32,10 @@ export async function lifeSummary(db: D1Database, userId: string): Promise<LifeS
     db.prepare('SELECT relationship, xp FROM relationship_scores WHERE user_id = ?').bind(user.id).all<{ relationship: RelationshipKey; xp: number }>(),
     db.prepare("SELECT substr(completed_at, 1, 10) AS d, COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? GROUP BY d").bind(user.id, `${since14}T00:00:00`).all<{ d: string; n: number }>(),
     db.prepare('SELECT date FROM spark_completions WHERE user_id = ? AND date >= ?').bind(user.id, since14).all<{ date: string }>(),
-    db.prepare("SELECT kind, SUM(amount_cents) AS cents FROM finance_transactions WHERE user_id = ? AND date LIKE ? GROUP BY kind").bind(user.id, `${month}%`).all<{ kind: 'income' | 'expense'; cents: number }>(),
-    db.prepare("SELECT b.category, b.monthly_cents, (SELECT COALESCE(SUM(amount_cents), 0) FROM finance_transactions t WHERE t.user_id = b.user_id AND t.kind = 'expense' AND t.category = b.category AND t.date LIKE ?) AS spent FROM finance_budgets b WHERE b.user_id = ?").bind(`${month}%`, user.id).all<{ category: string; monthly_cents: number; spent: number }>(),
+    db.prepare("SELECT kind, SUM(amount_cents) AS cents, MAX(currency) AS currency FROM finance_transactions WHERE user_id = ? AND date LIKE ? AND currency = ? GROUP BY kind").bind(user.id, `${month}%`, currencyOf(user)).all<{ kind: 'income' | 'expense'; cents: number; currency: string | null }>(),
+    db.prepare("SELECT b.category, b.monthly_cents, (SELECT COALESCE(SUM(amount_cents), 0) FROM finance_transactions t WHERE t.user_id = b.user_id AND t.kind = 'expense' AND t.category = b.category AND t.date LIKE ? AND t.currency = ?) AS spent FROM finance_budgets b WHERE b.user_id = ?").bind(`${month}%`, currencyOf(user), user.id).all<{ category: string; monthly_cents: number; spent: number }>(),
     db.prepare("SELECT COUNT(*) AS n FROM invoices WHERE user_id = ? AND status = 'sent' AND due_date IS NOT NULL AND due_date < ?").bind(user.id, today).first<{ n: number }>(),
-    db.prepare("SELECT g.kind, g.target_cents, g.saved_cents, (SELECT COALESCE(SUM(amount_cents), 0) FROM finance_transactions t WHERE t.user_id = g.user_id AND t.kind = 'income' AND t.date >= g.start_date) AS earned FROM finance_goals g WHERE g.user_id = ?").bind(user.id).all<{ kind: string; target_cents: number; saved_cents: number; earned: number }>(),
+    db.prepare("SELECT g.kind, g.target_cents, g.saved_cents, (SELECT COALESCE(SUM(amount_cents), 0) FROM finance_transactions t WHERE t.user_id = g.user_id AND t.kind = 'income' AND t.currency = ? AND t.date >= g.start_date) AS earned FROM finance_goals g WHERE g.user_id = ?").bind(currencyOf(user), user.id).all<{ kind: string; target_cents: number; saved_cents: number; earned: number }>(),
     db
       .prepare(
         `SELECT e.status, (SELECT COUNT(*) FROM course_assignments a JOIN cohorts k ON k.program_id = a.program_id WHERE k.id = e.cohort_id) AS total,
@@ -105,7 +106,7 @@ export async function lifeSummary(db: D1Database, userId: string): Promise<LifeS
   ]);
 
   const financial: LifePart[] = [
-    { label: 'This month', value: hasFinance ? `${income >= expense ? 'kept' : 'short'} ${(Math.abs(income - expense) / 100).toLocaleString()}` : 'nothing logged', score: hasFinance ? clamp(income === 0 ? (expense > 0 ? 20 : 50) : 50 + ((income - expense) / income) * 50) : null, path: '/finance', hint: 'Keeping more than you spend scores above fifty.' },
+    { label: 'This month', value: hasFinance ? `${income >= expense ? 'kept' : 'short'} ${money(Math.abs(income - expense), currencyOf(user))}` : 'nothing logged', score: hasFinance ? clamp(income === 0 ? (expense > 0 ? 20 : 50) : 50 + ((income - expense) / income) * 50) : null, path: '/finance', hint: 'Keeping more than you spend scores above fifty.' },
     { label: 'Budgets', value: budgets.results.length ? (over ? `${over} over` : 'all within') : 'none set', score: budgets.results.length ? clamp(100 - over * 25) : null, path: '/finance', hint: 'Every category over budget costs twenty-five points.' },
     { label: 'Invoices', value: (invoices?.n ?? 0) > 0 ? `${invoices?.n} overdue` : 'none overdue', score: hasFinance ? clamp(100 - (invoices?.n ?? 0) * 30) : null, path: '/finance', hint: 'Chase what is overdue.' },
     { label: 'Goals', value: goals.results.length ? `${Math.round(avg(goalPct) ?? 0)}% there` : 'none yet', score: goals.results.length ? clamp(avg(goalPct) ?? 0) : null, path: '/finance', hint: 'Average progress across your money goals.' },

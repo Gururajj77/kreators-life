@@ -1,6 +1,6 @@
 import { quoteCode, redeem, release, type Quoted } from '../discounts';
 import { Hono } from 'hono';
-import { EVENT_TYPE_META, EVENT_TYPES, type EventRegistration, type PartyEvent } from '@kreators/shared';
+import { DEFAULT_ZONE, EVENT_TYPE_META, EVENT_TYPES, type EventRegistration, type PartyEvent } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { audit, can, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, str, isClubMember, pageOf, paged, httpUrl } from '../db';
 import { claimEventCode, codeOf, guestView, hostView, setEventCode } from '../attendee';
@@ -47,7 +47,7 @@ party.post('/events', async (c) => {
   const id = newId();
   await db
     .prepare("INSERT INTO events (id, title, description, event_type, host_user_id, venue, online_url, timezone, starts_at, ends_at, capacity, price_points, visibility, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?)")
-    .bind(id, title, str(body.description, 3000), type, user.id, str(body.venue, 200), httpUrl(body.onlineUrl, 500) || null, str(body.timezone, 60, 'UTC') || 'UTC', start.toISOString(), new Date(start.getTime() + minutes * 60_000).toISOString(), num(body.capacity, null, 1, 100000), num(body.pricePoints, 0, 0) ?? 0, oneOf(body.visibility, ['public', 'private', 'club'] as const, 'public'), nowIso())
+    .bind(id, title, str(body.description, 3000), type, user.id, str(body.venue, 200), httpUrl(body.onlineUrl, 500) || null, str(body.timezone, 60) || user.timezone || DEFAULT_ZONE, start.toISOString(), new Date(start.getTime() + minutes * 60_000).toISOString(), num(body.capacity, null, 1, 100000), num(body.pricePoints, 0, 0) ?? 0, oneOf(body.visibility, ['public', 'private', 'club'] as const, 'public'), nowIso())
     .run();
   await audit(db, user.id, 'event.create', 'event', id, '', title);
   // An attendee code from the start, when the host set xp for the guests. A bad xp or code is said, and the event stays.

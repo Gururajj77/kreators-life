@@ -52,7 +52,7 @@ function ToolRow({ t, reviewer, onChange }: { t: Tool; reviewer: boolean; onChan
       </div>
       <MediaSection type="tool" id={t.id} title="Pictures and videos" />
       {reviewer && (
-        <div className="mt-sm flex flex-wrap gap-xs">
+        <div className="fill-row-all mt-sm flex flex-wrap gap-xs">
           {!t.verified && (
             <Button onClick={() => set.mutate({ verified: true })} disabled={set.isPending}>
               Verify

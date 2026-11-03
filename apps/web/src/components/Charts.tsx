@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { LOCALE } from '@kreators/shared';
 import type React from 'react';
 import { Link } from 'react-router';
 import { ChevronLeft, ChevronRight, type LucideIcon, ArrowRight } from 'lucide-react';
@@ -115,6 +116,12 @@ function Frame({ width, height, min, max, yFormat, labels, shown, onFill, axes, 
     <>
       {axes && (
         <div className="relative shrink-0 text-right text-[12px] font-bold" style={{ height, minWidth: 24 }} aria-hidden="true">
+          {/* Invisible copies in the flow give the column the widest label's width, so a long one (₹12,34,567) never spills past the card. */}
+          {ticks.map((t, i) => (
+            <span key={`w${i}`} className="invisible block h-0 overflow-hidden leading-none whitespace-nowrap">
+              {yFormat(t)}
+            </span>
+          ))}
           {ticks.map((t, i) => (
             <span key={i} className={`absolute right-0 block -translate-y-1/2 leading-none whitespace-nowrap ${onFill ? 'text-on-fill opacity-85' : 'text-ink-soft'}`} style={{ top: y(t) }}>
               {yFormat(t)}
@@ -444,7 +451,7 @@ export function CalendarGrid({
     const d = new Date(y ?? 2026, (m ?? 1) - 1 + by, 1);
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
   };
-  const name = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const name = first.toLocaleDateString(LOCALE, { month: 'long', year: 'numeric' });
   const nextBlocked = Boolean(maxDate && shift(1) > maxDate.slice(0, 7));
   const arrow = `toy toy-flat flex size-[44px] items-center justify-center rounded-pill ${onFill ? 'text-on-fill' : 'text-ink-soft hover:text-ink'} disabled:opacity-40`;
   const ring = (key: string) => (key === today || key === selected ? { outline: `2px solid ${onFill ? 'white' : 'var(--color-ink)'}`, outlineOffset: 2 } : undefined);
@@ -504,7 +511,7 @@ export function CalendarGrid({
               type="button"
               disabled={blocked}
               onClick={() => onPick(key)}
-              aria-label={`${new Date(`${key}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}, ${mark ? 'has an entry. Open it' : blocked ? 'not yet' : 'nothing yet. Add one'}`}
+              aria-label={`${new Date(`${key}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long' })}, ${mark ? 'has an entry. Open it' : blocked ? 'not yet' : 'nothing yet. Add one'}`}
               className={`toy toy-flat flex min-h-[44px] items-center justify-center rounded-pill ${blocked ? 'opacity-40' : ''}`}
             >
               {face}

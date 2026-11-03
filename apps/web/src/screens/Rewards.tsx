@@ -1,20 +1,24 @@
-import { POINTS, REWARD_BY_KEY, REWARD_GROUPS } from '@kreators/shared';
+import { CARD_GAME_BY_KEY, POINTS, REWARD_BY_KEY, REWARD_GROUPS } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
+import { useWide } from '../components/ViewToggle';
 import { Nudge } from '../components/Nudge';
 import { useCelebrate } from '../components/Celebration';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
+import { tie } from '../lib/text';
 import { useCardGames, useRefreshAll, useRewards } from '../lib/queries';
 import { LockedButton } from '../components/LockedButton';
 import { ConfirmSpend } from '../components/ConfirmSpend';
 import { AppIcon } from '../components/AppIcon';
+import { RollNumber } from '../components/fx/RollNumber';
 
 export function Rewards() {
   const q = useRewards();
+  const wide = useWide();
   const gamesQ = useCardGames();
   const refresh = useRefreshAll();
   const celebrate = useCelebrate();
@@ -70,15 +74,15 @@ export function Rewards() {
               Your balance
             </h2>
             <p className="m-0 font-display text-[36px] font-extrabold leading-none">
-              {data.points} <span className="text-[18px]">points</span>
+              <RollNumber value={data.points} /> <span className="text-[18px]">points</span>
             </p>
             <p className="mt-xs m-0 text-[14px] font-semibold text-on-ink/80">
               Check in daily for {POINTS.checkin}. Every {POINTS.streakBonusEvery}th day in a row pays {POINTS.streakBonus} extra.
             </p>
           </section>
-          <Nudge className="mt-sm" text={`A check-in is ${POINTS.checkin} points, every ${POINTS.streakBonusEvery}th day in a row ${POINTS.streakBonus} more, a like on your post 1, a new follower 2.`} />
+          <Nudge className="mt-sm" text="A like on your post pays 1 point, and a new follower 2." />
           <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">
-            Gear is a reservation until the first drop ships; cancel any time and the points come straight back. A card game opens in the app at once and is yours for good.
+            Gear is a reservation until the first drop ships, and cancelling gives the points back. A card game opens at once, for good.
           </p>
           {error && (
             <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
@@ -107,14 +111,16 @@ export function Rewards() {
                       const can = data.points >= r.cost;
                       const tile = g.key === 'games';
                       return (
-                        <li key={r.key} className={tile ? 'flex flex-col items-stretch gap-sm rounded-tile bg-card p-sm shadow-toy-soft' : 'flex flex-wrap items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft sm:flex-nowrap'}>
+                        <li key={r.key} data-pillar={r.game ? CARD_GAME_BY_KEY[r.game]?.accent : r.kind === 'event' ? 'divine' : 'parent_child'} className={tile ? 'flex flex-col items-stretch gap-sm rounded-tile bg-card p-sm shadow-toy-soft' : 'flex flex-wrap items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft sm:flex-nowrap'}>
                           <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill text-[24px]" style={{ background: r.kind === 'event' ? 'var(--tint-purple)' : 'var(--tint-yellow)' }} aria-hidden="true">
                             {r.emoji}
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block text-[16px] font-bold">{r.name}</span>
+                            <span className="block text-balance text-[16px] font-bold">{tie(r.name)}</span>
+                            {/* On a phone the name, the price and what is still to go are enough; the line about the item shows from the `md` width up (`useWide`). */}
                             <span className="block text-[14px] font-semibold text-ink-soft">
-                              {r.blurb} {can ? '' : `${r.cost - data.points} more points to go.`}
+                              {wide && `${r.blurb} `}
+                              {can ? '' : `${r.cost - data.points} more points to go.`}
                             </span>
                             {r.link && (
                               <a href={r.link} target="_blank" rel="noreferrer" className="text-[14px] font-bold underline underline-offset-4">
@@ -159,7 +165,7 @@ export function Rewards() {
                   return (
                     <li key={x.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                       <span className="min-w-0 flex-1">
-                        <span className="block text-[16px] font-bold">{r?.name ?? x.rewardKey}</span>
+                        <span className="block text-balance text-[16px] font-bold">{tie(r?.name ?? x.rewardKey)}</span>
                         <span className="block text-[14px] font-semibold text-ink-soft">
                           {x.points} points, {r?.kind === 'unlock' ? 'unlocked' : x.status}
                           {x.note ? `. ${x.note}` : ''}

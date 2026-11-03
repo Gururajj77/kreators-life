@@ -5,6 +5,7 @@ import {
   agencyDocStarter,
   contractAsText,
   contractVarsFor,
+  cleanContractAnswers,
   DOC_COMMENT_MAX,
   docDate,
   docRef,
@@ -24,6 +25,7 @@ import {
   type ContractDoc,
   type DocComment,
   type PublicAgencyDoc,
+  invoiceFromProfile,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { audit, dayFromDevice, nameOf, newId, notify, nowIso, oneOf, pageOf, paged, randomCode, str } from '../db';
@@ -63,19 +65,8 @@ const toFull = (r: DocRow): AgencyDocFull => ({
   createdAt: r.created_at,
 });
 
-/** Only answers to the document's own questions, and only options it offered, are kept. */
-function cleanAnswers(doc: ContractDoc, raw: unknown): Record<string, ContractAnswer> {
-  const given = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  const out: Record<string, ContractAnswer> = {};
-  for (const section of doc.sections) {
-    for (const q of section.questions ?? []) {
-      const a = given[q.id] && typeof given[q.id] === 'object' ? (given[q.id] as Record<string, unknown>) : {};
-      const picked = (Array.isArray(a.picked) ? a.picked : []).filter((x): x is string => typeof x === 'string' && q.options.includes(x)).slice(0, q.multi ? q.options.length : 1);
-      out[q.id] = { picked, other: q.other ? str(a.other, 200) : '', text: q.text ? str(a.text, 1500) : '' };
-    }
-  }
-  return out;
-}
+/** Only answers to the document's own questions, only options it offered, only fields it names and only web links are kept. */
+const cleanAnswers = (doc: ContractDoc, raw: unknown): Record<string, ContractAnswer> => cleanContractAnswers(doc, raw);
 
 agencyOther.get('/', async (c) => {
   const db = c.env.DB;
@@ -227,10 +218,14 @@ agencyOther.patch('/:id', async (c) => {
         clientId = cl.id;
       }
     }
-    await db
-      .prepare("UPDATE agency_docs SET body_json = ?, title = ?, client_id = ?, status = CASE WHEN status IN ('sent', 'revised') THEN 'revised' ELSE status END, revised_at = CASE WHEN status IN ('sent', 'revised') THEN ? ELSE revised_at END, updated_at = ? WHERE id = ? AND user_id = ? AND status IN ('draft', 'sent', 'revised')")
-      .bind(JSON.stringify(doc), doc.title, clientId, now, now, row.id, user.id)
+    // Saving as you go: the change lands only on the version the page read (`ifUpdatedAt`), so another tab's save is never written over.
+    const guard = typeof body.ifUpdatedAt === 'string' ? body.ifUpdatedAt : null;
+    if (guard !== null && guard !== row.updated_at) return c.json({ error: 'changed' }, 409);
+    const res = await db
+      .prepare(`UPDATE agency_docs SET body_json = ?, title = ?, client_id = ?, status = CASE WHEN status IN ('sent', 'revised') THEN 'revised' ELSE status END, revised_at = CASE WHEN status IN ('sent', 'revised') THEN ? ELSE revised_at END, updated_at = ? WHERE id = ? AND user_id = ? AND status IN ('draft', 'sent', 'revised')${guard !== null ? ' AND updated_at = ?' : ''}`)
+      .bind(JSON.stringify(doc), doc.title, clientId, now, now, row.id, user.id, ...(guard !== null ? [guard] : []))
       .run();
+    if (guard !== null && res.meta.changes !== 1) return c.json({ error: 'changed' }, 409);
   }
   if (typeof body.status === 'string') {
     const next = oneOf(body.status, ['draft', 'sent'] as const, 'draft');
@@ -274,7 +269,7 @@ agencyOther.post('/:id/email', async (c) => {
     intro: cover ? cover.message : 'Hello,\n\nHere is the document for you to read. You can write a comment or approve it at the link below.',
     text: cover ? '' : contractAsText(full.doc, { reference: full.ref, date: row.sent_at ?? row.created_at, answers: full.answers, acceptance: full.acceptance }),
     link: publicUrl(c.env, `/d/${row.token}`),
-    replyTo: settings.profile.from.email,
+    replyTo: invoiceFromProfile(settings.profile).email,
   });
   await logDoc(db, user.id, 'doc', row.id, result.sent ? 'emailed' : 'email-not-sent', maskEmail(who.to));
   await audit(db, user.id, 'agency_doc.email', 'doc', row.id, '', maskEmail(who.to));

@@ -72,6 +72,7 @@ import { calendarMe, calendarPublic } from './routes/calendar';
 import { agencyDocs, contractsPublic } from './routes/agencyDocs';
 import { agencyOther, docsPublic } from './routes/agencyOther';
 import { connect } from './routes/connect';
+import { activity } from './routes/activity';
 import { logger, pruneLogs, writeClientError, writeLog } from './logs';
 import { blockedPath, originAllowed, PAGE_HEADERS } from './headers';
 
@@ -191,6 +192,7 @@ for (const r of ROUTE_LIMITS) if (!isOpenDoor(r.path)) app.on(r.method, r.path, 
 app.route('/me/coach', myCoach);
 app.route('/me/calendar', calendarMe);
 app.route('/me/legal', meLegal);
+app.route('/me/activity', activity);
 app.route('/me', me);
 app.route('/onboarding', onboarding);
 app.route('/session', session);

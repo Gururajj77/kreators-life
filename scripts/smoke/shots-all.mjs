@@ -75,9 +75,23 @@ const site = [];
 // Agency: a client with a pipeline, time, an invoice, an agreement and a client link, so every Agency page has real data.
 await api('PATCH', '/me/modules', { key: 'agency', on: true }, M.token);
 await api('PUT', '/agency/settings', { currency: 'INR', weeklyHours: 30, profile: { from: { name: 'Studio Example', line: 'Prop. Sample for Studio Example', taxIds: [{ label: 'PAN', value: 'ABCDE1234F' }], address: '1 Example Road, Bengaluru', email: 'hello@example.test', phone: '+91 90000 00000' }, bank: { bankName: 'Example Bank', holder: 'Sample Person', account: '00112233', ifsc: 'EXMP0000001', upi: 'sample@upi' }, invoicePrefix: 'EX', payDays: 10, gstBps: 1800, signerName: 'Sample Person', signerTitle: 'Founder', jurisdiction: 'Bengaluru, Karnataka' } }, M.token);
-const agClient = await api('POST', '/agency/clients', { name: 'Acme Foods', contactName: 'Asha Rao', contactEmail: 'asha@acme.test', retainerCents: 5000000, piecesPerMonth: 8, hoursPerMonth: 20, channels: ['YouTube', 'Instagram'], renewalDate: new Date(Date.now() + 9 * 86_400_000).toISOString().slice(0, 10) }, M.token);
-await api('POST', '/agency/clients', { name: 'Bloom Skincare', retainerCents: 3000000, piecesPerMonth: 4, status: 'lead' }, M.token);
-await api('POST', '/agency/clients', { name: 'North Studio', retainerCents: 1500000, status: 'paused', health: 'amber' }, M.token);
+// A client needs an email and a password for its link. Acme's link is opened without one and its onboarding is sent, so the shot is the
+// client's dashboard; Bloom keeps its password (the lock screen) and North Studio is open but not onboarded (the form).
+const onboardingDraft = (questions, name, email) => ({
+  legalName: name, brands: name, addressLine: '12 Main Road', city: 'Bengaluru', state: 'Karnataka', pin: '560038', gstin: '', pan: '',
+  pocName: 'Asha Rao', designation: 'Marketing head', email, phone: '9876543210', billingEmail: '',
+  brief: Object.fromEntries(questions.map((q) => [q.id, q.links ? { picked: [], other: '', text: '', links: ['https://example.test/1', 'https://example.test/2', 'https://example.test/3'] } : (q.fields ?? []).length ? { picked: [], other: '', text: '', fields: { [q.fields[0]]: 'Warm and bold' } } : q.text ? { picked: [], other: '', text: 'Curious and hungry' } : { picked: [q.options[0]], other: '', text: '' }])),
+  references: ['https://example.test/1', 'https://example.test/2', 'https://example.test/3'],
+});
+const agClient = await api('POST', '/agency/clients', { portalPassword: 'generate', name: 'Acme Foods', contactName: 'Asha Rao', contactEmail: 'asha@acme.test', retainerCents: 5000000, piecesPerMonth: 8, hoursPerMonth: 20, channels: ['YouTube', 'Instagram'], renewalDate: new Date(Date.now() + 9 * 86_400_000).toISOString().slice(0, 10) }, M.token);
+const lockedClient = await api('POST', '/agency/clients', { portalPassword: 'generate', contactEmail: 'ira@bloom.test', name: 'Bloom Skincare', retainerCents: 3000000, piecesPerMonth: 4, status: 'lead' }, M.token);
+const formClient = await api('POST', '/agency/clients', { portalPassword: 'generate', contactEmail: 'team@north.test', name: 'North Studio', retainerCents: 1500000, status: 'paused', health: 'amber' }, M.token);
+if (formClient.id) await api('PUT', `/agency/clients/${formClient.id}/password`, { clear: true }, M.token);
+if (agClient.id) {
+  await api('PUT', `/agency/clients/${agClient.id}/password`, { clear: true }, M.token);
+  const form = await api('GET', `/public/agency/${agClient.portalToken}/onboarding`);
+  await api('POST', `/public/agency/${agClient.portalToken}/onboarding/submit`, { draft: onboardingDraft(form.questions ?? [], 'Acme Foods', 'asha@acme.test') });
+}
 let agencyPaths = [];
 if (agClient.id) {
   const day = (n) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
@@ -104,6 +118,8 @@ if (agClient.id) {
   await api('POST', '/reviews/kpis', { name: 'Sales calls', unit: 'number', direction: 'up', cadence: 'month', target: 20 }, M.token);
   agencyPaths = ['/agency', '/agency?tab=pipeline', '/agency?tab=clients', '/agency?tab=clients&cview=list', '/agency?tab=invoices', '/agency?tab=agreements', '/agency?tab=settings', `/agency/${agClient.id}`, inv.invoice?.id ? `/agency/invoices/${inv.invoice.id}` : null, kc.id ? `/agency/contracts/${kc.id}` : null, '/reviews?kind=month'];
   if (portal.portalToken) site.push(`/a/${portal.portalToken}`);
+  if (lockedClient.portalToken) site.push(`/a/${lockedClient.portalToken}`);
+  if (formClient.portalToken) site.push(`/a/${formClient.portalToken}`);
   if (inv.invoice?.token) site.push(`/i/${inv.invoice.token}`);
   if (contractToken) site.push(`/k/${contractToken}`);
 }

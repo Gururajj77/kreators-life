@@ -1,4 +1,4 @@
-import { RELATIONSHIP_BY_KEY, TASK_SORTS, addDays, openDay, isTaskSort, sortTasks, type Node } from '@kreators/shared';
+import { RELATIONSHIP_BY_KEY, TASK_SORTS, addDays, openDay, isTaskSort, sortTasks, type Node, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Suspense, useEffect, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
@@ -13,6 +13,7 @@ import { EvolutionReveal } from '../components/EvolutionReveal';
 import { Fold } from '../components/Fold';
 import { Icon } from '../components/Icon';
 import { Flame } from 'lucide-react';
+import { RollNumber } from '../components/fx/RollNumber';
 import { NotToDoBlock } from '../components/NotToDoList';
 import { Nudge } from '../components/Nudge';
 import { Person } from '../components/Person';
@@ -146,7 +147,7 @@ export function Today() {
   const backlog = backlogAll.filter((t) => !t.remind);
   const waiting = Math.max(0, (data?.backlogTotal ?? 0) - remembered.length);
   const done = data?.done ?? [];
-  const doneAt = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '');
+  const doneAt = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString(LOCALE, { hour: 'numeric', minute: '2-digit' }) : '');
   const taskDone = Boolean(data && data.doneRecently > 0);
   const doneCount = data ? Number(data.checkedIn) + Number(data.spark.done) + Number(taskDone) : 0;
   const identity = me.data?.identity ?? null;
@@ -160,7 +161,9 @@ export function Today() {
           {data && (
             <span className="inline-flex shrink-0 items-center gap-xs rounded-pill bg-card px-sm py-xs text-[14px] font-extrabold shadow-toy-soft">
               <Icon icon={Flame} size={16} />
-              {data.streak} {data.streak === 1 ? 'day' : 'days'}
+              <span>
+                <RollNumber value={data.streak} /> {data.streak === 1 ? 'day' : 'days'}
+              </span>
             </span>
           )}
         </div>
@@ -179,7 +182,8 @@ export function Today() {
         )}
       </header>
 
-      <RemindersSection />
+      {/* Daily lists the remembered tasks once, under To remember; the section here leaves its copy out. */}
+      <RemindersSection tasks={false} />
 
       {isPending && (
         <SkeletonList className="mt-md" count={3} lines={3} label="Loading your day" />
@@ -229,7 +233,7 @@ export function Today() {
 
           <RoutineSection date={date} />
 
-          <section className="mt-lg" aria-labelledby="spark-heading">
+          <section data-pillar={rel.key} className="mt-lg" aria-labelledby="spark-heading">
             <div className="flex items-center gap-sm">
               <Avatar relationship={rel.key} size={36} still decorative mood={data.spark.done ? 'excited' : 'happy'} />
               <h2 id="spark-heading" className="text-[18px]">
@@ -318,7 +322,7 @@ export function Today() {
                   </h3>
                   <span className="text-[14px] font-bold text-ink-soft">{remembered.length}</span>
                 </div>
-                <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Tagged Remember, with no day yet. Pick a day to move one up into Tasks and get a note in your inbox.</p>
+                <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Pick a day to move one into Tasks, with an inbox note.</p>
                 <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
                   {remembered.map((t) => (
                     <BacklogTask key={t.id} t={t} date={date} queue={queue} />
@@ -328,7 +332,7 @@ export function Today() {
             )}
             {waiting > 0 && (
               <Fold className="mt-md" title="Not scheduled yet" hint={String(waiting)}>
-                <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">These have no date yet. They stay out of Tasks until you pick a do date or a due date; then one moves up.</p>
+                <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Pick a do date or a due date to move one into Tasks.</p>
                 <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
                   {backlog.map((t) => (
                     <BacklogTask key={t.id} t={t} date={date} queue={queue} />

@@ -1,4 +1,4 @@
-import { BADGE_META, COACH_NOTE_MAX, COACH_SHARE_META, COACH_SHARE_PARTS, type CoachShare, type CoachSharePart, KIND_META, levelFromXp, PENALTIES, RELATIONSHIP_BY_KEY, RELATIONSHIPS, SCORE_LABEL, SCORECARD, weightWord, type Node, type NodeKind } from '@kreators/shared';
+import { BADGE_META, COACH_NOTE_MAX, COACH_SHARE_META, COACH_SHARE_PARTS, type CoachShare, type CoachSharePart, KIND_META, levelFromXp, PENALTIES, RELATIONSHIP_BY_KEY, RELATIONSHIPS, SCORE_LABEL, SCORECARD, weightWord, type Node, type NodeKind, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Inert } from '../components/Inert';
 import gsap from 'gsap';
@@ -95,7 +95,7 @@ function TaskLine({ t, onEdit }: { t: Node; onEdit?: () => void }) {
   const due = t.dueDate ? `${shortDay(t.dueDate)}${t.dueTime ? `, ${t.dueTime}` : ''}` : null;
   const hasTags = t.fromCoach || due !== null;
   return (
-    <li className="rounded-tile bg-card p-sm shadow-toy-soft">
+    <li data-pillar={t.relationship} className="rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="flex items-start gap-xs">
         <span className="mt-xs size-[12px] shrink-0 rounded-pill" style={{ background: RELATIONSHIP_BY_KEY[t.relationship].color }} aria-hidden="true" />
         <span className={`min-w-0 flex-1 text-[14px] font-bold ${t.status === 'done' ? 'text-ink-soft line-through' : ''}`}>{t.title}</span>
@@ -232,7 +232,7 @@ export function CoachStudent() {
           <div className="min-w-0">
             <h1 className="text-[30px]">{s.name}</h1>
             <p className="m-0 text-[14px] font-semibold text-ink-soft">
-              {BADGE_META[s.badge].name}{s.handle ? `, @${s.handle}` : ''}. Your student since {new Date(d.link.answeredAt ?? d.link.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}. Their today is {shortDay(d.date)}.
+              {BADGE_META[s.badge].name}{s.handle ? `, @${s.handle}` : ''}. Your student since {new Date(d.link.answeredAt ?? d.link.createdAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' })}. Their today is {shortDay(d.date)}.
             </p>
           </div>
         </div>
@@ -313,7 +313,7 @@ export function CoachStudent() {
             const mine = (d.pillars?.nodes ?? []).filter((n) => n.relationship === r.key);
             if (mine.length === 0) return null;
             return (
-              <div key={r.key} className="mt-md rounded-card bg-card p-md shadow-toy-soft">
+              <div key={r.key} data-pillar={r.key} className="mt-md rounded-card bg-card p-md shadow-toy-soft">
                 <h3 className="text-[18px]" style={{ color: `var(--deep-${r.key})` }}>
                   {r.name}
                 </h3>
@@ -390,7 +390,7 @@ export function CoachStudent() {
       )}
 
       {d.lifeMap && (
-        <Section id="map-heading" title="Life map answers" lede={`From their strategy session on ${new Date(d.lifeMap.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}. The bar runs from where they drop under stress to where they usually live.`}>
+        <Section id="map-heading" title="Life map answers" lede={`From their strategy session on ${new Date(d.lifeMap.createdAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' })}. The bar runs from where they drop under stress to where they usually live.`}>
           <PlacementChart placements={d.lifeMap.placements} focus={d.lifeMap.focus} />
           <h3 className="mt-md text-[18px]">Scores</h3>
           <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">

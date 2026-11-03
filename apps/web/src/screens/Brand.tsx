@@ -1,4 +1,4 @@
-import { BRAND_SOURCE_META, strategyPath, PIECE_KINDS, PIECE_META, RESEARCH_KINDS, RESEARCH_META, type BrandPiece, type BrandSource, type PieceKind, type ResearchItem, type ResearchKind, type ResearchRun } from '@kreators/shared';
+import { BRAND_SOURCE_META, strategyPath, PIECE_KINDS, PIECE_META, RESEARCH_KINDS, RESEARCH_META, type BrandPiece, type BrandSource, type PieceKind, type ResearchItem, type ResearchKind, type ResearchRun, formatCount } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
@@ -19,9 +19,10 @@ import { FIELD, chip } from '../lib/ui';
 import { copyPlain } from '../lib/clipboard';
 import { dateTime } from '../lib/date';
 import { ErrorLine } from '../components/ErrorLine';
+import { WorkingLine } from '../components/fx/WorkingLine';
 
 const when = dateTime;
-const n = (v: number | undefined) => (typeof v === 'number' && v > 0 ? v.toLocaleString() : '');
+const n = (v: number | undefined) => (typeof v === 'number' && v > 0 ? formatCount(v) : '');
 const TABS = [
   { key: 'sources', label: 'Links' },
   { key: 'research', label: 'Research' },
@@ -196,7 +197,7 @@ function SourcesTab({ id, sources, onChange, onOpenRun }: { id: string; sources:
       <h2 id="links-heading" className="text-[24px]">
         Links the brand is fed
       </h2>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">The site, the channels, the posts that did well, and the competitors. Read a link and the folder keeps what it says.</p>
+      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Site, channels, top posts and competitors. A read link stays in the folder.</p>
       <form
         className="mt-sm flex flex-col gap-sm rounded-card bg-card p-md shadow-toy-soft"
         onSubmit={(e) => {
@@ -281,7 +282,7 @@ function ResearchTab({ id, runs, preset, reach, onChange, onOpen }: { id: string
       <h2 id="research-heading" className="text-[24px]">
         Research
       </h2>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{reach ? 'Every run goes out through Agent Reach and is kept here with what it found.' : 'Without Agent Reach, YouTube search and outliers work with a YouTube key, and pages can be read. Connect the bridge for the rest.'}</p>
+      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{reach ? 'Every run goes out through Agent Reach and is kept here with what it found.' : 'Without Agent Reach, pages can be read, and YouTube works with a key. Connect the bridge for the rest.'}</p>
       <form
         className="mt-sm flex flex-col gap-sm rounded-card bg-card p-md shadow-toy-soft"
         onSubmit={(e) => {
@@ -317,6 +318,7 @@ function ResearchTab({ id, runs, preset, reach, onChange, onOpen }: { id: string
         <Button type="submit" disabled={go.isPending || !query.trim()}>
           {go.isPending ? 'Looking' : 'Run it'}
         </Button>
+        {go.isPending && <WorkingLine className="self-center" label="Researching" phrases={['Sending the search out', 'Reading what comes back', 'Keeping it in this folder']} loop={false} />}
       </form>
       {runs.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing researched yet. Start with outliers for the brand's main topic.</p>}
       <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -369,7 +371,7 @@ function CreateTab({ id, runs, preset, writer, onMade }: { id: string; runs: Res
       <h2 id="create-heading" className="text-[24px]">
         Create
       </h2>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{writer === 'none' ? 'No writing model is connected. You still get the research laid out in the shape of the piece, labelled as a digest.' : 'Pick what to write. The piece leans on the research you tick, or the latest runs if you tick none.'}</p>
+      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{writer === 'none' ? 'No writing model is connected, so you get the research laid out as a digest.' : 'Pick what to write. The piece leans on the research you tick, or the latest runs if you tick none.'}</p>
       <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
         {PIECE_KINDS.map((k) => (
           <li key={k}>
@@ -424,6 +426,7 @@ function CreateTab({ id, runs, preset, writer, onMade }: { id: string; runs: Res
         <Button type="submit" size="lg" full disabled={make.isPending}>
           {make.isPending ? 'Writing, this takes a minute' : `Write the ${PIECE_META[kind].name.toLowerCase()}`}
         </Button>
+        {make.isPending && <WorkingLine className="self-center" label={`Writing the ${PIECE_META[kind].name.toLowerCase()}`} phrases={research ? ['Reading your links', 'Researching the topic', 'Writing'] : picked.size ? ['Reading the research you picked', 'Writing'] : ['Writing']} loop={false} />}
       </form>
     </section>
   );

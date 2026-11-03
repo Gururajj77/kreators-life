@@ -1,11 +1,11 @@
-import { AGENCY_HEALTH_NAME, AGENCY_STATUS_NAME, CLIENT_HEALTH_TONE, CLIENT_STATUS_TONE, minutesLabel2, money, stageIndex, type AgencyClient as ClientData } from '@kreators/shared';
+import { AGENCY_HEALTH_NAME, AGENCY_STATUS_NAME, CLIENT_HEALTH_TONE, CLIENT_STATUS_TONE, minutesLabel2, money, parseOnboarding, stageIndex, type AgencyClient as ClientData, type AgencyClientPage, type ClientOnboarding as OnboardingAnswers } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Clock, ExternalLink, FilePlus, Pencil, ReceiptText } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { AgencyContracts } from '../components/AgencyContracts';
 import { ClientDocs } from '../components/AgencyDocs';
-import { LifecycleCard, RetainerCard } from '../components/AgencyLifecycle';
+import { LifecycleCard, PortalSecurityCard, RetainerCard } from '../components/AgencyLifecycle';
 import { AgencyInvoices } from '../components/AgencyInvoices';
 import { AgencyPipeline } from '../components/AgencyPipeline';
 import { Button } from '../components/Button';
@@ -29,6 +29,8 @@ import { bento } from '../lib/bento';
 import { prettyDate, todayLocal } from '../lib/date';
 import { useAuthed } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
+import { useCopy } from '../lib/clipboard';
+import { FIELD } from '../lib/ui';
 
 const COPY = {
   loading: 'Loading this client.',
@@ -80,6 +82,8 @@ export function AgencyClient() {
   const [editing, setEditing] = useState(false);
   const [timing, setTiming] = useState(false);
   const [newInvoice, setNewInvoice] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [answersOpen, setAnswersOpen] = useState(false);
   const items = useAuthed(['agency', 'items', 'client', id, 'time'], () => api.agencyItems(`client=${id}&size=100`), timing);
   const invalidate = () => qc.invalidateQueries({ queryKey: ['agency'] });
 
@@ -211,9 +215,24 @@ export function AgencyClient() {
         )}
       </header>
 
+      <ClientNotice page={d} portalUrl={portalUrl} onSetPassword={() => setPasswordOpen(true)} onAnswers={() => setAnswersOpen(true)} />
+
       <div className="mt-md">
         <LifecycleCard client={c} life={life} compact />
       </div>
+
+      {d.onboarding.answers && d.onboarding.done && (
+        <Fold className="mt-md" title="What they told you" hint={d.onboarding.at ? `sent ${prettyDate(d.onboarding.at.slice(0, 10))}` : undefined} open={answersOpen} onOpenChange={setAnswersOpen}>
+          <TheirAnswers clientId={c.id} answers={d.onboarding.answers} />
+        </Fold>
+      )}
+
+      <Sheet open={passwordOpen} onClose={() => setPasswordOpen(false)} title={`Password for ${c.name}`}>
+        {passwordOpen && <PortalSecurityCard client={c} life={life} />}
+        <div className="mt-md pb-xl">
+          <Button onClick={() => setPasswordOpen(false)}>Done</Button>
+        </div>
+      </Sheet>
 
       <div className="mt-md grid grid-cols-2 gap-sm md:grid-cols-3">
         {tiles.map((t, i) => (
@@ -392,5 +411,146 @@ export function AgencyClient() {
         }}
       />
     </Screen>
+  );
+}
+
+/**
+ * One line at the top of the client page, at most, in this order: the client asked for a new password (with their reason, Set a new
+ * password and Dismiss); the client has not finished onboarding (with Copy link); they finished it in the last seven days (See answers).
+ */
+function ClientNotice({ page, portalUrl, onSetPassword, onAnswers }: { page: AgencyClientPage; portalUrl: string; onSetPassword: () => void; onAnswers: () => void }) {
+  const qc = useQueryClient();
+  const { copy, said } = useCopy();
+  const dismiss = useMutation({ mutationFn: () => api.agencyPasswordRequestClose(page.client.id), onSuccess: () => qc.invalidateQueries({ queryKey: ['agency'] }) });
+  const name = page.client.name;
+  const ask = page.lifecycle.password.request;
+  const box = 'no-print mt-md flex flex-wrap items-center gap-xs rounded-tile p-sm';
+  if (ask) {
+    return (
+      <div role="status" className={box} style={{ background: 'var(--tint-yellow)' }}>
+        <p className="m-0 min-w-0 flex-1 basis-[220px] text-[14px] font-bold">
+          {`${name} asked for a new password`}
+          {ask.reason && (
+            <span className="block font-semibold text-ink-soft">
+              <Inert text={`“${ask.reason}”`} />
+            </span>
+          )}
+        </p>
+        <Button size="sm" onClick={onSetPassword}>
+          Set a new password
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => dismiss.mutate()} disabled={dismiss.isPending}>
+          Dismiss
+        </Button>
+      </div>
+    );
+  }
+  const ob = page.onboarding;
+  if (ob.needed && !ob.done) {
+    return (
+      <div role="status" className={`${box} bg-card shadow-toy-soft`}>
+        <p className="m-0 min-w-0 flex-1 basis-[220px] text-[14px] font-bold">{`Waiting for ${name} to finish onboarding`}</p>
+        {portalUrl && (
+          <Button size="sm" variant="outline" onClick={() => void copy(portalUrl)}>
+            {said ?? 'Copy link'}
+          </Button>
+        )}
+      </div>
+    );
+  }
+  const recent = ob.done && ob.at && Date.now() - Date.parse(ob.at) < 7 * 86_400_000;
+  if (recent && ob.at) {
+    return (
+      <div role="status" className={box} style={{ background: 'var(--tint-green)' }}>
+        <p className="m-0 min-w-0 flex-1 basis-[220px] text-[14px] font-bold">{`${name} finished onboarding on ${prettyDate(ob.at.slice(0, 10))}`}</p>
+        <Button size="sm" variant="outline" onClick={onAnswers}>
+          See answers
+        </Button>
+      </div>
+    );
+  }
+  return null;
+}
+
+const ANSWER_FIELDS: { key: Exclude<keyof OnboardingAnswers, 'brief' | 'references'>; label: string }[] = [
+  { key: 'legalName', label: 'Legal name' },
+  { key: 'brands', label: 'Brands for this trial' },
+  { key: 'addressLine', label: 'Address' },
+  { key: 'city', label: 'City' },
+  { key: 'state', label: 'State' },
+  { key: 'pin', label: 'PIN code' },
+  { key: 'gstin', label: 'GSTIN' },
+  { key: 'pan', label: 'PAN' },
+  { key: 'pocName', label: 'Point of contact' },
+  { key: 'designation', label: 'Their role' },
+  { key: 'email', label: 'Email' },
+  { key: 'phone', label: 'Phone' },
+  { key: 'billingEmail', label: 'Billing email' },
+];
+
+/** What the client wrote in the onboarding form, as a short list, with Edit to correct it. The brief's answers live in their agreement. */
+function TheirAnswers({ clientId, answers }: { clientId: string; answers: OnboardingAnswers }) {
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<OnboardingAnswers>(answers);
+  const save = useMutation({
+    mutationFn: () => api.agencyClientUpdate(clientId, { onboarding: parseOnboarding(draft) }),
+    onSuccess: () => {
+      setEditing(false);
+      void qc.invalidateQueries({ queryKey: ['agency'] });
+    },
+  });
+  const rows = ANSWER_FIELDS.filter((f) => answers[f.key].trim());
+  return (
+    <>
+      <dl className="m-0 grid gap-xs sm:grid-cols-2">
+        {rows.map((f) => (
+          <div key={f.key}>
+            <dt className="text-[12px] font-extrabold text-ink-soft">{f.label}</dt>
+            <dd className="m-0 break-words text-[14px] font-semibold">
+              <Inert text={answers[f.key]} />
+            </dd>
+          </div>
+        ))}
+        {answers.references.length > 0 && (
+          <div className="sm:col-span-2">
+            <dt className="text-[12px] font-extrabold text-ink-soft">Videos they like</dt>
+            <dd className="m-0 whitespace-pre-wrap break-words text-[14px] font-semibold">
+              <Inert text={answers.references.join('\n')} />
+            </dd>
+          </div>
+        )}
+      </dl>
+      <div className="mt-sm">
+        <Button size="sm" variant="outline" onClick={() => { setDraft(answers); setEditing(true); }}>
+          Edit
+        </Button>
+      </div>
+      <Sheet open={editing} onClose={() => setEditing(false)} title="What they told you">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            save.mutate();
+          }}
+        >
+          {ANSWER_FIELDS.map((f) => (
+            <label key={f.key} className="mt-sm block text-[14px] font-bold">
+              {f.label}
+              <input value={draft[f.key]} onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value })} className={FIELD} />
+            </label>
+          ))}
+          {save.isError && (
+            <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+              That did not save. Try again.
+            </p>
+          )}
+          <div className="mt-md pb-xl">
+            <Button type="submit" disabled={save.isPending}>
+              {save.isPending ? 'Saving' : 'Save'}
+            </Button>
+          </div>
+        </form>
+      </Sheet>
+    </>
   );
 }

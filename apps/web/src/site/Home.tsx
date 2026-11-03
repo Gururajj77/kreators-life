@@ -1,11 +1,13 @@
 import type { CSSProperties } from 'react';
-import { BUMLING, characterTitle, MODULE_BY_KEY, PAYMENTS_LIVE, PLAN_DAYS, PLANS, RELATIONSHIPS, type RelationshipKey } from '@kreators/shared';
+import { BUMLING, characterTitle, formatCount, MODULE_BY_KEY, PAYMENTS_LIVE, planPriceLabel, RELATIONSHIPS, type RelationshipKey } from '@kreators/shared';
 import { useQuery } from '@tanstack/react-query';
 import { HeroBlobs } from '../components/Hero';
 import { motion } from 'motion/react';
 import { Link } from 'react-router';
 import { Avatar } from '../components/Avatar';
-import { BackgroundPaths } from '../components/fx/BackgroundPaths';
+import { GradientStripes } from '../components/fx/GradientStripes';
+import { LiquidMetal } from '../components/fx/LiquidMetal';
+import { MorphShapes } from '../components/fx/MorphShapes';
 import { BorderBeam } from '../components/fx/BorderBeam';
 import { CountUp } from '../components/fx/CountUp';
 import { Magnet } from '../components/fx/Magnet';
@@ -38,36 +40,36 @@ const VILLAINS = [
     key: 'grind',
     name: 'The Grind',
     icon: Tornado,
-    does: 'Says one more video, one more hour. It takes your sleep first, then your mornings, then your mood.',
+    does: 'One more video, one more hour. It takes your sleep first.',
     costs: 'Tired work, and less of it.',
   },
   {
     key: 'scatter',
     name: 'The Scatter',
     icon: Puzzle,
-    does: 'Ten apps, ten logins, and nothing talks to anything. Courses, gigs, money and notes all live in different places.',
-    costs: 'Hours lost looking, and chances you never see.',
+    does: 'Ten apps, ten logins, and nothing talks to anything.',
+    costs: 'Hours lost looking, and chances missed.',
   },
   {
     key: 'silence',
     name: 'The Silence',
     icon: MessageSquareDashed,
-    does: 'You work alone in your room. Nobody checks in, cheers you on or tells you the truth.',
-    costs: 'Doubt grows fast when nobody is around.',
+    does: 'You work alone. Nobody checks in or tells you the truth.',
+    costs: 'Doubt grows fast.',
   },
   {
     key: 'drift',
     name: 'The Drift',
     icon: Hourglass,
-    does: 'Days pass. Goals sit in a note you never open. You feel busy, but nothing moves.',
-    costs: 'A year goes by, and you are in the same place.',
+    does: 'Goals sit in a note you never open, and nothing moves.',
+    costs: 'A year goes by in the same place.',
   },
   {
     key: 'squeeze',
     name: 'The Squeeze',
     icon: BatteryLow,
-    does: 'Money comes in bits, late, or not at all. Brands want views; you want rent.',
-    costs: 'Stress that leaks into the rest of your life.',
+    does: 'Money comes late, or not at all. Brands want views; you want rent.',
+    costs: 'Stress that leaks into everything.',
   },
 ] as const;
 
@@ -84,7 +86,7 @@ const ANSWERS: {
     villain: 'grind',
     pillar: 'self',
     poster: ['Keep your energy.', 'So the work lasts.'],
-    how: 'A routine built from your real day, with a wake time that moves thirty minutes a week. Trackers for sleep, mood and stress feed a daily brief that tells you when sleep starts to dip. Focus sessions come with breaks and a quiet sound, and you rate how focused you were.',
+    how: 'A routine built from your real day, with a wake time that moves thirty minutes a week. Sleep, mood and stress feed a daily brief that says when sleep starts to dip. Focus sessions come with breaks, a quiet sound and a rating.',
     benefit: 'You keep your energy, so your best work lasts.',
     apps: ['today', 'life', 'sleep', 'mindful'],
   },
@@ -92,7 +94,7 @@ const ANSWERS: {
     villain: 'scatter',
     pillar: 'guru',
     poster: ['One place.', 'One login.'],
-    how: 'Learning, paid work, brand campaigns, your clients, your shop and your money in one app. Only a few apps are on to start, the setup chat picks up to five more that fit, and you can switch any of them off.',
+    how: 'Learning, paid work, brand campaigns, your clients, your shop and your money in one app. Only a few apps are on to start. The setup chat picks up to five more that fit, and you can switch any off.',
     benefit: 'One place and one login, so nothing slips past you.',
     apps: ['school', 'work', 'agency', 'shop', 'finance'],
   },
@@ -100,7 +102,7 @@ const ANSWERS: {
     villain: 'silence',
     pillar: 'friendship',
     poster: ['People in your corner.', 'Every week.'],
-    how: 'Small circles near you, run clubs, events and a kind community. A life coach too, if you want one, who sees only what you switch on and never your journal. And card games to play with the people you are with, so a first meeting never starts with silence.',
+    how: 'Small circles near you, run clubs, events and a kind community. A life coach if you want one, who sees only what you switch on and never your journal. Card games, so a first meeting never starts with silence.',
     benefit: 'People in your corner, every week.',
     apps: ['circles', 'run', 'party', 'community', 'cards', 'coaching'],
   },
@@ -108,7 +110,7 @@ const ANSWERS: {
     villain: 'drift',
     pillar: 'divine',
     poster: ['A big goal.', 'One tick today.'],
-    how: 'Seven pillars, each a pyramid from a foundation you will not let break down to the task for today. A task can only be ticked from its do date, and it can carry a priority, a deadline and subtasks, or repeat as a habit. Plan my week spreads your tasks over seven days and shows how strong the plan is. Reviews each week and month show what moved, and you can plan the next one on a calendar and get a reminder. A quiz shows your strengths, and your next steps on Home start to fit you.',
+    how: 'Seven pillars, each a pyramid from a foundation you will not let break down to today’s task. A task can only be ticked from its do date. Plan my week spreads your tasks over seven days. Reviews each week and month show what moved. A quiz shows your strengths, so your next steps fit you.',
     benefit: 'A big goal becomes one box you can tick today.',
     apps: ['tower', 'discover', 'reviews', 'journal'],
   },
@@ -116,7 +118,7 @@ const ANSWERS: {
     villain: 'squeeze',
     pillar: 'servant_leader',
     poster: ['See every way in.', 'And all that comes in.'],
-    how: 'Paid gigs and brand campaigns. Win pays for every verified view, once a reviewer checks it. Your own shop takes 5% of a sale and nothing up front. For client work, Agency designs the invoice, works out GST and TDS, and keeps the agreement and the approvals with it. All your money sits in one picture.',
+    how: 'Paid gigs and brand campaigns. Win pays for every verified view, once a reviewer checks it. Your own shop takes 5% of a sale and nothing up front. Agency makes the client invoice, with GST and TDS worked out. All your money sits in one picture.',
     benefit: 'You see every way in, and everything that comes in.',
     apps: ['army', 'win', 'agency', 'shop', 'finance'],
   },
@@ -125,46 +127,64 @@ const ANSWERS: {
 const FIVE_WS = [
   {
     w: 'Who',
-    text: 'Anyone 18 or over building something of their own: creators, freelancers, small agencies and students. The creator apps are there if you want them.',
+    text: 'Anyone 18 or over building something of their own: creators, freelancers, small agencies and students.',
   },
   {
     w: 'What',
-    text: 'A daily game for the seven relationships in your life, with the apps a creator needs built in: learn, earn, run client work, meet people, sell and stay well.',
+    text: 'A daily game for the seven relationships, with a creator’s apps built in.',
   },
   {
     w: 'When',
-    text: 'A few minutes a day. Check in, do one small act, tick one task. Then a short look back each week and month.',
+    text: 'A few minutes a day, and a short look back each week and month.',
   },
   {
     w: 'Where',
-    text: 'On your phone or laptop, in the browser. Nothing to install, and you can add it to your home screen. Add an email and your progress follows you.',
+    text: 'On your phone or laptop, in the browser. Nothing to install.',
   },
   {
     w: 'Why',
-    text: 'A career built on burnout does not last. When the seven relationships are strong, the work gets better too.',
+    text: 'Burnout does not last. When the seven are strong, the work gets better too.',
   },
 ];
 
-const BEFORE = ['Up at three in the morning, editing again', 'Goals in a note you never open', 'Ten apps and no plan', 'Nobody to check in with', 'Money you cannot see coming'];
-const AFTER = [
-  'A routine that fits your real day',
-  'Today’s task moves a big goal',
-  'One app with only what you use',
-  'Circles, clubs and a coach who check in',
-  'All your money in and out, in one place',
-];
+const BEFORE = ['Up at three, editing again', 'Goals in a note you never open', 'Ten apps and no plan', 'Nobody to check in with', 'Money you cannot see coming'];
+const AFTER = ['A routine that fits your real day', 'Today’s task moves a big goal', 'One app, only what you use', 'Circles, clubs and a coach who check in', 'All your money in one place'];
 
 const FREE = [
   'The daily game: check in, a small act, a task',
   'Your seven pillars and the strategy session',
-  'Every app you switch on, from School to Agency and the Shop',
-  'The assistant’s tap flows, and help any time',
+  'Every app you switch on, from School to Agency',
+  'The assistant’s tap flows, and Help',
 ];
 
 /** The one line that says what it is and what it costs. Word for word in the hero, the offer and the last button. */
 export const TOUCHSTONE = 'One small act a day, for all seven. Free to start, free to stay.';
 
 const eyebrow = 'm-0 type-eyebrow text-ink-mute';
+
+/** The rule behind a fix, one short sentence a line, each with a tick in the pillar's colour. */
+function HowLines({ lines, pillar }: { lines: string[]; pillar: RelationshipKey }) {
+  return (
+    <ul className="m-0 flex list-none flex-col gap-xs p-0">
+      {lines.map((l) => (
+        <li key={l} className="flex items-start gap-xs text-[16px] font-semibold">
+          <Icon icon={Check} size={20} className="mt-[2px]" color={`var(--deep-${pillar})`} />
+          <span className="min-w-0">{l}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function BrandMore() {
+  return (
+    <ul className="m-0 grid list-disc gap-xs pl-md text-[16px] font-semibold text-ink-soft">
+      {BRAND_PITCH.more.map((t) => (
+        <li key={t}>{t}</li>
+      ))}
+    </ul>
+  );
+}
 const h2 = 'type-hook mt-xs text-[clamp(32px,7vw,56px)]';
 
 export function Home() {
@@ -189,25 +209,29 @@ export function Home() {
 
   return (
     <SiteLayout>
+      {/* The page's own background: one layer behind the whole page, so the hero never reads as a band of its own. */}
+      <MorphShapes page />
       {/* The hero, read like a poster: the hook from across the room, the context closer, the details at arm's length. */}
       <section className="relative isolate grid gap-lg pt-lg md:grid-cols-2 md:items-center md:pt-xl">
-        <BackgroundPaths />
         <HeroBlobs tone="ink" kind="blossom" />
         <div className="@container">
-          <p className={eyebrow}>For creators, freelancers, small agencies and students, 18 and up</p>
+          <p className={eyebrow}>For creators, freelancers, agencies and students, 18 and up</p>
           {/* Sized from the column width so each line stays whole. */}
           <h1 className="type-hook mt-sm text-[clamp(40px,13cqw,84px)]">
             <TextReveal parts={[{ text: 'Grow your work' }, { text: 'without losing your life', em: true }]} />
           </h1>
+          {/* One line's worth on a phone; a laptop has room for the why. Same meaning both ways. */}
           <p className="type-context mt-md m-0 max-w-[520px] text-[20px] text-ink-soft">
-            Your work is one of seven relationships. When it eats the other six, the work suffers too. kreators.app is a daily game that keeps all seven moving, with the tools a
-            creator needs built in.
+            Your work is one of seven relationships.<span className="hidden md:inline"> When it eats the other six, the work suffers too.</span> kreators.app is a daily game
+            that keeps all seven moving<span className="hidden md:inline">, with the tools a creator needs built in</span>.
           </p>
           <div className="mt-lg flex flex-wrap items-center gap-md">
             <Magnet>
-              <Link to={start} className="toy fx-shimmer fx-shimmer-intro inline-flex min-h-[56px] items-center rounded-pill bg-ink px-lg text-[18px] font-bold text-on-ink">
-                {token ? 'Go to app' : 'Start free'}
-              </Link>
+              <LiquidMetal>
+                <Link to={start} className="toy fx-shimmer fx-shimmer-intro inline-flex min-h-[56px] items-center rounded-pill bg-ink px-lg text-[18px] font-bold text-on-ink">
+                  {token ? 'Go to app' : 'Start free'}
+                </Link>
+              </LiquidMetal>
             </Magnet>
             <a href="#story" className="inline-flex min-h-[48px] items-center gap-xs text-[16px] font-bold underline underline-offset-4 hover:text-ink-soft">
               <AnimatedIcon name="scrollDown" size={24} />
@@ -216,7 +240,7 @@ export function Home() {
           </div>
           <p className="mt-md m-0 text-[14px] font-bold">{TOUCHSTONE}</p>
           <p className="mt-xs m-0 max-w-[520px] text-[14px] font-semibold text-ink-mute">
-            No card. Sign-up asks for a name, an email, a phone number and your birthday, so everyone here is 18 or over. The phone and birthday are never shown to anyone.
+            No card. We ask your phone and birthday so everyone here is 18 or over. Nobody else ever sees them.
           </p>
         </div>
         <div className="pt-lg md:pt-0">
@@ -243,7 +267,7 @@ export function Home() {
       </div>
 
       <GuideLine host={BUMLING.key} className="mt-xl">
-        Hi, I’m Bumling. Tell me what gets in your way, and I’ll switch on only the apps that fit.
+        Hi, I’m Bumling. Tell me what gets in your way, and I’ll switch on the apps that fit.
       </GuideLine>
 
       {/* P: the problem. */}
@@ -254,9 +278,9 @@ export function Home() {
             The work grows. <em>The rest of your life slips.</em>
           </h2>
           <p className="type-context mt-md m-0 text-[18px] text-ink-soft">
-            Creators are told to post more, grow faster and never stop. So the channel grows, and the things that hold a life together slip: sleep, friends, family, health, faith.
+            Creators are told to post more and never stop. So the channel grows, and the rest slips: sleep, friends, family, health, faith.
           </p>
-          <p className="mt-sm m-0 text-[18px] font-bold">It isn’t you. It’s the setup. You are fighting five villains at once, and mostly alone.</p>
+          <p className="mt-sm m-0 text-[18px] font-bold">It isn’t you. It’s the setup: five villains at once, mostly alone.</p>
         </motion.div>
         <GuideLine host="self" mood="sleepy" className="mt-lg">
           Be honest with me. When did you last sleep before midnight?
@@ -270,11 +294,11 @@ export function Home() {
             Meet the five villains
           </h2>
           <p className="type-context mt-sm m-0 text-[16px] text-ink-soft">
-            They never arrive all at once. They creep in, one late night at a time. Which of these sounds like your week?
+            They creep in one late night at a time.
           </p>
         </motion.div>
         <GuideLine host="servant_leader" side="right" mood="neutral" className="mt-md">
-          Five villains creep into a creator’s week. Which ones do you know?
+          Which of these five do you know?
         </GuideLine>
         <ul className="bento mt-md list-none p-0 m-0">
           {VILLAINS.map((v, i) => (
@@ -284,7 +308,7 @@ export function Home() {
               </p>
               <h3 className="mt-sm m-0 text-[22px] text-balance">{v.name}</h3>
               <p className="mt-xs m-0 text-balance text-[16px] font-semibold">{v.does}</p>
-              <p className="mt-sm m-0 text-balance text-[14px] font-extrabold text-ink-soft">What it costs: {v.costs}</p>
+              <p className="mt-sm m-0 text-balance text-[14px] font-extrabold text-ink-soft">Costs: {v.costs}</p>
               {/* The feature cell is two rows tall: its villain's mark fills the room at the foot, faint. */}
               {i === 0 && (
                 <p className="mt-auto m-0 flex justify-end pt-md text-ink-mute opacity-40" aria-hidden="true">
@@ -294,22 +318,22 @@ export function Home() {
             </SpotlightCard>
           ))}
         </ul>
-        <p className="mt-md m-0 text-[16px] font-bold">Here is the good news: each one has a fix, and the setup chat asks which ones you face.</p>
+        <p className="mt-md m-0 text-[16px] font-bold">Each one has a fix. The setup chat asks which you face.</p>
       </section>
 
       {/* S: the story and the solution. You are the hero; the app is the map and the guides. */}
       <section id="story" className="mt-2xl scroll-mt-lg" aria-labelledby="story-heading">
         <GuideLine host={BUMLING.key} mood="excited" className="mb-md">
-          You do the work. I hold the map, and seven guides walk with you, one for each relationship.
+          You do the work. I hold the map.
         </GuideLine>
-        <motion.div {...rise} className="rounded-card bg-card p-md shadow-toy-soft md:p-lg">
+        {/* The story is told as a story, in short paragraphs, so the density check reads it as a reading block (data-reading). */}
+        <motion.div {...rise} data-reading className="rounded-card bg-card p-md shadow-toy-soft md:p-lg">
           <p className={eyebrow}>The story</p>
           <h2 id="story-heading" className={h2}>
             You are the hero. <em>Every hero needs a guide.</em>
           </h2>
           <p className="type-context type-measure mt-md m-0 text-[18px] text-ink-soft">
-            kreators.app is not the hero; you are. It is the map, and the guides walk with you: seven characters, one for each relationship in your life, and Bumling, the app’s own
-            guide, who shows you around.
+            You are the hero; kreators.app is the map. Seven guides walk with you, one for each relationship, and Bumling shows you around.
           </p>
           <ul className="mt-md grid list-none grid-cols-1 gap-xs p-0 m-0 sm:grid-cols-2 lg:grid-cols-4" aria-label="Your guides">
             <li className="flex items-center gap-xs rounded-pill bg-paper pr-sm pl-xs">
@@ -324,14 +348,13 @@ export function Home() {
             ))}
           </ul>
           <p className="type-measure mt-lg m-0 text-[16px] font-semibold">
-            Picture a Monday. You open the Daily tab, check in, and do one small act for the pillar that needs you most. Then you tick one task. Each pillar is a pyramid standing
-            on its point, so the tick lands on the task and climbs through the project and the goals up to the foundation, the reason you started.
+            Picture a Monday. You check in, do one small act and tick one task. That tick climbs the pyramid to its foundation: the reason you started.
           </p>
           <ol className="bento mt-lg list-none p-0 m-0">
             {[
               ['A short chat', 'Answer a few questions. It switches on the apps that fit, and nothing else.'],
-              ['Your pillars', 'A short session places your seven relationships on a map and builds a pyramid for the ones that need you most.'],
-              ['Three boxes a day', 'Check in, do one small act, tick one task. Every tick climbs a pillar, and your guides grow with you.'],
+              ['Your pillars', 'A short session maps your seven and builds a pyramid for the ones that need you most.'],
+              ['Three boxes a day', 'Check in, do one small act, tick one task. Every tick climbs a pillar.'],
             ].map(([t, d], i) => (
               <SpotlightCard as="li" index={i} key={t} className={`rounded-tile bg-paper p-md ${i === 0 ? 'bento-w2' : ''}`}>
                 <p className="m-0 type-figure text-[28px] text-ink-mute" aria-hidden="true">
@@ -357,7 +380,7 @@ export function Home() {
           </h2>
         </motion.div>
         <GuideLine host="guru" side="right" className="mt-md">
-          Good questions deserve plain answers. Here are five of them.
+          Five plain answers.
         </GuideLine>
         <dl className="bento mt-md m-0">
           {FIVE_WS.map((x, i) => (
@@ -372,7 +395,7 @@ export function Home() {
           ))}
         </dl>
         <p className="type-measure mt-md m-0 text-[16px] font-semibold text-ink-soft">
-          It is not for you if you want a plain calendar or a to-do list. It is for you if you want your work and the rest of your life to move together.
+          For you if you want your work and your life to move together.
         </p>
       </section>
 
@@ -384,7 +407,7 @@ export function Home() {
             <h2 id="tackle-heading" className={h2}>
               How you beat each villain
             </h2>
-            <p className="type-context mt-sm m-0 text-[16px] text-ink-soft">What the app does about each one, the rule behind it, and what you get out of it.</p>
+            <p className="type-context mt-sm m-0 text-[16px] text-ink-soft">What the app does about each one, and what you get.</p>
           </div>
           <Link to="/features" className="toy toy-ink inline-flex min-h-[48px] items-center rounded-pill border-2 border-ink bg-card px-md font-bold">
             See every feature
@@ -398,7 +421,7 @@ export function Home() {
             const flip = ai % 2 === 1;
             const apps = a.apps.filter((k) => FEATURES[k] && MODULE_BY_KEY[k]);
             return (
-              <motion.li {...rise} key={a.villain} className="grid gap-md rounded-card bg-card p-sm shadow-toy-soft md:grid-cols-2 md:items-stretch md:p-md">
+              <motion.li {...rise} key={a.villain} data-pillar={a.pillar} className="grid gap-md rounded-card bg-card p-sm shadow-toy-soft md:grid-cols-2 md:items-stretch md:p-md">
                 <PosterPanel pillar={a.pillar} title={a.poster[0]} quiet={a.poster[1]} className={flip ? 'md:order-2' : ''}>
                   Against {v.name}
                 </PosterPanel>
@@ -407,15 +430,15 @@ export function Home() {
                     <Icon icon={v.icon} size={24} className="text-ink-soft" />
                     How you beat {v.name}
                   </h3>
-                  <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-                    {lines.map((l) => (
-                      <li key={l} className="flex items-start gap-xs text-[16px] font-semibold">
-                        <Icon icon={Check} size={20} className="mt-[2px]" color={`var(--deep-${a.pillar})`} />
-                        <span className="min-w-0">{l}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-sm m-0 text-balance text-[16px] font-extrabold">{a.benefit}</p>
+                  {/* The poster beside it already says this in two short lines; a phone shows the poster only, a laptop both. */}
+                  <p className="hidden md:block mt-sm m-0 text-balance text-[16px] font-extrabold">{a.benefit}</p>
+                  {/* The rules behind the fix: under a fold on a phone, so the card reads as the promise and the apps; open from md up. */}
+                  <Fold title="How it works" className="mt-sm md:hidden">
+                    <HowLines lines={lines} pillar={a.pillar} />
+                  </Fold>
+                  <div className="hidden md:block mt-sm">
+                    <HowLines lines={lines} pillar={a.pillar} />
+                  </div>
                   {/* A grid, not a wrapping row, so no app is ever left alone on the last line: an odd last one takes the row on a phone. */}
                   <ul className={`mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0 ${apps.length === 4 ? '' : 'sm:grid-cols-3'}`} aria-label="The apps that do it">
                     {apps.map((k, i) => (
@@ -446,12 +469,11 @@ export function Home() {
             What changes
           </h2>
           <p className="type-context mt-sm m-0 text-[16px] text-ink-soft">
-            Today, a tick. On Sunday, your first week review, planned on a calendar with a reminder. Each month and each quarter, a look back with the numbers next to the period
-            before.
+            Today, a tick. On Sunday, your first week review. Each month, a look back<span className="hidden md:inline"> with the numbers next to the month before</span>.
           </p>
         </motion.div>
         <GuideLine host="lover_partner" className="mt-md">
-          Small ticks add up. Look back after a week, and you will see what moved.
+          Small ticks add up. Look back after a week.
         </GuideLine>
         <div className="bento mt-md">
           <motion.div {...rise} className="bento-w2 rounded-card bg-card p-md shadow-toy-soft">
@@ -483,7 +505,7 @@ export function Home() {
               className={`rounded-tile bg-card p-sm shadow-toy-soft ${live.length < 4 && live[live.length - 1]?.[0] === label ? (['', 'bento-w4', 'bento-w3', 'bento-w2'][live.length] ?? '') : ''}`}
             >
               <p className="m-0 type-figure text-[28px]">
-                <CountUp value={value} format={(n) => n.toLocaleString()} />
+                <CountUp value={value} format={(n) => formatCount(n)} />
               </p>
               <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
                 {label} <span className="sr-only">live from the app</span>
@@ -499,7 +521,7 @@ export function Home() {
       {/* O: the offer. Value, then the price, then the paid parts, then the way out. */}
       <section id="offer" className="mt-2xl scroll-mt-lg" aria-labelledby="offer-heading">
         <GuideLine host="parent_child" side="right" mood="excited" className="mb-md">
-          No card, no catch. The daily game is free, and it stays free.
+          No card, no catch.
         </GuideLine>
         <motion.div {...rise} className="relative rounded-card bg-card p-md shadow-toy-soft md:p-lg">
           <BorderBeam />
@@ -516,16 +538,20 @@ export function Home() {
               </li>
             ))}
           </ul>
-          <p className="type-measure mt-md m-0 text-balance text-[14px] font-semibold text-ink-soft">
-            Two things cost money, and we say so up front. Typing to the assistant, so it does things for you, needs a plan from US$
-            {PLANS.pro.priceCents / 100} for {PLAN_DAYS} days
-            {PAYMENTS_LIVE ? '' : '; plans are not on sale yet, so nothing is charged'}. The Shop takes 5% of each sale you make.{' '}
+          {/* What costs money, as two short facts, then the way to see more. */}
+          <p className="type-measure mt-md m-0 text-[14px] font-bold">Two things cost money, and we say so up front:</p>
+          <ul className="type-measure mt-xs m-0 grid list-disc gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+            <li>
+              Typing to the assistant needs a plan from {planPriceLabel('pro')}
+              {PAYMENTS_LIVE ? '' : '. Plans are not on sale yet, so nothing is charged'}.
+            </li>
+            <li>The Shop takes 5% of each sale you make.</li>
+          </ul>
+          <p className="type-measure mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">
+            Switch any app off, export or delete everything, from the Profile tab.{' '}
             <Link to="/pricing" className="font-bold underline underline-offset-4">
               See pricing
             </Link>
-          </p>
-          <p className="type-measure mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">
-            You can always switch any app off, export your data, erase your progress or delete your account, from the Profile tab.
           </p>
         </motion.div>
       </section>
@@ -533,6 +559,7 @@ export function Home() {
       <section id="brands" className="mt-xl scroll-mt-lg" aria-labelledby="brands-heading">
         <motion.div
           {...rise}
+          data-pillar="servant_leader"
           className="wash grid gap-md rounded-card bg-card p-md shadow-toy-soft md:grid-cols-[2fr_1fr] md:items-center md:p-lg"
           style={{ '--wash': 'var(--color-r5)' } as CSSProperties}
         >
@@ -542,7 +569,14 @@ export function Home() {
               Pay for views that are checked, <em>not claimed</em>
             </h2>
             <p className="mt-sm m-0 text-balance text-[16px] font-semibold text-ink-soft">{BRAND_PITCH.pitch}</p>
-            <div className="mt-md flex flex-wrap gap-sm">
+            {/* The rest waits under a fold on a phone and is open from md up. */}
+            <Fold title="More for brands" className="mt-sm md:hidden">
+              <BrandMore />
+            </Fold>
+            <div className="hidden md:block mt-sm">
+              <BrandMore />
+            </div>
+            <div className="fill-row-all mt-md flex flex-wrap gap-sm">
               <Link to="/start" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
                 Post a brief
               </Link>
@@ -568,7 +602,7 @@ export function Home() {
           </h2>
         </motion.div>
         <GuideLine host="friendship" className="mt-md">
-          Not sure yet? That is fair. Here is what people ask first.
+          Not sure yet? That is fair.
         </GuideLine>
         <div className="mt-md grid gap-xs md:grid-cols-2">
           {SITE_FAQ.map((f) => (
@@ -582,28 +616,30 @@ export function Home() {
       {/* R: the response. One thing to do next. */}
       <section className="mt-2xl" aria-labelledby="start-heading">
         <motion.div {...rise} className="relative overflow-hidden rounded-card bg-ink p-md pb-0 text-on-ink md:p-lg md:pb-0">
-          <BorderBeam />
-          <h2 id="start-heading" className="type-hook text-[clamp(32px,7vw,64px)] text-on-ink">
+          <GradientStripes tone="ink" />
+          <h2 id="start-heading" className="relative z-10 type-hook text-[clamp(32px,7vw,64px)] text-on-ink">
             The villains have had enough time. <em>Your turn.</em>
           </h2>
-          <p className="type-context mt-sm m-0 text-[18px] text-on-ink/80">{TOUCHSTONE}</p>
-          <div className="mt-md">
+          <p className="relative z-10 type-context mt-sm m-0 text-[18px] text-on-ink/80">{TOUCHSTONE}</p>
+          <div className="relative z-10 mt-md">
             <Magnet>
-              <Link to={start} className="toy fx-shimmer inline-flex min-h-[56px] items-center rounded-pill bg-card px-lg text-[18px] font-bold text-ink">
-                {token ? 'Go to app' : 'Start free'}
-              </Link>
+              <LiquidMetal>
+                <Link to={start} className="toy fx-shimmer inline-flex min-h-[56px] items-center rounded-pill bg-card px-lg text-[18px] font-bold text-ink">
+                  {token ? 'Go to app' : 'Start free'}
+                </Link>
+              </LiquidMetal>
             </Magnet>
           </div>
-          <ol className="mt-md flex list-none flex-col gap-xs p-0 m-0 text-[14px] font-semibold text-on-ink/80 sm:flex-row sm:gap-md">
+          <ol className="relative z-10 mt-md flex list-none flex-col gap-xs p-0 m-0 text-[14px] font-semibold text-on-ink/80 sm:flex-row sm:gap-md">
             <li>1. Answer a few questions.</li>
             <li>2. We switch on the apps that fit.</li>
             <li>3. Tick your first box today.</li>
           </ol>
-          <p className="mt-sm m-0 text-[12px] font-semibold text-on-ink/70">
-            If it is not for you, delete your account from the Profile tab. Your journal, your pyramids and your personal details go with it.
+          <p className="relative z-10 mt-sm m-0 text-[12px] font-semibold text-on-ink/70">
+            Not for you? Delete your account, and everything in it, from the Profile tab.
           </p>
           {/* The seven peek up from the card's bottom edge: drawn whole, the card clips their lower half. */}
-          <div className="peek-row mt-lg flex justify-center gap-xs sm:gap-md" aria-hidden="true">
+          <div className="peek-row relative z-10 mt-lg flex justify-center gap-xs sm:gap-md" aria-hidden="true">
             {RELATIONSHIPS.map((r, i) => (
               // Each takes a seventh of the row up to 72px, so all seven fit a phone and none is cut at the side.
               <div key={r.key} className="peek-guide w-[12%] max-w-[72px]" style={{ '--peek-delay': `${i * 0.12}s` } as CSSProperties}>

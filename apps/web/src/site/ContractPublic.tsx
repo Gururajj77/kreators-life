@@ -10,7 +10,7 @@ import type { SheetStamp } from '../components/PrintSheet';
 import { Inert } from '../components/Inert';
 import { CopyTextButton, LinkTrouble } from '../components/PortalLock';
 import { ApiError, publicApi } from '../lib/api';
-import { fileTitle } from '../lib/printDoc';
+import { fileTitle, useAutoPrint } from '../lib/printDoc';
 import { SiteLayout } from './SiteLayout';
 import { FIELD } from '../lib/ui';
 
@@ -31,10 +31,19 @@ export function ContractPublic() {
   const [agree, setAgree] = useState(false);
   const [ask, setAsk] = useState('');
   const [sent, setSent] = useState(false);
-  // Once it is signed the answers on the page are the ones that were kept; until then they are the client's own, typed here.
+  // Once it is signed the answers on the page are the ones that were kept. Before that, the brief the client already answered in the
+  // onboarding form comes in filled, and so do their name and role, so accepting is a check and a tick, not typing it all again.
   useEffect(() => {
-    if (d?.status === 'signed') setAnswers(d.answers);
-  }, [d?.status, d?.answers]);
+    if (!d) return;
+    if (d.status === 'signed') setAnswers(d.answers);
+    else if (d.status === 'sent' && Object.keys(d.answers ?? {}).length > 0) setAnswers((m) => (Object.keys(m).length ? m : d.answers));
+  }, [d]);
+  useEffect(() => {
+    if (d?.status !== 'sent') return;
+    setName((n) => n || (d.doc.vars.pocName || d.doc.vars.clientContact || '').trim());
+    setTitle((t) => t || (d.doc.vars.clientTitle ?? '').trim());
+  }, [d]);
+  useAutoPrint(Boolean(d), fileTitle('Agreement', d?.doc.vars.client, d?.doc.title));
 
   const accept = useMutation({
     mutationFn: () => publicApi.contractAccept(token, { name: name.trim(), title: title.trim(), agree, answers }),

@@ -1,4 +1,4 @@
-import { AGENT_LIMITS, AGENT_META, AGENTS, messagesFor, money, PAID_PLANS, PLAN_CURRENCY, PLAN_DAYS, PLANS, type AgentLimit, type CreditEntry, type CreditReason, type DiscountCheck } from '@kreators/shared';
+import { AGENT_LIMITS, AGENT_META, AGENTS, formatCount, messagesFor, money, PAID_PLANS, PLAN_CURRENCY, PLAN_DAYS, PLANS, type AgentLimit, type CreditEntry, type CreditReason, type DiscountCheck } from '@kreators/shared';
 import { useState } from 'react';
 import { Button } from '../components/Button';
 import { AreaLine, StatTile } from '../components/Charts';
@@ -20,7 +20,7 @@ import { Check } from 'lucide-react';
  * the team switches plans on.
  */
 
-const n = (v: number) => v.toLocaleString('en-US');
+const n = (v: number) => formatCount(v);
 const REASON: Record<CreditReason, string> = { plan: 'Plan credits', topup: 'Top-up', admin: 'From the team', usage: 'Used', expire: 'Ran out with the plan' };
 const LIMIT_ROWS: { key: keyof AgentLimit; label: string; say: (v: number) => string }[] = [
   { key: 'contextTokens', label: 'Reads per message', say: (v) => `${n(v)} tokens` },
@@ -105,7 +105,7 @@ export function Plans() {
           </div>
           <p className="mt-sm m-0 text-[12px] font-bold text-ink-soft">
             {a.plan === 'none'
-              ? `${n(a.extraCredits)} extra credits wait for a plan. One credit is a tenth of a US cent of model use.`
+              ? `${n(a.extraCredits)} extra credits wait for a plan. A typical message is about 12 credits.`
               : `${n(a.planCredits)} from ${a.planName}, used first and gone when the plan ends. ${n(a.extraCredits)} extra, kept until used.`}
           </p>
 
@@ -178,7 +178,8 @@ export function Plans() {
                     <p className="mt-sm m-0 text-[14px] font-bold">
                       {n(p.credits)} credits, about {n(messagesFor(p.credits))} messages
                     </p>
-                    <p className="mt-xs m-0 flex-1 text-[14px] font-semibold text-ink-soft">{p.blurb}</p>
+                    {/* The blurb says the same credits and messages as the line above, so the card says the period instead. */}
+                    <p className="mt-xs m-0 flex-1 text-[14px] font-semibold text-ink-soft">For {PLAN_DAYS} days. Credits left at the end do not carry over.</p>
                     {mine ? (
                       <p className="mt-sm m-0 text-[14px] font-extrabold">Your plan</p>
                     ) : (

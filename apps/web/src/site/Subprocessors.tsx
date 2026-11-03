@@ -1,5 +1,5 @@
 import { LEGAL_VERSION, SUBPROCESSORS } from '@kreators/shared';
-import { A, Grid, H, LegalPage, Mail, P, contactEmail, useBusiness, versionDate } from './legalBits';
+import { A, ActionLink, Grid, H, LegalPage, Mail, P, contactEmail, useBusiness, versionDate } from './legalBits';
 
 /** Everyone who handles personal data for us. The list is in the shared package, so this page, the privacy page and the docs never disagree. */
 export function Subprocessors() {
@@ -9,7 +9,9 @@ export function Subprocessors() {
     <LegalPage
       wide
       title="Subprocessors"
-      lede={`The companies that handle personal data for us, what they do and where. Version ${LEGAL_VERSION}, last changed ${versionDate()}.`}
+      lede="The companies that handle personal data for us, what they do and where."
+      note={`Version ${LEGAL_VERSION}, last changed ${versionDate()}.`}
+      action={<ActionLink to="/privacy">Read the privacy page</ActionLink>}
     >
       <H>Who they are</H>
       <P>

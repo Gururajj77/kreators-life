@@ -1,4 +1,4 @@
-import { MOODS } from '@kreators/shared';
+import { MOODS, LOCALE } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { PeriodPanel } from '../components/PeriodPanel';
@@ -191,7 +191,7 @@ export function Mood() {
                   <span className="min-w-0 flex-1">
                     <span className="block text-[16px] font-bold">{m.name}</span>
                     <span className="block truncate text-[14px] font-semibold text-ink-soft">
-                      {new Date(`${l.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                      {new Date(`${l.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', month: 'short', day: 'numeric' })}
                       {l.note ? `. ${l.note}` : ''}
                     </span>
                   </span>
@@ -221,7 +221,7 @@ function MoodDaySheet({ date, existing, onClose, onChanged }: { date: string | n
   };
   const save = useMutation({ mutationFn: () => api.log('mood', { date: date!, value, note }), onSuccess: done });
   const remove = useMutation({ mutationFn: () => api.deleteLog('mood', existing!.id), onSuccess: done });
-  const pretty = date ? new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }) : '';
+  const pretty = date ? new Date(`${date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long' }) : '';
   const failed = save.error ?? remove.error;
   return (
     <Sheet open={date !== null} onClose={onClose} title={pretty}>

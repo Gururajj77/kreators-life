@@ -50,10 +50,9 @@ import {
   type LoveResult,
   type MindResult,
   type RelationshipKey,
-  type TypeResult,
-} from '@kreators/shared';
+  type TypeResult, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { api, type ExtraState } from '../lib/api';
 import { bento } from '../lib/bento';
@@ -64,6 +63,7 @@ import { Button } from './Button';
 import { HeroBlobs } from './Hero';
 import { BackLink } from './PageHeader';
 import { Section } from './Section';
+import { Fold } from './Fold';
 import { Toggle } from './Toggle';
 import { AppIcon } from './AppIcon';
 import { FIELD } from '../lib/ui';
@@ -71,14 +71,28 @@ import { StatusTag } from './StatusTag';
 
 const ACCENT: Record<ExtraKind, RelationshipKey> = { type: 'self', love: 'lover_partner', mind: 'guru', design: 'divine' };
 const fillOf = (color: string): CSSProperties => ({ background: `linear-gradient(135deg, ${color}, color-mix(in oklab, ${color} 72%, var(--fill-shade)))` });
-const when = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+const when = (iso: string) => new Date(iso).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', year: 'numeric' });
+
+// On a phone a card says its first and last sentence (what it is, and the care line that ends it); the middle shows
+// from the tablet width up, so the meaning is the same and the phone reads less.
+function ShortBlurb({ text }: { text: string }) {
+  const parts = text.match(/[^.!?]+[.!?]+(\s|$)/g)?.map((x) => x.trim()) ?? [text];
+  const cls = 'mt-xs m-0 flex-1 text-[14px] font-semibold text-ink-soft';
+  if (parts.length < 3) return <p className={cls}>{text}</p>;
+  return (
+    <p className={cls}>
+      {parts[0]} <span className="hidden md:inline">{parts.slice(1, -1).join(' ')} </span>
+      {parts[parts.length - 1]}
+    </p>
+  );
+}
 
 /** The three add-ons as cards on Discover's front page: start, carry on, or open the result. */
 export function MoreSection({ onOpen }: { onOpen: (k: ExtraKind) => void }) {
   const q = useDiscoverMore();
   const extras = q.data?.extras;
   return (
-    <Section id="more" title="More ways to know yourself" lede="Short self-checks you can take on their own, in any order. Each one adds to what Home suggests and what the assistant learns, only if you allow it.">
+    <Section id="more" title="More ways to know yourself" lede="Short self-checks, in any order. Each shapes your next steps and the assistant only if you allow it.">
       <ul className="m-0 grid list-none gap-xs p-0 md:grid-cols-2">
         {EXTRA_KINDS.map((k) => {
           const st = extras?.[k.key];
@@ -86,14 +100,15 @@ export function MoreSection({ onOpen }: { onOpen: (k: ExtraKind) => void }) {
           const started = !done && (st?.progress.done ?? 0) > 0;
           const rel = RELATIONSHIP_BY_KEY[ACCENT[k.key]];
           return (
-            <li key={k.key} className="flex flex-col rounded-card bg-card p-md shadow-toy-soft">
+            <li key={k.key} data-pillar={rel.key} className="flex flex-col rounded-card bg-card p-md shadow-toy-soft">
               <span className="flex size-[48px] items-center justify-center rounded-pill" style={fillOf(rel.color)} aria-hidden="true">
                 <AppIcon name={k.icon} size={24} />
               </span>
               <h3 className="mt-sm text-[18px]">{k.name}</h3>
-              <p className="mt-xs m-0 flex-1 text-[14px] font-semibold text-ink-soft">{k.blurb}</p>
+              <ShortBlurb text={k.blurb} />
               <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{done && st?.takenAt ? `Taken ${when(st.takenAt)}` : started ? `${st!.progress.done} of ${st!.progress.total} done` : 'Not taken yet'}</p>
-              {/* Outline on purpose: the main quiz's button is the one primary action on Discover. */}
+              {/* Outline on purpose: the main quiz's button is the one primary action on Discover. On hover it takes this card's colour
+                  (data-pillar on the card), the same as its icon. */}
               <Button className="mt-sm" variant="outline" onClick={() => onOpen(k.key)}>
                 {done ? 'See my result' : started ? 'Carry on' : 'Start'}
               </Button>
@@ -281,7 +296,7 @@ function MindView({ result }: { result: MindResult }) {
   return (
     <>
       <Hero kind="mind" title="How your mind works" line="Three areas, from how often each line was true for you. Signs are not a diagnosis. They show what to plan for." />
-      <p role="note" className="mt-sm m-0 rounded-tile bg-paper p-sm text-[14px] font-semibold">{MIND_NOTE}</p>
+      <CareNote lead="A self-check, not a diagnosis.">{MIND_NOTE}</CareNote>
       <Section id="mind-areas" title="Your three areas">
         <ul className="m-0 flex list-none flex-col gap-xs p-0">
           {a.areas.map((x) => (
@@ -430,7 +445,7 @@ function QuizScreen({ kind, onBack }: { kind: ExtraKind; onBack: () => void }) {
   })();
 
   const head = (
-    <header className="pt-lg">
+    <header className="pt-lg" data-pillar={ACCENT[kind]}>
       <BackLink to="/discover" onBack={onBack}>
         Discover
       </BackLink>
@@ -456,8 +471,8 @@ function QuizScreen({ kind, onBack }: { kind: ExtraKind; onBack: () => void }) {
       <>
         {head}
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{meta.blurb}</p>
-        {kind === 'mind' && <p role="note" className="mt-sm m-0 rounded-tile bg-paper p-sm text-[14px] font-semibold">{MIND_NOTE}</p>}
-        <div className="mt-md">
+        {kind === 'mind' && <CareNote lead="A self-check, not a diagnosis.">{MIND_NOTE}</CareNote>}
+        <div className="mt-md" data-pillar={ACCENT[kind]}>
           <div className="flex items-baseline justify-between gap-sm">
             <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
               {kind === 'love' ? (at < LOVE_PAIRS.length ? 'Receiving love' : 'Showing love') : meta.name}, {at + 1} of {total}
@@ -507,7 +522,7 @@ function QuizScreen({ kind, onBack }: { kind: ExtraKind; onBack: () => void }) {
       {st?.takenAt && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Taken {when(st.takenAt)}. Only you can see this.</p>}
       {result ? kind === 'type' ? <TypeView result={result as TypeResult} /> : kind === 'love' ? <LoveView result={result as LoveResult} /> : <MindView result={result as MindResult} /> : <p className="mt-md text-[14px] font-semibold">No result yet.</p>}
       <UseSwitches kind={kind} />
-      <div className="mt-md flex flex-wrap gap-xs">
+      <div className="mt-md flex flex-wrap gap-xs" data-pillar={ACCENT[kind]}>
         <Button
           variant="outline"
           onClick={() => {
@@ -620,6 +635,7 @@ function DesignForm({ initial, birthDate, onDone }: { initial: DesignInput; birt
   const problem = designInputProblem(parseDesignInput(input));
   return (
     <form
+      data-pillar={ACCENT.design}
       className="mt-md flex flex-col gap-md"
       onSubmit={(e) => {
         e.preventDefault();
@@ -643,7 +659,7 @@ function DesignForm({ initial, birthDate, onDone }: { initial: DesignInput; birt
             <option key={z} value={z} />
           ))}
         </datalist>
-        <span className="mt-xs block text-[12px] font-semibold text-ink-soft">The zone then, not now: it sets summer time and old offsets right. Start typing a city, like Kolkata or London.</span>
+        <span className="mt-xs block text-[12px] font-semibold text-ink-soft">The zone then, not now: it sets summer time and old offsets right. Start typing a city, like Kolkata or Dubai.</span>
       </label>
       <label className="block">
         <span className="block text-[14px] font-bold">Full name on your birth record (optional)</span>
@@ -703,7 +719,7 @@ function DesignView({ result, onEdit }: { result: DesignResult; onEdit: () => vo
   const rel = RELATIONSHIP_BY_KEY[ACCENT.design];
   const other = zodiac === 'tropical' ? 'fagan' : 'tropical';
   // In the birthplace's own clock, so the time reads as it does on the birth record.
-  const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: result.input.zone });
+  const when = (iso: string) => new Date(iso).toLocaleString(LOCALE, { dateStyle: 'medium', timeStyle: 'short', timeZone: result.input.zone });
   return (
     <>
       <Hero kind="design" big={`${t.name}`} title={`${chart.profile.text} profile, ${a.headline.split(', ')[1]}`} line={`Strategy: ${t.strategy}.`} />
@@ -762,7 +778,7 @@ function DesignView({ result, onEdit }: { result: DesignResult; onEdit: () => vo
       <Section id="design-goals" title="Goals you can do and count" lede="Each comes from your chart and lands on one of your seven pillars. Add one as a task, and pick a day for it on Daily.">
         <ul className="m-0 flex list-none flex-col gap-xs p-0">
           {a.goals.map((g) => (
-            <li key={g.title} className="rounded-tile p-sm shadow-toy-soft" style={{ background: `var(--soft-${g.pillar})` }}>
+            <li key={g.title} data-pillar={g.pillar} className="rounded-tile p-sm shadow-toy-soft" style={{ background: `var(--soft-${g.pillar})` }}>
               <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide" style={{ color: `var(--deep-${g.pillar})` }}>
                 {RELATIONSHIP_BY_KEY[g.pillar].name}
               </p>
@@ -827,7 +843,7 @@ function DesignView({ result, onEdit }: { result: DesignResult; onEdit: () => vo
       </Section>
         </>
       )}
-      <p className="mt-sm m-0 text-[12px] font-semibold text-ink-soft">Human design is a system for self-reflection. It is not science and it cannot predict anything. Use it the way you would use a journal prompt: keep what helps, and leave the rest. Positions are worked out here to a few arc minutes, a little less exact for the outer planets.</p>
+      <CareNote lead="A system for reflection, not science. It cannot predict anything.">Human design is a system for self-reflection. It is not science and it cannot predict anything. Use it the way you would use a journal prompt: keep what helps, and leave the rest. Positions are worked out here to a few arc minutes, a little less exact for the outer planets.</CareNote>
       <p className="m-0 text-[12px] font-semibold text-ink-soft" style={{ color: rel.deep }} aria-hidden="true" />
     </>
   );
@@ -874,7 +890,7 @@ function NumerologyPanel({ result, onEdit }: { result: DesignResult; onEdit: () 
   const KIND = { agree: 'Your answers agree', stretch: 'A stretch', combo: 'Put together' } as const;
   return (
     <>
-      <Section id="num-numbers" title="Your numbers" lede="From your birth date and, if you gave it, the full name on your birth record. Each settles to 1 to 9 or a master number. The sums on the way down are shown, since 10, 13, 14, 16 and 19 carry their own meaning.">
+      <Section id="num-numbers" title="Your numbers" lede="From your birth date and, if you gave it, your full birth name.">
         <ul className="m-0 grid list-none grid-cols-2 gap-xs p-0 md:grid-cols-4">
           {shown.map((t, i) => (
             <li key={t.key} className={bento(i, shown.length, 2, 4)}>
@@ -890,7 +906,14 @@ function NumerologyPanel({ result, onEdit }: { result: DesignResult; onEdit: () 
             </Button>
           </div>
         )}
-        <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Your personal year turns over on 1 January. Letters use the Pythagorean table: A to I are 1 to 9, J to R are 1 to 9, S to Z are 1 to 8.</p>
+        <Fold title="How the sums work" className="mt-xs">
+          <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+            <li>Each number settles to 1 to 9 or a master number.</li>
+            <li>The sums on the way down are shown, since 10, 13, 14, 16 and 19 carry their own meaning.</li>
+            <li>Your personal year turns over on 1 January.</li>
+            <li>Letters use the Pythagorean table: A to I are 1 to 9, J to R are 1 to 9, S to Z are 1 to 8.</li>
+          </ul>
+        </Fold>
       </Section>
 
       <Section id="num-read" title="What your main numbers say">
@@ -972,7 +995,7 @@ function NumerologyPanel({ result, onEdit }: { result: DesignResult; onEdit: () 
         ) : (
           <ul className="m-0 flex list-none flex-col gap-xs p-0">
             {insights.map((x) => (
-              <li key={x.title} className="rounded-tile p-sm shadow-toy-soft" style={{ background: x.pillar ? `var(--soft-${x.pillar})` : 'var(--color-card)' }}>
+              <li key={x.title} data-pillar={x.pillar ?? undefined} className="rounded-tile p-sm shadow-toy-soft" style={{ background: x.pillar ? `var(--soft-${x.pillar})` : 'var(--color-card)' }}>
                 <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{KIND[x.kind]}</p>
                 <h3 className="text-[18px]">{x.title}</h3>
                 <p className="mt-xs m-0 text-[14px] font-semibold">{x.text}</p>
@@ -991,7 +1014,7 @@ function NumerologyPanel({ result, onEdit }: { result: DesignResult; onEdit: () 
         )}
         {latest && <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Your strengths: {latest.result.top.map((k) => DISCOVER_STRENGTHS[k].name).join(', ')}.</p>}
       </Section>
-      <p className="mt-sm m-0 text-[12px] font-semibold text-ink-soft">Numerology is a system for self-reflection. It is not science, it cannot predict anything, and different schools add the numbers in slightly different ways. Use it like a journal prompt.</p>
+      <CareNote lead="A system for reflection, not science. It cannot predict anything.">Numerology is a system for self-reflection. It is not science, it cannot predict anything, and different schools add the numbers in slightly different ways. Use it like a journal prompt.</CareNote>
     </>
   );
 }
@@ -1013,7 +1036,7 @@ function DesignScreen({ onBack }: { onBack: () => void }) {
     if (st && mode === null) setMode(st.result ? 'result' : 'form');
   }, [st, mode]);
   const head = (
-    <header className="pt-lg">
+    <header className="pt-lg" data-pillar={ACCENT.design}>
       <BackLink to="/discover" onBack={onBack}>
         Discover
       </BackLink>
@@ -1034,7 +1057,7 @@ function DesignScreen({ onBack }: { onBack: () => void }) {
     return (
       <>
         {head}
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">A birth chart read as a map of how you are built to work, decide and give. It shows your type, strategy, authority, profile and cross, in the tropical and the sidereal zodiac, in three layers, with goals you can do.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Your birth chart, read as a map of how you work, decide and give.</p>
         <DesignForm initial={parseDesignInput(st.draft)} birthDate={me.data?.user.birthDate ?? ''} onDone={() => setMode('result')} />
       </>
     );
@@ -1042,10 +1065,10 @@ function DesignScreen({ onBack }: { onBack: () => void }) {
   return (
     <>
       {head}
-      {st.takenAt && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Worked out {new Date(st.takenAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}. Only you can see this.</p>}
+      {st.takenAt && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Worked out {new Date(st.takenAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', year: 'numeric' })}. Only you can see this.</p>}
       <DesignView result={st.result as DesignResult} onEdit={() => setMode('form')} />
       <UseSwitches kind="design" />
-      <div className="mt-md flex flex-wrap gap-xs">
+      <div className="mt-md flex flex-wrap gap-xs" data-pillar={ACCENT.design}>
         <Button variant="outline" onClick={() => setMode('form')}>
           Change my birth details
         </Button>
@@ -1054,5 +1077,17 @@ function DesignScreen({ onBack }: { onBack: () => void }) {
         </Button>
       </div>
     </>
+  );
+}
+
+/** A care line that must always be said: its lead stays in sight, and the whole note is one tap away. */
+function CareNote({ lead, children }: { lead: string; children: ReactNode }) {
+  return (
+    <div role="note" className="mt-sm">
+      <p className="m-0 text-[14px] font-bold">{lead}</p>
+      <Fold title="More" className="mt-xs">
+        <p className="m-0 text-[14px] font-semibold text-ink-soft">{children}</p>
+      </Fold>
+    </div>
   );
 }

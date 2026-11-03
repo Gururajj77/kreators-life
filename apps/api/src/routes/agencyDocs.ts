@@ -29,6 +29,9 @@ import {
   type DocType,
   CONTRACT_TEMPLATE_BY_KEY,
   contractVarsFor,
+  cleanContractAnswers,
+  parseOnboarding,
+  withProfilePackages,
   docFromProfile,
   INVOICE_STATUSES,
   invoiceTotals,
@@ -48,6 +51,7 @@ import {
   type PublicContract,
   monthName,
   tdsGrossupNote,
+  invoiceFromProfile,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { audit, dayFromDevice, nameOf, newId, notify, nowIso, num, oneOf, pageOf, paged, randomCode, shiftDate, str } from '../db';
@@ -86,13 +90,18 @@ export interface ClientBits {
   hours_per_month?: number;
   revisions_per_piece?: number;
   retainer_cents?: number;
+  /** What the client wrote in onboarding (migration 0071): the designation and the brands fill an agreement's blanks. */
+  onboarding_json?: string;
 }
 export async function clientBits(db: D1Database, userId: string, id: unknown): Promise<ClientBits | null> {
   if (typeof id !== 'string' || !id) return null;
-  return db
-    .prepare('SELECT id, name, contact_name, contact_email, billing_json, channels_json, pieces_per_month, hours_per_month, revisions_per_piece, retainer_cents FROM agency_clients WHERE id = ? AND user_id = ?')
-    .bind(id, userId)
-    .first<ClientBits>();
+  const base = 'SELECT id, name, contact_name, contact_email, billing_json, channels_json, pieces_per_month, hours_per_month, revisions_per_piece, retainer_cents';
+  try {
+    return await db.prepare(`${base}, onboarding_json FROM agency_clients WHERE id = ? AND user_id = ?`).bind(id, userId).first<ClientBits>();
+  } catch {
+    // A database that has not had migration 0071 yet has no onboarding column; the rest of the record still fills the paper.
+    return db.prepare(`${base} FROM agency_clients WHERE id = ? AND user_id = ?`).bind(id, userId).first<ClientBits>();
+  }
 }
 
 /** Everything a client's record already answers for a new document, so nothing it knows is asked again (contractVarsFor). */
@@ -104,10 +113,13 @@ export function clientFacts(client: ClientBits, currency: string): ContractClien
   } catch {
     channels = [];
   }
+  const onboarding = parseOnboarding(jsonOr<unknown>(client.onboarding_json ?? '{}', {}));
   return {
     name: client.name,
     address: billingOf(client).address,
-    contactName: client.contact_name,
+    contactName: client.contact_name || onboarding.pocName,
+    contactTitle: onboarding.designation,
+    brands: onboarding.brands,
     channels,
     piecesPerMonth: client.pieces_per_month ?? 0,
     hoursPerMonth: client.hours_per_month ?? 0,
@@ -174,7 +186,7 @@ function houseInvoice(row: HouseRow, profile: BusinessProfile): { doc: InvoiceDo
   const doc = t.invoice!;
   if (row.include_business) return { doc, items: t.items };
   const logo = parseDocStyle(profile.docStyle).logo;
-  return { doc: { ...doc, from: profile.from, bank: profile.bank, footer: doc.footer || profile.footer, style: { ...parseDocStyle(doc.style), logo, footer: parseDocStyle(profile.docStyle).footer } }, items: t.items };
+  return { doc: { ...doc, from: invoiceFromProfile(profile), bank: profile.bank, footer: doc.footer || profile.footer, style: { ...parseDocStyle(doc.style), logo, footer: parseDocStyle(profile.docStyle).footer } }, items: t.items };
 }
 /** A house agreement or document used by someone: the names are theirs, the logo and footer fall back to their own default look. */
 export function houseContract(row: HouseRow, profile: BusinessProfile): ContractDoc {
@@ -340,7 +352,7 @@ agencyDocs.get('/invoices/board', async (c) => {
 
 agencyDocs.get('/invoices/:id', async (c) => {
   const row = await c.env.DB.prepare(`${INV_SELECT} WHERE i.id = ? AND i.user_id = ? AND i.agency_client_id IS NOT NULL`).bind(c.req.param('id'), c.get('user').id).first<InvRow>();
-  return row ? c.json({ invoice: toInvoice(row) }) : c.json({ error: 'not found' }, 404);
+  return row ? c.json({ invoice: toInvoice(row), version: invoiceVersion(row) }) : c.json({ error: 'not found' }, 404);
 });
 
 // A new invoice starts from the person's profile (who it is from, the bank, the look, GST and TDS) and the client's billing details.
@@ -367,7 +379,7 @@ agencyDocs.post('/invoices', async (c) => {
   } else if (tpl) {
     const t = templateDoc(tpl);
     // A template saved without the sender's details (a copy of a house template) takes the person's own.
-    base = { ...t.invoice!, from: t.invoice!.from.name ? t.invoice!.from : settings.profile.from, bank: t.invoice!.bank.account || t.invoice!.bank.upi ? t.invoice!.bank : settings.profile.bank, to: billingOf(client) };
+    base = { ...t.invoice!, from: t.invoice!.from.name ? t.invoice!.from : invoiceFromProfile(settings.profile), bank: t.invoice!.bank.account || t.invoice!.bank.upi ? t.invoice!.bank : settings.profile.bank, to: billingOf(client) };
     starting = t.items;
   } else if (starter) {
     // The advance starter's TDS line carries the person's own rate, and is left off when they have none.
@@ -440,6 +452,8 @@ agencyDocs.patch('/invoices/:id', async (c) => {
   }
   if (row.status === 'paid') return c.json({ error: 'a paid invoice must be marked sent again before it can change' }, 400);
   if (row.status === 'void') return c.json({ error: 'a void invoice cannot change' }, 400);
+  // Saving as you go: invoices have no updated_at, so the page sends the version it read (`ifVersion`, from GET and every PATCH answer).
+  if (typeof body.ifVersion === 'string' && body.ifVersion !== invoiceVersion(row)) return c.json({ error: 'changed' }, 409);
   const prev = toInvoice(row);
   const doc = await ownLogo(db, user.id, parseInvoiceDoc(body.doc, prev.doc), parseDocStyle(prev.doc.style).logo);
   const items = 'items' in body ? itemsIn(body.items) : prev.items;
@@ -460,8 +474,18 @@ agencyDocs.patch('/invoices/:id', async (c) => {
     note: 'note' in body ? str(body.note, 500) : prev.note,
     doc,
   });
-  return invoice ? c.json({ invoice, totals: invoiceTotals(invoice.items, invoice.doc) }) : c.json({ error: 'not found' }, 404);
+  if (!invoice) return c.json({ error: 'not found' }, 404);
+  const after = await db.prepare(`${INV_SELECT} WHERE i.id = ? AND i.user_id = ?`).bind(row.id, user.id).first<InvRow>();
+  return c.json({ invoice, totals: invoiceTotals(invoice.items, invoice.doc), version: after ? invoiceVersion(after) : '' });
 });
+
+/** A short fingerprint of an invoice's editable content: the version the page read, checked before a save lands (`ifVersion`). */
+export function invoiceVersion(r: Pick<InvRow, 'doc_json' | 'items_json' | 'number' | 'issue_date' | 'due_date' | 'note' | 'status'>): string {
+  const text = [r.status, r.number, r.issue_date, r.due_date ?? '', r.note, r.items_json, r.doc_json].join('\u0001');
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193) >>> 0;
+  return `${text.length.toString(36)}-${h.toString(36)}`;
+}
 
 agencyDocs.delete('/invoices/:id', async (c) => {
   const db = c.env.DB;
@@ -639,13 +663,16 @@ agencyDocs.post('/contracts', async (c) => {
   if ((n?.n ?? 0) >= MAX_CONTRACTS) return c.json({ error: 'too many agreements; remove some first' }, 400);
   const settings = settings0 ?? (await settingsFor(db, user.id));
   // A built-in or own template takes the person's default look unless it has its own; a house template already carries the look it was given.
-  const baseStyle = parseDocStyle(template.doc.style, parseDocStyle(settings.profile.docStyle));
+  const typed = parseDocStyle(template.doc.style).layout === 'typed';
+  // A typed agreement (the Trial agreement) keeps its own look; only the page size comes from the person's default.
+  const baseStyle = typed ? parseDocStyle({ ...parseDocStyle(template.doc.style), page: parseDocStyle(settings.profile.docStyle).page }) : parseDocStyle(template.doc.style, parseDocStyle(settings.profile.docStyle));
   const doc: ContractDoc = await ownLogo(db, user.id, {
     ...structuredClone(template.doc),
     currency: settings.currency,
     vars: contractVarsFor(settings.profile, client ? clientFacts(client, settings.currency) : null),
     style: baseStyle,
-    sections: fillRetainerFee(structuredClone(template.doc).sections, client),
+    // The price table takes the owner's own packages (entered once in Settings) when the template has none of its own.
+    sections: withProfilePackages(fillRetainerFee(structuredClone(template.doc).sections, client), settings.profile),
   }, houseRow ? baseStyle.logo : '');
   const id = newId();
   const now = nowIso();
@@ -691,7 +718,15 @@ agencyDocs.patch('/contracts/:id', async (c) => {
         clientId = cl.id;
       }
     }
-    await db.prepare("UPDATE agency_contracts SET doc_json = ?, title = ?, client_id = ?, revised_at = CASE WHEN status = 'sent' THEN ? ELSE revised_at END, updated_at = ? WHERE id = ? AND user_id = ? AND status IN ('draft', 'sent')").bind(JSON.stringify(doc), doc.title, clientId, now, now, row.id, user.id).run();
+    // Saving as you go: the page sends the time it last read (`ifUpdatedAt`), and the change lands only on that version, so a second tab
+    // or device that saved meanwhile is never written over; the page reloads instead (409 changed).
+    const guard = typeof body.ifUpdatedAt === 'string' ? body.ifUpdatedAt : null;
+    if (guard !== null && guard !== row.updated_at) return c.json({ error: 'changed' }, 409);
+    const res = await db
+      .prepare(`UPDATE agency_contracts SET doc_json = ?, title = ?, client_id = ?, revised_at = CASE WHEN status = 'sent' THEN ? ELSE revised_at END, updated_at = ? WHERE id = ? AND user_id = ? AND status IN ('draft', 'sent')${guard !== null ? ' AND updated_at = ?' : ''}`)
+      .bind(JSON.stringify(doc), doc.title, clientId, now, now, row.id, user.id, ...(guard !== null ? [guard] : []))
+      .run();
+    if (guard !== null && res.meta.changes !== 1) return c.json({ error: 'changed' }, 409);
   }
   if (typeof body.status === 'string') {
     const next = oneOf(body.status, ['draft', 'sent', 'void'] as const, row.status === 'signed' ? 'draft' : (row.status as 'draft' | 'sent' | 'void'));
@@ -759,7 +794,7 @@ agencyDocs.post('/invoices/:id/email', async (c) => {
     intro: cover ? cover.message : `Hello,\n\nHere is ${inv.doc.title.toLowerCase() === 'invoice' ? 'invoice' : inv.doc.title.toLowerCase()} ${inv.number}.`,
     text: cover ? '' : invoiceAsText(inv),
     link: publicUrl(c.env, `/i/${row.token}`),
-    replyTo: settings.profile.from.email,
+    replyTo: invoiceFromProfile(settings.profile).email,
   });
   await logDoc(db, user.id, 'invoice', row.id, result.sent ? 'emailed' : 'email-not-sent', maskEmail(who.to));
   await audit(db, user.id, 'agency_doc.email', 'invoice', row.id, '', maskEmail(who.to));
@@ -785,7 +820,7 @@ agencyDocs.post('/contracts/:id/email', async (c) => {
     intro: cover ? cover.message : 'Hello,\n\nHere is the agreement for you to read. You can answer any questions and accept it at the link below.',
     text: cover ? '' : contractAsText(doc, { reference: docRef('AGR', row.id), date: row.sent_at ?? row.created_at, answers: jsonOr<Record<string, ContractAnswer>>(row.answers_json, {}), acceptance: jsonOr<AgencyContract['acceptance']>(row.acceptance_json, null) }),
     link: publicUrl(c.env, `/k/${row.token}`),
-    replyTo: settings.profile.from.email,
+    replyTo: invoiceFromProfile(settings.profile).email,
   });
   await logDoc(db, user.id, 'contract', row.id, result.sent ? 'emailed' : 'email-not-sent', maskEmail(who.to));
   await audit(db, user.id, 'agency_doc.email', 'contract', row.id, '', maskEmail(who.to));
@@ -846,16 +881,8 @@ contractsPublic.post('/:token/accept', async (c) => {
   if (!name) return c.json({ error: 'type your full name' }, 400);
   if (body.agree !== true) return c.json({ error: 'tick that you have read and agree' }, 400);
   const doc = docOf(row.doc_json);
-  // Only answers to the agreement's own questions, and only options it offered, are kept.
-  const raw = body.answers && typeof body.answers === 'object' ? (body.answers as Record<string, unknown>) : {};
-  const answers: Record<string, ContractAnswer> = {};
-  for (const section of doc.sections) {
-    for (const q of section.questions ?? []) {
-      const a = raw[q.id] && typeof raw[q.id] === 'object' ? (raw[q.id] as Record<string, unknown>) : {};
-      const picked = (Array.isArray(a.picked) ? a.picked : []).filter((x): x is string => typeof x === 'string' && q.options.includes(x)).slice(0, q.multi ? q.options.length : 1);
-      answers[q.id] = { picked, other: q.other ? str(a.other, 200) : '', text: q.text ? str(a.text, 1500) : '' };
-    }
-  }
+  // Only answers to the agreement's own questions, only options it offered, only fields it names and only web links are kept.
+  const answers: Record<string, ContractAnswer> = cleanContractAnswers(doc, body.answers);
   const now = nowIso();
   const res = await db
     .prepare("UPDATE agency_contracts SET status = 'signed', signed_at = ?, acceptance_json = ?, answers_json = ?, updated_at = ? WHERE id = ? AND status = 'sent'")

@@ -8,6 +8,7 @@ import { useSession } from '../lib/store';
 import { useDialogFocus } from '../lib/useDialogFocus';
 import { Button } from './Button';
 import { RulerPicker } from './RulerPicker';
+import { WaterFill } from './fx/WaterFill';
 import { Sheet } from './Sheet';
 import { Icon } from './Icon';
 import { ChevronDown, Droplet } from 'lucide-react';
@@ -86,12 +87,9 @@ function Drop({ size = 20 }: { size?: number }) {
 }
 
 function Bar({ w }: { w: WaterState }) {
-  const pct = Math.min(1, w.ml / w.goalMl);
   return (
     <div>
-      <div className="h-[12px] rounded-pill bg-line" role="progressbar" aria-valuemin={0} aria-valuemax={w.goalMl} aria-valuenow={w.ml} aria-label="Water today">
-        <div className="h-full rounded-pill bg-r4" style={{ width: `${pct * 100}%`, transition: 'width 240ms ease' }} />
-      </div>
+      <WaterFill value={w.ml} max={w.goalMl} />
       <p className="mt-xs m-0 text-[14px] font-bold">
         {w.glasses} of {w.goalGlasses} glasses · {litres(w.ml)} of {litres(w.goalMl)}
         {w.ml >= w.goalMl && ' · goal met'}
@@ -101,7 +99,8 @@ function Bar({ w }: { w: WaterState }) {
 }
 
 /** Water, the person's own reminders and the settings for both. The same on a laptop's bubble and a phone's section. */
-export function RemindersPanel({ bento = false }: { bento?: boolean }) {
+/** `tasks={false}` (Daily on a phone) leaves out the remembered tasks, which Daily already lists under To remember, and points there instead. */
+export function RemindersPanel({ bento = false, tasks = true }: { bento?: boolean; tasks?: boolean }) {
   const { q, day, refresh } = useReminders();
   const qc = useQueryClient();
   const w = q.data?.water;
@@ -145,7 +144,7 @@ export function RemindersPanel({ bento = false }: { bento?: boolean }) {
   const cell = bento ? 'rounded-inner bg-paper p-sm' : '';
   return (
     <div className={bento ? 'grid gap-sm md:grid-cols-2' : 'flex flex-col gap-md'}>
-      <section aria-label="Water" className={cell}>
+      <section aria-label="Water" className={cell} data-pillar="lover_partner">
         <h3 className="m-0 flex items-center gap-xs text-[16px] font-extrabold">
           <span className="text-r4"><Drop /></span> Water
         </h3>
@@ -294,7 +293,11 @@ export function RemindersPanel({ bento = false }: { bento?: boolean }) {
             Tasks from Daily
           </h4>
           <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">A task you ask to remember sends one note to your Inbox on its day.</p>
-          {remembered.length > 0 && (
+          {!tasks ? (
+            remembered.some((t) => !t.day) && <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+              <a href="#remember-heading" className="inline-flex min-h-[44px] items-center underline underline-offset-4 hover:text-ink">Tasks to remember are under Tasks below</a>
+            </p>
+          ) : remembered.length > 0 && (
             <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
               {remembered.map((t) => (
                 <li key={t.id} className="rounded-inner-sm bg-paper p-xs">
@@ -364,15 +367,14 @@ export function RemindersPanel({ bento = false }: { bento?: boolean }) {
  * On a phone: a section inside Daily and Journal, never a floating button. Water comes first, so its tap sits in
  * the collapsed row; the rest opens under it.
  */
-export function RemindersSection({ always = false }: { always?: boolean }) {
+export function RemindersSection({ always = false, tasks = true }: { always?: boolean; tasks?: boolean }) {
   const { q, day, refresh } = useReminders();
   const [open, setOpen] = useState(false);
   const w = q.data?.water;
   const drink = useMutation({ mutationFn: () => api.drinkWater(day), onSuccess: refresh });
   const undo = useMutation({ mutationFn: () => api.undoWater(day), onSuccess: refresh });
-  const pct = w ? Math.min(1, w.ml / w.goalMl) : 0;
   return (
-    <section className={`span-all mt-md w-full rounded-card bg-card p-md shadow-toy-soft ${always ? '' : 'md:hidden'}`} aria-label="Water and reminders">
+    <section className={`span-all mt-md w-full rounded-card bg-card p-md shadow-toy-soft ${always ? '' : 'md:hidden'}`} aria-label="Water and reminders" data-pillar="lover_partner">
       {/* One wide cell: what it is and where today stands on the left, the tap on the right. On a phone the tap drops under it, full width. */}
       <div className="flex flex-col gap-sm sm:flex-row sm:items-center sm:justify-between">
         <button type="button" aria-expanded={open} aria-controls="reminders-body" onClick={() => setOpen((v) => !v)} className="toy toy-flat flex min-h-[44px] min-w-0 flex-1 items-center gap-sm rounded-inner-sm px-xs py-xs text-left">
@@ -394,12 +396,10 @@ export function RemindersSection({ always = false }: { always?: boolean }) {
           </Button>
         </div>
       </div>
-      <div className="mt-sm h-[12px] rounded-pill bg-line" role="progressbar" aria-valuemin={0} aria-valuemax={w?.goalMl ?? 1} aria-valuenow={w?.ml ?? 0} aria-label="Water today">
-        <div className="h-full rounded-pill bg-r4" style={{ width: `${pct * 100}%`, transition: 'width 240ms ease' }} />
-      </div>
+      <WaterFill className="mt-sm" value={w?.ml} max={w?.goalMl} />
       {open && (
         <div id="reminders-body" className="mt-sm">
-          <RemindersPanel bento />
+          <RemindersPanel bento tasks={tasks} />
         </div>
       )}
     </section>
@@ -422,7 +422,7 @@ export function ReminderBubble() {
   if (!here) return null;
   const w = q.data?.water;
   return (
-    <div className="fixed bottom-md left-[calc(240px+var(--spacing-md))] z-40 hidden md:block">
+    <div className="fixed bottom-md left-[calc(240px+var(--spacing-md))] z-40 hidden md:block" data-pillar="lover_partner">
       {open && (
         <div ref={panel} className="mb-sm max-h-[70vh] w-[340px] overflow-y-auto rounded-card border border-line bg-card p-md shadow-toy-soft" role="dialog" aria-label="Water and reminders">
           <div className="mb-sm flex items-center justify-between">
@@ -456,6 +456,7 @@ export function WaterButton() {
         type="button"
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
+        data-pillar="lover_partner"
         aria-label={w ? `Water and reminders, ${w.glasses} of ${w.goalGlasses} glasses` : 'Water and reminders'}
         className="toy toy-soft hidden min-h-[44px] items-center gap-xs rounded-pill border border-line bg-card-strong px-sm text-[14px] font-bold text-ink md:flex"
       >

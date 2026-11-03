@@ -1,8 +1,10 @@
-import { PRODUCT_KIND_META, productPayWays, type CourseDraft, type Lesson, type QuizQuestion, PUBLIC_BADGES, HONORS, FAQ_A_MAX, FAQ_Q_MAX, MAX_FAQ, type ProductFaq, money } from '@kreators/shared';
+import { PRODUCT_KIND_META, productPayWays, type CourseDraft, type Lesson, type QuizQuestion, PUBLIC_BADGES, HONORS, FAQ_A_MAX, FAQ_Q_MAX, MAX_FAQ, type ProductFaq, money, typedCents } from '@kreators/shared';
+import { eventTime, longDate } from '../lib/date';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { Button } from '../components/Button';
+import { Fold } from '../components/Fold';
 import { MediaSection } from '../components/MediaSection';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
@@ -12,6 +14,20 @@ import { api } from '../lib/api';
 import { useAuthed, useRefreshAll, useStudio } from '../lib/queries';
 import { FIELD } from '../lib/ui';
 
+
+
+/** Paise as the rupees a person would type: 129950 is "1299.50", 129900 is "1299". Integer maths, no float. */
+const typedFromCents = (cents: number): string => {
+  const c = Math.max(0, Math.round(cents));
+  const rest = c % 100;
+  return `${(c - rest) / 100}${rest ? `.${String(rest).padStart(2, '0')}` : ''}`;
+};
+/** The money price typed in rupees ("1,299.50") as paise, read from its digits with `typedCents`. A price that is not a number is refused. */
+const moneyPriceCents = (typed: string): number => {
+  const cents = typedCents(typed);
+  if (!Number.isFinite(cents) || cents < 0) throw new Error('Type the money price as a number, like 1,299.50.');
+  return cents;
+};
 
 export function StudioProduct() {
   const { id = '' } = useParams();
@@ -61,7 +77,7 @@ export function StudioProduct() {
     setTitle(p.title);
     setDescription(p.description);
     setPricePoints(String(p.pricePoints));
-    setPriceCents(String(p.priceCents));
+    setPriceCents(typedFromCents(p.priceCents));
     setUrl(p.url ?? '');
     setStartsAt(p.startsAt ? p.startsAt.slice(0, 16) : '');
     setDurationMin(String(p.durationMin ?? 30));
@@ -93,7 +109,7 @@ export function StudioProduct() {
         title,
         description,
         pricePoints: Number(pricePoints) || 0,
-        priceCents: Number(priceCents) || 0,
+        priceCents: moneyPriceCents(priceCents),
         url: url || null,
         startsAt: startsAt ? new Date(startsAt).toISOString() : null,
         durationMin: Number(durationMin) || 30,
@@ -202,21 +218,21 @@ export function StudioProduct() {
         </div>
         {priced && (
           <label className="block">
-            <span className="block text-[14px] font-bold">Money price, in {p.currency} cents (test mode)</span>
-            <input type="number" min={0} value={priceCents} onChange={(e) => setPriceCents(e.target.value)} className={FIELD} />
+            <span className="block text-[14px] font-bold">Money price ({money(0, p.currency).replace(/0$/, '').trim()})</span>
+            <input type="text" inputMode="decimal" value={priceCents} onChange={(e) => setPriceCents(e.target.value)} placeholder="1,299.50" className={FIELD} />
           </label>
         )}
         {priced && (
           <p className="m-0 text-[12px] font-bold text-ink-soft">
             {(() => {
-              const w = productPayWays({ pricePoints: Number(pricePoints) || 0, priceCents: Number(priceCents) || 0, pwyw });
+              const w = productPayWays({ pricePoints: Number(pricePoints) || 0, priceCents: Math.max(0, typedCents(priceCents) || 0), pwyw });
               return w.free ? 'With both prices at 0 this is free.' : w.points && w.money ? 'Buyers can pay with points or with money.' : w.money ? 'Buyers pay with money only. Set a points price above 0 to let them pay with points too.' : 'Buyers pay with points only. Add a money price to let them pay with money too.';
             })()}
           </p>
         )}
         <fieldset className="m-0 rounded-tile border-2 border-line p-sm">
           <legend className="px-xs text-[14px] font-bold">Who can buy</legend>
-          <p className="m-0 text-[12px] font-bold text-ink-soft">Leave them empty and anyone can. Set an xp floor, a points floor, a badge, or any mix, and only people who earned them can. A super admin is never locked out.</p>
+          <p className="m-0 text-[12px] font-bold text-ink-soft">Empty means anyone can. Set any mix, and only people who earned it can buy.</p>
           <div className="mt-xs grid grid-cols-2 gap-xs">
             <label className="block">
               <span className="block text-[14px] font-bold">Xp of at least</span>
@@ -510,7 +526,7 @@ export function StudioProduct() {
               <li key={o.id} className="rounded-tile bg-card p-sm text-[14px] font-semibold shadow-toy-soft">
                 <span className="font-bold">{o.buyerName}</span>, {o.points > 0 ? `${o.points} points` : `${money(o.cents, o.currency)}, ${o.status}`}
                 {o.variant === 'replay' ? ', replay' : ''}
-                {o.sourceLabel ? `, via ${o.sourceLabel}` : ''}, {new Date(o.createdAt).toLocaleDateString()}
+                {o.sourceLabel ? `, via ${o.sourceLabel}` : ''}, {longDate(o.createdAt)}
                 {o.intake.length > 0 && (
                   <ul className="mt-xs list-none p-0 m-0 text-ink-soft">
                     {o.intake.map((a, i) => (
@@ -525,7 +541,7 @@ export function StudioProduct() {
             ))}
             {d.bookings.map((b) => (
               <li key={b.id} className="rounded-tile bg-card p-sm text-[14px] font-semibold shadow-toy-soft">
-                <span className="font-bold">{b.buyerName}</span>, {new Date(b.startsAt).toLocaleString()} UTC, {b.status}
+                <span className="font-bold">{b.buyerName}</span>, {eventTime(b.startsAt)}, {b.status}
                 {b.intake.length > 0 && (
                   <ul className="mt-xs list-none p-0 m-0 text-ink-soft">
                     {b.intake.map((a, i) => (
@@ -574,8 +590,15 @@ function DraftSheet({ productId, title, open, onClose, onSaved }: { productId: s
         <label className="block">
           <span className="block text-[14px] font-bold">Your notes, a transcript, or an outline</span>
           <textarea value={source} onChange={(e) => setSource(e.target.value)} rows={8} maxLength={20000} className={FIELD} placeholder={'# Lesson one\nWhat it covers, in a few lines.\nWhich cut keeps the energy up?\n- Cut on action *\n- Cut at random'} />
-          <span className="mt-xs block text-[12px] font-bold text-ink-soft">With AI on the server, lessons and quizzes are written from the notes. Without it, an outline is parsed: a line starting with # is a lesson, a line ending with ? is a question, lines starting with - are its options, and * marks the right one.</span>
+          <span className="mt-xs block text-[12px] font-bold text-ink-soft">Lessons and quizzes are written from your notes, or read from an outline.</span>
         </label>
+        <Fold title="How an outline reads">
+          <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-[12px] font-bold text-ink-soft">
+            <li>A line starting with # is a lesson.</li>
+            <li>A line ending with ? is a question.</li>
+            <li>Lines starting with - are its options, and * marks the right one.</li>
+          </ul>
+        </Fold>
         <Button variant="outline" onClick={() => preview.mutate()} disabled={preview.isPending || source.trim().length < 20}>
           {preview.isPending ? 'Drafting' : 'Preview draft'}
         </Button>

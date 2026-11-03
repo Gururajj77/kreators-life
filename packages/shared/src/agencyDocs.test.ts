@@ -143,7 +143,8 @@ describe('agreement text', () => {
       const text = contractAsText(doc, { reference: 'AGR-1', date: '2026-10-01' });
       sign(text);
       expect(text).toContain('Acme Foods');
-      expect(text).toContain('Reference: AGR-1');
+      // The typed layout (the Trial agreement) keeps the reference off the paper; the legal layout prints it.
+      if (parseDocStyle(t.doc.style).layout !== 'typed') expect(text).toContain('Reference: AGR-1');
       expect(text).toMatch(/\n1\. PARTIES/);
       expect(text).toContain('\n\n');
     }
@@ -151,10 +152,12 @@ describe('agreement text', () => {
   it('lists packages in whole cents, the brief with its answers, and the signature lines', () => {
     const base = CONTRACT_TEMPLATES.find((t) => t.key === 'trial')!.doc;
     const doc: ContractDoc = { ...base, vars: { client: 'Acme Foods' }, sections: base.sections.map((s) => (s.kind === 'packages' ? { ...s, packages: [{ name: 'Starter', units: 5, feeCents: 3500000 }] } : s)) };
-    const text = contractAsText(doc, { answers: { objective: { picked: ['Paid ads and performance marketing'], other: '', text: '' } }, acceptance: { name: 'Asha Rao', title: 'Head of Brand', at: '2026-10-03T08:30:00.000Z' } });
+    const text = contractAsText(doc, { answers: { objective: { picked: ['Paid ads / Performance marketing'], other: '', text: '' } }, acceptance: { name: 'Asha Rao', title: 'Head of Brand', at: '2026-10-03T08:30:00.000Z' } });
     sign(text);
-    expect(text).toContain(`Starter: 5 videos, ${money(3500000)}`);
-    expect(text).toContain('[x] Paid ads and performance marketing');
+    expect(text).toContain('Package | Videos | Package fee | Effective rate per video');
+    expect(text).toContain(`Starter | 5 | ${money(3500000)} | ${money(700000)}`);
+    expect(text).toContain('[x] Paid ads / Performance marketing');
+    expect(text).toContain('[ ] Organic content (value/entertainment first)');
     expect(text).toContain('Accepted electronically by Asha Rao on 3 Oct 2026, 08:30 UTC. Typed acceptance, not a certified e-signature.');
     expect(text).toContain('Signature: ____________________');
   });
@@ -182,7 +185,7 @@ describe('invoice text', () => {
     expect(text).toContain(`CGST (9%): ${money(t.cgst)}`);
     expect(text).toContain(`SGST (9%): ${money(t.sgst)}`);
     expect(text).toContain(`Total: ${money(t.total)}`);
-    expect(text).toContain(`Total amount in words: ${amountInWords(t.total)}`);
+    expect(text).toContain(`TOTAL AMOUNT IN WORDS : ${amountInWords(t.total)}`);
     expect(text).toContain(`TDS to deduct (10%): -${money(t.tdsDeducted)}`);
     expect(text).toContain(`To pay after TDS: ${money(t.netReceivable)}`);
     expect(text).toContain('IFSC code: TST0001');
@@ -194,7 +197,7 @@ describe('invoice text', () => {
     const t = invoiceTotals(inv.items, inv.doc);
     const text = invoiceAsText(inv);
     expect(text).toContain(`TDS adjusted: ${money(t.tdsAdjusted)}`);
-    expect(text).toContain(`GST (18%): ${money(t.gst)}`);
+    expect(text).toContain(`IGST (18%): ${money(t.gst)}`);
     expect(text).toContain(`TDS to deduct (${inv.doc.tdsBps / 100}%): -${money(t.tdsDeducted)}`);
     expect(text).toContain(`To pay after TDS: ${money(t.netReceivable)}`);
     expect(text).toContain('applicable for TDS deducted to be borne by the company as per the agreement terms.');
@@ -206,7 +209,7 @@ describe('invoice text', () => {
     const text = invoiceAsText(invoiceForClient(inv));
     expect(text).not.toContain('IFSC');
     expect(text).not.toContain('Bank account details');
-    expect(text).not.toContain('Total amount in words');
+    expect(text).not.toMatch(/amount in words/i);
     expect(text).not.toContain('Please pay by the due date');
     expect(text).toContain('Acme Foods');
     void emptyParty;
@@ -227,9 +230,10 @@ describe('other kinds of document', () => {
   });
   it('trial terms come from the trial agreement and point at no section numbers', () => {
     const t = contractAsText(agencyDocStarter('trial_terms'));
-    expect(t).not.toMatch(/section \d/);
-    expect(t).toContain('evaluation and approval only');
-    expect(t).toContain('one point of contact');
+    expect(t).not.toMatch(/section \d/i);
+    expect(t).toContain('solely for evaluation and approval purposes');
+    expect(t).toContain('one primary point of contact');
+    expect(t).not.toMatch(/^\d+\.\d+ /m);
   });
   it('a retainer proposal prices each option from the monthly fee, in whole cents', () => {
     const doc = retainerProposalDoc({ monthlyFeeCents: 4500050, months: [6, 1, 3, 3], deliverables: ['8 short videos', '2 reels'], revisionRounds: 2 });
@@ -252,7 +256,7 @@ describe('other kinds of document', () => {
 });
 
 describe('a document filled from the client and the profile', () => {
-  const profile = { ...emptyProfile(), signerName: 'Asha Rao', signerTitle: 'Founder', jurisdiction: 'Mumbai', from: { ...emptyParty(), name: 'Asha Studio', address: '12 Hill Road, Mumbai', email: 'asha@example.com', phone: '+91 98000 00000' } };
+  const profile = { ...emptyProfile(), signerName: 'Asha Rao', signerTitle: 'Founder', jurisdiction: 'Mumbai', brandName: 'Asha Films', operatingUnder: 'Asha Films', from: { ...emptyParty(), name: 'Asha Studio', address: '12 Hill Road, Mumbai', email: 'asha@example.com', phone: '+91 98000 00000' } };
   const client = { name: 'Acme Foods', address: '4 Park Street, Kolkata', contactName: 'Ravi Kumar', channels: ['YouTube', 'Instagram'], piecesPerMonth: 8, hoursPerMonth: 20, revisionsPerPiece: 2, retainerCents: 5500000, currency: 'INR' };
   const typed = { projectWhat: 'Launch videos', deliveryDate: '1 Dec 2026', trialPieces: '2', trialFee: 'None', sessionDate: '3 Nov 2026' };
   // A signing line is meant to be written on; everything else must be filled.
@@ -270,6 +274,10 @@ describe('a document filled from the client and the profile', () => {
         expect(text, `${d.title} ${audience}`).not.toMatch(/__|\{|\}|TBD/);
       }
     }
+  });
+  it('the designation takes the brand once: a bare title gets it, a title typed whole is kept as typed', () => {
+    expect(contractVarsFor({ ...profile, signerTitle: 'Founder', brandName: 'North Studio' }, client).providerDesignation).toBe('Founder, North Studio');
+    expect(contractVarsFor({ ...profile, signerTitle: 'Founder, North Studio', brandName: 'North Studio' }, client).providerDesignation).toBe('Founder, North Studio');
   });
   it('a missing value never shows as underscores: the client copy drops the line, the owner copy carries one note', () => {
     const vars = contractVarsFor({ ...profile, from: { ...profile.from, phone: '' } }, { ...client, contactName: '' });
@@ -325,5 +333,188 @@ describe('what an agreement prints', () => {
     const again = parseContractDoc(JSON.parse(JSON.stringify({ ...trial, sections: trial.sections.map((s) => (s.id === 'how' ? { ...s, print: true } : s)) })))!;
     expect(sectionPrints(again.sections.find((s) => s.id === 'how')!)).toBe(true);
     expect(sectionPrints(again.sections.find((s) => s.id === 'after')!)).toBe(false);
+  });
+});
+
+describe('the Trial agreement, to the letter', async () => {
+  const m = await import('./index');
+  const { CONTRACT_TEMPLATE_BY_KEY, contractVarsFor, emptyProfile, emptyParty, fillContractText, contractAsText, docVars, withProfilePackages, cleanContractAnswers, parseBodyBlocks, joinBodyBlocks, agencyDocStarter, AGENCY_DOC_KINDS, CONTRACT_TEMPLATES, sectionPrints, CURRENCY_WORDS, parseDocStyle } = m;
+  const trial = CONTRACT_TEMPLATE_BY_KEY.trial!.doc;
+  const sec = (id: string) => trial.sections.find((s) => s.id === id)!;
+  // Neutral sample values only: nobody's real name, number or price is written in the repo.
+  const profile = {
+    ...emptyProfile(),
+    signerName: 'Asha Rao',
+    signerTitle: 'Founder',
+    jurisdiction: 'Pune, Maharashtra',
+    brandName: 'Acme Studio',
+    operatingUnder: 'Acme Studio',
+    businessName: 'Rao Media',
+    businessAddress: '1 Test Road, Pune 411001, India',
+    emails: ['one@example.com', 'two@example.com'],
+    phones: ['+91 90000 00001', '+91 90000 00002'],
+    formatName: 'Street Interview',
+    formatNameInline: 'street interview',
+    pastClients: 'Brand One, Brand Two',
+    packages: { unit: 'Videos', rows: [{ name: '4 Video Package', units: 4, feeCents: 2000000 }, { name: '8 Video Package', units: 8, feeCents: 3600000 }], block: { units: 4, feeCents: 1600000 } },
+    from: { ...emptyParty(), name: 'Rao Media', email: 'one@example.com' },
+  };
+  const client = { name: 'Test Foods Pvt Ltd', address: '2 Market Lane, Delhi', contactName: 'Ravi Kumar', contactTitle: 'Head of Brand', brands: 'Test Foods', currency: 'INR' };
+  const filled = { ...trial, vars: contractVarsFor(profile, client), sections: withProfilePackages(structuredClone(trial.sections), profile) };
+
+  it('has the same title, subtitle and opening paragraph', () => {
+    expect(trial.title).toBe('TRIAL ENGAGEMENT AGREEMENT');
+    expect(trial.subtitle).toBe('TRIAL VIDEO, BRIEF AND PILOT ENGAGEMENT TERMS');
+    expect(trial.sections[0]!.heading).toBe('');
+    expect(trial.sections[0]!.body).toBe('This Agreement is entered into on the date of acceptance by the Client. It sets out the terms of the trial, the creative brief the Client needs to complete, what happens after the trial, and the pricing for the pilot engagement that follows.');
+    expect(trial.sections.map((s) => s.id)).toEqual(['intro', 'parties', 'purpose', 'brief', 'ownership', 'after', 'packages', 'payment', 'how', 'law', 'sign']);
+    expect(trial.sections.slice(1).map((s) => s.heading)).toEqual(['1. PARTIES', '2. PURPOSE OF THE TRIAL', '3. TRIAL VIDEO BRIEF', '4. TRIAL CONTENT, OWNERSHIP AND USAGE', '5. WHAT HAPPENS AFTER THE TRIAL', '6. PACKAGES AND PRICING', '7. PAYMENT TERMS', '8. HOW WE WORK: CREATIVE AND PRODUCTION ALIGNMENT', '9. CONFIDENTIALITY AND GOVERNING LAW', '10. ACCEPTANCE AND SIGNATURES']);
+    expect(parseDocStyle(trial.style).layout).toBe('typed');
+    expect(parseDocStyle(trial.style).heading).toBe('plain');
+  });
+
+  it('fills the parties line for line, and an empty second email takes only its own line', () => {
+    const lines = fillContractText(sec('parties').body, filled.vars, 'client').split('\n');
+    expect(lines).toEqual([
+      '**Service Provider:** Asha Rao',
+      'Proprietor, Rao Media, operating under Acme Studio',
+      '1 Test Road, Pune 411001, India',
+      '**Email:** one@example.com',
+      '**Email:** two@example.com',
+      '**Phone:** +91 90000 00001 | +91 90000 00002',
+      '',
+      '**Client:** Test Foods Pvt Ltd',
+      'Address: 2 Market Lane, Delhi',
+      'Brand(s) for this trial: Test Foods',
+      'Hereinafter referred to as the “Client”',
+      '',
+      '**Point of Contact**',
+      'Name: Ravi Kumar',
+      'Authorized Representative of the Client',
+      '',
+      'The Service Provider and the Client are collectively referred to as the “Parties”.',
+    ]);
+    const one = fillContractText(sec('parties').body, { ...filled.vars, providerEmail2: '' }, 'client').split('\n');
+    expect(one.filter((l) => l.startsWith('**Email:**'))).toEqual(['**Email:** one@example.com']);
+    expect(one.length).toBe(lines.length - 1);
+  });
+
+  it('keeps the purpose in shape with and without the format word', () => {
+    expect(fillContractText(sec('purpose').body, filled.vars, 'client')).toContain('the Service Provider’s street interview style of work on its own brand');
+    expect(fillContractText(sec('purpose').body, { ...filled.vars, formatNameInline: '' }, 'client')).toContain('the Service Provider’s style of work on its own brand');
+    expect(fillContractText(sec('purpose').body, {}, 'client')).not.toMatch(/\{|\}| {2}/);
+  });
+
+  it('asks the brief as the agreement does: the tick boxes, the brand guide lines and 3 to 5 links', () => {
+    const qs = sec('brief').questions!;
+    const boxes = (id: string) => {
+      const q = qs.find((x) => x.id === id)!;
+      return q.options.length + (q.other ? 1 : 0);
+    };
+    expect(boxes('objective')).toBe(4);
+    expect(boxes('brand')).toBe(6);
+    expect(boxes('musts')).toBe(9);
+    expect(qs.find((x) => x.id === 'response')!.answerLabel).toBe('Client response:');
+    expect(qs.find((x) => x.id === 'identity')!.fields).toHaveLength(4);
+    expect(qs.find((x) => x.id === 'editing')!.fields).toHaveLength(11);
+    expect(qs.find((x) => x.id === 'references')!.links).toEqual({ min: 3, max: 5 });
+    expect(qs.map((q) => q.heading).filter(Boolean)).toEqual(['3.1 Objective', '3.2 Brand Integration', '3.3 Desired Viewer Response', '3.4 Non-Negotiables', '3.5 Brand Guide']);
+    expect(sec('brief').tail).toMatch(/^### 3\.6 Creative Alignment\n/);
+  });
+
+  it('keeps only real answers: offered options, named fields and at most five web links', () => {
+    const got = cleanContractAnswers(trial, {
+      objective: { picked: ['Paid ads / Performance marketing', 'Something made up'], other: 'Launch' },
+      response: { text: 'Curious', picked: ['x'] },
+      identity: { fields: { 'Brand personality (3 to 5 words)': 'Warm, bold', 'Not a field': 'x' } },
+      references: { links: ['https://a.example/1', 'javascript:alert(1)', 'https://a.example/2', 'http://a.example/3', 'https://a.example/4', 'https://a.example/5', 'https://a.example/6'] },
+      constructor: { picked: ['x'] },
+      nope: { picked: ['x'] },
+    });
+    expect(got.objective!.picked).toEqual(['Paid ads / Performance marketing']);
+    expect(got.objective!.other).toBe('Launch');
+    expect(got.response!.picked).toEqual([]);
+    expect(got.response!.text).toBe('Curious');
+    expect(got.identity!.fields).toEqual({ 'Brand personality (3 to 5 words)': 'Warm, bold' });
+    expect(got.references!.links).toEqual(['https://a.example/1', 'https://a.example/2', 'http://a.example/3', 'https://a.example/4', 'https://a.example/5']);
+    expect(Object.keys(got)).not.toContain('nope');
+    expect(Object.keys(got)).not.toContain('constructor');
+  });
+
+  it('takes the packages from the profile and works the example out from them', () => {
+    const pk = filled.sections.find((s) => s.id === 'packages')!;
+    expect(pk.packages).toHaveLength(2);
+    expect(trial.sections.find((s) => s.id === 'packages')!.packages).toEqual([]);
+    const words = fillContractText(`${pk.body}\n\n${pk.tail}`, docVars(filled), 'client');
+    expect(words).toContain(`All amounts are in ${CURRENCY_WORDS.INR}.`);
+    expect(words).toContain('After the 8 video package, additional videos are added in blocks of 4 at ₹16,000 per block. For example, 12 videos cost ₹36,000 + ₹16,000 = ₹52,000, and 16 videos cost ₹36,000 + ₹32,000 = ₹68,000.');
+    const text = contractAsText(filled);
+    expect(text).toContain('Package | Videos | Package fee | Effective rate per video\n4 Video Package | 4 | ₹20,000 | ₹5,000\n8 Video Package | 8 | ₹36,000 | ₹4,500\nAdditional videos beyond 8 | Each block of 4 | ₹16,000 per block | ₹4,000');
+    // No packages: the client's copy has no empty table and no 6.1, and the owner is told once.
+    const bare = { ...trial, vars: filled.vars };
+    expect(contractAsText(bare)).not.toContain('Package | Videos');
+    expect(contractAsText(bare)).not.toContain('6.1 Additional Videos');
+    expect(contractAsText(bare)).toContain('6.2 One Brand Per Package');
+    expect(contractAsText(bare, { audience: 'owner' })).toContain('Your packages are not set: add them once in Settings.');
+  });
+
+  it('falls back to the agreement\'s own sentence shape when the brand, format or past clients are empty', () => {
+    const empty = { ...filled.vars, brandName: '', formatName: '', formatNameInline: '', pastClients: '' };
+    const how = fillContractText(sec('how').body, empty, 'client');
+    expect(how).toContain('We specialize in authentic, reaction-led creative using real people and real conversations.');
+    expect(how).toContain('Our team owns the creative execution.');
+    expect(how).toContain('working across different consumer categories have reinforced one thing for us:');
+    expect(how).toContain('The strength of the format comes from the fact that the responses aren\'t scripted.');
+    expect(how).not.toMatch(/\{\{|\}\}| {2}|__/);
+    const full = fillContractText(sec('how').body, filled.vars, 'client');
+    expect(full).toContain('Acme Studio specializes in authentic');
+    expect(full).toContain('Acme Studio owns the creative execution.');
+    expect(full).toContain('across brands such as Brand One, Brand Two and other consumer categories have reinforced');
+    expect(full).toContain('The strength of the Street Interview format comes from');
+    expect(full).toContain('**Setup → Question → Participant → Follow-up → Reaction → Edit**');
+    expect(full).toContain('**Hypothesis → Interaction → Production → Edit → Learn → Improve**');
+    expect(fillContractText('a {{x|b}} c {{y?[$]|none}}.', { y: 'v' })).toBe('a b c [v].');
+    expect(fillContractText('a {{x|}} c', {})).toBe('a c');
+  });
+
+  it('signs as the agreement does, and prints the main terms only', () => {
+    expect(sec('sign').body).toBe('By signing below, the Parties confirm that they have read and agreed to the terms of this Agreement.');
+    expect(filled.vars.providerDesignation).toBe('Founder, Acme Studio');
+    const text = contractAsText(filled);
+    expect(text).toContain('For the Service Provider:\nName: Asha Rao\nDesignation: Founder, Acme Studio\nSignature:');
+    expect(text).toContain('For the Client:\nName:');
+    expect(sec('law').body).toContain('Jurisdiction shall lie exclusively with the courts of {{jurisdiction}}.');
+    expect(trial.sections.filter((s) => !sectionPrints(s)).map((s) => s.id)).toEqual(['brief', 'after', 'how']);
+  });
+
+  it('reads as text in the agreement\'s own order, with every sentence that has no variable in it', () => {
+    const text = contractAsText(filled).replace(/\s+/g, ' ');
+    const fixed = trial.sections
+      .flatMap((s) => [s.heading, s.body, ...(s.questions ?? []).flatMap((q) => [q.heading ?? '', q.intro ?? '', q.group ?? '', q.label, ...q.options, ...(q.fields ?? [])]), s.tail ?? ''])
+      .flatMap((t) => t.split(/\n+/))
+      .map((l) => l.replace(/^###\s+|^- /, '').replace(/\*\*/g, '').trim())
+      .filter((l) => l && !l.includes('{{'));
+    let at = 0;
+    for (const line of fixed) {
+      const i = text.indexOf(line, at);
+      expect(i, line).toBeGreaterThanOrEqual(0);
+      at = i;
+    }
+    expect(text).not.toMatch(/###|\*\*|\{\{/);
+  });
+
+  it('turns every body into blocks and back, byte for byte', () => {
+    const docs = [...CONTRACT_TEMPLATES.map((t) => t.doc), ...AGENCY_DOC_KINDS.map((k) => agencyDocStarter(k))];
+    for (const d of docs) {
+      for (const s of d.sections) {
+        for (const body of [s.body, s.tail ?? '']) expect(joinBodyBlocks(parseBodyBlocks(body))).toBe(body);
+      }
+    }
+    const blocks = parseBodyBlocks('**Step 1: Trial review.** The trial.\n\n- one\n- {{brandName?$ owns|We own}}\n\n### 3.1 Objective\n\n**Setup → Edit**');
+    expect(blocks.map((b) => b.kind)).toEqual(['p', 'li', 'li', 'h3', 'strong']);
+    expect(blocks[0]!.segments[0]).toEqual({ bold: 'Step 1: Trial review.' });
+    expect(blocks[2]!.segments[0]).toEqual({ var: 'brandName', when: '$ owns', fallback: 'We own' });
+    // A new block (no separator) joins after a bullet with one line break, else with a blank line.
+    expect(joinBodyBlocks([...blocks.slice(0, 2), { kind: 'li', segments: ['two'], sep: '' }])).toBe('**Step 1: Trial review.** The trial.\n\n- one\n- two');
   });
 });

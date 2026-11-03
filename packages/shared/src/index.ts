@@ -1052,6 +1052,8 @@ export interface User {
   hasLocation: boolean;
   /** IANA zone the person's availability is written in. */
   timezone: string;
+  /** The currency their own money is kept in (Finance, a new product): one of `CURRENCIES`, rupees unless they changed it. */
+  currency: string;
   avatarUrl: string;
   socials: Socials;
   publicSettings: PublicSettings;
@@ -2125,15 +2127,15 @@ export const MODULES: readonly AppModule[] = [
   { key: 'tower', name: 'Pillars', blurb: 'The seven pillars of your life, one per relationship.', icon: 'Landmark', group: 'core', path: '/tower', defaultOn: true, locked: true, minRole: 'user' },
   { key: 'search', name: 'Search', blurb: 'Find anything you wrote, bought, applied to or read.', icon: 'Search', group: 'core', path: '/search', defaultOn: true, locked: true, minRole: 'user' },
   // On for everyone. People still only appear after they opt in under Profile, and journal and wellbeing never count.
-  { key: 'leaderboard', name: 'Leaderboard', blurb: 'See where you stand by goal, pillar, city and more. Boards for each goal, filters, and a monthly season.', icon: 'Trophy', group: 'core', path: '/leaderboard', defaultOn: true, minRole: 'user' },
+  { key: 'leaderboard', name: 'Leaderboard', blurb: 'See where you stand by goal, pillar and city, with a monthly season.', icon: 'Trophy', group: 'core', path: '/leaderboard', defaultOn: true, minRole: 'user' },
   // Off on a new account; unlocking a game in Rewards switches it on.
-  { key: 'cards', name: 'Games', blurb: 'Unlock a game once with points, then shuffle, flip and play it with the people you are with.', icon: 'Spade', group: 'community', path: '/cards', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  { key: 'cards', name: 'Games', blurb: 'Unlock a game with points, then play it with the people around you.', icon: 'Spade', group: 'community', path: '/cards', defaultOn: false, minRole: 'user', accent: 'friendship' },
   // Off on a new account. Owner only, like the journal: never shown to brands, staff, the leaderboard, a coach or the assistant.
-  { key: 'discover', name: 'Discover', blurb: 'A quiz about how you think, feel and act, with puzzles and real situations. It gives a detailed read on your personality, your reasoning and your emotional intelligence, and your strengths across the seven relationships.', icon: 'Telescope', group: 'wellbeing', path: '/discover', defaultOn: false, minRole: 'user', accent: 'self' },
+  { key: 'discover', name: 'Discover', blurb: 'A quiz on how you think, feel and act. It shows your strengths across the seven relationships.', icon: 'Telescope', group: 'wellbeing', path: '/discover', defaultOn: false, minRole: 'user', accent: 'self' },
   { key: 'notifications', name: 'Inbox', blurb: 'What happened while you were away, and daily reminders.', icon: 'Bell', group: 'core', path: '/inbox', defaultOn: true, minRole: 'user' },
   { key: 'help', name: 'Help', blurb: 'Answers to common questions, and a line to the team.', icon: 'LifeBuoy', group: 'core', path: '/help', defaultOn: true, minRole: 'user' },
   // The assistant is part of every screen, not an app of its own: locked on, and its page is its plan and credits.
-  { key: 'assistant', name: 'Assistant', blurb: 'Tap a flow to log something, or type what you did and it is done in the app for you. Typing is part of a plan.', icon: 'WandSparkles', group: 'core', path: '/plans', defaultOn: true, locked: true, minRole: 'user' },
+  { key: 'assistant', name: 'Assistant', blurb: 'Tap a flow to log something, or type it with a plan.', icon: 'WandSparkles', group: 'core', path: '/plans', defaultOn: true, locked: true, minRole: 'user' },
 
   { key: 'school', name: 'School', blurb: 'Programs and cohorts: lessons, assignments, mentor feedback, completion.', icon: 'GraduationCap', group: 'earn', path: '/school', defaultOn: true, minRole: 'user', accent: 'guru' },
   { key: 'work', name: 'Work', blurb: 'Opportunities from brands and the team. Apply, track, get hired.', icon: 'BriefcaseBusiness', group: 'earn', path: '/work', defaultOn: true, minRole: 'user', accent: 'servant_leader' },
@@ -2143,30 +2145,30 @@ export const MODULES: readonly AppModule[] = [
   { key: 'agency', name: 'Agency', blurb: 'Clients, content pieces from idea to published, retainers, time, approvals and invoices.', icon: 'FolderKanban', group: 'earn', path: '/agency', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
 
   { key: 'party', name: 'Party', blurb: 'Meetups, workshops, camps and flagship days. RSVP, waitlist, check in.', icon: 'PartyPopper', group: 'community', path: '/party', defaultOn: false, minRole: 'user', accent: 'friendship' },
-  { key: 'run', name: 'Kreators Run', blurb: 'Run clubs near you. A start code at the line logs your run and pays points. Kilometres, badges, and brand collabs with giveaways.', icon: 'Footprints', group: 'community', path: '/run', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  { key: 'run', name: 'Kreators Run', blurb: 'Run clubs near you. A start code at the line logs your run.', icon: 'Footprints', group: 'community', path: '/run', defaultOn: false, minRole: 'user', accent: 'friendship' },
   { key: 'community', name: 'Community', blurb: 'Posts, replies and likes, by category.', icon: 'MessagesSquare', group: 'community', path: '/community', defaultOn: false, minRole: 'user', accent: 'friendship' },
   { key: 'club', name: 'Club', blurb: 'A curated membership with benefits and exclusive opportunities.', icon: 'IdCard', group: 'community', path: '/club', defaultOn: false, minRole: 'user', accent: 'friendship' },
   { key: 'bond', name: 'Bond', blurb: 'Friends, introductions, and anonymous chats with people you met.', icon: 'Handshake', group: 'community', path: '/bond', defaultOn: false, minRole: 'user', accent: 'friendship' },
-  { key: 'circles', name: 'Circles', blurb: 'Small anonymous groups near you every week, matched by interests that fit together. The chat opens a day before you meet.', icon: 'UsersRound', group: 'community', path: '/circles', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  { key: 'circles', name: 'Circles', blurb: 'Small anonymous groups near you each week, matched by interests that fit.', icon: 'UsersRound', group: 'community', path: '/circles', defaultOn: false, minRole: 'user', accent: 'friendship' },
 
-  { key: 'life', name: 'Life', blurb: 'Physical, financial, emotional, mental and spiritual, on one dashboard that opens into each part of the app.', icon: 'Compass', group: 'wellbeing', path: '/life', defaultOn: true, minRole: 'user', accent: 'lover_partner' },
+  { key: 'life', name: 'Life', blurb: 'The five areas of life on one dashboard.', icon: 'Compass', group: 'wellbeing', path: '/life', defaultOn: true, minRole: 'user', accent: 'lover_partner' },
   { key: 'wellbeing', name: 'Wellbeing', blurb: 'One score from your mood, sleep, stress and mindful minutes.', icon: 'HeartPulse', group: 'wellbeing', path: '/wellbeing', defaultOn: false, minRole: 'user', accent: 'lover_partner' },
   { key: 'mood', name: 'Mood', blurb: 'How are you feeling today? Pick a face, see the week.', icon: 'FaceSlightlySmiling', group: 'wellbeing', path: '/mood', defaultOn: false, minRole: 'user', accent: 'parent_child' },
   { key: 'sleep', name: 'Sleep', blurb: 'Hours and quality, night by night.', icon: 'Moon', group: 'wellbeing', path: '/sleep', defaultOn: false, minRole: 'user', accent: 'guru' },
   { key: 'stress', name: 'Stress', blurb: 'Level and what is behind it.', icon: 'WavesHorizontal', group: 'wellbeing', path: '/stress', defaultOn: false, minRole: 'user', accent: 'friendship' },
   { key: 'mindful', name: 'Mindful minutes', blurb: 'A breathing timer that logs your minutes.', icon: 'Wind', group: 'wellbeing', path: '/mindful', defaultOn: false, minRole: 'user', accent: 'divine' },
   { key: 'journal', name: 'Journal', blurb: 'Write it down with an emotion and a stress level.', icon: 'NotebookPen', group: 'wellbeing', path: '/journal', defaultOn: true, minRole: 'user', accent: 'self' },
-  { key: 'reviews', name: 'Reviews', blurb: 'Weekly, monthly, quarterly and mid-year reviews: the numbers from every app, and what you make of them.', icon: 'ClipboardCheck', group: 'wellbeing', path: '/reviews', defaultOn: false, minRole: 'user', accent: 'self' },
+  { key: 'reviews', name: 'Reviews', blurb: 'Look back on a week, month, quarter or half year, with your numbers.', icon: 'ClipboardCheck', group: 'wellbeing', path: '/reviews', defaultOn: false, minRole: 'user', accent: 'self' },
   { key: 'companion', name: 'Companion', blurb: 'A chat that knows how you are doing. Not a therapist.', icon: 'MessageCircleHeart', group: 'wellbeing', path: '/companion', defaultOn: false, minRole: 'user', accent: 'guru' },
-  { key: 'coaching', name: 'Coaching', blurb: 'Work with a life coach who sees the progress you choose to share, or coach your own students. Never your journal.', icon: 'Target', group: 'wellbeing', path: '/coaching', defaultOn: false, minRole: 'user', accent: 'guru' },
+  { key: 'coaching', name: 'Coaching', blurb: 'A life coach sees only what you share, never your journal.', icon: 'Target', group: 'wellbeing', path: '/coaching', defaultOn: false, minRole: 'user', accent: 'guru' },
 
   { key: 'profile', name: 'Public page', blurb: 'What people see: bio, skills, portfolio, links and what you sell.', icon: 'Link', group: 'creator', path: '/profile', defaultOn: true, minRole: 'user', accent: 'self' },
   { key: 'shop', name: 'Shop', blurb: 'Sell downloads, courses, memberships, sessions and events.', icon: 'ShoppingBag', group: 'creator', path: '/shop', defaultOn: true, minRole: 'user', accent: 'servant_leader' },
-  { key: 'store', name: 'Store', blurb: 'Gear and software for creators: new through partner links, pre-owned from other creators with offers and chat, and kits by budget.', icon: 'ShoppingCart', group: 'creator', path: '/store', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
+  { key: 'store', name: 'Store', blurb: 'Gear new from partners, or pre-owned from other creators.', icon: 'ShoppingCart', group: 'creator', path: '/store', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
   { key: 'audience', name: 'Audience', blurb: 'Followers, leads, broadcasts and your affiliate link.', icon: 'Megaphone', group: 'creator', path: '/shop/audience', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
   { key: 'content', name: 'Content', blurb: 'Which post made money: tracked links, views and revenue per piece of content.', icon: 'TrendingUp', group: 'creator', path: '/shop/content', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
   { key: 'automations', name: 'Auto-DM', blurb: 'Comment a keyword, get a link in DMs. Funnels show where people drop off.', icon: 'Bot', group: 'creator', path: '/shop/automations', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
-  { key: 'finance', name: 'Finance', blurb: 'Money in, money out, dues, budgets, goals and a monthly picture of your creator business.', icon: 'Wallet', group: 'creator', path: '/finance', defaultOn: false, minRole: 'user', accent: 'parent_child' },
+  { key: 'finance', name: 'Finance', blurb: 'Money in and out, dues, budgets and goals for your work.', icon: 'Wallet', group: 'creator', path: '/finance', defaultOn: false, minRole: 'user', accent: 'parent_child' },
   { key: 'library', name: 'My purchases', blurb: 'Courses, downloads, memberships, tickets and sessions you own.', icon: 'Backpack', group: 'creator', path: '/library', defaultOn: false, minRole: 'user', accent: 'guru' },
   { key: 'knowledge', name: 'Knowledge', blurb: 'Curated articles and exercises with their sources.', icon: 'BookOpen', group: 'creator', path: '/knowledge', defaultOn: false, minRole: 'user', accent: 'guru' },
   { key: 'tools', name: 'Tools', blurb: 'A directory of creator tools, verified by the team.', icon: 'Toolbox', group: 'creator', path: '/tools', defaultOn: false, minRole: 'user', accent: 'guru' },
@@ -2176,7 +2178,7 @@ export const MODULES: readonly AppModule[] = [
   { key: 'manage', name: 'Manage', blurb: 'Your staff tools, as far as your permissions go.', icon: 'ShieldCheck', group: 'manage', path: '/manage', defaultOn: true, minRole: 'sub_admin' },
   { key: 'admin', name: 'Admin', blurb: 'Roles, permissions, feature flags, audit log, honors, points.', icon: 'KeyRound', group: 'manage', path: '/admin', defaultOn: true, minRole: 'admin' },
   // Tracking for the team, in Operations: the module's minRole keeps it to staff and admins.
-  { key: 'observability', name: 'Observability', blurb: 'Who is here, which apps they have on, who holds which role, and the build map.', icon: 'RadioTower', group: 'manage', path: '/internal/observability', defaultOn: true, minRole: 'sub_admin' },
+  { key: 'observability', name: 'Observability', blurb: 'Who is here, which apps are on, roles and the build map.', icon: 'RadioTower', group: 'manage', path: '/internal/observability', defaultOn: true, minRole: 'sub_admin' },
 ];
 
 export const MODULE_BY_KEY: Record<string, AppModule> = byKey(MODULES.map((m) => [m.key, m]));
@@ -2189,6 +2191,13 @@ export const MODULE_GROUPS: Record<ModuleGroup, string> = {
   core: 'Essentials',
   manage: 'Operations',
 };
+
+/** The one order of the app groups, everywhere they are listed (Apps, Profile, Features, the sidebar, the phone menu, Home's Go to,
+ * the public Features page): Contribution, Reflection, Connection, Creation, Essentials, then the team's Operations. The founder's
+ * order (2026-11-03); apps inside a group still come in the order that fits the person. */
+export const MODULE_GROUP_ORDER: readonly ModuleGroup[] = ['earn', 'wellbeing', 'community', 'creator', 'core', 'manage'];
+/** The given groups, in the one order. */
+export const inGroupOrder = (groups: readonly ModuleGroup[]): ModuleGroup[] => MODULE_GROUP_ORDER.filter((g) => groups.includes(g));
 
 /** The relationship whose colour each app group wears on the Apps page and under You, Features. */
 export const MODULE_GROUP_ACCENT: Record<ModuleGroup, RelationshipKey> = {
@@ -3508,6 +3517,19 @@ export function phoneProblem(raw: string): string | null {
   const p = normalizePhone(raw);
   if (!/^\+?\d{8,15}$/.test(p)) return 'Enter your mobile number, like 98765 43210, or with its country code, like +44 7700 900123.';
   return null;
+}
+
+/**
+ * A phone number for the eye, never for storing: an Indian mobile reads the Indian way, "+91 77421 14087", whether it was kept as
+ * "+917742114087", "+91 77421-14087" or a bare "7742114087". Anything else (a number abroad, a landline such as "080 2345 6789",
+ * words like "ext") comes back as typed.
+ */
+export function phoneDisplay(raw: string): string {
+  const t = raw.trim();
+  if (!/^[+\d\s().-]+$/.test(t)) return t;
+  const digits = t.replace(/\D/g, '');
+  const local = t.startsWith('+') ? (/^91[6-9]\d{9}$/.test(digits) ? digits.slice(2) : '') : /^[6-9]\d{9}$/.test(digits) ? digits : '';
+  return local ? `+91 ${local.slice(0, 5)} ${local.slice(5)}` : t;
 }
 
 /** India's 28 states and 8 union territories, for an address. */
@@ -7044,11 +7066,15 @@ export const HELP_FAQ = [
   { q: 'Where do the journal prompts come from?', a: `Under Prompt me in Journal there are prompts in sixteen categories, such as shadow work, inner child, gratitude, boundaries, manifestation scripting, 3-6-9 writing, money, body and a weekly reset. Each says why it helps and what you can reasonably expect. ${JOURNAL_PROMPT_CREDIT} They are for reflection, not therapy or medical advice, and a hopeful prompt is a planning tool, not a promise. Which prompts you were shown stays on your device and is never sent to us or to the assistant.` },
   { q: 'Who can see my journal?', a: 'Only you. Journal entries and wellbeing scores are never shown to brands, staff, the leaderboard or Club selection.' },
   { q: 'What are Games?', a: 'Nine card games you unlock once with points in Rewards, then play in the app. You shuffle, draw, flip and drag cards around a table. Nothing is posted to you. Games switches on when you unlock your first one.' },
-  { q: 'What is focus mode?', a: 'On a game table, the icon with four corner brackets hides the menu, the assistant and everything else, so the table has the whole screen. Press Escape or tap the icon again to leave.' },
+  { q: 'What is focus mode?', a: 'On a game table, or on the focus timer in Mindful minutes, the icon with four corner brackets hides the menu, the assistant and everything else, so it has the whole screen. Press Escape or tap the icon again to leave.' },
   { q: 'What is Discover?', a: 'A quiz about how you think, feel and act, with puzzles and real situations. It shows your top strengths across the seven relationships, a detailed read on five personality traits and on your reasoning, and, if you add it, your emotional intelligence. It is a self-check, not an IQ test or a diagnosis.' },
   { q: 'What are the type, love languages and mind self-checks in Discover?', a: 'Three short self-checks under More ways to know yourself. 16 personality types, in the style of Myers-Briggs (MBTI), gives four letters out of sixteen, with what each side means for you. Love languages shows how you like to be shown love and how you show it, which can differ. How your mind works shows how often attention, energy and impulse, and patterns and senses show up for you. It is not a test for ADHD or autism, and only a trained professional can say what is going on.' },
   { q: 'What is Human design in Discover, and how exact is it?', a: 'Human design is a system for self-reflection, not science. Enter your birth date, time and the time zone of your birthplace. The app works out where thirteen bodies stood at your birth and when the Sun stood 88 degrees earlier, then shows your type, strategy, authority, profile and channels, in the tropical zodiac and in the sidereal one (Fagan-Bradley), in three layers: body, mind and purpose. Positions are good to a few arc minutes, a little less for the outer planets, and a line that sits right on an edge is marked. Each part of the reading becomes a goal you can add as a task.' },
   { q: 'Can I turn the timer sounds off?', a: 'Yes. In Mindful minutes, the first switch under Sounds and alarms turns off every beat, chime, background sound and buzz at once. Your other choices stay saved. Otherwise you can choose a soft beat for the mini break (one beat) and the long break (three beats), a background sound with its volume, and whether a phone buzzes. These follow your account to every device.' },
+  { q: 'Are there keyboard shortcuts for the focus timer?', a: 'Yes, on a laptop, in Mindful minutes. Space starts or pauses the clock. S stops it. K skips to the next part of a Pomodoro. A question mark shows the list. They do nothing while you type in a box.' },
+  { q: 'Can I change or delete a focus session, or add one I forgot?', a: 'Yes. Your sessions from today are listed under the timer. Tap one to change its length or its task, or to delete it. If it also counted as mindful minutes, those change with it. Tap Add a session I forgot to add one for today or yesterday. Continue on a row starts the same task and length again.' },
+  { q: 'What happens if I stop a timer early?', a: 'Once a whole minute has passed, you choose: keep the minutes so far, or throw them away. Under a minute, nothing is kept.' },
+  { q: 'Can I set a daily focus goal or a reminder?', a: 'Yes, both are off until you switch them on in Timer settings. A goal shows how many minutes you have done today against it, and the dashboard counts the days you met it. There is no streak and nothing to lose. A reminder sends one inbox note on the days you pick, at your time, and skips a day you already focused.' },
   { q: 'How many devices can I use at once?', a: 'Three. Your account can be signed in on three devices at the same time, such as a phone, a laptop and a tablet. When you sign in on a fourth, the one that has been signed in the longest is signed out to make room, and it tells you why when you open it. Your progress is kept on your account, so signing in again brings everything back. Changing your password signs out every other device at once.' },
   { q: 'What does numerology in Discover work out?', a: 'It sits beside the body, mind and purpose layers of Human design. From your birth date it gives your life path, birthday number and attitude. From the full name on your birth record it adds your expression, soul urge, personality and maturity, and the numbers your name is missing. It shows where you are in your personal year, month and day, keeps the master numbers 11, 22 and 33 whole, and points out the turning point 10 and the karmic numbers 13, 14, 16 and 19. Then it sets your numbers next to your Discover answers: where they agree, where they stretch you, and how they fit your Human design. Numerology is a system for reflection, not science.' },
   { q: 'How much will a reward pay me?', a: 'Open the reward and use What could I earn. Type the number of views your post might get and it shows the points. Nothing is paid under the minimum views, a post stops earning at the most one post can pay, and a reviewer must confirm the views first. The pool also has to have points left.' },
@@ -7320,7 +7346,7 @@ export function briefFor(f: BriefFacts): { signals: BriefLine[]; actions: BriefL
   if (f.stressAvg !== null && f.stressAvg >= 4) sig(85, 'stress', 'watch', 'Stress has been high most of this week.', on('stress') ? '/stress' : null);
   if (f.notToDoSlipped > 0) sig(55, 'slipped', 'watch', `You slipped on ${plural(f.notToDoSlipped, 'not to do item')} yesterday. Today is a fresh start.`, '/today');
   if (f.routineWeek !== null && f.contractDays !== null)
-    sig(f.routineWeek < f.contractDays ? 58 : 35, 'routine', f.routineWeek < f.contractDays ? 'watch' : 'good', `Your routine: ${f.routineWeek} of the last 7 days, against a deal of ${f.contractDays}.`, '/today');
+    sig(f.routineWeek < f.contractDays ? 58 : 35, 'routine', f.routineWeek < f.contractDays ? 'watch' : 'good', `Routine: ${f.routineWeek} of the last 7 days, against a deal of ${f.contractDays}.`, '/today');
   if (f.nextEvent) sig(68, 'event', 'neutral', `${f.nextEvent.title} is ${f.nextEvent.when}.`, f.nextEvent.to);
   if (f.coachNotes > 0) sig(72, 'coach-note', 'neutral', f.coachNotes === 1 ? 'Your life coach left you a note.' : `Your life coach left you ${f.coachNotes} notes.`, '/coaching');
   if (f.coachAsks > 0) sig(74, 'coach-ask', 'neutral', f.coachAsks === 1 ? 'A life coach asked to work with you.' : `${f.coachAsks} life coaches asked to work with you.`, '/you#coach');
@@ -7342,10 +7368,10 @@ export function briefFor(f: BriefFacts): { signals: BriefLine[]; actions: BriefL
   if (!f.smallActDone) act(80, 'act', 'Do today’s small act. It takes a minute.', '/today');
   if (f.coachAsks > 0) act(88, 'coach-ask', 'Answer the coach who asked: yes or no, on your Profile tab.', '/you#coach');
   if (f.coachNotes > 0 && on('coaching')) act(76, 'coach-note', 'Read your coach’s note.', '/coaching');
-  if (ag && ag.changeAsks > 0) act(74, 'agency-change', ag.changeAsks === 1 ? 'Make the change your client asked for, then send the piece back for review.' : 'Work through the changes your clients asked for.', agTo);
+  if (ag && ag.changeAsks > 0) act(74, 'agency-change', ag.changeAsks === 1 ? 'Make the change your client asked for, then send it back.' : 'Work through the changes your clients asked for.', agTo);
   if (ag?.retainersChosen && ag.retainersChosen > 0) act(86, 'agency-retainer', 'Confirm the retainer your client chose, so its first month is made.', ag.retainersChosen === 1 && ag.retainerChosen ? `/agency/${ag.retainerChosen.clientId}` : '/agency');
   if (ag?.piecesDueToday && ag.piecesDueToday > 0) act(78, 'agency-due', ag.piecesDueToday === 1 ? 'Finish the client piece due today and send it for review.' : 'Work through the client pieces due today, oldest first.', '/today');
-  if (ag?.invoicesOverdue && ag.invoicesOverdue > 0) act(68, 'agency-invoice', 'Send a reminder for the invoice past due, or mark it paid if it came in.', '/agency?tab=invoices');
+  if (ag?.invoicesOverdue && ag.invoicesOverdue > 0) act(68, 'agency-invoice', 'Remind the client about the late invoice, or mark it paid.', '/agency?tab=invoices');
   if (f.tasksOverdue > 0) act(70, 'overdue', 'Move or finish the tasks past their day.', '/tower');
   if (f.reviewDue && on('reviews')) act(65, 'review', 'Write last week’s review. Five minutes, and the numbers are filled in.', '/reviews');
   if (f.stressAvg !== null && f.stressAvg >= 4 && on('mindful')) act(72, 'breathe', 'Take five minutes with the breathing timer.', '/mindful');
@@ -7353,21 +7379,21 @@ export function briefFor(f: BriefFacts): { signals: BriefLine[]; actions: BriefL
   if (f.nextEvent) act(55, 'event', `Check the plan for ${f.nextEvent.title}.`, f.nextEvent.to);
   // Wellbeing feeds the pillars (the owner's own numbers, for the owner's own brief): a short-sleep week, a low mood week or a high-stress
   // week each suggest one step in the pillar that looks after it. Rules only; the numbers never leave this brief.
-  if (f.sleepAvg !== null && f.sleepAvg < BRIEF_SLEEP_LOW) act(57, 'pillar-sleep', `Under ${BRIEF_SLEEP_LOW} hours a night this week. Add one task to your Yourself pillar: lights out at the same time three nights running.`, '/realm/self');
-  if (f.moodAvg !== null && f.moodAvg <= BRIEF_MOOD_LOW) act(56, 'pillar-mood', 'A low week for your mood. Add one task to your Friends pillar: see or call one friend this week.', '/realm/friendship');
-  if (f.stressAvg !== null && f.stressAvg >= 4 && !on('mindful')) act(56, 'pillar-stress', 'Stress has been high. Add one task to your Yourself pillar: ten minutes outside, phone away, each day this week.', '/realm/self');
+  if (f.sleepAvg !== null && f.sleepAvg < BRIEF_SLEEP_LOW) act(57, 'pillar-sleep', `Under ${BRIEF_SLEEP_LOW} hours a night. Add a set lights-out task to Yourself.`, '/realm/self');
+  if (f.moodAvg !== null && f.moodAvg <= BRIEF_MOOD_LOW) act(56, 'pillar-mood', 'A low mood week. Add a task to Friends: call one friend.', '/realm/friendship');
+  if (f.stressAvg !== null && f.stressAvg >= 4 && !on('mindful')) act(56, 'pillar-stress', 'Stress is high. Add a task to Yourself: ten minutes outside daily.', '/realm/self');
   // Next steps that emerge from what Discover learned about this person: their quietest strength, and the shape of their traits.
   const d = f.discover;
-  if (d && !d.taken && on('discover')) act(48, 'discover', 'Take the Discover quiz: puzzles, personality and strengths. Your next steps get personal.', '/discover');
+  if (d && !d.taken && on('discover')) act(48, 'discover', 'Take the Discover quiz, so your next steps fit you.', '/discover');
   if (d?.profile) {
     const p = d.profile;
     const grow = DISCOVER_STRENGTHS[p.growth];
     act(58, 'strength-grow', `Your quietest strength is ${grow.name}. ${grow.tryThis}`, STRENGTH_PATH[p.growth]);
-    if (p.bands.c === 'low') act(66, 'style-small', 'Pick one task and finish only that today. Small and done beats big and open.', '/today');
+    if (p.bands.c === 'low') act(66, 'style-small', 'Pick one task and finish only that today.', '/today');
     if (p.bands.s === 'low' && on('mindful')) act(64, 'style-calm', 'Take two minutes with the breathing timer before your hardest task.', '/mindful');
-    if (p.bands.e === 'high') act(52, 'style-people', 'Do one step with another person today: a friend, a circle or a run.', on('circles') ? '/circles' : null);
+    if (p.bands.e === 'high') act(52, 'style-people', 'Do one step with a friend, a circle or a run today.', on('circles') ? '/circles' : null);
     if (p.bands.o === 'high') act(50, 'style-new', 'Try one new thing in your pillars today, even a small one.', '/tower');
-    if (p.eq?.a === 'low' && on('journal')) act(54, 'eq-name', 'Write one line about how you feel right now and what set it off.', '/journal');
+    if (p.eq?.a === 'low' && on('journal')) act(54, 'eq-name', 'Write one line on how you feel and what set it off.', '/journal');
     if (p.eq?.m === 'low' && on('mindful')) act(63, 'eq-calm', 'Before you answer a message that stung, take five slow breaths.', '/mindful');
     if (p.eq?.e === 'low') act(51, 'eq-ask', 'Ask one person how they are today, then listen without fixing.', null);
     sig(30, 'strength', 'good', `Your strongest strength is ${DISCOVER_STRENGTHS[p.top[0]!].name}. Use it today.`, STRENGTH_PATH[p.top[0]!]);
@@ -7377,23 +7403,23 @@ export function briefFor(f: BriefFacts): { signals: BriefLine[]; actions: BriefL
   if (x) {
     if (x.type?.includes('I')) act(49, 'type-quiet', 'Block one quiet hour for your hardest task, with no messages.', '/today');
     if (x.type?.includes('J')) act(47, 'type-plan', 'Plan tomorrow’s three tasks tonight, so you can relax.', '/today');
-    if (x.type?.includes('P')) act(47, 'type-finish', 'Pick one task and give it a finish time. Open days need one fixed point.', '/today');
+    if (x.type?.includes('P')) act(47, 'type-finish', 'Give one task a finish time today.', '/today');
     if (x.type?.includes('N')) act(46, 'type-steps', 'Turn one big idea into three small steps in Pillars.', '/tower');
     if (x.design) act(48, 'design-strategy', `Today’s practice from your Human design: ${DESIGN_TYPES[x.design.type].strategy.charAt(0).toLowerCase()}${DESIGN_TYPES[x.design.type].strategy.slice(1)}.`, '/discover?more=design');
     if (x.love) {
       const give = x.love.give[0]!;
       const GIVE: Record<LoveKey, string> = {
-        words: 'Send one kind message to someone today and say what you like about them.',
+        words: 'Tell someone today what you like about them.',
         time: 'Give one person ten minutes of full attention today, phone away.',
-        gifts: 'Do one small kind thing for someone: a note, a treat or a photo that made you think of them.',
+        gifts: 'Do one small kind thing for someone today, like a note.',
         acts: 'Do one favour for someone today without being asked.',
         touch: 'Give someone a hug today, if they like those.',
       };
       act(45, 'love-give', GIVE[give], null);
-      if (!x.love.receive.some((k) => x.love!.give.includes(k))) act(44, 'love-ask', `Tell one person how you feel most cared for: ${LOVE_LANGUAGES[x.love.receive[0]!].name.toLowerCase()}. They cannot guess it.`, null);
+      if (!x.love.receive.some((k) => x.love!.give.includes(k))) act(44, 'love-ask', `Tell someone you feel cared for through ${LOVE_LANGUAGES[x.love.receive[0]!].name.toLowerCase()}.`, null);
     }
     if (x.mind) {
-      if (x.mind.att !== 'few') act(62, 'mind-att', 'Break one task into three subtasks, then run one 15 minute focus round on the first.', on('mindful') ? '/mindful' : '/today');
+      if (x.mind.att !== 'few') act(62, 'mind-att', 'Split one task into three subtasks, then focus 15 minutes on one.', on('mindful') ? '/mindful' : '/today');
       if (x.mind.ene !== 'few') act(53, 'mind-ene', 'Stand up and move for two minutes before a long task.', null);
       if (x.mind.pat !== 'few') act(53, 'mind-pat', 'Plan tomorrow tonight, so a change of plan feels smaller.', '/today');
     }
@@ -8100,16 +8126,19 @@ export const PLAN_DAYS = 30;
 export const PLAN_CURRENCY = 'INR';
 /** The live strategy call, in paise: Rs 10,000. */
 export const LIVE_CALL_CENTS = 1_000_000;
+/** About what one assistant message costs, to say how far credits go. A guess, and said as one. */
+export const TYPICAL_MESSAGE_CREDITS = 12;
+export const messagesFor = (credits: number): number => Math.floor(Math.max(0, credits) / TYPICAL_MESSAGE_CREDITS);
 /** "10,000 credits a month, about 833 messages." Built from the credits, so the line never drifts from the plan. */
 const planBlurb = (credits: number): string =>
   `${credits.toLocaleString('en-IN')} credits a month, about ${messagesFor(credits).toLocaleString('en-IN')} messages.`;
 /** The only three plans, priced in paise. Each gives a fixed number of credits a month. */
 export const PLANS: Readonly<Record<PaidPlan, Plan>> = {
-  pro: { key: 'pro', name: 'Pro', priceCents: 129_900, credits: 10_000, blurb: planBlurb(10_000) },
-  pro_max: { key: 'pro_max', name: 'Pro Max', priceCents: 999_900, credits: 100_000, blurb: planBlurb(100_000) },
-  ultra: { key: 'ultra', name: 'Ultra', priceCents: 3_999_900, credits: 400_000, blurb: planBlurb(400_000) },
+  pro: { key: 'pro', name: 'Pro', priceCents: 149_900, credits: 10_000, blurb: planBlurb(10_000) },
+  pro_max: { key: 'pro_max', name: 'Pro Max', priceCents: 1_249_900, credits: 100_000, blurb: planBlurb(100_000) },
+  ultra: { key: 'ultra', name: 'Ultra', priceCents: 4_999_900, credits: 400_000, blurb: planBlurb(400_000) },
 };
-/** "₹1,299 for 30 days": a plan's price the way every screen says it. */
+/** "₹1,499 for 30 days": a plan's price the way every screen says it. */
 export const planPriceLabel = (key: PaidPlan): string => `${money(PLANS[key].priceCents, PLAN_CURRENCY)} for ${PLAN_DAYS} days`;
 export const planName = (key: string): string => (isPaidPlan(key) ? PLANS[key].name : 'No plan');
 
@@ -8120,9 +8149,9 @@ export interface TopUpPack {
 }
 /** Extra credits on top of a plan. They stay until used. */
 export const TOPUP_PACKS: readonly TopUpPack[] = [
-  { key: 'small', priceCents: 79_900, credits: 8_000 },
-  { key: 'medium', priceCents: 199_900, credits: 20_000 },
-  { key: 'large', priceCents: 399_900, credits: 40_000 },
+  { key: 'small', priceCents: 89_900, credits: 8_000 },
+  { key: 'medium', priceCents: 229_900, credits: 20_000 },
+  { key: 'large', priceCents: 449_900, credits: 40_000 },
 ];
 /** True once a payment provider takes money for plans and top-ups. Until then the team switches plans on. */
 export const PAYMENTS_LIVE = false;
@@ -8153,9 +8182,6 @@ export const AGENT_LIMITS: Readonly<Record<PaidPlan, Record<AgentKey, AgentLimit
   pro_max: { assistant: { contextTokens: 64_000, perMessage: 250, perDay: 8_000, steps: 10 }, feelings: { contextTokens: 3_000, perMessage: 20, perDay: 800, steps: 1 } },
   ultra: { assistant: { contextTokens: 128_000, perMessage: 600, perDay: 30_000, steps: 12 }, feelings: { contextTokens: 4_000, perMessage: 40, perDay: 2_000, steps: 1 } },
 };
-/** About what one assistant message costs, to say how far credits go. A guess, and said as one. */
-export const TYPICAL_MESSAGE_CREDITS = 12;
-export const messagesFor = (credits: number): number => Math.floor(Math.max(0, credits) / TYPICAL_MESSAGE_CREDITS);
 
 /** Plan credits are spent first, then the extra ones. Never more than there is. */
 export function spendSplit(cost: number, plan: number, extra: number): { plan: number; extra: number } {
@@ -10485,7 +10511,8 @@ export const FOCUS_VIEWS: readonly { key: FocusView; name: string; count: number
   { key: 'month', name: 'Months', count: 6, blurb: 'The last six months.' },
 ];
 export const isFocusView = (v: unknown): v is FocusView => v === 'day' || v === 'week' || v === 'month';
-export const FOCUS_MAX_MINUTES = 120;
+/** The longest one focus session can be kept as: ten hours, the same cap a mindful-minutes log has (a long stopwatch run, a nudged timer). */
+export const FOCUS_MAX_MINUTES = 600;
 
 export interface FocusTask {
   id: string;
@@ -10509,11 +10536,29 @@ export interface FocusResponse {
   view: FocusView;
   buckets: FocusBucket[];
   totals: { minutes: number; rounds: number; tasksDone: number; activeBuckets: number; /** The average of the ratings given, to one decimal, and how many rounds were rated. */ quality: number | null; rated: number };
-  /** Where the time went in this stretch, most first. */
-  tasks: { nodeId: string | null; title: string; minutes: number; rounds: number }[];
+  /** Where the time went in this stretch, most first. `planned` is the task's own time estimate in minutes, when it has one. */
+  tasks: { nodeId: string | null; title: string; minutes: number; rounds: number; planned: number | null }[];
   best: { key: string; label: string; minutes: number } | null;
   /** A plain line on how this stretch compares with the one before it. */
   trend: string;
+  /** Focus minutes on each day of this stretch, oldest first, for the daily goal (focusGoalMet). */
+  dayMinutes: number[];
+}
+/** What kind of clock a session came from; `manual` is one added by hand afterwards. Older rows have none. */
+export type FocusMode = 'timer' | 'pomodoro' | 'stopwatch' | 'manual';
+export const isFocusMode = (v: unknown): v is FocusMode => v === 'timer' || v === 'pomodoro' || v === 'stopwatch' || v === 'manual';
+/** One finished focus session, as the day's list shows it. Owner only. */
+export interface FocusRoundRow {
+  id: string;
+  minutes: number;
+  title: string;
+  nodeId: string | null;
+  quality: number | null;
+  mode: FocusMode | null;
+  day: string;
+  createdAt: string;
+  /** It also counted as mindful minutes (a wellbeing log kept in step with it). */
+  mindful: boolean;
 }
 
 // ---- repeating tasks: daily, on weekdays, weekly on chosen days, monthly, yearly; every N of them; until a day, or for ever ----
@@ -11223,7 +11268,78 @@ export interface FocusSettings {
   /** A background sound while a timer runs, and how loud, 0 to 100. */
   ambient: AmbientKind;
   ambientVolume: number;
+  /** The breathing pattern Breathe and the breaks follow (BREATH_PATTERNS key), and what marks each step. */
+  breath: string;
+  breathCue: BreathCue;
+  /** A daily focus goal in minutes (15 to 480, in steps of 15), or null for none. Off until the person sets one; it never makes a streak or a penalty. */
+  goalMinutes: number | null;
+  /** A daily nudge to focus, as HH:MM in the person's zone, or null for none (off until set). Skipped on a day that already has a session. */
+  reminderTime: string | null;
+  /** The days the nudge goes out, 1 for Monday to 7 for Sunday. */
+  reminderDays: number[];
 }
+/** One step of a breathing pattern: breathe in, hold full, breathe out, or hold empty, for a whole number of seconds. */
+export type BreathStepKind = 'in' | 'hold' | 'out' | 'rest';
+export interface BreathStep {
+  kind: BreathStepKind;
+  seconds: number;
+}
+export interface BreathPattern {
+  key: string;
+  name: string;
+  /** The counts, as people say them: "4 · 4 · 6 · 2". */
+  counts: string;
+  /** One plain line on what it is. Never a health claim. */
+  line: string;
+  steps: readonly BreathStep[];
+}
+/**
+ * Breathing patterns people widely use, each a loop of steps. The words are ours and plain; nothing here promises an effect. The first
+ * is the default. A sigh is two breaths in (a long one, then a short top-up) and one long breath out.
+ */
+export const BREATH_PATTERNS: readonly BreathPattern[] = [
+  { key: 'calm', name: 'Calm exhale', counts: '4 · 4 · 6 · 2', line: 'In for 4, hold for 4, out for 6, rest for 2. The breath out is the longest.', steps: [{ kind: 'in', seconds: 4 }, { kind: 'hold', seconds: 4 }, { kind: 'out', seconds: 6 }, { kind: 'rest', seconds: 2 }] },
+  { key: 'box', name: 'Box', counts: '4 · 4 · 4 · 4', line: 'Four even sides: in, hold, out, hold, each for 4.', steps: [{ kind: 'in', seconds: 4 }, { kind: 'hold', seconds: 4 }, { kind: 'out', seconds: 4 }, { kind: 'rest', seconds: 4 }] },
+  { key: '478', name: '4-7-8', counts: '4 · 7 · 8', line: 'In for 4, hold for 7, out slowly for 8.', steps: [{ kind: 'in', seconds: 4 }, { kind: 'hold', seconds: 7 }, { kind: 'out', seconds: 8 }] },
+  { key: 'even', name: 'Even', counts: '5 · 5', line: 'In for 5, out for 5: about six slow breaths a minute.', steps: [{ kind: 'in', seconds: 5 }, { kind: 'out', seconds: 5 }] },
+  { key: 'triangle', name: 'Triangle', counts: '4 · 4 · 4', line: 'In for 4, hold for 4, out for 4.', steps: [{ kind: 'in', seconds: 4 }, { kind: 'hold', seconds: 4 }, { kind: 'out', seconds: 4 }] },
+  { key: 'longout', name: 'Longer out', counts: '4 · 6', line: 'In for 4, out for 6. No holding.', steps: [{ kind: 'in', seconds: 4 }, { kind: 'out', seconds: 6 }] },
+  { key: 'sigh', name: 'Sigh', counts: '2 + 1 · 6', line: 'Breathe in, then a little more on top, then a long breath out.', steps: [{ kind: 'in', seconds: 2 }, { kind: 'in', seconds: 1 }, { kind: 'out', seconds: 6 }] },
+];
+export const BREATH_BY_KEY: Record<string, BreathPattern> = Object.fromEntries(BREATH_PATTERNS.map((p) => [p.key, p]));
+export const breathPatternFor = (key: string | null | undefined): BreathPattern => (key && Object.hasOwn(BREATH_BY_KEY, key) ? BREATH_BY_KEY[key]! : BREATH_PATTERNS[0]!);
+/** What marks each step: nothing, a soft chime, a bell, or a voice saying "In", "Hold", "Out" (the browser's own speech, no service). */
+export type BreathCue = 'off' | 'chime' | 'bell' | 'voice';
+export const BREATH_CUES: readonly { key: BreathCue; name: string }[] = [
+  { key: 'chime', name: 'Soft chime' },
+  { key: 'bell', name: 'Bell' },
+  { key: 'voice', name: 'Voice' },
+  { key: 'off', name: 'No cue' },
+];
+const isBreathCue = (v: unknown): v is BreathCue => v === 'off' || v === 'chime' || v === 'bell' || v === 'voice';
+/** The word a voice cue says. */
+export const BREATH_SAY: Record<BreathStepKind, string> = { in: 'In', hold: 'Hold', out: 'Out', rest: 'Hold' };
+/** Whole rounds of a pattern in a length of time. */
+export const breathRounds = (pattern: BreathPattern, ms: number): number => Math.floor(Math.max(0, ms) / pattern.steps.reduce((t, x) => t + x.seconds * 1000, 0));
+/** The words a step shows. */
+export const BREATH_WORDS: Record<BreathStepKind, string> = { in: 'Breathe in', hold: 'Hold', out: 'Breathe out', rest: 'Hold' };
+
+/** Where a breath stands after `elapsedMs`: which step, how far through it (0 to 1), and the whole seconds left in it (counting down). */
+export function breathAt(pattern: BreathPattern, elapsedMs: number): { index: number; step: BreathStep; progress: number; secondsLeft: number; loop: number } {
+  const cycleMs = pattern.steps.reduce((t, s) => t + s.seconds * 1000, 0);
+  const e = Math.max(0, elapsedMs);
+  const loop = Math.floor(e / cycleMs);
+  let t = e - loop * cycleMs;
+  for (let i = 0; i < pattern.steps.length; i += 1) {
+    const step = pattern.steps[i]!;
+    const ms = step.seconds * 1000;
+    if (t < ms) return { index: i, step, progress: t / ms, secondsLeft: Math.ceil((ms - t) / 1000), loop };
+    t -= ms;
+  }
+  const last = pattern.steps.length - 1;
+  return { index: last, step: pattern.steps[last]!, progress: 1, secondsLeft: 0, loop };
+}
+
 export const FOCUS_PRESETS: readonly { name: string; focus: number; short: number; long: number; every: number }[] = [
   { name: 'Classic', focus: 25, short: 5, long: 30, every: 4 },
   { name: 'Deep', focus: 50, short: 10, long: 30, every: 3 },
@@ -11244,6 +11360,11 @@ export const FOCUS_DEFAULTS: FocusSettings = {
   vibrate: true,
   ambient: 'off',
   ambientVolume: 40,
+  breath: 'calm',
+  breathCue: 'chime',
+  goalMinutes: null,
+  reminderTime: null,
+  reminderDays: [1, 2, 3, 4, 5, 6, 7],
 };
 const clampWhole = (v: unknown, lo: number, hi: number, fallback: number): number => {
   const n = Math.round(Number(v));
@@ -11277,7 +11398,17 @@ export function parseFocusSettings(raw: unknown): FocusSettings {
     vibrate: flag('vibrate', d.vibrate),
     ambient: isAmbientKind(o.ambient) ? o.ambient : d.ambient,
     ambientVolume: clampWhole(o.ambientVolume, 0, 100, d.ambientVolume),
+    breath: typeof o.breath === 'string' && Object.hasOwn(BREATH_BY_KEY, o.breath) ? o.breath : d.breath,
+    breathCue: isBreathCue(o.breathCue) ? o.breathCue : d.breathCue,
+    goalMinutes: o.goalMinutes === null || o.goalMinutes === undefined || !Number.isFinite(Number(o.goalMinutes)) ? null : Math.min(480, Math.max(15, Math.round(Number(o.goalMinutes) / 15) * 15)),
+    reminderTime: typeof o.reminderTime === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(o.reminderTime) ? o.reminderTime : null,
+    reminderDays: Array.isArray(o.reminderDays) ? [...new Set(o.reminderDays.map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 7))].sort((x, y) => x - y) : [...d.reminderDays],
   };
+}
+/** How many of these days met the daily focus goal (each a day's focus minutes). No goal means none; it is a count, never a streak. */
+export function focusGoalMet(days: readonly number[], goal: number | null): number {
+  if (goal === null || !Number.isFinite(goal) || goal <= 0) return 0;
+  return days.filter((m) => Number.isFinite(m) && m >= goal).length;
 }
 /** How many soft beats mark the start of a break: one for a mini break, three for the long one. */
 export const BREAK_BEATS = { short: 1, long: 3 } as const;
@@ -11548,6 +11679,8 @@ export interface AgencyClientPage {
   invoices: AgencyInvoiceRow[];
   /** The way from enquiry to monthly delivery. */
   lifecycle: ClientLifecycle;
+  /** Whether the client is asked to fill in the onboarding form at their link, whether they did and when, and what they told you. */
+  onboarding: { needed: boolean; done: boolean; at: string | null; answers: ClientOnboarding | null };
 }
 
 /** The parts of a client's dashboard the owner can show at the client link. Each is a switch; the default says what it starts as. */
@@ -11595,6 +11728,8 @@ export interface PortalView {
   show: PortalShow;
   /** Where they are on the way from first contact to monthly delivery. */
   stage: AgencyStageKey;
+  /** The onboarding form: asked for, and sent. While it is asked for and not sent, the parts below are empty and only the form shows. */
+  onboarding: { needed: boolean; done: boolean };
   /** What is waiting on the client now. */
   waitingOn: PortalWaitingOn[];
   /** The strategy session, from the strategy stage on. */
@@ -11668,7 +11803,7 @@ export const AGENCY_STAGES: readonly AgencyStage[] = [
     name: 'Enquiry',
     line: 'A brand got in touch and asked what comes next.',
     clientDoes: 'Nothing yet. An agreement is on its way.',
-    ownerDoes: 'Make the trial and pilot agreement and send it.',
+    ownerDoes: 'Add the client and send their link. The agreement is made when they finish onboarding.',
     steps: [
       { key: 'note', text: 'Write down what they asked for, in the client notes.' },
       { key: 'make', text: 'Make a Trial and pilot agreement for them.' },
@@ -11827,14 +11962,14 @@ export interface TrialRule {
   source: string;
 }
 export const TRIAL_RULES: readonly TrialRule[] = [
-  { key: 'evaluation', text: 'Anything made in the trial is for evaluation and approval only.', source: 'Trial agreement, 4.1' },
-  { key: 'no-use', text: 'The client may not publish, share, boost, advertise, reuse, sublicense or otherwise use it commercially unless a paid engagement is later confirmed in writing.', source: 'Trial agreement, 4.1' },
-  { key: 'comes-down', text: 'If the work does not go ahead, unpublished trial content stays unused and published trial content comes down on request.', source: 'Trial agreement, 4.1' },
-  { key: 'rights', text: 'Unless agreed in writing, ownership and usage rights do not pass to the client just because of the trial.', source: 'Trial agreement, 4.2' },
-  { key: 'brief', text: 'The client fills in this brief before the shoot.', source: 'Trial agreement, 3' },
-  { key: 'feedback', text: 'The client sends feedback through one point of contact.', source: 'Trial agreement, 5 and 8.3' },
-  { key: 'edits', text: 'Small edit-level changes such as text, trims, order and captions are part of the process. A new concept, format, set-up, new footage or a reshoot is discussed separately before it is started.', source: 'Trial agreement, 8.3' },
-  { key: 'no-promise', text: 'The trial does not oblige either side to go on to a pilot.', source: 'Trial agreement, 2' },
+  { key: 'evaluation', text: 'Any content produced during the trial is created solely for evaluation and approval purposes.', source: 'Trial agreement, 4.1' },
+  { key: 'no-use', text: 'The Client may not publish, distribute, boost, advertise, repurpose, sublicense, or otherwise commercially use trial content unless a paid engagement is subsequently confirmed in writing.', source: 'Trial agreement, 4.1' },
+  { key: 'comes-down', text: 'If the engagement does not proceed, all unpublished trial content must remain unused, and any published trial content must be removed upon request.', source: 'Trial agreement, 4.1' },
+  { key: 'rights', text: 'Unless otherwise agreed in writing, ownership and/or usage rights for content created during the trial do not transfer to the Client merely by virtue of the trial.', source: 'Trial agreement, 4.2' },
+  { key: 'brief', text: 'Please complete this brief before the shoot.', source: 'Trial agreement, 3' },
+  { key: 'feedback', text: 'The Client shares feedback through one primary point of contact.', source: 'Trial agreement, 5, Step 2' },
+  { key: 'edits', text: 'Minor revisions such as text changes, trims, sequencing adjustments, captions and similar edit-level changes can be incorporated within the agreed process.', source: 'Trial agreement, 8.12' },
+  { key: 'no-promise', text: 'Nothing in the trial creates an obligation to proceed to a pilot engagement on either side.', source: 'Trial agreement, 2' },
 ];
 
 // ---- the days of the lifecycle
@@ -11893,6 +12028,194 @@ const PORTAL_WORDS = [
 export function makePortalPassword(rand: (n: number) => number): string {
   const word = () => PORTAL_WORDS[rand(PORTAL_WORDS.length)]!;
   return `${word()}-${word()}-${word()}-${word()}-${String(rand(100)).padStart(2, '0')}`;
+}
+
+// ---- a client asks for a new password (the owner sets it; the client can only ask)
+
+/** What the owner sees when a client asked for a new password from the lock screen: when, and the optional reason they gave. */
+export interface PasswordRequest {
+  at: string;
+  reason: string;
+}
+/** The longest reason a client can give for asking. */
+export const PASSWORD_REQUEST_REASON_MAX = 200;
+
+// ---- client onboarding: the client fills in their details and the trial brief once, at their link
+
+/** A GSTIN: two digits for the state, the ten-character PAN, an entity digit, Z, a check character. Empty is fine (it is optional). */
+export function gstinProblem(raw: string): string | null {
+  const v = raw.replace(/\s+/g, '').toUpperCase();
+  if (!v) return null;
+  return /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(v) ? null : 'A GSTIN has 15 characters, like 29ABCDE1234F1Z5.';
+}
+/** A PAN: five letters, four digits, one letter. Empty is fine (it is optional). */
+export function panProblem(raw: string): string | null {
+  const v = raw.replace(/\s+/g, '').toUpperCase();
+  if (!v) return null;
+  return /^[A-Z]{5}\d{4}[A-Z]$/.test(v) ? null : 'A PAN has 10 characters, like ABCDE1234F.';
+}
+
+/** Everything the client tells us once: their company, who to talk to, and the trial brief (section 3 of the agreement). */
+export interface ClientOnboarding {
+  legalName: string;
+  /** The brand or brands for this trial. */
+  brands: string;
+  addressLine: string;
+  city: string;
+  state: string;
+  pin: string;
+  gstin: string;
+  pan: string;
+  pocName: string;
+  designation: string;
+  email: string;
+  phone: string;
+  billingEmail: string;
+  /** The brief's answers, by the agreement's own question ids (3.1 to 3.5). */
+  brief: Record<string, ContractAnswer>;
+  /** Three to five links to videos (or a Drive folder) that show the feel they want. */
+  references: string[];
+}
+const ONBOARDING_REFS_MIN = 3;
+const ONBOARDING_REFS_MAX = 5;
+/**
+ * The five short steps of the form. A brief step lists the agreement's question numbers it asks ("3.1"); a question whose number is not
+ * listed lands on the last brief step, so a template with more questions still asks every one.
+ */
+export const ONBOARDING_STEPS = [
+  { key: 'company', title: 'Your company', line: 'Who the agreement and invoices are made out to.', brief: [], refs: null },
+  { key: 'people', title: 'Who we talk to', line: 'The one person we send work and questions to.', brief: [], refs: null },
+  { key: 'goal', title: 'What the videos are for', line: 'Your aim, how much the brand shows, and what people should feel.', brief: ['3.1', '3.2', '3.3'], refs: null },
+  { key: 'musts', title: 'Must-haves', line: 'Tick what has to be in every video.', brief: ['3.4'], refs: null },
+  { key: 'guide', title: 'Your brand guide', line: 'How your brand looks and sounds, and a few videos you like.', brief: ['3.5', '3.6'], refs: { min: ONBOARDING_REFS_MIN, max: ONBOARDING_REFS_MAX } },
+] as const satisfies readonly { key: string; title: string; line: string; brief: readonly string[]; refs: { min: number; max: number } | null }[];
+
+export const emptyOnboarding = (): ClientOnboarding => ({
+  legalName: '', brands: '', addressLine: '', city: '', state: '', pin: '', gstin: '', pan: '', pocName: '', designation: '', email: '', phone: '', billingEmail: '', brief: {}, references: [],
+});
+
+const obText = (v: unknown, max: number): string => (typeof v === 'string' ? v.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').trim().slice(0, max) : '');
+const OB_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** The fields and the most each one keeps. */
+const OB_FIELDS: Record<Exclude<keyof ClientOnboarding, 'brief' | 'references'>, number> = {
+  legalName: 160, brands: 160, addressLine: 200, city: 60, state: 60, pin: 12, gstin: 30, pan: 20, pocName: 80, designation: 80, email: 120, phone: 20, billingEmail: 120,
+};
+
+/** The agreement's own number of a brief question ("3.4"), from its subhead or its words, or '' when it has none. */
+const briefNumber = (q: Pick<ContractQuestion, 'label' | 'heading'>): string => /^\s*(\d+\.\d+)/.exec(q.heading ?? '')?.[1] ?? /^\s*(\d+\.\d+)/.exec(q.label)?.[1] ?? '';
+
+/**
+ * Which step of the form asks each brief question, in the agreement's order: by its number (3.1 to 3.3 on the third step, 3.4 on the
+ * fourth, 3.5 on the fifth); a question with no number of its own (a second part of 3.5) stays on the step of the one before it, and
+ * one whose number no step names lands on the last step, so every question is asked once.
+ */
+export function onboardingBriefSteps(questions: readonly ContractQuestion[]): ContractQuestion[][] {
+  const out: ContractQuestion[][] = ONBOARDING_STEPS.map(() => []);
+  let at = 2;
+  for (const q of questions) {
+    const n = briefNumber(q);
+    if (n) {
+      const i = ONBOARDING_STEPS.findIndex((s) => (s.brief as readonly string[]).includes(n));
+      at = i >= 0 ? i : ONBOARDING_STEPS.length - 1;
+    }
+    out[at]!.push(q);
+  }
+  return out;
+}
+
+/**
+ * The one reader for what a client typed or the server kept. Unknown keys are dropped, every text is cut to its length, a GSTIN and a PAN
+ * are upper-cased without spaces, a PIN keeps digits only, and links are https or http only, at most five. With the agreement's questions,
+ * only answers to those questions and only options they offered are kept; without them an answer keeps its shape only.
+ */
+export function parseOnboarding(v: unknown, questions?: readonly ContractQuestion[]): ClientOnboarding {
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  const out = emptyOnboarding();
+  for (const [k, max] of Object.entries(OB_FIELDS) as [keyof typeof OB_FIELDS, number][]) out[k] = obText(o[k], max);
+  out.gstin = out.gstin.replace(/\s+/g, '').toUpperCase().slice(0, 15);
+  out.pan = out.pan.replace(/\s+/g, '').toUpperCase().slice(0, 10);
+  out.pin = out.pin.replace(/\D/g, '').slice(0, 6);
+  out.references = (Array.isArray(o.references) ? o.references : [])
+    .map((x) => obText(x, 500))
+    .filter((x) => /^https?:\/\/[^\s]+$/i.test(x))
+    .slice(0, ONBOARDING_REFS_MAX);
+  const raw = o.brief && typeof o.brief === 'object' ? (o.brief as Record<string, unknown>) : {};
+  const brief: Record<string, ContractAnswer> = {};
+  const answerOf = (a: unknown, q?: ContractQuestion): ContractAnswer => {
+    const x = (a && typeof a === 'object' ? a : {}) as Record<string, unknown>;
+    const picked = (Array.isArray(x.picked) ? x.picked : []).map((p) => obText(p, 200)).filter((p) => p && (!q || q.options.includes(p)));
+    const answer: ContractAnswer = { picked: q && !q.multi ? picked.slice(0, 1) : picked.slice(0, 20), other: !q || q.other ? obText(x.other, 200) : '', text: !q || q.text ? obText(x.text, 1500) : '' };
+    // A brand guide's lines, by the line's own words; with the questions, only the lines it asks for.
+    const given = x.fields && typeof x.fields === 'object' ? (x.fields as Record<string, unknown>) : null;
+    if (given && (!q || (q.fields ?? []).length)) {
+      const fields: Record<string, string> = {};
+      const names = q ? (q.fields ?? []) : Object.keys(given).slice(0, 20);
+      for (const f of names) if (Object.prototype.hasOwnProperty.call(given, f) && obText(given[f], 300)) fields[f.slice(0, 120)] = obText(given[f], 300);
+      answer.fields = fields;
+    }
+    if (Array.isArray(x.links) && (!q || q.links)) answer.links = x.links.map((l) => obText(l, 500)).filter((l) => /^https?:\/\/[^\s]+$/i.test(l)).slice(0, q?.links?.max ?? ONBOARDING_REFS_MAX);
+    return answer;
+  };
+  if (questions) {
+    for (const q of questions) if (Object.prototype.hasOwnProperty.call(raw, q.id)) brief[q.id] = answerOf(raw[q.id], q);
+  } else {
+    for (const k of Object.keys(raw).slice(0, MAX_CONTRACT_QUESTIONS * 2)) if (/^[a-zA-Z0-9_-]{1,30}$/.test(k)) brief[k] = answerOf(raw[k]);
+  }
+  out.brief = brief;
+  return out;
+}
+
+/** Whether a brief question has an answer: a tick or an Other line, or words where it asks for words. */
+const briefAnswered = (q: ContractQuestion, a: ContractAnswer | undefined): boolean => {
+  if (!a) return false;
+  if (q.links) return (a.links ?? []).filter((l) => /^https?:\/\/[^\s]+$/i.test(l.trim())).length >= q.links.min;
+  if ((q.fields ?? []).length) return Object.values(a.fields ?? {}).some((v) => v.trim());
+  if (q.text) return Boolean(a.text.trim());
+  return a.picked.length > 0 || Boolean(a.other.trim());
+};
+
+/**
+ * The first thing still missing, with the step it is on and the field to send the person back to, or null when the form can be sent. The
+ * GSTIN and PAN are optional but must be real when typed; the billing email may be left empty (the contact's email is used).
+ */
+export function onboardingProblem(o: ClientOnboarding, questions: readonly ContractQuestion[] = []): { step: number; field: string; message: string } | null {
+  const need = (step: number, field: string, ok: boolean, message: string) => (ok ? null : { step, field, message });
+  const checks = [
+    need(0, 'legalName', Boolean(o.legalName.trim()), 'Type your company\'s legal name.'),
+    need(0, 'brands', Boolean(o.brands.trim()), 'Name the brand or brands for this trial.'),
+    need(0, 'addressLine', Boolean(o.addressLine.trim()), 'Type the registered address.'),
+    need(0, 'city', Boolean(o.city.trim()), 'Type the city.'),
+    need(0, 'state', Boolean(o.state.trim()), 'Pick the state.'),
+    need(0, 'pin', !pinCodeProblem(o.pin), pinCodeProblem(o.pin) ?? ''),
+    need(0, 'gstin', !gstinProblem(o.gstin), gstinProblem(o.gstin) ?? ''),
+    need(0, 'pan', !panProblem(o.pan), panProblem(o.pan) ?? ''),
+    need(1, 'pocName', Boolean(o.pocName.trim()), 'Type the name of the person we talk to.'),
+    need(1, 'designation', Boolean(o.designation.trim()), 'Type their role, like Marketing head.'),
+    need(1, 'email', OB_EMAIL.test(o.email.trim()), 'Type an email we can write to.'),
+    need(1, 'phone', !phoneProblem(o.phone), phoneProblem(o.phone) ?? ''),
+    need(1, 'billingEmail', !o.billingEmail.trim() || OB_EMAIL.test(o.billingEmail.trim()), 'Check the billing email, or leave it empty.'),
+  ];
+  for (const c of checks) if (c) return c;
+  const steps = onboardingBriefSteps(questions);
+  for (let i = 0; i < steps.length; i += 1) {
+    for (const q of steps[i]!) {
+      // The lines of a brand guide count together: one line anywhere in it is enough (the agreement asks for "a simple brand guide").
+      if ((q.fields ?? []).length && questions.some((x) => (x.fields ?? []).length && briefAnswered(x, o.brief[x.id]))) continue;
+      if (briefAnswered(q, o.brief[q.id])) continue;
+      const what = q.links ? `Add at least ${q.links.min} links to videos you like.` : (q.fields ?? []).length ? 'Fill in at least one line of your brand guide.' : `Answer ${briefNumber(q) || 'this question'}.`;
+      return { step: i, field: `q-${q.id}`, message: what };
+    }
+  }
+  // A template with no links question of its own still asks for the reference videos, as the agreement does.
+  if (!questions.some((q) => q.links) && o.references.length < ONBOARDING_REFS_MIN) return { step: ONBOARDING_STEPS.length - 1, field: 'references', message: `Add at least ${ONBOARDING_REFS_MIN} links to videos you like.` };
+  return null;
+}
+
+/** What goes under "Billed to" from the form: the brand as the big name, the legal name under it, the tax numbers, the full address. */
+export function onboardingToBilling(o: ClientOnboarding, brandName: string): InvoiceParty {
+  const taxIds = [o.gstin ? { label: 'GSTIN', value: o.gstin } : null, o.pan ? { label: 'PAN', value: o.pan } : null].filter((x): x is { label: string; value: string } => x !== null);
+  const address = [o.addressLine.trim(), o.city.trim(), [o.state.trim(), o.pin.trim()].filter(Boolean).join(' ')].filter(Boolean).join(', ').slice(0, 300);
+  return { name: brandName.trim() || o.brands.trim(), line: o.legalName.trim(), taxIds, address, email: (o.billingEmail.trim() || o.email.trim()).slice(0, 120), phone: o.phone.trim() ? normalizePhone(o.phone) : '' };
 }
 
 // ---- changes (revisions) on a piece
@@ -12034,7 +12357,7 @@ export interface ClientLifecycle {
   /** Checklist ticks, "<stage>:<step>" to true. */
   ticks: Record<string, boolean>;
   revisionsPerPiece: number;
-  password: { set: boolean; setAt: string | null; lastOpenedDay: string | null };
+  password: { set: boolean; setAt: string | null; lastOpenedDay: string | null; /** An open ask from the client for a new password. */ request: PasswordRequest | null };
   /** The open or running retainer, else the latest one that ended. */
   retainer: AgencyRetainer | null;
   /** What has happened, newest first. */
@@ -12165,16 +12488,36 @@ export function kpiToInput(unit: KpiUnit, stored: number): number {
 // Invoice designer and calculator
 // ---------------------------------------------------------------------------
 
-/** The looks an invoice can wear. Colours come from the theme tokens in the screen, never from here. */
-export const INVOICE_DESIGNS = ['classic', 'teal', 'warm', 'mono'] as const;
+/**
+ * The looks an invoice can wear. Only keys live here: the screen maps each key to colours (theme tokens, or for Founder classic the paper
+ * colours in the legal block of app.css), so stored data never becomes a raw colour.
+ */
+export const INVOICE_DESIGNS = ['founder', 'classic', 'teal', 'warm', 'mono'] as const;
 export type InvoiceDesign = (typeof INVOICE_DESIGNS)[number];
 export const INVOICE_DESIGN_META: Record<InvoiceDesign, { name: string; blurb: string }> = {
+  founder: { name: 'Founder classic', blurb: 'Grey bars, a teal bank header, green totals and a blue words line.' },
   classic: { name: 'Classic', blurb: 'Grey bars, a green total and a blue line for the words.' },
   teal: { name: 'Teal', blurb: 'Teal bars with a soft sky total.' },
   warm: { name: 'Warm', blurb: 'Sand bars with a soft peach total.' },
   mono: { name: 'Plain', blurb: 'Black and white. Prints cleanly.' },
 };
-export const INVOICE_TITLES = ['Invoice', 'Advance invoice', 'Proforma invoice', 'Tax invoice'] as const;
+/** The titles to pick from. The title stays free text: the owner can type any other on the paper. */
+export const INVOICE_TITLES = ['Invoice', 'Advance Invoice', 'Proforma Invoice', 'Tax Invoice'] as const;
+/** What the quantity column is called on the paper. */
+export const INVOICE_QTY_LABELS = ['Qty', 'Qty/Hr rate', 'Hours'] as const;
+export type InvoiceQtyLabel = (typeof INVOICE_QTY_LABELS)[number];
+/** A quantity as the invoice prints it: with `pad`, a number under ten gets a leading zero ("05"), the way the founder's invoices write it. */
+export function invoiceQty(n: number, pad = false): string {
+  const v = Math.round(n);
+  return pad && v >= 0 && v < 10 ? `0${v}` : String(v);
+}
+/** Money on an invoice always shows the paise: "₹35,000.00". The agreement and the rest of the app keep `money()`. */
+export function invoiceMoney(cents: number, currency = 'INR'): string {
+  const c = Math.round(cents);
+  const abs = Math.abs(c);
+  const rest = abs % 100;
+  return `${c < 0 ? '-' : ''}${money(abs - rest, currency)}.${String(rest).padStart(2, '0')}`;
+}
 export const GST_RATES_BPS = [0, 500, 1200, 1800, 2800] as const;
 /** Common TDS rates for creative work, in basis points (one percent is 100). Any rate from 0 to 30 percent is allowed. */
 export const TDS_RATES_BPS = [0, 100, 200, 500, 1000] as const;
@@ -12182,7 +12525,7 @@ export const TDS_MODES = ['none', 'grossup', 'show'] as const;
 export type TdsMode = (typeof TDS_MODES)[number];
 export const TDS_MODE_NAME: Record<TdsMode, string> = { none: 'No TDS', grossup: 'The client pays the TDS (add it, then deduct it)', show: 'Show what they will deduct' };
 /** The line under the total when the client bears the TDS: the extra amount is on the invoice so that, after they deduct TDS, the price is paid in full. */
-export const tdsGrossupNote = (tdsBps: number): string => `*Additional ${tdsBps / 100}% adjusted on total invoice amount applicable for TDS deducted to be borne by the company as per the agreement terms.`;
+export const tdsGrossupNote = (tdsBps: number): string => `*Additional ${tdsBps > 0 ? tdsBps / 100 : ''}% adjusted on total invoice amount applicable for TDS deducted to be borne by the company as per the agreement terms.`;
 export const MAX_INVOICE_LINES = 30;
 export const INVOICE_TEXT_MAX = 200;
 
@@ -12248,6 +12591,10 @@ export interface InvoiceDoc {
   footer: string;
   /** How the printed page looks: letterhead, font, size, page, margins, footer. Older invoices have the default. */
   style?: DocStyle;
+  /** What the quantity column is called; older invoices read "Qty". */
+  qtyLabel?: InvoiceQtyLabel;
+  /** Write a quantity under ten with a leading zero ("05"). */
+  qtyPad?: boolean;
 }
 export const emptyInvoiceDoc = (): InvoiceDoc => ({ show: defaultInvoiceShow(), title: 'Invoice', from: emptyParty(), to: emptyParty(), bank: emptyBank(), design: 'classic', discountMode: 'none', discountValue: 0, gstBps: 0, gstSplit: false, tdsBps: 0, tdsMode: 'none', footnote: '', footer: '' });
 
@@ -12271,8 +12618,70 @@ export interface BusinessProfile {
   jurisdiction: string;
   /** The look every new document starts with. */
   docStyle?: DocStyle;
+  /** The brand the work is done under (the agreement's 8.1, 8.11 and 10). */
+  brandName: string;
+  /** "operating under ..." in the agreement's parties; reads as the brand name when left empty. */
+  operatingUnder: string;
+  /** The proprietorship or company name: "Proprietor, <business>" and "Prop. <business>" in the invoice footer. */
+  businessName: string;
+  /** The registered address: the agreement's parties and the invoice footer. */
+  businessAddress: string;
+  /** Up to two emails and two phones for the agreement and the footer; `from.email` and `from.phone` stay the invoice header's. */
+  emails: string[];
+  phones: string[];
+  /** A web address as typed: https or a bare domain. */
+  website: string;
+  /** The name of the content format the packages sell, and the way it is written inside a line ("05 <format> Videos Package"). */
+  formatName: string;
+  formatNameInline: string;
+  /** The sentence of past clients the agreement's 8.15 names, as the owner writes it. */
+  pastClients: string;
+  /** The package table, entered once: the agreement's section 6, the offers and invoice lines read it. */
+  packages: ProfilePackages;
+  /** What a new invoice calls its quantity column, and whether it writes 5 as 05. */
+  invoiceQtyLabel: InvoiceQtyLabel;
+  invoiceQtyPad: boolean;
 }
-export const emptyProfile = (): BusinessProfile => ({ show: defaultInvoiceShow(), from: emptyParty(), bank: emptyBank(), design: 'classic', title: 'Invoice', footnote: '', footer: '', invoicePrefix: '', payDays: 14, gstBps: 0, tdsBps: 0, tdsMode: 'none', signerName: '', signerTitle: '', jurisdiction: '', docStyle: defaultDocStyle() });
+/** The owner's packages: rows of a name, how many units and the fee, and the block that is sold past the largest one. */
+export interface ProfilePackages {
+  /** The unit, plural, as the paper writes it: "Videos". */
+  unit: string;
+  rows: ContractPackage[];
+  block: { units: number; feeCents: number };
+}
+export const MAX_PROFILE_PACKAGES = 8;
+const emptyPackages = (): ProfilePackages => ({ unit: 'Videos', rows: [], block: { units: 0, feeCents: 0 } });
+export const emptyProfile = (): BusinessProfile => ({
+  show: defaultInvoiceShow(),
+  from: emptyParty(),
+  bank: emptyBank(),
+  design: 'founder',
+  title: 'Invoice',
+  footnote: '',
+  footer: '',
+  invoicePrefix: '',
+  payDays: 14,
+  gstBps: 0,
+  tdsBps: 0,
+  tdsMode: 'none',
+  signerName: '',
+  signerTitle: '',
+  jurisdiction: '',
+  docStyle: defaultDocStyle(),
+  brandName: '',
+  operatingUnder: '',
+  businessName: '',
+  businessAddress: '',
+  emails: [],
+  phones: [],
+  website: '',
+  formatName: '',
+  formatNameInline: '',
+  pastClients: '',
+  packages: emptyPackages(),
+  invoiceQtyLabel: 'Qty',
+  invoiceQtyPad: false,
+});
 
 const cleanText = (v: unknown, max = INVOICE_TEXT_MAX): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const bps = (v: unknown, max: number): number => {
@@ -12328,8 +12737,41 @@ export function parseInvoiceDoc(v: unknown, base: InvoiceDoc = emptyInvoiceDoc()
     footnote: 'footnote' in o ? cleanText(o.footnote, 300) : base.footnote,
     footer: 'footer' in o ? cleanText(o.footer, 300) : base.footer,
     style: 'style' in o ? parseDocStyle(o.style, base.style) : parseDocStyle(base.style),
+    qtyLabel: oneOfList(o.qtyLabel, INVOICE_QTY_LABELS, base.qtyLabel ?? 'Qty'),
+    qtyPad: 'qtyPad' in o ? o.qtyPad === true : base.qtyPad === true,
   };
 }
+/** A whole number from a stored value, or null when it is not a number at all. */
+const wholeOrNull = (v: unknown, min: number, max: number): number | null => {
+  if (typeof v !== 'number' && (typeof v !== 'string' || !v.trim())) return null;
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : null;
+};
+/** The package table, read defensively: up to eight rows with a count and a fee that are numbers, and the block past the largest. */
+export function parsePackages(v: unknown): ProfilePackages {
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  const rows: ContractPackage[] = [];
+  for (const r of Array.isArray(o.rows) ? o.rows : []) {
+    if (rows.length >= MAX_PROFILE_PACKAGES) break;
+    const x = (r && typeof r === 'object' ? r : {}) as Record<string, unknown>;
+    const units = wholeOrNull(x.units, 0, 10_000);
+    const feeCents = wholeOrNull(x.feeCents, 0, 1_000_000_000_00);
+    if (units === null || units <= 0 || feeCents === null) continue;
+    rows.push({ name: cleanText(x.name, 60), units, feeCents });
+  }
+  const b = (o.block && typeof o.block === 'object' ? o.block : {}) as Record<string, unknown>;
+  return { unit: cleanText(o.unit, 30) || 'Videos', rows, block: { units: wholeOrNull(b.units, 0, 10_000) ?? 0, feeCents: wholeOrNull(b.feeCents, 0, 1_000_000_000_00) ?? 0 } };
+}
+const cleanList = (v: unknown, max: number, len: number, ok: (s: string) => boolean): string[] =>
+  (Array.isArray(v) ? v : [])
+    .map((x) => cleanText(x, len))
+    .filter((x) => x && ok(x))
+    .slice(0, max);
+/** A web address as the owner typed it, kept only when it is https or a bare domain. */
+const cleanWebsite = (v: unknown): string => {
+  const s = cleanText(v, 120);
+  return /^(https:\/\/)?([a-z0-9-]+\.)+[a-z]{2,}(\/\S*)?$/i.test(s) ? s : '';
+};
 export function parseProfile(v: unknown): BusinessProfile {
   const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
   const e = emptyProfile();
@@ -12350,11 +12792,106 @@ export function parseProfile(v: unknown): BusinessProfile {
     signerTitle: cleanText(o.signerTitle, 80),
     jurisdiction: cleanText(o.jurisdiction, 80),
     docStyle: parseDocStyle(o.docStyle),
+    brandName: cleanText(o.brandName, 80),
+    operatingUnder: cleanText(o.operatingUnder, 80) || cleanText(o.brandName, 80),
+    businessName: cleanText(o.businessName, 120),
+    businessAddress: cleanText(o.businessAddress, 300),
+    emails: cleanList(o.emails, 2, 120, (x) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x)),
+    phones: cleanList(o.phones, 2, 40, (x) => /^[+\d][\d\s()-]{4,}$/.test(x)),
+    website: cleanWebsite(o.website),
+    formatName: cleanText(o.formatName, 60),
+    formatNameInline: cleanText(o.formatNameInline, 60) || cleanText(o.formatName, 60),
+    pastClients: cleanText(o.pastClients, 600),
+    packages: parsePackages(o.packages),
+    invoiceQtyLabel: oneOfList(o.invoiceQtyLabel, INVOICE_QTY_LABELS, e.invoiceQtyLabel),
+    invoiceQtyPad: o.invoiceQtyPad === true,
+  };
+}
+/**
+ * The two centred lines at the foot of an invoice, from the profile: "Prop. <business> - <address>" and "Phone: <p1> | <p2> | <email> |
+ * <website>". A part that is empty is left out with its separator, so nothing is invented and no line ends in a bare bar.
+ */
+export function invoiceFooterFor(p: Pick<BusinessProfile, 'businessName' | 'businessAddress' | 'phones' | 'emails' | 'website' | 'from'>): string {
+  const address = p.businessAddress.split('\n').map((x) => x.trim()).filter(Boolean).join(', ');
+  const first = [p.businessName.trim() ? `Prop. ${p.businessName.trim()}` : '', address].filter(Boolean).join(' - ');
+  const phones = (p.phones.length ? p.phones : [p.from.phone]).map((x) => x.trim()).filter(Boolean);
+  const email = (p.emails[0] ?? p.from.email).trim();
+  const second = [phones.length ? `Phone: ${phones.join(' | ')}` : '', email, p.website.trim()].filter(Boolean).join(' | ');
+  return [first, second].filter(Boolean).join('\n');
+}
+const singularOf = (unit: string): string => (/s$/i.test(unit) ? unit.slice(0, -1) : unit);
+/**
+ * The worked example under the package table (the agreement's 6.1), from the owner's own numbers: "After the 20 video package,
+ * additional videos are added in blocks of 5 at ₹35,000 per block. For example, 25 videos cost ₹1,50,000 + ₹35,000 = ₹1,85,000, and
+ * 30 videos cost ₹1,50,000 + ₹70,000 = ₹2,20,000." Empty when there is no block or no package to count from.
+ */
+export function packageExampleLine(pk: ProfilePackages, currency = 'INR'): string {
+  const top = [...pk.rows].filter((r) => r.units > 0).sort((a, b) => a.units - b.units).at(-1);
+  const { units: b, feeCents: bf } = pk.block;
+  if (!top || b <= 0 || bf <= 0) return '';
+  const plural = (pk.unit || 'Videos').toLowerCase();
+  const one = singularOf(plural);
+  const m = (c: number) => money(c, currency);
+  const t = top.units;
+  const f = top.feeCents;
+  return `After the ${t} ${one} package, additional ${plural} are added in blocks of ${b} at ${m(bf)} per block. For example, ${t + b} ${plural} cost ${m(f)} + ${m(bf)} = ${m(f + bf)}, and ${t + 2 * b} ${plural} cost ${m(f)} + ${m(2 * bf)} = ${m(f + 2 * bf)}.`;
+}
+/** A package as an invoice line: "05 <format> Videos Package", the count as the quantity, and the fee shared over it to the cent. */
+export function packageInvoiceLine(row: ContractPackage, profile: Pick<BusinessProfile, 'formatNameInline' | 'formatName' | 'packages'>): InvoiceItem {
+  const unit = profile.packages.unit || 'Videos';
+  const Unit = unit.charAt(0).toUpperCase() + unit.slice(1);
+  const format = (profile.formatNameInline || profile.formatName).trim();
+  const units = Math.max(1, Math.round(row.units));
+  return { description: [invoiceQty(units, true), format, Unit, 'Package'].filter(Boolean).join(' '), quantity: units, unitCents: Math.round(row.feeCents / units) };
+}
+/** Whether a footnote is the generated TDS line (any rate, or the blank "%" the founder's invoice prints). */
+const AUTO_TDS_NOTE = /^\*Additional (\d+(\.\d+)?)?% adjusted on total invoice amount/;
+/**
+ * The italic lines under an invoice's totals. When the client bears the TDS the first is the TDS line for the rate (the founder's own
+ * wording, with a blank "%" while no rate is set); then the owner's own footnote, unless it is only an older copy of that TDS line.
+ */
+export function invoiceFootnote(doc: Pick<InvoiceDoc, 'footnote' | 'tdsMode' | 'tdsBps'>): string[] {
+  const own = doc.footnote.trim();
+  const out: string[] = [];
+  if (doc.tdsMode === 'grossup') out.push(tdsGrossupNote(doc.tdsBps));
+  if (own && !(doc.tdsMode === 'grossup' && AUTO_TDS_NOTE.test(own))) out.push(own);
+  return out;
+}
+/** The sender on an invoice: what was typed on the invoice paper, and where a part is empty, what the agreement paper of the same
+ *  profile holds (brand, "Prop. <name> for <business>", address, first email and phone), so the business is typed once. */
+export function invoiceFromProfile(p: BusinessProfile): InvoiceParty {
+  const t = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  const f = p.from;
+  const business = t(p.businessName);
+  const signer = t(p.signerName);
+  const prop = signer && business ? `Prop. ${signer} for ${business}` : signer ? `Prop. ${signer}` : '';
+  return {
+    ...f,
+    name: t(f.name) || t(p.brandName) || t(p.operatingUnder) || business,
+    line: t(f.line) || prop,
+    address: t(f.address) || t(p.businessAddress),
+    email: t(f.email) || t((p.emails ?? [])[0]),
+    phone: t(f.phone) || t((p.phones ?? [])[0]),
   };
 }
 /** A fresh invoice's look and details, from the person's profile. */
 export function docFromProfile(p: BusinessProfile): InvoiceDoc {
-  return { ...emptyInvoiceDoc(), show: p.show, title: p.title, from: p.from, bank: p.bank, design: p.design, gstBps: p.gstBps, tdsBps: p.tdsBps, tdsMode: p.tdsMode, footnote: p.footnote, footer: p.footer, style: parseDocStyle(p.docStyle) };
+  return {
+    ...emptyInvoiceDoc(),
+    show: p.show,
+    title: p.title,
+    from: invoiceFromProfile(p),
+    bank: p.bank,
+    design: p.design,
+    gstBps: p.gstBps,
+    tdsBps: p.tdsBps,
+    tdsMode: p.tdsMode,
+    footnote: p.footnote,
+    footer: p.footer || invoiceFooterFor(p),
+    style: parseDocStyle(p.docStyle),
+    qtyLabel: p.invoiceQtyLabel,
+    qtyPad: p.invoiceQtyPad,
+  };
 }
 
 /** The invoice as the client may see it: what the person switched off is removed here, so it never reaches the client's browser. */
@@ -12481,11 +13018,16 @@ export type DocType = (typeof DOC_TYPES)[number];
 
 export const MAX_CONTRACT_SECTIONS = 30;
 export const MAX_CONTRACT_QUESTIONS = 12;
-export const CONTRACT_TEXT_MAX = 6000;
+/** The longest a section's words (its body, and the words after its questions or table) can be. The Trial agreement's "How we work" runs to about 11,000. */
+export const CONTRACT_TEXT_MAX = 16000;
+/** The most short answers one brief question holds (one per line of a brand guide), and the most links. */
+export const MAX_CONTRACT_FIELDS = 16;
+export const MAX_CONTRACT_LINKS = 10;
 
 export type ContractSectionKind = 'text' | 'packages' | 'brief' | 'signatures';
 export interface ContractQuestion {
   id: string;
+  /** The question itself ("What is the primary purpose of these videos?"). Empty for a part that is only a list of fields. */
   label: string;
   options: string[];
   /** More than one option may be ticked. */
@@ -12494,6 +13036,18 @@ export interface ContractQuestion {
   other: boolean;
   /** A free-text answer instead of options. */
   text: boolean;
+  /** A numbered subhead drawn above it, such as "3.1 Objective". */
+  heading?: string;
+  /** A line under the subhead, before the question ("Please share (or attach) a simple brand guide covering the following:"). */
+  intro?: string;
+  /** A bold subhead of its own, such as "Brand Identity". */
+  group?: string;
+  /** The words before a written answer, such as "Client response:". */
+  answerLabel?: string;
+  /** One short labelled answer for each line, such as the lines of a brand guide. */
+  fields?: string[];
+  /** Links the client gives (examples of videos), between min and max. */
+  links?: { min: number; max: number };
 }
 export interface ContractPackage {
   name: string;
@@ -12511,6 +13065,8 @@ export interface ContractSection {
   extra?: { units: number; feeCents: number };
   unitName?: string;
   questions?: ContractQuestion[];
+  /** Words drawn after the questions or the price table, in the same small markdown as the body. */
+  tail?: string;
   /**
    * Whether the section is on the printed page. The agreement is its main text; a section of information (how the work runs, what happens next) or a
    * brief the client answers at the link can stay on the screen and out of the print. When it is not set, a brief is not printed and everything else is.
@@ -12536,6 +13092,10 @@ export interface ContractAnswer {
   picked: string[];
   other: string;
   text: string;
+  /** One short answer for each of a question's fields, by the field's own words. */
+  fields?: Record<string, string>;
+  /** The links given, in order. */
+  links?: string[];
 }
 
 /** The words that fill a contract. Where each comes from decides what the form prefills. */
@@ -12561,8 +13121,29 @@ export const CONTRACT_VARS = [
   { key: 'trialPieces', label: 'Number of trial pieces', from: 'typed' },
   { key: 'trialFee', label: 'Trial fee, if any', from: 'typed' },
   { key: 'sessionDate', label: 'Date of the session', from: 'typed' },
+  { key: 'providerBrand', label: 'Brand you operate under', from: 'profile' },
+  { key: 'providerEmail2', label: 'Your second email', from: 'profile', optional: true },
+  { key: 'providerPhones', label: 'Your phones', from: 'profile' },
+  { key: 'providerDesignation', label: 'Your designation', from: 'profile' },
+  { key: 'clientTitle', label: "Client's designation", from: 'client', optional: true },
+  { key: 'brandName', label: 'Your brand name', from: 'profile', optional: true },
+  { key: 'formatName', label: 'Your content format', from: 'profile', optional: true },
+  { key: 'formatNameInline', label: 'Your format, inside a line', from: 'profile', optional: true },
+  { key: 'pastClients', label: 'Brands you have worked with', from: 'profile', optional: true },
+  { key: 'currencyWords', label: 'Currency in words', from: 'profile', optional: true },
 ] as const;
 export type ContractVarKey = (typeof CONTRACT_VARS)[number]['key'];
+/** The name of a currency as an agreement writes it: "All amounts are in Indian Rupees (INR)." */
+export const CURRENCY_WORDS: Record<string, string> = byKey([
+  ['INR', 'Indian Rupees (INR)'],
+  ['USD', 'US Dollars (USD)'],
+  ['EUR', 'Euros (EUR)'],
+  ['GBP', 'Pounds Sterling (GBP)'],
+  ['AED', 'UAE Dirhams (AED)'],
+  ['SGD', 'Singapore Dollars (SGD)'],
+  ['AUD', 'Australian Dollars (AUD)'],
+  ['CAD', 'Canadian Dollars (CAD)'],
+]);
 
 const uid = (p: string, i: number) => `${p}${i + 1}`;
 const text = (id: string, heading: string, body: string): ContractSection => ({ id, heading, kind: 'text', body });
@@ -12570,6 +13151,345 @@ const question = (id: string, label: string, options: string[], opts: Partial<Co
 
 const CONFIDENTIALITY = 'Both parties keep non-public information from the other private. This lasts five years after the agreement ends.\n\nThis agreement follows the laws of India. Only the courts of {{jurisdiction}} may hear a dispute about it.';
 const SIGNATURES = 'By signing below, both parties confirm they have read and agree to this agreement.';
+
+// The founder's Trial Engagement Agreement, word for word (docs/DECISIONS.md, 2026-11-03). Only a person's or a company's details are
+// variables, filled from the business profile and the client; {{a|b}} and {{a?..$..|b}} are the fallbacks used when a profile field is
+// empty, so a sentence keeps the agreement's own shape and no name is invented. The section ids are read by TRIAL_RULES and trialPart.
+const TRIAL_PARTIES = [
+    "**Service Provider:** {{provider}}",
+    "Proprietor, {{providerBusiness}}, operating under {{providerBrand}}",
+    "{{providerAddress}}",
+    "**Email:** {{providerEmail}}",
+    "**Email:** {{providerEmail2}}",
+    "**Phone:** {{providerPhones}}",
+    "",
+    "**Client:** {{client}}",
+    "Address: {{clientAddress}}",
+    "Brand(s) for this trial: {{brands}}",
+    "Hereinafter referred to as the “Client”",
+    "",
+    "**Point of Contact**",
+    "Name: {{clientContact}}",
+    "Authorized Representative of the Client",
+    "",
+    "The Service Provider and the Client are collectively referred to as the “Parties”.",
+  ].join('\n');
+const TRIAL_PURPOSE = [
+    "The trial is a short evaluation so that the Client can see the Service Provider’s {{formatNameInline|}} style of work on its own brand before committing to a paid pilot engagement.",
+    "",
+    "Scope, number of trial videos and any trial fee are as confirmed in writing between the Parties. Nothing in the trial creates an obligation to proceed to a pilot engagement on either side.",
+  ].join('\n');
+const TRIAL_BRIEF_TAIL = [
+    "### 3.6 Creative Alignment",
+    "",
+    "To ensure the best outcome, all creative direction, branding expectations, and mandatory elements should be finalized before the shoot.",
+    "",
+    "Any new creative requirements or changes introduced after filming may require additional editing, revised deliverables, or a reshoot if they depend on footage that was not originally captured.",
+  ].join('\n');
+const TRIAL_OWNERSHIP = [
+    "### 4.1 Trial Content and Usage",
+    "",
+    "Any content produced during the trial is created solely for evaluation and approval purposes. The Client may not publish, distribute, boost, advertise, repurpose, sublicense, or otherwise commercially use trial content unless a paid engagement is subsequently confirmed in writing. If the engagement does not proceed, all unpublished trial content must remain unused, and any published trial content must be removed upon request.",
+    "",
+    "### 4.2 IP and Usage Rights",
+    "",
+    "Unless otherwise agreed in writing, ownership and/or usage rights for content created during the trial do not transfer to the Client merely by virtue of the trial. Any commercial usage rights will be governed by the final engagement agreement.",
+    "",
+    "### 4.3 Competitive Conflicts",
+    "",
+    "Either Party may discontinue discussions if a conflict of interest or competitive overlap becomes apparent. Where the Service Provider identifies such a conflict, the Service Provider may request that trial content be removed from active use.",
+  ].join('\n');
+const TRIAL_AFTER = [
+    "If the Client wishes to continue, this is how the pilot engagement will run.",
+    "",
+    "**Step 1: Trial review.** The trial videos are shared with the Client for evaluation.",
+    "",
+    "**Step 2: Consolidated feedback.** The Client shares feedback through one primary point of contact. Edit-level feedback is handled as described in Section 8.12.",
+    "",
+    "**Step 3: Package selection.** The Client chooses a package from Section 6 for a single brand.",
+    "",
+    "**Step 4: Pilot agreement and prepayment.** A pilot engagement agreement is signed, an invoice is raised, and the full package fee is paid in advance. Production begins on receipt of payment.",
+    "",
+    "**Step 5: Pre-production alignment.** Before each shoot, the Parties lock the items listed in Section 8.11. The completed brief in Section 3 is the starting point.",
+    "",
+    "**Step 6: Shoot, edit and delivery.** The agreed batch is produced through a planned production cycle, with review checkpoints where useful and minor revisions included.",
+    "",
+    "**Step 7: Usage rights.** Usage rights for the final videos transfer on full payment, on the terms of the pilot engagement agreement.",
+    "",
+    "Delivery timelines for the pilot are confirmed in the pilot engagement agreement once pre-production alignment is complete.",
+  ].join('\n');
+const TRIAL_PACKAGES_TAIL = [
+    "### 6.1 Additional Videos",
+    "",
+    "{{packageExample}}",
+    "",
+    "### 6.2 One Brand Per Package",
+    "",
+    "Each package applies to one brand only. Packages cannot be combined, pooled or split across multiple brands, including where the Client is an agency working for several brands. Each brand requires its own package, priced separately from the table above.",
+    "",
+    "### 6.3 Quantities Not Listed",
+    "",
+    "Quantities that fall between the packages above are quoted in writing before work begins.",
+    "",
+    "### 6.4 Taxes",
+    "",
+    "Fees are exclusive of applicable taxes, including GST where applicable.",
+  ].join('\n');
+const TRIAL_PAYMENT = [
+    "All payments are prepaid. The full package fee is due in advance, before pre-production or production begins.",
+    "",
+    "An invoice will be raised when the Client confirms the package and signs the pilot engagement agreement. Production begins on receipt of payment.",
+    "",
+    "If payment is delayed or partially paid:",
+    "",
+    "- Work may be paused",
+    "- Delivery of edited videos and/or raw footage may be withheld",
+    "- Usage rights shall remain suspended",
+    "",
+    "Refund and delivery guarantee terms are set out in the pilot engagement agreement.",
+  ].join('\n');
+const TRIAL_HOW = [
+    "This section applies to the trial and to the pilot engagement unless the pilot engagement agreement says otherwise.",
+    "",
+    "### 8.1 What We Are Building",
+    "",
+    "{{brandName?$ specializes|We specialize}} in authentic, reaction-led creative using real people and real conversations.",
+    "",
+    "The strength of the {{formatName|}} format comes from the fact that the responses aren't scripted.",
+    "",
+    "The creative process is therefore about engineering the interaction, not scripting the outcome.",
+    "",
+    "We can control:",
+    "",
+    "- The objective and creative direction",
+    "- Question and concept framing",
+    "- How participants are approached",
+    "- The setup of the interaction",
+    "- The interviewer and follow-up questions",
+    "- On-ground direction",
+    "- Participant selection",
+    "- Editing, pacing and final presentation",
+    "",
+    "What we cannot control is exactly how a stranger will respond in the moment.",
+    "",
+    "Our responsibility is to create the strongest possible conditions for interesting reactions and then identify and build around the strongest moments in post-production.",
+    "",
+    "### 8.2 Creative Variety",
+    "",
+    "One of the biggest learnings we've taken from producing {{formatName|}} campaigns across different consumer brands is that creative variety is extremely important, but variety does not necessarily mean creating a completely different production setup for every video.",
+    "",
+    "For a batch of five videos, we will actively avoid simply repeating the same question or interaction.",
+    "",
+    "Instead, we'll create variation through different creative mechanisms such as:",
+    "",
+    "- Guessing and reveals",
+    "- A/B comparisons",
+    "- Challenges",
+    "- Rankings",
+    "- Debates and opposing opinions",
+    "- Personal experiences",
+    "- Product reactions",
+    "- Humour and playful interactions",
+    "- Unexpected questions",
+    "- Audience participation",
+    "- Different follow-up structures",
+    "",
+    "This allows each video to have its own creative identity while keeping the overall production efficient and authentic.",
+    "",
+    "We have found through previous campaigns that this is a much more sustainable way to create variety than treating every video as a completely separate production.",
+    "",
+    "### 8.3 Engagement and Reactions",
+    "",
+    "We also want to clarify what we mean when we say that we're engineering engagement.",
+    "",
+    "A question that looks interesting on paper does not automatically create an engaging video.",
+    "",
+    "The complete interaction matters:",
+    "",
+    "**Setup → Question → Participant → Follow-up → Reaction → Edit**",
+    "",
+    "For example, instead of simply asking for an opinion, we can create curiosity through a prediction, create debate through an A/B choice, create humour through an unexpected challenge, or create surprise through a reveal.",
+    "",
+    "The interviewer then has the freedom to follow an interesting response and go deeper.",
+    "",
+    "Because we're working with real strangers, we cannot guarantee that a particular participant will be funny, emotional, surprising or highly reactive.",
+    "",
+    "What we can do is deliberately create more opportunities for those moments to happen.",
+    "",
+    "### 8.4 Video Length and Editing",
+    "",
+    "The final content will be optimized for short-form consumption.",
+    "",
+    "Our editing process will prioritize:",
+    "",
+    "- Strong opening moments",
+    "- Removing unnecessary pauses and repetition",
+    "- Clear context",
+    "- Tight storytelling",
+    "- Strong reaction moments",
+    "- Appropriate pacing",
+    "- Clean endings",
+    "",
+    "At the same time, we don't want to impose an arbitrary duration on every video if doing so removes the context or payoff that makes a particular interaction work.",
+    "",
+    "The goal is not simply to make the video shorter. The goal is to make it as tight and engaging as the story allows.",
+    "",
+    "### 8.5 Visual Quality",
+    "",
+    "We will maintain professional standards around:",
+    "",
+    "- Framing",
+    "- Audio",
+    "- Camera positioning",
+    "- Lighting where possible",
+    "- Participant presentation",
+    "- Background distractions",
+    "- Overall composition",
+    "",
+    "We also understand the importance of making the batch visually varied.",
+    "",
+    "However, our standard production model is built around efficient batch shooting.",
+    "",
+    "We can create visual variation through different participants, backgrounds, framing, interaction styles, environments and creative mechanisms without requiring every video to have a completely different production setup.",
+    "",
+    "If a particular concept genuinely requires a specialised location, costume, tent, large prop, custom setup or additional production requirement, that should be identified and agreed during pre-production so that we can plan for it appropriately.",
+    "",
+    "### 8.6 Natural Conversations",
+    "",
+    "One of the biggest advantages of {{formatName|this format}} is that the content feels different from a conventional scripted advertisement.",
+    "",
+    "We therefore want the conversations to feel spontaneous, natural and entertaining.",
+    "",
+    "The product can absolutely be integrated into the conversation, but we don't want to force a predetermined brand pitch onto a stranger.",
+    "",
+    "The objective is to make the brand/product part of an interesting interaction rather than making the interaction feel like an advertisement.",
+    "",
+    "### 8.7 Products and Campaign Objectives",
+    "",
+    "If multiple products are being featured, we're happy to plan the content across them.",
+    "",
+    "However, we would recommend that each video has a primary creative objective rather than trying to communicate every product, feature, benefit and CTA within every video.",
+    "",
+    "For example, a video could primarily be designed to:",
+    "",
+    "- Create curiosity",
+    "- Address a specific problem",
+    "- Generate product interest",
+    "- Demonstrate a benefit",
+    "- Build social proof",
+    "- Drive consideration",
+    "",
+    "This gives the content a clearer purpose while allowing the overall batch to cover the wider product portfolio.",
+    "",
+    "### 8.8 Brand Representation",
+    "",
+    "Where the interviewer is representing the Client, we'll ensure that the relationship with the brand is communicated clearly.",
+    "",
+    "We'll align on the preferred introduction and brand positioning before the shoot so there is no ambiguity around who the interviewer is representing.",
+    "",
+    "### 8.9 Participant Engagement",
+    "",
+    "Participant participation is another important production variable.",
+    "",
+    "Because we're approaching people organically on the street, having a simple incentive can materially improve our ability to get people to stop, participate and spend enough time with us.",
+    "",
+    "If we use rewards, they should ideally be physical or immediately redeemable so that they can be shown and handed to participants on the spot.",
+    "",
+    "The purpose is not to influence what someone says. It is simply to improve participation and increase the pool of genuine interactions available to us.",
+    "",
+    "The exact incentive mechanism can be finalized during pre-production.",
+    "",
+    "### 8.10 Shoot-Day Flexibility",
+    "",
+    "Once the objective and creative direction are agreed, our team needs reasonable flexibility on the ground.",
+    "",
+    "With real participants, some interactions will naturally be stronger than others.",
+    "",
+    "If an unexpected conversation starts working particularly well, the interviewer may follow that direction, ask additional questions or adapt the interaction.",
+    "",
+    "That flexibility is an important part of authentic {{formatName|}} production.",
+    "",
+    "We would rather follow a genuinely interesting moment than force the participant back into a predetermined script.",
+    "",
+    "### 8.11 Pre-Production Alignment",
+    "",
+    "Before each shoot, we'd like to lock:",
+    "",
+    "- Primary objective",
+    "- Product/product(s) being featured",
+    "- Target audience",
+    "- Core message/value proposition",
+    "- Desired audience response",
+    "- Required brand/product information",
+    "- Mandatory requirements",
+    "- Things to avoid",
+    "- Any special production requirements",
+    "",
+    "Once these are clear, our team will take responsibility for translating them into the concepts, questions, interactions and on-ground execution.",
+    "",
+    "The brand provides the objective, product truth and requirements.",
+    "",
+    "{{brandName?$ owns|Our team owns}} the creative execution.",
+    "",
+    "This division is important because it allows the team to provide the right context without having to micromanage how the interaction should unfold on the street.",
+    "",
+    "### 8.12 Review and Revisions",
+    "",
+    "We're happy to collaborate closely and take feedback seriously.",
+    "",
+    "At the same time, we need to distinguish between an edit-level revision and a change in creative or production direction.",
+    "",
+    "Minor revisions such as text changes, trims, sequencing adjustments, captions and similar edit-level changes can be incorporated within the agreed process.",
+    "",
+    "Requests that require a fundamentally different concept, format, production setup, new footage or reshoot would need to be discussed separately before being undertaken.",
+    "",
+    "We would also prefer feedback to be consolidated through one primary point of contact so that the team receives one clear direction rather than multiple overlapping interpretations.",
+    "",
+    "### 8.13 Delivery and Workflow",
+    "",
+    "Our preferred workflow is to complete the agreed batch through a planned production cycle rather than repeatedly changing direction between individual videos.",
+    "",
+    "We can share work for review at agreed checkpoints where useful, particularly during the initial phase of the engagement, but production planning should continue against the agreed batch direction.",
+    "",
+    "This allows us to maintain the efficiency that makes the pricing and production model viable while still giving the team sufficient visibility into the creative direction.",
+    "",
+    "### 8.14 Performance Expectations",
+    "",
+    "We'll always optimize the content for attention, retention, engagement and the intended campaign objective.",
+    "",
+    "However, {{formatName|our content}} is distributed content and its final performance depends on several factors beyond production, including the platform, audience, account history, media spend, offer and distribution strategy.",
+    "",
+    "Therefore, we cannot guarantee specific views, virality, reach, engagement, conversions, CAC, ROAS or sales outcomes.",
+    "",
+    "What we can control is the creative system:",
+    "",
+    "**Hypothesis → Interaction → Production → Edit → Learn → Improve**",
+    "",
+    "The objective is to use every batch to understand what resonates and make the next batch stronger.",
+    "",
+    "### 8.15 Overall Approach",
+    "",
+    "The learnings we've taken from working across {{pastClients?brands such as $ and other|different}} consumer categories have reinforced one thing for us:",
+    "",
+    "The strongest {{formatName|}} campaigns don't come from simply asking more questions or making every video look completely different.",
+    "",
+    "They come from having a clear objective, choosing the right reaction mechanism, creating strong interactions with real people, capturing enough variety on the ground and then building the strongest moments in the edit.",
+    "",
+    "That's the system we'd like to bring to the Client.",
+    "",
+    "We're happy to move forward and are genuinely looking forward to seeing what we can create together.",
+    "",
+    "If the above accurately reflects our discussions and expectations from both sides, please reply with a confirmation so that we can consider this our working alignment and proceed with production planning.",
+  ].join('\n');
+const TRIAL_LAW = [
+    "Both Parties agree to maintain confidentiality over non public information exchanged. Confidentiality obligations survive termination for five years.",
+    "",
+    "This Agreement shall be governed by the laws of India. Jurisdiction shall lie exclusively with the courts of {{jurisdiction}}.",
+    "",
+    "This Agreement, including the completed brief, constitutes the entire understanding between the Parties for the trial and supersedes all prior communications on the trial. The pilot engagement will be governed by a separate agreement.",
+  ].join('\n');
+/** The look of the founder's agreement: plain sans type, headings as typed, no letterhead and no page numbers. */
+const TRIAL_STYLE: DocStyle = { letterhead: false, logo: '', heading: 'plain', font: 'sans', size: 'normal', accent: 'ink', page: 'a4', margin: 'normal', footer: '', pageNumbers: false, signLayout: 'side', layout: 'typed' };
 
 export interface ContractTemplate {
   key: string;
@@ -12584,47 +13504,49 @@ export const CONTRACT_TEMPLATES: readonly ContractTemplate[] = [
     name: 'Trial and pilot',
     blurb: 'A short paid or free trial, a brief the client fills in, then packages for the pilot.',
     doc: {
-      title: 'Trial engagement agreement',
-      subtitle: 'Trial, brief and pilot terms',
+      title: 'TRIAL ENGAGEMENT AGREEMENT',
+      subtitle: 'TRIAL VIDEO, BRIEF AND PILOT ENGAGEMENT TERMS',
       templateKey: 'trial',
       show: { comments: true, download: true },
       currency: 'INR',
       vars: {},
+      style: TRIAL_STYLE,
       sections: [
-        text('parties', '1. Parties', '**Service provider:** {{provider}}, {{providerTitle}}, {{providerBusiness}}\n{{providerAddress}}\nEmail: {{providerEmail}} | Phone: {{providerPhone}}\n\n**Client:** {{client}}\nAddress: {{clientAddress}}\nBrand or brands for this trial: {{brands}}\nPoint of contact: {{clientContact}} (authorised to speak for the client)\n\nThe service provider and the client are the "parties".'),
-        text('purpose', '2. Purpose of the trial', 'The trial is a short test, so the client can see the service provider\'s style of work on its own brand before it commits to a paid pilot.\n\nThe scope, the number of trial pieces and any trial fee are confirmed in writing between the parties. The trial does not oblige either side to go on to a pilot.'),
+        { id: 'intro', heading: '', kind: 'text', print: true, body: "This Agreement is entered into on the date of acceptance by the Client. It sets out the terms of the trial, the creative brief the Client needs to complete, what happens after the trial, and the pricing for the pilot engagement that follows." },
+        text('parties', '1. PARTIES', TRIAL_PARTIES),
+        text('purpose', '2. PURPOSE OF THE TRIAL', TRIAL_PURPOSE),
         {
           id: 'brief',
-          heading: '3. Trial brief',
+          heading: '3. TRIAL VIDEO BRIEF',
           kind: 'brief',
-          body: 'The client fills in this brief before the shoot. It is the starting point for every creative choice in the trial. Settle the creative direction, the brand needs and the must-haves before filming. New asks after filming may mean extra editing, new deliverables or a reshoot, if they need footage that was not captured.',
+          body: "Please complete this brief before the shoot. It is the starting point for all creative decisions on the trial.",
           questions: [
-            question('objective', '3.1 What is the main purpose of these videos?', ['Organic content (value and entertainment first)', 'Organic content with light brand awareness', 'Paid ads and performance marketing']),
-            question('brand', '3.2 How strongly should the brand show?', ['Minimal, story first', 'Subtle branding throughout', 'Product visible throughout', 'Product only in the intro and outro', 'Creator holding the product']),
-            question('response', '3.3 After watching, what should people think, feel or do?', [], { other: false, text: true }),
-            question('musts', '3.4 What must be in every video?', ['Product shots', 'Logo visible', 'Brand mention', 'Call to action', 'People trying the product', 'Intro hooks', 'Closing statements', 'Disclaimers'], { multi: true }),
-            question('guide', '3.5 Link to your brand guide: personality in 3 to 5 words, words to use and avoid, editing style, fonts, colours, music, pacing, logo and product shot rules. Add 3 to 5 videos that show the feel you want.', [], { other: false, text: true }),
+            question('objective', 'What is the primary purpose of these videos?', ["Organic content (value/entertainment first)", "Organic content with subtle brand awareness", "Paid ads / Performance marketing"], { heading: '3.1 Objective', multi: true }),
+            question('brand', 'How prominently should the brand appear?', ["Minimal (story first)", "Subtle branding throughout", "Product visible throughout", "Product only in intro/outro", "Creator holding product"], { heading: '3.2 Brand Integration' }),
+            question('response', 'After watching the video, what should the audience think, feel, or do?', [], { heading: '3.3 Desired Viewer Response', other: false, text: true, answerLabel: 'Client response:' }),
+            question('musts', 'What must be included in every video?', ["Product shots", "Logo visible", "Brand mention", "CTA", "People trying the product", "Intro hook/s", "Closing statement/s", "Disclaimer(s)"], { heading: '3.4 Non-Negotiables', multi: true }),
+            question('identity', '', [], { heading: '3.5 Brand Guide', intro: 'Please share (or attach) a simple brand guide covering the following:', group: 'Brand Identity', other: false, fields: ["Brand personality (3 to 5 words)", "Positive brand keywords", "Negative brand keywords", "Things to avoid"] }),
+            question('editing', '', [], { group: 'Editing and Design Language', other: false, fields: ["Overall editing style (fast-paced, premium, cinematic, documentary, raw UGC, etc.)", "Typography preferences", "Brand colours", "Motion graphics style", "Caption/subtitle style", "Music direction", "Sound effects (minimal, energetic, meme-style, etc.)", "Transition style", "Preferred pacing", "Logo usage guidelines", "Product shot guidelines"] }),
+            question('references', 'Please share 3 to 5 examples of videos that best represent the desired creative direction.', [], { group: 'References', other: false, links: { min: 3, max: 5 } }),
           ],
+          tail: TRIAL_BRIEF_TAIL,
         },
-        text('ownership', '4. Trial content, ownership and use', '**4.1 Trial content.** Anything made in the trial is for evaluation and approval only. The client may not publish, share, boost, advertise, reuse, sublicense or otherwise use it commercially unless a paid engagement is later confirmed in writing. If the work does not go ahead, unpublished trial content stays unused and published trial content comes down on request.\n\n**4.2 Rights.** Unless agreed in writing, ownership and usage rights do not pass to the client just because of the trial. Commercial rights are set by the final engagement agreement.\n\n**4.3 Conflicts.** Either party may stop talks if a conflict of interest or competitor overlap appears. If the service provider finds one, it may ask for the trial content to come out of use.'),
-        { ...text('after', '5. What happens after the trial', 'If the client wants to go on, the pilot runs like this:\n\n- **Step 1, trial review.** The trial pieces are shared for review.\n- **Step 2, one set of feedback.** The client sends feedback through one point of contact. Small edits are handled as in section 8.\n- **Step 3, pick a package.** The client chooses a package from section 6, for one brand.\n- **Step 4, agreement and prepayment.** A pilot agreement is signed, an invoice is raised and the full package fee is paid in advance. Work starts when payment arrives.\n- **Step 5, plan before each shoot.** The parties lock the items in section 8 first. The brief in section 3 is the starting point.\n- **Step 6, shoot, edit, deliver.** The batch is made in a planned cycle, with review points where useful and small revisions included.\n- **Step 7, usage rights.** Rights to the final pieces pass on full payment, on the terms of the pilot agreement.\n\nDelivery dates are set in the pilot agreement once the plan is locked.'), print: false },
+        text('ownership', '4. TRIAL CONTENT, OWNERSHIP AND USAGE', TRIAL_OWNERSHIP),
+        { ...text('after', '5. WHAT HAPPENS AFTER THE TRIAL', TRIAL_AFTER), print: false },
         {
           id: 'packages',
-          heading: '6. Packages and pricing',
+          heading: '6. PACKAGES AND PRICING',
           kind: 'packages',
-          body: 'Pilot packages are priced below. Each package is for one brand only. Packages cannot be joined, pooled or split across brands, even where the client is an agency that works for several brands. Quantities not listed are quoted in writing before work begins. Fees do not include taxes such as GST.',
+          // The rows come from the owner's own package table (the business profile) when the agreement is made; the template has none.
+          body: 'Pilot engagement packages are priced as follows. All amounts are in {{currencyWords}}.',
           unitName: 'videos',
-          packages: [
-            { name: 'Starter', units: 5, feeCents: 0 },
-            { name: 'Growth', units: 10, feeCents: 0 },
-            { name: 'Scale', units: 20, feeCents: 0 },
-          ],
-          extra: { units: 5, feeCents: 0 },
+          packages: [],
+          tail: TRIAL_PACKAGES_TAIL,
         },
-        text('payment', '7. Payment', 'All payments are prepaid. The full package fee is due before planning or production starts. An invoice is raised when the client confirms the package and signs the pilot agreement. Work starts when payment arrives.\n\nIf payment is late or only part paid, the service provider may pause work, hold back edited files and raw footage, and keep usage rights suspended. Refund and delivery terms are set out in the pilot agreement.'),
-        { ...text('how', '8. How we work', '**8.1 Direction and execution.** The client gives the objective, the product facts and the must-haves. The service provider owns the creative execution. Before each shoot the parties lock: the main objective, the products featured, the target audience, the core message, the response wanted, required brand and product facts, mandatory items, things to avoid, and any special needs for the shoot.\n\n**8.2 Flexibility on the day.** Once the direction is agreed, the team needs reasonable room on the ground to follow what is working.\n\n**8.3 Reviews and revisions.** Small edit-level changes such as text, trims, order and captions are part of the process. A new concept, format, set-up, new footage or a reshoot is discussed separately before it is started. The client sends feedback through one point of contact.\n\n**8.4 Delivery.** The agreed batch is finished in one planned cycle, not by changing direction between single pieces. Work can be shared at agreed checkpoints.\n\n**8.5 Results.** The service provider will make the content to get attention and the aim of the campaign. Results also depend on the platform, the audience, the account, ad spend, the offer and how the content is spread. So no particular views, reach, engagement, sales or return on ad spend can be promised.'), print: false },
-        text('law', '9. Confidentiality and law', `${CONFIDENTIALITY}\n\nThis agreement, with the completed brief, is the whole understanding between the parties for the trial and replaces earlier talks about it. The pilot is covered by a separate agreement.`),
-        { id: 'sign', heading: '10. Acceptance', kind: 'signatures', body: SIGNATURES },
+        text('payment', '7. PAYMENT TERMS', TRIAL_PAYMENT),
+        { ...text('how', '8. HOW WE WORK: CREATIVE AND PRODUCTION ALIGNMENT', TRIAL_HOW), print: false },
+        text('law', '9. CONFIDENTIALITY AND GOVERNING LAW', TRIAL_LAW),
+        { id: 'sign', heading: '10. ACCEPTANCE AND SIGNATURES', kind: 'signatures', body: "By signing below, the Parties confirm that they have read and agreed to the terms of this Agreement." },
       ],
     },
   },
@@ -12691,6 +13613,12 @@ export const CONTRACT_TEMPLATES: readonly ContractTemplate[] = [
 export const CONTRACT_TEMPLATE_BY_KEY: Record<string, ContractTemplate> = byKey(CONTRACT_TEMPLATES.map((t) => [t.key, t]));
 
 const BLANK = '__________';
+/** The line a typed agreement leaves for the client to write on by hand, as the paper does. */
+const WRITE_ON = '____________________________________';
+/** On a typed agreement the client's own details, while they are empty, are lines to write on (the paper's way), not left out. */
+export function writeOnKeys(doc: Pick<ContractDoc, 'style'>): ReadonlySet<string> | undefined {
+  return parseDocStyle(doc.style).layout === 'typed' ? new Set(CONTRACT_VARS.filter((v) => v.from !== 'profile' && !('optional' in v && v.optional)).map((v) => v.key)) : undefined;
+}
 /** Who reads the filled words: the owner (who also gets one notice of what is missing, `contractGapNote`) or the client. */
 export type DocAudience = 'owner' | 'client';
 const GONE = '\u0000';
@@ -12713,39 +13641,81 @@ function tidyPart(p: string): string | null {
  * editor's one-line previews). With one, a missing value never shows as underscores: its words go, and a line left holding only a label
  * ("Phone:") goes with them, so the client reads a clean page and the owner reads the same page plus one notice of what to add.
  */
-export function fillContractText(body: string, vars: Record<string, string>, audience?: DocAudience): string {
+/**
+ * The "either" forms, resolved before anything else: {{key|fallback}} is the value, or the fallback words when it is empty, and
+ * {{key?words with $|fallback}} is the words with the value in place of $, or the fallback. They keep a sentence in its own shape when a
+ * profile field is empty ("{{brandName?$ owns|Our team owns}} the creative execution."), so nothing is invented and nothing is left blank.
+ * An empty result takes one space before it with it, so "the {{formatName|}} format" reads "the format".
+ */
+const EITHER = /( ?)\{\{(\w+)(?:\?([^|{}]*))?\|([^{}]*)\}\}/g;
+function resolveEither(body: string, vars: Record<string, string>): string {
+  return body.replace(EITHER, (_m, space: string, k: string, when: string | undefined, fallback: string) => {
+    const v = (vars[k] ?? '').trim();
+    const out = v ? (when === undefined ? v : when.split('$').join(v)) : fallback;
+    return out ? `${space}${out}` : '';
+  });
+}
+/** A "### " subhead left with nothing under it before the next subhead or the end (its words were all missing) goes too. */
+function dropBareSubheads(text: string): string {
+  const lines = text.split('\n');
+  const keep = lines.filter((l, i) => {
+    if (!/^###\s/.test(l)) return true;
+    const next = lines.slice(i + 1).find((x) => x.trim());
+    return next !== undefined && !/^###\s/.test(next);
+  });
+  return keep.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+/**
+ * Fills {{name}} from the variables. Without an audience a missing one is a blank line to write on (the old behaviour, kept for the
+ * editor's one-line previews). With one, a missing value never shows as underscores: its words go, and a line left holding only a label
+ * ("Phone:") goes with them, so the client reads a clean page and the owner reads the same page plus one notice of what to add.
+ */
+export function fillContractText(body: string, vars: Record<string, string>, audience?: DocAudience, writeOn?: ReadonlySet<string>): string {
   const has = (k: string) => Boolean(vars[k] && vars[k]!.trim());
-  if (!audience) return body.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => (has(k) ? vars[k]!.trim() : BLANK));
-  const raw = body.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => (has(k) ? vars[k]!.trim() : GONE));
+  const either = resolveEither(body, vars);
+  if (!audience) return either.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => (has(k) ? vars[k]!.trim() : BLANK));
+  // `writeOn` names the blanks a typed agreement keeps as a line to write on (the client's name and address, as the paper has them).
+  const raw = either.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => (has(k) ? vars[k]!.trim() : writeOn?.has(k) ? WRITE_ON : GONE));
   if (!raw.includes(GONE)) return raw;
-  return raw
-    .split('\n')
-    .map((line) => {
-      if (!line.includes(GONE)) return line;
-      const parts = line.split(' | ').map(tidyPart).filter((x): x is string => x !== null);
-      return parts.length ? parts.join(' | ') : null;
-    })
-    .filter((l): l is string => l !== null)
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n');
+  return dropBareSubheads(
+    raw
+      .split('\n')
+      .map((line) => {
+        if (!line.includes(GONE)) return line;
+        const parts = line.split(' | ').map(tidyPart).filter((x): x is string => x !== null);
+        return parts.length ? parts.join(' | ') : null;
+      })
+      .filter((l): l is string => l !== null)
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n'),
+  );
 }
 
 /** Every variable a document names (in its sections and its brief) that has no value yet, once each, in the order of CONTRACT_VARS. */
 export function contractGaps(doc: Pick<ContractDoc, 'sections' | 'vars'>): { key: string; label: string; from: 'profile' | 'client' | 'typed' }[] {
   const named = new Set<string>();
+  const scan = (t: string | undefined) => {
+    for (const m of (t ?? '').matchAll(/\{\{(\w+)\}\}/g)) named.add(m[1]!);
+  };
   for (const s of doc.sections) {
-    for (const m of s.body.matchAll(/\{\{(\w+)\}\}/g)) named.add(m[1]!);
-    for (const q of s.questions ?? []) for (const m of q.label.matchAll(/\{\{(\w+)\}\}/g)) named.add(m[1]!);
+    scan(s.body);
+    scan(s.tail);
+    for (const q of s.questions ?? []) scan(q.label);
   }
-  return CONTRACT_VARS.filter((v) => named.has(v.key) && !(doc.vars[v.key] ?? '').trim()).map((v) => ({ key: v.key, label: v.label, from: v.from }));
+  // A line that is fine without its value (a second email) is never a gap.
+  return CONTRACT_VARS.filter((v) => !('optional' in v && v.optional) && named.has(v.key) && !(doc.vars[v.key] ?? '').trim()).map((v) => ({ key: v.key, label: v.label, from: v.from }));
 }
 
 /** The one owner-only notice a document carries in place of blanks: what is missing and where it is added once. Null when nothing is. */
 export function contractGapNote(doc: Pick<ContractDoc, 'sections' | 'vars'>): string | null {
   const gaps = contractGaps(doc);
-  if (!gaps.length) return null;
-  const of = (from: string) => gaps.filter((g) => g.from === from).map((g) => g.label.replace(/^Your /, '').toLowerCase());
+  // A price table with no rows is the owner's package table not set yet; the client's copy leaves the empty table out.
+  const noPackages = doc.sections.some((s) => s.kind === 'packages' && !(s.packages ?? []).length);
+  if (!gaps.length && !noPackages) return null;
+  // "Client address" reads as the client's address, "Client" as the client's name.
+  const of = (from: string) => gaps.filter((g) => g.from === from).map((g) => (g.label === 'Client' ? 'name' : g.label.replace(/^(Your|Client's|Client) /, '').toLowerCase()));
   const parts = [
+    noPackages ? 'Your packages are not set: add them once in Settings.' : '',
     of('profile').length ? `Your business details are not set (${of('profile').join(', ')}): add them once in Settings.` : '',
     of('client').length ? `The client's ${of('client').join(', ')} ${of('client').length === 1 ? 'is' : 'are'} not set: add ${of('client').length === 1 ? 'it' : 'them'} once on the client's page.` : '',
     of('typed').length ? `Still to fill in: ${of('typed').join(', ')}.` : '',
@@ -12758,6 +13728,9 @@ export interface ContractClientFacts {
   name: string;
   address: string;
   contactName: string;
+  /** The point of contact's designation, and the brand or brands for the work, when the client gave them (onboarding). */
+  contactTitle?: string;
+  brands?: string;
   channels?: string[];
   piecesPerMonth?: number;
   hoursPerMonth?: number;
@@ -12769,17 +13742,33 @@ export interface ContractClientFacts {
 /** The variables a new contract starts with, from the person's profile and the client's details. */
 export function contractVarsFor(profile: BusinessProfile, client: ContractClientFacts | null): Record<string, string> {
   const n = (v: number | undefined) => (typeof v === 'number' && v > 0 ? String(v) : '');
+  const t = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  const emails = (profile.emails ?? []).map(t).filter(Boolean);
+  const phones = (profile.phones ?? []).map(t).filter(Boolean);
+  const currency = client?.currency || 'INR';
   return {
     provider: profile.signerName,
     providerTitle: profile.signerTitle,
-    providerBusiness: profile.from.name,
-    providerAddress: profile.from.address,
-    providerEmail: profile.from.email,
-    providerPhone: profile.from.phone,
+    providerBusiness: t(profile.businessName) || profile.from.name,
+    providerAddress: t(profile.businessAddress) || profile.from.address,
+    providerEmail: emails[0] ?? profile.from.email,
+    providerEmail2: emails[1] ?? '',
+    providerPhone: phones[0] ?? profile.from.phone,
+    providerPhones: (phones.length ? phones : [profile.from.phone.trim()]).filter(Boolean).join(' | '),
+    providerBrand: t(profile.operatingUnder) || t(profile.brandName),
+    // "Founder, <brand>" in the signature block, as the agreement signs it.
+    // A designation typed whole ("Founder, Northlight Studio", as the settings field suggests) is kept as typed; a bare title gets the brand.
+    providerDesignation: profile.signerTitle.includes(',') ? profile.signerTitle.trim() : [profile.signerTitle.trim(), t(profile.brandName)].filter(Boolean).join(', '),
+    brandName: t(profile.brandName),
+    formatName: t(profile.formatName),
+    formatNameInline: t(profile.formatNameInline) || t(profile.formatName),
+    pastClients: t(profile.pastClients),
+    currencyWords: CURRENCY_WORDS[currency] ?? currency,
     client: client?.name ?? '',
     clientAddress: client?.address ?? '',
     clientContact: client?.contactName ?? '',
-    brands: client?.name ?? '',
+    clientTitle: client?.contactTitle ?? '',
+    brands: client?.brands?.trim() || client?.name || '',
     jurisdiction: profile.jurisdiction,
     pieces: n(client?.piecesPerMonth),
     channels: (client?.channels ?? []).filter(Boolean).join(', '),
@@ -12787,6 +13776,27 @@ export function contractVarsFor(profile: BusinessProfile, client: ContractClient
     revisions: typeof client?.revisionsPerPiece === 'number' ? String(client.revisionsPerPiece) : '',
     monthlyFee: client?.retainerCents && client.retainerCents > 0 ? money(client.retainerCents, client.currency || 'INR') : '',
   };
+}
+
+/** The packages section a new agreement takes from the owner's own package table, when the template brings none of its own. */
+export function withProfilePackages(sections: ContractSection[], profile: Pick<BusinessProfile, 'packages'>): ContractSection[] {
+  const pk = profile.packages;
+  if (!pk || !pk.rows.length) return sections;
+  return sections.map((s) =>
+    s.kind === 'packages' && !(s.packages ?? []).length
+      ? { ...s, packages: pk.rows.map((r) => ({ ...r })), extra: pk.block.units > 0 ? { ...pk.block } : undefined, unitName: (pk.unit || s.unitName || 'videos').toLowerCase() }
+      : s,
+  );
+}
+
+/**
+ * Everything a document's words are filled from: its own variables, plus what is worked out from the document itself: the currency in
+ * words and the worked example under the price table (the agreement's 6.1), so a fee changed in the table changes the example with it.
+ */
+export function docVars(doc: Pick<ContractDoc, 'vars' | 'sections' | 'currency'>): Record<string, string> {
+  const pk = doc.sections.find((s) => s.kind === 'packages' && (s.packages ?? []).length);
+  const example = pk ? packageExampleLine({ unit: pk.unitName || 'videos', rows: pk.packages ?? [], block: pk.extra ?? { units: 0, feeCents: 0 } }, doc.currency) : '';
+  return { ...doc.vars, currencyWords: (doc.vars.currencyWords ?? '').trim() || (CURRENCY_WORDS[doc.currency] ?? doc.currency), packageExample: example };
 }
 
 /** What each package costs a unit, in whole cents, and the price of n units counting blocks past the largest package. */
@@ -12819,6 +13829,8 @@ export function parseContractDoc(v: unknown): ContractDoc | null {
     const kind = oneOfList(s.kind, kinds, 'text');
     const section: ContractSection = { id, heading: cleanText(s.heading, 120), kind, body: cleanText(s.body, CONTRACT_TEXT_MAX) };
     if (typeof s.print === 'boolean') section.print = s.print;
+    const tail = cleanText(s.tail, CONTRACT_TEXT_MAX);
+    if (tail && kind !== 'text') section.tail = tail;
     if (kind === 'packages') {
       const ps = Array.isArray(s.packages) ? s.packages : [];
       section.packages = ps
@@ -12840,9 +13852,25 @@ export function parseContractDoc(v: unknown): ContractDoc | null {
           let qid = cleanText(x.id, 30).replace(/[^a-zA-Z0-9_-]/g, '') || uid('q', j);
           while (qseen.has(qid)) qid = `${qid}x`;
           qseen.add(qid);
-          return { id: qid, label: cleanText(x.label, 400), options: (Array.isArray(x.options) ? x.options : []).map((t) => cleanText(t, 120)).filter(Boolean).slice(0, 12), multi: x.multi === true, other: x.other === true, text: x.text === true };
+          const out: ContractQuestion = { id: qid, label: cleanText(x.label, 400), options: (Array.isArray(x.options) ? x.options : []).map((t) => cleanText(t, 120)).filter(Boolean).slice(0, 12), multi: x.multi === true, other: x.other === true, text: x.text === true };
+          const heading = cleanText(x.heading, 120);
+          const intro = cleanText(x.intro, 400);
+          const group = cleanText(x.group, 120);
+          const answerLabel = cleanText(x.answerLabel, 60);
+          const fields = (Array.isArray(x.fields) ? x.fields : []).map((t) => cleanText(t, 160)).filter(Boolean).slice(0, MAX_CONTRACT_FIELDS);
+          if (heading) out.heading = heading;
+          if (intro) out.intro = intro;
+          if (group) out.group = group;
+          if (answerLabel) out.answerLabel = answerLabel;
+          if (fields.length) out.fields = [...new Set(fields)];
+          const l = x.links && typeof x.links === 'object' ? (x.links as Record<string, unknown>) : null;
+          if (l) {
+            const max = Math.max(1, Math.min(MAX_CONTRACT_LINKS, Math.round(Number(l.max)) || 5));
+            out.links = { min: Math.max(0, Math.min(max, Math.round(Number(l.min)) || 0)), max };
+          }
+          return out;
         })
-        .filter((q) => q.label);
+        .filter((q) => q.label || q.heading || q.group || (q.fields ?? []).length);
     }
     clean.push(section);
   });
@@ -12927,10 +13955,10 @@ export const INVOICE_STARTERS: readonly { key: string; name: string; blurb: stri
   { key: 'standard', name: 'Standard invoice', blurb: 'One line to fill in.', title: 'Invoice', footnote: '', items: [{ description: 'Services', quantity: 1, unitCents: 0 }] },
   {
     key: 'advance',
-    name: 'Advance invoice',
+    name: 'Advance Invoice',
     blurb: 'Paid before the work starts, with a line on TDS.',
-    title: 'Advance invoice',
-    footnote: '*Additional % adjusted on the total invoice amount applies for TDS deducted, to be borne by the company as per the agreement terms.',
+    title: 'Advance Invoice',
+    footnote: tdsGrossupNote(0),
     items: [{ description: 'Package', quantity: 1, unitCents: 0 }],
   },
   { key: 'retainer', name: 'Monthly retainer', blurb: 'A fixed fee for the month.', title: 'Invoice', footnote: '', items: [{ description: 'Monthly retainer', quantity: 1, unitCents: 0 }] },
@@ -12972,6 +14000,10 @@ export const DOC_ACCENTS = ['ink', 'navy', 'green', 'plum', 'clay', 'slate'] as 
 export const DOC_PAGES = ['a4', 'letter'] as const;
 export const DOC_MARGINS = ['narrow', 'normal', 'wide'] as const;
 export const DOC_SIGN_LAYOUTS = ['side', 'stacked'] as const;
+/** How a page is laid out: `legal` (serif, a centred small-caps title, a reference and date, a letterhead) or `typed`, the way a typed
+ * agreement looks (left-aligned bold capitals, headings as typed, a hairline between sections, no letterhead). */
+export const DOC_LAYOUTS = ['legal', 'typed'] as const;
+export type DocLayout = (typeof DOC_LAYOUTS)[number];
 export type DocHeading = (typeof DOC_HEADINGS)[number];
 export type DocFont = (typeof DOC_FONTS)[number];
 export type DocSize = (typeof DOC_SIZES)[number];
@@ -12987,6 +14019,7 @@ export const DOC_STYLE_NAMES = {
   page: { a4: 'A4', letter: 'Letter' },
   margin: { narrow: 'Narrow', normal: 'Normal', wide: 'Wide' },
   signLayout: { side: 'Side by side', stacked: 'Stacked' },
+  layout: { legal: 'Legal', typed: 'Typed' },
 } as const;
 export const DOC_FOOTER_MAX = 200;
 /** A picture the person uploaded to use as a logo: the id of the stored file, never a web address. */
@@ -13008,8 +14041,13 @@ export interface DocStyle {
   /** "Page 1 of 3" at the foot of every page. */
   pageNumbers: boolean;
   signLayout: DocSignLayout;
+  /** Older documents have the legal layout. */
+  layout?: DocLayout;
 }
-export const defaultDocStyle = (): DocStyle => ({ letterhead: true, logo: '', heading: 'numbered', font: 'serif', size: 'normal', accent: 'ink', page: 'a4', margin: 'normal', footer: '', pageNumbers: true, signLayout: 'side' });
+/** A function declaration, not a const: profile defaults earlier in this file call it while the module loads. */
+export function defaultDocStyle(): DocStyle {
+  return { letterhead: true, logo: '', heading: 'numbered', font: 'serif', size: 'normal', accent: 'ink', page: 'a4', margin: 'normal', footer: '', pageNumbers: true, signLayout: 'side', layout: 'legal' };
+}
 
 /** The one reader of a document's style: anything unknown falls back to `base` (the default unless given), so a stored value is always a key we know. */
 export function parseDocStyle(v: unknown, base: DocStyle = defaultDocStyle()): DocStyle {
@@ -13027,11 +14065,12 @@ export function parseDocStyle(v: unknown, base: DocStyle = defaultDocStyle()): D
     footer: 'footer' in o ? cleanText(o.footer, DOC_FOOTER_MAX) : base.footer,
     pageNumbers: typeof o.pageNumbers === 'boolean' ? o.pageNumbers : base.pageNumbers,
     signLayout: oneOfList(o.signLayout, DOC_SIGN_LAYOUTS, base.signLayout),
+    layout: oneOfList(o.layout, DOC_LAYOUTS, base.layout ?? 'legal'),
   };
 }
 /** One plain line on a style, for its summary card. */
 export function docStyleSummary(s: DocStyle): string {
-  return `${DOC_STYLE_NAMES.font[s.font]}, ${DOC_STYLE_NAMES.size[s.size].toLowerCase()} type, ${DOC_STYLE_NAMES.page[s.page]}, ${s.heading === 'numbered' ? 'numbered' : 'plain'} headings${s.letterhead ? '' : ', no letterhead'}`;
+  return `${s.layout === 'typed' ? 'Typed, ' : ''}${DOC_STYLE_NAMES.font[s.font]}, ${DOC_STYLE_NAMES.size[s.size].toLowerCase()} type, ${DOC_STYLE_NAMES.page[s.page]}, ${s.heading === 'numbered' ? 'numbered' : 'plain'} headings${s.letterhead ? '' : ', no letterhead'}`;
 }
 
 // ---- the words of a document
@@ -13080,14 +14119,20 @@ export function contractParties(doc: Pick<ContractDoc, 'vars'>): DocParty[] {
 /** An agreement built from a template already has a Parties section, so the page does not draw the parties table as well. */
 export const hasPartiesSection = (doc: Pick<ContractDoc, 'sections'>): boolean => doc.sections.some((s) => s.id === 'parties');
 
-/** One section's words as plain text: blanks filled, **bold** marks removed, bullets kept as "- ". */
-export function plainWords(body: string, vars: Record<string, string>, audience: DocAudience = 'client'): string {
-  return fillContractText(body, vars, audience)
-    .replace(/\r\n?/g, '\n')
+/** A line with its marks taken off: a "### " subhead, **bold** and a "* " bullet. */
+const unmark = (line: string): string =>
+  line
+    .replace(/^###\s+/, '')
     .replace(/\*\*(.+?)\*\*/g, '$1')
     .replace(/\*\*/g, '')
+    .replace(/^\*\s/, '- ')
+    .trimEnd();
+/** One section's words as plain text: blanks filled, subheads and **bold** marks removed, bullets kept as "- ". */
+export function plainWords(body: string, vars: Record<string, string>, audience: DocAudience = 'client', writeOn?: ReadonlySet<string>): string {
+  return fillContractText(body, vars, audience, writeOn)
+    .replace(/\r\n?/g, '\n')
     .split('\n')
-    .map((l) => l.replace(/^\*\s/, '- ').trimEnd())
+    .map(unmark)
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
@@ -13104,15 +14149,34 @@ export interface DocTextExtras {
   audience?: DocAudience;
 }
 
+const hasOwn = (o: object, k: string): boolean => Object.prototype.hasOwnProperty.call(o, k);
+const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+/** "videos" read as one: "video". */
+export const unitOne = (unit: string): string => (/s$/i.test(unit) ? unit.slice(0, -1) : unit);
+
+/** The rows of a price table as the page draws them: the header, a row per package, and the row for blocks past the largest. */
+export function packageRows(s: Pick<ContractSection, 'packages' | 'extra' | 'unitName'>, currency: string): { head: string[]; rows: string[][] } {
+  const unit = (s.unitName || 'pieces').toLowerCase();
+  const fee = (c: number) => (c > 0 ? money(c, currency) : '—');
+  const top = Math.max(0, ...(s.packages ?? []).map((p) => p.units));
+  const rows = (s.packages ?? []).map((p) => [p.name, String(p.units), fee(p.feeCents), fee(packageRate(p))]);
+  if (s.extra && s.extra.units > 0) rows.push([`Additional ${unit} beyond ${top}`, `Each block of ${s.extra.units}`, s.extra.feeCents > 0 ? `${money(s.extra.feeCents, currency)} per block` : '—', fee(packageRate({ name: '', units: s.extra.units, feeCents: s.extra.feeCents }))]);
+  return { head: ['Package', capital(unit), 'Package fee', `Effective rate per ${unitOne(unit)}`], rows };
+}
+
 /**
- * An agreement (or any sectioned document) as clean plain text, the way it goes into an email: the title, the parties, numbered sections
- * with a blank line between them, packages as lines, the brief with its answers, and the signature lines. No markup characters.
+ * An agreement (or any sectioned document) as clean plain text, the way it goes into an email and the way the page prints: the title,
+ * the parties, the sections with a blank line between them, the price table as lines, the brief with its answers, and the signature
+ * lines. A typed layout keeps the title and the headings exactly as typed; the legal layout numbers them. No markup characters.
  */
 export function contractAsText(doc: ContractDoc, extras: DocTextExtras = {}): string {
   const style = parseDocStyle(doc.style);
-  const out: string[] = [doc.title.toUpperCase()];
+  const typed = style.layout === 'typed';
+  const vars = docVars(doc);
+  const blanks = writeOnKeys(doc);
+  const out: string[] = [typed ? doc.title : doc.title.toUpperCase()];
   if (doc.subtitle) out.push(doc.subtitle);
-  const meta = [extras.reference ? `Reference: ${extras.reference}` : '', extras.date ? `Date: ${docDate(extras.date)}` : ''].filter(Boolean);
+  const meta = typed ? [] : [extras.reference ? `Reference: ${extras.reference}` : '', extras.date ? `Date: ${docDate(extras.date)}` : ''].filter(Boolean);
   if (meta.length) out.push(meta.join('   '));
   const audience = extras.audience ?? 'client';
   const gapNote = audience === 'owner' ? contractGapNote(doc) : null;
@@ -13121,42 +14185,49 @@ export function contractAsText(doc: ContractDoc, extras: DocTextExtras = {}): st
   for (const p of parties) out.push('', `${p.label}:`, ...p.lines);
   let n = 0;
   for (const s of doc.sections) {
-    const words = plainWords(s.body, doc.vars, audience);
+    const words = plainWords(s.body, vars, audience, blanks);
     // A part with nothing written in it yet is the owner's to write; the client's copy leaves it out.
     if (s.kind === 'text' && !words && audience === 'client') continue;
-    n += 1;
-    out.push('', docHeadingText(style, s.heading || 'Section', n).toUpperCase());
+    if (s.heading.trim()) {
+      n += 1;
+      out.push('', typed ? s.heading.trim() : docHeadingText(style, s.heading, n).toUpperCase());
+    }
     if (words) out.push('', words);
     else if (s.kind === 'text') out.push('', 'Not written yet.');
-    if (s.kind === 'packages') {
-      const unit = s.unitName || 'pieces';
-      const one = unit.endsWith('s') ? unit.slice(0, -1) : unit;
-      const fee = (c: number) => (c > 0 ? money(c, doc.currency) : 'to be agreed');
-      out.push('');
-      for (const p of s.packages ?? []) out.push(`- ${p.name}: ${p.units} ${unit}, ${fee(p.feeCents)}${p.feeCents > 0 && p.units > 0 ? ` (${money(packageRate(p), doc.currency)} a ${one})` : ''}`);
-      if (s.extra && s.extra.units > 0) out.push(`- Each further block of ${s.extra.units} ${unit}: ${fee(s.extra.feeCents)}`);
+    if (s.kind === 'packages' && (s.packages ?? []).length) {
+      const t = packageRows(s, doc.currency);
+      out.push('', t.head.join(' | '), ...t.rows.map((r) => r.join(' | ')));
     }
     if (s.kind === 'brief') {
       for (const q of s.questions ?? []) {
-        const a = extras.answers?.[q.id];
-        out.push('', plainWords(q.label, doc.vars, audience));
-        for (const o of q.options) out.push(`  [${a?.picked.includes(o) ? 'x' : ' '}] ${o}`);
-        if (q.other) out.push(`  Other: ${a?.other ?? ''}`.trimEnd());
-        if (q.text) out.push(`  Answer: ${a?.text ?? ''}`.trimEnd());
+        const a = extras.answers && hasOwn(extras.answers, q.id) ? extras.answers[q.id] : undefined;
+        if (q.heading) out.push('', q.heading);
+        if (q.intro) out.push('', plainWords(q.intro, vars, audience));
+        if (q.group) out.push('', q.group);
+        if (q.label) out.push('', plainWords(q.label, vars, audience));
+        for (const o of q.options) out.push(`[${a?.picked.includes(o) ? 'x' : ' '}] ${o}`);
+        if (q.other) out.push(`[${a?.other ? 'x' : ' '}] Other: ${a?.other ?? ''}`.trimEnd());
+        if (q.text) out.push(`${q.answerLabel || 'Answer:'} ${a?.text ?? ''}`.trimEnd());
+        for (const f of q.fields ?? []) out.push(`- ${f}: ${a?.fields && hasOwn(a.fields, f) ? a.fields[f] : ''}`.trimEnd());
+        (a?.links ?? []).forEach((l, i) => out.push(`${i + 1}. ${l}`));
       }
+    }
+    if (s.tail) {
+      const tail = plainWords(s.tail, vars, audience);
+      if (tail) out.push('', tail);
     }
     if (s.kind === 'signatures') {
       const acc = extras.acceptance;
       const v = doc.vars;
       out.push(
         '',
-        'For the service provider',
+        'For the Service Provider:',
         `Name: ${(v.provider ?? '').trim()}`.trimEnd(),
-        `Designation: ${(v.providerTitle ?? '').trim()}`.trimEnd(),
+        `Designation: ${((v.providerDesignation ?? '').trim() || (v.providerTitle ?? '').trim())}`.trimEnd(),
         'Signature: ____________________',
         'Date: ____________________',
         '',
-        'For the client',
+        'For the Client:',
         `Name: ${acc?.name ?? ''}`.trimEnd(),
         `Designation: ${acc?.title ?? ''}`.trimEnd(),
         `Signature: ${acc ? acc.name : '____________________'}`,
@@ -13166,6 +14237,127 @@ export function contractAsText(doc: ContractDoc, extras: DocTextExtras = {}): st
     }
   }
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// ---- the words of a section as blocks, for editing them in place on the page
+
+/** A piece of a block: plain words, a variable ({{key}}, or an either form with its fallback), or **bold** words. */
+export type BodySegment = string | { var: string; when?: string; fallback?: string } | { bold: string };
+/** One block of a section's words: a paragraph (its lines kept), a bullet, a "### " subhead or a whole bold line. */
+export interface BodyBlock {
+  kind: 'p' | 'li' | 'h3' | 'strong';
+  segments: BodySegment[];
+  /** The exact line breaks before it (one between bullets, a blank line otherwise), so a body reads back byte for byte. */
+  sep: string;
+  /** Unused by the built-ins: a lead in bold is a `{ bold }` segment. Kept for callers that set one. */
+  lead?: string;
+}
+const SEG_RE = /(\*\*[^*\n]+?\*\*|\{\{\w+(?:\?[^|{}]*)?(?:\|[^{}]*)?\}\})/;
+function segmentsOf(text: string): BodySegment[] {
+  const out: BodySegment[] = [];
+  for (const part of text.split(SEG_RE)) {
+    if (!part) continue;
+    const b = /^\*\*([^*\n]+?)\*\*$/.exec(part);
+    if (b) {
+      out.push({ bold: b[1]! });
+      continue;
+    }
+    const v = /^\{\{(\w+)(?:\?([^|{}]*))?(?:\|([^{}]*))?\}\}$/.exec(part);
+    if (v) {
+      const seg: { var: string; when?: string; fallback?: string } = { var: v[1]! };
+      if (v[2] !== undefined) seg.when = v[2];
+      if (v[3] !== undefined) seg.fallback = v[3];
+      out.push(seg);
+      continue;
+    }
+    out.push(part);
+  }
+  return out;
+}
+/** A segment back to its words. */
+export function segmentText(seg: BodySegment): string {
+  if (typeof seg === 'string') return seg;
+  if ('bold' in seg) return `**${seg.bold}**`;
+  return `{{${seg.var}${seg.when !== undefined ? `?${seg.when}` : ''}${seg.fallback !== undefined ? `|${seg.fallback}` : ''}}}`;
+}
+/** A section's words as blocks. `joinBodyBlocks` gives the same words back, byte for byte, for any body that has no blank lines at its ends. */
+export function parseBodyBlocks(body: string): BodyBlock[] {
+  const blocks: BodyBlock[] = [];
+  let blanks: string[] = [];
+  let cur: { kind: BodyBlock['kind']; raw: string; sep: string } | null = null;
+  const done: { kind: BodyBlock['kind']; raw: string; sep: string }[] = [];
+  const sepFor = (): string => (done.length || cur ? '\n' : '') + blanks.map((b) => `${b}\n`).join('');
+  for (const line of body.split('\n')) {
+    if (!line.trim()) {
+      if (cur) done.push(cur);
+      cur = null;
+      blanks.push(line);
+      continue;
+    }
+    const kind: BodyBlock['kind'] = /^###\s/.test(line) ? 'h3' : /^- /.test(line) ? 'li' : /^\*\*[^*\n]+\*\*$/.test(line.trim()) && line === line.trim() ? 'strong' : 'p';
+    if (kind === 'p' && cur?.kind === 'p' && blanks.length === 0) {
+      cur.raw += `\n${line}`;
+      continue;
+    }
+    const sep = sepFor();
+    if (cur) done.push(cur);
+    cur = { kind, raw: line, sep };
+    blanks = [];
+  }
+  if (cur) done.push(cur);
+  for (const d of done) {
+    const inner = d.kind === 'h3' ? d.raw.replace(/^###\s/, '') : d.kind === 'li' ? d.raw.slice(2) : d.kind === 'strong' ? d.raw.slice(2, -2) : d.raw;
+    blocks.push({ kind: d.kind, segments: segmentsOf(inner), sep: d.sep });
+  }
+  return blocks;
+}
+const PREFIX: Record<BodyBlock['kind'], [string, string]> = { p: ['', ''], li: ['- ', ''], h3: ['### ', ''], strong: ['**', '**'] };
+/** Blocks back to a section's words. A block with no `sep` (a new one) gets one line break after a bullet before a bullet, else a blank line. */
+export function joinBodyBlocks(blocks: readonly BodyBlock[]): string {
+  return blocks
+    .map((b, i) => {
+      const prev = blocks[i - 1];
+      const sep = i === 0 ? '' : b.sep && b.sep.includes('\n') ? b.sep : b.kind === 'li' && prev?.kind === 'li' ? '\n' : '\n\n';
+      const [a, z] = PREFIX[b.kind];
+      return `${sep}${b.lead ? `**${b.lead}** ` : ''}${a}${b.segments.map(segmentText).join('')}${z}`;
+    })
+    .join('');
+}
+
+/** A link a client may give: http or https, a real host, no spaces and no user name or password in it. */
+function linkOk(s: string): boolean {
+  return s.length <= 500 && /^https?:\/\/([a-z0-9-]+\.)+[a-z]{2,}(:\d{2,5})?([/?#][^\s]*)?$/i.test(s);
+}
+/**
+ * The client's answers to a document's questions, cleaned: only questions the document has, only options it offered (one unless it takes
+ * several), "Other" and a written answer only where asked, a field only where the question names it, and links only http or https, at most
+ * the question's own number. Anything else is dropped. The one reader of answers, on every route that takes them.
+ */
+export function cleanContractAnswers(doc: Pick<ContractDoc, 'sections'>, raw: unknown): Record<string, ContractAnswer> {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const out: Record<string, ContractAnswer> = {};
+  const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+  for (const section of doc.sections) {
+    for (const q of section.questions ?? []) {
+      const a = (hasOwn(r, q.id) && r[q.id] && typeof r[q.id] === 'object' ? r[q.id] : {}) as Record<string, unknown>;
+      const picked = [...new Set((Array.isArray(a.picked) ? a.picked : []).filter((x): x is string => typeof x === 'string' && q.options.includes(x)))].slice(0, q.multi ? q.options.length : 1);
+      const answer: ContractAnswer = { picked, other: q.other ? str(a.other, 200) : '', text: q.text ? str(a.text, 1500) : '' };
+      if ((q.fields ?? []).length) {
+        const given = (a.fields && typeof a.fields === 'object' ? a.fields : {}) as Record<string, unknown>;
+        const fields: Record<string, string> = {};
+        for (const f of q.fields ?? []) if (hasOwn(given, f)) fields[f] = str(given[f], 300);
+        answer.fields = fields;
+      }
+      if (q.links) {
+        answer.links = (Array.isArray(a.links) ? a.links : [])
+          .map((l) => str(l, 500))
+          .filter(linkOk)
+          .slice(0, q.links.max);
+      }
+      out[q.id] = answer;
+    }
+  }
+  return out;
 }
 
 /** What invoiceAsText needs from an invoice. */
@@ -13183,24 +14375,23 @@ export function invoiceAsText(inv: InvoiceTextSource, totals?: InvoiceTotals): s
   const out: string[] = [`${(d.title || 'Invoice').toUpperCase()} ${inv.number}`.trim()];
   out.push(`Date: ${docDate(inv.issueDate)}`);
   if (inv.dueDate) out.push(`Payment due by: ${docDate(inv.dueDate)}`);
-  out.push('', 'From:', ...party(d.from, inv.ownerName), '', 'Billed to:', ...party(d.to, inv.clientName), '', 'Items:');
-  inv.items.forEach((i, n) => out.push(`${n + 1}. ${i.description}: ${i.quantity} x ${money(i.unitCents, cur)} = ${money(i.quantity * i.unitCents, cur)}`));
+  out.push('', 'From:', ...party(d.from, inv.ownerName), '', 'Billed To:', ...party(d.to, inv.clientName), '', 'Items:');
+  inv.items.forEach((i, n) => out.push(`${n + 1}. ${i.description}: ${invoiceQty(i.quantity, d.qtyPad)} x ${money(i.unitCents, cur)} = ${money(i.quantity * i.unitCents, cur)}`));
   out.push('', `Subtotal: ${money(t.subtotal, cur)}`);
   if (t.discount > 0) out.push(`${d.discountMode === 'percent' ? `Discount (${d.discountValue / 100}%)` : 'Discount'}: -${money(t.discount, cur)}`);
   if (d.gstBps > 0 || t.gst > 0) {
     if (d.gstSplit) {
       out.push(`CGST (${d.gstBps / 200}%): ${money(t.cgst, cur)}`, `SGST (${d.gstBps / 200}%): ${money(t.sgst, cur)}`);
-    } else out.push(`GST (${d.gstBps / 100}%): ${money(t.gst, cur)}`);
+    } else out.push(`${cur === 'INR' ? 'IGST' : 'GST'} (${d.gstBps / 100}%): ${money(t.gst, cur)}`); // one rate, not split: IGST, for a client in another state
   }
   if (d.tdsMode === 'grossup') out.push(`TDS adjusted: ${money(t.tdsAdjusted, cur)}`);
   out.push(`Total: ${money(t.total, cur)}`);
-  if (d.show.words) out.push(`Total amount in words: ${amountInWords(t.total, cur)}`);
+  if (d.show.words) out.push(`TOTAL AMOUNT IN WORDS : ${amountInWords(t.total, cur)}`);
   if ((d.tdsMode === 'show' || d.tdsMode === 'grossup') && t.tdsDeducted > 0) out.push(`TDS to deduct (${d.tdsBps / 100}%): -${money(t.tdsDeducted, cur)}`, `To pay after TDS: ${money(t.netReceivable, cur)}`);
-  if (d.tdsMode === 'grossup' && d.tdsBps > 0) out.push('', tdsGrossupNote(d.tdsBps));
-  const bank = [d.bank.bankName && `Bank name: ${d.bank.bankName}`, d.bank.holder && `Account holder: ${d.bank.holder}`, d.bank.account && `Account number: ${d.bank.account}`, d.bank.ifsc && `IFSC code: ${d.bank.ifsc}`, d.bank.upi && `UPI details: ${d.bank.upi}`].filter((x): x is string => Boolean(x));
+  const bank = [d.bank.bankName && `Bank Name: ${d.bank.bankName}`, d.bank.holder && `Account holder: ${d.bank.holder}`, d.bank.account && `Account number: ${d.bank.account}`, d.bank.ifsc && `IFSC code: ${d.bank.ifsc}`, d.bank.upi && `UPI Details: ${d.bank.upi}`].filter((x): x is string => Boolean(x));
   if (bank.length) out.push('', 'Bank account details:', ...bank);
   if (inv.note.trim()) out.push('', inv.note.trim());
-  if (d.footnote.trim()) out.push('', d.footnote.trim());
+  for (const line of invoiceFootnote(d)) out.push('', line);
   if (d.footer.trim()) out.push('', d.footer.trim());
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
@@ -13371,11 +14562,13 @@ export function monthlyReportDoc(f: MonthlyReportFacts): ContractDoc {
 const TRIAL = CONTRACT_TEMPLATE_BY_KEY.trial?.doc.sections ?? [];
 const trialPart = (id: string, heading: string): ContractSection => {
   const s = TRIAL.find((x) => x.id === id);
-  // The trial agreement points to its own section numbers; on this page they point to the parts named here.
+  // The trial agreement points to its own section numbers; on this page they point to the parts named here, and its numbered subheads
+  // ("8.1 What We Are Building") lose the numbers that belong to the agreement.
   const body = (s?.body ?? '')
-    .replace('as in section 8', 'as under "How we work" below')
-    .replace('from section 6', 'from the packages in the pilot agreement')
-    .replace('the items in section 8 first. The brief in section 3 is', 'the items under "How we work" below first. The trial brief is');
+    .replace('as described in Section 8.12', 'as described under "How we work" below')
+    .replace('from Section 6', 'from the packages in the pilot agreement')
+    .replace('the items listed in Section 8.11. The completed brief in Section 3 is', 'the items listed under "How we work" below. The completed trial brief is')
+    .replace(/^### \d+(\.\d+)*\s+/gm, '### ');
   return sec(id, heading, body);
 };
 
@@ -13919,6 +15112,7 @@ export const RETENTION: readonly RetentionRule[] = [
   { category: 'Your journal and wellbeing logs', keep: 'Until you delete an entry or your account', why: 'Only you can read them.' },
   { category: 'Sign-in sessions', keep: 'Until you sign out, you pass the device limit, or thirty days after you were signed out by it', why: 'To keep you signed in, and to say why you were signed out.' },
   { category: 'A client\'s unlock of an Agency link that has a password (a random token kept only as a hash)', keep: 'Twelve hours, or until the owner changes the password', why: 'So a client does not type the password on every page.' },
+  { category: 'A client\'s ask for a new Agency link password (the day, and a short reason if they gave one)', keep: 'Until the owner sets a new one or dismisses it, then ninety days', why: 'So the owner knows the link may be at risk.' },
   { category: 'Password reset links', keep: 'Thirty minutes to use; the used or expired row is removed within a week', why: 'Safety.' },
   { category: 'The app\'s own log (changes, refusals, errors, who did it)', keep: 'Thirty days', why: 'To find and fix problems and to spot abuse. Never holds what you wrote.' },
   { category: 'Emails we sent you (receipts, resets)', keep: 'Ninety days in the outbox, then deleted', why: 'To show what was sent if something goes wrong.' },
@@ -13954,7 +15148,7 @@ export const SUBPROCESSORS: readonly Subprocessor[] = [
 ];
 
 /** The days after which a thing is removed by the daily tidy-up. One list, read by the cron. */
-export const RETENTION_DAYS = { outbox: 90, webhooks: 365, clicks: 396, resets: 7, requests: 1095, notices: 1095, channelLines: 365 } as const;
+export const RETENTION_DAYS = { outbox: 90, webhooks: 365, clicks: 396, resets: 7, requests: 1095, notices: 1095, channelLines: 365, passwordRequests: 90 } as const;
 
 /** What the business that runs kreators.app wants shown on the contact page and in the copyright notice process. Every field is set by the owner, never in code. */
 export interface BusinessInfo {
@@ -13972,4 +15166,68 @@ export interface BusinessInfo {
   dmcaAddress: string;
   dmcaEmail: string;
   dmcaRegistered: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// The year of activity on Profile ("Your year", GET /me/activity): a heatmap of what a person did each day, counts only.
+// Written here, not imported, because the barrel has no runtime imports (the smoke scripts load it straight from TypeScript).
+
+/** How many days the grid covers: 53 weeks, ending on the person's own today. */
+export const ACTIVITY_DAYS = 371;
+
+/** One day on the grid: the xp earned and the person's own tasks ticked, on their own calendar day. */
+export interface ActivityDay {
+  /** YYYY-MM-DD, the person's day. */
+  day: string;
+  xp: number;
+  ticks: number;
+}
+
+/** What GET /me/activity answers: every day oldest first, ending on `end`, with the totals and the busiest day of each count. */
+export interface ActivityYear {
+  end: string;
+  days: ActivityDay[];
+  totals: { xp: number; ticks: number };
+  max: { xp: number; ticks: number };
+}
+
+/** The two counts the grid can show. */
+export type ActivityMetric = 'xp' | 'ticks';
+
+/**
+ * The shade of a day, 0 to 4: 0 only for nothing, then the quarter of the busiest day it reaches, so the busiest day is always 4.
+ * Whole numbers only (`ceil(count * 4 / max)`).
+ */
+export function activityLevel(count: number, max: number): 0 | 1 | 2 | 3 | 4 {
+  if (!(count > 0) || !(max > 0)) return 0;
+  const level = Math.ceil((Math.min(count, max) * 4) / max);
+  return Math.max(1, Math.min(4, level)) as 1 | 2 | 3 | 4;
+}
+
+/** 1 for Monday to 7 for Sunday, for a YYYY-MM-DD day. */
+function weekdayOf(day: string): number {
+  const [y, m, d] = day.split('-').map(Number);
+  const w = new Date(Date.UTC(y ?? 2000, (m ?? 1) - 1, d ?? 1)).getUTCDay();
+  return w === 0 ? 7 : w;
+}
+
+/**
+ * The days laid out as weeks, Monday first like `monthGrid`: each column is seven slots from Monday to Sunday. The first column is padded
+ * with null before the first day and the last one after the last day, so a year that starts mid-week still lines up.
+ */
+export function activityWeeks<T extends { day: string }>(days: readonly T[]): (T | null)[][] {
+  if (days.length === 0) return [];
+  const lead = weekdayOf(days[0]!.day) - 1;
+  const slots: (T | null)[] = [...Array.from({ length: lead }, () => null), ...days];
+  while (slots.length % 7 !== 0) slots.push(null);
+  const weeks: (T | null)[][] = [];
+  for (let i = 0; i < slots.length; i += 7) weeks.push(slots.slice(i, i + 7));
+  return weeks;
+}
+
+/** The days from `end` back, oldest first: the empty grid the server fills in. */
+export function activityRange(end: string, count = ACTIVITY_DAYS): string[] {
+  const [y, m, d] = end.split('-').map(Number);
+  const base = Date.UTC(y ?? 2000, (m ?? 1) - 1, d ?? 1);
+  return Array.from({ length: count }, (_, i) => new Date(base - (count - 1 - i) * 86_400_000).toISOString().slice(0, 10));
 }

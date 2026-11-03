@@ -1,4 +1,4 @@
-import { BADGE_META, COACH_SHARE_META, COACH_SHARE_PARTS, MAX_COACHES, type CoachLink, type CoachSharePart } from '@kreators/shared';
+import { BADGE_META, COACH_SHARE_META, COACH_SHARE_PARTS, MAX_COACHES, type CoachLink, type CoachSharePart, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -11,7 +11,7 @@ import { RoleBadge } from './RoleBadge';
 import { Sheet } from './Sheet';
 import { Toggle } from './Toggle';
 
-const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+const day = (iso: string) => new Date(iso).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
 
 /** A person in a coaching list: the first letter of their name, with their badge on it. */
 export function CoachFace({ name, badge, size = 40 }: { name: string; badge: CoachLink['coach']['badge']; size?: number }) {
@@ -56,7 +56,7 @@ export function MyCoachSection({ id = 'coach', title = 'Your life coach', inCoac
       </h2>
       {!inCoaching && (
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          A life coach is someone the team chose; their badge says Life coach. They see only the parts you switch on, never your journal, and you can end it any time.
+          A coach the team chose sees only what you switch on, never your journal. End it any time.
         </p>
       )}
       {q.data && links.length === 0 && (
@@ -129,7 +129,7 @@ export function MyCoachSection({ id = 'coach', title = 'Your life coach', inCoac
           {error instanceof Error ? error.message : 'That did not work. Check your connection and try again.'}
         </p>
       )}
-      <Nudge className="mt-xs" text={`Up to ${MAX_COACHES} coaches at once. Every ask, yes, note and task change is in the change log ${inCoaching ? 'further down this page' : 'under Coaching'}.`} />
+      <Nudge className="mt-xs" text={`Up to ${MAX_COACHES} coaches at once. Every change is logged ${inCoaching ? 'further down this page' : 'under Coaching'}.`} />
       <Sheet open={Boolean(ending)} onClose={() => setEnding(null)} title={`End coaching with ${ending?.coach.name ?? 'your coach'}?`}>
         <p className="m-0 text-[16px] font-semibold">They stop seeing your progress at once and are told. Their notes and the change log stay with you.</p>
         <div className="mt-md flex flex-col gap-xs">

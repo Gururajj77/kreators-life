@@ -1,4 +1,4 @@
-import { bountyPayout, detectPlatform, SOCIAL_PLATFORM_META, type Bounty, type BountySubmission } from '@kreators/shared';
+import { bountyPayout, detectPlatform, SOCIAL_PLATFORM_META, type Bounty, type BountySubmission, LOCALE, formatCount } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -22,7 +22,7 @@ import { IconTag } from '../components/FactTag';
 type Rule = Pick<Bounty, 'ratePerThousand' | 'maxPayoutPoints' | 'minViews'>;
 
 const day = shortDate;
-const n = (v: number) => v.toLocaleString();
+const n = (v: number) => formatCount(v);
 
 
 
@@ -98,7 +98,7 @@ function ReviewBox({ s, rule, reviewer, finance, onDone }: { s: BountySubmission
             .slice(0, 6)
             .map((m) => (
               <li key={m.id} className="text-[12px] font-bold text-ink-soft">
-                {new Date(m.fetchedAt).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: {n(m.views)} views, {n(m.likes + m.comments + m.shares)} engagement, {m.source === 'auto' ? 'read from the platform' : m.source === 'staff' ? 'confirmed by staff' : 'reported by the creator'}
+                {new Date(m.fetchedAt).toLocaleString(LOCALE, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: {n(m.views)} views, {n(m.likes + m.comments + m.shares)} engagement, {m.source === 'auto' ? 'read from the platform' : m.source === 'staff' ? 'confirmed by staff' : 'reported by the creator'}
                 {m.note ? `. ${m.note}` : ''}
               </li>
             ))}
@@ -596,7 +596,7 @@ function MySubmission({ s, onDone }: { s: BountySubmission; onDone: () => void }
             report.mutate();
           }}
         >
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">Type what the platform shows you. A reviewer confirms the numbers before anything is paid. You can report once every six hours.</p>
+          <p className="m-0 text-[14px] font-semibold text-ink-soft">Type what the platform shows. A reviewer checks it before anything pays, and you can report every six hours.</p>
           <div className="grid grid-cols-2 gap-xs">
             <label className="block">
               <span className="block text-[12px] font-bold">Views</span>
@@ -654,16 +654,18 @@ function EarnCalc({ b }: { b: Rule }) {
   return (
     <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft" role="group" aria-label="What could I earn?">
       <p className="m-0 text-[14px] font-extrabold">What could I earn?</p>
-      <label className="mt-xs block">
+      <div className="mt-xs flex flex-wrap items-end gap-xs">
+      <label className="block min-w-[200px] flex-1">
         <span className="block text-[12px] font-bold text-ink-soft">If my post gets this many views</span>
         <input type="number" min={0} inputMode="numeric" value={views} onChange={(e) => setViews(e.target.value)} className={FIELD} />
       </label>
-      <div className="mt-xs flex flex-wrap gap-xs">
+      <div className="ml-auto flex flex-wrap justify-end gap-xs" role="group" aria-label="Quick view counts">
         {[1000, 10000, 100000, 1000000].map((x) => (
           <button key={x} type="button" aria-pressed={v === x} onClick={() => setViews(String(x))} className={`toy min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${v === x ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
             {n(x)}
           </button>
         ))}
+      </div>
       </div>
       <p className="mt-sm m-0 font-display text-[32px] font-extrabold leading-none" aria-live="polite">
         {n(pay)} pts

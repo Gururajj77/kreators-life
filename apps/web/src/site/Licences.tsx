@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { LOCALE } from '@kreators/shared';
 import { Fold } from '../components/Fold';
 import { H, LegalPage, P } from './legalBits';
 
@@ -33,14 +34,14 @@ export function Licences() {
     };
   }, []);
   return (
-    <LegalPage title="Open-source licences" lede="kreators.app is built on work that other people shared. Here is what is in the app, and the licence it came under.">
+    <LegalPage title="Open-source licences" lede="kreators.app is built on work other people shared. Here is each part and its licence.">
       <H>Packages</H>
       {!data && !failed && <P>Loading the list.</P>}
       {failed && <P>The list did not load. Try again in a moment.</P>}
       {data && (
         <>
           <P>
-            {data.packages.length} packages ship with the web app. This list was made on {new Date(data.generatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}. Open one to read its licence.
+            {data.packages.length} packages ship with the web app. This list was made on {new Date(data.generatedAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', year: 'numeric' })}. Open one to read its licence.
           </P>
           <div className="mt-sm grid gap-xs">
             {data.packages.map((p) => (

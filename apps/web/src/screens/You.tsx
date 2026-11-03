@@ -1,4 +1,4 @@
-import { FOCUS_OPTIONS, HONORS, IDENTITY_BY_KEY, OWN_TAG_ICON, IDENTITY_STAGES, identityLabel, identityLine, levelFromXp, matchSetup, passwordProblem, MODULE_GROUP_ACCENT, MODULE_GROUP_BLURB, MODULE_GROUPS, POINTS, RELATIONSHIP_BY_KEY, RELATIONSHIPS, BADGE_META, badgeRoleOf, setupSwitchable, type MeResponse, nextBadge } from '@kreators/shared';
+import { FOCUS_OPTIONS, HONORS, IDENTITY_BY_KEY, OWN_TAG_ICON, IDENTITY_STAGES, identityLabel, identityLine, levelFromXp, matchSetup, passwordProblem, MODULE_GROUP_ACCENT, MODULE_GROUP_BLURB, MODULE_GROUPS, POINTS, RELATIONSHIP_BY_KEY, RELATIONSHIPS, BADGE_META, badgeRoleOf, setupSwitchable, type MeResponse, MODULE_GROUP_ORDER, nextBadge, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Suspense, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -13,7 +13,8 @@ import { RoleBadge } from '../components/RoleBadge';
 import { SignOut } from '../components/SignOut';
 import { EvolutionReveal } from '../components/EvolutionReveal';
 import { Toggle } from '../components/Toggle';
-import { useGroupOrder, useModules } from '../lib/modules';
+import { AppGroups } from '../components/AppGroups';
+import { useModules } from '../lib/modules';
 import { useSession } from '../lib/store';
 import { useTheme, type ThemeMode } from '../lib/theme';
 import { Screen } from '../components/Screen';
@@ -30,6 +31,7 @@ import { Icon } from '../components/Icon';
 import { StatTile } from '../components/Charts';
 
 const BadgeGallery = lazyNamed(() => import('../components/BadgeGallery'), 'BadgeGallery');
+const ActivityGrid = lazyNamed(() => import('../components/ActivityGrid'), 'ActivityGrid');
 
 export function You() {
   const me = useMe();
@@ -44,7 +46,8 @@ function YouView({ data }: { data: MeResponse }) {
   const nav = useNavigate();
   const setToken = useSession((s) => s.setToken);
   const { modules } = useModules();
-  const featureGroups = useGroupOrder(['earn', 'creator', 'community', 'wellbeing', 'core', 'manage']);
+  // The one group order (Contribution, Reflection, Connection, Creation, Essentials, Operations).
+  const featureGroups = MODULE_GROUP_ORDER;
   const themeMode = useTheme((s) => s.mode);
   const setThemeMode = useTheme((s) => s.setMode);
   const toggle = useMutation({ mutationFn: ({ key, on }: { key: string; on: boolean }) => api.setModule(key, on), onSuccess: () => refresh() });
@@ -138,7 +141,7 @@ function YouView({ data }: { data: MeResponse }) {
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
           {(FOCUS_OPTIONS as readonly string[]).includes(user.focus) && user.focus !== 'Other' ? `Mostly ${user.focus.toLowerCase()}. ` : ''}Level{' '}
           {levelFromXp(user.xp)}, climbing since{' '}
-          {new Date(user.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}.
+          {new Date(user.createdAt).toLocaleDateString(LOCALE, { month: 'short', year: 'numeric' })}.
         </p>
         <div className="mt-sm flex flex-wrap items-center gap-xs">
           <Link to={user.handle ? `/u/${user.handle}` : `/people/${user.id}`} className="toy toy-soft inline-flex min-h-[48px] items-center gap-xs rounded-pill bg-card px-md text-[14px] font-bold text-ink">
@@ -202,67 +205,10 @@ function YouView({ data }: { data: MeResponse }) {
         <h2 id="features-heading" className="text-[24px]">
           Features
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">This is the one place an app can be switched off. Off means it goes grey on the Apps screen; nothing is deleted.</p>
-        {featureGroups.map((g) => {
-          const list = modules.filter((m) => m.group === g && m.available && !m.locked);
-          if (list.length === 0) return null;
-          const rel = RELATIONSHIP_BY_KEY[MODULE_GROUP_ACCENT[g]];
-          const on = list.filter((m) => m.on).length;
-          return (
-            <div key={g} className="mt-md rounded-card p-sm" style={{ background: `var(--soft-${rel.key})` }}>
-              <div className="flex items-center gap-sm">
-                <Avatar relationship={rel.key} size={36} decorative still mood={on > 0 ? 'happy' : 'sleepy'} />
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-[16px]">{MODULE_GROUPS[g]}</h3>
-                  <p className="m-0 text-[12px] font-bold" style={{ color: `var(--deep-${rel.key})` }}>
-                    {MODULE_GROUP_BLURB[g]}
-                  </p>
-                </div>
-                <span className="shrink-0 rounded-pill bg-card px-xs text-[12px] font-extrabold leading-[24px]" style={{ color: `var(--deep-${rel.key})` }}>
-                  {on} of {list.length} on
-                </span>
-              </div>
-              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-                {list.map((m) => (
-                  <li key={m.key}>
-                    <Toggle
-                      on={m.on}
-                      onChange={(on) => toggle.mutate({ key: m.key, on })}
-                      label={
-                        fits.has(m.key) ? (
-                          <>
-                            <AppIcon name={m.icon} size={16} className="mr-xs inline-block align-[-2px]" />
-                            {m.name}{' '}
-                            <span className="ml-xs rounded-pill px-xs align-middle text-[11px] font-extrabold uppercase tracking-wide" style={{ background: `var(--soft-${rel.key})`, color: `var(--deep-${rel.key})` }}>
-                              Fits you
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <AppIcon name={m.icon} size={16} className="mr-xs inline-block align-[-2px]" />
-                            {m.name}
-                          </>
-                        )
-                      }
-                      hint={
-                        fits.has(m.key) ? (
-                          <>
-                            {tie(m.blurb)}
-                            <span className="mt-xs block text-[12px] font-bold">{fits.get(m.key)}</span>
-                          </>
-                        ) : (
-                          tie(m.blurb)
-                        )
-                      }
-                      disabled={toggle.isPending}
-                      color={rel.color}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          );
-        })}
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Open a group to switch its apps. Off hides an app; nothing is deleted.</p>
+        <div className="mt-md">
+          <AppGroups groups={featureGroups} fits={fits} open where="profile" />
+        </div>
       </section>
 
       <CalendarLink />
@@ -286,7 +232,7 @@ function YouView({ data }: { data: MeResponse }) {
             </div>
           </div>
         ) : (
-          <div className="mt-sm rounded-card p-md" style={{ background: 'var(--tint-yellow)' }}>
+          <div data-pillar="parent_child" className="mt-sm rounded-card p-md" style={{ background: 'var(--tint-yellow)' }}>
             <p className="m-0 text-[16px] font-bold">Only on this device so far.</p>
             <p className="mt-xs m-0 text-[14px] font-semibold">Add an email and password and everything here comes with you to a new phone.</p>
             <Link to="/onboarding" className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
@@ -345,7 +291,12 @@ function YouView({ data }: { data: MeResponse }) {
         </form>
       </Sheet>
       <Sheet open={deleting} onClose={() => setDeleting(false)} title="Delete your account">
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">This removes your name, email, page, bio, pillars, logs, journal, messages and notifications, and archives anything you sell. Money records stay, anonymised, because the books have to. It cannot be undone.</p>
+          <p className="m-0 text-[14px] font-bold">This cannot be undone.</p>
+          <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+            <li>Gone: your name, email, page, bio, pillars, logs, journal, messages and notifications.</li>
+            <li>Archived: anything you sell.</li>
+            <li>Kept, anonymised: money records, because the books have to.</li>
+          </ul>
           <label className="mt-md block">
             <span className="block text-[14px] font-bold">Type DELETE to confirm</span>
             <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} autoComplete="off" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
@@ -365,7 +316,7 @@ function YouView({ data }: { data: MeResponse }) {
         <h2 id="evo-heading" className="text-[24px]">
           Who you are becoming
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Xp fills in your next form from the feet up. Each form also needs time in the app before it is ready.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Xp fills in your next form, and each form also needs time in the app.</p>
         <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
           <EvolutionReveal
             now={<Person stage={identity.stage.stage} size={104} decorative />}
@@ -437,6 +388,16 @@ function YouView({ data }: { data: MeResponse }) {
         </div>
       </section>
 
+      <Suspense
+        fallback={
+          <Busy label="Loading your year" className="mt-lg">
+            <Skeleton className="h-[300px]" />
+          </Busy>
+        }
+      >
+        <ActivityGrid />
+      </Suspense>
+
       <section className="mt-lg" aria-label="Badges and honors">
         <Suspense
           fallback={
@@ -458,7 +419,7 @@ function YouView({ data }: { data: MeResponse }) {
                 <BadgeArt name={h.name} icon={h.icon} tier={h.tier} shape="seal" earned={on} size="sm" decorative />
                 <span className="min-w-0">
                   <span className="block text-[14px] font-extrabold">{h.name}</span>
-                  <span className="block text-[12px] font-semibold text-ink-soft">{on ? (h.source === 'time' ? 'Unlocked' : 'Awarded') : `Locked · ${h.how}`}</span>
+                  <span className="block text-balance text-[12px] font-semibold text-ink-soft">{on ? (h.source === 'time' ? 'Unlocked' : 'Awarded') : tie(`Locked · ${h.how}`)}</span>
                 </span>
               </li>
             );
@@ -518,7 +479,7 @@ function YouView({ data }: { data: MeResponse }) {
           </label>
           <fieldset className="m-0 border-0 p-0">
             <legend className="text-[14px] font-bold">What fills most of your days</legend>
-            <div className="mt-xs flex flex-wrap gap-xs">
+            <div className="fill-row-all mt-xs flex flex-wrap gap-xs">
               {FOCUS_OPTIONS.map((t) => (
                 <button
                   key={t}

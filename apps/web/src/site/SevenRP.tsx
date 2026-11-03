@@ -1,3 +1,4 @@
+import { usePillarAccent } from '../lib/usePillarAccent';
 import gsap from 'gsap';
 import type { CSSProperties } from 'react';
 import { LIFE_AREAS, RELATIONSHIPS, type AppModule, type LifeAreaKey } from '@kreators/shared';
@@ -117,6 +118,7 @@ function AppGrid({ items }: { items: AppModule[] }) {
 function Explorer({ picks, value, onPick, label }: { picks: Choice[]; value: string; onPick: (k: string) => void; label: string }) {
   const current = picks.find((p) => p.key === value) ?? picks[0]!;
   const r = current.relationship;
+  usePillarAccent(r.key);
   const panel = useRef<HTMLDivElement>(null);
   const first = useRef(true);
   const reduce = useReducedMotion();
@@ -141,6 +143,7 @@ function Explorer({ picks, value, onPick, label }: { picks: Choice[]; value: str
         {picks.map((p) => (
           <button
             key={p.key}
+            data-pillar={p.relationship.key}
             type="button"
             aria-pressed={p.key === current.key}
             onClick={() => onPick(p.key)}
@@ -155,7 +158,7 @@ function Explorer({ picks, value, onPick, label }: { picks: Choice[]; value: str
         {picks.map((p) => {
           const on = p.key === current.key;
           return (
-            <li key={p.key} className="flex flex-1">
+            <li key={p.key} data-pillar={p.relationship.key} className="flex flex-1">
               <button
                 type="button"
                 aria-pressed={on}
@@ -183,6 +186,7 @@ function Explorer({ picks, value, onPick, label }: { picks: Choice[]; value: str
       <div
         ref={panel}
         id="pillar-panel"
+        data-pillar={r.key}
         aria-live="polite"
         className="fx-spot wash rounded-card bg-card p-md shadow-toy-soft md:p-lg"
         style={{ '--wash': r.color } as CSSProperties}

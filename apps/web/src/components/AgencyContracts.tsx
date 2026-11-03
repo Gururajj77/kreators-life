@@ -1,4 +1,4 @@
-import { contractAsText, docRef, CONTRACT_STATUSES, CONTRACT_STATUS_NAME, CONTRACT_STATUS_TONE, CONTRACT_TEMPLATES, type AgencyTemplate, type BoardColumn, type ContractListItem, type ContractStatus } from '@kreators/shared';
+import { contractAsText, docRef, CONTRACT_STATUSES, CONTRACT_STATUS_NAME, CONTRACT_STATUS_TONE, CONTRACT_TEMPLATES, type AgencyTemplate, type BoardColumn, type ContractListItem, type ContractStatus, LOCALE } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -17,7 +17,7 @@ import { StatusTag } from './StatusTag';
 import { useView, ViewToggle } from './ViewToggle';
 import { FIELD } from '../lib/ui';
 
-const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+const day = (iso: string) => new Date(iso).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
 const TEMPLATE_NAME: Record<string, string> = Object.fromEntries(CONTRACT_TEMPLATES.map((t) => [t.key, t.name]));
 
 /** Where an agreement can go from a board: draft and sent move between themselves and to void. A signed one is a record; only the client signs. */

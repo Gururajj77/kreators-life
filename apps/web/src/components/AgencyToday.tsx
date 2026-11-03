@@ -1,11 +1,11 @@
-import { money, type TodayAgency, type TodayEvent } from '@kreators/shared';
+import { money, type TodayAgency, type TodayEvent, LOCALE } from '@kreators/shared';
 import { ChevronRight, Footprints, PartyPopper, UsersRound, type LucideIcon } from 'lucide-react';
 import { Link } from 'react-router';
 import { Icon } from './Icon';
 import { StatusTag } from './StatusTag';
 
 /** A short day for a row ("4 Nov"), from a YYYY-MM-DD day, read as that calendar day and never shifted by a zone. */
-const shortDay = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+const shortDay = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
 const ROW = 'toy toy-soft flex min-h-[44px] w-full items-center gap-sm rounded-tile bg-card px-sm py-xs text-left text-ink';
 
@@ -99,7 +99,7 @@ export function TodayEvents({ events }: { events: TodayEvent[] }) {
               <span className="min-w-0 flex-1">
                 <span className="block text-[14px] font-extrabold">{e.title}</span>
                 <span className="block text-[12px] font-bold text-ink-soft">
-                  {EVENT_KIND[e.kind]}, {new Date(e.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                  {EVENT_KIND[e.kind]}, {new Date(e.at).toLocaleTimeString(LOCALE, { hour: 'numeric', minute: '2-digit' })}
                 </span>
               </span>
               <Icon icon={ChevronRight} size={16} className="shrink-0 text-ink-mute" />

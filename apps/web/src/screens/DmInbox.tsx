@@ -1,4 +1,5 @@
 import type { DmRequest } from '@kreators/shared';
+import { longDate } from '../lib/date';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button } from '../components/Button';
@@ -40,7 +41,7 @@ export function DmInbox() {
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {closed.map((r) => (
               <li key={r.id}>
-                <Fold title={`${r.buyerName}, ${r.productTitle}`} hint={`${r.status}${r.answeredAt ? ` ${new Date(r.answeredAt).toLocaleDateString()}` : ''}`}>
+                <Fold title={`${r.buyerName}, ${r.productTitle}`} hint={`${r.status}${r.answeredAt ? ` ${longDate(r.answeredAt)}` : ''}`}>
                   <p className="mt-sm m-0 whitespace-pre-wrap text-[14px] font-semibold">{r.question}</p>
                   {r.answer && <p className="mt-sm m-0 whitespace-pre-wrap rounded-tile bg-paper p-sm text-[14px] font-semibold">{r.answer}</p>}
                 </Fold>
@@ -63,7 +64,7 @@ function OpenRequest({ r, onDone }: { r: DmRequest; onDone: () => void }) {
         {r.buyerName}, {r.productTitle}
       </p>
       <p className={`m-0 text-[14px] font-bold ${overdue ? 'text-r1' : 'text-ink-soft'}`}>
-        {overdue ? 'Overdue, promised by' : 'Answer by'} {new Date(r.dueAt).toLocaleDateString()}. Asked {new Date(r.createdAt).toLocaleDateString()}.
+        {overdue ? 'Overdue, promised by' : 'Answer by'} {longDate(r.dueAt)}. Asked {longDate(r.createdAt)}.
       </p>
       <p className="mt-sm m-0 whitespace-pre-wrap rounded-tile bg-paper p-sm text-[16px] font-semibold">{r.question}</p>
       <form

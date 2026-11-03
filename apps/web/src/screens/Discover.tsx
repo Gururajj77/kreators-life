@@ -24,8 +24,7 @@ import {
   type DiscoverPuzzle,
   type PuzzleKind,
   type DiscoverResult,
-  type PuzzleCell,
-} from '@kreators/shared';
+  type PuzzleCell, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router';
@@ -37,11 +36,13 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Section } from '../components/Section';
 import { Toggle } from '../components/Toggle';
+import { Fold } from '../components/Fold';
 import { useParamState } from '../lib/useParamState';
 import { api } from '../lib/api';
 import { useDiscover, useRefreshAll } from '../lib/queries';
 import { MoreScreen, MoreSection } from '../components/DiscoverMore';
 import { IconTag } from '../components/FactTag';
+import { TabRow } from '../components/TabRow';
 
 /** Every step of the quiz in order, with where its answer lives. */
 interface Step {
@@ -435,7 +436,7 @@ function Quiz({ answers, setAnswers, onLeave, onDone, busy, error }: { answers: 
     body = (
       <div className="rounded-card bg-card p-md shadow-toy-soft">
         <h2 className="text-[24px]">Your strengths are ready</h2>
-        <p className="mt-sm m-0 text-[16px] font-semibold">You can see them now. Or go further and add the emotional intelligence part: how you handle your feelings, read people and work through situations with them. It adds a detailed read, and you can do it later.</p>
+        <p className="mt-sm m-0 text-[16px] font-semibold">See them now, or first add emotional intelligence: how you handle feelings and read people. You can also add it later.</p>
         <div className="mt-md flex flex-col gap-xs">
           <Button onClick={() => { setGate(false); go(at + 1); }}>Add emotional intelligence</Button>
           <Button variant="outline" onClick={onDone} disabled={busy}>{busy ? 'Working it out' : 'See my strengths now'}</Button>
@@ -680,12 +681,19 @@ function ReasoningTab({ result }: { result: DiscoverResult }) {
 
 function UseTab({ settings, onChange }: { settings: { steps: boolean; assistant: boolean; mind: boolean }; onChange: (s: Partial<{ steps: boolean; assistant: boolean; mind: boolean }>) => void }) {
   return (
-    <Section id="use-results" title="Let your results help" lede="Both are your call, and you can change them any time. Your answers are never shared. Only a short summary is used: your strengths, how each trait reads and your reasoning level.">
+    <Section id="use-results" title="Let your results help" lede="Your call, and you can change it any time. Your answers are never shared.">
       <div className="flex flex-col gap-xs">
         <Toggle on={settings.steps} onChange={(v) => onChange({ steps: v })} label="Shape my next steps" hint="Home’s daily brief picks steps that fit you, such as one small task if you start many things. Plain rules, no AI." />
-        <Toggle on={settings.mind} onChange={(v) => onChange({ mind: v })} label="Include how my mind works" hint="Off until you switch it on. It then shapes next steps and, if the assistant is allowed, helps it pace things for you. It never names a condition. Only matters if you took that self-check." />
-        <Toggle on={settings.assistant} onChange={(v) => onChange({ assistant: v })} label="Let the assistant learn from them" hint="The assistant uses the summary to choose its tone and the size of a step. Only a model that keeps no data can read it." />
+        <Toggle on={settings.mind} onChange={(v) => onChange({ mind: v })} label="Include how my mind works" hint="Off until you switch it on. It never names a condition." />
+        <Toggle on={settings.assistant} onChange={(v) => onChange({ assistant: v })} label="Let the assistant learn from them" hint="Only a model that keeps no data can read it." />
       </div>
+      <Fold title="What is used" className="mt-sm">
+        <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+          <li>Only a short summary: your strengths, how each trait reads and your reasoning level.</li>
+          <li>The assistant uses it to choose its tone and the size of a step.</li>
+          <li>How your mind works, once switched on, shapes next steps and helps the assistant pace things. It only matters if you took that self-check.</li>
+        </ul>
+      </Fold>
     </Section>
   );
 }
@@ -698,14 +706,8 @@ function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, 
   const growthRel = RELATIONSHIP_BY_KEY[result.growth];
   return (
     <>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Taken {new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}. Only you can see this.</p>
-      <div className="scroll-row mt-sm flex gap-xs" role="group" aria-label="Parts of your result">
-        {TABS.filter(([k]) => k !== 'eq' || result.eq).map(([k, label]) => (
-          <button key={k} type="button" aria-pressed={tab === k} onClick={() => setTab(k)} className={`toy min-h-[44px] shrink-0 rounded-pill border-2 px-md text-[14px] font-bold ${tab === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-            {label}
-          </button>
-        ))}
-      </div>
+      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Taken {new Date(at).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', year: 'numeric' })}. Only you can see this.</p>
+      <TabRow className="mt-sm" pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`} label="Parts of your result" items={TABS.filter(([k]) => k !== 'eq' || result.eq).map(([key, label]) => ({ key, label }))} value={tab} onChange={setTab} />
       {tab === 'personality' && <PersonalityTab result={result} />}
       {tab === 'eq' && <EqTab result={result} />}
       {tab === 'reasoning' && <ReasoningTab result={result} />}
@@ -790,7 +792,7 @@ function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, 
       </Section>
 
       <Section id="grow" title="Where to grow">
-        <div className="rounded-card p-md" style={{ background: `var(--soft-${result.growth})` }}>
+        <div data-pillar={result.growth} className="rounded-card p-md" style={{ background: `var(--soft-${result.growth})` }}>
           <div className="flex items-center gap-sm">
             <Avatar relationship={result.growth} size={48} decorative still mood="sleepy" />
             <div>
@@ -897,7 +899,7 @@ export function Discover() {
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Discover</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">A quiz about how you think, feel and act. It gives you a detailed read on your personality and your reasoning, and your strengths across the seven relationships.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">A quiz on how you think, feel and act, and where your strengths are.</p>
       </header>
 
       {q.isPending && (
@@ -920,7 +922,7 @@ export function Discover() {
 
       {data && mode !== 'result' && (
         <>
-          <section className="relative mt-md overflow-hidden rounded-card p-md text-on-fill" style={fillOf(RELATIONSHIP_BY_KEY.self.color)} aria-labelledby="quiz-head">
+          <section className="relative mt-md overflow-hidden rounded-card p-md text-on-fill" style={fillOf(RELATIONSHIP_BY_KEY.self.color)} data-pillar="self" aria-labelledby="quiz-head">
             <HeroBlobs seed="discover" />
             <div className="relative flex items-start justify-between gap-sm">
               <h2 id="quiz-head" className="min-w-0 text-[22px]">{prog.done === 0 ? 'Find out what you are good at' : `${prog.done} of ${DISCOVER_STEPS} answered`}</h2>
@@ -929,7 +931,7 @@ export function Discover() {
                 <Avatar relationship="self" size={64} decorative mood={prog.done === 0 ? 'happy' : 'excited'} />
               </span>
             </div>
-            <p className="relative mt-xs m-0 text-[14px] font-semibold">Five parts: pick what is most and least like you, solve pattern puzzles that adjust to you, choose words that fit you and judge real situations. Then, if you like, add emotional intelligence. It saves as you go, so you can stop and come back.</p>
+            <p className="relative mt-xs m-0 text-[14px] font-semibold">Five short parts, saved as you go, so you can stop and come back.</p>
             <div className="relative mt-sm flex flex-wrap gap-xs">
               <Button variant="light" onClick={() => setMode('quiz')}>
                 {prog.done === 0 ? 'Start the quiz' : prog.core.done === prog.core.total ? 'Add emotional intelligence' : 'Continue'}
@@ -970,7 +972,7 @@ export function Discover() {
             <Section id="last" title="Your last result">
               <div className="rounded-card bg-card p-md shadow-toy-soft">
                 <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                  {new Date(result.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}
+                  {new Date(result.createdAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', year: 'numeric' })}
                 </p>
                 <p className="mt-xs m-0 text-[16px] font-bold">
                   {result.result.top.map((k) => DISCOVER_STRENGTHS[k].name).join(', ')}
@@ -983,7 +985,7 @@ export function Discover() {
                 <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
                   {data.history.map((h) => (
                     <li key={h.id} className="flex items-center justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-                      <span className="text-[14px] font-semibold">{new Date(h.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}: {h.result.top.map((k) => DISCOVER_STRENGTHS[k].name).join(', ')}</span>
+                      <span className="text-[14px] font-semibold">{new Date(h.createdAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' })}: {h.result.top.map((k) => DISCOVER_STRENGTHS[k].name).join(', ')}</span>
                       <Button size="sm" variant="ghost" onClick={() => { setShown(h); setMode('result'); }}>
                         Open
                       </Button>

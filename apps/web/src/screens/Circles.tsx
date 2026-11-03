@@ -1,4 +1,4 @@
-import { CIRCLE_STATUS_META, CIRCLE_STATUSES, dressCodeFor, INTERESTS, type CircleEvent, type CircleStatus } from '@kreators/shared';
+import { CIRCLE_STATUS_META, CIRCLE_STATUSES, dressCodeFor, INTERESTS, type CircleEvent, type CircleStatus, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Inert } from '../components/Inert';
 import { useEffect, useRef, useState } from 'react';
@@ -24,7 +24,7 @@ import { eventTime } from '../lib/date';
 import { StatusTag } from '../components/StatusTag';
 
 const when = eventTime;
-const weekly = (iso: string) => `Every ${new Date(iso).toLocaleDateString(undefined, { weekday: 'long' })} at ${new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+const weekly = (iso: string) => `Every ${new Date(iso).toLocaleDateString(LOCALE, { weekday: 'long' })} at ${new Date(iso).toLocaleTimeString(LOCALE, { hour: 'numeric', minute: '2-digit' })}`;
 const countdown = (iso: string, now: number) => {
   const ms = new Date(iso).getTime() - now;
   if (ms <= 0) return 'now';
@@ -61,7 +61,12 @@ export function Circles() {
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Circles</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Small anonymous groups near you, every week, seated by interests that fit together. Everyone has an alias and keeps it. Red if you are single, white if you are committed. The chat opens a day before you meet.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Small anonymous groups near you each week, seated by interests that fit.</p>
+        <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-[12px] font-bold text-ink-soft">
+          <li>Everyone has an alias and keeps it.</li>
+          <li>Red if you are single, white if you are committed.</li>
+          <li>The chat opens a day before you meet.</li>
+        </ul>
         {d && !ready && (
           <p className="mt-sm m-0 rounded-tile bg-r3 p-sm text-[14px] font-bold text-ink-fixed">
             To join a circle, pick at least two interests and your city under{' '}
@@ -456,7 +461,7 @@ export function CircleGroup() {
         </h2>
         <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
           {g.members.map((m) => (
-            <li key={m.alias} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+            <li key={m.alias} data-pillar={m.character} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
               <Avatar relationship={m.character} size={40} decorative still />
               <span className="min-w-0 flex-1">
                 <span className="block text-[16px] font-bold">

@@ -1,4 +1,4 @@
-import { ATTENDEE_CODE_MAX, ATTENDEE_CODE_MIN, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, attendeeXpLocked, BADGES, kmLabel, normalizeCode, paceLabel, RELATIONSHIP_BY_KEY, RUN_BADGES, RUN_PACE_META, RUN_PACES, RUN_REWARD, type Run as RunItem, type RunClub, type RunCollab, type RunCollabApplication, type RunPace, type RunResponse, type RunTracking, type TagTone } from '@kreators/shared';
+import { ATTENDEE_CODE_MAX, ATTENDEE_CODE_MIN, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, attendeeXpLocked, BADGES, kmLabel, normalizeCode, paceLabel, RELATIONSHIP_BY_KEY, RUN_BADGES, RUN_PACE_META, RUN_PACES, RUN_REWARD, type Run as RunItem, type RunClub, type RunCollab, type RunCollabApplication, type RunPace, type RunResponse, type RunTracking, type TagTone, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Footprints, Gift } from 'lucide-react';
 import { Fragment, useState } from 'react';
@@ -25,7 +25,7 @@ import { StatusTag } from '../components/StatusTag';
 import { FactTag, IconTag } from '../components/FactTag';
 import { useSeedOnce } from '../lib/useSeed';
 
-const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+const day = (iso: string) => new Date(iso).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' });
 const REL = RELATIONSHIP_BY_KEY.friendship;
 const pill = (tint: string) => ({ background: `var(--tint-${tint})` });
 const TINT_TONE: Record<'green' | 'red' | 'yellow' | 'purple' | 'sky', TagTone> = { green: 'good', red: 'bad', yellow: 'warn', purple: 'deep', sky: 'info' };
@@ -66,7 +66,7 @@ function Giveaway({ giveaway, brand, count }: { giveaway: string; brand?: string
 function ClubCard({ k }: { k: RunClub }) {
   return (
     <li>
-      <Link to={`/run/clubs/${k.id}`} className="toy toy-soft flex items-start gap-sm rounded-tile bg-card p-sm">
+      <Link to={`/run/clubs/${k.id}`} data-pillar={REL.key} className="toy toy-soft flex items-start gap-sm rounded-tile bg-card p-sm">
         <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill text-[22px]" style={{ background: `var(--soft-${REL.key})` }} aria-hidden="true">
           <Icon icon={Footprints} size={22} />
         </span>
@@ -137,7 +137,7 @@ export function Run() {
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Kreators Run</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Run clubs near you. The host shows a start code at the line. Enter it and your run is logged once, with kilometres, xp and points.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Run clubs near you. Enter the host’s start code and your run is logged once.</p>
         <div className="mt-md flex flex-wrap gap-xs" role="group" aria-label="Sections">
           {TABS.map((t) => (
             <button key={t.key} type="button" aria-pressed={tab === t.key} onClick={() => setTab(t.key)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === t.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
@@ -175,7 +175,7 @@ function ClubsTab({ d, onStart }: { d: RunResponse; onStart: () => void }) {
   const others = d.clubs.filter((k) => !k.mine);
   return (
     <>
-      <Nudge className="mt-sm" text={`A logged run pays the xp its host set (up to ${ATTENDEE_XP_MAX}) and ${RUN_REWARD.points} points, and its minutes count as movement in Life.`} />
+      <Nudge className="mt-sm" text={`A run pays its host’s xp (up to ${ATTENDEE_XP_MAX}) and ${RUN_REWARD.points} points. Minutes count as movement.`} />
       <Button className="mt-md" onClick={onStart}>
         Start a club
       </Button>
@@ -373,7 +373,7 @@ function CollabsTab() {
   const d = q.data;
   return (
     <>
-      <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Brands post what they give, what they ask, and a giveaway for the runners. A host applies with the club, and the giveaway shows on the run.</p>
+      <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Brands post a giveaway for runners. A host applies, and it shows on the run.</p>
       {d?.canPost && (
         <Button className="mt-md" onClick={() => setPosting(true)}>
           Post a collab
@@ -676,7 +676,7 @@ function RunCard({ r, host, member, onLog, onRecode, onStatus, busy }: { r: RunI
     <li className="rounded-card bg-card p-md shadow-toy-soft">
       <p className="m-0 text-[16px] font-bold">{r.title}</p>
       <p className="m-0 text-[14px] font-semibold text-ink-soft">
-        {eventTime(r.startsAt)} to {new Date(r.endsAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}, {kmLabel(r.metres)}
+        {eventTime(r.startsAt)} to {new Date(r.endsAt).toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' })}, {kmLabel(r.metres)}
         {r.meetingPoint ? `, ${r.meetingPoint}` : ''}
       </p>
       <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
@@ -694,7 +694,7 @@ function RunCard({ r, host, member, onLog, onRecode, onStatus, busy }: { r: RunI
             <p className="m-0 shrink-0 rounded-pill bg-card px-sm py-xs text-[14px] font-extrabold">+{r.xp} xp each</p>
           </div>
           <p className="m-0 font-display text-[40px] font-extrabold leading-none tracking-[0.2em] break-all">{r.code}</p>
-          <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Show this at the start line. It works from thirty minutes before the start until three hours after the end, once per runner. You do not log your own run.</p>
+          <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Show this at the start line, from thirty minutes before to three hours after. Once per runner, and you never log your own run.</p>
           <RunCodeEditor r={r} onRecode={onRecode} busy={busy} />
         </div>
       )}
@@ -769,7 +769,7 @@ function EntrySheet({ run, onClose, onDone }: { run: RunItem | null; onClose: ()
               <input type="number" min={0} max={600} value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="Optional" className={FIELD} />
             </label>
           </div>
-          <Nudge text={`Logs once per run. ${run?.xp ?? RUN_REWARD.xp} xp and ${RUN_REWARD.points} points, up to ${RUN_REWARD.perDay} runs a day. Minutes count as movement in Life.`} />
+          <Nudge text={`${run?.xp ?? RUN_REWARD.xp} xp and ${RUN_REWARD.points} points, once per run, up to ${RUN_REWARD.perDay} a day. Minutes count as movement.`} />
           <ErrorLine e={log.isError ? log.error : null} />
           <Button type="submit" size="lg" full disabled={log.isPending || code.length < ATTENDEE_CODE_MIN}>
             Log my run

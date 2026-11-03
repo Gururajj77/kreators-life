@@ -1,4 +1,4 @@
-import { RELATIONSHIPS } from '@kreators/shared';
+import { RELATIONSHIPS, LOCALE } from '@kreators/shared';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
@@ -38,7 +38,7 @@ export function CertificatePage() {
             <p className="mt-xs m-0 text-[18px] font-semibold text-ink-soft">completed</p>
             <p className="mt-xs m-0 text-[24px] font-extrabold">{c.productTitle}</p>
             <p className="mt-sm m-0 text-[16px] font-semibold text-ink-soft">
-              taught by {c.ownerName}, issued {new Date(c.issuedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}
+              taught by {c.ownerName}, issued {new Date(c.issuedAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', year: 'numeric' })}
             </p>
             <p className="mt-md m-0 rounded-pill bg-paper px-md py-xs font-mono text-[14px] font-bold tracking-widest">{c.code}</p>
             <p className="mt-xs m-0 text-[12px] font-semibold text-ink-mute">Verified against kreators.app records at the time of viewing.</p>

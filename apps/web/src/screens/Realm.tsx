@@ -1,3 +1,4 @@
+import { usePillarAccent } from '../lib/usePillarAccent';
 import { HeroBlobs, PILLAR_FLOWER } from '../components/Hero';
 import {
   CHARACTER_STAGES,
@@ -49,6 +50,7 @@ export function Realm() {
 }
 
 function RealmView({ relationship }: { relationship: RelationshipKey }) {
+  usePillarAccent(relationship);
   const rel = RELATIONSHIP_BY_KEY[relationship];
   const me = useMe();
   const nodesQ = useNodes(relationship);
@@ -402,7 +404,7 @@ function AddSheet({ kind, relationship, nodes, today, onClose }: { kind: NodeKin
           {kind === 'task' && (
             <>
               <TaskPlanFields plan={plan} onChange={setPlan} today={today} />
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">Leave the do date empty and the task waits in the not scheduled list on Daily until you pick a day. A new task can be ticked ten minutes after you write it. Go do it first.</p>
+              <p className="m-0 text-[14px] font-semibold text-ink-soft">No do date? It waits in Not scheduled yet on Daily. A new task can be ticked after ten minutes.</p>
             </>
           )}
           {create.isError && (

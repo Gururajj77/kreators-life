@@ -92,7 +92,7 @@ async function numbersFor(db: D1Database, userId: string, p: Period): Promise<Pe
       .first<{ kept: number | null; slipped: number | null }>(),
     db.prepare('SELECT kind, COUNT(*) AS n, SUM(value) AS total FROM wellbeing_logs WHERE user_id = ? AND date >= ? AND date <= ? GROUP BY kind').bind(userId, from, to).all<{ kind: string; n: number; total: number }>(),
     db.prepare('SELECT COUNT(*) AS n, AVG(emotion) AS mood FROM journal_entries WHERE user_id = ? AND created_at >= ? AND created_at < ?').bind(userId, fromTs, toTs).first<{ n: number; mood: number | null }>(),
-    db.prepare('SELECT kind, COALESCE(SUM(amount_cents), 0) AS cents FROM finance_transactions WHERE user_id = ? AND date >= ? AND date <= ? GROUP BY kind').bind(userId, from, to).all<{ kind: string; cents: number }>(),
+    db.prepare(`SELECT kind, COALESCE(SUM(amount_cents), 0) AS cents FROM finance_transactions WHERE user_id = ?1 AND date >= ?2 AND date <= ?3 AND currency = (SELECT COALESCE(NULLIF(currency, ''), 'INR') FROM users WHERE id = ?1) GROUP BY kind`).bind(userId, from, to).all<{ kind: string; cents: number }>(),
     db
       .prepare("SELECT COUNT(*) AS n, COALESCE(SUM(cents), 0) AS cents, COALESCE(SUM(points), 0) AS points FROM orders WHERE owner_id = ? AND status IN ('paid', 'test') AND created_at >= ? AND created_at < ?")
       .bind(userId, fromTs, toTs)
@@ -191,7 +191,8 @@ export async function summaryFor(db: D1Database, userId: string, p: Period): Pro
     db.prepare('SELECT substr(created_at, 1, 10) AS d, SUM(amount) AS xp FROM xp_events WHERE user_id = ? AND created_at >= ? AND created_at < ? GROUP BY d').bind(userId, fromTs, toTs).all<{ d: string; xp: number }>(),
     db.prepare("SELECT substr(completed_at, 1, 10) AS d, COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? AND completed_at < ? GROUP BY d").bind(userId, fromTs, toTs).all<{ d: string; n: number }>(),
     db.prepare('SELECT relationship, SUM(amount) AS xp FROM xp_events WHERE user_id = ? AND relationship IS NOT NULL AND created_at >= ? AND created_at < ? GROUP BY relationship').bind(userId, fromTs, toTs).all<{ relationship: RelationshipKey; xp: number }>(),
-    db.prepare('SELECT currency FROM finance_transactions WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date DESC LIMIT 1').bind(userId, p.start, p.end).first<{ currency: string }>(),
+    // The period's money is summed in the person's own currency only (numbersFor), so it is labelled with that one.
+    db.prepare("SELECT COALESCE(NULLIF(currency, ''), 'INR') AS currency FROM users WHERE id = ?").bind(userId).first<{ currency: string }>(),
     flaggedFor(db, userId, p),
   ]);
   const xpMap = new Map(xpByDay.results.map((r) => [r.d, r.xp]));

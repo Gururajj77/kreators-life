@@ -351,6 +351,8 @@
     margin: 0;
     min-height: 100dvh;
     overscroll-behavior-y: none;
+    /* Full-bleed art (the hero's flowing lines) is as wide as the screen; clip, not hidden, so nothing scrolls sideways and sticky headers still stick. */
+    overflow-x: clip;
   }
   /* The wash behind everything: soft glows over a gradient base, never a flat fill. It is fixed to the screen, so the
      glass above it always has something to frost. */
@@ -981,6 +983,19 @@ nav {
 .bento-h2 {
   min-height: 160px;
 }
+/* A bento only from the md width up (it needs height too, like the md variant): below that the list keeps its own phone layout,
+   such as Home's sideways row of metrics. Sizes come from BENTO_SIZE in lib/bento.ts. */
+@media (width >= 48rem) and (height >= 30rem) {
+  .bento-md {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--spacing-sm);
+    grid-auto-flow: dense;
+  }
+  .bento-md > * {
+    min-width: 0;
+  }
+}
 
 /* The one big cell in a bento: a wash of two calm colours behind the glass, so the eye lands there first. */
 .bento-feature {
@@ -1069,8 +1084,6 @@ input[type='radio'] {
   --fx-shine: rgba(255, 255, 255, 0.3); /* the sweep across a shimmer button */
   --fx-beam-a: var(--color-r6);
   --fx-beam-b: var(--color-r5);
-  --fx-path-still: 0.1;
-  --fx-path-flow: 0.5;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
@@ -1078,8 +1091,6 @@ input[type='radio'] {
     --fx-shine: rgba(255, 255, 255, 0.22);
     --fx-beam-a: #8f9bff;
     --fx-beam-b: #5fd0c0;
-    --fx-path-still: 0.14;
-    --fx-path-flow: 0.7;
   }
 }
 :root[data-theme='dark'] {
@@ -1087,8 +1098,6 @@ input[type='radio'] {
   --fx-shine: rgba(255, 255, 255, 0.22);
   --fx-beam-a: #8f9bff;
   --fx-beam-b: #5fd0c0;
-  --fx-path-still: 0.14;
-  --fx-path-flow: 0.7;
 }
 
 /* Reveal: fades and lifts in once when scrolled to; siblings stagger by --fx-i. */
@@ -1286,45 +1295,6 @@ input[type='radio'] {
   }
 }
 
-/* Background paths: still hairlines, and a short dash travelling along each. Very faint, behind the words. */
-.fx-paths {
-  opacity: 0.85;
-  -webkit-mask-image: radial-gradient(ellipse 70% 78% at 50% 50%, #000 38%, transparent 100%);
-  mask-image: radial-gradient(ellipse 70% 78% at 50% 50%, #000 38%, transparent 100%);
-}
-.fx-paths path {
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  vector-effect: non-scaling-stroke;
-}
-.fx-path-still {
-  stroke-width: 1;
-  opacity: var(--fx-path-still);
-}
-.fx-path-flow {
-  stroke-width: 1.6;
-  opacity: var(--fx-path-flow);
-  stroke-dasharray: 130 870;
-  animation: fx-flow linear infinite;
-  animation-play-state: paused;
-}
-.fx-paths[data-run='true'] .fx-path-flow {
-  animation-play-state: running;
-}
-@keyframes fx-flow {
-  from {
-    stroke-dashoffset: 0;
-  }
-  to {
-    stroke-dashoffset: -1000;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .fx-path-flow {
-    display: none;
-  }
-}
 
 /* Particle burst: confetti dots in a fixed layer, removed when done. */
 .fx-burst {
@@ -1423,8 +1393,7 @@ input[type='radio'] {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
-  .fx-spot::before,
-  .fx-paths {
+  .fx-spot::before {
     display: none;
   }
 }
@@ -1608,6 +1577,12 @@ input[type='radio'] {
   background: var(--fill-1);
   box-shadow: inset 0 0 0 1px var(--separator);
   transition: background-color 220ms ease;
+}
+/* An invisible hit area six pixels above and below, so a switch that stands alone in a row is a 52 by 44 target without looking larger. */
+.fx-switch::before {
+  content: '';
+  position: absolute;
+  inset: -6px 0;
 }
 .fx-switch[aria-checked='true'] {
   background: var(--switch-on, var(--color-r4));
@@ -1888,6 +1863,137 @@ ol.grid > li > .toy:only-child {
 .legal-print-note { display: none; }
 .legal-text { margin: var(--spacing-xs) 0 0; padding: var(--spacing-sm); max-height: 420px; overflow: auto; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; line-height: 1.5; border-radius: var(--radius-tile); background: var(--color-paper); user-select: text; }
 
+/* Paragraph lines typed on their own (the parties) stay their own lines; a block that follows with no blank line between sits close. */
+/* white-space is a shorthand that also resets the wrap style, so pretty (no word alone on a paragraph's last line) is set again after it. */
+.legal-clause { white-space: pre-line; text-wrap-style: pretty; }
+.legal-doc [data-tight], .legal-doc .paper-block[data-tight] > * { margin-top: 0; }
+.legal-h3 { margin: var(--spacing-sm) 0 0; font-size: 1.05em; font-weight: 700; line-height: 1.3; break-after: avoid; }
+.legal-strong { font-weight: 700; }
+.legal-bullet { flex-shrink: 0; font-weight: 800; }
+.legal-gap { font-style: italic; color: var(--color-ink-soft); }
+.legal-table-wrap { margin-top: var(--spacing-sm); overflow-x: auto; }
+.legal-table .text-right { text-align: right; }
+/* The brief: subheads, tick boxes drawn as the paper draws them (a box character), an "Other:" line, a written answer, links. */
+.legal-brief { margin-top: var(--spacing-xs); }
+.legal-q { position: relative; margin: 0; padding: 0; border: 0; min-width: 0; }
+.legal-legend { display: block; padding: 0; float: none; width: 100%; }
+.legal-ticks { margin: var(--spacing-xs) 0 0; padding: 0 0 0 var(--spacing-md); list-style: none; }
+.legal-ticks li { display: flex; align-items: center; gap: var(--spacing-xs); min-height: 1.6em; }
+.legal-box { flex-shrink: 0; font-family: 'Segoe UI Symbol', 'Apple Symbols', system-ui, sans-serif; font-size: 1.2em; line-height: 1; }
+.legal-tick-row { display: flex; align-items: center; gap: var(--spacing-xs); min-height: 44px; cursor: pointer; }
+.legal-tick-input { width: 24px; height: 24px; flex-shrink: 0; margin: 0; accent-color: var(--color-ink); }
+/* Where the client answers on the screen, the real checkbox is the box; on paper the drawn box is (see the print block). */
+.legal-tick-row .legal-box, .legal-other:has(.legal-tick-input) .legal-box { display: none; }
+.legal-rule { flex: 1; min-width: 0; border-bottom: 1px solid var(--color-ink-mute); padding-bottom: 2px; }
+.legal-line-input { flex: 1; min-width: 0; min-height: 44px; padding: 0 var(--spacing-xs); font: inherit; color: inherit; border: 0; border-bottom: 1px solid var(--color-ink-mute); background: transparent; border-radius: 0; }
+.legal-line-input:focus-visible { outline: 2px solid var(--color-ink); outline-offset: 2px; }
+.legal-field { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-xs); flex: 1; min-width: 0; }
+.legal-answer { min-height: 4.8em; }
+.legal-links { margin: var(--spacing-xs) 0 0; padding-left: var(--spacing-lg); }
+.legal-links li { margin-top: 4px; }
+.legal-links li:has(.legal-line-input) { display: list-item; }
+.legal-hand { font-family: var(--font-display, inherit); font-size: 1.25em; font-style: italic; }
+
+/* ----- The typed layout (DocStyle.layout 'typed'): the way the founder's own agreement is typed. Plain sans type, the title and the line
+   under it left-aligned in bold capitals, headings as typed (no small caps, no counter), a numbered subhead in bold, a grey hairline
+   between sections, no reference row, no letterhead and no running title. */
+.legal-root[data-layout='typed'] .legal-head { text-align: left; }
+/* On a phone the title steps down so "TRIAL ENGAGEMENT AGREEMENT" (about 16em wide) stays on one line from 320 to 430, including the
+   owner's editable title, which cannot carry a nowrap span; a laptop and paper keep 1.85em and 23pt. */
+.legal-root[data-layout='typed'] .legal-title { text-align: left; font-variant: normal; letter-spacing: 0; font-size: clamp(0.95em, 4.8vw, 1.85em); text-transform: none; }
+/* On a phone screen a typed clause whose last word would stand alone ("consumption.", "above.") is pulled in from the right by
+   lib/noLoneWord.ts until two words share the last line. The owner's paper is plain editable text, so the client page's nowrap
+   spans cannot help there, and balance gives up past six lines. The words never change; paper and laptops never get it. */
+@media screen {
+  .legal-root [data-lone-trim] { padding-right: var(--lone-trim); }
+}
+.legal-root[data-layout='typed'] .legal-subtitle { text-align: left; margin-top: var(--spacing-sm); font-size: 1.3em; font-weight: 700; color: var(--color-ink); }
+.legal-root[data-layout='typed'] .legal-sec { margin-top: var(--spacing-md); padding-top: 0; }
+.legal-root[data-layout='typed'] .legal-sec + .legal-sec::before { content: ''; display: block; margin: 0 0 var(--spacing-md); border-top: 1px solid #b8bcc8; }
+.legal-root[data-layout='typed'] .legal-sec-h { border-bottom: 0; padding-bottom: 0; font-variant: normal; letter-spacing: 0; font-size: 1.3em; }
+.legal-root[data-layout='typed'] .legal-sec-h::before { content: none; }
+.legal-root[data-layout='typed'] .legal-clause { margin-top: var(--spacing-sm); hyphens: manual; }
+.legal-root[data-layout='typed'] .legal-clause[data-tight] { margin-top: 0; }
+.legal-root[data-layout='typed'] .legal-h3 { margin-top: var(--spacing-md); }
+.legal-root[data-layout='typed'] .legal-list { padding-left: var(--spacing-md); }
+.legal-root[data-layout='typed'] .legal-sign-block h3 { font-variant: normal; letter-spacing: 0; }
+.legal-root[data-layout='typed'] .legal-sign-line > span:last-child { border-bottom: 0; }
+.legal-root[data-layout='typed'] .legal-sign-line { margin-top: 0; }
+.legal-root[data-layout='typed'] .legal-table thead th { border-bottom-width: 1px; background: #eef0f4; }
+
+/* ==========================================================================================================
+   Paper editing (components/PaperEdit.tsx): the owner edits an agreement, a document, an invoice or a house template on the page that
+   prints. Every editable region is plain text; these rules only show where you can type (a soft tint on hover and focus, a dotted line
+   under a blank, a grey placeholder in an empty region) and the section handle in the margin. All of it is screen only: on paper the
+   regions are the plain words and the handles are gone.
+   ========================================================================================================== */
+.paper-edit { outline: none; border-radius: 4px; transition: background-color 120ms var(--ease-open); white-space: pre-wrap; }
+.paper-edit:hover { background-color: rgba(37, 41, 58, 0.04); }
+.paper-edit:focus { background-color: rgba(43, 61, 122, 0.07); box-shadow: 0 0 0 2px rgba(43, 61, 122, 0.35); }
+.paper-edit[data-empty]::before { content: attr(data-placeholder); color: #8a8fa3; pointer-events: none; }
+.paper-edit[data-empty]:focus::before { content: none; }
+.paper-var .paper-edit { border-bottom: 1px dotted #6b7088; border-radius: 0; padding: 0 2px; }
+.paper-fallback { color: inherit; }
+.paper-var-empty { margin-left: 4px; }
+.paper-note { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: #565c72; }
+.paper-sec, .legal-q { position: relative; }
+.paper-handle { position: absolute; left: -44px; top: 0; display: none; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; border-radius: 12px; color: #565c72; background: transparent; cursor: pointer; }
+/* Out of sight (and out of the page's button count) until the section is pointed at or has focus: Tab from the heading reaches it. */
+.paper-sec:focus-within > .paper-handle, .legal-q:focus-within > .paper-handle { display: flex; }
+.paper-handle:focus-visible { outline: 2px solid #25293a; outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) {
+  .paper-sec:hover > .paper-handle, .legal-q:hover > .paper-handle { display: flex; }
+  .paper-handle:hover { background-color: rgba(37, 41, 58, 0.06); }
+}
+/* A phone has no hover and little margin: a long press on the heading opens the same menu, and a focused section shows its handle at the right. */
+@media (max-width: 640px) {
+  .paper-handle { left: auto; right: 0; }
+}
+.legal-doc:has(.paper-sec) { padding-left: max(var(--spacing-md), 48px); }
+@media (max-width: 640px) { .legal-doc:has(.paper-sec) { padding-left: var(--spacing-md); } }
+
+/* ----- Invoice designs: Founder classic (components/InvoiceView.tsx, INVOICE_DESIGNS 'founder')
+   The founder's own invoice, colour for colour: dark grey bars, a teal bank header, green totals, a blue words bar, light grey value boxes
+   and a slate title. Paper colours, so raw values are allowed here like the rest of the legal block; the sheet is white in dark mode too.
+   White on the #666 bars is 5.7:1, white on the teal header 4.7:1 (the PDF's #45818e, a shade deeper so it holds AA), the slate title on white 4.9:1. The design is a key on
+   the sheet (`data-design`), never a stored colour. */
+.legal-root[data-design='founder'], .legal-invoice[data-design='founder'] {
+  --inv-bar: #666666;
+  --inv-bar-text: #ffffff;
+  --inv-head: #427c88;
+  --inv-head-text: #ffffff;
+  --inv-sum: #d9ead3;
+  --inv-sum-text: #5b6770;
+  --inv-words: #c9daf8;
+  --inv-row: #eef2f7;
+  --inv-bank: #f3f3f3;
+  --inv-box: #eef2f7;
+  --inv-title: #5b7385;
+  --inv-note: #666666;
+}
+.legal-invoice[data-design='founder'] { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #333333; }
+.legal-invoice[data-design='founder'] .inv-sum-k, .legal-invoice[data-design='founder'] .inv-sum-v { color: var(--inv-sum-text); }
+/* Editing on the paper: a field reads as the printed text; a faint dashed edge shows where you can type, on screen only. In the components
+   layer, so a width or alignment utility on one field still wins. */
+@layer components {
+.inv-edit { display: block; width: 100%; min-width: 0; margin: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; line-height: inherit; text-align: inherit; letter-spacing: inherit; text-transform: inherit; resize: none; field-sizing: content; border-radius: 4px; }
+.inv-edit::placeholder { color: currentColor; opacity: 0.45; }
+.inv-edit:hover { outline: 1px dashed color-mix(in srgb, currentColor 35%, transparent); outline-offset: 2px; }
+.inv-edit:focus-visible { outline: 2px solid var(--color-r5); outline-offset: 2px; }
+select.inv-edit { appearance: none; cursor: pointer; }
+/* A line's handle shows when the pointer is on the line or the line holds the caret (a tap on a phone), so the page has no extra buttons at rest. */
+.inv-handle { display: none; }
+.inv-line:hover .inv-handle, .inv-line:focus-within .inv-handle { display: inline-flex; }
+}
+@media print {
+  .inv-edit { outline: none !important; }
+  /* An empty field's hint and a date field's picker are for typing on screen; the paper prints neither. */
+  .inv-edit::placeholder { color: transparent; }
+  input[type='date'].inv-edit::-webkit-calendar-picker-indicator { display: none; }
+  /* A tax number's name is as wide as its word on paper, so it reads "PAN: ABCDE1234F" like the founder's invoice. */
+  .inv-tax-k { width: auto !important; }
+}
+
 
 /* ===== The ruler and the focus panel (2026-11-02, Mindful) =====
    components/RulerPicker.tsx draws `.rp`; components/FocusRounds.tsx and screens/Mindful.tsx draw the night-slate panel (`.mf-*`).
@@ -2026,6 +2132,21 @@ ol.grid > li > .toy:only-child {
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-sm);
+}
+/* On a phone the four tabs (Breathe, Timer, Pomodoro, Stopwatch) take the whole first row, spread evenly, and the main button sits on
+   its own row under them, full width, so nothing overlaps. */
+@media (max-width: 639.98px) {
+  .mf-top {
+    flex-wrap: wrap;
+  }
+  .mf-top > .mf-tabs {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+  .mf-top > .mf-start {
+    order: 2;
+    flex: 1 1 100%;
+  }
 }
 .mf-title {
   margin: 0;
@@ -2237,6 +2358,15 @@ ol.grid > li > .toy:only-child {
   gap: var(--spacing-xs);
   margin-top: var(--spacing-sm);
 }
+/* The focus panel's actions (Skip, Stop, the session line, This part): a clear gap from the break pickers above, so they read as their own row. */
+.mf-actions[aria-label='Clock actions'] {
+  margin-top: var(--spacing-md);
+}
+@media (min-width: 640px) {
+  .mf-actions[aria-label='Clock actions'] {
+    margin-top: var(--spacing-lg);
+  }
+}
 .mf-mini {
   min-height: 44px;
   padding: 0 var(--spacing-sm);
@@ -2269,6 +2399,33 @@ ol.grid > li > .toy:only-child {
 }
 .mf-status {
   margin-top: var(--spacing-xs);
+}
+/* In the actions row: Skip and Stop, then where you are (the dots and "Session 1 of 4"), then This part. On a laptop the three share one
+   line, the middle one taking the room left; on a phone each takes its own line, in that order, and This part spreads across its line. */
+.mf-actions > .mf-status {
+  display: flex;
+  flex: 1 1 200px;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  margin: 0;
+  text-align: center;
+}
+.mf-actions > .mf-status .mf-dots {
+  margin-top: 0;
+}
+.mf-actions > .mf-status .mf-line {
+  margin-top: var(--spacing-xs);
+}
+@media (max-width: 639.98px) {
+  .mf-actions.fill-row > .mf-status {
+    flex: 1 1 100%;
+  }
+  .mf-actions.fill-row > .mf-nudge {
+    flex: 1 1 100%;
+    justify-content: space-between;
+    margin-left: 0;
+  }
 }
 .mf-dots {
   display: flex;
@@ -2359,12 +2516,10 @@ ol.grid > li > .toy:only-child {
   font-variant-numeric: tabular-nums;
   color: #ffffff;
 }
-/* The round buttons: under the panel in one row on a phone; floating at its corners on a laptop, in the space its stage leaves. */
+/* The round buttons: one row at the top right, on the heading's line, on every screen. */
 .mf-rounds {
   display: flex;
-  justify-content: center;
   gap: var(--spacing-xs);
-  margin-top: var(--spacing-sm);
 }
 .mf-round {
   position: relative;
@@ -2418,53 +2573,7 @@ ol.grid > li > .toy:only-child {
     opacity: 1;
   }
 }
-@media (width >= 48rem) and (height >= 30rem) {
-  .mf-stage {
-    position: relative;
-    padding: 0 var(--spacing-xl) var(--spacing-lg);
-  }
-  .mf-stage .mf-panel {
-    padding-bottom: var(--spacing-lg);
-  }
-  .mf-rounds {
-    display: contents;
-  }
-  .mf-round {
-    position: absolute;
-  }
-  .mf-round[data-at='tl'] {
-    top: var(--spacing-md);
-    left: var(--spacing-xs);
-  }
-  .mf-round[data-at='tr'] {
-    top: var(--spacing-md);
-    right: var(--spacing-xs);
-  }
-  .mf-round[data-at='br'] {
-    top: calc(var(--spacing-md) + 44px + var(--spacing-xs));
-    right: var(--spacing-xs);
-  }
-  .mf-round[data-at='bc'] {
-    bottom: 0;
-    left: 50%;
-    margin-left: -22px;
-  }
-  /* A laptop has room beside the buttons, so their tips open sideways (towards the middle) rather than above. */
-  .mf-round[data-at='tl']::after {
-    top: 50%;
-    bottom: auto;
-    left: calc(100% + var(--spacing-xs));
-    transform: translateY(-50%);
-  }
-  .mf-round[data-at='tr']::after,
-  .mf-round[data-at='br']::after {
-    top: 50%;
-    right: calc(100% + var(--spacing-xs));
-    bottom: auto;
-    left: auto;
-    transform: translateY(-50%);
-  }
-}
+/* The panel is the full width of the column on every screen, like the boxes above it; its four round buttons sit in one row under it. */
 @media (prefers-reduced-motion: reduce) {
   .rp-line,
   .mf-bar > span,
@@ -2664,6 +2773,8 @@ ol.grid > li > .toy:only-child {
   .legal-doc .legal-sec { margin-top: 6mm; padding-top: 0; }
   .legal-doc .legal-clause, .legal-doc .legal-list li { orphans: 3; widows: 3; break-inside: avoid; page-break-inside: avoid; }
   .legal-doc .legal-sign, .legal-doc .legal-sign-block, .legal-doc .legal-parties, .legal-doc tr, .legal-doc fieldset { break-inside: avoid; page-break-inside: avoid; }
+  /* The acceptance section is kept whole: its heading and sentence never end one page with the signature blocks on the next. */
+  .legal-doc .legal-sec[data-kind='signatures'] { break-inside: avoid; page-break-inside: avoid; }
   .legal-doc .legal-sign { margin-top: 8mm; }
   .legal-doc .legal-sign-line { margin-top: 7mm; }
   .legal-doc thead { display: table-header-group; }
@@ -2708,6 +2819,81 @@ ol.grid > li > .toy:only-child {
   /* Kept in the flow but unseen and without height, so the numbers of the sections that print stay the numbers the text refers to ("section 6"). */
   .legal-doc .legal-noprint { position: absolute !important; visibility: hidden !important; height: 0 !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; }
   .legal-doc .legal-print-note { display: block; margin-top: 8mm; font-size: 8.5pt; font-style: italic; color: #555 !important; }
+  /* The brief prints as the paper draws it: a box per choice (ticked where the client ticked), never a browser widget. */
+  .legal-doc .legal-tick-input { display: none !important; }
+  .legal-doc .legal-box { display: inline !important; }
+  .legal-doc .legal-line-input { border: 0 !important; border-bottom: 0.5pt solid #000 !important; min-height: 0; }
+  .legal-doc .legal-q { break-inside: auto; }
+  /* Editing marks never reach the paper. */
+  .legal-doc .paper-edit { background: none !important; box-shadow: none !important; }
+  .legal-doc .paper-edit[data-empty]::before { content: none !important; }
+  .legal-doc .paper-var .paper-edit { border-bottom: 0 !important; padding: 0 !important; }
+  /* A blank still empty prints as a line to write on, as the paper has it. */
+  .legal-doc .paper-var .paper-edit[data-empty] { display: inline-block; min-width: 60mm; border-bottom: 0.5pt solid #000 !important; }
+  .legal-doc .paper-var-empty, .legal-doc .paper-handle, .legal-doc .paper-note { display: none !important; }
+  .legal-doc:has(.paper-sec) { padding-left: 0 !important; }
+  /* The typed layout on paper, measured from the founder's own PDF (a word processor's Arial at 11pt): every line 1.3227 of its size
+     (14.55pt for the words), 12pt between paragraphs, a 13pt subhead with 14pt above it, a 17pt section heading, the hairline 21pt under
+     a section and 23pt over the next heading, bullets and tick boxes 18pt in and their words 36pt in. With the text block PrintSheet gives
+     the page (6.5 by 9 inches, the PDF's), each page starts and ends on the line the PDF's does. */
+  .legal-root[data-layout='typed'] { --doc-accent: #000; --tl: 1.3227; }
+  .legal-root[data-layout='typed'] .legal-doc { font-family: Arial, Helvetica, sans-serif; font-size: 11pt; line-height: var(--tl); }
+  .legal-root[data-layout='typed'] .legal-doc :is(p, li, dd, td, th, h1, h2, h3) { line-height: var(--tl); letter-spacing: 0; }
+  .legal-root[data-layout='typed'] .legal-doc :is(h1, h2, h3) { font-weight: 700; }
+  .legal-root[data-layout='typed'] .legal-head { margin: 0; }
+  .legal-root[data-layout='typed'] .legal-title { margin: 0; padding-top: 22.4pt; font-size: 23pt; line-height: var(--tl); color: #000 !important; }
+  .legal-root[data-layout='typed'] .legal-subtitle { margin: 18.4pt 0 0; font-size: 17pt; line-height: var(--tl); color: #000 !important; }
+  .legal-root[data-layout='typed'] .legal-sec { margin-top: 23pt; padding-top: 0; }
+  .legal-root[data-layout='typed'] .legal-head ~ .legal-sec:first-of-type { margin-top: 12pt; }
+  /* The hairline closes the section above it, as the PDF draws it, so a page never opens on a rule. */
+  .legal-root[data-layout='typed'] .legal-sec + .legal-sec::before { content: none; }
+  .legal-root[data-layout='typed'] .legal-sec:has(~ .legal-sec:not(.legal-noprint))::after { content: ''; display: block; margin: 21pt 3.4pt 0; border-top: 0.75pt solid #9a9a9a !important; break-before: avoid; }
+  .legal-root[data-layout='typed'] .legal-sec.legal-noprint + .legal-sec { margin-top: 23pt; }
+  .legal-root[data-layout='typed'] .legal-sec-h { margin: 0; padding: 0; font-size: 17pt; line-height: var(--tl); border-bottom: 0 !important; color: #000 !important; }
+  .legal-root[data-layout='typed'] :is(.legal-clause, .legal-list, .legal-ticks, .legal-brief, .legal-links) { margin-top: 12pt; }
+  .legal-root[data-layout='typed'] .legal-clause[data-tight], .legal-root[data-layout='typed'] .paper-block[data-tight] > *, .legal-root[data-layout='typed'] .legal-ticks + .legal-ticks { margin-top: 0; }
+  /* A fieldset keeps its own margins, so the brief adds none above the first subhead. */
+  .legal-root[data-layout='typed'] .legal-brief { margin-top: 0; }
+  .legal-root[data-layout='typed'] .legal-h3 { margin-top: 14pt; font-size: 13pt; line-height: var(--tl); }
+  .legal-root[data-layout='typed'] .legal-h3[data-empty] { display: none; }
+  /* A paragraph may run on to the next page, two lines at least on each side, as a word processor keeps them; a heading stays with what follows. */
+  /* (Chrome keeps the widows here only with three orphans: with two it leaves one line of a three-line paragraph alone on the next page.) */
+  .legal-root[data-layout='typed'] :is(.legal-clause, .legal-list li) { break-inside: auto; page-break-inside: auto; orphans: 3; widows: 2; }
+  /* Where the PDF starts a page by hand (ContractView marks the block; the editor's blocks get the same rule from the page). */
+  .legal-root[data-layout='typed'] [data-page-break] { break-before: page; page-break-before: always; margin-top: 0; }
+  /* Lines break where a word processor breaks them (as full as they go), not evened out, or a paragraph would end a line early. */
+  .legal-root[data-layout='typed'] .legal-doc :is(p, li, h1, h2, h3, span) { text-wrap: wrap; text-wrap-style: auto; }
+  .legal-root[data-layout='typed'] :is(.legal-sec-h, .legal-h3) { break-after: avoid; page-break-after: avoid; }
+  .legal-root[data-layout='typed'] :is(.legal-list, .legal-ticks) { padding-left: 18pt; }
+  .legal-root[data-layout='typed'] :is(.legal-list, .legal-ticks) li { margin: 0; min-height: 0; gap: 0; align-items: baseline; }
+  /* The PDF's bullet is a filled circle; the mark is drawn, the bullet in the page's words is not changed. */
+  .legal-root[data-layout='typed'] .legal-list .legal-bullet { width: 18pt; font-weight: 400; font-size: 0; }
+  .legal-root[data-layout='typed'] .legal-list .legal-bullet::before { content: '\25CF'; font-size: 11pt; line-height: var(--tl); }
+  .legal-root[data-layout='typed'] .legal-ticks .legal-box { margin-right: 0.28em; font-size: 1em; line-height: inherit; font-family: Helvetica, Arial, sans-serif; }
+  .legal-root[data-layout='typed'] .legal-ticks li > span:not(.legal-box) + .legal-rule { margin-left: 0.28em; flex: 0 0 183pt; }
+  .legal-root[data-layout='typed'] .legal-answer { margin-top: 0; min-height: 95.6pt; }
+  /* At the client's link the brief is a form: on paper its rows are the paper's lines, never 44px tap targets. */
+  .legal-root[data-layout='typed'] :is(.legal-tick-row, .legal-field) { min-height: 0; gap: 0; align-items: baseline; }
+  .legal-root[data-layout='typed'] .legal-line-input { min-height: 0; height: calc(var(--tl) * 1em); padding: 0; font-size: 1em; line-height: inherit; }
+  /* Link lines nobody filled in are the screen's to type in; the PDF has none. */
+  .legal-root[data-layout='typed'] .legal-links:has(> li > .legal-line-input):not(:has(> li > .legal-line-input:not(:placeholder-shown))) { display: none; }
+  .legal-root[data-layout='typed'] .legal-links li { margin-top: 0; }
+  .legal-root[data-layout='typed'] .legal-table-wrap { margin: 12.7pt 0 26.6pt; overflow: visible; }
+  .legal-root[data-layout='typed'] .legal-table { width: 100%; margin: 0; }
+  /* The PDF's table runs 27.4pt past the right edge of the words. With the PDF's own text block (PrintSheet) the page keeps that strip
+     inside its right margin and the words stop short of it, so the table reaches into it without widening the page (a wider page is
+     shrunk to fit, and every line would move). */
+  .legal-root[data-layout='typed'][data-margin='normal'] .legal-doc { padding-right: 27.8pt !important; }
+  .legal-root[data-layout='typed'][data-margin='normal'] .legal-table { width: calc(100% + 27.4pt); }
+  .legal-root[data-layout='typed'] .legal-table :is(th, td) { padding: 5.3pt 6.8pt; font-size: 11pt; line-height: var(--tl); border: 1pt solid #9a9a9a !important; }
+  .legal-root[data-layout='typed'] .legal-table thead th { background: #eeeeee !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* The two signature blocks as the PDF tabs them: the client's 252pt in, every line on the paragraph's 14.55pt. */
+  .legal-root[data-layout='typed'] .legal-sign { margin-top: 12pt; gap: 0; grid-template-columns: 252pt 1fr; }
+  .legal-root[data-layout='typed'] .legal-sign-line > span { padding-bottom: 0 !important; line-height: inherit; }
+  .legal-root[data-layout='typed'] .legal-sign-line .paper-var .paper-edit[data-empty] { min-width: 0; border-bottom: 0 !important; }
+  .legal-root[data-layout='typed'] .legal-sign-block h3 { font-size: 11pt; line-height: var(--tl); }
+  /* One space between a label and its value, as typed (an Arial space is 0.278em). */
+  .legal-root[data-layout='typed'] .legal-sign-line { margin-top: 0; gap: 0.278em; line-height: var(--tl); }
 }
 
 /* The wordmark's dot: the seven pillar colours, red to violet, in one small round. */
@@ -2740,3 +2926,992 @@ ol.grid > li > .toy:only-child {
    page colour (the player's default is the system Canvas, a white bar on glass or a dark one in light mode). On glass there
    is no one colour under the icon, so the knockout draws nothing and the slash simply crosses the glyph, like a lucide icon. */
 .ua-knock { --ua-knockout: transparent; }
+
+/* Hover colours follow the pillar. An app's screen (Gate), a pillar page, 7RP and a feature page set data-accent on the root to a pillar;
+   a block can carry data-pillar to wear its own. --tint then becomes that pillar's colour, and every button kind hovers in it. */
+/* --tint-ink is the text that reads on that colour: white on the deep ones, the dark slate on orange and yellow. */
+:root[data-accent='servant_leader'], [data-pillar='servant_leader'] { --tint: var(--color-r1); --tint-ink: #ffffff; }
+:root[data-accent='friendship'], [data-pillar='friendship'] { --tint: var(--color-r2); --tint-ink: var(--color-ink-fixed); }
+:root[data-accent='parent_child'], [data-pillar='parent_child'] { --tint: var(--color-r3); --tint-ink: var(--color-ink-fixed); }
+:root[data-accent='lover_partner'], [data-pillar='lover_partner'] { --tint: var(--color-r4); --tint-ink: #ffffff; }
+:root[data-accent='self'], [data-pillar='self'] { --tint: var(--color-r5); --tint-ink: #ffffff; }
+:root[data-accent='guru'], [data-pillar='guru'] { --tint: var(--color-r6); --tint-ink: #ffffff; }
+:root[data-accent='divine'], [data-pillar='divine'] { --tint: var(--color-r7); --tint-ink: #ffffff; }
+@media (hover: hover) and (pointer: fine) {
+  /* A toy that names no colour of its own lifts with a glow in the pillar's colour. */
+  .toy:not([style*='--toy-color']):hover:not(:disabled) {
+    --toy-color: var(--tint);
+  }
+  /* The main dark button leans toward the pillar; the lean is small, so its text keeps its contrast in both themes. */
+  :is(.btn-primary, .toy.bg-ink):hover:not(:disabled) {
+    background-image: linear-gradient(135deg, color-mix(in oklab, var(--color-ink) 80%, var(--tint)), color-mix(in oklab, var(--color-ink) 68%, var(--tint)));
+  }
+  /* An outline button takes the pillar's edge and a faint wash of it. */
+  :is(.btn-outline, .toy.toy-ink):hover:not(:disabled) {
+    border-color: var(--tint);
+    background-color: color-mix(in oklab, var(--tint) 12%, var(--card-strong));
+  }
+  /* A text button takes the pillar's colour, deepened toward ink so it still reads on the page. */
+  .btn-ghost:hover:not(:disabled) {
+    color: color-mix(in oklab, var(--tint) 55%, var(--color-ink));
+  }
+}
+
+/* The running-clock pill in the logo's corner: its colour eases from one stage to the next (blue, green past halfway, orange in the last
+   five minutes, red in the last minute), and in the last minute it breathes gently. Only opacity and transform move. */
+.focus-pill-wrap {
+  transition:
+    background-color 0.6s var(--ease-open),
+    opacity 0.3s ease;
+  color: var(--color-on-fill);
+}
+.focus-pill-wrap.is-paused {
+  opacity: 0.8;
+}
+.focus-pill-wrap[data-urgent] {
+  animation: focus-pill-breathe 1.6s ease-in-out infinite;
+}
+/* The controls stay folded until a mouse is over the pill or the keyboard is inside it. */
+.focus-pill-ctl {
+  display: none;
+}
+.focus-pill-wrap:focus-within .focus-pill-ctl {
+  display: flex;
+}
+@media (hover: hover) and (pointer: fine) {
+  .focus-pill-wrap:hover .focus-pill-ctl {
+    display: flex;
+  }
+  .focus-pill-wrap:hover[data-urgent] {
+    animation-play-state: paused;
+  }
+  .focus-pill-btn:hover {
+    background-color: rgba(255, 255, 255, 0.18);
+  }
+}
+.focus-pill-btn:focus-visible {
+  outline: 2px solid var(--color-on-fill);
+  outline-offset: -3px;
+}
+@keyframes focus-pill-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .focus-pill-wrap {
+    transition: none;
+  }
+  .focus-pill-wrap[data-urgent] {
+    animation: none;
+  }
+}
+
+/* Breathe: one glass circle per step in a row, left to right (components/BreathFour.tsx). The step you are on fills with liquid over its
+   count (the level is set ten times a second with a matching short glide, a wave slides along its surface) with ripples spreading from
+   it, and carries its word and the seconds left; the ones before stay full and soft, the ones after wait empty. No outlines. Only transform and opacity move, and
+   a step's ripples run twice over its count and stop. */
+.breath-row {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px 0;
+  margin: 0 auto;
+}
+.breath-step {
+  position: relative;
+  display: block;
+  width: 68px;
+  height: 68px;
+  flex-shrink: 0;
+}
+.breath-glass {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.breath-empty {
+  fill: var(--c);
+  opacity: 0.16;
+}
+.breath-glass path {
+  fill: var(--c);
+  opacity: 0.5;
+  transition: opacity 0.4s ease;
+}
+.breath-glass[data-now] path {
+  opacity: 0.95;
+}
+.breath-level {
+  transition: transform 0.1s linear;
+}
+.breath-wave {
+  animation: breath-wave 1.6s linear infinite;
+}
+@keyframes breath-wave {
+  to {
+    transform: translateX(-100px);
+  }
+}
+.breath-ripples {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.breath-ripple {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--c);
+  opacity: 0;
+  animation: breath-ripple calc(var(--breath-move, 4s) / 2) ease-out 2 both;
+}
+@keyframes breath-ripple {
+  from {
+    opacity: 0.35;
+    transform: scale(0.3);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+.breath-in {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.breath-word {
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.breath-soft {
+  color: rgba(255, 255, 255, 0.72);
+  font-variant-numeric: tabular-nums;
+}
+.breath-count {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 359px) {
+  .breath-step {
+    width: 60px;
+    height: 60px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .breath-level {
+    transition: none;
+  }
+  .breath-glass[data-now] .breath-level {
+    transform: translateY(-58px) !important;
+  }
+  .breath-wave {
+    animation: none;
+  }
+  .breath-ripples {
+    display: none;
+  }
+}
+
+/* A box names its colour with data-pillar (its icon's colour); the buttons in it keep their own look and their own hover, and that hover
+   (the edge and faint wash on an outline button, the gentle lean on a dark one, the lift's glow) simply uses the box's colour through
+   --tint, set above. No new style. */
+
+/* Breathe and focus: more room in the middle. The clock and its ruler, the progress bar, and the pickers each get a clear band of space,
+   one step up the spacing scale on a phone and two on a laptop. */
+.mf-dial {
+  gap: var(--spacing-sm);
+  /* The top of the middle sits a little further from the tabs row than the other bands. */
+  margin-top: calc(var(--spacing-md) + var(--spacing-xs));
+}
+.mf-bar {
+  margin-top: var(--spacing-md);
+}
+.mf-sets {
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+.mf-panel > .mf-line {
+  margin-top: var(--spacing-md);
+}
+@media (min-width: 640px) {
+  .mf-panel {
+    padding: var(--spacing-md) var(--spacing-lg) var(--spacing-lg);
+  }
+  .mf-dial {
+    margin-top: calc(var(--spacing-lg) + var(--spacing-sm));
+  }
+  .mf-bar {
+    margin-top: var(--spacing-lg);
+  }
+  .mf-sets {
+    margin-top: var(--spacing-lg);
+  }
+  .mf-panel > .mf-line {
+    margin-top: var(--spacing-lg);
+  }
+}
+
+/* Quick choices that belong with a row of pickers (Breathe's 1, 3, 5, 10 min) sit on the pickers' line, at its right end, level with
+   the chips; on a phone they take their own line under the pickers, still at the right. */
+.mf-quick {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: var(--spacing-xs);
+}
+@media (width >= 40rem) {
+  .mf-quick {
+    grid-column: span 2;
+    align-self: end;
+  }
+}
+/* An actions row with nothing in it (Breathe while idle) takes no room. */
+.mf-actions:empty {
+  display: none;
+}
+
+/* ------------------------------------------------------------------------------------------------
+   Skeleton sweep (2026-11-03, learned from a shimmering skeleton wrapper, built here; components/Skeleton.tsx). Every block in
+   one loading region (Busy, SkeletonList, or a lone block) carries a band as big as the region, pulled back by the block's own
+   offset (--skel-x, --skel-y, measured by the region), so one diagonal light passes over the whole region at once. Only transform
+   moves; it runs only while the region is on screen in a visible tab (data-run); under reduced motion the blocks are plain and still.
+   ------------------------------------------------------------------------------------------------ */
+:root {
+  --fx-skel-shine: rgba(255, 255, 255, 0.55);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fx-skel-shine: rgba(255, 255, 255, 0.1);
+  }
+}
+:root[data-theme='dark'] {
+  --fx-skel-shine: rgba(255, 255, 255, 0.1);
+}
+@layer components {
+  .fx-skel {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fx-skel::after {
+    content: '';
+    position: absolute;
+    left: calc(-1 * var(--skel-x, 0px));
+    top: calc(-1 * var(--skel-y, 0px));
+    width: var(--skel-w, 100%);
+    height: var(--skel-h, 100%);
+    pointer-events: none;
+    background: linear-gradient(105deg, transparent 35%, var(--fx-skel-shine) 50%, transparent 65%);
+    transform: translateX(-100%);
+    animation: fx-skel-sweep 1.6s ease-in-out infinite;
+    animation-play-state: paused;
+  }
+  .fx-skel-region[data-run='true'] .fx-skel::after,
+  .fx-skel.fx-skel-region[data-run='true']::after {
+    animation-play-state: running;
+    will-change: transform;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-skel::after {
+    content: none;
+  }
+}
+@keyframes fx-skel-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  80%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Water's level bar (components/fx/WaterFill.tsx): the track and the bg-r4 pill look as they always did at rest. The level is the full
+   track width, slid left by transform (never by width), so its round leading end keeps its shape. The crest is a small soft wave at that
+   leading edge, seen only while the level glides after a glass is added or undone (opacity 0 at rest); GSAP moves it by translateX only. */
+.water-track {
+  position: relative;
+  height: 12px;
+  overflow: hidden;
+  /* Keeps the slid-out fill clipped to the rounded track in Safari too. */
+  isolation: isolate;
+}
+.water-level {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+.water-crest {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 24px;
+  height: 100%;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.water-crest svg {
+  display: block;
+  width: 36px;
+  height: 100%;
+  overflow: visible;
+}
+.water-crest path {
+  fill: var(--color-on-fill);
+  fill-opacity: 0.28;
+}
+.water-crest path.water-crest-foam {
+  fill: none;
+  stroke: var(--color-on-fill);
+  stroke-opacity: 0.55;
+  stroke-width: 1.2;
+}
+@media (prefers-reduced-motion: reduce) {
+  .water-level {
+    will-change: auto;
+  }
+  .water-crest {
+    display: none;
+  }
+}
+
+/* GradientStripes (components/fx/GradientStripes.tsx): light sliced into stripes. One horizon glow from the theme's indigo, sky
+   and green (plus the page's first glow) rising from the foot of the card, cut into upright stripes. Each stripe shows its own
+   slice of the one gradient (the fill is 1/n of the band wide, so a background n times as wide, positioned at i/(n-1), lines up),
+   with a rounded shade darker at its edges, and a 1px inset either side leaves a 2px seam of card between stripes. The band sits
+   in the lower 55% (a little less on the ink card) and fades out towards the top, so text above stays on calm colour. Only
+   transform moves (GSAP); the grain is a still SVG noise at 4%, hidden with reduced transparency or more contrast. */
+.fx-stripes {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.fx-stripes-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 55%;
+  display: flex;
+  -webkit-mask-image: linear-gradient(to top, black 0%, black 25%, transparent 85%);
+  mask-image: linear-gradient(to top, black 0%, black 25%, transparent 85%);
+}
+.fx-stripes[data-tone='ink'] .fx-stripes-band {
+  height: 48%;
+  opacity: 0.9;
+}
+/* A phone's words wrap over more of the card, so the band stays lower there. */
+@media (max-width: 767px) {
+  .fx-stripes-band {
+    height: 42%;
+  }
+  .fx-stripes[data-tone='ink'] .fx-stripes-band {
+    height: 38%;
+  }
+}
+.fx-stripe {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+}
+.fx-stripe-fill {
+  position: absolute;
+  top: 6%;
+  left: 1px;
+  right: 1px;
+  height: 140%;
+  border-radius: 10px 10px 0 0;
+  background-image:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--fill-shade) 34%, transparent),
+      transparent 32%,
+      color-mix(in srgb, var(--color-on-fill) 16%, transparent) 50%,
+      transparent 68%,
+      color-mix(in srgb, var(--fill-shade) 34%, transparent)
+    ),
+    linear-gradient(90deg, var(--color-r6), var(--color-r5) 42%, var(--color-r4) 74%, var(--glow-1));
+  background-size:
+    100% 100%,
+    calc(var(--fx-stripes-n) * 100%) 100%;
+  background-position:
+    0 0,
+    calc(var(--i) / (var(--fx-stripes-n) - 1) * 100%) 0;
+  background-repeat: no-repeat;
+  will-change: transform;
+}
+.fx-stripes::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23g)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-stripe-fill {
+    will-change: auto;
+  }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .fx-stripes::after {
+    display: none;
+  }
+}
+
+/* LiquidMetal (components/fx/LiquidMetal.tsx) -----------------------------------------------------------------------------
+   A ring of flowing chrome round one pill: a big square of conic metal stripes turns behind the button and shows only in the
+   rim (the wrapper's padding); a thinner coloured sheen turns the other way. The child keeps its own face, so its label's
+   contrast is unchanged. Only transform moves (GSAP); data-run pauses it off screen; reduced motion leaves it still. */
+:root {
+  --fx-metal-1: #fbfcff; /* near white */
+  --fx-metal-2: #cfd4e0; /* light silver */
+  --fx-metal-3: #8e95a8; /* mid steel */
+  --fx-metal-4: #4a5063; /* dark graphite */
+  --fx-metal-5: #e3e6ee; /* silver again */
+  --fx-metal-edge: rgba(255, 255, 255, 0.75);
+  --fx-metal-sheen: 0.25;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fx-metal-1: #e6e9f2;
+    --fx-metal-2: #a9afc0;
+    --fx-metal-3: #6c7387;
+    --fx-metal-4: #2e3343;
+    --fx-metal-5: #c3c8d6;
+    --fx-metal-edge: rgba(255, 255, 255, 0.45);
+    --fx-metal-sheen: 0.3;
+  }
+}
+:root[data-theme='dark'] {
+  --fx-metal-1: #e6e9f2;
+  --fx-metal-2: #a9afc0;
+  --fx-metal-3: #6c7387;
+  --fx-metal-4: #2e3343;
+  --fx-metal-5: #c3c8d6;
+  --fx-metal-edge: rgba(255, 255, 255, 0.45);
+  --fx-metal-sheen: 0.3;
+}
+.fx-metal {
+  --fx-metal-rim: 3px;
+  position: relative;
+  display: inline-flex;
+  isolation: isolate;
+  border-radius: var(--radius-pill, 999px);
+  padding: var(--fx-metal-rim);
+}
+.fx-metal-rim-2 {
+  --fx-metal-rim: 2px;
+}
+.fx-metal-rim-4 {
+  --fx-metal-rim: 4px;
+}
+/* The rotating layers live in their own clip, so the child's keyboard ring can still be drawn outside the rim. */
+.fx-metal-clip {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  background: var(--fx-metal-3);
+}
+/* A soft highlight along the top edge, like light caught on polished metal. */
+.fx-metal-clip::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 0 var(--fx-metal-edge);
+}
+.fx-metal-ring,
+.fx-metal-sheen {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(300%, 640px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%) rotate(30deg); /* the still angle; GSAP takes over when motion is allowed */
+  will-change: transform;
+}
+.fx-metal-ring {
+  background: conic-gradient(
+    from 0deg,
+    var(--fx-metal-1) 0deg,
+    var(--fx-metal-2) 24deg,
+    var(--fx-metal-4) 52deg,
+    var(--fx-metal-3) 78deg,
+    var(--fx-metal-1) 104deg,
+    var(--fx-metal-5) 128deg,
+    var(--fx-metal-3) 160deg,
+    var(--fx-metal-4) 186deg,
+    var(--fx-metal-2) 214deg,
+    var(--fx-metal-1) 238deg,
+    var(--fx-metal-4) 270deg,
+    var(--fx-metal-3) 300deg,
+    var(--fx-metal-5) 330deg,
+    var(--fx-metal-1) 360deg
+  );
+}
+.fx-metal-sheen {
+  opacity: var(--fx-metal-sheen);
+  background: conic-gradient(
+    from 90deg,
+    transparent 0deg,
+    var(--color-r5) 40deg,
+    transparent 90deg,
+    var(--color-r6) 150deg,
+    transparent 200deg,
+    var(--color-r4) 260deg,
+    transparent 310deg
+  );
+}
+.fx-metal[data-run='false'] .fx-metal-ring,
+.fx-metal[data-run='false'] .fx-metal-sheen {
+  will-change: auto;
+}
+/* The button sits above the metal; its own classes are untouched. */
+.fx-metal > :not(.fx-metal-clip) {
+  position: relative;
+  z-index: 1;
+}
+/* The keyboard ring is drawn just outside the rim, so it is never hidden by the metal. */
+.fx-metal > :not(.fx-metal-clip):focus-visible {
+  outline-offset: calc(var(--fx-metal-rim) + 3px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-metal-ring,
+  .fx-metal-sheen {
+    will-change: auto;
+  }
+}
+/* Reduced transparency or more contrast: the ring stays solid metal, and the coloured sheen goes. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .fx-metal-sheen {
+    display: none;
+  }
+}
+
+/* MorphShapes (components/fx/MorphShapes.tsx): a lava-lamp backdrop behind a hero. Four shapes in the page's glow colours, each
+   blurred on its own layer (so a turning shape moves on the compositor without re-blurring the group), faded at the top and the foot
+   of the section, with a faint grain so the soft gradient does not band. Sizes follow the hero's longer side (container units). */
+:root {
+  --fx-morph-a: 0.7;
+  --fx-morph-blur: 56px;
+  /* The four page glows, half a step richer than the wash so the shapes read against it; pale enough that the muted ink over the
+     periwinkle and lavender keeps 4.5:1 (sampled from rendered shots, light mode, 390 and 1280). */
+  --fx-morph-1: #c8d2ff;
+  --fx-morph-2: #b2e4d5;
+  --fx-morph-3: #f9c9c8;
+  --fx-morph-4: #d8c8f7;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fx-morph-a: 0.75;
+    --fx-morph-1: rgba(104, 116, 232, 0.6); /* the four glows, stronger than the wash so the shapes read */
+    --fx-morph-2: rgba(58, 170, 170, 0.46);
+    --fx-morph-3: rgba(214, 110, 150, 0.36);
+    --fx-morph-4: rgba(130, 100, 220, 0.5);
+  }
+}
+:root[data-theme='dark'] {
+  --fx-morph-a: 0.75;
+  --fx-morph-1: rgba(104, 116, 232, 0.6); /* the four glows, stronger than the wash so the shapes read */
+  --fx-morph-2: rgba(58, 170, 170, 0.46);
+  --fx-morph-3: rgba(214, 110, 150, 0.36);
+  --fx-morph-4: rgba(130, 100, 220, 0.5);
+}
+@media (min-width: 768px) {
+  :root {
+    --fx-morph-blur: 72px;
+  }
+}
+.fx-morph {
+  container-type: size;
+  overflow: hidden; /* the shapes overrun the section; the screen edge and the faded top and foot are where they stop */
+  opacity: var(--fx-morph-a);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 72%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 72%, transparent 100%);
+}
+/* As the page's own layer (MorphShapes `page`): fixed behind everything, one background for the whole page, so it needs no faded edge. */
+.fx-morph[data-page] {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+/* The soft glow that trails a mouse (pointer-fine only; set by MorphShapes). Hidden until the pointer moves; transform and opacity only. */
+.fx-morph-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 420px;
+  height: 420px;
+  margin: -210px 0 0 -210px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--fx-morph-1), transparent);
+  filter: blur(24px);
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+.fx-morph-glow[data-on] {
+  opacity: 0.9;
+}
+.fx-morph-shape {
+  position: absolute;
+  display: block;
+  /* --fx-s is the shape's share of the hero's longer side, set inline. */
+  width: calc(max(100cqw, 100cqh) * var(--fx-s, 0.5));
+  aspect-ratio: 1;
+  filter: blur(var(--fx-morph-blur)) saturate(1.1);
+  will-change: transform;
+}
+.fx-morph-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0.9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.fx-morph:not([data-run='true']) .fx-morph-shape {
+  will-change: auto;
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .fx-morph {
+    display: none;
+  }
+}
+
+/* Bento look and arrival (the .bento system, lib/bento.ts BENTO_SIZE). Learned from a bento grid layout's look, built here.
+   Arrival: each cell fades and lifts 12px as it scrolls into view, a little after the cell before it (by position, the eighth and
+   later share the last step), driven by the page's own scroll (animation-timeline: view()), so it never plays off screen and holds
+   once in. Only transform and opacity move; the fill is backwards only, so after arriving a cell is untouched (its toy lift still
+   works). Cells that already arrive on their own (Reveal's .fx-reveal, or a motion element with inline opacity) are left to that.
+   Where the browser has no scroll timelines, or under reduced motion, every cell simply shows. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .bento > :not(.fx-reveal, [style*='opacity']) {
+      --bento-i: 7;
+      animation: bento-arrive linear backwards;
+      animation-timing-function: var(--ease-open);
+      animation-timeline: view();
+      animation-range: entry calc(var(--bento-i) * 5%) entry calc(55% + var(--bento-i) * 5%);
+    }
+    .bento > :nth-child(1) { --bento-i: 0; }
+    .bento > :nth-child(2) { --bento-i: 1; }
+    .bento > :nth-child(3) { --bento-i: 2; }
+    .bento > :nth-child(4) { --bento-i: 3; }
+    .bento > :nth-child(5) { --bento-i: 4; }
+    .bento > :nth-child(6) { --bento-i: 5; }
+    .bento > :nth-child(7) { --bento-i: 6; }
+  }
+  @media (prefers-reduced-motion: no-preference) and (width >= 48rem) and (height >= 30rem) {
+    .bento-md > :not(.fx-reveal, [style*='opacity']) {
+      --bento-i: 7;
+      animation: bento-arrive linear backwards;
+      animation-timing-function: var(--ease-open);
+      animation-timeline: view();
+      animation-range: entry calc(var(--bento-i) * 5%) entry calc(55% + var(--bento-i) * 5%);
+    }
+    .bento-md > :nth-child(1) { --bento-i: 0; }
+    .bento-md > :nth-child(2) { --bento-i: 1; }
+    .bento-md > :nth-child(3) { --bento-i: 2; }
+    .bento-md > :nth-child(4) { --bento-i: 3; }
+    .bento-md > :nth-child(5) { --bento-i: 4; }
+    .bento-md > :nth-child(6) { --bento-i: 5; }
+    .bento-md > :nth-child(7) { --bento-i: 6; }
+  }
+}
+@keyframes bento-arrive {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bento > *,
+  .bento-md > * {
+    animation: none;
+  }
+}
+
+/* Hover, pointer fine only: a cell that is a link or a toy (or holds one alone) shows a hairline in the screen's accent on top of the
+   toy's own lift; the feature cell's wash brightens a little. An outline, not a new shadow, so the toy's shadow stays its own. */
+.bento-feature {
+  position: relative;
+  isolation: isolate;
+}
+.bento-feature::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background-image: linear-gradient(150deg, color-mix(in oklab, var(--color-r6) 12%, transparent), color-mix(in oklab, var(--color-r4) 10%, transparent) 70%, transparent);
+  opacity: 0;
+  transition: opacity 320ms var(--ease-open);
+}
+@supports (corner-shape: squircle) {
+  .bento-feature::after {
+    corner-shape: inherit;
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  :is(.bento, .bento-md) > :is(a, .toy):hover:not(:focus-visible),
+  :is(.bento, .bento-md) > * > :is(a, .toy):only-child:hover:not(:focus-visible) {
+    outline: 1px solid color-mix(in oklab, var(--tint) 35%, transparent);
+    outline-offset: -1px;
+  }
+  .bento-feature:hover::after {
+    opacity: 1;
+  }
+}
+
+/* KanbanBoard drag (components/KanbanBoard.tsx): a card lifted by pointer leaves a dashed slot of its own height, a copy follows
+   the pointer above everything, and while a card is held the cursor says grabbing (not-allowed over a column that cannot take it)
+   and nothing on the page selects. At rest a card looks exactly as before; only a long press no longer opens the phone's callout. */
+.kanban-card {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.kanban-card.kanban-home {
+  background: transparent;
+  box-shadow: none;
+  outline: 2px dashed var(--color-line);
+  outline-offset: -2px;
+}
+.kanban-card.kanban-home > * {
+  visibility: hidden;
+}
+.kanban-card.kanban-away {
+  display: none;
+}
+.kanban-clone {
+  position: fixed;
+  z-index: 1000;
+  margin: 0;
+  pointer-events: none;
+  will-change: transform;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+}
+html.kanban-drag,
+html.kanban-drag * {
+  cursor: grabbing !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+html.kanban-drag.kanban-no,
+html.kanban-drag.kanban-no * {
+  cursor: not-allowed !important;
+}
+
+/* ActivityGrid (components/ActivityGrid.tsx): "Your year" on Profile, a year of days as 12px cells with 3px gaps, Monday to Sunday down a
+   column and the weeks across. Five shades from the done green (--color-r4) thinned into the card, so they are pale to deep in light mode
+   and dark to bright in dark mode; each step is also lighter or darker than the last, and the legend and the tooltip carry the number, so
+   colour is never the only sign. The cells wait hidden until the grid is first seen and GSAP ripples them in; reduced motion never hides them. */
+.act-year {
+  --act-0: var(--fill-1);
+  --act-1: color-mix(in oklab, var(--color-r4) 25%, var(--card));
+  --act-2: color-mix(in oklab, var(--color-r4) 50%, var(--card));
+  --act-3: color-mix(in oklab, var(--color-r4) 75%, var(--card));
+  --act-4: color-mix(in oklab, var(--color-r4) 100%, var(--card));
+}
+.act-frame,
+.act-days {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 12px;
+  color: var(--label-2);
+}
+.act-frame {
+  flex: none;
+  display: grid;
+  grid-template-rows: auto auto;
+  row-gap: 3px;
+}
+/* The weeks scroll; the day names stay put beside them. The scroller bleeds only 8px (room for the grid's focus ring), not the row's 16px,
+   so the first week lines up with the card's padding. */
+.act-year .scroll-row.act-scroll {
+  display: block;
+  margin: calc(var(--spacing-xs) * -1);
+  padding: var(--spacing-xs);
+}
+.act-months {
+  display: grid;
+  grid-template-columns: repeat(var(--act-cols), 12px);
+  column-gap: 3px;
+  height: 14px;
+}
+.act-months > span {
+  white-space: nowrap;
+}
+.act-days {
+  flex: none;
+  display: grid;
+  grid-template-rows: repeat(7, 12px);
+  row-gap: 3px;
+  /* under the month row (14px) and its 3px gap, and one cell gap from the first week */
+  border-top: 17px solid transparent;
+  border-right: var(--spacing-xs) solid transparent;
+}
+.act-grid {
+  display: grid;
+  grid-template-rows: repeat(7, 12px);
+  row-gap: 3px;
+  border-radius: 4px;
+}
+/* The grid is wider than the box it scrolls in, so its keyboard ring is drawn on the box, whole, in the system's focus blue. */
+.act-grid:focus-visible {
+  outline: none;
+}
+.act-year .act-scroll {
+  border-radius: var(--radius-inner);
+}
+.act-year .act-scroll:has(.act-grid:focus-visible) {
+  outline: 3px solid var(--deep-self);
+  outline-offset: -3px;
+}
+.act-row {
+  display: grid;
+  grid-template-columns: repeat(var(--act-cols), 12px);
+  column-gap: 3px;
+}
+.act-cell {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--act-0);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ink) 6%, transparent);
+  transform-origin: center;
+}
+.act-cell[data-lv='1'] {
+  background: var(--act-1);
+}
+.act-cell[data-lv='2'] {
+  background: var(--act-2);
+}
+.act-cell[data-lv='3'] {
+  background: var(--act-3);
+}
+.act-cell[data-lv='4'] {
+  background: var(--act-4);
+}
+.act-cell.act-none {
+  background: transparent;
+  box-shadow: none;
+}
+.act-cell[data-active] {
+  box-shadow:
+    0 0 0 1px var(--card-strong),
+    0 0 0 3px var(--label);
+}
+.act-swatch {
+  flex: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .act-grid[data-reveal='wait'] .act-cell {
+    opacity: 0;
+  }
+}
+.act-tip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-inner);
+  background: var(--card-strong);
+  color: var(--label);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.act-tip[data-on] {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .act-tip {
+    transition: none;
+  }
+}
+
+/* SearchBox goo (components/SearchBox.tsx) */
+/* Two solid shapes behind the real field and results, merged by an SVG goo filter so the panel pours out of the
+   field. Decoration only: never under the text, the input or the rows, never hit by the pointer, hidden at rest. */
+.search-goo-host {
+  isolation: isolate;
+}
+.search-goo {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+}
+.search-goo-host[data-goo='rest'] .search-goo {
+  visibility: hidden;
+}
+.search-goo-shapes {
+  position: absolute;
+  inset: 0;
+}
+.search-goo-pill,
+.search-goo-neck,
+.search-goo-drop {
+  position: absolute;
+  background: var(--card-strong);
+}
+.search-goo-pill {
+  border-radius: 9999px;
+}
+.search-goo-neck {
+  border-radius: 24px;
+  transform-origin: 50% 0;
+}
+.search-goo-drop {
+  border-radius: var(--radius-card);
+  transform-origin: 50% 0;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce), (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .search-goo {
+    display: none;
+  }
+}

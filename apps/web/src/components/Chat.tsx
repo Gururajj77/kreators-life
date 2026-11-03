@@ -10,6 +10,7 @@ import { Avatar } from './Avatar';
 import { Icon } from './Icon';
 import { MoodFace } from './MoodFace';
 import { Button } from './Button';
+import { FocusPill } from './FocusPill';
 import { StartOver } from './StartOver';
 import { ThemeToggle } from './ThemeToggle';
 
@@ -118,7 +119,7 @@ function Lines({ lines, voice }: { lines: ChatLine[]; voice?: ChatVoice }) {
   );
 }
 
-function Typing({ who, continued }: { who: Host | ChatVoice; continued: boolean }) {
+function Typing({ who, continued, status }: { who: Host | ChatVoice; continued: boolean; status?: ReactNode }) {
   const reduce = useReducedMotion();
   const dots = useRef<HTMLSpanElement>(null);
   useEffect(() => {
@@ -135,13 +136,15 @@ function Typing({ who, continued }: { who: Host | ChatVoice; continued: boolean 
   }, [reduce]);
   const name = typeof who === 'string' ? hostName(who) : who.name;
   return (
-    <div data-typing role="status" aria-label={`${name} is typing`} className={`${continued ? 'mt-sm' : 'mt-md'} flex items-center gap-xs`}>
+    // With a status line (a long job, see fx/WorkingLine) that line speaks for the row; the dots stay as they are.
+    <div data-typing role={status ? undefined : 'status'} aria-label={status ? undefined : `${name} is typing`} className={`${continued ? 'mt-sm' : 'mt-md'} flex min-w-0 items-center gap-xs`}>
       {!continued && (typeof who === 'string' ? <Avatar relationship={who} size={24} decorative still /> : <Badge voice={who} />)}
       <span ref={dots} className="inline-flex items-center gap-[4px] py-xs" aria-hidden="true">
         {[0, 1, 2].map((i) => (
           <span key={i} className="block size-[8px] rounded-pill bg-ink-mute" />
         ))}
       </span>
+      {status}
     </div>
   );
 }
@@ -156,7 +159,7 @@ function Answer({ children }: { children: ReactNode }) {
     else gsap.fromTo(box.current, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.3, ease: 'power2.out' });
   }, [reduce]);
   return (
-    <div ref={box} data-answer className="mt-sm">
+    <div ref={box} data-answer aria-live="off" className="mt-sm">
       {children}
     </div>
   );
@@ -452,9 +455,12 @@ export function ChatTurns({
   notice,
   room,
   lastTurn,
+  typingStatus,
 }: {
   log: ChatLine[];
   typing: Host | ChatVoice | null;
+  /** A line beside the typing dots while a long job runs (the assistant's model call). */
+  typingStatus?: ReactNode;
   voice?: ChatVoice;
   /** What the person answers with, under the last lines: choices, a card, or a short wait line, then its links. */
   answer?: ReactNode;
@@ -468,14 +474,15 @@ export function ChatTurns({
   const turns = turnsOf(log);
   const lastLine = log[log.length - 1];
   const continued = Boolean(typing && lastLine?.from === 'bot' && (typeof typing === 'string' ? lastLine.host === typing : !lastLine.host));
+  // The transcript is a log (it reads as one, and screen readers hear each new line); the answer box inside it stays quiet.
   return (
-    <>
+    <div role="log" aria-live="polite" aria-label="Conversation" className="contents">
       {turns.map((t, i) => {
         const last = i === turns.length - 1;
         return (
           <section key={t[0]!.id} ref={last ? lastTurn : undefined} data-turn style={last ? { minHeight: room } : undefined} className="pt-xs pb-md">
             <Lines lines={t} voice={voice} />
-            {last && typing && <Typing who={typing} continued={continued} />}
+            {last && typing && <Typing who={typing} continued={continued} status={typingStatus} />}
             {last && notice && (
               <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
                 {notice}
@@ -485,7 +492,7 @@ export function ChatTurns({
           </section>
         );
       })}
-    </>
+    </div>
   );
 }
 
@@ -588,7 +595,11 @@ export function ChatScreen({
         {/* Start over on the left, Close and the theme on the right. On a phone the title and the step take a second
             line under the buttons, so they are never cut short; on a laptop they sit between them. */}
         <div className="mx-auto grid w-full max-w-[760px] grid-cols-[1fr_auto] items-center gap-x-xs gap-y-xs px-md py-sm md:grid-cols-[1fr_auto_1fr]">
-          <div className="col-start-1 row-start-1 flex min-w-0 items-center">{onStartOver && log.length > 1 && <StartOver onConfirm={onStartOver} />}</div>
+          {/* A running or paused focus clock (lib/focusSession.ts) shows beside Start over, so it is never out of sight in a chat. */}
+          <div className="col-start-1 row-start-1 flex min-w-0 items-center gap-xs">
+            {onStartOver && log.length > 1 && <StartOver onConfirm={onStartOver} />}
+            <FocusPill compact />
+          </div>
           <div className="col-span-2 col-start-1 row-start-2 min-w-0 text-left md:col-span-1 md:col-start-2 md:row-start-1">
             <p className="m-0 truncate text-[14px] font-extrabold">{title}</p>
             {step && <p className="m-0 truncate text-[12px] font-bold text-ink-soft">{step}</p>}

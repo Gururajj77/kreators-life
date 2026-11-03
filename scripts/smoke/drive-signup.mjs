@@ -46,6 +46,9 @@ if (process.env.DRIVE_START === 'welcome') {
   await new Promise((r) => setTimeout(r, 3000));
 } else {
 await page.goto(`${ORIGIN}/signup`, { waitUntil: 'networkidle0' });
+// The privacy choices card sits over the bottom left on a first visit: answer it before typing, like a person would (a tap under it could land on its links).
+await page.evaluate(() => [...document.querySelectorAll('[role="dialog"] button')].find((x) => /Reject all/.test(x.textContent))?.click());
+await new Promise((r) => setTimeout(r, 600));
 const fields = await page.$$('input');
 const kinds = [];
 for (const f of fields) kinds.push(await f.evaluate((el) => `${el.type}:${el.autocomplete}`));
@@ -58,9 +61,6 @@ for (const p of pws) { await p.click({ clickCount: 3 }); await p.type(`Camera-${
 await typeInto('input[type="tel"]', '+91 98765 43210');
 await page.$eval('input[type="date"]', (el) => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(el, '1990-05-20'); el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); });
 await page.screenshot({ path: path.join(OUT, '1-form.png') });
-// The privacy choices card sits over the bottom left on a first visit: answer it first, like a person would.
-await page.evaluate(() => [...document.querySelectorAll('[role="dialog"] button')].find((x) => /Reject all/.test(x.textContent))?.click());
-await new Promise((r) => setTimeout(r, 600));
 for (const box of await page.$$('form input[type="checkbox"]')) await box.click();
 const btn = await page.$('button[type="submit"]');
 console.log('submit disabled?', await btn.evaluate((b) => b.disabled));

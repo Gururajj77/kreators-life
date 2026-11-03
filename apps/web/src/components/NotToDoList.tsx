@@ -96,7 +96,7 @@ export function NotToDoList({ items, date, queue }: Props) {
             const subtitle =
               item.today === 'slipped' ? 'Slipped today. Fresh start tomorrow.' : item.streak === 0 ? 'No streak yet. Today can be day one.' : `${item.streak} ${item.streak === 1 ? 'day' : 'days'} in a row · best ${item.bestStreak}`;
             return (
-              <li key={item.id}>
+              <li key={item.id} data-pillar={rel?.key}>
                 <CheckRow
                   checked={item.today === 'kept'}
                   onToggle={() => mark(item, item.today === 'kept' ? null : 'kept')}

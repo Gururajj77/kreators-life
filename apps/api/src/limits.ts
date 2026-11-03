@@ -77,6 +77,8 @@ export const LIMITS = {
   portalLogin: { max: 5, windowSec: 600 },
   /** The same password, per client whatever the address, so many addresses cannot share the guessing. */
   portalLoginLink: { max: 20, windowSec: 600 },
+  /** A client asking for a new password from the lock screen, per address: it needs no session, so it is held to three an hour. */
+  portalPasswordAsk: { max: 3, windowSec: 3600 },
   /** A client choosing a retainer length, and the owner's lifecycle calls (stage, password, offer, confirm). */
   lifecycle: { max: 120, windowSec: 3600 },
   /** Changing the password from Profile, per person: the current password is checked, so a stolen session cannot guess it. */
@@ -160,6 +162,8 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/discover/submit', limit: 'discover' },
   { method: 'PUT', path: '/wellbeing/focus-settings', limit: 'prefs' },
   { method: 'PATCH', path: '/wellbeing/focus/:id', limit: 'prefs' },
+  { method: 'POST', path: '/wellbeing/focus', limit: 'prefs' },
+  { method: 'DELETE', path: '/wellbeing/focus/:id', limit: 'prefs' },
   { method: 'POST', path: '/me/calendar', limit: 'prefs' },
   { method: 'PUT', path: '/session/away', limit: 'prefs' },
   { method: 'POST', path: '/discover/more/:kind/submit', limit: 'discover' },
@@ -212,6 +216,11 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/public/invoices/:token/unlock', limit: 'portalLogin', by: 'address' },
   { method: 'POST', path: '/public/agency/doc/:token/unlock', limit: 'portalLogin', by: 'address' },
   { method: 'POST', path: '/public/agency/:token/retainer', limit: 'portal' },
+  // Client onboarding at the link (saved as they go, sent once) and the ask for a new password, all per address: the link is the only key.
+  { method: 'PUT', path: '/public/agency/:token/onboarding', limit: 'portal', by: 'address' },
+  { method: 'POST', path: '/public/agency/:token/onboarding/submit', limit: 'portal', by: 'address' },
+  { method: 'POST', path: '/public/agency/password-request', limit: 'portalPasswordAsk', by: 'address' },
+  { method: 'POST', path: '/agency/clients/:id/password-request/close', limit: 'lifecycle' },
   { method: 'POST', path: '/agency/clients/:id/stage', limit: 'lifecycle' },
   { method: 'PUT', path: '/agency/clients/:id/lifecycle', limit: 'lifecycle' },
   { method: 'POST', path: '/agency/clients/:id/checklist', limit: 'lifecycle' },

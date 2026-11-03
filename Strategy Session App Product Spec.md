@@ -214,7 +214,7 @@ The ramp is `rampTime`: wake-up and lights-out move thirty minutes earlier for e
 
 ### Your plan
 
-Days a week, at least: 3 to 7, default 5. A daily check-in time, default 21:00, written to the person's reminder time so the cron sends one inbox reminder on any day without a check-in. What a short week costs (`PENALTIES`). The weekly check and the monthly review dates. A typed name, then "Sign it". The optional live call is a switch in the same card ("I would like a live call with a coach", US$100 or ₹10,000 in India); when it is on, the details open after signing and point at Help to set a time by hand until a payment provider is connected. Saying no changes nothing.
+Days a week, at least: 3 to 7, default 5. A daily check-in time, default 21:00, written to the person's reminder time so the cron sends one inbox reminder on any day without a check-in. What a short week costs (`PENALTIES`). The weekly check and the monthly review dates. A typed name, then "Sign it". The optional live call is a switch in the same card ("I would like a live call with a coach", ₹10,000, charged in rupees); when it is on, the details open after signing and point at Help to set a time by hand until a payment provider is connected. Saying no changes nothing.
 
 ### Your pillars and what comes next
 
@@ -315,12 +315,11 @@ The coach's job shrinks from running every session to reviewing exceptions. One 
 
 *Status: the offer is on the last card; booking and payment wait for the payment provider.*
 
-The app is the program; the live call is a paid add-on at US$100 or ₹10,000. A student can complete onboarding, the daily loop and every review without ever speaking to the coach.
+The app is the program; the live call is a paid add-on at ₹10,000, charged in Indian rupees (decided 2026-11-03: India first, open to all). A student can complete onboarding, the daily loop and every review without ever speaking to the coach.
 
 | Buyer | Live call price | Charged in |
 | --- | --- | --- |
-| India | ₹10,000 | INR (UPI, cards) |
-| Everywhere else | US$100 | USD (cards) |
+| Everyone (India first, open to all) | ₹10,000 | INR (UPI, cards; a card from abroad is charged in rupees) |
 
 **Where the call is offered**
 
@@ -331,11 +330,11 @@ The app is the program; the live call is a paid add-on at US$100 or ₹10,000. A
 **How a booking works**
 
 1. The student picks a slot from the coach's availability, shown in the student's timezone.
-2. Currency is set by the card's billing country, not by IP or a dropdown, so the parity price can't be gamed.
+2. The price is ₹10,000 for everyone, charged in rupees, so there is no parity price to game.
 3. The coach gets the prep page: map placement, scorecard, insecurities, adherence, the student's own questions.
 4. After the call, the coach edits the plan in the app. Changes are tagged "from your live call".
 
-**Is ₹10,000 actually parity?** No. At about ₹96.5 per dollar (mid-market, July 2026, [Pluang](https://pluang.com/en/tools/currency-converter/usd-inr)), US$100 is about ₹9,650. So ₹10,000 is a straight currency conversion, slightly rounded up. Purchasing-power parity for India is roughly ₹20 to ₹22 per international dollar (approximate, from memory of World Bank figures), which would put the call near ₹2,000 to ₹2,500. Pick one and name it honestly:
+*History (before 2026-11-03, when the call was US$100 abroad):* **Is ₹10,000 actually parity?** No. At about ₹96.5 per dollar (mid-market, July 2026, [Pluang](https://pluang.com/en/tools/currency-converter/usd-inr)), US$100 is about ₹9,650. So ₹10,000 is a straight currency conversion, slightly rounded up. Purchasing-power parity for India is roughly ₹20 to ₹22 per international dollar (approximate, from memory of World Bank figures), which would put the call near ₹2,000 to ₹2,500. Pick one and name it honestly:
 
 - **Same real price everywhere:** keep ₹10,000 and call it local-currency pricing.
 - **True parity:** about ₹2,500 in India. More Indian students can buy, at a quarter of the revenue per call.
@@ -383,7 +382,7 @@ The biggest risk is building the whole map before one student completes a month.
 
 - **Self-reported scores inflate.** A student can rate emotional state 8/10 and control over feelings 6/10 in the same sitting. Ask behavior questions ("how many nights this week did you sleep after 1?") next to every slider.
 - **Penalties drive lying, not effort.** If a miss costs a coaching week, students will tick boxes they did not do. Consider rewarding honest reporting of a bad week. Also, "lose a coaching week" means nothing to a self-serve student who never booked one. The penalty needs a new lever: a delayed unlock, a broken streak, or a miss shown on the coach roster. *As built, the student picks one of exactly those three at step 10; none of them is enforced yet.*
-- **Self-serve hides the moment that sold coaching.** In a live session, trust comes from a person reading the student back to themselves. A form does not do that by default. The placement chart and prep page have to do it, or the US$100 call will feel like a cost and not a next step.
+- **Self-serve hides the moment that sold coaching.** In a live session, trust comes from a person reading the student back to themselves. A form does not do that by default. The placement chart and prep page have to do it, or the ₹10,000 call will feel like a cost and not a next step.
 - **Sensitive data.** Insecurities, relationship history, spiritual practice. This needs a privacy stance before the first paying student.
 
 **Open questions**

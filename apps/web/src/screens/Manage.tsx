@@ -1,4 +1,5 @@
 import { MODULE_BY_KEY, PERMISSION_META, ROLE_META, type Permission } from '@kreators/shared';
+import { longDate } from '../lib/date';
 import { AppIcon } from '../components/AppIcon';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -121,7 +122,7 @@ export function Manage() {
                 {m.role !== 'user' && <StatusTag tone="calm">{ROLE_META[m.role].name}</StatusTag>}
               </p>
               <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                {m.xp} xp, streak {m.streak}, joined {new Date(m.createdAt).toLocaleDateString()}
+                {m.xp} xp, streak {m.streak}, joined {longDate(m.createdAt)}
                 {m.lastCheckin ? `, last check-in ${m.lastCheckin}` : ', never checked in'}
               </p>
             </li>

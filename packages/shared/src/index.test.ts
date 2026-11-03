@@ -1,4 +1,4 @@
-import { FOCUS_DEFAULTS, parseFocusSettings, AMBIENT_SOUNDS, BREAK_BEATS, rulerClamp, rulerIndex, rulerTicks, rulerValueAt } from './index';
+import { FOCUS_DEFAULTS, focusGoalMet, parseFocusSettings, AMBIENT_SOUNDS, BREAK_BEATS, rulerClamp, rulerIndex, rulerTicks, rulerValueAt } from './index';
 import { parseFaq, MAX_FAQ } from './index';
 import { lineForDay, DAILY_LINE_COUNT } from './index';
 import { numberValue, computeNumerology, personalCycle, numerologyInsights, nameWords, NUMBER_READINGS, KARMIC_DEBTS, YEAR_THEMES, type NumerologyContext } from './index';
@@ -23,7 +23,7 @@ import { builtInTemplate, parseReviewPrompts, periodDays, periodFor, periodLabel
 import { MAX_NOT_TO_DO, notToDoStreak, notToDoWeek, shiftDay } from './index';
 // Discover's answer keys live on the server only (P138); the tests read the same file the Worker does.
 import { DISCOVER_KEYS as K } from '../../../apps/api/src/discoverKeys';
-import { AGENT_LIMITS, AGENTS, ASSISTANT_MODELS, centsFrom, creditsFor, FALLBACK_PRICE, isPaidPlan, messagesFor, microsFrom, MODEL_PRICES, PAID_PLANS, PLANS, priceOf, spendSplit, TOPUP_PACKS } from './index';
+import { AGENT_LIMITS, AGENTS, ASSISTANT_MODELS, centsFrom, creditsFor, FALLBACK_PRICE, isPaidPlan, isCurrency, CURRENCIES, LIVE_CALL_CENTS, messagesFor, PLAN_CURRENCY, planPriceLabel, microsFrom, MODEL_PRICES, PAID_PLANS, PLANS, priceOf, spendSplit, TOPUP_PACKS } from './index';
 import { describe, expect, it } from 'vitest';
 import { bountyPayout, COMPLEMENTS, dressCodeFor, feeBps, greetingFor, INTEREST_GROUPS, INTERESTS, ladderOptions, MAX_INTERESTS, MODULE_GROUPS, MODULES, moduleState, nextWeek, passwordProblem, matchCircles, matchScore, money, nudgeFor, rolloutBucket, slotsFor, timeLabel, zonedToUtc } from './index';
 
@@ -37,6 +37,17 @@ describe('money', () => {
     expect(money(123450, 'INR')).toBe('₹1,234.50');
     expect(money(100000, 'INR')).toBe('₹1,000');
     expect(money(-2500, 'USD')).toBe('-$25');
+  });
+  it('groups rupees in lakh and crore and other currencies in thousands, whatever the runtime', () => {
+    expect(money(1_000_000_000, 'INR')).toBe('₹1,00,00,000');
+    expect(money(10_000_000, 'INR')).toBe('₹1,00,000');
+    expect(money(129_950, 'INR')).toBe('₹1,299.50');
+    expect(money(100_000_000, 'USD')).toBe('$1,000,000');
+    expect(money(-5, 'INR')).toBe('-₹0.05');
+    expect(money(1_000_000)).toBe('₹10,000');
+    // A Studio money price typed in rupees is read from its digits: Rs 1,299.50 is 129950 paise.
+    expect(typedCents('1,299.50')).toBe(129_950);
+    expect(typedCents('₹1,299')).toBe(129_900);
   });
   it('content rewards pay per thousand verified views, never past the cap or below the floor', () => {
     const rule = { ratePerThousand: 10, maxPayoutPoints: 500, minViews: 1000 };
@@ -867,13 +878,16 @@ describe('editing the routine', () => {
 });
 
 describe('assistant credits', () => {
-  it('prices the three plans as agreed: Pro $15 for $10 of use, Pro Max $125 for $100, Ultra $500 for $400', () => {
+  it('prices the three plans in rupees as the founder set them: Pro Rs 1,499, Pro Max Rs 12,499, Ultra Rs 49,999 (2026-11-03, margins kept near the dollar plans at about Rs 96.5 to the dollar)', () => {
     expect(PAID_PLANS).toEqual(['pro', 'pro_max', 'ultra']);
-    // One credit is a tenth of a US cent, so a dollar of model use is a thousand credits.
-    expect([PLANS.pro.priceCents, PLANS.pro.credits]).toEqual([1_500, 10_000]);
-    expect([PLANS.pro_max.priceCents, PLANS.pro_max.credits]).toEqual([12_500, 100_000]);
-    expect([PLANS.ultra.priceCents, PLANS.ultra.credits]).toEqual([50_000, 400_000]);
-    for (const k of PAID_PLANS) expect(PLANS[k].priceCents).toBeGreaterThan(PLANS[k].credits / 10);
+    expect(PLAN_CURRENCY).toBe('INR');
+    expect([PLANS.pro.priceCents, PLANS.pro.credits]).toEqual([149_900, 10_000]);
+    expect([PLANS.pro_max.priceCents, PLANS.pro_max.credits]).toEqual([1_249_900, 100_000]);
+    expect([PLANS.ultra.priceCents, PLANS.ultra.credits]).toEqual([4_999_900, 400_000]);
+    expect(planPriceLabel('pro')).toBe('₹1,499 for 30 days');
+    expect(PLANS.pro.blurb).toBe('10,000 credits a month, about 833 messages.');
+    for (const k of PAID_PLANS) expect(PLANS[k].blurb).not.toMatch(/US\$|\$|dollar/);
+    expect(money(LIVE_CALL_CENTS, PLAN_CURRENCY)).toBe('₹10,000');
     expect(isPaidPlan('none')).toBe(false);
     expect(isPaidPlan('pro_max')).toBe(true);
   });
@@ -885,8 +899,19 @@ describe('assistant credits', () => {
       expect(pro!.perMessage).toBeLessThan(pro!.perDay);
       for (const k of PAID_PLANS) expect(AGENT_LIMITS[k][a].perDay).toBeLessThanOrEqual(PLANS[k].credits);
     }
-    // Top-ups never sell credits cheaper than the biggest plan does.
-    for (const t of TOPUP_PACKS) expect(t.priceCents / t.credits).toBeGreaterThanOrEqual(PLANS.ultra.priceCents / PLANS.ultra.credits);
+    // Top-ups are scaled from the old dollar packs by the plans' ratio and rounded to a clean rupee price ending in 99.
+    expect(TOPUP_PACKS.map((t) => [t.key, t.priceCents, t.credits])).toEqual([
+      ['small', 89_900, 8_000],
+      ['medium', 229_900, 20_000],
+      ['large', 449_900, 40_000],
+    ]);
+    for (const t of TOPUP_PACKS) {
+      expect(t.priceCents % 100).toBe(0);
+      expect((t.priceCents / 100) % 100).toBe(99);
+    }
+    expect(isCurrency('INR')).toBe(true);
+    expect(isCurrency('constructor')).toBe(false);
+    expect(CURRENCIES[0]).toBe('INR');
   });
   it('turns tokens into whole credits, rounding up, with no float in between', () => {
     const kimi = MODEL_PRICES['moonshotai/kimi-k2.6']!;
@@ -1490,6 +1515,26 @@ describe('the timer settings a person keeps', () => {
     expect(parseFocusSettings(JSON.stringify({ focus: 40 })).focus).toBe(40);
     expect(parseFocusSettings('not json')).toEqual(FOCUS_DEFAULTS);
     expect('extra' in s).toBe(false);
+  });
+  it('keeps the daily goal and the reminder off until set, and holds them to the rules', () => {
+    expect(FOCUS_DEFAULTS.goalMinutes).toBeNull();
+    expect(FOCUS_DEFAULTS.reminderTime).toBeNull();
+    expect(FOCUS_DEFAULTS.reminderDays).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(parseFocusSettings({ goalMinutes: 47 }).goalMinutes).toBe(45);
+    expect(parseFocusSettings({ goalMinutes: 5 }).goalMinutes).toBe(15);
+    expect(parseFocusSettings({ goalMinutes: 9999 }).goalMinutes).toBe(480);
+    expect(parseFocusSettings({ goalMinutes: null }).goalMinutes).toBeNull();
+    expect(parseFocusSettings({ goalMinutes: 'lots' }).goalMinutes).toBeNull();
+    expect(parseFocusSettings({ reminderTime: '07:30' }).reminderTime).toBe('07:30');
+    expect(parseFocusSettings({ reminderTime: '24:00' }).reminderTime).toBeNull();
+    expect(parseFocusSettings({ reminderDays: [7, 1, 1, 9, 0, 2.5, '3'] }).reminderDays).toEqual([1, 3, 7]);
+    expect(parseFocusSettings({ reminderDays: 'mon' }).reminderDays).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+  it('counts the days a goal was met, and nothing without a goal', () => {
+    expect(focusGoalMet([30, 90, 10, 60], 60)).toBe(2);
+    expect(focusGoalMet([30, 90], null)).toBe(0);
+    expect(focusGoalMet([], 30)).toBe(0);
+    expect(focusGoalMet([Number.NaN, 30], 30)).toBe(1);
   });
   it('marks a mini break with one beat and the long break with three, and has serene sounds to pick from', () => {
     expect(BREAK_BEATS).toEqual({ short: 1, long: 3 });

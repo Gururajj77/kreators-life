@@ -1,4 +1,4 @@
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, money, MONTH_RE, monthShift, type FinanceDue, type FinanceGoal, type FinanceRecurring, type FinanceSplit, type FinanceSummary, type FinanceTransaction, typedCents } from '@kreators/shared';
+import { EXPENSE_CATEGORIES, formatCount, INCOME_CATEGORIES, LOCALE, money, MONTH_RE, monthShift, type FinanceDue, type FinanceGoal, type FinanceRecurring, type FinanceSplit, type FinanceSummary, type FinanceTransaction, typedCents } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { PeriodPanel } from '../components/PeriodPanel';
@@ -10,16 +10,16 @@ import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { Toggle } from '../components/Toggle';
 import { api } from '../lib/api';
-import { todayLocal } from '../lib/date';
+import { shortDate, todayLocal } from '../lib/date';
 import { FIELD } from '../lib/ui';
 import { useParamState } from '../lib/useParamState';
 import { Fold } from '../components/Fold';
 
 import { useAuthed } from '../lib/queries';
 
-const monthName = (m: string) => new Date(`${m}-01T00:00:00`).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
-const shortMonth = (m: string) => new Date(`${m}-01T00:00:00`).toLocaleDateString(undefined, { month: 'short' });
-const day = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+const monthName = (m: string) => new Date(`${m}-01T00:00:00`).toLocaleDateString(LOCALE, { month: 'short', year: 'numeric' });
+const shortMonth = (m: string) => new Date(`${m}-01T00:00:00`).toLocaleDateString(LOCALE, { month: 'short' });
+const day = (d: string) => shortDate(d);
 const shiftMonth = monthShift;
 /** A typed amount in cents through `typedCents` ("1,250.50" and "₹1.005" read right, a minus kept); junk reads as 0, so the form stays shut. */
 const toCents = (v: string): number => {
@@ -53,7 +53,7 @@ export function Finance() {
             <Stat label="earned, all time" value={money(d.totals.incomeCents, d.currency)} tone="var(--tint-green)" />
             <Stat label="spent, all time" value={money(d.totals.expenseCents, d.currency)} tone="var(--tint-red)" />
             <Stat label="kept" value={money(d.totals.netCents, d.currency)} tone={d.totals.netCents >= 0 ? 'var(--tint-yellow)' : 'var(--tint-red)'} />
-            <Stat label="platform points, all time" value={d.totals.platformPoints.toLocaleString()} tone="var(--tint-purple)" />
+            <Stat label="platform points, all time" value={formatCount(d.totals.platformPoints)} tone="var(--tint-purple)" />
           </div>
         )}
         {/* Logging money is what Finance is for, so Money in and Money out are the two solid buttons; the rest are quieter. */}
@@ -106,7 +106,7 @@ export function Finance() {
               <Stat label="in" value={money(d.incomeCents, d.currency)} tone="var(--tint-green)" />
               <Stat label="out" value={money(d.expenseCents, d.currency)} tone="var(--tint-red)" />
               <Stat label="net" value={money(d.netCents, d.currency)} tone={d.netCents >= 0 ? 'var(--tint-yellow)' : 'var(--tint-red)'} />
-              <Stat label="platform points" value={d.platformPoints.toLocaleString()} tone="var(--tint-purple)" />
+              <Stat label="platform points" value={formatCount(d.platformPoints)} tone="var(--tint-purple)" />
             </div>
             <MonthBars months={d.months} currency={d.currency} />
             <CategoryDonut byCategory={d.byCategory} currency={d.currency} />
@@ -126,7 +126,7 @@ export function Finance() {
               )}
             </p>
             {d.owedToYou.length > 0 && (
-              <div className="mt-sm grid grid-cols-1 gap-xs sm:grid-cols-2" aria-label="Agency invoices owed to you">
+              <div className="mt-sm grid grid-cols-1 gap-xs sm:grid-cols-2" data-pillar="self" aria-label="Agency invoices owed to you">
                 {d.owedToYou.map((o) => (
                   <StatTile
                     key={o.currency}
@@ -245,6 +245,9 @@ export function Finance() {
               Entries, {monthName(month)}
             </h2>
             {d.transactions.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Nothing logged this month yet.</p>}
+            {d.transactions.some((t) => t.currency && t.currency !== d.currency) && (
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">The totals count only {d.currency}. Entries in another currency are listed here and not added in.</p>
+            )}
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
               {d.transactions.map((t) => (
                 <TxRow key={t.id} t={t} currency={d.currency} onChange={refetch} />
@@ -366,7 +369,7 @@ function DueRow({ due, currency, onChange }: { due: FinanceDue; currency: string
             {due.dueDate ? `${overdue ? 'was due' : 'due'} ${day(due.dueDate)}` : 'no date'}
             {due.recurring === 'monthly' ? ', every month' : ''}
             {due.note ? `, ${due.note}` : ''}
-            {due.settledAt ? `, settled ${new Date(due.settledAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}` : ''}
+            {due.settledAt ? `, settled ${shortDate(due.settledAt)}` : ''}
           </span>
         </span>
         <span className="shrink-0 text-[16px] font-extrabold">{money(due.amountCents, due.currency || currency)}</span>
@@ -524,7 +527,7 @@ function AddSheet({ kind, onClose, onDone }: { kind: 'income' | 'expense' | null
         </div>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-[14px] font-bold">Splits (optional)</legend>
-          <p className="m-0 text-[12px] font-semibold text-ink-soft">Shares of this amount that belong to other people, for example an editor’s cut. Each one shows as owed until you mark it paid.</p>
+          <p className="m-0 text-[12px] font-semibold text-ink-soft">Shares that belong to others, like an editor’s cut. Each stays owed until you mark it paid.</p>
           <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
             {splits.map((s, i) => (
               <li key={i} className="grid grid-cols-[1fr_120px_44px] gap-xs">

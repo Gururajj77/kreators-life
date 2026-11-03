@@ -6,6 +6,14 @@ import { MediaCover } from '../components/Media';
 import { useSession } from '../lib/store';
 
 /** One thing on offer, with the door into the app. Signing in brings you straight back to it. */
+/** A card is a preview, so its line is short: the first sentence when it is short enough, else the first words and an ellipsis. The page itself has all of it. */
+function cardBlurb(text: string, max = 24): string {
+  const t = text.trim().replace(/\s+/g, ' ');
+  const first = t.match(/^.*?[.?!](?=\s|$)/)?.[0] ?? t;
+  const words = first.split(' ');
+  return words.length <= max ? first : `${words.slice(0, max).join(' ').replace(/[,;:]$/, '')}…`;
+}
+
 export function ListingCard({ listing, showFeature = true }: { listing: Listing; showFeature?: boolean }) {
   const token = useSession((s) => s.token);
   const meta = LISTING_TYPE_META[listing.type];
@@ -36,18 +44,18 @@ export function ListingCard({ listing, showFeature = true }: { listing: Listing;
           <p className="m-0 text-[14px] font-semibold text-ink-soft">{listing.by}</p>
         </div>
       </div>
-      {listing.blurb && <p className="mt-sm m-0 text-[14px] font-semibold leading-snug text-ink-soft text-pretty">{listing.blurb}</p>}
+      {listing.blurb && <p className="mt-sm m-0 text-[14px] font-semibold leading-snug text-ink-soft">{cardBlurb(listing.blurb)}</p>}
       {listing.facts.length > 0 && (
-        // One line that scrolls sideways, never a wrapped row that leaves one tag alone on the line under it.
-        <div className="mt-sm">
-          <ul className="scroll-row scroll-fade list-none" aria-label="Facts">
-          {listing.facts.map((f, i) => (
-            <li key={`${f.kind}-${i}`} className="flex shrink-0">
-              <FactTag kind={f.kind}>{f.text}</FactTag>
+        // A card is a preview: the first three facts, wrapping onto a second line when they must, never a row that
+        // scrolls sideways inside the card. The page itself lists every fact.
+        // fill-row-all: a fact that wraps onto a line of its own spans the line instead of standing alone (the lone-pill rule).
+        <ul className="fill-row-all mt-sm flex list-none flex-wrap gap-xs p-0" aria-label="Facts">
+          {listing.facts.slice(0, 3).map((f, i) => (
+            <li key={`${f.kind}-${i}`} className="flex max-w-full">
+              <FactTag kind={f.kind} className="w-full justify-center">{f.text}</FactTag>
             </li>
           ))}
-          </ul>
-        </div>
+        </ul>
       )}
       <div className="mt-md flex flex-1 flex-wrap items-end justify-between gap-xs">
         {showFeature && module ? (

@@ -1,4 +1,5 @@
 import { PRODUCT_KIND_META, productHasOwnCover, productPayWays, unlockAt, type DiscountCheck, money } from '@kreators/shared';
+import { dateTime } from '../lib/date';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
@@ -204,7 +205,7 @@ export function ProductPage() {
             {p.description && <p className="mt-sm m-0 whitespace-pre-wrap text-[16px] font-semibold leading-relaxed">{p.description}</p>}
             <ul className="mt-md flex list-none flex-col gap-xs p-0 m-0 text-[14px] font-bold">
               {p.kind === 'course' && <li>{d.lessonCount} lessons{p.certificate ? ', with a certificate at the end' : ''}</li>}
-              {p.kind === 'event' && p.startsAt && <li>{new Date(p.startsAt).toLocaleString()}</li>}
+              {p.kind === 'event' && p.startsAt && <li>{dateTime(p.startsAt)}</li>}
               {p.kind === 'event' && p.capacity && (
                 <li>
                   {Math.max(0, p.capacity - p.sold)} of {p.capacity} seats left

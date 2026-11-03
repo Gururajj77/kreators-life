@@ -15,6 +15,8 @@ import { lazyNamed } from './lib/lazy';
 import { useMe } from './lib/queries';
 import { useApplyTheme } from './lib/theme';
 import { useFocus, useSession } from './lib/store';
+import { useFocusSession } from './lib/focusSession';
+import { FocusPill } from './components/FocusPill';
 import { noteVisit } from './lib/context';
 import { Auth, Forgot, ResetPassword } from './screens/Auth';
 import { Home as Dashboard } from './screens/Home';
@@ -24,8 +26,8 @@ import { Welcome } from './screens/Welcome';
 import { Home } from './site/Home';
 import { SevenRP } from './site/SevenRP';
 
-// Mounted once by Shell, not a screen, but still downloaded only after the first paint so the entry stays under budget:
-// its state lives outside the component (lib/focusPortal.ts, localStorage), so a tick's worth of delay loses nothing.
+// Mounted once by Root for anyone signed in, not a screen, but still downloaded only after the first paint so the entry stays under budget:
+// a running clock is written down in the tab (sessionStorage, lib/focusSession.ts) and picked back up when it mounts, so a delay loses nothing.
 const FocusRoundsHost = lazyNamed(() => import('./components/FocusRoundsHost'), 'FocusRoundsHost');
 const Admin = lazyNamed(() => import('./screens/Admin'), 'Admin');
 const Manage = lazyNamed(() => import('./screens/Manage'), 'Manage');
@@ -163,7 +165,8 @@ function Shell() {
   const loc = useLocation();
   if (!token) return <Navigate to={toSignIn(loc.pathname, loc.search)} replace />;
   if (me.isPending) return <Loading />;
-  if (me.isError) {
+  // Only when there is nothing to show: a background refetch that fails (the window refocused while offline) keeps the page as it was.
+  if (me.isError && !me.data) {
     return (
       <div className="mx-auto flex min-h-dvh max-w-[480px] flex-col items-center justify-center gap-md px-md text-center" role="alert">
         <Avatar relationship="self" size={72} mood="sleepy" />
@@ -177,11 +180,6 @@ function Shell() {
   return (
     <>
       <Page tabs />
-      {/* Outside the card table's own "focus mode" guard on purpose: a different thing with the same name (CLAUDE.md), and a running
-          focus clock must keep going while that is on too. */}
-      <Suspense fallback={null}>
-        <FocusRoundsHost />
-      </Suspense>
       {!focus && (
         <div className="contents no-print">
           <TabBar />
@@ -204,20 +202,48 @@ const explained = (key: string, el: ReactNode) => (
 /** Every new page starts at the top. A link with a hash still lands on its element. */
 /** A new page starts at the top and a hash lands on its element; Back and Forward return to where you were. */
 function Root() {
+  const token = useSession((s) => s.token);
   return (
     <>
       <ScrollRestoration />
       <Page tabs={false} />
       <ConsentPopup />
+      {/* The focus clock, for anyone signed in, at the root so no page change ever unmounts it: the app, the two chats, the vibe check,
+          the public site and the card table's focus mode alike. Signing out (no token) takes it away. */}
+      {token && (
+        <Suspense fallback={null}>
+          <FocusRoundsHost />
+        </Suspense>
+      )}
     </>
   );
 }
 
-/** Pages outside the app shell and the public site still get the theme switch. */
+/**
+ * Pages outside the app shell and the public site still get the theme switch, and a running focus clock its pill: at the top left on a
+ * phone (where the first header starts 64px down to clear the corners; never pinned, it scrolls away with the page), and beside the theme switch at the top right on a laptop, where
+ * the top left holds these pages' own BackLink (Admin, a public page, a product page).
+ */
 function Standalone() {
+  const token = useSession((s) => s.token);
+  // The vibe check carries the pill beside its own Close button.
+  const vibe = useLocation().pathname.startsWith('/vibe-check');
+  const clock = useFocusSession((s) => s.snap.active) && Boolean(token) && !vibe;
   return (
     <>
-      <ThemeToggle floating />
+      <div className="safe-top fixed top-sm right-md z-30 flex items-center gap-xs">
+        {clock && (
+          <span className="no-print hidden md:flex">
+            <FocusPill compact />
+          </span>
+        )}
+        <ThemeToggle />
+      </div>
+      {clock && (
+        <div className="safe-top absolute top-sm left-md z-30 no-print md:hidden">
+          <FocusPill compact />
+        </div>
+      )}
       <Page tabs={false} />
     </>
   );

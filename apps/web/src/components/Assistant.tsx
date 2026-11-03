@@ -6,8 +6,10 @@ import {
   KIND_META,
   KINDS,
   MAX_NOT_TO_DO,
+  formatCount,
   messagesFor,
   money,
+  PLAN_CURRENCY,
   MOODS,
   NOT_TO_DO_TITLE_MAX,
   PERIOD_KINDS,
@@ -61,6 +63,10 @@ import { Markdown } from './Markdown';
 import { StartOver } from './StartOver';
 import { MoodFace } from './MoodFace';
 import { FIELD } from '../lib/ui';
+import { WorkingLine } from './fx/WorkingLine';
+
+/** What a typed message does while it runs, shown in turn beside the typing dots. */
+const WORKING_PHRASES = ['Reading what you asked', 'Looking things up', 'Making the changes'] as const;
 
 /**
  * The assistant: the round button at the bottom right of every screen in the app, and the panel it opens over the
@@ -677,7 +683,7 @@ function Receipts({ scope, ids }: { scope: string; ids: string[] }) {
 const PAYWALL: Record<AssistantPaywall, { title: string; line: string }> = {
   plan: {
     title: 'Typing is part of a plan',
-    line: `Pro is ${money(PLANS.pro.priceCents, 'USD')} a month for ${PLANS.pro.credits.toLocaleString('en-US')} credits, about ${messagesFor(PLANS.pro.credits).toLocaleString('en-US')} messages. The flows stay free. See Plans and credits in the Profile tab.`,
+    line: `Pro is ${money(PLANS.pro.priceCents, PLAN_CURRENCY)} a month for ${formatCount(PLANS.pro.credits)} credits, about ${formatCount(messagesFor(PLANS.pro.credits))} messages. The flows stay free.`,
   },
   credits: { title: 'Out of credits', line: 'Top up, or wait for your plan to start again. The flows stay free.' },
   day: { title: "Today's limit is used", line: 'It frees up over the next 24 hours, and a bigger plan has more room. The flows stay free.' },
@@ -754,6 +760,8 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
   const [talk, setTalk] = useKept<AssistantTurn[]>(scope, 'talk', []);
   const [receipts, setReceipts] = useKept<Record<string, AssistantReceipt>>(scope, 'receipts', {});
   const [thinking, setThinking] = useKept(scope, 'thinking', false);
+  // When the running message was sent, so its seconds keep counting while the person moves around the app.
+  const [since, setSince] = useKept(scope, 'since', 0);
   // The running message's id, for Stop, and whether Stop was tapped.
   const run = useKeptRef<string | null>(scope, 'run', null);
   const [stopping, setStopping] = useKept(scope, 'stopping', false);
@@ -1095,7 +1103,7 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
             say(meta.host, [`Which layer? A pyramid is built from the foundation${shut ? ', so a layer shows only once the one before it is there' : ''}.`], {
               kind: 'chips',
               chips: open.map((k) => ({ label: KIND_META[k].label, value: k, blurb: KIND_META[k].hint })),
-              more: 'Foundation is the one thing you will not let break. A guiding principle keeps it standing. A value goal is how you want to feel. A goal outcome is the result you can see. A project is the work that gets you there, and tasks hang under it.',
+              more: 'Each choice says what its layer is for. From the top, they run foundation, guiding principle, value goal, goal outcome and project, with tasks under it.',
               pick: (c2) => {
                 you(c2.label);
                 const kind = c2.value as NodeKind;
@@ -1403,6 +1411,7 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
     const turns: AssistantTurn[] = [...talk.map(now), { role: 'user' as const, text }].slice(-40);
     setTalk(turns);
     setThinking(true);
+    setSince(Date.now());
     setStopping(false);
     setTyping('bumling');
     const runId = crypto.randomUUID();
@@ -1472,6 +1481,27 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
     else gsap.fromTo(el, { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.25, ease: 'power2.out' });
   }, [reduce]);
 
+  // On a phone the panel ends at the top of the tab bar, whatever height the bar has (its labels can make it taller
+  // than the class above assumes); on a laptop the bar is hidden and the md: classes place the card.
+  useLayoutEffect(() => {
+    const el = panel.current;
+    const bar = document.querySelector<HTMLElement>('nav.fx-bar[aria-label="Main"]');
+    if (!el || !bar) return;
+    const place = () => {
+      const shown = getComputedStyle(bar).display !== 'none';
+      el.style.bottom = shown ? `${Math.max(0, window.innerHeight - bar.getBoundingClientRect().top)}px` : '';
+    };
+    place();
+    const ro = new ResizeObserver(place);
+    ro.observe(bar);
+    window.addEventListener('resize', place);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', place);
+      el.style.bottom = '';
+    };
+  }, []);
+
   // The small link is only for asks that do not already offer the list as a choice.
   const offersMenu = Boolean(ask && ask.kind === 'chips' && ask.chips.some((c) => c.value === 'menu' || c.value === 'more' || c.value === 'all'));
   const showMenuLink = log.length > 2 && !offersMenu;
@@ -1529,7 +1559,7 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
     );
   })();
 
-  const credits = !status.data ? '' : !status.data.connected ? 'Tap a flow to log something' : !account || account.plan === 'none' ? 'Typing needs a plan' : `${account.planName} · ${account.total.toLocaleString('en-US')} credits left`;
+  const credits = !status.data ? '' : !status.data.connected ? 'Tap a flow to log something' : !account || account.plan === 'none' ? 'Typing needs a plan' : `${account.planName} · ${formatCount(account.total)} credits left`;
 
   return (
     <section
@@ -1569,7 +1599,7 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
         </div>
       )}
       <div ref={box} className="min-h-0 flex-1 overflow-y-auto px-md" aria-live="polite">
-        <ChatTurns log={log} typing={typing} answer={answer} answerKey={`${log.filter((m) => m.from === 'you').length}:${ask?.kind ?? ''}`} room={`${room}px`} lastTurn={lastTurn} />
+        <ChatTurns log={log} typing={typing} answer={answer} answerKey={`${log.filter((m) => m.from === 'you').length}:${ask?.kind ?? ''}`} room={`${room}px`} lastTurn={lastTurn} typingStatus={thinking ? <WorkingLine key={since} label={stopping ? 'Bumling is stopping' : 'Bumling is working'} phrases={stopping ? ['Stopping after this step'] : WORKING_PHRASES} since={since || undefined} /> : undefined} />
       </div>
       <div className="border-t-2 border-line p-xs">
         <ChatComposer placeholder={canType ? 'Add or change something' : status.data?.connected ? 'Needs a plan' : 'Ask what something means'} onStop={thinking ? stop : undefined} stopping={stopping} onSend={(t) => void send(t)} disabled={thinking || ask?.kind === 'wait'} maxLength={2000} />

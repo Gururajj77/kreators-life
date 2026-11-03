@@ -44,7 +44,8 @@ const COPY = {
   timeLede: 'Type minutes, or hours and minutes like 1:30.',
   removeAsk: 'This removes the deliverable and its notes. It cannot be undone.',
   armyLede: 'This one answers a deliverable in an Army campaign.',
-  changesLede: 'The client can ask for a change at their link while some are left; it goes back to making and uses one. With none left they can only ask for a paid change, which arrives here as a note. A new month starts with a fresh count.',
+  changesLede: 'Each change the client asks for uses one and sends the piece back to making.',
+  changesMore: ['With none left, the client can only ask for a paid change, which arrives here as a note.', 'A new month starts with a fresh count.'],
 } as const;
 
 const ARMY_TAG: Record<string, { tone: TagTone; name: string }> = {
@@ -304,6 +305,11 @@ function Changes({ item, onDone }: { item: AgencyDeliverable; onDone: () => void
       </h3>
       <p className="mt-xs m-0 text-[14px] font-bold">{`${changesLabel(item.revisions, item.revisionsAllowed)}${left === 0 ? '. None left' : ''}`}</p>
       <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{COPY.changesLede}</p>
+      <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-[12px] font-semibold text-ink-soft">
+        {COPY.changesMore.map((l) => (
+          <li key={l}>{l}</li>
+        ))}
+      </ul>
       <div className="mt-xs flex flex-wrap gap-xs">
         <Button variant="outline" size="sm" onClick={() => change.mutate(1)} disabled={change.isPending}>
           Add a change

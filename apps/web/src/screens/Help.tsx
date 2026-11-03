@@ -1,4 +1,5 @@
 import { earningGuide, HELP_FAQ, termGroups, type SupportTicket } from '@kreators/shared';
+import { longDate } from '../lib/date';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -35,7 +36,7 @@ function Ticket({ t, agent, onChange }: { t: SupportTicket; agent: boolean; onCh
       </p>
       <p className="m-0 text-[14px] font-semibold text-ink-soft">
         {agent ? `${t.userName}, ` : ''}
-        {new Date(t.createdAt).toLocaleDateString()}
+        {longDate(t.createdAt)}
       </p>
       <p className="mt-xs m-0 whitespace-pre-wrap text-[16px] font-semibold leading-relaxed">{t.body}</p>
       {t.reply && (
@@ -97,20 +98,33 @@ export function Help() {
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Help</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          Answers to the usual questions, and a line to the team. If you are in danger, call your local emergency number. In India, Tele-MANAS is 14416.
-        </p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Answers to the usual questions, and a line to the team.</p>
+        <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">In danger? Call your local emergency number. In India, Tele-MANAS is 14416.</p>
+        <div className="mt-sm">
+          <nav aria-label="On this page" className="scroll-row">
+            {[
+              ['#earning', 'How you earn'],
+              ['#words', 'Words we use'],
+              ['#faq', 'Common questions'],
+              ['#write', 'Write to the team'],
+            ].map(([href, label]) => (
+              <a key={href} href={href} className="toy toy-flat inline-flex min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill bg-card px-md text-[14px] font-bold">
+                {label}
+              </a>
+            ))}
+          </nav>
+        </div>
       </header>
 
       <section className="mt-lg" id="earning" aria-labelledby="earning-heading">
         <h2 id="earning-heading" className="text-[24px]">
           How you earn
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Xp is progress: it fills your level and your pillars. Points are spendable: rewards, featured spots. Badges are proof. Nothing here is big on purpose; showing up is the whole trick.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Xp is progress, points are to spend, and badges are proof. Showing up is the whole trick.</p>
         {earningGuide().map((g) => (
-          <div key={g.title} className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
-            <h3 className="m-0 text-[18px]">{g.title}</h3>
-            <ul className="mt-xs flex list-none flex-col p-0 m-0">
+          <Fold key={g.title} className="mt-sm" title={g.title} hint={String(g.lines.length)}>
+          <div className="rounded-card bg-card p-md shadow-toy-soft">
+            <ul className="flex list-none flex-col p-0 m-0">
               {g.lines.map((l) => (
                 <li key={l.what} className="flex items-baseline justify-between gap-sm border-t border-line py-xs text-[14px]">
                   <span className="min-w-0 flex-1">
@@ -122,6 +136,7 @@ export function Help() {
               ))}
             </ul>
           </div>
+          </Fold>
         ))}
       </section>
 
@@ -130,13 +145,15 @@ export function Help() {
           Words we use
         </h2>
         <p className="prose-long mt-xs m-0 text-[14px] font-semibold text-ink-soft">Every word the app made up, in plain ones. The "How it works" section at the bottom of each app shows the ones it leans on.</p>
-        <nav aria-label="Word categories" className="mt-sm flex flex-wrap gap-xs">
-          {termGroups().map((g) => (
-            <a key={g.name} href={`#words-${g.name.toLowerCase().replace(/[^a-z]+/g, '-')}`} className="toy toy-flat inline-flex min-h-[44px] items-center rounded-pill bg-card px-md text-[14px] font-bold">
-              {g.name}
-            </a>
-          ))}
-        </nav>
+        <div className="mt-sm">
+          <nav aria-label="Word categories" className="scroll-row">
+            {termGroups().map((g) => (
+              <a key={g.name} href={`#words-${g.name.toLowerCase().replace(/[^a-z]+/g, '-')}`} className="toy toy-flat inline-flex min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill bg-card px-md text-[14px] font-bold">
+                {g.name}
+              </a>
+            ))}
+          </nav>
+        </div>
         {termGroups().map((g) => (
           <div key={g.name} id={`words-${g.name.toLowerCase().replace(/[^a-z]+/g, '-')}`} className="mt-md">
             <h3 className="m-0 text-[16px] font-extrabold">{g.name}</h3>
@@ -152,7 +169,7 @@ export function Help() {
         ))}
       </section>
 
-      <section className="mt-lg" aria-labelledby="faq-heading">
+      <section className="mt-lg" id="faq" aria-labelledby="faq-heading">
         <h2 id="faq-heading" className="text-[24px]">
           Common questions
         </h2>
@@ -174,7 +191,7 @@ export function Help() {
         </p>
       </section>
 
-      <section className="mt-lg" aria-labelledby="write-heading">
+      <section className="mt-lg" id="write" aria-labelledby="write-heading">
         <h2 id="write-heading" className="text-[24px]">
           Write to the team
         </h2>

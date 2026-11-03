@@ -1,4 +1,5 @@
-import { PROPOSAL_STAGES, type Proposal, type ProposalStage } from '@kreators/shared';
+import { PROPOSAL_STAGES, type Proposal, type ProposalStage, money } from '@kreators/shared';
+import { longDate } from '../lib/date';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button } from '../components/Button';
@@ -84,8 +85,8 @@ function ProposalCard({ p, reviewer, onChange }: { p: Proposal; reviewer: boolea
           </span>
           <span className="block text-[14px] font-semibold text-ink-soft">
             {reviewer ? `${p.userName}, ` : ''}
-            {p.budgetAmount > 0 ? `${p.currency} ${p.budgetAmount.toLocaleString()}, ` : ''}
-            updated {new Date(p.updatedAt).toLocaleDateString()}
+            {p.budgetAmount > 0 ? `${money(Math.round(p.budgetAmount * 100), p.currency)}, ` : ''}
+            updated {longDate(p.updatedAt)}
           </span>
         </span>
         <Icon icon={ChevronDown} size={20} strokeWidth={3} className={`shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -97,7 +98,7 @@ function ProposalCard({ p, reviewer, onChange }: { p: Proposal; reviewer: boolea
             <ol className="mt-sm flex list-none flex-col gap-xs border-l-2 border-line p-0 pl-sm m-0">
               {p.log.map((l, i) => (
                 <li key={`${l.createdAt}-${i}`} className="text-[14px] font-semibold text-ink-soft">
-                  <span className="font-bold text-ink">{l.toStage ? STAGE_LABEL[l.toStage as ProposalStage] ?? l.toStage : ''}</span> by {l.actorName}, {new Date(l.createdAt).toLocaleDateString()}
+                  <span className="font-bold text-ink">{l.toStage ? STAGE_LABEL[l.toStage as ProposalStage] ?? l.toStage : ''}</span> by {l.actorName}, {longDate(l.createdAt)}
                   {l.note ? `. ${l.note}` : ''}
                 </li>
               ))}

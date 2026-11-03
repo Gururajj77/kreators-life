@@ -1,4 +1,4 @@
-import { EVENT_TYPE_META, EVENT_TYPES, type DiscountCheck, type EventRegistration, type EventType, type PartyEvent } from '@kreators/shared';
+import { EVENT_TYPE_META, EVENT_TYPES, type DiscountCheck, type EventRegistration, type EventType, type PartyEvent, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
@@ -511,7 +511,7 @@ export function EventPage() {
                   <span className="block text-[14px] font-semibold text-ink-soft">
                     {r.status}
                     {r.networkingOptIn ? ', open to intros' : ''}
-                    {r.checkedInAt ? `, checked in ${new Date(r.checkedInAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}` : ''}
+                    {r.checkedInAt ? `, checked in ${new Date(r.checkedInAt).toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' })}` : ''}
                   </span>
                 </span>
                 {r.status === 'registered' && (
@@ -552,7 +552,7 @@ function DuplicateEvent({ id, startsAt }: { id: string; startsAt: string }) {
         Run it again
       </Button>
       <Sheet open={open} onClose={() => setOpen(false)} title="Run it again">
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">The same event on a new date: title, place, seats and price carry over. Guests sign up again, and any xp comes with a new code.</p>
+        <p className="m-0 text-[14px] font-semibold text-ink-soft">Same title, place, seats and price on a new date. Guests sign up again, with a new code.</p>
         <label className="mt-md block">
           <span className="block text-[14px] font-bold">Starts</span>
           <input type="datetime-local" value={when} onChange={(ev) => setWhen(ev.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />

@@ -1,4 +1,5 @@
 import { CONTENT_KINDS, LINK_SOURCES, SOCIAL_PLATFORM_META, type ContentItem, type TrackedLink } from '@kreators/shared';
+import { dateTime } from '../lib/date';
 import { useMutation } from '@tanstack/react-query';
 import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
@@ -133,7 +134,7 @@ function ContentCard({ item, onChange }: { item: ContentItem; onChange: () => vo
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
       <p className="m-0 text-[12px] font-bold text-ink-soft">
         {platform}, {item.kind}
-        {item.syncedAt ? `, numbers from ${new Date(item.syncedAt).toLocaleString()}` : ', numbers not read yet'}
+        {item.syncedAt ? `, numbers from ${dateTime(item.syncedAt)}` : ', numbers not read yet'}
       </p>
       <a href={item.url} target="_blank" rel="noreferrer" className="mt-xs block break-words text-[16px] font-bold underline-offset-4 hover:underline">
         {item.caption || item.url}

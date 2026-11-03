@@ -1,9 +1,10 @@
-import { FOCUS_VIEWS, focusQualityName, RELATIONSHIP_BY_KEY, type FocusView } from '@kreators/shared';
+import { FOCUS_VIEWS, focusGoalMet, focusQualityName, RELATIONSHIP_BY_KEY, type FocusView } from '@kreators/shared';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { useSession } from '../lib/store';
 import { bento } from '../lib/bento';
+import { useFocusPrefs } from '../lib/focusPrefs';
 import { useParamState } from '../lib/useParamState';
 import { HBars, PillBars, StatTile } from './Charts';
 import { Section } from './Section';
@@ -28,6 +29,10 @@ export function FocusDashboard() {
   const spec = FOCUS_VIEWS.find((v) => v.key === view)!;
   const q = useQuery({ queryKey: ['focus', view], queryFn: () => api.focusDashboard(view, todayLocal()), enabled: Boolean(token) });
   const d = q.data;
+  // The optional daily goal adds one tile: the days in this stretch that met it. A count only, never a streak.
+  const goal = useFocusPrefs().settings.goalMinutes;
+  const tiles = goal ? 6 : 5;
+  const cols = goal ? 3 : 5;
   const maxMin = d ? Math.max(unit === 'hours' ? 0.5 : 30, ...d.buckets.map((b) => scale(b.minutes, unit))) : unit === 'hours' ? 0.5 : 30;
   const maxTasks = d ? Math.max(3, ...d.buckets.map((b) => b.tasksDone)) : 3;
 
@@ -65,10 +70,10 @@ export function FocusDashboard() {
 
       {d && (
         <>
-          <div className="mt-sm grid grid-cols-2 gap-xs md:grid-cols-5">
-            <StatTile className={bento(0, 5, 2, 5)} label="Focus time" value={show(d.totals.minutes, unit)} hint={`${d.totals.rounds} ${d.totals.rounds === 1 ? 'session' : 'sessions'}`} />
+          <div className={`mt-sm grid grid-cols-2 gap-xs ${goal ? 'md:grid-cols-3' : 'md:grid-cols-5'}`}>
+            <StatTile className={bento(0, tiles, 2, cols)} label="Focus time" value={show(d.totals.minutes, unit)} hint={`${d.totals.rounds} ${d.totals.rounds === 1 ? 'session' : 'sessions'}`} />
             <StatTile
-              className={bento(1, 5, 2, 5)}
+              className={bento(1, tiles, 2, cols)}
               label="Focus quality"
               value={
                 d.totals.quality === null ? (
@@ -81,9 +86,10 @@ export function FocusDashboard() {
               }
               hint={d.totals.rated > 0 ? `${d.totals.rated} ${d.totals.rated === 1 ? 'session' : 'sessions'} rated` : 'Rate a session to see it'}
             />
-            <StatTile className={bento(2, 5, 2, 5)} label="Tasks ticked" value={d.totals.tasksDone} hint="in the same stretch" />
-            <StatTile className={bento(3, 5, 2, 5)} label="Active" value={`${d.totals.activeBuckets} of ${d.buckets.length}`} hint={view === 'day' ? 'days with a session' : view === 'week' ? 'weeks with a session' : 'months with a session'} />
-            <StatTile className={bento(4, 5, 2, 5)} label="Best" value={d.best ? show(d.best.minutes, unit) : 'None yet'} hint={d.best ? d.best.label : 'Finish a session'} />
+            <StatTile className={bento(2, tiles, 2, cols)} label="Tasks ticked" value={d.totals.tasksDone} hint="in the same stretch" />
+            <StatTile className={bento(3, tiles, 2, cols)} label="Active" value={`${d.totals.activeBuckets} of ${d.buckets.length}`} hint={view === 'day' ? 'days with a session' : view === 'week' ? 'weeks with a session' : 'months with a session'} />
+            <StatTile className={bento(4, tiles, 2, cols)} label="Best" value={d.best ? show(d.best.minutes, unit) : 'None yet'} hint={d.best ? d.best.label : 'Finish a session'} />
+            {goal && <StatTile className={bento(5, tiles, 2, cols)} label="Days the goal was met" value={`${focusGoalMet(d.dayMinutes, goal)} of ${d.dayMinutes.length}`} hint={`${goal} minutes a day`} />}
           </div>
           <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{d.trend}</p>
 
@@ -103,7 +109,7 @@ export function FocusDashboard() {
               <p className="m-0 text-[14px] font-extrabold">Where the time went</p>
               <div className="mt-xs">
                 <HBars
-                  rows={d.tasks.map((t, i) => ({ key: t.nodeId ?? `none-${i}`, label: t.title, value: d.totals.minutes ? t.minutes / d.totals.minutes : 0, text: `${show(t.minutes, unit)}, ${t.rounds} ${t.rounds === 1 ? 'session' : 'sessions'}`, color: t.nodeId ? RELATIONSHIP_BY_KEY.servant_leader.color : RELATIONSHIP_BY_KEY.self.color }))}
+                  rows={d.tasks.map((t, i) => ({ key: t.nodeId ?? `none-${i}`, label: t.title, value: d.totals.minutes ? t.minutes / d.totals.minutes : 0, text: t.planned ? `${unit === 'hours' ? show(t.minutes, unit) : t.minutes} of ${show(t.planned, unit)} planned` : `${show(t.minutes, unit)}, ${t.rounds} ${t.rounds === 1 ? 'session' : 'sessions'}`, color: t.nodeId ? RELATIONSHIP_BY_KEY.servant_leader.color : RELATIONSHIP_BY_KEY.self.color }))}
                   label="Focus time by task"
                 />
               </div>

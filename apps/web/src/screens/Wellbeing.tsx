@@ -1,4 +1,4 @@
-import { MODULE_BY_KEY, MOODS, STRESS_LEVELS, type LogKind } from '@kreators/shared';
+import { MODULE_BY_KEY, MOODS, STRESS_LEVELS, type LogKind, LOCALE } from '@kreators/shared';
 import { AppIcon } from '../components/AppIcon';
 import { Link } from 'react-router';
 import { PeriodPanel } from '../components/PeriodPanel';
@@ -11,11 +11,11 @@ import { Screen } from '../components/Screen';
 import { useMe, useWellbeing } from '../lib/queries';
 
 /** The four trackers; each wears its app's own icon from the registry. */
-const ROWS: { kind: LogKind; name: string; path: string; color: string; tint: string; max: number; format: (v: number | null) => string }[] = [
-  { kind: 'mood', name: 'Mood', path: '/mood', color: 'var(--color-r3)', tint: 'var(--tint-yellow)', max: 5, format: (v) => (v === null ? 'Not logged today' : (MOODS.find((m) => m.value === Math.round(v))?.name ?? '')) },
-  { kind: 'sleep', name: 'Sleep', path: '/sleep', color: 'var(--color-r6)', tint: 'var(--tint-purple)', max: 10, format: (v) => (v === null ? 'Not logged' : `${v} hours`) },
-  { kind: 'stress', name: 'Stress', path: '/stress', color: 'var(--color-r2)', tint: 'var(--tint-orange)', max: 5, format: (v) => (v === null ? 'Not logged' : STRESS_LEVELS[Math.round(v) - 1] ?? '') },
-  { kind: 'mindful', name: 'Mindful minutes', path: '/mindful', color: 'var(--color-r4)', tint: 'var(--tint-green)', max: 60, format: (v) => `${v ?? 0} min this week` },
+const ROWS: { kind: LogKind; name: string; path: string; color: string; pillar: 'parent_child' | 'guru' | 'friendship' | 'lover_partner'; tint: string; max: number; format: (v: number | null) => string }[] = [
+  { kind: 'mood', name: 'Mood', path: '/mood', color: 'var(--color-r3)', pillar: 'parent_child', tint: 'var(--tint-yellow)', max: 5, format: (v) => (v === null ? 'Not logged today' : (MOODS.find((m) => m.value === Math.round(v))?.name ?? '')) },
+  { kind: 'sleep', name: 'Sleep', path: '/sleep', color: 'var(--color-r6)', pillar: 'guru', tint: 'var(--tint-purple)', max: 10, format: (v) => (v === null ? 'Not logged' : `${v} hours`) },
+  { kind: 'stress', name: 'Stress', path: '/stress', color: 'var(--color-r2)', pillar: 'friendship', tint: 'var(--tint-orange)', max: 5, format: (v) => (v === null ? 'Not logged' : STRESS_LEVELS[Math.round(v) - 1] ?? '') },
+  { kind: 'mindful', name: 'Mindful minutes', path: '/mindful', color: 'var(--color-r4)', pillar: 'lover_partner', tint: 'var(--tint-green)', max: 60, format: (v) => `${v ?? 0} min this week` },
 ];
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
@@ -57,7 +57,7 @@ export function Wellbeing() {
               </Ring>
               <div className="min-w-0 flex-1">
                 <p className="m-0 font-display text-[28px] font-extrabold leading-tight">{d.label}</p>
-                <p className="mt-xs m-0 text-[14px] font-semibold opacity-90">Scored over the last seven days. Logging every day keeps it honest.</p>
+                <p className="mt-xs m-0 text-[14px] font-semibold opacity-90">Scored over the last seven days. Logging every day keeps it{'\u00a0'}honest.</p>
               </div>
             </div>
           </Hero>
@@ -83,7 +83,7 @@ export function Wellbeing() {
               <EmojiRow
                 items={d.week.map((w) => {
                   const m = w.mood === null ? null : (MOODS.find((x) => x.value === w.mood) ?? null);
-                  return { label: new Date(`${w.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' }).slice(0, 2), color: m?.color ?? null, mood: m?.value ?? null };
+                  return { label: new Date(`${w.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short' }).slice(0, 2), color: m?.color ?? null, mood: m?.value ?? null };
                 })}
               />
             </div>
@@ -95,7 +95,7 @@ export function Wellbeing() {
               const series = d.week.map((w) => (r.kind === 'mindful' ? w.mindful : r.kind === 'move' ? null : w[r.kind]));
               return (
                 <li key={r.kind}>
-                  <Link to={r.path} className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm">
+                  <Link to={r.path} data-pillar={r.pillar} className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm">
                     {r.kind === 'mood' && p?.latest ? (
                       <MoodFace value={p.latest} size={48} />
                     ) : (

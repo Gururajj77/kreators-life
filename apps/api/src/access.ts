@@ -59,6 +59,9 @@ export const MODULE_FOR_PREFIX: Record<string, readonly string[]> = {
   internal: ['observability'],
   // Not listed on purpose: `discounts` (a signed-in person asking whether a code works) is core. It serves plans and top-ups, which belong to no
   // module, and it only prices an item; each area's own checkout (store, school, party, credits) is gated like any other route.
+  // Also not listed on purpose: `public` (the client's side of Agency: /public/agency/:token, its onboarding form, the password ask,
+  // and the agreement, invoice and document links). A client has no account, so no module can be checked for them; each of those
+  // routes asks requirePortalAccess instead, and the owner's own side (/agency/clients/:id and the rest) is gated by `agency` above.
 };
 
 /** The modules an API path under /api belongs to, or null for the core. */

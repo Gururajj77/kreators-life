@@ -1,5 +1,6 @@
+import { usePillarAccent } from '../lib/usePillarAccent';
 import type { CSSProperties } from 'react';
-import { LISTING_TYPE_META, RELATIONSHIP_BY_KEY } from '@kreators/shared';
+import { LISTING_TYPE_META, MODULE_GROUP_ACCENT, RELATIONSHIP_BY_KEY } from '@kreators/shared';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'motion/react';
 import { Link, Navigate, useParams } from 'react-router';
@@ -14,12 +15,26 @@ import { SiteLayout } from './SiteLayout';
 import { ChevronLeft } from 'lucide-react';
 import { AppIcon } from '../components/AppIcon';
 import { Icon } from '../components/Icon';
+import { Fold } from '../components/Fold';
+
+/** The rest of a feature's story: one short fact a line, as a list (CopyOS: lists for features, paragraphs only for a story). */
+function MoreList({ items }: { items: string[] }) {
+  return (
+    <ul className="m-0 grid list-disc gap-xs pl-md text-[16px] font-semibold leading-snug text-ink-soft">
+      {items.map((t) => (
+        <li key={t}>{t}</li>
+      ))}
+    </ul>
+  );
+}
 
 /** One public page per part of the app. Each ends at the door into that part. */
 export function Feature() {
   const { key = '' } = useParams();
   const token = useSession((s) => s.token);
   const found = featureFor(key);
+  // The page wears the colour of the pillar this app serves first, so its buttons hover in it.
+  usePillarAccent(found?.copy.relationships[0] ?? null);
   const rise = useRise();
   const listingType = found?.copy.listing;
   const listings = useQuery({
@@ -36,6 +51,7 @@ export function Feature() {
   return (
     <SiteLayout>
       <motion.header
+        data-pillar={lead.key}
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         className="wash mt-lg grid gap-md rounded-card bg-card p-md shadow-toy-soft md:grid-cols-[3fr_2fr] md:items-center md:p-lg"
@@ -51,6 +67,14 @@ export function Feature() {
           </p>
           <h1 className="type-hook mt-xs text-[clamp(40px,9vw,80px)]">{module.name}</h1>
           <p className="mt-sm m-0 max-w-[560px] text-[16px] font-semibold leading-snug text-ink-soft">{copy.pitch}</p>
+          {copy.more && copy.more.length > 0 && (
+            <>
+              {/* A phone keeps the first screen light: the rest of the story waits under a fold. A laptop shows it open, under the buttons. */}
+              <Fold title={`More about ${module.name}`} className="mt-sm max-w-[560px] md:hidden">
+                <MoreList items={copy.more} />
+              </Fold>
+            </>
+          )}
           <div className="mt-md flex flex-wrap gap-sm">
             <Link to={open} className="toy inline-flex min-h-[56px] items-center rounded-pill bg-ink px-lg text-[18px] font-bold text-on-ink">
               {token ? `Open ${module.name}` : `Sign in to open ${module.name}`}
@@ -61,6 +85,12 @@ export function Feature() {
               </Link>
             )}
           </div>
+          {/* The action comes before the explanation: on a laptop the rest of the story sits under the buttons. */}
+          {copy.more && copy.more.length > 0 && (
+            <div className="hidden md:block mt-md max-w-[560px]">
+              <MoreList items={copy.more} />
+            </div>
+          )}
         </div>
         {/* The guide of the app's first pillar says what it is for, in one line: the tagline, in their voice. */}
         <GuideLine host={lead.key} side="right" mood="excited" size={128} className="justify-self-stretch">
@@ -80,7 +110,7 @@ export function Feature() {
             <p className="m-0 type-hook text-[32px] leading-none" style={{ color: `var(--deep-${lead.key})` }}>
               {i + 1}
             </p>
-            <p className="mt-xs m-0 text-[16px] font-bold leading-snug">{s}</p>
+            <p className="mt-xs m-0 text-[16px] font-bold leading-snug">{keepTail(s)}</p>
           </motion.div>
         ))}
       </section>
@@ -89,12 +119,12 @@ export function Feature() {
         <h2 id="serves" className="text-[24px]">
           Which pillars it serves
         </h2>
-        <ul className="mt-sm flex list-none flex-wrap gap-xs p-0 m-0">
+        <ul className="fill-row-all mt-sm flex list-none flex-wrap gap-xs p-0 m-0">
           {copy.relationships.map((k) => {
             const r = RELATIONSHIP_BY_KEY[k];
             return (
-              <li key={k}>
-                <Link to={`/7rp?pillar=${k}`} className="toy toy-soft inline-flex min-h-[48px] items-center gap-xs rounded-pill bg-card pr-md pl-xs text-[14px] font-bold">
+              <li key={k} data-pillar={k}>
+                <Link to={`/7rp?pillar=${k}`} className="toy toy-soft inline-flex w-full justify-center min-h-[48px] items-center gap-xs rounded-pill bg-card pr-md pl-xs text-[14px] font-bold">
                   <Avatar relationship={k} size={32} decorative />
                   {r.name}
                   <span className="text-ink-soft">pillar {r.floor}</span>
@@ -131,14 +161,14 @@ export function Feature() {
       )}
 
       {others.length > 0 && (
-        <section className="mt-lg" aria-labelledby="more">
+        <section className="mt-lg" aria-labelledby="more" data-pillar={MODULE_GROUP_ACCENT[module.group]}>
           <h2 id="more" className="text-[24px]">
             More in this group
           </h2>
-          <ul className="mt-sm flex list-none flex-wrap gap-xs p-0 m-0">
+          <ul className="fill-row-all mt-sm flex list-none flex-wrap gap-xs p-0 m-0">
             {others.map((m) => (
               <li key={m.key}>
-                <Link to={`/features/${m.key}`} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-card px-sm text-[14px] font-bold">
+                <Link to={`/features/${m.key}`} className="toy toy-soft inline-flex w-full justify-center min-h-[44px] items-center gap-xs rounded-pill bg-card px-sm text-[14px] font-bold">
                   <AppIcon name={m.icon} size={16} />
                   {m.name}
                 </Link>
@@ -148,5 +178,16 @@ export function Feature() {
         </section>
       )}
     </SiteLayout>
+  );
+}
+
+/** The last two words of a step stay on one line, hyphens included ("week-on-week trend."), so no step ends on a word alone. */
+function keepTail(text: string) {
+  const words = text.trim().split(/\s+/);
+  if (words.length < 3) return text;
+  return (
+    <>
+      {words.slice(0, -2).join(' ')} <span className="whitespace-nowrap">{words.slice(-2).join(' ')}</span>
+    </>
   );
 }

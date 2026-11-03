@@ -4,7 +4,7 @@ import { LOVE_PAIRS, MIND_SCREENS, TYPE_NAMES, TYPE_SCREENS, DISCOVER_CORE_STEPS
 import { LIMITS, ROUTE_LIMITS } from '../../apps/api/src/limits.ts';
 import { DISCOVER_KEYS } from '../../apps/api/src/discoverKeys.ts';
 import { LEGAL_VERSION } from '../../packages/shared/src/index.ts';
-import { contractAsText, invoiceAsText, money } from '../../packages/shared/src/index.ts';
+import { CONTRACT_VARS, contractAsText, invoiceAsText, money } from '../../packages/shared/src/index.ts';
 import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, PLANS } from '../../packages/shared/src/index.ts';
 import http from 'node:http';
 
@@ -52,6 +52,33 @@ async function api(method, path, body, token, headers = {}) {
   return { status: res.status, json, headers: res.headers };
 }
 const admin = (method, path, body) => api(method, path, body, null, { 'X-Admin-Key': ADMIN_KEY });
+
+// A client is added the way the owner adds one: the brand, the client's email and a password for their page (made here). The older
+// Agency checks read the link without unlocking it and expect its dashboard, so unless `locked` is asked for this clears the password,
+// sends the onboarding form as the client would, and puts the owner's own contact and billing back (the form writes its own over them).
+// The answer is the create's, with the generated password beside it.
+const onboardingDraft = (questions, name, email) => ({
+  legalName: name, brands: name, addressLine: '12 Main Road', city: 'Bengaluru', state: 'Karnataka', pin: '560038', gstin: '', pan: '',
+  pocName: 'Smoke contact', designation: 'Marketing head', email, phone: '9876543210', billingEmail: '',
+  brief: Object.fromEntries(questions.map((q) => [q.id, q.links ? { picked: [], other: '', text: '', links: ['https://example.test/1', 'https://example.test/2', 'https://example.test/3'] } : (q.fields ?? []).length ? { picked: [], other: '', text: '', fields: { [q.fields[0]]: 'Warm and bold' } } : q.text ? { picked: [], other: '', text: 'Curious and hungry' } : { picked: [q.options[0]], other: '', text: '' }])),
+  references: ['https://example.test/1', 'https://example.test/2', 'https://example.test/3'],
+});
+let onboardSeq = 0;
+async function addClient(body, token, { locked = false } = {}) {
+  const slug = String(body.name ?? 'client').toLowerCase().replace(/[^a-z0-9]+/g, '') || 'client';
+  const full = { contactEmail: `${slug}@client.test`, portalPassword: 'generate', ...body };
+  const made = await api('POST', '/agency/clients', full, token);
+  if (made.status !== 201 || locked) return made;
+  await api('PUT', `/agency/clients/${made.json.id}/password`, { clear: true }, token);
+  // Its own address for the link, so the per-address portal limit is never spent by the setup.
+  const ip = { 'CF-Connecting-IP': `10.250.${(seed + onboardSeq) & 255}.${(++onboardSeq * 7) & 255}` };
+  const form = await api('GET', `/public/agency/${made.json.portalToken}/onboarding`, undefined, null, ip);
+  const sent = await api('POST', `/public/agency/${made.json.portalToken}/onboarding/submit`, { draft: onboardingDraft(form.json.questions ?? [], full.name, full.contactEmail) }, null, ip);
+  if (sent.status !== 200) console.log('  (setup) onboarding was not sent', sent.status, JSON.stringify(sent.json));
+  const { portalPassword: _pw, ...owner } = full;
+  await api('PATCH', `/agency/clients/${made.json.id}`, { contactName: '', billing: null, ...owner }, token);
+  return made;
+}
 
 // A stand-in for the assistant's model, so the checks never pay for a real one. blueprint.sh points the smoke server
 // at it (ASSISTANT_BASE_URL). A user line "DO [{name, args}, ...]" comes back as exactly those tool calls; after the
@@ -102,7 +129,8 @@ const PHONE = '+91 98765 43210';
 let signups = 0;
 async function signup(email, password, displayName) {
   const n = signups++;
-  const from = n < 6 ? {} : { 'CF-Connecting-IP': `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 10 + Math.floor(n / 6)) & 255}` };
+  // From the seventh on, six to an address in a range no section uses for its own sign-ups (they take seed + 1 to 31 and 211).
+  const from = n < 6 ? {} : { 'CF-Connecting-IP': `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 100 + Math.floor(n / 6)) & 255}` };
   const r = await api('POST', '/auth/signup', { email, password, displayName, phone: PHONE, birthDate: GROWN }, null, from);
   if (r.status !== 201) throw new Error(`signup ${email} failed: ${r.status} ${JSON.stringify(r.json)}`);
   return { token: r.json.token, user: r.json.user };
@@ -489,6 +517,21 @@ section('Finance');
   check('a zero amount is refused', zero.status === 400, zero.json);
   const neg = await api('POST', '/finance/transactions', { kind: 'income', amountCents: -500 }, B.token);
   check('a negative amount is refused', neg.status === 400, neg.json);
+  // India first, open to all: a person keeps their money in rupees unless they pick another currency (migration 0070).
+  check('a new account keeps its money in rupees', (await me(C.token))?.currency === 'INR', (await me(C.token))?.currency);
+  // No date sent: the entry lands on the person's day in their zone (India's by default), which is today above, even between
+  // 00:00 and 05:30 IST when the server's UTC date is still yesterday.
+  const undated = await api('POST', '/finance/transactions', { kind: 'income', amountCents: 100 }, B.token);
+  check('an entry with no date lands on the person\'s own day, never the server\'s UTC date', undated.json.transaction?.date === today, [undated.json.transaction?.date, today]);
+  const toUsd = await api('PATCH', '/me', { currency: 'USD' }, B.token);
+  check('someone abroad can switch their currency', toUsd.status === 200 && userOf(toUsd)?.currency === 'USD', userOf(toUsd)?.currency);
+  const odd = await api('PATCH', '/me', { currency: 'constructor' }, B.token);
+  check('a currency that is not on the list is ignored', userOf(odd)?.currency === 'USD', userOf(odd)?.currency);
+  const inUsd = await api('POST', '/finance/transactions', { kind: 'income', amountCents: 2500, category: 'Brand deal', date: today }, B.token);
+  check('an entry with no currency is kept in the person\'s own', inUsd.status === 201 && inUsd.json.transaction?.currency === 'USD', inUsd.json.transaction?.currency);
+  const named = await api('POST', '/finance/transactions', { kind: 'income', amountCents: 2500, currency: 'inr', date: today }, B.token);
+  check('an entry that names its currency keeps it', named.json.transaction?.currency === 'INR', named.json.transaction?.currency);
+  await api('PATCH', '/me', { currency: 'INR' }, B.token);
   const list = await api('GET', '/finance', undefined, B.token);
   check('finance answers with the month', list.status === 200, list.status);
   const other = await api('GET', '/finance', undefined, C.token);
@@ -634,6 +677,8 @@ section('Store');
   const offer1 = await api('POST', `/market/listings/${id}/offers`, { cents: 400000 }, B.token);
   const offer2 = await api('POST', `/market/listings/${id}/offers`, { cents: 450000, note: 'Final' }, B.token);
   check('a buyer can offer', offer1.status === 201 && offer2.status === 201, [offer1.status, offer2.status]);
+  const sellerInbox = await api('GET', '/inbox?size=25', undefined, C.token);
+  check('the seller is told the offer in rupees, grouped the Indian way', JSON.stringify(sellerInbox.json).includes('offers ₹4,500.'), '');
   const detailB = await api('GET', `/market/listings/${id}`, undefined, B.token);
   check('one open offer per buyer: the new one replaces the old', detailB.json.myOffer?.id === offer2.json.offer.id && detailB.json.myOffer?.cents === 450000, detailB.json?.myOffer);
   const detailC = await api('GET', `/market/listings/${id}`, undefined, C.token);
@@ -1845,8 +1890,8 @@ section('Engagement');
   // Focus rounds in Mindful minutes: kept per person, charted by day, week and month.
   const todayStr = new Date().toISOString().slice(0, 10);
   const fr0 = await api('POST', '/wellbeing/focus', { minutes: 0, date: todayStr }, R.token);
-  const fr1 = await api('POST', '/wellbeing/focus', { minutes: 500, date: todayStr }, R.token);
-  check('a focus round is 1 to 120 minutes', fr0.status === 400 && fr1.status === 400, [fr0.status, fr1.status]);
+  const fr1 = await api('POST', '/wellbeing/focus', { minutes: 700, date: todayStr }, R.token);
+  check('a focus round is 1 to 600 minutes', fr0.status === 400 && fr1.status === 400, [fr0.status, fr1.status]);
   const frOld = await api('POST', '/wellbeing/focus', { minutes: 25, date: '2020-01-01' }, R.token);
   check('and counts for today or yesterday only', frOld.status === 400, frOld.status);
   const frGhost = await api('POST', '/wellbeing/focus', { minutes: 25, date: todayStr, nodeId: 'not-a-real-task' }, R.token);
@@ -1946,10 +1991,17 @@ section('Agency');
   const day = (n) => new Date(Date.parse(`${today}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
   // clients
-  const mk = await api('POST', '/agency/clients', { name: 'Acme Foods', contactName: 'Asha', contactEmail: 'asha@acme.test', retainerCents: 5000000, piecesPerMonth: 8, hoursPerMonth: 20, channels: ['YouTube', 'Instagram', 'youtube'], renewalDate: day(10) }, O.token);
+  const mk = await addClient({ name: 'Acme Foods', contactName: 'Asha', contactEmail: 'asha@acme.test', retainerCents: 5000000, piecesPerMonth: 8, hoursPerMonth: 20, channels: ['YouTube', 'Instagram', 'youtube'], renewalDate: day(10) }, O.token);
   check('a client is made', mk.status === 201 && mk.json.id, mk.json);
   const cid = mk.json.id;
   check('a client with no name is refused', (await api('POST', '/agency/clients', { name: ' ' }, O.token)).status === 400);
+  // A new client needs the client's email and a password for their page: the owner's own word (strong enough) or a generated one.
+  check('adding a client without a password is refused', (await api('POST', '/agency/clients', { name: 'Orbit Foods', contactEmail: 'ops@orbit.test' }, O.token)).status === 400);
+  check('adding a client with a weak password is refused', (await api('POST', '/agency/clients', { name: 'Orbit Foods', contactEmail: 'ops@orbit.test', portalPassword: 'short' }, O.token)).status === 400);
+  check('adding a client without the client\'s email is refused', (await api('POST', '/agency/clients', { name: 'Orbit Foods', portalPassword: `maple-river-${stamp}-48` }, O.token)).status === 400);
+  const genMk = await api('POST', '/agency/clients', { name: 'Orbit Foods', contactEmail: 'ops@orbit.test', portalPassword: 'generate' }, O.token);
+  check('adding a client with a generated password makes it, shows the word once and locks the link', genMk.status === 201 && /^[a-z]+(-[a-z]+){3}-\d\d$/.test(genMk.json.password ?? '') && Boolean(genMk.json.portalToken), genMk.json);
+  if (genMk.json.id) await api('DELETE', `/agency/clients/${genMk.json.id}`, undefined, O.token);
   const ov = await api('GET', `/agency?day=${today}`, undefined, O.token);
   check('the overview counts the client and the retainer', ov.json.totals?.activeClients === 1 && ov.json.totals?.retainerCents === 5000000 && ov.json.clients?.length === 1, ov.json.totals);
   check('channels are kept once, however they were typed', JSON.stringify(ov.json.clients[0].channels) === JSON.stringify(['YouTube', 'Instagram']), ov.json.clients[0].channels);
@@ -2185,7 +2237,9 @@ section('Agency');
   check('a sent one can be taken back, which closes its link', recall.json.contract.token && recalled.json.contract.status === 'draft' && (await pub('GET', `/contracts/${recall.json.contract.token}`)).status === 404);
   const lst = await api('GET', '/agency/contracts', undefined, O.token);
   const kb = await api('GET', '/agency/contracts/board', undefined, O.token);
-  check('the agreements are listed, paged and boarded by status', lst.json.contracts?.length === 2 && kb.json.columns?.map((c) => c.stage).join() === 'draft,sent,signed,void' && kb.json.columns[2].total === 1, kb.json.columns?.map((c) => `${c.stage}:${c.total}`));
+  // The client's onboarding (addClient sends it) also made its Trial agreement, so the list holds that one beside the two made here.
+  const listedIds = (lst.json.contracts ?? []).map((k) => k.id);
+  check('the agreements are listed, paged and boarded by status', listedIds.includes(kid) && listedIds.includes(revise.json.id) && kb.json.columns?.map((c) => c.stage).join() === 'draft,sent,signed,void' && kb.json.columns[2].total === 1 && kb.json.columns.reduce((n, c) => n + c.total, 0) === listedIds.length, kb.json.columns?.map((c) => `${c.stage}:${c.total}`));
   check('the client link shows on the client\'s dashboard when agreements and invoices are switched on', await (async () => {
     const o = await api('POST', `/agency/clients/${cid}/portal`, { on: true, show: { invoices: true, contracts: true, hours: false } }, O.token);
     const v = await pub('GET', `/agency/${o.json.portalToken}`);
@@ -2194,7 +2248,7 @@ section('Agency');
   await api('POST', `/agency/clients/${cid}/portal`, { on: false }, O.token);
 
   // templates: the person's own starting points
-  const bloom = await api('POST', '/agency/clients', { name: 'Bloom Skincare', contactName: 'Ira', billing: { name: 'Bloom', line: 'Bloom Skincare Pvt Ltd' } }, O.token);
+  const bloom = await addClient({ name: 'Bloom Skincare', contactName: 'Ira', billing: { name: 'Bloom', line: 'Bloom Skincare Pvt Ltd' } }, O.token);
   await api('PATCH', `/agency/clients/${bloom.json.id}`, { name: 'Bloom Skincare', billing: { name: 'Bloom Skincare', line: 'Bloom Skincare Pvt Ltd', taxIds: [{ label: 'GSTIN', value: '29ABCDE1234F1Z5' }] } }, O.token);
   const srcInv = await api('POST', `/agency/invoices?day=${today}`, { clientId: cid, items: [{ description: 'Founder reel package', quantity: 3, unitCents: 250000 }], doc: { title: 'Advance invoice', design: 'teal', gstBps: 1800, footnote: 'TDS note' } }, O.token);
   const tnoName = await api('POST', '/agency/templates', { kind: 'invoice', name: ' ', fromId: srcInv.json.invoice.id }, O.token);
@@ -2212,7 +2266,7 @@ section('Agency');
   const stored = JSON.stringify((await api('GET', '/me/export', undefined, O.token)).json.agencyTemplates);
   check('what is stored has no client in it', !stored.includes('Acme Foods') && !stored.includes('asha@acme'), stored.slice(0, 200));
   const st = await api('POST', `/agency/invoices?day=${today}`, { clientId: bloom.json.id, starter: 'advance' }, O.token);
-  check('a built-in starting point sets the title and the footnote', st.json.invoice?.doc.title === 'Advance invoice' && /TDS/.test(st.json.invoice.doc.footnote) && st.json.invoice.items.length === 1, st.json);
+  check('a built-in starting point sets the title and the footnote', st.json.invoice?.doc.title === 'Advance Invoice' && /TDS/.test(st.json.invoice.doc.footnote) && st.json.invoice.items.length === 1, st.json);
   check('a template that is not yours is refused', (await api('POST', `/agency/invoices?day=${today}`, { clientId: bloom.json.id, templateId: tmk.json.id }, X.token)).status === 400);
   const ren = await api('PATCH', `/agency/templates/${tmk.json.id}`, { name: 'Advance teal v2' }, O.token);
   check('a template can be renamed', ren.status === 200 && (await api('GET', '/agency/templates?kind=invoice', undefined, O.token)).json.templates[0].name === 'Advance teal v2');
@@ -2288,7 +2342,9 @@ section('Agency');
   check('or for a period that has not started', (await api('PUT', `/reviews/kpis/${km.json.id}/value`, { date: day(70), value: 3 }, O.token)).status === 400);
   check('another person cannot touch it', (await api('PUT', `/reviews/kpis/${km.json.id}/value`, { value: 1 }, X.token)).status === 403 && (await api('DELETE', `/reviews/kpis/${km.json.id}`, undefined, X.token)).status === 403);
   const exp = (await api('GET', '/me/export', undefined, O.token)).json;
-  check('everything is in the export', exp.agencyClients?.length === 2 && exp.agencyTemplates?.length === 1 && exp.agencyItems?.length >= 3 && exp.agencyContracts?.length === 3 && exp.kpis?.length === 3 && exp.kpiValues?.length === 1 && exp.agencySettings?.length === 1);
+  // Every agreement the owner holds, the onboarding's Trial agreements included, is in the export.
+  const heldK = (await api('GET', '/agency/contracts/board', undefined, O.token)).json.columns?.reduce((n, c) => n + c.total, 0);
+  check('everything is in the export', exp.agencyClients?.length === 2 && exp.agencyTemplates?.length === 1 && exp.agencyItems?.length >= 3 && exp.agencyContracts?.length === heldK && heldK >= 3 && exp.kpis?.length === 3 && exp.kpiValues?.length === 1 && exp.agencySettings?.length === 1);
 
   // leaving
   const del = await api('DELETE', '/me', { confirm: 'DELETE' }, O.token);
@@ -2353,6 +2409,74 @@ section('Week plan, focus quality and the calendar link');
   await api('PATCH', `/wellbeing/focus/${fr2.json.id}`, { quality: null }, W.token);
   check('a rating can be taken back, and an unrated round is left out, not counted as zero', (await api('GET', `/wellbeing/focus?view=day&date=${today}`, undefined, W.token)).json.totals.quality === 4);
   check('only your own round can be rated', (await api('PATCH', `/wellbeing/focus/${fr.json.id}`, { quality: 1 }, A.token)).status === 404);
+
+  // The Toggl pass (2026-11-03): today's sessions, recent tasks, planned against actual, change or delete a session, one round per part.
+  {
+    const list = await api('GET', `/wellbeing/focus/today?date=${today}`, undefined, W.token);
+    check("today's sessions are the person's own, newest first", list.status === 200 && list.json.rounds?.length === 2 && list.json.rounds.every((x) => x.minutes === 25 && 'mode' in x && 'mindful' in x) && list.json.rounds[0].createdAt >= list.json.rounds[1].createdAt, list.json);
+    check('a day that is not on the calendar is refused', (await api('GET', '/wellbeing/focus/today?date=2026-11-31', undefined, W.token)).status === 400);
+    check("nobody sees someone else's day", (await api('GET', `/wellbeing/focus/today?date=${today}`, undefined, A.token)).json.rounds?.every((x) => x.id !== fr.json.id));
+    const tB = await add({ title: 'Toggl task B' });
+    await api('POST', '/wellbeing/focus', { minutes: 20, date: today, nodeId: a.json.node.id }, W.token);
+    await api('POST', '/wellbeing/focus', { minutes: 25, date: today, nodeId: a.json.node.id }, W.token);
+    await api('POST', '/wellbeing/focus', { minutes: 10, date: today, nodeId: tB.json.node.id, mode: 'timer' }, W.token);
+    const recent = await api('GET', '/wellbeing/focus/tasks?recent=1', undefined, W.token);
+    check('recent tasks come newest first: B, then A', recent.status === 200 && recent.json.tasks?.[0]?.id === tB.json.node.id && recent.json.tasks?.[1]?.id === a.json.node.id && recent.json.tasks.length <= 5, recent.json.tasks?.map((x) => x.title));
+    const otherRecent = await api('GET', '/wellbeing/focus/tasks?recent=1', undefined, A.token);
+    check("another person's recent tasks hold none of them", !otherRecent.json.tasks?.some((x) => x.id === tB.json.node.id || x.id === a.json.node.id), otherRecent.json.tasks);
+    const planned = await api('GET', `/wellbeing/focus?view=day&date=${today}`, undefined, W.token);
+    const rowA = planned.json.tasks?.find((x) => x.nodeId === a.json.node.id);
+    check('a task with an estimate says what was planned: 45 of 60', rowA?.minutes === 45 && rowA?.planned === 60, rowA);
+    check('a session with no task has nothing planned, and the goal reads day by day', planned.json.tasks?.find((x) => x.nodeId === null)?.planned === null && planned.json.dayMinutes?.length === 14 && planned.json.dayMinutes.at(-1) === 105, planned.json.dayMinutes);
+
+    // Keep the same part twice (a duplicated tab): one round and one mindful log; someone else's same ref is their own.
+    const mindfulOf = async (tok) => ((await api('GET', '/wellbeing/mindful?days=2', undefined, tok)).json.logs ?? []).filter((l) => l.extra?.kind === 'focus').length;
+    const logs0 = await mindfulOf(W.token);
+    const ref = `smoke${stamp}:timer:${Date.now()}`;
+    const k1 = await api('POST', '/wellbeing/focus', { minutes: 12, date: today, clientRef: ref, mode: 'timer', mindful: true }, W.token);
+    const k2 = await api('POST', '/wellbeing/focus', { minutes: 12, date: today, clientRef: ref, mode: 'timer', mindful: true }, W.token);
+    check('the same part sent twice is one round, and the second says duplicate', k1.status === 201 && k1.json.duplicate === false && k1.json.logged === true && k2.status === 200 && k2.json.duplicate === true && k2.json.id === k1.json.id, [k1.json, k2.json]);
+    check('and one mindful log', (await mindfulOf(W.token)) === logs0 + 1, [logs0, await mindfulOf(W.token)]);
+    const kA = await api('POST', '/wellbeing/focus', { minutes: 12, date: today, clientRef: ref, mode: 'timer' }, A.token);
+    check("another person's same ref is their own round", kA.status === 201 && kA.json.duplicate === false && kA.json.id !== k1.json.id, kA.json);
+    check('a ref with odd characters is refused', (await api('POST', '/wellbeing/focus', { minutes: 12, date: today, clientRef: 'a b/c' }, W.token)).status === 400);
+    // Change it, and the mindful log moves with it; delete it, and both go.
+    const ch = await api('PATCH', `/wellbeing/focus/${k1.json.id}`, { minutes: 30, nodeId: tB.json.node.id }, W.token);
+    const logNow = ((await api('GET', '/wellbeing/mindful?days=2', undefined, W.token)).json.logs ?? []).filter((l) => l.extra?.kind === 'focus');
+    const changed = (await api('GET', `/wellbeing/focus/today?date=${today}`, undefined, W.token)).json.rounds.find((x) => x.id === k1.json.id);
+    check('changing the length changes the linked mindful log, and the task is re-read', ch.status === 200 && changed?.minutes === 30 && changed?.title === 'Toggl task B' && changed?.mindful === true && logNow.some((l) => l.value === 30), [changed, logNow.map((l) => l.value)]);
+    check("a session can't be pointed at someone else's task, and 0 minutes is refused", (await api('PATCH', `/wellbeing/focus/${k1.json.id}`, { nodeId: 'not-a-real-task' }, W.token)).status === 404 && (await api('PATCH', `/wellbeing/focus/${k1.json.id}`, { minutes: 0 }, W.token)).status === 400);
+    check("another person can neither change nor delete it", (await api('PATCH', `/wellbeing/focus/${k1.json.id}`, { minutes: 5 }, A.token)).status === 404 && (await api('DELETE', `/wellbeing/focus/${k1.json.id}`, undefined, A.token)).status === 404);
+    const del = await api('DELETE', `/wellbeing/focus/${k1.json.id}`, undefined, W.token);
+    check('deleting a session removes it and its mindful log', del.status === 200 && !(await api('GET', `/wellbeing/focus/today?date=${today}`, undefined, W.token)).json.rounds.some((x) => x.id === k1.json.id) && (await mindfulOf(W.token)) === logs0, await mindfulOf(W.token));
+    check('a forgotten session can be added for yesterday but not two days back', (await api('POST', '/wellbeing/focus', { minutes: 15, date: day(-1), mode: 'manual' }, W.token)).status === 201 && (await api('POST', '/wellbeing/focus', { minutes: 15, date: day(-2), mode: 'manual' }, W.token)).status === 400);
+
+    // The optional daily nudge: once, on the chosen day after its time, and never for someone who already focused that day.
+    const zones = ['Asia/Kolkata', 'Europe/London', 'America/New_York', 'Asia/Tokyo', 'Pacific/Auckland', 'America/Los_Angeles'];
+    const localOf = (z) => {
+      const parts = new Intl.DateTimeFormat('en-CA', { timeZone: z, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date());
+      const get = (k) => parts.find((x) => x.type === k)?.value ?? '';
+      return { day: `${get('year')}-${get('month')}-${get('day')}`, minutes: Number(get('hour')) * 60 + Number(get('minute')) };
+    };
+    const zone = zones.find((z) => localOf(z).minutes >= 30 && localOf(z).minutes < 23 * 60 + 30) ?? 'Asia/Kolkata';
+    const local = localOf(zone);
+    const at = `${String(Math.floor((local.minutes - 10) / 60)).padStart(2, '0')}:${String((local.minutes - 10) % 60).padStart(2, '0')}`;
+    const N = await signup(`focusnudge-${stamp}@smoke.test`, `Lantern-${stamp}-pass`, 'Smoke nudge');
+    const N2 = await signup(`focusnudge2-${stamp}@smoke.test`, `Lantern-${stamp}-pass`, 'Smoke nudge two');
+    for (const who of [N, N2]) {
+      await api('PATCH', '/me', { timezone: zone }, who.token);
+      await api('PUT', '/wellbeing/focus-settings', { settings: { reminderTime: at, reminderDays: [1, 2, 3, 4, 5, 6, 7], goalMinutes: 47 } }, who.token);
+    }
+    const kept = await api('GET', '/wellbeing/focus-settings', undefined, N.token);
+    check('the goal and the nudge are kept, the goal in steps of 15', kept.json.settings?.reminderTime === at && kept.json.settings?.goalMinutes === 45, kept.json.settings);
+    await api('POST', '/wellbeing/focus', { minutes: 15, date: local.day }, N2.token);
+    const nudges = async (tok) => ((await api('GET', '/inbox', undefined, tok)).json.notifications ?? []).filter((x) => x.title === 'Time to focus').length;
+    await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+    check('the focus nudge arrives once its time has passed', (await nudges(N.token)) === 1, await nudges(N.token));
+    await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+    check('a second run sends no second nudge', (await nudges(N.token)) === 1, await nudges(N.token));
+    check('someone who already focused that day gets none', (await nudges(N2.token)) === 0, await nudges(N2.token));
+  }
 
   // the calendar link
   const cal0 = await api('GET', '/me/calendar', undefined, W.token);
@@ -2481,8 +2605,11 @@ section('Legal: terms, privacy choices, notices');
   const hit = async (headers) => (await fetch(`${ORIGIN}/go/${code}`, { redirect: 'manual', headers: { 'CF-Connecting-IP': ADDRESS, ...headers } })).headers.get('set-cookie') ?? '';
   check('in Germany the cookie waits for a yes', code && !(await hit({ 'CF-IPCountry': 'DE' })).includes('kl_click'));
   check('in Germany a yes lets it be set', (await hit({ 'CF-IPCountry': 'DE', Cookie: 'kc_attr=1' })).includes('kl_click'));
-  check('in India it is set unless they said no', (await hit({ 'CF-IPCountry': 'IN' })).includes('kl_click') && !(await hit({ 'CF-IPCountry': 'IN', Cookie: 'kc_attr=0' })).includes('kl_click'));
-  check('a browser that sends Global Privacy Control gets no cookie', !(await hit({ 'CF-IPCountry': 'IN', 'Sec-GPC': '1' })).includes('kl_click'));
+  // India joined the countries where a yes comes first (DPDP Act, legal-india L2).
+  check('in India the cookie waits for a yes', !(await hit({ 'CF-IPCountry': 'IN' })).includes('kl_click') && !(await hit({ 'CF-IPCountry': 'IN', Cookie: 'kc_attr=0' })).includes('kl_click'));
+  check('in India a yes lets it be set', (await hit({ 'CF-IPCountry': 'IN', Cookie: 'kc_attr=1' })).includes('kl_click'));
+  check('outside those countries it is set unless they said no', (await hit({ 'CF-IPCountry': 'US' })).includes('kl_click') && !(await hit({ 'CF-IPCountry': 'US', Cookie: 'kc_attr=0' })).includes('kl_click'));
+  check('a browser that sends Global Privacy Control gets no cookie', !(await hit({ 'CF-IPCountry': 'US', 'Sec-GPC': '1' })).includes('kl_click'));
 }
 
 section('Security: headers, origin, exposed files, errors, addresses, alerts');
@@ -2987,7 +3114,7 @@ section('Discount codes');
   // Plans and top-ups: the price shown is right even though nothing is charged yet.
   await mk({ code: word('plan'), kind: 'percent', percent: '20', areas: ['plan', 'topup'] });
   const planCheck = await dc('/discounts/check', { code: word('plan'), area: 'plan', itemId: 'pro' }, B1);
-  check('a plan code prices a plan from the plan list', planCheck.status === 200 && planCheck.json.listCents === PLANS.pro.priceCents && planCheck.json.payCents === PLANS.pro.priceCents - Math.floor(PLANS.pro.priceCents / 5) && planCheck.json.currency === 'USD', planCheck.json);
+  check('a plan code prices a plan from the plan list', planCheck.status === 200 && planCheck.json.listCents === PLANS.pro.priceCents && planCheck.json.payCents === PLANS.pro.priceCents - Math.floor(PLANS.pro.priceCents / 5) && planCheck.json.currency === 'INR', planCheck.json);
   const planBuy = await dc('/credits/checkout', { kind: 'plan', key: 'pro', discountCode: word('plan') }, B1);
   check('plan checkout checks the code and still says nothing was charged', planBuy.status === 409 && planBuy.json.live === false && planBuy.json.quote?.payCents === planCheck.json.payCents, planBuy.json);
   check('plan checkout refuses a code that does not work', (await dc('/credits/checkout', { kind: 'plan', key: 'pro', discountCode: 'NOSUCHCODE' }, B1)).status === 400, '');
@@ -3082,7 +3209,7 @@ section('Agency lifecycle');
   const day = (n) => new Date(Date.parse(`${today}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
   // A new client can start with a password on its link; the word is shown once and kept only as a hash.
-  const mk = await api('POST', '/agency/clients', { name: 'Lifecycle Labs', contactEmail: 'ops@lifecycle.test', retainerCents: 5000000, piecesPerMonth: 3, portalPassword: 'generate' }, O.token);
+  const mk = await addClient({ name: 'Lifecycle Labs', contactEmail: 'ops@lifecycle.test', retainerCents: 5000000, piecesPerMonth: 3, portalPassword: 'generate' }, O.token, { locked: true });
   const cid = mk.json.id;
   const pw = mk.json.password;
   check('a new client can start with a password, shown once', mk.status === 201 && typeof pw === 'string' && pw.length >= 10 && /^[a-z]+(-[a-z]+){3}-\d\d$/.test(pw), mk.json);
@@ -3116,8 +3243,16 @@ section('Agency lifecycle');
   check('with the session the page reads, at the first stage', open.status === 200 && open.json.stage === 'enquiry' && open.json.clientName === 'Lifecycle Labs', open.status);
   const p1 = await page(cid);
   check('the owner sees when it was opened, as a day', p1.lifecycle.password.lastOpenedDay === new Date().toISOString().slice(0, 10), p1.lifecycle.password);
+  // Before the onboarding form is sent the page is only the form; once the client sends it, the dashboard opens.
+  check('before onboarding only the form shows', open.json.onboarding?.needed === true && !('waiting' in open.json) && !('invoices' in open.json) && !('docs' in open.json), Object.keys(open.json).join());
+  const obForm = await P('GET', `/agency/${tok}/onboarding`, undefined, { session });
+  check('the form needs the unlock and asks the agreement\'s own questions', (await P('GET', `/agency/${tok}/onboarding`)).status === 401 && obForm.status === 200 && obForm.json.questions?.length >= 3, obForm.status);
+  const obSent = await P('POST', `/agency/${tok}/onboarding/submit`, { draft: onboardingDraft(obForm.json.questions ?? [], 'Lifecycle Labs Private Limited', 'ops@lifecycle.test') }, { session, ip: LIP(35) });
+  check('the client sends the form once', obSent.status === 200 && (await P('POST', `/agency/${tok}/onboarding/submit`, { draft: onboardingDraft(obForm.json.questions ?? [], 'X', 'x@x.test') }, { session, ip: LIP(36) })).status === 409, obSent.json);
+  const afterOb = await P('GET', `/agency/${tok}`, undefined, { session });
+  check('after onboarding the dashboard opens, and the owner has the details', 'waiting' in afterOb.json && afterOb.json.onboarding?.done === true && (await page(cid)).client.billing.line === 'Lifecycle Labs Private Limited', Object.keys(afterOb.json).join());
   // A session is for one client.
-  const other = await api('POST', '/agency/clients', { name: 'Other Labs', portalPassword: 'generate' }, O.token);
+  const other = await addClient({ name: 'Other Labs', portalPassword: 'generate' }, O.token, { locked: true });
   const otherTok = (await api('POST', `/agency/clients/${other.json.id}/portal`, { on: true }, O.token)).json.portalToken;
   check('a session for one client does not open another', (await P('GET', `/agency/${otherTok}`, undefined, { session })).status === 401);
 
@@ -3255,7 +3390,7 @@ section('Agency lifecycle');
   check('an ended retainer can be renewed with a new offer', (await api('POST', `/agency/clients/${cid}/retainer`, { options: [{ months: 12 }] }, O.token)).status === 201 && (await page(cid)).lifecycle.retainer.status === 'offered');
 
   // Months that were missed while nothing ran are made on the next run, once each; auto-send off leaves the invoices as drafts.
-  const late = (await api('POST', '/agency/clients', { name: 'Late Labs', retainerCents: 1000000, piecesPerMonth: 2 }, O.token)).json.id;
+  const late = (await addClient({ name: 'Late Labs', retainerCents: 1000000, piecesPerMonth: 2 }, O.token)).json.id;
   for (const to of ['agreement_sent', 'agreement_signed', 'strategy', 'trial', 'pilot']) await api('POST', `/agency/clients/${late}/stage`, { to }, O.token);
   const lo = await api('POST', `/agency/clients/${late}/retainer`, { options: [{ months: 6 }], autoSend: false }, O.token);
   const lTok = (await api('POST', `/agency/clients/${late}/portal`, { on: true }, O.token)).json.portalToken;
@@ -3269,6 +3404,60 @@ section('Agency lifecycle');
   const lp = await page(late);
   check('and the cron does not make them again', (await items(late)).length === 4 && lp.lifecycle.retainer.cyclesMade === 2 && lp.invoices.length === 2, [lp.lifecycle.retainer.cyclesMade, lp.invoices.length]);
   check('with auto-send off the invoices wait as drafts', lp.invoices.every((i) => i.status === 'draft'), lp.invoices.map((i) => i.status));
+
+  // Client onboarding, by its rules, on a client whose link is locked: the form needs the unlock, is saved as the client goes,
+  // names the first unanswered question of the brief, and is sent once however many taps arrive together.
+  const obMk = await addClient({ name: 'Onboard Labs', contactEmail: 'ops@onboard.test', portalPassword: 'generate' }, O.token, { locked: true });
+  const obId = obMk.json.id;
+  const obTok = obMk.json.portalToken;
+  const obPw = obMk.json.password;
+  check('onboarding: the form is locked without a portal session', obMk.status === 201 && (await P('GET', `/agency/${obTok}/onboarding`, undefined, { ip: LIP(41) })).status === 401 && (await P('PUT', `/agency/${obTok}/onboarding`, { draft: {} }, { ip: LIP(41) })).status === 401, obMk.json);
+  const obSession = (await P('POST', `/agency/${obTok}/unlock`, { password: obPw }, { ip: LIP(42) })).json.session;
+  const obQs = (await P('GET', `/agency/${obTok}/onboarding`, undefined, { session: obSession, ip: LIP(43) })).json.questions ?? [];
+  const obDraft = onboardingDraft(obQs, 'Onboard Labs Private Limited', 'asha@onboard.test');
+  const obPut = await P('PUT', `/agency/${obTok}/onboarding`, { draft: { ...obDraft, brief: {}, junk: 'dropped' } }, { session: obSession, ip: LIP(43) });
+  const obBack = (await P('GET', `/agency/${obTok}/onboarding`, undefined, { session: obSession, ip: LIP(43) })).json;
+  check('onboarding: the draft is saved by PUT, and only the form\'s own fields', obPut.status === 200 && obBack.draft?.legalName === 'Onboard Labs Private Limited' && !('junk' in (obBack.draft ?? {})) && obBack.done === false, obBack.draft);
+  const obHalf = await P('POST', `/agency/${obTok}/onboarding/submit`, { draft: { ...obDraft, brief: {} } }, { session: obSession, ip: LIP(44) });
+  check('onboarding: sending it without the brief is refused with the first question', obHalf.status === 400 && /^Answer 3\.1\./.test(obHalf.json.error ?? '') && String(obHalf.json.field).startsWith('q-'), obHalf.json);
+  const [obA, obB] = await Promise.all([
+    P('POST', `/agency/${obTok}/onboarding/submit`, { draft: obDraft }, { session: obSession, ip: LIP(45) }),
+    P('POST', `/agency/${obTok}/onboarding/submit`, { draft: obDraft }, { session: obSession, ip: LIP(46) }),
+  ]);
+  check('onboarding: two sends at once give one 200 and one 409', [obA.status, obB.status].sort().join() === '200,409', [obA.status, obB.status, obA.json, obB.json]);
+  const obExport = (await api('GET', '/me/export', undefined, O.token)).json;
+  const obRow = (obExport.agencyClients ?? []).find((r) => r.id === obId);
+  check('onboarding: the export holds the form, when it was sent and that it was needed', typeof obRow?.onboarding_json === 'string' && obRow.onboarding_json.includes('Onboard Labs Private Limited') && Boolean(obRow.onboarded_at) && obRow.onboarding_needed === 1, obRow && { needed: obRow.onboarding_needed, at: obRow.onboarded_at });
+
+  // Asking for a new password, from the lock screen: the same answer for any link, one open ask per client, one inbox note,
+  // a limit per address, dismissed by the owner, closed by a new password (which also ends every portal session).
+  const askIp = LIP(47);
+  const pwAsk = (body, ip) => P('POST', '/agency/password-request', { kind: 'agency', ...body }, { ip });
+  const askUnknown = await pwAsk({ token: 'ZZZZZZZZZZZZZZZZ', reason: 'x' }, LIP(48));
+  const ask1 = await pwAsk({ token: obTok, reason: 'I think it was shared' }, askIp);
+  check('password ask: an unknown link gets the same answer as a real one', askUnknown.status === 200 && ask1.status === 200 && JSON.stringify(askUnknown.json) === JSON.stringify(ask1.json), [askUnknown.json, ask1.json]);
+  const ask2 = await pwAsk({ token: obTok, reason: 'again' }, askIp);
+  const askPage = await page(obId);
+  check('password ask: a second ask is merged into the one open request, with the first reason', ask2.status === 200 && askPage.lifecycle.password.request?.reason === 'I think it was shared', askPage.lifecycle.password.request);
+  const askInbox = JSON.stringify((await api('GET', '/inbox', undefined, O.token)).json);
+  check('password ask: the owner gets one inbox note for it', askInbox.split('Onboard Labs asked for a new password').length - 1 === 1, askInbox.slice(0, 200));
+  check('password ask: the log keeps the fact and never the reason', askPage.lifecycle.log.some((l) => /asked for a new password/.test(l.text)) && !JSON.stringify(askPage.lifecycle.log).includes('I think it was shared'));
+  const ask3 = await pwAsk({ token: obTok }, askIp);
+  const ask4 = await pwAsk({ token: obTok }, askIp);
+  check('password ask: a fourth ask from one address within the hour is limited', ask3.status === 200 && ask4.status === 429, [ask3.status, ask4.status]);
+  check('password ask: another person cannot dismiss it', (await api('POST', `/agency/clients/${obId}/password-request/close`, {}, X.token)).status === 404);
+  const askClose = await api('POST', `/agency/clients/${obId}/password-request/close`, {}, O.token);
+  check('password ask: the owner dismisses it and it is gone from the page', askClose.status === 200 && askClose.json.closed === true && (await page(obId)).lifecycle.password.request === null, askClose.json);
+  await pwAsk({ token: obTok, reason: 'Lost it' }, LIP(49));
+  check('password ask: after a dismissal a new ask opens again', (await page(obId)).lifecycle.password.request?.reason === 'Lost it');
+  const obNewPw = `Cedar-${stamp}-lotus-07`;
+  check('password ask: the old portal session still opens the page before the new password', (await P('GET', `/agency/${obTok}`, undefined, { session: obSession })).status === 200);
+  const obSet = await api('PUT', `/agency/clients/${obId}/password`, { password: obNewPw }, O.token);
+  check('password ask: a new password closes the open ask and ends every portal session', obSet.status === 200 && (await page(obId)).lifecycle.password.request === null && (await P('GET', `/agency/${obTok}`, undefined, { session: obSession })).status === 401);
+  const askExport = (await api('GET', '/me/export', undefined, O.token)).json;
+  const askRows = (askExport.agencyPasswordRequests ?? []).filter((r) => r.client_id === obId);
+  const askText = JSON.stringify(askExport);
+  check('password ask: the export carries the asks and no password', askRows.length >= 2 && askRows.every((r) => !Object.keys(r).some((k) => /hash|salt|pass/i.test(k))) && !askText.includes(obPw) && !askText.includes(obNewPw) && !/portal_pass_hash|portal_pass_salt/.test(askText), askRows);
 
   // Export and erase.
   const ex = JSON.stringify((await api('GET', '/me/export', undefined, O.token)).json);
@@ -3296,7 +3485,7 @@ section('Agency documents');
   const pub = (method, path, body) => api(method, `/public${path}`, body, null, { 'CF-Connecting-IP': `10.${(seed >> 8) & 255}.${seed & 255}.${(Math.floor(Math.random() * 200) + 20) & 255}` });
   const clean = (t) => typeof t === 'string' && !/undefined|\[object|\*\*/.test(t) && !/<[a-z/][^>]*>/i.test(t);
 
-  const mkClient = async (who, extra = {}) => (await api('POST', '/agency/clients', { name: 'Docs Co', contactName: 'Dana', contactEmail: 'dana@docs.test', retainerCents: 4500000, ...extra }, who.token)).json.id;
+  const mkClient = async (who, extra = {}) => (await addClient({ name: 'Docs Co', contactName: 'Dana', contactEmail: 'dana@docs.test', retainerCents: 4500000, ...extra }, who.token)).json.id;
   const cid = await mkClient(O);
 
   // the other kinds of document
@@ -3311,7 +3500,7 @@ section('Agency documents');
   check('its text version has no undefined, no markup and the client\'s name', clean(text0) && text0.includes('Docs Co') && /\n1\. THE SESSION/.test(text0), text0.slice(0, 200));
   const trial = await api('POST', '/agency/docs', { kind: 'trial_terms', clientId: cid }, O.token);
   const trialText = contractAsText((await api('GET', `/agency/docs/${trial.json.id}`, undefined, O.token)).json.doc.doc);
-  check('trial terms come from the trial agreement and point at no section numbers', trial.status === 201 && trialText.includes('evaluation and approval only') && !/section \d/.test(trialText), trialText.slice(0, 80));
+  check('trial terms come from the trial agreement and point at no section numbers', trial.status === 201 && trialText.includes('solely for evaluation and approval purposes') && !/section \d/i.test(trialText), trialText.slice(0, 80));
   const prop = await api('POST', '/agency/docs', { kind: 'retainer_proposal', clientId: cid, retainer: { monthlyFeeCents: 4500050, deliverables: ['8 short videos'], months: [1, 3, 6] } }, O.token);
   const propDoc = (await api('GET', `/agency/docs/${prop.json.id}`, undefined, O.token)).json.doc.doc;
   const pk = propDoc.sections.find((s) => s.kind === 'packages').packages;
@@ -3390,7 +3579,37 @@ section('Agency documents');
   const iMailDraft = await api('POST', `/agency/invoices/${iv.id}/email`, {}, O.token);
   check('a draft invoice is not emailed', iMailDraft.status === 400, iMailDraft.json);
   const kc = await api('POST', '/agency/contracts', { templateKey: 'trial', clientId: cid }, O.token);
-  check('a new agreement starts with the default look', (await api('GET', `/agency/contracts/${kc.json.id}`, undefined, O.token)).json.contract.doc.style?.heading === 'numbered', kc.json);
+  // The Trial and pilot agreement is drawn in the typed layout, like the founder's own; the others start with numbered headings.
+  const kcRet = await api('POST', '/agency/contracts', { templateKey: 'retainer', clientId: cid }, O.token);
+  const kcStyle = (await api('GET', `/agency/contracts/${kc.json.id}`, undefined, O.token)).json.contract.doc.style;
+  const retStyle = (await api('GET', `/agency/contracts/${kcRet.json.id}`, undefined, O.token)).json.contract?.doc.style;
+  check('a new agreement starts with the default look', kcStyle?.layout === 'typed' && retStyle?.heading === 'numbered', { kcStyle, retStyle });
+  if (kcRet.json.id) await api('DELETE', `/agency/contracts/${kcRet.json.id}`, undefined, O.token);
+
+  // Paper edited in place saves as you go, only onto the version the page read: a second save from the same old version is
+  // refused (409 changed) instead of writing over the first, and a save that names no version still lands (the older callers).
+  for (const [what, path, key] of [['agreement', `/agency/contracts/${kc.json.id}`, 'contract'], ['document', `/agency/docs/${draftDoc.json.id}`, 'doc']]) {
+    const cur = (await api('GET', path, undefined, O.token)).json[key];
+    const at = cur?.updatedAt;
+    const g1 = await api('PATCH', path, { doc: { ...cur.doc, subtitle: 'one' }, ifUpdatedAt: at }, O.token);
+    check(`autosave on an ${what}: a save on the version read lands`, typeof at === 'string' && g1.status === 200, [at, g1.status, g1.json]);
+    const g2 = await api('PATCH', path, { doc: { ...cur.doc, subtitle: 'two' }, ifUpdatedAt: at }, O.token);
+    check(`autosave on an ${what}: a second save from the same old version is refused as changed`, g2.status === 409 && g2.json.error === 'changed', [g2.status, g2.json]);
+    const mid = (await api('GET', path, undefined, O.token)).json[key];
+    check(`autosave on an ${what}: the refused save wrote nothing`, mid?.doc.subtitle === 'one', mid?.doc.subtitle);
+    const g3 = await api('PATCH', path, { doc: { ...mid.doc, subtitle: cur.doc.subtitle } }, O.token);
+    check(`autosave on an ${what}: a save with no version still lands, and the subtitle is put back`, g3.status === 200 && (await api('GET', path, undefined, O.token)).json[key]?.doc.subtitle === cur.doc.subtitle, g3.status);
+  }
+  {
+    const ivPath = `/agency/invoices/${iv.id}`;
+    const cur = (await api('GET', ivPath, undefined, O.token)).json;
+    const v0 = cur.version;
+    const g1 = await api('PATCH', ivPath, { note: 'Guard one', ifVersion: v0 }, O.token);
+    check('autosave on an invoice: a save on the version read lands and answers a new version', typeof v0 === 'string' && v0 !== '' && g1.status === 200 && typeof g1.json.version === 'string' && g1.json.version !== v0, [v0, g1.status, g1.json.version]);
+    const g2 = await api('PATCH', ivPath, { note: 'Guard two', ifVersion: v0 }, O.token);
+    check('autosave on an invoice: replaying the old version is refused as changed', g2.status === 409 && g2.json.error === 'changed' && (await api('GET', ivPath, undefined, O.token)).json.invoice?.note === 'Guard one', [g2.status, g2.json]);
+    check('autosave on an invoice: a save with no version still lands', (await api('PATCH', ivPath, { note: cur.invoice.note }, O.token)).status === 200);
+  }
 
   // house templates: only the super admin makes them; everyone else reads and copies
   await api('PUT', '/agency/settings', { profile: { from: { name: 'Founder Studio', address: 'HOUSE-ADDR Road', taxIds: [], line: '', email: '', phone: '' }, bank: { bankName: 'Founder Bank', account: '111222333', holder: '', ifsc: '', upi: '' } } }, A.token);
@@ -3427,6 +3646,20 @@ section('Agency documents');
   const kUsed = await api('POST', '/agency/contracts', { houseId: kcHouse.json.id, clientId: cid }, O.token);
   const kDoc = (await api('GET', `/agency/contracts/${kUsed.json.id}`, undefined, O.token)).json.contract?.doc;
   check('a house agreement is copied with your names, not the admin\'s', kUsed.status === 201 && kDoc.vars.client === 'Docs Co' && !JSON.stringify(kDoc).includes('Founder Client') && kDoc.sections.length > 3, kUsed.json);
+  // A house template is edited in place by the super admin, saved only onto the version read, and never takes on names.
+  {
+    const hPath = `/admin/agency/templates/${kcHouse.json.id}`;
+    const one = (await api('GET', hPath, undefined, A.token)).json;
+    const hAt = one.template?.updatedAt;
+    const filled = { ...one.contract, subtitle: 'House copy', vars: { ...(one.contract?.vars ?? {}), client: 'Someone Real Ltd' } };
+    const h1 = await api('PATCH', hPath, { body: filled, ifUpdatedAt: hAt }, A.token);
+    check('house template autosave: the super admin\'s save on the version read lands', typeof hAt === 'string' && h1.status === 200 && typeof h1.json.updatedAt === 'string', [h1.status, h1.json]);
+    const h2 = await api('PATCH', hPath, { body: { ...one.contract, subtitle: 'Stale copy' }, ifUpdatedAt: hAt }, A.token);
+    check('house template autosave: replaying the old version is refused as changed', h2.status === 409 && h2.json.error === 'changed', [h2.status, h2.json]);
+    const hAfter = (await api('GET', hPath, undefined, A.token)).json;
+    check('house template autosave: the first save stays, and its blanks stay empty without business details', hAfter.contract?.subtitle === 'House copy' && hAfter.template?.includeBusiness === false && Object.values(hAfter.contract?.vars ?? {}).every((v) => v === ''), hAfter.contract?.vars);
+    check('house template autosave: a normal account cannot open or change it', (await api('GET', hPath, undefined, O.token)).status === 403 && (await api('PATCH', hPath, { body: one.contract, ifUpdatedAt: hAfter.template?.updatedAt }, O.token)).status === 403 && (await api('PATCH', hPath, { body: one.contract }, X.token)).status === 403);
+  }
   const dHouse = await api('POST', '/admin/agency/templates', { kind: 'doc', name: `House brief ${stamp}`, fromId: (await api('POST', '/agency/docs', { kind: 'brief', clientId: fcid }, A.token)).json.id, includeBusiness: false }, A.token);
   const dUsed = await api('POST', '/agency/docs', { houseId: dHouse.json.id, clientId: cid }, O.token);
   check('a house document is copied the same way', dUsed.status === 201 && (await api('GET', `/agency/docs/${dUsed.json.id}`, undefined, O.token)).json.doc?.kind === 'brief', dUsed.json);
@@ -3446,8 +3679,8 @@ section('Agency documents');
   // every other document, every invoice starter and every email note opens with no blank, no placeholder and nothing to retype.
   {
     const F = await join('docfill');
-    await api('PUT', '/agency/settings', { currency: 'INR', profile: { from: { name: 'Fill Studio', line: '', taxIds: [], address: '9 Fill Road, Pune', email: 'fill@studio.test', phone: '+91 90000 11111' }, bank: { bankName: 'Fill Bank', holder: 'Fill Person', account: '12121212', ifsc: 'fill0000001', upi: '' }, signerName: 'Fill Person', signerTitle: 'Founder', jurisdiction: 'Pune', payDays: 10 } }, F.token);
-    const fc = (await api('POST', '/agency/clients', { name: 'Full Co', contactName: 'Mira Das', contactEmail: 'mira@full.test', channels: ['YouTube', 'Instagram'], retainerCents: 6000000, piecesPerMonth: 8, hoursPerMonth: 20 }, F.token)).json.id;
+    await api('PUT', '/agency/settings', { currency: 'INR', profile: { from: { name: 'Fill Studio', line: '', taxIds: [], address: '9 Fill Road, Pune', email: 'fill@studio.test', phone: '+91 90000 11111' }, bank: { bankName: 'Fill Bank', holder: 'Fill Person', account: '12121212', ifsc: 'fill0000001', upi: '' }, signerName: 'Fill Person', signerTitle: 'Founder', brandName: 'Fill Films', jurisdiction: 'Pune', payDays: 10 } }, F.token);
+    const fc = (await addClient({ name: 'Full Co', contactName: 'Mira Das', contactEmail: 'mira@full.test', channels: ['YouTube', 'Instagram'], retainerCents: 6000000, piecesPerMonth: 8, hoursPerMonth: 20 }, F.token)).json.id;
     // The add-client form saves the billing part straight after, the same way.
     await api('PATCH', `/agency/clients/${fc}`, { name: 'Full Co', billing: { name: 'Full Co', line: '', taxIds: [{ label: 'GSTIN', value: '27ABCDE1234F1Z5' }], address: '5 Full Street, Mumbai', email: '', phone: '' } }, F.token);
     const typed = { projectWhat: 'Launch videos', deliveryDate: '1 Dec 2026', trialPieces: '2', trialFee: 'None', sessionDate: '3 Nov 2026' };
@@ -3465,7 +3698,9 @@ section('Agency documents');
       papers.push({ name: `document ${kind}`, kind: 'doc', doc: d.doc, docKind: kind });
     }
     const asked = papers.flatMap((p) => Object.entries(p.doc.vars).filter(([key, v]) => !v && !(key in typed)).map(([key]) => `${p.name}: ${key}`));
-    const named = papers.flatMap((p) => p.doc.sections.flatMap((s) => [...s.body.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1])).filter((key) => !p.doc.vars[key] && !(key in typed)).map((key) => `${p.name}: ${key}`));
+    // An optional field (a second email) may stay empty: its line is left out of the client's copy.
+    const optionalVar = new Set(CONTRACT_VARS.filter((v) => v.optional).map((v) => v.key));
+    const named = papers.flatMap((p) => p.doc.sections.flatMap((s) => [...s.body.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1])).filter((key) => !p.doc.vars[key] && !(key in typed) && !optionalVar.has(key)).map((key) => `${p.name}: ${key}`));
     check('every agreement and document starts filled from the profile and the client, asking only what no record holds', named.length === 0, named.slice(0, 8));
     void asked;
     const dirty = [];
@@ -3637,7 +3872,7 @@ section('Money guards: two taps pay once, nothing is refunded that was not paid'
   // Agency: a locked client's invoice in lower case is still locked; two taps on Mark paid book once; a take-back cannot undo a signature.
   const O = await join('agencyguard', ['agency', 'finance']);
   await api('PUT', '/agency/settings', { profile: { gstBps: 0, tdsBps: 0, tdsMode: 'none' } }, O.token);
-  const cl = await api('POST', '/agency/clients', { name: 'Guarded Co', contactEmail: 'ops@guarded.test', portalPassword: 'generate' }, O.token);
+  const cl = await addClient({ name: 'Guarded Co', contactEmail: 'ops@guarded.test', portalPassword: 'generate' }, O.token, { locked: true });
   const inv = await api('POST', `/agency/invoices?day=${today}`, { clientId: cl.json.id, items: [{ description: 'Guarded reel', quantity: 1, unitCents: 100000 }] }, O.token);
   const iid = inv.json.invoice?.id;
   const sentInv = await api('PATCH', `/agency/invoices/${iid}`, { status: 'sent' }, O.token);
@@ -3725,7 +3960,7 @@ section('Agency across the app');
   await api('PATCH', '/me', { displayName: 'Smoke emerge', timezone: zone }, E.token);
   for (const key of ['agency', 'finance']) await api('PATCH', '/me/modules', { key, on: true }, E.token);
   const brand = `Emergeco${stamp}`;
-  const k = await api('POST', '/agency/clients', { name: brand, contactName: 'Nia', contactEmail: 'nia@emerge.test', retainerCents: 3000000, piecesPerMonth: 4 }, E.token);
+  const k = await addClient({ name: brand, contactName: 'Nia', contactEmail: 'nia@emerge.test', retainerCents: 3000000, piecesPerMonth: 4 }, E.token);
   check('an Agency client is made for the emergence checks', k.status === 201 && k.json.id, k.json);
   const kid = k.json.id;
   const piece = await api('POST', `/agency/items?day=${D}`, { clientId: kid, title: 'Emerge reel', kind: 'short', platform: 'Instagram', stage: 'making', dueDate: D }, E.token);
@@ -3789,7 +4024,7 @@ section('Agency across the app');
     check('its Undo removes the note', u3.json?.receipt?.status === 'undone' && !(await notes()).some((n) => n.body === `Brighter opening ${stamp}`), u3.json);
     const kept = JSON.stringify((await api('GET', '/me/export', undefined, E.token)).json?.assistantActions ?? []);
     check('the assistant log keeps the label, never the note\'s words', !kept.includes(`Brighter opening ${stamp}`), '');
-    const theirs = await api('POST', '/agency/clients', { name: `Other${stamp}` }, stranger.token);
+    const theirs = await addClient({ name: `Other${stamp}` }, stranger.token);
     const cross = await say(DO({ name: 'move_agency_deliverable', args: { itemId: piece.json.id, clientId: theirs.json.id, stage: 'review' } }));
     check('a tool cannot reach another person\'s client', (cross.json?.receipts ?? []).every((r) => r.status !== 'done') && (await items()).find((x) => x.id === piece.json.id)?.stage === 'making', cross.json);
   }

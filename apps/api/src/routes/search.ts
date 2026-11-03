@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { SearchResults } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { resolveAccess } from '../access';
+import { liveUser } from '../db';
 
 export const search = new Hono<AppEnv>();
 
@@ -24,7 +25,7 @@ search.get('/', async (c) => {
     db.prepare('SELECT id, title, created_at AS createdAt FROM journal_entries WHERE user_id = ? AND (title LIKE ? OR body LIKE ?) ORDER BY created_at DESC LIMIT 6').bind(user.id, like, like).all<SearchResults['journal'][number]>(),
     db.prepare('SELECT id, title, kind FROM resources WHERE published = 1 AND (title LIKE ? OR summary LIKE ? OR tags LIKE ?) LIMIT 6').bind(like, like, like).all<SearchResults['resources'][number]>(),
     db.prepare("SELECT p.id, p.title, p.kind, u.handle AS ownerHandle FROM products p JOIN users u ON u.id = p.owner_id WHERE p.status = 'live' AND (p.title LIKE ? OR p.description LIKE ?) LIMIT 6").bind(like, like).all<SearchResults['products'][number]>(),
-    db.prepare('SELECT handle, display_name AS name FROM users WHERE handle IS NOT NULL AND (handle LIKE ? OR display_name LIKE ?) LIMIT 6').bind(like, like).all<SearchResults['people'][number]>(),
+    db.prepare(`SELECT u.handle, u.display_name AS name FROM users u WHERE u.handle IS NOT NULL AND ${liveUser()} AND (u.handle LIKE ? OR u.display_name LIKE ?) LIMIT 6`).bind(like, like).all<SearchResults['people'][number]>(),
     db.prepare("SELECT id, title, category FROM store_items WHERE status = 'live' AND (title LIKE ? OR description LIKE ?) LIMIT 6").bind(like, like).all<SearchResults['items'][number]>(),
     db.prepare("SELECT id, title, condition FROM preowned_listings WHERE status IN ('live', 'agreed') AND (title LIKE ? OR description LIKE ?) LIMIT 6").bind(like, like).all<SearchResults['listings'][number]>(),
     db.prepare('SELECT id, name AS title, category FROM tools WHERE verified = 1 AND (name LIKE ? OR description LIKE ?) LIMIT 6').bind(like, like).all<SearchResults['tools'][number]>(),

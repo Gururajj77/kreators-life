@@ -191,7 +191,10 @@ export function TabBar() {
       {/* Laptop: a sidebar on the left. */}
       <nav aria-label="Main" className="safe-top fixed inset-y-0 left-0 z-30 hidden w-[240px] flex-col overflow-y-auto border-r border-line bg-card px-sm py-md md:flex">
         {focusActive ? (
-          <FocusPill />
+          // The sidebar's own top padding is taken by the safe area, so the filled pill gets its own room from the top edge.
+          <div className="pt-sm">
+            <FocusPill />
+          </div>
         ) : (
           <Link to="/home" className="flex min-h-[44px] items-center gap-xs px-xs font-display text-[18px] font-extrabold">
             <BrandMark />

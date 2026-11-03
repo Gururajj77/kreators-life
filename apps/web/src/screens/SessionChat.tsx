@@ -55,6 +55,9 @@ import {
   type IconName,
   type Question,
   characterHello,
+  LIVE_CALL_CENTS,
+  money,
+  PLAN_CURRENCY,
 } from '@kreators/shared';
 import { Check } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
@@ -340,7 +343,7 @@ function MapForm({ initial, initialAway, onSend }: { initial: Partial<Record<Rel
       {/* The seven, as a row of faces: where you are, and which are done. */}
       <ol className="m-0 grid list-none grid-cols-7 gap-xs p-0" aria-label="The seven relationships">
         {RELATIONSHIPS.map((x, i) => (
-          <li key={x.key}>
+          <li key={x.key} data-pillar={x.key}>
             <button type="button" onClick={() => go(i)} aria-current={i === at ? 'step' : undefined} aria-label={`${x.name}${done(x.key) ? ', done' : ''}`} className={`toy toy-flat relative flex min-h-[48px] w-full items-center justify-center rounded-tile border-2 ${i === at ? 'border-ink bg-card' : 'border-transparent'}`}>
               <Avatar relationship={x.key} size={32} decorative still />
               {done(x.key) && (
@@ -353,7 +356,7 @@ function MapForm({ initial, initialAway, onSend }: { initial: Partial<Record<Rel
         ))}
       </ol>
 
-      <div className="mt-sm rounded-tile bg-card p-sm shadow-toy-soft">
+      <div data-pillar={r.key} className="mt-sm rounded-tile bg-card p-sm shadow-toy-soft">
         <div className="flex items-center gap-sm">
           <Avatar relationship={r.key} size={40} decorative still />
           <span className="min-w-0 flex-1">
@@ -615,8 +618,8 @@ function ScoreForm({ away, onSend }: { away: RelationshipKey[]; onSend: Send }) 
   const labels: Record<string, string> = { ...SCORE_LABEL, ...Object.fromEntries(RELATIONSHIPS.map((r) => [r.key, r.name])) };
   // Stars, one to five; three to start.
   const [v, setV] = useState<Record<string, number>>(Object.fromEntries(keys.map((k) => [k, 3])));
-  const group = (title: string, ks: readonly string[], color: string) => (
-    <div>
+  const group = (title: string, ks: readonly string[], color: string, pillar: RelationshipKey) => (
+    <div data-pillar={pillar}>
       <h3 className="text-[16px]">{title}</h3>
       <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
         {ks.map((k) => (
@@ -636,9 +639,9 @@ function ScoreForm({ away, onSend }: { away: RelationshipKey[]; onSend: Send }) 
   const avg = (ks: readonly string[]) => (ks.reduce((a, k) => a + (v[k] ?? 0), 0) / ks.length).toFixed(1);
   return (
     <div className="flex flex-col gap-md">
-      {group('Health', SCORECARD.health, 'var(--deep-self)')}
-      {group('Wealth', SCORECARD.wealth, 'var(--deep-servant_leader)')}
-      {group(away.length ? 'Your relationships' : 'The seven', seven, 'var(--deep-friendship)')}
+      {group('Health', SCORECARD.health, 'var(--deep-self)', 'self')}
+      {group('Wealth', SCORECARD.wealth, 'var(--deep-servant_leader)', 'servant_leader')}
+      {group(away.length ? 'Your relationships' : 'The seven', seven, 'var(--deep-friendship)', 'friendship')}
       <ChatActions full next="Those are my stars" onNext={() => onSend(Object.fromEntries(keys.map((k) => [k, String(scoreOfStars(v[k] ?? 3))])), `Health ${avg(SCORECARD.health)} stars, wealth ${avg(SCORECARD.wealth)} stars, relationships ${avg(seven)} stars on average`)} />
     </div>
   );
@@ -804,7 +807,7 @@ function ContractForm({ initial, placeholder, onSend }: { initial: Data['contrac
       </label>
       {/* The live call, once and optional: a line in the plan rather than a step of its own. */}
       <div className="mt-md">
-        <Toggle on={call} onChange={setCall} label="I would like a live call with a coach" hint="A person goes through your answers with you, for US$100, or ₹10,000 in India. The app works without it, and saying no changes nothing." />
+        <Toggle on={call} onChange={setCall} label="I would like a live call with a coach" hint={`A person goes through your answers with you, for ${money(LIVE_CALL_CENTS, PLAN_CURRENCY)}. The app works without it, and saying no changes nothing.`} />
       </div>
       <ChatActions full next="Sign it" ready={Boolean(c.signedName.trim())} onNext={() => onSend({ minDays: String(c.minDays), checkinTime: c.checkinTime, penalty: c.penalty, signedName: c.signedName.trim(), call: call ? 'yes' : 'no' }, `${c.minDays} days a week, check-in at ${c.checkinTime}, ${PENALTIES.find((p) => p.key === c.penalty)?.name.toLowerCase()}. Signed ${c.signedName.trim()}.${call ? ' And I would like a live call.' : ''}`)} />
     </div>
@@ -841,7 +844,7 @@ function PicksForm({ focus, result, own: ownWords = {}, onSend }: { focus: Relat
           const l = result.ladders[k];
           const o = ladderOptions(k);
           return (
-            <li key={k} className="rounded-card p-md" style={{ background: `var(--soft-${k})` }}>
+            <li key={k} data-pillar={k} className="rounded-card p-md" style={{ background: `var(--soft-${k})` }}>
               <div className="flex items-start gap-sm">
                 <Avatar relationship={k} size={44} decorative still />
                 <div className="min-w-0 flex-1">
@@ -1017,19 +1020,19 @@ export function SessionChat() {
       'bumling',
       [
         ...(greet
-          ? [...greet, 'This is your strategy session. It sets up your pillars: the seven relationships the app is built around. By the end you will have a map, one or two pillars to focus on, a daily routine and a plan you sign.', 'A good life rests on three things: your health, your wealth and your relationships. Health is part of “Yourself”, and work and money have a pillar of their own. Here are the seven.', { node: <FrameCard /> }]
+          ? [...greet, 'This is your strategy session. By the end you will have a map, one or two pillars to focus on, a daily routine and a plan you sign.', 'A good life rests on health, wealth and your seven relationships. Health sits under “Yourself”, and work and money have a pillar of their own.', { node: <FrameCard /> }]
           : []),
         'Let’s start with your map. It shows how you show up in each relationship, one at a time.',
-        'For each one, tick every feeling you know from it, on good days and on bad ones. I work out where you usually are and where you drop under stress. If love, teachers or faith are not part of your life right now, you can set them aside.',
+        'For each one, tick every feeling you know from it, on good days and on bad ones. I work out where you usually are and where you drop under stress.',
         { node: <MapPicture /> },
         'There are no wrong answers. An honest answer helps you more than an impressive one.',
       ],
-      { stage: { part: 'map', sub: 'all' }, ask: { kind: 'form', render: (send) => <MapForm initial={chatRef.current.data.placements} initialAway={chatRef.current.data.away} onSend={send} />, more: 'The feelings come in three groups. Stuck, below Courage: fear, blame or shame are in charge. Owning it: you show up and keep your word. At ease: things flow and you give without keeping score. The key line is Courage. If you drop below it when you are stressed, that relationship is a good place to start. A pillar you set aside sits at Neutrality, “fine either way”, and stays out of your focus until you turn it back on. Made a mistake? Tap “Change my last answer” under any card. If you close the chat, everything you already sent is saved.' } },
+      { stage: { part: 'map', sub: 'all' }, ask: { kind: 'form', render: (send) => <MapForm initial={chatRef.current.data.placements} initialAway={chatRef.current.data.away} onSend={send} />, more: 'If love, teachers or faith are not part of your life right now, you can set them aside. The feelings come in three groups. Stuck, below Courage: fear, blame or shame are in charge. Owning it: you show up and keep your word. At ease: things flow and you give without keeping score. The key line is Courage. If you drop below it when you are stressed, that relationship is a good place to start. A pillar you set aside sits at Neutrality, “fine either way”, and stays out of your focus until you turn it back on. Made a mistake? Tap “Change my last answer” under any card. If you close the chat, everything you already sent is saved.' } },
     );
 
   const goWay = (data: Data) => {
     const starts = placedOf(data).filter((p) => placementFlags(p).required).map((p) => p.relationship);
-    say('bumling', [starts.length ? belowCourage(starts) : 'Nothing drops below Courage, even under stress. That is a strong start.', 'Still on your map: what gets in your way. There are two kinds of things. Fears show up when you are about to act, like the fear of being judged. Insecurities are things you worry other people notice about you.', 'Pick any that fit, or add your own words. If nothing fits, just send the card. That is a fine answer.'], { stage: { part: 'way' }, ask: { kind: 'form', render: (send) => <WayForm onSend={send} />, more: 'For each fear, pick the relationship it holds back, and say how often it decides things for you. For each insecurity, pick how heavy it feels, from a little to very heavy, and the relationship it touches. The heavier it is, the more it pulls that relationship towards your focus.' } });
+    say('bumling', [starts.length ? belowCourage(starts) : 'Nothing drops below Courage, even under stress. That is a strong start.', 'Still on your map: what gets in your way. Fears show up when you are about to act, and insecurities are what you worry other people notice.', 'Pick any that fit, or add your own words. If nothing fits, just send the card. That is a fine answer.'], { stage: { part: 'way' }, ask: { kind: 'form', render: (send) => <WayForm onSend={send} />, more: 'A fear is like the fear of being judged. For each fear, pick the relationship it holds back, and say how often it decides things for you. For each insecurity, pick how heavy it feels, from a little to very heavy, and the relationship it touches. The heavier it is, the more it pulls that relationship towards your focus.' } });
   };
 
   const goScorecard = () =>
@@ -1462,7 +1465,7 @@ export function SessionChat() {
         composer={{ placeholder: 'Ask about any word', onSend: askAbout, disabled: Boolean(typing) || chat.stage.part === 'account' }}
       />
       <Sheet open={callOpen} onClose={() => setCallOpen(false)} title="Book a live call">
-        <p className="m-0 text-[16px] font-semibold text-ink-soft">A live strategy call with the coach is US$100, or ₹10,000 in India. Booking opens once payments are connected. Until then, write to the team under Help and we will set a time by hand.</p>
+        <p className="m-0 text-[16px] font-semibold text-ink-soft">A live strategy call with the coach is {money(LIVE_CALL_CENTS, PLAN_CURRENCY)}. Booking opens once payments are connected. Until then, write to the team under Help and we will set a time by hand.</p>
         <Link to="/help" className="toy mt-md inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink">
           Write to the team
         </Link>

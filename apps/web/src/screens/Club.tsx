@@ -1,4 +1,5 @@
 import { CLUB_BENEFITS, type Membership, type Page } from '@kreators/shared';
+import { longDate } from '../lib/date';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button } from '../components/Button';
@@ -82,7 +83,7 @@ export function Club() {
               <p className="m-0 text-[18px] font-extrabold">{STATUS_COPY[mine.status].title}</p>
               <p className="mt-xs m-0 text-[14px] font-semibold">{STATUS_COPY[mine.status].blurb}</p>
               {mine.decisionNote && <p className="mt-xs m-0 text-[14px] font-semibold">Note from the reviewer: {mine.decisionNote}</p>}
-              {mine.endsAt && (mine.status === 'approved' || mine.status === 'active') && <p className="mt-xs m-0 text-[14px] font-semibold">Runs until {new Date(mine.endsAt).toLocaleDateString()}.</p>}
+              {mine.endsAt && (mine.status === 'approved' || mine.status === 'active') && <p className="mt-xs m-0 text-[14px] font-semibold">Runs until {longDate(mine.endsAt)}.</p>}
               {(mine.status === 'approved' || mine.status === 'active') && (
                 <p className="mt-xs m-0 text-[14px] font-semibold">{mine.managerName ? `Your manager: ${mine.managerName}. Write to the team under Help to reach them.` : 'A manager on staff will be named for you soon.'}</p>
               )}
@@ -133,7 +134,7 @@ function ReviewQueue({ queue, staff, page, onChange }: { queue: Membership[]; st
           {m.status}
         </span>
       </p>
-      <p className="m-0 text-[14px] font-semibold text-ink-soft">Applied {new Date(m.createdAt).toLocaleDateString()}</p>
+      <p className="m-0 text-[14px] font-semibold text-ink-soft">Applied {longDate(m.createdAt)}</p>
       {m.note && <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold">{m.note}</p>}
       <label className="mt-sm block">
         <span className="block text-[12px] font-bold">Note to them</span>

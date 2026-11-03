@@ -21,8 +21,7 @@ import {
   type AgencyClient,
   type AgencyRetainer,
   type ClientLifecycle,
-  type RetainerOption,
-} from '@kreators/shared';
+  type RetainerOption, LOCALE } from '@kreators/shared';
 import { useAuthed } from '../lib/queries';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent, type ReactNode } from 'react';
@@ -158,7 +157,8 @@ export function LifecycleCard({ client, life, compact = false }: { client: Agenc
     <>
       <div className="mt-sm flex flex-wrap items-center gap-xs">
         {next && (
-          <Button onClick={() => move.mutate({ to: next, undo: false })} disabled={Boolean(problem) || move.isPending}>
+          // One solid button per screen: while the client's password ask is open, "Set a new password" above is the solid one.
+          <Button variant={life.password.request ? 'outline' : 'primary'} onClick={() => move.mutate({ to: next, undo: false })} disabled={Boolean(problem) || move.isPending}>
             {move.isPending ? 'Moving' : `Move to ${AGENCY_STAGE_BY_KEY[next].name}`}
           </Button>
         )}
@@ -351,7 +351,7 @@ export function DocPassword({ clientId, clientName, savedClientId }: { clientId:
       <p className="prose-long m-0 min-w-0 flex-1 text-[14px] font-semibold text-ink-soft">
         {tie(
           set
-            ? `${clientName || 'The client'} types a password before they can read this link. It is the same one for their page and every document sent to them.`
+            ? `${clientName || 'The client'} types their password first. One password opens every link.`
             : 'Anyone with this link can open it. Set a password and the client types it first.',
         )}
       </p>
@@ -412,7 +412,7 @@ export function PortalSecurityCard({ client, life }: { client: AgencyClient; lif
       )}
       {set && (
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          {`The client types it once to open their page, their agreements and their invoices. It lasts twelve hours in their browser tab. ${life.password.setAt ? `Set ${prettyDate(life.password.setAt.slice(0, 10))}.` : ''} We keep only a scrambled copy, so we cannot show it again.`}
+          {`One password opens every link for twelve hours.${life.password.setAt ? ` Set ${prettyDate(life.password.setAt.slice(0, 10))}.` : ''}`}
         </p>
       )}
       <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{life.password.lastOpenedDay ? `Last opened ${prettyDate(life.password.lastOpenedDay)}.` : on ? 'Not opened yet.' : 'The link is switched off, so nobody can open it.'}</p>
@@ -567,7 +567,7 @@ export function RetainerCard({ client, life, currency }: { client: AgencyClient;
             <>
               <p className="mt-sm m-0 text-[14px] font-bold">
                 {`${r.months} months from ${r.startDay ? prettyDate(r.startDay) : 'the start day'}. ${r.cyclesMade} of ${r.months} made.`}
-                {r.nextCycle ? ` Next cycle: ${new Date(`${r.nextCycle.day}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}.` : ''}
+                {r.nextCycle ? ` Next cycle: ${new Date(`${r.nextCycle.day}T00:00:00`).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' })}.` : ''}
               </p>
               <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Each month makes its invoice and its pieces by itself, once, on the retainer&apos;s own day. A short month falls on its last day.</p>
             </>

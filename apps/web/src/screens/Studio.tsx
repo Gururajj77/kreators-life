@@ -1,4 +1,5 @@
-import { money, PRODUCT_KIND_META, PRODUCT_KINDS, productHasOwnCover, type Booking, type Order, type Product, type ProductKind } from '@kreators/shared';
+import { money, PRODUCT_KIND_META, PRODUCT_KINDS, productHasOwnCover, type Booking, type Order, type Product, type ProductKind, LOCALE, formatCount } from '@kreators/shared';
+import { longDate, dateTime } from '../lib/date';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -13,6 +14,7 @@ import { api, downloadCsv as fetchCsv, errorText } from '../lib/api';
 import { useAuthed, useMe, useRefreshAll, useStudio } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { Stars } from '../components/Stars';
+import { TabRow } from '../components/TabRow';
 import { FIELD } from '../lib/ui';
 import { useCopy } from '../lib/clipboard';
 
@@ -25,7 +27,22 @@ const STATUS_PILL: Record<Order['status'], string> = {
   expired: 'bg-line text-ink',
 };
 
-export function Studio({ tab = 'home' }: { tab?: 'home' | 'page' | 'bookings' | 'reviews' | 'audience' | 'content' | 'automations' | 'customers' | 'dm' }) {
+type ShopTab = 'home' | 'page' | 'bookings' | 'reviews' | 'audience' | 'content' | 'automations' | 'customers' | 'dm';
+
+/** Most used first: the row shows what fits and puts the rest behind More. */
+const SHOP_TABS: readonly { key: ShopTab; label: string; to: string }[] = [
+  { key: 'home', label: 'Overview', to: '/shop' },
+  { key: 'page', label: 'My page', to: '/shop/page' },
+  { key: 'customers', label: 'Customers', to: '/shop/customers' },
+  { key: 'bookings', label: 'Bookings', to: '/shop/bookings' },
+  { key: 'content', label: 'Content', to: '/shop/content' },
+  { key: 'dm', label: 'Priority DMs', to: '/shop/dm' },
+  { key: 'reviews', label: 'Reviews', to: '/shop/testimonials' },
+  { key: 'audience', label: 'Audience', to: '/shop/audience' },
+  { key: 'automations', label: 'Auto-DM', to: '/shop/automations' },
+];
+
+export function Studio({ tab = 'home' }: { tab?: ShopTab }) {
   const me = useMe();
   const q = useStudio();
   const refresh = useRefreshAll();
@@ -42,27 +59,7 @@ export function Studio({ tab = 'home' }: { tab?: 'home' | 'page' | 'bookings' | 
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
           Sell downloads, courses, memberships, sessions, events, payment links, bundles, locked posts and priority DMs. Points work today; money checkout is in test mode until a payment provider is connected.
         </p>
-        <div className="mt-md">
-        <nav className="scroll-row" aria-label="Shop sections">
-          {(
-            [
-              ['home', 'Overview', '/shop'],
-              ['page', 'My page', '/shop/page'],
-              ['bookings', 'Bookings', '/shop/bookings'],
-              ['reviews', 'Reviews', '/shop/testimonials'],
-              ['audience', 'Audience', '/shop/audience'],
-              ['content', 'Content', '/shop/content'],
-              ['automations', 'Auto-DM', '/shop/automations'],
-              ['customers', 'Customers', '/shop/customers'],
-              ['dm', 'Priority DMs', '/shop/dm'],
-            ] as const
-          ).map(([k, label, to]) => (
-            <Link key={k} to={to} aria-current={tab === k ? 'page' : undefined} className={`inline-flex min-h-[44px] shrink-0 items-center min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === k ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
-              {label}
-            </Link>
-          ))}
-        </nav>
-        </div>
+        <TabRow className="mt-md" pillClass={(on) => `inline-flex min-h-[44px] items-center rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`} label="Shop sections" items={SHOP_TABS} value={tab} onChange={(k) => nav(SHOP_TABS.find((t) => t.key === k)!.to)} />
       </header>
 
       {tab === 'home' && d && (
@@ -70,7 +67,7 @@ export function Studio({ tab = 'home' }: { tab?: 'home' | 'page' | 'bookings' | 
           <section className="span-all mt-md" aria-label="Numbers">
             <div className="grid grid-cols-2 gap-xs md:grid-cols-4">
               <StatTile label="orders" value={d.analytics.orders} hint={`${d.analytics.attributed} via links, ${d.analytics.direct} from your page`} tone="var(--tint-purple)" to="/shop/content" />
-              <StatTile label="points earned" value={d.analytics.pointsEarned.toLocaleString()} hint={d.analytics.centsEarned > 0 ? `plus ${money(d.analytics.centsEarned)} in money orders` : d.analytics.affiliatePoints > 0 ? `${d.analytics.affiliatePoints} from referrals` : 'from sales'} tone="var(--tint-green)" to="/shop/customers" />
+              <StatTile label="points earned" value={formatCount(d.analytics.pointsEarned)} hint={d.analytics.centsEarned > 0 ? `plus ${money(d.analytics.centsEarned)} in money orders` : d.analytics.affiliatePoints > 0 ? `${d.analytics.affiliatePoints} from referrals` : 'from sales'} tone="var(--tint-green)" to="/shop/customers" />
               <StatTile label="page views" value={d.analytics.views} hint={`${d.analytics.clicks} link clicks`} to="/shop/page" />
               <StatTile label="followers" value={d.analytics.followers} hint={`${d.analytics.leads} ${d.analytics.leads === 1 ? 'lead' : 'leads'}`} to="/shop/audience" />
             </div>
@@ -82,7 +79,7 @@ export function Studio({ tab = 'home' }: { tab?: 'home' | 'page' | 'bookings' | 
                 </Link>
               </div>
               <div className="mt-sm">
-                <AreaLine values={d.analytics.days.map((x) => x.orders)} max={Math.max(3, ...d.analytics.days.map((x) => x.orders))} labels={d.analytics.days.map((x) => new Date(`${x.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' }))} color="var(--color-r6)" height={160} empty="No orders in the last two weeks" label="Orders per day for the last fourteen days" />
+                <AreaLine values={d.analytics.days.map((x) => x.orders)} max={Math.max(3, ...d.analytics.days.map((x) => x.orders))} labels={d.analytics.days.map((x) => new Date(`${x.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short' }))} color="var(--color-r6)" height={160} empty="No orders in the last two weeks" label="Orders per day for the last fourteen days" />
               </div>
             </div>
             <div className="mt-xs flex items-center gap-md rounded-card bg-card p-md shadow-toy-soft">
@@ -226,7 +223,7 @@ function SalesSection() {
               <span className={`shrink-0 rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${STATUS_PILL[o.status]}`}>{o.status}</span>
             </div>
             <p className="m-0 text-[14px] font-semibold text-ink-soft">
-              {new Date(o.createdAt).toLocaleDateString()}. {o.points > 0 ? `${o.points} points` : `${money(o.cents, o.currency)}${o.provider === 'razorpay' ? '' : ', test'}`}
+              {longDate(o.createdAt)}. {o.points > 0 ? `${o.points} points` : `${money(o.cents, o.currency)}${o.provider === 'razorpay' ? '' : ', test'}`}
               {o.couponCode ? `, coupon ${o.couponCode}` : ''}
               {o.affiliateCode ? ', via affiliate' : ''}
               {o.sourceLabel ? `, from ${o.sourceLabel}` : ', profile direct'}
@@ -434,7 +431,7 @@ function BookingsTab() {
                 {b.buyerName}, {b.productTitle}
               </p>
               <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                {new Date(b.startsAt).toLocaleString()}, {b.status}
+                {dateTime(b.startsAt)}, {b.status}
                 {b.note ? `. ${b.note}` : ''}
               </p>
               {b.status === 'requested' && (
@@ -480,7 +477,7 @@ function OverridesSection() {
         {overrides.data?.overrides.map((o) => (
           <li key={o.date} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
             <span className="flex-1 text-[16px] font-bold">
-              {new Date(`${o.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
+              {new Date(`${o.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', day: 'numeric', month: 'short' })}
               <span className="font-semibold text-ink-soft">{o.ranges.length === 0 ? ', day off' : `, ${o.ranges.map((r) => `${fmt(r.startMin)} to ${fmt(r.endMin)}`).join(', ')}`}</span>
             </span>
             <Button variant="ghost" onClick={() => remove.mutate(o.date)} disabled={remove.isPending}>

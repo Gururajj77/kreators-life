@@ -1,4 +1,4 @@
-import { STRESS_LEVELS, STRESSORS } from '@kreators/shared';
+import { STRESS_LEVELS, STRESSORS, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -42,7 +42,7 @@ export function Stress() {
         </Hero>
       )}
 
-      <section className="mt-md rounded-card p-md" style={{ background: 'var(--tint-orange)' }} aria-labelledby="level-heading">
+      <section data-pillar="friendship" className="mt-md rounded-card p-md" style={{ background: 'var(--tint-orange)' }} aria-labelledby="level-heading">
         <h2 id="level-heading" className="text-[24px]">
           Right now
         </h2>
@@ -128,7 +128,7 @@ export function Stress() {
                 {STRESS_LEVELS[Math.round(l.value) - 1]}
               </p>
               <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                {new Date(`${l.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                {new Date(`${l.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', month: 'short', day: 'numeric' })}
                 {Array.isArray(l.extra.stressors) && l.extra.stressors.length > 0 ? `. ${(l.extra.stressors as string[]).join(', ')}` : ''}
               </p>
             </li>

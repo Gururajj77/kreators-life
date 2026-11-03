@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { EVENT_APPS, MAX_EVENT_MESSAGE, MAX_REPLY_DEPTH, photoLinkProblem, threadOrder, type EventApp, type EventExtras, type EventMessage, type EventPerson } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { anonAlias, can, nameOf, newId, notify, notifyMany, nowIso, publicOf, str } from '../db';
+import { anonAlias, can, liveUser, nameOf, newId, notify, notifyMany, nowIso, publicOf, str } from '../db';
 import { requestFriend } from './bond';
 
 /**
@@ -99,7 +99,7 @@ async function extrasFor(env: { CLICK_SALT?: string }, db: D1Database, user: Use
       `SELECT u.id, u.display_name, u.handle, u.public_json,
          (SELECT CASE WHEN f.status = 'accepted' THEN 'friends' WHEN f.requester_id = ?3 THEN 'sent' ELSE 'pending' END FROM friendships f WHERE (f.requester_id = ?3 AND f.recipient_id = u.id) OR (f.requester_id = u.id AND f.recipient_id = ?3) LIMIT 1) AS friend
        FROM users u
-       WHERE u.id != ?3
+       WHERE u.id != ?3 AND ${liveUser()}
          AND (EXISTS (SELECT 1 FROM event_networking n WHERE n.app = ?1 AND n.event_id = ?2 AND n.user_id = u.id)
               OR (?1 = 'party' AND EXISTS (SELECT 1 FROM event_registrations r WHERE r.event_id = ?2 AND r.user_id = u.id AND r.networking_opt_in = 1 AND r.status IN ('registered','attended'))))
          AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ?3 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = ?3))

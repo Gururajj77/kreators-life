@@ -33,3 +33,18 @@ export function bento(i: number, count: number, base: number, wide: number): str
   const b = Math.min(6, bentoSpans(count, wide)[i] ?? 1);
   return `${BASE[a]} ${WIDE[b]}`;
 }
+
+/**
+ * The one name for a cell's size in a `.bento` grid (app.css), so a screen says what a cell is rather than spelling its spans: a large cell
+ * is two columns and two rows (the one that matters most, usually with `bento-feature`), medium two columns, wide the whole row, tall two rows
+ * and small one cell. The spans only apply from the tablet width; a phone stacks every cell in one column.
+ */
+export const BENTO_SIZE = {
+  large: 'bento-w2 bento-h2',
+  medium: 'bento-w2',
+  wide: 'bento-w4',
+  tall: 'bento-h2',
+  small: '',
+} as const;
+
+export type BentoSize = keyof typeof BENTO_SIZE;

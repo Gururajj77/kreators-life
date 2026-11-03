@@ -1,4 +1,6 @@
-import { BADGE_FAMILIES, BADGE_FAMILY_META, BADGE_TIER_LABEL, BADGE_TIERS, BADGES, badgeProgress, type Badge, type BadgeTier, type HeldBadge } from '@kreators/shared';
+import { BADGE_FAMILIES, BADGE_FAMILY_META, BADGE_TIER_LABEL, BADGE_TIERS, BADGES, badgeProgress, type Badge, type BadgeTier, type HeldBadge, LOCALE } from '@kreators/shared';
+import { useWide } from './ViewToggle';
+import { Fold } from './Fold';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
 import { bento } from '../lib/bento';
@@ -31,7 +33,7 @@ function writeSeen(keys: Set<string>) {
   }
 }
 
-const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+const day = (iso: string) => new Date(iso).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
 
 function Bar({ pct, label }: { pct: number; label: string }) {
   return (
@@ -44,6 +46,8 @@ function Bar({ pct, label }: { pct: number; label: string }) {
 function Tile({ b, held, count, fresh, onOpen }: { b: Badge; held: HeldBadge | undefined; count: number; fresh: boolean; onOpen: () => void }) {
   const earned = Boolean(held);
   const p = badgeProgress(b, count);
+  // On a phone a locked tile keeps its name, tier and bar; how to earn it is one tap away in its sheet. Wider screens show it on the tile too.
+  const wide = useWide();
   return (
     <button type="button" onClick={onOpen} className="toy toy-soft flex min-h-[44px] w-full flex-col items-center gap-xs rounded-tile bg-card p-sm text-center">
       <BadgeArt name={b.name} icon={b.icon} tier={b.tier} shape={BADGE_FAMILY_META[b.family].shape} earned={earned} size="md" shine={fresh} decorative />
@@ -51,7 +55,7 @@ function Tile({ b, held, count, fresh, onOpen }: { b: Badge; held: HeldBadge | u
       <span className="text-[12px] font-bold text-ink-soft">
         {earned ? (held?.at ? `Earned ${day(held.at)}` : held?.given ? 'Given by the team' : 'Earned') : 'Locked'} · {BADGE_TIER_LABEL[b.tier]}
       </span>
-      {!earned && <span className="text-[12px] font-semibold text-ink-soft">{b.how}</span>}
+      {!earned && wide && <span className="text-balance text-[12px] font-semibold text-ink-soft">{keepTail(b.how)}</span>}
       {!earned && p.countable && (
         <span className="mt-auto flex w-full flex-col gap-xs">
           <Bar pct={p.pct} label={`${b.name}: ${p.label}`} />
@@ -95,6 +99,7 @@ export function BadgeGallery() {
   const [tierPick, setTierPick] = useParamState('badgeTier', 'all');
   const tier = (BADGE_TIERS as readonly string[]).includes(tierPick) ? (tierPick as BadgeTier) : null;
   const [open, setOpen] = useState<string | null>(null);
+  const wide = useWide();
 
   const held = useMemo(() => new Map((q.data?.held ?? []).map((h) => [h.key, h])), [q.data]);
   // A badge earned in the last few minutes that this device has not shown yet plays its shine once.
@@ -161,6 +166,25 @@ export function BadgeGallery() {
           const ordered = [...own.filter((b) => held.has(b.key)), ...own.filter((b) => !held.has(b.key))];
           const got = BADGES.filter((b) => b.family === f && held.has(b.key)).length;
           const all = BADGES.filter((b) => b.family === f).length;
+          const body = (
+            <>
+              <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{BADGE_FAMILY_META[f].blurb}</p>
+              <ul className="mt-sm grid list-none grid-cols-2 gap-sm p-0 m-0 md:grid-cols-4">
+                {ordered.map((b, i) => (
+                  <li key={b.key} className={bento(i, ordered.length, 2, 4)}>
+                    <Tile b={b} held={held.get(b.key)} count={q.data.progress[b.stat] ?? 0} fresh={fresh.has(b.key)} onOpen={() => setOpen(b.key)} />
+                  </li>
+                ))}
+              </ul>
+            </>
+          );
+          // On a phone each family is a fold (ten families of medals are a long scroll); one you hold a badge in starts open.
+          if (!wide)
+            return (
+              <Fold key={f} className="mt-xs" title={f} hint={`${got} of ${all}`} defaultOpen={got > 0}>
+                {body}
+              </Fold>
+            );
           return (
             <section key={f} className="mt-md" aria-labelledby={`badge-family-${f.replace(/\s+/g, '-')}`}>
               <div className="flex flex-wrap items-baseline justify-between gap-xs">
@@ -171,19 +195,23 @@ export function BadgeGallery() {
                   {got} of {all}
                 </p>
               </div>
-              <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{BADGE_FAMILY_META[f].blurb}</p>
-              <ul className="mt-sm grid list-none grid-cols-2 gap-sm p-0 m-0 md:grid-cols-4">
-                {ordered.map((b, i) => (
-                  <li key={b.key} className={bento(i, ordered.length, 2, 4)}>
-                    <Tile b={b} held={held.get(b.key)} count={q.data.progress[b.stat] ?? 0} fresh={fresh.has(b.key)} onOpen={() => setOpen(b.key)} />
-                  </li>
-                ))}
-              </ul>
+              {body}
             </section>
           );
         })}
 
       <Detail b={openBadge} held={openBadge ? held.get(openBadge.key) : undefined} count={openBadge ? (q.data?.progress[openBadge.stat] ?? 0) : 0} onClose={() => setOpen(null)} />
     </section>
+  );
+}
+
+/** The last two words stay on one line, hyphens included ("twenty-five posts"), so a goal never ends on a word alone. */
+function keepTail(text: string) {
+  const words = text.trim().split(/\s+/);
+  if (words.length < 3) return text;
+  return (
+    <>
+      {words.slice(0, -2).join(' ')} <span className="whitespace-nowrap">{words.slice(-2).join(' ')}</span>
+    </>
   );
 }

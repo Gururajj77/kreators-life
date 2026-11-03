@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
 import { DiscountField } from '../components/DiscountField';
+import { Fold } from '../components/Fold';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
@@ -33,7 +34,7 @@ export function School() {
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">School</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Programs run as cohorts: lessons, assignments, live sessions and feedback from a mentor. Finish one and Work has places for what you learned.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Cohorts with lessons, assignments, live sessions and a mentor’s feedback.</p>
       </header>
 
       {d && (d.myCohorts.length > 0 || d.managed.length > 0) && (
@@ -108,16 +109,20 @@ function ProgramCard({ program: p, staff, myIds, onChange }: { program: Program;
         </div>
         {!p.published && <StatusTag tone="neutral">Draft</StatusTag>}
       </div>
-      {p.description && <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold">{p.description}</p>}
-      {p.outcomes && (
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          <span className="font-bold">You leave with:</span> {p.outcomes}
-        </p>
-      )}
-      {p.prerequisites && (
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          <span className="font-bold">Before you start:</span> {p.prerequisites}
-        </p>
+      {p.description && <p className="prose-long mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold">{p.description}</p>}
+      {(p.outcomes || p.prerequisites) && (
+        <Fold className="mt-xs" title="More about it">
+          {p.outcomes && (
+            <p className="m-0 text-[14px] font-semibold text-ink-soft">
+              <span className="font-bold">You leave with:</span> {p.outcomes}
+            </p>
+          )}
+          {p.prerequisites && (
+            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+              <span className="font-bold">Before you start:</span> {p.prerequisites}
+            </p>
+          )}
+        </Fold>
       )}
       {open.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No cohort dates are set yet. Come back after the team adds one.</p>}
       {open.length > 0 && p.pricePoints > 0 && p.published && <DiscountField className="mt-sm" area="program" itemId={p.id} value={discount?.code ?? ''} check={discount} onChange={(_c, check) => setDiscount(check)} />}
@@ -146,7 +151,7 @@ function ProgramCard({ program: p, staff, myIds, onChange }: { program: Program;
         <ErrorLine e={enroll.error ?? publish.error} />
       </div>
       {staff && (
-        <div className="mt-sm flex flex-wrap gap-xs">
+        <div className="fill-row-all mt-sm flex flex-wrap gap-xs">
           <Button variant="outline" onClick={() => setTool('lesson')}>
             Add lesson
           </Button>

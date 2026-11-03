@@ -1,4 +1,4 @@
-import { anonAliasFrom, isRealDay, pageSizeOf, parseIdentities, parseRepeat, parsePriority, parseIntake, parseLinkBlocks, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
+import { anonAliasFrom, DEFAULT_ZONE, isCurrency, isRealDay, pageSizeOf, parseIdentities, parseRepeat, parsePriority, parseIntake, parseLinkBlocks, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
 import { BADGE_STATS, BADGES, badgesFrom, communityRankOf, type CommunityRank, EMPTY_SOCIALS, isPrivateBadge, parsePublicSettings, HONORS, isStaffFor, levelFromXp, PERMISSIONS, RELATIONSHIPS, roleRank, taskReadyAt, timeHonors, type BadgeFacts, type BadgesResponse, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
 import type { Context, Next } from 'hono';
 import type { AppEnv } from './env';
@@ -69,6 +69,31 @@ export function dayFromDevice(v: string | undefined | null): string {
   return v && DATE_RE.test(v) && v <= shiftDate(utc, 1) ? v : utc;
 }
 
+/** Today in an IANA zone, as YYYY-MM-DD (India's when the zone is missing or not one). */
+export function dayInZone(zone: string | null | undefined, at = new Date()): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: zone || DEFAULT_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(at);
+  } catch {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: DEFAULT_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(at);
+  }
+}
+
+/**
+ * The person's own day: the one their device sent (`?day=` or a body field), when it is a real day no further than one day from
+ * their zone's today, else today in their zone (India's by default). Never the server's UTC date, which is still yesterday in
+ * India until 05:30.
+ */
+export function personDay(device: string | undefined | null, zone: string | null | undefined): string {
+  const own = dayInZone(zone);
+  return device && DATE_RE.test(device) && device >= shiftDate(own, -1) && device <= shiftDate(own, 1) ? device : own;
+}
+
+/** The currency a person keeps their money in (migration 0070), rupees unless they changed it. */
+export const currencyOf = (r: object): string => {
+  const v = (r as { currency?: unknown }).currency;
+  return isCurrency(v) ? v : 'INR';
+};
+
 /** An approved Club membership that has not run out. */
 export async function isClubMember(db: D1Database, userId: string): Promise<boolean> {
   return Boolean(await db.prepare("SELECT 1 FROM memberships WHERE user_id = ? AND status IN ('approved','active') AND (ends_at IS NULL OR ends_at > ?)").bind(userId, nowIso()).first());
@@ -121,7 +146,8 @@ export function toUser(r: UserRow): User {
     city: r.city ?? '',
     area: r.area ?? '',
     hasLocation: r.lat !== null && r.lat !== undefined && r.lng !== null && r.lng !== undefined,
-    timezone: r.timezone || 'Asia/Kolkata',
+    timezone: r.timezone || DEFAULT_ZONE,
+    currency: currencyOf(r),
     avatarUrl: r.avatar_url ?? '',
     socials: parseSocials(r.socials_json),
     links: linksOf(r),
@@ -523,3 +549,8 @@ export function httpUrl(v: unknown, max = 500): string {
   const t = typeof v === 'string' ? v.trim().slice(0, max) : '';
   return /^https?:\/\/\S+$/i.test(t) ? t : '';
 }
+
+/** A deleted account keeps its row (orders and invoices stay true for the books) under this name, and appears in no list of people
+ * and in no count of members. `liveUser('u')` is the condition for a query over users aliased `u`. */
+export const DELETED_NAME = 'Deleted member';
+export const liveUser = (alias = 'u'): string => `${alias}.display_name != '${DELETED_NAME}'`;

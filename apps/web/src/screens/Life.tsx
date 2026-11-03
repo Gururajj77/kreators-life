@@ -1,4 +1,4 @@
-import { LIFE_AREAS, RELATIONSHIP_BY_KEY, type LifeArea } from '@kreators/shared';
+import { LIFE_AREAS, RELATIONSHIP_BY_KEY, type LifeArea, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -39,7 +39,7 @@ export function Life() {
               </Gauge>
               <div className="min-w-0">
                 <p className="m-0 font-display text-[28px] font-extrabold leading-tight">{d.label}</p>
-                <p className="prose-long mt-xs m-0 text-[14px] font-semibold opacity-90">The average of the five areas. Parts with nothing logged do not count against you.</p>
+                <p className="prose-long mt-xs m-0 text-[14px] font-semibold opacity-90">The average of the five areas. Parts with nothing logged do not count against{'\u00a0'}you.</p>
               </div>
             </div>
           </Hero>
@@ -81,7 +81,7 @@ export function Life() {
                 { values: wb.data.week.map((w) => (w.stress === null ? null : ((5 - w.stress) / 4) * 100)), color: 'var(--color-r2)', label: 'Calm' },
               ]}
               max={100}
-              labels={wb.data.week.map((w) => new Date(`${w.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' }))}
+              labels={wb.data.week.map((w) => new Date(`${w.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short' }))}
               allLabels
               height={160}
               label="Mood, sleep and calm as scores out of a hundred for the last seven days"
@@ -124,7 +124,7 @@ function AreaCard({ area }: { area: LifeArea }) {
   const trend = Math.round(area.trend);
   return (
     <section className="mt-lg" aria-labelledby={`area-${area.key}`}>
-      <div className="rounded-card p-md" style={{ background: `var(--soft-${rel.key})` }}>
+      <div data-pillar={rel.key} className="rounded-card p-md" style={{ background: `var(--soft-${rel.key})` }}>
         <div className="flex items-center gap-sm">
           <Ring value={area.score / 100} size={72} stroke={8} color={rel.color} track="color-mix(in oklab, var(--color-ink) 14%, transparent)" label={`${meta.name} ${area.score} of 100`}>
             <span className="font-display text-[20px] font-extrabold">{area.score}</span>

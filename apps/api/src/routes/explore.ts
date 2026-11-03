@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import { EVENT_TYPE_META, LISTING_TYPES, fact, type Listing, type ListingType, type PublicStats } from '@kreators/shared';
+import { DEFAULT_ZONE, EVENT_TYPE_META, LISTING_TYPES, LOCALE, fact, type Listing, type ListingType, type PublicStats } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { nameOf, pageOf, paged } from '../db';
+import { liveUser, nameOf, pageOf, paged } from '../db';
 import { mediaForListings } from './media';
 import { cache } from '../cachecontrol';
 
@@ -21,7 +21,9 @@ interface Opts {
   limit?: number;
 }
 
-const when = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+// A public card is read by anyone, so a moment is written in India's time, the Indian way.
+const when = (iso: string) => new Date(iso).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', timeZone: DEFAULT_ZONE });
+const whenAt = (iso: string) => new Date(iso).toLocaleString(LOCALE, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: DEFAULT_ZONE });
 const money = (min: number | null, max: number | null, cur: string) => (min === null && max === null ? null : `${cur} ${min ?? ''}${min !== null && max !== null ? ' to ' : ''}${max ?? ''}`.trim());
 
 /**
@@ -104,7 +106,7 @@ export async function listingsFor(db: D1Database, o: Opts): Promise<Listing[]> {
             title: r.title,
             by: nameOf({ display_name: r.host_name }),
             blurb: r.description,
-            facts: [...fact('category', EVENT_TYPE_META[r.event_type]?.name ?? r.event_type), ...fact('when', new Date(r.starts_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })), ...(r.online_url ? fact('online', 'Online') : fact('place', r.venue)), ...(r.price_points > 0 ? fact('price', `${r.price_points} pts`) : fact('free', 'Free'))],
+            facts: [...fact('category', EVENT_TYPE_META[r.event_type]?.name ?? r.event_type), ...fact('when', whenAt(r.starts_at)), ...(r.online_url ? fact('online', 'Online') : fact('place', r.venue)), ...(r.price_points > 0 ? fact('price', `${r.price_points} pts`) : fact('free', 'Free'))],
             path: `/party/${r.id}`,
             featured: r.featured === 1,
             live: r.status === 'published' && r.ends_at >= now,
@@ -178,7 +180,7 @@ export async function listingsFor(db: D1Database, o: Opts): Promise<Listing[]> {
             title: r.title,
             by: [r.area, r.city].filter(Boolean).join(', '),
             blurb: `Anonymous group of ${r.group_size}, matched by interests that fit. Red if single, white if committed. Names stay hidden; the chat opens a day before.${r.venue_hint ? ` ${r.venue_hint}` : ''}`,
-            facts: [...fact('when', new Date(r.starts_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })), ...fact('when', r.repeat === 'weekly' ? 'every week' : ''), ...fact('availability', `${r.signups} signed up`), ...fact('category', `tables of ${r.group_size}`)],
+            facts: [...fact('when', whenAt(r.starts_at)), ...fact('when', r.repeat === 'weekly' ? 'every week' : ''), ...fact('availability', `${r.signups} signed up`), ...fact('category', `tables of ${r.group_size}`)],
             path: '/circles',
             featured: false,
             live: r.status === 'open' && r.starts_at >= now,
@@ -222,7 +224,7 @@ explore.get('/stats', async (c) => {
   const row = await c.env.DB
     .prepare(
       `SELECT
-        (SELECT COUNT(*) FROM users WHERE onboarded_at IS NOT NULL) AS members,
+        (SELECT COUNT(*) FROM users u WHERE u.onboarded_at IS NOT NULL AND ${liveUser()}) AS members,
         (SELECT COUNT(*) FROM bounties WHERE status = 'open' AND ends_at >= ?1) AS rewards_open,
         (SELECT COUNT(*) FROM opportunities WHERE status = 'published') AS opportunities_open,
         (SELECT COUNT(*) FROM events WHERE status = 'published' AND visibility = 'public' AND ends_at >= ?1) AS events_upcoming,

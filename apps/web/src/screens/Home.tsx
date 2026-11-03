@@ -1,6 +1,6 @@
 import { QuoteOfTheDay } from '../components/QuoteOfTheDay';
 import { RemindersSection } from '../components/Reminders';
-import { badgeRoleOf, greetingFor, knowledgeKindIcon, LIFE_AREAS, MODULE_BY_KEY, MODULE_GROUPS, money, MOODS, RELATIONSHIP_BY_KEY, STRESS_LEVELS, type HomeResponse, type ModuleGroup } from '@kreators/shared';
+import { badgeRoleOf, greetingFor, knowledgeKindIcon, LIFE_AREAS, MODULE_BY_KEY, MODULE_GROUP_ACCENT, MODULE_GROUPS, money, MOODS, RELATIONSHIP_BY_KEY, STRESS_LEVELS, type HomeResponse, type ModuleGroup, type RelationshipKey, formatCount } from '@kreators/shared';
 import type { CSSProperties, ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
@@ -25,8 +25,11 @@ import { Screen } from '../components/Screen';
 import { SearchBox } from '../components/SearchBox';
 import { DailyBrief } from '../components/DailyBrief';
 import { Section, SeeAll } from '../components/Section';
+import { Segmented } from '../components/fx/Segmented';
+import { useParamState } from '../lib/useParamState';
 import { api } from '../lib/api';
-import { bento } from '../lib/bento';
+import { BENTO_SIZE, bento } from '../lib/bento';
+import { tie } from '../lib/text';
 import { prettyDate, todayLocal, weekday, eventTime } from '../lib/date';
 import { useGroupOrder, useModules } from '../lib/modules';
 import { useAuthed, useMe } from '../lib/queries';
@@ -74,6 +77,10 @@ const SOURCE_META = {
   other: { label: 'Other', color: 'var(--color-r5)' },
 } as const;
 /** On a solid colour fill everything is white; a translucent white is the track. */
+const XP_VIEWS = [
+  { value: 'day', label: 'By day' },
+  { value: 'source', label: 'By source' },
+] as const;
 const WHITE = 'var(--color-on-fill)';
 const WHITE_TRACK = 'rgba(255,255,255,0.3)';
 
@@ -92,6 +99,7 @@ export function Home() {
   const q = useAuthed(['home', date], () => api.home(date, hour));
   const { modules } = useModules();
   const shortcutGroups = useGroupOrder(SHORTCUT_ORDER);
+  const [xpView, setXpView] = useParamState('xp', 'day');
   const d = q.data;
   // The three half-width extras pair up in two columns; when one is left over it takes the whole row, so nothing stands alone.
   const extras = d ? ([d.life ? 'life' : null, d.resources.length > 0 ? 'reads' : null, d.money ? 'money' : null].filter(Boolean) as string[]) : [];
@@ -155,16 +163,16 @@ export function Home() {
           <div className="min-w-0">
             <h1 className="text-[28px] leading-[1.2] [overflow-wrap:anywhere] sm:text-[30px] text-on-fill">{firstName ? `Hi, ${firstName}!` : 'Hi there!'}</h1>
             {d && (
-              <p className="m-0 flex flex-wrap items-center gap-x-xs text-[14px] font-bold opacity-90" aria-label="At a glance">
+              <p className="fill-row m-0 flex flex-wrap items-center gap-x-xs text-[14px] font-bold opacity-90" aria-label="At a glance">
                 <Link to="/tower" className="inline-flex min-h-[44px] items-center underline-offset-4 hover:underline">
                   <Icon icon={Star} size={14} className="mr-xs inline-block align-[-2px]" />Level {d.xp.level}
                 </Link>
-                <span aria-hidden="true">·</span>
+                <span aria-hidden="true" className="hidden sm:inline">·</span>
                 <Link to="/today" className="inline-flex min-h-[44px] items-center underline-offset-4 hover:underline">
                   <Icon icon={Flame} size={14} className="mr-xs inline-block align-[-2px]" />
                   {d.today.streak} {d.today.streak === 1 ? 'day' : 'days'}
                 </Link>
-                <span aria-hidden="true">·</span>
+                <span aria-hidden="true" className="hidden sm:inline">·</span>
                 <Link to="/mood" className="inline-flex min-h-[44px] items-center underline-offset-4 hover:underline">
                   {moodToday ? <MoodFace value={moodToday.value} size={16} className="mr-xs inline-block align-[-3px]" /> : <Icon icon={FaceSlightlySmiling} size={14} className="mr-xs inline-block align-[-2px]" />}
                   {moodToday ? moodToday.name : 'Log your mood'}
@@ -200,8 +208,8 @@ export function Home() {
       {d && (
         <>
           <Section id="home-metrics" title="Your metrics" lede="Where you stand today. Tap one for the detail." action={<SeeAll to="/life">Life</SeeAll>} span>
-            <ul className="-mx-md flex snap-x scroll-px-md list-none gap-xs overflow-x-auto px-md pb-xs scrollbar-none m-0 md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0">
-              <li className="w-[168px] shrink-0 snap-start md:col-span-2 md:w-auto">
+            <ul className="bento-md -mx-md flex snap-x scroll-px-md list-none gap-xs overflow-x-auto px-md pb-xs scrollbar-none m-0 md:mx-0 md:overflow-visible md:px-0">
+              <li data-pillar="lover_partner" className={`w-[168px] shrink-0 snap-start md:w-auto md:[&>a]:h-full ${BENTO_SIZE.large}`}>
                 <MetricCard to="/life" title="Life score" icon={Compass} tone="var(--color-r4)" deep="var(--deep-lover_partner)" corner={<Avatar relationship="lover_partner" size={36} decorative mood={(d.life?.overall ?? 0) >= 60 ? 'excited' : 'happy'} />}>
                   <span className="flex flex-1 items-center justify-center">
                     <Gauge value={(d.life?.overall ?? 0) / 100} size={120} stroke={12} color={WHITE} track={WHITE_TRACK} label={`Life ${d.life?.overall ?? 0} of 100`}>
@@ -215,7 +223,7 @@ export function Home() {
                   </span>
                 </MetricCard>
               </li>
-              <li className="w-[168px] shrink-0 snap-start md:w-auto">
+              <li data-pillar="friendship" className={`w-[168px] shrink-0 snap-start md:w-auto ${BENTO_SIZE.medium}`}>
                 <MetricCard to="/mood" title="Mood" tone="var(--color-r2)" deep="var(--deep-friendship)" corner={<MoodFace value={moodToday?.value ?? 3} size={40} color="rgba(255,255,255,0.25)" face="var(--color-on-fill)" />}>
                   <span className="block font-display text-[26px] font-extrabold leading-none">{moodToday ? moodToday.name : 'Not logged'}</span>
                   <span className="mt-xs block flex-1">
@@ -223,7 +231,7 @@ export function Home() {
                   </span>
                 </MetricCard>
               </li>
-              <li className="w-[168px] shrink-0 snap-start md:w-auto">
+              <li data-pillar="guru" className={`w-[168px] shrink-0 snap-start md:w-auto ${BENTO_SIZE.medium}`}>
                 <MetricCard to="/wellbeing" title="Wellbeing" icon={HeartPulse} tone="var(--color-r6)" deep="var(--deep-guru)" corner={<Avatar relationship="guru" size={36} decorative mood={d.trackers.score >= 60 ? 'excited' : 'happy'} />}>
                   <span className="flex flex-1 items-center justify-center">
                     <Ring value={d.trackers.score / 100} size={104} stroke={11} color={WHITE} track={WHITE_TRACK} label={`Wellbeing ${d.trackers.score} of 100`}>
@@ -244,7 +252,7 @@ export function Home() {
             <div className="grid grid-cols-2 gap-xs md:grid-cols-4">
               <KitTile to="/today" tone="bg-r4" icon={Flame} value={String(d.today.streak)} label="day streak" hint={d.today.checkedIn ? 'checked in today' : 'not yet today'} />
               <KitTile to="/today" tone="bg-r2" icon={Sparkles} value={`+${d.xp.today}`} label="xp today" hint={`${d.xp.week} this week`} />
-              <KitTile to="/rewards" tone="bg-r3" yellow icon={Coins} value={d.points.toLocaleString()} label="points" hint="trade for rewards" />
+              <KitTile to="/rewards" tone="bg-r3" yellow icon={Coins} value={formatCount(d.points)} label="points" hint="trade for rewards" />
               <KitTile to="/tower" tone="bg-ink" icon={Star} value={`Level ${d.xp.level}`} label={`${d.xp.into} of ${d.xp.span} xp`} hint={`${d.xp.span - d.xp.into} to level ${d.xp.level + 1}`}>
                 <span className="mt-xs block h-[6px] overflow-hidden rounded-pill bg-on-ink/20" aria-hidden="true">
                   <span className="block h-full rounded-pill bg-on-ink" style={{ width: `${Math.round((d.xp.into / Math.max(1, d.xp.span)) * 100)}%` }} />
@@ -274,7 +282,7 @@ export function Home() {
           </Section>
 
           <Section id="home-today" title="Daily" lede="Tick each box when you have done it." action={<SeeAll to="/today">Open</SeeAll>}>
-            <div className="relative flex flex-col overflow-hidden rounded-card bg-r4 p-md text-on-fill">
+            <div data-pillar="lover_partner" className="relative flex flex-col overflow-hidden rounded-card bg-r4 p-md text-on-fill">
               <HeroBlobs kind="daisy" />
               <div className="relative flex flex-1 flex-col">
                 <div className="flex items-center justify-between gap-sm">
@@ -284,7 +292,7 @@ export function Home() {
                     </Ring>
                     <p className="m-0">
                       <span className="block font-display text-[24px] font-extrabold leading-none">{d.today.doneCount === 3 ? 'All three done' : `${3 - d.today.doneCount} to go`}</span>
-                      <span className="mt-xs block text-[14px] font-bold opacity-90">Check in, small act, one task.</span>
+                      <span className="mt-xs block text-balance text-[14px] font-bold opacity-90">{tie('Check in, small act, one task.')}</span>
                     </p>
                   </div>
                   <span className="shrink-0" aria-hidden="true">
@@ -327,12 +335,12 @@ export function Home() {
             <ul className="flex list-none flex-col gap-xs p-0 m-0">
               {[
                 {
-                  key: 'mindful', to: '/mindful', name: 'Mindful minutes', icon: MODULE_BY_KEY.mindful?.icon, tone: 'var(--tint-green)',
+                  key: 'mindful', pillar: 'lover_partner', to: '/mindful', name: 'Mindful minutes', icon: MODULE_BY_KEY.mindful?.icon, tone: 'var(--tint-green)',
                   value: d.trackers.mindful.minutesWeek > 0 ? `${d.trackers.mindful.minutesWeek} min this week` : 'none this week',
                   visual: <Sparkline values={d.trackers.mindful.week} max={60} color="var(--color-r4)" width={80} height={32} />,
                 },
                 {
-                  key: 'sleep', to: '/sleep', name: 'Sleep', icon: MODULE_BY_KEY.sleep?.icon, tone: 'var(--tint-purple)',
+                  key: 'sleep', pillar: 'guru', to: '/sleep', name: 'Sleep', icon: MODULE_BY_KEY.sleep?.icon, tone: 'var(--tint-purple)',
                   value: d.trackers.sleep.avg7 === null ? 'not logged' : `${d.trackers.sleep.avg7.toFixed(1)} h a night`,
                   visual: (
                     <Ring value={d.trackers.sleep.avg7 === null ? 0 : (Math.max(4, Math.min(8, d.trackers.sleep.avg7)) - 4) / 4} size={44} stroke={5} color="var(--color-r6)" track="var(--color-line)" label="Sleep quality">
@@ -341,7 +349,7 @@ export function Home() {
                   ),
                 },
                 {
-                  key: 'journal', to: '/journal', name: 'Journal', icon: MODULE_BY_KEY.journal?.icon, tone: 'var(--tint-orange)',
+                  key: 'journal', pillar: 'friendship', to: '/journal', name: 'Journal', icon: MODULE_BY_KEY.journal?.icon, tone: 'var(--tint-orange)',
                   value: d.trackers.journal.streakDays > 0 ? `${d.trackers.journal.streakDays} day streak` : d.trackers.journal.entriesMonth > 0 ? `${d.trackers.journal.entriesMonth} this month` : 'nothing written yet',
                   visual: (
                     <span className="grid grid-cols-7 gap-xs" role="img" aria-label="Days with an entry in the last two weeks">
@@ -352,7 +360,7 @@ export function Home() {
                   ),
                 },
                 {
-                  key: 'stress', to: '/stress', name: 'Stress', icon: MODULE_BY_KEY.stress?.icon, tone: 'var(--tint-yellow)',
+                  key: 'stress', pillar: 'parent_child', to: '/stress', name: 'Stress', icon: MODULE_BY_KEY.stress?.icon, tone: 'var(--tint-yellow)',
                   value: d.trackers.stress.latest === null ? 'not logged' : `Level ${d.trackers.stress.latest} (${STRESS_LEVELS[d.trackers.stress.latest - 1] ?? ''})`,
                   visual: <Segments value={d.trackers.stress.latest} color="var(--color-r3)" label="Stress level out of five" />,
                 },
@@ -377,7 +385,7 @@ export function Home() {
                 },
               ].map((r) => (
                 <li key={r.key}>
-                  <Link to={r.to} className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm text-ink">
+                  <Link to={r.to} data-pillar={r.pillar} className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm text-ink">
                     {r.key === 'mood' && moodToday ? (
                       <MoodFace value={moodToday.value} size={48} />
                     ) : (
@@ -397,7 +405,7 @@ export function Home() {
           </Section>
 
           <Section id="home-next" title="Up next" lede="Events, runs and circles you joined." action={<SeeAll to="/party">Party</SeeAll>}>
-            <div className="flex flex-col rounded-card bg-card p-md shadow-toy-soft">
+            <div data-pillar="lover_partner" className="flex flex-col rounded-card bg-card p-md shadow-toy-soft">
               <div className="flex items-center justify-between gap-sm">
                 <p className="m-0 flex items-baseline gap-xs">
                   <span className="font-display text-[40px] font-extrabold leading-none">{d.upNext.length}</span>
@@ -455,10 +463,10 @@ export function Home() {
 
           <Section id="home-companion" title="Companion" lede="A chat that knows how you are doing. Not a therapist.">
             {/* Centred in its half: when Up next beside it is taller, the room goes above and below, never one band at the foot. */}
-            <div className="relative flex flex-col justify-center overflow-hidden rounded-card bg-ink p-md text-on-ink">
+            <div data-pillar="guru" className="relative flex flex-col justify-center overflow-hidden rounded-card bg-ink p-md text-on-ink">
               <HeroBlobs opacity={0.06} kind="violet" />
               <div className="relative z-10 max-w-[60%]">
-                <p className="m-0 font-display text-[40px] font-extrabold leading-none">{d.companion.messages.toLocaleString()}</p>
+                <p className="m-0 font-display text-[40px] font-extrabold leading-none">{formatCount(d.companion.messages)}</p>
                 <p className="mt-xs m-0 text-[18px] font-extrabold">{d.companion.messages === 1 ? 'message' : 'messages'}</p>
                 <p className="mt-xs m-0 text-[14px] font-bold opacity-80">
                   <Icon icon={MessageCircle} size={14} className="mr-xs inline-block align-[-2px]" />
@@ -483,37 +491,41 @@ export function Home() {
           </Section>
 
           <MoreOnHome>
-          <Section id="home-trend" title="Last 14 days" lede="Xp a day. A green dot is a task ticked." action={<SeeAll to="/today">Daily</SeeAll>}>
+          {/* One question, one box: how much xp came in over the last two weeks, by day or by what earned it. The tab lives in the URL. */}
+          <Section id="home-trend" title="Xp, last 14 days" lede={xpView === 'source' ? 'The last two weeks, by what you did.' : 'Xp a day. A green dot is a task ticked.'} action={<SeeAll to="/today">Daily</SeeAll>} span className="col-span-full">
             <div className="rounded-card bg-card p-md shadow-toy-soft">
-              <AreaLine values={d.days.map((x) => x.xp)} max={Math.max(60, ...d.days.map((x) => x.xp))} labels={d.days.map((x) => weekday(x.date))} color="var(--color-r4)" height={160} empty="No xp in the last two weeks" label={`Xp per day for the last fourteen days, ${d.xp.week} this week`} />
-              <div className="mt-xs flex gap-xs" role="img" aria-label="Days with a task ticked">
-                {d.days.map((x) => (
-                  <span key={x.date} className="flex flex-1 justify-center">
-                    <span className="block size-[8px] rounded-pill" style={{ background: x.tasks > 0 ? 'var(--color-r4)' : 'var(--color-line)' }} />
-                  </span>
-                ))}
-              </div>
-              {d.days.every((x) => x.xp === 0) && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Every box ticked on Daily lands here.</p>}
-            </div>
-          </Section>
-
-          <Section id="home-sources" title="Where xp came from" lede="The last two weeks, by what you did.">
-            <div className="flex items-center gap-md rounded-card bg-card p-md shadow-toy-soft">
-              <Donut segments={d.xpBySource.map((x) => ({ value: x.xp, color: SOURCE_META[x.source].color, label: SOURCE_META[x.source].label }))} size={132} stroke={20} label="Xp by source">
-                <span className="flex flex-col items-center leading-none">
-                  <span className="font-display text-[24px] font-extrabold">{d.xpBySource.reduce((s, x) => s + x.xp, 0)}</span>
-                  <span className="mt-xs text-[12px] font-bold text-ink-soft">xp</span>
-                </span>
-              </Donut>
-              <div className="min-w-0 flex-1">
-                {d.xpBySource.length > 0 ? <Legend items={d.xpBySource.map((x) => ({ color: SOURCE_META[x.source].color, label: SOURCE_META[x.source].label, text: `${x.xp}` }))} /> : <p className="m-0 text-[14px] font-semibold text-ink-soft">Tick a box on Today and the ring fills in.</p>}
-              </div>
+              <Segmented label="Show xp" value={xpView === 'source' ? 'source' : 'day'} onChange={(v) => setXpView(v)} options={XP_VIEWS} />
+              {xpView === 'source' ? (
+                <div className="mt-md flex items-center gap-md">
+                  <Donut segments={d.xpBySource.map((x) => ({ value: x.xp, color: SOURCE_META[x.source].color, label: SOURCE_META[x.source].label }))} size={132} stroke={20} label="Xp by source">
+                    <span className="flex flex-col items-center leading-none">
+                      <span className="font-display text-[24px] font-extrabold">{d.xpBySource.reduce((s, x) => s + x.xp, 0)}</span>
+                      <span className="mt-xs text-[12px] font-bold text-ink-soft">xp</span>
+                    </span>
+                  </Donut>
+                  <div className="min-w-0 flex-1">
+                    {d.xpBySource.length > 0 ? <Legend items={d.xpBySource.map((x) => ({ color: SOURCE_META[x.source].color, label: SOURCE_META[x.source].label, text: `${x.xp}` }))} /> : <p className="m-0 text-[14px] font-semibold text-ink-soft">Tick a box on Today and the ring fills in.</p>}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-md">
+                  <AreaLine values={d.days.map((x) => x.xp)} max={Math.max(60, ...d.days.map((x) => x.xp))} labels={d.days.map((x) => weekday(x.date))} color="var(--color-r4)" height={160} empty="No xp in the last two weeks" label={`Xp per day for the last fourteen days, ${d.xp.week} this week`} />
+                  <div className="mt-xs flex gap-xs" role="img" aria-label="Days with a task ticked">
+                    {d.days.map((x) => (
+                      <span key={x.date} className="flex flex-1 justify-center">
+                        <span className="block size-[8px] rounded-pill" style={{ background: x.tasks > 0 ? 'var(--color-r4)' : 'var(--color-line)' }} />
+                      </span>
+                    ))}
+                  </div>
+                  {d.days.every((x) => x.xp === 0) && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Every box ticked on Daily lands here.</p>}
+                </div>
+              )}
             </div>
           </Section>
           </MoreOnHome>
 
           {d.life && (
-            <Section id="home-life" title="Life" lede={`${d.life.overall} of 100, ${d.life.label.toLowerCase()}. Only you see this.`} action={<SeeAll to="/life">Open</SeeAll>} span={lastOptional === 'life'}>
+            <Section id="home-life" title="Life" lede="Your five areas. Only you see this." action={<SeeAll to="/life">Open</SeeAll>} span={lastOptional === 'life'}>
               <Link to="/life" className="toy toy-soft flex flex-col justify-center rounded-card bg-card p-md text-ink">
                 <ul className="flex list-none justify-between gap-xs p-0 m-0">
                   {d.life.areas.map((a) => {
@@ -544,12 +556,12 @@ export function Home() {
               <ul className={`grid list-none grid-cols-2 gap-xs p-0 m-0 ${lastOptional === 'reads' ? 'md:grid-cols-4' : ''}`}>
                 {d.resources.map((r, i) => (
                   <li key={r.id} className={`flex ${bento(i, d.resources.length, 2, lastOptional === 'reads' ? 4 : 2)}`}>
-                    <Link to={`/knowledge/${r.id}`} className="toy toy-soft flex min-h-[160px] w-full flex-col rounded-card bg-card p-sm text-ink">
+                    <Link to={`/knowledge/${r.id}`} data-pillar="lover_partner" className="toy toy-soft flex min-h-[160px] w-full flex-col rounded-card bg-card p-sm text-ink">
                       <span className="flex size-[48px] items-center justify-center rounded-pill bg-r4 text-on-fill">
                         <AppIcon name={knowledgeKindIcon(r.kind)} size={22} />
                       </span>
                       {r.tag && <StatusTag className="mt-xs w-fit" tone="calm">{tagLabel(r.tag)}</StatusTag>}
-                      <span className="mt-xs block text-[16px] font-bold leading-snug">{r.title}</span>
+                      <span className="mt-xs block text-balance text-[16px] font-bold leading-snug">{tie(r.title)}</span>
                       <span className="mt-xs block text-[12px] font-bold text-ink-soft">{r.kind}</span>
                     </Link>
                   </li>
@@ -593,7 +605,7 @@ export function Home() {
               <div className="rounded-card bg-card p-md shadow-toy-soft">
                 <div className="grid grid-cols-3 gap-xs">
                   <KitTile tone="bg-paper" plain icon={Receipt} value={String(d.shop.ordersMonth)} label="orders" />
-                  <KitTile tone="bg-paper" plain icon={Coins} value={d.shop.pointsMonth.toLocaleString()} label="points" hint={d.shop.centsMonth > 0 ? money(d.shop.centsMonth, d.shop.currency) : undefined} />
+                  <KitTile tone="bg-paper" plain icon={Coins} value={formatCount(d.shop.pointsMonth)} label="points" hint={d.shop.centsMonth > 0 ? money(d.shop.centsMonth, d.shop.currency) : undefined} />
                   <KitTile tone="bg-paper" plain icon={Users} value={String(d.shop.followers)} label="followers" hint={`${d.shop.views} page views`} />
                 </div>
                 <div className="mt-md">
@@ -608,7 +620,7 @@ export function Home() {
               const list = modules.filter((m) => m.on && m.group === g);
               if (list.length === 0) return null;
               return (
-                <div key={g} className="mt-sm first:mt-0">
+                <div key={g} data-pillar={MODULE_GROUP_ACCENT[g]} className="mt-sm first:mt-0">
                   <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{MODULE_GROUPS[g]}</p>
                   <ul className="mt-xs grid list-none grid-cols-3 gap-xs p-0 m-0 md:grid-cols-6">
                     {list.map((m, i) => (
@@ -651,6 +663,7 @@ function MetricCard({ to, title, icon, tone, deep, corner, children }: { to: str
 function KitTile({ to, tone, icon, value, label, hint, yellow = false, plain = false, children }: { to?: string; tone: string; icon: LucideIcon; value: string; label: string; hint?: string; yellow?: boolean; plain?: boolean; children?: ReactNode }) {
   const fg = plain ? 'text-ink' : yellow ? 'text-on-yellow' : tone === 'bg-ink' ? 'text-on-ink' : 'text-on-fill';
   const cls = `block min-h-[96px] rounded-tile p-sm ${tone} ${fg} ${plain ? 'shadow-toy-soft' : ''}`;
+  const pillar = ({ 'bg-r4': 'lover_partner', 'bg-r2': 'friendship', 'bg-r3': 'parent_child' } as Record<string, RelationshipKey>)[tone];
   const inner = (
     <>
       <span className="flex items-baseline gap-xs">
@@ -663,11 +676,11 @@ function KitTile({ to, tone, icon, value, label, hint, yellow = false, plain = f
     </>
   );
   return to ? (
-    <Link to={to} className={`${cls} toy`}>
+    <Link to={to} data-pillar={pillar} className={`${cls} toy`}>
       {inner}
     </Link>
   ) : (
-    <div className={cls}>{inner}</div>
+    <div data-pillar={pillar} className={cls}>{inner}</div>
   );
 }
 

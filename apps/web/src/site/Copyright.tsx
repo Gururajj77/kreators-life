@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Button } from '../components/Button';
-import { A, Bullets, Fact, H, LegalPage, Mail, P, Strong, contactEmail, useBusiness } from './legalBits';
+import { A, Bullets, Fact, Grievance, H, LegalPage, Mail, NOT_SET, P, Strong, contactEmail, useBusiness } from './legalBits';
+import { Link } from 'react-router';
 import { FIELD } from '../lib/ui';
 
 
@@ -104,9 +105,22 @@ export function Copyright() {
   const { business, loading } = useBusiness();
   const email = contactEmail(business);
   const agent = business?.dmcaAgent ?? '';
-  const unset = loading ? 'Loading.' : 'Being set up.';
+  const unset = loading ? 'Loading.' : NOT_SET;
   return (
-    <LegalPage title="Copyright" lede="What to do if something on kreators.app copies your work, and what to do if we took down something that was yours.">
+    <LegalPage
+      title="Copyright"
+      lede="If something here copies your work, or we took down yours by mistake."
+      action={
+        <>
+          <Link to="#send-notice" className="toy toy-soft inline-flex min-h-[44px] items-center rounded-pill bg-card px-md text-[14px] font-bold">
+            Send a notice
+          </Link>
+          <Link to="#send-counter" className="toy toy-soft inline-flex min-h-[44px] items-center rounded-pill bg-card px-md text-[14px] font-bold">
+            Send a counter-notice
+          </Link>
+        </>
+      }
+    >
       <H>Content people post</H>
       <P>People upload pictures and post words here, and they promise they have the right to. We do not check each one beforehand. When a copyright owner tells us about a copy, we act on it. If you upload or post something, it must be yours, or you must have permission to use it.</P>
       <H>What we do with a notice</H>
@@ -121,7 +135,7 @@ export function Copyright() {
       <H>Repeat infringers</H>
       <P>An account that gets repeated valid notices is closed.</P>
 
-      <H>Send a copyright notice</H>
+      <H id="send-notice">Send a copyright notice</H>
       <P>A notice needs these things. The form below asks for each.</P>
       <Bullets
         items={[
@@ -135,12 +149,16 @@ export function Copyright() {
       />
       <NoticeForm kind="notice" />
 
-      <H>Send a counter-notice</H>
+      <H id="send-counter">Send a counter-notice</H>
       <P>Use this if we removed your content and you think that was a mistake. Say what was removed, where it was shown, and why you think it was wrong. We pass what you send to the person who made the notice.</P>
       <NoticeForm kind="counter" />
 
-      <H>Our designated agent</H>
-      <P>You can also send a notice or a counter-notice to our agent.</P>
+      <H>Notices from India</H>
+      <P>A notice about a work copied in India is handled under India's Copyright Act and the IT Rules, through our Grievance Officer. Use the forms above, or write to the Grievance Officer.</P>
+      <Grievance business={business} loading={loading} />
+
+      <H>Our designated agent (United States)</H>
+      <P>For a notice under the US copyright law (the DMCA), you can also write to our agent.</P>
       <div className="mt-sm grid gap-sm md:grid-cols-2">
         <Fact label="Agent" value={agent} unset={unset} />
         <Fact label="Address" value={business?.dmcaAddress} unset={unset} />

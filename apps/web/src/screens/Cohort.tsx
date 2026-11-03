@@ -1,4 +1,4 @@
-import { videoEmbed, type CohortSession, type CourseAssignment, type Enrollment, type Submission } from '@kreators/shared';
+import { videoEmbed, type CohortSession, type CourseAssignment, type Enrollment, type Submission, LOCALE } from '@kreators/shared';
 import type { TagTone } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -20,7 +20,7 @@ import { ErrorLine } from '../components/ErrorLine';
 import { StatusTag } from '../components/StatusTag';
 
 const fmtDate = shortDate;
-const fmtWhen = (d: string) => new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+const fmtWhen = (d: string) => new Date(d).toLocaleString(LOCALE, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 const isLive = (s: CohortSession) => {
   const now = Date.now();
   return now >= new Date(s.startsAt).getTime() - 15 * 60_000 && now <= new Date(s.endsAt).getTime() + 60 * 60_000;
@@ -155,7 +155,7 @@ export function Cohort() {
                 <div className="min-w-0">
                   <p className="m-0 truncate text-[16px] font-bold">{s.title}</p>
                   <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                    {fmtWhen(s.startsAt)} to {new Date(s.endsAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                    {fmtWhen(s.startsAt)} to {new Date(s.endsAt).toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
                 {s.attended && <StatusTag tone="good">You were here</StatusTag>}
@@ -267,11 +267,15 @@ function AssignmentCard({ a, cohortId, mine, all, canRun, enrolled, onChange }: 
         )}
         {canRun && waiting > 0 && <StatusTag tone="warn">{waiting} to review</StatusTag>}
       </div>
-      {a.instructions && <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold">{a.instructions}</p>}
-      {a.rubric && (
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          <span className="font-bold">Judged on:</span> {a.rubric}
-        </p>
+      {(a.instructions || a.rubric) && (
+        <Fold className="mt-xs" title="Read the brief">
+          {a.instructions && <p className="m-0 whitespace-pre-wrap text-[14px] font-semibold">{a.instructions}</p>}
+          {a.rubric && (
+            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+              <span className="font-bold">Judged on:</span> {a.rubric}
+            </p>
+          )}
+        </Fold>
       )}
       {mine && mine.feedback.length > 0 && (
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">

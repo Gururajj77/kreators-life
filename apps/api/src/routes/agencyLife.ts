@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import {
   AGENCY_STAGE_BY_KEY,
   AGENCY_TITLE_MAX,
@@ -14,14 +14,31 @@ import {
   portalPasswordProblem,
   previousStage,
   stageIndex,
+  CONTRACT_TEMPLATE_BY_KEY,
+  PASSWORD_REQUEST_REASON_MAX,
+  contractGaps,
+  contractVarsFor,
+  onboardingProblem,
+  onboardingToBilling,
+  parseContractDoc,
+  parseDocStyle,
+  parseOnboarding,
+  withProfilePackages,
+  type ClientOnboarding,
+  type ContractAnswer,
+  type ContractDoc,
+  type ContractQuestion,
 } from '@kreators/shared';
+import { fillEmail, emptyEmailVars } from '@kreators/shared/agencyEmail';
 import type { AppEnv } from '../env';
-import { dayFromDevice, newId, notify, nowIso, num, shiftDate } from '../db';
+import { dayFromDevice, nameOf, newId, notify, nowIso, num, randomCode, shiftDate, str } from '../db';
+import { sendEmail } from '../ops';
+import { ownLogo, publicUrl } from '../agencyPaper';
 import { dateOrNull, moneyIn } from '../agencyUtil';
-import { clientRow } from './agency';
+import { clientRow, settingsFor } from './agency';
 import { runAgencyCycles } from '../agencyCycles';
-import { applyStageEvent, logStmt, moveStage, type RetainerRow } from '../lifecycle';
-import { clearPortalSessions, closedLinkAnswer, lockRowForToken, newPortalPassword, passwordColumns, requirePortalAccess, unlockPortal } from '../portalAccess';
+import { applyStageEvent, closePasswordRequest, logStmt, moveStage, syncStageFromAgreements, type RetainerRow } from '../lifecycle';
+import { agencyFace, clearPortalSessions, clientOfDocument, closedLinkAnswer, lockRowForToken, newPortalPassword, passwordColumns, requirePortalAccess, unlockPortal, type LockRow } from '../portalAccess';
 
 /**
  * Agency lifecycle, the owner's side: move a client along, set the days and tick the checklist, put a password on the client's link, add
@@ -120,21 +137,34 @@ agencyLife.put('/clients/:id/password', async (c) => {
     await db.batch([
       db.prepare('UPDATE agency_clients SET portal_pass_hash = NULL, portal_pass_salt = NULL, portal_pass_set_at = NULL, updated_at = ? WHERE id = ? AND user_id = ?').bind(now, row.id, user.id),
       clearPortalSessions(db, row.id),
+      closePasswordRequest(db, user.id, row.id),
       logStmt(db, user.id, row.id, 'me', 'password', 'The password on the client link was removed.'),
     ]);
     return c.json({ set: false });
   }
   const generated = body.generate === true;
-  const password = generated ? newPortalPassword() : typeof body.password === 'string' ? body.password : '';
+  const password = generated ? newPortalPassword(row.name) : typeof body.password === 'string' ? body.password : '';
   const problem = portalPasswordProblem(password, row.name);
   if (problem) return c.json({ error: problem }, 400);
   const col = await passwordColumns(password);
   await db.batch([
     db.prepare('UPDATE agency_clients SET portal_pass_hash = ?, portal_pass_salt = ?, portal_pass_set_at = ?, updated_at = ? WHERE id = ? AND user_id = ?').bind(col.hash, col.salt, now, now, row.id, user.id),
     clearPortalSessions(db, row.id),
+    // A new password answers the client's ask for one, in the same batch.
+    closePasswordRequest(db, user.id, row.id),
     logStmt(db, user.id, row.id, 'me', 'password', `A password was ${row.portal_pass_hash ? 'changed' : 'set'} for the client link.`),
   ]);
   return c.json(generated ? { set: true, password } : { set: true });
+});
+
+// The owner dismisses the client's ask for a new password without changing it (they talked, and it was not shared after all).
+agencyLife.post('/clients/:id/password-request/close', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await clientRow(db, user.id, c.req.param('id'));
+  if (!row) return c.json({ error: 'not found' }, 404);
+  const [res] = await db.batch([closePasswordRequest(db, user.id, row.id), logStmt(db, user.id, row.id, 'me', 'password', 'The ask for a new password was dismissed.')]);
+  return c.json({ ok: true, closed: (res?.meta.changes ?? 0) > 0 });
 });
 
 // ---- the trial video
@@ -319,3 +349,193 @@ agencyLifePublic.post('/:token/retainer', async (c) => {
   return c.json({ ok: true });
 });
 
+// ---- onboarding: the client fills in their details and the trial brief once, at their link
+
+interface OnboardingClient {
+  id: string; user_id: string; name: string; contact_name: string; contact_email: string; billing_json: string; channels_json: string; pieces_per_month: number; hours_per_month: number;
+  revisions_per_piece: number; retainer_cents: number; onboarding_json: string; onboarded_at: string | null; onboarding_needed: number;
+}
+const ONBOARDING_SELECT = 'SELECT id, user_id, name, contact_name, contact_email, billing_json, channels_json, pieces_per_month, hours_per_month, revisions_per_piece, retainer_cents, onboarding_json, onboarded_at, onboarding_needed FROM agency_clients WHERE id = ?';
+
+/**
+ * The agreement the form's brief comes from: the owner's newest own template made from the Trial and pilot one, else the built-in one.
+ * Its brief section's questions are the questions the client answers, so the ids and words are the agreement's own.
+ */
+async function trialTemplate(db: D1Database, userId: string): Promise<ContractDoc> {
+  const rows = await db.prepare("SELECT doc_json FROM agency_templates WHERE user_id = ? AND kind = 'contract' ORDER BY updated_at DESC LIMIT 20").bind(userId).all<{ doc_json: string }>();
+  for (const r of rows.results) {
+    let doc: ContractDoc | null = null;
+    try {
+      doc = parseContractDoc(JSON.parse(r.doc_json || 'null'));
+    } catch {
+      doc = null;
+    }
+    if (doc && doc.templateKey === 'trial' && doc.sections.some((x) => x.kind === 'brief')) return doc;
+  }
+  return structuredClone(CONTRACT_TEMPLATE_BY_KEY.trial!.doc);
+}
+/** The saved draft as JSON, or nothing when it cannot be read. */
+const savedDraft = (raw: string): unknown => {
+  try {
+    return JSON.parse(raw || '{}');
+  } catch {
+    return {};
+  }
+};
+const briefOf = (doc: ContractDoc): ContractQuestion[] => doc.sections.filter((x) => x.kind === 'brief').flatMap((x) => x.questions ?? []);
+
+/** The client behind a link, once it is unlocked: the lock row and the onboarding columns, or the answer to send instead. */
+async function onboardingDoor(c: Context<AppEnv>): Promise<{ client: OnboardingClient } | { res: Response }> {
+  const db = c.env.DB;
+  const lock = await lockRowForToken(db, c.req.param('token') ?? '');
+  if (!lock) return { res: (await closedLinkAnswer(c, c.req.param('token') ?? '')) ?? c.json({ error: 'no page at this link' }, 404) };
+  const denied = await requirePortalAccess(c, lock.id);
+  if (denied) return { res: denied };
+  const client = await db.prepare(ONBOARDING_SELECT).bind(lock.id).first<OnboardingClient>();
+  if (!client) return { res: c.json({ error: 'no page at this link' }, 404) };
+  c.header('Cache-Control', 'no-store');
+  return { client };
+}
+
+/** The brief's answers as the agreement keeps them, with the reference links written into the question that asks for them. */
+function answersFrom(o: ClientOnboarding, questions: readonly ContractQuestion[]): Record<string, ContractAnswer> {
+  const out: Record<string, ContractAnswer> = {};
+  for (const q of questions) {
+    const a = o.brief[q.id];
+    if (a) out[q.id] = { picked: [...a.picked], other: a.other, text: a.text, ...(a.fields ? { fields: { ...a.fields } } : {}), ...(a.links ? { links: [...a.links] } : {}) };
+  }
+  // The agreement asks for the links in a question of its own when it has one; otherwise they go into its last question for words.
+  if (o.references.length > 0 && !questions.some((q) => q.links)) {
+    const texts = questions.filter((q) => q.text);
+    const target = texts.find((q) => /reference|example|videos? that show/i.test(q.label)) ?? texts[texts.length - 1];
+    if (target) {
+      const prev = out[target.id] ?? { picked: [], other: '', text: '' };
+      const links = `References:\n${o.references.join('\n')}`;
+      out[target.id] = { ...prev, text: (prev.text.trim() ? `${prev.text.trim()}\n\n${links}` : links).slice(0, 1500) };
+    }
+  }
+  return out;
+}
+
+// What the form needs: the draft so far, the brief's questions from the agreement, and the two things the owner already typed.
+agencyLifePublic.get('/:token/onboarding', async (c) => {
+  const door = await onboardingDoor(c);
+  if ('res' in door) return door.res;
+  const { client } = door;
+  const questions = briefOf(await trialTemplate(c.env.DB, client.user_id));
+  return c.json({
+    draft: parseOnboarding(savedDraft(client.onboarding_json), questions),
+    questions,
+    prefill: { brand: client.name, email: client.contact_email },
+    done: Boolean(client.onboarded_at),
+  });
+});
+
+// Saved as the client goes, on Next and when they leave a field. Only the form's own fields and the agreement's own questions are kept.
+agencyLifePublic.put('/:token/onboarding', async (c) => {
+  const door = await onboardingDoor(c);
+  if ('res' in door) return door.res;
+  const { client } = door;
+  if (client.onboarded_at) return c.json({ error: 'This form was already sent.' }, 409);
+  const body = await bodyOf(c);
+  const questions = briefOf(await trialTemplate(c.env.DB, client.user_id));
+  const draft = parseOnboarding(body.draft, questions);
+  await c.env.DB.prepare('UPDATE agency_clients SET onboarding_json = ?, updated_at = ? WHERE id = ? AND onboarded_at IS NULL').bind(JSON.stringify(draft), nowIso(), client.id).run();
+  return c.json({ ok: true });
+});
+
+// Sent once: the details land on the client record (billing, contact), the agreement is made from the trial template and filled in,
+// and the owner is told in the inbox and by one email. Guarded on onboarded_at, so two taps send it once.
+agencyLifePublic.post('/:token/onboarding/submit', async (c) => {
+  const db = c.env.DB;
+  const door = await onboardingDoor(c);
+  if ('res' in door) return door.res;
+  const { client } = door;
+  if (client.onboarded_at) return c.json({ error: 'This form was already sent.' }, 409);
+  const body = await bodyOf(c);
+  const template = await trialTemplate(db, client.user_id);
+  const questions = briefOf(template);
+  const o = parseOnboarding('draft' in body ? body.draft : savedDraft(client.onboarding_json), questions);
+  const problem = onboardingProblem(o, questions);
+  if (problem) return c.json({ error: problem.message, step: problem.step, field: problem.field }, 400);
+  const now = nowIso();
+  const billing = onboardingToBilling(o, client.name);
+  const claimed = await db
+    .prepare('UPDATE agency_clients SET billing_json = ?, contact_name = ?, contact_email = ?, onboarding_json = ?, onboarded_at = ?, updated_at = ? WHERE id = ? AND onboarded_at IS NULL')
+    .bind(JSON.stringify(billing), o.pocName.slice(0, 80), o.email.slice(0, 120), JSON.stringify(o), now, now, client.id)
+    .run();
+  if (!claimed.meta.changes) return c.json({ error: 'This form was already sent.' }, 409);
+
+  // The agreement, once: filled from the business profile and what the client just said, the brief answered from the form.
+  const settings = await settingsFor(db, client.user_id);
+  const have = await db.prepare("SELECT id, status, token FROM agency_contracts WHERE client_id = ? AND user_id = ? AND (template_key = 'trial' OR doc_json LIKE '%\"templateKey\":\"trial\"%') AND status != 'void' LIMIT 1").bind(client.id, client.user_id).first<{ id: string; status: string; token: string | null }>();
+  let contractToken: string | null = have?.status === 'sent' || have?.status === 'signed' ? have.token : null;
+  let made: 'sent' | 'draft' | null = null;
+  if (!have) {
+    const facts = { name: o.legalName || client.name, brands: o.brands || client.name, address: billing.address, contactName: o.pocName, piecesPerMonth: client.pieces_per_month, hoursPerMonth: client.hours_per_month, revisionsPerPiece: client.revisions_per_piece, retainerCents: client.retainer_cents, currency: settings.currency };
+    const vars = { ...contractVarsFor(settings.profile, facts), client: o.legalName || client.name, brands: o.brands || client.name, clientContact: o.pocName, clientTitle: o.designation, pocName: o.pocName };
+    // The same look and price table a new agreement gets from POST /agency/contracts: a typed agreement keeps its own look (only the page
+    // size is the person's), and the owner's own packages fill a price table the template leaves empty.
+    const typed = parseDocStyle(template.style).layout === 'typed';
+    const style = typed ? parseDocStyle({ ...parseDocStyle(template.style), page: parseDocStyle(settings.profile.docStyle).page }) : parseDocStyle(template.style, parseDocStyle(settings.profile.docStyle));
+    const doc: ContractDoc = await ownLogo(db, client.user_id, { ...template, currency: settings.currency, vars, style, sections: withProfilePackages(template.sections, settings.profile) });
+    // Sent at once when the business side is complete (its details and a priced package table); otherwise a draft for the owner to finish.
+    const pkg = doc.sections.find((x) => x.kind === 'packages');
+    const ready = contractGaps(doc).every((g) => g.from !== 'profile') && (!pkg || (pkg.packages ?? []).some((p) => p.feeCents > 0));
+    const id = newId();
+    const token = ready ? randomCode(16) : null;
+    await db
+      .prepare('INSERT INTO agency_contracts (id, user_id, client_id, title, template_key, status, doc_json, answers_json, token, sent_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, client.user_id, client.id, doc.title, 'trial', ready ? 'sent' : 'draft', JSON.stringify(doc), JSON.stringify(answersFrom(o, questions)), token, ready ? now : null, now, now)
+      .run();
+    made = ready ? 'sent' : 'draft';
+    contractToken = token;
+    if (ready) await syncStageFromAgreements(db, { userId: client.user_id, clientId: client.id });
+  }
+  await logStmt(db, client.user_id, client.id, 'client', 'onboarding', 'Onboarding finished.').run();
+  const what = made === 'sent' ? 'Their agreement is filled in and sent to them to accept.' : made === 'draft' ? 'Their agreement is ready as a draft. Add your business details, then send it.' : 'Their details are on their page.';
+  await notify(db, client.user_id, 'agency', `${client.name} finished onboarding`, what, `/agency/${client.id}`);
+  // One email to the owner's own address: the brand and a link to the client page, never the answers. Not marketing.
+  const owner = await db.prepare('SELECT email, display_name FROM users WHERE id = ?').bind(client.user_id).first<{ email: string | null; display_name: string }>();
+  if (owner?.email) {
+    const mail = fillEmail('onboarding-done', { ...emptyEmailVars(), names: (nameOf(owner) || '').split(/\s+/)[0] ?? '', engagement: client.name, status: what, link: publicUrl(c.env, `/agency/${client.id}`) });
+    await sendEmail(db, c.env, { userId: client.user_id, to: owner.email, subject: mail.subject, body: mail.body, private: true });
+  }
+  return c.json({ ok: true, contract: made, contractToken });
+});
+
+// ---- a client asks for a new password, from the lock screen or their page
+
+// No session needed, so it works from the lock screen. The same answer for an unknown link, a known one and one already asked about,
+// so it never confirms a link. One open ask per client (the partial unique index); the reason stays in that row only.
+agencyLifePublic.post('/password-request', async (c) => {
+  const db = c.env.DB;
+  const body = await bodyOf(c);
+  const kind = body.kind === 'contract' || body.kind === 'invoice' || body.kind === 'doc' ? body.kind : 'agency';
+  const token = typeof body.token === 'string' ? body.token.slice(0, 40) : '';
+  const reason = str(body.reason, PASSWORD_REQUEST_REASON_MAX);
+  const client: LockRow | null = kind === 'agency' ? await lockRowForToken(db, token) : await clientOfDocument(db, kind, token);
+  c.header('Cache-Control', 'no-store');
+  if (!client || !client.portal_pass_hash) return c.json({ ok: true });
+  const now = nowIso();
+  const res = await db.prepare('INSERT OR IGNORE INTO agency_password_requests (id, client_id, user_id, reason, created_at) VALUES (?, ?, ?, ?, ?)').bind(newId(), client.id, client.user_id, reason, now).run();
+  if (!res.meta.changes) return c.json({ ok: true });
+  await db.batch([
+    logStmt(db, client.user_id, client.id, 'client', 'password', 'The client asked for a new password.'),
+    // One stable note per client, so a second ask after a dismissal brings the same line back to the top instead of adding another.
+    db.prepare('INSERT OR REPLACE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)').bind(`pwreq-${client.id}`, client.user_id, 'agency', `${client.name} asked for a new password`, 'Set a new one on their page, then send it to them yourself.', `/agency/${client.id}`, now),
+  ]);
+  const owner = await db.prepare('SELECT email FROM users WHERE id = ?').bind(client.user_id).first<{ email: string | null }>();
+  if (owner?.email) {
+    const face = await agencyFace(db, client.user_id);
+    const link = publicUrl(c.env, `/agency/${client.id}`);
+    await sendEmail(db, c.env, {
+      userId: client.user_id,
+      to: owner.email,
+      subject: `${client.name} asked for a new password`,
+      body: `${client.name} asked for a new password for their page${face.agencyName ? ` with ${face.agencyName}` : ''}.\n\nSet a new one on their page, then send it to them yourself, by a different channel from the link.${link ? `\n\n${link}` : ''}`,
+      private: true,
+    });
+  }
+  return c.json({ ok: true });
+});

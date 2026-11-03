@@ -1,4 +1,4 @@
-import { PRODUCT_KIND_META, productHasOwnCover, BADGES, HONORS, RELATIONSHIPS } from '@kreators/shared';
+import { PRODUCT_KIND_META, productHasOwnCover, BADGES, HONORS, RELATIONSHIPS, LOCALE } from '@kreators/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Inert } from '../components/Inert';
 import { useState } from 'react';
@@ -89,7 +89,7 @@ export function Public() {
       )}
       {d && (
         <>
-          <section className="mt-md rounded-card bg-ink p-md text-on-ink">
+          <section data-pillar="friendship" className="mt-md rounded-card bg-ink p-md text-on-ink">
             {d.avatarUrl ? (
               <img src={d.avatarUrl} alt={`${d.name}, profile picture`} width={64} height={64} fetchPriority="high" decoding="async" className="size-[64px] rounded-pill bg-paper object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
             ) : (
@@ -191,7 +191,7 @@ export function Public() {
                   </li>
                 ))}
               </ul>
-              <p className="mt-sm m-0 text-[12px] font-bold text-ink-soft">Member since {new Date(d.activity.memberSince).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}.</p>
+              <p className="mt-sm m-0 text-[12px] font-bold text-ink-soft">Member since {new Date(d.activity.memberSince).toLocaleDateString(LOCALE, { month: 'short', year: 'numeric' })}.</p>
             </section>
           )}
           {(d.badges.length > 0 || d.honors.length > 0) && (
@@ -220,7 +220,7 @@ export function Public() {
                 {d.posts.map((p) => (
                   <li key={p.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
                     <p className="m-0 text-[12px] font-bold text-ink-soft">
-                      {p.category}, {new Date(p.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                      {p.category}, {new Date(p.createdAt).toLocaleDateString(LOCALE, { month: 'short', day: 'numeric' })}
                     </p>
                     <p className="mt-xs m-0 whitespace-pre-wrap text-[16px] font-semibold leading-relaxed"><Inert text={p.body} /></p>
                     <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
@@ -253,7 +253,7 @@ export function Public() {
                         <span className="block text-[16px] font-bold leading-snug">{p.title}</span>
                         <span className="block text-[14px] font-semibold text-ink-soft">
                           {meta.name}
-                          {p.kind === 'event' && p.startsAt ? `, ${new Date(p.startsAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''}
+                          {p.kind === 'event' && p.startsAt ? `, ${new Date(p.startsAt).toLocaleString(LOCALE, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''}
                           {p.rating ? `, rated ${p.rating}` : ''}
                         </span>
                       </span>

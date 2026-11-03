@@ -63,7 +63,7 @@ export function PriorityPicker({ value, onChange }: { value: Priority | null; on
   return (
     <div>
       <span className="block text-[14px] font-bold">Priority</span>
-      <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label="Priority">
+      <div className="fill-row mt-xs flex flex-wrap gap-xs" role="group" aria-label="Priority">
         {PRIORITIES.map((p) => (
           <button key={p.value} type="button" aria-pressed={value === p.value} onClick={() => onChange(value === p.value ? null : p.value)} className={`pri-${p.value} pri-chip toy min-h-[44px] rounded-pill px-sm text-[14px] font-bold`}>
             {p.tag} {p.name}
@@ -122,7 +122,9 @@ export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange
     <div className="flex flex-col gap-md">
       <div>
         <span className="block text-[14px] font-bold">Do on</span>
-        <div className="mt-xs flex flex-wrap gap-xs">
+        <div className="flex flex-wrap items-end gap-xs">
+          <input type="date" aria-label="Do date" value={plan.doDate} onChange={(e) => set({ doDate: e.target.value })} className={`${FIELD} min-w-[200px] flex-1`} />
+          <div className="ml-auto flex flex-wrap justify-end gap-xs" role="group" aria-label="Quick days">
           {[
             { name: 'Today', day: today },
             { name: 'Tomorrow', day: addDays(today, 1) },
@@ -132,8 +134,8 @@ export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange
               {q.name}
             </button>
           ))}
+          </div>
         </div>
-        <input type="date" aria-label="Do date" value={plan.doDate} onChange={(e) => set({ doDate: e.target.value })} className={FIELD} />
         <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{plan.doDate ? 'It shows on Daily from this day. It cannot be ticked before.' : 'No do date: it waits in the list below Tasks on Daily until you pick a day.'}</p>
       </div>
       <label className="block">
@@ -166,7 +168,8 @@ export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange
       />
       <Toggle on={plan.forReview} onChange={(forReview) => set({ forReview })} label="Bring it to my review" hint="The review for its week, month or quarter lists it, so you can put it into your answers." compact />
 
-      <div className="grid grid-cols-2 gap-xs">
+      <div className="flex flex-wrap items-end gap-xs">
+      <div className="grid min-w-[240px] flex-1 grid-cols-2 gap-xs">
         <label className="block">
           <span className="block text-[14px] font-bold">Time (optional)</span>
           <input type="time" value={plan.time} onChange={(e) => set({ time: e.target.value })} className={FIELD} />
@@ -176,12 +179,14 @@ export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange
           <input type="number" min={5} max={600} step={5} value={plan.minutes} onChange={(e) => set({ minutes: e.target.value })} placeholder="25" className={FIELD} />
         </label>
       </div>
-      <div className="flex flex-wrap gap-xs" role="group" aria-label="How long it should take">
+      {/* On a phone the five chips cannot share a line; the cap breaks them three and two, never four and a lone one. */}
+      <div className="ml-auto flex max-w-[260px] flex-wrap justify-end gap-xs sm:max-w-none" role="group" aria-label="How long it should take">
         {ESTIMATES.map((m) => (
           <button key={m} type="button" aria-pressed={plan.minutes === String(m)} onClick={() => set({ minutes: plan.minutes === String(m) ? '' : String(m) })} className={`toy min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${plan.minutes === String(m) ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
             {m >= 60 ? `${m / 60} h` : `${m} min`}
           </button>
         ))}
+      </div>
       </div>
       {/* The quick picks stay; the ruler is for anything between (5 to 240 minutes). A longer time can still be typed above. */}
       <RulerPicker

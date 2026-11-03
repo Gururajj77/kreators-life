@@ -1,4 +1,4 @@
-import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_CODE_MAX, ATTENDEE_CODE_MIN, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, attendeeXpLocked, attendeeXpProblem, codeProblem, normalizeCode, RELATIONSHIP_BY_KEY, type AttendeeCodeHost, type AttendeeCodeView } from '@kreators/shared';
+import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_CODE_MAX, ATTENDEE_CODE_MIN, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, attendeeXpLocked, attendeeXpProblem, codeProblem, normalizeCode, RELATIONSHIP_BY_KEY, type AttendeeCodeHost, type AttendeeCodeView, LOCALE } from '@kreators/shared';
 import { useState, type ReactNode } from 'react';
 import { useNow } from '../lib/useNow';
 import { Button } from './Button';
@@ -23,7 +23,7 @@ export interface CodeChange {
 
 const say = (e: unknown) => (e instanceof Error ? e.message : 'That did not work. Try again.');
 /** A time in the window, as the clock on the wall says it: "Sat 18:30". */
-const clock = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+const clock = (iso: string) => new Date(iso).toLocaleString(LOCALE, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
 
 function Problem({ text }: { text: string | null }) {
   if (!text) return null;

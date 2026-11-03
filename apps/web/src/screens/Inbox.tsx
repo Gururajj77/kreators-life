@@ -1,4 +1,4 @@
-import { INBOX_TAB_META, isInboxTab, type InboxShow, type InboxTab } from '@kreators/shared';
+import { INBOX_TAB_META, isInboxTab, type InboxShow, type InboxTab, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Inert } from '../components/Inert';
 import { useEffect, useState, type CSSProperties } from 'react';
@@ -8,6 +8,7 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { SkeletonList } from '../components/Skeleton';
 import { Sheet } from '../components/Sheet';
+import { TabRow } from '../components/TabRow';
 import type { LucideIcon } from 'lucide-react';
 import { AlarmClock, ArchiveRestore, AtSign, Bell, BriefcaseBusiness, CalendarCheck, Footprints, Handshake, Mail, Medal, Megaphone, MessageCircle, MessagesSquare, PartyPopper, ReceiptText, ShieldAlert, ShoppingBag, Star, Target, UserPlus, UsersRound, Wrench } from 'lucide-react';
 import { AnimatedIcon } from '../components/AnimatedIcon';
@@ -90,16 +91,13 @@ export function Inbox() {
         <h2 id="list-heading" className="text-[18px]">
           What happened
         </h2>
-        <div className="mt-sm">
-          <div className="scroll-row" role="group" aria-label="Tabs">
-            {(q.data?.tabs ?? [{ tab: 'all' as InboxTab, unread: 0 }]).map((t) => (
-              <button key={t.tab} type="button" aria-pressed={tab === t.tab} onClick={() => setTab(t.tab)} className={`toy shrink-0 min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === t.tab ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-                {INBOX_TAB_META[t.tab].name}
-                {t.unread > 0 ? ` (${t.unread})` : ''}
-              </button>
-            ))}
-          </div>
-        </div>
+        <TabRow
+          className="mt-sm"
+          label="Tabs"
+          items={(q.data?.tabs ?? [{ tab: 'all' as InboxTab, unread: 0 }]).map((t) => ({ key: t.tab, label: `${INBOX_TAB_META[t.tab].name}${t.unread > 0 ? ` (${t.unread})` : ''}` }))}
+          value={tab}
+          onChange={setTab}
+        />
         <div className="mt-xs flex flex-wrap items-center gap-xs" role="group" aria-label="Show">
           {SHOWS.map(([k, label]) => (
             <button key={k} type="button" aria-pressed={show === k} onClick={() => setShow(k)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-[12px] font-extrabold ${show === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
@@ -130,7 +128,7 @@ export function Inbox() {
                 <span className="min-w-0 flex-1">
                   <span className={`block text-[16px] ${n.readAt ? 'font-semibold' : 'font-extrabold'}`}>{n.title}</span>
                   {n.body && <span className="block text-[14px] font-semibold text-ink-soft"><Inert text={n.body} /></span>}
-                  <span className="block text-[12px] font-bold text-ink-mute">{new Date(n.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                  <span className="block text-[12px] font-bold text-ink-mute">{new Date(n.createdAt).toLocaleString(LOCALE, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
                 </span>
                 {!n.readAt && <span className="size-[10px] shrink-0 rounded-pill bg-r1" aria-label="Unread" />}
               </>

@@ -1,4 +1,4 @@
-import { BREATHING, mantraLine, OPTIONAL_PILLARS, PENALTIES, RELATIONSHIP_BY_KEY, RELATIONSHIPS, SCORE_LABEL, SCORECARD, weightWord, type RelationshipKey } from '@kreators/shared';
+import { BREATHING, mantraLine, OPTIONAL_PILLARS, PENALTIES, RELATIONSHIP_BY_KEY, RELATIONSHIPS, SCORE_LABEL, SCORECARD, weightWord, type RelationshipKey, LOCALE } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { api } from '../lib/api';
@@ -10,6 +10,7 @@ import { Ring } from './Ring';
 import { RoutinePanel } from './RoutinePanel';
 import { Section } from './Section';
 import { Toggle } from './Toggle';
+import { Fold } from './Fold';
 import { Icon } from './Icon';
 import { Star } from 'lucide-react';
 
@@ -64,7 +65,7 @@ export function LifeMapPanel() {
   const away = a.away ?? [];
   const unbuilt = focus.filter((k) => !built.has(k));
   const relScores = RELATIONSHIPS.map((r) => a.scores[r.key]);
-  const when = new Date(a.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  const when = new Date(a.createdAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
   return (
     <section id="life-map" className="mt-lg scroll-mt-[64px]" aria-labelledby="life-map-heading">
       <h2 id="life-map-heading" className="text-[24px]">
@@ -85,7 +86,7 @@ export function LifeMapPanel() {
       <Section id="focus-heading" title="Month one" lede={focus.length ? 'The pillars the plan is built around. A floor under Courage is always one of them.' : 'No focus picked yet.'}>
         <ul className="m-0 flex list-none flex-wrap gap-xs p-0">
           {focus.map((k) => (
-            <li key={k}>
+            <li key={k} data-pillar={k}>
               <Link to={`/realm/${k}`} className="toy flex min-h-[44px] items-center gap-xs rounded-pill px-sm text-[14px] font-bold" style={{ background: RELATIONSHIP_BY_KEY[k].color, color: RELATIONSHIP_BY_KEY[k].text }}>
                 <Avatar relationship={k} size={24} decorative still />
                 {RELATIONSHIP_BY_KEY[k].name}
@@ -99,7 +100,7 @@ export function LifeMapPanel() {
         <PlacementChart placements={a.placements} focus={focus} away={away} />
       </Section>
 
-      <Section id="away-heading" title="Part of your life?" lede="Love, teachers and faith can be set aside when they are not part of your life right now. A pillar set aside sits at Neutrality, stays out of your focus and gets no pyramid. Turn it back on here any time.">
+      <Section id="away-heading" title="Part of your life?" lede="Set aside what is not part of your life right now.">
         <ul className="m-0 flex list-none flex-col gap-xs p-0">
           {OPTIONAL_PILLARS.map((k) => (
             <li key={k}>
@@ -112,6 +113,13 @@ export function LifeMapPanel() {
             {setAway.error instanceof Error ? setAway.error.message : 'That did not save. Try again.'}
           </p>
         )}
+        <Fold title="What setting aside does" className="mt-sm">
+          <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+            <li>Love, teachers and faith can be set aside.</li>
+            <li>A pillar set aside sits at Neutrality, stays out of your focus and gets no pyramid.</li>
+            <li>Turn it back on here any time.</li>
+          </ul>
+        </Fold>
       </Section>
 
       <Section id="ladder-heading" title="The whole map" lede="Sixteen levels in three bands. The goal for month one is every floor above the Courage line.">
@@ -163,7 +171,14 @@ export function LifeMapPanel() {
       </Section>
 
       {d.routine && (
-        <Section id="routine-heading" title="Your routine" lede={`Built from your day: up at ${a.realDay.wake}, lights out ${a.realDay.sleep}, work ${a.realDay.workStart} to ${a.realDay.workEnd}. Wake-up moves thirty minutes earlier for every week you keep the deal. You can change any of it.`}>
+        <Section id="routine-heading" title="Your routine" lede="Built from your day. You can change any of it.">
+          <ul className="mb-sm m-0 flex list-none flex-wrap gap-x-md gap-y-xs p-0 text-[14px] font-bold">
+            <li>Up at {a.realDay.wake}</li>
+            <li>Lights out {a.realDay.sleep}</li>
+            <li>
+              Work {a.realDay.workStart} to {a.realDay.workEnd}
+            </li>
+          </ul>
           <RoutinePanel general={d.routine.general} exceptional={d.routine.exceptional} date={date} />
           <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0 text-[14px] font-semibold">
             <li>Mantra: {mantraLine(d.routine.practices)}.</li>
@@ -172,13 +187,13 @@ export function LifeMapPanel() {
             {d.routine.practices.reading && <li>One page a morning from {d.routine.practices.reading}.</li>}
           </ul>
           <p className="mt-sm m-0 text-[12px] font-bold text-ink-soft">
-            The morning steps are on <Link to="/today" className="underline underline-offset-4">Daily</Link> as tick rows.
+            The morning steps are on <Link to="/today" className="underline underline-offset-4">Daily</Link> as tick rows. Wake-up moves thirty minutes earlier for every week you keep the deal.
           </p>
         </Section>
       )}
 
       {d.contract && (
-        <Section id="contract-heading" title="The contract" lede={`Signed ${d.contract.signedName} on ${new Date(d.contract.signedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}.`}>
+        <Section id="contract-heading" title="The contract" lede={`Signed ${d.contract.signedName} on ${new Date(d.contract.signedAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' })}.`}>
           <ul className="m-0 flex list-none flex-col gap-xs p-0 text-[14px] font-semibold">
             <li>At least {d.contract.minDays} days a week. This week: {d.week.done} of 7 done.</li>
             <li>Check-in at {d.contract.checkinTime}; a reminder lands in your inbox on any day you have not.</li>

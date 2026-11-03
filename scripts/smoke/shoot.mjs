@@ -129,5 +129,7 @@ try {
 if (PROBE) {
   console.log(`\n${path.basename(process.env.SHOOT_PROBE)}: ${probeHits.length} hit${probeHits.length === 1 ? '' : 's'}`);
   for (const h of probeHits) console.log(`  ${h.shot}  ${h.line ?? `${h.ratio}:1  "${h.text}"  ${h.color} on ${h.background}  ${h.where}`}`);
+  // SHOOT_HITS=<file> also writes every hit as JSON, so a combined probe can be counted probe by probe.
+  if (process.env.SHOOT_HITS) fs.writeFileSync(process.env.SHOOT_HITS, JSON.stringify(probeHits, null, 1));
   if (probeHits.length) process.exitCode = 1;
 }

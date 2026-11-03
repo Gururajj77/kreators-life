@@ -85,7 +85,7 @@ export function Pyramid({ relationship, words = {}, autoplay = false, compact = 
   const Stack = onSelect ? 'div' : 'button';
 
   return (
-    <div ref={root} className={className}>
+    <div ref={root} className={className} data-pillar={relationship}>
       <Stack
         type={onSelect ? undefined : 'button'}
         onClick={onSelect ? undefined : () => setPlayed((n) => n + 1)}

@@ -1,4 +1,4 @@
-import { canMute, communityRankOf, FEED_FILTER_META, FEED_FILTERS, FEED_SORT_META, FEED_SORTS, MAX_PINNED, POST_CATEGORIES, REACTION_META, REACTIONS, SOCIAL_REWARDS, type CommunityPost, type CommunityReply, type FeedFilter, type FeedSort, type ReactionCounts, type ReactionKind, DEFAULT_PAGE_SIZE, pageQuery, type PageSize } from '@kreators/shared';
+import { canMute, communityRankOf, FEED_FILTER_META, FEED_FILTERS, FEED_SORT_META, FEED_SORTS, MAX_PINNED, POST_CATEGORIES, REACTION_META, REACTIONS, SOCIAL_REWARDS, type CommunityPost, type CommunityReply, type FeedFilter, type FeedSort, type ReactionCounts, type ReactionKind, DEFAULT_PAGE_SIZE, pageQuery, type PageSize, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Inert } from '../components/Inert';
 import { useState } from 'react';
@@ -265,7 +265,7 @@ function CommunityFeed() {
       {posts.length === 0 && q.data && <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">{filter === 'following' ? 'Nobody you follow has posted yet. Follow people from their posts.' : filter === 'mine' ? 'You have not posted yet.' : 'No posts here yet. Start the conversation.'}</p>}
       <ul className="mt-md flex list-none flex-col gap-sm p-0 m-0">
         {posts.map((p) => (
-          <li key={p.id} className={`rounded-card bg-card p-md shadow-toy-soft ${p.hidden || p.held ? 'opacity-60' : ''}`}>
+          <li key={p.id} data-pillar="friendship" className={`rounded-card bg-card p-md shadow-toy-soft ${p.hidden || p.held ? 'opacity-60' : ''}`}>
             {(p.pinned || p.held) && <p className="m-0 mb-xs text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{p.held ? 'Waiting for a guide’s okay. Only you see it for now.' : 'Pinned by a guide'}</p>}
             <div className="flex items-center gap-sm">
               <span className="flex size-[40px] items-center justify-center rounded-pill bg-r2 font-display text-[16px] font-extrabold text-on-fill" aria-hidden="true">
@@ -284,7 +284,7 @@ function CommunityFeed() {
                   {p.authorPro && <IconTag tone="deep" icon="Crown">Pro</IconTag>}
                 </span>
                 <span className="block text-[12px] font-bold text-ink-soft">
-                  {p.category}, {new Date(p.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  {p.category}, {new Date(p.createdAt).toLocaleDateString(LOCALE, { month: 'short', day: 'numeric' })}
                   {p.authorFollowers > 0 ? ` · ${p.authorFollowers} ${p.authorFollowers === 1 ? 'follower' : 'followers'}` : ''}
                   {p.hidden ? ', hidden' : ''}
                 </span>
@@ -429,7 +429,7 @@ function RepliesSheet({ post, onClose, onSaved }: { post: CommunityPost | null; 
                   <p className="m-0 text-[14px] font-bold">
                     {r.authorName}
                     {r.anonymous && <IconTag className="ml-xs" tone="neutral" icon="UserRound">{r.mine ? 'Anonymous, you' : 'Anonymous'}</IconTag>}{' '}
-                    <span className="font-semibold text-ink-soft">{new Date(r.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                    <span className="font-semibold text-ink-soft">{new Date(r.createdAt).toLocaleDateString(LOCALE, { month: 'short', day: 'numeric' })}</span>
                   </p>
                   <p className="mt-xs m-0 text-[16px] font-semibold"><Inert text={r.body} /></p>
                   <div className="mt-xs flex flex-wrap items-center gap-xs">

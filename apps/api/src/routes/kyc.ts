@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { KycProfile } from '@kreators/shared';
+import { INDIAN_STATES, pinCodeProblem, type KycProfile } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { nowIso, str } from '../db';
 import { logEvent, track } from '../ops';
@@ -28,7 +28,14 @@ kyc.post('/', async (c) => {
   const pan = str(body.pan, 20).toUpperCase().replace(/\s/g, '');
   const account = str(body.bankAccount, 34).replace(/\s/g, '');
   const ifsc = str(body.ifsc, 11).toUpperCase();
-  const address = str(body.address, 300);
+  // The address is one line, "street, city, State PIN" (the form sends its four fields joined that way; no new column). It must end
+  // with a real PIN code; a state, when it names one, must be one of India's.
+  const parts = [str(body.addressLine, 200), str(body.city, 60), [str(body.state, 60), str(body.pin, 6)].filter(Boolean).join(' ')].filter(Boolean);
+  const address = (parts.length > 0 ? parts.join(', ') : str(body.address, 300)).slice(0, 300);
+  const pin = /(\S+)\s*$/.exec(address)?.[1] ?? '';
+  if (pinCodeProblem(pin)) return c.json({ error: 'an address ending with a six-digit PIN code' }, 400);
+  const stateWord = str(body.state, 60);
+  if (stateWord && !(INDIAN_STATES as readonly string[]).includes(stateWord)) return c.json({ error: 'a state or union territory from the list' }, 400);
   if (!legalName || !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) return c.json({ error: 'your legal name and a valid PAN' }, 400);
   if (account.length < 6 || !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) return c.json({ error: 'a bank account number and a valid IFSC' }, 400);
   const prev = await db.prepare('SELECT status FROM kyc_profiles WHERE user_id = ?').bind(user.id).first<{ status: string }>();

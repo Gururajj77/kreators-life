@@ -6,7 +6,7 @@ import { runRecurring } from './routes/finance';
 import { matchDueCircles, rollWeeklyCircles } from './routes/circles';
 import { fetchMetrics } from './social';
 import { closeSeason, sendEventReminders } from './engage';
-import { money, RETENTION_DAYS, nextOccurrence, nextOnOrAfter, parseRepeat, pastWaterNote, PERIOD_META, reviewPeriodFor, zonedToUtc, type PeriodKind } from '@kreators/shared';
+import { DEFAULT_ZONE, money, parseFocusSettings, RETENTION_DAYS, nextOccurrence, nextOnOrAfter, parseRepeat, pastWaterNote, PERIOD_META, reviewPeriodFor, zonedToUtc, type PeriodKind } from '@kreators/shared';
 import { flaggedFor } from './routes/reviews';
 import { securityAlerts } from './alerts';
 import { runAgencyCycles } from './agencyCycles';
@@ -29,7 +29,7 @@ export async function runScheduled(env: Env, cron: string = ''): Promise<{ seque
     const water = await sendWaterAndCustom(db, { water: true, custom: false });
     return { sequences: 0, recurring: 0, circles: 0, weekly: 0, content: 0, submissions: 0, reminders: water, events: 0, season: 0, agency: 0 };
   }
-  const reminders = (await sendReminders(db)) + (await sendWaterAndCustom(db, { water: cron !== MAIN_CRON, custom: true })) + (await sendTaskReminders(db)) + (await sendReviewReminders(db)) + (await sendInvoiceNotes(db).catch(() => 0)) + (await sendAgencyDueNotes(db).catch(() => 0));
+  const reminders = (await sendReminders(db)) + (await sendWaterAndCustom(db, { water: cron !== MAIN_CRON, custom: true })) + (await sendTaskReminders(db)) + (await sendReviewReminders(db)) + (await sendInvoiceNotes(db).catch(() => 0)) + (await sendAgencyDueNotes(db).catch(() => 0)) + (await sendFocusReminders(db).catch(() => 0));
   await clearPastWaterNotes(db);
   await tidyOld(db);
   await securityAlerts(db).catch(() => 0);
@@ -85,6 +85,7 @@ export async function tidyOld(db: D1Database): Promise<void> {
     db.prepare("UPDATE webhook_events SET payload = '' WHERE received_at < ? AND payload != ''").bind(ago(RETENTION_DAYS.webhooks)),
     db.prepare('DELETE FROM link_clicks WHERE created_at < ?').bind(ago(RETENTION_DAYS.clicks)),
     db.prepare('DELETE FROM channel_messages WHERE created_at < ?').bind(ago(RETENTION_DAYS.channelLines)),
+    db.prepare('DELETE FROM agency_password_requests WHERE closed_at IS NOT NULL AND closed_at < ?').bind(ago(RETENTION_DAYS.passwordRequests)),
     db.prepare('DELETE FROM data_requests WHERE requested_at < ?').bind(ago(RETENTION_DAYS.requests)),
     db.prepare("DELETE FROM copyright_notices WHERE status != 'new' AND COALESCE(resolved_at, created_at) < ?").bind(ago(RETENTION_DAYS.notices)),
   ]);
@@ -228,6 +229,44 @@ export async function sendTaskReminders(db: D1Database): Promise<number> {
       .prepare("INSERT OR IGNORE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', ?, ?, ?, NULL, ?)")
       // The note opens Daily on this task, with its plan open, so the inbox line and the Remember tag are one thing.
       .bind(`task-${t.id}-${day}`, t.user_id, `Remember: ${t.title}`.slice(0, 160), `${tag}Planned for today${t.due_date && t.do_date ? `, due ${t.due_date}` : ''}. Tap to open it.`.trim(), `/today?task=${t.id}`, nowIso())
+      .run();
+    if (res.meta.changes) sent += 1;
+  }
+  return sent;
+}
+
+/**
+ * The optional daily focus nudge (FocusSettings.reminderTime and reminderDays, off until set under Timer settings): one inbox note a day
+ * (id `focus-<user>-<day>`, so it goes once), on the chosen days, within an hour after the time in the person's zone (a time after the last
+ * tick goes out at it), linking to Mindful minutes, and never on a day that already has a focus session.
+ */
+export async function sendFocusReminders(db: D1Database): Promise<number> {
+  const now = new Date();
+  const rows = await db
+    .prepare("SELECT p.user_id, p.settings_json, u.timezone FROM focus_prefs p JOIN users u ON u.id = p.user_id WHERE json_extract(p.settings_json, '$.reminderTime') IS NOT NULL LIMIT 5000")
+    .all<{ user_id: string; settings_json: string; timezone: string | null }>();
+  let sent = 0;
+  for (const r of rows.results) {
+    const s = parseFocusSettings(r.settings_json);
+    if (!s.reminderTime || s.reminderDays.length === 0) continue;
+    const zone = r.timezone || DEFAULT_ZONE;
+    let localDay: string;
+    try {
+      localDay = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+    } catch {
+      continue;
+    }
+    // 1 for Monday to 7 for Sunday, from the person's own day.
+    const weekday = ((new Date(`${localDay}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
+    if (!s.reminderDays.includes(weekday)) continue;
+    const due = zonedToUtc(localDay, Math.min(Number(s.reminderTime.slice(0, 2)) * 60 + Number(s.reminderTime.slice(3, 5)), LAST_TICK), zone);
+    const since = now.getTime() - due.getTime();
+    if (since < 0 || since > 60 * 60_000) continue;
+    const focused = await db.prepare('SELECT 1 FROM focus_rounds WHERE user_id = ? AND day = ? LIMIT 1').bind(r.user_id, localDay).first();
+    if (focused) continue;
+    const res = await db
+      .prepare("INSERT OR IGNORE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', ?, ?, '/mindful', NULL, ?)")
+      .bind(`focus-${r.user_id}-${localDay}`, r.user_id, 'Time to focus', s.goalMinutes ? `Your goal is ${s.goalMinutes} minutes today. One session gets you started.` : 'One focus session today. Pick a task and press Start.', nowIso())
       .run();
     if (res.meta.changes) sent += 1;
   }

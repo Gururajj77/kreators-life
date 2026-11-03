@@ -1,3 +1,5 @@
+import { LOCALE } from '@kreators/shared';
+
 const pad = (n: number) => String(n).padStart(2, '0');
 
 /** Local calendar date as YYYY-MM-DD. The API treats this as the user's "today". */
@@ -9,7 +11,7 @@ export function todayLocal(): string {
 export function prettyDate(date: string): string {
   const [y, m, d] = date.split('-').map(Number);
   const dt = new Date(y ?? 2000, (m ?? 1) - 1, d ?? 1);
-  return dt.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+  return dt.toLocaleDateString(LOCALE, { weekday: 'long', month: 'short', day: 'numeric' });
 }
 
 export function dueLabel(due: string | null, today: string): { text: string; overdue: boolean } | null {
@@ -18,7 +20,7 @@ export function dueLabel(due: string | null, today: string): { text: string; ove
   if (due < today) return { text: 'Overdue', overdue: true };
   const [y, m, d] = due.split('-').map(Number);
   const dt = new Date(y ?? 2000, (m ?? 1) - 1, d ?? 1);
-  return { text: dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), overdue: false };
+  return { text: dt.toLocaleDateString(LOCALE, { month: 'short', day: 'numeric' }), overdue: false };
 }
 
 /** The last n local calendar dates, oldest first, ending today. */
@@ -34,10 +36,11 @@ export function lastDays(n: number): string[] {
 
 /** "24 Oct" */
 export function shortDay(date: string): string {
-  return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  return new Date(`${date}T00:00:00`).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' });
 }
 
-// One set of formatters (they were copied into ~25 screens). A bare day (YYYY-MM-DD) is read as local midnight through `toDate`, never as
+// One set of formatters, all in LOCALE (Indian English: 24 Oct 2026, 24/10/2026); the zone stays the device's, the person's own clock.
+// (they were copied into ~25 screens). A bare day (YYYY-MM-DD) is read as local midnight through `toDate`, never as
 // UTC midnight, so it never shows as the day before west of UTC.
 
 /** A Date from an ISO instant or a bare YYYY-MM-DD day (local midnight). */
@@ -45,20 +48,22 @@ export function toDate(v: string): Date {
   return /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(`${v}T00:00:00`) : new Date(v);
 }
 /** "24 Oct" for an instant or a bare day. */
-export const shortDate = (v: string) => toDate(v).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+export const shortDate = (v: string) => toDate(v).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' });
 /** "24 Oct 2026" for an instant or a bare day. */
-export const longDate = (v: string) => toDate(v).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+export const longDate = (v: string) => toDate(v).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
 /** "Sat 24 Oct" for an instant or a bare day. */
-export const dayLabel = (v: string) => toDate(v).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
-/** "24 Oct, 18:30": a moment something happened. */
-export const dateTime = (iso: string) => toDate(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
-/** "Sat 24 Oct, 18:30": when an event starts. */
-export const eventTime = (iso: string) => toDate(iso).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
-/** "18:30". */
-export const clockTime = (iso: string) => toDate(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+export const dayLabel = (v: string) => toDate(v).toLocaleDateString(LOCALE, { weekday: 'short', day: 'numeric', month: 'short' });
+/** "24 Oct, 6:30 pm": a moment something happened. */
+export const dateTime = (iso: string) => toDate(iso).toLocaleString(LOCALE, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+/** "Sat, 24 Oct, 6:30 pm": when an event starts. */
+export const eventTime = (iso: string) => toDate(iso).toLocaleString(LOCALE, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+/** "6:30 pm". */
+export const clockTime = (iso: string) => toDate(iso).toLocaleTimeString(LOCALE, { hour: 'numeric', minute: '2-digit' });
 /** "Sat" (or "Saturday", "S") for an instant or a bare day. */
-export const weekday = (v: string, style: 'long' | 'short' | 'narrow' = 'short') => toDate(v).toLocaleDateString(undefined, { weekday: style });
+export const weekday = (v: string, style: 'long' | 'short' | 'narrow' = 'short') => toDate(v).toLocaleDateString(LOCALE, { weekday: style });
 /** "October 2026" for a YYYY-MM month. */
-export const monthLabel = (month: string) => toDate(`${month}-01`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+export const monthLabel = (month: string) => toDate(`${month}-01`).toLocaleDateString(LOCALE, { month: 'long', year: 'numeric' });
+/** "24/10/2026" for an instant or a bare day. */
+export const numericDate = (v: string) => toDate(v).toLocaleDateString(LOCALE, { day: '2-digit', month: '2-digit', year: 'numeric' });
 /** A Date as the value of an <input type="datetime-local">: "2026-10-24T18:30" in the device's own zone. */
 export const localDateTimeValue = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;

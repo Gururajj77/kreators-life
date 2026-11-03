@@ -1,4 +1,4 @@
-import { EVENT_REMINDERS, previousSeason, SEASON_TOP, seasonLabel, seasonOf, seasonStart } from '@kreators/shared';
+import { DEFAULT_ZONE, EVENT_REMINDERS, LOCALE, previousSeason, SEASON_TOP, seasonLabel, seasonOf, seasonStart } from '@kreators/shared';
 import { nowIso } from './db';
 
 /**
@@ -9,7 +9,7 @@ import { nowIso } from './db';
 /** "Sat 18:30", in the person's own zone. */
 function clockIn(iso: string, zone: string): string {
   try {
-    return new Intl.DateTimeFormat('en-GB', { timeZone: zone || 'Asia/Kolkata', weekday: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
+    return new Intl.DateTimeFormat(LOCALE, { timeZone: zone || DEFAULT_ZONE, weekday: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
   } catch {
     return new Date(iso).toUTCString().slice(0, 22);
   }

@@ -201,7 +201,7 @@ Total registered users and follower counts are never a success metric.
 
 ### Still open
 - Email or phone verification. The phone is collected but neither is verified; founder admin promotion relies on signing up first.
-- Geography and currencies beyond INR (Agency lets a person pick a currency for their invoices; the platform's money is INR).
+- Geography beyond India. India first, open to all (2026-11-03): rupees, +91, Asia/Kolkata and en-IN formats are the defaults, and a person abroad picks their own currency (`users.currency`, migration 0070) and zone under Profile; nothing is converted between currencies, and the platform's own prices are in rupees.
 - A staging environment and a written backup and restore step.
 - Refund and cancellation terms for paid programs, if any are ever priced.
 - Creator contracts, rights and exclusivity as legal text for Army (the fields exist on a campaign). Agreements in Agency are templates and say they are a starting point, not legal advice.

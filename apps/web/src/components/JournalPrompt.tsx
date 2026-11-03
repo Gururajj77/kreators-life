@@ -129,7 +129,7 @@ export function JournalPrompt({ onWrite }: { onWrite: (start: { title: string; b
       </div>
 
       {prompt && cat ? (
-        <div ref={cardRef} className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
+        <div ref={cardRef} data-pillar={cat.accent} className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
           <div aria-live="polite" aria-atomic="true">
             <div className="flex flex-wrap items-center gap-xs">
               <span className="rounded-pill px-sm py-xs text-[12px] font-extrabold" style={{ background: accentOf(prompt.category), color: ON_FILL }}>

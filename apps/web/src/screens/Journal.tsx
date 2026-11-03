@@ -1,4 +1,4 @@
-import { MODULE_BY_KEY, MOODS, STRESSORS, type JournalEntry } from '@kreators/shared';
+import { MODULE_BY_KEY, MOODS, STRESSORS, type JournalEntry, LOCALE } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Suspense, useEffect, useState } from 'react';
 import { PeriodPanel } from '../components/PeriodPanel';
@@ -119,7 +119,7 @@ export function Journal() {
                       {e.title}
                     </span>
                     <span className="block text-[14px] font-semibold text-ink-soft">
-                      {new Date(e.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                      {new Date(e.createdAt).toLocaleString(LOCALE, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                       {e.stressors.length ? `. ${e.stressors.join(', ')}` : ''}
                     </span>
                     <span className="mt-xs block text-[14px] font-semibold">{e.body.slice(0, 140)}{e.body.length > 140 ? '…' : ''}</span>
@@ -166,7 +166,7 @@ export function Journal() {
 function DaySheet({ date, onClose, onOpen, onNew }: { date: string | null; onClose: () => void; onOpen: (e: JournalEntry) => void; onNew: (date: string) => void }) {
   const q = useQuery({ queryKey: ['journal-day', date], queryFn: () => api.journalDay(date!), enabled: Boolean(date) });
   const entries = q.data?.entries ?? [];
-  const pretty = date ? new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }) : '';
+  const pretty = date ? new Date(`${date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long' }) : '';
   return (
     <Sheet open={date !== null} onClose={onClose} title={pretty}>
       <div className="flex flex-col gap-sm pb-xl">
@@ -233,7 +233,7 @@ function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEn
   const words = body.trim() ? body.trim().split(/\s+/).length : 0;
 
   return (
-    <Sheet open={entry !== null} onClose={onClose} title={existing ? 'Edit entry' : date ? `New entry for ${new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}` : 'New entry'}>
+    <Sheet open={entry !== null} onClose={onClose} title={existing ? 'Edit entry' : date ? `New entry for ${new Date(`${date}T00:00:00`).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long' })}` : 'New entry'}>
       <form
         className="flex flex-col gap-md"
         onSubmit={(e) => {

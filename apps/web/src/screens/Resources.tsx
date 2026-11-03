@@ -75,7 +75,7 @@ function List() {
       <ul className="mt-md flex list-none flex-col gap-xs p-0 m-0">
         {q.data?.resources.map((r) => (
           <li key={r.id}>
-            <Link to={`/knowledge/${r.id}`} className="toy toy-soft flex items-start gap-sm rounded-tile bg-card p-sm">
+            <Link to={`/knowledge/${r.id}`} data-pillar="lover_partner" className="toy toy-soft flex items-start gap-sm rounded-tile bg-card p-sm">
               <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-r4 text-on-fill">
                 <AppIcon name={knowledgeKindIcon(r.kind)} size={20} />
               </span>
@@ -114,10 +114,10 @@ function Detail({ id }: { id: string }) {
       </header>
       {q.isError && <p className="mt-md font-bold">That resource is not here.</p>}
       {r && (
-        <article className="mt-md rounded-card bg-card p-md shadow-toy-soft">
+        <article data-reading className="mt-md rounded-card bg-card p-md shadow-toy-soft">
           <p className="m-0 text-[18px] font-bold">{r.summary}</p>
           {r.body.split(/\n{2,}/).map((p, i) => (
-            <p key={i} className="mt-md m-0 text-[16px] font-semibold leading-relaxed">
+            <p key={i} className="prose-long mt-md m-0 text-[16px] font-semibold leading-relaxed">
               {p}
             </p>
           ))}

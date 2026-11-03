@@ -1,5 +1,6 @@
 import { youtubeId, type LinkBlock } from '@kreators/shared';
 import { EmbedGate } from './EmbedGate';
+import { FadeImage } from './Media';
 import { Icon } from './Icon';
 import { GalleryHorizontal, Play, ChevronRight } from 'lucide-react';
 
@@ -8,11 +9,6 @@ import { GalleryHorizontal, Play, ChevronRight } from 'lucide-react';
  * images, YouTube videos and carousels. A tap on anything with a link reports back so the owner
  * can see what people open. Every link opens in a new tab and leaves this page where it is.
  */
-/** A picture that fails to load disappears instead of leaving a broken icon on the page. */
-const hide = (e: { currentTarget: HTMLImageElement }) => {
-  e.currentTarget.style.display = 'none';
-};
-
 export function LinkBlocks({ blocks, onOpen }: { blocks: LinkBlock[]; onOpen?: (id: string) => void }) {
   if (blocks.length === 0) return null;
   const open = (id: string) => () => onOpen?.(id);
@@ -22,7 +18,7 @@ export function LinkBlocks({ blocks, onOpen }: { blocks: LinkBlock[]; onOpen?: (
         {blocks.map((b) => (
           <li key={b.id}>
             {b.type === 'link' && (
-              <a href={b.url} target="_blank" rel="noreferrer" onClick={open(b.id)} className={`group toy flex min-h-[56px] items-center justify-between gap-sm rounded-pill px-md text-[16px] font-bold ${b.featured ? 'toy-soft bg-r3 text-on-yellow' : 'bg-card text-ink shadow-toy-soft'}`}>
+              <a href={b.url} target="_blank" rel="noreferrer" onClick={open(b.id)} data-pillar={b.featured ? 'parent_child' : undefined} className={`group toy flex min-h-[56px] items-center justify-between gap-sm rounded-pill px-md text-[16px] font-bold ${b.featured ? 'toy-soft bg-r3 text-on-yellow' : 'bg-card text-ink shadow-toy-soft'}`}>
                 <span className="min-w-0 flex-1 truncate text-center">{b.title || b.url}</span>
                 <Icon icon={ChevronRight} size={18} strokeWidth={3} className="transition-transform motion-safe:group-hover:translate-x-xs shrink-0" />
               </a>
@@ -33,10 +29,10 @@ export function LinkBlocks({ blocks, onOpen }: { blocks: LinkBlock[]; onOpen?: (
               <figure className="m-0 overflow-hidden rounded-card bg-card shadow-toy-soft">
                 {b.url ? (
                   <a href={b.url} target="_blank" rel="noreferrer" onClick={open(b.id)} className="block">
-                    <img src={b.image} alt={b.title} loading="lazy" decoding="async" onError={hide} className="block max-h-[320px] w-full object-cover" />
+                    <FadeImage src={b.image} alt={b.title} loading="lazy" decoding="async" className="block max-h-[320px] w-full object-cover" />
                   </a>
                 ) : (
-                  <img src={b.image} alt={b.title} loading="lazy" decoding="async" onError={hide} className="block max-h-[320px] w-full object-cover" />
+                  <FadeImage src={b.image} alt={b.title} loading="lazy" decoding="async" className="block max-h-[320px] w-full object-cover" />
                 )}
                 {b.title && <figcaption className="p-sm text-center text-[14px] font-semibold">{b.title}</figcaption>}
               </figure>
@@ -63,7 +59,7 @@ export function LinkBlocks({ blocks, onOpen }: { blocks: LinkBlock[]; onOpen?: (
                   {b.items.map((it) => {
                     const card = (
                       <>
-                        {it.image ? <img src={it.image} alt={it.title} loading="lazy" decoding="async" onError={hide} className="block aspect-[4/5] w-full object-cover" /> : <span className="flex aspect-[4/5] w-full items-center justify-center bg-paper" aria-hidden="true"><Icon icon={GalleryHorizontal} size={32} /></span>}
+                        {it.image ? <FadeImage src={it.image} alt={it.title} loading="lazy" decoding="async" className="block aspect-[4/5] w-full object-cover" /> : <span className="flex aspect-[4/5] w-full items-center justify-center bg-paper" aria-hidden="true"><Icon icon={GalleryHorizontal} size={32} /></span>}
                         {it.title && <span className="block p-sm text-[14px] font-bold">{it.title}</span>}
                       </>
                     );

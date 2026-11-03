@@ -22,14 +22,14 @@ export function Button({ variant = 'primary', color, deep, size = 'md', full = f
   /* sm keeps its compact look through tight padding and line-height, not a bigger box, but the hit area is still 44px (HIG minimum). */
   const sizing = size === 'lg' ? 'min-h-[56px] px-lg text-[18px]' : size === 'sm' ? 'min-h-[44px] px-sm text-[14px] leading-none' : 'min-h-[48px] px-md text-[16px]';
   const look = {
-    primary: 'toy bg-ink text-on-ink',
-    outline: 'toy toy-ink bg-card-strong text-ink border border-ink/30 hover:border-ink',
-    ghost: 'bg-transparent text-ink-soft underline-offset-4 transition-colors hover:text-ink hover:underline',
+    primary: 'toy btn-primary bg-ink text-on-ink',
+    outline: 'toy toy-ink btn-outline bg-card-strong text-ink border border-ink/30',
+    ghost: 'btn-ghost bg-transparent text-ink-soft underline-offset-4 transition-colors hover:underline',
     color: 'toy text-ink',
     /* For buttons that sit on a coloured hero: a white pill with dark text, like the kit. */
     light: 'toy bg-card-strong text-ink',
     /* The primary look with a band of light that sweeps across on hover or keyboard focus (app.css, Motion kit). For the one main action on a screen. */
-    shimmer: 'toy fx-shimmer bg-ink text-on-ink',
+    shimmer: 'toy fx-shimmer btn-primary bg-ink text-on-ink',
   }[variant];
   const colorStyle = variant === 'color' ? ({ background: color, '--toy-color': deep ?? '#1a1a1a', ...style } as CSSProperties) : style;
 

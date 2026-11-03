@@ -1,5 +1,8 @@
 import { Hono, type Context } from 'hono';
 import {
+  DEFAULT_ZONE,
+  formatCount,
+  LOCALE,
   AGENT_LIMITS,
   ASSISTANT_MODELS,
   creditsFor,
@@ -210,13 +213,13 @@ export function assistantRoutes(appFetch: AppFetch) {
     const left = acct.plan_credits + acct.extra_credits;
     if (left <= 0) return refuse(c, 'credits', 'You are out of credits. Top up, or wait for your plan to start again.', 402);
     const used = (await usedToday(db, user.id)).assistant;
-    if (used >= limit.perDay) return refuse(c, 'day', `You used today's ${limit.perDay.toLocaleString('en-US')} credits for the assistant on ${PLANS[acct.plan].name}. They free up over the next 24 hours.`, 429);
+    if (used >= limit.perDay) return refuse(c, 'day', `You used today's ${formatCount(limit.perDay)} credits for the assistant on ${PLANS[acct.plan].name}. They free up over the next 24 hours.`, 429);
     const budget = Math.min(left, limit.perMessage, limit.perDay - used);
 
     const turns = parseTurns(body.messages);
     if (!turns.length || turns[turns.length - 1]!.role !== 'user') return c.json({ error: 'Say something first.' }, 400);
     const date = dateFrom(body.context?.date);
-    const timeZone = typeof body.context?.timeZone === 'string' && /^[A-Za-z0-9_+\-/]{1,64}$/.test(body.context.timeZone) ? body.context.timeZone : 'UTC';
+    const timeZone = typeof body.context?.timeZone === 'string' && /^[A-Za-z0-9_+\-/]{1,64}$/.test(body.context.timeZone) ? body.context.timeZone : user.timezone || DEFAULT_ZONE;
     const path = typeof body.context?.path === 'string' ? body.context.path.slice(0, 200) : '';
 
     // A model that keeps data is never offered the journal or the trackers to read.
@@ -226,7 +229,7 @@ export function assistantRoutes(appFetch: AppFetch) {
     // What the person let the assistant learn from Discover: only when they switched it on and the model keeps nothing.
     const dset = cfg.private ? await settingsOf(db, user.id) : null;
     const learned = dset?.assistant ? learnedForAssistant(await latestProfile(db, user.id), await latestExtras(db, user.id, dset.mind)) : null;
-    const system = systemPrompt({ learned, name: user.display_name, date, weekday: new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' }), timeZone, screen: screenOf(path) });
+    const system = systemPrompt({ learned, name: user.display_name, date, weekday: new Date(`${date}T12:00:00Z`).toLocaleDateString(LOCALE, { weekday: 'long', timeZone: 'Etc/UTC' }), timeZone, screen: screenOf(path) });
     const fixed = tokensOf(system) + tokensOf(JSON.stringify(specs));
     const messages: Message[] = [{ role: 'system', content: system }, ...fit(turns, limit.contextTokens - fixed - MAX_OUT)];
 

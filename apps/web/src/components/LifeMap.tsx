@@ -284,15 +284,27 @@ function ScaleDrawing({ L }: { L: Layout }) {
         if (!words.length) return null;
         const y = d.top ? top(d.from) + R * (words.length > 1 ? 1.1 : 1) : middle(d.from, d.to);
         const cx = L.fx + L.fw / 2;
-        if (!d.light) return <g key={d.from}>{lines(words, cx, y, sizes.dim, 'middle', 'font-bold', { fill: 'var(--color-on-fill)' })}</g>;
+        // White words on a dark band. Where the band fades towards sky blue ("New Humanity Consciousness") the fill alone falls
+        // under 4.5:1, so each word carries a soft halo in the chart's fixed ink, painted under the letters.
+        if (!d.light)
+          return (
+            <g key={d.from}>
+              {lines(words, cx, y, sizes.dim, 'middle', 'font-bold', { fill: 'var(--color-on-fill)', stroke: 'var(--color-ink-fixed)', strokeOpacity: 0.55, strokeWidth: 3, strokeLinejoin: 'round', paintOrder: 'stroke' })}
+            </g>
+          );
         // A light band (gold, lime, yellow) puts its words on a small card-coloured chip in the theme's own ink, so they read in
         // both themes whatever sits under the picture.
         const cw = Math.max(...words.map((t) => t.length)) * sizes.dim * 0.6 + 10;
         const ch = words.length * (sizes.dim + 3) + 4;
+        // Low in the funnel the chip is wider than the funnel, so on a phone it would run into the level words beside it ("3rd
+        // Dimension" over "150 - Anger"). There it moves left until its right edge stays clear of the words at its own foot.
+        const right = L.sides ? cx + cw / 2 : Math.min(cx + cw / 2, edge(y + ch / 2) + 1);
+        const chipX = Math.max(L.fx - 1, right - cw);
+        const tx = chipX + cw / 2;
         return (
           <g key={d.from}>
-            <rect x={cx - cw / 2} y={y - ch / 2} width={cw} height={ch} rx={ch / 2 > 10 ? 8 : ch / 2} style={{ fill: 'var(--color-card-strong)' }} fillOpacity={0.92} />
-            {lines(words, cx, y, sizes.dim, 'middle', 'font-bold', { fill: 'var(--color-ink)' })}
+            <rect x={chipX} y={y - ch / 2} width={cw} height={ch} rx={ch / 2 > 10 ? 8 : ch / 2} style={{ fill: 'var(--color-card-strong)' }} fillOpacity={0.92} />
+            {lines(words, tx, y, sizes.dim, 'middle', 'font-bold', { fill: 'var(--color-ink)' })}
           </g>
         );
       })}

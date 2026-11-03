@@ -34,6 +34,7 @@ import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { useMe, useRefreshAll } from '../lib/queries';
 import { useSeedOnce } from '../lib/useSeed';
+import { FocusPill } from '../components/FocusPill';
 
 const STEPS_PER_FLOOR = 3;
 const STEP_OF_ROLE = { gauge: 1, probe: 2, foundation: 3 } as const;
@@ -62,10 +63,14 @@ function CloseVibe({ inline = false }: { inline?: boolean }) {
     else if (params.get('floors')) nav('/session');
     else nav('/onboarding');
   };
+  // A running or paused focus clock sits beside Close, on every step of the vibe check.
   return (
-    <button type="button" aria-label="Close" onClick={leave} className={`toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-card text-ink-soft hover:text-ink ${inline ? '' : 'safe-top fixed top-sm right-md z-30'}`}>
-      <Icon icon={X} size={20} strokeWidth={3} />
-    </button>
+    <span className={`flex shrink-0 items-center gap-xs ${inline ? '' : 'safe-top absolute top-sm right-md z-30 md:fixed'}`}>
+      <FocusPill compact />
+      <button type="button" aria-label="Close" onClick={leave} className="toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-card text-ink-soft hover:text-ink">
+        <Icon icon={X} size={20} strokeWidth={3} />
+      </button>
+    </span>
   );
 }
 
@@ -244,7 +249,7 @@ function PickFloors({ chosen, onChange, onBack, onNext }: { chosen: Relationship
           <CloseVibe inline />
         </div>
         <h1 className="mt-md text-[36px]">Which relationships need work right now?</h1>
-        <p className="mt-sm text-[16px] font-semibold text-ink-soft">Pick the pillars you want to start with. Each one asks three questions. The others wait under Pillars until you are ready for them.</p>
+        <p className="mt-sm text-[16px] font-semibold text-ink-soft">Pick where to start. Each pillar asks three questions, and the rest wait under Pillars.</p>
       </div>
       <ul className="mt-lg flex list-none flex-col gap-xs p-0 m-0 pb-2xl">
         {RELATIONSHIPS.map((r) => {
@@ -615,7 +620,7 @@ function AboutYou({ onNext }: { onNext: () => void }) {
       <div className="pt-xl">
         <Avatar relationship="friendship" size={88} />
         <h1 className="mt-md text-[36px]">What are you into?</h1>
-        <p className="mt-sm text-[16px] font-semibold text-ink-soft">Pick up to ten and add your city. Circles seat you with people nearby whose interests fit yours: the same ones, or pairs that gel, like the writer with the film maker.</p>
+        <p className="mt-sm text-[16px] font-semibold text-ink-soft">Pick up to ten and add your city, so Circles can seat you with people who fit.</p>
       </div>
       <form
         className="mt-lg flex flex-col gap-md"
@@ -715,7 +720,7 @@ function Learn({ result, floors, onNext }: { result: OnboardingResponse; floors:
       key: 'not',
       eyebrow: 'What this is',
       title: 'Not a to-do list',
-      body: <p className="m-0 text-[16px] font-semibold text-ink-soft">Most apps start with tasks. Tasks alone are easy to drop. It is not a to-do list and it is not a mood app. It is a pyramid for each pillar of your life, and every task has a base under it.</p>,
+      body: <p className="m-0 text-[16px] font-semibold text-ink-soft">Tasks alone are easy to drop. Here each pillar is a pyramid, so every task has a base under it.</p>,
     },
     {
       key: 'rule',

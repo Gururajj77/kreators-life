@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
-import { BackgroundPaths } from '../components/fx/BackgroundPaths';
+import { MorphShapes } from '../components/fx/MorphShapes';
 import { burstFrom } from '../components/fx/burst';
+import { LiquidMetal } from '../components/fx/LiquidMetal';
 import { TextReveal } from '../components/fx/TextReveal';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
@@ -64,14 +65,15 @@ export function Welcome() {
 
   return (
     <Screen tabs={false} className="flex min-h-dvh flex-col">
+      <MorphShapes page />
       <div className="relative isolate flex flex-1 flex-col justify-center pt-xl">
-        <BackgroundPaths />
         <Staircase />
         <h1 className="mt-lg text-[clamp(36px,11vw,48px)]">
           <TextReveal parts={[{ text: 'Seven relationships.' }, { br: true }, { text: 'One you.' }]} />
         </h1>
         <p className="mt-md text-[18px] font-semibold leading-snug text-ink-soft">
-          A daily game for the seven relationships that make a life, with the apps a creator or an agency needs around it. Start with a short chat. It is a few questions, and the apps that fit you switch on. The deeper strategy session waits in Pillars until you want it.
+          A daily game for the seven relationships, with the apps a creator or an agency needs. Answer a few questions and the apps that fit you switch on.
+          <span className="hidden sm:inline"> The deeper strategy session waits in Pillars until you want it.</span>
         </p>
       </div>
       <div className="flex flex-col gap-sm pb-lg">
@@ -80,18 +82,20 @@ export function Welcome() {
             {error}
           </p>
         )}
-        <Button
-          variant="shimmer"
-          size="lg"
-          full
-          onClick={(e) => {
-            burstFrom(e.currentTarget);
-            void start();
-          }}
-          disabled={busy}
-        >
-          {busy ? 'Opening your chat' : resuming ? 'Carry on setting up' : 'Start with a short chat'}
-        </Button>
+        <LiquidMetal className="w-full">
+          <Button
+            variant="shimmer"
+            size="lg"
+            full
+            onClick={(e) => {
+              burstFrom(e.currentTarget);
+              void start();
+            }}
+            disabled={busy}
+          >
+            {busy ? 'Opening your chat' : resuming ? 'Carry on setting up' : 'Start with a short chat'}
+          </Button>
+        </LiquidMetal>
         <p className="m-0 text-center text-[14px] font-semibold text-ink-mute">
           Free to start. Your answers are saved on this device, so you can stop and come back. Add this page to your home screen to keep it close.
         </p>

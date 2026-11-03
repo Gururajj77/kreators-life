@@ -201,14 +201,15 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
   return (
     <div>
       {(search || Object.keys(options).length > 0) && (
-        <div className="flex flex-wrap items-center gap-sm">
+        // fill-row-all: every item grows to fill its line, so a filter or the count never stands alone on the last one (the lone-pill rule).
+        <div className="fill-row-all flex flex-wrap items-center gap-sm">
           {search && <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter this list" aria-label={`Filter ${label}`} autoComplete="off" className="min-h-[44px] min-w-[240px] flex-1 rounded-pill border-2 border-line bg-card px-md text-[14px] font-semibold" />}
           {columns
             .filter((c) => c.filter)
             .map((c) => (
-              <label key={c.key} className="flex min-w-[min(100%,220px)] max-w-full flex-1 items-center gap-xs sm:flex-none">
+              <label key={c.key} className="flex min-w-[min(100%,220px)] max-w-full flex-1 items-center gap-xs">
                 <span className="shrink-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{c.label}</span>
-                <Select value={filters[c.key] ?? ''} aria-label={`Filter by ${c.label}`} onChange={(e) => setFilters((f) => ({ ...f, [c.key]: e.target.value }))} className="min-w-0 flex-1 sm:min-w-[140px] sm:flex-none" selectClass="rounded-pill bg-card">
+                <Select value={filters[c.key] ?? ''} aria-label={`Filter by ${c.label}`} onChange={(e) => setFilters((f) => ({ ...f, [c.key]: e.target.value }))} className="min-w-0 flex-1 sm:min-w-[140px]" selectClass="rounded-pill bg-card">
                   <option value="">All</option>
                   {(options[c.key] ?? []).map((o) => (
                     <option key={o} value={o}>
@@ -218,7 +219,7 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
                 </Select>
               </label>
             ))}
-          <span className="shrink-0 text-[14px] font-bold text-ink-soft">
+          <span className="shrink-0 whitespace-nowrap text-right text-[14px] font-bold text-ink-soft">
             {visible.length} of {rows.length}
           </span>
         </div>

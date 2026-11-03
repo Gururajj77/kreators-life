@@ -125,7 +125,7 @@ function MatchList({ answers, available, onSend }: { answers: SetupAnswers; avai
     const mod = MODULE_BY_KEY[a.key]!;
     const checked = on.includes(a.key);
     return (
-      <li key={a.key}>
+      <li key={a.key} data-pillar={MODULE_GROUP_ACCENT[mod.group]}>
         <button
           type="button"
           role="checkbox"
@@ -253,7 +253,7 @@ export function SetupChat() {
       answers: a,
       asked,
       picks: a.goals,
-      ask: { kind: 'groups', groups: groupsOf(SETUP_GOAL_GROUPS, goalChoice), max: MAX_SETUP_GOALS, done: 'Next', more: 'Your answers decide which apps you get. If you want to earn, you get the apps that pay you. If you work for clients, you get Agency, for their work, time, invoices and approvals. If you want to plan your week, Reviews adds a calendar and reminders, and Plan my week on Daily is always there. If you want to feel better, you get the trackers for mood, sleep and stress. “Work on myself” also adds the strategy session, a deeper setup for the seven relationships in your life.' },
+      ask: { kind: 'groups', groups: groupsOf(SETUP_GOAL_GROUPS, goalChoice), max: MAX_SETUP_GOALS, done: 'Next', more: 'Your answers decide which apps you get. Earning brings the apps that pay you. Client work brings Agency, for their work, time, invoices and approvals. Planning brings Reviews, with a calendar and reminders. Feeling better brings the mood, sleep and stress trackers. “Work on myself” adds the strategy session, a deeper setup for your seven relationships.' },
     });
 
   const askWho = (a: SetupAnswers, asked: Question[], lead: Line[]) =>
@@ -262,7 +262,7 @@ export function SetupChat() {
       answers: a,
       asked,
       picks: a.identities.filter((k) => kindOf(k) === 'role'),
-      ask: { kind: 'groups', groups: groupsOf(SETUP_ROLE_GROUPS, tagChoice), done: 'Next', skip: 'None of these', more: 'This helps me suggest apps that fit your life. A student who edits videos needs different apps than an agency owner or a parent who wants to save money. You can pick more than one, or describe yourself in your own words in the box below.' },
+      ask: { kind: 'groups', groups: groupsOf(SETUP_ROLE_GROUPS, tagChoice), done: 'Next', skip: 'None of these', more: 'This helps me suggest apps that fit your life. A student who edits videos needs other apps than an agency owner. Pick more than one, or describe yourself in the box below.' },
     });
 
   const askWork = (a: SetupAnswers, asked: Question[], lead: Line[]) => {
@@ -337,12 +337,12 @@ export function SetupChat() {
       [
         `All set! 🎉 ${on.length === 1 ? "I've switched on your app." : `I've switched on your ${on.length} apps.`}`,
         'Five tabs are always there: Home, Daily, Pillars, Apps and Profile.',
-        'Daily gives you three small things to do each day, and Plan my week suggests a day for each task. Pillars is where you work on the seven relationships in your life: with yourself, your family, your friends, a partner, your work, your teachers and your faith.',
+        'Daily gives you three small things to do each day. Pillars is where you work on the seven relationships in your life.',
         ...(on.includes('agency') ? ['Agency is on. Add your first client, then move each deliverable from idea to published. A page you can share lets the client approve their work.'] : []),
         ...(on.includes('reviews') ? ['Reviews is on. Pick a day for your first look back, and you get a reminder.'] : []),
         ...(coachLine ? [coachLine] : []),
         session,
-        'Or start with Discover. It is a quiz with puzzles, personality and real situations. It shows your strengths and makes your next steps fit you.',
+        'Or start with Discover, a quiz that shows your strengths and shapes your next steps to fit you.',
         'One more thing, if you like: add your interests, so people who like the same things can find you.',
       ],
       { part: 'done', ask: { kind: 'chips', chips: [...chips, { value: 'profile', label: 'Add my interests' }] } },

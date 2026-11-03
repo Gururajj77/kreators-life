@@ -1,4 +1,4 @@
-import { CONSENT_PURPOSES, LEGAL_VERSION, type ConsentChoices } from '@kreators/shared';
+import { CONSENT_PURPOSES, LEGAL_VERSION, LOCALE, type ConsentChoices } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { api } from '../lib/api';
@@ -19,7 +19,7 @@ export function PrivacyChoices() {
   });
   const gpc = globalPrivacyControl();
   const d = q.data;
-  const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : null);
+  const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' }) : null);
   return (
     <Section id="privacy-choices" title="Privacy choices" lede="Asked once, changed here any time. Each tick saves at once.">
       <ul className="flex list-none flex-col gap-xs p-0 m-0">

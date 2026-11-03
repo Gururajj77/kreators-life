@@ -3,6 +3,8 @@ import { Link, NavLink, useLocation } from 'react-router';
 import { BrandMark } from '../components/BrandMark';
 import { Ornament, Posy } from '../components/Hero';
 import { useSession } from '../lib/store';
+import { useFocusSession } from '../lib/focusSession';
+import { FocusPill } from '../components/FocusPill';
 import { useTheme } from '../lib/theme';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { Segmented } from '../components/fx/Segmented';
@@ -23,12 +25,14 @@ export function Logo() {
 }
 
 /**
- * The public site's frame. `minimal` is for pages a client opens from a link (the agency client page, invoices, agreements, documents):
+ * The frame of the public site. `minimal` is for pages a client opens from a link (the agency client page, invoices, agreements, documents):
  * the header keeps only the logo and the theme switch, with no Explore, Sign in or Go to app; the footer and its privacy links stay.
  */
 export function SiteLayout({ children, wide = true, minimal = false }: { children: ReactNode; wide?: boolean; minimal?: boolean }) {
   const entry = useAppEntry();
   const token = useSession((s) => s.token);
+  // Signed in with a focus clock running or paused: the pill sits beside the wordmark (in its place on a phone, where the header is tight).
+  const clock = useFocusSession((s) => s.snap.active) && Boolean(token);
   const themeMode = useTheme((s) => s.mode);
   const setThemeMode = useTheme((s) => s.setMode);
   // Two classes, because Tailwind 4 orders `inline-flex` after `hidden`: a link that carries both would always show.
@@ -50,12 +54,21 @@ export function SiteLayout({ children, wide = true, minimal = false }: { childre
   const { pathname } = useLocation();
   const slide = useSlider<HTMLElement>('[aria-current="page"]', pathname);
   return (
-    <div className="min-h-dvh text-ink">
+    <div className="min-h-dvh overflow-x-clip text-ink">
       <div ref={top} aria-hidden="true" className="pointer-events-none absolute top-0 left-0 h-xs w-xs" />
       <header data-scrolled={scrolled ? '' : undefined} className="fx-header safe-top relative z-30 md:sticky md:top-0">
         {/* The header and the footer are the same width on every page, like the home page; only the reading column narrows. */}
         <div className="mx-auto flex min-w-0 max-w-[1080px] items-center justify-between gap-sm px-md py-xs">
-          <Logo />
+          {clock ? (
+            <span className="flex min-w-0 items-center gap-xs">
+              <span className="hidden md:flex">
+                <Logo />
+              </span>
+              <FocusPill compact />
+            </span>
+          ) : (
+            <Logo />
+          )}
           {minimal ? (
             <ThemeToggle />
           ) : (
@@ -102,7 +115,7 @@ export function SiteLayout({ children, wide = true, minimal = false }: { childre
           <div>
             <Logo />
             <p className="mt-xs m-0 max-w-[420px] text-[14px] font-semibold text-ink-soft">
-              A daily game for the seven relationships that make a life, with the tools a creator needs built in. One small act a day, for all seven. Free to start, free to stay.
+              A daily game for the seven relationships, with a creator’s tools built in. One small act a day, for all seven. Free to start, free to stay.
             </p>
           </div>
           <nav aria-label="Footer" className="grid grid-cols-2 gap-xs text-[14px] font-bold text-ink-soft sm:grid-cols-3">
@@ -165,7 +178,7 @@ export function SiteLayout({ children, wide = true, minimal = false }: { childre
         </div>
         <Ornament className="mt-xs" />
         <p className="relative m-0 px-md text-center text-[12px] font-semibold text-ink-mute">
-          Your journal and wellbeing numbers are never shown to brands, staff, the leaderboard or Club selection.
+          Your journal and wellbeing are never shown to brands, staff, the leaderboard or Club selection.
         </p>
         <p className="relative m-0 px-md pb-lg text-center text-[12px] font-semibold text-ink-mute">
           Built with ❤️ by{' '}

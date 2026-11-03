@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import {
+  money,
   FEATURE_DAYS,
   FEATURE_FEE_POINTS,
   isFeatured,
@@ -362,7 +363,7 @@ market.post('/listings/:id/offers', async (c) => {
     db.prepare("UPDATE preowned_offers SET status = 'withdrawn', decided_at = ? WHERE listing_id = ? AND buyer_id = ? AND status = 'open'").bind(now, row.id, user.id),
     db.prepare('INSERT INTO preowned_offers (id, listing_id, buyer_id, cents, note, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, row.id, user.id, Math.round(cents), str(body.note, 300), 'open', now),
   ]);
-  await notify(db, row.seller_id, 'store', `An offer on ${row.title}`, `${nameOf(user)} offers ${row.currency} ${(Math.round(cents) / 100).toLocaleString()}.`, '/store');
+  await notify(db, row.seller_id, 'store', `An offer on ${row.title}`, `${nameOf(user)} offers ${money(Math.round(cents), row.currency)}.`, '/store');
   const fresh = await db.prepare(`${OFFER_SELECT} WHERE o.id = ?`).bind(id).first<OfferRow>();
   return c.json({ offer: fresh ? toOffer(fresh) : null }, 201);
 });

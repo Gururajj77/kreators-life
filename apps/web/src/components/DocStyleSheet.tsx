@@ -1,4 +1,5 @@
-import { DOC_ACCENTS, DOC_FONTS, DOC_FOOTER_MAX, DOC_HEADINGS, DOC_MARGINS, DOC_PAGES, DOC_SIGN_LAYOUTS, DOC_SIZES, DOC_STYLE_NAMES, docStyleSummary, emptyProfile, parseDocStyle, type DocStyle } from '@kreators/shared';
+import { DOC_ACCENTS, DOC_FONTS, DOC_FOOTER_MAX, DOC_HEADINGS,
+  DOC_LAYOUTS, DOC_MARGINS, DOC_PAGES, DOC_SIGN_LAYOUTS, DOC_SIZES, DOC_STYLE_NAMES, docStyleSummary, emptyProfile, parseDocStyle, type DocStyle } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { api } from '../lib/api';
@@ -56,6 +57,11 @@ export function DocStyleSheet({ open, onClose, value, onChange, disabled = false
       <fieldset disabled={disabled} className="m-0 grid gap-sm border-0 p-0 pb-xl">
         <p className="m-0 text-[14px] font-semibold text-ink-soft">How this document looks on paper and as a PDF. The preview changes as you choose.</p>
         {before}
+        <div>
+          <span className={LABEL}>Layout</span>
+          <Chips label="Layout" options={opts('layout', DOC_LAYOUTS)} value={s.layout ?? 'legal'} onChange={(v) => set({ layout: v as DocStyle['layout'] })} />
+          <p className="mt-xs m-0 text-[12px] font-semibold text-ink-mute">Typed is plain type with headings as you typed them, like a typed agreement.</p>
+        </div>
         <Toggle on={s.letterhead} onChange={(on) => set({ letterhead: on })} label="Letterhead" hint="Your business name and address at the top of the first page." />
         {s.letterhead && (
           <div>

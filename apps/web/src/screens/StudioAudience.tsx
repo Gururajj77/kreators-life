@@ -1,4 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
+import { longDate, dateTime } from '../lib/date';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
@@ -80,7 +81,7 @@ export function StudioAudience() {
         </form>
       </section>
 
-      <section className="mt-lg rounded-card p-md" style={{ background: 'var(--tint-yellow)' }} aria-labelledby="aff-heading">
+      <section data-pillar="parent_child" className="mt-lg rounded-card p-md" style={{ background: 'var(--tint-yellow)' }} aria-labelledby="aff-heading">
         <h2 id="aff-heading" className="text-[24px]">
           Affiliate link
         </h2>
@@ -117,7 +118,7 @@ export function StudioAudience() {
                 {l.name} <span className="font-semibold text-ink-soft">{l.email}</span>
               </p>
               {l.message && <p className="mt-xs m-0 text-[14px] font-semibold">{l.message}</p>}
-              <p className="m-0 text-[12px] font-bold text-ink-mute">{new Date(l.createdAt).toLocaleString()}</p>
+              <p className="m-0 text-[12px] font-bold text-ink-mute">{dateTime(l.createdAt)}</p>
             </li>
           ))}
         </ul>
@@ -138,7 +139,7 @@ export function StudioAudience() {
               ) : (
                 f.name
               )}
-              <span className="font-semibold text-ink-soft"> since {new Date(f.since).toLocaleDateString()}</span>
+              <span className="font-semibold text-ink-soft"> since {longDate(f.since)}</span>
             </li>
           ))}
         </ul>
@@ -155,7 +156,7 @@ export function StudioAudience() {
               <li key={b.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
                 <p className="m-0 text-[16px] font-bold">{b.title}</p>
                 <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                  To {b.sent} {b.audience}, {new Date(b.createdAt).toLocaleDateString()}
+                  To {b.sent} {b.audience}, {longDate(b.createdAt)}
                 </p>
               </li>
             ))}

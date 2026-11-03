@@ -1,4 +1,4 @@
-import { DEFAULT_PAGE_SIZE, pageQuery, type Page, type PageSize, money } from '@kreators/shared';
+import { DEFAULT_PAGE_SIZE, formatCount, pageQuery, type Page, type PageSize, money } from '@kreators/shared';
 import { MAX_CREDIT_GRANT, PAID_PLANS, PLAN_DAYS, planName, type PlanKey, type TagTone } from '@kreators/shared';
 import { ATTENDEE_XP_MAX, codeProblem, normalizeCode, type AdminAttendeeCode } from '@kreators/shared';
 import { MAX_COACHES, type AdminCoachAsk, type AdminCoachLink } from '@kreators/shared';
@@ -44,6 +44,7 @@ import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { AdminDiscounts } from '../components/AdminDiscounts';
 import { AdminHouseTemplates } from '../components/AdminHouseTemplates';
+import { TabRow } from '../components/TabRow';
 import { Toggle } from '../components/Toggle';
 import { AppIcon } from '../components/AppIcon';
 import { AnimatedIcon } from '../components/AnimatedIcon';
@@ -54,6 +55,7 @@ import { useMe } from '../lib/queries';
 import { FIELD } from '../lib/ui';
 import { dateTime, longDate } from '../lib/date';
 import { StatusTag } from '../components/StatusTag';
+import { Fold } from '../components/Fold';
 
 const ADMIN_HONORS = HONORS.filter((h) => h.source === 'admin' && h.key !== 'pro');
 const KEY_STORE = 'kreators.adminKey';
@@ -345,20 +347,21 @@ export function Admin() {
     for (const r of rows) await fn(r);
   };
 
+  // Most used first: the row shows what fits and puts the rest behind More.
   const tabs: [Tab, string][] = [
     ['people', 'People'],
-    ['flags', 'Flags'],
     ['listings', 'Listings'],
-    ['coaches', 'Life coaches'],
-    ['codes', 'Attendee codes'],
-    ['discounts', 'Discount codes'],
-    ['agencyhouse', 'Agency templates'],
-    ['orders', 'Orders'],
-    ['webhooks', 'Webhooks'],
-    ['kyc', 'KYC'],
-    ['ops', 'Ops'],
     ['redemptions', `Redemptions${redemptions.length ? ` (${redemptions.length})` : ''}`],
+    ['orders', 'Orders'],
+    ['kyc', 'KYC'],
+    ['coaches', 'Life coaches'],
+    ['flags', 'Flags'],
+    ['discounts', 'Discount codes'],
+    ['codes', 'Attendee codes'],
+    ['agencyhouse', 'Agency templates'],
     ['audit', 'Audit'],
+    ['webhooks', 'Webhooks'],
+    ['ops', 'Ops'],
   ];
 
   return (
@@ -393,22 +396,21 @@ export function Admin() {
 
       {loaded && (
         <>
-          <div className="mt-md">
-          <nav className="scroll-row md:flex-wrap md:overflow-visible" aria-label="Admin sections">
-            {tabs.map(([k, label]) => (
-              <button key={k} type="button" aria-pressed={tab === k} onClick={() => openTab(k)} className={`toy shrink-0 min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-                {label}
-              </button>
-            ))}
-          </nav>
-          </div>
+          <TabRow className="mt-md" label="Admin sections" items={tabs.map(([key, label]) => ({ key, label }))} value={tab} onChange={openTab} />
 
           {tab === 'people' && (
             <section className="mt-md" aria-labelledby="people-heading">
               <h2 id="people-heading" className="text-[24px]">
                 People
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Search the whole list on the server, then sort, filter and edit the rows here. Role and plan change in the row; tick rows to change several at once. Tap a row for honors, points, credits and what that person sees.</p>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Search the server, then sort, filter and edit the rows here.</p>
+              <Fold title="How this table works" className="mt-xs">
+                <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+                  <li>Role and plan change in the row.</li>
+                  <li>Tick rows to change several at once.</li>
+                  <li>Tap a row for honors, points, credits and what that person sees.</li>
+                </ul>
+              </Fold>
               <form
                 className="mt-sm flex gap-xs"
                 onSubmit={(e) => {
@@ -449,10 +451,10 @@ export function Admin() {
                     { key: 'role', label: 'Role', get: (u) => ROLE_META[u.role].name, filter: true, edit: { kind: 'select', options: ROLE_OPTIONS, onEdit: (u, v) => run(async () => applyUser((await adminApi.setRole(key, u.id, roleByName(String(v)))).user)) } },
                     { key: 'coach', label: 'Life coach', get: (u) => (u.permissions.includes('coach') ? 'Yes' : u.coachAskedAt ? 'Asked' : 'No'), filter: true },
                     { key: 'plan', label: 'Plan', get: (u) => planName(u.plan), filter: true, edit: { kind: 'select', options: PLAN_OPTIONS, onEdit: (u, v) => run(async () => applyUser((await adminApi.setPlan(key, u.id, planByName(String(v)), PLAN_DAYS)).user)) } },
-                    { key: 'credits', label: 'Credits', get: (u) => creditsOf(u), align: 'right' },
+                    { key: 'credits', label: 'Credits', get: (u) => creditsOf(u), render: (u) => formatCount(creditsOf(u)), align: 'right' },
                     { key: 'perms', label: 'Permissions', get: (u) => (u.role === 'admin' ? 'all' : u.permissions.map((p) => PERMISSION_NAMES[p]).join(', ')), wide: true, wrap: true },
-                    { key: 'xp', label: 'XP', get: (u) => u.xp, align: 'right' },
-                    { key: 'points', label: 'Points', get: (u) => u.points, align: 'right' },
+                    { key: 'xp', label: 'XP', get: (u) => u.xp, render: (u) => formatCount(u.xp), align: 'right' },
+                    { key: 'points', label: 'Points', get: (u) => u.points, render: (u) => formatCount(u.points), align: 'right' },
                     { key: 'honors', label: 'Honors', get: (u) => u.honors.map((h) => HONOR_BY_KEY[h]?.name ?? h).join(', '), render: (u) => <span role="img" aria-label={u.honors.map((h) => HONOR_BY_KEY[h]?.name ?? h).join(', ')} className="inline-flex gap-xs">{u.honors.map((h) => <AppIcon key={h} name={HONOR_BY_KEY[h]?.icon} size={16} />)}</span>, wide: true },
                     { key: 'joined', label: 'Joined', get: (u) => u.createdAt.slice(0, 10), render: (u) => day(u.createdAt), wide: true },
                     {
@@ -596,7 +598,7 @@ export function Admin() {
                   <p className="mt-md m-0 text-[14px] font-bold">Plan and credits</p>
                   <p className="m-0 text-[12px] font-semibold text-ink-soft">
                     {planName(selected.plan)}
-                    {selected.planUntil ? ` until ${selected.planUntil.slice(0, 10)}` : ''}. {selected.planCredits.toLocaleString('en-US')} plan credits, {selected.extraCredits.toLocaleString('en-US')} extra. Payments are not live, so plans start here. A new plan grants its credits fresh; extra credits stay until used.
+                    {selected.planUntil ? ` until ${selected.planUntil.slice(0, 10)}` : ''}. {formatCount(selected.planCredits)} plan credits, {formatCount(selected.extraCredits)} extra. Payments are not live, so plans start here. A new plan grants its credits fresh; extra credits stay until used.
                   </p>
                   <div className="mt-xs grid grid-cols-[1fr_auto_auto] gap-xs">
                     <select value={plan} onChange={(e) => setPlan(e.target.value as PlanKey)} aria-label="Plan" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]">
@@ -624,7 +626,7 @@ export function Admin() {
                   </Button>
                   {preview && (
                     <>
-                      <p className="mt-sm m-0 text-[12px] font-semibold text-ink-soft">Tick an app to allow it for this person, untick to block it. A struck-through app is not allowed. Locked apps cannot be blocked. "Reset" takes your choice back and returns the app to the usual rules.</p>
+                      <p className="mt-sm m-0 text-[12px] font-semibold text-ink-soft">Tick to allow, untick to block. Struck through means not allowed, and locked apps cannot be blocked. Reset returns an app to the usual rules.</p>
                       <ul className="mt-xs grid list-none grid-cols-1 gap-xs p-0 m-0 sm:grid-cols-2 md:grid-cols-3">
                         {MODULES.map((m) => {
                           const a = preview.access[m.key];
@@ -679,7 +681,14 @@ export function Admin() {
               <h2 id="flags-heading" className="text-[24px]">
                 Feature flags
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Off hides a module for everyone. Rollout shows it to a steady percentage of people. Overrides force it on or off for one person, one role or one brand, and can expire. Change any cell in place.</p>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Switch an app for everyone, a share of people, or one person. Edit any cell in place.</p>
+              <Fold title="What each switch does" className="mt-xs">
+                <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+                  <li>Off hides a module for everyone.</li>
+                  <li>Rollout shows it to a steady percentage of people.</li>
+                  <li>Overrides force it on or off for one person, one role or one brand, and can expire.</li>
+                </ul>
+              </Fold>
               <div className="mt-sm">
                 <DataTable<ModuleSetting>
                   rows={settings}
@@ -771,8 +780,15 @@ export function Admin() {
               <h2 id="listings-heading" className="text-[24px]">
                 Listings
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">What the public site shows on Explore and on each feature page. Create here, then publish or feature in the row, or tick several and do it at once. Brands make their own campaigns public from Army.</p>
-              <div className="mt-sm flex flex-wrap gap-xs">
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">What the public site shows on Explore and each feature page.</p>
+              <Fold title="How listing works" className="mt-xs">
+                <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+                  <li>Create here, then publish or feature in the row.</li>
+                  <li>Tick several to do it at once.</li>
+                  <li>Brands make their own campaigns public from Army.</li>
+                </ul>
+              </Fold>
+              <div className="fill-row mt-sm flex flex-wrap gap-xs">
                 {LISTING_TYPES.filter((t) => t !== 'campaign').map((t) => (
                   <Button key={t} variant="outline" size="sm" onClick={() => { setCreating(t); setForm({}); }}>
                     New {LISTING_TYPE_META[t].name.toLowerCase()}
@@ -1070,7 +1086,7 @@ export function Admin() {
               <h2 id="orders-heading" className="text-[24px]">
                 Orders
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Search the server by order id, provider id, buyer name or email, page name or product. Sort and filter the results below; tap a row for its timeline and a refund.</p>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Search by order, provider id, buyer, page or product. Tap a row for its timeline and a refund.</p>
               <form
                 className="mt-sm flex flex-wrap gap-xs"
                 onSubmit={(e) => {
@@ -1105,7 +1121,7 @@ export function Admin() {
                     { key: 'product', label: 'Product', get: (o) => o.productTitle, wrap: true, render: (o) => <><span className="block font-bold">{o.productTitle}</span><span className="block text-[12px] font-bold text-ink-mute">#{o.id.slice(0, 8)}</span></> },
                     { key: 'buyer', label: 'Buyer', get: (o) => `${o.buyerName} ${o.buyerEmail ?? ''}`.trim(), render: (o) => <><span className="block">{o.buyerName}</span>{o.buyerEmail && <span className="block text-[12px] font-bold text-ink-soft">{o.buyerEmail}</span>}</> },
                     { key: 'from', label: 'From', get: (o) => (o.ownerHandle ? `@${o.ownerHandle}` : o.ownerName), filter: true, wide: true },
-                    { key: 'amount', label: 'Amount', get: (o) => (o.points > 0 ? o.points : o.cents / 100), align: 'right', render: (o) => (o.points > 0 ? `${o.points} pts` : money(o.cents, o.currency)) },
+                    { key: 'amount', label: 'Amount', get: (o) => (o.points > 0 ? o.points : o.cents), align: 'right', render: (o) => (o.points > 0 ? `${formatCount(o.points)} pts` : money(o.cents, o.currency)) },
                     { key: 'provider', label: 'Provider', get: (o) => o.provider, filter: true, wide: true },
                     { key: 'status', label: 'Status', get: (o) => o.status, filter: true, render: (o) => <Pill tone={statusTone(o.status)}>{o.status}</Pill> },
                     { key: 'created', label: 'Created', get: (o) => o.createdAt, render: (o) => when(o.createdAt) },
@@ -1125,7 +1141,7 @@ export function Admin() {
                   <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
                     <Pill tone={statusTone(orderDetail.order.status)}>{orderDetail.order.status}</Pill> {orderDetail.order.provider}
                     {orderDetail.order.providerOrderId ? `, ${orderDetail.order.providerOrderId}` : ''}
-                    {orderDetail.order.paidAt ? `, paid ${new Date(orderDetail.order.paidAt).toLocaleString()}` : ''}
+                    {orderDetail.order.paidAt ? `, paid ${dateTime(orderDetail.order.paidAt)}` : ''}
                   </p>
                   <p className="mt-md m-0 text-[14px] font-bold">Timeline</p>
                   {orderDetail.timeline.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">Nothing logged for this order yet.</p>}
@@ -1134,7 +1150,7 @@ export function Admin() {
                       <li key={t.id} className="rounded-tile bg-paper px-sm py-xs text-[12px] font-bold">
                         <span>{t.type}</span>
                         {t.data ? <span className="block break-words font-semibold text-ink-soft">{t.data}</span> : null}
-                        <span className="block font-semibold text-ink-mute">{new Date(t.createdAt).toLocaleString()}</span>
+                        <span className="block font-semibold text-ink-mute">{dateTime(t.createdAt)}</span>
                       </li>
                     ))}
                   </ul>
@@ -1145,7 +1161,7 @@ export function Admin() {
                         {orderDetail.webhooks.map((h) => (
                           <li key={h.id} className="rounded-tile bg-paper px-sm py-xs text-[12px] font-bold">
                             {h.type}
-                            <span className="block font-semibold text-ink-soft">{h.processedAt ? `processed ${new Date(h.processedAt).toLocaleString()}` : 'not processed yet'}</span>
+                            <span className="block font-semibold text-ink-soft">{h.processedAt ? `processed ${dateTime(h.processedAt)}` : 'not processed yet'}</span>
                             {h.error && <span className="block font-semibold text-r1">{h.error}</span>}
                           </li>
                         ))}
@@ -1348,9 +1364,12 @@ export function Admin() {
               <h2 id="coaches-heading" className="text-[24px]">
                 Life coaches
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-                A life coach wears the Life coach badge and works only with students who said yes. They see what each student shares, leave notes and add tasks, never the journal. A student has up to {MAX_COACHES} coaches. Giving or taking the badge is the Life coach permission; every change is audited, and the person is told.
-              </p>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">A life coach works only with students who said yes, and never sees the journal.</p>
+              <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+                <li>A student has up to {MAX_COACHES} coaches.</li>
+                <li>Giving or taking the badge is the Life coach permission.</li>
+                <li>Every change is audited, and the person is told.</li>
+              </ul>
 
               <h3 className="mt-md text-[18px]">Asked to be a life coach</h3>
               <div className="mt-sm">
@@ -1397,7 +1416,7 @@ export function Admin() {
               </div>
 
               <h3 className="mt-md text-[18px]">Link a coach and a student</h3>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Ask, and the student says yes or no on their Profile tab. Link now only when they agreed with you already; they can still end it any time.</p>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Ask, and the student answers on their Profile tab. Link now only if they already agreed.</p>
               <form
                 className="mt-sm grid gap-xs md:grid-cols-[1fr_1fr_auto_auto]"
                 onSubmit={(e) => {
@@ -1479,9 +1498,12 @@ export function Admin() {
               <h2 id="codes-heading" className="text-[24px]">
                 Attendee codes
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-                Every event with guests across Party, Run and Circles, from a week ago on, soonest first. Set its xp (up to {ATTENDEE_XP_MAX}, until thirty minutes before the start, when the code opens) and its code, the same rules a host has; only its own guests can use the code, once each, and the host hears about your change. Every change is in the audit log.
-              </p>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Every Party, Run and Circles event with guests, from a week ago on, soonest first.</p>
+              <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+                <li>Set its xp (up to {ATTENDEE_XP_MAX}) until the code opens, thirty minutes before the start.</li>
+                <li>Only its own guests can use the code, once each.</li>
+                <li>The host hears about your change, and it is audited.</li>
+              </ul>
               <form
                 className="mt-sm flex flex-wrap gap-xs"
                 onSubmit={(e) => {
@@ -1603,8 +1625,9 @@ export function Admin() {
                     { key: 'actor', label: 'Actor', get: (l) => l.actorName, filter: true },
                     { key: 'action', label: 'Action', get: (l) => l.action, filter: true, render: (l) => <span className="font-bold">{l.action}</span> },
                     { key: 'resource', label: 'Resource', get: (l) => `${l.resourceType} ${l.resourceId?.slice(0, 8) ?? ''}`.trim(), filter: false },
-                    { key: 'before', label: 'Before', get: (l) => l.before, wide: true, wrap: true },
-                    { key: 'after', label: 'After', get: (l) => l.after, wrap: true },
+                    // Data, not prose: one line in the mono face that scrolls inside its cell, so a JSON tail never wraps onto a line alone.
+                    { key: 'before', label: 'Before', get: (l) => l.before, wide: true, wrap: true, render: (l) => <code className="block max-w-[320px] overflow-x-auto whitespace-nowrap font-mono text-[12px]">{l.before}</code> },
+                    { key: 'after', label: 'After', get: (l) => l.after, wrap: true, render: (l) => <code className="block max-w-[320px] overflow-x-auto whitespace-nowrap font-mono text-[12px]">{l.after}</code> },
                   ]}
                 />
               </div>

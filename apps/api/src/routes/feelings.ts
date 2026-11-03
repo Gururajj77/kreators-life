@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import {
+  formatCount,
   AGENT_LIMITS,
   ASSISTANT_MODEL_BY_ID,
   ASSISTANT_MODELS,
@@ -59,7 +60,7 @@ feelings.post('/', async (c) => {
   const left = acct.plan_credits + acct.extra_credits;
   if (left <= 0) return c.json(refuse('credits', 'You are out of credits. Read my words stays free.'), 402);
   const used = (await usedToday(db, user.id)).feelings;
-  if (used >= limit.perDay) return c.json(refuse('day', `You used today's ${limit.perDay.toLocaleString('en-US')} credits for the feelings reader on ${PLANS[acct.plan].name}. Read my words stays free.`), 429);
+  if (used >= limit.perDay) return c.json(refuse('day', `You used today's ${formatCount(limit.perDay)} credits for the feelings reader on ${PLANS[acct.plan].name}. Read my words stays free.`), 429);
   const budget = Math.min(left, limit.perMessage, limit.perDay - used);
 
   const about = isRelationshipKey(body.relationship) ? RELATIONSHIP_BY_KEY[body.relationship].name.toLowerCase() : undefined;

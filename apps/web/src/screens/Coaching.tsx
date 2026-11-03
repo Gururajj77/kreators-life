@@ -50,8 +50,8 @@ export function Coaching() {
         <h1 className="text-[30px]">Coaching</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
           {h?.coach
-            ? 'You are a life coach. Your students said yes to you, and each one picks what you see. Leave notes and add tasks; every step is in the change log for both of you.'
-            : 'Work with a life coach the team chose. They see only what you share, never your journal, and you can end it any time.'}
+            ? 'Each student picks what you see. Every note and task you add is logged for both of you.'
+            : 'A coach the team chose sees only what you share, never your journal. End it any time.'}
         </p>
       </header>
       {h?.coach && <CoachSide hub={h} onChange={() => void hub.refetch()} />}

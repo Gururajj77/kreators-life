@@ -29,8 +29,12 @@ export function Hero({
 }) {
   // The fill is the theme token for the colour, so a relationship's hero always has the contrast the token is tuned for.
   const fill = fillFor(color);
+  // The box names its colour so the buttons on it hover in it; earth is no pillar's colour.
+  const named = character ?? deep?.match(/--deep-([a-z_]+)\)/)?.[1];
+  const pillar = named && named !== 'earth' ? named : undefined;
   return (
     <section
+      data-pillar={pillar}
       className={`relative overflow-hidden rounded-card p-md ${yellow ? 'text-on-yellow' : 'text-on-fill'} ${className}`}
       style={
         {

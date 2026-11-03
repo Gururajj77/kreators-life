@@ -1,7 +1,7 @@
-import { BUMLING, MODULE_GROUPS, type ModuleGroup } from '@kreators/shared';
+import { BUMLING, inGroupOrder, MODULE_GROUP_ACCENT, MODULE_GROUPS, type ModuleGroup } from '@kreators/shared';
 import { Link } from 'react-router';
 import { FEATURES, SITE_FEATURES } from './content';
-import { BorderBeam } from '../components/fx/BorderBeam';
+import { GradientStripes } from '../components/fx/GradientStripes';
 import { Reveal } from '../components/fx/Reveal';
 import '../components/fx/spotlight';
 import { GuideLine } from './GuideLine';
@@ -22,18 +22,24 @@ function span(i: number, n: number): string {
 /** Everything a creator needs, by group: every app, each opening into its own page. */
 export function Features() {
   const entry = useAppEntry();
-  const groups: ModuleGroup[] = ['core', 'earn', 'community', 'wellbeing', 'creator'];
+  // The one group order everywhere; the team's own Operations group is not on the public site.
+  const groups: ModuleGroup[] = inGroupOrder(['earn', 'wellbeing', 'community', 'creator', 'core']);
   return (
     <SiteLayout>
       <header className="pt-lg md:pt-xl">
         <p className="m-0 type-eyebrow text-ink-mute">Features</p>
         <h1 className="type-hook mt-sm text-[clamp(40px,9vw,80px)]">Everything a creator needs, <em>one switch at a time</em></h1>
-        <p className="type-context type-measure mt-md m-0 text-[20px] text-ink-soft">Courses in one app, gigs in another, money in a sheet. It adds up to ten logins and no plan. Here every app is a switch inside one place: keep what you use, and the rest stays out of the way.</p>
+        {/* The problem and the fix in four short lines, one sentence each (copy brief: a lead in four short paragraphs). */}
+        <div className="type-measure mt-md grid gap-xs text-[18px] text-ink-soft md:text-[20px]">
+          <p className="type-context m-0">Courses in one app, gigs in another, money in a sheet.</p>
+          <p className="type-context m-0">It adds up to ten logins and no plan.</p>
+          <p className="type-context m-0">Here every app is a switch in one place, so you keep only what you use.</p>
+        </div>
         <div className="grid gap-md md:grid-cols-[3fr_2fr] md:items-end">
-          <p className="type-measure mt-sm m-0 text-[16px] font-semibold text-ink-soft">A short chat at the start switches on the ones that fit you. Tap any app below to see how it works.</p>
+          <p className="type-measure mt-sm m-0 text-[16px] font-semibold text-ink-soft">A short chat switches on the ones that fit you. Tap any app to see how it works.</p>
           {/* Bumling, the app's own guide, keeps the header from sitting all on the left. */}
           <GuideLine host={BUMLING.key} side="right" mood="excited" size={96}>
-            Tell me what you want to do, and I will switch on just those apps.
+            Tell me what you want, and I’ll switch on just those apps.
           </GuideLine>
         </div>
       </header>
@@ -41,7 +47,7 @@ export function Features() {
         const list = SITE_FEATURES.filter((m) => m.group === g);
         if (list.length === 0) return null;
         return (
-          <section key={g} className="mt-xl" aria-labelledby={`group-${g}`}>
+          <section key={g} className="mt-xl" aria-labelledby={`group-${g}`} data-pillar={MODULE_GROUP_ACCENT[g]}>
             <h2 id={`group-${g}`} className="type-hook text-[clamp(28px,5vw,40px)]">
               {MODULE_GROUPS[g]}
             </h2>
@@ -63,13 +69,16 @@ export function Features() {
       })}
       <section className="mt-2xl">
         {/* The card colour in both themes (bg-ink turns cream in dark mode, which made this a glaring white block on the dark page). */}
-        <div className="relative rounded-card border-2 border-line bg-card-strong p-lg text-ink shadow-toy-soft">
-          <BorderBeam />
-          <h2 className="type-hook text-[clamp(32px,6vw,56px)]">Switch on only <em>what you need</em></h2>
-          <p className="type-context mt-sm m-0 text-[18px] text-ink-soft">Answer a few questions and we switch on the apps that fit you. Change them any time, free.</p>
-          <Link to={entry === '/home' ? '/home' : '/start'} className="toy fx-shimmer mt-md inline-flex min-h-[56px] items-center rounded-pill bg-ink px-lg text-[18px] font-bold text-on-ink">
-            Start free
-          </Link>
+        {/* Light sliced into stripes rises from the foot of the card (GradientStripes); the words and Start free sit above it. */}
+        <div className="relative overflow-hidden rounded-card border-2 border-line bg-card-strong p-lg pb-xl text-ink shadow-toy-soft">
+          <GradientStripes tone="card" />
+          <div className="relative z-10">
+            <h2 className="type-hook text-[clamp(32px,6vw,56px)]">Switch on only <em>what you need</em></h2>
+            <p className="type-context mt-sm m-0 text-[18px] text-ink-soft">Answer a few questions and we switch on the apps that fit you. Change them any time, free.</p>
+            <Link to={entry === '/home' ? '/home' : '/start'} className="toy fx-shimmer mt-md inline-flex min-h-[56px] items-center rounded-pill bg-ink px-lg text-[18px] font-bold text-on-ink">
+              Start free
+            </Link>
+          </div>
         </div>
       </section>
     </SiteLayout>

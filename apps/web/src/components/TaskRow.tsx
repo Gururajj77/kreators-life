@@ -53,6 +53,7 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
 
   return (
     <motion.li
+      data-pillar={rel.key}
       layout={!reduce}
       initial={{ opacity: 0, y: reduce ? 0 : 8 }}
       animate={{ opacity: 1, y: 0 }}

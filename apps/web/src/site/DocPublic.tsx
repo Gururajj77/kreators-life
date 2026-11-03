@@ -10,7 +10,7 @@ import type { SheetStamp } from '../components/PrintSheet';
 import { Inert } from '../components/Inert';
 import { CopyTextButton, LinkTrouble } from '../components/PortalLock';
 import { ApiError, publicApi } from '../lib/api';
-import { fileTitle } from '../lib/printDoc';
+import { fileTitle, useAutoPrint } from '../lib/printDoc';
 import { SiteLayout } from './SiteLayout';
 import { FIELD } from '../lib/ui';
 
@@ -25,6 +25,7 @@ export function DocPublic() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['agency-doc', token], queryFn: () => publicApi.agencyDoc(token), retry: false });
   const d = q.data;
+  useAutoPrint(Boolean(d), fileTitle(d ? AGENCY_DOC_KIND_META[d.kind].name : 'Document', d?.doc.vars.client, d?.doc.title));
   const [answers, setAnswers] = useState<Record<string, ContractAnswer>>({});
   const [name, setName] = useState('');
   const [title, setTitle] = useState('');

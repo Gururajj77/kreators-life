@@ -25,11 +25,13 @@ export interface EmailVars {
   signStudio: string;
   signPhone: string;
   signEmail: string;
+  /** A link the note is about (a client's page), when it has one. */
+  link?: string;
 }
 
 export const emptyEmailVars = (): EmailVars => ({ names: '', engagement: '', attached: [], amount: '', period: '', dueBy: '', status: '', note: '', signName: '', signStudio: '', signPhone: '', signEmail: '' });
 
-export type EmailTemplateKey = 'begin' | 'monthly-invoice' | 'renewal' | 'signed-copy' | 'plan' | 'report' | 'before-shoot' | 'payment-nudge' | 'payment-firm' | 'payment-thanks';
+export type EmailTemplateKey = 'portal-invite' | 'onboarding-done' | 'begin' | 'monthly-invoice' | 'renewal' | 'signed-copy' | 'plan' | 'report' | 'before-shoot' | 'payment-nudge' | 'payment-firm' | 'payment-thanks';
 
 export interface EmailTemplate {
   key: EmailTemplateKey;
@@ -190,6 +192,35 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
       ]),
   },
   {
+    key: 'portal-invite',
+    name: 'Their page and a short form',
+    when: 'A new client: the link to their page. The password goes in a separate message.',
+    subject: (v) => `Your page with ${present(v.signStudio) ? v.signStudio.trim() : 'us'}`,
+    body: (v) =>
+      joined([
+        hi(v),
+        present(v.link ?? '') ? `Here is your page: ${(v.link ?? '').trim()}` : 'Here is the link to your page.',
+        'Open it, type the password I send you separately, and fill in a short form about your brand. It takes a few minutes.',
+        'Your password comes in a separate message.',
+        v.note,
+        signoff(v, 'Looking forward to working together.\n\nBest regards,'),
+      ]),
+  },
+  {
+    key: 'onboarding-done',
+    name: 'Onboarding finished (to you)',
+    when: 'Sent to you when a client finishes the form at their link.',
+    subject: (v) => `${present(v.engagement) ? v.engagement.trim() : 'A client'} finished onboarding`,
+    body: (v) =>
+      joined([
+        hi(v),
+        `${present(v.engagement) ? v.engagement.trim() : 'Your client'} filled in their details and the trial brief.`,
+        present(v.status) ? v.status.trim() : '',
+        present(v.link ?? '') ? `Open their page: ${(v.link ?? '').trim()}` : '',
+        signoff(v, 'kreators.app'),
+      ]),
+  },
+  {
     key: 'payment-thanks',
     name: 'Payment received',
     when: 'The money has arrived.',
@@ -256,7 +287,8 @@ export function suggestEmailTemplate(kind: 'invoice' | 'contract' | 'doc', ctx: 
 export interface EmailFacts {
   kind: 'invoice' | 'contract' | 'doc';
   client?: { name: string; contactName: string; month?: { published: number; inReview: number; open: number } } | null;
-  profile?: { signerName: string; from: { name: string; phone: string; email: string } } | null;
+  /** The business profile: the invoice's sender (`from`), and the agreement paper's own fields, used where a part of `from` is empty. */
+  profile?: { signerName: string; from: { name: string; phone: string; email: string }; brandName?: string; operatingUnder?: string; businessName?: string; phones?: string[]; emails?: string[] } | null;
   /** The document's title, as it is printed. */
   title?: string;
   /** The invoice number, or the document's reference. */
@@ -327,9 +359,11 @@ export function emailVarsFor(f: EmailFacts): { vars: EmailVars; missing: EmailGa
   v.period = f.period ?? '';
   if (p) {
     v.signName = p.signerName.trim();
-    v.signStudio = p.from.name.trim();
-    v.signPhone = p.from.phone.trim();
-    v.signEmail = p.from.email.trim();
+    // Typed once: the invoice's sender, else the agreement paper's brand, phone and email (the same fallback as invoiceFromProfile).
+    const t = (x: unknown) => (typeof x === 'string' ? x.trim() : '');
+    v.signStudio = t(p.from.name) || t(p.brandName) || t(p.operatingUnder) || t(p.businessName);
+    v.signPhone = t(p.from.phone) || t((p.phones ?? [])[0]);
+    v.signEmail = t(p.from.email) || t((p.emails ?? [])[0]);
     if (!v.signName) missing.push({ key: 'signerName', label: 'your name for the sign-off', where: 'profile' });
     if (!v.signStudio) missing.push({ key: 'businessName', label: 'your business name', where: 'profile' });
     if (!v.signPhone) missing.push({ key: 'phone', label: 'your phone', where: 'profile' });

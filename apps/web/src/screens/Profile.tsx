@@ -1,4 +1,4 @@
-import { AVAILABILITY, CATEGORIES, EXPERIENCE_LEVELS, GOALS, SKILLS, TIMEZONES, type PortfolioItem, type Socials, type User, DEFAULT_PUBLIC, PUBLIC_SETTING_META, type PublicSettings } from '@kreators/shared';
+import { AVAILABILITY, CATEGORIES, EXPERIENCE_LEVELS, GOALS, SKILLS, TIMEZONES, CURRENCIES, DEFAULT_ZONE, money, type PortfolioItem, type Socials, type User, DEFAULT_PUBLIC, PUBLIC_SETTING_META, type PublicSettings } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -85,14 +85,15 @@ function ProfileView({ user }: { user: User }) {
   const [locating, setLocating] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl);
   const [socials, setSocials] = useState<Socials>(user.socials);
-  const [timezone, setTimezone] = useState(user.timezone || 'Asia/Kolkata');
+  const [timezone, setTimezone] = useState(user.timezone || DEFAULT_ZONE);
+  const [currency, setCurrency] = useState(user.currency || 'INR');
   const [saved, setSaved] = useState(false);
   // What the form holds, as one string, against what was last saved: the save bar shows only while they differ.
-  const current = JSON.stringify({ handle, bio, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, avatarUrl, socials, timezone, pub, coords });
+  const current = JSON.stringify({ handle, bio, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, avatarUrl, socials, timezone, currency, pub, coords });
   const [baseline, setBaseline] = useState(current);
   const dirty = current !== baseline;
   const save = useMutation({
-    mutationFn: () => api.updateMe({ handle: handle || null, bio, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, avatarUrl, socials, timezone, publicSettings: pub, ...(coords === undefined ? {} : { lat: coords?.lat ?? null, lng: coords?.lng ?? null }) }),
+    mutationFn: () => api.updateMe({ handle: handle || null, bio, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, avatarUrl, socials, timezone, currency, publicSettings: pub, ...(coords === undefined ? {} : { lat: coords?.lat ?? null, lng: coords?.lng ?? null }) }),
     onSuccess: () => {
       refresh();
       setBaseline(current);
@@ -184,6 +185,17 @@ function ProfileView({ user }: { user: User }) {
           </select>
           <span className="mt-xs block text-[12px] font-bold text-ink-soft">Your availability and bookings are written in this zone. Buyers see the same slots in their own.</span>
         </label>
+        <label className="block">
+          <span className="block text-[14px] font-bold">Currency</span>
+          <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={FIELD}>
+            {CURRENCIES.map((k) => (
+              <option key={k} value={k}>
+                {k} ({money(0, k).replace(/0$/, '').trim()})
+              </option>
+            ))}
+          </select>
+          <span className="mt-xs block text-[12px] font-bold text-ink-soft">Money you add in Finance is kept in this currency unless you pick another. Rupees unless you change it.</span>
+        </label>
         <div>
           <Chips legend="Skills" options={SKILLS} value={skills} onChange={setSkills} max={12} hint="What you can be hired for." />
         </div>
@@ -241,7 +253,7 @@ function ProfileView({ user }: { user: User }) {
         </label>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-[16px] font-bold">What is public</legend>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Each part of your page has a switch. Off means it is not shown to anyone but you. Your journal and wellbeing are never on your page.</p>
+          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Off shows a part only to you. Your journal and wellbeing are never here.</p>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {PUBLIC_SETTING_META.map((m) => (
               <li key={m.key} className={m.key !== 'pagePublic' && !pub.pagePublic ? 'opacity-60' : ''}>
@@ -269,7 +281,7 @@ function ProfileView({ user }: { user: User }) {
         <h2 id="links-heading" className="text-[24px]">
           Links
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Your page is the door to everything you make. Stack buttons, headers, text, pictures, videos and carousels; the best thing goes first. Each change saves on its own.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Stack links, text, pictures and videos, best first. Each change saves on its own.</p>
         <div className="mt-sm">
           <LinksEditor key={user.id} initial={user.links} />
         </div>
@@ -327,7 +339,7 @@ function Portfolio() {
       <h2 id="portfolio-heading" className="text-[24px]">
         Portfolio
       </h2>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Your best work, as links. Public items show on your page and go with every application you send. Up to five travel with an application.</p>
+      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Your best work, as links. Public ones show on your page, and up to five go with each application.</p>
       {q.data && items.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing here yet. Add the piece you are proudest of.</p>}
       <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
         {items.map((it) => (

@@ -1,4 +1,4 @@
-import { birthDateProblem, MAX_DEVICES, MIN_AGE, passwordProblem, phoneProblem } from '@kreators/shared';
+import { birthDateProblem, MAX_DEVICES, MIN_AGE, passwordProblem, PHONE_HINT, phoneProblem } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
@@ -117,6 +117,7 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
       </div>
       {mode === 'signin' && <SignedOutNote />}
       <form
+        data-pillar="friendship"
         className="mt-lg flex flex-col gap-md"
         onSubmit={(e) => {
           e.preventDefault();
@@ -139,7 +140,7 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
           <label className="block">
             <span className="block text-[14px] font-bold">Phone</span>
             <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" maxLength={24} placeholder="+91 98765 43210" className={FIELD_CARD} />
-            <span className="mt-xs block text-[12px] font-bold text-ink-soft">{phoneBad ?? 'Add the country code. We ask so everyone here is real. Never shown to anyone.'}</span>
+            <span className="mt-xs block text-[12px] font-bold text-ink-soft">{phoneBad ?? `${PHONE_HINT} We ask so everyone here is real. Never shown to anyone.`}</span>
           </label>
         )}
         {mode === 'signup' && (
@@ -216,6 +217,7 @@ export function Forgot() {
         </div>
       ) : (
         <form
+          data-pillar="friendship"
           className="mt-lg flex flex-col gap-md"
           onSubmit={(e) => {
             e.preventDefault();
@@ -274,6 +276,7 @@ export function ResetPassword() {
       </div>
       {token ? (
         <form
+          data-pillar="friendship"
           className="mt-lg flex flex-col gap-md"
           onSubmit={(e) => {
             e.preventDefault();

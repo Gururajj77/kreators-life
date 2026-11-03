@@ -1,4 +1,4 @@
-import { DEFAULT_PAGE_SIZE, DISCOUNT_AREAS, DISCOUNT_AREA_META, DISCOUNT_CODE_MAX, discountLabel, money, pageQuery, zonedToUtc, type AdminDiscountCode, type DiscountArea, type Page, type PageSize } from '@kreators/shared';
+import { DEFAULT_PAGE_SIZE, DEFAULT_ZONE, DISCOUNT_AREAS, DISCOUNT_AREA_META, DISCOUNT_CODE_MAX, discountLabel, money, pageQuery, zonedToUtc, type AdminDiscountCode, type DiscountArea, type Page, type PageSize } from '@kreators/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { adminApi, type DiscountInput, type DiscountList } from '../lib/api';
 import { Button } from './Button';
@@ -7,7 +7,7 @@ import { DataTable, Select } from './DataTable';
 import { Sheet } from './Sheet';
 import { FIELD_44 } from '../lib/ui';
 
-const zone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+const zone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || DEFAULT_ZONE;
 const isDay = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v;
 const nextDay = (v: string) => new Date(Date.parse(`${v}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
 /** The person's own day for an instant, as YYYY-MM-DD. */
@@ -131,7 +131,11 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
         </h2>
         <Button onClick={() => setMaking(true)}>Make a code</Button>
       </div>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">A code takes a percent or a fixed amount off a Shop product, a School program, a Party ticket, a plan or a top-up. The platform pays for it, so the seller still gets the full price. Once a code is made, its word and worth stay. For a new deal, make a new code.</p>
+      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">A code takes a percent or an amount off a product, program, ticket, plan or top-up.</p>
+      <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+        <li>The platform pays, so the seller still gets the full price.</li>
+        <li>A code’s word and worth never change. For a new deal, make a new code.</li>
+      </ul>
 
       {totals && (
         <div className="mt-sm grid grid-cols-2 gap-sm md:grid-cols-4">
@@ -280,7 +284,7 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
                     <option value="USD">USD ($)</option>
                   </Select>
                 </label>
-                <p className="col-span-2 m-0 text-[12px] font-bold text-ink-soft">Takes money off only. Plans and top-ups are in USD. It never takes off more than the price.</p>
+                <p className="col-span-2 m-0 text-[12px] font-bold text-ink-soft">Takes money off only. Plans and top-ups are in INR. It never takes off more than the price.</p>
               </div>
             )}
           </fieldset>

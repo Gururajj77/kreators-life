@@ -93,6 +93,11 @@ export async function syncStageFromAgreements(db: D1Database, only?: { userId: s
   return moved;
 }
 
+/** Closes a client's open ask for a new password: the owner set one, or dismissed it. A statement, so it rides in the same batch. */
+export function closePasswordRequest(db: D1Database, userId: string, clientId: string): D1PreparedStatement {
+  return db.prepare('UPDATE agency_password_requests SET closed_at = ? WHERE client_id = ? AND user_id = ? AND closed_at IS NULL').bind(nowIso(), clientId, userId);
+}
+
 /** The retainer as the owner sees it. `made` is the months it has made so far (`YYYY-MM`). */
 export function toRetainer(r: RetainerRow, made: string[]): AgencyRetainer {
   const options = parseRetainerOptions(r.options_json);
@@ -159,10 +164,12 @@ function ticksOf(raw: string): Record<string, boolean> {
 
 /** The owner's view of a client's lifecycle: stage, days, checklist, password state, retainer and the log. */
 export async function lifecycleFor(db: D1Database, userId: string, row: LifeClient): Promise<ClientLifecycle> {
-  const [retainerRow, log, trial] = await Promise.all([
+  const [retainerRow, log, trial, ask] = await Promise.all([
     currentRetainer(db, userId, row.id),
     db.prepare('SELECT id, actor, kind, text, created_at FROM agency_log WHERE client_id = ? AND user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 30').bind(row.id, userId).all<{ id: string; actor: LifecycleLogLine['actor']; kind: string; text: string; created_at: string }>(),
     db.prepare('SELECT id FROM agency_items WHERE client_id = ? AND user_id = ? AND trial = 1 ORDER BY created_at LIMIT 1').bind(row.id, userId).first<{ id: string }>(),
+    // The client's open ask for a new password, with its reason: shown only here, on the owner's own client page.
+    db.prepare('SELECT reason, created_at FROM agency_password_requests WHERE client_id = ? AND user_id = ? AND closed_at IS NULL LIMIT 1').bind(row.id, userId).first<{ reason: string; created_at: string }>(),
   ]);
   const made = retainerRow ? await monthsMade(db, retainerRow.id) : [];
   return {
@@ -171,7 +178,7 @@ export async function lifecycleFor(db: D1Database, userId: string, row: LifeClie
     dates: parseLifecycleDates(row.lifecycle_json),
     ticks: ticksOf(row.ticks_json),
     revisionsPerPiece: row.revisions_per_piece,
-    password: { set: Boolean(row.portal_pass_hash), setAt: row.portal_pass_set_at, lastOpenedDay: row.portal_last_opened_day },
+    password: { set: Boolean(row.portal_pass_hash), setAt: row.portal_pass_set_at, lastOpenedDay: row.portal_last_opened_day, request: ask ? { at: ask.created_at, reason: ask.reason } : null },
     retainer: retainerRow ? toRetainer(retainerRow, made) : null,
     log: log.results.map((l) => ({ id: l.id, actor: l.actor, kind: l.kind, text: l.text, at: l.created_at })),
     trialItemId: trial?.id ?? null,

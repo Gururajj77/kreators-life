@@ -6,6 +6,7 @@ import { Avatar } from '../components/Avatar';
 import { Ring } from '../components/Ring';
 import { Screen } from '../components/Screen';
 import { Pyramid } from '../components/Pyramid';
+import { Fold } from '../components/Fold';
 import { XpBar } from '../components/XpBar';
 import { ConsciousnessMap } from '../components/LifeMap';
 import { LifeMapPanel } from '../components/LifeMapPanel';
@@ -31,6 +32,7 @@ function Floor({ r, state, delay, placement, focus }: { r: Relationship; state: 
 
   return (
     <motion.li
+      data-pillar={r.key}
       initial={{ opacity: 0, y: reduce ? 0 : 28 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: reduce ? 0 : delay, type: 'spring', stiffness: 300, damping: 24 }}
@@ -79,7 +81,7 @@ function StartSessionCard() {
     <Link to="/session" className="group toy toy-soft mt-md flex items-center gap-sm rounded-card bg-ink p-md text-on-ink">
       <span className="min-w-0 flex-1">
         <span className="block font-display text-[18px] font-extrabold">Set up your pillars: the strategy session</span>
-        <span className="mt-xs block text-[14px] font-semibold text-on-ink/70">A few minutes with all seven characters. Place each relationship on the map, then leave with a routine, a contract and your first pyramids.</span>
+        <span className="mt-xs block text-[14px] font-semibold text-on-ink/70">Leave with your map, a routine, a contract and your first pyramids.</span>
       </span>
       <Icon icon={ChevronRight} size={22} className="transition-transform motion-safe:group-hover:translate-x-xs row-chevron" />
     </Link>
@@ -138,12 +140,10 @@ export function Tower() {
             <h2 id="how-heading" className="text-[24px]">
               How a pillar works
             </h2>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-              Every pillar is a pyramid. The foundation at the top is one thing you will not let break. The point at the bottom is one small task for today. Tick the task and the whole pyramid gets stronger. That is the whole game.
-            </p>
-            <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">
-              Most apps start with tasks, and tasks fade in a week. This starts at the foundation, so each task has a reason to exist.
-            </p>
+            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Every pillar is a pyramid, from the foundation at the top to today’s small task at the point. Tick the task and the whole pyramid gets stronger.</p>
+            <Fold title="Why start at the foundation" className="mt-xs">
+              <p className="m-0 text-[14px] font-semibold text-ink-soft">Most apps start with tasks, and tasks fade in a week. This starts at the foundation, so each task has a reason to exist.</p>
+            </Fold>
           </div>
           <div className="mt-md">
             <Pyramid relationship={weakest} compact />

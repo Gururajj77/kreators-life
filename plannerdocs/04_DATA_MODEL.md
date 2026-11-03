@@ -294,6 +294,11 @@ The export (`GET /me/export`) is one JSON file; the keys are the groups above (`
 | 0066 | session_away | `assessments.away_json` (pillars set aside as not part of life right now) |
 | 0067 | safety_indexes | two unique indexes: one paid question per order, one income line per invoice |
 | 0068 | card_games_groups | FunFlow's cards cleaned up, Animal Sounds back as its own card, the Group Night deck; no new table |
+| 0069 | retired_portal_links | `retired_portal_links` (a renewed or closed client link, kept as a hash so it answers 410) |
+| 0070 | person_currency | `users.currency` (the person's own money currency, INR by default) |
+| 0071 | agency_onboarding | `agency_clients.onboarding_json`, `onboarded_at`, `onboarding_needed` (the client's one-time form) and `agency_password_requests` (one open ask per client for a new password, the reason kept only there) |
+| 0072 | card_games_more | 181 more cards in FunFlow, HealFlow, The Relationship Method Challenge, WorkFlow and DateFlow Connect; INSERTs only, no new table |
+| 0073 | focus_sessions | `focus_rounds.mode`, `log_id` (the mindful log written with the round) and `client_ref` (one round per part, unique per person) |
 
 ## What changed since this was written
 
@@ -308,5 +313,7 @@ The export (`GET /me/export`) is one JSON file; the keys are the groups above (`
 - **`agency_templates` kind `email`.** Beside `invoice`, `contract` and `doc`, a person's own email note is a template of kind `email` (`TEMPLATE_KINDS` in shared), holding `{ name, subject, message }` as plain text; the routes are in `routes/agencyDocs.ts`.
 - **Discover answer keys** are no longer in shared: `DISCOVER_SCENES`, `EQ_READING` and `EQ_PEOPLE` carry the words only, and the keys are `DISCOVER_KEYS` in `apps/api/src/discoverKeys.ts` (`DiscoverKeys` type in shared), passed to `scoreDiscover` and `scoreEq`. Stored results are unchanged.
 - **Migration 0068 `0068_card_games_groups.sql`.** Data only, in `cards` and `card_decks`: FunFlow's cards with stray glyphs rewritten with their examples in `list_json`, Animal Sounds as its own card, and a fifth deck, Group Night (`groupnight`, 4 to 10 or more).
+- **Migration 0069 `0069_retired_portal_links.sql`.** `retired_portal_links`: token_hash (SHA-256 of the old client-link token, primary key; never the token), client_id, user_id, retired_at, with indexes on user, client and time. Written when the owner renews or closes a link, read by `closedLinkAnswer` so the old link answers 410 with the business's name, logo and email, deleted with the client and with the account, and dropped by the cron after a year. Not in the export (it holds only hashes).
+- **Migration 0070 `0070_person_currency.sql`.** `users.currency TEXT NOT NULL DEFAULT 'INR'`, one of `CURRENCIES` (`isCurrency`), set with `PATCH /me {currency}` and read with `currencyOf` in db.ts. Finance uses it when an entry names no currency, and the sums in Finance, Life and the reviews add up only that currency.
 - **No migration for the interface pass.** Icons, the Agency screens, onboarding chips and the HIG rules changed no table; `agency_templates` kind `email` uses the existing columns.
 - **Paged lists.** Finance's month entries (`tx`) and dues (`du`), Bond's introductions (`in`), a run club's coming runs (`ru`), past runs (`rr`) and collabs (`rk`), Auto-DM's sends (`ds`) and the payouts rows (`po`) are served a page at a time with `pageOf` and `paged`; the sums beside them (the month's in and out, what is owed, the payout totals) are added up in SQL over every row.

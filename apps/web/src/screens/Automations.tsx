@@ -1,4 +1,5 @@
 import type { DmAutomation, Funnel, FunnelStep, FunnelStepKind, Sequence } from '@kreators/shared';
+import { dateTime } from '../lib/date';
 import { useMutation } from '@tanstack/react-query';
 import { ArrowRight } from 'lucide-react';
 import { useState } from 'react';
@@ -72,7 +73,7 @@ export function Automations() {
               {autos.data.sends.map((s) => (
                 <li key={s.id} className="rounded-tile bg-card p-sm text-[14px] font-semibold shadow-toy-soft">
                   <span className="font-bold">{s.recipientHandle || 'someone'}</span>, {s.status}
-                  {s.error ? `: ${s.error}` : ''}, {new Date(s.createdAt).toLocaleString()}
+                  {s.error ? `: ${s.error}` : ''}, {dateTime(s.createdAt)}
                 </li>
               ))}
             </ul>

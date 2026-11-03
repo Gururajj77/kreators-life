@@ -1,4 +1,5 @@
-import type { KycProfile } from '@kreators/shared';
+import { INDIAN_STATES, money, pinCodeProblem, type KycProfile } from '@kreators/shared';
+import { longDate } from '../lib/date';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -99,7 +100,7 @@ export function Customers() {
                 {c.email && <span className="font-semibold text-ink-soft"> {c.email}</span>}
               </p>
               <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                {c.orders} {c.orders === 1 ? 'order' : 'orders'}, {c.points} points{c.cents > 0 ? `, ${(c.cents / 100).toFixed(2)}${live ? '' : ' test'}` : ''}. First {new Date(c.firstAt).toLocaleDateString()}, last {new Date(c.lastAt).toLocaleDateString()}. Came from {c.source}.
+                {c.orders} {c.orders === 1 ? 'order' : 'orders'}, {c.points} points{c.cents > 0 ? `, ${money(c.cents)}${live ? '' : ' test'}` : ''}. First {longDate(c.firstAt)}, last {longDate(c.lastAt)}. Came from {c.source}.
               </p>
             </li>
           ))}
@@ -125,7 +126,7 @@ export function Customers() {
             <Stat label="affiliate share" value={p.affiliatePoints} />
             <Stat label="net to you" value={p.netPoints} />
             <Stat label="refunded" value={p.refundedPoints} />
-            <Stat label={live ? 'money' : 'test money'} value={(p.testCents / 100).toFixed(2)} />
+            <Stat label={live ? 'money' : 'test money'} value={money(p.testCents)} />
           </div>
         )}
         {p && p.rows.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No sales yet. Each sale is listed here with its fee.</p>}
@@ -136,7 +137,7 @@ export function Customers() {
                 {r.buyerName}, {r.productTitle}
               </p>
               <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                {r.points} points, fee {r.fee}, affiliate {r.affiliate}, net {r.net}. {r.status}, {new Date(r.createdAt).toLocaleDateString()}.
+                {r.points} points, fee {r.fee}, affiliate {r.affiliate}, net {r.net}. {r.status}, {longDate(r.createdAt)}.
               </p>
               {r.status !== 'refunded' && r.status !== 'pending' && r.status !== 'failed' && r.status !== 'expired' && (
                 <Button variant="ghost" className="mt-xs" onClick={() => setRefunding({ id: r.orderId, title: r.productTitle })}>
@@ -184,7 +185,13 @@ function KycSection({ kyc, onChange }: { kyc: KycProfile | null; onChange: () =>
   const [pan, setPan] = useState('');
   const [bankAccount, setBankAccount] = useState('');
   const [ifsc, setIfsc] = useState('');
-  const [address, setAddress] = useState('');
+  const [line, setLine] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [pin, setPin] = useState('');
+  const pinWrong = pin.length > 0 ? pinCodeProblem(pin) : null;
+  // One address line for the server, "street, city, State PIN", so the stored column stays as it was.
+  const address = [line.trim(), city.trim(), [state, pin.trim()].filter(Boolean).join(' ')].filter(Boolean).join(', ');
   const submit = useMutation({
     mutationFn: () => api.submitKyc({ legalName, pan, bankAccount, ifsc, address }),
     onSuccess: () => {
@@ -206,7 +213,7 @@ function KycSection({ kyc, onChange }: { kyc: KycProfile | null; onChange: () =>
       </div>
       {kyc && status !== 'none' && (
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          {kyc.legalName}, PAN ending {kyc.panLast4}, account ending {kyc.bankLast4}, {kyc.ifsc}.{kyc.submittedAt ? ` Sent ${new Date(kyc.submittedAt).toLocaleDateString()}.` : ''}
+          {kyc.legalName}, PAN ending {kyc.panLast4}, account ending {kyc.bankLast4}, {kyc.ifsc}.{kyc.submittedAt ? ` Sent ${longDate(kyc.submittedAt)}.` : ''}
           {kyc.note ? ` Note from the team: ${kyc.note}` : ''}
         </p>
       )}
@@ -239,14 +246,36 @@ function KycSection({ kyc, onChange }: { kyc: KycProfile | null; onChange: () =>
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Address</span>
-            <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} maxLength={300} className={FIELD} />
+            <input value={line} onChange={(e) => setLine(e.target.value)} required maxLength={200} placeholder="Flat, building, street" autoComplete="street-address" className={FIELD} />
           </label>
+          <div className="grid grid-cols-1 gap-xs sm:grid-cols-3">
+            <label className="block">
+              <span className="block text-[14px] font-bold">City</span>
+              <input value={city} onChange={(e) => setCity(e.target.value)} required maxLength={60} autoComplete="address-level2" className={FIELD} />
+            </label>
+            <label className="block">
+              <span className="block text-[14px] font-bold">State</span>
+              <select value={state} onChange={(e) => setState(e.target.value)} required autoComplete="address-level1" className={FIELD}>
+                <option value="">Pick one</option>
+                {INDIAN_STATES.map((st) => (
+                  <option key={st} value={st}>
+                    {st}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="block text-[14px] font-bold">PIN code</span>
+              <input value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} required inputMode="numeric" maxLength={6} placeholder="560038" autoComplete="postal-code" aria-invalid={pinWrong ? true : undefined} className={FIELD} />
+              {pinWrong && <span className="mt-xs block text-[12px] font-semibold text-ink-soft">{pinWrong}</span>}
+            </label>
+          </div>
           {submit.isError && (
             <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
               {errorText(submit.error, 'Could not send that.')}
             </p>
           )}
-          <Button type="submit" disabled={submit.isPending}>
+          <Button type="submit" disabled={submit.isPending || Boolean(pinWrong)}>
             {status === 'rejected' ? 'Send again' : 'Send for review'}
           </Button>
         </form>

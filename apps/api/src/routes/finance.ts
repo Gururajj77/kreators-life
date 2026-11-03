@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import { DOC_COMMENT_MAX, monthShift, emptyInvoiceDoc, invoiceForClient, EXPENSE_CATEGORIES, INCOME_CATEGORIES, INVOICE_STATUSES, invoiceTotals, parseInvoiceDoc, type InvoiceDoc, type FinanceBudget, type FinanceDue, type FinanceGoal, type FinanceRecurring, type FinanceSplit, type FinanceSummary, type FinanceTransaction, type Invoice, type InvoiceItem, type Page } from '@kreators/shared';
+import { DOC_COMMENT_MAX, isCurrency, monthShift, emptyInvoiceDoc, invoiceForClient, EXPENSE_CATEGORIES, INCOME_CATEGORIES, INVOICE_STATUSES, invoiceTotals, parseInvoiceDoc, type InvoiceDoc, type FinanceBudget, type FinanceDue, type FinanceGoal, type FinanceRecurring, type FinanceSplit, type FinanceSummary, type FinanceTransaction, type Invoice, type InvoiceItem, type Page } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { DATE_RE, dayFromDevice, nameOf, newId, notify, nowIso, num, oneOf, pageOf, paged, randomCode, str } from '../db';
+import { currencyOf, DATE_RE, dayInZone, nameOf, personDay, shiftDate, newId, notify, nowIso, num, oneOf, pageOf, paged, randomCode, str } from '../db';
 
 /** Finance: a creator's money in and out, budgets and invoices. Nothing here touches points or payouts. */
 export const finance = new Hono<AppEnv>();
@@ -47,14 +47,23 @@ export function nextMonthly(from: string, dayOfMonth: number): string {
   return `${first.toISOString().slice(0, 7)}-${String(Math.min(dayOfMonth, days)).padStart(2, '0')}`;
 }
 
+/** The currency an entry is kept in: the one sent when it is a real one, else the person's own (rupees unless they changed it). */
+const moneyCurrency = (sent: unknown, user: object): string => {
+  const typed = typeof sent === 'string' ? sent.trim().toUpperCase() : '';
+  return isCurrency(typed) ? typed : currencyOf(user);
+};
+
 /** Post every recurring entry whose date has come. Called by the cron. */
 export async function runRecurring(db: D1Database, onlyUser?: string): Promise<number> {
-  const today = new Date().toISOString().slice(0, 10);
+  // A month's entry posts on the person's own day, in their zone (India's by default), never the server's UTC date. The query
+  // reads up to the furthest day anywhere (UTC plus one) and each row is then held to its owner's today.
+  const latest = shiftDate(new Date().toISOString().slice(0, 10), 1);
   const due = onlyUser
-    ? await db.prepare('SELECT * FROM finance_recurring WHERE active = 1 AND next_date <= ? AND user_id = ? LIMIT 200').bind(today, onlyUser).all<RecRow & { user_id: string }>()
-    : await db.prepare('SELECT * FROM finance_recurring WHERE active = 1 AND next_date <= ? LIMIT 200').bind(today).all<RecRow & { user_id: string }>();
+    ? await db.prepare('SELECT r.*, u.timezone AS zone FROM finance_recurring r JOIN users u ON u.id = r.user_id WHERE r.active = 1 AND r.next_date <= ? AND r.user_id = ? LIMIT 200').bind(latest, onlyUser).all<RecRow & { user_id: string; zone: string | null }>()
+    : await db.prepare('SELECT r.*, u.timezone AS zone FROM finance_recurring r JOIN users u ON u.id = r.user_id WHERE r.active = 1 AND r.next_date <= ? LIMIT 200').bind(latest).all<RecRow & { user_id: string; zone: string | null }>();
   let posted = 0;
   for (const r of due.results) {
+    if (r.next_date > dayInZone(r.zone)) continue;
     // The date moves first and only from the date that was read, so a second run at the same time posts nothing twice.
     const moved = await db.prepare('UPDATE finance_recurring SET next_date = ? WHERE id = ? AND next_date = ?').bind(nextMonthly(r.next_date, r.day_of_month), r.id, r.next_date).run();
     if (moved.meta.changes !== 1) continue;
@@ -98,35 +107,38 @@ finance.get('/', async (c) => {
   // The month's entries and every due are paged (prefixes tx and du); the month's sums and what is owed are added up in SQL, so they cover every row, not one page.
   const txAsk = pageOf(c, 'tx');
   const duAsk = pageOf(c, 'du');
-  const today = new Date().toISOString().slice(0, 10);
+  const today = personDay(c.req.query('day'), user.timezone);
+  // Sums are in the person's own currency only: an entry kept in another one is listed with its own sign and never added in,
+  // so rupees and dollars are never summed and relabelled as one.
+  const cur = currencyOf(user);
   const [tx, byMonth, budgets, invoices, points, totals, dues, recurring, goals, monthCats, owedSums, agencyOwed] = await Promise.all([
     db.prepare('SELECT * FROM finance_transactions WHERE user_id = ? AND date LIKE ? ORDER BY date DESC, created_at DESC LIMIT ? OFFSET ?').bind(user.id, `${month}%`, txAsk.limit, txAsk.offset).all<TxRow>(),
-    db.prepare("SELECT substr(date, 1, 7) AS m, kind, SUM(amount_cents) AS cents FROM finance_transactions WHERE user_id = ? AND substr(date, 1, 7) >= ? AND substr(date, 1, 7) <= ? GROUP BY m, kind").bind(user.id, from, month).all<{ m: string; kind: 'income' | 'expense'; cents: number }>(),
+    db.prepare("SELECT substr(date, 1, 7) AS m, kind, SUM(amount_cents) AS cents FROM finance_transactions WHERE user_id = ? AND substr(date, 1, 7) >= ? AND substr(date, 1, 7) <= ? AND currency = ? GROUP BY m, kind").bind(user.id, from, month, cur).all<{ m: string; kind: 'income' | 'expense'; cents: number }>(),
     db.prepare('SELECT category, monthly_cents FROM finance_budgets WHERE user_id = ?').bind(user.id).all<{ category: string; monthly_cents: number }>(),
     db.prepare(`${INV_SELECT} WHERE i.user_id = ? ORDER BY i.created_at DESC LIMIT 100`).bind(user.id).all<InvRow>(),
     db.prepare("SELECT COALESCE(SUM(amount), 0) AS n FROM points_ledger WHERE user_id = ? AND amount > 0 AND reason IN ('sale','affiliate','bounty') AND created_at LIKE ?").bind(user.id, `${month}%`).first<{ n: number }>(),
     db
       .prepare(
         `SELECT
-          (SELECT COALESCE(SUM(amount_cents), 0) FROM finance_transactions WHERE user_id = ?1 AND kind = 'income') AS income,
-          (SELECT COALESCE(SUM(amount_cents), 0) FROM finance_transactions WHERE user_id = ?1 AND kind = 'expense') AS expense,
+          (SELECT COALESCE(SUM(amount_cents), 0) FROM finance_transactions WHERE user_id = ?1 AND kind = 'income' AND currency = ?2) AS income,
+          (SELECT COALESCE(SUM(amount_cents), 0) FROM finance_transactions WHERE user_id = ?1 AND kind = 'expense' AND currency = ?2) AS expense,
           (SELECT COALESCE(SUM(amount), 0) FROM points_ledger WHERE user_id = ?1 AND amount > 0 AND reason IN ('sale','affiliate','bounty')) AS points`,
       )
-      .bind(user.id)
+      .bind(user.id, cur)
       .first<{ income: number; expense: number; points: number }>(),
     db.prepare("SELECT * FROM finance_dues WHERE user_id = ? ORDER BY CASE status WHEN 'open' THEN 0 ELSE 1 END, due_date IS NULL, due_date, created_at LIMIT ? OFFSET ?").bind(user.id, duAsk.limit, duAsk.offset).all<DueRow>(),
     db.prepare('SELECT * FROM finance_recurring WHERE user_id = ? ORDER BY active DESC, next_date').bind(user.id).all<RecRow>(),
     db
       .prepare(
-        `SELECT g.*, (SELECT COALESCE(SUM(amount_cents), 0) FROM finance_transactions t WHERE t.user_id = g.user_id AND t.kind = 'income' AND t.date >= g.start_date AND (g.deadline IS NULL OR t.date <= g.deadline)) AS earned
+        `SELECT g.*, (SELECT COALESCE(SUM(amount_cents), 0) FROM finance_transactions t WHERE t.user_id = g.user_id AND t.kind = 'income' AND t.currency = ? AND t.date >= g.start_date AND (g.deadline IS NULL OR t.date <= g.deadline)) AS earned
          FROM finance_goals g WHERE g.user_id = ? ORDER BY g.created_at DESC`,
       )
-      .bind(user.id)
+      .bind(cur, user.id)
       .all<GoalRow>(),
-    db.prepare('SELECT kind, category, SUM(amount_cents) AS cents, MIN(currency) AS currency FROM finance_transactions WHERE user_id = ? AND date LIKE ? GROUP BY kind, category').bind(user.id, `${month}%`).all<{ kind: 'income' | 'expense'; category: string; cents: number; currency: string }>(),
+    db.prepare('SELECT kind, category, SUM(amount_cents) AS cents, MIN(currency) AS currency FROM finance_transactions WHERE user_id = ? AND date LIKE ? AND currency = ? GROUP BY kind, category').bind(user.id, `${month}%`, cur).all<{ kind: 'income' | 'expense'; category: string; cents: number; currency: string }>(),
     db
-      .prepare("SELECT COALESCE(SUM(CASE WHEN direction = 'owed' THEN amount_cents END), 0) AS owed, COALESCE(SUM(CASE WHEN direction = 'owe' THEN amount_cents END), 0) AS owe FROM finance_dues WHERE user_id = ? AND status = 'open'")
-      .bind(user.id)
+      .prepare("SELECT COALESCE(SUM(CASE WHEN direction = 'owed' THEN amount_cents END), 0) AS owed, COALESCE(SUM(CASE WHEN direction = 'owe' THEN amount_cents END), 0) AS owe FROM finance_dues WHERE user_id = ? AND status = 'open' AND currency = ?")
+      .bind(user.id, cur)
       .first<{ owed: number; owe: number }>(),
     // Agency invoices sent and not paid: owed to the person, summed in SQL by currency so a page limit never hides one.
     db
@@ -150,7 +162,7 @@ finance.get('/', async (c) => {
   }
   const budgetList: FinanceBudget[] = budgets.results.map((b) => ({ category: b.category, monthlyCents: b.monthly_cents, spentCents: cat.get(`expense:${b.category}`)?.cents ?? 0 }));
   const inv = invoices.results.map(toInvoice);
-  const currency = list[0]?.currency ?? monthCats.results[0]?.currency ?? inv[0]?.currency ?? 'INR';
+  const currency = cur;
   const summary: FinanceSummary & { txPage: Page; duePage: Page } = {
     month,
     currency,
@@ -161,7 +173,7 @@ finance.get('/', async (c) => {
     byCategory: [...cat.values()].sort((a, b) => b.cents - a.cents),
     months,
     budgets: budgetList,
-    openInvoicesCents: inv.filter((i) => i.status === 'sent').reduce((a, i) => a + i.totalCents, 0),
+    openInvoicesCents: inv.filter((i) => i.status === 'sent' && i.currency === cur).reduce((a, i) => a + i.totalCents, 0),
     overdueInvoices: inv.filter((i) => i.status === 'sent' && i.dueDate && i.dueDate < today).length,
     transactions: list,
     invoices: inv,
@@ -188,11 +200,11 @@ finance.post('/transactions', async (c) => {
   const amount = Math.min(raw, 1_000_000_000);
   const categories = kind === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
   const category = oneOf(body.category, categories, categories[categories.length - 1] as string);
-  const date = typeof body.date === 'string' && DATE_RE.test(body.date) ? body.date : new Date().toISOString().slice(0, 10);
+  const date = typeof body.date === 'string' && DATE_RE.test(body.date) ? body.date : personDay(c.req.query('day'), user.timezone);
   const id = newId();
   await db
     .prepare("INSERT INTO finance_transactions (id, user_id, kind, amount_cents, currency, category, counterparty, note, date, source, ref, splits_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', NULL, ?, ?)")
-    .bind(id, user.id, kind, amount, str(body.currency, 3, 'INR').toUpperCase() || 'INR', category, str(body.counterparty, 80), str(body.note, 300), date, JSON.stringify(cleanSplits(body.splits, amount)), nowIso())
+    .bind(id, user.id, kind, amount, moneyCurrency(body.currency, user), category, str(body.counterparty, 80), str(body.note, 300), date, JSON.stringify(cleanSplits(body.splits, amount)), nowIso())
     .run();
   const row = await db.prepare('SELECT * FROM finance_transactions WHERE id = ?').bind(id).first<TxRow>();
   return c.json({ transaction: row ? toTx(row) : null }, 201);
@@ -226,7 +238,7 @@ finance.post('/dues', async (c) => {
   const id = newId();
   await db
     .prepare("INSERT INTO finance_dues (id, user_id, direction, counterparty, amount_cents, currency, category, note, due_date, recurring, status, settled_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', NULL, ?)")
-    .bind(id, user.id, direction, counterparty, Math.min(amount, 1_000_000_000), str(body.currency, 3, 'INR').toUpperCase() || 'INR', oneOf(body.category, cats, cats[cats.length - 1] as string), str(body.note, 300), typeof body.dueDate === 'string' && DATE_RE.test(body.dueDate) ? body.dueDate : null, body.recurring === 'monthly' ? 'monthly' : 'none', nowIso())
+    .bind(id, user.id, direction, counterparty, Math.min(amount, 1_000_000_000), moneyCurrency(body.currency, user), oneOf(body.category, cats, cats[cats.length - 1] as string), str(body.note, 300), typeof body.dueDate === 'string' && DATE_RE.test(body.dueDate) ? body.dueDate : null, body.recurring === 'monthly' ? 'monthly' : 'none', nowIso())
     .run();
   const row = await db.prepare('SELECT * FROM finance_dues WHERE id = ?').bind(id).first<DueRow>();
   return c.json({ due: row ? toDue(row) : null }, 201);
@@ -240,7 +252,7 @@ finance.post('/dues/:id/settle', async (c) => {
   if (!d) return c.json({ error: 'not found, or already settled' }, 404);
   const now = nowIso();
   // The person's own day, from the device (?day=), so a due settled late in the evening is booked on their day, not the server's.
-  const today = dayFromDevice(c.req.query('day'));
+  const today = personDay(c.req.query('day'), user.timezone);
   // The status moves first and only from open: two taps at once settle (and book the money) once.
   const moved = await db.prepare("UPDATE finance_dues SET status = 'settled', settled_at = ? WHERE id = ? AND user_id = ? AND status = 'open'").bind(now, d.id, user.id).run();
   if (moved.meta.changes !== 1) return c.json({ error: 'not found, or already settled' }, 409);
@@ -276,13 +288,13 @@ finance.post('/recurring', async (c) => {
   const kind = body.kind === 'expense' ? 'expense' : 'income';
   const cats = kind === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
   const day = Math.max(1, Math.min(28, Math.round(Number(body.dayOfMonth)) || 1));
-  const today = new Date().toISOString().slice(0, 10);
+  const today = personDay(c.req.query('day'), user.timezone);
   const thisMonth = `${today.slice(0, 7)}-${String(day).padStart(2, '0')}`;
   const next = thisMonth >= today ? thisMonth : nextMonthly(thisMonth, day);
   const id = newId();
   await db
     .prepare('INSERT INTO finance_recurring (id, user_id, kind, amount_cents, currency, category, counterparty, note, day_of_month, next_date, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)')
-    .bind(id, user.id, kind, Math.min(amount, 1_000_000_000), str(body.currency, 3, 'INR').toUpperCase() || 'INR', oneOf(body.category, cats, cats[cats.length - 1] as string), str(body.counterparty, 80), str(body.note, 300), day, next, nowIso())
+    .bind(id, user.id, kind, Math.min(amount, 1_000_000_000), moneyCurrency(body.currency, user), oneOf(body.category, cats, cats[cats.length - 1] as string), str(body.counterparty, 80), str(body.note, 300), day, next, nowIso())
     .run();
   const row = await db.prepare('SELECT * FROM finance_recurring WHERE id = ?').bind(id).first<RecRow>();
   return c.json({ recurring: row ? toRec(row) : null }, 201);
@@ -316,7 +328,7 @@ finance.post('/goals', async (c) => {
   const id = newId();
   await db
     .prepare('INSERT INTO finance_goals (id, user_id, title, kind, target_cents, saved_cents, start_date, deadline, created_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)')
-    .bind(id, user.id, title, body.kind === 'earn' ? 'earn' : 'save', Math.min(target, 1_000_000_000_000), new Date().toISOString().slice(0, 10), typeof body.deadline === 'string' && DATE_RE.test(body.deadline) ? body.deadline : null, nowIso())
+    .bind(id, user.id, title, body.kind === 'earn' ? 'earn' : 'save', Math.min(target, 1_000_000_000_000), personDay(c.req.query('day'), user.timezone), typeof body.deadline === 'string' && DATE_RE.test(body.deadline) ? body.deadline : null, nowIso())
     .run();
   return c.json({ ok: true, id }, 201);
 });
@@ -397,9 +409,11 @@ const totalOf = (items: InvoiceItem[], doc: InvoiceDoc | undefined) => (doc ? in
 export async function createInvoice(db: D1Database, userId: string, input: NewInvoice): Promise<Invoice | null> {
   const number = input.number ?? (await nextNumber(db, userId, input.prefix ?? ''));
   const id = newId();
+  // No issue day given: the owner's today in their zone, never the server's UTC date.
+  const issueDate = input.issueDate ?? dayInZone((await db.prepare('SELECT timezone FROM users WHERE id = ?').bind(userId).first<{ timezone: string | null }>())?.timezone);
   await db
     .prepare("INSERT INTO invoices (id, user_id, number, client_name, client_email, items_json, total_cents, currency, status, issue_date, due_date, note, token, paid_at, created_at, agency_client_id, doc_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, NULL, ?, ?, ?)")
-    .bind(id, userId, number, input.clientName, input.clientEmail, JSON.stringify(input.items), totalOf(input.items, input.doc), input.currency, input.issueDate ?? new Date().toISOString().slice(0, 10), input.dueDate, input.note, randomCode(12), nowIso(), input.agencyClientId ?? null, JSON.stringify(input.doc ?? {}))
+    .bind(id, userId, number, input.clientName, input.clientEmail, JSON.stringify(input.items), totalOf(input.items, input.doc), input.currency, issueDate, input.dueDate, input.note, randomCode(12), nowIso(), input.agencyClientId ?? null, JSON.stringify(input.doc ?? {}))
     .run();
   const row = await db.prepare(`${INV_SELECT} WHERE i.id = ?`).bind(id).first<InvRow>();
   return row ? toInvoice(row) : null;
@@ -460,7 +474,7 @@ finance.post('/invoices', async (c) => {
     .slice(0, 30);
   if (items.length === 0) return c.json({ error: 'at least one line' }, 400);
   const dueDate = typeof body.dueDate === 'string' && DATE_RE.test(body.dueDate) ? body.dueDate : null;
-  const invoice = await createInvoice(c.env.DB, user.id, { clientName, clientEmail: str(body.clientEmail, 120), items, dueDate, note: str(body.note, 500), currency: str(body.currency, 3, 'INR').toUpperCase() || 'INR' });
+  const invoice = await createInvoice(c.env.DB, user.id, { clientName, clientEmail: str(body.clientEmail, 120), items, dueDate, note: str(body.note, 500), currency: moneyCurrency(body.currency, user) });
   return c.json({ invoice }, 201);
 });
 
