@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { Link } from 'react-router';
 import type { LucideIcon } from 'lucide-react';
-import { ArrowDownLeft, ArrowRight, ArrowUpRight, Bell, CalendarClock, CalendarDays, Check, ChevronDown, ChevronRight, Clock, Coins, Compass, FaceSlightlySmiling, Flame, Footprints, HandCoins, HeartPulse, MessageCircle, MessageCirclePlus, NotebookPen, PartyPopper, Pencil, Receipt, Sparkles, Star, UserRound, Users, UsersRound } from 'lucide-react';
+import { ArrowDownLeft, ArrowRight, ArrowUpRight, Bell, CalendarClock, CalendarDays, Check, ChevronRight, Clock, Coins, Compass, FaceSlightlySmiling, Flame, Footprints, HandCoins, HeartPulse, MessageCircle, MessageCirclePlus, NotebookPen, PartyPopper, Pencil, Receipt, Sparkles, Star, UserRound, Users, UsersRound } from 'lucide-react';
 import { AppIcon } from '../components/AppIcon';
 import { Icon } from '../components/Icon';
 import { PeriodPanel } from '../components/PeriodPanel';
@@ -37,6 +37,7 @@ import { useGroupOrder, useModules } from '../lib/modules';
 import { useAuthed, useMe } from '../lib/queries';
 import { SkeletonList } from '../components/Skeleton';
 import { StatusTag } from '../components/StatusTag';
+import { ToggleChevron } from '../components/ToggleMark';
 
 const SHORTCUT_ORDER: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'manage'];
 const when = eventTime;
@@ -65,7 +66,7 @@ function MoreOnHome({ children }: { children: ReactNode }) {
     <div className="contents">
       <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="toy toy-flat col-span-full flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile bg-paper px-sm text-left text-[16px] font-bold aria-expanded:bg-line">
         More on Home
-        <Icon icon={ChevronDown} size={16} className={`text-ink-soft transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ToggleChevron open={open} className="text-ink-soft" />
       </button>
       {open && children}
     </div>

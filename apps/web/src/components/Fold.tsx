@@ -1,7 +1,6 @@
 import { useId, useState, type ReactNode } from 'react';
-import { ChevronDown } from 'lucide-react';
 import { AnimatedIcon } from './AnimatedIcon';
-import { Icon } from './Icon';
+import { ToggleChevron } from './ToggleMark';
 
 /**
  * A small fold-out in the app's own style: the title is a rounded flat button with a chevron, tinted while open, and what it holds sits
@@ -51,7 +50,7 @@ export function Fold({
         {adds ? (
           <AnimatedIcon name="plusToX" size={16} active={open} className="text-ink-soft" />
         ) : (
-          <Icon icon={ChevronDown} size={tone === 'plain' ? 14 : 16} className={`text-ink-soft transition-transform ${open ? 'rotate-180' : ''}`} />
+          <ToggleChevron open={open} size={tone === 'plain' ? 14 : 16} className="text-ink-soft" />
         )}
       </button>
       {open && (

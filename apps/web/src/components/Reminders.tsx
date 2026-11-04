@@ -12,8 +12,9 @@ import { RulerPicker } from './RulerPicker';
 import { WaterFill } from './fx/WaterFill';
 import { Sheet } from './Sheet';
 import { Icon } from './Icon';
-import { ChevronDown, Droplet } from 'lucide-react';
+import { Droplet } from 'lucide-react';
 import { FIELD } from '../lib/ui';
+import { ToggleChevron } from './ToggleMark';
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'That did not work. Try again.');
 const litres = (ml: number) => (ml >= 1000 ? `${(ml / 1000).toFixed(ml % 1000 === 0 ? 0 : 2).replace(/0$/, '')} L` : `${ml} ml`);
@@ -194,11 +195,12 @@ export function RemindersPanel({ bento = false, tasks = true }: { bento?: boolea
             </span>
           </span>
         </label>
-        <button type="button" aria-expanded={showSet} onClick={() => setShowSet((v) => !v)} className="mt-xs inline-flex min-h-[44px] items-center text-[12px] font-bold text-ink-soft underline underline-offset-4">
+        <button type="button" aria-expanded={showSet} aria-controls="water-settings" onClick={() => setShowSet((v) => !v)} className="mt-xs inline-flex min-h-[44px] items-center gap-xs text-[12px] font-bold text-ink-soft underline underline-offset-4">
           {showSet ? 'Hide water settings' : 'Water settings'}
+          <ToggleChevron open={showSet} size={14} strokeWidth={3} />
         </button>
         {showSet && (
-          <div className="mt-xs grid grid-cols-2 gap-xs">
+          <div id="water-settings" className="mt-xs grid grid-cols-2 gap-xs">
             <WaterNumber label="Daily goal (ml)" value={w.goalMl} min={WATER_GOAL_MIN} max={WATER_GOAL_MAX} step={100} labelEvery={500} onSave={(n) => settle.mutate({ goalMl: n })} />
             <WaterNumber label="A glass (ml)" value={w.glassMl} min={WATER_GLASS_MIN} max={WATER_GLASS_MAX} step={50} labelEvery={250} onSave={(n) => settle.mutate({ glassMl: n })} />
             <label className="block">
@@ -386,7 +388,7 @@ export function RemindersSection({ always = false, tasks = true, quiet = false }
             <span className="block text-[16px] font-extrabold">Water and reminders</span>
             <span className="block text-[14px] font-bold text-ink-soft">{w ? `${w.glasses} of ${w.goalGlasses} glasses today · ${litres(w.ml)} of ${litres(w.goalMl)}` : 'Loading'}</span>
           </span>
-          <Icon icon={ChevronDown} size={16} strokeWidth={3} className={`shrink-0 ${open ? 'rotate-180' : ''}`} />
+          <ToggleChevron open={open} size={16} strokeWidth={3} />
         </button>
         <div className="flex gap-xs sm:shrink-0">
           <Button size="md" variant={quiet ? 'outline' : undefined} className="flex-1 sm:flex-none" onClick={() => drink.mutate()} disabled={drink.isPending || !w} aria-label="Add a glass of water">

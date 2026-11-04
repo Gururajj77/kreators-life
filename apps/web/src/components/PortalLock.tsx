@@ -10,6 +10,7 @@ import { forgetPortalSessions, hadPortalSession, keepPortalSession } from '../li
 import { AnimatedIcon } from './AnimatedIcon';
 import { Button } from './Button';
 import { Icon } from './Icon';
+import { ToggleChevron } from './ToggleMark';
 
 const COPY = {
   lede: 'This page is private. Type the password you were given to open it.',
@@ -64,8 +65,9 @@ export function PasswordAsk({ kind, token, agencyName }: { kind: AskKind; token:
   };
   return (
     <div className="no-print mt-sm">
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls={`${id}-ask`} className="min-h-[44px] bg-transparent p-0 text-[14px] font-semibold text-ink-soft underline underline-offset-4 hover:text-ink">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls={`${id}-ask`} className="inline-flex min-h-[44px] items-center gap-xs bg-transparent p-0 text-left text-[14px] font-semibold text-ink-soft underline underline-offset-4 hover:text-ink">
         {COPY.ask}
+        <ToggleChevron open={open} size={14} />
       </button>
       {open && (
         <form id={`${id}-ask`} onSubmit={send} className="mt-xs rounded-tile bg-paper p-sm">

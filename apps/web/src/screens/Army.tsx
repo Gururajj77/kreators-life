@@ -16,6 +16,7 @@ import { StatusTag } from '../components/StatusTag';
 import type { TagTone } from '@kreators/shared';
 import { shortDate } from '../lib/date';
 import { ErrorLine } from '../components/ErrorLine';
+import { ToggleChevron } from '../components/ToggleMark';
 
 const fmtDate = (d: string | null) => (d ? shortDate(d) : 'no date');
 const fmtWhen = (d: string) => new Date(d).toLocaleString(LOCALE, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -175,17 +176,20 @@ function OrgCard({ org }: { org: Organization }) {
   const owner = org.myRole === 'owner';
   return (
     <div className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="toy toy-flat flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile text-left">
+      <button type="button" aria-expanded={open} aria-controls={`org-people-${org.id}`} onClick={() => setOpen((v) => !v)} className="toy toy-flat flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile text-left">
         <span className="min-w-0">
           <span className="block truncate text-[16px] font-bold">{org.name}</span>
           <span className="block text-[14px] font-semibold text-ink-soft">
             {org.type}, you are {org.myRole ?? 'a guest'}
           </span>
         </span>
-        <span className="text-[14px] font-bold text-ink-soft">{open ? 'Hide' : 'People'}</span>
+        <span className="flex shrink-0 items-center gap-xs text-[14px] font-bold text-ink-soft">
+          {open ? 'Hide' : 'People'}
+          <ToggleChevron open={open} />
+        </span>
       </button>
       {open && (
-        <div className="mt-sm">
+        <div id={`org-people-${org.id}`} className="mt-sm">
           <ul className="flex list-none flex-col gap-xs p-0 m-0">
             {members.data?.members.map((m) => (
               <li key={m.userId} className="flex items-center gap-sm rounded-tile bg-paper p-sm">

@@ -38,6 +38,7 @@ import { fileTitle, printAs } from '../lib/printDoc';
 import { forgetPortalSessions, forgetTeamLinkSessions, hadPortalSession, hadTeamLinkSession, keepTeamLinkSession } from '../lib/portalSession';
 import { SiteLayout } from './SiteLayout';
 import { FIELD } from '../lib/ui';
+import { ToggleChevron } from '../components/ToggleMark';
 
 const COPY = {
   loading: 'Loading.',
@@ -172,16 +173,19 @@ function PieceActions({ doors, id, stage, changes, waiting = false, onDone }: { 
         {canChange && left > 0 && (
           <Button size="sm" variant={quiet} onClick={() => setMode(mode === 'change' ? null : 'change')} aria-expanded={mode === 'change'} disabled={busy}>
             Ask for a change
+            <ToggleChevron open={mode === 'change'} size={14} />
           </Button>
         )}
         {canChange && left === 0 && doors.paidChange && (
           <Button size="sm" variant={quiet} onClick={() => setMode(mode === 'paid' ? null : 'paid')} aria-expanded={mode === 'paid'} disabled={busy}>
             Ask for a paid change
+            <ToggleChevron open={mode === 'paid'} size={14} />
           </Button>
         )}
         {can.canComment && (
           <Button size="sm" variant="ghost" onClick={() => setMode(mode === 'comment' ? null : 'comment')} aria-expanded={mode === 'comment'} disabled={busy}>
             Comment
+            <ToggleChevron open={mode === 'comment'} size={14} />
           </Button>
         )}
       </div>

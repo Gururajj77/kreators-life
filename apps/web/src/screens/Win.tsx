@@ -20,6 +20,7 @@ import type { TagTone } from '@kreators/shared';
 import { shortDate, localDateTimeValue } from '../lib/date';
 import { IconTag } from '../components/FactTag';
 import { CardHead } from '../components/CardHead';
+import { ToggleChevron } from '../components/ToggleMark';
 
 type Rule = Pick<Bounty, 'ratePerThousand' | 'maxPayoutPoints' | 'minViews'>;
 
@@ -585,13 +586,15 @@ function MySubmission({ s, onDone }: { s: BountySubmission; onDone: () => void }
               Refresh numbers
             </Button>
           )}
-          <Button variant={auto ? 'ghost' : 'outline'} onClick={() => setReporting((v) => !v)}>
+          <Button variant={auto ? 'ghost' : 'outline'} onClick={() => setReporting((v) => !v)} aria-expanded={reporting} aria-controls="win-report-numbers">
             Report numbers
+            <ToggleChevron open={reporting} />
           </Button>
         </div>
       )}
       {reporting && (
         <form
+          id="win-report-numbers"
           className="mt-sm flex flex-col gap-sm rounded-tile bg-paper p-sm"
           onSubmit={(e) => {
             e.preventDefault();

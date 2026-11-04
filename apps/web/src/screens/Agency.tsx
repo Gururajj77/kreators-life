@@ -49,6 +49,7 @@ import { useParamState } from '../lib/useParamState';
 import { lazyNamed } from '../lib/lazy';
 import { AgencyCanContext, agencyCanFor, setAgencyTeam, useAgencyTeam, useAgencyCan } from '../lib/agencyWorkspace';
 import { TEAM_ROLE_META, type MyTeam, type TeamTab } from '@kreators/shared';
+import { ToggleChevron } from '../components/ToggleMark';
 
 const AgencyTeam = lazyNamed(() => import('../components/AgencyTeam'), 'AgencyTeam');
 const ClientMemberView = lazyNamed(() => import('../components/AgencyTeam'), 'ClientMemberView');
@@ -413,6 +414,7 @@ function Overview({ onTab, onAdd }: { onTab: (t: TabKey, paper?: 'invoices' | 'a
               <div className="mt-sm">
                 <Button variant="outline" size="sm" onClick={() => setAllComing((v) => !v)} aria-expanded={allComing}>
                   {allComing ? 'Show fewer' : `Show more (${d.coming.length - COMING_FIRST})`}
+                  <ToggleChevron open={allComing} />
                 </Button>
               </div>
             )}

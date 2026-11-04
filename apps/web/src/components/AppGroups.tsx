@@ -3,7 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import gsap from 'gsap';
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronRight, RotateCcw } from 'lucide-react';
 import { api } from '../lib/api';
 import { useKept } from '../lib/kept';
 import { useAppPrefs, useModules, useSaveAppPrefs, type ModuleView } from '../lib/modules';
@@ -17,6 +17,7 @@ import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import { SortableList } from './SortableList';
 import { Toggle } from './Toggle';
+import { ToggleChevron } from './ToggleMark';
 
 /**
  * The apps, grouped, each group one big accordion in its pillar's colour. Opening a group shows every app in it, on or off: the name
@@ -186,7 +187,7 @@ function Group({ group, list, unread, fits, busy, failed, scope, startOpen, onTo
         <span className="shrink-0 rounded-pill bg-card-strong px-sm text-[12px] font-extrabold leading-[26px]" style={{ color: `var(--deep-${rel.key})` }}>
           {on} of {list.length} on
         </span>
-        <Icon icon={ChevronDown} size={20} className={`shrink-0 text-ink-soft transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+        <ToggleChevron open={open} size={20} className="text-ink-soft" />
       </button>
       {controls}
       <div ref={body} id={`${id}-b`} hidden={!open} className="overflow-hidden">

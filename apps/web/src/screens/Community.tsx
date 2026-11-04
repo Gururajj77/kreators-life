@@ -25,6 +25,7 @@ import { IconTag } from '../components/FactTag';
 import { FilterBar, FilterSelect } from '../components/FilterSelect';
 import { Fold } from '../components/Fold';
 import { AskSheet, type Ask } from '../components/Channels';
+import { ToggleChevron } from '../components/ToggleMark';
 
 const FILTER_ITEMS = FEED_FILTERS.map((f) => ({ key: f, label: FEED_FILTER_META[f] }));
 const SORT_ITEMS = FEED_SORTS.map((k) => ({ key: k, label: FEED_SORT_META[k] }));
@@ -50,8 +51,9 @@ function Reactions({ counts, mine, onPick, busy }: { counts: ReactionCounts; min
           <ReactionGlyph kind={k} size={16} picked={mine === k} /> {counts[k]}
         </button>
       ))}
-      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="toy toy-soft inline-flex min-h-[44px] items-center rounded-pill bg-paper px-sm text-[14px] font-bold">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-paper px-sm text-[14px] font-bold">
         {mine ? 'Change' : 'React'}
+        <ToggleChevron open={open} size={14} />
       </button>
       {open && (
         <span className="flex flex-wrap gap-xs" role="group" aria-label="Pick a reaction">
@@ -432,6 +434,7 @@ function RepliesSheet({ post, onClose, onSaved, onAsk }: { post: CommunityPost |
                     {kids > 0 && (
                       <Button variant="ghost" size="sm" aria-expanded={!folded.has(r.id)} onClick={() => setFolded((f) => { const n = new Set(f); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; })}>
                         {folded.has(r.id) ? `Show ${kids} ${kids === 1 ? 'reply' : 'replies'}` : 'Fold'}
+                        <ToggleChevron open={!folded.has(r.id)} size={14} />
                       </Button>
                     )}
                     {!r.mine && (

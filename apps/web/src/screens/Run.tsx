@@ -27,6 +27,7 @@ import { StatusTag } from '../components/StatusTag';
 import { CardHead } from '../components/CardHead';
 import { FactTag, IconTag } from '../components/FactTag';
 import { useSeedOnce } from '../lib/useSeed';
+import { ToggleChevron } from '../components/ToggleMark';
 
 const day = (iso: string) => new Date(iso).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' });
 const REL = RELATIONSHIP_BY_KEY.friendship;
@@ -701,11 +702,16 @@ function RunTalk({ runId }: { runId: string }) {
         <Link to={`/run?tab=talk&run=${runId}`} className="inline-flex min-h-[44px] items-center px-xs text-[14px] font-bold underline underline-offset-4 hover:text-ink-soft">
           Open the discussion
         </Link>
-        <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="toy toy-flat min-h-[44px] rounded-pill px-md text-[14px] font-bold underline underline-offset-4">
+        <button type="button" aria-expanded={open} aria-controls={`run-people-${runId}`} onClick={() => setOpen((v) => !v)} className="toy toy-flat inline-flex min-h-[44px] items-center gap-xs rounded-pill px-md text-[14px] font-bold underline underline-offset-4">
           {open ? 'Hide photos and people' : 'Photos and people'}
+          <ToggleChevron open={open} />
         </button>
       </span>
-      {open && <EventPanel app="run" id={runId} talk={false} />}
+      {open && (
+        <div id={`run-people-${runId}`}>
+          <EventPanel app="run" id={runId} talk={false} />
+        </div>
+      )}
     </li>
   );
 }

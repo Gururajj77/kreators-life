@@ -4597,3 +4597,43 @@ li.sort-lifted {
     font-size: 12px;
   }
 }
+
+/* Toggle marks (components/ToggleMark.tsx): a button that opens or folds something in place shows its state. The chevron turns half a
+   turn while open; an icon-only toggle's icon turns into a cross while open (the two glyphs stacked in one cell, only opacity and a turn
+   change). Under reduced motion they just swap. */
+.toggle-chevron {
+  transition: transform 200ms var(--ease-open);
+}
+.toggle-chevron-open {
+  transform: rotate(180deg);
+}
+.toggle-icon {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+}
+.toggle-icon > span {
+  display: inline-flex;
+  grid-area: 1 / 1;
+  transition:
+    opacity 200ms var(--ease-open),
+    transform 200ms var(--ease-open);
+}
+.toggle-icon-open {
+  opacity: 0;
+  transform: rotate(-90deg);
+}
+.toggle-icon[data-open] .toggle-icon-closed {
+  opacity: 0;
+  transform: rotate(90deg);
+}
+.toggle-icon[data-open] .toggle-icon-open {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .toggle-chevron,
+  .toggle-icon > span {
+    transition: none;
+  }
+}

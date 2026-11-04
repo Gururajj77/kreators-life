@@ -11,6 +11,7 @@ import { Ring } from './Ring';
 import { StatusTag } from './StatusTag';
 import { TaskPlanFields, planBody, planOf, planProblem, type Plan } from './TaskPlan';
 import { COPY } from './WeekPlan';
+import { ToggleChevron } from './ToggleMark';
 
 // The body of the Plan my week sheet: the strength, the suggestions, the fixes and Keep. It downloads when the sheet opens
 // (WeekPlan.tsx), so Daily's first download carries only the button.
@@ -350,13 +351,14 @@ export function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: 
                     <input type="checkbox" checked={done} onChange={(e) => setChecked((c) => ({ ...c, [i]: e.target.checked }))} aria-label={`${COPY.handled}: ${a.text}`} className="size-[24px] shrink-0" />
                     <p className={`m-0 min-w-0 flex-1 text-[14px] font-semibold ${done ? 'text-ink-soft line-through' : ''}`}>{tie(a.text)}</p>
                     {fixable && (
-                      <button type="button" aria-expanded={openLine === i} onClick={() => setOpenLine(openLine === i ? null : i)} className="toy toy-flat min-h-[44px] shrink-0 rounded-pill border border-line bg-card-strong px-sm text-[14px] font-bold">
+                      <button type="button" aria-expanded={openLine === i} aria-controls={`plan-fix-${i}`} onClick={() => setOpenLine(openLine === i ? null : i)} className="toy toy-flat inline-flex min-h-[44px] shrink-0 items-center gap-xs rounded-pill border border-line bg-card-strong px-sm text-[14px] font-bold">
                         {openLine === i ? COPY.hide : COPY.fix}
+                        <ToggleChevron open={openLine === i} size={14} />
                       </button>
                     )}
                   </div>
                   {openLine === i && (
-                    <div className="mt-sm rounded-tile bg-card p-sm">
+                    <div id={`plan-fix-${i}`} className="mt-sm rounded-tile bg-card p-sm">
                       <Fix
                         a={a}
                         plan={plan}

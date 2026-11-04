@@ -2,8 +2,7 @@ import { HOW_TO, MODULE_BY_KEY, TERMS } from '@kreators/shared';
 import gsap from 'gsap';
 import { createContext, useContext, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router';
-import { ChevronDown } from 'lucide-react';
-import { Icon } from './Icon';
+import { ToggleChevron } from './ToggleMark';
 
 const Key = createContext<string | null>(null);
 
@@ -19,7 +18,7 @@ export function useModuleKey(): string | null {
 
 function Chevron({ open, className = '' }: { open: boolean; className?: string }) {
   return (
-    <Icon icon={ChevronDown} size={20} className={`transition-transform ${open ? 'rotate-180' : ''} ${className}`} />
+    <ToggleChevron open={open} size={20} className={className} />
   );
 }
 

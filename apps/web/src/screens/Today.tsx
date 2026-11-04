@@ -57,6 +57,8 @@ function DailyTask({ t, date, queue, onToggle, subtitle, focus = false }: { t: N
       onToggle={onToggle}
       onEdit={() => setOpen((v) => !v)}
       editLabel={open ? 'Close the plan for' : 'Plan'}
+      editOpen={open}
+      editControls={`task-plan-${t.id}`}
       panel={
         open ? (
           <div id={`task-plan-${t.id}`}>
@@ -83,6 +85,8 @@ function BacklogTask({ t, date, queue }: { t: Node; date: string; queue: ReturnT
       hint="Pick a day first. Then it moves up into Tasks."
       onEdit={() => setOpen((v) => !v)}
       editLabel={open ? 'Close the plan for' : 'Plan'}
+      editOpen={open}
+      editControls={`task-plan-${t.id}`}
       panel={
         <>
           <div className="mt-xs flex flex-wrap items-center gap-xs" role="group" aria-label={`Pick a day for ${t.title}`}>
@@ -94,7 +98,11 @@ function BacklogTask({ t, date, queue }: { t: Node; date: string; queue: ReturnT
             </button>
             <input type="date" aria-label={`Do date for ${t.title}`} min={date} onChange={(e) => /^\d{4}-\d{2}-\d{2}$/.test(e.target.value) && e.target.value >= '2000-01-01' && pick.mutate(e.target.value)} className="min-h-[44px] rounded-pill border-2 border-line bg-paper px-sm text-[14px] font-bold" />
           </div>
-          {open && <TaskPanel task={t} today={date} />}
+          {open && (
+            <div id={`task-plan-${t.id}`}>
+              <TaskPanel task={t} today={date} />
+            </div>
+          )}
         </>
       }
     />

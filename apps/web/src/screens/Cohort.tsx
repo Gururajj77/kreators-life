@@ -14,7 +14,7 @@ import { MediaSection, useMediaMenuItem } from '../components/MediaSection';
 import { IconButton } from '../components/IconButton';
 import { IconTag } from '../components/FactTag';
 import { Icon } from '../components/Icon';
-import { ChevronDown, ExternalLink, ImagePlus } from 'lucide-react';
+import { ExternalLink, ImagePlus } from 'lucide-react';
 import { MediaTile } from '../components/Media';
 import { api, errorText } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
@@ -23,6 +23,7 @@ import { Fold } from '../components/Fold';
 import { shortDate } from '../lib/date';
 import { ErrorLine } from '../components/ErrorLine';
 import { StatusTag } from '../components/StatusTag';
+import { ToggleChevron } from '../components/ToggleMark';
 
 const fmtDate = shortDate;
 const fmtWhen = (d: string) => new Date(d).toLocaleString(LOCALE, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -262,7 +263,7 @@ function LessonCard({ item, n, open, onToggle }: { item: LearningItem; n: number
         <span className="min-w-0 flex-1 pt-[4px] text-[16px] leading-snug font-bold text-balance">{item.moduleTitle}</span>
         <span className="flex shrink-0 items-center gap-xs pt-[2px]">
           <IconTag tone="calm" icon={tag.icon}>{tag.word}</IconTag>
-          <Icon icon={ChevronDown} size={20} className={`text-ink-soft transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+          <ToggleChevron open={open} size={20} className="text-ink-soft" />
         </span>
       </button>
       {open && (

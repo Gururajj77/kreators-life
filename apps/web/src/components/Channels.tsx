@@ -36,6 +36,7 @@ import { ErrorLine } from './ErrorLine';
 import { IconTag } from './FactTag';
 import { StatusTag } from './StatusTag';
 import { TabRow } from './TabRow';
+import { ToggleChevron } from './ToggleMark';
 
 const when = dateTime;
 const RANK_WORD = { member: '', guide: 'Guide', staff: 'Staff', admin: 'Admin' } as const;
@@ -678,8 +679,9 @@ export function LineActions({
         </button>
       )}
       {!line.mine && (
-        <button type="button" aria-expanded={more} onClick={() => setMore((m) => !m)} className={btn}>
+        <button type="button" aria-expanded={more} onClick={() => setMore((m) => !m)} className={`${btn} gap-xs`}>
           More
+          <ToggleChevron open={more} size={14} />
         </button>
       )}
       {more && !line.mine && (

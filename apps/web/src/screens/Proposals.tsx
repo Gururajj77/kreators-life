@@ -9,12 +9,12 @@ import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
-import { Icon } from '../components/Icon';
-import { ChevronDown, Pencil, Undo2 } from 'lucide-react';
+import { Pencil, Undo2 } from 'lucide-react';
 import { MoreMenu } from '../components/MoreMenu';
 import type { CSSProperties } from 'react';
 import { FIELD } from '../lib/ui';
 import { ErrorLine } from '../components/ErrorLine';
+import { ToggleChevron } from '../components/ToggleMark';
 
 /** A budget as typed ("1,50,000", "₹ 2500.50"), read from its digits with `typedCents` and kept in whole units the way the column stores it; anything unreadable is 0. */
 const budgetUnits = (typed: string): number => {
@@ -97,7 +97,7 @@ function ProposalCard({ p, reviewer, mine, onChange, onEdit, onWithdraw }: { p: 
             updated {longDate(p.updatedAt)}
           </span>
         </span>
-        <Icon icon={ChevronDown} size={20} strokeWidth={3} className={`shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ToggleChevron open={open} size={20} strokeWidth={3} />
       </button>
       {mine && p.stage === 'submitted' && (
         <MoreMenu

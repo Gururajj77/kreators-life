@@ -9,6 +9,7 @@ import { Icon } from './Icon';
 import { PriorityChip, TaskTags } from './TaskPlan';
 import { FactTag, IconTag } from './FactTag';
 import { StatusTag } from './StatusTag';
+import { ToggleIcon } from './ToggleMark';
 
 interface Props {
   task: Node;
@@ -23,11 +24,16 @@ interface Props {
   panel?: ReactNode;
   /** Text for the edit button, when it opens a panel. */
   editLabel?: string;
+  /** The edit button opens `panel` in place: whether it is open now. The pencil then turns into a cross while open (`ToggleIcon`)
+   *  and the button carries `aria-expanded`. Leave it off when the pencil opens a Sheet, which has its own close. */
+  editOpen?: boolean;
+  /** The id of the opened panel, for `aria-controls`. */
+  editControls?: string;
   /** Show the task's pillar as a tag (on a pillar's own page every task is that pillar, so it is left off). */
   pillarTag?: boolean;
 }
 
-export function TaskRow({ task, today, subtitle, busy = false, hint = null, onToggle, onEdit, panel, editLabel, pillarTag = true }: Props) {
+export function TaskRow({ task, today, subtitle, busy = false, hint = null, onToggle, onEdit, panel, editLabel, editOpen, editControls, pillarTag = true }: Props) {
   const reduce = useReducedMotion();
   const now = useNow();
   const rel = RELATIONSHIP_BY_KEY[task.relationship];
@@ -97,9 +103,11 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
               type="button"
               onClick={onEdit}
               aria-label={`${editLabel ?? 'Edit'} "${task.title}"`}
+              aria-expanded={editOpen}
+              aria-controls={editOpen ? editControls : undefined}
               className="toy toy-soft flex w-[48px] shrink-0 items-center justify-center rounded-tile bg-card text-ink-soft hover:text-ink"
             >
-              <Icon icon={Pencil} size={20} strokeWidth={2.6} />
+              {editOpen === undefined ? <Icon icon={Pencil} size={20} strokeWidth={2.6} /> : <ToggleIcon open={editOpen} icon={Pencil} size={20} strokeWidth={2.6} />}
             </button>
           ) : undefined
         }

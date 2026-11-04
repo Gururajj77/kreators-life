@@ -1,10 +1,11 @@
 import { GETTING_STARTED_DAYS, type BriefLine } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Link } from 'react-router';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { api } from '../lib/api';
 import { Icon } from './Icon';
 import { useAuthed } from '../lib/queries';
+import { ToggleChevron } from './ToggleMark';
 
 const TONE: Record<BriefLine['tone'], string> = { good: 'var(--color-r4)', watch: 'var(--color-r1)', neutral: 'var(--color-line)' };
 
@@ -70,7 +71,7 @@ export function DailyBrief({ date, hour }: { date: string; hour: number }) {
             </span>
             <span className="flex shrink-0 items-center gap-xs text-[14px] font-extrabold text-ink-soft">
               {g.done} of {g.items.length}
-              <Icon icon={ChevronDown} size={14} strokeWidth={3} />
+              <ToggleChevron open={!g.folded} size={14} strokeWidth={3} />
             </span>
           </button>
           {!g.folded && (

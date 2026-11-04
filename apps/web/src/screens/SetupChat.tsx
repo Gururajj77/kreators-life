@@ -39,6 +39,7 @@ import { forgetKept, useKept, useKeptRef } from '../lib/kept';
 import { useModules } from '../lib/modules';
 import { useMe, useRefreshAll } from '../lib/queries';
 import { useSession } from '../lib/store';
+import { ToggleChevron } from '../components/ToggleMark';
 
 // ---------------------------------------------------------------------------
 // One guide, a few taps. Dew asks what brings you here, which of a few things sound like you, what you make
@@ -160,8 +161,9 @@ function MatchList({ answers, available, onSend }: { answers: SetupAnswers; avai
         </>
       )}
       <div className="mt-xs flex flex-wrap gap-md">
-        <button type="button" onClick={() => setWhy(!why)} className="inline-flex min-h-[44px] items-center text-[14px] font-bold underline underline-offset-4">
+        <button type="button" aria-expanded={why} onClick={() => setWhy(!why)} className="inline-flex min-h-[44px] items-center gap-xs text-[14px] font-bold underline underline-offset-4">
           {why ? 'Hide the reasons' : 'Why these apps?'}
+          <ToggleChevron open={why} size={14} />
         </button>
         {!more && m.more.length > 0 && (
           <button type="button" onClick={() => setMore(true)} className="inline-flex min-h-[44px] items-center text-[14px] font-bold underline underline-offset-4">
