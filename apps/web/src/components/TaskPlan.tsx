@@ -1,11 +1,11 @@
-import { PRIORITIES, addDays, priorityTag, repeatLabel, openDay, type Node, type Priority, type Repeat } from '@kreators/shared';
+import { PRIORITIES, RELATIONSHIPS, addDays, priorityTag, repeatLabel, openDay, taskIsHabit, type MonthProject, type Node, type Priority, type Repeat } from '@kreators/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Bell, ClipboardCheck, Landmark, Repeat as RepeatIcon, X } from 'lucide-react';
 import { api, type TaskPlanBody } from '../lib/api';
 import { Icon } from './Icon';
-import { useRefreshAll } from '../lib/queries';
+import { useAuthed, useRefreshAll } from '../lib/queries';
 import { RepeatPicker } from './RepeatPicker';
 import { RulerPicker } from './RulerPicker';
 import { Toggle } from './Toggle';
@@ -29,10 +29,10 @@ export function PriorityChip({ priority }: { priority: Priority | null }) {
  * The marks on a task, so a person can tell kinds of task apart at a glance: its priority, Remember (it will remind them on the day),
  * Habit (it comes back on its own), From pillar (the strategy session or the vibe check made it) and From your coach.
  */
-export function TaskTags({ task }: { task: Node }) {
+export function TaskTags({ task, priority = true }: { task: Node; /** False where the row shows the priority in its own corner. */ priority?: boolean }) {
   return (
     <>
-      <PriorityChip priority={task.priority} />
+      {priority && <PriorityChip priority={task.priority} />}
       {task.remind && (
         <StatusTag tone="warn" mark={<Icon icon={Bell} size={12} />}>
           Remember
@@ -43,7 +43,7 @@ export function TaskTags({ task }: { task: Node }) {
           For review
         </StatusTag>
       )}
-      {task.repeat && (
+      {task.repeat && taskIsHabit(task) && (
         <StatusTag tone="good" mark={<Icon icon={RepeatIcon} size={12} />} title={repeatLabel(task.repeat, openDay(task))}>
           Habit
         </StatusTag>
@@ -63,9 +63,10 @@ export function PriorityPicker({ value, onChange }: { value: Priority | null; on
   return (
     <div>
       <span className="block text-[14px] font-bold">Priority</span>
-      <div className="fill-row mt-xs flex flex-wrap gap-xs" role="group" aria-label="Priority">
+      {/* Two columns of equal buttons on a phone (P0 and P1, then P2 and P3), four in a row from the tablet width. */}
+      <div className="mt-xs grid grid-cols-2 gap-xs sm:grid-cols-4" role="group" aria-label="Priority">
         {PRIORITIES.map((p) => (
-          <button key={p.value} type="button" aria-pressed={value === p.value} onClick={() => onChange(value === p.value ? null : p.value)} className={`pri-${p.value} pri-chip toy min-h-[44px] rounded-pill px-sm text-[14px] font-bold`}>
+          <button key={p.value} type="button" aria-pressed={value === p.value} onClick={() => onChange(value === p.value ? null : p.value)} className={`pri-${p.value} pri-chip toy min-h-[44px] w-full whitespace-nowrap rounded-pill px-xs text-[14px] font-bold`}>
             {p.tag} {p.name}
           </button>
         ))}
@@ -83,6 +84,8 @@ export interface Plan {
   priority: Priority | null;
   remind: boolean;
   forReview: boolean;
+  /** "Count it as a habit", only read while it repeats. On unless the person said no. */
+  habit: boolean;
   time: string;
   minutes: string;
 }
@@ -93,6 +96,7 @@ export const planOf = (n?: Node | null, doDate = ''): Plan => ({
   priority: n?.priority ?? null,
   remind: n?.remind ?? false,
   forReview: n?.forReview ?? false,
+  habit: n?.habit ?? true,
   time: n?.dueTime ?? '',
   minutes: n?.estimateMin ? String(n.estimateMin) : '',
 });
@@ -105,6 +109,7 @@ export const planBody = (p: Plan): TaskPlanBody => {
     priority: p.priority,
     remind: p.remind,
     forReview: p.forReview,
+    habit: dated && p.repeat ? p.habit : null,
     dueTime: p.time || null,
     estimateMin: Number(p.minutes) > 0 ? Number(p.minutes) : null,
   };
@@ -124,13 +129,14 @@ export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange
         <span className="block text-[14px] font-bold">Do on</span>
         <div className="flex flex-wrap items-end gap-xs">
           <input type="date" aria-label="Do date" value={plan.doDate} onChange={(e) => set({ doDate: e.target.value })} className={`${FIELD} min-w-[200px] flex-1`} />
-          <div className="ml-auto flex flex-wrap justify-end gap-xs" role="group" aria-label="Quick days">
+          {/* A phone: the three quick days as one even row across the full width under the date; wider, beside the date at its right. */}
+          <div className="grid w-full grid-cols-3 gap-xs sm:ml-auto sm:flex sm:w-auto sm:flex-wrap sm:justify-end" role="group" aria-label="Quick days">
           {[
             { name: 'Today', day: today },
             { name: 'Tomorrow', day: addDays(today, 1) },
             { name: 'Next week', day: addDays(today, 7) },
           ].map((q) => (
-            <button key={q.name} type="button" aria-pressed={plan.doDate === q.day} onClick={() => set({ doDate: plan.doDate === q.day ? '' : q.day })} className={`toy min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${plan.doDate === q.day ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={q.name} type="button" aria-pressed={plan.doDate === q.day} onClick={() => set({ doDate: plan.doDate === q.day ? '' : q.day })} className={`toy min-h-[44px] whitespace-nowrap rounded-pill border-2 px-xs text-[14px] font-bold sm:px-sm ${plan.doDate === q.day ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {q.name}
             </button>
           ))}
@@ -156,8 +162,11 @@ export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange
         anchor={plan.doDate || plan.dueDate}
         onChange={(repeat) => set({ repeat })}
         onAnchor={plan.doDate || plan.dueDate ? (day) => (plan.doDate || !plan.dueDate ? set({ doDate: day }) : set({ dueDate: day })) : undefined}
-        note="Tick it and the next one is made for you. A repeating task is a habit."
+        note="Tick it and the next one is made for you."
       />
+      {plan.repeat && dated && (
+        <Toggle on={plan.habit} onChange={(habit) => set({ habit })} label="Count it as a habit" hint={plan.habit ? 'It wears the Habit tag.' : 'No Habit tag: it only comes back.'} compact />
+      )}
 
       <Toggle
         on={plan.remind}
@@ -179,10 +188,10 @@ export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange
           <input type="number" min={5} max={600} step={5} value={plan.minutes} onChange={(e) => set({ minutes: e.target.value })} placeholder="25" className={FIELD} />
         </label>
       </div>
-      {/* On a phone the five chips cannot share a line; the cap breaks them three and two, never four and a lone one. */}
-      <div className="ml-auto flex max-w-[260px] flex-wrap justify-end gap-xs sm:max-w-none" role="group" aria-label="How long it should take">
+      {/* On a phone the five chips are one even row across the full width, like the quick days above; wider, at the right. */}
+      <div className="grid w-full grid-cols-5 gap-xs sm:ml-auto sm:flex sm:w-auto sm:flex-wrap sm:justify-end" role="group" aria-label="How long it should take">
         {ESTIMATES.map((m) => (
-          <button key={m} type="button" aria-pressed={plan.minutes === String(m)} onClick={() => set({ minutes: plan.minutes === String(m) ? '' : String(m) })} className={`toy min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${plan.minutes === String(m) ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+          <button key={m} type="button" aria-pressed={plan.minutes === String(m)} onClick={() => set({ minutes: plan.minutes === String(m) ? '' : String(m) })} className={`toy min-h-[44px] whitespace-nowrap rounded-pill border-2 px-0 text-[14px] font-bold sm:px-sm ${plan.minutes === String(m) ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
             {m >= 60 ? `${m / 60} h` : `${m} min`}
           </button>
         ))}
@@ -208,7 +217,7 @@ export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange
   );
 }
 
-/** Opens Mindful minutes ready to focus on this task, for as long as its estimate says. */
+/** Opens Mindfulness ready to focus on this task, for as long as its estimate says. */
 export function StartFocus({ task, className = '' }: { task: Node; className?: string }) {
   const min = task.estimateMin ?? 25;
   return (
@@ -272,14 +281,58 @@ export function Subtasks({ task }: { task: Node }) {
   );
 }
 
+/**
+ * The pillar and project an open task holds up: any of the person's active projects, grouped by pillar. Moving it under a project in
+ * another pillar moves the task to that pillar (PATCH /nodes/:id with parentId). Used by TaskPanel on Daily and the pillar page's edit sheet.
+ */
+export function ProjectSelect({ projects, value, onChange }: { projects: MonthProject[]; value: string; onChange: (id: string) => void }) {
+  return (
+    <label className="block">
+      <span className="block text-[14px] font-bold">Pillar and project</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={FIELD}>
+        {!projects.some((p) => p.id === value) && <option value={value}>Where it is now</option>}
+        {RELATIONSHIPS.map((r) => {
+          const here = projects.filter((p) => p.relationship === r.key);
+          return here.length > 0 ? (
+            <optgroup key={r.key} label={r.name}>
+              {here.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title}
+                </option>
+              ))}
+            </optgroup>
+          ) : null;
+        })}
+      </select>
+      <span className="mt-xs block text-[12px] font-semibold text-ink-soft">Moving it to a project in another pillar moves the task to that pillar.</span>
+    </label>
+  );
+}
+
 /** The panel under a task on Daily: plan it, break it into subtasks, size it and start a focus session on it. */
 export function TaskPanel({ task, today }: { task: Node; today: string }) {
   const refresh = useRefreshAll();
   const [plan, setPlan] = useState<Plan>(() => planOf(task));
+  // The pillar and project it holds up: any of the person's open projects, grouped by pillar. The projects come from this month's
+  // answer, the same read the month calendar and "Add a task" use. A ticked task stays where it is.
+  const month = today.slice(0, 7);
+  const projectsQ = useAuthed(['today', 'month', month, today], () => api.todayMonth(month, today), task.status === 'active');
+  const [parentId, setParentId] = useState(task.parentId ?? '');
   const problem = planProblem(plan);
-  const save = useMutation({ mutationFn: () => api.updateNode(task.id, planBody(plan)), onSuccess: () => refresh() });
+  const save = useMutation({ mutationFn: () => api.updateNode(task.id, { ...planBody(plan), ...(parentId && parentId !== task.parentId ? { parentId } : {}) }), onSuccess: () => refresh() });
+  const projects = projectsQ.data?.projects ?? [];
   return (
     <div className="mt-xs flex flex-col gap-md rounded-card bg-card p-md shadow-toy-soft">
+      {task.status === 'active' && projects.length > 0 && (
+        <ProjectSelect
+          projects={projects}
+          value={parentId}
+          onChange={(id) => {
+            save.reset();
+            setParentId(id);
+          }}
+        />
+      )}
       <TaskPlanFields
         plan={plan}
         onChange={(next) => {

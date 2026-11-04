@@ -1,3 +1,4 @@
+import { CloseButton } from '../components/CloseButton';
 import { DEFAULT_PAGE_SIZE, formatCount, pageQuery, type Page, type PageSize, money } from '@kreators/shared';
 import { MAX_CREDIT_GRANT, PAID_PLANS, PLAN_DAYS, planName, type PlanKey, type TagTone } from '@kreators/shared';
 import { ATTENDEE_XP_MAX, codeProblem, normalizeCode, type AdminAttendeeCode } from '@kreators/shared';
@@ -39,7 +40,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
 import { DataTable, Select } from '../components/DataTable';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { AdminDiscounts } from '../components/AdminDiscounts';
@@ -52,6 +53,7 @@ import { Icon } from '../components/Icon';
 import { X } from 'lucide-react';
 import { adminApi } from '../lib/api';
 import { useMe } from '../lib/queries';
+import { useParamState } from '../lib/useParamState';
 import { FIELD } from '../lib/ui';
 import { dateTime, longDate } from '../lib/date';
 import { StatusTag } from '../components/StatusTag';
@@ -62,11 +64,8 @@ const KEY_STORE = 'kreators.adminKey';
 const PERMISSION_NAMES: Record<Permission, string> = { talent: 'Talent', cohorts: 'Cohorts', events: 'Events', finance: 'Finance', moderation: 'Moderation', support: 'Support', review: 'Review', mentor: 'Mentor', coach: 'Life coach' };
 const TAB_KEYS = ['people', 'flags', 'listings', 'coaches', 'codes', 'discounts', 'agencyhouse', 'orders', 'webhooks', 'kyc', 'ops', 'redemptions', 'audit'] as const;
 type Tab = (typeof TAB_KEYS)[number];
-/** The tab a link asked for (an inbox note about a coach ask opens Life coaches), else People. */
-const firstTab = (): Tab => {
-  const t = new URLSearchParams(window.location.search).get('tab');
-  return (TAB_KEYS as readonly string[]).includes(t ?? '') ? (t as Tab) : 'people';
-};
+/** The tab in the address (an inbox note about a coach ask opens Life coaches), else People. */
+const asTab = (t: string): Tab => ((TAB_KEYS as readonly string[]).includes(t) ? (t as Tab) : 'people');
 const LINK_STATUS_NAMES: Record<AdminCoachLink['status'], string> = { pending: 'Waiting', active: 'Active', declined: 'Said no', ended: 'Ended' };
 const ASKED_BY_NAMES: Record<AdminCoachLink['askedBy'], string> = { coach: 'Coach asked', student: 'Student asked', admin: 'The team' };
 const APP_NAMES: Record<AdminAttendeeCode['app'], string> = { party: 'Party', run: 'Run', circles: 'Circles' };
@@ -109,7 +108,9 @@ export function Admin() {
   const me = useMe();
   const sessionAdmin = me.data?.user.role === 'admin';
   const [key, setKey] = useState(readKey);
-  const [tab, setTab] = useState<Tab>(firstTab);
+  // The tab lives in the address, so Back, a reload and a shared link land on it.
+  const [tabParam, setTabParam] = useParamState('tab', 'people');
+  const tab = asTab(tabParam);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -133,6 +134,8 @@ export function Admin() {
   const [q, setQ] = useState('');
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [selected, setSelected] = useState<AdminUser | null>(null);
+  // The account the delete sheet is asking about; null when it is closed.
+  const [deleting, setDeleting] = useState<AdminUser | null>(null);
   const [honor, setHonor] = useState(ADMIN_HONORS[0]?.key ?? 'founder');
   const [note, setNote] = useState('');
   const [amount, setAmount] = useState('100');
@@ -230,11 +233,17 @@ export function Admin() {
     if (sessionAdmin && !loaded && !busy) void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionAdmin]);
-  // A link that opened Life coaches fetches it once the rest is in.
+  // Each tab fetches on first open (by a tap, Back or a link), once the rest is in, so the first load stays quick.
   useEffect(() => {
-    if (loaded && tab === 'coaches' && coachAsks === null) void loadCoaches();
+    if (!loaded) return;
+    if (tab === 'orders' && orders === null) void searchOrders();
+    if (tab === 'webhooks' && hooks === null) void loadHooks();
+    if (tab === 'kyc' && kycList === null) void loadKyc();
+    if (tab === 'ops' && funnels === null) void loadOps();
+    if (tab === 'codes' && codes === null) void loadCodes();
+    if (tab === 'coaches' && coachAsks === null) void loadCoaches();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded]);
+  }, [loaded, tab]);
 
   const applyUser = (u: AdminUser) => {
     setSelected((s) => (s?.id === u.id ? u : s));
@@ -332,16 +341,8 @@ export function Admin() {
       setOutbox(o.outbox);
       gotPage('outbox', o.page);
     });
-  // Each new tab fetches on first open, so the first load stays as quick as it was.
-  const openTab = (k: Tab) => {
-    setTab(k);
-    if (k === 'orders' && orders === null) void searchOrders();
-    if (k === 'webhooks' && hooks === null) void loadHooks();
-    if (k === 'kyc' && kycList === null) void loadKyc();
-    if (k === 'ops' && funnels === null) void loadOps();
-    if (k === 'codes' && codes === null) void loadCodes();
-    if (k === 'coaches' && coachAsks === null) void loadCoaches();
-  };
+  // The effect above fetches what the new tab needs.
+  const openTab = (k: Tab) => setTabParam(k);
   /** The same change on every ticked row, one after the other, then one refresh. */
   const each = async <T,>(rows: T[], fn: (row: T) => Promise<void>) => {
     for (const r of rows) await fn(r);
@@ -366,13 +367,11 @@ export function Admin() {
 
   return (
     <Screen tabs={false} wide>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Admin</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          {sessionAdmin ? 'You are signed in as an admin, so no key is needed.' : 'Paste the admin key, or sign in with an admin account. Every change here is written to the audit log.'}
-        </p>
-      </header>
+      <AppCover
+        back={{ to: '/apps', label: 'Apps' }}
+        title="Admin"
+        lede={sessionAdmin ? 'You are signed in as an admin, so no key is needed.' : 'Paste the admin key, or sign in with an admin account. Every change here is written to the audit log.'}
+      />
 
       {!sessionAdmin && (
         <form
@@ -471,12 +470,7 @@ export function Admin() {
                           aria-label={`Delete ${u.displayName || 'this account'}`}
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (!window.confirm(`Delete ${u.displayName || 'this account'}? Their details and what they made go. Money records stay, without their name. This cannot be undone.`)) return;
-                            void run(async () => {
-                              await adminApi.deleteUser(key, u.id);
-                              if (selected?.id === u.id) setSelected(null);
-                              await refreshUsers(asks.users);
-                            });
+                            setDeleting(u);
                           }}
                           className="toy flex size-[44px] items-center justify-center rounded-pill text-ink-soft hover:text-r1 disabled:opacity-30"
                         >
@@ -496,6 +490,32 @@ export function Admin() {
                 />
               </div>
 
+              <Sheet open={deleting !== null} onClose={() => setDeleting(null)} title={`Delete ${deleting?.displayName || 'this account'}?`}>
+                <p className="m-0 text-[14px] font-semibold text-ink-soft">Their details and what they made go. Money records stay, without their name. This cannot be undone.</p>
+                <div className="mt-md flex flex-col gap-xs">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      const u = deleting;
+                      if (!u) return;
+                      setDeleting(null);
+                      void run(async () => {
+                        await adminApi.deleteUser(key, u.id);
+                        if (selected?.id === u.id) setSelected(null);
+                        await refreshUsers(asks.users);
+                      });
+                    }}
+                    className="toy inline-flex min-h-[56px] items-center justify-center gap-xs rounded-pill bg-r1 px-md text-[18px] font-bold text-on-fill disabled:opacity-50"
+                  >
+                    Yes, delete
+                  </button>
+                  <Button variant="outline" size="lg" onClick={() => setDeleting(null)}>
+                    Keep this account
+                  </Button>
+                </div>
+              </Sheet>
+
               {selected && (
                 <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
                   <div className="flex items-start justify-between gap-sm">
@@ -503,9 +523,7 @@ export function Admin() {
                       <h3 className="text-[22px]">{selected.displayName || 'Anonymous climber'}</h3>
                       <p className="mt-xs m-0 text-[12px] font-bold text-ink-mute">{selected.id}</p>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => setSelected(null)}>
-                      Close
-                    </Button>
+                    <CloseButton onClick={() => setSelected(null)} label="Close this person" />
                   </div>
 
                   <p className="mt-md m-0 text-[14px] font-bold">Permissions</p>
@@ -1134,9 +1152,7 @@ export function Admin() {
                     <h3 className="text-[22px]">
                       {orderDetail.order.productTitle} <span className="text-[14px] font-bold text-ink-mute">#{orderDetail.order.id.slice(0, 8)}</span>
                     </h3>
-                    <Button variant="ghost" size="sm" onClick={() => setOrderDetail(null)}>
-                      Close
-                    </Button>
+                    <CloseButton onClick={() => setOrderDetail(null)} label="Close this order" />
                   </div>
                   <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
                     <Pill tone={statusTone(orderDetail.order.status)}>{orderDetail.order.status}</Pill> {orderDetail.order.provider}

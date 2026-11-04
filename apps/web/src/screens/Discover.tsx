@@ -32,7 +32,7 @@ import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { StatTile } from '../components/Charts';
 import { HeroBlobs } from '../components/Hero';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Section } from '../components/Section';
 import { Toggle } from '../components/Toggle';
@@ -40,9 +40,11 @@ import { Fold } from '../components/Fold';
 import { useParamState } from '../lib/useParamState';
 import { api } from '../lib/api';
 import { useDiscover, useRefreshAll } from '../lib/queries';
-import { MoreScreen, MoreSection } from '../components/DiscoverMore';
+import { AskDelete, MoreScreen, MoreSection } from '../components/DiscoverMore';
 import { IconTag } from '../components/FactTag';
+import { CardHead } from '../components/CardHead';
 import { TabRow } from '../components/TabRow';
+import { EmergenceSlot } from '../components/EmergenceSlot';
 
 /** Every step of the quiz in order, with where its answer lives. */
 interface Step {
@@ -423,9 +425,11 @@ function Quiz({ answers, setAnswers, onLeave, onDone, busy, error }: { answers: 
     const s = DISCOVER_SECTIONS[intro]!;
     body = (
       <div className="rounded-card bg-card p-md shadow-toy-soft">
-        <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">Part {intro + 1} of {DISCOVER_SECTIONS.length}</p>
+        {/* The count sits in the card's top right corner, level with the part line, so the heading moves up. */}
+        <CardHead tag={<IconTag tone="calm" icon="ListChecks" fit>{`${s.count} questions`}</IconTag>}>
+          <p className="m-0 text-[12px] font-extrabold uppercase leading-[24px] tracking-wide text-ink-soft">Part {intro + 1} of {DISCOVER_SECTIONS.length}</p>
+        </CardHead>
         <h2 className="mt-xs text-[24px]">{s.name}</h2>
-        <IconTag className="mt-xs" tone="calm" icon="ListChecks">{`${s.count} questions`}</IconTag>
         <p className="mt-sm m-0 text-[16px] font-semibold">{s.blurb}</p>
         <Button className="mt-md" onClick={() => setIntro(null)}>
           Start this part
@@ -700,6 +704,7 @@ function UseTab({ settings, onChange }: { settings: { steps: boolean; assistant:
 
 function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, deleting, onOpenMore }: { onOpenMore: (k: ExtraKind) => void; id: string; at: string; result: DiscoverResult; settings: { steps: boolean; assistant: boolean; mind: boolean }; onSettings: (s: Partial<{ steps: boolean; assistant: boolean; mind: boolean }>) => void; onRetake: () => void; onDelete: (id: string) => void; deleting: boolean }) {
   const [tabAsked, setTab] = useParamState('tab', 'strengths');
+  const [asking, setAsking] = useState(false);
   // A link to the emotional intelligence tab only works when that part was taken.
   const tab = tabAsked === 'eq' && !result.eq ? 'strengths' : tabAsked;
   const growth = DISCOVER_STRENGTHS[result.growth];
@@ -817,10 +822,11 @@ function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, 
         <Button variant="outline" onClick={onRetake}>
           Take it again
         </Button>
-        <Button variant="ghost" onClick={() => window.confirm('Delete this result for good?') && onDelete(id)} disabled={deleting}>
+        <Button variant="ghost" onClick={() => setAsking(true)} disabled={deleting}>
           Delete this result
         </Button>
       </div>
+      <AskDelete open={asking} title="Delete this result?" line="The result and your answers are gone for good. This cannot be undone." pending={deleting} failed={false} onYes={() => onDelete(id)} onClose={() => setAsking(false)} />
     </>
   );
 }
@@ -896,11 +902,7 @@ export function Discover() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Discover</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">A quiz on how you think, feel and act, and where your strengths are.</p>
-      </header>
+      <AppCover back={{ to: '/apps', label: 'Apps' }} title="Discover" lede="A quiz on how you think, feel and act, and where your strengths are." />
 
       {q.isPending && (
         <p className="mt-md text-[14px] font-bold text-ink-soft" role="status">
@@ -908,9 +910,9 @@ export function Discover() {
         </p>
       )}
       {q.isError && (
-        <div className="mt-md rounded-card bg-card p-md shadow-toy-soft" role="alert">
-          <p className="m-0 font-bold">Could not load Discover.</p>
-          <Button variant="outline" className="mt-sm" onClick={() => q.refetch()}>
+        <div className="mt-md rounded-card bg-card p-md shadow-toy-soft flex flex-wrap-reverse items-center justify-between gap-sm" role="alert">
+          <p className="m-0 font-bold min-w-0 flex-1 basis-[60%]">Could not load Discover.</p>
+          <Button variant="outline" onClick={() => q.refetch()}>
             Try again
           </Button>
         </div>
@@ -970,14 +972,16 @@ export function Discover() {
 
           {result && (
             <Section id="last" title="Your last result">
-              <div className="rounded-card bg-card p-md shadow-toy-soft">
-                <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                  {new Date(result.createdAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', year: 'numeric' })}
-                </p>
-                <p className="mt-xs m-0 text-[16px] font-bold">
-                  {result.result.top.map((k) => DISCOVER_STRENGTHS[k].name).join(', ')}
-                </p>
-                <Button className="mt-sm" variant="outline" onClick={() => { setShown(result); setMode('result'); }}>
+              <div className="flex flex-wrap-reverse items-center justify-between gap-sm rounded-card bg-card p-md shadow-toy-soft">
+                <div className="min-w-0 flex-1 basis-[60%]">
+                  <p className="m-0 text-[14px] font-semibold text-ink-soft">
+                    {new Date(result.createdAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', year: 'numeric' })}
+                  </p>
+                  <p className="mt-xs m-0 text-[16px] font-bold">
+                    {result.result.top.map((k) => DISCOVER_STRENGTHS[k].name).join(', ')}
+                  </p>
+                </div>
+                <Button variant="outline" onClick={() => { setShown(result); setMode('result'); }}>
                   See my strengths
                 </Button>
               </div>
@@ -997,6 +1001,7 @@ export function Discover() {
           )}
         </>
       )}
+      <EmergenceSlot app="discover" max={2} />
     </Screen>
   );
 }

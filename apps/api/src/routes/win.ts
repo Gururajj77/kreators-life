@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { bountyPayout, detectPlatform, type Bounty, type BountySubmission, type SocialMetric } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { audit, can, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, str, pageOf, paged } from '../db';
+import { audit, can, liveUser, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, str, pageOf, paged } from '../db';
 import { fetchMetrics } from '../social';
 
 /** Win: content rewards. A brand funds a pool; creators post videos; verified views turn into points. */
@@ -67,11 +67,12 @@ win.get('/:id', async (c) => {
   const staff = can(user, 'review') || can(user, 'finance');
   const ask = pageOf(c);
   // The person's own entry, everyone's entries (staff only) and this reward's board do not depend on each other: read together.
+  // Neither everyone's entries nor the board lists a deleted member (`liveUser`); the rows stay for the books.
   const [mine, all, board] = await Promise.all([
     db.prepare(`${S_SELECT} WHERE s.bounty_id = ? AND s.user_id = ?`).bind(b.id, user.id).first<SRow>(),
-    staff ? db.prepare(`${S_SELECT} WHERE s.bounty_id = ? ORDER BY s.latest_views DESC LIMIT ? OFFSET ?`).bind(b.id, ask.limit, ask.offset).all<SRow>() : Promise.resolve({ results: [] as SRow[] }),
+    staff ? db.prepare(`${S_SELECT} WHERE s.bounty_id = ? AND ${liveUser('u')} ORDER BY s.latest_views DESC LIMIT ? OFFSET ?`).bind(b.id, ask.limit, ask.offset).all<SRow>() : Promise.resolve({ results: [] as SRow[] }),
     // The leaderboard of this reward shows names and views only, never payouts.
-    db.prepare('SELECT u.display_name, s.latest_views, s.status FROM bounty_submissions s JOIN users u ON u.id = s.user_id WHERE s.bounty_id = ? AND s.status != \'rejected\' ORDER BY s.latest_views DESC LIMIT 10').bind(b.id).all<{ display_name: string; latest_views: number; status: string }>(),
+    db.prepare(`SELECT u.display_name, s.latest_views, s.status FROM bounty_submissions s JOIN users u ON u.id = s.user_id WHERE s.bounty_id = ? AND s.status != 'rejected' AND ${liveUser('u')} ORDER BY s.latest_views DESC LIMIT 10`).bind(b.id).all<{ display_name: string; latest_views: number; status: string }>(),
   ]);
   const [metrics, allMetrics] = await Promise.all([metricsFor(db, mine ? [mine.id] : []), staff ? metricsFor(db, all.results.map((s) => s.id)) : Promise.resolve([])]);
   const pg = paged(all.results, ask);

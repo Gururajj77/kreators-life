@@ -5,7 +5,7 @@ import { Link } from 'react-router';
 import { Button } from '../components/Button';
 import { DiscountField } from '../components/DiscountField';
 import { Fold } from '../components/Fold';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api, errorText } from '../lib/api';
@@ -31,11 +31,7 @@ export function School() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">School</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Cohorts with lessons, assignments, live sessions and a mentor’s feedback.</p>
-      </header>
+      <AppCover back={{ to: '/apps', label: 'Apps' }} title="School" lede="Cohorts with lessons, assignments, live sessions and a mentor’s feedback." />
 
       {d && (d.myCohorts.length > 0 || d.managed.length > 0) && (
         <section className="mt-lg" aria-labelledby="mine-heading">
@@ -140,7 +136,7 @@ function ProgramCard({ program: p, staff, myIds, onChange }: { program: Program;
                 Open
               </Link>
             ) : (
-              <Button onClick={() => enroll.mutate(k.id)} disabled={enroll.isPending || k.enrolled >= k.capacity}>
+              <Button variant="outline" onClick={() => enroll.mutate(k.id)} disabled={enroll.isPending || k.enrolled >= k.capacity}>
                 {k.enrolled >= k.capacity ? 'Full' : 'Enrol'}
               </Button>
             )}

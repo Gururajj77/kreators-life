@@ -20,8 +20,10 @@ interface Props {
  * On a laptop the tab bar becomes a sidebar on the left and the content uses the width as one
  * column. Home alone asks for two, so its metric cards sit side by side.
  */
+// From the laptop width the column is centred and keeps the sidebar's width plus one gap on its left (2026-11-05: at 1024 the words met the
+// sidebar's edge), and the frame is one gap wider, so the text column keeps its width.
 export function Screen({ children, tabs = true, columns = false, wide = false, howTo = true, className = '' }: Props) {
-  const width = tabs ? 'max-w-[480px] md:ml-[240px] md:max-w-[1040px] lg:mx-auto lg:pl-[240px]' : wide ? 'max-w-[480px] md:max-w-[1200px]' : 'max-w-[480px] md:max-w-[640px]';
+  const width = tabs ? 'max-w-[480px] md:ml-[var(--nav-w)] md:max-w-[1040px] lg:mx-auto lg:max-w-[calc(1040px+var(--spacing-lg))] lg:pl-[calc(var(--nav-w)+var(--spacing-lg))]' : wide ? 'max-w-[480px] md:max-w-[1200px]' : 'max-w-[480px] md:max-w-[640px]';
   return (
     <>
       <SkipLink />

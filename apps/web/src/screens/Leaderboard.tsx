@@ -1,8 +1,8 @@
-import { IDENTITY_STAGES, LEADERBOARD_POOL, LEADERBOARD_SCOPES, isLeaderboardScope, type LeaderboardBlock, type LeaderboardEntry, type LeaderboardOption, type LeaderboardScope, type LeaderboardSort, LOCALE } from '@kreators/shared';
+import { IDENTITY_STAGES, LEADERBOARD_POOL, LEADERBOARD_SCOPES, isLeaderboardScope, type LeaderboardBlock, type LeaderboardEntry, type LeaderboardOption, type LeaderboardScope, type LeaderboardSort, LOCALE, formatCount } from '@kreators/shared';
 import { useSearchParams } from 'react-router';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Pager, usePage } from '../components/Pager';
 import { StatTile } from '../components/Charts';
@@ -15,11 +15,11 @@ import { Medal } from 'lucide-react';
 import { AppIcon } from '../components/AppIcon';
 import { Icon } from '../components/Icon';
 import { IconTag } from '../components/FactTag';
-import { TabRow } from '../components/TabRow';
+import { FilterBar, FilterSelect } from '../components/FilterSelect';
 
 const SORTS: { key: LeaderboardSort; label: string; stat: (e: LeaderboardEntry) => string }[] = [
-  { key: 'xp', label: 'All time', stat: (e) => `${e.xp} xp` },
-  { key: 'season', label: 'This month', stat: (e) => `${e.seasonXp} xp` },
+  { key: 'xp', label: 'All time', stat: (e) => `${formatCount(e.xp)} xp` },
+  { key: 'season', label: 'This month', stat: (e) => `${formatCount(e.seasonXp)} xp` },
   { key: 'streak', label: 'Streak', stat: (e) => `${e.streak} ${e.streak === 1 ? 'day' : 'days'}` },
   { key: 'badges', label: 'Badges', stat: (e) => `${e.badgeCount} ${e.badgeCount === 1 ? 'badge' : 'badges'}` },
 ];
@@ -70,20 +70,8 @@ function Entry({ e, stat }: { e: LeaderboardEntry; stat: string }) {
   );
 }
 
-const SCOPE_NOUN: Record<LeaderboardScope, string> = { all: '', goal: 'goal', pillar: 'pillar', city: 'city', identity: 'tag', level: 'level' };
-
-function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={on}
-      onClick={onClick}
-      className={`toy min-h-[44px] shrink-0 rounded-pill border-2 px-md text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
-    >
-      {children}
-    </button>
-  );
-}
+/** The label of the second dropdown, short enough for the 76px label column on a phone. */
+const SCOPE_LABEL: Record<LeaderboardScope, string> = { all: '', goal: 'Goal', pillar: 'Pillar', city: 'City', identity: 'Tag', level: 'Level' };
 
 function BlockCard({ b, onOpen, className = '' }: { b: LeaderboardBlock; onOpen: () => void; className?: string }) {
   return (
@@ -104,7 +92,7 @@ function BlockCard({ b, onOpen, className = '' }: { b: LeaderboardBlock; onOpen:
                 <PlaceMark place={t.rank} /> {t.name}
                 {t.isMe ? ' (you)' : ''}
               </span>
-              <span className="shrink-0 font-extrabold">{t.xp} xp</span>
+              <span className="shrink-0 font-extrabold">{formatCount(t.xp)} xp</span>
             </li>
           ))}
         </ol>
@@ -148,7 +136,7 @@ export function Leaderboard() {
   const q = useLeaderboard(by, scope, value, paging.query);
   const sort = SORTS.find((s) => s.key === by) ?? SORTS[0]!;
   const pillarBoard = scope === 'pillar';
-  const statFor = (e: LeaderboardEntry) => (by === 'xp' && pillarBoard ? `${e.xp} xp here` : sort.stat(e));
+  const statFor = (e: LeaderboardEntry) => (by === 'xp' && pillarBoard ? `${formatCount(e.xp)} xp here` : sort.stat(e));
   const open = (b: LeaderboardBlock) => {
     patch({ scope: b.scope, value: b.value });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -160,53 +148,28 @@ export function Leaderboard() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Leaderboard</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">See where you stand by goal, pillar, city and more.</p>
-        <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-[12px] font-bold text-ink-soft">
+      <AppCover back={{ to: '/apps', label: 'Apps' }} title="Leaderboard" lede="See where you stand by goal, pillar, city and more.">
+        <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-[12px] font-bold text-ink-soft">
           <li>Each month is a season, and its top three get the Season top three honor.</li>
           <li>You show only after you opt in under Profile.</li>
           <li>Journal and wellbeing never count.</li>
         </ul>
-      </header>
+      </AppCover>
 
       <section className="mt-md" aria-label="Choose a board">
-        <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">Board</p>
-        <TabRow className="mt-xs" pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`} label="Board type" items={LEADERBOARD_SCOPES} value={scope} onChange={(k) => patch({ scope: k, value: '' })} />
-        {scope !== 'all' && (
-          <label className="mt-sm block">
-            <span className="block text-[14px] font-bold">Which {SCOPE_NOUN[scope]}</span>
-            <select
+        {/* Board, which one and rank by each pick one value, so they are dropdowns in one row (one per line on a phone). */}
+        <FilterBar label="Board" count={scope === 'all' ? 2 : 3}>
+          <FilterSelect label="Board" items={LEADERBOARD_SCOPES} value={scope} onChange={(k) => patch({ scope: k, value: '' })} />
+          {scope !== 'all' && (
+            <FilterSelect
+              label={SCOPE_LABEL[scope]}
+              items={choices.length === 0 ? [{ key: '', label: options.isPending ? 'Loading' : 'None yet' }] : choices.map((o) => ({ key: o.value, label: `${o.label} (${o.count})` }))}
               value={value}
-              onChange={(e) => {
-                patch({ value: e.target.value });
-              }}
-              className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]"
-            >
-              {choices.length === 0 && <option value="">{options.isPending ? 'Loading' : 'None yet'}</option>}
-              {choices.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label} ({o.count})
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <p className="mt-sm m-0 text-[12px] font-bold text-ink-soft">Rank by</p>
-        <div className="mt-xs grid grid-cols-2 gap-xs sm:grid-cols-4" role="group" aria-label="Rank by">
-          {SORTS.map((s) => (
-            <Chip
-              key={s.key}
-              on={by === s.key}
-              onClick={() => {
-                patch({ by: s.key });
-              }}
-            >
-              {s.label}
-            </Chip>
-          ))}
-        </div>
+              onChange={(v) => patch({ value: v })}
+            />
+          )}
+          <FilterSelect label="Rank by" items={SORTS} value={by} onChange={(k) => patch({ by: k })} />
+        </FilterBar>
       </section>
 
       {q.isPending && q.fetchStatus !== 'idle' && (
@@ -215,9 +178,9 @@ export function Leaderboard() {
         </p>
       )}
       {q.isError && (
-        <div className="mt-md rounded-card bg-card p-md shadow-toy-soft" role="alert">
-          <p className="m-0 font-bold">Could not load the leaderboard.</p>
-          <Button variant="outline" className="mt-sm" onClick={() => q.refetch()}>
+        <div className="mt-md flex flex-wrap-reverse items-center justify-between gap-sm rounded-card bg-card p-md shadow-toy-soft" role="alert">
+          <p className="m-0 min-w-0 flex-1 basis-[60%] font-bold">Could not load the leaderboard.</p>
+          <Button variant="outline" onClick={() => q.refetch()}>
             Try again
           </Button>
         </div>
@@ -231,7 +194,7 @@ export function Leaderboard() {
             </h2>
             <div className="mt-sm grid grid-cols-2 gap-xs sm:grid-cols-4">
               <StatTile label="Your spot" value={me ? `#${me.rank}` : '·'} hint={me ? `of ${q.data.people}${q.data.people >= LEADERBOARD_POOL ? '+' : ''}` : q.data.optedIn ? `Not in the top ${LEADERBOARD_POOL} here` : 'You are hidden'} tone="var(--color-card)" />
-              <StatTile label={pillarBoard ? 'Your xp here' : 'Your xp'} value={me ? me.xp : '·'} hint={me ? `Level ${me.level}` : undefined} />
+              <StatTile label={pillarBoard ? 'Your xp here' : 'Your xp'} value={me ? formatCount(me.xp) : '·'} hint={me ? `Level ${me.level}` : undefined} />
               <StatTile label="On this board" value={q.data.people} hint={q.data.people >= LEADERBOARD_POOL ? 'Top of many' : q.data.people === 1 ? 'person' : 'people'} />
               <StatTile label="Season ends" value={daysLeft === null ? '·' : `${daysLeft}d`} hint={q.data.season.label} />
             </div>
@@ -297,7 +260,7 @@ export function Leaderboard() {
                   <li key={p.season} className="rounded-tile bg-card p-sm shadow-toy-soft">
                     <p className="m-0 text-[14px] font-extrabold">{p.label}</p>
                     <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                      {p.top.map((t) => `${placeWord(t.place)} ${t.name}${t.isMe ? ' (you)' : ''}, ${t.xp} xp`).join(' · ')}
+                      {p.top.map((t) => `${placeWord(t.place)} ${t.name}${t.isMe ? ' (you)' : ''}, ${formatCount(t.xp)} xp`).join(' · ')}
                     </p>
                   </li>
                 ))}

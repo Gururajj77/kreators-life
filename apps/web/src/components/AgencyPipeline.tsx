@@ -9,10 +9,12 @@ import { shortDay } from '../lib/date';
 import { Busy, Skeleton } from './Skeleton';
 import { FILTER_SELECT } from './AgencyInvoices';
 import { Button } from './Button';
+import { useAgencyCan } from '../lib/agencyWorkspace';
 import { DeliverableSheet } from './DeliverableSheet';
 import { KanbanBoard } from './KanbanBoard';
 import { Pager, usePage } from './Pager';
 import { StatusTag } from './StatusTag';
+import { CardHead } from './CardHead';
 import { useView, ViewToggle } from './ViewToggle';
 
 const COPY = {
@@ -46,12 +48,23 @@ function Facts({ item, showClient, showStage, compact = false }: { item: AgencyD
     );
   return (
     <>
-      <span className="block text-[16px] font-extrabold leading-snug">{item.title}</span>
-      <span className="mt-xs flex flex-wrap items-center gap-xs">
-        {showStage && <StatusTag tone={DELIVERABLE_STAGE_TONE[item.stage]}>{DELIVERABLE_STAGE_META[item.stage].name}</StatusTag>}
-        {item.overdue && <StatusTag tone="bad">Late</StatusTag>}
-        {item.armyDeliverableId && item.army && <StatusTag tone={ARMY_TONE[item.army.status] ?? 'neutral'}>{ARMY_NAME[item.army.status] ?? 'Army'}</StatusTag>}
-      </span>
+      <CardHead
+        tag={
+          (showStage || item.overdue) && (
+            <>
+              {showStage && <StatusTag fit tone={DELIVERABLE_STAGE_TONE[item.stage]}>{DELIVERABLE_STAGE_META[item.stage].name}</StatusTag>}
+              {item.overdue && <StatusTag fit tone="bad">Late</StatusTag>}
+            </>
+          )
+        }
+      >
+        <span className="block text-[16px] font-extrabold leading-snug">{item.title}</span>
+      </CardHead>
+      {item.armyDeliverableId && item.army && (
+        <span className="mt-xs flex">
+          <StatusTag tone={ARMY_TONE[item.army.status] ?? 'neutral'}>{ARMY_NAME[item.army.status] ?? 'Army'}</StatusTag>
+        </span>
+      )}
       <span className="mt-xs block text-[12px] font-bold text-ink-soft">
         {tie(
           `${DELIVERABLE_KIND_NAME[item.kind]}${item.platform && item.platform.toLowerCase() !== DELIVERABLE_KIND_NAME[item.kind].toLowerCase() ? `, ${item.platform}` : ''}${showClient ? `, ${item.clientName}` : ''}`,
@@ -84,6 +97,8 @@ function Loading() {
  */
 export function AgencyPipeline({ clientId, defaultView = 'board', adding, onAdding }: { clientId?: string; defaultView?: 'list' | 'board'; adding?: boolean; onAdding?: (open: boolean) => void }) {
   const qc = useQueryClient();
+  // A team member with Pipeline on view only sees the pieces; nothing moves or gets added.
+  const edit = useAgencyCan().can('pipeline', 'edit');
   const [view, setView] = useView('p', defaultView);
   const [clientRaw, setClientRaw] = useParamState('pclient', '');
   const [channel, setChannel] = useParamState('pchannel', '');
@@ -149,7 +164,7 @@ export function AgencyPipeline({ clientId, defaultView = 'board', adding, onAddi
     <div>
       <div className="flex flex-wrap items-center justify-between gap-sm">
         <ViewToggle view={view} onChange={setView} label="Deliverables view" />
-        {!onAdding && (
+        {!onAdding && edit && (
           <Button size="sm" plusToX disabled={noClients} onClick={() => openItem(null)}>
             Add deliverable
           </Button>
@@ -225,9 +240,13 @@ export function AgencyPipeline({ clientId, defaultView = 'board', adding, onAddi
               columns={columns}
               empty="Nothing here"
               itemLabel={(item) => item.title}
-              onMove={(item, from, to) => {
-                if (from !== to) move.mutate({ item, to: to as DeliverableStage });
-              }}
+              onMove={
+                edit
+                  ? (item, from, to) => {
+                      if (from !== to) move.mutate({ item, to: to as DeliverableStage });
+                    }
+                  : undefined
+              }
               onMore={() => setPer((p) => p + 25)}
               card={(item) => (
                 <button type="button" onClick={() => openItem(item)} className="block w-full text-left">

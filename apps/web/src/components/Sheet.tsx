@@ -1,5 +1,6 @@
-import { AnimatePresence, motion, useDragControls } from 'motion/react';
+import { AnimatePresence, m as motion, useDragControls } from 'motion/react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { tick } from './fx/haptics';
 import { useDialogFocus } from '../lib/useDialogFocus';
 import { X } from 'lucide-react';
@@ -43,7 +44,9 @@ export function Sheet({ open, onClose, title, children }: Props) {
     };
   }, [open]);
 
-  return (
+  // Drawn at the top of the page, never inside whatever opened it: a glass panel's blur or a transform (the sidebar, a card, another
+  // sheet) would otherwise become the sheet's frame and squeeze it into that box.
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -96,6 +99,7 @@ export function Sheet({ open, onClose, title, children }: Props) {
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

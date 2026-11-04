@@ -97,8 +97,6 @@ const ANIMATIONS = {
 
 export type AnimatedName = keyof typeof ANIMATIONS;
 /** Every registered name, for the icon gallery and tests. */
-export const ANIMATED_NAMES = Object.keys(ANIMATIONS) as AnimatedName[];
-
 /**
  * How an icon plays: the player's own words, plus `hover-bounce` (ours): a hover plays it to its end and straight back,
  * whether or not the pointer stays (the padlock lifts and falls back; it never rests open on a locked button).

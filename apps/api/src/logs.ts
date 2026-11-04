@@ -90,7 +90,9 @@ export const logger = (): MiddlewareHandler<AppEnv> => async (c, next) => {
     if (level === 'error') run(writeLog(c.env.DB, { level, area: 'private', status, ms: Date.now() - started, message: 'a server error in a private area' }));
     return;
   }
-  run(writeLog(c.env.DB, { level, area, method, path: clean, status, ms: took, actorId: user?.id ?? null, actorName: user?.display_name ?? null, message }));
+  // A team member working on someone's Agency is named, not the owner whose agency it is.
+  const team = c.get('team');
+  run(writeLog(c.env.DB, { level, area, method, path: clean, status, ms: took, actorId: team?.memberId ?? user?.id ?? null, actorName: team?.memberName ?? user?.display_name ?? null, message }));
 };
 
 /** What the browser reports when a screen breaks. No person, no body: a short message and the screen it happened on. */

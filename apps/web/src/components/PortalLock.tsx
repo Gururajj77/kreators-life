@@ -27,7 +27,7 @@ const COPY = {
 } as const;
 
 /** Which kind of link a lock screen stands in front of, as the password ask names it. */
-export type AskKind = 'agency' | 'contract' | 'invoice' | 'doc';
+export type AskKind = 'agency' | 'contract' | 'invoice' | 'doc' | 'team';
 const ASK_KIND: Record<LockedLink, AskKind> = { contracts: 'contract', invoices: 'invoice', 'agency/doc': 'doc' };
 
 /**
@@ -107,7 +107,7 @@ export function AgencyMark({ name, logo, size = 'md' }: { name: string; logo: st
  * and logo) and who it is for, and the same words answer a wrong password and a link that is not there. `unlock` makes the call; this
  * keeps the session it returns for the tab (sessionStorage), so a reload in the same tab stays open and a new tab asks again.
  */
-export function PortalLock({ clientName, agencyName = '', agencyLogo = '', ended = false, link, unlock, onOpen, ask }: { clientName: string; agencyName?: string; agencyLogo?: string; /** The tab held a session that the server no longer takes. */ ended?: boolean; link: string; unlock: (password: string) => Promise<{ session: string | null; expiresAt: string | null }>; onOpen: () => void; /** Which link this is, so the client can ask the owner for a new password. */ ask?: { kind: AskKind; token: string } }) {
+export function PortalLock({ clientName, agencyName = '', agencyLogo = '', ended = false, link, unlock, onOpen, ask, keep = keepPortalSession }: { clientName: string; agencyName?: string; agencyLogo?: string; /** The tab held a session that the server no longer takes. */ ended?: boolean; link: string; unlock: (password: string) => Promise<{ session: string | null; expiresAt: string | null }>; onOpen: () => void; /** Which link this is, so the client can ask the owner for a new password. */ ask?: { kind: AskKind; token: string }; /** Where the unlock is kept: the client link's store by default, the team link's for the team link. */ keep?: (session: string, expiresAt: string | null, link: string) => void }) {
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const [password, setPassword] = useState('');
@@ -122,7 +122,7 @@ export function PortalLock({ clientName, agencyName = '', agencyLogo = '', ended
     setError('');
     try {
       const r = await unlock(password);
-      if (r.session) keepPortalSession(r.session, r.expiresAt, link);
+      if (r.session) keep(r.session, r.expiresAt, link);
       setPassword('');
       onOpen();
     } catch (err) {

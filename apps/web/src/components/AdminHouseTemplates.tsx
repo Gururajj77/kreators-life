@@ -199,8 +199,8 @@ function HouseTemplatePaper({ adminKey, id, onBack }: { adminKey: string; id: st
           <StatusTag tone={meta.status === 'active' ? 'good' : 'neutral'}>{meta.status === 'active' ? 'Active' : 'Retired'}</StatusTag>
           <SaveLine words={auto.words} canUndo={auto.canUndo} onUndo={auto.undo} />
         </div>
-        <div className="mt-md flex flex-wrap items-center gap-xs">
-          <Button onClick={() => void patch({ status: meta.status === 'active' ? 'retired' : 'active' })}>{meta.status === 'active' ? 'Retire' : 'Bring back'}</Button>
+        <div className="mt-md flex items-center gap-xs">
+          <Button full className="flex-1" onClick={() => void patch({ status: meta.status === 'active' ? 'retired' : 'active' })}>{meta.status === 'active' ? 'Retire' : 'Bring back'}</Button>
           <MoreMenu
             label="More for this template"
             items={[

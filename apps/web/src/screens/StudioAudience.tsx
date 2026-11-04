@@ -3,7 +3,7 @@ import { longDate, dateTime } from '../lib/date';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
@@ -35,17 +35,19 @@ export function StudioAudience() {
   
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/shop">Shop</BackLink>
-        <h1 className="text-[30px]">Audience</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          Followers, leads from your page, broadcasts to their inbox, and your affiliate link. To see which post each sale came from, open{' '}
-          <Link to="/shop/content" className="underline underline-offset-4">
-            Content
-          </Link>
-          .
-        </p>
-      </header>
+      <AppCover
+        back={{ to: '/shop', label: 'Shop' }}
+        title="Audience"
+        lede={
+          <>
+            Followers, leads from your page, broadcasts to their inbox, and your affiliate link. To see which post each sale came from, open{' '}
+            <Link to="/shop/content" className="underline underline-offset-4">
+              Content
+            </Link>
+            .
+          </>
+        }
+      />
 
       <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="bc-heading">
         <h2 id="bc-heading" className="text-[24px]">
@@ -89,12 +91,12 @@ export function StudioAudience() {
           Anyone who shares a link with their code earns {Math.round((d?.affiliateShare ?? 0.2) * 100)}% of the points on every sale it brings. Your code is <span className="font-extrabold">{d?.referralCode ?? '…'}</span>, and {d?.referred ?? 0} {d?.referred === 1 ? 'person has' : 'people have'} joined through it.
         </p>
         {link ? (
-          <>
-            <p className="mt-sm m-0 break-all rounded-tile bg-card p-sm text-[14px] font-semibold">{link}</p>
-            <Button variant="outline" className="mt-sm" onClick={() => void copier.copy(link)}>
+          <div className="mt-sm flex flex-wrap-reverse items-center justify-between gap-sm">
+            <p className="m-0 min-w-0 flex-1 basis-[60%] break-all rounded-tile bg-card p-sm text-[14px] font-semibold">{link}</p>
+            <Button variant="outline" onClick={() => void copier.copy(link)}>
               {copier.said === 'Copied' ? 'Copied' : 'Copy my link'}
             </Button>
-          </>
+          </div>
         ) : (
           <p className="mt-sm m-0 text-[14px] font-bold">
             Set a page name under{' '}

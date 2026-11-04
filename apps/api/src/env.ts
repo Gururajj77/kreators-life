@@ -104,6 +104,8 @@ export interface UserRow {
   socials_json: string;
   public_json: string;
   links_json: string;
+  /** JSON: which app groups start open and the order of apps inside a group (migration 0074), read through parseAppPrefs. */
+  app_prefs_json?: string | null;
   fee_bps: number;
   streak: number;
   best_streak: number;
@@ -114,7 +116,18 @@ export interface UserRow {
   created_at: string;
 }
 
+/** A team member acting on an owner's Agency, as the gate resolved them for this one request. */
+export interface TeamActor {
+  id: string;
+  ownerId: string;
+  memberId: string;
+  memberName: string;
+  role: import('@kreators/shared').TeamRole;
+  access: import('@kreators/shared').TeamAccess;
+}
+
 export type AppEnv = {
   Bindings: Env;
-  Variables: { user: UserRow; logNote?: string; requestId?: string };
+  /** `team` is set by the Agency team gate (agencyTeamAccess.ts) when a team member works on someone's Agency: `user` is then the owner. */
+  Variables: { user: UserRow; team?: TeamActor; logNote?: string; requestId?: string };
 };

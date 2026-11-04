@@ -2,15 +2,17 @@ import { quoteCode, redeem, release, type Quoted } from '../discounts';
 import { Hono } from 'hono';
 import { DEFAULT_ZONE, EVENT_TYPE_META, EVENT_TYPES, type EventRegistration, type PartyEvent } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { audit, can, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, str, isClubMember, pageOf, paged, httpUrl } from '../db';
+import { audit, can, liveUser, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, str, isClubMember, pageOf, paged, httpUrl } from '../db';
 import { claimEventCode, codeOf, guestView, hostView, setEventCode } from '../attendee';
 
 export const party = new Hono<AppEnv>();
 
 interface EventRow { id: string; title: string; description: string; event_type: PartyEvent['eventType']; host_user_id: string; host_name: string; venue: string; online_url: string | null; timezone: string; starts_at: string; ends_at: string; capacity: number | null; price_points: number; visibility: PartyEvent['visibility']; status: PartyEvent['status']; created_at: string; registered: number; waitlisted: number; attendee_xp: number | null }
+/** Seats taken on an event, counting only live accounts: a deleted member holds no seat and is in no count. `ev` is the SQL for the event id. */
+const seatsTaken = (ev: string) => `(SELECT COUNT(*) FROM event_registrations sr JOIN users su ON su.id = sr.user_id WHERE sr.event_id = ${ev} AND sr.status IN ('registered','attended') AND ${liveUser('su')})`;
 const SELECT = `SELECT e.*, u.display_name AS host_name,
-  (SELECT COUNT(*) FROM event_registrations r WHERE r.event_id = e.id AND r.status IN ('registered','attended')) AS registered,
-  (SELECT COUNT(*) FROM event_registrations r WHERE r.event_id = e.id AND r.status = 'waitlisted') AS waitlisted,
+  ${seatsTaken('e.id')} AS registered,
+  (SELECT COUNT(*) FROM event_registrations r JOIN users ru ON ru.id = r.user_id WHERE r.event_id = e.id AND r.status = 'waitlisted' AND ${liveUser('ru')}) AS waitlisted,
   (SELECT a.xp FROM attendee_codes a WHERE a.app = 'party' AND a.thing_id = e.id) AS attendee_xp
   FROM events e JOIN users u ON u.id = e.host_user_id`;
 interface RegRow { id: string; event_id: string; user_id: string; name: string; status: EventRegistration['status']; registered_at: string; checked_in_at: string | null; networking_opt_in: number; /** What the ticket cost this person; null is the full price. */ paid_points?: number | null }
@@ -70,14 +72,20 @@ party.get('/events/:id', async (c) => {
   const mineRow = await db.prepare('SELECT r.*, u.display_name AS name FROM event_registrations r JOIN users u ON u.id = r.user_id WHERE r.event_id = ? AND r.user_id = ?').bind(row.id, user.id).first<RegRow>();
   if (!host && !mineRow && row.visibility === 'private') return c.json({ error: 'not found' }, 404);
   if (!host && !mineRow && row.visibility === 'club' && !(await clubMember(db, user.id))) return c.json({ error: 'club members only' }, 403);
-  const regs = host ? await db.prepare('SELECT r.*, u.display_name AS name FROM event_registrations r JOIN users u ON u.id = r.user_id WHERE r.event_id = ? ORDER BY r.registered_at LIMIT 1000').bind(row.id).all<RegRow>() : { results: [] as RegRow[] };
+  // The host's guest list, a page at a time (prefix `g`), never a deleted member.
+  // With no size asked for, a page is the largest size (100), so a host checking guests in at the door sees the whole room.
+  const gBase = pageOf(c, 'g');
+  const gAsk = c.req.query('gsize') || c.req.query('size') ? gBase : { page: gBase.page, size: 100 as const, limit: 101, offset: (gBase.page - 1) * 100 };
+  const regs = host ? await db.prepare(`SELECT r.*, u.display_name AS name FROM event_registrations r JOIN users u ON u.id = r.user_id WHERE r.event_id = ? AND ${liveUser('u')} ORDER BY r.registered_at, r.rowid LIMIT ? OFFSET ?`).bind(row.id, gAsk.limit, gAsk.offset).all<RegRow>() : { results: [] as RegRow[] };
+  const guests = paged(regs.results, gAsk);
   const fb = await db.prepare('SELECT AVG(rating) AS avg, COUNT(*) AS n FROM event_feedback WHERE event_id = ?').bind(row.id).first<{ avg: number | null; n: number }>();
   // The code goes to the host and events staff only; a guest sees the xp, whether they claimed it, and when it works.
   const code = await codeOf(db, 'party', row.id);
   const guest = Boolean(mineRow && (mineRow.status === 'registered' || mineRow.status === 'attended'));
   return c.json({
     event: toEvent(row, mineRow ? toReg(mineRow) : null),
-    registrations: regs.results.map(toReg),
+    registrations: guests.items.map(toReg),
+    registrationsPage: host ? guests.page : null,
     host,
     feedback: { average: fb?.avg ? Math.round(fb.avg * 10) / 10 : null, count: fb?.n ?? 0 },
     hostCode: host ? await hostView(db, code, row.starts_at, row.ends_at, row.registered) : null,
@@ -117,7 +125,7 @@ party.post('/events/:id/rsvp', async (c) => {
   // Try for a seat, never by deleting a row first: a cancelled row of this person's is reused, else a new one is written, and
   // only the request whose own statement changed a row goes on to pay. Two taps at once take one seat and one charge.
   const reuse = existing?.status === 'cancelled';
-  const seatCount = `(SELECT COUNT(*) FROM event_registrations WHERE event_id = ?2 AND status IN ('registered','attended')) < ?6`;
+  const seatCount = `${seatsTaken('?2')} < ?6`;
   const take = (want: 'registered' | 'waitlisted', paid: number, guardSeat: boolean) =>
     reuse
       ? db
@@ -170,7 +178,7 @@ async function paidFor(db: D1Database, reg: { id: string; user_id: string; paid_
  */
 async function promoteNext(db: D1Database, ev: { id: string; title: string; price_points: number; capacity: number | null }): Promise<void> {
   const cap = ev.capacity ?? 1_000_000;
-  const wait = await db.prepare("SELECT id, user_id FROM event_registrations WHERE event_id = ? AND status = 'waitlisted' ORDER BY registered_at LIMIT 20").bind(ev.id).all<{ id: string; user_id: string }>();
+  const wait = await db.prepare(`SELECT r.id, r.user_id FROM event_registrations r JOIN users u ON u.id = r.user_id WHERE r.event_id = ? AND r.status = 'waitlisted' AND ${liveUser('u')} ORDER BY r.registered_at LIMIT 20`).bind(ev.id).all<{ id: string; user_id: string }>();
   for (const next of wait.results) {
     const price = Math.max(0, ev.price_points);
     if (price > 0) {
@@ -182,7 +190,7 @@ async function promoteNext(db: D1Database, ev: { id: string; title: string; pric
     }
     const moved = await db
       .prepare(`UPDATE event_registrations SET status = 'registered', paid_points = ?1 WHERE id = ?2 AND status = 'waitlisted'
-        AND (SELECT COUNT(*) FROM event_registrations WHERE event_id = ?3 AND status IN ('registered','attended')) < ?4`)
+        AND ${seatsTaken('?3')} < ?4`)
       .bind(price, next.id, ev.id, cap)
       .run();
     if (moved.meta.changes !== 1) {
@@ -268,7 +276,7 @@ party.put('/events/:id/attendee-code', async (c) => {
   const set = await setEventCode(db, 'party', row.id, row.starts_at, user.id, body);
   if ('error' in set) return c.json({ error: set.error }, set.status);
   await audit(db, user.id, 'attendee_code.set', 'event', row.id, prev ? { xp: prev.xp } : '', { xp: set.row.xp, newCode: set.row.code !== prev?.code });
-  const n = await db.prepare("SELECT COUNT(*) AS n FROM event_registrations WHERE event_id = ? AND status IN ('registered','attended')").bind(row.id).first<{ n: number }>();
+  const n = await db.prepare(`SELECT ${seatsTaken('?1')} AS n`).bind(row.id).first<{ n: number }>();
   return c.json({ hostCode: await hostView(db, set.row, row.starts_at, row.ends_at, n?.n ?? 0) });
 });
 

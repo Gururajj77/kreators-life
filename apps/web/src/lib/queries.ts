@@ -44,8 +44,8 @@ export const useDiscoverMore = () => useAuthed(keys.discoverMore, api.discoverMo
 export const useCardGames = () => useAuthed(keys.cards, api.cardGames);
 export const useCardGame = (key: string) => useAuthed([...keys.cards, key] as const, () => api.cardGame(key), Boolean(key));
 
-export function useRewards() {
-  return useAuthed(keys.rewards, api.rewards);
+export function useRewards(pq = '') {
+  return useAuthed([...keys.rewards, pq], () => api.rewards(pq));
 }
 
 export const useWellbeing = () => useAuthed(['wellbeing'], api.wellbeing);

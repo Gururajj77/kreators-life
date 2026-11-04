@@ -18,7 +18,7 @@ import { useFocus, useSession } from './lib/store';
 import { useFocusSession } from './lib/focusSession';
 import { FocusPill } from './components/FocusPill';
 import { noteVisit } from './lib/context';
-import { Auth, Forgot, ResetPassword } from './screens/Auth';
+import { Auth } from './screens/Auth';
 import { Home as Dashboard } from './screens/Home';
 import { Today } from './screens/Today';
 import { SetupChat } from './screens/SetupChat';
@@ -29,6 +29,8 @@ import { SevenRP } from './site/SevenRP';
 // Mounted once by Root for anyone signed in, not a screen, but still downloaded only after the first paint so the entry stays under budget:
 // a running clock is written down in the tab (sessionStorage, lib/focusSession.ts) and picked back up when it mounts, so a delay loses nothing.
 const FocusRoundsHost = lazyNamed(() => import('./components/FocusRoundsHost'), 'FocusRoundsHost');
+const Forgot = lazyNamed(() => import('./screens/PasswordReset'), 'Forgot');
+const ResetPassword = lazyNamed(() => import('./screens/PasswordReset'), 'ResetPassword');
 const Admin = lazyNamed(() => import('./screens/Admin'), 'Admin');
 const Manage = lazyNamed(() => import('./screens/Manage'), 'Manage');
 const Observability = lazyNamed(() => import('./screens/Observability'), 'Observability');
@@ -68,6 +70,7 @@ const AgencyInvoice = lazyNamed(() => import('./screens/AgencyInvoice'), 'Agency
 const AgencyContract = lazyNamed(() => import('./screens/AgencyContract'), 'AgencyContract');
 const AgencyDoc = lazyNamed(() => import('./screens/AgencyDoc'), 'AgencyDoc');
 const ClientPortal = lazyNamed(() => import('./site/ClientPortal'), 'ClientPortal');
+const TeamPortal = lazyNamed(() => import('./site/ClientPortal'), 'TeamPortal');
 const ContractPublic = lazyNamed(() => import('./site/ContractPublic'), 'ContractPublic');
 const DocPublic = lazyNamed(() => import('./site/DocPublic'), 'DocPublic');
 const PortalDocGate = lazyNamed(() => import('./components/PortalLock'), 'PortalDocGate');
@@ -85,6 +88,7 @@ const Public = lazyNamed(() => import('./screens/Public'), 'Public');
 const Realm = lazyNamed(() => import('./screens/Realm'), 'Realm');
 const Resources = lazyNamed(() => import('./screens/Resources'), 'Resources');
 const Rewards = lazyNamed(() => import('./screens/Rewards'), 'Rewards');
+const Book = lazyNamed(() => import('./screens/Book'), 'Book');
 const Cards = lazyNamed(() => import('./screens/Cards'), 'Cards');
 const Discover = lazyNamed(() => import('./screens/Discover'), 'Discover');
 const CardTable = lazyNamed(() => import('./screens/CardTable'), 'CardTable');
@@ -106,6 +110,7 @@ const SessionChat = lazyNamed(() => import('./screens/SessionChat'), 'SessionCha
 const Wellbeing = lazyNamed(() => import('./screens/Wellbeing'), 'Wellbeing');
 const Reward = lazyNamed(() => import('./screens/Win'), 'Reward');
 const Win = lazyNamed(() => import('./screens/Win'), 'Win');
+const Insights = lazyNamed(() => import('./screens/Insights'), 'Insights');
 const You = lazyNamed(() => import('./screens/You'), 'You');
 const CertificatePage = lazyNamed(() => import('./site/CertificatePage'), 'CertificatePage');
 const InvoicePage = lazyNamed(() => import('./site/InvoicePage'), 'InvoicePage');
@@ -262,6 +267,7 @@ const router = createBrowserRouter([
   { path: '/c/:code', element: <CertificatePage /> },
   { path: '/i/:token', element: <PortalDocGate kind="invoices"><InvoicePage /></PortalDocGate> },
   { path: '/a/:token', element: <ClientPortal /> },
+  { path: '/t/:token', element: <TeamPortal /> },
   { path: '/k/:token', element: <PortalDocGate kind="contracts"><ContractPublic /></PortalDocGate> },
   { path: '/d/:token', element: <PortalDocGate kind="agency/doc"><DocPublic /></PortalDocGate> },
   { path: '/unsubscribe/:token', element: <Unsubscribe /> },
@@ -311,6 +317,7 @@ const router = createBrowserRouter([
       { path: '/apps', element: explained('apps', <Apps />) },
       { path: '/you', element: explained('you', <You />) },
       { path: '/search', element: <Search /> },
+      { path: '/insights', element: explained('insights', <Insights />) },
       { path: '/profile', element: gated('profile', <Profile />) },
       { path: '/help', element: gated('help', <Help />) },
       { path: '/inbox', element: gated('notifications', <Inbox />) },
@@ -320,6 +327,7 @@ const router = createBrowserRouter([
       { path: '/cards', element: gated('cards', <Cards />) },
       { path: '/cards/:game', element: gated('cards', <CardTable />) },
       { path: '/rewards', element: <Rewards /> },
+      { path: '/book', element: <Book /> },
       { path: '/plans', element: explained('assistant', <Plans />) },
       // learn and earn
       { path: '/school', element: gated('school', <School />) },

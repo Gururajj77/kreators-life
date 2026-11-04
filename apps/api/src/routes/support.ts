@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { SupportTicket } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { can, nameOf, newId, notify, nowIso, oneOf, str } from '../db';
+import { can, nameOf, newId, notify, nowIso, oneOf, pageOf, paged, str } from '../db';
 
 export const support = new Hono<AppEnv>();
 
@@ -12,9 +12,17 @@ const toT = (r: Row): SupportTicket => ({ id: r.id, userId: r.user_id, userName:
 support.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const mine = await db.prepare(`${SELECT} WHERE t.user_id = ? ORDER BY t.created_at DESC`).bind(user.id).all<Row>();
-  const queue = can(user, 'support') ? await db.prepare(`${SELECT} WHERE t.status = 'open' ORDER BY t.created_at LIMIT 500`).all<Row>() : { results: [] as Row[] };
-  return c.json({ tickets: mine.results.map(toT), queue: queue.results.map(toT), agent: can(user, 'support') });
+  const agent = can(user, 'support');
+  // Both lists a page at a time: `t` for the person's own messages, `q` for the open queue the support staff answer.
+  const askMine = pageOf(c, 't');
+  const askQueue = pageOf(c, 'q');
+  const [mine, queue] = await Promise.all([
+    db.prepare(`${SELECT} WHERE t.user_id = ? ORDER BY t.created_at DESC, t.id LIMIT ? OFFSET ?`).bind(user.id, askMine.limit, askMine.offset).all<Row>(),
+    agent ? db.prepare(`${SELECT} WHERE t.status = 'open' ORDER BY t.created_at, t.id LIMIT ? OFFSET ?`).bind(askQueue.limit, askQueue.offset).all<Row>() : Promise.resolve({ results: [] as Row[] }),
+  ]);
+  const myPage = paged(mine.results, askMine);
+  const queuePage = paged(queue.results, askQueue);
+  return c.json({ tickets: myPage.items.map(toT), page: myPage.page, queue: queuePage.items.map(toT), queuePage: queuePage.page, agent });
 });
 
 support.post('/', async (c) => {

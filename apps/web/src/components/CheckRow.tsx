@@ -24,6 +24,12 @@ interface Props {
   hint?: string | null;
   /** Something next to the row that is not part of the tap target, like an edit button. */
   aside?: ReactNode;
+  /** A tag for the row's top right corner on a phone (a task's priority). From the tablet width up it sits at the row's right, after `foot`. */
+  corner?: ReactNode;
+  /** A tag for the row's bottom right corner on a phone (a task's pillar). From the tablet width up it sits at the row's right, before `corner`. */
+  foot?: ReactNode;
+  /** The row's other marks (a task's Remember, Habit, For review, time, due): at the row's right with `corner` and `foot` on a laptop; on a phone across the row's foot, each line filled, so the title keeps its width. */
+  marks?: ReactNode;
   large?: boolean;
 }
 
@@ -46,6 +52,9 @@ export function CheckRow({
   hint = null,
   aside,
   large = false,
+  corner,
+  foot,
+  marks,
 }: Props) {
   const id = useId();
   // When the box goes from empty to ticked, the tick draws itself in (its stroke runs from start to end); never on the first paint,
@@ -88,7 +97,7 @@ export function CheckRow({
     <div>
       <div className="flex items-stretch gap-xs">
         <label
-          className={`check-row toy toy-soft flex min-w-0 flex-1 cursor-pointer select-none items-center gap-sm rounded-tile bg-card p-sm has-[input:focus-visible]:outline-[3px] has-[input:focus-visible]:outline-offset-2 has-[input:focus-visible]:outline-ink ${large ? 'min-h-[64px]' : 'min-h-[56px]'}`}
+          className={`check-row toy toy-soft flex min-w-0 flex-1 cursor-pointer select-none flex-wrap items-center gap-sm md:flex-nowrap rounded-tile bg-card p-sm has-[input:focus-visible]:outline-[3px] has-[input:focus-visible]:outline-offset-2 has-[input:focus-visible]:outline-ink ${large ? 'min-h-[64px]' : 'min-h-[56px]'}`}
           style={{ '--check-color': locked && !checked ? 'var(--color-ink-mute)' : color } as CSSProperties}
         >
           <input
@@ -126,6 +135,21 @@ export function CheckRow({
               </span>
             )}
           </span>
+          {(corner || foot || marks) && (
+            // Every tag sits at the right (2026-11-05). A phone: the corner tag at the top right and the foot tag under it or at the bottom
+            // right, the other marks across the row's foot (below). A laptop: one row at the right, the marks first, then the foot, then the corner at the far
+            // right; a long set wraps, right-aligned, and never takes more than half the row.
+            <span className="flex shrink-0 flex-col items-end justify-between gap-xs self-stretch md:max-w-[50%] md:flex-row-reverse md:flex-wrap md:items-center md:justify-start md:self-center">
+              {corner ?? <span aria-hidden="true" />}
+              {marks && <span className="hidden md:order-3 md:flex md:flex-wrap md:justify-end md:gap-xs">{marks}</span>}
+              {foot ? <span className="md:order-2">{foot}</span> : <span aria-hidden="true" />}
+            </span>
+          )}
+          {marks && (
+            // A phone: the marks share the lines across the foot of the row, filling each line so none stands alone, while the title keeps
+            // its width and the priority and pillar keep the right.
+            <span className="fill-row order-last flex basis-full flex-wrap justify-end gap-xs md:hidden">{marks}</span>
+          )}
         </label>
         {aside}
       </div>

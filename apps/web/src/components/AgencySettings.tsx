@@ -20,7 +20,7 @@ import {
   type InvoiceItem,
 } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, Clock, LayoutTemplate, Palette, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { ChevronRight, Clock, LayoutTemplate, ListChecks, Palette, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { api } from '../lib/api';
@@ -30,6 +30,7 @@ import { AgreementTemplates } from './AgencyContracts';
 import { InvoiceTemplates, PaperLoading } from './AgencyInvoices';
 import { Button } from './Button';
 import { DocStyleSheet } from './DocStyleSheet';
+import { FillDetailsSheet } from './FillDetails';
 import { Icon } from './Icon';
 import { Field, FIELD, InvoiceView, LABEL, MoneyCell, PaperText, ShowSwitches, type InvoiceEditor } from './InvoiceView';
 import { MoreMenu } from './MoreMenu';
@@ -37,6 +38,7 @@ import { PrintSheet } from './PrintSheet';
 import { Busy, Skeleton } from './Skeleton';
 import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
+import { CardHead } from './CardHead';
 
 const KIND_NAME: Record<string, string> = { invoice: 'Invoice', contract: 'Agreement', doc: 'Document' };
 
@@ -66,10 +68,9 @@ function HouseTemplates() {
       <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
         {house.map((t) => (
           <li key={t.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-            <span className="flex flex-wrap items-center gap-xs text-[16px] font-extrabold">
-              {t.name}
-              <StatusTag tone="info">{KIND_NAME[t.kind] ?? 'Template'}</StatusTag>
-            </span>
+            <CardHead tag={<StatusTag fit tone="info">{KIND_NAME[t.kind] ?? 'Template'}</StatusTag>}>
+              <span className="block text-[16px] font-extrabold">{t.name}</span>
+            </CardHead>
             <span className="mt-xs block text-[14px] font-semibold text-ink-soft">{t.summary}</span>
           </li>
         ))}
@@ -101,7 +102,7 @@ export function AgencySettings() {
   const [savedJson, setSavedJson] = useState('');
   const [undo, setUndo] = useState<Settings | null>(null);
   const [note, setNote] = useState('');
-  const [panel, setPanel] = useState<'show' | 'style' | 'hours' | 'templates' | null>(null);
+  const [panel, setPanel] = useState<'fill' | 'show' | 'style' | 'hours' | 'templates' | null>(null);
   const [docStyle, setDocStyle] = useState<DocStyle>(parseDocStyle(undefined));
   const [sample, setSample] = useState<InvoiceItem[] | null>(null);
   // What only the sample shows (the client, a discount, the GST split, the date, the number as typed): typed on the paper, never saved.
@@ -233,11 +234,19 @@ export function AgencySettings() {
   return (
     <div>
       <div className="mt-md flex flex-wrap items-center gap-sm">
-        <button type="button" onClick={() => setPanel('templates')} className="fx-row min-w-0 flex-1 text-ink">
+        {/* Two rounded button rows (a glass tile with the toy lift, like a task row), never a bare square `fx-row`, which belongs inside an inset list. */}
+        <button type="button" onClick={() => setPanel('templates')} className="toy toy-soft flex min-h-[56px] min-w-0 flex-1 basis-[240px] items-center gap-xs rounded-tile bg-card px-xs text-left text-ink shadow-toy-soft">
           <span className="flex h-[40px] w-[48px] shrink-0 items-center justify-center text-ink-soft">
             <Icon icon={LayoutTemplate} size={20} />
           </span>
           <span className="min-w-0 flex-1 text-[16px] font-extrabold">Templates</span>
+          <Icon icon={ChevronRight} size={20} className="text-ink-mute" />
+        </button>
+        <button type="button" onClick={() => setPanel('fill')} className="toy toy-soft flex min-h-[56px] min-w-0 flex-1 basis-[240px] items-center gap-xs rounded-tile bg-card px-xs text-left text-ink shadow-toy-soft">
+          <span className="flex h-[40px] w-[48px] shrink-0 items-center justify-center text-ink-soft">
+            <Icon icon={ListChecks} size={20} />
+          </span>
+          <span className="min-w-0 flex-1 text-[16px] font-extrabold">Fill in your business details</span>
           <Icon icon={ChevronRight} size={20} className="text-ink-mute" />
         </button>
         <MoreMenu items={more} label="More business settings" />
@@ -271,6 +280,7 @@ export function AgencySettings() {
       <h3 className="mt-lg mb-xs text-[16px] font-extrabold">Your agreements</h3>
       <AgreementPaper p={p} currency={draft.currency} set={set} />
 
+      <FillDetailsSheet open={panel === 'fill'} onClose={() => setPanel(null)} doc={null} profile={p} onProfile={(next) => set(next)} />
       <Sheet open={panel === 'templates'} onClose={() => setPanel(null)} title="Templates">
         <div className="grid gap-md pb-xl">
           <div>

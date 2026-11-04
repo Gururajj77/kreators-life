@@ -28,7 +28,7 @@ import { Pyramid } from '../components/Pyramid';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { TaskRow } from '../components/TaskRow';
-import { StartFocus, Subtasks, TaskPlanFields, planBody, planOf, planProblem, type Plan } from '../components/TaskPlan';
+import { ProjectSelect, StartFocus, Subtasks, TaskPlanFields, planBody, planOf, planProblem, type Plan } from '../components/TaskPlan';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { fillVar, ON_FILL } from '../lib/relFill';
@@ -39,6 +39,7 @@ import { useActionQueue } from '../lib/useActionQueue';
 import { Icon } from '../components/Icon';
 import { Check } from 'lucide-react';
 import { Fold } from '../components/Fold';
+import { EmergenceSlot } from '../components/EmergenceSlot';
 
 /** The layers above the tasks, top down like the pyramid: the foundation first, projects last. */
 const RUNGS = KINDS.filter((k) => k !== 'task');
@@ -191,6 +192,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                           task={n}
                           today={today}
                           subtitle={project ? `Project: ${project.title}` : undefined}
+                          pillarTag={false}
                           busy={queue.isPending(n.id)}
                           hint={queue.hint(n.id)}
                           onToggle={() => toggle(n)}
@@ -206,7 +208,8 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
               <Button full className="mt-sm" plusToX expanded={adding === 'task'} onClick={() => setAdding('task')} disabled={projects.length === 0}>
                 Add a task
               </Button>
-              {projects.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Tasks need a project. Open the pyramid below to add one.</p>}
+              {/* The caption of the button above: it says why that one button is off, so it sits centred under it. */}
+              {projects.length === 0 && <p className="mt-xs m-0 text-center text-[12px] font-semibold text-balance text-ink-soft">Tasks need a project. Open the pyramid below to add one.</p>}
             </section>
 
             <section className="mt-lg" aria-labelledby="ladder-heading">
@@ -316,6 +319,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                               key={n.id}
                               task={n}
                               today={today}
+                              pillarTag={false}
                               busy={queue.isPending(n.id)}
                               hint={queue.hint(n.id)}
                               onToggle={() => toggle(n)}
@@ -331,6 +335,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
             </section>
           </>
         )}
+        <EmergenceSlot app="pillar" rel={relationship} max={2} />
       </Screen>
 
       <AddSheet kind={adding} relationship={relationship} nodes={nodes} today={today} onClose={() => setAdding(null)} />
@@ -426,17 +431,30 @@ function EditSheet({ node, onClose }: { node: Node | null; onClose: () => void }
   const [title, setTitle] = useState('');
   const [note, setNote] = useState('');
   const [plan, setPlan] = useState<Plan>(() => planOf(null));
+  // An open task can move under any of the person's active projects, in any pillar: the same read and picker as TaskPanel on Daily.
+  const [parentId, setParentId] = useState('');
+  const day = todayLocal();
+  const month = day.slice(0, 7);
+  const movable = node?.kind === 'task' && node.status === 'active';
+  const projectsQ = useAuthed(['today', 'month', month, day], () => api.todayMonth(month, day), movable);
+  const projects = projectsQ.data?.projects ?? [];
 
   useEffect(() => {
     setTitle(node?.title ?? '');
     setNote(node?.note ?? '');
     setPlan(planOf(node));
+    setParentId(node?.parentId ?? '');
   }, [node]);
 
   const save = useMutation({
     mutationFn: () => {
       if (!node) throw new Error('no node');
-      return api.updateNode(node.id, { title: title.trim(), note, ...(node.kind === 'task' ? planBody(plan) : {}) });
+      return api.updateNode(node.id, {
+        title: title.trim(),
+        note,
+        ...(node.kind === 'task' ? planBody(plan) : {}),
+        ...(movable && parentId && parentId !== node.parentId ? { parentId } : {}),
+      });
     },
     onSuccess: () => {
       refresh();
@@ -475,6 +493,7 @@ function EditSheet({ node, onClose }: { node: Node | null; onClose: () => void }
           </label>
           {node.kind === 'task' && (
             <>
+              {movable && projects.length > 0 && <ProjectSelect projects={projects} value={parentId} onChange={setParentId} />}
               <TaskPlanFields plan={plan} onChange={setPlan} today={todayLocal()} />
               <Subtasks task={node} />
               <StartFocus task={{ ...node, estimateMin: Number(plan.minutes) > 0 ? Number(plan.minutes) : node.estimateMin }} />

@@ -10,11 +10,12 @@ import { StatusTag } from '../components/StatusTag';
 import { AreaLine, Gauge, HBars, MultiLine, StatTile, WeekDots } from '../components/Charts';
 import { PlacementChart, ScoreRow } from '../components/LifeMap';
 import { CoachFace } from '../components/MyCoach';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Pager, usePage } from '../components/Pager';
 import { Screen } from '../components/Screen';
 import { Section } from '../components/Section';
 import { Sheet } from '../components/Sheet';
+import { TabRow } from '../components/TabRow';
 import { api } from '../lib/api';
 import { shortDay, dateTime } from '../lib/date';
 import { useAuthed } from '../lib/queries';
@@ -63,18 +64,13 @@ function ShareBar({ share }: { share: CoachShare }) {
       <div ref={sentinel} aria-hidden="true" />
       <div id="share-bar" className="sticky top-0 z-20 -mx-md md:-mx-lg">
         <div ref={backdrop} aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 -top-[calc(64px+env(safe-area-inset-top))] border-b border-line bg-paper/85 opacity-0 backdrop-blur-md md:top-0" />
-        <nav aria-label="What they share" className="scroll-row relative m-0 py-sm [mask-image:linear-gradient(to_right,black_calc(100%-32px),transparent)] md:px-lg md:[mask-image:none]">
-          {COACH_SHARE_PARTS.map((k) =>
-            share[k] ? (
-              <button key={k} type="button" onClick={() => jumpTo(PART_SECTION_ID[k])} className="toy toy-soft inline-flex min-h-[44px] shrink-0 items-center rounded-pill bg-card px-sm text-[12px] font-extrabold text-ink">
-                {COACH_SHARE_META[k].name}
-              </button>
-            ) : (
-              <span key={k} title="They do not share this" className="inline-flex min-h-[44px] shrink-0 items-center rounded-pill bg-line px-sm text-[12px] font-extrabold text-ink-soft line-through">
-                {COACH_SHARE_META[k].name}
-              </span>
-            ),
-          )}
+        <nav aria-label="What they share" className="relative px-md py-sm md:px-lg">
+          <TabRow
+            label="What they share"
+            items={COACH_SHARE_PARTS.map((k) => ({ key: k, label: COACH_SHARE_META[k].name, disabled: !share[k], title: share[k] ? undefined : 'They do not share this' }))}
+            onChange={(k) => requestAnimationFrame(() => jumpTo(PART_SECTION_ID[k]))}
+            pillClass={(_on, off) => (off ? 'inline-flex min-h-[44px] items-center rounded-pill bg-line px-sm text-[12px] font-extrabold text-ink-soft line-through' : 'toy toy-soft inline-flex min-h-[44px] items-center rounded-pill bg-card px-sm text-[12px] font-extrabold text-ink')}
+          />
         </nav>
       </div>
     </>
@@ -212,11 +208,7 @@ export function CoachStudent() {
   if (q.isError)
     return (
       <Screen>
-        <header className="pt-lg">
-          <BackLink to="/coaching">Coaching</BackLink>
-          <h1 className="text-[30px]">Not your student</h1>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{say(q.error)}</p>
-        </header>
+        <AppCover back={{ to: '/coaching', label: 'Coaching' }} title="Not your student" lede={say(q.error)} />
       </Screen>
     );
   if (!d) return null;
@@ -225,19 +217,19 @@ export function CoachStudent() {
   const projects = (d.pillars?.nodes ?? []).filter((n) => n.kind === 'project' && n.status === 'active');
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/coaching">Coaching</BackLink>
-        <div className="mt-xs flex items-center gap-sm">
-          <CoachFace name={s.name} badge={s.badge} size={56} />
-          <div className="min-w-0">
-            <h1 className="text-[30px]">{s.name}</h1>
-            <p className="m-0 text-[14px] font-semibold text-ink-soft">
+      <AppCover
+        back={{ to: '/coaching', label: 'Coaching' }}
+        title={s.name}
+        lede={
+          <>
+            <p className="m-0">
               {BADGE_META[s.badge].name}{s.handle ? `, @${s.handle}` : ''}. Your student since {new Date(d.link.answeredAt ?? d.link.createdAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' })}. Their today is {shortDay(d.date)}.
             </p>
-          </div>
-        </div>
-        <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">They pick what you see and can change it any time. Never their journal.</p>
-      </header>
+            <p className="mt-xs m-0 text-[12px] font-bold">They pick what you see and can change it any time. Never their journal.</p>
+          </>
+        }
+        actions={<CoachFace name={s.name} badge={s.badge} size={56} />}
+      />
 
       <ShareBar share={share} />
 

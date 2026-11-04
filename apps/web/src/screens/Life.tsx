@@ -15,6 +15,7 @@ import { useAuthed, useWellbeing } from '../lib/queries';
 import { AppIcon } from '../components/AppIcon';
 import { Icon } from '../components/Icon';
 import { ChevronRight } from 'lucide-react';
+import { EmergenceSlot } from '../components/EmergenceSlot';
 
 /** Five areas of a life on one screen, each part opening the place where you act on it. */
 export function Life() {
@@ -29,7 +30,7 @@ export function Life() {
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-[30px]">Life</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Physical, financial, emotional, mental and spiritual, scored from what you already log. Tap any part to go where you act on it. Only you see this.</p>
+        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Physical, financial, mental, emotional and spiritual, scored from what you already log. Tap any part to go where you act on it. Only you see this.</p>
         {d && (
           <Hero color="var(--color-r4)" deep="var(--deep-lover_partner)" className="mt-md" character="lover_partner" mood={d.overall >= 60 ? "excited" : d.overall >= 40 ? "happy" : "sleepy"}>
             <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">Life score</p>
@@ -70,28 +71,29 @@ export function Life() {
       )}
 
       {wb.data && (
-        <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-label="Mood, sleep and calm this week">
+        <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-label="Sleep, calm and mood this week">
           <p className="m-0 text-[14px] font-bold">This week, day by day</p>
-          <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Mood, sleep and calm as scores out of a hundred. The physical, emotional and mental areas are built from these.</p>
+          <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Sleep, calm and mood as scores out of a hundred. The physical, mental and emotional areas are built from these.</p>
           <div className="mt-sm">
             <MultiLine
               series={[
-                { values: wb.data.week.map((w) => (w.mood === null ? null : ((w.mood - 1) / 4) * 100)), color: 'var(--color-r3)', label: 'Mood' },
                 { values: wb.data.week.map((w) => (w.sleep === null ? null : (Math.max(4, Math.min(8, w.sleep)) - 4) * 25)), color: 'var(--color-r6)', label: 'Sleep' },
                 { values: wb.data.week.map((w) => (w.stress === null ? null : ((5 - w.stress) / 4) * 100)), color: 'var(--color-r2)', label: 'Calm' },
+                { values: wb.data.week.map((w) => (w.mood === null ? null : ((w.mood - 1) / 4) * 100)), color: 'var(--color-r3)', label: 'Mood' },
               ]}
               max={100}
               labels={wb.data.week.map((w) => new Date(`${w.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short' }))}
               allLabels
               height={160}
-              label="Mood, sleep and calm as scores out of a hundred for the last seven days"
-              empty="Log a mood, a night or a stress level and the lines appear."
+              label="Sleep, calm and mood as scores out of a hundred for the last seven days"
+              empty="Log a night, a stress level or a mood and the lines appear."
             />
           </div>
         </section>
       )}
 
       <PeriodPanel id="life-period" parts={['daily', 'notToDo', 'wellbeing', 'journal', 'finance', 'school']} />
+      <EmergenceSlot app="life" max={2} />
       {d?.areas.map((a) => (
         <AreaCard key={a.key} area={a} />
       ))}

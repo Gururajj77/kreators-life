@@ -5,18 +5,22 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { AgencyContracts } from '../components/AgencyContracts';
 import { ClientDocs } from '../components/AgencyDocs';
-import { LifecycleCard, PortalSecurityCard, RetainerCard } from '../components/AgencyLifecycle';
+import { LifecycleCard, RetainerCard } from '../components/AgencyLifecycle';
+import { ClientPassword } from '../components/ClientPassword';
 import { AgencyInvoices } from '../components/AgencyInvoices';
 import { AgencyPipeline } from '../components/AgencyPipeline';
 import { Button } from '../components/Button';
 import { StatTile } from '../components/Charts';
 import { ClientLink } from '../components/ClientLink';
+import { TeamLink } from '../components/TeamLink';
 import { ClientSheet } from '../components/ClientSheet';
 import { Fold } from '../components/Fold';
 import { Segmented } from '../components/fx/Segmented';
 import { Inert } from '../components/Inert';
 import { MoreMenu } from '../components/MoreMenu';
+import { IconButton } from '../components/IconButton';
 import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Ring } from '../components/Ring';
 import { Screen } from '../components/Screen';
 import { Section } from '../components/Section';
@@ -40,7 +44,7 @@ const COPY = {
   timeFailed: 'That did not save. Check the time and try again.',
   timeEmpty: 'No time logged yet.',
   agreementLede: 'Trial terms, retainers and project agreements for this client.',
-  linkLede: 'What your client sees at their link.',
+  linkLede: 'What your client and their team see at their links.',
   retainerLede: 'The client picks the months; each month bills itself.',
   retainerLater: 'A retainer can be offered after the pilot month.',
   invoiceFailed: 'Could not make the invoice. Set a retainer or a fee on a published deliverable first.',
@@ -82,8 +86,10 @@ export function AgencyClient() {
   const [editing, setEditing] = useState(false);
   const [timing, setTiming] = useState(false);
   const [newInvoice, setNewInvoice] = useState(false);
-  const [passwordOpen, setPasswordOpen] = useState(false);
   const [answersOpen, setAnswersOpen] = useState(false);
+  // The client whose password card went to the top of the page this visit: it stays there after the ask is answered or a password is
+  // set, so its "every open session ended" line and a generated password shown once are not lost when the state changes.
+  const [pwTopId, setPwTopId] = useState<string | null>(null);
   const items = useAuthed(['agency', 'items', 'client', id, 'time'], () => api.agencyItems(`client=${id}&size=100`), timing);
   const invalidate = () => qc.invalidateQueries({ queryKey: ['agency'] });
 
@@ -137,6 +143,9 @@ export function AgencyClient() {
 
   const c: ClientData = d.client;
   const life = d.lifecycle;
+  const pwNeeds = Boolean(life.password.request) || !life.password.set;
+  if (pwNeeds && pwTopId !== id) setPwTopId(id);
+  const pwTop = pwNeeds || pwTopId === id;
   const cur = d.settings.currency;
   const m = c.month;
   const planned = c.piecesPerMonth;
@@ -181,10 +190,24 @@ export function AgencyClient() {
 
   return (
     <Screen columns={false}>
-      <header className="pt-lg">
-        <BackLink to="/agency">Agency</BackLink>
-        <div className="flex items-start justify-between gap-sm">
-          <h1 className="min-w-0 text-[30px]">{c.name}</h1>
+      <AppCover
+        back={{ to: '/agency', label: 'Agency' }}
+        title={c.name}
+        lede={
+          <>
+            <span className="inline-flex flex-wrap items-center justify-end gap-xs">
+              <StatusTag tone={CLIENT_STATUS_TONE[c.status]}>{AGENCY_STATUS_NAME[c.status]}</StatusTag>
+              <StatusTag tone={CLIENT_HEALTH_TONE[c.health]}>{AGENCY_HEALTH_NAME[c.health]}</StatusTag>
+              {c.campaignName && <StatusTag tone="info">{`Army: ${c.campaignName}`}</StatusTag>}
+            </span>
+            {facts.length > 0 && (
+              <p className="mt-xs m-0">
+                <Inert text={facts.join(' · ')} />
+              </p>
+            )}
+          </>
+        }
+        actions={
           <MoreMenu
             label={`More for ${c.name}`}
             items={[
@@ -195,27 +218,18 @@ export function AgencyClient() {
               { key: 'invoice', label: 'Invoice this month', icon: FilePlus, onSelect: invoiceMonth, disabled: makeInvoice.isPending },
             ]}
           />
-        </div>
-        <div className="mt-xs flex flex-wrap items-center gap-xs">
-          <StatusTag tone={CLIENT_STATUS_TONE[c.status]}>{AGENCY_STATUS_NAME[c.status]}</StatusTag>
-          <StatusTag tone={CLIENT_HEALTH_TONE[c.health]}>{AGENCY_HEALTH_NAME[c.health]}</StatusTag>
-          {c.campaignName && <StatusTag tone="info">{`Army: ${c.campaignName}`}</StatusTag>}
-        </div>
-        {facts.length > 0 && (
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-            <Inert text={facts.join(' · ')} />
-          </p>
-        )}
+        }
+      >
         {c.notes && (
-          <Fold className="mt-sm" title="Notes">
+          <Fold title="Notes">
             <p className="m-0 whitespace-pre-wrap text-[14px] font-semibold text-ink-soft">
               <Inert text={c.notes} />
             </p>
           </Fold>
         )}
-      </header>
+      </AppCover>
 
-      <ClientNotice page={d} portalUrl={portalUrl} onSetPassword={() => setPasswordOpen(true)} onAnswers={() => setAnswersOpen(true)} />
+      <ClientNotice page={d} portalUrl={portalUrl} passwordFirst={pwTop} onAnswers={() => setAnswersOpen(true)} />
 
       <div className="mt-md">
         <LifecycleCard client={c} life={life} compact />
@@ -226,13 +240,6 @@ export function AgencyClient() {
           <TheirAnswers clientId={c.id} answers={d.onboarding.answers} />
         </Fold>
       )}
-
-      <Sheet open={passwordOpen} onClose={() => setPasswordOpen(false)} title={`Password for ${c.name}`}>
-        {passwordOpen && <PortalSecurityCard client={c} life={life} />}
-        <div className="mt-md pb-xl">
-          <Button onClick={() => setPasswordOpen(false)}>Done</Button>
-        </div>
-      </Sheet>
 
       <div className="mt-md grid grid-cols-2 gap-sm md:grid-cols-3">
         {tiles.map((t, i) => (
@@ -324,7 +331,7 @@ export function AgencyClient() {
                 <Button size="sm" onClick={() => makeInvoice.mutate()} disabled={makeInvoice.isPending}>
                   {makeInvoice.isPending ? 'Making' : 'Invoice this month'}
                 </Button>
-                <MoreMenu label="More for invoices" items={[{ key: 'new', label: 'New invoice', icon: FilePlus, onSelect: () => setNewInvoice(true) }]} />
+                <IconButton icon={FilePlus} label="New invoice" onClick={() => setNewInvoice(true)} opens />
               </div>
             }
           >
@@ -354,8 +361,12 @@ export function AgencyClient() {
       )}
 
       {seg === 'link' && (
-        <Section id="link-heading" title="Client link" lede={COPY.linkLede}>
+        <Section id="link-heading" title="Links" lede={COPY.linkLede}>
           <ClientLink client={c} life={life} />
+          {/* The password card is at the top of the page while it needs the owner (an ask, or no password); otherwise it lives here. */}
+          {!pwTop && <ClientPassword className="mt-sm" clientId={c.id} clientName={c.name} state={life.password} linkOn={Boolean(c.portalToken)} />}
+          {/* The team link for the client's own team: its own token, switches and password, never any paper. */}
+          <TeamLink client={c} />
         </Section>
       )}
 
@@ -415,35 +426,17 @@ export function AgencyClient() {
 }
 
 /**
- * One line at the top of the client page, at most, in this order: the client asked for a new password (with their reason, Set a new
- * password and Dismiss); the client has not finished onboarding (with Copy link); they finished it in the last seven days (See answers).
+ * One block at the top of the client page, at most, in this order: the password card when the client asked for a new password (its
+ * "Set a new password" is then the screen's one solid button) or when the link has no password; the client has not finished onboarding
+ * (with Copy link); they finished it in the last seven days (See answers).
  */
-function ClientNotice({ page, portalUrl, onSetPassword, onAnswers }: { page: AgencyClientPage; portalUrl: string; onSetPassword: () => void; onAnswers: () => void }) {
-  const qc = useQueryClient();
+function ClientNotice({ page, portalUrl, passwordFirst, onAnswers }: { page: AgencyClientPage; portalUrl: string; passwordFirst: boolean; onAnswers: () => void }) {
   const { copy, said } = useCopy();
-  const dismiss = useMutation({ mutationFn: () => api.agencyPasswordRequestClose(page.client.id), onSuccess: () => qc.invalidateQueries({ queryKey: ['agency'] }) });
   const name = page.client.name;
-  const ask = page.lifecycle.password.request;
+  const pw = page.lifecycle.password;
   const box = 'no-print mt-md flex flex-wrap items-center gap-xs rounded-tile p-sm';
-  if (ask) {
-    return (
-      <div role="status" className={box} style={{ background: 'var(--tint-yellow)' }}>
-        <p className="m-0 min-w-0 flex-1 basis-[220px] text-[14px] font-bold">
-          {`${name} asked for a new password`}
-          {ask.reason && (
-            <span className="block font-semibold text-ink-soft">
-              <Inert text={`“${ask.reason}”`} />
-            </span>
-          )}
-        </p>
-        <Button size="sm" onClick={onSetPassword}>
-          Set a new password
-        </Button>
-        <Button size="sm" variant="ghost" onClick={() => dismiss.mutate()} disabled={dismiss.isPending}>
-          Dismiss
-        </Button>
-      </div>
-    );
+  if (passwordFirst) {
+    return <ClientPassword className="no-print mt-md" clientId={page.client.id} clientName={name} state={pw} linkOn={Boolean(page.client.portalToken)} primary={Boolean(pw.request)} />;
   }
   const ob = page.onboarding;
   if (ob.needed && !ob.done) {

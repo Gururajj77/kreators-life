@@ -6,7 +6,7 @@ export type Mood = 'happy' | 'excited' | 'neutral' | 'sleepy';
 /**
  * The guides are friendly flat monsters (the 2026-11-03 look), drawn by the design rules: few, big shapes; a gradient body (light
  * from the top left, deeper to the bottom right), never a flat fill; one clear mark each; big eyes and an open, kind mouth. The seven
- * run the rainbow in pillar order, red for work and money through violet for faith. Bumling, the app's own guide, is a neutral grey
+ * run the rainbow in pillar order, red for servitude through violet for faith. Bumling, the app's own guide, is a neutral grey
  * robot-ish one with a gold antenna, so it sits well on light and dark and never reads as one of the seven.
  */
 interface Tones {
@@ -88,7 +88,7 @@ const mirror = (d: string) => d.replace(/(-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?)/g, 
 
 function draw(key: Host, t: Tones, fill: string): Drawn {
   switch (key) {
-    // Ember, work and money: an egg with small horns and bat wings, ready to go.
+    // Ember, servitude: an egg with small horns and bat wings, ready to go.
     case 'servant_leader': {
       const wing = 'M26 50 C16 38 4 38 2 50 C8 50 10 56 8 60 C14 58 18 62 18 66 C22 62 26 60 28 58 Z';
       const horn = 'M35 24 L31 9 L43 20 Z';

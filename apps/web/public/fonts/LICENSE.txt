@@ -1,12 +1,15 @@
 Fonts served from this folder
 
-Fraunces        Copyright 2018 The Fraunces Project Authors (https://github.com/undercasetype/Fraunces)
-JetBrains Mono  Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)
-Urbanist        Copyright 2020 The Urbanist Project Authors (https://github.com/coreyhu/Urbanist)
+Geist           Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font)
+Geist Mono      Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font)
+Inter           Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)
+Caveat          Copyright 2014 The Caveat Project Authors (https://github.com/googlefonts/caveat)
 
-All three families are licensed under the SIL Open Font License, Version 1.1.
+All four families are licensed under the SIL Open Font License, Version 1.1.
 This license is available with a FAQ at https://openfontlicense.org
 
 The files are the woff2 subsets (latin and latin-ext) that Google Fonts serves for each family,
-saved here so that no request goes to a third party when a page loads. The fonts are not modified.
+saved here so that no request goes to a third party when a page loads. inter-currency.woff2 is
+the currency signs (the rupee among them) cut from Inter's latin-ext file with pyftsubset, so a
+page with a price loads 8 kB instead of the whole latin-ext file; no glyph is changed.
 The full license text is at https://openfontlicense.org/open-font-license-official-text/

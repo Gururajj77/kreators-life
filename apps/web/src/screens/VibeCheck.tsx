@@ -17,7 +17,7 @@ import {
   type RelationshipKey,
 } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, m as motion, useReducedMotion } from 'motion/react';
 import gsap from 'gsap';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { InterestPicker } from '../components/InterestPicker';

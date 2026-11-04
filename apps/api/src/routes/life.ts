@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { levelFromXp, money, wellbeingLabel, type LifeArea, type LifePart, type LifeSummary, type RelationshipKey } from '@kreators/shared';
+import { LIFE_AREA_ORDER, levelFromXp, money, wellbeingLabel, type LifeArea, type LifeAreaKey, type LifePart, type LifeSummary, type RelationshipKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { currencyOf } from '../db';
 
@@ -112,17 +112,6 @@ export async function lifeSummary(db: D1Database, userId: string): Promise<LifeS
     { label: 'Goals', value: goals.results.length ? `${Math.round(avg(goalPct) ?? 0)}% there` : 'none yet', score: goals.results.length ? clamp(avg(goalPct) ?? 0) : null, path: '/finance', hint: 'Average progress across your money goals.' },
   ];
 
-  const emotional: LifePart[] = [
-    { label: 'Mood', value: moodAvg === null ? 'not logged' : `${moodAvg.toFixed(1)} of 5`, score: scoreMood(moodNow), path: '/mood', hint: 'Your average face this week.' },
-    { label: 'Journal', value: journalNow.length ? `${journalNow.length} ${journalNow.length === 1 ? 'entry' : 'entries'}` : 'nothing written', score: journalAvg === null ? null : clamp(((journalAvg - 1) / 4) * 100), path: '/journal', hint: 'The feeling you tagged on entries.' },
-    { label: 'People floors', value: `level ${Math.round(avg(['friendship', 'lover_partner', 'parent_child'].map((k) => levelFromXp(xpOf(k as RelationshipKey)))) ?? 1)}`, score: floorScore(['friendship', 'lover_partner', 'parent_child']), path: '/tower', hint: 'Friendship, partner and family floors of your tower.' },
-  ];
-  const emotionalBefore = mean([
-    { label: '', value: '', score: scoreMood(lastWeek('mood')), path: '', hint: '' },
-    { label: '', value: '', score: journalBefore.length ? clamp((((avg(journalBefore.map((j) => j.emotion)) ?? 3) - 1) / 4) * 100) : null, path: '', hint: '' },
-    { label: '', value: '', score: floorScore(['friendship', 'lover_partner', 'parent_child']), path: '', hint: '' },
-  ]);
-
   const mental: LifePart[] = [
     { label: 'Stress', value: stressAvg === null ? 'not logged' : `${stressAvg.toFixed(1)} of 5`, score: scoreStress(stressNow), path: '/stress', hint: 'Lower stress scores higher.' },
     { label: 'Focus', value: `${tasksThisWeek} ${tasksThisWeek === 1 ? 'task' : 'tasks'} done`, score: scoreCount(tasksThisWeek, 7), path: '/today', hint: 'Seven ticked tasks a week scores full marks.' },
@@ -132,6 +121,17 @@ export async function lifeSummary(db: D1Database, userId: string): Promise<LifeS
     { label: '', value: '', score: scoreStress(lastWeek('stress')), path: '', hint: '' },
     { label: '', value: '', score: scoreCount(tasksLastWeek, 7), path: '', hint: '' },
     { label: '', value: '', score: cohorts.results.length ? clamp(avg(learning) ?? 0) : null, path: '', hint: '' },
+  ]);
+
+  const emotional: LifePart[] = [
+    { label: 'Mood', value: moodAvg === null ? 'not logged' : `${moodAvg.toFixed(1)} of 5`, score: scoreMood(moodNow), path: '/mood', hint: 'Your average face this week.' },
+    { label: 'Journal', value: journalNow.length ? `${journalNow.length} ${journalNow.length === 1 ? 'entry' : 'entries'}` : 'nothing written', score: journalAvg === null ? null : clamp(((journalAvg - 1) / 4) * 100), path: '/journal', hint: 'The feeling you tagged on entries.' },
+    { label: 'People floors', value: `level ${Math.round(avg(['friendship', 'lover_partner', 'parent_child'].map((k) => levelFromXp(xpOf(k as RelationshipKey)))) ?? 1)}`, score: floorScore(['friendship', 'lover_partner', 'parent_child']), path: '/tower', hint: 'Friendship, partner and family floors of your tower.' },
+  ];
+  const emotionalBefore = mean([
+    { label: '', value: '', score: scoreMood(lastWeek('mood')), path: '', hint: '' },
+    { label: '', value: '', score: journalBefore.length ? clamp((((avg(journalBefore.map((j) => j.emotion)) ?? 3) - 1) / 4) * 100) : null, path: '', hint: '' },
+    { label: '', value: '', score: floorScore(['friendship', 'lover_partner', 'parent_child']), path: '', hint: '' },
   ]);
 
   const spiritual: LifePart[] = [
@@ -145,13 +145,15 @@ export async function lifeSummary(db: D1Database, userId: string): Promise<LifeS
     { label: '', value: '', score: floorScore(['guru', 'divine']), path: '', hint: '' },
   ]);
 
-  const areas: LifeArea[] = [
-    { key: 'physical', score: mean(physical), trend: mean(physical) - physicalBefore, parts: physical },
-    { key: 'financial', score: mean(financial), trend: 0, parts: financial },
-    { key: 'emotional', score: mean(emotional), trend: mean(emotional) - emotionalBefore, parts: emotional },
-    { key: 'mental', score: mean(mental), trend: mean(mental) - mentalBefore, parts: mental },
-    { key: 'spiritual', score: mean(spiritual), trend: mean(spiritual) - spiritualBefore, parts: spiritual },
-  ];
+  // Built in the one order of the five areas (`LIFE_AREA_ORDER`), never by hand.
+  const byArea: Record<LifeAreaKey, Omit<LifeArea, 'key'>> = {
+    physical: { score: mean(physical), trend: mean(physical) - physicalBefore, parts: physical },
+    financial: { score: mean(financial), trend: 0, parts: financial },
+    mental: { score: mean(mental), trend: mean(mental) - mentalBefore, parts: mental },
+    emotional: { score: mean(emotional), trend: mean(emotional) - emotionalBefore, parts: emotional },
+    spiritual: { score: mean(spiritual), trend: mean(spiritual) - spiritualBefore, parts: spiritual },
+  };
+  const areas: LifeArea[] = LIFE_AREA_ORDER.map((key) => ({ key, ...byArea[key] }));
   const overall = clamp(areas.reduce((a, x) => a + x.score, 0) / areas.length);
   return { date: today, overall, label: wellbeingLabel(overall), areas };
 }

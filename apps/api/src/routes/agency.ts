@@ -50,11 +50,13 @@ import {
   stageIndex,
 } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { dayFromDevice, newId, nameOf, notify, nowIso, num, oneOf, pageOf, paged, randomCode, shiftDate, str } from '../db';
+import { dayFromDevice, liveUser, newId, nameOf, notify, nowIso, num, oneOf, pageOf, paged, randomCode, shiftDate, str } from '../db';
 import { dateOrNull, moneyIn } from '../agencyUtil';
 import { resolveAccess } from '../access';
 import { uploadVersion } from './army';
 import { lifecycleFor, syncStageFromAgreements, logStmt, type RetainerRow } from '../lifecycle';
+import { teamMay } from '../agencyTeamAccess';
+import { teamShowOf } from './teamLink';
 import { agencyFace, clearPortalSessions, closedLinkAnswer, newPortalPassword, passwordColumns, requirePortalAccess, retirePortalLink } from '../portalAccess';
 
 /**
@@ -75,6 +77,7 @@ interface ClientRow {
   stage: string; stage_since: string | null; lifecycle_json: string; ticks_json: string; revisions_per_piece: number;
   portal_pass_hash: string | null; portal_pass_salt: string | null; portal_pass_set_at: string | null; portal_last_opened_day: string | null;
   onboarding_json: string; onboarded_at: string | null; onboarding_needed: number;
+  team_link_token: string | null; team_link_json: string; team_link_pass_hash: string | null; team_link_pass_set_at: string | null; team_link_opened_day: string | null;
 }
 interface ItemRow {
   id: string; client_id: string; client_name: string; title: string; kind: DeliverableKind; platform: string; stage: DeliverableStage; due_date: string | null; publish_date: string | null; link: string; notes: string;
@@ -234,6 +237,8 @@ function toClient(r: ClientRow, m: MonthStats, today: string): AgencyClient {
     portal: portalOf(r.portal_json),
     portalToken: r.portal_token,
     portalLocked: Boolean(r.portal_pass_hash),
+    // The team link's own state; its ask for a new password is read only on the client's own page (GET /clients/:id).
+    teamLink: { token: r.team_link_token, show: teamShowOf(r.team_link_json), password: { set: Boolean(r.team_link_pass_hash), setAt: r.team_link_pass_set_at, lastOpenedDay: r.team_link_opened_day, request: null } },
     stage: parseStage(r.stage),
     createdAt: r.created_at,
     month: m,
@@ -424,6 +429,14 @@ agency.patch('/clients/:id', async (c) => {
   const prev = await clientRow(db, user.id, c.req.param('id'));
   if (!prev) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  // A team member never changes the owner's private notes or the Army link, and the money only with paperwork to edit (they were shown blanks).
+  if (c.get('team')) {
+    delete body.notes;
+    delete body.campaignId;
+    // The client's email is where their link and every paper's email go: only the owner changes it, so a member cannot send the link to themselves.
+    delete body.contactEmail;
+    if (!teamMay(c, 'paperwork', 'edit')) for (const k of ['retainerCents', 'billing', 'onboarding']) delete body[k];
+  }
   const f = clientFields(body, prev);
   if (!f.name) return c.json({ error: 'who is the client?' }, 400);
   let campaignId = prev.campaign_id;
@@ -446,9 +459,12 @@ agency.delete('/clients/:id', async (c) => {
   const res = await c.env.DB.prepare('DELETE FROM agency_clients WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
   if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
   await c.env.DB.batch([
+    // A client team member tied to this client goes with it (the foreign key says so too; this does not lean on the pragma).
+    c.env.DB.prepare('DELETE FROM agency_team WHERE client_id = ? AND owner_id = ?').bind(c.req.param('id'), c.get('user').id),
     c.env.DB.prepare('DELETE FROM retired_portal_links WHERE client_id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id),
     c.env.DB.prepare('DELETE FROM agency_password_requests WHERE client_id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id),
     c.env.DB.prepare('DELETE FROM portal_sessions WHERE client_id = ?').bind(c.req.param('id')),
+    c.env.DB.prepare('DELETE FROM team_link_sessions WHERE client_id = ?').bind(c.req.param('id')),
   ]);
   return c.json({ ok: true });
 });
@@ -462,7 +478,7 @@ agency.get('/clients/:id', async (c) => {
   await syncStageFromAgreements(db, { userId: user.id, clientId: c.req.param('id') });
   const row = await clientRow(db, user.id, c.req.param('id'));
   if (!row) return c.json({ error: 'not found' }, 404);
-  const [settings, stats, counts, channels, time, invoices, campaigns, lifecycle] = await Promise.all([
+  const [settings, stats, counts, channels, time, invoices, campaigns, lifecycle, teamAsk] = await Promise.all([
     settingsFor(db, user.id),
     statsFor(db, user.id, today),
     db.prepare('SELECT stage, COUNT(*) AS n FROM agency_items WHERE client_id = ? AND user_id = ? GROUP BY stage').bind(row.id, user.id).all<{ stage: DeliverableStage; n: number }>(),
@@ -480,12 +496,16 @@ agency.get('/clients/:id', async (c) => {
     db.prepare('SELECT id, number, total_cents, currency, status, issue_date, token FROM invoices WHERE user_id = ? AND agency_client_id = ? ORDER BY created_at DESC LIMIT 12').bind(user.id, row.id).all<{ id: string; number: string; total_cents: number; currency: string; status: AgencyInvoiceRow['status']; issue_date: string; token: string }>(),
     campaignsFor(c, user),
     lifecycleFor(db, user.id, row),
+    // Their team's open ask for a new team link password, with its reason: shown only here, on the owner's own client page.
+    db.prepare("SELECT reason, created_at FROM agency_password_requests WHERE client_id = ? AND user_id = ? AND link = 'team' AND closed_at IS NULL LIMIT 1").bind(row.id, user.id).first<{ reason: string; created_at: string }>(),
   ]);
+  const client = toClient(row, stats.get(row.id) ?? emptyStats(), today);
+  if (teamAsk) client.teamLink.password.request = { at: teamAsk.created_at, reason: teamAsk.reason };
   const by = Object.fromEntries(DELIVERABLE_STAGES.map((s) => [s, 0])) as Record<DeliverableStage, number>;
   for (const r of counts.results) by[r.stage] = r.n;
   const body: AgencyClientPage = {
     settings,
-    client: toClient(row, stats.get(row.id) ?? emptyStats(), today),
+    client,
     counts: by,
     byChannel: channels.results.map((r) => ({ channel: r.platform, published: r.published ?? 0, open: r.open ?? 0 })),
     campaigns,
@@ -644,6 +664,9 @@ agency.post('/items', async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
   const client = typeof body.clientId === 'string' ? await clientRow(db, user.id, body.clientId) : null;
   if (!client) return c.json({ error: 'pick a client' }, 400);
+  // A piece's fee is set by a team member only with paperwork to edit; its private notes are the owner's alone.
+  if (!teamMay(c, 'paperwork', 'edit')) delete body.feeCents;
+  if (c.get('team')) delete body.notes;
   const f = itemFields(body);
   if (!f.title) return c.json({ error: 'what is it called?' }, 400);
   const n = await db.prepare('SELECT COUNT(*) AS n FROM agency_items WHERE user_id = ?').bind(user.id).first<{ n: number }>();
@@ -664,6 +687,9 @@ agency.patch('/items/:id', async (c) => {
   const prev = await db.prepare(`${ITEM_SELECT} WHERE i.id = ? AND i.user_id = ?`).bind(c.req.param('id'), user.id).first<ItemRow>();
   if (!prev) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  if (!teamMay(c, 'paperwork', 'edit')) delete body.feeCents;
+  // A member never sees the owner's private notes on a piece (the gate blanks them), so whatever they send keeps the stored words.
+  if (c.get('team')) delete body.notes;
   const f = itemFields(body, prev);
   if (!f.title) return c.json({ error: 'what is it called?' }, 400);
   const now = nowIso();
@@ -693,16 +719,31 @@ agency.delete('/items/:id', async (c) => {
 
 // ---- the thread on a deliverable
 
-interface NoteRow { id: string; author: AgencyNote['author']; kind: NoteKind; shared: number; body: string; created_at: string }
-const toNote = (r: NoteRow): AgencyNote => ({ id: r.id, author: r.author, kind: r.kind, shared: r.shared === 1, body: r.body, createdAt: r.created_at });
+interface NoteRow { id: string; author: AgencyNote['author']; kind: NoteKind; shared: number; body: string; created_at: string; author_id?: string | null; author_name?: string | null; via_team_link?: number }
+const toNote = (r: NoteRow, readerId?: string): AgencyNote => ({
+  id: r.id,
+  author: r.author,
+  // A team note says who wrote it, named when read, so a deleted account leaves no name behind.
+  ...(r.author === 'team' ? { authorName: r.author_name || 'A former team member', mine: Boolean(readerId && r.author_id === readerId) } : {}),
+  // A client note written at the team link says so.
+  ...(r.author === 'client' && r.via_team_link === 1 ? { clientTeam: true } : {}),
+  kind: r.kind,
+  shared: r.shared === 1,
+  body: r.body,
+  createdAt: r.created_at,
+});
 
 agency.get('/items/:id/notes', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const item = await db.prepare('SELECT id FROM agency_items WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).first();
   if (!item) return c.json({ error: 'not found' }, 404);
-  const rows = await db.prepare('SELECT id, author, kind, shared, body, created_at FROM agency_notes WHERE item_id = ? AND user_id = ? ORDER BY created_at LIMIT 100').bind(c.req.param('id'), user.id).all<NoteRow>();
-  return c.json({ notes: rows.results.map(toNote) });
+  const rows = await db
+    .prepare(`SELECT n.id, n.author, n.kind, n.shared, n.body, n.created_at, n.author_id, n.via_team_link, (SELECT u.display_name FROM users u WHERE u.id = n.author_id AND ${liveUser('u')}) AS author_name FROM agency_notes n WHERE n.item_id = ? AND n.user_id = ? ORDER BY n.created_at LIMIT 100`)
+    .bind(c.req.param('id'), user.id)
+    .all<NoteRow>();
+  const reader = c.get('team')?.memberId ?? user.id;
+  return c.json({ notes: rows.results.map((r) => toNote(r, reader)) });
 });
 
 agency.post('/items/:id/notes', async (c) => {
@@ -714,12 +755,22 @@ agency.post('/items/:id/notes', async (c) => {
   const text = str(body.body, AGENCY_NOTE_MAX);
   if (!text) return c.json({ error: 'write something' }, 400);
   const id = newId();
+  // A team member's note, and the owner's note shared with the team, are `team` notes: never shown to the client, named by who wrote them.
+  const team = c.get('team');
+  if (team || body.team === true) {
+    await db.prepare("INSERT INTO agency_notes (id, user_id, item_id, author, shared, body, author_id, created_at) VALUES (?, ?, ?, 'team', 0, ?, ?, ?)").bind(id, user.id, c.req.param('id'), text, team?.memberId ?? user.id, nowIso()).run();
+    return c.json({ id }, 201);
+  }
   await db.prepare("INSERT INTO agency_notes (id, user_id, item_id, author, shared, body, created_at) VALUES (?, ?, ?, 'me', ?, ?, ?)").bind(id, user.id, c.req.param('id'), body.shared === true ? 1 : 0, text, nowIso()).run();
   return c.json({ id }, 201);
 });
 
 agency.delete('/notes/:id', async (c) => {
-  const res = await c.env.DB.prepare("DELETE FROM agency_notes WHERE id = ? AND user_id = ? AND author = 'me'").bind(c.req.param('id'), c.get('user').id).run();
+  // A team member removes only their own team notes; the owner removes their own notes and any team note on their Agency.
+  const team = c.get('team');
+  const res = team
+    ? await c.env.DB.prepare("DELETE FROM agency_notes WHERE id = ? AND user_id = ? AND author = 'team' AND author_id = ?").bind(c.req.param('id'), c.get('user').id, team.memberId).run()
+    : await c.env.DB.prepare("DELETE FROM agency_notes WHERE id = ? AND user_id = ? AND author IN ('me', 'team')").bind(c.req.param('id'), c.get('user').id).run();
   if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
   return c.json({ ok: true });
 });
@@ -829,6 +880,28 @@ agencyPublic.get('/:token', async (c) => {
   if (!client) return (await closedLinkAnswer(c, c.req.param('token'))) ?? c.json({ error: 'no page at this link' }, 404);
   const denied = await requirePortalAccess(c, client.id);
   if (denied) return denied;
+  const view = await portalViewFor(db, client, { visit: true });
+  c.header('Cache-Control', 'no-store');
+  return c.json(view);
+});
+
+/** The page before the onboarding form is sent: who sent it, the client's name, the stage and the form. */
+export interface PortalPending { agencyName: string; agencyLogo: string; agencyEmail: string; clientName: string; stage: ReturnType<typeof parseStage>; onboarding: { needed: boolean; done: boolean } }
+
+/** A client by id, in the owner's books, in the shape the client link reads. */
+export async function portalClientById(db: D1Database, ownerId: string, clientId: string): Promise<PortalClient | null> {
+  return db
+    .prepare('SELECT c.id, c.user_id, c.name, c.pieces_per_month, c.hours_per_month, c.portal_json, c.revisions_per_piece, c.onboarding_needed, c.onboarded_at, u.display_name AS owner_name FROM agency_clients c JOIN users u ON u.id = c.user_id WHERE c.id = ? AND c.user_id = ?')
+    .bind(clientId, ownerId)
+    .first<PortalClient>();
+}
+
+/**
+ * The client's dashboard, built once for both its callers: the client link (after its password) and a client team member's read-only view
+ * (/me/teams/:id/client-view). Only the parts the owner switched on are read, so PORTAL_NEVER holds by construction for both. `visit`
+ * records the day the link was opened; the in-app view does not.
+ */
+export async function portalViewFor(db: D1Database, client: PortalClient, opts: { visit: boolean }): Promise<PortalView | PortalPending> {
   await syncStageFromAgreements(db, { userId: client.user_id, clientId: client.id });
   const show = portalOf(client.portal_json);
   const onboarding = { needed: client.onboarding_needed === 1, done: Boolean(client.onboarded_at) };
@@ -839,10 +912,9 @@ agencyPublic.get('/:token', async (c) => {
     const [fresh0, face0] = await Promise.all([
       db.prepare('SELECT stage FROM agency_clients WHERE id = ?').bind(client.id).first<{ stage: string }>(),
       agencyFace(db, client.user_id),
-      db.prepare("UPDATE agency_clients SET portal_last_opened_day = ? WHERE id = ? AND COALESCE(portal_last_opened_day, '') != ?").bind(today0, client.id, today0).run(),
+      opts.visit ? db.prepare("UPDATE agency_clients SET portal_last_opened_day = ? WHERE id = ? AND COALESCE(portal_last_opened_day, '') != ?").bind(today0, client.id, today0).run() : Promise.resolve(null),
     ]);
-    c.header('Cache-Control', 'no-store');
-    return c.json({ agencyName: face0.agencyName || nameOf({ display_name: client.owner_name }), agencyLogo: face0.agencyLogo, agencyEmail: face0.agencyEmail, clientName: client.name, stage: parseStage(fresh0?.stage), onboarding });
+    return { agencyName: face0.agencyName || nameOf({ display_name: client.owner_name }), agencyLogo: face0.agencyLogo, agencyEmail: face0.agencyEmail, clientName: client.name, stage: parseStage(fresh0?.stage), onboarding };
   }
   const todayUtc = utcToday();
   const { start, end } = monthBounds(todayUtc.slice(0, 7));
@@ -873,15 +945,15 @@ agencyPublic.get('/:token', async (c) => {
     // Other documents sent to them (never a draft), with their link.
     show.docs ? db.prepare("SELECT title, kind, status, token FROM agency_docs WHERE client_id = ? AND status IN ('sent', 'approved', 'revised') AND token IS NOT NULL ORDER BY updated_at DESC LIMIT 12").bind(client.id).all<SentDoc>() : none<SentDoc>(),
     // Open the link counts as a visit for the day. A day, nothing more.
-    db.prepare("UPDATE agency_clients SET portal_last_opened_day = ? WHERE id = ? AND COALESCE(portal_last_opened_day, '') != ?").bind(todayUtc, client.id, todayUtc).run(),
+    opts.visit ? db.prepare("UPDATE agency_clients SET portal_last_opened_day = ? WHERE id = ? AND COALESCE(portal_last_opened_day, '') != ?").bind(todayUtc, client.id, todayUtc).run() : Promise.resolve(null),
   ]);
   const stage = parseStage(fresh?.stage);
   const life = parseLifecycleDates(fresh?.lifecycle_json);
   const at = stageIndex(stage);
   const ids = waiting.results.map((w) => w.id);
-  type Thread = { item_id: string; author: 'me' | 'client'; kind: NoteKind; body: string; created_at: string };
+  type Thread = { item_id: string; author: 'me' | 'client'; kind: NoteKind; body: string; created_at: string; via_team_link: number };
   const threads = ids.length && show.notes
-    ? await db.prepare(`SELECT item_id, author, kind, body, created_at FROM agency_notes WHERE item_id IN (${ids.map(() => '?').join(',')}) AND (shared = 1 OR author = 'client') ORDER BY created_at`).bind(...ids).all<Thread>()
+    ? await db.prepare(`SELECT item_id, author, kind, body, created_at, via_team_link FROM agency_notes WHERE item_id IN (${ids.map(() => '?').join(',')}) AND (shared = 1 OR author = 'client') ORDER BY created_at`).bind(...ids).all<Thread>()
     : { results: [] as Thread[] };
 
   // The retainer offer, with what each length comes to. The one place the fee shows, because the client has to see a price to choose.
@@ -930,7 +1002,7 @@ agencyPublic.get('/:token', async (c) => {
     trial: stage === 'trial' ? { due: life.trialDue, rules: TRIAL_RULES } : null,
     pilot: at >= stageIndex('pilot') && (life.pilotStart || life.pilotEnd) ? { start: life.pilotStart, end: life.pilotEnd } : null,
     retainer,
-    waiting: waiting.results.map((w) => ({ id: w.id, title: w.title, kind: w.kind, platform: w.platform, link: w.link, publishDate: w.publish_date, changes: { used: w.revisions, allowed: w.allowed }, thread: threads.results.filter((t) => t.item_id === w.id).map((t) => ({ author: t.author, kind: t.kind, body: t.body, createdAt: t.created_at })) })),
+    waiting: waiting.results.map((w) => ({ id: w.id, title: w.title, kind: w.kind, platform: w.platform, link: w.link, publishDate: w.publish_date, changes: { used: w.revisions, allowed: w.allowed }, thread: threads.results.filter((t) => t.item_id === w.id).map((t) => ({ author: t.author, kind: t.kind, body: t.body, createdAt: t.created_at, ...(t.via_team_link === 1 ? { team: true } : {}) })) })),
     coming: coming.results.map((x) => ({ id: x.id, title: x.title, kind: x.kind, platform: x.platform, stage: x.stage, publishDate: x.publish_date, changes: { used: x.revisions, allowed: x.allowed } })),
     published: done.results.map((x) => ({ id: x.id, title: x.title, kind: x.kind, platform: x.platform, link: x.link, publishedAt: x.published_at })),
     month: show.progress ? { published: count?.n ?? 0, planned: client.pieces_per_month } : null,
@@ -940,9 +1012,8 @@ agencyPublic.get('/:token', async (c) => {
     contracts: contracts.results.map((x) => ({ title: x.title, status: x.status, token: x.token })),
     docs: docs.results.map((x) => ({ title: x.title, kind: x.kind, status: x.status, token: x.token })),
   };
-  c.header('Cache-Control', 'no-store');
-  return c.json(view);
-});
+  return view;
+}
 
 // A client approves, asks for a change, or only comments, as far as the owner allowed. The link is the only key (and its password, when set),
 // so it is limited per address. A change spends one of the changes included in the piece and sends it back to making; with none left the

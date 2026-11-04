@@ -4,8 +4,14 @@ import gsap from 'gsap';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import { Button } from '../components/Button';
+import { Avatar } from '../components/Avatar';
+import { ExpandButton } from '../components/ExpandButton';
+import { Eraser, FlipHorizontal2, Shuffle } from 'lucide-react';
 import { HeroBlobs } from '../components/Hero';
-import { BackLink } from '../components/PageHeader';
+import { PageHeader } from '../components/PageHeader';
+import { StatusTag } from '../components/StatusTag';
+import { Busy, Skeleton } from '../components/Skeleton';
+import { tick } from '../components/fx/haptics';
 import { Screen } from '../components/Screen';
 import { Section } from '../components/Section';
 import { Sheet } from '../components/Sheet';
@@ -18,6 +24,12 @@ import { TabRow } from '../components/TabRow';
 import { Segmented } from '../components/fx/Segmented';
 import { fillVar } from '../lib/relFill';
 import { tie } from '../lib/text';
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+/** A mouse or pen lifts a card once it has moved this far; a finger lifts it after a still press (moving first scrolls the page). */
+const MOUSE_SLOP = 6;
+const TOUCH_SLOP = 8;
+const TOUCH_HOLD_MS = 250;
 
 const reduced = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -161,20 +173,31 @@ function useCut<T extends HTMLElement>() {
 
 /** The back of every card in a game: its colour, its flower, its name. A deck can add its own line. On the pile the count badge sits in
  *  the bottom corner, so the words end above it (`badge`). */
-function Cover({ game, deck, size, badge = false }: { game: CardGamePlay; deck?: PlayDeck; size: number; badge?: boolean }) {
+function Cover({ game, deck, size, badge = false, onHint }: { game: CardGamePlay; deck?: PlayDeck; size: number; badge?: boolean; onHint?: (shown: boolean) => void }) {
   const rel = RELATIONSHIP_BY_KEY[game.accent];
+  // A deck's hint is shown on the cover only while it fits whole (a phone's pile is small); never cut mid-sentence. `onHint` tells the table, which then shows it beside the pile.
+  const ref = useRef<HTMLDivElement>(null);
+  const [hideHint, setHideHint] = useState(false);
+  useLayoutEffect(() => setHideHint(false), [size, deck?.key]);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el && deck?.hint && !hideHint && el.scrollHeight > el.clientHeight + 1) setHideHint(true);
+  });
+  const shown = Boolean(deck?.hint) && !hideHint;
+  useEffect(() => onHint?.(shown), [shown, onHint]);
   return (
-    <div className={`relative flex size-full flex-col items-center justify-center gap-xs overflow-hidden rounded-tile p-sm text-center text-on-fill ${badge ? 'pb-lg' : ''}`} style={fill(rel)}>
+    <div ref={ref} className={`relative flex size-full flex-col items-center justify-center gap-xs overflow-hidden rounded-tile p-sm text-center text-on-fill ${badge ? 'pb-lg' : ''}`} style={fill(rel)}>
       <HeroBlobs seed={game.key} opacity={0.2} />
-      <span className="relative leading-none" style={{ fontSize: size * 0.28 }} aria-hidden="true">
-        {game.emoji}
+      {/* The game's guide in place of an emoji, as on the Games tiles. */}
+      <span className="relative" aria-hidden="true">
+        <Avatar relationship={game.accent} size={Math.round(size * 0.26)} decorative />
       </span>
-      {/* A long name (The Relationship Method Challenge) is set a size smaller, so its last two words fit one line together and none is left alone. */}
+      {/* A long name is set a size smaller, so its last two words fit one line together and none is left alone. */}
       <span className="relative text-balance font-display font-extrabold leading-[1.15]" style={{ fontSize: game.name.length > 24 ? Math.max(12, size * 0.087) : Math.max(14, size * 0.1) }}>
         {game.name.length > 24 ? tie(game.name) : game.name}
       </span>
       {deck && <span className="relative text-balance text-[12px] font-bold opacity-90">{deck.name}</span>}
-      {deck?.hint && <span className="relative text-balance text-[12px] font-semibold leading-[1.3]">{deck.hint}</span>}
+      {shown && <span className="relative text-balance text-[12px] font-semibold leading-[1.3]">{deck?.hint}</span>}
     </div>
   );
 }
@@ -193,8 +216,8 @@ function Face({ game, deck, label, title, text, list, size, onRead }: { game: Ca
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-xs p-sm">
         <div ref={body} data-card-body className="relative flex min-h-0 flex-1 flex-col gap-xs overflow-hidden">
-          {title && <p className="m-0 font-display font-extrabold leading-[1.2]" style={{ fontSize: Math.max(15, size * 0.095) }}>{title}</p>}
-          {text && <p className="m-0 font-semibold leading-[1.35]" style={{ fontSize: Math.max(13, size * (long ? 0.066 : 0.08)) }}>{text}</p>}
+          {title && <p className="m-0 font-display font-extrabold leading-[1.2] text-ink" style={{ fontSize: Math.max(15, size * 0.095) }}>{title}</p>}
+          {text && <p className="m-0 font-medium leading-[1.35] text-ink-soft" style={{ fontSize: Math.max(13, size * (long ? 0.066 : 0.08)) }}>{text}</p>}
           {list && list.length > 0 && (
             <ul className="m-0 list-disc pl-md font-semibold text-ink-soft" style={{ fontSize: Math.max(12, size * 0.062) }}>
               {list.slice(0, 2).map((x) => (
@@ -212,7 +235,7 @@ function Face({ game, deck, label, title, text, list, size, onRead }: { game: Ca
               e.stopPropagation();
               onRead();
             }}
-            className="mt-auto self-start text-[12px] font-extrabold underline underline-offset-4"
+            className="mt-auto inline-flex min-h-[44px] items-center self-start text-[12px] font-extrabold underline underline-offset-4"
           >
             Read all
           </button>
@@ -225,7 +248,23 @@ function Face({ game, deck, label, title, text, list, size, onRead }: { game: Ca
 function TableCard({ game, deck, card, t, size, box, onRaise, onMove, onFlip, onRead }: { game: CardGamePlay; deck: PlayDeck; card: PlayCard; t: OnTable; size: number; box: { w: number; h: number }; onRaise: (uid: number) => void; onMove: (uid: number, x: number, y: number) => void; onFlip: (uid: number) => void; onRead: (card: PlayCard, deck: PlayDeck, side: 'a' | 'b') => void }) {
   const root = useRef<HTMLDivElement>(null);
   const inner = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ sx: number; sy: number; ox: number; oy: number; moved: boolean; nx: number; ny: number } | null>(null);
+  const drag = useRef<{
+    sx: number;
+    sy: number;
+    ox: number;
+    oy: number;
+    nx: number;
+    ny: number;
+    /** Picked up: it follows the pointer, a little bigger, leaning with its sideways speed. */
+    lifted: boolean;
+    touch: boolean;
+    timer: number | null;
+    lx: number;
+    lt: number;
+    vx: number;
+    lean: gsap.QuickToFunc | null;
+    rest: number | null;
+  } | null>(null);
   const first = useRef(true);
   const h = Math.round(size * 1.4);
 
@@ -236,7 +275,17 @@ function TableCard({ game, deck, card, t, size, box, onRaise, onMove, onFlip, on
     if (first.current) {
       first.current = false;
       if (reduced()) gsap.set(el, { x: t.x, y: t.y });
-      else gsap.fromTo(el, { x: t.from.x, y: t.from.y, rotation: -8, scale: 0.9 }, { x: t.x, y: t.y, rotation: 0, scale: 1, duration: 0.45, ease: 'power3.out' });
+      else {
+        // It leaves the pile leaning left on one draw and right on the next (the pile sits at one side, so the way it travels would
+        // turn them all one way), a little more the further it goes, and swings just past level as it lands.
+        const dist = Math.hypot(t.x - t.from.x, t.y - t.from.y);
+        const side = t.uid % 2 ? 1 : -1;
+        const start = side * clamp(6 + dist / 50, 6, 14) * (t.uid % 3 === 0 ? 0.75 : 1);
+        gsap
+          .timeline()
+          .fromTo(el, { x: t.from.x, y: t.from.y, rotation: start, scale: 0.9 }, { x: t.x, y: t.y, rotation: -start * 0.18, scale: 1, duration: 0.45, ease: 'power3.out' })
+          .to(el, { rotation: 0, duration: 0.25, ease: 'power2.out' });
+      }
       return;
     }
     gsap.set(el, { x: t.x, y: t.y });
@@ -248,15 +297,58 @@ function TableCard({ game, deck, card, t, size, box, onRaise, onMove, onFlip, on
     if (!el) return;
     if (shown.current === t.flipped && el.dataset.set) return;
     shown.current = t.flipped;
+    const firstSet = !el.dataset.set;
     el.dataset.set = '1';
-    if (reduced()) gsap.set(el, { rotateY: t.flipped ? 180 : 0 });
-    else gsap.to(el, { rotateY: t.flipped ? 180 : 0, duration: 0.5, ease: 'power2.inOut' });
+    if (firstSet || reduced()) {
+      gsap.set(el, { rotateY: t.flipped ? 180 : 0 });
+      return;
+    }
+    // The card turns over and rises a little while it does, so it feels picked up, not spun on the spot.
+    const tl = gsap.timeline();
+    tl.to(el, { rotateY: t.flipped ? 180 : 0, duration: 0.5, ease: 'power2.inOut' }, 0);
+    if (root.current) tl.to(root.current, { scale: 1.04, duration: 0.25, ease: 'power2.out' }, 0).to(root.current, { scale: 1, duration: 0.25, ease: 'power2.in' }, 0.25);
+    return () => {
+      tl.progress(1).kill();
+    };
   }, [t.flipped]);
 
+  // A finger that has lifted a card must not scroll the page. Only a listener that is not passive can say so, and it must be there before the
+  // touch starts, so it sits on the card for good and does nothing unless the card is lifted (the same as KanbanBoard).
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const stop = (e: TouchEvent) => {
+      if (drag.current?.lifted) e.preventDefault();
+    };
+    el.addEventListener('touchmove', stop, { passive: false });
+    return () => {
+      el.removeEventListener('touchmove', stop);
+      const d = drag.current;
+      if (d?.timer != null) window.clearTimeout(d.timer);
+      if (d?.rest != null) window.clearTimeout(d.rest);
+      drag.current = null;
+      gsap.killTweensOf(el);
+    };
+  }, []);
+
+  const lift = () => {
+    const d = drag.current;
+    if (!d || d.lifted) return;
+    d.lifted = true;
+    if (d.timer !== null) window.clearTimeout(d.timer);
+    d.timer = null;
+    tick();
+    const el = root.current;
+    if (!el || reduced()) return;
+    gsap.to(el, { scale: 1.03, duration: 0.18, ease: 'power2.out' });
+    d.lean = gsap.quickTo(el, 'rotation', { duration: 0.25, ease: 'power2.out' });
+  };
   const down = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
+    if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
     e.currentTarget.setPointerCapture(e.pointerId);
-    drag.current = { sx: e.clientX, sy: e.clientY, ox: t.x, oy: t.y, moved: false, nx: t.x, ny: t.y };
+    const touch = e.pointerType === 'touch';
+    drag.current = { sx: e.clientX, sy: e.clientY, ox: t.x, oy: t.y, nx: t.x, ny: t.y, lifted: false, touch, timer: null, lx: e.clientX, lt: performance.now(), vx: 0, lean: null, rest: null };
+    if (touch) drag.current.timer = window.setTimeout(lift, TOUCH_HOLD_MS);
     onRaise(t.uid);
   };
   const move = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -264,18 +356,52 @@ function TableCard({ game, deck, card, t, size, box, onRaise, onMove, onFlip, on
     if (!d) return;
     const dx = e.clientX - d.sx;
     const dy = e.clientY - d.sy;
-    if (!d.moved && Math.hypot(dx, dy) < 5) return;
-    d.moved = true;
+    if (!d.lifted) {
+      const dist = Math.hypot(dx, dy);
+      if (d.touch) {
+        // A swipe before the hold: the page scrolls, and the card is left where it is.
+        if (dist > TOUCH_SLOP) {
+          if (d.timer !== null) window.clearTimeout(d.timer);
+          drag.current = null;
+        }
+        return;
+      }
+      if (dist < MOUSE_SLOP) return;
+      lift();
+    }
+    const now = performance.now();
+    const dt = now - d.lt;
+    // Sideways speed in px a second, smoothed and held to what the lean can show (8 degrees at 200 px/s).
+    if (dt > 0) d.vx = clamp(d.vx * 0.6 + ((e.clientX - d.lx) / dt) * 1000 * 0.4, -300, 300);
+    d.lx = e.clientX;
+    d.lt = now;
+    if (d.lean) {
+      d.lean(clamp(d.vx * 0.04, -8, 8));
+      // When the pointer rests the card stands up straight again.
+      if (d.rest !== null) window.clearTimeout(d.rest);
+      d.rest = window.setTimeout(() => {
+        if (drag.current === d) {
+          d.vx = 0;
+          d.lean?.(0);
+        }
+      }, 80);
+    }
     d.nx = Math.min(Math.max(0, d.ox + dx), Math.max(0, box.w - size));
     d.ny = Math.min(Math.max(0, d.oy + dy), Math.max(0, box.h - h));
     if (root.current) gsap.set(root.current, { x: d.nx, y: d.ny });
   };
-  const up = () => {
+  const end = (cancelled: boolean) => {
     const d = drag.current;
     drag.current = null;
     if (!d) return;
-    if (d.moved) onMove(t.uid, d.nx, d.ny);
-    else onFlip(t.uid);
+    if (d.timer !== null) window.clearTimeout(d.timer);
+    if (d.rest !== null) window.clearTimeout(d.rest);
+    if (d.lifted) {
+      // Set down: it glides back to upright and its own size.
+      const el = root.current;
+      if (el && !reduced()) gsap.to(el, { rotation: 0, scale: 1, duration: 0.3, ease: 'power3.out' });
+      onMove(t.uid, d.nx, d.ny);
+    } else if (!cancelled) onFlip(t.uid);
   };
   const key = (e: KeyboardEvent<HTMLDivElement>) => {
     const step = 16;
@@ -301,13 +427,14 @@ function TableCard({ game, deck, card, t, size, box, onRaise, onMove, onFlip, on
       aria-label={`${card.title ?? card.label ?? deck.name}: ${card.text || card.list?.[0] || ''}. ${t.flipped ? 'Showing the other side.' : ''} Press Enter to flip, arrow keys to move.`}
       onPointerDown={down}
       onPointerMove={move}
-      onPointerUp={up}
-      onPointerCancel={up}
+      onPointerUp={() => end(false)}
+      onPointerCancel={() => end(true)}
+      onContextMenu={(e) => e.preventDefault()}
       onKeyDown={key}
       data-table-card
       data-crowded={t.crowded ? '1' : undefined}
-      className="absolute top-0 left-0 cursor-grab touch-none select-none outline-none active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-ink"
-      style={{ width: size, height: h, zIndex: t.z, perspective: 900 }}
+      className="absolute top-0 left-0 cursor-grab select-none outline-none active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-ink"
+      style={{ width: size, height: h, zIndex: t.z, perspective: 900, WebkitTouchCallout: 'none' }}
     >
       <div ref={inner} className="relative size-full shadow-toy-soft" style={{ transformStyle: 'preserve-3d', borderRadius: 'var(--radius-tile)' }}>
         <div className="absolute inset-0" style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}>
@@ -367,11 +494,13 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
   const narrow = box.w < 520;
   // The card's size follows the table's width, but never asks for more height than the table has to give: on a short table
   // (a phone on its side in focus mode) this keeps enough room to lay several cards out without stacking them.
-  const size = Math.round(Math.min(210, Math.max(132, Math.min(box.w * (narrow ? 0.42 : 0.2), box.h / 1.9))));
+  const size = Math.round(Math.min(210, Math.max(132, Math.min(box.w * (narrow ? 0.42 : 0.24), box.h / 1.9))));
   const height = Math.round(size * 1.4);
   const pileX = 16;
   const pileY = 16;
   const left = piles[deck.key]?.length ?? 0;
+  // Whether the top of the pile could show the deck's hint whole; when it could not, the line beside the pile carries it.
+  const [pileHint, setPileHint] = useState(true);
 
   // When the table changes size (focus mode on or off, a phone turning, a window resized) every card is brought back onto it. Positions are
   // scaled to the new size, so the cards keep their arrangement and none is left outside the edge.
@@ -447,7 +576,7 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
   );
   // How to play, house rules and special cards are one block with tabs, most important first; a tab shows only when it has something.
   const guide = [
-    { value: 'how' as const, label: 'How to play' },
+    { value: 'how' as const, label: 'Basics' },
     ...(game.rules && game.rules.length > 0 ? [{ value: 'rules' as const, label: 'House rules' }] : []),
     ...(game.special && game.special.length > 0 ? [{ value: 'special' as const, label: 'Special cards' }] : []),
   ];
@@ -457,6 +586,7 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
   // In focus mode the whole table is one screen-sized column: the buttons on top, the table filling what is left, so on a phone it never runs past the screen.
   return (
     <div
+      data-pillar={game.accent}
       className={focus ? 'fixed inset-0 z-40 flex flex-col gap-sm overflow-hidden px-md' : undefined}
       style={focus ? { paddingTop: 'calc(var(--spacing-md) + env(safe-area-inset-top))', paddingBottom: 'calc(var(--spacing-md) + env(safe-area-inset-bottom))' } : undefined}
     >
@@ -471,24 +601,17 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
         pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
       />
 
-      {/* Two rows, so nothing is ever left alone on a line: the four deck actions, then the count with water and focus mode at the right. */}
+      {/* One row: Draw (the one solid button), then Shuffle, Flip all and Clear table as round icons, water and focus mode at the right. How many
+          cards are left is on the deck pill and the pile, and read out by the live line below. */}
       <div className={`fill-row flex shrink-0 flex-wrap items-center gap-xs ${focus ? '' : 'mt-sm'}`}>
         <Button size="sm" onClick={draw} disabled={left === 0}>
           Draw a card
         </Button>
-        <Button size="sm" variant="outline" onClick={shuffle}>
-          Shuffle
-        </Button>
-        <Button size="sm" variant="outline" onClick={flipAll} disabled={table.length === 0}>
-          Flip all
-        </Button>
-        <Button size="sm" variant="ghost" onClick={clear} disabled={table.length === 0}>
-          Clear table
-        </Button>
-      </div>
-      <div className={`flex shrink-0 items-center justify-between gap-xs ${focus ? '' : 'mt-xs'}`}>
-        <span className="min-w-0 text-[14px] font-bold text-ink-soft">{left} left in {deck.name}</span>
-        <div className="flex shrink-0 items-center gap-xs">
+        {/* The table's other actions as round icons; on a laptop each one's words slide out on hover. */}
+        <ExpandButton icon={Shuffle} label="Shuffle" onClick={shuffle} />
+        <ExpandButton icon={FlipHorizontal2} label="Flip all" onClick={flipAll} disabled={table.length === 0} />
+        <ExpandButton icon={Eraser} label="Clear table" onClick={clear} disabled={table.length === 0} />
+        <div className="ml-auto flex shrink-0 items-center gap-xs">
           {/* Focus mode takes the menu (and with it the corner pill) away, so a running focus clock shows here, small, instead. */}
           {focus && <FocusPill compact />}
           <WaterButton />
@@ -497,7 +620,7 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
       </div>
       <p className="sr-only" role="status" aria-live="polite">{said}</p>
 
-      <div ref={boxRef} className={`focus-target relative overflow-hidden rounded-card border border-line bg-card ${focus ? 'min-h-0 flex-1' : 'mt-sm'}`} style={{ ...(focus ? { minHeight: 0 } : { minHeight: narrow ? 480 : 580 }), isolation: 'isolate', background: `linear-gradient(160deg, var(--soft-${rel.key}), transparent 70%)` }} aria-label="Card table">
+      <div ref={boxRef} className={`focus-target relative overflow-hidden rounded-card border border-line bg-card ${focus ? 'min-h-0 flex-1' : 'mt-sm'}`} style={{ ...(focus ? { minHeight: 0 } : { minHeight: narrow ? 480 : 580 }), isolation: 'isolate', background: `linear-gradient(160deg, color-mix(in oklab, ${fillVar(rel)} 14%, transparent), transparent 70%)` }} aria-label="Card table">
         <button
           ref={pileRef}
           type="button"
@@ -512,14 +635,21 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
             <>
               {[2, 1, 0].filter((k) => k < left).map((k) => (
                 <span key={k} className="absolute inset-0" style={{ transform: `translate(${k * 3}px, ${k * 3}px)`, zIndex: 3 - k }}>
-                  <Cover game={game} deck={deck} size={size} badge />
+                  <Cover game={game} deck={deck} size={size} badge onHint={k === 0 ? setPileHint : undefined} />
                 </span>
               ))}
-              <span className="absolute right-xs bottom-xs rounded-pill bg-card-strong px-xs text-[12px] font-extrabold text-ink" style={{ zIndex: 5 }}>{left}</span>
+              <span className="absolute right-xs bottom-xs" style={{ zIndex: 5 }}>
+                <StatusTag tone="neutral">{`${left} left`}</StatusTag>
+              </span>
             </>
           )}
         </button>
-        {table.length === 0 && <p className="absolute m-0 text-[14px] font-semibold text-ink-soft" style={{ left: pileX + size + 32, top: 32, right: 16 }}>Tap the pile to draw. Tap a card to flip it. Drag it where you like.</p>}
+        {table.length === 0 && (
+          <div className="absolute text-[14px] font-semibold text-ink-soft" style={{ left: pileX + size + 32, top: 32, right: 16 }}>
+            {!pileHint && deck.hint && left > 0 && <p className="mb-sm mt-0 text-ink">{deck.hint}</p>}
+            <p className="m-0">Tap the pile to draw. Tap a card to flip it. Drag it where you like.</p>
+          </div>
+        )}
         {table.map((t) => {
           const d = byKey[t.deck];
           const c = d?.cards[t.idx];
@@ -532,8 +662,9 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
       <>
       <Section id="how-to-play" title="How to play" className="focus-dimmable">
         <div className="rounded-card bg-card p-md shadow-toy-soft">
-          {guide.length > 1 && <Segmented label="How to play" value={shownGuide} onChange={setGuideTab} options={guide} className="mb-sm" />}
-          {shownGuide === 'how' && <p className="m-0 text-[14px] font-semibold text-ink-soft">{game.howTo}</p>}
+          {guide.length > 1 && <Segmented label="Rules" value={shownGuide} onChange={setGuideTab} options={guide} className="mb-sm" />}
+          {/* The rules are read at the table, so they are a reading block (full lines, exempt from the phone's density rule). */}
+          {shownGuide === 'how' && <p className="prose-long m-0 text-[14px] font-semibold text-ink-soft">{game.howTo}</p>}
           {shownGuide === 'rules' && game.rules && (
             <ul className="m-0 list-none divide-y divide-line p-0">
               {game.rules.map((s) => (
@@ -623,16 +754,17 @@ export function CardTable() {
   const err = q.error instanceof Error ? q.error.message : '';
 
   return (
-    <Screen howTo={false} tabs={!focus} wide={focus} className="focus-scope">
-      <header className={`focus-dimmable pt-lg ${focus ? 'hidden' : ''}`}>
-        <BackLink to="/cards">Games</BackLink>
-        <h1 className="text-balance text-[30px]">{tie(info?.name ?? 'Card game')}</h1>
-        {info && <p className="mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">{info.tagline}</p>}
-      </header>
+    <Screen howTo={false} tabs={!focus} wide={focus} className="focus-scope card-table-scope">
+      {/* The header is the screen's first child, so on a phone it clears the floating logo; app.css (card-table-scope) dims it like the rest. */}
+      {!focus && <PageHeader back={{ to: '/cards', label: 'Games' }} title={tie(info?.name ?? 'Card game')} lede={info?.tagline} />}
       {q.isPending && (
-        <p className="mt-md text-[14px] font-bold text-ink-soft" role="status">
-          Shuffling the deck
-        </p>
+        <Busy label="Shuffling the deck">
+          <div className="mt-md flex gap-xs">
+            <Skeleton className="h-[44px] w-[120px] rounded-pill" />
+            <Skeleton className="h-[44px] w-[120px] rounded-pill" />
+          </div>
+          <Skeleton className="mt-sm h-[480px] w-full rounded-card" />
+        </Busy>
       )}
       {q.isError && (
         <div className="mt-md rounded-card bg-card p-md shadow-toy-soft" role="alert">

@@ -117,7 +117,7 @@ export function HostCodeCard({ value, startsAt, onSave, guests = 'guests', child
           </label>
         </div>
         <Problem text={problem} />
-        <Button className="mt-sm" full disabled={busy || !(Number(xp) >= 1)} onClick={() => void save({ xp: Number(xp), ...(own ? { code: own } : {}) })}>
+        <Button variant="outline" className="mt-sm" full disabled={busy || !(Number(xp) >= 1)} onClick={() => void save({ xp: Number(xp), ...(own ? { code: own } : {}) })}>
           Make the code
         </Button>
       </div>

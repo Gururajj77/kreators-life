@@ -49,6 +49,8 @@ export const LIMITS = {
   assistant: { max: 60, windowSec: 3600 },
   /** "Read with AI" on the strategy session's map card. A model call paid in credits, a line at a time. */
   feelings: { max: 30, windowSec: 3600 },
+  /** Lines typed to the Companion, on any path: the model, Workers AI or the rules. Stop is counted with them. */
+  companion: { max: 60, windowSec: 3600 },
   /** Coaching asks: a coach asking a student, a student asking a coach, and asking the team to be made a life coach. */
   coachAsk: { max: 20, windowSec: 3600 },
   /** What a life coach writes for a student: notes, and tasks added or changed. */
@@ -66,6 +68,8 @@ export const LIMITS = {
   prefs: { max: 240, windowSec: 3600 },
   /** Everyday Agency work: moving a deliverable, a note, a time entry. */
   agency: { max: 600, windowSec: 3600 },
+  /** Asking someone to join your Agency team: an inbox note and maybe a friend request go out, so twenty a day. */
+  teamInvite: { max: 20, windowSec: 86400 },
   /** Asking whether a discount code works, per person; the same number again per address (`discountAddress`), so many accounts on one address cannot guess codes. */
   discount: { max: 20, windowSec: 600 },
   discountAddress: { max: 60, windowSec: 600 },
@@ -79,6 +83,10 @@ export const LIMITS = {
   portalLoginLink: { max: 20, windowSec: 600 },
   /** A client asking for a new password from the lock screen, per address: it needs no session, so it is held to three an hour. */
   portalPasswordAsk: { max: 3, windowSec: 3600 },
+  /** The password on a team link (the client's own team), per address: five tries in ten minutes, a budget of its own. */
+  teamLinkLogin: { max: 5, windowSec: 600 },
+  /** The same team link's password, per client whatever the address. */
+  teamLinkLoginLink: { max: 20, windowSec: 600 },
   /** A client choosing a retainer length, and the owner's lifecycle calls (stage, password, offer, confirm). */
   lifecycle: { max: 120, windowSec: 3600 },
   /** Changing the password from Profile, per person: the current password is checked, so a stolen session cannot guess it. */
@@ -113,7 +121,7 @@ export const ROUTE_LIMITS: readonly {
   /** Count the address instead of the person. */
   by?: 'address';
   /** Count only a request whose body carries a discount code, so an ordinary checkout, enrolment or RSVP never spends the code budget. */
-  when?: 'discountCode';
+  when?: 'discountCode' | 'appPrefs';
 }[] = [
   ...CHANNEL_DOORS,
   { method: 'POST', path: '/auth/signin', limit: 'signin' },
@@ -151,6 +159,8 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/studio/brands', limit: 'create' },
   { method: 'POST', path: '/assistant', limit: 'assistant' },
   { method: 'POST', path: '/assistant/feelings', limit: 'feelings' },
+  { method: 'POST', path: '/companion', limit: 'companion' },
+  { method: 'POST', path: '/companion/stop', limit: 'companion' },
   { method: 'POST', path: '/party/events/:id/claim', limit: 'claim' },
   { method: 'POST', path: '/circles/events/:id/claim', limit: 'claim' },
   { method: 'POST', path: '/party/events/:id/duplicate', limit: 'create' },
@@ -166,6 +176,7 @@ export const ROUTE_LIMITS: readonly {
   { method: 'DELETE', path: '/wellbeing/focus/:id', limit: 'prefs' },
   { method: 'POST', path: '/me/calendar', limit: 'prefs' },
   { method: 'PUT', path: '/session/away', limit: 'prefs' },
+  { method: 'PUT', path: '/today/day-type', limit: 'prefs' },
   { method: 'POST', path: '/discover/more/:kind/submit', limit: 'discover' },
   { method: 'POST', path: '/public/client-error', limit: 'clientError' },
   { method: 'POST', path: '/public/vitals', limit: 'vitals' },
@@ -185,6 +196,11 @@ export const ROUTE_LIMITS: readonly {
   { method: 'PATCH', path: '/reminders/custom/:id', limit: 'reminder' },
   { method: 'PUT', path: '/media/for/:type/:id', limit: 'create' },
   { method: 'POST', path: '/connect/:app/:id/messages', limit: 'message' },
+  // A run's discussion: lines take the event conversation's limit; the rest are the channel doors' limits.
+  { method: 'POST', path: '/run/talk/:runId/messages', limit: 'message' },
+  { method: 'DELETE', path: '/run/talk/:runId/messages/:mid', limit: 'prefs' },
+  { method: 'POST', path: '/run/talk/:runId/messages/:mid/report', limit: 'ticket' },
+  { method: 'POST', path: '/run/talk/:runId/messages/:mid/block-author', limit: 'follow' },
   { method: 'POST', path: '/connect/:app/:id/people/:userId/connect', limit: 'intro' },
   { method: 'POST', path: '/reviews/kpis', limit: 'create' },
   { method: 'PUT', path: '/reviews/kpis/:id/value', limit: 'prefs' },
@@ -198,6 +214,8 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/agency/templates', limit: 'create' },
   { method: 'POST', path: '/agency/contracts', limit: 'create' },
   { method: 'POST', path: '/agency/contracts/:id/duplicate', limit: 'create' },
+  { method: 'POST', path: '/agency/invoices/:id/restore', limit: 'agency' },
+  { method: 'POST', path: '/agency/contracts/:id/restore', limit: 'agency' },
   { method: 'POST', path: '/agency/docs', limit: 'create' },
   { method: 'POST', path: '/agency/docs/:id/duplicate', limit: 'create' },
   { method: 'POST', path: '/agency/invoices/:id/email', limit: 'docEmail' },
@@ -220,6 +238,13 @@ export const ROUTE_LIMITS: readonly {
   { method: 'PUT', path: '/public/agency/:token/onboarding', limit: 'portal', by: 'address' },
   { method: 'POST', path: '/public/agency/:token/onboarding/submit', limit: 'portal', by: 'address' },
   { method: 'POST', path: '/public/agency/password-request', limit: 'portalPasswordAsk', by: 'address' },
+  // The team link (the client's own team): its unlock per address, and a note or approval from it per address like the client link.
+  { method: 'POST', path: '/public/team-link/:token/unlock', limit: 'teamLinkLogin', by: 'address' },
+  { method: 'POST', path: '/public/team-link/:token/items/:id', limit: 'portal', by: 'address' },
+  // The owner's side of the team link: a fresh link or a new password ends every team session, so they count as lifecycle calls.
+  { method: 'POST', path: '/agency/clients/:id/team-link', limit: 'lifecycle' },
+  { method: 'PUT', path: '/agency/clients/:id/team-link/password', limit: 'lifecycle' },
+  { method: 'POST', path: '/agency/clients/:id/team-link/password-request/close', limit: 'lifecycle' },
   { method: 'POST', path: '/agency/clients/:id/password-request/close', limit: 'lifecycle' },
   { method: 'POST', path: '/agency/clients/:id/stage', limit: 'lifecycle' },
   { method: 'PUT', path: '/agency/clients/:id/lifecycle', limit: 'lifecycle' },
@@ -245,6 +270,8 @@ export const ROUTE_LIMITS: readonly {
     { method: 'POST' as const, path, limit: 'discountAddress' as const, by: 'address' as const, when: 'discountCode' as const },
   ]),
   { method: 'POST', path: '/me/password', limit: 'passwordChange' },
+  // How the app groups start and the order of apps in them (Profile, Features): counted only when a save carries it.
+  { method: 'PATCH', path: '/me', limit: 'prefs', when: 'appPrefs' },
   // The rest of Agency's writes: everyday work under `agency`, the heavy ones (a fresh client link ends every session, an
   // import reaches Army) under `lifecycle`, and the business metrics under `prefs`.
   { method: 'PATCH', path: '/agency/clients/:id', limit: 'agency' },
@@ -266,6 +293,14 @@ export const ROUTE_LIMITS: readonly {
   { method: 'DELETE', path: '/agency/docs/:id', limit: 'agency' },
   { method: 'PATCH', path: '/reviews/kpis/:id', limit: 'prefs' },
   { method: 'DELETE', path: '/reviews/kpis/:id', limit: 'prefs' },
+  // The Agency team: an invite under its own daily count, the owner's other changes as everyday Agency work, and the member's answer or
+  // leaving as a preference. A member's own work on the owner's Agency counts against the member, since these run before the team gate.
+  { method: 'POST', path: '/agency/team', limit: 'teamInvite' },
+  { method: 'PATCH', path: '/agency/team/:id', limit: 'agency' },
+  { method: 'POST', path: '/agency/team/:id/resend', limit: 'agency' },
+  { method: 'DELETE', path: '/agency/team/:id', limit: 'agency' },
+  { method: 'POST', path: '/me/teams/:id/answer', limit: 'prefs' },
+  { method: 'POST', path: '/me/teams/:id/leave', limit: 'prefs' },
 ];
 
 /** The doors that take no session are limited before the session check; everything else after it, per person. */

@@ -4,9 +4,10 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { MediaSection } from '../components/MediaSection';
 import { Button } from '../components/Button';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
+import { ConfirmSpend } from '../components/ConfirmSpend';
 import { api } from '../lib/api';
 import { useAuthed, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
@@ -18,6 +19,7 @@ import { StatusTag } from '../components/StatusTag';
 import type { TagTone } from '@kreators/shared';
 import { shortDate, localDateTimeValue } from '../lib/date';
 import { IconTag } from '../components/FactTag';
+import { CardHead } from '../components/CardHead';
 
 type Rule = Pick<Bounty, 'ratePerThousand' | 'maxPayoutPoints' | 'minViews'>;
 
@@ -42,7 +44,7 @@ const STATUS_LABEL: Record<BountySubmission['status'], string> = {
 };
 
 function StatusPill({ status }: { status: BountySubmission['status'] }) {
-  return <StatusTag tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</StatusTag>;
+  return <StatusTag tone={STATUS_TONE[status]} fit>{STATUS_LABEL[status]}</StatusTag>;
 }
 
 function rateLine(b: Rule): string {
@@ -58,13 +60,14 @@ function BountyCard({ b }: { b: Bounty }) {
           <Icon icon={Medal} size={22} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap items-center gap-xs">
-            <span className="text-[16px] font-bold">{b.title}</span>
-            {b.featured && (
+          <CardHead tag={b.mine ? <StatusPill status={b.mine.status} /> : b.featured && <IconTag tone="warn" icon="Star" fit>Featured</IconTag>}>
+            <span className="block text-[16px] font-bold">{b.title}</span>
+          </CardHead>
+          {b.mine && b.featured && (
+            <span className="mt-xs flex">
               <IconTag tone="warn" icon="Star">Featured</IconTag>
-            )}
-            {b.mine && <StatusPill status={b.mine.status} />}
-          </span>
+            </span>
+          )}
           <span className="block text-[14px] font-semibold text-ink-soft">
             {b.brandName}, {b.deliverable}
             {b.platform ? ` on ${b.platform}` : ''}
@@ -85,6 +88,7 @@ function ReviewBox({ s, rule, reviewer, finance, onDone }: { s: BountySubmission
   const suggested = rule ? bountyPayout(Number(views) || 0, rule) : s.estimatedPoints;
   const [payout, setPayout] = useState(String(s.payoutPoints > 0 ? s.payoutPoints : suggested));
   const [touched, setTouched] = useState(false);
+  const [paying, setPaying] = useState(false);
   const review = useMutation({ mutationFn: (body: Parameters<typeof api.reviewBounty>[1]) => api.reviewBounty(s.id, body), onSuccess: onDone });
   const live = touched ? payout : String(s.payoutPoints > 0 ? s.payoutPoints : suggested);
   return (
@@ -130,7 +134,7 @@ function ReviewBox({ s, rule, reviewer, finance, onDone }: { s: BountySubmission
             <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} className={FIELD} />
           </label>
           <div className="flex flex-wrap gap-xs">
-            <Button onClick={() => review.mutate({ status: 'verified', evidenceViews: Number(views) || 0, evidenceNote: note, payoutPoints: Number(live) || 0 })} disabled={review.isPending}>
+            <Button variant="outline" onClick={() => review.mutate({ status: 'verified', evidenceViews: Number(views) || 0, evidenceNote: note, payoutPoints: Number(live) || 0 })} disabled={review.isPending}>
               Verify
             </Button>
             <Button variant="outline" onClick={() => review.mutate({ status: 'rejected', evidenceViews: Number(views) || 0, evidenceNote: note })} disabled={review.isPending}>
@@ -154,14 +158,18 @@ function ReviewBox({ s, rule, reviewer, finance, onDone }: { s: BountySubmission
               className={FIELD}
             />
           </label>
-          <Button
-            onClick={() => {
-              if (window.confirm(`Pay ${live} points to ${s.userName}?`)) review.mutate({ status: 'paid', payoutPoints: Number(live) || 0 });
-            }}
-            disabled={review.isPending}
-          >
+          <Button variant="outline" onClick={() => setPaying(true)} disabled={review.isPending}>
             Pay {live} pts
           </Button>
+          <ConfirmSpend
+            open={paying}
+            onClose={() => setPaying(false)}
+            title={`Pay ${live} points?`}
+            body={`${live} points go to ${s.userName} from the reward's pool. This cannot be undone.`}
+            action={`Pay ${live} points`}
+            busy={review.isPending}
+            onConfirm={() => review.mutate({ status: 'paid', payoutPoints: Number(live) || 0 })}
+          />
         </div>
       )}
       <ErrorLine e={review.isError ? review.error : null} />
@@ -172,10 +180,9 @@ function ReviewBox({ s, rule, reviewer, finance, onDone }: { s: BountySubmission
 function SubmissionRow({ s, rule, reviewer, finance, onDone, showPerson }: { s: BountySubmission; rule: Rule | null; reviewer: boolean; finance: boolean; onDone: () => void; showPerson: boolean }) {
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <p className="m-0 flex flex-wrap items-center gap-xs text-[16px] font-bold">
-        {showPerson ? s.userName : s.bountyTitle}
-        <StatusPill status={s.status} />
-      </p>
+      <CardHead tag={<StatusPill status={s.status} />}>
+        <p className="m-0 text-[16px] font-bold">{showPerson ? s.userName : s.bountyTitle}</p>
+      </CardHead>
       <p className="m-0 text-[14px] font-semibold text-ink-soft">
         {SOCIAL_PLATFORM_META[s.platform].name}, {n(s.latestViews)} views, {n(s.latestEngagement)} engagement
         {s.evidenceViews !== null ? `, ${n(s.evidenceViews)} confirmed` : ''}
@@ -202,29 +209,26 @@ export function Win() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Win</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Content rewards. A brand funds a pool, you post a video about them, verified views turn into points.</p>
+      <AppCover
+        back={{ to: '/apps', label: 'Apps' }}
+        title="Win"
+        lede="Content rewards. A brand funds a pool, you post a video about them, verified views turn into points."
+        actions={d?.canCreate ? <Button onClick={() => setLaunching(true)}>Launch a reward</Button> : undefined}
+      >
         {d && (
-          <div className="mt-md rounded-card bg-ink p-md text-on-ink">
+          <div className="rounded-card bg-ink p-md text-on-ink">
             <p className="m-0 text-[14px] font-bold opacity-70">Earned so far</p>
             <p className="m-0 font-display text-[36px] font-extrabold leading-none">
               {n(d.earned)} <span className="text-[18px]">points</span>
             </p>
           </div>
         )}
-        {d?.canCreate && (
-          <Button className="mt-md" onClick={() => setLaunching(true)}>
-            Launch a reward
-          </Button>
-        )}
-      </header>
+      </AppCover>
 
       {q.isError && (
-        <div className="mt-md rounded-card bg-card p-md shadow-toy-soft" role="alert">
-          <p className="m-0 font-bold">Could not load rewards.</p>
-          <Button variant="outline" className="mt-sm" onClick={() => q.refetch()}>
+        <div className="mt-md rounded-card bg-card p-md shadow-toy-soft flex flex-wrap-reverse items-center justify-between gap-sm" role="alert">
+          <p className="m-0 font-bold min-w-0 flex-1 basis-[60%]">Could not load rewards.</p>
+          <Button variant="outline" onClick={() => q.refetch()}>
             Try again
           </Button>
         </div>
@@ -254,10 +258,9 @@ export function Win() {
                 {d.mine.map((s) => (
                   <li key={s.id}>
                     <Link to={`/win/${s.bountyId}`} className="toy toy-soft block rounded-tile bg-card p-sm">
-                      <span className="flex flex-wrap items-center gap-xs text-[16px] font-bold">
-                        {s.bountyTitle}
-                        <StatusPill status={s.status} />
-                      </span>
+                      <CardHead tag={<StatusPill status={s.status} />}>
+                        <span className="block text-[16px] font-bold">{s.bountyTitle}</span>
+                      </CardHead>
                       <span className="block text-[14px] font-semibold text-ink-soft">
                         {SOCIAL_PLATFORM_META[s.platform].name}, {n(s.latestViews)} views
                         {s.status === 'paid' ? `, paid ${n(s.payoutPoints)} pts` : `, about ${n(s.estimatedPoints)} pts at the current numbers`}
@@ -549,10 +552,9 @@ function MySubmission({ s, onDone }: { s: BountySubmission; onDone: () => void }
   const auto = SOCIAL_PLATFORM_META[s.platform].auto;
   return (
     <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
-      <p className="m-0 flex flex-wrap items-center gap-xs text-[16px] font-bold">
-        Your entry
-        <StatusPill status={s.status} />
-      </p>
+      <CardHead tag={<StatusPill status={s.status} />}>
+        <p className="m-0 text-[16px] font-bold">Your entry</p>
+      </CardHead>
       <a href={s.url} target="_blank" rel="noreferrer" className="mt-xs inline-flex min-h-[44px] items-center text-[14px] font-bold underline underline-offset-4">
         {SOCIAL_PLATFORM_META[s.platform].name} post
       </a>
@@ -659,7 +661,8 @@ function EarnCalc({ b }: { b: Rule }) {
         <span className="block text-[12px] font-bold text-ink-soft">If my post gets this many views</span>
         <input type="number" min={0} inputMode="numeric" value={views} onChange={(e) => setViews(e.target.value)} className={FIELD} />
       </label>
-      <div className="ml-auto flex flex-wrap justify-end gap-xs" role="group" aria-label="Quick view counts">
+      {/* Two by two on a phone, so the fourth count is never alone on its line; one row from `sm` up. */}
+      <div className="grid w-full grid-cols-2 gap-xs sm:ml-auto sm:flex sm:w-auto sm:flex-wrap sm:justify-end" role="group" aria-label="Quick view counts">
         {[1000, 10000, 100000, 1000000].map((x) => (
           <button key={x} type="button" aria-pressed={v === x} onClick={() => setViews(String(x))} className={`toy min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${v === x ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
             {n(x)}
@@ -704,11 +707,7 @@ export function Reward() {
   if (q.isError) {
     return (
       <Screen>
-        <header className="pt-lg">
-          <BackLink to="/win">Win</BackLink>
-          <h1 className="text-[30px]">That reward is gone</h1>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{q.error instanceof Error ? q.error.message : 'It may have closed.'}</p>
-        </header>
+        <AppCover back={{ to: '/win', label: 'Win' }} title="That reward is gone" lede={q.error instanceof Error ? q.error.message : 'It may have closed.'} />
       </Screen>
     );
   }
@@ -723,21 +722,18 @@ export function Reward() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/win">Win</BackLink>
-        <p className="m-0 text-[14px] font-bold text-ink-soft">
-          {b.brandName}
-          {b.featured ? ', featured' : ''}
-          {!open ? `, ${b.status === 'paid' ? 'pool paid out' : 'closed'}` : `, closes ${day(b.endsAt)}`}
-          {b.version > 1 ? `, version ${b.version}` : ''}
-        </p>
-        <h1 className="text-[30px]">{b.title}</h1>
-        {(reviewer || win.data?.canCreate) && b.status !== 'paid' && (
-          <Button variant="outline" className="mt-sm" onClick={() => setEditing(true)}>
-            Change this reward
-          </Button>
-        )}
-      </header>
+      <AppCover
+        back={{ to: '/win', label: 'Win' }}
+        title={b.title}
+        lede={`${b.brandName}${b.featured ? ', featured' : ''}${!open ? `, ${b.status === 'paid' ? 'pool paid out' : 'closed'}` : `, closes ${day(b.endsAt)}`}${b.version > 1 ? `, version ${b.version}` : ''}`}
+        actions={
+          (reviewer || win.data?.canCreate) && b.status !== 'paid' ? (
+            <Button variant="outline" onClick={() => setEditing(true)}>
+              Change this reward
+            </Button>
+          ) : undefined
+        }
+      />
 
       <MediaSection type="reward" id={b.id} />
 

@@ -3,7 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Button } from '../components/Button';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { Toggle } from '../components/Toggle';
@@ -55,11 +55,7 @@ export function Army() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Army</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Brand campaigns from brief to delivery. Creators see a brief once the team assigns them to it.</p>
-      </header>
+      <AppCover back={{ to: '/apps', label: 'Apps' }} title="Army" lede="Brand campaigns from brief to delivery. Creators see a brief once the team assigns them to it." />
 
       {offers.length > 0 && (
         <section className="mt-lg" aria-labelledby="offers-heading">
@@ -399,10 +395,7 @@ export function Campaign() {
   if (q.isError) {
     return (
       <Screen>
-        <header className="pt-lg">
-          <BackLink to="/army">Army</BackLink>
-        </header>
-        <p className="mt-md font-bold">{errorText(q.error, 'That campaign is not yours or does not exist.')}</p>
+        <AppCover back={{ to: '/army', label: 'Army' }} title="Not yours, or gone" lede={errorText(q.error, 'That campaign is not yours or does not exist.')} />
       </Screen>
     );
   }
@@ -413,25 +406,28 @@ export function Campaign() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/army">Army</BackLink>
-        <p className="m-0 text-[14px] font-bold text-ink-soft">
-          {c.organizationName}, owned by {c.ownerName}
-        </p>
-        <h1 className="text-[30px]">{c.name}</h1>
-        <div className="mt-xs">
-          <StatusPill status={c.status} />
-        </div>
-      </header>
+      {/* Who it is for sits under the title, not above it: above, it lay on the clapperboard's lines (4.35:1 in light mode on a laptop). */}
+      <AppCover
+        back={{ to: '/army', label: 'Army' }}
+        title={c.name}
+        lede={
+          <span className="inline-flex flex-wrap items-center justify-end gap-x-sm gap-y-xs">
+            <span>
+              {c.organizationName}, owned by {c.ownerName}
+            </span>
+            <StatusPill status={c.status} />
+          </span>
+        }
+      />
 
       <section className="mt-lg" aria-label="Progress">
-        <ol className="flex list-none flex-wrap gap-xs p-0 m-0">
+        <ol className="fill-row flex list-none flex-wrap gap-xs p-0 m-0">
           {CAMPAIGN_STATUSES.filter((s) => s !== 'cancelled').map((s, i) => {
             const idx = CAMPAIGN_STATUSES.indexOf(c.status);
             const done = i < idx && c.status !== 'cancelled';
             const current = s === c.status;
             return (
-              <li key={s} aria-current={current ? 'step' : undefined} className={`rounded-pill px-xs text-[12px] font-extrabold leading-[24px] ${current ? 'bg-ink text-on-ink' : done ? 'bg-r4 text-on-fill' : 'bg-card text-ink-soft shadow-toy-soft'}`}>
+              <li key={s} aria-current={current ? 'step' : undefined} className={`rounded-pill px-xs text-center text-[12px] font-extrabold leading-[24px] ${current ? 'bg-ink text-on-ink' : done ? 'bg-r4 text-on-fill' : 'bg-card text-ink-soft shadow-toy-soft'}`}>
                 {CAMPAIGN_STATUS_META[s]}
               </li>
             );
@@ -537,7 +533,7 @@ export function Campaign() {
           <h2 id="creators-heading" className="text-[24px]">
             {who === 'creator' ? 'Your role' : 'Creators'}
           </h2>
-          {who === 'staff' && <Button onClick={() => setAssigning(true)}>Assign</Button>}
+          {who === 'staff' && <Button variant="outline" onClick={() => setAssigning(true)}>Assign</Button>}
         </div>
         {d.assignments.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{who === 'staff' ? 'No one assigned yet.' : 'The team has not assigned anyone yet.'}</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">

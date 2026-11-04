@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { CONTENT_KINDS, LINK_SOURCES, detectPlatform, type ContentItem, type Customer, type DmAutomation, type DmRequest, type DmSend, type Funnel, type FunnelStep, type Page, type PayoutSummary, type Sequence, type TrackedLink } from '@kreators/shared';
 import type { AppEnv, Env } from '../env';
-import { nameOf, newId, notify, nowIso, num, oneOf, parseList, randomCode, str, pageOf, paged } from '../db';
+import { inBatches, nameOf, newId, notify, nowIso, num, oneOf, parseList, randomCode, str, pageOf, paged } from '../db';
 import { fetchMetrics } from '../social';
 import { fetchT, isTimeout, TIMEOUT } from '../http';
 import { providerFor } from '../payments';
@@ -135,8 +135,8 @@ growth.delete('/content/:id', async (c) => {
 });
 
 // ---- Auto-DM automations
-interface AutoRow { id: string; content_item_id: string | null; content_caption: string | null; keywords_json: string; dm_message: string; public_replies_json: string; link_id: string; link_code: string; product_title: string | null; active: number; created_at: string; matched: number; sent: number; queued: number; failed: number; clicks: number; sales: number; revenue: number }
-const AUTO_SELECT = `SELECT a.*, ci.caption AS content_caption, l.code AS link_code, p.title AS product_title,
+interface AutoRow { id: string; content_item_id: string | null; content_caption: string | null; content_url: string | null; content_external_id: string | null; keywords_json: string; dm_message: string; public_replies_json: string; link_id: string; link_code: string; product_title: string | null; active: number; created_at: string; matched: number; sent: number; queued: number; failed: number; clicks: number; sales: number; revenue: number }
+const AUTO_SELECT = `SELECT a.*, ci.caption AS content_caption, ci.url AS content_url, ci.external_id AS content_external_id, l.code AS link_code, p.title AS product_title,
   (SELECT COUNT(*) FROM dm_sends s WHERE s.automation_id = a.id) AS matched,
   (SELECT COUNT(*) FROM dm_sends s WHERE s.automation_id = a.id AND s.status = 'sent') AS sent,
   (SELECT COUNT(*) FROM dm_sends s WHERE s.automation_id = a.id AND s.status = 'queued') AS queued,
@@ -200,10 +200,8 @@ export async function handleComment(db: D1Database, env: Env, ownerId: string | 
     : await db.prepare(`${AUTO_SELECT} WHERE a.active = 1 AND (ci.external_id = ? OR ci.url = ?)`).bind(comment.mediaExternalId ?? '', comment.mediaUrl ?? '').all<AutoRow>();
   let matched = 0;
   for (const a of rows.results) {
-    if (a.content_item_id && comment.mediaUrl && ownerId) {
-      const item = await db.prepare('SELECT url, external_id FROM content_items WHERE id = ?').bind(a.content_item_id).first<{ url: string; external_id: string | null }>();
-      if (item && item.url !== comment.mediaUrl && item.external_id !== comment.mediaExternalId) continue;
-    }
+    // The post the automation watches came with the row (AUTO_SELECT's join), so there is no read per automation.
+    if (a.content_item_id && comment.mediaUrl && ownerId && a.content_url !== null && a.content_url !== comment.mediaUrl && a.content_external_id !== comment.mediaExternalId) continue;
     const words = parseList(a.keywords_json);
     if (!words.some((w) => text.includes(w))) continue;
     matched += 1;
@@ -255,43 +253,54 @@ growth.post('/automations/:id/simulate', async (c) => {
 // ---- funnels: a chain of steps, each with how many people reached it
 interface FunnelRow { id: string; name: string; steps_json: string; created_at: string }
 
-async function stepCount(db: D1Database, ownerId: string, step: FunnelStep): Promise<number> {
-  const one = async (sql: string, ...binds: unknown[]) => (await db.prepare(sql).bind(...binds).first<{ n: number }>())?.n ?? 0;
+/** The one read that counts a step, or null for a kind that has none (it counts 0). */
+function stepQuery(db: D1Database, ownerId: string, step: FunnelStep): D1PreparedStatement | null {
   switch (step.kind) {
     case 'content':
-      return one('SELECT views AS n FROM content_items WHERE id = ? AND owner_id = ?', step.ref, ownerId);
+      return db.prepare('SELECT views AS n FROM content_items WHERE id = ? AND owner_id = ?').bind(step.ref, ownerId);
     case 'automation':
-      return one('SELECT COUNT(*) AS n FROM dm_sends s JOIN dm_automations a ON a.id = s.automation_id WHERE a.id = ? AND a.owner_id = ?', step.ref, ownerId);
+      return db.prepare('SELECT COUNT(*) AS n FROM dm_sends s JOIN dm_automations a ON a.id = s.automation_id WHERE a.id = ? AND a.owner_id = ?').bind(step.ref, ownerId);
     case 'link':
-      return one('SELECT COUNT(*) AS n FROM link_clicks k JOIN tracked_links l ON l.id = k.link_id WHERE l.id = ? AND l.owner_id = ?', step.ref, ownerId);
+      return db.prepare('SELECT COUNT(*) AS n FROM link_clicks k JOIN tracked_links l ON l.id = k.link_id WHERE l.id = ? AND l.owner_id = ?').bind(step.ref, ownerId);
     case 'lead':
-      return one('SELECT COUNT(*) AS n FROM leads WHERE owner_id = ?', ownerId);
+      return db.prepare('SELECT COUNT(*) AS n FROM leads WHERE owner_id = ?').bind(ownerId);
     case 'product':
-      return one("SELECT COUNT(*) AS n FROM orders WHERE product_id = ? AND owner_id = ? AND status IN ('paid','test')", step.ref, ownerId);
+      return db.prepare("SELECT COUNT(*) AS n FROM orders WHERE product_id = ? AND owner_id = ? AND status IN ('paid','test')").bind(step.ref, ownerId);
     case 'broadcast':
-      return one('SELECT sent AS n FROM broadcasts WHERE id = ? AND owner_id = ?', step.ref, ownerId);
+      return db.prepare('SELECT sent AS n FROM broadcasts WHERE id = ? AND owner_id = ?').bind(step.ref, ownerId);
     default:
-      return 0;
+      return null;
   }
 }
 
-async function toFunnel(db: D1Database, ownerId: string, r: FunnelRow): Promise<Funnel> {
-  let steps: FunnelStep[] = [];
-  try {
-    const v = JSON.parse(r.steps_json) as unknown;
-    if (Array.isArray(v)) steps = v.filter((x): x is FunnelStep => Boolean(x && typeof x === 'object' && 'kind' in x && 'ref' in x));
-  } catch {
-    steps = [];
-  }
-  const withCounts = await Promise.all(steps.map(async (s) => ({ ...s, count: await stepCount(db, ownerId, s) })));
-  return { id: r.id, name: r.name, steps: withCounts, createdAt: r.created_at };
+/** Funnels with every step counted: all the counts of all the funnels in one round trip a fifty, not one read per step. */
+async function toFunnels(db: D1Database, ownerId: string, rows: readonly FunnelRow[]): Promise<Funnel[]> {
+  const all = rows.map((r) => {
+    let steps: FunnelStep[] = [];
+    try {
+      const v = JSON.parse(r.steps_json) as unknown;
+      if (Array.isArray(v)) steps = v.filter((x): x is FunnelStep => Boolean(x && typeof x === 'object' && 'kind' in x && 'ref' in x));
+    } catch {
+      steps = [];
+    }
+    return { r, steps: steps.map((s) => ({ s, q: stepQuery(db, ownerId, s) })) };
+  });
+  const asks = all.flatMap(({ steps }) => steps.flatMap(({ q }) => (q ? [q] : [])));
+  const got = await inBatches<{ n: number }>(db, asks);
+  let k = 0;
+  return all.map(({ r, steps }) => ({
+    id: r.id,
+    name: r.name,
+    steps: steps.map(({ s, q }) => ({ ...s, count: q ? (got[k++]?.results[0]?.n ?? 0) : 0 })),
+    createdAt: r.created_at,
+  }));
 }
 
 growth.get('/funnels', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const rows = await db.prepare('SELECT * FROM funnels WHERE owner_id = ? ORDER BY created_at DESC').bind(user.id).all<FunnelRow>();
-  const funnels = await Promise.all(rows.results.map((r) => toFunnel(db, user.id, r)));
+  const funnels = await toFunnels(db, user.id, rows.results);
   return c.json({ funnels });
 });
 
@@ -305,7 +314,7 @@ growth.post('/funnels', async (c) => {
   const id = newId();
   await db.prepare('INSERT INTO funnels (id, owner_id, name, steps_json, created_at) VALUES (?, ?, ?, ?, ?)').bind(id, user.id, name, JSON.stringify(steps), nowIso()).run();
   const row = await db.prepare('SELECT * FROM funnels WHERE id = ?').bind(id).first<FunnelRow>();
-  return c.json({ funnel: row ? await toFunnel(db, user.id, row) : null }, 201);
+  return c.json({ funnel: row ? ((await toFunnels(db, user.id, [row]))[0] ?? null) : null }, 201);
 });
 
 growth.delete('/funnels/:id', async (c) => {

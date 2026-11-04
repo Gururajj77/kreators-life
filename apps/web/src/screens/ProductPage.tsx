@@ -1,4 +1,4 @@
-import { PRODUCT_KIND_META, productHasOwnCover, productPayWays, unlockAt, type DiscountCheck, money } from '@kreators/shared';
+import { PRODUCT_KIND_META, productHasOwnCover, productPayWays, unlockAt, type DiscountCheck, money, formatCount } from '@kreators/shared';
 import { dateTime } from '../lib/date';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
@@ -171,7 +171,7 @@ export function ProductPage() {
 
   const ready = (p?.kind !== 'dm' || question.trim().length > 0) && (!needsIntake || intake.filter((a) => a.trim()).length >= (p?.intake.length ?? 0)) && (!p?.pwyw || price >= (p?.pricePoints ?? 0));
   const payPoints = discount && discount.offPoints > 0 ? discount.payPoints : price;
-  const buyLabel = (label: string) => (p?.pricePoints === 0 && !p?.pwyw ? `${label} for free` : payPoints === 0 ? `${label} for free` : `${label} for ${payPoints} points`);
+  const buyLabel = (label: string) => (p?.pricePoints === 0 && !p?.pwyw ? `${label} for free` : payPoints === 0 ? `${label} for free` : `${label} for ${formatCount(payPoints)} points`);
   const busy = buy.isPending || pendingOrder !== null;
   const payCents = p ? (discount && discount.offCents > 0 ? discount.payCents : p.priceCents) : 0;
   const moneyLabel = p ? money(payCents, p.currency) : '';
@@ -216,9 +216,9 @@ export function ProductPage() {
               {p.kind === 'bundle' && <li>Includes {p.bundleIds.length} products</li>}
               {p.kind === 'locked' && <li>One post, shown to you after purchase</li>}
               {p.kind === 'dm' && <li>A written answer within {p.responseDays ?? 3} days</li>}
-              {p.kind === 'payment' && <li>{p.pwyw ? `Pay what you want, from ${p.pricePoints} points` : 'A one-off payment'}</li>}
-              {p.pwyw && p.kind !== 'payment' && <li>Pay what you want, from {p.pricePoints} points</li>}
-              <li>{p.sold} people have this</li>
+              {p.kind === 'payment' && <li>{p.pwyw ? `Pay what you want, from ${formatCount(p.pricePoints)} points` : 'A one-off payment'}</li>}
+              {p.pwyw && p.kind !== 'payment' && <li>Pay what you want, from {formatCount(p.pricePoints)} points</li>}
+              <li>{formatCount(p.sold)} {p.sold === 1 ? 'person has' : 'people have'} this</li>
             </ul>
           </div>
 
@@ -242,7 +242,7 @@ export function ProductPage() {
                 <label className="mt-sm block">
                   <span className="block text-[14px] font-bold">What you want to pay, in points</span>
                   <input type="number" min={p.pricePoints} value={offer} onChange={(e) => setOffer(e.target.value)} placeholder={String(p.pricePoints)} className={FIELD} />
-                  <span className="mt-xs block text-[12px] font-bold text-ink-soft">At least {p.pricePoints}.</span>
+                  <span className="mt-xs block text-[12px] font-bold text-ink-soft">At least {formatCount(p.pricePoints)}.</span>
                 </label>
               )}
               {p.kind === 'dm' && (
@@ -288,7 +288,7 @@ export function ProductPage() {
               )}
               {replayForSale ? (
                 <Button full size="lg" className="mt-md" onClick={() => buy.mutate({ pay: 'points', replay: true })} disabled={busy}>
-                  Buy the replay for {p.replayPoints} points
+                  Buy the replay for {formatCount(p.replayPoints)} points
                 </Button>
               ) : !d.unlock.ok ? (
                 <LockedButton unlock={d.unlock} className="mt-md" />
@@ -297,7 +297,7 @@ export function ProductPage() {
                   {buyLabel(meta.buy)}
                 </Button>
               ) : null}
-              {(ways.points || replayForSale) && <p className="mt-xs m-0 text-center text-[12px] font-bold text-ink-soft">You have {points} points.</p>}
+              {(ways.points || replayForSale) && <p className="mt-xs m-0 text-center text-[12px] font-bold text-ink-soft">You have {formatCount(points)} points.</p>}
               {ways.money && !replayForSale && d.unlock.ok && (
                 <>
                   <Button variant={ways.points ? 'outline' : 'primary'} full size={ways.points ? 'md' : 'lg'} className={ways.points ? 'mt-sm' : 'mt-md'} onClick={() => buy.mutate({ pay: 'money' })} disabled={busy || !ready || !d.unlock.ok}>

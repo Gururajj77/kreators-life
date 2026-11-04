@@ -4,7 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
 import { Button } from '../components/Button';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api, errorText } from '../lib/api';
@@ -36,11 +36,7 @@ export function ContentResults() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/shop/content">Content</BackLink>
-        <h1 className="text-[30px]">Posts and links</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Which post made money. Share the /go link instead of the plain one and every sale is credited to the post it came from.</p>
-      </header>
+      <AppCover back={{ to: '/shop/content', label: 'Content' }} title="Posts and links" lede="Which post made money. Share the /go link instead of the plain one and every sale is credited to the post it came from." />
 
       <section className="mt-md grid grid-cols-3 gap-xs" aria-label="Numbers">
         <StatTile label="sales from links" value={attributed} />
@@ -82,7 +78,7 @@ export function ContentResults() {
           <h2 id="links-heading" className="text-[24px]">
             Tracked links
           </h2>
-          <Button onClick={() => setLinking(true)}>New link</Button>
+          <Button variant="outline" onClick={() => setLinking(true)}>New link</Button>
         </div>
         {links.data && links.data.links.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing yet. A link can open your page or one product.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -116,6 +112,29 @@ export function ContentResults() {
   );
 }
 
+/** The pale red outline a delete wears (the Sign out button's look), never solid until the sheet asks. */
+const DELETE_BTN = 'toy inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-[16px] font-bold text-r1 hover:bg-r1/10 disabled:opacity-50';
+
+/** Asks before a delete, the Mindful session pattern: a red "Yes, delete it" and a quiet "Keep it". */
+function ConfirmDelete({ open, title, body, pending, failed, onYes, onClose }: { open: boolean; title: string; body: string; pending: boolean; failed: boolean; onYes: () => void; onClose: () => void }) {
+  return (
+    <Sheet open={open} onClose={onClose} title={title}>
+      <div className="grid gap-md pb-xl">
+        <p className="m-0 text-[16px] font-semibold text-ink-soft">{body}</p>
+        {failed && <p role="alert" className="m-0 text-[14px] font-bold text-r1">That did not work. Try again.</p>}
+        <div className="flex flex-wrap gap-xs">
+          <button type="button" disabled={pending} onClick={onYes} className={DELETE_BTN}>
+            Yes, delete it
+          </button>
+          <Button variant="outline" onClick={onClose}>
+            Keep it
+          </Button>
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
 function ContentCard({ item, onChange }: { item: ContentItem; onChange: () => void }) {
   const [typing, setTyping] = useState(false);
   const [views, setViews] = useState(String(item.views));
@@ -129,6 +148,7 @@ function ContentCard({ item, onChange }: { item: ContentItem; onChange: () => vo
     },
   });
   const remove = useMutation({ mutationFn: () => api.deleteContent(item.id), onSuccess: onChange });
+  const [deleting, setDeleting] = useState(false);
   const platform = SOCIAL_PLATFORM_META[item.platform]?.name ?? 'Other';
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
@@ -136,8 +156,8 @@ function ContentCard({ item, onChange }: { item: ContentItem; onChange: () => vo
         {platform}, {item.kind}
         {item.syncedAt ? `, numbers from ${dateTime(item.syncedAt)}` : ', numbers not read yet'}
       </p>
-      <a href={item.url} target="_blank" rel="noreferrer" className="mt-xs block break-words text-[16px] font-bold underline-offset-4 hover:underline">
-        {item.caption || item.url}
+      <a href={item.url} target="_blank" rel="noreferrer" className="mt-xs flex min-h-[44px] items-center text-[16px] font-bold underline-offset-4 hover:underline">
+        <span className="min-w-0 break-words">{item.caption || item.url}</span>
       </a>
       <dl className="mt-sm grid grid-cols-3 gap-xs m-0 text-[14px]">
         {(
@@ -192,18 +212,19 @@ function ContentCard({ item, onChange }: { item: ContentItem; onChange: () => vo
           </Button>
         </form>
       ) : (
-        <div className="mt-sm flex flex-wrap gap-xs">
+        <div className="mt-sm flex flex-wrap gap-xs fill-row">
           <Button variant="outline" onClick={() => refresh.mutate(undefined)} disabled={refresh.isPending}>
             Refresh numbers
           </Button>
           <Button variant="outline" onClick={() => setTyping(true)}>
             Type the numbers
           </Button>
-          <Button variant="ghost" disabled={remove.isPending} onClick={() => window.confirm('Remove this post and its tracked links?') && remove.mutate()}>
+          <button type="button" disabled={remove.isPending} onClick={() => setDeleting(true)} className={DELETE_BTN}>
             Remove
-          </Button>
+          </button>
         </div>
       )}
+      <ConfirmDelete open={deleting} title="Delete this post?" body="The post and its tracked links go. Sales already credited stay. This cannot be undone." pending={remove.isPending} failed={remove.isError} onYes={() => remove.mutate()} onClose={() => setDeleting(false)} />
     </li>
   );
 }
@@ -214,6 +235,7 @@ function LinkCard({ link, goBase, onChange }: { link: TrackedLink; goBase: strin
   const [qr, setQr] = useState<string | null>(null);
   const [qrError, setQrError] = useState<string | null>(null);
   const remove = useMutation({ mutationFn: () => api.deleteLink(link.id), onSuccess: onChange });
+  const [deleting, setDeleting] = useState(false);
   const url = `${goBase}${link.code}`;
   useEffect(() => {
     if (!qrOpen || qr) return;
@@ -234,17 +256,18 @@ function LinkCard({ link, goBase, onChange }: { link: TrackedLink; goBase: strin
       <p className="m-0 text-[14px] font-semibold text-ink-soft">
         Opens {link.productTitle ?? 'your page'}, from {link.sourceType}. {link.clicks} clicks, {link.checkouts} checkouts, {link.sales} sales, {link.revenuePoints} points.
       </p>
-      <div className="mt-sm flex flex-wrap gap-xs">
+      <div className="mt-sm flex flex-wrap gap-xs fill-row">
         <Button variant="outline" onClick={() => void copy()}>
           {copied ? 'Copied' : 'Copy'}
         </Button>
         <Button variant="outline" onClick={() => setQrOpen(true)}>
           QR
         </Button>
-        <Button variant="ghost" disabled={remove.isPending} onClick={() => window.confirm('Remove this link? Sales already credited stay.') && remove.mutate()}>
+        <button type="button" disabled={remove.isPending} onClick={() => setDeleting(true)} className={DELETE_BTN}>
           Remove
-        </Button>
+        </button>
       </div>
+      <ConfirmDelete open={deleting} title="Delete this link?" body="The link stops working. Sales already credited stay. This cannot be undone." pending={remove.isPending} failed={remove.isError} onYes={() => remove.mutate()} onClose={() => setDeleting(false)} />
       <Sheet open={qrOpen} onClose={() => setQrOpen(false)} title={link.label || `Link ${link.code}`}>
         <div className="flex flex-col items-center gap-sm text-center">
           {qr ? <img src={qr} width={160} height={160} alt={`QR code for ${url}`} className="rounded-tile bg-white p-xs" /> : qrError ? <p className="m-0 text-[14px] font-bold">{qrError}</p> : <p className="m-0 text-[14px] font-semibold text-ink-soft">Drawing the code</p>}

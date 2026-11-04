@@ -502,11 +502,14 @@ describe('unlocks and the earning guide', () => {
     expect(unlockFor({ minPoints: 200, badge: 'first_task' }, { points: 250, badges: ['first_task'] }).ok).toBe(true);
     // An xp floor joins points and badges, and a super admin is never locked out.
     expect(unlockFor({ minPoints: 0, minXp: 500, badge: '' }, { points: 0, xp: 120, badges: [] }).why).toBe('Needs 500 xp, you have 120.');
-    expect(unlockFor({ minPoints: 2000, minXp: 500, badge: 'first_task' }, { points: 10, xp: 120, badges: [] }).why).toBe('Needs 500 xp, you have 120, 2000 points, you have 10 and the First tick badge.');
+    expect(unlockFor({ minPoints: 2000, minXp: 500, badge: 'first_task' }, { points: 10, xp: 120, badges: [] }).why).toBe('Needs 500 xp, you have 120, 2,000 points, you have 10 and the First tick badge.');
     expect(unlockFor({ minPoints: 2000, minXp: 500, badge: 'first_task' }, { points: 2000, xp: 500, badges: ['first_task'] }).ok).toBe(true);
     expect(unlockFor({ minPoints: 2000, minXp: 500, badge: 'first_task' }, { points: 0, xp: 0, badges: [], superAdmin: true }).ok).toBe(true);
-    expect(unlockAt({ minPoints: 2000, minXp: 500, badge: 'first_task' })).toBe('Unlocks at 500 xp, 2000 points and the First tick badge');
+    expect(unlockAt({ minPoints: 2000, minXp: 500, badge: 'first_task' })).toBe('Unlocks at 500 xp, 2,000 points and the First tick badge');
     expect(unlockAt({ minPoints: 0, minXp: 0, badge: '' })).toBe('');
+    // Counts are grouped the Indian way, in the lock and in what is missing.
+    expect(unlockAt({ minPoints: 123456, minXp: 1500, badge: '' })).toBe('Unlocks at 1,500 xp and 1,23,456 points');
+    expect(unlockFor({ minPoints: 123456, badge: '' }, { points: 12000, badges: [] }).why).toBe('Needs 1,23,456 points, you have 12,000.');
     expect(nextBadge([])?.key).toBe('first_task');
     expect(nextBadge(['first_task'])?.key).toBe('streak_3');
     expect(earningGuide().length).toBeGreaterThanOrEqual(4);
@@ -680,7 +683,7 @@ describe('strategy session', () => {
     expect(prompt).toContain('about your family');
   });
   it('names the seven in plain words', () => {
-    expect(RELATIONSHIPS.map((r) => r.name)).toEqual(['Work and money', 'Friends', 'Family', 'Love', 'Yourself', 'Teachers', 'Faith']);
+    expect(RELATIONSHIPS.map((r) => r.name)).toEqual(['Servitude', 'Friends', 'Family', 'Love', 'Yourself', 'Teachers', 'Faith']);
   });
   it('ramps the day thirty minutes a week and never past the target', () => {
     expect(rampTime('08:30', '06:30', 0, 'earlier')).toBe('08:30');
@@ -1561,6 +1564,12 @@ import {
   parsePortalShow,
   PORTAL_NEVER,
   PORTAL_PARTS,
+  parseTeamLinkShow,
+  defaultTeamLinkShow,
+  TEAM_LINK_PARTS,
+  TEAM_LINK_ACTIONS,
+  TEAM_LINK_BLOCKED,
+  TEAM_LINK_NEVER,
   priceForUnits,
   utilisationPct,
   deliverableOverdue,
@@ -1700,6 +1709,31 @@ describe('the client dashboard link', () => {
   it('says plainly what is never shown', () => {
     expect(PORTAL_NEVER.join(' ')).toMatch(/private notes/i);
     expect(PORTAL_NEVER.join(' ')).toMatch(/Army/);
+  });
+});
+
+describe('the team link for a client\'s own team', () => {
+  it('has no paper part to switch on', () => {
+    const keys = [...TEAM_LINK_PARTS, ...TEAM_LINK_ACTIONS].map((p) => p.key as string);
+    for (const k of TEAM_LINK_BLOCKED) expect(keys, k).not.toContain(k);
+    for (const k of ['invoices', 'contracts', 'docs', 'hours', 'retainer', 'onboarding', 'billing']) expect(keys, k).not.toContain(k);
+    // Every team part is a part the client page has too, so it reads the same rows.
+    const client = PORTAL_PARTS.map((p) => p.key as string);
+    for (const p of TEAM_LINK_PARTS) expect(client).toContain(p.key);
+  });
+  it('drops a paper part however it was saved', () => {
+    const v = parseTeamLinkShow({ invoices: true, contracts: true, docs: true, hours: true, retainer: true, constructor: true, waiting: false, canApprove: true });
+    expect(Object.keys(v).sort()).toEqual(Object.keys(defaultTeamLinkShow()).sort());
+    for (const k of ['invoices', 'contracts', 'docs', 'hours', 'retainer']) expect(k in v, k).toBe(false);
+    expect(v).toMatchObject({ waiting: false, canApprove: true });
+    expect(parseTeamLinkShow('nonsense')).toEqual(defaultTeamLinkShow());
+    expect(parseTeamLinkShow({ waiting: 'yes' }).waiting).toBe(true);
+  });
+  it('starts with approving off, and says what is never on it', () => {
+    expect(defaultTeamLinkShow().canApprove).toBe(false);
+    expect(defaultTeamLinkShow().canComment).toBe(true);
+    const never = TEAM_LINK_NEVER.join(' ');
+    for (const w of [/invoice/i, /agreement/i, /document/i, /retainer/i, /onboarding/i, /money/i, /private notes/i]) expect(never).toMatch(w);
   });
 });
 
@@ -1935,7 +1969,7 @@ describe('setup: agencies, clients and planning', () => {
   });
   it('says why in the person\'s own words, for each pair that matters', () => {
     const why = (identities: string[], goals: string[], app: string) => matchSetup({ identities, goals, blockers: [] }).apps.find((a) => a.key === app)?.why;
-    expect(why(['agency_owner'], ['clients'], 'agency')).toBe('Because you run an agency and want all your client work in one place.');
+    expect(why(['agency_owner'], ['clients'], 'agency')).toBe('Because you run an agency and want all your client work in one place, with your team on its Team tab.');
     expect(why(['freelancer'], ['clients'], 'agency')).toBe('Because you work for clients and want their work, time and invoices in one place.');
     expect(why(['creator'], ['clients'], 'agency')).toBe('Because you make content for brands and want their work and invoices in one place.');
     expect(why(['founder'], ['plan'], 'reviews')).toBe('Because you run a business and can track its numbers in each review.');
@@ -1976,6 +2010,68 @@ describe('setup: agencies, clients and planning', () => {
     }
     expect(roles.some((r) => r.key === 'agency_owner')).toBe(true);
     expect(sets.size / pairs).toBeGreaterThan(0.9);
+  });
+});
+
+import { DAY_TYPE_KEYS, dayTypeFor, TEAM_ROLE_META } from './index';
+
+describe('setup: the roles the app has now', () => {
+  const keys = (identities: string[], goals: string[]) => matchSetup({ identities, goals, blockers: [] }).apps.map((a) => a.key);
+  it('names a team role with the word Agency uses for it, and keeps the old keys', () => {
+    const tag = (k: string) => IDENTITIES.find((i) => i.key === k)!;
+    expect(tag('creator').label).toBe(TEAM_ROLE_META.content_creator.name);
+    expect(tag('shooter').label).toBe(TEAM_ROLE_META.videographer.name);
+    expect(tag('editor').label).toBe(TEAM_ROLE_META.editor.name);
+    for (const k of ['creator', 'freelancer', 'student', 'employee', 'founder', 'agency_owner', 'explorer', 'coach', 'parent', 'editor', 'shooter', 'reader', 'runner']) expect(IDENTITIES.some((i) => i.key === k), k).toBe(true);
+    for (const k of ['agency_team', 'brand_client', 'run_host']) expect(tag(k).kind, k).toBe('role');
+    expect(tag('brand_client').label).toBe('Brand or client');
+  });
+  it('leans each new role to the apps it needs, whatever the goal', () => {
+    for (const g of SETUP_GOALS) {
+      expect(keys(['agency_team'], [g.key]), g.key).toContain('agency');
+      expect(keys(['run_host'], [g.key]), g.key).toContain('run');
+      const brand = keys(['brand_client'], [g.key]);
+      expect(brand.includes('army') || brand.includes('agency'), g.key).toBe(true);
+    }
+    expect(keys(['brand_client'], ['grow'])).toEqual(expect.arrayContaining(['army', 'agency']));
+    expect(keys(['freelancer', 'editor'], ['work', 'learn'])).toEqual(expect.arrayContaining(['work', 'army', 'agency', 'school']));
+    expect(keys(['freelancer', 'editor'], ['work'])).toEqual(expect.arrayContaining(['work', 'army', 'agency']));
+    expect(keys(['freelancer', 'shooter'], ['work'])).toEqual(expect.arrayContaining(['work', 'army', 'agency']));
+    expect(keys([], ['learn']).length).toBeGreaterThan(0);
+    expect(keys(['reader'], ['learn'])).toEqual(expect.arrayContaining(['school', 'knowledge']));
+  });
+  it('names the Team tab whenever an agency owner gets Agency', () => {
+    for (const g of SETUP_GOALS) {
+      const why = matchSetup({ identities: ['agency_owner'], goals: [g.key], blockers: [] }).apps.find((a) => a.key === 'agency')?.why;
+      expect(why, g.key).toMatch(/Team tab/);
+    }
+    expect(matchSetup({ identities: ['agency_team'], goals: ['clients'], blockers: [] }).apps.find((a) => a.key === 'agency')?.why).toMatch(/Team tab/);
+    // A weaker pair (an editor who wants work) never takes the Team tab out of an agency owner's reason.
+    expect(matchSetup({ identities: ['agency_owner', 'editor'], goals: ['work'], blockers: [] }).apps.find((a) => a.key === 'agency')?.why).toMatch(/Team tab/);
+  });
+  it('says the new roles in one line', () => {
+    expect(identityLine({ identities: ['brand_client'], goals: ['grow'], blockers: [] })).toBe('A brand or client, here to grow an audience.');
+    expect(identityLine({ identities: ['agency_team', 'editor'], goals: ['learn'], blockers: [] })).toBe('An agency video editor, here to learn a skill.');
+    expect(identityLine({ identities: ['run_host'], goals: ['people'], blockers: [] })).toBe('A run club host, here to meet people.');
+    expect(identityLine({ identities: ['creator'], goals: [], blockers: [] })).toBe('A content creator.');
+  });
+  it('reads the new roles from your own words, the longest phrase winning', () => {
+    expect(readAbout('I host a run club every Sunday').identities).toEqual(['run_host']);
+    expect(readAbout('I work at an agency as an editor').identities).toEqual(expect.arrayContaining(['agency_team', 'editor']));
+    expect(readAbout('I work at an agency as an editor').identities).not.toContain('employee');
+    expect(readAbout('I am a brand manager and we hire creators').identities).toEqual(['brand_client']);
+    expect(readAbout('I run a content agency.').identities).toEqual(['agency_owner']);
+    expect(readAbout('I work in a bank').identities).toEqual(['employee']);
+    expect(readAbout('I host a podcast').identities).toEqual(expect.arrayContaining(['host', 'podcast']));
+    // A stage's phrase never hides the role inside it.
+    expect(readAbout("I'm a full time creator").identities).toEqual(['creator', 'full_time']);
+  });
+  it('gives the day a role implies, the most specific tag first', () => {
+    for (const i of IDENTITIES) if (i.dayType) expect(DAY_TYPE_KEYS, i.key).toContain(i.dayType);
+    expect(dayTypeFor(['student', 'freelancer', 'editor'])).toBe('deep_work');
+    expect(dayTypeFor(['creator'])).toBe('create');
+    expect(dayTypeFor(['student'])).toBe('learning');
+    expect(dayTypeFor(['explorer', 'Dancer'])).toBeNull();
   });
 });
 
@@ -2529,5 +2625,14 @@ describe('icons', () => {
   it('falls back to a plain page for a kind it does not know', () => {
     expect(knowledgeKindIcon('constructor')).toBe('FileText');
     expect(knowledgeKindIcon('video')).toBe('Video');
+  });
+});
+
+import { LIFE_AREAS as ORDER_LIFE_AREAS, LIFE_AREA_ORDER } from './index';
+describe('five areas of life order', () => {
+  it('is physical, financial, mental, emotional, spiritual, everywhere', () => {
+    const order = ['physical', 'financial', 'mental', 'emotional', 'spiritual'];
+    expect([...LIFE_AREA_ORDER]).toEqual(order);
+    expect(Object.keys(ORDER_LIFE_AREAS)).toEqual(order);
   });
 });

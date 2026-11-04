@@ -1,6 +1,6 @@
-import { BADGE_META, badgeRoleOf, MODULE_GROUPS, type ModuleGroup } from '@kreators/shared';
+import { BADGE_META, badgeRoleOf, RELATIONSHIP_BY_KEY, groupStartsOpen, MODULE_GROUPS, orderInGroup, type ModuleGroup } from '@kreators/shared';
 import { useEffect, useState, type ReactNode } from 'react';
-import { CircleUserRound, Landmark, LayoutGrid } from 'lucide-react';
+import { CircleUserRound, Landmark, LayoutGrid, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { AnimatedIcon, type AnimatedName } from './AnimatedIcon';
 import { AppIcon } from './AppIcon';
 import { FocusPill } from './FocusPill';
@@ -10,7 +10,7 @@ import { StatusTag } from './StatusTag';
 import { useFocusSession } from '../lib/focusSession';
 import { useSlider } from './fx/useSlider';
 import { Link, NavLink, useLocation } from 'react-router';
-import { useGroupOrder, useModules } from '../lib/modules';
+import { useAppPrefs, useGroupOrder, useModules } from '../lib/modules';
 import { useMe } from '../lib/queries';
 import { BrandMark } from './BrandMark';
 import { RoleBadge } from './RoleBadge';
@@ -67,7 +67,28 @@ const inside = (path: string, at: string) => at === path || at.startsWith(`${pat
 
 const SIDEBAR_GROUPS: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'core', 'manage'];
 
+/** Whether the laptop sidebar is folded to its icons: kept on this device, and set on <html> as data-nav so --nav-w follows it. */
+function useNavMini(): [boolean, (v: boolean) => void] {
+  const [mini, setMini] = useState(() => {
+    try {
+      return localStorage.getItem('kreators.navMini') === '1';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    document.documentElement.dataset.nav = mini ? 'mini' : 'full';
+    try {
+      localStorage.setItem('kreators.navMini', mini ? '1' : '0');
+    } catch {
+      // private window: it still works for this visit
+    }
+  }, [mini]);
+  return [mini, setMini];
+}
+
 export function TabBar() {
+  const [mini, setMini] = useNavMini();
   const me = useMe();
   const unread = me.data?.unread ?? 0;
   const { modules } = useModules();
@@ -78,11 +99,16 @@ export function TabBar() {
   const bottom = useSlider<HTMLUListElement>('[aria-current="page"] .tab-icon', loc.pathname);
   const side = useSlider<HTMLUListElement>('[aria-current="page"]', loc.pathname);
   const sidebarApps = modules.filter((m) => m.on && !m.locked);
+  // The person's arrangement (Profile, Features): the apps they placed come first in each group, and each group starts open or closed
+  // as they picked (Contribution and Essentials open until they pick).
+  const prefs = useAppPrefs();
+  const appsOf = (g: ModuleGroup) => orderInGroup(sidebarApps.filter((m) => m.group === g), prefs.order[g]);
   // Phone: the sidebar's app groups live behind a menu button at the top right.
   const [menu, setMenu] = useState(false);
   useEffect(() => setMenu(false), [loc.pathname]);
-  // Laptop: the sidebar's groups start folded and the group of the app you are in opens; a tap opens or folds any of them,
-  // and moving to another page opens that page's group without folding what you opened.
+  // The sidebar's groups (and the phone menu's) start as the person picked, Contribution and Essentials open until then, and the group
+  // of the app you are in opens; a tap opens or folds any of them for this visit, and moving to another page opens that page's group
+  // without folding what you opened.
   const groupOf = (at: string) => sidebarApps.find((m) => inside(m.path, at))?.group;
   const [openGroups, setOpenGroups] = useState<Partial<Record<ModuleGroup, boolean>>>(() => {
     const g = groupOf(loc.pathname);
@@ -156,28 +182,32 @@ export function TabBar() {
         )}
         {sidebarApps.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing switched on yet. Pick apps under Apps.</p>}
         {groupOrder.map((g) => {
-          const list = sidebarApps.filter((m) => m.group === g);
+          const list = appsOf(g);
           if (list.length === 0) return null;
           return (
-            <section key={g} className="mt-md" aria-label={MODULE_GROUPS[g]}>
-              <h3 className="m-0 px-xs text-[12px] font-extrabold uppercase tracking-wide text-ink-soft" style={{ fontFamily: 'var(--font-body)' }}>
-                {MODULE_GROUPS[g]}
-              </h3>
-              <ul className="mt-xs flex list-none flex-col p-0 m-0">
-                {list.map((m) => (
-                  <li key={m.key}>
-                    <NavLink to={m.path} className={({ isActive }) => `toy flex min-h-[48px] items-center gap-sm rounded-pill px-sm text-[16px] font-bold transition-colors ${isActive ? 'bg-ink text-on-ink' : 'text-ink hover:bg-paper'}`}>
-                      {({ isActive }) => (
-                        <>
-                          <NavAppIcon name={m.icon} size={20} on={isActive} />
-                          <span className="truncate">{m.name}</span>
-                          {m.key === 'notifications' && unread > 0 && <UnreadTag n={unread} />}
-                        </>
-                      )}
-                    </NavLink>
-                  </li>
-                ))}
-              </ul>
+            <section key={g} className="mt-sm" aria-label={MODULE_GROUPS[g]}>
+              <Fold
+                tone="plain"
+                open={openGroups[g] ?? groupStartsOpen(prefs, g)}
+                onOpenChange={(o) => setOpenGroups((s) => ({ ...s, [g]: o }))}
+                title={<span className="text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{MODULE_GROUPS[g]}</span>}
+              >
+                <ul className="flex list-none flex-col p-0 m-0">
+                  {list.map((m) => (
+                    <li key={m.key}>
+                      <NavLink to={m.path} className={({ isActive }) => `toy flex min-h-[48px] items-center gap-sm rounded-pill px-sm text-[16px] font-bold transition-colors ${isActive ? 'bg-ink text-on-ink' : 'text-ink hover:bg-paper'}`}>
+                        {({ isActive }) => (
+                          <>
+                            <NavAppIcon name={m.icon} size={20} on={isActive} />
+                            <span className="truncate">{m.name}</span>
+                            {m.key === 'notifications' && unread > 0 && <UnreadTag n={unread} />}
+                          </>
+                        )}
+                      </NavLink>
+                    </li>
+                  ))}
+                </ul>
+              </Fold>
             </section>
           );
         })}
@@ -189,40 +219,56 @@ export function TabBar() {
         </div>
       </Sheet>
       {/* Laptop: a sidebar on the left. */}
-      <nav aria-label="Main" className="safe-top fixed inset-y-0 left-0 z-30 hidden w-[240px] flex-col overflow-y-auto border-r border-line bg-card px-sm py-md md:flex">
+      <nav aria-label="Main" data-mini={mini || undefined} className="nav-side safe-top fixed inset-y-0 left-0 z-30 hidden w-[var(--nav-w)] flex-col overflow-x-hidden overflow-y-auto border-r border-line bg-card px-sm py-md md:flex">
         {focusActive ? (
-          // The sidebar's own top padding is taken by the safe area, so the filled pill gets its own room from the top edge.
-          <div className="pt-sm">
-            <FocusPill />
+          // The running clock stays in sight while the sidebar scrolls (sticky at its top, on the sidebar's own surface); folded, it is a
+          // round dot with the minutes, rippling each second.
+          <div className={`sticky top-0 z-10 -mx-sm bg-card px-sm pt-sm pb-xs ${mini ? 'flex justify-center' : ''}`}>
+            {mini ? <FocusPill dot /> : <FocusPill />}
           </div>
         ) : (
-          <Link to="/home" className="flex min-h-[44px] items-center gap-xs px-xs font-display text-[18px] font-extrabold">
-            <BrandMark />
-          </Link>
+          // The safe area takes the sidebar's own top padding, so the logo keeps its room from the top and left edges itself.
+          <div className={`mt-sm flex items-center gap-xs ${mini ? 'justify-center' : ''}`}>
+            <Link to="/home" aria-label="kreators.app, home" className={`flex min-h-[44px] items-center gap-xs font-display text-[18px] font-extrabold ${mini ? 'justify-center' : 'px-sm'}`}>
+              {mini ? (
+                <span aria-hidden="true" className="flex items-baseline text-[22px] leading-none">
+                  k<span className="brand-dot" />
+                </span>
+              ) : (
+                <BrandMark />
+              )}
+            </Link>
+          </div>
         )}
-        {/* Your role, right under the logo: creator, staff or admin. The theme button sits beside it. */}
-        <div className="mt-xs flex min-h-[44px] items-center justify-between gap-xs px-xs">
-          {me.data ? (
-            <p className="m-0 flex items-center gap-xs text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
-              <RoleBadge role={badgeRoleOf(me.data.user)} size={20} />
-              {BADGE_META[badgeRoleOf(me.data.user)].name}
-            </p>
+        {/* Your role, right under the logo, as a tag in its own colour, with the theme button beside it. Folded, only the theme button. */}
+        <div className={`mt-xs flex min-h-[44px] items-center gap-xs ${mini ? 'justify-center' : 'justify-between px-xs'}`}>
+          {!mini && me.data ? (
+            (() => {
+              const role = badgeRoleOf(me.data.user);
+              const rel = RELATIONSHIP_BY_KEY[BADGE_META[role].accent];
+              return (
+                <span className="inline-flex min-h-[32px] items-center gap-xs rounded-pill py-[4px] pr-sm pl-[4px] text-[12px] font-extrabold tracking-wide" style={{ background: `var(--soft-${rel.key})`, color: `var(--deep-${rel.key})` }}>
+                  <RoleBadge role={role} size={24} />
+                  {BADGE_META[role].name}
+                </span>
+              );
+            })()
           ) : (
-            <span />
+            !mini && <span />
           )}
           <ThemeToggle />
         </div>
         <ul ref={side.ref} className="fx-slide mt-md flex list-none flex-col gap-xs p-0 m-0">
           {TABS.map((t) => (
             <li key={t.to}>
-              <NavLink to={t.to} className={({ isActive }) => `tab relative flex min-h-[48px] items-center gap-sm rounded-pill px-sm text-[16px] font-bold transition-colors ${isActive ? (side.ready ? 'text-on-ink' : 'bg-ink text-on-ink') : 'text-ink-soft hover:bg-paper hover:text-ink'}`}>
+              <NavLink to={t.to} aria-label={mini ? t.label : undefined} title={mini ? t.label : undefined} className={({ isActive }) => `tab relative flex min-h-[48px] items-center gap-sm rounded-pill text-[16px] font-bold transition-colors ${mini ? 'justify-center px-0' : 'px-sm'} ${isActive ? (side.ready ? 'text-on-ink' : 'bg-ink text-on-ink') : 'text-ink-soft hover:bg-paper hover:text-ink'}`}>
                 {({ isActive }) => (
                   <>
                     <span className="relative flex size-[28px] items-center justify-center">
                       {t.icon(isActive, 24)}
                       {badge(t.to)}
                     </span>
-                    {t.label}
+                    {!mini && t.label}
                   </>
                 )}
               </NavLink>
@@ -232,13 +278,15 @@ export function TabBar() {
         {/* The apps that are on, under their category, folded away until you open one or step inside it. Switch more on from Apps. */}
         <div className="mt-md flex flex-col gap-xs">
           {groupOrder.map((g) => {
-            const list = sidebarApps.filter((m) => m.group === g);
+            const list = appsOf(g);
             if (list.length === 0) return null;
+            // Folded: only the main tabs; the apps come back when the sidebar opens.
+            if (mini) return null;
             return (
               <Fold
                 key={g}
                 tone="plain"
-                open={openGroups[g] ?? false}
+                open={openGroups[g] ?? groupStartsOpen(prefs, g)}
                 onOpenChange={(o) => setOpenGroups((s) => ({ ...s, [g]: o }))}
                 title={<span className="text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{MODULE_GROUPS[g]}</span>}
               >
@@ -261,13 +309,20 @@ export function TabBar() {
             );
           })}
         </div>
-        <div className="mt-auto flex flex-col gap-xs px-xs pt-md">
-          <SignOut className="w-full" />
-          <Link to="/" className="inline-flex min-h-[44px] items-center text-[12px] font-bold text-ink-soft hover:text-ink">
-            About kreators.app
-          </Link>
+        <div className={`mt-auto flex flex-col gap-xs pt-md ${mini ? 'items-center' : 'px-xs'}`}>
+          <SignOut className={mini ? '' : 'w-full'} iconOnly={mini} />
+          {!mini && (
+            <Link to="/" className="inline-flex min-h-[44px] items-center text-[12px] font-bold text-ink-soft hover:text-ink">
+              About kreators.app
+            </Link>
+          )}
         </div>
       </nav>
+      {/* Fold the sidebar to its main tabs, or open it again (kept on this device): a round button half over the sidebar's edge, at the
+          top while it is open and at the foot while it is folded. */}
+      <button type="button" onClick={() => setMini(!mini)} aria-pressed={mini} aria-label={mini ? 'Open the sidebar' : 'Fold the sidebar'} title={mini ? 'Open the sidebar' : 'Fold the sidebar'} data-mini={mini || undefined} className="nav-fold toy toy-soft fixed z-40 hidden size-[36px] items-center justify-center rounded-pill border border-line bg-card-strong text-ink-soft hover:text-ink md:flex">
+        <Icon icon={mini ? PanelLeftOpen : PanelLeftClose} size={18} className="nav-fold-icon" />
+      </button>
     </>
   );
 }

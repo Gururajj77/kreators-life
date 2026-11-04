@@ -4,6 +4,8 @@ import { Footprints, Gift } from 'lucide-react';
 import { Fragment, useState } from 'react';
 import { Icon } from '../components/Icon';
 import { EventPanel } from '../components/EventPanel';
+import { Dot } from '../components/Channels';
+import { RunDiscussions, useRunTalksUnread } from '../components/RunDiscussions';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { BadgeMedal } from '../components/BadgeArt';
 import { Button } from '../components/Button';
@@ -11,7 +13,7 @@ import { useCelebrate } from '../components/Celebration';
 import { AreaLine, HBars, StatTile } from '../components/Charts';
 import { Hero, HeroNumber } from '../components/Hero';
 import { Nudge } from '../components/Nudge';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
@@ -22,6 +24,7 @@ import { Pager, usePage } from '../components/Pager';
 import { FIELD } from '../lib/ui';
 import { ErrorLine } from '../components/ErrorLine';
 import { StatusTag } from '../components/StatusTag';
+import { CardHead } from '../components/CardHead';
 import { FactTag, IconTag } from '../components/FactTag';
 import { useSeedOnce } from '../lib/useSeed';
 
@@ -30,13 +33,40 @@ const REL = RELATIONSHIP_BY_KEY.friendship;
 const pill = (tint: string) => ({ background: `var(--tint-${tint})` });
 const TINT_TONE: Record<'green' | 'red' | 'yellow' | 'purple' | 'sky', TagTone> = { green: 'good', red: 'bad', yellow: 'warn', purple: 'deep', sky: 'info' };
 
-type Tab = 'clubs' | 'tracking' | 'collabs';
+type Tab = 'clubs' | 'tracking' | 'collabs' | 'talk';
 const TABS: { key: Tab; label: string }[] = [
   { key: 'clubs', label: 'Clubs' },
   { key: 'tracking', label: 'My runs' },
   { key: 'collabs', label: 'Brand collabs' },
+  { key: 'talk', label: 'Discussions' },
 ];
 
+
+/** A step asked once more before it happens, in a sheet instead of the browser's confirm box: a red button does it, a quiet one does not. */
+function AskSheet({ ask, onClose }: { ask: { title: string; body: string; action: string; run: () => void } | null; onClose: () => void }) {
+  return (
+    <Sheet open={ask !== null} onClose={onClose} title={ask?.title ?? ''}>
+      <div className="grid gap-md pb-xl">
+        <p className="m-0 text-[16px] font-semibold text-ink-soft">{ask?.body}</p>
+        <div className="flex flex-wrap gap-xs">
+          <button
+            type="button"
+            onClick={() => {
+              ask?.run();
+              onClose();
+            }}
+            className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-[16px] font-semibold text-on-fill"
+          >
+            {ask?.action}
+          </button>
+          <Button variant="outline" onClick={onClose}>
+            Keep it
+          </Button>
+        </div>
+      </div>
+    </Sheet>
+  );
+}
 
 function Choice<T extends string>({ options, value, onChange, label }: { options: { key: T; label: string }[]; value: T; onChange: (v: T) => void; label: string }) {
   return (
@@ -71,18 +101,19 @@ function ClubCard({ k }: { k: RunClub }) {
           <Icon icon={Footprints} size={22} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap items-center gap-xs">
-            <span className="text-[16px] font-bold">{k.name}</span>
-            {k.host ? (
-              <StatusTag tone={TINT_TONE['green']}>
+          <CardHead
+            tag={k.host ? (
+              <StatusTag tone={TINT_TONE['green']} fit>
                 You host
               </StatusTag>
             ) : k.mine ? (
-              <StatusTag tone={TINT_TONE['green']}>
+              <StatusTag tone={TINT_TONE['green']} fit>
                 Member
               </StatusTag>
             ) : null}
-          </span>
+          >
+            <span className="block text-[16px] font-bold">{k.name}</span>
+          </CardHead>
           <span className="block text-[14px] font-semibold text-ink-soft">
             {k.city}, {RUN_PACE_META[k.pace].name.toLowerCase()}, {k.members} {k.members === 1 ? 'runner' : 'runners'}
           </span>
@@ -131,22 +162,29 @@ export function Run() {
   const tab: Tab = TABS.some((t) => t.key === asked) ? (asked as Tab) : 'clubs';
   const setTab = (t: Tab) => setParams(t === 'clubs' ? {} : { tab: t }, { replace: true, preventScrollReset: true });
   const [starting, setStarting] = useState(false);
+  const unread = useRunTalksUnread();
   const d = q.data;
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Kreators Run</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Run clubs near you. Enter the host’s start code and your run is logged once.</p>
-        <div className="mt-md flex flex-wrap gap-xs" role="group" aria-label="Sections">
+      <AppCover back={{ to: '/apps', label: 'Apps' }} title="Kreators Run" lede="Run clubs near you. Enter the host’s start code and your run is logged once." />
+
+      {/* Under the hero: the sections on the left and Start a club at the right of the same line. On a phone the four sections
+          sit two by two (none alone on a line) and the button takes its own line under them. The line about pay sits under both. */}
+      <div className="mt-md flex flex-wrap items-center justify-between gap-sm">
+        <div className="grid w-full grid-cols-2 gap-xs sm:flex sm:w-auto sm:min-w-0 sm:flex-wrap" role="group" aria-label="Sections">
           {TABS.map((t) => (
-            <button key={t.key} type="button" aria-pressed={tab === t.key} onClick={() => setTab(t.key)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === t.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={t.key} type="button" aria-pressed={tab === t.key} onClick={() => setTab(t.key)} className={`toy inline-flex min-h-[44px] items-center justify-center rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === t.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {t.label}
               {t.key === 'collabs' && d && d.collabsOpen > 0 ? ` · ${d.collabsOpen}` : ''}
+              {t.key === 'talk' && tab !== 'talk' && <Dot n={unread} />}
             </button>
           ))}
         </div>
-      </header>
+        <Button className="max-sm:w-full" onClick={() => setStarting(true)}>
+          Start a club
+        </Button>
+      </div>
+      <Nudge className="mt-sm" text={`A run pays its host’s xp (up to ${ATTENDEE_XP_MAX}) and ${RUN_REWARD.points} points. Minutes count as movement.`} />
 
       {q.isPending && (
         <p className="mt-md text-[14px] font-bold text-ink-soft" role="status">
@@ -154,32 +192,28 @@ export function Run() {
         </p>
       )}
       {q.isError && (
-        <div className="mt-md rounded-card bg-card p-md shadow-toy-soft" role="alert">
-          <p className="m-0 font-bold">Could not load Kreators Run.</p>
-          <Button variant="outline" className="mt-sm" onClick={() => q.refetch()}>
+        <div className="mt-md rounded-card bg-card p-md shadow-toy-soft flex flex-wrap-reverse items-center justify-between gap-sm" role="alert">
+          <p className="m-0 font-bold min-w-0 flex-1 basis-[60%]">Could not load Kreators Run.</p>
+          <Button variant="outline" onClick={() => q.refetch()}>
             Try again
           </Button>
         </div>
       )}
 
-      {d && tab === 'clubs' && <ClubsTab d={d} onStart={() => setStarting(true)} />}
+      {d && tab === 'clubs' && <ClubsTab d={d} />}
       {d && tab === 'tracking' && <TrackingTab t={d.tracking} />}
       {tab === 'collabs' && <CollabsTab />}
+      {tab === 'talk' && <RunDiscussions />}
 
       <StartClubSheet open={starting} onClose={() => setStarting(false)} />
     </Screen>
   );
 }
 
-function ClubsTab({ d, onStart }: { d: RunResponse; onStart: () => void }) {
+function ClubsTab({ d }: { d: RunResponse }) {
   const others = d.clubs.filter((k) => !k.mine);
   return (
     <>
-      <Nudge className="mt-sm" text={`A run pays its host’s xp (up to ${ATTENDEE_XP_MAX}) and ${RUN_REWARD.points} points. Minutes count as movement.`} />
-      <Button className="mt-md" onClick={onStart}>
-        Start a club
-      </Button>
-
       {d.upcoming.length > 0 && (
         <section className="mt-lg" aria-labelledby="run-upcoming">
           <h2 id="run-upcoming" className="text-[24px]">
@@ -320,7 +354,7 @@ function CollabCard({ k, myClubs, onApply, onChange }: { k: RunCollab; myClubs: 
         </ul>
       )}
       <div className="mt-sm flex flex-wrap gap-xs">
-        {canApply && <Button onClick={onApply}>Apply with a club</Button>}
+        {canApply && <Button variant="outline" onClick={onApply}>Apply with a club</Button>}
         {k.poster && k.status === 'open' && (
           <Button variant="outline" onClick={() => close.mutate()} disabled={close.isPending}>
             Close collab
@@ -346,7 +380,7 @@ function ApplicationRow({ a, onChange }: { a: RunCollabApplication & { collabTit
       <div className="mt-sm flex flex-wrap items-center gap-xs">
         {a.status === 'applied' ? (
           <>
-            <Button onClick={() => decide.mutate('accepted')} disabled={decide.isPending}>
+            <Button variant="outline" onClick={() => decide.mutate('accepted')} disabled={decide.isPending}>
               Accept
             </Button>
             <Button variant="outline" onClick={() => decide.mutate('declined')} disabled={decide.isPending}>
@@ -375,7 +409,7 @@ function CollabsTab() {
     <>
       <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Brands post a giveaway for runners. A host applies, and it shows on the run.</p>
       {d?.canPost && (
-        <Button className="mt-md" onClick={() => setPosting(true)}>
+        <Button variant="outline" className="mt-md" onClick={() => setPosting(true)}>
           Post a collab
         </Button>
       )}
@@ -658,15 +692,20 @@ function RunCodeEditor({ r, onRecode, busy }: { r: RunItem; onRecode: (change: {
   );
 }
 
-/** Photos, the conversation and the people to meet for one run, opened on request so a list of runs does not poll for each. */
+/** The run's discussion (under Discussions), then its photos and the people to meet, opened on request so a list of runs does not poll for each. */
 function RunTalk({ runId }: { runId: string }) {
   const [open, setOpen] = useState(false);
   return (
     <li className="list-none">
-      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="toy toy-flat min-h-[44px] rounded-pill px-md text-[14px] font-bold underline underline-offset-4">
-        {open ? 'Hide photos, chat and people' : 'Photos, chat and people'}
-      </button>
-      {open && <EventPanel app="run" id={runId} />}
+      <span className="flex flex-wrap items-center gap-xs">
+        <Link to={`/run?tab=talk&run=${runId}`} className="inline-flex min-h-[44px] items-center px-xs text-[14px] font-bold underline underline-offset-4 hover:text-ink-soft">
+          Open the discussion
+        </Link>
+        <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="toy toy-flat min-h-[44px] rounded-pill px-md text-[14px] font-bold underline underline-offset-4">
+          {open ? 'Hide photos and people' : 'Photos and people'}
+        </button>
+      </span>
+      {open && <EventPanel app="run" id={runId} talk={false} />}
     </li>
   );
 }
@@ -713,13 +752,7 @@ function RunCard({ r, host, member, onLog, onRecode, onStatus, busy }: { r: RunI
             <Button variant="outline" onClick={() => onStatus('done')} disabled={busy}>
               Mark done
             </Button>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                if (window.confirm('Cancel this run and tell the club?')) onStatus('cancelled');
-              }}
-              disabled={busy}
-            >
+            <Button variant="ghost" onClick={() => onStatus('cancelled')} disabled={busy}>
               Cancel run
             </Button>
           </>
@@ -891,6 +924,7 @@ export function RunClubPage() {
   const celebrate = useCelebrate();
   const [adding, setAdding] = useState(false);
   const [logging, setLogging] = useState<RunItem | null>(null);
+  const [ask, setAsk] = useState<{ title: string; body: string; action: string; run: () => void } | null>(null);
   const after = () => {
     refresh();
     q.refetch();
@@ -905,11 +939,7 @@ export function RunClubPage() {
   if (q.isError) {
     return (
       <Screen>
-        <header className="pt-lg">
-          <BackLink to="/run">Kreators Run</BackLink>
-          <h1 className="text-[30px]">No such club</h1>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{q.error instanceof Error ? q.error.message : 'This club is gone or was never here.'}</p>
-        </header>
+        <AppCover back={{ to: '/run', label: 'Kreators Run' }} title="No such club" lede={q.error instanceof Error ? q.error.message : 'This club is gone or was never here.'} />
       </Screen>
     );
   }
@@ -921,17 +951,52 @@ export function RunClubPage() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/run">Kreators Run</BackLink>
-        <p className="m-0 text-[14px] font-bold text-ink-soft">
-          <Icon icon={Footprints} size={14} className="mr-xs inline align-middle" />
-          {k.city}, {RUN_PACE_META[k.pace].name.toLowerCase()}, hosted by {k.hostName}
-          {k.status === 'closed' ? ', closed' : ''}
-        </p>
-        <h1 className="text-[30px]">{k.name}</h1>
-        {k.meets && <p className="mt-xs m-0 text-[16px] font-semibold">{k.meets}</p>}
-        {k.description && <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold text-ink-soft">{k.description}</p>}
-        <div className="mt-sm flex flex-wrap items-center gap-xs">
+      <AppCover
+        back={{ to: '/run', label: 'Kreators Run' }}
+        eyebrow={
+          <>
+            <Icon icon={Footprints} size={14} className="mr-xs inline align-middle" />
+            {k.city}, {RUN_PACE_META[k.pace].name.toLowerCase()}, hosted by {k.hostName}
+            {k.status === 'closed' ? ', closed' : ''}
+          </>
+        }
+        title={k.name}
+        lede={
+          k.meets || k.description ? (
+            <>
+              {k.meets && <p className="m-0 text-[16px] font-semibold text-ink">{k.meets}</p>}
+              {k.description && <p className="mt-xs m-0 whitespace-pre-wrap">{k.description}</p>}
+            </>
+          ) : undefined
+        }
+        actions={
+          <>
+            {!k.mine && k.status === 'active' && (
+              <Button onClick={() => join.mutate()} disabled={join.isPending}>
+                Join the club
+              </Button>
+            )}
+            {k.mine && !k.host && (
+              <Button variant="outline" onClick={() => leave.mutate()} disabled={leave.isPending}>
+                Leave
+              </Button>
+            )}
+            {k.host && k.status === 'active' && (
+              <>
+                <Button onClick={() => setAdding(true)}>Add a run</Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => setAsk({ title: 'Close this club?', body: 'Runs and entries stay, and nobody can join after that.', action: 'Yes, close it', run: () => close.mutate() })}
+                  disabled={close.isPending}
+                >
+                  Close the club
+                </Button>
+              </>
+            )}
+          </>
+        }
+      >
+        <div className="flex flex-wrap items-center gap-xs">
           <IconTag tone="calm" icon="Users">{`${k.members} ${k.members === 1 ? 'runner' : 'runners'}`}</IconTag>
           {k.visibility === 'private' && (
             <StatusTag tone={TINT_TONE['purple']}>
@@ -944,34 +1009,8 @@ export function RunClubPage() {
             </StatusTag>
           )}
         </div>
-        <div className="mt-md flex flex-wrap gap-xs">
-          {!k.mine && k.status === 'active' && (
-            <Button onClick={() => join.mutate()} disabled={join.isPending}>
-              Join the club
-            </Button>
-          )}
-          {k.mine && !k.host && (
-            <Button variant="outline" onClick={() => leave.mutate()} disabled={leave.isPending}>
-              Leave
-            </Button>
-          )}
-          {k.host && k.status === 'active' && (
-            <>
-              <Button onClick={() => setAdding(true)}>Add a run</Button>
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  if (window.confirm('Close this club? Runs and entries stay, nobody can join.')) close.mutate();
-                }}
-                disabled={close.isPending}
-              >
-                Close the club
-              </Button>
-            </>
-          )}
-        </div>
         <ErrorLine e={join.isError ? join.error : leave.isError ? leave.error : close.isError ? close.error : null} />
-      </header>
+      </AppCover>
 
       <section className="mt-lg" aria-labelledby="club-runs">
         <h2 id="club-runs" className="text-[24px]">
@@ -982,7 +1021,7 @@ export function RunClubPage() {
         <ul className="mt-sm flex list-none flex-col gap-sm p-0 m-0">
           {d.runs.map((r) => (
             <Fragment key={r.id}>
-              <RunCard r={r} host={k.host} member={k.mine} onLog={() => setLogging(r)} onRecode={(change) => recode.mutate({ runId: r.id, change })} onStatus={(status) => setRun.mutate({ runId: r.id, status })} busy={busy} />
+              <RunCard r={r} host={k.host} member={k.mine} onLog={() => setLogging(r)} onRecode={(change) => recode.mutate({ runId: r.id, change })} onStatus={(status) => (status === 'cancelled' ? setAsk({ title: 'Cancel this run?', body: 'Everyone in the club is told it is off.', action: 'Yes, cancel it', run: () => setRun.mutate({ runId: r.id, status }) }) : setRun.mutate({ runId: r.id, status }))} busy={busy} />
               {(k.host || k.mine) && <RunTalk runId={r.id} />}
             </Fragment>
           ))}
@@ -1086,6 +1125,7 @@ export function RunClubPage() {
           after();
         }}
       />
+      <AskSheet ask={ask} onClose={() => setAsk(null)} />
     </Screen>
   );
 }

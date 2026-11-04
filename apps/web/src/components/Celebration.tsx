@@ -1,6 +1,6 @@
 import { BADGES, KIND_META, RELATIONSHIPS, type Node, type RippleEvent } from '@kreators/shared';
 import { BadgeMedal } from './BadgeArt';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, m as motion, useReducedMotion } from 'motion/react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 export interface Celebration {

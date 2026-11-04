@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Button } from '../components/Button';
 import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
@@ -39,16 +40,18 @@ function List() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Knowledge</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Short reads and exercises from the guides. Each one takes a few minutes.</p>
-        {canAuthor && (
-          <Button variant="outline" className="mt-sm" onClick={() => setEditing('new')}>
-            Write a resource
-          </Button>
-        )}
-      </header>
+      <AppCover
+        back={{ to: '/apps', label: 'Apps' }}
+        title="Knowledge"
+        lede="Short reads and exercises from the guides. Each one takes a few minutes."
+        actions={
+          canAuthor ? (
+            <Button variant="outline" onClick={() => setEditing('new')}>
+              Write a resource
+            </Button>
+          ) : undefined
+        }
+      />
       {/* One quiet select instead of a wall of pills: the seven pillars by name, then any other topic the reads carry. The choice lives in the URL. */}
       <label className="mt-md flex flex-wrap items-center gap-xs text-[14px] font-bold">
         <span>Show</span>
@@ -101,18 +104,15 @@ function Detail({ id }: { id: string }) {
   const r = q.data?.resource;
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/knowledge">Knowledge</BackLink>
-        {r && (
-          <>
-            <p className="m-0 text-[14px] font-bold text-ink-soft">
-              {r.kind === 'exercise' ? 'Exercise' : r.kind === 'video' ? 'Video' : 'Article'} by {r.authorName}
-            </p>
-            <h1 className="text-[30px]">{r.title}</h1>
-          </>
-        )}
-      </header>
-      {q.isError && <p className="mt-md font-bold">That resource is not here.</p>}
+      {r ? (
+        <AppCover back={{ to: '/knowledge', label: 'Knowledge' }} title={r.title} lede={`${r.kind === 'exercise' ? 'Exercise' : r.kind === 'video' ? 'Video' : 'Article'} by ${r.authorName}`} />
+      ) : q.isError ? (
+        <AppCover back={{ to: '/knowledge', label: 'Knowledge' }} title="Not here" lede="That resource is not here." />
+      ) : (
+        <header className="pt-lg">
+          <BackLink to="/knowledge">Knowledge</BackLink>
+        </header>
+      )}
       {r && (
         <article data-reading className="mt-md rounded-card bg-card p-md shadow-toy-soft">
           <p className="m-0 text-[18px] font-bold">{r.summary}</p>

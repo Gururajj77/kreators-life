@@ -82,13 +82,18 @@ export async function limited(db: D1Database, key: string, max: number, windowSe
 export const ipOf = (c: Context<AppEnv>) => c.req.header('CF-Connecting-IP') ?? c.req.header('X-Forwarded-For') ?? 'local';
 
 /** Middleware: the named limit from limits.ts, per address, or per person once there is a session. */
-export function rateLimit(name: LimitName, by?: 'address', when?: 'discountCode') {
+export function rateLimit(name: LimitName, by?: 'address', when?: 'discountCode' | 'appPrefs') {
   const { max, windowSec } = LIMITS[name];
   return async (c: Context<AppEnv>, next: Next) => {
     // A limit that counts only code tries looks at the body (Hono keeps it, so the route still reads it).
     if (when === 'discountCode') {
       const body = await c.req.json<{ discountCode?: unknown }>().catch(() => null);
       if (!body || typeof body.discountCode !== 'string' || !body.discountCode.trim()) return next();
+    }
+    // A profile save counts against `prefs` only when it carries the app groups' arrangement.
+    if (when === 'appPrefs') {
+      const body = await c.req.json<{ appPrefs?: unknown }>().catch(() => null);
+      if (!body || body.appPrefs === undefined) return next();
     }
     // `by: 'address'` counts the address even for a signed-in person, so one address cannot try codes through many accounts.
     const who = by === 'address' ? ipOf(c) : (c.get('user')?.id ?? ipOf(c));

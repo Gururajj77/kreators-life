@@ -14,7 +14,7 @@ const WAVE = 'M0 50 Q12.5 43 25 50 T50 50 T75 50 T100 50 T125 50 T150 50 T175 50
  * and the first circle starts again. No outlines. Under reduced motion nothing waves or ripples: the step you are on shows full and its
  * words change. Only transform and opacity move, and the wave and the ripples exist only on the step you are on.
  */
-export function BreathFour({ pattern, running, elapsedMs, onStep }: { pattern: BreathPattern; running: boolean; elapsedMs: () => number; onStep?: (kind: BreathStepKind) => void }) {
+export function BreathFour({ pattern, running, elapsedMs, onStep, pace = 1 }: { pattern: BreathPattern; running: boolean; elapsedMs: () => number; onStep?: (kind: BreathStepKind) => void; /** Seconds one count lasts (the pattern is timed at this pace); the circles still show counts, never seconds. */ pace?: number }) {
   const [, setTick] = useState(0);
   useTicker(running, () => setTick((n) => n + 1), 100);
   const at = breathAt(pattern, elapsedMs());
@@ -34,9 +34,12 @@ export function BreathFour({ pattern, running, elapsedMs, onStep }: { pattern: B
       step.current?.(at.step.kind);
     }
   }, [stepId, at.step.kind]);
+  // Counts, not seconds: a step of 4 counts at 1.5 s a count still reads 4, 3, 2, 1, each number held for 1.5 s.
+  const countOf = (sec: number) => Math.round(sec / pace);
+  const countsLeft = Math.max(1, Math.ceil(((1 - at.progress) * at.step.seconds) / pace - 1e-6));
   const word = running ? BREATH_WORDS[at.step.kind] : 'Ready';
   return (
-    <div className="breath-row" role="img" aria-label={running ? `${word}, ${at.secondsLeft}` : `${pattern.name}: ${pattern.counts}`}>
+    <div className="breath-row" role="img" aria-label={running ? `${word}, ${countsLeft}` : `${pattern.name}: ${pattern.counts}`}>
       {pattern.steps.map((s, i) => {
         const now = running && i === at.index;
         const done = running && i < at.index;
@@ -68,10 +71,10 @@ export function BreathFour({ pattern, running, elapsedMs, onStep }: { pattern: B
               {now ? (
                 <>
                   <span className="breath-word">{BREATH_SAY[s.kind]}</span>
-                  <span className="breath-count">{at.secondsLeft}</span>
+                  <span className="breath-count">{countsLeft}</span>
                 </>
               ) : (
-                <span className="breath-word breath-soft">{s.seconds}</span>
+                <span className="breath-word breath-soft">{countOf(s.seconds)}</span>
               )}
             </span>
           </span>

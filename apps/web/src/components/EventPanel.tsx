@@ -19,7 +19,7 @@ const friendWord: Record<EventPerson['friend'], string> = { none: '', sent: 'Req
  * What happens around an event once you are in it: the host's photo folder, a conversation for the guests,
  * and the guests who said they would like to meet others. Shown to the host and the guests only.
  */
-export function EventPanel({ app, id }: { app: EventApp; id: string }) {
+export function EventPanel({ app, id, talk = true }: { app: EventApp; id: string; /** False where the conversation lives elsewhere (a run's is its discussion in Kreators Run). */ talk?: boolean }) {
   const token = useSession((s) => s.token);
   const qc = useQueryClient();
   const key = ['event-extras', app, id];
@@ -77,7 +77,7 @@ export function EventPanel({ app, id }: { app: EventApp; id: string }) {
               <input value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="Open until the end of the month" className={FIELD} />
             </label>
             <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Set the folder to "anyone with the link can view" so guests can open it.</p>
-            <Button type="submit" className="mt-sm" disabled={share.isPending || !url.trim()}>Share the folder</Button>
+            <Button type="submit" variant="outline" className="mt-sm" disabled={share.isPending || !url.trim()}>Share the folder</Button>
             {err(share)}
           </form>
         )}
@@ -113,49 +113,51 @@ export function EventPanel({ app, id }: { app: EventApp; id: string }) {
         {err(connect)}
       </Section>
 
-      <Section id={`talk-${id}`} title="Conversation" lede="Say hello, share a plan, ask where to meet. It is open to this event's guests and host, and stays open for a month after.">
-        <ul className="m-0 flex max-h-[360px] list-none flex-col gap-xs overflow-y-auto rounded-tile bg-paper p-sm" aria-live="polite" aria-label="Conversation">
-          {d.messages.length === 0 && <li className="text-[14px] font-semibold text-ink-soft">No messages yet. Start it.</li>}
-          {d.messages.map((m) => (
-            <li key={m.id} style={{ marginLeft: `calc(var(--spacing-md) * ${m.depth})` }} className={`rounded-tile p-sm text-[14px] ${m.mine ? 'bg-ink text-on-ink' : 'bg-card'}`}>
-              <span className="flex items-baseline justify-between gap-xs">
-                <span className="font-extrabold">
-                  {m.mine ? 'You' : m.name}
-                  {m.anonymous && <span className={`ml-xs rounded-pill px-xs text-[11px] leading-[18px] ${m.mine ? 'bg-on-ink/15' : 'bg-line text-ink-soft'}`}>{m.mine ? `Anonymous as ${m.name}` : 'Anonymous'}</span>}
-                  {m.host && <IconTag className="ml-xs" tone="warn" icon="Crown">Host</IconTag>}
+      {talk && (
+        <Section id={`talk-${id}`} title="Conversation" lede="Say hello, share a plan, ask where to meet. It is open to this event's guests and host, and stays open for a month after.">
+          <ul className="m-0 flex max-h-[360px] list-none flex-col gap-xs overflow-y-auto rounded-tile bg-paper p-sm" aria-live="polite" aria-label="Conversation">
+            {d.messages.length === 0 && <li className="text-[14px] font-semibold text-ink-soft">No messages yet. Start it.</li>}
+            {d.messages.map((m) => (
+              <li key={m.id} style={{ marginLeft: `calc(var(--spacing-md) * ${m.depth})` }} className={`rounded-tile p-sm text-[14px] ${m.mine ? 'bg-ink text-on-ink' : 'bg-card'}`}>
+                <span className="flex items-baseline justify-between gap-xs">
+                  <span className="font-extrabold">
+                    {m.mine ? 'You' : m.name}
+                    {m.anonymous && <span className={`ml-xs rounded-pill px-xs text-[11px] leading-[18px] ${m.mine ? 'bg-on-ink/15' : 'bg-line text-ink-soft'}`}>{m.mine ? `Anonymous as ${m.name}` : 'Anonymous'}</span>}
+                    {m.host && <IconTag className="ml-xs" tone="warn" icon="Crown">Host</IconTag>}
+                  </span>
+                  <span className={`text-[12px] font-bold ${m.mine ? 'text-on-ink/70' : 'text-ink-soft'}`}>{when(m.createdAt)}</span>
                 </span>
-                <span className={`text-[12px] font-bold ${m.mine ? 'text-on-ink/70' : 'text-ink-soft'}`}>{when(m.createdAt)}</span>
-              </span>
-              <span className="block whitespace-pre-wrap font-semibold"><Inert text={m.body} /></span>
-              <button type="button" onClick={() => setTo(m)} className={`mt-xs mr-sm inline-flex min-h-[44px] items-center text-[12px] font-bold underline underline-offset-4 ${m.mine ? 'text-on-ink/80' : 'text-ink-soft'}`}>
-                Reply
-              </button>
-              {(m.mine || host) && (
-                <button type="button" onClick={() => unsay.mutate(m.id)} className={`mt-xs inline-flex min-h-[44px] items-center text-[12px] font-bold underline underline-offset-4 ${m.mine ? 'text-on-ink/80' : 'text-ink-soft'}`}>
-                  Take down
+                <span className="block whitespace-pre-wrap font-semibold"><Inert text={m.body} /></span>
+                <button type="button" onClick={() => setTo(m)} className={`mt-xs mr-sm inline-flex min-h-[44px] items-center text-[12px] font-bold underline underline-offset-4 ${m.mine ? 'text-on-ink/80' : 'text-ink-soft'}`}>
+                  Reply
                 </button>
-              )}
-            </li>
-          ))}
-          <li ref={end} aria-hidden="true" />
-        </ul>
-        {to && (
-          <p className="mt-sm m-0 flex items-center justify-between gap-xs rounded-tile bg-paper p-xs text-[12px] font-bold text-ink-soft">
-            <span className="min-w-0 truncate">Replying to {to.mine ? 'yourself' : to.name}: <Inert text={to.body} /></span>
-            <Button variant="ghost" size="sm" onClick={() => setTo(null)}>Cancel</Button>
-          </p>
-        )}
-        <form className="mt-sm flex gap-xs" onSubmit={(e) => { e.preventDefault(); if (text.trim()) say.mutate(); }}>
-          <label className="min-w-0 flex-1">
-            <span className="sr-only">Your message</span>
-            <input value={text} maxLength={MAX_EVENT_MESSAGE} onChange={(e) => setText(e.target.value)} placeholder="Write to the guests" className={FIELD + ' !mt-0'} />
-          </label>
-          <Button type="submit" disabled={say.isPending || !text.trim()}>Send</Button>
-        </form>
-        <AnonToggle on={anonymous} onChange={setAnonymous} className="mt-xs" />
-        {err(say)}
-        {err(unsay)}
-      </Section>
+                {(m.mine || host) && (
+                  <button type="button" onClick={() => unsay.mutate(m.id)} className={`mt-xs inline-flex min-h-[44px] items-center text-[12px] font-bold underline underline-offset-4 ${m.mine ? 'text-on-ink/80' : 'text-ink-soft'}`}>
+                    Take down
+                  </button>
+                )}
+              </li>
+            ))}
+            <li ref={end} aria-hidden="true" />
+          </ul>
+          {to && (
+            <p className="mt-sm m-0 flex items-center justify-between gap-xs rounded-tile bg-paper p-xs text-[12px] font-bold text-ink-soft">
+              <span className="min-w-0 truncate">Replying to {to.mine ? 'yourself' : to.name}: <Inert text={to.body} /></span>
+              <Button variant="ghost" size="sm" onClick={() => setTo(null)}>Cancel</Button>
+            </p>
+          )}
+          <form className="mt-sm flex gap-xs" onSubmit={(e) => { e.preventDefault(); if (text.trim()) say.mutate(); }}>
+            <label className="min-w-0 flex-1">
+              <span className="sr-only">Your message</span>
+              <input value={text} maxLength={MAX_EVENT_MESSAGE} onChange={(e) => setText(e.target.value)} placeholder="Write to the guests" className={FIELD + ' !mt-0'} />
+            </label>
+            <Button type="submit" variant="outline" disabled={say.isPending || !text.trim()}>Send</Button>
+          </form>
+          <AnonToggle on={anonymous} onChange={setAnonymous} className="mt-xs" />
+          {err(say)}
+          {err(unsay)}
+        </Section>
+      )}
     </>
   );
 }

@@ -9,6 +9,7 @@ import { useTheme } from '../lib/theme';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { Segmented } from '../components/fx/Segmented';
 import { useSlider } from '../components/fx/useSlider';
+import { SITE_PRIMARY_SM } from './buttons';
 
 /** Where "Go to app" goes: straight in for people with a session, to sign in for everyone else. */
 export function useAppEntry(): string {
@@ -92,7 +93,7 @@ export function SiteLayout({ children, wide = true, minimal = false }: { childre
               )}
               <Link
                 to={entry}
-                className="toy inline-flex min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink max-[380px]:px-sm"
+                className={`${SITE_PRIMARY_SM} shrink-0 whitespace-nowrap max-[380px]:px-sm`}
               >
                 Go to app
               </Link>
@@ -111,14 +112,16 @@ export function SiteLayout({ children, wide = true, minimal = false }: { childre
         }}
       >
         <Posy tone="ink" kind="lotus" className="right-0 bottom-0" />
-        <div className="relative mx-auto flex max-w-[1080px] flex-col gap-md px-md py-lg md:flex-row md:items-start md:justify-between">
+        {/* A row only from lg: on a tablet the four link columns, the words and the theme switch did not fit side by side. */}
+        <div className="relative mx-auto flex max-w-[1080px] flex-col gap-md px-md py-lg lg:flex-row lg:items-start lg:justify-between">
           <div>
             <Logo />
             <p className="mt-xs m-0 max-w-[420px] text-[14px] font-semibold text-ink-soft">
               A daily game for the seven relationships, with a creator’s tools built in. One small act a day, for all seven. Free to start, free to stay.
             </p>
           </div>
-          <nav aria-label="Footer" className="grid grid-cols-2 gap-xs text-[14px] font-bold text-ink-soft sm:grid-cols-3">
+          {/* Columns as wide as their words, each link on one line: equal columns ran "Subprocessors" into "Copyright" and left "choices" alone. */}
+          <nav aria-label="Footer" className="grid grid-cols-2 gap-xs whitespace-nowrap text-[14px] font-bold text-ink-soft sm:grid-cols-[repeat(4,max-content)] sm:gap-x-md">
             <Link to="/explore" className="min-h-[44px] hover:text-ink">
               Explore
             </Link>
@@ -128,14 +131,18 @@ export function SiteLayout({ children, wide = true, minimal = false }: { childre
             <Link to="/features" className="min-h-[44px] hover:text-ink">
               Features
             </Link>
+            <Link to="/features/books" className="min-h-[44px] hover:text-ink">
+              Books
+            </Link>
             <a href="/#brands" className="min-h-[44px] hover:text-ink">
               For brands
             </a>
             <Link to="/features/help" className="min-h-[44px] hover:text-ink">
               Help
             </Link>
-            <Link to="/signin" className="min-h-[44px] hover:text-ink">
-              Sign in
+            {/* Like the header: sign-in without a session, the app (Home) with one. */}
+            <Link to={entry} className="min-h-[44px] hover:text-ink">
+              {token ? 'Go to app' : 'Sign in'}
             </Link>
             <Link to="/pricing" className="min-h-[44px] hover:text-ink">
               Pricing

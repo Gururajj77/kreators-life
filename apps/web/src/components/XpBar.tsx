@@ -1,5 +1,5 @@
 import { levelProgress } from '@kreators/shared';
-import { motion, useReducedMotion } from 'motion/react';
+import { m as motion, useReducedMotion } from 'motion/react';
 
 interface Props {
   xp: number;

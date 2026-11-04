@@ -1,6 +1,6 @@
 import { releaseDeadOrders } from './discounts';
 import type { Env } from './env';
-import { getUser, nowIso } from './db';
+import { getUser, inBatches, nowIso, shiftDate } from './db';
 import { runSequences } from './routes/growth';
 import { runRecurring } from './routes/finance';
 import { matchDueCircles, rollWeeklyCircles } from './routes/circles';
@@ -12,6 +12,7 @@ import { securityAlerts } from './alerts';
 import { runAgencyCycles } from './agencyCycles';
 import { syncStageFromAgreements } from './lifecycle';
 import { pruneExpiredPortalSessions, pruneRetiredPortalLinks } from './portalAccess';
+import { pruneExpiredTeamLinkSessions } from './teamLinkAccess';
 import { resolveAccess } from './access';
 
 /** The cron runs every fifteen minutes, so 23:45 is the last tick of a day: a reminder set for 23:46 to 23:59 goes out then and not at 00:00, when its day has already turned over. */
@@ -41,6 +42,7 @@ export async function runScheduled(env: Env, cron: string = ''): Promise<{ seque
   const agencyMade = await runAgencyCycles(db).catch(() => 0);
   await syncStageFromAgreements(db).catch(() => 0);
   await pruneExpiredPortalSessions(db).catch(() => undefined);
+  await pruneExpiredTeamLinkSessions(db).catch(() => undefined);
   await pruneRetiredPortalLinks(db).catch(() => undefined);
   const circles = await matchDueCircles(db);
   const weekly = await rollWeeklyCircles(db);
@@ -85,6 +87,8 @@ export async function tidyOld(db: D1Database): Promise<void> {
     db.prepare("UPDATE webhook_events SET payload = '' WHERE received_at < ? AND payload != ''").bind(ago(RETENTION_DAYS.webhooks)),
     db.prepare('DELETE FROM link_clicks WHERE created_at < ?').bind(ago(RETENTION_DAYS.clicks)),
     db.prepare('DELETE FROM channel_messages WHERE created_at < ?').bind(ago(RETENTION_DAYS.channelLines)),
+    // A run's discussion is a channel for that run: its lines are kept as long as a channel's.
+    db.prepare('DELETE FROM run_messages WHERE created_at < ?').bind(ago(RETENTION_DAYS.channelLines)),
     db.prepare('DELETE FROM agency_password_requests WHERE closed_at IS NOT NULL AND closed_at < ?').bind(ago(RETENTION_DAYS.passwordRequests)),
     db.prepare('DELETE FROM data_requests WHERE requested_at < ?').bind(ago(RETENTION_DAYS.requests)),
     db.prepare("DELETE FROM copyright_notices WHERE status != 'new' AND COALESCE(resolved_at, created_at) < ?").bind(ago(RETENTION_DAYS.notices)),
@@ -109,17 +113,10 @@ export async function clearPastWaterNotes(db: D1Database): Promise<number> {
     const today = dayIn(r.timezone || 'Asia/Kolkata');
     return today !== null && pastWaterNote(r.id, today);
   });
-  for (let i = 0; i < gone.length; i += 50) {
-    await db.batch(gone.slice(i, i + 50).map((r) => db.prepare('DELETE FROM notifications WHERE id = ?').bind(r.id)));
-  }
+  await inBatches(db, gone.map((r) => db.prepare('DELETE FROM notifications WHERE id = ?').bind(r.id)));
   return gone.length;
 }
 
-/**
- * The daily reminder: a person sets a time under Inbox, in their own zone. Each run looks at everyone with a
- * time, works out today's instant for it in their zone, and drops one reminder into the inbox when that
- * instant has passed in the last hour and they have not checked in today. One a day, never more.
- */
 /**
  * Water and the person's own reminders, as inbox notices at the right local time. Water goes every few minutes the person
  * chose, inside their day, and only while the day's goal is not met, as one inbox line a day that each reminder rewrites; a custom reminder goes once on each of its days, within
@@ -128,55 +125,49 @@ export async function clearPastWaterNotes(db: D1Database): Promise<number> {
 export async function sendWaterAndCustom(db: D1Database, parts: { water: boolean; custom: boolean } = { water: true, custom: true }): Promise<number> {
   const now = new Date();
   let sent = 0;
-  const notice = (userId: string, title: string, body: string) =>
-    db.prepare("INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', ?, ?, '/today', NULL, ?)").bind(crypto.randomUUID(), userId, title, body, nowIso()).run();
-  const local = (zone: string) => {
-    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', weekday: 'short' }).formatToParts(now);
-    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
-    return { day: `${get('year')}-${get('month')}-${get('day')}`, minutes: Number(get('hour')) * 60 + Number(get('minute')), weekday: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(get('weekday')) + 1 };
-  };
   const mins = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
 
   if (parts.water) {
     const water = await db
       .prepare('SELECT p.user_id, p.water_goal_ml, p.water_glass_ml, p.water_every_min, p.water_from, p.water_to, p.last_water_at, u.timezone FROM reminder_prefs p JOIN users u ON u.id = p.user_id WHERE p.water_on = 1')
       .all<{ user_id: string; water_goal_ml: number; water_glass_ml: number; water_every_min: number; water_from: string; water_to: string; last_water_at: string | null; timezone: string }>();
+    const due: { w: (typeof water.results)[number]; day: string }[] = [];
     for (const w of water.results) {
-      let at;
-      try {
-        at = local(w.timezone || 'Asia/Kolkata');
-      } catch {
-        continue;
-      }
+      const at = localNow(w.timezone || 'Asia/Kolkata', now);
+      if (!at) continue;
       if (at.minutes < mins(w.water_from) || at.minutes > mins(w.water_to)) continue;
       // A few minutes of slack: the tick two hours after the last one lands a few seconds before the two hours are up.
       if (w.last_water_at && now.getTime() - Date.parse(w.last_water_at) < (w.water_every_min - 5) * 60_000) continue;
-      const so = await db.prepare('SELECT COALESCE(SUM(ml), 0) AS ml FROM water_logs WHERE user_id = ? AND day = ?').bind(w.user_id, at.day).first<{ ml: number }>();
-      const drunk = so?.ml ?? 0;
-      if (drunk >= w.water_goal_ml) continue;
-      // One water line per person per day: later reminders rewrite it (new count, back to unread, newest first) instead of piling up.
-      await db
-        .prepare(
-          "INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', 'Time for some water', ?, '/today', NULL, ?) ON CONFLICT(id) DO UPDATE SET body = excluded.body, created_at = excluded.created_at, read_at = NULL, archived_at = NULL",
-        )
-        .bind(`water-${w.user_id}-${at.day}`, w.user_id, `${Math.floor(drunk / w.water_glass_ml)} of ${Math.ceil(w.water_goal_ml / w.water_glass_ml)} glasses so far today. Tap to log one.`, nowIso())
-        .run();
-      await db.prepare('UPDATE reminder_prefs SET last_water_at = ? WHERE user_id = ?').bind(nowIso(), w.user_id).run();
-      sent += 1;
+      due.push({ w, day: at.day });
     }
+    // What each of them drank today in one round trip, then every note and its time in another.
+    const drunkRows = await inBatches<{ ml: number }>(db, due.map(({ w, day }) => db.prepare('SELECT COALESCE(SUM(ml), 0) AS ml FROM water_logs WHERE user_id = ? AND day = ?').bind(w.user_id, day)));
+    const writes: D1PreparedStatement[] = [];
+    due.forEach(({ w, day }, i) => {
+      const drunk = drunkRows[i]?.results[0]?.ml ?? 0;
+      if (drunk >= w.water_goal_ml) return;
+      // One water line per person per day: later reminders rewrite it (new count, back to unread, newest first) instead of piling up.
+      writes.push(
+        db
+          .prepare(
+            "INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', 'Time for some water', ?, '/today', NULL, ?) ON CONFLICT(id) DO UPDATE SET body = excluded.body, created_at = excluded.created_at, read_at = NULL, archived_at = NULL",
+          )
+          .bind(`water-${w.user_id}-${day}`, w.user_id, `${Math.floor(drunk / w.water_glass_ml)} of ${Math.ceil(w.water_goal_ml / w.water_glass_ml)} glasses so far today. Tap to log one.`, nowIso()),
+        db.prepare('UPDATE reminder_prefs SET last_water_at = ? WHERE user_id = ?').bind(nowIso(), w.user_id),
+      );
+      sent += 1;
+    });
+    await inBatches(db, writes);
   }
 
   if (parts.custom) {
     const custom = await db
       .prepare('SELECT r.id, r.user_id, r.title, r.time, r.days_json, r.last_sent_day, u.timezone FROM custom_reminders r JOIN users u ON u.id = r.user_id WHERE r.enabled = 1')
       .all<{ id: string; user_id: string; title: string; time: string; days_json: string; last_sent_day: string | null; timezone: string }>();
+    const writes: D1PreparedStatement[] = [];
     for (const r of custom.results) {
-      let at;
-      try {
-        at = local(r.timezone || 'Asia/Kolkata');
-      } catch {
-        continue;
-      }
+      const at = localNow(r.timezone || 'Asia/Kolkata', now);
+      if (!at) continue;
       if (r.last_sent_day === at.day) continue;
       let days: number[] = [];
       try {
@@ -186,10 +177,13 @@ export async function sendWaterAndCustom(db: D1Database, parts: { water: boolean
       }
       const since = at.minutes - Math.min(mins(r.time), LAST_TICK);
       if (!days.includes(at.weekday) || since < 0 || since > 60) continue;
-      await notice(r.user_id, r.title, 'Your own reminder.');
-      await db.prepare('UPDATE custom_reminders SET last_sent_day = ? WHERE id = ?').bind(at.day, r.id).run();
+      writes.push(
+        db.prepare("INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', ?, ?, '/today', NULL, ?)").bind(crypto.randomUUID(), r.user_id, r.title, 'Your own reminder.', nowIso()),
+        db.prepare('UPDATE custom_reminders SET last_sent_day = ? WHERE id = ?').bind(at.day, r.id),
+      );
       sent += 1;
     }
+    await inBatches(db, writes);
   }
   return sent;
 }
@@ -210,93 +204,95 @@ export async function sendTaskReminders(db: D1Database): Promise<number> {
     )
     .bind(new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10), new Date(now.getTime() + 86_400_000).toISOString().slice(0, 10))
     .all<{ id: string; user_id: string; title: string; priority: number | null; do_date: string | null; due_date: string | null; due_time: string | null; timezone: string }>();
-  let sent = 0;
+  const writes: D1PreparedStatement[] = [];
   for (const t of rows.results) {
-    let parts;
-    try {
-      parts = new Intl.DateTimeFormat('en-CA', { timeZone: t.timezone || 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now);
-    } catch {
-      continue;
-    }
-    const get = (k: string) => parts.find((p) => p.type === k)?.value ?? '';
-    const day = `${get('year')}-${get('month')}-${get('day')}`;
+    const clock = localNow(t.timezone || 'Asia/Kolkata', now);
+    if (!clock) continue;
+    const { day } = clock;
     if ((t.do_date ?? t.due_date) !== day) continue;
     const at = t.due_time ?? '09:00';
-    const since = Number(get('hour')) * 60 + Number(get('minute')) - Math.min(Number(at.slice(0, 2)) * 60 + Number(at.slice(3, 5)), LAST_TICK);
+    const since = clock.minutes - Math.min(Number(at.slice(0, 2)) * 60 + Number(at.slice(3, 5)), LAST_TICK);
     if (since < 0 || since > 60) continue;
     const tag = t.priority === null ? '' : `P${t.priority} `;
-    const res = await db
-      .prepare("INSERT OR IGNORE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', ?, ?, ?, NULL, ?)")
-      // The note opens Daily on this task, with its plan open, so the inbox line and the Remember tag are one thing.
-      .bind(`task-${t.id}-${day}`, t.user_id, `Remember: ${t.title}`.slice(0, 160), `${tag}Planned for today${t.due_date && t.do_date ? `, due ${t.due_date}` : ''}. Tap to open it.`.trim(), `/today?task=${t.id}`, nowIso())
-      .run();
-    if (res.meta.changes) sent += 1;
+    writes.push(
+      db
+        .prepare("INSERT OR IGNORE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', ?, ?, ?, NULL, ?)")
+        // The note opens Daily on this task, with its plan open, so the inbox line and the Remember tag are one thing.
+        .bind(`task-${t.id}-${day}`, t.user_id, `Remember: ${t.title}`.slice(0, 160), `${tag}Planned for today${t.due_date && t.do_date ? `, due ${t.due_date}` : ''}. Tap to open it.`.trim(), `/today?task=${t.id}`, nowIso()),
+    );
   }
-  return sent;
+  return changed(await inBatches(db, writes));
 }
+
+/** How many of a batch's writes changed a row: an `INSERT OR IGNORE` that met its id counts nothing. */
+const changed = (results: readonly D1Result[]) => results.filter((r) => r.meta.changes).length;
 
 /**
  * The optional daily focus nudge (FocusSettings.reminderTime and reminderDays, off until set under Timer settings): one inbox note a day
  * (id `focus-<user>-<day>`, so it goes once), on the chosen days, within an hour after the time in the person's zone (a time after the last
- * tick goes out at it), linking to Mindful minutes, and never on a day that already has a focus session.
+ * tick goes out at it), linking to Mindfulness, and never on a day that already has a focus session.
  */
 export async function sendFocusReminders(db: D1Database): Promise<number> {
   const now = new Date();
   const rows = await db
     .prepare("SELECT p.user_id, p.settings_json, u.timezone FROM focus_prefs p JOIN users u ON u.id = p.user_id WHERE json_extract(p.settings_json, '$.reminderTime') IS NOT NULL LIMIT 5000")
     .all<{ user_id: string; settings_json: string; timezone: string | null }>();
-  let sent = 0;
+  const due: { userId: string; localDay: string; goalMinutes: number | null | undefined }[] = [];
   for (const r of rows.results) {
     const s = parseFocusSettings(r.settings_json);
     if (!s.reminderTime || s.reminderDays.length === 0) continue;
     const zone = r.timezone || DEFAULT_ZONE;
-    let localDay: string;
-    try {
-      localDay = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
-    } catch {
-      continue;
-    }
+    const clock = localNow(zone, now);
+    if (!clock) continue;
+    const localDay = clock.day;
     // 1 for Monday to 7 for Sunday, from the person's own day.
-    const weekday = ((new Date(`${localDay}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
-    if (!s.reminderDays.includes(weekday)) continue;
-    const due = zonedToUtc(localDay, Math.min(Number(s.reminderTime.slice(0, 2)) * 60 + Number(s.reminderTime.slice(3, 5)), LAST_TICK), zone);
-    const since = now.getTime() - due.getTime();
+    if (!s.reminderDays.includes(clock.weekday)) continue;
+    const at = zonedToUtc(localDay, Math.min(Number(s.reminderTime.slice(0, 2)) * 60 + Number(s.reminderTime.slice(3, 5)), LAST_TICK), zone);
+    const since = now.getTime() - at.getTime();
     if (since < 0 || since > 60 * 60_000) continue;
-    const focused = await db.prepare('SELECT 1 FROM focus_rounds WHERE user_id = ? AND day = ? LIMIT 1').bind(r.user_id, localDay).first();
-    if (focused) continue;
-    const res = await db
-      .prepare("INSERT OR IGNORE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', ?, ?, '/mindful', NULL, ?)")
-      .bind(`focus-${r.user_id}-${localDay}`, r.user_id, 'Time to focus', s.goalMinutes ? `Your goal is ${s.goalMinutes} minutes today. One session gets you started.` : 'One focus session today. Pick a task and press Start.', nowIso())
-      .run();
-    if (res.meta.changes) sent += 1;
+    due.push({ userId: r.user_id, localDay, goalMinutes: s.goalMinutes });
   }
-  return sent;
+  // Who already focused today, in one round trip, then the notes for the rest in another.
+  const focused = await inBatches(db, due.map((d) => db.prepare('SELECT 1 FROM focus_rounds WHERE user_id = ? AND day = ? LIMIT 1').bind(d.userId, d.localDay)));
+  const writes = due
+    .filter((_, i) => !focused[i]?.results[0])
+    .map((d) =>
+      db
+        .prepare("INSERT OR IGNORE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', ?, ?, '/mindful', NULL, ?)")
+        .bind(`focus-${d.userId}-${d.localDay}`, d.userId, 'Time to focus', d.goalMinutes ? `Your goal is ${d.goalMinutes} minutes today. One session gets you started.` : 'One focus session today. Pick a task and press Start.', nowIso()),
+    );
+  return changed(await inBatches(db, writes));
 }
 
+/**
+ * The daily reminder: a person sets a time under Inbox, in their own zone. Each run looks at everyone with a
+ * time, works out today's instant for it in their zone, and drops one reminder into the inbox when that
+ * instant has passed in the last hour and they have not checked in today. One a day, never more.
+ */
 export async function sendReminders(db: D1Database): Promise<number> {
   const now = new Date();
   const rows = await db.prepare("SELECT id, reminder_time, timezone, last_checkin FROM users WHERE reminder_time IS NOT NULL AND reminder_time != ''").all<{ id: string; reminder_time: string; timezone: string; last_checkin: string | null }>();
-  let sent = 0;
+  const due: { userId: string; at: Date }[] = [];
   for (const u of rows.results) {
     const zone = u.timezone || 'Asia/Kolkata';
     const [h, m] = u.reminder_time.split(':').map(Number);
     if (!Number.isFinite(h) || !Number.isFinite(m)) continue;
-    let localDay: string;
-    try {
-      localDay = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
-    } catch {
-      continue;
-    }
+    const clock = localNow(zone, now);
+    if (!clock) continue;
+    const localDay = clock.day;
     if (u.last_checkin === localDay) continue;
-    const due = zonedToUtc(localDay, Math.min((h ?? 0) * 60 + (m ?? 0), LAST_TICK), zone);
-    const since = now.getTime() - due.getTime();
+    const at = zonedToUtc(localDay, Math.min((h ?? 0) * 60 + (m ?? 0), LAST_TICK), zone);
+    const since = now.getTime() - at.getTime();
     if (since < 0 || since > 60 * 60_000) continue;
-    const already = await db.prepare("SELECT 1 FROM notifications WHERE user_id = ? AND kind = 'reminder' AND created_at >= ?").bind(u.id, due.toISOString()).first();
-    if (already) continue;
-    await db.prepare("INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', ?, ?, '/today', NULL, ?)").bind(crypto.randomUUID(), u.id, 'Time to check in', 'Three boxes on Daily. The first one keeps your streak.', nowIso()).run();
-    sent += 1;
+    due.push({ userId: u.id, at });
   }
-  return sent;
+  // Who already had a reminder since their time, in one round trip, then the notes for the rest in another.
+  const already = await inBatches(db, due.map((d) => db.prepare("SELECT 1 FROM notifications WHERE user_id = ? AND kind = 'reminder' AND created_at >= ?").bind(d.userId, d.at.toISOString())));
+  const writes = due
+    .filter((_, i) => !already[i]?.results[0])
+    .map((d) => db.prepare("INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'reminder', ?, ?, '/today', NULL, ?)").bind(crypto.randomUUID(), d.userId, 'Time to check in', 'Three boxes on Daily. The first one keeps your streak.', nowIso()));
+  await inBatches(db, writes);
+  return writes.length;
 }
 
 /**
@@ -317,14 +313,9 @@ export async function sendReviewReminders(db: D1Database): Promise<number> {
     .all<{ id: string; user_id: string; kind: PeriodKind; name: string; anchor: string; time: string; repeat_json: string | null; next_on: string; timezone: string }>();
   let sent = 0;
   for (const r of rows.results) {
-    let parts;
-    try {
-      parts = new Intl.DateTimeFormat('en-CA', { timeZone: r.timezone || 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now);
-    } catch {
-      continue;
-    }
-    const get = (k: string) => parts.find((p) => p.type === k)?.value ?? '';
-    const day = `${get('year')}-${get('month')}-${get('day')}`;
+    const clock = localNow(r.timezone || 'Asia/Kolkata', now);
+    if (!clock) continue;
+    const { day } = clock;
     const repeat = parseRepeat(r.repeat_json);
     const advance = async (from: string) => {
       const next = repeat ? nextOccurrence(repeat, r.anchor, from) : null;
@@ -336,7 +327,7 @@ export async function sendReviewReminders(db: D1Database): Promise<number> {
       continue;
     }
     if (r.next_on !== day) continue;
-    const since = Number(get('hour')) * 60 + Number(get('minute')) - Math.min(Number(r.time.slice(0, 2)) * 60 + Number(r.time.slice(3, 5)), LAST_TICK);
+    const since = clock.minutes - Math.min(Number(r.time.slice(0, 2)) * 60 + Number(r.time.slice(3, 5)), LAST_TICK);
     if (since < 0) continue;
     if (since <= 60) {
       const period = reviewPeriodFor(r.kind, day);
@@ -353,12 +344,16 @@ export async function sendReviewReminders(db: D1Database): Promise<number> {
   return sent;
 }
 
-/** The person's own day and minute of the day in their zone, or null when the zone is not one the runtime knows. */
-function localNow(zone: string, now: Date): { day: string; minutes: number } | null {
+/**
+ * The person's own day, minute of the day and weekday (1 for Monday to 7 for Sunday) in their zone, or null when the zone is not one
+ * the runtime knows. The one clock every reminder in this file reads.
+ */
+function localNow(zone: string, now: Date): { day: string; minutes: number; weekday: number } | null {
   try {
     const parts = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now);
     const get = (k: string) => parts.find((p) => p.type === k)?.value ?? '';
-    return { day: `${get('year')}-${get('month')}-${get('day')}`, minutes: Number(get('hour')) * 60 + Number(get('minute')) };
+    const day = `${get('year')}-${get('month')}-${get('day')}`;
+    return { day, minutes: Number(get('hour')) * 60 + Number(get('minute')), weekday: ((new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7) + 1 };
   } catch {
     return null;
   }
@@ -386,32 +381,37 @@ export async function sendInvoiceNotes(db: D1Database, now: Date = new Date()): 
     )
     .bind(back, ahead)
     .all<{ id: string; user_id: string; number: string; due_date: string; total_cents: number; currency: string; agency_client_id: string | null; client: string; timezone: string | null }>();
-  const agencyOn = new Map<string, boolean>();
-  const isAgencyOn = async (userId: string) => {
-    if (!agencyOn.has(userId)) {
-      const u = await getUser(db, userId);
-      agencyOn.set(userId, u ? (await resolveAccess(db, u)).access.agency?.on === true : false);
-    }
-    return agencyOn.get(userId) ?? false;
-  };
-  let sent = 0;
+  const isAgencyOn = agencyOnFor(db);
+  const writes: D1PreparedStatement[] = [];
   for (const r of rows.results) {
     const at = localNow(r.timezone || 'Asia/Kolkata', now);
     if (!at || at.minutes < INVOICE_NOTE_TIME) continue;
     const late = r.due_date < at.day;
     if (!late && r.due_date !== at.day) continue;
-    if (late && r.due_date < shiftDay(at.day, -INVOICE_LATE_REACH)) continue;
+    if (late && r.due_date < shiftDate(at.day, -INVOICE_LATE_REACH)) continue;
     const isAgency = r.agency_client_id !== null;
     if (isAgency && !(await isAgencyOn(r.user_id))) continue;
     const title = late ? `Invoice ${r.number} is past due` : `Invoice ${r.number} is due today`;
     const body = `${money(r.total_cents, r.currency)} from ${r.client || 'your client'}, due ${r.due_date}. ${late ? 'Send a reminder, or mark it paid if it came in.' : 'Mark it paid when it comes in.'}`;
-    const res = await db
-      .prepare('INSERT OR IGNORE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)')
-      .bind(`invoice-${r.id}-${late ? 'late' : 'due'}`, r.user_id, isAgency ? 'agency' : 'invoice', title.slice(0, 160), body.slice(0, 300), isAgency ? `/agency/invoices/${r.id}` : '/finance', nowIso())
-      .run();
-    if (res.meta.changes) sent += 1;
+    writes.push(
+      db
+        .prepare('INSERT OR IGNORE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)')
+        .bind(`invoice-${r.id}-${late ? 'late' : 'due'}`, r.user_id, isAgency ? 'agency' : 'invoice', title.slice(0, 160), body.slice(0, 300), isAgency ? `/agency/invoices/${r.id}` : '/finance', nowIso()),
+    );
   }
-  return sent;
+  return changed(await inBatches(db, writes));
+}
+
+/** Whether Agency is on for a person (their switch, the team's flags), asked once per person per run. */
+function agencyOnFor(db: D1Database): (userId: string) => Promise<boolean> {
+  const seen = new Map<string, boolean>();
+  return async (userId) => {
+    if (!seen.has(userId)) {
+      const u = await getUser(db, userId);
+      seen.set(userId, u ? (await resolveAccess(db, u)).access.agency?.on === true : false);
+    }
+    return seen.get(userId) ?? false;
+  };
 }
 
 /**
@@ -440,21 +440,19 @@ export async function sendAgencyDueNotes(db: D1Database, now: Date = new Date())
     one.items.push({ title: r.title, client_id: r.client_id, client: r.client });
     byUser.set(r.user_id, one);
   }
-  let sent = 0;
+  const isAgencyOn = agencyOnFor(db);
+  const writes: D1PreparedStatement[] = [];
   for (const [userId, { day, items }] of byUser) {
-    const u = await getUser(db, userId);
-    if (!u || (await resolveAccess(db, u)).access.agency?.on !== true) continue;
+    if (!(await isAgencyOn(userId))) continue;
     const first = items[0]!;
     const oneClient = items.every((x) => x.client_id === first.client_id);
     const title = items.length === 1 ? `${first.title} is due today` : `${items.length} pieces are due today`;
     const body = items.length === 1 ? `For ${first.client}. Move it on in Agency, or change its due day.` : `${items.slice(0, 3).map((x) => `${x.title} (${x.client})`).join(', ')}${items.length > 3 ? ` and ${items.length - 3} more` : ''}.`;
-    const res = await db
-      .prepare("INSERT OR IGNORE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'agency', ?, ?, ?, NULL, ?)")
-      .bind(`agency-due-${userId}-${day}`, userId, title.slice(0, 160), body.slice(0, 300), oneClient ? `/agency/${first.client_id}` : '/agency?tab=pipeline', nowIso())
-      .run();
-    if (res.meta.changes) sent += 1;
+    writes.push(
+      db
+        .prepare("INSERT OR IGNORE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'agency', ?, ?, ?, NULL, ?)")
+        .bind(`agency-due-${userId}-${day}`, userId, title.slice(0, 160), body.slice(0, 300), oneClient ? `/agency/${first.client_id}` : '/agency?tab=pipeline', nowIso()),
+    );
   }
-  return sent;
+  return changed(await inBatches(db, writes));
 }
-
-const shiftDay = (day: string, n: number) => new Date(Date.parse(`${day}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);

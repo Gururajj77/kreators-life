@@ -32,10 +32,10 @@ import { ClientOnboarding } from '../components/ClientOnboarding';
 import { StageBar } from '../components/StageBar';
 import { Busy, Skeleton, SkeletonCard } from '../components/Skeleton';
 import { StatusTag } from '../components/StatusTag';
-import { ApiError, publicApi } from '../lib/api';
+import { ApiError, publicApi, teamLinkApi } from '../lib/api';
 import { prettyDate } from '../lib/date';
 import { fileTitle, printAs } from '../lib/printDoc';
-import { forgetPortalSessions, hadPortalSession } from '../lib/portalSession';
+import { forgetPortalSessions, forgetTeamLinkSessions, hadPortalSession, hadTeamLinkSession, keepTeamLinkSession } from '../lib/portalSession';
 import { SiteLayout } from './SiteLayout';
 import { FIELD } from '../lib/ui';
 
@@ -107,8 +107,19 @@ const linkButton = 'toy toy-ink inline-flex min-h-[44px] items-center justify-ce
  * beside it (which spends one of the changes included and sends it back to making), or a paid change when none are left, and the
  * changes-used line. Any other piece only takes a comment, except an approved one, which keeps a quiet "Ask for a change". A comment is always a quiet text button. What the owner switched off is not offered.
  */
-function PieceActions({ token, view, id, stage, changes, waiting = false, onDone }: { token: string; view: PortalView; id: string; stage: DeliverableStage; changes: { used: number; allowed: number }; waiting?: boolean; onDone: (line: string) => void }) {
-  const can = view.show;
+type Decision = 'approve' | 'changes' | 'paid_change' | 'comment';
+/** What a page lets the person at the link do, and how a tap reaches the server: the client link's call, or the team link's. */
+interface PieceDoors {
+  can: { canApprove: boolean; canComment: boolean };
+  decide: (id: string, body: { decision: Decision; note?: string; where?: string }) => Promise<unknown>;
+  /** The client link offers a paid change once the included ones are used; the team link never does (that is about money). */
+  paidChange: boolean;
+  /** Said when no change is left and a paid change is not offered here. */
+  noneLeft?: string;
+}
+
+function PieceActions({ doors, id, stage, changes, waiting = false, onDone }: { doors: PieceDoors; id: string; stage: DeliverableStage; changes: { used: number; allowed: number }; waiting?: boolean; onDone: (line: string) => void }) {
+  const can = doors.can;
   const [mode, setMode] = useState<null | 'change' | 'paid' | 'comment'>(null);
   const [note, setNote] = useState('');
   const [where, setWhere] = useState('');
@@ -120,7 +131,7 @@ function PieceActions({ token, view, id, stage, changes, waiting = false, onDone
   const quiet = waiting ? 'outline' : 'ghost';
 
   const [sentLine, setSentLine] = useState('');
-  const send = async (decision: 'approve' | 'changes' | 'paid_change' | 'comment') => {
+  const send = async (decision: Decision) => {
     if (decision !== 'approve' && !note.trim()) {
       setError(decision === 'comment' ? 'Write something first.' : COPY.needNote);
       return;
@@ -135,7 +146,7 @@ function PieceActions({ token, view, id, stage, changes, waiting = false, onDone
     setBusy(true);
     setError('');
     try {
-      await publicApi.portalDecide(token, id, { decision, note: kept.note.trim() || undefined, where: kept.where.trim() || undefined });
+      await doors.decide(id, { decision, note: kept.note.trim() || undefined, where: kept.where.trim() || undefined });
       onDone(line);
     } catch (e) {
       setSentLine('');
@@ -151,7 +162,7 @@ function PieceActions({ token, view, id, stage, changes, waiting = false, onDone
   if (!(waiting && can.canApprove) && !canChange && !can.canComment) return null;
   return (
     <div className="mt-sm no-print">
-      {canChange && (waiting || mode === 'change' || mode === 'paid') && <p className="m-0 text-[14px] font-bold text-ink-soft">{left > 0 ? changesLabel(changes.used, changes.allowed) : COPY.noneLeft}</p>}
+      {canChange && (waiting || mode === 'change' || mode === 'paid') && <p className="m-0 text-[14px] font-bold text-ink-soft">{left > 0 ? changesLabel(changes.used, changes.allowed) : doors.paidChange ? COPY.noneLeft : (doors.noneLeft ?? COPY.noneLeft)}</p>}
       <div className="mt-xs flex flex-wrap items-center gap-xs">
         {waiting && can.canApprove && stage === 'review' && (
           <Button size="sm" onClick={() => send('approve')} disabled={busy}>
@@ -163,7 +174,7 @@ function PieceActions({ token, view, id, stage, changes, waiting = false, onDone
             Ask for a change
           </Button>
         )}
-        {canChange && left === 0 && (
+        {canChange && left === 0 && doors.paidChange && (
           <Button size="sm" variant={quiet} onClick={() => setMode(mode === 'paid' ? null : 'paid')} aria-expanded={mode === 'paid'} disabled={busy}>
             Ask for a paid change
           </Button>
@@ -441,6 +452,155 @@ function Retainer({ token, view, onDone }: { token: string; view: PortalView; on
   );
 }
 
+/** The pieces a client page shows: the client link's and the team link's alike. */
+type PiecesView = Pick<PortalView, 'agencyName' | 'clientName' | 'waiting' | 'coming' | 'published' | 'month' | 'channels'> & {
+  show: Pick<PortalView['show'], 'waiting' | 'coming' | 'published' | 'progress' | 'channels'>;
+};
+
+/**
+ * The work, in the order the client page has always shown it: pieces to review, this month so far, coming up, published and by channel.
+ * The client link and the team link both draw it, each with its own doors (`PieceDoors`). `team` names the client in the thread, since
+ * the reader at the team link is someone on their team.
+ */
+function PieceSections({ view: v, doors, nothingWaiting, onDone, team = false }: { view: PiecesView; doors: PieceDoors; nothingWaiting: string; onDone: (line: string) => void; team?: boolean }) {
+  return (
+    <>
+      {v.show.waiting && (
+        <section className="mt-lg" aria-labelledby="waiting-heading">
+          <Heading id="waiting-heading" title="Pieces to review" lede={v.waiting.length > 0 ? (doors.can.canApprove ? COPY.waitingLede : COPY.waitingViewOnly) : undefined} />
+          {v.waiting.length === 0 ? (
+            <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">
+              {nothingWaiting}
+            </p>
+          ) : (
+            <ul className="mt-sm flex flex-col gap-sm p-0 m-0">
+              {v.waiting.map((w) => {
+                const meta = [DELIVERABLE_KIND_NAME[w.kind], w.platform, w.publishDate ? `goes live ${dot(w.publishDate)}` : ''].filter(Boolean).join(', ');
+                return (
+                  <Card key={w.id}>
+                    <div className="flex items-start justify-between gap-sm">
+                      <p className="m-0 min-w-0 text-[16px] font-extrabold">
+                        <Inert text={w.title} />
+                      </p>
+                      <StatusTag tone={DELIVERABLE_STAGE_TONE.review}>{DELIVERABLE_STAGE_META.review.name}</StatusTag>
+                    </div>
+                    <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{meta}</p>
+                    {safe(w.link) && (
+                      <p className="mt-sm m-0 no-print">
+                        <a href={w.link} target="_blank" rel="noopener noreferrer" className={linkButton}>
+                          Watch it
+                        </a>
+                      </p>
+                    )}
+                    {w.thread.length > 0 && (
+                      <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0" aria-label="Notes">
+                        {w.thread.map((t, i) => (
+                          <li key={`${t.createdAt}-${i}`} className={`rounded-tile p-sm text-[14px] font-semibold ${t.author === 'client' ? 'bg-paper' : 'bg-card-strong'}`}>
+                            <span className="block text-[12px] font-extrabold text-ink-soft">{`${t.author === 'client' ? (t.team ? 'Your team' : team ? v.clientName : 'You') : v.agencyName}${t.kind === 'change' || t.kind === 'paid_change' ? `, ${NOTE_KIND_NAME[t.kind].toLowerCase()}` : ''}`}</span>
+                            <span className="whitespace-pre-wrap">
+                              <Inert text={t.body} />
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <PieceActions doors={doors} id={w.id} stage="review" changes={w.changes} waiting onDone={onDone} />
+                  </Card>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {v.show.progress && v.month && (
+        <section className="mt-lg" aria-labelledby="month-heading">
+          <Heading id="month-heading" title="This month so far" />
+          <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
+            <p className="m-0 font-display text-[28px] font-extrabold leading-none">{v.month.planned > 0 ? `${v.month.published} of ${v.month.planned}` : String(v.month.published)}</p>
+            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{v.month.planned > 0 ? 'deliverables live against the plan' : 'deliverables live'}</p>
+            {v.month.planned > 0 && (
+              <div className="mt-sm h-[8px] overflow-hidden rounded-pill bg-line" role="img" aria-label={`${v.month.published} of ${v.month.planned} live`}>
+                <div className="h-full rounded-pill" style={{ width: `${Math.min(100, Math.round((v.month.published / v.month.planned) * 100))}%`, background: 'var(--color-r4)' }} />
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {v.show.coming && (
+        <section className="mt-lg" aria-labelledby="coming-heading">
+          <Heading id="coming-heading" title="Coming up" lede={COPY.comingLede} />
+          {v.coming.length === 0 ? (
+            <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing is being made right now. New pieces show up here once work on them starts.</p>
+          ) : (
+            <ul className="mt-sm flex flex-col gap-xs p-0 m-0">
+              {v.coming.map((c) => (
+                <Card key={c.id}>
+                  <div className="flex items-start justify-between gap-sm">
+                    <div className="min-w-0">
+                      <p className="m-0 text-[16px] font-bold">
+                        <Inert text={c.title} />
+                      </p>
+                      <p className="m-0 text-[14px] font-semibold text-ink-soft">{[DELIVERABLE_KIND_NAME[c.kind], c.platform, c.publishDate ? `goes live ${dot(c.publishDate)}` : ''].filter(Boolean).join(', ')}</p>
+                    </div>
+                    <StatusTag tone={DELIVERABLE_STAGE_TONE[c.stage]}>{DELIVERABLE_STAGE_META[c.stage].name}</StatusTag>
+                  </div>
+                  <PieceActions doors={doors} id={c.id} stage={c.stage} changes={c.changes} onDone={onDone} />
+                </Card>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {v.show.published && (
+        <section className="mt-lg" aria-labelledby="published-heading">
+          <Heading id="published-heading" title="Published" lede={COPY.publishedLede} />
+          {v.published.length === 0 ? (
+            <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing has gone live yet. Each piece shows up here on the day it goes live.</p>
+          ) : (
+            <ul className="mt-sm flex flex-col gap-xs p-0 m-0">
+              {v.published.map((p) => (
+                <Card key={p.id}>
+                  <p className="m-0 text-[16px] font-bold">
+                    <Inert text={p.title} />
+                  </p>
+                  <p className="m-0 text-[14px] font-semibold text-ink-soft">{[DELIVERABLE_KIND_NAME[p.kind], p.platform, p.publishedAt ? dot(p.publishedAt) : ''].filter(Boolean).join(', ')}</p>
+                  {safe(p.link) && (
+                    <p className="mt-sm m-0 no-print">
+                      <a href={p.link} target="_blank" rel="noopener noreferrer" className={linkButton}>
+                        Open it
+                      </a>
+                    </p>
+                  )}
+                  <PieceActions doors={doors} id={p.id} stage="published" changes={{ used: 0, allowed: 0 }} onDone={onDone} />
+                </Card>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {v.show.channels && v.channels.length > 0 && (
+        <section className="mt-lg" aria-labelledby="channels-heading">
+          <Heading id="channels-heading" title="By channel" />
+          <ul className="mt-sm flex flex-col gap-xs p-0 m-0">
+            {v.channels.map((ch) => (
+              <Card key={ch.channel}>
+                <div className="flex items-baseline justify-between gap-sm">
+                  <span className="min-w-0 text-[16px] font-bold">{ch.channel}</span>
+                  <span className="shrink-0 text-[14px] font-bold text-ink-soft">{`${ch.published} live this month, ${ch.open} open`}</span>
+                </div>
+              </Card>
+            ))}
+          </ul>
+        </section>
+      )}
+    </>
+  );
+}
+
 /** One row in the documents list: what it is, its status as a tag, and a chevron to open it. */
 type DocRow = { key: string; href: string; title: string; line: string; tone: TagTone; status: string };
 function docRows(v: PortalView): DocRow[] {
@@ -592,139 +752,12 @@ export function ClientPortal() {
 
             <Retainer token={token} view={v} onDone={done} />
 
-            {v.show.waiting && (
-              <section className="mt-lg" aria-labelledby="waiting-heading">
-                <Heading id="waiting-heading" title="Pieces to review" lede={v.waiting.length > 0 ? (v.show.canApprove ? COPY.waitingLede : COPY.waitingViewOnly) : undefined} />
-                {v.waiting.length === 0 ? (
-                  <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">
-                    {/* The stage's next line names pieces only from the trial on; before that it is about the step card above, said there. */}
-                    {PIECE_STAGES.has(v.stage) ? `${COPY.nothingWaiting} ${fill(words.next, v.agencyName)}` : COPY.nothingWaiting}
-                  </p>
-                ) : (
-                  <ul className="mt-sm flex flex-col gap-sm p-0 m-0">
-                    {v.waiting.map((w) => {
-                      const meta = [DELIVERABLE_KIND_NAME[w.kind], w.platform, w.publishDate ? `goes live ${dot(w.publishDate)}` : ''].filter(Boolean).join(', ');
-                      return (
-                        <Card key={w.id}>
-                          <div className="flex items-start justify-between gap-sm">
-                            <p className="m-0 min-w-0 text-[16px] font-extrabold">
-                              <Inert text={w.title} />
-                            </p>
-                            <StatusTag tone={DELIVERABLE_STAGE_TONE.review}>{DELIVERABLE_STAGE_META.review.name}</StatusTag>
-                          </div>
-                          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{meta}</p>
-                          {safe(w.link) && (
-                            <p className="mt-sm m-0 no-print">
-                              <a href={w.link} target="_blank" rel="noopener noreferrer" className={linkButton}>
-                                Watch it
-                              </a>
-                            </p>
-                          )}
-                          {w.thread.length > 0 && (
-                            <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0" aria-label="Notes">
-                              {w.thread.map((t, i) => (
-                                <li key={`${t.createdAt}-${i}`} className={`rounded-tile p-sm text-[14px] font-semibold ${t.author === 'client' ? 'bg-paper' : 'bg-card-strong'}`}>
-                                  <span className="block text-[12px] font-extrabold text-ink-soft">{`${t.author === 'client' ? 'You' : v.agencyName}${t.kind === 'change' || t.kind === 'paid_change' ? `, ${NOTE_KIND_NAME[t.kind].toLowerCase()}` : ''}`}</span>
-                                  <span className="whitespace-pre-wrap">
-                                    <Inert text={t.body} />
-                                  </span>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                          <PieceActions token={token} view={v} id={w.id} stage="review" changes={w.changes} waiting onDone={done} />
-                        </Card>
-                      );
-                    })}
-                  </ul>
-                )}
-              </section>
-            )}
-
-            {v.show.progress && v.month && (
-              <section className="mt-lg" aria-labelledby="month-heading">
-                <Heading id="month-heading" title="This month so far" />
-                <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
-                  <p className="m-0 font-display text-[28px] font-extrabold leading-none">{v.month.planned > 0 ? `${v.month.published} of ${v.month.planned}` : String(v.month.published)}</p>
-                  <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{v.month.planned > 0 ? 'deliverables live against the plan' : 'deliverables live'}</p>
-                  {v.month.planned > 0 && (
-                    <div className="mt-sm h-[8px] overflow-hidden rounded-pill bg-line" role="img" aria-label={`${v.month.published} of ${v.month.planned} live`}>
-                      <div className="h-full rounded-pill" style={{ width: `${Math.min(100, Math.round((v.month.published / v.month.planned) * 100))}%`, background: 'var(--color-r4)' }} />
-                    </div>
-                  )}
-                </div>
-              </section>
-            )}
-
-            {v.show.coming && (
-              <section className="mt-lg" aria-labelledby="coming-heading">
-                <Heading id="coming-heading" title="Coming up" lede={COPY.comingLede} />
-                {v.coming.length === 0 ? (
-                  <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing is being made right now. New pieces show up here once work on them starts.</p>
-                ) : (
-                  <ul className="mt-sm flex flex-col gap-xs p-0 m-0">
-                    {v.coming.map((c) => (
-                      <Card key={c.id}>
-                        <div className="flex items-start justify-between gap-sm">
-                          <div className="min-w-0">
-                            <p className="m-0 text-[16px] font-bold">
-                              <Inert text={c.title} />
-                            </p>
-                            <p className="m-0 text-[14px] font-semibold text-ink-soft">{[DELIVERABLE_KIND_NAME[c.kind], c.platform, c.publishDate ? `goes live ${dot(c.publishDate)}` : ''].filter(Boolean).join(', ')}</p>
-                          </div>
-                          <StatusTag tone={DELIVERABLE_STAGE_TONE[c.stage]}>{DELIVERABLE_STAGE_META[c.stage].name}</StatusTag>
-                        </div>
-                        <PieceActions token={token} view={v} id={c.id} stage={c.stage} changes={c.changes} onDone={done} />
-                      </Card>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            )}
-
-            {v.show.published && (
-              <section className="mt-lg" aria-labelledby="published-heading">
-                <Heading id="published-heading" title="Published" lede={COPY.publishedLede} />
-                {v.published.length === 0 ? (
-                  <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing has gone live yet. Each piece shows up here on the day it goes live.</p>
-                ) : (
-                  <ul className="mt-sm flex flex-col gap-xs p-0 m-0">
-                    {v.published.map((p) => (
-                      <Card key={p.id}>
-                        <p className="m-0 text-[16px] font-bold">
-                          <Inert text={p.title} />
-                        </p>
-                        <p className="m-0 text-[14px] font-semibold text-ink-soft">{[DELIVERABLE_KIND_NAME[p.kind], p.platform, p.publishedAt ? dot(p.publishedAt) : ''].filter(Boolean).join(', ')}</p>
-                        {safe(p.link) && (
-                          <p className="mt-sm m-0 no-print">
-                            <a href={p.link} target="_blank" rel="noopener noreferrer" className={linkButton}>
-                              Open it
-                            </a>
-                          </p>
-                        )}
-                        <PieceActions token={token} view={v} id={p.id} stage="published" changes={{ used: 0, allowed: 0 }} onDone={done} />
-                      </Card>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            )}
-
-            {v.show.channels && v.channels.length > 0 && (
-              <section className="mt-lg" aria-labelledby="channels-heading">
-                <Heading id="channels-heading" title="By channel" />
-                <ul className="mt-sm flex flex-col gap-xs p-0 m-0">
-                  {v.channels.map((ch) => (
-                    <Card key={ch.channel}>
-                      <div className="flex items-baseline justify-between gap-sm">
-                        <span className="min-w-0 text-[16px] font-bold">{ch.channel}</span>
-                        <span className="shrink-0 text-[14px] font-bold text-ink-soft">{`${ch.published} live this month, ${ch.open} open`}</span>
-                      </div>
-                    </Card>
-                  ))}
-                </ul>
-              </section>
-            )}
+            <PieceSections
+              view={v}
+              doors={{ can: v.show, decide: (id, body) => publicApi.portalDecide(token, id, body), paidChange: true }}
+              nothingWaiting={PIECE_STAGES.has(v.stage) ? `${COPY.nothingWaiting} ${fill(words.next, v.agencyName)}` : COPY.nothingWaiting}
+              onDone={done}
+            />
 
             {v.show.hours && v.hours && (
               <section className="mt-lg" aria-labelledby="hours-heading">
@@ -784,6 +817,107 @@ export function ClientPortal() {
               )}
             </div>
             <PasswordAsk kind="agency" token={token} agencyName={v.agencyName} />
+          </article>
+        )}
+      </div>
+    </SiteLayout>
+  );
+}
+
+/**
+ * The team link (`/t/:token`, 2026-11-04): the client page for the client's own team, a junior who sees the work and none of the paper.
+ * The server sends only the work (`TeamLinkView` has no paper field), its unlock is its own (kept and sent apart from the client link's),
+ * and approvals, when the owner allows them, are recorded as from the client's team.
+ */
+export function TeamPortal() {
+  const { token = '' } = useParams();
+  const qc = useQueryClient();
+  const key = ['agency', 'team-link', token];
+  const q = useQuery({ queryKey: key, queryFn: () => teamLinkApi.page(token), retry: false });
+  const [said, setSaid] = useState('');
+  const [ended, setEnded] = useState(false);
+  const v = q.data;
+  const locked = q.error instanceof ApiError && q.error.status === 401 && q.error.data.error === 'locked';
+  const link = `team:${token}`;
+  useEffect(() => {
+    if (!locked) return;
+    if (hadTeamLinkSession(link)) setEnded(true);
+    forgetTeamLinkSessions(link);
+  }, [locked, link]);
+  const done = (line: string) => {
+    setSaid(line);
+    void qc.invalidateQueries({ queryKey: key });
+  };
+
+  if (locked) {
+    const data = (q.error as ApiError).data;
+    return (
+      <SiteLayout wide={false} minimal>
+        <PortalLock
+          clientName={`${String(data.clientName ?? '')} team`.trim()}
+          agencyName={String(data.agencyName ?? '')}
+          agencyLogo={String(data.agencyLogo ?? '')}
+          ended={ended}
+          link={link}
+          keep={keepTeamLinkSession}
+          ask={{ kind: 'team', token }}
+          unlock={(pw) => teamLinkApi.unlock(token, pw)}
+          onOpen={() => {
+            setEnded(false);
+            void qc.invalidateQueries({ queryKey: key });
+          }}
+        />
+      </SiteLayout>
+    );
+  }
+
+  const anything = v ? v.show.waiting || v.show.coming || v.show.published || v.show.progress || v.show.channels : false;
+  return (
+    <SiteLayout wide={false} minimal>
+      <div className="pt-lg">
+        {q.isPending && (
+          <Busy label="Loading the team page" className="grid gap-md">
+            <Skeleton className="h-[56px] w-1/2" />
+            <SkeletonCard lines={4} />
+          </Busy>
+        )}
+        {q.isError && <LinkTrouble error={q.error} onRetry={() => void q.refetch()} />}
+        {v && (
+          <article className="print-doc" data-team-view>
+            <header>
+              <AgencyMark name={v.agencyName} logo={v.agencyLogo} />
+              <h1 className="mt-md text-[30px]">{`Hello, ${v.clientName} team`}</h1>
+              <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">Where the work stands.</p>
+              <p className="mt-sm m-0 rounded-tile bg-paper p-sm text-[14px] font-bold">Team view: paperwork and payments are not shown here.</p>
+              {v.show.canApprove && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{`What you approve or send back is recorded as from ${v.clientName}'s team.`}</p>}
+            </header>
+            {said && (
+              <p role="status" className="mt-md m-0 rounded-tile p-sm text-[14px] font-bold" style={{ background: 'var(--tint-green)' }}>
+                {said}
+              </p>
+            )}
+            {anything ? (
+              <PieceSections
+                view={v}
+                team
+                doors={{ can: v.show, decide: (id, body) => teamLinkApi.decide(token, id, { ...body, decision: body.decision === 'paid_change' ? 'changes' : body.decision }), paidChange: false, noneLeft: `No changes are left on this piece. Ask ${v.clientName} about a further one.` }}
+                nothingWaiting={COPY.nothingWaiting}
+                onDone={done}
+              />
+            ) : (
+              <p className="mt-lg m-0 text-[16px] font-semibold text-ink-soft">Nothing is shared on this link yet.</p>
+            )}
+            <div className="mt-xl no-print flex flex-wrap items-center gap-sm">
+              <Button variant="outline" size="sm" onClick={() => printAs(fileTitle('Team view', v.clientName))}>
+                Print or save as PDF
+              </Button>
+              {v.agencyEmail && (
+                <a href={`mailto:${v.agencyEmail}`} className={linkButton}>
+                  {`Email ${v.agencyName || 'them'}`}
+                </a>
+              )}
+            </div>
+            <PasswordAsk kind="team" token={token} agencyName={v.agencyName} />
           </article>
         )}
       </div>

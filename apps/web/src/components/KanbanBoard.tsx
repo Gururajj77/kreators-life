@@ -23,6 +23,10 @@ interface Props<T extends { id: string }> {
   /** What the Move menu may offer for a card; defaults to every other column. */
   canMoveTo?: (item: T, from: string, to: string) => boolean;
   empty?: string;
+  /** Put the Move button at the card's foot (beside its last line) instead of beside its title, so a long title in capitals keeps
+   * the card's whole width and never leaves its last word alone on a line ("TRIAL ENGAGEMENT / AGREEMENT"). The card marks its last
+   * line with data-kfoot, which keeps room for the button (app.css .kanban-foot). */
+  moveAtFoot?: boolean;
 }
 
 /** The fade at the right edge while the board has more columns to the right: a hint that it scrolls. */
@@ -68,7 +72,8 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
  * and then moves the card; dropping at home, outside any column or pressing Escape glides it back. Under reduced motion nothing tilts,
  * glides or slides: the copy follows the pointer directly and cards jump into place. Nothing runs while nobody drags.
  */
-export function KanbanBoard<T extends { id: string }>({ columns, card, itemLabel, onMove, onMore, canMoveTo, empty = 'Nothing here' }: Props<T>) {
+export function KanbanBoard<T extends { id: string }>({ columns, card, itemLabel, onMove, onMore, canMoveTo, empty = 'Nothing here', moveAtFoot = false }: Props<T>) {
+  const foot = moveAtFoot && onMove !== undefined;
   const [moving, setMoving] = useState<{ item: T; from: string } | null>(null);
   const [drag, setDragState] = useState<Drag<T> | null>(null);
   /** A card just dropped elsewhere: kept out of its old column until the new columns arrive, so it never flashes back. */
@@ -432,9 +437,9 @@ export function KanbanBoard<T extends { id: string }>({ columns, card, itemLabel
                 data-kcard={item.id}
                 onPointerDown={onMove ? (e) => onPressStart(e, item, col.stage) : undefined}
                 onDragStart={onMove ? (e) => e.preventDefault() : undefined}
-                className={`flex items-start gap-xs rounded-tile bg-card-strong p-sm shadow-toy-soft ${onMove ? 'kanban-card cursor-grab active:cursor-grabbing' : ''} ${held ? 'kanban-home' : ''} ${away ? 'kanban-away' : ''}`}
+                className={`${foot ? 'relative' : 'flex items-start gap-xs'} rounded-tile bg-card-strong p-sm shadow-toy-soft ${onMove ? 'kanban-card cursor-grab active:cursor-grabbing' : ''} ${held ? 'kanban-home' : ''} ${away ? 'kanban-away' : ''}`}
               >
-                <div className="min-w-0 flex-1">{card(item, col.stage)}</div>
+                <div className={foot ? 'kanban-foot min-w-0' : 'min-w-0 flex-1'}>{card(item, col.stage)}</div>
                 {onMove && (
                   <button
                     type="button"
@@ -442,7 +447,7 @@ export function KanbanBoard<T extends { id: string }>({ columns, card, itemLabel
                     onClick={() => setMoving({ item, from: col.stage })}
                     aria-label={`Move ${itemLabel(item)}`}
                     aria-haspopup="dialog"
-                    className="toy toy-soft flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-ink"
+                    className={`toy toy-soft flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-ink ${foot ? 'absolute bottom-sm right-sm' : ''}`}
                   >
                     <Icon icon={ArrowLeftRight} size={18} />
                   </button>
@@ -486,11 +491,11 @@ export function KanbanBoard<T extends { id: string }>({ columns, card, itemLabel
             ref={clone}
             aria-hidden="true"
             inert
-            className="kanban-clone flex items-start gap-xs rounded-tile bg-card-strong p-sm shadow-toy"
+            className={`kanban-clone ${foot ? '' : 'flex items-start gap-xs'} rounded-tile bg-card-strong p-sm shadow-toy`}
             style={{ left: drag.rect.left, top: drag.rect.top, width: drag.rect.width }}
           >
-            <div className="min-w-0 flex-1">{card(drag.item, drag.from)}</div>
-            <span className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft">
+            <div className={foot ? 'kanban-foot min-w-0' : 'min-w-0 flex-1'}>{card(drag.item, drag.from)}</div>
+            <span className={`flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft ${foot ? 'absolute bottom-sm right-sm' : ''}`}>
               <Icon icon={ArrowLeftRight} size={18} />
             </span>
           </div>,

@@ -59,7 +59,7 @@ export function Hero({
 /** The seven flowers: one for each pillar, so the decoration differs from place to place instead of repeating. */
 export type FlowerKind = 'blossom' | 'daisy' | 'lotus' | 'poppy' | 'tulip' | 'cosmos' | 'violet';
 export const FLOWER_KINDS: readonly FlowerKind[] = ['blossom', 'daisy', 'lotus', 'poppy', 'tulip', 'cosmos', 'violet'];
-/** Each pillar wears its own flower: a poppy for work and money, a blossom for friends, a daisy for family, a tulip for love, a violet for yourself, a cosmos for teachers, a lotus for faith. */
+/** Each pillar wears its own flower: a poppy for servitude, a blossom for friends, a daisy for family, a tulip for love, a violet for yourself, a cosmos for teachers, a lotus for faith. */
 export const PILLAR_FLOWER: Record<RelationshipKey, FlowerKind> = {
   servant_leader: 'poppy',
   friendship: 'blossom',
@@ -136,6 +136,16 @@ const FLOWER_SHAPE: Record<FlowerKind, () => ReactNode> = {
     </g>
   ),
 };
+
+/** One flower's shapes around the origin (about 150 units across), for art that draws its own flower inside a larger scene (fx/CoverArt). */
+export function flowerShape(kind: FlowerKind): ReactNode {
+  return FLOWER_SHAPE[kind]();
+}
+
+/** A flower's shape alone, around the origin and about 150 units across, for a drawing that places it itself (the app covers). */
+export function FlowerShape({ kind }: { kind: FlowerKind }) {
+  return <>{FLOWER_SHAPE[kind]()}</>;
+}
 
 /**
  * One big flower in its own box. The box is 200 by 170, the flower sits inside it with room to spare, and the svg scales down to fit

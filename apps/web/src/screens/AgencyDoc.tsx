@@ -1,6 +1,6 @@
-import { AGENCY_DOC_KIND_META, AGENCY_DOC_STATUS_NAME, AGENCY_DOC_STATUS_TONE, contractAsText, parseDocStyle, type ContractDoc } from '@kreators/shared';
+import { AGENCY_DOC_KIND_META, AGENCY_DOC_STATUS_NAME, AGENCY_DOC_STATUS_TONE, contractAsText, formatCount, parseDocStyle, type ContractDoc } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, ClipboardCopy, CopyPlus, KeyRound, LayoutTemplate, Link2, Mail, MessageSquare, Palette, Send, ShieldCheck, Trash2, Undo2, UserRound } from 'lucide-react';
+import { Building2, ClipboardCopy, CopyPlus, KeyRound, LayoutTemplate, Link2, ListChecks, Mail, MessageSquare, Palette, Send, ShieldCheck, Trash2, Undo2, UserRound } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { DocPassword } from '../components/AgencyLifecycle';
@@ -8,10 +8,12 @@ import { Button } from '../components/Button';
 import { ContractView, paperDate } from '../components/ContractView';
 import { ConfirmSheet, EmailCopySheet, type EmailContext } from '../components/DocActions';
 import { DocStyleSheet } from '../components/DocStyleSheet';
+import { blanksIn, FillDetailsSheet } from '../components/FillDetails';
 import { HouseTemplateSheet, useSuperAdmin } from '../components/HouseTemplateButton';
 import { Icon } from '../components/Icon';
 import { type MoreMenuItem } from '../components/MoreMenu';
 import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import type { SheetStamp } from '../components/PrintSheet';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
@@ -22,7 +24,7 @@ import { copyPlain } from '../lib/clipboard';
 import { fileTitle, printAs, useAutoPrint } from '../lib/printDoc';
 import { ClientSheet, DocHeader, SaveLine, TemplateSheet, ThreadSheet, usePaperDoc, useSaid, waitingFrom, type PaperState } from './AgencyContract';
 
-type Open = 'client' | 'can' | 'thread' | 'template' | 'house' | 'style' | 'email' | 'password' | 'draft' | 'delete' | null;
+type Open = 'fill' | 'client' | 'can' | 'thread' | 'template' | 'house' | 'style' | 'email' | 'password' | 'draft' | 'delete' | null;
 
 /**
  * An Agency document that is not an invoice or an agreement: a strategy session summary, trial video terms, a retainer proposal or a
@@ -115,13 +117,7 @@ export function AgencyDoc() {
   if (q.isError || !d || !doc) {
     return (
       <Screen columns={false}>
-        <header className="pt-lg">
-          <BackLink to="/agency?tab=agreements&agseg=other">Documents</BackLink>
-          <h1 className="text-[30px]">Not found</h1>
-          <p role="alert" className="m-0 text-[16px] font-semibold text-ink-soft">
-            That document is not here. It may have been removed.
-          </p>
-        </header>
+        <AppCover back={{ to: '/agency?tab=agreements&agseg=other', label: 'Documents' }} title="Not found" lede={<span role="alert">That document is not here. It may have been removed.</span>} />
       </Screen>
     );
   }
@@ -140,7 +136,12 @@ export function AgencyDoc() {
   const edit = (fn: (x: ContractDoc) => ContractDoc) => setState((s) => (s ? { ...s, doc: fn(s.doc) } : s));
   const copy = async (text: string, what: string) => setSaid((await copyPlain(text)) ? `${what} copied.` : 'Could not copy. Try again.');
   const close = () => setOpen(null);
+  // While a draft still has blanks, filling them is the main action and sending waits in More.
+  const blanks = blanksIn(doc);
+  const fillFirst = d.status === 'draft' && blanks > 0;
   const more: MoreMenuItem[] = [
+    { key: 'fill', label: 'Fill in the details', icon: ListChecks, hint: blanks ? `${formatCount(blanks)} empty` : undefined, onSelect: () => setOpen('fill') },
+    ...(fillFirst ? [{ key: 'send', label: 'Send to client', icon: Send, disabled: setStatus.isPending, onSelect: () => setStatus.mutate('sent') }] : []),
     ...(link ? [{ key: 'link', label: 'Copy link', icon: Link2, onSelect: () => void copy(link, 'The link') }] : []),
     { key: 'email', label: 'Email a copy', icon: Mail, onSelect: () => setOpen('email') },
     { key: 'text', label: 'Copy text', icon: ClipboardCopy, onSelect: () => void copy(contractAsText(doc, { reference: d.ref, date: d.sentAt ?? d.createdAt, answers: d.answers, acceptance: d.acceptance }), 'The text') },
@@ -155,18 +156,22 @@ export function AgencyDoc() {
     ...(d.status === 'sent' || d.status === 'revised' ? [{ key: 'draft', label: 'Take back to draft', icon: Undo2, destructive: true, onSelect: () => setOpen('draft') }] : []),
     ...(d.status === 'draft' ? [{ key: 'delete', label: 'Delete', icon: Trash2, destructive: true, onSelect: () => setOpen('delete') }] : []),
   ];
-  const primary =
-    d.status === 'draft' ? (
-      <Button onClick={() => setStatus.mutate('sent')} disabled={setStatus.isPending}>
-        <Icon icon={Send} size={18} />
-        Send to client
-      </Button>
-    ) : d.status === 'approved' ? (
-      <Button onClick={() => duplicate.mutate()} disabled={duplicate.isPending}>
-        <Icon icon={CopyPlus} size={18} />
-        Revise
-      </Button>
-    ) : null;
+  const primary = fillFirst ? (
+    <Button onClick={() => setOpen('fill')}>
+      <Icon icon={ListChecks} size={18} />
+      Fill in the details
+    </Button>
+  ) : d.status === 'draft' ? (
+    <Button onClick={() => setStatus.mutate('sent')} disabled={setStatus.isPending}>
+      <Icon icon={Send} size={18} />
+      Send to client
+    </Button>
+  ) : d.status === 'approved' ? (
+    <Button onClick={() => duplicate.mutate()} disabled={duplicate.isPending}>
+      <Icon icon={CopyPlus} size={18} />
+      Revise
+    </Button>
+  ) : null;
   const error = [setStatus, duplicate, remove].map((m) => m.error).find(Boolean);
 
   return (
@@ -186,8 +191,31 @@ export function AgencyDoc() {
       />
 
       <section className="mt-md" aria-label="The document">
-        <ContractView audience="owner" kind="document" doc={doc} answers={d.answers} acceptance={d.acceptance} reference={d.ref} date={d.sentAt ?? d.createdAt} stamp={sheetStamp} onDocChange={editable ? (x) => edit(() => x) : undefined} />
+        <ContractView audience="owner" kind="document" doc={doc} answers={d.answers} acceptance={d.acceptance} reference={d.ref} date={d.sentAt ?? d.createdAt} stamp={sheetStamp} onDocChange={editable ? (x) => edit(() => x) : undefined} onFill={() => setOpen('fill')} />
       </section>
+
+      <FillDetailsSheet
+        open={open === 'fill'}
+        onClose={close}
+        doc={doc}
+        noun="document"
+        clientId={clientId}
+        record={
+          d.status === 'approved'
+            ? {
+                why: 'This document is approved, so it is a record. Revise to change it.',
+                revise: (
+                  <Button variant="outline" onClick={() => duplicate.mutate()} disabled={duplicate.isPending}>
+                    <Icon icon={CopyPlus} size={18} />
+                    Revise
+                  </Button>
+                ),
+              }
+            : null
+        }
+        onDocVars={(changes) => edit((x) => ({ ...x, vars: { ...x.vars, ...changes } }))}
+        onSaved={setSaid}
+      />
 
       <ClientSheet open={open === 'client'} onClose={close} value={clientId} onChange={(v) => setState((s) => (s ? { ...s, clientId: v } : s))} clients={pick} />
       <Sheet open={open === 'can'} onClose={close} title="Client permissions">

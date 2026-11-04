@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { MoreHorizontal } from 'lucide-react';
 import { Icon } from './Icon';
+import { IconButton } from './IconButton';
 import { Sheet } from './Sheet';
 
 export interface MoreMenuItem {
@@ -54,6 +55,12 @@ export function MoreMenu({
     else setOwn(v);
   };
   if (items.length === 0) return null;
+  // One action needs no menu: one tap on a round icon button instead (wave 15). A menu with its own trigger, or one that asks
+  // twice, stays a menu.
+  const only = items.length === 1 ? items[0] : undefined;
+  if (only && trigger === undefined && !only.confirm) {
+    return <IconButton icon={only.icon ?? MoreHorizontal} label={only.label} onClick={only.onSelect} disabled={only.disabled} opens />;
+  }
   return (
     <>
       {trigger === undefined ? (

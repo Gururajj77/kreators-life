@@ -656,55 +656,6 @@ export function Field({ label, id, value, onChange, placeholder, type = 'text', 
   );
 }
 
-/** One side of an invoice: the names, the tax numbers, the address and how to reach them. */
-export function PartyFields({ idp, value, onChange, nameLabel, lineLabel, lineHint }: { idp: string; value: InvoiceParty; onChange: (p: InvoiceParty) => void; nameLabel: string; lineLabel: string; lineHint?: string }) {
-  const set = (patch: Partial<InvoiceParty>) => onChange({ ...value, ...patch });
-  return (
-    <div className="grid gap-sm md:grid-cols-2">
-      <Field id={`${idp}-name`} label={nameLabel} value={value.name} onChange={(v) => set({ name: v })} max={120} />
-      <Field id={`${idp}-line`} label={lineLabel} value={value.line} onChange={(v) => set({ line: v })} placeholder={lineHint} max={160} />
-      <div className="min-w-0 md:col-span-2">
-        <span className={LABEL}>Tax numbers</span>
-        {value.taxIds.map((t, i) => (
-          <div key={i} className="mt-xs flex gap-xs">
-            <input aria-label="Tax number name" value={t.label} maxLength={20} placeholder="PAN" onChange={(e) => set({ taxIds: value.taxIds.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) })} className="w-[96px] shrink-0 rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
-            <input aria-label="Tax number" value={t.value} maxLength={40} onChange={(e) => set({ taxIds: value.taxIds.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)) })} className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
-            <button type="button" aria-label="Remove this number" onClick={() => set({ taxIds: value.taxIds.filter((_, j) => j !== i) })} className="toy toy-soft min-h-[44px] min-w-[44px] shrink-0 rounded-pill border-2 border-line bg-card text-[16px] font-bold">
-              ×
-            </button>
-          </div>
-        ))}
-        {value.taxIds.length < 4 && (
-          <button type="button" onClick={() => set({ taxIds: [...value.taxIds, { label: value.taxIds.length === 0 ? 'PAN' : 'GSTIN', value: '' }] })} className="toy toy-soft mt-xs min-h-[44px] rounded-pill border-2 border-line bg-card px-md text-[14px] font-bold">
-            Add a tax number
-          </button>
-        )}
-      </div>
-      <div className="min-w-0 md:col-span-2">
-        <label htmlFor={`${idp}-address`} className={LABEL}>
-          Address
-        </label>
-        <textarea id={`${idp}-address`} value={value.address} maxLength={300} rows={3} onChange={(e) => set({ address: e.target.value })} className={FIELD} />
-      </div>
-      <Field id={`${idp}-email`} label="Email" type="email" value={value.email} onChange={(v) => set({ email: v })} max={120} />
-      <Field id={`${idp}-phone`} label="Phone" value={value.phone} onChange={(v) => set({ phone: v })} max={40} />
-    </div>
-  );
-}
-
-export function BankFields({ value, onChange }: { value: BankDetails; onChange: (b: BankDetails) => void }) {
-  const set = (patch: Partial<BankDetails>) => onChange({ ...value, ...patch });
-  return (
-    <div className="grid gap-sm md:grid-cols-2">
-      <Field id="bank-name" label="Bank name" value={value.bankName} onChange={(v) => set({ bankName: v })} max={80} />
-      <Field id="bank-holder" label="Account holder" value={value.holder} onChange={(v) => set({ holder: v })} max={80} />
-      <Field id="bank-account" label="Account number" inputMode="numeric" value={value.account} onChange={(v) => set({ account: v })} max={40} />
-      <Field id="bank-ifsc" label="IFSC code" value={value.ifsc} onChange={(v) => set({ ifsc: v.toUpperCase() })} max={20} />
-      <Field id="bank-upi" label="UPI details" value={value.upi} onChange={(v) => set({ upi: v })} max={80} />
-    </div>
-  );
-}
-
 /** A switch for each thing the client may see on an invoice. */
 export function ShowSwitches({ value, onChange }: { value: InvoiceShow; onChange: (s: InvoiceShow) => void }): ReactNode {
   return (

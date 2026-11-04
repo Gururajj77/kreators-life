@@ -4,7 +4,7 @@ import { LOVE_PAIRS, MIND_SCREENS, TYPE_NAMES, TYPE_SCREENS, DISCOVER_CORE_STEPS
 import { LIMITS, ROUTE_LIMITS } from '../../apps/api/src/limits.ts';
 import { DISCOVER_KEYS } from '../../apps/api/src/discoverKeys.ts';
 import { LEGAL_VERSION } from '../../packages/shared/src/index.ts';
-import { CONTRACT_VARS, contractAsText, invoiceAsText, money } from '../../packages/shared/src/index.ts';
+import { CONTRACT_VARS, contractAsText, contractVarsUsed, invoiceAsText, money } from '../../packages/shared/src/index.ts';
 import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, PLANS } from '../../packages/shared/src/index.ts';
 import http from 'node:http';
 
@@ -330,6 +330,28 @@ section('Tasks');
   check('nodes list answers', list.status === 200, list.status);
   const todayRes = await api('GET', `/today?date=${today}`, undefined, B.token);
   check('today answers with tasks and a small act', todayRes.status === 200 && Array.isArray(todayRes.json.tasks), Object.keys(todayRes.json ?? {}));
+
+  // Moving a task to another project (the "Pillar and project" picker on Daily and the pillar page): only an open task, only under one of
+  // the person's own active projects, and it takes that project's pillar.
+  const all = list.json.nodes ?? [];
+  const friendProject = all.find((n) => n.kind === 'project' && n.relationship === 'friendship' && n.status === 'active');
+  const selfPillar = all.find((n) => n.kind === 'pillar' && n.relationship === 'self');
+  const principle = all.find((n) => n.kind === 'principle');
+  check('the move checks have a friendship project, a pillar and a principle to try', Boolean(friendProject && selfPillar && principle), { friendProject: friendProject?.id, selfPillar: selfPillar?.id, principle: principle?.id });
+  const moved = await api('PATCH', `/nodes/${made[2].id}`, { parentId: friendProject?.id }, B.token);
+  check('an open task moves to a project in another pillar and takes that pillar', moved.status === 200 && moved.json.node?.parentId === friendProject?.id && moved.json.node?.relationship === 'friendship', moved.json);
+  const nowhere = await api('PATCH', `/nodes/${made[2].id}`, { parentId: 'not-a-node' }, B.token);
+  check('a task cannot move under a node that is not there', nowhere.status === 400, nowhere.json);
+  const toPillar = await api('PATCH', `/nodes/${made[2].id}`, { parentId: selfPillar?.id }, B.token);
+  const toPrinciple = await api('PATCH', `/nodes/${made[2].id}`, { parentId: principle?.id }, B.token);
+  check('a task moves only under a project, never a foundation or a principle', toPillar.status === 400 && toPrinciple.status === 400, [toPillar.json, toPrinciple.json]);
+  const doneMove = await api('PATCH', `/nodes/${ladderTasks[0].id}`, { parentId: friendProject?.id }, B.token);
+  check('a ticked task stays where its xp was earned', doneMove.status === 400 && /Only an open task/.test(doneMove.json.error ?? ''), doneMove.json);
+  const stranger = await api('PATCH', `/nodes/${made[2].id}`, { parentId: project.id }, A.token);
+  const stillThere = (await api('GET', '/nodes', undefined, B.token)).json.nodes?.find((n) => n.id === made[2].id);
+  check("another account cannot move someone's task", (stranger.status === 404 || stranger.status === 400) && stillThere?.parentId === friendProject?.id, [stranger.status, stillThere?.parentId]);
+  const back = await api('PATCH', `/nodes/${made[2].id}`, { parentId: project.id }, B.token);
+  check('the task moves back and takes its own pillar again', back.status === 200 && back.json.node?.parentId === project.id && back.json.node?.relationship === 'self', back.json);
 }
 
 
@@ -426,6 +448,42 @@ section('Task plan');
   check('subtasks are in the export', JSON.stringify(exported.json).includes('First step'), '');
 }
 
+// ---------------------------------------------------------------- day types: the kind of day, and Daily's six by context
+section('Day types');
+{
+  const G = await signup(`daytype-${stamp}@smoke.test`, `Quartz-${stamp}-pass`, 'Smoke day type');
+  const answers = QUESTIONS.filter((q) => q.relationship === 'self' || q.relationship === 'servant_leader').map((q) => ({ questionId: q.id, value: 1 }));
+  await api('POST', '/onboarding', { answers, displayName: 'Smoke day type' }, G.token);
+  const built = await api('POST', '/onboarding/build', { relationships: ['self', 'servant_leader'], date: today, picks: { self: {}, servant_leader: {} } }, G.token);
+  const projOf = (rel) => (built.json.nodes ?? []).find((n) => n.kind === 'project' && n.relationship === rel);
+  const add = (rel, title, priority) => api('POST', '/nodes', { kind: 'task', parentId: projOf(rel)?.id, relationship: rel, title, doDate: today, ...(priority ? { priority } : {}) }, G.token);
+  check('a test account with a work and a self project', !!projOf('self') && !!projOf('servant_leader'), built.json.nodes?.map((n) => [n.kind, n.relationship]));
+  // Seven tasks made in date order, so the old by-day pick would leave the work P0 (made last) off the six.
+  for (let i = 0; i < 5; i++) await add('self', `Self plain ${i}`);
+  await add('self', 'Self P0', 'P0');
+  await add('servant_leader', 'Work P0', 'P0');
+
+  const none = await api('GET', `/today/day-type?date=${today}&today=${today}`, undefined, G.token);
+  check('no kind of day to start with', none.status === 200 && none.json.kind === null && none.json.date === today, none.json);
+  const bad = await api('PUT', '/today/day-type', { date: today, today, kind: 'constructor' }, G.token);
+  check('a kind of day we do not know is refused', bad.status === 400, bad.json);
+  const far = await api('PUT', '/today/day-type', { date: '2026-11-31', today, kind: 'deep_work' }, G.token);
+  check('a day that is not today or tomorrow is refused', far.status === 400, far.json);
+  const set = await api('PUT', '/today/day-type', { date: today, today, kind: 'deep_work' }, G.token);
+  const back = await api('GET', `/today/day-type?date=${today}&today=${today}`, undefined, G.token);
+  check('Deep work is saved for the day', set.status === 200 && back.json.kind === 'deep_work', [set.json, back.json]);
+  const daily = await api('GET', `/today?date=${today}`, undefined, G.token);
+  const titles = (daily.json.tasks ?? []).map((t) => t.title);
+  check('on a Deep work day the six start with the work P0, then the self P0', titles[0] === 'Work P0' && titles[1] === 'Self P0' && titles.length === 6, titles);
+  const stranger = await api('GET', `/today/day-type?date=${today}&today=${today}`, undefined, B.token);
+  check('the kind of day is the owner’s only', stranger.status === 200 && stranger.json.kind !== 'deep_work', stranger.json);
+  const cleared = await api('PUT', '/today/day-type', { date: today, today, kind: null }, G.token);
+  const after = (await api('GET', `/today?date=${today}`, undefined, G.token)).json.tasks?.map((t) => t.title) ?? [];
+  check('clearing it goes back to the by-day pick', cleared.status === 200 && cleared.json.kind === null && !after.includes('Work P0'), after);
+  const exported = await api('GET', '/me/export', undefined, G.token);
+  check('the kind of day is in the export', exported.status === 200 && JSON.stringify(exported.json).includes('"dayTypes"'), Object.keys(exported.json ?? {}).filter((k) => /day/i.test(k)));
+}
+
 // ---------------------------------------------------------------- daily: check-in, small act, not to do
 section('Daily');
 {
@@ -502,8 +560,10 @@ section('Wellbeing');
   check('journal entries stay with their owner', otherList.status === 200 && !JSON.stringify(otherList.json).includes('Smoke entry'), otherList.status);
   const life = await api('GET', '/life', undefined, B.token);
   check('life counts the movement minutes', life.status === 200 && /30 min this week/.test(JSON.stringify(life.json)), life.status);
+  check('the five areas come in their one order: physical, financial, mental, emotional, spiritual', (life.json?.areas ?? []).map((a) => a.key).join() === 'physical,financial,mental,emotional,spiritual', (life.json?.areas ?? []).map((a) => a.key));
   const home = await api('GET', '/home', undefined, B.token);
   check('home answers in one call', home.status === 200 && home.json.xp && home.json.xp.today > 0, Object.keys(home.json ?? {}));
+  check('home lists the five areas in the same order', !home.json?.life || home.json.life.areas.map((a) => a.key).join() === 'physical,financial,mental,emotional,spiritual', home.json?.life?.areas?.map((a) => a.key));
 }
 
 // ---------------------------------------------------------------- finance: integer cents
@@ -532,6 +592,25 @@ section('Finance');
   const named = await api('POST', '/finance/transactions', { kind: 'income', amountCents: 2500, currency: 'inr', date: today }, B.token);
   check('an entry that names its currency keeps it', named.json.transaction?.currency === 'INR', named.json.transaction?.currency);
   await api('PATCH', '/me', { currency: 'INR' }, B.token);
+  // App groups (2026-11-04): each person picks which groups start open and the order of apps inside a group, saved on the account.
+  const fresh = await me(C.token);
+  check('a new account has no app prefs yet', JSON.stringify(fresh?.appPrefs) === JSON.stringify({ open: {}, order: {} }), fresh?.appPrefs);
+  const across = await api('PATCH', '/me', { appPrefs: { open: {}, order: { earn: ['work', 'life'] } } }, A.token);
+  check('app prefs refuse an app placed in another group', across.status === 400 && /another group/.test(across.json.error ?? ''), across.json);
+  const proto = await api('PATCH', '/me', { appPrefs: { open: { constructor: true }, order: {} } }, A.token);
+  check('app prefs refuse a group that does not exist', proto.status === 400, proto.json);
+  const twice = await api('PATCH', '/me', { appPrefs: { order: { earn: ['army', 'army'] } } }, A.token);
+  check('app prefs refuse an app listed twice', twice.status === 400, twice.json);
+  const arranged = { open: { earn: false, wellbeing: true }, order: { earn: ['army', 'agency', 'school', 'work', 'win'], core: ['help', 'notifications', 'leaderboard'] } };
+  const setPrefs = await api('PATCH', '/me', { appPrefs: arranged }, A.token);
+  check('app prefs are saved', setPrefs.status === 200 && JSON.stringify(userOf(setPrefs)?.appPrefs) === JSON.stringify(arranged), userOf(setPrefs)?.appPrefs);
+  const reread = await me(A.token);
+  check('app prefs keep their order across a reload', JSON.stringify(reread?.appPrefs) === JSON.stringify(arranged), reread?.appPrefs);
+  const otherSave = await api('PATCH', '/me', { bio: 'Smoke founder' }, A.token);
+  check('a profile save without app prefs leaves them alone', JSON.stringify(userOf(otherSave)?.appPrefs) === JSON.stringify(arranged), userOf(otherSave)?.appPrefs);
+  check('app prefs belong to their owner', JSON.stringify((await me(C.token))?.appPrefs) === JSON.stringify({ open: {}, order: {} }), (await me(C.token))?.appPrefs);
+  const exported = await api('GET', '/me/export', undefined, A.token);
+  check('app prefs are in the export', JSON.stringify(exported.json?.user?.appPrefs) === JSON.stringify(arranged), exported.json?.user?.appPrefs);
   const list = await api('GET', '/finance', undefined, B.token);
   check('finance answers with the month', list.status === 200, list.status);
   const other = await api('GET', '/finance', undefined, C.token);
@@ -775,6 +854,107 @@ section('Run');
   }
   const runHome = await api('GET', '/run', undefined, B.token);
   check('the run home answers', runHome.status === 200, runHome.status);
+}
+
+// ---------------------------------------------------------------- kreators run: discussions
+section('Run discussions');
+{
+  // Its own address, so these sign-ups never touch the sign-up limit the rest of the checks use.
+  const TALK_ADDRESS = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 41) & 255}`;
+  const join = async (who) => {
+    const r = await api('POST', '/auth/signup', { email: `talk-${who}-${stamp}@smoke.test`, password: `Kettle-${stamp}-pass`, displayName: `Talk ${who}`, phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': TALK_ADDRESS });
+    return { token: r.json.token, user: r.json.user };
+  };
+  const H = await join('host');
+  const M = await join('member');
+  const N = await join('second');
+  const X = await join('outsider');
+  const Z = await join('leaver');
+  for (const t of [H, M, N, X, Z]) await api('PATCH', '/me/modules', { key: 'run', on: true }, t.token);
+  const soon = (min) => new Date(Date.now() + min * 60_000).toISOString();
+  const club = (await api('POST', '/run/clubs', { name: `Talk runners ${stamp}`, city: 'Bengaluru', pace: 'easy' }, H.token)).json.club;
+  const oldRun = (await api('POST', `/run/clubs/${club.id}/runs`, { title: 'Long gone run', startsAt: soon(-40 * 24 * 60), minutes: 60 }, H.token)).json.run;
+  for (const t of [M, N, Z]) await api('POST', `/run/clubs/${club.id}/join`, {}, t.token);
+  const r = (await api('POST', `/run/clubs/${club.id}/runs`, { title: `Talk run ${stamp}`, startsAt: soon(60), minutes: 60 }, H.token)).json.run;
+  const path = `/run/talk/${r.id}`;
+  const linesFor = async (t, q = '') => (await api('GET', `${path}/messages${q}`, undefined, t.token)).json;
+
+  const listM = await api('GET', '/run/talk', undefined, M.token);
+  const row = listM.json.talks?.find((t) => t.runId === r.id);
+  check('a member has a discussion for each run of their club', listM.status === 200 && row?.open === true && row.people === 4 && row.host === false, listM.json);
+  check('a run that ended past its month is not listed', !(listM.json.talks ?? []).some((t) => t.runId === oldRun?.id), listM.json.talks?.map((t) => t.title));
+  const hi = await api('POST', `${path}/messages`, { body: `Meet at the gate, @${N.user.handle} and @${X.user.handle}` }, M.token);
+  check('a member writes in the discussion', hi.status === 201 && hi.json.line?.mine === true && hi.json.line.host === false, hi.json);
+  // The shared event chat never takes a line for a run, and never reads one back, so nobody writes around the discussion's rules.
+  const around = await api('POST', `/connect/run/${r.id}/messages`, { body: 'Around the discussion' }, M.token);
+  check('the shared event chat refuses a line for a run', around.status === 404, around.json);
+  const aroundRead = await api('GET', `/connect/run/${r.id}`, undefined, M.token);
+  check('the shared event chat shows no run lines', aroundRead.status !== 200 || (aroundRead.json.messages ?? []).length === 0, aroundRead.json);
+  const nLines = await linesFor(N, '?read=1');
+  check('another member reads it', (nLines.lines ?? []).some((l) => l.body.startsWith('Meet at the gate') && l.userId === M.user.id), nLines);
+  const nInbox = (await api('GET', '/inbox?size=50', undefined, N.token)).json;
+  const xInbox = (await api('GET', '/inbox?size=50', undefined, X.token)).json;
+  check('a mention tells a runner once', JSON.stringify(nInbox).split('mentioned you in').length === 2, '');
+  check('a mention never reaches someone outside the run', !JSON.stringify(xInbox).includes('mentioned you in'), '');
+
+  // Someone outside the run sees nothing at all.
+  const xList = await api('GET', '/run/talk', undefined, X.token);
+  check('someone outside the run has no discussion listed', xList.status === 200 && !(xList.json.talks ?? []).some((t) => t.runId === r.id), xList.json);
+  check('and the discussion is a 404 to them', (await api('GET', path, undefined, X.token)).status === 404 && (await api('GET', `${path}/messages`, undefined, X.token)).status === 404, '');
+  check('and they cannot write in it', (await api('POST', `${path}/messages`, { body: 'let me in' }, X.token)).status === 404, '');
+  check('a member who joined after a run ended is not in its discussion', (await api('GET', `/run/talk/${oldRun.id}`, undefined, M.token)).status === 404, '');
+
+  // Unread: the host has a line waiting until they read it.
+  const hostUnread = (await api('GET', '/run/talk/unread', undefined, H.token)).json.unread;
+  await linesFor(H, '?read=1');
+  const hostAfter = (await api('GET', '/run/talk/unread', undefined, H.token)).json.unread;
+  check('a line waits as unread until the discussion is read', hostUnread >= 1 && hostAfter === 0, { hostUnread, hostAfter });
+
+  // Anonymous lines carry a made-up name for this run and nothing that points at the writer.
+  const anon = await api('POST', `${path}/messages`, { body: `quiet line ${stamp}`, anonymous: true }, N.token);
+  const seenByM = (await linesFor(M)).lines?.find((l) => l.body === `quiet line ${stamp}`);
+  check('an anonymous line hides who wrote it from the others', anon.status === 201 && seenByM?.anonymous === true && seenByM.userId === '' && seenByM.handle === null && seenByM.name !== 'Talk second' && seenByM.host === false, seenByM);
+  check('the writer still finds their own anonymous line', (await linesFor(N)).lines?.some((l) => l.body === `quiet line ${stamp}` && l.mine && l.anonymous), '');
+
+  // Blocking the person behind an anonymous line hides both ways, without learning who it was.
+  const blocked = await api('POST', `${path}/messages/${seenByM.id}/block-author`, {}, M.token);
+  const mAfter = (await linesFor(M)).lines ?? [];
+  const nAfter = (await linesFor(N)).lines ?? [];
+  check('a block hides their lines from you', blocked.status === 201 && !mAfter.some((l) => l.body === `quiet line ${stamp}`), blocked.json);
+  check('and yours from them', !nAfter.some((l) => l.body.startsWith('Meet at the gate')), nAfter.map((l) => l.body));
+  await api('DELETE', `/bond/block/${N.user.id}`, undefined, M.token);
+  check('lifting the block shows the lines again', ((await linesFor(M)).lines ?? []).some((l) => l.body === `quiet line ${stamp}`), '');
+
+  // Report and take down.
+  const nLine = (await linesFor(M)).lines.find((l) => l.body === `quiet line ${stamp}`);
+  check('a line can be reported to the team', (await api('POST', `${path}/messages/${nLine.id}/report`, { note: 'smoke' }, M.token)).status === 201, '');
+  check('your own line is not reported', (await api('POST', `${path}/messages/${hi.json.line.id}/report`, {}, M.token)).status === 400, '');
+  check('a member cannot take down another runner’s line', (await api('DELETE', `${path}/messages/${nLine.id}`, undefined, M.token)).status === 403, '');
+  const before = (await linesFor(M)).lines;
+  const down = await api('DELETE', `${path}/messages/${hi.json.line.id}`, undefined, H.token);
+  const poll = await linesFor(M, `?after=${before.at(-1).seq}&from=${before[0].seq}`);
+  check('the host takes a line down', down.status === 200 && (poll.gone ?? []).includes(hi.json.line.seq) && !((await linesFor(N)).lines ?? []).some((l) => l.id === hi.json.line.id), poll);
+  const mInbox = (await api('GET', '/inbox?size=50', undefined, M.token)).json;
+  check('and its writer is told', JSON.stringify(mInbox).includes('A line of yours was taken down'), '');
+  const hostLine = await api('POST', `${path}/messages`, { body: 'See you all there' }, H.token);
+  check('the host’s own line is marked as the host’s', hostLine.status === 201 && hostLine.json.line?.host === true, hostLine.json);
+
+  // A closed discussion takes no new lines: a run more than a month past, and a cancelled run.
+  const late = await api('POST', `/run/talk/${oldRun.id}/messages`, { body: 'too late' }, H.token);
+  check('a month after the run its discussion takes no new lines', late.status === 409, late.json);
+  check('but it can still be read by its people', (await api('GET', `/run/talk/${oldRun.id}/messages`, undefined, H.token)).status === 200, '');
+  await api('PATCH', `/run/runs/${r.id}`, { status: 'cancelled' }, H.token);
+  const off = await api('POST', `${path}/messages`, { body: 'still on?' }, M.token);
+  check('a cancelled run’s discussion takes no new lines', off.status === 409, off.json);
+
+  // Export and delete.
+  const zr = (await api('POST', `/run/clubs/${club.id}/runs`, { title: 'Leaver run', startsAt: soon(90), minutes: 30 }, H.token)).json.run;
+  const zline = await api('POST', `/run/talk/${zr.id}/messages`, { body: `leaver run line ${stamp}` }, Z.token);
+  const zexp = (await api('GET', '/me/export', undefined, Z.token)).json;
+  check('the export holds a person’s run discussion lines', zline.status === 201 && (zexp.runLines ?? []).some((l) => l.body === `leaver run line ${stamp}`), zexp.runLines);
+  const zdel = await api('DELETE', '/me', { confirm: 'DELETE' }, Z.token);
+  const afterZ = await api('GET', `/run/talk/${zr.id}/messages`, undefined, H.token);
+  check('deleting the account deletes the lines', zdel.status === 200 && !(afterZ.json.lines ?? []).some((l) => l.body.includes('leaver run line')), afterZ.json);
 }
 
 // ---------------------------------------------------------------- school and staff powers
@@ -1180,6 +1360,111 @@ section('Assistant and credits');
   const reasons = new Set((history.json.entries ?? []).map((e) => e.reason));
   check('the history shows the plan, the grant, the use and the expiry', ['plan', 'admin', 'expire'].every((r) => reasons.has(r)) && (!mock || reasons.has('usage')), [...reasons]);
   check('no plan, no Pro mark', (await me(E.token)).isPro === false, '');
+}
+
+// ---------------------------------------------------------------- the Companion on the assistant's model layer
+section('Companion');
+{
+  const K = await signup(`companion-${stamp}@smoke.test`, `Lantern-${stamp}-pass`, 'Smoke companion');
+  const L = await signup(`companion2-${stamp}@smoke.test`, `Lantern-${stamp}-pass`, 'Smoke other');
+  for (const t of [K, L]) await api('PATCH', '/me/modules', { key: 'companion', on: true }, t.token);
+  const ctx = { date: today, timeZone: 'Asia/Kolkata' };
+  const tell = (body, extra = {}, token = K.token) => api('POST', '/companion', { body, context: ctx, ...extra }, token);
+  const usage = async () => ((await api('GET', '/credits/ledger?size=50', undefined, K.token)).json.entries ?? []).filter((e) => e.agent === 'companion');
+  const status = await api('GET', '/companion', undefined, K.token);
+  const mock = status.json?.model === 'smoke-mock';
+  const { ASSISTANT_MODELS } = await import('../../packages/shared/src/index.ts');
+  check('the Companion says what answers for free, whether a model is connected, and the account', status.status === 200 && Array.isArray(status.json.messages) && ['workers-ai', 'local'].includes(status.json.builtIn) && typeof status.json.connected === 'boolean' && status.json.account?.plan === 'none', status.json);
+  check('POST /companion is rate limited', ROUTE_LIMITS.some((r) => r.method === 'POST' && r.path === '/companion' && r.limit === 'companion'), '');
+
+  await api('POST', '/wellbeing/mood', { date: today, value: 4 }, K.token);
+  await api('POST', '/wellbeing/sleep', { date: today, value: 7.5 }, K.token);
+  mockModel.last = null;
+  const free = await tell('I feel tired');
+  check('with no plan the built-in companion still answers, free, and no model is called', free.status === 200 && ['local', 'workers-ai'].includes(free.json.messages?.[1]?.model) && free.json.fallback !== 'credits' && mockModel.last === null && (await usage()).length === 0, free.json);
+  check('the reply line says who answered, the person’s own line does not', free.json.messages?.[0]?.role === 'user' && free.json.messages[0].model === undefined, free.json.messages);
+
+  mockModel.last = null;
+  const crisis = await tell('Some days I want to end my life');
+  check('crisis words always get the crisis line, and never reach a model', crisis.status === 200 && crisis.json.model === 'crisis' && /14416/.test(crisis.json.messages?.[1]?.body ?? '') && mockModel.last === null, crisis.json);
+  const crisis2 = await tell('thinking about suicide');
+  check('"suicide" is caught too, not only "suicid"', crisis2.json.model === 'crisis', crisis2.json.model);
+
+  if (!mock) console.log('  (the Companion model checks need the smoke server that blueprint.sh starts with the mock model; skipped)');
+  else {
+    await admin('POST', `/admin/users/${K.user.id}/plan`, { plan: 'pro', days: 30 });
+    mockModel.last = null;
+    const crisisPaid = await tell('I want to die');
+    check('with a plan, crisis words still never reach the model and cost nothing', crisisPaid.json.model === 'crisis' && mockModel.last === null && (await usage()).length === 0, crisisPaid.json);
+
+    const open = ASSISTANT_MODELS.find((m) => !m.private && !m.thinks);
+    const closed = ASSISTANT_MODELS.find((m) => m.private);
+    mockModel.last = null;
+    const hello = await tell('hello', { model: open.id });
+    const sys = mockModel.last?.messages?.[0]?.content ?? '';
+    const offered = (mockModel.last?.tools ?? []).map((t) => t.function.name);
+    check('with a plan the picked model answers, and the line keeps its id', hello.status === 200 && hello.json.messages?.[1]?.body === 'The mock heard you.' && hello.json.model === open.id && hello.json.messages[1].model === open.id, hello.json);
+    check('the model is told it is the Companion, not Bumling', sys.includes('Companion') && !sys.includes('Bumling, the guide'), sys.slice(0, 120));
+    check('a model that may keep data never gets mood, sleep or the wellbeing score', !/mood today|sleep last night|wellbeing \d/.test(sys), sys);
+    check('and is offered only the day’s read tools, never the journal or trackers', offered.length > 0 && offered.every((n) => ['get_daily', 'get_routine', 'get_reminders', 'get_week_plan'].includes(n)), offered);
+    check('no temperature is sent', mockModel.last && !('temperature' in mockModel.last), mockModel.last?.temperature);
+    const sent = JSON.stringify((mockModel.last?.messages ?? []).slice(1));
+    check('nor an earlier built-in reply written from the sleep log (7.5 hours) or the score', !/7\.5 hours|wellbeing score/i.test(sent) && /I feel tired/.test(sent), sent.slice(0, 300));
+    const seen = (await api('GET', '/companion', undefined, K.token)).json.messages ?? [];
+    check('the chat keeps who answered each line', seen.some((m) => m.body === 'The mock heard you.' && m.model === open.id), seen.slice(-2));
+    const rows = await usage();
+    check('a free model still writes one usage row with its tokens and model, and costs nothing', rows.length === 1 && rows[0].amount === 0 && rows[0].tokens?.input === 1000 && rows[0].tokens?.output === 50, rows);
+    check('the day’s use is counted for the Companion', (await api('GET', '/credits', undefined, K.token)).json.account?.usedToday?.companion === 0, '');
+
+    mockModel.last = null;
+    const priv = await tell('how am I', { model: closed.id });
+    const psys = mockModel.last?.messages?.[0]?.content ?? '';
+    const ptools = (mockModel.last?.tools ?? []).map((t) => t.function.name);
+    check('a model that keeps nothing sees the mood and the sleep', priv.status === 200 && /mood today (?!unknown)\w+/.test(psys) && /sleep last night (?!unknown)[\d.]+ hours/.test(psys), psys.slice(-200));
+    check('and may read the trackers', ptools.includes('get_wellbeing'), ptools);
+
+    const read = await tell(`DO ${JSON.stringify([{ name: 'get_daily' }])}`, { model: open.id });
+    check('a read tool runs as the person', read.status === 200 && /^Mock done:/.test(read.json.messages?.[1]?.body ?? '') && !/only reads/.test(read.json.messages[1].body), read.json.messages?.[1]);
+    const write = await tell(`DO ${JSON.stringify([{ name: 'check_in' }])}`, { model: open.id });
+    const day = (await api('GET', `/today?date=${today}`, undefined, K.token)).json;
+    check('a write is refused and never run: the Companion only reads', /only reads/.test(write.json.messages?.[1]?.body ?? '') && day.checkedIn === false, { said: write.json.messages?.[1]?.body, checkedIn: day.checkedIn });
+    const actions = (await api('GET', '/me/export', undefined, K.token)).json;
+    check('nothing is written to the assistant’s action log', (actions.assistantActions ?? []).length === 0, actions.assistantActions?.length);
+    check('the export carries the chat with who answered', (actions.companionChat ?? []).some((r) => r.model === open.id), (actions.companionChat ?? []).length);
+
+    // Credits charged once: the server's default stand-in has a price, so a message on it costs credits.
+    await admin('POST', `/admin/users/${K.user.id}/plan`, { plan: 'pro_max', days: 30 });
+    const before = (await api('GET', '/credits', undefined, K.token)).json.account;
+    const paid = await tell('a priced hello');
+    const after = (await api('GET', '/credits', undefined, K.token)).json.account;
+    const priced = (await usage()).filter((e) => e.amount < 0);
+    check('a priced message is charged once, through the one ledger', paid.status === 200 && paid.json.credits?.spent > 0 && after.total === before.total - paid.json.credits.spent && priced.length === 1 && after.usedToday.companion === paid.json.credits.spent, { credits: paid.json.credits, before: before.total, after: after.total, rows: priced.length });
+
+    const runId = crypto.randomUUID();
+    const running = api('POST', '/companion', { body: `SLOW DO ${JSON.stringify([{ name: 'check_in' }])}`, runId, context: ctx }, K.token);
+    await new Promise((r) => setTimeout(r, 800));
+    const stopNow = await api('POST', '/companion/stop', { runId }, K.token);
+    const halted = await running;
+    check('Stop ends a Companion message before its tools run', stopNow.status === 200 && halted.json.stopped === 'user' && halted.json.messages?.[1]?.body === 'Stopped.', halted.json);
+    check('Stop needs the run it stops', (await api('POST', '/companion/stop', {}, K.token)).status === 400, '');
+    const theirRun = crypto.randomUUID();
+    await api('PATCH', '/me/modules', { key: 'companion', on: true }, L.token);
+    await api('POST', '/companion/stop', { runId: theirRun }, L.token);
+    const notStopped = await api('POST', '/companion', { body: 'still here', runId: theirRun, context: ctx }, K.token);
+    check('another person’s Stop never stops my message', notStopped.status === 200 && notStopped.json.stopped === null && notStopped.json.messages?.[1]?.body === 'The mock heard you.', notStopped.json);
+    const usedBefore = (await usage()).length;
+    const broken = await tell('FAIL');
+    check('a model that fails falls back to the built-in companion, never a 502, and charges nothing', broken.status === 200 && broken.json.fallback === 'error' && ['local', 'workers-ai'].includes(broken.json.model) && (await usage()).length === usedBefore, broken.json);
+    await admin('POST', `/admin/users/${K.user.id}/plan`, { plan: 'none' });
+  }
+
+  const theirs = await api('GET', '/companion', undefined, L.token);
+  check('another person never sees the chat', theirs.status === 200 && theirs.json.messages?.length === 0, theirs.json.messages?.length);
+  const block = await admin('POST', '/admin/flags/companion/overrides', { subjectType: 'user', subjectId: L.user.id, enabled: false, reason: 'smoke' });
+  check('with the Companion switched off for a person, the API refuses', (await tell('hello', {}, L.token)).status === 403, block.status);
+  if (block.json?.override?.id) await admin('DELETE', `/admin/flags/overrides/${block.json.override.id}`);
+  await api('DELETE', '/companion', undefined, K.token);
+  check('Clear empties the chat', ((await api('GET', '/companion', undefined, K.token)).json.messages ?? []).length === 0, '');
 }
 
 // ---------------------------------------------------------------- attendee codes
@@ -1887,7 +2172,7 @@ section('Engagement');
   const obs = await api('GET', '/internal/observability', undefined, A.token);
   check('observability counts the newer apps: games, Discover, hand-given xp and badges, and the logs', obs.status === 200 && obs.json.additions?.games?.length === 9 && obs.json.additions?.discover?.results >= 0 && obs.json.additions?.grants?.xp >= 1 && obs.json.additions?.grants?.badges >= 1 && obs.json.additions?.logs?.errors >= 1, obs.json.additions);
 
-  // Focus rounds in Mindful minutes: kept per person, charted by day, week and month.
+  // Focus rounds in Mindfulness: kept per person, charted by day, week and month.
   const todayStr = new Date().toISOString().slice(0, 10);
   const fr0 = await api('POST', '/wellbeing/focus', { minutes: 0, date: todayStr }, R.token);
   const fr1 = await api('POST', '/wellbeing/focus', { minutes: 700, date: todayStr }, R.token);
@@ -2247,6 +2532,48 @@ section('Agency');
   })());
   await api('POST', `/agency/clients/${cid}/portal`, { on: false }, O.token);
 
+  // Restore after a void (2026-11-04): back to exactly the status it had, guarded so two taps restore once; the books stay true.
+  {
+    const notVoid = await api('POST', `/agency/invoices/${inv.id}/restore`, {}, O.token);
+    check('restore: an invoice that is not void is refused', notVoid.status === 400, notVoid.json);
+    await api('PATCH', `/agency/invoices/${inv.id}`, { status: 'void' }, O.token);
+    const voidSeen = await pub('GET', `/invoices/${inv.token}`);
+    const back = await api('POST', `/agency/invoices/${inv.id}/restore`, {}, O.token);
+    const backSeen = await pub('GET', `/invoices/${inv.token}`);
+    check('restore: a voided sent invoice comes back sent, with its number and link', voidSeen.json?.invoice?.status === 'void' && back.status === 200 && back.json.restoredTo === 'sent' && back.json.invoice.status === 'sent' && back.json.invoice.number === 'TST-900' && backSeen.json?.invoice?.status === 'sent', { v: voidSeen.json?.invoice?.status, b: back.json });
+    check('restore: another person cannot restore it', (await api('POST', `/agency/invoices/${inv.id}/restore`, {}, X.token)).status === 404);
+    const booked = async () => ((await api('GET', '/me/export', undefined, O.token)).json.finance ?? []).filter((t) => t.source === 'invoice' && t.ref === inv.id);
+    await api('PATCH', `/agency/invoices/${inv.id}`, { status: 'paid' }, O.token);
+    const paidBooks = await booked();
+    await api('PATCH', `/agency/invoices/${inv.id}`, { status: 'void' }, O.token);
+    const voidBooks = await booked();
+    const [r1, r2] = await Promise.all([api('POST', `/agency/invoices/${inv.id}/restore`, {}, O.token), api('POST', `/agency/invoices/${inv.id}/restore`, {}, O.token)]);
+    const restoredBooks = await booked();
+    check('restore: two restores at once restore once', [r1.status, r2.status].sort().join() === '200,400', [r1.status, r2.status]);
+    check('restore: a voided paid invoice comes back paid and books its income once again', [r1, r2].find((r) => r.status === 200)?.json.invoice.status === 'paid' && paidBooks.length === 1 && voidBooks.length === 0 && restoredBooks.length === 1 && restoredBooks[0].amount_cents === paidBooks[0].amount_cents && restoredBooks[0].date === paidBooks[0].date, { paidBooks: paidBooks.length, voidBooks: voidBooks.length, restoredBooks });
+    await api('PATCH', `/agency/invoices/${inv.id}`, { status: 'sent' }, O.token);
+    check('restore: the restore is a line in the client\'s log', JSON.stringify((await api('GET', '/me/export', undefined, O.token)).json.agencyLog ?? []).includes('restored as paid'));
+
+    const kNot = await api('POST', `/agency/contracts/${kid}/restore`, {}, O.token);
+    check('restore: an agreement that is not void is refused', kNot.status === 400, kNot.json);
+    await api('PATCH', `/agency/contracts/${kid}`, { status: 'void' }, O.token);
+    const kGone = await pub('GET', `/contracts/${ktok}`);
+    const [k1, k2] = await Promise.all([api('POST', `/agency/contracts/${kid}/restore`, {}, O.token), api('POST', `/agency/contracts/${kid}/restore`, {}, O.token)]);
+    const kOk = [k1, k2].find((r) => r.status === 200);
+    const kBack = await pub('GET', `/contracts/${ktok}`);
+    check('restore: two agreement restores at once restore once', [k1.status, k2.status].sort().join() === '200,400', [k1.status, k2.status]);
+    check('restore: a voided signed agreement comes back signed, at the same link, with its acceptance', kGone.status === 404 && kOk?.json.restoredTo === 'signed' && kOk.json.contract.status === 'signed' && kOk.json.contract.token === ktok && kOk.json.contract.acceptance?.name === 'Asha Rao' && kBack.status === 200 && kBack.json.status === 'signed', { gone: kGone.status, ok: kOk?.json, back: kBack.status });
+    const sentAgain = await api('PATCH', `/agency/contracts/${revise.json.id}`, { status: 'sent' }, O.token);
+    await api('PATCH', `/agency/contracts/${revise.json.id}`, { status: 'void' }, O.token);
+    const sBack = await api('POST', `/agency/contracts/${revise.json.id}/restore`, {}, O.token);
+    check('restore: a voided sent agreement comes back sent at its old link', sBack.json.contract?.status === 'sent' && sBack.json.contract.token === sentAgain.json.contract?.token, sBack.json);
+    await api('PATCH', `/agency/contracts/${revise.json.id}`, { status: 'draft' }, O.token);
+    await api('PATCH', `/agency/contracts/${revise.json.id}`, { status: 'void' }, O.token);
+    const dBack = await api('POST', `/agency/contracts/${revise.json.id}/restore`, {}, O.token);
+    check('restore: a voided draft comes back a draft with no link', dBack.json.contract?.status === 'draft' && dBack.json.contract.token === null, dBack.json);
+    check('restore: another person cannot restore an agreement', (await api('POST', `/agency/contracts/${kid}/restore`, {}, X.token)).status === 404);
+  }
+
   // templates: the person's own starting points
   const bloom = await addClient({ name: 'Bloom Skincare', contactName: 'Ira', billing: { name: 'Bloom', line: 'Bloom Skincare Pvt Ltd' } }, O.token);
   await api('PATCH', `/agency/clients/${bloom.json.id}`, { name: 'Bloom Skincare', billing: { name: 'Bloom Skincare', line: 'Bloom Skincare Pvt Ltd', taxIds: [{ label: 'GSTIN', value: '29ABCDE1234F1Z5' }] } }, O.token);
@@ -2317,6 +2644,13 @@ section('Agency');
   check('the brand\'s feedback comes back into the thread, and the piece back to making', Boolean(vid) && sync.json.moved === 'making' && afterSync.stage === 'making' && armyNotes.some((n) => n.author === 'brand' && /Open stronger/.test(n.body)), { vid, sync: sync.json, notes: armyNotes });
   check('the brand\'s words stay out of the client\'s link', !JSON.stringify(await pub('GET', `/agency/${(await api('POST', `/agency/clients/${cid}/portal`, { on: true }, O.token)).json.portalToken}`)).includes('Open stronger'));
   await api('POST', `/agency/clients/${cid}/portal`, { on: false }, O.token);
+  // A team member with the pipeline open never reads what the brand wrote in Army (the owner's Army work).
+  const armyTeam = await api('POST', '/agency/team', { who: `stranger-${stamp}@smoke.test`, role: 'editor', access: { overview: 'off', pipeline: 'view', clients: 'off', paperwork: 'off' } }, O.token);
+  await api('POST', `/me/teams/${armyTeam.json.id}/answer`, { yes: true }, X.token);
+  const armySeen = await api('GET', `/agency/items?client=${cid}&size=100&day=${today}`, undefined, X.token, { 'X-Agency-Team': armyTeam.json.id });
+  const armyMine = armySeen.json.items?.find((i) => i.id === armyItem.id);
+  check('team: a member never reads the brand\'s Army words or link on a piece', armySeen.status === 200 && armyMine && armyMine.army === null && armyMine.armyDeliverableId === null && !JSON.stringify(armySeen.json).includes('Open stronger'), armyMine);
+  await api('DELETE', `/agency/team/${armyTeam.json.id}`, undefined, O.token);
 
   // business metrics in Reviews
   const k403 = await api('POST', '/reviews/kpis', { name: 'Sales calls' }, O.token);
@@ -2449,7 +2783,9 @@ section('Week plan, focus quality and the calendar link');
     check("another person can neither change nor delete it", (await api('PATCH', `/wellbeing/focus/${k1.json.id}`, { minutes: 5 }, A.token)).status === 404 && (await api('DELETE', `/wellbeing/focus/${k1.json.id}`, undefined, A.token)).status === 404);
     const del = await api('DELETE', `/wellbeing/focus/${k1.json.id}`, undefined, W.token);
     check('deleting a session removes it and its mindful log', del.status === 200 && !(await api('GET', `/wellbeing/focus/today?date=${today}`, undefined, W.token)).json.rounds.some((x) => x.id === k1.json.id) && (await mindfulOf(W.token)) === logs0, await mindfulOf(W.token));
-    check('a forgotten session can be added for yesterday but not two days back', (await api('POST', '/wellbeing/focus', { minutes: 15, date: day(-1), mode: 'manual' }, W.token)).status === 201 && (await api('POST', '/wellbeing/focus', { minutes: 15, date: day(-2), mode: 'manual' }, W.token)).status === 400);
+    // The server's window is a day either side of its UTC day (dateNearToday), so count from that day: between 18:30 and 24:00 UTC the IST `today` is a day ahead.
+    const utcDay = (n) => new Date(Date.parse(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+    check('a forgotten session can be added for yesterday but not two days back', (await api('POST', '/wellbeing/focus', { minutes: 15, date: utcDay(-1), mode: 'manual' }, W.token)).status === 201 && (await api('POST', '/wellbeing/focus', { minutes: 15, date: utcDay(-2), mode: 'manual' }, W.token)).status === 400);
 
     // The optional daily nudge: once, on the chosen day after its time, and never for someone who already focused that day.
     const zones = ['Asia/Kolkata', 'Europe/London', 'America/New_York', 'Asia/Tokyo', 'Pacific/Auckland', 'America/Los_Angeles'];
@@ -2675,7 +3011,7 @@ section('Security: headers, origin, exposed files, errors, addresses, alerts');
   const wrangler = readFileSync(new URL('../../apps/api/wrangler.jsonc', import.meta.url), 'utf8');
   const { BLOCKED_PATTERNS } = await import('../../apps/api/src/headers.ts');
   check('wrangler sends every blocked pattern to the Worker and leaves /.well-known alone', BLOCKED_PATTERNS.every((x) => wrangler.includes(`"${x}"`)) && wrangler.includes('"!/.well-known/*"'), BLOCKED_PATTERNS.filter((x) => !wrangler.includes(`"${x}"`)));
-  check('app screens and /.well-known are not caught by the hidden-file rule', ['/admin', '/settings', '/signin/reset', '/today', '/.well-known/security.txt', '/assets/index-abc.js', '/fonts/urbanist-latin.woff2', '/resources/x.md', '/u/someone.name'].every((p) => !blockedPath(p)) && blockedPath('/.env') && blockedPath('/a/.git/config') && blockedPath('/%2eenv'));
+  check('app screens and /.well-known are not caught by the hidden-file rule', ['/admin', '/settings', '/signin/reset', '/today', '/.well-known/security.txt', '/assets/index-abc.js', '/fonts/inter-latin.woff2', '/resources/x.md', '/u/someone.name'].every((p) => !blockedPath(p)) && blockedPath('/.env') && blockedPath('/a/.git/config') && blockedPath('/%2eenv'));
 
   // Errors: a body that is not JSON and a path that does not exist answer plainly.
   const bad = await fetch(`${API}/auth/signin`, { method: 'POST', headers: { 'content-type': 'application/json', ...SEC }, body: '{"email": "a@b.co", "password": "hunter2-secret' });
@@ -2701,11 +3037,13 @@ section('Security: headers, origin, exposed files, errors, addresses, alerts');
   check('below the levels no alert is made; at the levels each one is', quiet.length === 0 && loud.map((a) => a.kind).sort().join() === 'errors,limits,roles,signins', [quiet, loud.map((a) => a.kind)]);
   check('an alert holds counts only, no name, address or request', loud.every((a) => !/@|Bearer|\d+\.\d+\.\d+\.\d+/.test(a.body)));
   // A role change is in the audit trail by now (the Admin section changed roles in the last minutes), so the cron tells the admins once.
+  // The founder's inbox is shared by every run on this database, so count only what these two cron runs add.
+  const roleNotesNow = async () => ((await api('GET', '/inbox?tab=team', undefined, A.token)).json.notifications ?? []).filter((n) => n.title === 'A role or permission was changed').length;
+  const roleBefore = await roleNotesNow();
   await fetch(`${ORIGIN}/__scheduled?cron=*%2F15+*+*+*+*`);
   await fetch(`${ORIGIN}/__scheduled?cron=*%2F15+*+*+*+*`);
-  const adminInbox = await api('GET', '/inbox?tab=team', undefined, A.token);
-  const roleNotes = (adminInbox.json.notifications ?? []).filter((n) => n.title === 'A role or permission was changed');
-  check('after a role change the admins are told in the inbox, and two cron runs in an hour tell them once', roleNotes.length >= 1 && roleNotes.length <= 2, [roleNotes.length, Object.keys(adminInbox.json)]);
+  const roleAfter = await roleNotesNow();
+  check('after a role change the admins are told in the inbox, and two cron runs in an hour tell them once', roleAfter >= 1 && roleAfter - roleBefore <= 1, [roleBefore, roleAfter]);
 }
 
 section('Export and delete');
@@ -3466,6 +3804,155 @@ section('Agency lifecycle');
   check('removing a client takes its retainers with it', (await api('DELETE', `/agency/clients/${late}`, undefined, O.token)).status === 200 && (await api('POST', `/agency/retainers/${lo.json.id}/end`, {}, O.token)).status === 404);
 }
 
+// ---------------------------------------------------------------- Agency team link: the client page for the client's own team, without the paper
+section('Agency team link');
+{
+  const TIP = (n) => `10.${(seed >> 10) & 255}.${(seed + n) & 255}.${((seed >> 3) + 7) & 255}`;
+  const join = async (who) => {
+    const r = await api('POST', '/auth/signup', { email: `${who}-${stamp}@smoke.test`, password: `Harbour-${stamp}-pass`, displayName: `Smoke ${who}`, phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': TIP(3) });
+    await api('PATCH', '/me/modules', { key: 'agency', on: true }, r.json.token);
+    return { token: r.json.token, user: r.json.user };
+  };
+  const O = await join('tlowner');
+  const X = await join('tlstranger');
+  const anyIp = () => TIP(100 + Math.floor(Math.random() * 120));
+  const P = (method, path, body, o = {}) => api(method, `/public${path}`, body, null, { 'CF-Connecting-IP': o.ip ?? anyIp(), ...(o.portal ? { 'X-Portal-Session': o.portal } : {}), ...(o.team ? { 'X-Team-Link-Session': o.team } : {}) });
+  const page = (id) => api('GET', `/agency/clients/${id}?day=${today}`, undefined, O.token).then((r) => r.json);
+
+  // A client the owner already works with: onboarded, a password on its own link, and paper sent to it.
+  const mk = await addClient({ name: 'Junior Labs', contactEmail: 'ops@junior.test', piecesPerMonth: 4, channels: ['Instagram'] }, O.token);
+  const cid = mk.json.id;
+  const mainTok = mk.json.portalToken;
+  const mainPw = (await api('PUT', `/agency/clients/${cid}/password`, { generate: true }, O.token)).json.password;
+  await api('POST', `/agency/clients/${cid}/portal`, { show: { invoices: true, contracts: true, docs: true, hours: true } }, O.token);
+  const p0 = await page(cid);
+  check('team link: off to start, approving off by default, never any paper part', p0.client.teamLink?.token === null && p0.client.teamLink.show.canApprove === false && p0.client.teamLink.show.canComment === true && !('invoices' in p0.client.teamLink.show) && !('hours' in p0.client.teamLink.show), p0.client.teamLink);
+  // The team link never opens without a password (2026-11-05): none, or a weak one, is refused and leaves it off.
+  const noPw = await api('POST', `/agency/clients/${cid}/team-link`, { on: true }, O.token);
+  const weakPw = await api('POST', `/agency/clients/${cid}/team-link`, { on: true, password: 'short' }, O.token);
+  check('team link: switching it on needs a password, and a weak one is refused', noPw.status === 400 && /password/.test(noPw.json.error ?? '') && weakPw.status === 400 && (await page(cid)).client.teamLink.token === null, { noPw: noPw.json, weakPw: weakPw.json });
+  const on = await api('POST', `/agency/clients/${cid}/team-link`, { on: true, password: `Copper-lantern-river-${stamp}`, show: { invoices: true, contracts: true, docs: true, hours: true, retainer: true, channels: true } }, O.token);
+  const tTok = on.json.token;
+  check('team link: switched on, its own sixteen characters, and a paper switch is dropped', on.status === 200 && /^[A-Z2-9]{16}$/.test(tTok ?? '') && tTok !== mainTok && on.json.show.channels === true && !['invoices', 'contracts', 'docs', 'hours', 'retainer'].some((k) => k in on.json.show), on.json);
+  check('team link: a stranger cannot switch, set or read it', (await api('POST', `/agency/clients/${cid}/team-link`, { on: true }, X.token)).status === 404 && (await api('PUT', `/agency/clients/${cid}/team-link/password`, { generate: true }, X.token)).status === 404);
+  check('team link: a weak password is refused', (await api('PUT', `/agency/clients/${cid}/team-link/password`, { password: 'short' }, O.token)).status === 400);
+  check('team link: switched on with its password set, which cannot be removed while it is on', (await page(cid)).client.teamLink.password.set === true && (await api('PUT', `/agency/clients/${cid}/team-link/password`, { clear: true }, O.token)).status === 400);
+  const setPw = await api('PUT', `/agency/clients/${cid}/team-link/password`, { generate: true }, O.token);
+  const tPw = setPw.json.password;
+  check('team link: a generated password is shown once, its own word', setPw.status === 200 && /^[a-z]+(-[a-z]+){3}-\d\d$/.test(tPw ?? '') && tPw !== mainPw, setPw.json);
+  const p1 = await page(cid);
+  check('team link: the owner sees it set and the main link untouched', p1.client.teamLink.password.set === true && p1.client.portalToken === mainTok && p1.lifecycle.password.set === true && !JSON.stringify(p1).includes(tPw) && !/team_link_pass/.test(JSON.stringify(p1)), p1.client.teamLink);
+
+  // The work and the paper.
+  const item = (b) => api('POST', `/agency/items?day=${today}`, { clientId: cid, platform: 'Instagram', ...b }, O.token).then((r) => r.json.id ?? r.json.item?.id);
+  const rev = await item({ title: `Review reel ${stamp}`, kind: 'short', link: 'https://example.com/reel' });
+  await api('PATCH', `/agency/items/${rev}?day=${today}`, { stage: 'review' }, O.token);
+  const mkg = await item({ title: `Making reel ${stamp}`, kind: 'short' });
+  await api('PATCH', `/agency/items/${mkg}?day=${today}`, { stage: 'making' }, O.token);
+  await api('POST', `/agency/items/${rev}/notes`, { body: `Private owner note ${stamp}`, shared: false }, O.token);
+  await api('POST', `/agency/items/${rev}/notes`, { body: `Shared owner note ${stamp}`, shared: true }, O.token);
+  const inv = (await api('POST', `/agency/invoices?day=${today}`, { clientId: cid, items: [{ description: 'Team link test videos', quantity: 2, unitCents: 500000 }] }, O.token)).json.invoice;
+  const invSent = (await api('PATCH', `/agency/invoices/${inv.id}`, { status: 'sent' }, O.token)).json.invoice;
+  const kc = await api('POST', '/agency/contracts', { templateKey: 'trial', clientId: cid }, O.token);
+  const kTok = (await api('PATCH', `/agency/contracts/${kc.json.id}`, { status: 'sent' }, O.token)).json.contract?.token;
+  const dmk = await api('POST', '/agency/docs', { kind: 'brief', clientId: cid }, O.token);
+  await api('PATCH', `/agency/docs/${dmk.json.id}`, { status: 'sent' }, O.token);
+  const dTok = (await api('GET', `/agency/docs/${dmk.json.id}`, undefined, O.token)).json.doc?.token;
+  check('team link: the paper for the checks exists', Boolean(invSent?.token && kTok && dTok), { inv: invSent?.token, kTok, dTok });
+
+  // The lock, the unlock and the same words for a wrong password and an unknown link.
+  const locked = await P('GET', `/team-link/${tTok}`);
+  check('team link: locked without its session, names only', locked.status === 401 && locked.json.error === 'locked' && Object.keys(locked.json).sort().join() === 'agencyLogo,agencyName,clientName,error', locked.json);
+  const w1 = await P('POST', `/team-link/${tTok}/unlock`, { password: 'definitely-not-it-77' }, { ip: TIP(11) });
+  const w2 = await P('POST', '/team-link/ABCDEFGHJKLMNPQR/unlock', { password: 'definitely-not-it-77' }, { ip: TIP(12) });
+  check('team link: a wrong password and an unknown link answer the same', w1.status === 401 && w2.status === 401 && w1.json.error === w2.json.error, [w1.json, w2.json]);
+  check('team link: the client link\'s password does not open it', (await P('POST', `/team-link/${tTok}/unlock`, { password: mainPw }, { ip: TIP(13) })).status === 401);
+  const tu = await P('POST', `/team-link/${tTok}/unlock`, { password: tPw }, { ip: TIP(14) });
+  const tS = tu.json.session;
+  check('team link: the right password gives a team session', tu.status === 200 && /^[0-9a-f]{64}$/.test(tS ?? ''), tu.json);
+  const mu = await P('POST', `/agency/${mainTok}/unlock`, { password: mainPw }, { ip: TIP(15) });
+  const mS = mu.json.session;
+  check('team link: the client link unlocks with its own password', mu.status === 200 && /^[0-9a-f]{64}$/.test(mS ?? ''), mu.json);
+
+  // What the team sees: the work, never the paper.
+  const tv = await P('GET', `/team-link/${tTok}`, undefined, { team: tS });
+  const tvText = JSON.stringify(tv.json);
+  check('team link: the page shows the work', tv.status === 200 && tv.json.teamView === true && tv.json.waiting?.some((w) => w.id === rev) && tv.json.coming?.some((w) => w.id === mkg) && tv.json.clientName === 'Junior Labs', tv.status);
+  check('team link: the page has no invoice, agreement, document, retainer, stage, onboarding or hours', ['invoices', 'contracts', 'docs', 'retainer', 'stage', 'onboarding', 'hours', 'waitingOn', 'trial', 'pilot', 'strategy'].every((k) => !(k in tv.json)), Object.keys(tv.json).join());
+  check('team link: no paper token, number or amount is anywhere in it', ![invSent.token, kTok, dTok, mainTok, invSent.number, 'Team link test videos', '/i/', '/k/', '/d/'].some((x) => tvText.includes(x)) && !/totalCents|feeCents|retainer/i.test(tvText), tvText.slice(0, 300));
+  check('team link: the shared note shows, the private one never', tvText.includes(`Shared owner note ${stamp}`) && !tvText.includes(`Private owner note ${stamp}`));
+
+  // A team session never reaches the client link or the paper, and the team link never serves paper.
+  const refused = await Promise.all([
+    P('GET', `/invoices/${invSent.token}`, undefined, { team: tS }),
+    P('GET', `/contracts/${kTok}`, undefined, { team: tS }),
+    P('GET', `/agency/doc/${dTok}`, undefined, { team: tS }),
+    P('GET', `/invoices/${invSent.token}/lock`, undefined, { team: tS }),
+    P('GET', `/agency/${mainTok}`, undefined, { team: tS }),
+    P('GET', `/agency/${mainTok}/onboarding`, undefined, { team: tS }),
+    P('POST', `/contracts/${kTok}/accept`, { name: 'Junior', agree: true, answers: {} }, { team: tS }),
+  ]);
+  check('team link: a team session on an invoice, agreement, document or the client link is a 404', refused.every((r) => r.status === 404), refused.map((r) => r.status));
+  check('team link: a team session passed as a client session opens nothing', (await P('GET', `/agency/${mainTok}`, undefined, { portal: tS })).status === 401 && (await P('GET', `/contracts/${kTok}`, undefined, { portal: tS })).status === 401 && (await P('GET', `/invoices/${invSent.token}`, undefined, { portal: tS })).status === 401);
+  const wrongDoors = await Promise.all([invSent.token, kTok, dTok, mainTok].map((t) => P('GET', `/team-link/${t}`, undefined, { team: tS })));
+  check('team link: an invoice, agreement, document or client link token finds no team page', wrongDoors.every((r) => r.status === 404), wrongDoors.map((r) => r.status));
+  check('team link: a client session does not open the team link', (await P('GET', `/team-link/${tTok}`, undefined, { portal: mS })).status === 401 && (await P('GET', `/team-link/${tTok}`, undefined, { team: mS })).status === 401);
+  check('team link: the client link still opens with its own session', (await P('GET', `/agency/${mainTok}`, undefined, { portal: mS })).status === 200);
+
+  // Notes and approvals from the team are marked as theirs; approving waits for the owner's yes.
+  const cm = await P('POST', `/team-link/${tTok}/items/${rev}`, { decision: 'comment', note: `Team comment ${stamp}` }, { team: tS });
+  check('team link: a comment needs the team session', (await P('POST', `/team-link/${tTok}/items/${rev}`, { decision: 'comment', note: 'x' })).status === 401 && cm.status === 200, cm.json);
+  const notes = (await api('GET', `/agency/items/${rev}/notes`, undefined, O.token)).json.notes ?? [];
+  const tn = notes.find((n) => n.body === `Team comment ${stamp}`);
+  check('team link: the owner sees the comment as from the client\'s team', tn?.author === 'client' && tn.clientTeam === true && notes.filter((n) => n.author === 'client' && n.body !== `Team comment ${stamp}`).every((n) => !n.clientTeam), tn);
+  const mv = await P('GET', `/agency/${mainTok}`, undefined, { portal: mS });
+  const mvLine = mv.json.waiting?.find((w) => w.id === rev)?.thread?.find((t) => t.body === `Team comment ${stamp}`);
+  check('team link: the client sees it marked as from their team', mvLine?.team === true, mvLine);
+  const inbox1 = JSON.stringify((await api('GET', '/inbox?size=50', undefined, O.token)).json);
+  check('team link: the owner is told it came from their team', inbox1.includes('Junior Labs\'s team wrote on'));
+  check('team link: approving is refused until the owner allows it', (await P('POST', `/team-link/${tTok}/items/${rev}`, { decision: 'approve' }, { team: tS })).status === 403 && (await P('POST', `/team-link/${tTok}/items/${rev}`, { decision: 'changes', note: 'x' }, { team: tS })).status === 403);
+  check('team link: a paid change is never asked from it', (await P('POST', `/team-link/${tTok}/items/${rev}`, { decision: 'paid_change', note: `Paid ask ${stamp}` }, { team: tS })).status === 200 && !(await api('GET', `/agency/items/${rev}/notes`, undefined, O.token)).json.notes.some((n) => n.kind === 'paid_change'));
+  await api('POST', `/agency/clients/${cid}/team-link`, { show: { canApprove: true } }, O.token);
+  const ap = await P('POST', `/team-link/${tTok}/items/${rev}`, { decision: 'approve' }, { team: tS });
+  const items = (await api('GET', `/agency/items?day=${today}&client=${cid}&size=100`, undefined, O.token)).json.items ?? [];
+  check('team link: once allowed, an approval moves the piece and is recorded as from their team', ap.status === 200 && items.find((i) => i.id === rev)?.stage === 'approved' && JSON.stringify((await api('GET', '/inbox?size=50', undefined, O.token)).json).includes('Junior Labs\'s team approved'), ap.json);
+
+  // Renewing or re-locking one link leaves the other alone.
+  const freshMain = await api('POST', `/agency/clients/${cid}/portal`, { fresh: true }, O.token);
+  await api('PUT', `/agency/clients/${cid}/password`, { generate: true }, O.token);
+  check('team link: a fresh client link and a new client password leave the team link and its session working', freshMain.json.portalToken !== mainTok && (await P('GET', `/team-link/${tTok}`, undefined, { team: tS })).status === 200 && (await page(cid)).client.teamLink.token === tTok);
+  const mainTok2 = freshMain.json.portalToken;
+  const newMainPw = (await api('PUT', `/agency/clients/${cid}/password`, { generate: true }, O.token)).json.password;
+  const mS2 = (await P('POST', `/agency/${mainTok2}/unlock`, { password: newMainPw }, { ip: TIP(16) })).json.session;
+  const freshTeam = await api('POST', `/agency/clients/${cid}/team-link`, { fresh: true }, O.token);
+  const tTok2 = freshTeam.json.token;
+  const oldTeam = await P('GET', `/team-link/${tTok}`);
+  check('team link: a fresh team link closes the old one (410) and keeps the client link and its session', tTok2 && tTok2 !== tTok && oldTeam.status === 410 && oldTeam.json.error === 'closed' && (await P('GET', `/agency/${mainTok2}`, undefined, { portal: mS2 })).status === 200 && (await page(cid)).client.portalToken === mainTok2, oldTeam.json);
+  check('team link: a fresh team link ends the team sessions', (await P('GET', `/team-link/${tTok2}`, undefined, { team: tS })).status === 401);
+  const tS2 = (await P('POST', `/team-link/${tTok2}/unlock`, { password: tPw }, { ip: TIP(17) })).json.session;
+  const tPw2 = (await api('PUT', `/agency/clients/${cid}/team-link/password`, { generate: true }, O.token)).json.password;
+  check('team link: a new team password ends team sessions and leaves the client\'s', (await P('GET', `/team-link/${tTok2}`, undefined, { team: tS2 })).status === 401 && (await P('GET', `/agency/${mainTok2}`, undefined, { portal: mS2 })).status === 200);
+
+  // Their team asks for a new password: its own ask, its own note.
+  const askA = await P('POST', '/agency/password-request', { kind: 'team', token: tTok2, reason: 'A junior left' }, { ip: TIP(18) });
+  const askB = await P('POST', '/agency/password-request', { kind: 'team', token: 'ABCDEFGHJKLMNPQR', reason: 'x' }, { ip: TIP(19) });
+  const p2 = await page(cid);
+  check('team link: the ask answers the same for a real and an unknown link, and lands on the team link only', askA.status === 200 && askB.status === 200 && JSON.stringify(askA.json) === JSON.stringify(askB.json) && p2.client.teamLink.password.request?.reason === 'A junior left' && p2.lifecycle.password.request === null, p2.client.teamLink.password);
+  check('team link: the owner is told their team asked', JSON.stringify((await api('GET', '/inbox?size=50', undefined, O.token)).json).includes('Junior Labs\'s team asked for a new password'));
+  await api('PUT', `/agency/clients/${cid}/team-link/password`, { generate: true }, O.token);
+  check('team link: a new team password closes the team ask', (await page(cid)).client.teamLink.password.request === null);
+
+  // The export, switching off, and the delete.
+  const ex = (await api('GET', '/me/export', undefined, O.token)).json;
+  const row = (ex.agencyClients ?? []).find((r) => r.id === cid);
+  const exText = JSON.stringify(ex);
+  check('team link: the export has the settings and never a hash, a salt, a session or the password', row?.team_link_token === tTok2 && row.team_link_has_password === 1 && typeof row.team_link_json === 'string' && !/team_link_pass_hash|team_link_pass_salt|team_link_sessions/.test(exText) && ![tPw, tPw2, tS, tS2].some((x) => exText.includes(x)), row);
+  const off = await api('POST', `/agency/clients/${cid}/team-link`, { on: false }, O.token);
+  check('team link: switching it off closes it (410) and leaves the client link on', off.json.token === null && (await P('GET', `/team-link/${tTok2}`)).status === 410 && (await page(cid)).client.portalToken === mainTok2);
+  await api('POST', `/agency/clients/${cid}/team-link`, { on: true }, O.token);
+  const tTok3 = (await page(cid)).client.teamLink.token;
+  check('team link: deleting the client removes the team link too', (await api('DELETE', `/agency/clients/${cid}`, undefined, O.token)).status === 200 && (await P('GET', `/team-link/${tTok3}`)).status === 404 && (await P('GET', `/team-link/${tTok2}`)).status === 404);
+}
 
 // ---------------------------------------------------------------- Agency documents: the legal page, text version, email a copy, other kinds, house templates
 import { AGENCY_DOC_KINDS, CONTRACT_TEMPLATES, INVOICE_STARTERS } from '../../packages/shared/src/index.ts';
@@ -3609,6 +4096,46 @@ section('Agency documents');
     const g2 = await api('PATCH', ivPath, { note: 'Guard two', ifVersion: v0 }, O.token);
     check('autosave on an invoice: replaying the old version is refused as changed', g2.status === 409 && g2.json.error === 'changed' && (await api('GET', ivPath, undefined, O.token)).json.invoice?.note === 'Guard one', [g2.status, g2.json]);
     check('autosave on an invoice: a save with no version still lands', (await api('PATCH', ivPath, { note: cur.invoice.note }, O.token)).status === 200);
+  }
+
+  // Fill in the details (2026-11-05): the form lists the blanks a paper uses and saves each group through the routes that already exist.
+  // Your business goes to the profile, the client to their record, the rest onto the paper's own words, saved with the version guard.
+  {
+    const fcl = await mkClient(O, { name: 'Fill Co', contactName: 'Fiona' });
+    const kf = await api('POST', '/agency/contracts', { templateKey: 'trial', clientId: fcl }, O.token);
+    const kfPath = `/agency/contracts/${kf.json.id}`;
+    const k0 = (await api('GET', kfPath, undefined, O.token)).json.contract;
+    const used = contractVarsUsed(k0.doc);
+    check('fill in the details: the Trial lists its parties and the client, once each', ['provider', 'providerBusiness', 'client', 'clientContact', 'brands'].every((k) => used.includes(k)) && new Set(used).size === used.length, used);
+    const prof0 = (await api('GET', `/agency?day=${today}`, undefined, O.token)).json.settings.profile;
+    const signer = `Fill Signer ${stamp}`;
+    const contact = `Fill Contact ${stamp}`;
+    const brands = `Fill Brand ${stamp}`;
+    const putP = await api('PUT', '/agency/settings', { profile: { ...prof0, signerName: signer } }, O.token);
+    const putC = await api('PATCH', `/agency/clients/${fcl}`, { contactName: contact }, O.token);
+    check('fill in the details: your business saves to the profile and the client to their record', putP.status === 200 && putP.json.settings?.profile.signerName === signer && putC.status === 200 && (await api('GET', `/agency/clients/${fcl}?day=${today}`, undefined, O.token)).json.client?.contactName === contact, [putP.status, putC.status]);
+    const vars = { ...k0.doc.vars, provider: signer, clientContact: contact, brands };
+    const saved = await api('PATCH', kfPath, { doc: { ...k0.doc, vars }, ifUpdatedAt: k0.updatedAt }, O.token);
+    const ownerText = saved.json.contract ? contractAsText(saved.json.contract.doc, { audience: 'owner' }) : '';
+    check('fill in the details: the paper shows the new words', saved.status === 200 && [signer, contact, brands].every((w) => ownerText.includes(w)), saved.status);
+    const stale = await api('PATCH', kfPath, { doc: { ...k0.doc, vars: { ...vars, brands: 'Stale words' } }, ifUpdatedAt: k0.updatedAt }, O.token);
+    check('fill in the details: a save from a stale version answers 409 and writes nothing', stale.status === 409 && stale.json.error === 'changed' && (await api('GET', kfPath, undefined, O.token)).json.contract.doc.vars.brands === brands, stale.status);
+    const other = (await api('POST', '/agency/contracts', { templateKey: 'trial', clientId: fcl }, O.token)).json.id;
+    const otherVars = (await api('GET', `/agency/contracts/${other}`, undefined, O.token)).json.contract?.doc.vars ?? {};
+    const records = JSON.stringify([(await api('GET', `/agency?day=${today}`, undefined, O.token)).json.settings, (await api('GET', `/agency/clients/${fcl}?day=${today}`, undefined, O.token)).json.client]);
+    check('fill in the details: a this-agreement word stays on this agreement, while the profile and client words reach the next one', otherVars.brands !== brands && !records.includes(brands) && otherVars.provider === signer && otherVars.clientContact === contact, otherVars);
+    const sentK = (await api('PATCH', kfPath, { status: 'sent' }, O.token)).json.contract;
+    const readK = await pub('GET', `/contracts/${sentK?.token}`);
+    const clientText = readK.json.doc ? contractAsText(readK.json.doc, { audience: 'client' }) : '';
+    check('fill in the details: the client copy carries the profile, client and agreement words', readK.status === 200 && [signer, contact, brands].every((w) => clientText.includes(w)), readK.status);
+    const rev = await api('PATCH', kfPath, { doc: { ...sentK.doc, vars: { ...sentK.doc.vars, brands: `${brands} two` } }, ifUpdatedAt: sentK.updatedAt }, O.token);
+    check('fill in the details: a sent agreement takes a change and reads revised', rev.status === 200 && Boolean(rev.json.contract?.revisedAt), rev.status);
+    const acc = await pub('POST', `/contracts/${sentK.token}/accept`, { name: 'Fiona Client', agree: true });
+    const signedK = (await api('GET', kfPath, undefined, O.token)).json.contract;
+    const refused = await api('PATCH', kfPath, { doc: { ...signedK.doc, vars: { ...signedK.doc.vars, brands: 'After signing' } }, ifUpdatedAt: signedK.updatedAt }, O.token);
+    check('fill in the details: a signed agreement refuses a change', acc.status === 200 && signedK.status === 'signed' && refused.status === 400 && (await api('GET', kfPath, undefined, O.token)).json.contract.doc.vars.brands === `${brands} two`, [acc.status, signedK.status, refused.status]);
+    await api('PUT', '/agency/settings', { profile: prof0 }, O.token);
+    await api('DELETE', `/agency/contracts/${other}`, undefined, O.token);
   }
 
   // house templates: only the super admin makes them; everyone else reads and copies
@@ -4027,6 +4554,447 @@ section('Agency across the app');
     const theirs = await addClient({ name: `Other${stamp}` }, stranger.token);
     const cross = await say(DO({ name: 'move_agency_deliverable', args: { itemId: piece.json.id, clientId: theirs.json.id, stage: 'review' } }));
     check('a tool cannot reach another person\'s client', (cross.json?.receipts ?? []).every((r) => r.status !== 'done') && (await items()).find((x) => x.id === piece.json.id)?.stage === 'making', cross.json);
+  }
+}
+
+// ---------------------------------------------------------------- the Agency team (wave 14)
+section('Agency team');
+{
+  const on = async (u) => {
+    await api('PATCH', '/me/modules', { key: 'agency', on: true }, u.token);
+    return u;
+  };
+  const T = await on(await signup(`team-owner-${stamp}@smoke.test`, `Harbour-${stamp}-pass`, 'Team Owner'));
+  const E = await signup(`team-editor-${stamp}@smoke.test`, `Harbour-${stamp}-pass`, 'Team Editor');
+  const C = await on(await signup(`team-creator-${stamp}@smoke.test`, `Harbour-${stamp}-pass`, 'Team Creator'));
+  const K = await signup(`team-client-${stamp}@smoke.test`, `Harbour-${stamp}-pass`, 'Team Client');
+  const X = await on(await signup(`team-outsider-${stamp}@smoke.test`, `Harbour-${stamp}-pass`, 'Team Outsider'));
+  const BK = await signup(`team-blocker-${stamp}@smoke.test`, `Harbour-${stamp}-pass`, 'Team Blocker');
+  const asMember = (rowId) => ({ 'X-Agency-Team': rowId });
+  const D = today;
+
+  // The owner's agency: a profile with a bank, a client with a private note and a fee, a piece, an invoice.
+  await api('PUT', '/agency/settings', { profile: { from: { name: `Team Studio ${stamp}` }, bank: { bankName: 'Team Bank', holder: 'Team Owner', account: '55667788', ifsc: 'tbnk0000009', upi: 'team@upi' } } }, T.token);
+  const cl = await addClient({ name: `Team Client Co ${stamp}`, retainerCents: 4200000, notes: `OWNER-PRIVATE-${stamp}` }, T.token);
+  const cid = cl.json.id;
+  check('team: the owner has a client', cl.status === 201 && Boolean(cid), cl.json);
+  const other = await addClient({ name: `Other Client ${stamp}` }, T.token);
+  const piece = await api('POST', `/agency/items?day=${D}`, { clientId: cid, title: 'Team reel', feeCents: 123400 }, T.token);
+  const pid = piece.json.id;
+  await api('POST', `/agency/items/${pid}/notes`, { body: `PRIVATE-NOTE-${stamp}`, shared: false }, T.token);
+  const ownTeamNote = await api('POST', `/agency/items/${pid}/notes`, { body: `For the team ${stamp}`, team: true }, T.token);
+  const mkInv = await api('POST', `/agency/invoices?day=${D}`, { clientId: cid, items: [{ description: 'Reels', quantity: 2, unitCents: 500000 }] }, T.token);
+  const invId = mkInv.json.invoice?.id;
+  check('team: the owner has an invoice', mkInv.status === 201 && Boolean(invId), mkInv.status);
+
+  // Inviting: by @username, by friend code and by email.
+  let invites = 0;
+  const invite = (body, token = T.token) => {
+    if (token === T.token) invites += 1;
+    return api('POST', '/agency/team', body, token);
+  };
+  const handle = `ed${stamp}`.slice(0, 20);
+  await api('PATCH', '/me', { handle }, E.token);
+  const cMe = await me(C.token);
+  const iE = await invite({ who: `@${handle}`, role: 'editor' });
+  check('team: an editor is invited by @username', iE.status === 201 && iE.json.friendRequest === 'sent', iE.json);
+  const iC = await invite({ who: cMe.friendCode, role: 'content_creator' });
+  check('team: a content creator is invited by friend code', iC.status === 201 && iC.json.friendRequest === 'sent', iC.json);
+  check('team: a client member needs a client', (await invite({ who: `team-client-${stamp}@smoke.test`, role: 'client' })).status === 400);
+  const iK = await invite({ who: `team-client-${stamp}@smoke.test`, role: 'client', clientId: cid, access: { overview: 'edit', clients: 'view', paperwork: 'edit', pipeline: 'edit' } });
+  check('team: a client is invited by email', iK.status === 201, iK.json);
+  const eInbox = JSON.stringify((await api('GET', '/inbox', undefined, E.token)).json);
+  check('team: the editor hears about it in the inbox, with the link', eInbox.includes(`/agency?team=${iE.json.id}`) && eInbox.includes('asked you to join their Agency'), '');
+  check('team: and gets a friend request from the owner', eInbox.includes('would like to be friends'), '');
+  check('team: inviting yourself is refused', (await invite({ who: `team-owner-${stamp}@smoke.test`, role: 'editor' })).status === 400);
+  check('team: a second open invite is refused', (await invite({ who: `@${handle}`, role: 'videographer' })).status === 409);
+  await api('POST', '/bond/block', { userId: T.user.id }, BK.token);
+  const blocked = await invite({ who: `team-blocker-${stamp}@smoke.test`, role: 'editor' });
+  const nobody = await invite({ who: `nobody-${stamp}@smoke.test`, role: 'editor' });
+  check('team: a block reads exactly like an unknown person', blocked.status === 404 && nobody.status === 404 && blocked.json.error === nobody.json.error, [blocked.json, nobody.json]);
+
+  // At most ten invites waiting.
+  const fillers = [];
+  for (let i = 0; i < 7; i++) {
+    const f = await signup(`team-fill${i}-${stamp}@smoke.test`, `Harbour-${stamp}-pass`, `Filler ${i}`);
+    const r = await invite({ who: `team-fill${i}-${stamp}@smoke.test`, role: 'videographer' });
+    fillers.push({ f, id: r.json.id });
+  }
+  const eleventh = await invite({ who: `team-outsider-${stamp}@smoke.test`, role: 'editor' });
+  check('team: an eleventh waiting invite is refused', eleventh.status === 400, eleventh.json);
+  for (const x of fillers) await api('DELETE', `/agency/team/${x.id}`, undefined, T.token);
+  check('team: a taken-back invite leaves no line to answer', !JSON.stringify((await api('GET', '/inbox', undefined, fillers[0].f.token)).json).includes('asked you to join'), '');
+
+  // Answering: core, so it works with Agency off.
+  const eTeams = await api('GET', '/me/teams', undefined, E.token);
+  check('team: the invite shows under /me/teams with Agency off', eTeams.status === 200 && eTeams.json.teams?.some((t) => t.id === iE.json.id && t.status === 'invited' && t.role === 'editor'), eTeams.json);
+  const no = await api('POST', `/me/teams/${iE.json.id}/answer`, { yes: false }, E.token);
+  check('team: the editor can say no', no.status === 200 && no.json.status === 'removed', no.json);
+  check('team: a second answer changes nothing', (await api('POST', `/me/teams/${iE.json.id}/answer`, { yes: true }, E.token)).status === 404);
+  const again = await invite({ who: `@${handle}`, role: 'editor' });
+  check('team: the owner can ask again, as a new row', again.status === 201 && again.json.id !== iE.json.id, again.json);
+  const eId = again.json.id;
+  const yes = await api('POST', `/me/teams/${eId}/answer`, { yes: true }, E.token);
+  check('team: and the editor says yes', yes.status === 200 && yes.json.status === 'active', yes.json);
+  await on(E);
+  await api('POST', `/me/teams/${iC.json.id}/answer`, { yes: true }, C.token);
+  await api('POST', `/me/teams/${iK.json.id}/answer`, { yes: true }, K.token);
+  const cId = iC.json.id;
+  const kId = iK.json.id;
+  const list = await api('GET', '/agency/team', undefined, T.token);
+  const kRow = list.json.members?.find((m) => m.id === kId);
+  check('team: the owner lists the team, a client capped at view with Clients off', list.status === 200 && list.json.members?.length >= 3 && kRow?.access.overview === 'view' && kRow?.access.clients === 'off' && kRow?.access.paperwork === 'view' && kRow?.client?.id === cid, kRow);
+  check('team: another person sees none of it', (await api('GET', '/agency/team', undefined, X.token)).json.members?.length === 0);
+
+  // The editor at work: pipeline edit, nothing else.
+  const eh = asMember(eId);
+  check('team: the editor reads the pipeline', (await api('GET', `/agency/items?day=${D}`, undefined, E.token, eh)).json.items?.some((i) => i.id === pid));
+  const eItems = await api('GET', `/agency/items?day=${D}`, undefined, E.token, eh);
+  check('team: without paperwork the fee is hidden', eItems.json.items?.every((i) => i.feeCents === 0), eItems.json.items?.map((i) => i.feeCents));
+  const eOv = await api('GET', `/agency?day=${D}`, undefined, E.token, eh);
+  check('team: the overview gives an editor only client names', eOv.status === 200 && eOv.json.clients?.some((x) => x.id === cid && x.name && x.retainerCents === undefined) && Object.values(eOv.json.totals ?? {}).every((v) => v === 0) && eOv.json.settings?.profile?.bank?.account === '' && (eOv.json.coming ?? []).length === 0, eOv.json);
+  const eAdd = await api('POST', `/agency/items?day=${D}`, { clientId: cid, title: 'Editor cut', feeCents: 999 }, E.token, eh);
+  check('team: the editor adds a piece', eAdd.status === 201, eAdd.json);
+  const fee = async (id) => (await api('GET', `/agency/items?day=${D}&size=100`, undefined, T.token)).json.items?.find((i) => i.id === id)?.feeCents;
+  check('team: and a fee they send is ignored', (await fee(eAdd.json.id)) === 0, await fee(eAdd.json.id));
+  await api('PATCH', `/agency/items/${pid}?day=${D}`, { title: 'Team reel', stage: 'making', feeCents: 999 }, E.token, eh);
+  check('team: a piece they change keeps its fee', (await fee(pid)) === 123400, await fee(pid));
+  // The owner's "Notes, only for you" on a piece: never shown to a member, and never wiped by what a member sends.
+  await api('PATCH', `/agency/items/${pid}?day=${D}`, { title: 'Team reel', notes: `PIECE-PRIVATE-${stamp}` }, T.token);
+  const eSee = JSON.stringify([(await api('GET', `/agency/items?day=${D}`, undefined, E.token, eh)).json, (await api('GET', `/agency/board?day=${D}`, undefined, E.token, eh)).json]);
+  check('team: a piece\'s private notes never reach a member', !eSee.includes(`PIECE-PRIVATE-${stamp}`), '');
+  await api('PATCH', `/agency/items/${pid}?day=${D}`, { title: 'Team reel', notes: '' }, E.token, eh);
+  const ownNotes = (await api('GET', `/agency/items?day=${D}&size=100`, undefined, T.token)).json.items?.find((i) => i.id === pid)?.notes;
+  check('team: and a member\'s save keeps them', ownNotes === `PIECE-PRIVATE-${stamp}`, ownNotes);
+  const refused = [
+    ['GET', `/agency/clients/${cid}`],
+    ['GET', '/agency/invoices'],
+    ['PUT', '/agency/settings', { currency: 'USD' }],
+    ['POST', '/agency/clients', { name: 'Nope', contactEmail: 'n@x.test', portalPassword: 'generate' }],
+    ['DELETE', `/agency/items/${pid}`],
+    ['PUT', `/agency/clients/${cid}/password`, { generate: true }],
+    ['POST', `/agency/clients/${cid}/portal`, { fresh: true }],
+    ['GET', '/agency/team'],
+    ['POST', '/agency/time', { clientId: cid, day: D, minutes: 30 }],
+    ['POST', '/agency/templates', { kind: 'invoice', fromId: invId, name: 'x' }],
+  ];
+  const codes = [];
+  for (const [m, p, b] of refused) codes.push((await api(m, p, b, E.token, eh)).status);
+  check('team: what an editor may not do is refused', codes.every((s) => s === 403), codes);
+  check('team: the settings stayed as they were', (await api('GET', `/agency?day=${D}`, undefined, T.token)).json.settings?.currency === 'INR');
+
+  // The content creator: clients view, cut down.
+  const ch = asMember(cId);
+  const page = await api('GET', `/agency/clients/${cid}?day=${D}`, undefined, C.token, ch);
+  const pc = page.json.client ?? {};
+  check('team: a content creator reads a client page with the private parts blank', page.status === 200 && pc.notes === '' && pc.retainerCents === 0 && pc.portalToken === null && pc.portalLocked === false && page.json.campaigns?.length === 0 && page.json.time?.length === 0 && page.json.onboarding?.answers === null && page.json.invoices?.length === 0 && page.json.lifecycle?.password?.set === false && page.json.settings?.profile?.bank?.account === '', { client: pc, onb: page.json.onboarding });
+  check('team: and nothing private hides elsewhere in it', !JSON.stringify(page.json).includes(`OWNER-PRIVATE-${stamp}`) && !JSON.stringify(page.json).includes('55667788'), '');
+  check('team: but cannot change the client', (await api('PATCH', `/agency/clients/${cid}`, { name: 'Renamed' }, C.token, ch)).status === 403);
+
+  // Paperwork: view, then edit.
+  await api('PATCH', `/agency/team/${eId}`, { access: { overview: 'off', pipeline: 'edit', clients: 'off', paperwork: 'view' } }, T.token);
+  check('team: a change of access tells the member', JSON.stringify((await api('GET', '/inbox', undefined, E.token)).json).includes('Your access to'), '');
+  const eInv = await api('GET', `/agency/invoices/${invId}`, undefined, E.token, eh);
+  check('team: with paperwork to view, an invoice comes without the bank or the link', eInv.status === 200 && eInv.json.invoice?.doc?.bank?.account === '' && eInv.json.invoice?.token === null && !JSON.stringify(eInv.json).includes('55667788'), eInv.json.invoice?.doc?.bank);
+  check('team: and cannot be changed', (await api('PATCH', `/agency/invoices/${invId}`, { note: 'x' }, E.token, eh)).status === 403);
+  await api('PATCH', `/agency/team/${eId}`, { access: { overview: 'off', pipeline: 'edit', clients: 'off', paperwork: 'edit' } }, T.token);
+  const eEdit = await api('PATCH', `/agency/invoices/${invId}`, { note: `edited by the team ${stamp}`, doc: { bank: { bankName: '', holder: '', account: '', ifsc: '', upi: '' } } }, E.token, eh);
+  const ownerInv = await api('GET', `/agency/invoices/${invId}`, undefined, T.token);
+  check('team: with paperwork to edit, an edit keeps the stored bank', eEdit.status === 200 && ownerInv.json.invoice?.note === `edited by the team ${stamp}` && ownerInv.json.invoice?.doc?.bank?.account === '55667788', [eEdit.status, ownerInv.json.invoice?.doc?.bank]);
+  // A member never sets where the client pays: a new invoice with their own bank keeps the owner's.
+  const eNew = await api('POST', `/agency/invoices?day=${D}`, { clientId: cid, items: [{ description: 'Cut', quantity: 1, unitCents: 10000 }], doc: { bank: { bankName: 'Member Bank', holder: 'Team Editor', account: '99990000', ifsc: 'mbnk0000001', upi: 'editor@upi' } } }, E.token, eh);
+  const eNewOwner = eNew.json.invoice?.id ? (await api('GET', `/agency/invoices/${eNew.json.invoice.id}`, undefined, T.token)).json.invoice : null;
+  check('team: an invoice a member makes pays into the owner\'s bank, never one they send', eNew.status === 201 && eNewOwner?.doc?.bank?.account === '55667788' && !JSON.stringify(eNewOwner ?? {}).includes('99990000'), [eNew.status, eNewOwner?.doc?.bank]);
+  // Nor sends the client's link (in every emailed copy) to an address of their own.
+  await api('PATCH', `/agency/invoices/${invId}`, { status: 'sent' }, T.token);
+  const eMail = await api('POST', `/agency/invoices/${invId}/email`, { to: `team-editor-${stamp}@smoke.test` }, E.token, eh);
+  check('team: a member cannot email the client\'s link to an address of their own', eMail.status === 400 && /on record/.test(eMail.json.error ?? ''), eMail.json);
+  const eMailOk = await api('POST', `/agency/invoices/${invId}/email`, {}, E.token, eh);
+  const mailLog = JSON.stringify((await api('GET', `/agency/doc-log/invoice/${invId}`, undefined, T.token)).json);
+  check('team: but sends to the client\'s address on record', eMailOk.status === 200 && !mailLog.includes('team-editor'), [eMailOk.status, eMailOk.json]);
+  await api('PATCH', `/agency/team/${eId}`, { access: { overview: 'off', pipeline: 'edit', clients: 'off', paperwork: 'off' } }, T.token);
+
+  // Notes: a member writes team notes, never sees the owner's private ones, and removes only their own.
+  const eNote = await api('POST', `/agency/items/${pid}/notes`, { body: `Editor note ${stamp}`, shared: true }, E.token, eh);
+  const ownerNotes = (await api('GET', `/agency/items/${pid}/notes`, undefined, T.token)).json.notes ?? [];
+  check('team: the owner sees the member\'s note as a team note, by name, never shared with the client', ownerNotes.some((n) => n.body === `Editor note ${stamp}` && n.author === 'team' && n.authorName === 'Team Editor' && n.shared === false), ownerNotes);
+  const memberNotes = (await api('GET', `/agency/items/${pid}/notes`, undefined, E.token, eh)).json.notes ?? [];
+  check('team: the member sees team notes and never the owner\'s private one', memberNotes.some((n) => n.body === `For the team ${stamp}`) && memberNotes.some((n) => n.body === `Editor note ${stamp}` && n.mine === true) && !memberNotes.some((n) => n.body === `PRIVATE-NOTE-${stamp}`), memberNotes);
+  check('team: the member cannot remove the owner\'s note', (await api('DELETE', `/agency/notes/${ownTeamNote.json.id}`, undefined, E.token, eh)).status === 404);
+  const tokLink = await api('POST', `/agency/clients/${cid}/portal`, { show: { waiting: true, notes: true } }, T.token);
+  await api('PATCH', `/agency/items/${pid}?day=${D}`, { title: 'Team reel', stage: 'review' }, T.token);
+  const portal = await api('GET', `/public/agency/${tokLink.json.portalToken}`, undefined, null, { 'CF-Connecting-IP': `10.251.${seed & 255}.9` });
+  check('team: team notes never reach the client link', portal.status === 200 && !JSON.stringify(portal.json).includes(`Editor note ${stamp}`) && !JSON.stringify(portal.json).includes(`For the team ${stamp}`), portal.status);
+
+  // The log names who did it.
+  await api('PATCH', `/agency/team/${cId}`, { access: { overview: 'off', pipeline: 'edit', clients: 'edit', paperwork: 'off' } }, T.token);
+  const STAGES = ['enquiry', 'agreement_sent', 'agreement_signed', 'strategy', 'trial', 'pilot', 'retainer_offer', 'retainer', 'delivery'];
+  const atNow = (await api('GET', `/agency/clients/${cid}?day=${D}`, undefined, T.token)).json.lifecycle?.stage ?? 'enquiry';
+  const at = STAGES.indexOf(atNow);
+  const stg = await api('POST', `/agency/clients/${cid}/stage`, at > 0 ? { to: STAGES[at - 1], undo: true } : { to: 'agreement_sent' }, C.token, ch);
+  const life = (await api('GET', `/agency/clients/${cid}?day=${D}`, undefined, T.token)).json.lifecycle?.log ?? [];
+  check('team: a stage move by a member is logged as the team, by name', stg.status === 200 && life.some((l) => l.actor === 'team' && l.kind === 'stage' && l.actorName === 'Team Creator'), [stg.json, life.slice(0, 3)]);
+  check('team: a piece a member added leaves a team line in the client\'s log', life.some((l) => l.actor === 'team' && l.kind === 'team' && /added a piece/.test(l.text)), life.map((l) => l.text));
+  // The client's email is where their link goes: a member with Clients to edit changes the rest, never that.
+  const mailBefore = (await api('GET', `/agency/clients/${cid}?day=${D}`, undefined, T.token)).json.client?.contactEmail;
+  const ce = await api('PATCH', `/agency/clients/${cid}`, { contactEmail: `team-creator-${stamp}@smoke.test`, health: 'amber' }, C.token, ch);
+  const cAfter = (await api('GET', `/agency/clients/${cid}?day=${D}`, undefined, T.token)).json.client;
+  check('team: a member cannot change the client\'s email', ce.status === 200 && Boolean(mailBefore) && cAfter?.contactEmail === mailBefore && cAfter?.health === 'amber', [mailBefore, cAfter?.contactEmail, cAfter?.health]);
+  await new Promise((r) => setTimeout(r, 800));
+  const logs = await api('GET', `/internal/logs?actor=${C.user.id}`, undefined, A.token);
+  check('team: the app log names the member, not the owner', logs.status === 200 && logs.json.logs?.some((l) => l.actorId === C.user.id && /\/agency\/clients\/.+\/stage/.test(l.path ?? '')), logs.json.logs?.slice(0, 3));
+
+  // The client member: never the owner's routes, only their own client's read-only page.
+  const kh = asMember(kId);
+  const kCodes = [];
+  for (const p of ['/agency', `/agency/items?day=${D}`, '/agency/invoices', `/agency/clients/${cid}`]) kCodes.push((await api('GET', p, undefined, K.token, kh)).status);
+  check('team: a client member is refused on every owner route', kCodes.every((s) => s === 403), kCodes);
+  await api('PATCH', `/agency/invoices/${invId}`, { status: 'sent' }, T.token);
+  await api('POST', `/agency/clients/${cid}/portal`, { show: { invoices: true, waiting: true, coming: true } }, T.token);
+  const kv = await api('GET', `/me/teams/${kId}/client-view`, undefined, K.token);
+  const kvText = JSON.stringify(kv.json);
+  check('team: a client member reads their own client\'s page', kv.status === 200 && kv.json.view?.clientName === `Team Client Co ${stamp}` && kv.json.view?.invoices?.length >= 1, kv.json.view && { name: kv.json.view.clientName, inv: kv.json.view.invoices?.length });
+  check('team: with no fee, retainer, private note, other client or password in it', !kvText.includes('feeCents') && !kvText.includes('retainerCents') && !kvText.includes(`OWNER-PRIVATE-${stamp}`) && !kvText.includes(`PRIVATE-NOTE-${stamp}`) && !kvText.includes(`Other Client ${stamp}`) && !kvText.includes('pass_hash') && !kvText.includes(`Editor note ${stamp}`), '');
+  await api('PATCH', `/agency/team/${kId}`, { access: { overview: 'view', pipeline: 'view', clients: 'off', paperwork: 'off' } }, T.token);
+  const kv2 = await api('GET', `/me/teams/${kId}/client-view`, undefined, K.token);
+  check('team: with paperwork off, the paper is gone', kv2.status === 200 && kv2.json.view?.invoices?.length === 0 && kv2.json.view?.contracts?.length === 0, kv2.json.view?.invoices);
+  check('team: someone else cannot read that page', (await api('GET', `/me/teams/${kId}/client-view`, undefined, E.token)).status === 403);
+
+  // Wrong or old rows.
+  check('team: a made-up row is refused', (await api('GET', `/agency/items?day=${D}`, undefined, E.token, asMember('not-a-row'))).status === 403);
+  check('team: another person\'s row is refused', (await api('GET', `/agency/items?day=${D}`, undefined, X.token, asMember(eId))).status === 403);
+  check('team: the owner cannot use a member\'s row', (await api('GET', `/agency/items?day=${D}`, undefined, T.token, asMember(cId))).status === 403);
+
+  // The owner's Agency switched off: members are refused too.
+  const off = await admin('POST', '/admin/flags/agency/overrides', { subjectType: 'user', subjectId: T.user.id, enabled: false, reason: 'smoke team' });
+  const shut = await api('GET', `/agency/items?day=${D}`, undefined, C.token, ch);
+  check('team: with the owner\'s Agency off, a member is refused', shut.status === 403 && /not open/.test(shut.json.error ?? ''), shut.json);
+  if (off.json.override?.id) await admin('DELETE', `/admin/flags/overrides/${off.json.override.id}`);
+  check('team: and let in again once it is back', (await api('GET', `/agency/items?day=${D}`, undefined, C.token, ch)).status === 200);
+
+  // Removal ends access on the next request.
+  check('team: the owner removes the editor', (await api('DELETE', `/agency/team/${eId}`, undefined, T.token)).status === 200);
+  const gone = await api('GET', `/agency/items?day=${D}`, undefined, E.token, eh);
+  check('team: the editor\'s next request is refused as gone', gone.status === 403 && gone.json.reason === 'gone', gone.json);
+  check('team: and their own Agency still works', (await api('GET', `/agency?day=${D}`, undefined, E.token)).status === 200);
+  check('team: a member can leave', (await api('POST', `/me/teams/${cId}/leave`, undefined, C.token)).status === 200 && (await api('GET', `/agency/items?day=${D}`, undefined, C.token, ch)).status === 403);
+
+  // One more invite that stays open, so the owner's delete can be seen taking it.
+  const iX = await invite({ who: `team-outsider-${stamp}@smoke.test`, role: 'videographer' });
+  check('team: an outsider can be invited after all', iX.status === 201, iX.json);
+
+  // The export.
+  const tExp = await api('GET', '/me/export', undefined, T.token);
+  const kExp = await api('GET', '/me/export', undefined, K.token);
+  check('team: the owner\'s export has the team, the member\'s the teams joined', tExp.json.agencyTeam?.length >= 3 && kExp.json.agencyTeamsJoined?.some((r) => r.id === kId && r.client_id === undefined), [tExp.json.agencyTeam?.length, kExp.json.agencyTeamsJoined]);
+
+  // The invite limit: twenty a day, counted on every ask.
+  let first429 = 0;
+  while (invites < 22 && !first429) {
+    const r = await invite({ who: `nobody-${invites}-${stamp}@smoke.test`, role: 'editor' });
+    if (r.status === 429) first429 = invites;
+  }
+  check('team: the twenty-first invite in a day is refused', first429 === 21, first429);
+
+  // Deleting: an account takes its rows and its name off what it did; the tied client takes its client member; the owner takes the team.
+  const delE = await api('DELETE', '/me', { confirm: 'DELETE' }, E.token);
+  check('team: the editor deletes their account', delE.status === 200, delE.json);
+  const afterNotes = (await api('GET', `/agency/items/${pid}/notes`, undefined, T.token)).json.notes ?? [];
+  check('team: their note stays on the owner\'s piece without their name', afterNotes.some((n) => n.body === `Editor note ${stamp}` && n.authorName === 'A former team member'), afterNotes.filter((n) => n.author === 'team'));
+  const rows = (await api('GET', '/agency/team', undefined, T.token)).json.members ?? [];
+  check('team: their rows go with them', !rows.some((m) => m.person?.name === 'Team Editor'), rows.map((m) => m.person?.name));
+  await api('DELETE', `/agency/clients/${cid}`, undefined, T.token);
+  check('team: deleting the client removes its client member', !(await api('GET', '/me/teams', undefined, K.token)).json.teams?.some((t) => t.id === kId));
+  const delT = await api('DELETE', '/me', { confirm: 'DELETE' }, T.token);
+  check('team: the owner deletes their account', delT.status === 200, delT.json);
+  check('team: and every row of their team goes', (await api('GET', '/me/teams', undefined, X.token)).json.teams?.length === 0, '');
+}
+
+// ---------------------------------------------------------------- Emerging (2026-11-04)
+import { execFileSync as emergeExec } from 'node:child_process';
+import { existsSync as emergeExists } from 'node:fs';
+import { zonedToUtc as emergeUtc, addDays as emergeAddDays, isoWeekday as emergeWeekday } from '../../packages/shared/src/index.ts';
+section('Emerging');
+{
+  // A person's own patterns, read across their apps. The data goes in through the ordinary routes; only a tick's time cannot be
+  // sent (the server stamps it now), so three ticks are moved back to earlier days in the smoke database itself, never another.
+  const smokeState = new URL('./state', import.meta.url).pathname;
+  const ownSmokeServer = ORIGIN === 'http://127.0.0.1:8788' && emergeExists(smokeState);
+  const smokeSql = (sql) =>
+    emergeExec('npx', ['--no-install', 'wrangler', 'd1', 'execute', 'kreators-life', '--local', '--persist-to', smokeState, '--command', sql], { cwd: new URL('../../apps/api', import.meta.url).pathname, stdio: 'pipe' });
+  const E = await signup(`insights-${stamp}@smoke.test`, 'Emerge-smoke-ok-1', 'Emerge Smoke');
+  const O = await signup(`insights-other-${stamp}@smoke.test`, 'Emerge-smoke-ok-2', 'Emerge Other');
+  const get = (q, token = E.token) => api('GET', `/insights?day=${today}${q}`, undefined, token);
+  const ago = (n) => emergeAddDays(today, -n);
+
+  const fresh = await get('');
+  check('emerging: a new account answers', fresh.status === 200 && fresh.json.day === today && Array.isArray(fresh.json.insights), fresh.json);
+  check('emerging: a new account sees only watching lines, no number and no chart', fresh.json.insights?.length > 0 && fresh.json.insights.every((i) => i.state === 'watching' && i.headline === '' && i.chart === null && i.need), fresh.json.insights?.map((i) => [i.key, i.state]));
+  check('emerging: a bad day is refused', (await api('GET', '/insights?day=2026-11-31', undefined, E.token)).status === 400);
+  check('emerging: an unknown place is refused', (await get('&app=nowhere')).status === 400);
+  check('emerging: an unknown pillar is refused', (await get('&rel=constructor')).status === 400);
+  check('emerging: needs a session', (await api('GET', `/insights?day=${today}`)).status === 401);
+
+  for (const key of ['mood', 'sleep', 'stress', 'mindful']) await api('PATCH', '/me/modules', { key, on: true }, E.token);
+  const built = await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: { project: 'Emerge project' } } }, E.token);
+  const proj = (built.json.nodes ?? []).find((n) => n.kind === 'project');
+  check('emerging: a pyramid to hang tasks on', built.status === 201 && proj?.id, built.status);
+
+  // Three ways of writing the same task, each ticked through the ordinary route (a new account's first three ticks have no wait).
+  const ticked = [];
+  for (const title of ['Gym session', 'gym sessions', 'Gym session 3']) {
+    const made = await api('POST', '/nodes', { kind: 'task', parentId: proj.id, relationship: 'self', title }, E.token);
+    const done = await api('POST', `/nodes/${made.json.node?.id}/complete`, { date: today }, E.token);
+    check(`emerging: "${title}" is added and ticked`, made.status === 201 && done.status === 200, [made.status, done.status, done.json]);
+    ticked.push(made.json.node?.id);
+  }
+  const oneDay = await get('');
+  check('emerging: three ticks on one day are not a habit', !oneDay.json.insights?.some((i) => i.key === 'habit' && i.state === 'ready'), oneDay.json.insights?.filter((i) => i.key === 'habit'));
+
+  // Sleep and mood over sixteen past days: eight nights of 8 hours with a mood of 4, eight of 6 hours with a mood of 2.
+  for (let n = 1; n <= 16; n += 1) {
+    const good = n % 2 === 1;
+    await api('POST', '/wellbeing/sleep', { date: ago(n), value: good ? 8 : 6 }, E.token);
+    await api('POST', '/wellbeing/mood', { date: ago(n), value: good ? 4 : 2, note: `mood note ${stamp}` }, E.token);
+  }
+  // A journal entry whose words must never reach the answer.
+  const secret = `Zebra-${stamp}-private`;
+  await api('POST', '/journal', { title: secret, body: `${secret} body words`, date: ago(2) }, E.token);
+  const withData = await get('');
+  const raw = JSON.stringify(withData.json);
+  const sm = withData.json.insights?.find((i) => i.key === 'sleep-mood');
+  check('emerging: sleep and mood pair up, counted by hand', sm?.state === 'ready' && sm.headline === '4.0 vs 2.0' && sm.chart?.rows?.[0]?.n === 8 && sm.chart?.rows?.[1]?.n === 8 && sm.private === true, sm);
+  check('emerging: the line says what went together, never a cause', /^On days after 7 hours of sleep or more, your mood was 4\.0 on average\. On other days, 2\.0\.$/.test(sm?.text ?? '') && !/because|leads to|due to|causes/i.test(sm?.text ?? ''), sm?.text);
+  check('emerging: journal words and notes never appear', !raw.includes(secret) && !raw.includes(`mood note ${stamp}`), '');
+  const sleepOnly = await get('&app=sleep');
+  check('emerging: an app gets only the lines that touch it', sleepOnly.status === 200 && sleepOnly.json.insights?.length > 0 && sleepOnly.json.insights.every((i) => i.apps.includes('sleep') && i.state === 'ready'), sleepOnly.json.insights?.map((i) => i.key));
+
+  // Another person sees none of it, and cannot reach the tasks behind it.
+  const other = await get('', O.token);
+  const otherRaw = JSON.stringify(other.json);
+  check('emerging: another account sees none of this account\'s data', other.status === 200 && !otherRaw.includes('Gym') && !other.json.insights?.some((i) => i.state === 'ready'), other.json.insights?.filter((i) => i.state === 'ready'));
+  check('emerging: and cannot change a task the habit names', (await api('PATCH', `/nodes/${ticked[0]}`, { title: 'mine now' }, O.token)).status === 404);
+
+  // Switching an app off takes its lines with it.
+  await api('PATCH', '/me/modules', { key: 'stress', on: false }, E.token);
+  const offStress = await get('&app=stress');
+  const allNoStress = await get('');
+  check('emerging: with Stress off, nothing for Stress and no stress line anywhere', offStress.status === 200 && offStress.json.insights?.length === 0 && !allNoStress.json.insights?.some((i) => i.key === 'stress-calm' || i.key === 'money-stress'), offStress.json.insights?.map((i) => i.key));
+  await api('PATCH', '/me/modules', { key: 'sleep', on: false }, E.token);
+  check('emerging: with Sleep off, sleep and mood goes', !(await get('')).json.insights?.some((i) => i.key === 'sleep-mood'));
+  await api('PATCH', '/me/modules', { key: 'sleep', on: true }, E.token);
+
+  if (!ownSmokeServer) {
+    console.log('  (skipped the habit checks: they move tick times in the smoke database, and this is not the smoke server on 8788)');
+  } else {
+    // The three ticks on three different days in the person's zone (India): today, two and four days ago, at 7:30 in the morning.
+    const at = (n) => emergeUtc(ago(n), 7 * 60 + 30, 'Asia/Kolkata').toISOString();
+    smokeSql(ticked.map((id, i) => `UPDATE nodes SET completed_at = '${at(i * 2)}' WHERE id = '${id}' AND user_id = '${E.user.id}';`).join(' '));
+    const three = await get('');
+    const habit = three.json.insights?.find((i) => i.key === 'habit' && i.state === 'ready');
+    const top = Math.min(...[0, 2, 4].map((n) => emergeWeekday(ago(n))));
+    check('emerging: three similar ticks on three days are a habit', habit?.habit?.ticks === 3 && habit.headline === '3 times' && habit.habit.days?.length === 3 && habit.action?.kind === 'habit', habit);
+    check('emerging: it suggests a weekly repeat on the usual day at the usual time', habit?.habit?.repeat?.kind === 'weekly' && habit.habit.repeat.days?.length === 1 && habit.habit.repeat.days[0] === top && habit.habit.time === '07:30', habit?.habit);
+    check('emerging: the habit is on Daily and Pillars too', (await get('&app=today')).json.insights?.some((i) => i.id === habit?.id) && (await get('&app=tower')).json.insights?.some((i) => i.id === habit?.id));
+    // Make it a habit: an open task in the group takes the repeat through the ordinary PATCH, and the card goes by itself.
+    const open = await api('POST', '/nodes', { kind: 'task', parentId: proj.id, relationship: 'self', title: 'Gym session' }, E.token);
+    const offered = (await get('')).json.insights?.find((i) => i.key === 'habit' && i.state === 'ready');
+    check('emerging: an open task in the group is offered, not a new one', offered?.habit?.openTaskId === open.json.node?.id && offered.habit.projectId === proj.id, offered?.habit);
+    const kept = await api('PATCH', `/nodes/${open.json.node?.id}`, { repeat: offered?.habit?.repeat, doDate: offered?.habit?.firstDay }, E.token);
+    check('emerging: Keep goes through the ordinary task edit', kept.status === 200, kept.json);
+    const after = await get('');
+    check('emerging: once it repeats, the habit is no longer suggested', !after.json.insights?.some((i) => i.key === 'habit' && i.state === 'ready'), after.json.insights?.filter((i) => i.key === 'habit'));
+  }
+
+  // Quick: the reads are one batch, so a read is fast even with weeks of rows.
+  let best = Infinity;
+  for (let i = 0; i < 3; i += 1) {
+    const t0 = performance.now();
+    await get('');
+    best = Math.min(best, performance.now() - t0);
+  }
+  check('emerging: answers in under 200 ms', best < 200, `${Math.round(best)} ms`);
+}
+
+section('Good and bad habits');
+{
+  // The 2026-11-04 ask: a task done again and again, or a slip on the not to do list, tied to how the days went and sorted into good
+  // and bad habits. Ticks and not to do marks cannot be sent for past days, so they are written into the smoke database itself.
+  const habitState = new URL('./state', import.meta.url).pathname;
+  const habitOwn = ORIGIN === 'http://127.0.0.1:8788' && emergeExists(habitState);
+  const habitSql = (sql) =>
+    emergeExec('npx', ['--no-install', 'wrangler', 'd1', 'execute', 'kreators-life', '--local', '--persist-to', habitState, '--command', sql], { cwd: new URL('../../apps/api', import.meta.url).pathname, stdio: 'pipe' });
+  const H = await signup(`habits-${stamp}@smoke.test`, 'Habits-smoke-ok-1', 'Habit Smoke');
+  const back = (n) => emergeAddDays(today, -n);
+  const get = (q = '') => api('GET', `/insights?day=${today}${q}`, undefined, H.token);
+  for (const key of ['mood', 'sleep', 'stress', 'mindful']) await api('PATCH', '/me/modules', { key, on: true }, H.token);
+  const built = await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: { project: 'Habit project' } } }, H.token);
+  const proj = (built.json.nodes ?? []).find((n) => n.kind === 'project');
+  check('habits: a pyramid to hang tasks on', built.status === 201 && proj?.id, built.status);
+
+  // Count it as a habit: a choice on a repeating task, carried to the next one.
+  const daily = { kind: 'daily', every: 1, days: [], until: null };
+  const made = await api('POST', '/nodes', { kind: 'task', parentId: proj?.id, relationship: 'self', title: 'Water the plants', repeat: daily, doDate: today, habit: false }, H.token);
+  check('habits: a repeating task can be made not a habit', made.status === 201 && made.json.node?.habit === false && made.json.node?.repeat?.kind === 'daily', made.json.node);
+  const plain = await api('POST', '/nodes', { kind: 'task', parentId: proj?.id, relationship: 'self', title: 'Stretch', repeat: daily, doDate: today }, H.token);
+  check('habits: with no pick the old rule holds (null)', plain.status === 201 && plain.json.node?.habit === null, plain.json.node);
+  const on = await api('PATCH', `/nodes/${made.json.node?.id}`, { habit: true }, H.token);
+  check('habits: the pick changes through the ordinary edit', on.status === 200 && on.json.node?.habit === true, on.json.node);
+  const ticked = await api('POST', `/nodes/${made.json.node?.id}/complete`, { date: today }, H.token);
+  check('habits: the next one carries the pick', ticked.status === 200 && ticked.json.next?.habit === true, ticked.json.next);
+  const cleared = await api('PATCH', `/nodes/${ticked.json.next?.id}`, { habit: null }, H.token);
+  check('habits: null goes back to the old rule', cleared.status === 200 && cleared.json.node?.habit === null, cleared.json.node);
+  const exported = await api('GET', '/me/export', undefined, H.token);
+  check('habits: the pick is in the export', JSON.stringify(exported.json).includes('"habit":1'), '');
+
+  if (!habitOwn) {
+    console.log('  (skipped the good and bad habit checks: they write past days into the smoke database, and this is not the smoke server on 8788)');
+  } else {
+    // "Evening walk" on the odd days back (1, 3, … 19) with a mood of 4; the even days a mood of 2. "Scroll in bed" slipped on the
+    // even days 2 to 12 and kept on the odd ones.
+    const walkIds = [];
+    for (let n = 1; n <= 19; n += 2) {
+      const t = await api('POST', '/nodes', { kind: 'task', parentId: proj?.id, relationship: 'self', title: 'Evening walk' }, H.token);
+      walkIds.push([t.json.node?.id, n]);
+    }
+    for (let n = 1; n <= 20; n += 1) await api('POST', '/wellbeing/mood', { date: back(n), value: n % 2 ? 4 : 2 }, H.token);
+    const ntd = await api('POST', '/today/not-to-do', { title: 'Scroll in bed', relationship: 'self' }, H.token);
+    check('habits: a not to do item', ntd.status === 201 && ntd.json.item?.id, ntd.json);
+    const at = (n) => emergeUtc(back(n), 19 * 60, 'Asia/Kolkata').toISOString();
+    const marks = [];
+    for (let n = 1; n <= 19; n += 2) marks.push([n, 'kept']);
+    for (let n = 2; n <= 12; n += 2) marks.push([n, 'slipped']);
+    habitSql(
+      [
+        ...walkIds.map(([id, n]) => `UPDATE nodes SET status = 'done', completed_at = '${at(n)}' WHERE id = '${id}' AND user_id = '${H.user.id}';`),
+        ...marks.map(([n, st]) => `INSERT INTO not_to_do_days (item_id, user_id, day, status, created_at) VALUES ('${ntd.json.item.id}', '${H.user.id}', '${back(n)}', '${st}', '${at(n)}');`),
+      ].join(' '),
+    );
+    const all = await get();
+    const ties = (all.json.insights ?? []).filter((i) => i.key === 'habit-tie' && i.state === 'ready');
+    const good = ties.find((i) => i.tie?.title === 'Evening walk');
+    const bad = ties.find((i) => i.tie?.title === 'Scroll in bed');
+    check('habits: Evening walk is a good habit, counted by hand', good?.tie?.verdict === 'good' && good.headline === '4.0 vs 2.0' && good.text === 'On days you ticked “Evening walk”, your mood was 2.0 higher, on average.' && good.private === true, good);
+    check('habits: the good habit offers Make it a habit', good?.action?.kind === 'habit' && good.action.label === 'Make it a habit' && good.habit?.projectId === proj?.id, good?.action);
+    check('habits: a slip on the not to do list is a bad habit', bad?.tie?.verdict === 'bad' && bad.tie.kind === 'notToDo' && /^On days you slipped on “Scroll in bed”, your mood was 2\.0 lower/.test(bad.text) && bad.action?.to === '/today#ntd-heading', bad);
+    check('habits: every line ends on things that happen together, never a cause', ties.every((i) => i.basis.endsWith('Things that happen together, not causes.') && !/because|leads to|due to|causes|makes you/i.test(i.text)), ties.map((i) => i.text));
+    check('habits: the plain "keeps coming back" card is not said twice', !(all.json.insights ?? []).some((i) => i.key === 'habit' && i.state === 'ready' && /Evening walk/.test(i.text)), '');
+    check('habits: Home and Daily show them', (await get('&app=home')).json.insights?.some((i) => i.key === 'habit-tie') && (await get('&app=today')).json.insights?.some((i) => i.key === 'habit-tie'));
+    check('habits: the pillar page shows its own', (await get('&app=pillar&rel=self')).json.insights?.some((i) => i.tie?.title === 'Evening walk'));
+    // Make it a habit: a new repeating task, counted as a habit, through the ordinary create; the card then opens the task instead.
+    const kept = await api('POST', '/nodes', { kind: 'task', parentId: proj?.id, relationship: 'self', title: good?.habit?.title ?? 'Evening walk', repeat: good?.habit?.repeat, doDate: good?.habit?.firstDay, habit: true }, H.token);
+    check('habits: Keep makes a repeating task counted as a habit', kept.status === 201 && kept.json.node?.habit === true, kept.json.node);
+    const after = (await get()).json.insights?.find((i) => i.tie?.title === 'Evening walk');
+    check('habits: once it repeats, the card opens the task', after?.tie?.repeats === true && after.action?.label === 'Open the task', after?.action);
+    // Mood, Sleep and Stress off: nothing that reads how a day felt.
+    for (const key of ['mood', 'sleep', 'stress']) await api('PATCH', '/me/modules', { key, on: false }, H.token);
+    const off = await get();
+    const offTies = (off.json.insights ?? []).filter((i) => i.key === 'habit-tie');
+    check('habits: with Mood, Sleep and Stress off, no habit reads wellbeing', off.status === 200 && offTies.every((i) => !i.private && !i.reads.includes('wellbeing')) && !offTies.some((i) => i.state === 'ready' && /mood|slept|stress/.test(i.text)), offTies.map((i) => [i.state, i.text]));
+    // Another person sees none of it.
+    const O = await signup(`habits-other-${stamp}@smoke.test`, 'Habits-smoke-ok-2', 'Habit Other');
+    const other = await api('GET', `/insights?day=${today}`, undefined, O.token);
+    check('habits: another account sees none of it', other.status === 200 && !JSON.stringify(other.json).includes('Scroll in bed') && !JSON.stringify(other.json).includes('Evening walk'), '');
   }
 }
 

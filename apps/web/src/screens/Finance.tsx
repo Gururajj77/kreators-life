@@ -5,7 +5,7 @@ import { PeriodPanel } from '../components/PeriodPanel';
 import { Button } from '../components/Button';
 import { Donut, Legend, MultiLine, StatTile } from '../components/Charts';
 import { Pager, usePage } from '../components/Pager';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { Toggle } from '../components/Toggle';
@@ -16,6 +16,7 @@ import { useParamState } from '../lib/useParamState';
 import { Fold } from '../components/Fold';
 
 import { useAuthed } from '../lib/queries';
+import { EmergenceSlot } from '../components/EmergenceSlot';
 
 const monthName = (m: string) => new Date(`${m}-01T00:00:00`).toLocaleDateString(LOCALE, { month: 'short', year: 'numeric' });
 const shortMonth = (m: string) => new Date(`${m}-01T00:00:00`).toLocaleDateString(LOCALE, { month: 'short' });
@@ -44,10 +45,7 @@ export function Finance() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Finance</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Money in, money out, who with, what is owed, what repeats, and your goals. Only you can see this.</p>
+      <AppCover back={{ to: '/apps', label: 'Apps' }} title="Finance" lede="Money in, money out, who with, what is owed, what repeats, and your goals. Only you can see this.">
         {d && (
           <div className="mt-md grid grid-cols-2 gap-xs md:grid-cols-4" aria-label="All time">
             <Stat label="earned, all time" value={money(d.totals.incomeCents, d.currency)} tone="var(--tint-green)" />
@@ -79,7 +77,7 @@ export function Finance() {
             Budgets
           </Button>
         </div>
-      </header>
+      </AppCover>
 
       {q.isError && (
         <p role="alert" className="span-all mt-md m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
@@ -90,6 +88,7 @@ export function Finance() {
       {d && (
         <>
           <PeriodPanel id="finance-period" parts={['finance', 'shop']} />
+          <EmergenceSlot app="finance" max={2} />
           <section className="mt-lg" aria-labelledby="month-heading">
             <div className="flex items-center justify-between gap-xs">
               <button type="button" onClick={() => { setMonth(shiftMonth(month, -1)); txPage.reset(); }} aria-label="Previous month" className="toy toy-soft flex size-[44px] items-center justify-center rounded-pill bg-card text-[18px] font-extrabold">

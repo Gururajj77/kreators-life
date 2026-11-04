@@ -3,6 +3,7 @@ import { Button } from '../components/Button';
 import { A, Bullets, Fact, Grievance, H, LegalPage, Mail, NOT_SET, P, Strong, contactEmail, useBusiness } from './legalBits';
 import { Link } from 'react-router';
 import { FIELD } from '../lib/ui';
+import { SITE_LINK } from './buttons';
 
 
 interface Blank {
@@ -92,7 +93,8 @@ function NoticeForm({ kind }: { kind: 'notice' | 'counter' }) {
         </p>
       )}
       <div className="mt-md">
-        <Button type="submit" disabled={busy}>
+        {/* One solid button a page: the notice is the main form, the counter-notice wears the site's secondary look. */}
+        <Button type="submit" variant={counter ? 'outline' : 'primary'} disabled={busy}>
           {busy ? 'Sending' : counter ? 'Send the counter-notice' : 'Send the notice'}
         </Button>
       </div>
@@ -112,10 +114,10 @@ export function Copyright() {
       lede="If something here copies your work, or we took down yours by mistake."
       action={
         <>
-          <Link to="#send-notice" className="toy toy-soft inline-flex min-h-[44px] items-center rounded-pill bg-card px-md text-[14px] font-bold">
+          <Link to="#send-notice" className={SITE_LINK}>
             Send a notice
           </Link>
-          <Link to="#send-counter" className="toy toy-soft inline-flex min-h-[44px] items-center rounded-pill bg-card px-md text-[14px] font-bold">
+          <Link to="#send-counter" className={SITE_LINK}>
             Send a counter-notice
           </Link>
         </>

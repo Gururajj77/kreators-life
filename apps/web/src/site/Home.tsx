@@ -1,8 +1,8 @@
 import type { CSSProperties } from 'react';
-import { BUMLING, characterTitle, formatCount, MODULE_BY_KEY, PAYMENTS_LIVE, planPriceLabel, RELATIONSHIPS, type RelationshipKey } from '@kreators/shared';
+import { BOOK_AUTHOR, BUMLING, formatCount, MODULE_BY_KEY, PAYMENTS_LIVE, planPriceLabel, RELATIONSHIPS, type RelationshipKey } from '@kreators/shared';
 import { useQuery } from '@tanstack/react-query';
 import { HeroBlobs } from '../components/Hero';
-import { motion } from 'motion/react';
+import { m as motion } from 'motion/react';
 import { Link } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { GradientStripes } from '../components/fx/GradientStripes';
@@ -11,7 +11,6 @@ import { MorphShapes } from '../components/fx/MorphShapes';
 import { BorderBeam } from '../components/fx/BorderBeam';
 import { CountUp } from '../components/fx/CountUp';
 import { Magnet } from '../components/fx/Magnet';
-import { Marquee } from '../components/fx/Marquee';
 import { SpotlightCard } from '../components/fx/SpotlightCard';
 import { TextReveal } from '../components/fx/TextReveal';
 import { publicApi } from '../lib/api';
@@ -19,13 +18,15 @@ import { useSession } from '../lib/store';
 import { BRAND_PITCH, FEATURES, SITE_FAQ, SITE_FEATURES } from './content';
 import { Tower, useRise } from './SevenRP';
 import { SiteLayout, useAppEntry } from './SiteLayout';
-import { BatteryLow, Check, Hourglass, MessageSquareDashed, Puzzle, Tornado, X } from 'lucide-react';
-import { AnimatedIcon } from '../components/AnimatedIcon';
+import { ArrowDown, BatteryLow, Check, Hourglass, MessageSquareDashed, Puzzle, Tornado, X } from 'lucide-react';
 import { AppIcon } from '../components/AppIcon';
 import { Icon } from '../components/Icon';
 import { Fold } from '../components/Fold';
 import { GuideLine } from './GuideLine';
 import { PosterPanel } from './PosterPanel';
+import { useBookEntry } from './Books';
+import { BookShelf } from '../components/BookShelf';
+import { SiteArrow, SITE_CHIP, SITE_LINK, SITE_LINK_INLINE, SITE_PRIMARY, SITE_PRIMARY_ON_INK, SITE_SECONDARY } from './buttons';
 
 /**
  * The landing page tells one story, in the PASTOR order: the problem, what it costs (the villains), the story and the
@@ -73,6 +74,9 @@ const VILLAINS = [
   },
 ] as const;
 
+/** A few app buttons under the answers say what the app is in plainer words (2026-11-04); the app keeps its own name everywhere else. */
+const APP_CHIP_LABEL: Partial<Record<string, string>> = { run: 'Run club' };
+
 /** How the app beats each villain: what it does (a rule the code keeps), what you get, and the apps that do it. */
 const ANSWERS: {
   villain: (typeof VILLAINS)[number]['key'];
@@ -96,7 +100,7 @@ const ANSWERS: {
     poster: ['One place.', 'One login.'],
     how: 'Learning, paid work, brand campaigns, your clients, your shop and your money in one app. Only a few apps are on to start. The setup chat picks up to five more that fit, and you can switch any off.',
     benefit: 'One place and one login, so nothing slips past you.',
-    apps: ['school', 'work', 'agency', 'shop', 'finance'],
+    apps: ['agency', 'school', 'work', 'shop', 'finance'],
   },
   {
     villain: 'silence',
@@ -120,7 +124,7 @@ const ANSWERS: {
     poster: ['See every way in.', 'And all that comes in.'],
     how: 'Paid gigs and brand campaigns. Win pays for every verified view, once a reviewer checks it. Your own shop takes 5% of a sale and nothing up front. Agency makes the client invoice, with GST and TDS worked out. All your money sits in one picture.',
     benefit: 'You see every way in, and everything that comes in.',
-    apps: ['army', 'win', 'agency', 'shop', 'finance'],
+    apps: ['army', 'agency', 'shop', 'win', 'finance'],
   },
 ];
 
@@ -192,6 +196,7 @@ export function Home() {
   const rise = useRise();
   const token = useSession((s) => s.token);
   const start = token ? entry : '/start';
+  const bookEntry = useBookEntry();
   const stats = useQuery({
     queryKey: ['site', 'stats'],
     queryFn: publicApi.stats,
@@ -228,13 +233,14 @@ export function Home() {
           <div className="mt-lg flex flex-wrap items-center gap-md">
             <Magnet>
               <LiquidMetal>
-                <Link to={start} className="toy fx-shimmer fx-shimmer-intro inline-flex min-h-[56px] items-center rounded-pill bg-ink px-lg text-[18px] font-bold text-on-ink">
+                <Link to={start} className={`${SITE_PRIMARY} fx-shimmer-intro`}>
                   {token ? 'Go to app' : 'Start free'}
                 </Link>
               </LiquidMetal>
             </Magnet>
-            <a href="#story" className="inline-flex min-h-[48px] items-center gap-xs text-[16px] font-bold underline underline-offset-4 hover:text-ink-soft">
-              <AnimatedIcon name="scrollDown" size={24} />
+            <a href="#story" className={`${SITE_LINK} text-[16px]`}>
+              {/* A plain arrow: the animated mouse showed as an empty outline at rest. */}
+              <Icon icon={ArrowDown} size={20} />
               See how it works
             </a>
           </div>
@@ -242,29 +248,18 @@ export function Home() {
           <p className="mt-xs m-0 max-w-[520px] text-[14px] font-semibold text-ink-mute">
             No card. We ask your phone and birthday so everyone here is 18 or over. Nobody else ever sees them.
           </p>
+          {/* The app list was a drifting band of pills here (the founder: "cluttered from the start"); one quiet line in the link look instead. */}
+          <p className="mt-xs m-0 max-w-[520px] text-[14px] font-semibold text-ink-mute">
+            {formatCount(SITE_FEATURES.length)} apps, each one a switch.{' '}
+            <Link to="/features" className={`${SITE_LINK_INLINE} text-ink`}>
+              See every feature
+            </Link>
+          </p>
         </div>
         <div className="pt-lg md:pt-0">
           <Tower />
         </div>
       </section>
-
-      {/* Every app, drifting past: real names from the feature list, each opening its own page. */}
-      <div className="mt-xl">
-        <Marquee label="Every app inside kreators.app" duration={Math.max(60, SITE_FEATURES.length * 3)}>
-          {SITE_FEATURES.map((m) => (
-            <li key={m.key}>
-              <Link
-                to={`/features/${m.key}`}
-                title={FEATURES[m.key]?.tagline}
-                className="inline-flex min-h-[44px] items-center gap-xs whitespace-nowrap rounded-pill border border-line bg-card-strong px-sm text-[14px] font-bold text-ink-soft transition-colors hover:text-ink"
-              >
-                <AppIcon name={m.icon} size={16} />
-                {m.name}
-              </Link>
-            </li>
-          ))}
-        </Marquee>
-      </div>
 
       <GuideLine host={BUMLING.key} className="mt-xl">
         Hi, I’m Bumling. Tell me what gets in your way, and I’ll switch on the apps that fit.
@@ -282,13 +277,10 @@ export function Home() {
           </p>
           <p className="mt-sm m-0 text-[18px] font-bold">It isn’t you. It’s the setup: five villains at once, mostly alone.</p>
         </motion.div>
-        <GuideLine host="self" mood="sleepy" className="mt-lg">
-          Be honest with me. When did you last sleep before midnight?
-        </GuideLine>
       </section>
 
       {/* A: amplify. The villains, and what they cost when nobody stops them. */}
-      <section id="villains" className="mt-xl scroll-mt-lg" aria-labelledby="villains-heading">
+      <section id="villains" className="mt-2xl scroll-mt-lg" aria-labelledby="villains-heading">
         <motion.div {...rise} className="type-measure">
           <h2 id="villains-heading" className="type-hook text-[clamp(28px,5vw,40px)]">
             Meet the five villains
@@ -297,9 +289,6 @@ export function Home() {
             They creep in one late night at a time.
           </p>
         </motion.div>
-        <GuideLine host="servant_leader" side="right" mood="neutral" className="mt-md">
-          Which of these five do you know?
-        </GuideLine>
         <ul className="bento mt-md list-none p-0 m-0">
           {VILLAINS.map((v, i) => (
             <SpotlightCard as="li" index={i} key={v.key} className={`rounded-card bg-card p-md shadow-toy-soft ${i === 0 ? 'bento-w2 bento-h2 bento-feature flex flex-col' : ''}`}>
@@ -335,18 +324,6 @@ export function Home() {
           <p className="type-context type-measure mt-md m-0 text-[18px] text-ink-soft">
             You are the hero; kreators.app is the map. Seven guides walk with you, one for each relationship, and Bumling shows you around.
           </p>
-          <ul className="mt-md grid list-none grid-cols-1 gap-xs p-0 m-0 sm:grid-cols-2 lg:grid-cols-4" aria-label="Your guides">
-            <li className="flex items-center gap-xs rounded-pill bg-paper pr-sm pl-xs">
-              <Avatar relationship={BUMLING.key} size={36} decorative />
-              <span className="text-[14px] font-bold">{characterTitle(BUMLING.key)}</span>
-            </li>
-            {RELATIONSHIPS.map((r) => (
-              <li key={r.key} className="flex items-center gap-xs rounded-pill bg-paper pr-sm pl-xs">
-                <Avatar relationship={r.key} size={36} decorative />
-                <span className="text-[14px] font-bold">{characterTitle(r.key)}</span>
-              </li>
-            ))}
-          </ul>
           <p className="type-measure mt-lg m-0 text-[16px] font-semibold">
             Picture a Monday. You check in, do one small act and tick one task. That tick climbs the pyramid to its foundation: the reason you started.
           </p>
@@ -365,8 +342,9 @@ export function Home() {
               </SpotlightCard>
             ))}
           </ol>
-          <Link to="/7rp" className="toy toy-soft mt-md inline-flex min-h-[48px] items-center rounded-pill bg-paper px-md font-bold">
+          <Link to="/7rp" className={`${SITE_SECONDARY} mt-md`}>
             Meet the seven relationships
+            <SiteArrow />
           </Link>
         </motion.div>
       </section>
@@ -379,9 +357,6 @@ export function Home() {
             Who it’s for, and why
           </h2>
         </motion.div>
-        <GuideLine host="guru" side="right" className="mt-md">
-          Five plain answers.
-        </GuideLine>
         <dl className="bento mt-md m-0">
           {FIVE_WS.map((x, i) => (
             <SpotlightCard
@@ -409,9 +384,6 @@ export function Home() {
             </h2>
             <p className="type-context mt-sm m-0 text-[16px] text-ink-soft">What the app does about each one, and what you get.</p>
           </div>
-          <Link to="/features" className="toy toy-ink inline-flex min-h-[48px] items-center rounded-pill border-2 border-ink bg-card px-md font-bold">
-            See every feature
-          </Link>
         </motion.div>
         <ul className="mt-md flex list-none flex-col gap-lg p-0 m-0">
           {ANSWERS.map((a, ai) => {
@@ -439,17 +411,19 @@ export function Home() {
                   <div className="hidden md:block mt-sm">
                     <HowLines lines={lines} pillar={a.pillar} />
                   </div>
-                  {/* A grid, not a wrapping row, so no app is ever left alone on the last line: an odd last one takes the row on a phone. */}
-                  <ul className={`mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0 ${apps.length === 4 ? '' : 'sm:grid-cols-3'}`} aria-label="The apps that do it">
+                  {/* A bento, not a wrapping row, so no app is ever left alone on a line. Four go two by two; six three by three; five put the
+                      first two (the ones that matter most) wide on the first row and three under them from the tablet width, and on a phone the first
+                      takes the row and the rest pair up. */}
+                  <ul className={`mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0 ${apps.length === 4 ? '' : apps.length === 5 ? 'sm:grid-cols-6' : 'sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3'}`} aria-label="The apps that do it">
                     {apps.map((k, i) => (
-                      <li key={k} className={i === apps.length - 1 && apps.length % 2 === 1 ? 'col-span-2 sm:col-span-1' : ''}>
+                      <li key={k} className={apps.length === 5 ? (i === 0 ? 'col-span-2 sm:col-span-3' : i === 1 ? 'sm:col-span-3' : 'sm:col-span-2') : i === apps.length - 1 && apps.length % 2 === 1 ? 'col-span-2 sm:col-span-1' : ''}>
                         <Link
                           to={`/features/${k}`}
                           title={FEATURES[k]?.tagline}
-                          className="toy toy-soft flex min-h-[44px] w-full items-center gap-xs rounded-pill bg-paper px-sm text-[14px] font-bold"
+                          className={`${SITE_CHIP} w-full`}
                         >
                           <AppIcon name={MODULE_BY_KEY[k]?.icon} size={16} />
-                          {MODULE_BY_KEY[k]?.name}
+                          {APP_CHIP_LABEL[k] ?? MODULE_BY_KEY[k]?.name}
                         </Link>
                       </li>
                     ))}
@@ -459,6 +433,29 @@ export function Home() {
             );
           })}
         </ul>
+      </section>
+
+      {/* Still the solution: the founder's three books, the courses made from them, and where to read more. */}
+      <section id="books" className="mt-2xl scroll-mt-lg" aria-labelledby="books-heading">
+        <motion.div {...rise} className="type-measure">
+          <p className={eyebrow}>The books</p>
+          <h2 id="books-heading" className={h2}>
+            Three books, <em>three courses</em>
+          </h2>
+          <p className="type-context mt-sm m-0 text-[16px] text-ink-soft">
+            By {BOOK_AUTHOR}, who builds kreators.app. Each one is a course in School.
+          </p>
+        </motion.div>
+        <BookShelf className="mt-md" href={(b) => `/features/books#${b.slug}`} />
+        <div className="mt-md flex flex-wrap items-center gap-sm">
+          <Link to={bookEntry} className={SITE_SECONDARY}>
+            Read the course in the app
+            <SiteArrow />
+          </Link>
+          <Link to="/features/books" className={`${SITE_LINK} text-[16px]`}>
+            About the books
+          </Link>
+        </div>
       </section>
 
       {/* T: the change. Before and after, and the real numbers so far. */}
@@ -472,9 +469,6 @@ export function Home() {
             Today, a tick. On Sunday, your first week review. Each month, a look back<span className="hidden md:inline"> with the numbers next to the month before</span>.
           </p>
         </motion.div>
-        <GuideLine host="lover_partner" className="mt-md">
-          Small ticks add up. Look back after a week.
-        </GuideLine>
         <div className="bento mt-md">
           <motion.div {...rise} className="bento-w2 rounded-card bg-card p-md shadow-toy-soft">
             <h3 className="m-0 text-[20px] text-ink-soft text-balance">Before</h3>
@@ -513,8 +507,9 @@ export function Home() {
             </SpotlightCard>
           ))}
         </div>
-        <Link to="/explore" className="toy toy-soft mt-md inline-flex min-h-[48px] items-center rounded-pill bg-card px-md font-bold">
+        <Link to="/explore" className={`${SITE_SECONDARY} mt-md`}>
           See what is open right now
+          <SiteArrow />
         </Link>
       </section>
 
@@ -529,7 +524,6 @@ export function Home() {
           <h2 id="offer-heading" className={h2}>
             Free to start. <em>Free to stay.</em>
           </h2>
-          <p className="type-context mt-sm m-0 text-[18px] text-ink-soft">{TOUCHSTONE}</p>
           <ul className="bento mt-md list-none p-0 m-0">
             {FREE.map((f, i) => (
               <li key={f} className={`flex items-start gap-xs rounded-tile bg-paper p-sm text-[16px] font-bold ${i === 0 ? 'bento-w2' : i === 3 ? 'bento-w4' : ''}`}>
@@ -549,14 +543,14 @@ export function Home() {
           </ul>
           <p className="type-measure mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">
             Switch any app off, export or delete everything, from the Profile tab.{' '}
-            <Link to="/pricing" className="font-bold underline underline-offset-4">
+            <Link to="/pricing" className={SITE_LINK_INLINE}>
               See pricing
             </Link>
           </p>
         </motion.div>
       </section>
 
-      <section id="brands" className="mt-xl scroll-mt-lg" aria-labelledby="brands-heading">
+      <section id="brands" className="mt-2xl scroll-mt-lg" aria-labelledby="brands-heading">
         <motion.div
           {...rise}
           data-pillar="servant_leader"
@@ -577,14 +571,13 @@ export function Home() {
               <BrandMore />
             </div>
             <div className="fill-row-all mt-md flex flex-wrap gap-sm">
-              <Link to="/start" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
-                Post a brief
-              </Link>
-              <Link to="/features/win" className="toy toy-ink inline-flex min-h-[48px] items-center rounded-pill border-2 border-ink bg-card px-md font-bold">
+              <Link to="/features/win" className={SITE_SECONDARY}>
                 How content rewards pay
+                <SiteArrow />
               </Link>
-              <Link to="/features/agency" className="toy toy-ink inline-flex min-h-[48px] items-center rounded-pill border-2 border-ink bg-card px-md font-bold">
+              <Link to="/features/agency" className={SITE_SECONDARY}>
                 Run client work
+                <SiteArrow />
               </Link>
             </div>
           </div>
@@ -601,9 +594,6 @@ export function Home() {
             Questions people ask
           </h2>
         </motion.div>
-        <GuideLine host="friendship" className="mt-md">
-          Not sure yet? That is fair.
-        </GuideLine>
         <div className="mt-md grid gap-xs md:grid-cols-2">
           {SITE_FAQ.map((f) => (
             <Fold key={f.q} title={f.q}>
@@ -624,17 +614,12 @@ export function Home() {
           <div className="relative z-10 mt-md">
             <Magnet>
               <LiquidMetal>
-                <Link to={start} className="toy fx-shimmer inline-flex min-h-[56px] items-center rounded-pill bg-card px-lg text-[18px] font-bold text-ink">
+                <Link to={start} className={SITE_PRIMARY_ON_INK}>
                   {token ? 'Go to app' : 'Start free'}
                 </Link>
               </LiquidMetal>
             </Magnet>
           </div>
-          <ol className="relative z-10 mt-md flex list-none flex-col gap-xs p-0 m-0 text-[14px] font-semibold text-on-ink/80 sm:flex-row sm:gap-md">
-            <li>1. Answer a few questions.</li>
-            <li>2. We switch on the apps that fit.</li>
-            <li>3. Tick your first box today.</li>
-          </ol>
           <p className="relative z-10 mt-sm m-0 text-[12px] font-semibold text-on-ink/70">
             Not for you? Delete your account, and everything in it, from the Profile tab.
           </p>

@@ -9,7 +9,8 @@ import { useMe } from '../lib/queries';
 const ORDER: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'core', 'manage'];
 
 /**
- * Every app, grouped, each group one big accordion in its pillar's colour, closed to start (components/AppGroups.tsx). Opening a group
+ * Every app, grouped, each group one big accordion in its pillar's colour (components/AppGroups.tsx); Contribution and
+ * Essentials start open unless the person picked otherwise under Profile, Features, and the apps follow their own order there. Opening a group
  * lists its apps: the name opens an app that is on, and the switch beside it turns it on or off right here. The same groups sit under
  * Profile, Features. Rank and rewards are part of the game, not apps.
  */

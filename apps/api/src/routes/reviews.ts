@@ -32,10 +32,11 @@ import {
   type ReviewSummary,
   type ReviewTemplate,
   type ReviewsResponse,
+  type Page,
   monthShift,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { DATE_RE, dayFromDevice, newId, nowIso, shiftDate, str } from '../db';
+import { DATE_RE, dayFromDevice, newId, nowIso, pageOf, paged, shiftDate, str } from '../db';
 
 /** Reviews: the numbers for a period from every app, and the review a person writes about it. */
 export const reviews = new Hono<AppEnv>();
@@ -70,7 +71,7 @@ export function toReview(r: ReviewRow): Review {
 }
 
 /** Everything that happened in one period, pulled from each app's own table. Journal and wellbeing stay with the owner. */
-async function numbersFor(db: D1Database, userId: string, p: Period): Promise<PeriodNumbers> {
+export async function numbersFor(db: D1Database, userId: string, p: Period): Promise<PeriodNumbers> {
   const from = p.start;
   const to = p.end;
   const fromTs = `${from}T00:00:00`;
@@ -217,18 +218,22 @@ reviews.get('/', async (c) => {
   const user = c.get('user');
   const kind = kindOf(c.req.query('kind')) ?? 'week';
   const period = periodFor(kind, dateOf(c.req.query('date')));
+  // Saved reviews come a page at a time (prefix `r`), so an older one is never out of reach.
+  const rAsk = pageOf(c, 'r');
   const [summary, row, templates, recent] = await Promise.all([
     summaryFor(db, user.id, period),
     db.prepare('SELECT * FROM reviews WHERE user_id = ? AND kind = ? AND period_start = ?').bind(user.id, kind, period.start).first<ReviewRow>(),
     templatesFor(db, user.id, kind),
-    db.prepare('SELECT id, kind, period_start, period_end, rating, highlight, updated_at FROM reviews WHERE user_id = ? ORDER BY period_start DESC, updated_at DESC LIMIT 24').bind(user.id).all<Pick<ReviewRow, 'id' | 'kind' | 'period_start' | 'period_end' | 'rating' | 'highlight' | 'updated_at'>>(),
+    db.prepare('SELECT id, kind, period_start, period_end, rating, highlight, updated_at FROM reviews WHERE user_id = ? ORDER BY period_start DESC, updated_at DESC LIMIT ? OFFSET ?').bind(user.id, rAsk.limit, rAsk.offset).all<Pick<ReviewRow, 'id' | 'kind' | 'period_start' | 'period_end' | 'rating' | 'highlight' | 'updated_at'>>(),
   ]);
-  const res: ReviewsResponse = {
+  const recentPg = paged(recent.results, rAsk);
+  const res: ReviewsResponse & { recentPage: Page } = {
     period,
     summary,
     review: row ? toReview(row) : null,
     templates,
-    recent: recent.results.map((r): ReviewListItem => ({ id: r.id, kind: r.kind, start: r.period_start, end: r.period_end, rating: r.rating, highlight: r.highlight, updatedAt: r.updated_at })),
+    recentPage: recentPg.page,
+    recent: recentPg.items.map((r): ReviewListItem => ({ id: r.id, kind: r.kind, start: r.period_start, end: r.period_end, rating: r.rating, highlight: r.highlight, updatedAt: r.updated_at })),
   };
   return c.json(res);
 });

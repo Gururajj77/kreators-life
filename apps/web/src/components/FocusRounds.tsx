@@ -1,6 +1,5 @@
-import { BREAK_BEATS, BREATH_CUES, BREATH_PATTERNS, breathPatternFor, breathRounds, FOCUS_MAX_MINUTES, FOCUS_PRESETS, FOCUS_QUALITY, focusQualityName, RELATIONSHIP_BY_KEY, type BreathStepKind, type FocusMode, type FocusRoundRow, type FocusSettings } from '@kreators/shared';
+import { BREAK_BEATS, BREATH_CUES, BREATH_PATTERNS, breathAtPace, breathPatternFor, breathRounds, FOCUS_MAX_MINUTES, FOCUS_PRESETS, FOCUS_QUALITY, focusQualityName, RELATIONSHIP_BY_KEY, type BreathStepKind, type FocusMode, type FocusRoundRow, type FocusSettings } from '@kreators/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import gsap from 'gsap';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useSearchParams } from 'react-router';
 import { focusRunActive, parseFocusRun, resumeFrom, type FocusRun, type FocusResume } from '@kreators/shared/focusRun';
@@ -18,10 +17,10 @@ import { BreathFour } from './BreathFour';
 import { useFocus, useSession } from '../lib/store';
 import { Button } from './Button';
 import { ChipSelect, type ChipOption } from './ChipSelect';
-import { prefersReducedMotion } from './fx/env';
 import { useSlider } from './fx/useSlider';
 import { RulerPicker } from './RulerPicker';
 import { Sheet } from './Sheet';
+import { TabRow } from './TabRow';
 import { SoundControls } from './SoundControls';
 import { Toggle } from './Toggle';
 import { Icon as LucideGlyph } from './Icon';
@@ -42,6 +41,8 @@ const TAB_KEY = 'kreators.focusTab';
 const TIMER_KEY = 'kreators.focusTimerMin';
 const BREATHE_KEY = 'kreators.breatheMin';
 const BREATHE_LENGTHS = [1, 3, 5, 10];
+/** The fifth quick length, only while the panel is narrow (a phone, or a tablet beside the sidebar), where the lengths have a row of their own (`.mf-quick-extra`). */
+const PHONE_BREATHE_LENGTH = 25;
 const RULER = { min: 5, max: 120, step: 5, labelEvery: 10 } as const;
 
 const clampInt = (v: unknown, lo: number, hi: number, fallback: number) => {
@@ -307,7 +308,7 @@ function SessionEditor({ edit, onClose, enabled, owner, logFocus }: { edit: Focu
 }
 
 /**
- * The focus panel of Mindful minutes: a dark slate glass card with three kinds of clock (Timer, Pomodoro, Stopwatch) under one row of tabs,
+ * The focus panel of Mindfulness: a dark slate glass card with three kinds of clock (Timer, Pomodoro, Stopwatch) under one row of tabs,
  * a ruler to choose how long a focus part is, the time in large figures, and the break settings as four small chips. Four round buttons float
  * by it (settings, sounds on or off, background music, the task being worked on). Every clock runs on an end time or a start instant, so a
  * background tab stays right; it keeps the screen awake, chimes and buzzes at the end, and puts the time in the tab's title.
@@ -456,7 +457,7 @@ export function FocusRounds({
   const breathe = useCountdown(
     breatheMin * 60_000,
     (ms, endedAt) => {
-      const rounds = breathRounds(breathPatternFor(settings.breath), ms);
+      const rounds = breathRounds(breathAtPace(breathPatternFor(settings.breath), settings.breathPace), ms);
       const done = `Done. ${rounds} ${rounds === 1 ? 'round' : 'rounds'} of ${breathPatternFor(settings.breath).name}, ${Math.max(1, Math.round(ms / 60_000))} min. It counts as mindful minutes.`;
       setSaid(done);
       setBreathDone(done);
@@ -478,7 +479,10 @@ export function FocusRounds({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [breatheMin]);
   // The pattern Breathe and the breaks follow, the cue at each step, and the line shown after a session (how many rounds).
-  const pattern = breathPatternFor(settings.breath);
+  // Each count lasts settings.breathPace seconds (1.0 to 5.0), so the pattern as drawn and timed is the written one at that pace.
+  const pattern = breathAtPace(breathPatternFor(settings.breath), settings.breathPace);
+  // What the slider sets before a session: the seconds each count lasts, or the whole length in minutes (the founder's left/right switch).
+  const [breathRuler, setBreathRuler] = useState<'count' | 'total'>('total');
   const [breathDone, setBreathDone] = useState<string | null>(null);
   const breatheElapsed = () => breathe.total - (breathe.running ? Math.max(0, (breathe.getEndsAt() ?? 0) - Date.now()) : breathe.left);
   const cue = (kind: BreathStepKind) => {
@@ -985,7 +989,8 @@ export function FocusRounds({
   const onKey = useRef<(e: KeyboardEvent) => void>(() => undefined);
   onKey.current = (e: KeyboardEvent) => {
     if (!onMindful || elsewhere || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
-    if (document.querySelector('[role="dialog"]')) return;
+    // Only a modal sheet holds the keys: the privacy card (a dialog that is not modal) must not.
+    if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
     const control = e.target instanceof HTMLElement && e.target.closest('button, a, [role="slider"], [role="tab"]');
     if (e.key === ' ' && !control) {
       e.preventDefault();
@@ -1023,7 +1028,8 @@ export function FocusRounds({
   useEffect(() => {
     if (!fullOn || !fullMine.current) return;
     const esc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !document.querySelector('[role="dialog"]')) setFullScreen(false);
+      // A modal sheet takes Escape first; the privacy card (not modal) never stops it, or full screen could not be left.
+      if (e.key === 'Escape' && !document.querySelector('[role="dialog"][aria-modal="true"]')) setFullScreen(false);
     };
     const fs = () => {
       if (!document.fullscreenElement) setFullScreen(false);
@@ -1082,8 +1088,19 @@ export function FocusRounds({
   const nudgeable = mode !== 'stopwatch' && mode !== 'breathe';
   const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
+  // In full screen the whole section (its heading, its round buttons and the panel) covers the page on its own, phone and laptop alike.
+  const covering = fullOn && fullMine.current && onMindful;
+  useEffect(() => {
+    if (!covering) return;
+    const was = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = was;
+    };
+  }, [covering]);
+
   return (
-    <section className="mt-md" aria-labelledby="focus-heading">
+    <section className={covering ? 'mf-cover' : 'mt-md'} data-cover={covering || undefined} aria-labelledby="focus-heading">
       {/* The heading and its line on the left; the four round buttons (task, settings, sounds, music) at the right, level with the
           bottom of that line. On a narrow phone they wrap under it, at the right. */}
       <div className="flex flex-wrap items-end justify-between gap-sm">
@@ -1124,18 +1141,30 @@ export function FocusRounds({
             </p>
           )}
 
-          <div className="mf-dial">
+          {/* Breathe before a session: the seconds a count lasts on the left and the whole length on the right are both buttons; the
+              slider between them sets whichever is picked. */}
+          <div className={`mf-dial ${mode === 'breathe' && breathe.atFull ? 'mf-dial-breathe' : ''}`}>
+            {mode === 'breathe' && breathe.atFull && (
+              <button type="button" className="mf-time-btn mf-pace" aria-pressed={breathRuler === 'count'} onClick={() => setBreathRuler('count')} aria-label={`Seconds per count, ${settings.breathPace.toFixed(1)}. Set it with the slider.`}>
+                <span className="mf-time">{settings.breathPace.toFixed(1)}s</span>
+                <span className="mf-time-cap">per count</span>
+              </button>
+            )}
             <div className="mf-ruler">
               {mode === 'breathe' ? (
                 breathe.atFull ? (
-                  <RulerPicker label="Breathing length" tone="night" accent="r4" min={1} max={30} step={1} labelEvery={5} majorStep={5} value={breatheMin} onChange={pickBreathe} valueText={(v) => `${v} ${v === 1 ? 'minute' : 'minutes'}`} format={(v) => String(v)} />
+                  breathRuler === 'count' ? (
+                    <RulerPicker label="Seconds per count" tone="night" accent="r4" min={10} max={50} step={1} labelEvery={5} majorStep={5} value={Math.round(settings.breathPace * 10)} onChange={(v) => save({ ...settings, breathPace: v / 10 })} valueText={(v) => `each count lasts ${(v / 10).toFixed(1)} seconds`} format={(v) => (v / 10).toFixed(1)} />
+                  ) : (
+                    <RulerPicker label="Breathing length" tone="night" accent="r4" min={1} max={30} step={1} labelEvery={5} majorStep={5} value={breatheMin} onChange={pickBreathe} valueText={(v) => `${v} ${v === 1 ? 'minute' : 'minutes'}`} format={(v) => String(v)} />
+                  )
                 ) : (
-                  <BreathFour pattern={pattern} running={breathe.running} elapsedMs={breatheElapsed} onStep={cue} />
+                  <BreathFour pattern={pattern} pace={settings.breathPace} running={breathe.running} elapsedMs={breatheElapsed} onStep={cue} />
                 )
               ) : mode === 'stopwatch' ? (
                 <SecondsStrip seconds={Math.floor(stopwatch.ms / 1000) % 60} live={stopwatch.ms > 0} />
               ) : isBreak ? (
-                <BreathFour pattern={pattern} running={running} elapsedMs={() => partMs - (running ? Math.max(0, (endsAt.current ?? 0) - Date.now()) : leftMs)} onStep={cue} />
+                <BreathFour pattern={pattern} pace={settings.breathPace} running={running} elapsedMs={() => partMs - (running ? Math.max(0, (endsAt.current ?? 0) - Date.now()) : leftMs)} onStep={cue} />
               ) : mode === 'timer' ? (
                 <RulerPicker
                   label="Timer length"
@@ -1156,9 +1185,16 @@ export function FocusRounds({
               )}
             </div>
             <div className="mf-time-wrap">
-              <span className="mf-time" role="timer" aria-label={`${mode === 'pomodoro' ? LABEL[phase] : MODES.find((m) => m.key === mode)!.name}, ${readout}${mode === 'stopwatch' ? '' : ' left'}`}>
-                {readout}
-              </span>
+              {mode === 'breathe' && breathe.atFull ? (
+                <button type="button" className="mf-time-btn" aria-pressed={breathRuler === 'total'} onClick={() => setBreathRuler('total')} aria-label={`Total length, ${readout}. Set it with the slider.`}>
+                  <span className="mf-time">{readout}</span>
+                  <span className="mf-time-cap">total</span>
+                </button>
+              ) : (
+                <span className="mf-time" role="timer" aria-label={`${mode === 'pomodoro' ? LABEL[phase] : MODES.find((m) => m.key === mode)!.name}, ${readout}${mode === 'stopwatch' ? '' : ' left'}`}>
+                  {readout}
+                </span>
+              )}
             </div>
           </div>
           {mode !== 'stopwatch' && (
@@ -1185,10 +1221,11 @@ export function FocusRounds({
                   onChange={(i) => save({ ...settings, breathCue: BREATH_CUES[i]!.key })}
                 />
                 {/* At the right end of the pickers' line: the quick lengths while idle, Stop while it runs (no row of its own). */}
-                <div className="mf-quick" role="group" aria-label={breathe.atFull ? 'Quick lengths' : 'Clock actions'}>
+                <div className={`mf-quick ${breathe.atFull ? 'mf-quick-lengths' : ''}`} role="group" aria-label={breathe.atFull ? 'Quick lengths' : 'Clock actions'}>
                   {breathe.atFull
-                    ? BREATHE_LENGTHS.map((m) => (
-                        <button key={m} type="button" aria-pressed={breatheMin === m} onClick={() => pickBreathe(m)} className="mf-mini toy min-w-[44px]">
+                    ? [...BREATHE_LENGTHS, PHONE_BREATHE_LENGTH].map((m) => (
+                        // A phone has the room for one longer sit (25 minutes) as a fifth even pill; a laptop keeps the four beside the pickers.
+                        <button key={m} type="button" aria-pressed={breatheMin === m} onClick={() => pickBreathe(m)} className={`mf-mini toy min-w-[44px] ${m === PHONE_BREATHE_LENGTH ? 'mf-quick-extra' : ''}`}>
                           {m} min
                         </button>
                       ))
@@ -1351,7 +1388,7 @@ export function FocusRounds({
       </div>
 
       {/* Today's sessions, newest first: tap one to change or delete it; Continue starts the same clock, length and task again. */}
-      <div className="mt-md" role="group" aria-labelledby="focus-today-heading">
+      <div className="mt-md" hidden={covering} role="group" aria-labelledby="focus-today-heading">
         <div className="flex flex-wrap items-end justify-between gap-sm">
           <div className="min-w-0 flex-[1_1_220px]">
             <h3 id="focus-today-heading" className="text-[18px]">
@@ -1482,16 +1519,17 @@ export function FocusRounds({
 
       <Sheet open={sheet === 'settings'} onClose={() => setSheet(null)} title="Timer settings">
         <p className="m-0 text-[14px] font-extrabold">Your plan</p>
-        <div className="scroll-row mt-xs flex gap-xs" role="group" aria-label="Plans to start from">
-          {FOCUS_PRESETS.map((p) => {
-            const same = settings.focus === p.focus && settings.short === p.short && settings.long === p.long && settings.every === p.every;
-            return (
-              <button key={p.name} type="button" aria-pressed={same} onClick={() => save({ ...settings, ...p })} className={`toy min-h-[44px] shrink-0 rounded-pill border-2 px-sm text-[14px] font-bold ${same ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-                {p.name} {p.focus}/{p.short}
-              </button>
-            );
-          })}
-        </div>
+        <TabRow
+          className="mt-xs"
+          label="Plans to start from"
+          items={FOCUS_PRESETS.map((p) => ({ key: p.name, label: `${p.name} ${p.focus}/${p.short}` }))}
+          value={FOCUS_PRESETS.find((p) => settings.focus === p.focus && settings.short === p.short && settings.long === p.long && settings.every === p.every)?.name ?? ''}
+          onChange={(name) => {
+            const p = FOCUS_PRESETS.find((x) => x.name === name);
+            if (p) save({ ...settings, ...p });
+          }}
+          pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+        />
         <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{planLine(settings)}</p>
         <div className="mt-sm flex flex-col gap-xs text-left">
           <Toggle compact on={settings.logFocus} onChange={(v) => save({ ...settings, logFocus: v })} label="Count finished focus sessions as mindful minutes" />

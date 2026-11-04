@@ -1,12 +1,13 @@
-import { PRODUCT_KIND_META, productPayWays, type CourseDraft, type Lesson, type QuizQuestion, PUBLIC_BADGES, HONORS, FAQ_A_MAX, FAQ_Q_MAX, MAX_FAQ, type ProductFaq, money, typedCents } from '@kreators/shared';
+import { PRODUCT_KIND_META, productPayWays, type CourseDraft, type Lesson, type QuizQuestion, PUBLIC_BADGES, HONORS, FAQ_A_MAX, FAQ_Q_MAX, MAX_FAQ, type ProductFaq, money, typedCents, formatCount } from '@kreators/shared';
 import { eventTime, longDate } from '../lib/date';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { Button } from '../components/Button';
+import { MoreMenu, type MoreMenuItem } from '../components/MoreMenu';
 import { Fold } from '../components/Fold';
-import { MediaSection } from '../components/MediaSection';
-import { BackLink } from '../components/PageHeader';
+import { MediaSection, useMediaMenuItem } from '../components/MediaSection';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { Pager, usePage } from '../components/Pager';
@@ -28,6 +29,33 @@ const moneyPriceCents = (typed: string): number => {
   if (!Number.isFinite(cents) || cents < 0) throw new Error('Type the money price as a number, like 1,299.50.');
   return cents;
 };
+
+/** A client-only id for a row being edited, so removing one from the middle never hands its field to the next. Stripped before saving. */
+const rowKey = (): string => crypto.randomUUID();
+type FaqRow = ProductFaq & { key: string };
+type IntakeRow = { key: string; text: string };
+type QuizRow = QuizQuestion & { key: string; optKeys: string[] };
+const quizRow = (qn: QuizQuestion): QuizRow => ({ ...qn, key: rowKey(), optKeys: qn.options.map(() => rowKey()) });
+
+/** Asks before a delete, the Mindful session pattern: a red "Yes, delete it" and a quiet "Keep it". */
+function ConfirmDelete({ open, title, body, pending, failed, onYes, onClose }: { open: boolean; title: string; body: string; pending: boolean; failed: boolean; onYes: () => void; onClose: () => void }) {
+  return (
+    <Sheet open={open} onClose={onClose} title={title}>
+      <div className="grid gap-md pb-xl">
+        <p className="m-0 text-[16px] font-semibold text-ink-soft">{body}</p>
+        {failed && <p role="alert" className="m-0 text-[14px] font-bold text-r1">That did not work. Try again.</p>}
+        <div className="flex flex-wrap gap-xs">
+          <button type="button" disabled={pending} onClick={onYes} className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-[16px] font-bold text-r1 hover:bg-r1/10 disabled:opacity-50">
+            Yes, delete it
+          </button>
+          <Button variant="outline" onClick={onClose}>
+            Keep it
+          </Button>
+        </div>
+      </div>
+    </Sheet>
+  );
+}
 
 export function StudioProduct() {
   const { id = '' } = useParams();
@@ -51,8 +79,9 @@ export function StudioProduct() {
   const [meetingUrl, setMeetingUrl] = useState('');
   const [cover, setCover] = useState('');
   const [pwyw, setPwyw] = useState(false);
-  const [intake, setIntake] = useState<string[]>([]);
-  const [faq, setFaq] = useState<ProductFaq[]>([]);
+  const [intake, setIntake] = useState<IntakeRow[]>([]);
+  const [faq, setFaq] = useState<FaqRow[]>([]);
+  const [deleting, setDeleting] = useState(false);
   const [replayUrl, setReplayUrl] = useState('');
   const [replayPoints, setReplayPoints] = useState('0');
   const [bundleIds, setBundleIds] = useState<string[]>([]);
@@ -85,8 +114,8 @@ export function StudioProduct() {
     setMeetingUrl(p.meetingUrl ?? '');
     setCover(p.cover);
     setPwyw(p.pwyw);
-    setIntake(p.intake);
-    setFaq(p.faq ?? []);
+    setIntake(p.intake.map((text) => ({ key: rowKey(), text })));
+    setFaq((p.faq ?? []).map((f) => ({ ...f, key: rowKey() })));
     setReplayUrl(p.replayUrl ?? '');
     setReplayPoints(String(p.replayPoints));
     setBundleIds(p.bundleIds);
@@ -117,7 +146,7 @@ export function StudioProduct() {
         meetingUrl: meetingUrl || null,
         cover,
         pwyw,
-        intake: intake.map((s) => s.trim()).filter(Boolean),
+        intake: intake.map((r) => r.text.trim()).filter(Boolean),
         faq: faq.map((f) => ({ q: f.q.trim(), a: f.a.trim() })).filter((f) => f.q && f.a),
         replayUrl: replayUrl || null,
         replayPoints: Number(replayPoints) || 0,
@@ -146,11 +175,14 @@ export function StudioProduct() {
   });
   const addCoupon = useMutation({ mutationFn: () => api.createCoupon({ code: couponCode, percentOff: Number(couponOff), productId: id }), onSuccess: () => coupons.refetch() });
   const delCoupon = useMutation({ mutationFn: (cid: string) => api.deleteCoupon(cid), onSuccess: () => coupons.refetch() });
+  // Pictures and videos open from the More menu, so the form's Save stays the one solid button.
+  const [editingMedia, setEditingMedia] = useState(false);
+  const mediaItem = useMediaMenuItem('product', id, () => setEditingMedia(true));
 
   if (q.isError) {
     return (
       <Screen>
-        <p className="pt-lg font-bold">That product is not yours or does not exist.</p>
+        <AppCover back={{ to: '/shop', label: 'Shop' }} title="Not yours, or gone" lede="That product is not yours or does not exist." />
       </Screen>
     );
   }
@@ -159,35 +191,33 @@ export function StudioProduct() {
   const mine = coupons.data?.coupons.filter((c) => c.productId === id || c.productId === null) ?? [];
   const others = (studio.data?.products ?? []).filter((x) => x.id !== id && x.kind !== 'bundle');
   const priced = p.kind !== 'link';
-  const setIntakeAt = (i: number, v: string) => setIntake((list) => list.map((x, j) => (j === i ? v : x)));
+  const setIntakeAt = (key: string, v: string) => setIntake((list) => list.map((x) => (x.key === key ? { ...x, text: v } : x)));
+  const more: MoreMenuItem[] = [
+    ...(mediaItem ? [mediaItem] : []),
+    ...(p.status === 'live' ? [{ key: 'unpublish', label: 'Unpublish', onSelect: () => save.mutate('draft'), disabled: save.isPending }] : []),
+    ...(p.status === 'live' ? [{ key: 'view', label: 'View as buyer', onSelect: () => nav(`/p/${p.id}`) }] : []),
+    { key: 'delete', label: 'Delete product', destructive: true, onSelect: () => setDeleting(true) },
+  ];
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/shop">Shop</BackLink>
-        <p className="m-0 text-[14px] font-bold text-ink-soft">
-          {meta.name}, {p.status}, {p.sold} sold{p.rating ? `, rated ${p.rating}` : ''}
-        </p>
-        <h1 className="text-[30px]">{p.title}</h1>
-        <div className="mt-sm flex flex-wrap gap-xs">
-          {p.status !== 'live' ? (
-            <Button onClick={() => save.mutate('live')} disabled={save.isPending}>
-              Publish
-            </Button>
-          ) : (
-            <Button variant="outline" onClick={() => save.mutate('draft')} disabled={save.isPending}>
-              Unpublish
-            </Button>
-          )}
-          {p.status === 'live' && (
-            <Link to={`/p/${p.id}`} className="toy toy-ink inline-flex min-h-[48px] items-center rounded-pill border-2 border-ink bg-card px-md font-bold">
-              View as buyer
-            </Link>
-          )}
-        </div>
-      </header>
+      <AppCover
+        back={{ to: '/shop', label: 'Shop' }}
+        title={p.title}
+        lede={`${meta.name}, ${p.status}, ${formatCount(p.sold)} sold${p.rating ? `, rated ${p.rating}` : ''}`}
+        actions={
+          <>
+            {p.status !== 'live' && (
+              <Button variant="outline" onClick={() => save.mutate('live')} disabled={save.isPending}>
+                Publish
+              </Button>
+            )}
+            <MoreMenu items={more} label="More for this product" />
+          </>
+        }
+      />
 
-      <MediaSection type="product" id={p.id} />
+      <MediaSection type="product" id={p.id} trigger={null} open={editingMedia} onOpenChange={setEditingMedia} />
 
       <form
         className="mt-md flex flex-col gap-md rounded-card bg-card p-md shadow-toy-soft"
@@ -298,7 +328,7 @@ export function StudioProduct() {
                   <label key={o.id} className="flex min-h-[44px] items-center gap-sm rounded-tile bg-paper p-xs text-[14px] font-bold">
                     <input type="checkbox" checked={on} onChange={(e) => setBundleIds((list) => (e.target.checked ? [...list, o.id] : list.filter((x) => x !== o.id)))} className="size-[20px] accent-ink" />
                     <span className="min-w-0 flex-1 truncate">
-                      {o.title} <span className="font-semibold text-ink-soft">{PRODUCT_KIND_META[o.kind].name}, {o.pricePoints} pts</span>
+                      {o.title} <span className="font-semibold text-ink-soft">{PRODUCT_KIND_META[o.kind].name}, {formatCount(o.pricePoints)} pts</span>
                     </span>
                   </label>
                 );
@@ -377,17 +407,17 @@ export function StudioProduct() {
           <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Answer the doubts that stop people buying: who it is for, what they get, how long it takes. Up to {MAX_FAQ}.</p>
           <div className="mt-xs flex flex-col gap-xs">
             {faq.map((f, i) => (
-              <div key={i} className="flex flex-col gap-xs rounded-tile bg-paper p-sm">
-                <input value={f.q} onChange={(e) => setFaq((list) => list.map((x, j) => (j === i ? { ...x, q: e.target.value } : x)))} maxLength={FAQ_Q_MAX} aria-label={`Question ${i + 1}`} placeholder="A question a buyer asks" className="rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]" />
-                <textarea value={f.a} onChange={(e) => setFaq((list) => list.map((x, j) => (j === i ? { ...x, a: e.target.value } : x)))} maxLength={FAQ_A_MAX} rows={3} aria-label={`Answer ${i + 1}`} placeholder="Your answer, in plain words" className="rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]" />
-                <Button variant="ghost" onClick={() => setFaq((list) => list.filter((_, j) => j !== i))} aria-label={`Remove question ${i + 1}`}>
+              <div key={f.key} className="flex flex-col gap-xs rounded-tile bg-paper p-sm">
+                <input value={f.q} onChange={(e) => setFaq((list) => list.map((x) => (x.key === f.key ? { ...x, q: e.target.value } : x)))} maxLength={FAQ_Q_MAX} aria-label={`Question ${i + 1}`} placeholder="A question a buyer asks" className="rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]" />
+                <textarea value={f.a} onChange={(e) => setFaq((list) => list.map((x) => (x.key === f.key ? { ...x, a: e.target.value } : x)))} maxLength={FAQ_A_MAX} rows={3} aria-label={`Answer ${i + 1}`} placeholder="Your answer, in plain words" className="rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]" />
+                <Button variant="ghost" onClick={() => setFaq((list) => list.filter((x) => x.key !== f.key))} aria-label={`Remove question ${i + 1}`}>
                   Remove
                 </Button>
               </div>
             ))}
           </div>
           {faq.length < MAX_FAQ && (
-            <Button variant="outline" className="mt-xs" plusToX onClick={() => setFaq((list) => [...list, { q: '', a: '' }])}>
+            <Button variant="outline" className="mt-xs" plusToX onClick={() => setFaq((list) => [...list, { key: rowKey(), q: '', a: '' }])}>
               Add a question
             </Button>
           )}
@@ -397,16 +427,16 @@ export function StudioProduct() {
             <legend className="text-[14px] font-bold">{p.kind === 'session' ? 'Questions to answer when booking' : 'Questions to answer at checkout'}</legend>
             <div className="mt-xs flex flex-col gap-xs">
               {intake.map((qn, i) => (
-                <div key={i} className="flex items-center gap-xs">
-                  <input value={qn} onChange={(e) => setIntakeAt(i, e.target.value)} maxLength={200} aria-label={`Question ${i + 1}`} className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
-                  <Button variant="ghost" onClick={() => setIntake((list) => list.filter((_, j) => j !== i))} aria-label={`Remove question ${i + 1}`}>
+                <div key={qn.key} className="flex items-center gap-xs">
+                  <input value={qn.text} onChange={(e) => setIntakeAt(qn.key, e.target.value)} maxLength={200} aria-label={`Question ${i + 1}`} className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+                  <Button variant="ghost" onClick={() => setIntake((list) => list.filter((x) => x.key !== qn.key))} aria-label={`Remove question ${i + 1}`}>
                     Remove
                   </Button>
                 </div>
               ))}
             </div>
             {intake.length < 8 && (
-              <Button variant="outline" className="mt-xs" plusToX onClick={() => setIntake((list) => [...list, ''])}>
+              <Button variant="outline" className="mt-xs" plusToX onClick={() => setIntake((list) => [...list, { key: rowKey(), text: '' }])}>
                 Add a question
               </Button>
             )}
@@ -441,7 +471,7 @@ export function StudioProduct() {
               <Button variant="outline" onClick={() => setDrafting(true)}>
                 Draft from notes
               </Button>
-              <Button onClick={() => setLesson('new')}>Add lesson</Button>
+              <Button variant="outline" onClick={() => setLesson('new')}>Add lesson</Button>
             </div>
           </div>
           <ol className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -466,10 +496,12 @@ export function StudioProduct() {
       )}
 
       {p.kind === 'membership' && (
-        <section className="mt-lg rounded-card bg-card p-md shadow-toy-soft">
-          <h2 className="text-[24px]">Members feed</h2>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Members and you can post in a feed only they can see.</p>
-          <Link to={`/community?product=${p.id}`} className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+        <section className="mt-lg flex flex-wrap-reverse items-center justify-between gap-sm rounded-card bg-card p-md shadow-toy-soft">
+          <div className="min-w-0 flex-1 basis-[60%]">
+            <h2 className="text-[24px]">Members feed</h2>
+            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Members and you can post in a feed only they can see.</p>
+          </div>
+          <Link to={`/community?product=${p.id}`} className="toy toy-ink inline-flex min-h-[48px] items-center rounded-pill border-2 border-ink bg-card px-md font-bold">
             Open members feed
           </Link>
         </section>
@@ -508,7 +540,7 @@ export function StudioProduct() {
               <span className="block text-[12px] font-bold">% off</span>
               <input type="number" min={1} max={100} value={couponOff} onChange={(e) => setCouponOff(e.target.value)} className={FIELD} />
             </label>
-            <Button type="submit" disabled={addCoupon.isPending}>
+            <Button type="submit" variant="outline" disabled={addCoupon.isPending}>
               Add
             </Button>
           </form>
@@ -524,7 +556,7 @@ export function StudioProduct() {
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {d.orders.map((o) => (
               <li key={o.id} className="rounded-tile bg-card p-sm text-[14px] font-semibold shadow-toy-soft">
-                <span className="font-bold">{o.buyerName}</span>, {o.points > 0 ? `${o.points} points` : `${money(o.cents, o.currency)}, ${o.status}`}
+                <span className="font-bold">{o.buyerName}</span>, {o.points > 0 ? `${formatCount(o.points)} points` : `${money(o.cents, o.currency)}, ${o.status}`}
                 {o.variant === 'replay' ? ', replay' : ''}
                 {o.sourceLabel ? `, via ${o.sourceLabel}` : ''}, {longDate(o.createdAt)}
                 {o.intake.length > 0 && (
@@ -560,9 +592,7 @@ export function StudioProduct() {
         </section>
       )}
 
-      <Button variant="ghost" className="mt-lg" disabled={remove.isPending} onClick={() => window.confirm(`Delete "${p.title}"? Buyers lose access.`) && remove.mutate()}>
-        Delete product
-      </Button>
+      <ConfirmDelete open={deleting} title="Delete this product?" body={`"${p.title}". Buyers lose access. This cannot be undone.`} pending={remove.isPending} failed={remove.isError} onYes={() => remove.mutate()} onClose={() => setDeleting(false)} />
 
       <LessonSheet productId={id} lesson={lesson} onClose={() => setLesson(null)} onSaved={() => q.refetch()} />
       {p.kind === 'course' && <DraftSheet productId={id} title={p.title} open={drafting} onClose={() => setDrafting(false)} onSaved={() => q.refetch()} />}
@@ -649,17 +679,19 @@ function LessonSheet({ productId, lesson, onClose, onSaved }: { productId: strin
   const [body, setBody] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
   const [drip, setDrip] = useState('0');
-  const [quiz, setQuiz] = useState<QuizQuestion[]>([]);
+  const [quiz, setQuiz] = useState<QuizRow[]>([]);
   const [passScore, setPassScore] = useState('0');
+  const [deleting, setDeleting] = useState(false);
   useEffect(() => {
     setTitle(existing?.title ?? '');
     setBody(existing?.body ?? '');
     setVideoUrl(existing?.videoUrl ?? '');
     setDrip(String(existing?.dripDays ?? 0));
-    setQuiz(existing?.quiz ?? []);
+    setQuiz((existing?.quiz ?? []).map(quizRow));
+    setDeleting(false);
     setPassScore(String(existing?.passScore ?? 0));
   }, [lesson]); // eslint-disable-line react-hooks/exhaustive-deps
-  const cleanQuiz = quiz.map((qn) => ({ ...qn, q: qn.q.trim(), options: qn.options.map((o) => o.trim()) })).filter((qn) => qn.q && qn.options.filter(Boolean).length >= 2);
+  const cleanQuiz = quiz.map(({ key: _key, optKeys: _optKeys, ...qn }) => ({ ...qn, q: qn.q.trim(), options: qn.options.map((o) => o.trim()) })).filter((qn) => qn.q && qn.options.filter(Boolean).length >= 2);
   const payload = { title, body, videoUrl: videoUrl || null, dripDays: Number(drip) || 0, quiz: cleanQuiz, passScore: Number(passScore) || 0 };
   const save = useMutation({
     mutationFn: () => (existing ? api.updateLesson(existing.id, payload) : api.createLesson(productId, payload)),
@@ -675,7 +707,7 @@ function LessonSheet({ productId, lesson, onClose, onSaved }: { productId: strin
       onClose();
     },
   });
-  const setQ = (i: number, patch: Partial<QuizQuestion>) => setQuiz((list) => list.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const setQ = (i: number, patch: Partial<QuizRow>) => setQuiz((list) => list.map((x, j) => (j === i ? { ...x, ...patch } : x)));
   const setOpt = (i: number, k: number, v: string) => setQ(i, { options: (quiz[i]?.options ?? []).map((o, m) => (m === k ? v : o)) });
   return (
     <Sheet open={lesson !== null} onClose={onClose} title={existing ? 'Edit lesson' : 'New lesson'}>
@@ -708,18 +740,18 @@ function LessonSheet({ productId, lesson, onClose, onSaved }: { productId: strin
           <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Multiple choice. Mark the right option. Passing marks the lesson done.</p>
           <ol className="mt-xs flex list-none flex-col gap-sm p-0 m-0">
             {quiz.map((qn, i) => (
-              <li key={i} className="rounded-tile bg-paper p-sm">
+              <li key={qn.key} className="rounded-tile bg-paper p-sm">
                 <label className="block">
                   <span className="block text-[12px] font-bold">Question {i + 1}</span>
                   <input value={qn.q} onChange={(e) => setQ(i, { q: e.target.value })} maxLength={300} className={FIELD} />
                 </label>
                 <div className="mt-xs flex flex-col gap-xs" role="radiogroup" aria-label={`Right answer for question ${i + 1}`}>
                   {qn.options.map((o, k) => (
-                    <div key={k} className="flex items-center gap-xs">
+                    <div key={qn.optKeys[k] ?? k} className="flex items-center gap-xs">
                       <input type="radio" name={`q-${i}`} checked={qn.answer === k} onChange={() => setQ(i, { answer: k })} aria-label={`Option ${k + 1} is right`} className="size-[20px] accent-ink" />
                       <input value={o} onChange={(e) => setOpt(i, k, e.target.value)} maxLength={200} placeholder={`Option ${k + 1}`} aria-label={`Option ${k + 1}`} className="min-w-0 flex-1 rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]" />
                       {qn.options.length > 2 && (
-                        <Button variant="ghost" aria-label={`Remove option ${k + 1}`} onClick={() => setQ(i, { options: qn.options.filter((_, m) => m !== k), answer: qn.answer >= k && qn.answer > 0 ? qn.answer - 1 : qn.answer })}>
+                        <Button variant="ghost" aria-label={`Remove option ${k + 1}`} onClick={() => setQ(i, { options: qn.options.filter((_, m) => m !== k), optKeys: qn.optKeys.filter((_, m) => m !== k), answer: qn.answer >= k && qn.answer > 0 ? qn.answer - 1 : qn.answer })}>
                           Remove
                         </Button>
                       )}
@@ -728,7 +760,7 @@ function LessonSheet({ productId, lesson, onClose, onSaved }: { productId: strin
                 </div>
                 <div className="mt-xs flex flex-wrap gap-xs">
                   {qn.options.length < 6 && (
-                    <Button variant="outline" onClick={() => setQ(i, { options: [...qn.options, ''] })}>
+                    <Button variant="outline" onClick={() => setQ(i, { options: [...qn.options, ''], optKeys: [...qn.optKeys, rowKey()] })}>
                       Add option
                     </Button>
                   )}
@@ -740,7 +772,7 @@ function LessonSheet({ productId, lesson, onClose, onSaved }: { productId: strin
             ))}
           </ol>
           {quiz.length < 20 && (
-            <Button variant="outline" className="mt-xs" plusToX onClick={() => setQuiz((list) => [...list, blankQuestion()])}>
+            <Button variant="outline" className="mt-xs" plusToX onClick={() => setQuiz((list) => [...list, quizRow(blankQuestion())])}>
               Add a question
             </Button>
           )}
@@ -761,11 +793,12 @@ function LessonSheet({ productId, lesson, onClose, onSaved }: { productId: strin
           {existing ? 'Save lesson' : 'Add lesson'}
         </Button>
         {existing && (
-          <Button variant="ghost" disabled={remove.isPending} onClick={() => window.confirm('Delete this lesson?') && remove.mutate()}>
+          <button type="button" disabled={remove.isPending} onClick={() => setDeleting(true)} className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-[16px] font-bold text-r1 hover:bg-r1/10 disabled:opacity-50">
             Delete lesson
-          </Button>
+          </button>
         )}
       </form>
+      <ConfirmDelete open={deleting} title="Delete this lesson?" body={`"${existing?.title ?? ''}". Its text and quiz go. This cannot be undone.`} pending={remove.isPending} failed={remove.isError} onYes={() => remove.mutate()} onClose={() => setDeleting(false)} />
     </Sheet>
   );
 }

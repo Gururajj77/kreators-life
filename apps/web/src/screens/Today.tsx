@@ -15,6 +15,7 @@ import { Icon } from '../components/Icon';
 import { Flame } from 'lucide-react';
 import { RollNumber } from '../components/fx/RollNumber';
 import { NotToDoBlock } from '../components/NotToDoList';
+import { EmergenceSlot, HabitsSlot } from '../components/EmergenceSlot';
 import { Nudge } from '../components/Nudge';
 import { Person } from '../components/Person';
 import { RoutineSection } from '../components/RoutineSection';
@@ -25,17 +26,20 @@ import { TaskRow } from '../components/TaskRow';
 import { TaskPanel } from '../components/TaskPlan';
 import { WeekPlanButton } from '../components/WeekPlan';
 import { api } from '../lib/api';
-import { prettyDate } from '../lib/date';
+import { dayLabel, prettyDate } from '../lib/date';
 import { lazyNamed } from '../lib/lazy';
 import { useMe, useRefreshAll, useToday } from '../lib/queries';
 import { useActionQueue } from '../lib/useActionQueue';
 import { useParamState } from '../lib/useParamState';
+import { DayTypeNote, DayTypeSelect, useDayType } from '../components/DayTypePicker';
+import { TabRow } from '../components/TabRow';
 
 // The month calendar downloads only when its toggle is opened.
 const TaskMonth = lazyNamed(() => import('../components/TaskMonth'), 'TaskMonth');
+const AddTaskForm = lazyNamed(() => import('../components/TaskMonth'), 'AddTaskForm');
 
 /** A task on Daily with its plan panel one tap away. */
-function DailyTask({ t, date, queue, onToggle, subtitle, focus = false }: { t: Node; date: string; queue: ReturnType<typeof useActionQueue>; onToggle: () => void; subtitle: string; focus?: boolean }) {
+function DailyTask({ t, date, queue, onToggle, subtitle, focus = false }: { t: Node; date: string; queue: ReturnType<typeof useActionQueue>; onToggle: () => void; subtitle?: string; focus?: boolean }) {
   // A reminder note opens Daily on its task (`?task=<id>`): that task starts with its plan open and is scrolled into view, once.
   const [open, setOpen] = useState(focus);
   useEffect(() => {
@@ -73,7 +77,7 @@ function BacklogTask({ t, date, queue }: { t: Node; date: string; queue: ReturnT
     <TaskRow
       task={t}
       today={date}
-      subtitle={`${RELATIONSHIP_BY_KEY[t.relationship].name}, no day yet`}
+      subtitle="No day yet"
       busy={queue.isPending(t.id) || pick.isPending}
       onToggle={() => setOpen(true)}
       hint="Pick a day first. Then it moves up into Tasks."
@@ -105,6 +109,8 @@ export function Today() {
   const queue = useActionQueue(refresh);
   const [search] = useSearchParams();
   const focusTask = search.get('task');
+  const [addOpen, setAddOpen] = useState(false);
+  const [added, setAdded] = useState<string | null>(null);
 
   const checkIn = () =>
     queue.run('checkin', async () => {
@@ -138,10 +144,16 @@ export function Today() {
     });
 
   const rel = data ? RELATIONSHIP_BY_KEY[data.spark.relationship] : null;
-  const [sortRaw, setSort] = useParamState('taskSort', 'day');
-  const sort = isTaskSort(sortRaw) ? sortRaw : 'day';
-  const tasks = sortTasks(data?.tasks ?? [], sort);
-  const backlogAll = sortTasks(data?.backlog ?? [], sort === 'day' ? 'priority' : sort);
+  // The kind of day the person picked (none to start with). With one picked and no sort chosen, the list sorts By context: P0 first,
+  // then the day's lead pillar inside each priority. A sort in the URL still wins.
+  const dayType = useDayType(date);
+  const [sortRaw, setSort] = useParamState('taskSort', '');
+  const ownSort = isTaskSort(sortRaw) ? sortRaw : null;
+  const sort = ownSort ?? (dayType.type ? 'context' : 'day');
+  const context = dayType.type ? { lead: dayType.type.lead, second: dayType.type.second } : null;
+  const sorts = TASK_SORTS.filter((s) => s.key !== 'context' || dayType.type);
+  const tasks = sortTasks(data?.tasks ?? [], sort, context);
+  const backlogAll = sortTasks(data?.backlog ?? [], sort === 'day' ? 'priority' : sort, context);
   // Things tagged Remember with no day: kept in plain sight, not folded away.
   const remembered = backlogAll.filter((t) => t.remind);
   const backlog = backlogAll.filter((t) => !t.remind);
@@ -189,9 +201,9 @@ export function Today() {
         <SkeletonList className="mt-md" count={3} lines={3} label="Loading your day" />
       )}
       {isError && (
-        <div className="mt-md rounded-card bg-card p-md shadow-toy-soft" role="alert">
-          <p className="m-0 font-bold">Could not load today.</p>
-          <Button variant="outline" className="mt-sm" onClick={() => refetch()}>
+        <div className="mt-md rounded-card bg-card p-md shadow-toy-soft flex flex-wrap-reverse items-center justify-between gap-sm" role="alert">
+          <p className="m-0 font-bold min-w-0 flex-1 basis-[60%]">Could not load today.</p>
+          <Button variant="outline" onClick={() => refetch()}>
             Try again
           </Button>
         </div>
@@ -267,16 +279,17 @@ export function Today() {
                 <WeekPlanButton />
               </div>
             </div>
-            {(tasks.length > 1 || backlog.length > 1) && (
-              <div className="mt-xs flex flex-wrap items-center gap-xs" role="group" aria-label="Sort tasks by">
-                <span className="text-[14px] font-bold text-ink-soft">Sort by</span>
-                {TASK_SORTS.map((s) => (
-                  <button key={s.key} type="button" aria-pressed={sort === s.key} title={s.blurb} onClick={() => setSort(s.key)} className={`toy min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${sort === s.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-                    {s.name}
-                  </button>
-                ))}
-              </div>
-            )}
+            {/* The kind of day and the sort share one line from the laptop width up (the dropdown at the left of the sort row and its All
+                button); below it, a phone or a tablet beside the sidebar, each takes a line of its own (at 768 they ran into each other). */}
+            <div className="mt-xs flex w-full flex-col gap-xs lg:flex-row lg:items-center lg:justify-between lg:gap-md">
+              <DayTypeSelect type={dayType.type} onPick={dayType.set} />
+              {(tasks.length > 1 || backlog.length > 1) && (
+                <div className="min-w-0 flex-1">
+                  <TabRow lead="Sort by" align="end" label="Sort tasks by" items={sorts.map((s) => ({ key: s.key, label: s.name }))} value={sort} onChange={setSort} />
+                </div>
+              )}
+            </div>
+            <DayTypeNote type={dayType.type} failed={dayType.failed} ownSort={ownSort && ownSort !== 'context' ? (TASK_SORTS.find((s) => s.key === ownSort)?.name ?? null) : null} />
             <Fold className="mt-xs" title="Month calendar">
               <Suspense fallback={<Skeleton className="h-[320px]" />}>
                 <TaskMonth today={date} />
@@ -300,19 +313,47 @@ export function Today() {
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                 <AnimatePresence initial={false}>
                   {tasks.map((t) => (
-                    <DailyTask key={t.id} t={t} date={date} queue={queue} focus={t.id === focusTask} onToggle={() => tick(t.id)} subtitle={RELATIONSHIP_BY_KEY[t.relationship].name} />
+                    <DailyTask key={t.id} t={t} date={date} queue={queue} focus={t.id === focusTask} onToggle={() => tick(t.id)} />
                   ))}
                 </AnimatePresence>
               </ul>
             ) : (
-              <div className="mt-sm rounded-card border-2 border-dashed border-line p-md">
-                <p className="m-0 text-[14px] font-semibold text-ink-soft">
+              <div className="mt-sm flex flex-wrap-reverse items-center justify-between gap-sm rounded-card border-2 border-dashed border-line p-md">
+                <p className="m-0 min-w-0 flex-1 basis-[60%] text-[14px] font-semibold text-ink-soft">
                   {taskDone ? 'Tasks done for today. Their pyramids got stronger. More arrive as their dates come up.' : 'Tasks come from pillars you set up.'}
                 </p>
-                <Link to="/tower" className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+                <Link to="/tower" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
                   {taskDone ? 'Set up another pillar' : 'Set up a pillar'}
                 </Link>
               </div>
+            )}
+            {/* Under the list: a quiet fold whose plus turns into a cross, opening the add form right here (downloaded on first open). */}
+            {/* Saving a task folds it away again and says where the task went, right here, since the new row lands up in the list. */}
+            <Fold
+              className="mt-xs"
+              title="Add a task"
+              adds
+              open={addOpen}
+              onOpenChange={(o) => {
+                setAddOpen(o);
+                if (o) setAdded(null);
+              }}
+            >
+              <Suspense fallback={<Skeleton className="h-[240px]" />}>
+                <AddTaskForm
+                  today={date}
+                  autoFocus
+                  onAdded={(title, doDate) => {
+                    setAddOpen(false);
+                    setAdded(!doDate || doDate === date ? `Added “${title}” to today's tasks.` : `Added “${title}”. It shows here from ${dayLabel(doDate)}.`);
+                  }}
+                />
+              </Suspense>
+            </Fold>
+            {added && (
+              <p role="status" className="mt-xs m-0 text-[14px] font-bold text-ink-soft">
+                {added}
+              </p>
             )}
             {remembered.length > 0 && (
               <div role="group" className="mt-md" aria-labelledby="remember-heading">
@@ -356,7 +397,7 @@ export function Today() {
                         key={t.id}
                         task={t}
                         today={date}
-                        subtitle={`${RELATIONSHIP_BY_KEY[t.relationship].name}${t.completedAt ? `, done at ${doneAt(t.completedAt)}` : ''}`}
+                        subtitle={t.completedAt ? `Done at ${doneAt(t.completedAt)}` : undefined}
                         busy={queue.isPending(t.id)}
                         hint={queue.hint(t.id)}
                         onToggle={() => untick(t.id)}
@@ -379,6 +420,8 @@ export function Today() {
           <TodayEvents events={data.events ?? []} />
 
           <NotToDoBlock />
+          <HabitsSlot app="today" />
+          <EmergenceSlot app="today" max={2} exclude={['habit-tie']} />
         </>
       )}
 

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { CLUB_BENEFITS, type Membership } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { audit, can, getUser, nameOf, newId, notify, nowIso, oneOf, str, pageOf, paged } from '../db';
+import { audit, can, getUser, liveUser, nameOf, newId, notify, nowIso, oneOf, str, pageOf, paged } from '../db';
 
 export const club = new Hono<AppEnv>();
 
@@ -14,11 +14,12 @@ club.get('/', async (c) => {
   const user = c.get('user');
   const mine = await db.prepare(`${SELECT} WHERE m.user_id = ?`).bind(user.id).first<Row>();
   const ask = pageOf(c);
-  const queue = can(user, 'review') ? await db.prepare(`${SELECT} ORDER BY CASE m.status WHEN 'applied' THEN 0 ELSE 1 END, m.created_at DESC LIMIT ? OFFSET ?`).bind(ask.limit, ask.offset).all<Row>() : { results: [] as Row[] };
+  // A deleted account is never in the queue or the count (`liveUser`).
+  const queue = can(user, 'review') ? await db.prepare(`${SELECT} WHERE ${liveUser('u')} ORDER BY CASE m.status WHEN 'applied' THEN 0 ELSE 1 END, m.created_at DESC LIMIT ? OFFSET ?`).bind(ask.limit, ask.offset).all<Row>() : { results: [] as Row[] };
   const pg = paged(queue.results, ask);
-  const members = await db.prepare("SELECT COUNT(*) AS n FROM memberships WHERE status IN ('approved','active')").first<{ n: number }>();
+  const members = await db.prepare(`SELECT COUNT(*) AS n FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.status IN ('approved','active') AND ${liveUser('u')}`).first<{ n: number }>();
   // Reviewers pick a manager from the staff, so they get the list.
-  const staff = can(user, 'review') ? await db.prepare("SELECT id, display_name FROM users WHERE role IN ('sub_admin', 'admin') ORDER BY display_name LIMIT 100").all<{ id: string; display_name: string }>() : { results: [] as { id: string; display_name: string }[] };
+  const staff = can(user, 'review') ? await db.prepare(`SELECT id, display_name FROM users u WHERE role IN ('sub_admin', 'admin') AND ${liveUser('u')} ORDER BY display_name LIMIT 100`).all<{ id: string; display_name: string }>() : { results: [] as { id: string; display_name: string }[] };
   return c.json({ page: pg.page, benefits: CLUB_BENEFITS, mine: mine ? toM(mine) : null, queue: pg.items.map(toM), members: members?.n ?? 0, reviewer: can(user, 'review'), staff: staff.results.map((r) => ({ id: r.id, name: nameOf(r) })) });
 });
 

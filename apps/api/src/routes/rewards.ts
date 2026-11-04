@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { CARD_GAME_BY_KEY, REWARD_BY_KEY, REWARDS, unlockFor, type Redemption, type RewardsResponse } from '@kreators/shared';
 import { haveFor } from '../unlocks';
 import type { AppEnv } from '../env';
-import { getUser, newId, nowIso, parseModules } from '../db';
+import { getUser, newId, nowIso, pageOf, paged, parseModules } from '../db';
 
 export const rewards = new Hono<AppEnv>();
 
@@ -24,13 +24,19 @@ export function toRedemption(r: RedemptionRow): Redemption {
 rewards.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const rows = await db
-    .prepare('SELECT * FROM redemptions WHERE user_id = ? ORDER BY created_at DESC LIMIT 50')
-    .bind(user.id)
-    .all<RedemptionRow>();
-  const owned = await db.prepare('SELECT game_key FROM card_unlocks WHERE user_id = ?').bind(user.id).all<{ game_key: string }>();
-  const res: RewardsResponse = { points: user.points, games: owned.results.map((r) => r.game_key), rewards: [...REWARDS], redemptions: rows.results.map(toRedemption) };
-  return c.json(res);
+  // Reservations are served a page at a time (prefix `r`: `rpage`, `rsize`), never a bare LIMIT; the two reads run together.
+  const ask = pageOf(c, 'r');
+  const [rows, owned] = await Promise.all([
+    db
+      .prepare('SELECT * FROM redemptions WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ? OFFSET ?')
+      .bind(user.id, ask.limit, ask.offset)
+      .all<RedemptionRow>(),
+    db.prepare('SELECT game_key FROM card_unlocks WHERE user_id = ?').bind(user.id).all<{ game_key: string }>(),
+  ]);
+  const { items, page } = paged(rows.results, ask);
+  const res: RewardsResponse = { points: user.points, games: owned.results.map((r) => r.game_key), rewards: [...REWARDS], redemptions: items.map(toRedemption) };
+  // `redemptionsPage` says whether older reservations exist; RewardsResponse in shared does not name it yet (see the stream notes).
+  return c.json({ ...res, redemptionsPage: page });
 });
 
 // Reserve a reward. Points leave the balance now; the thing itself ships later.

@@ -54,11 +54,12 @@ const chatOpen = (ev: Ev, now = nowIso()) => ev.status !== 'cancelled' && now < 
 
 async function extrasFor(env: { CLICK_SALT?: string }, db: D1Database, user: UserRow, ev: Ev): Promise<EventExtras> {
   const now = nowIso();
+  // A run's lines live in its discussion (routes/run.ts), shown only to that run's own people; none are read from here.
   const photos = await db.prepare('SELECT url, note FROM event_photos WHERE app = ? AND event_id = ?').bind(ev.app, ev.id).first<{ url: string; note: string }>();
   const msgs = await db
     .prepare(
       `SELECT m.id, m.user_id, m.body, m.created_at, m.anonymous, m.parent_id, m.depth, u.display_name, u.handle FROM event_messages m JOIN users u ON u.id = m.user_id
-       WHERE m.app = ?1 AND m.event_id = ?2 AND m.removed_by IS NULL
+       WHERE m.app = ?1 AND m.event_id = ?2 AND m.removed_by IS NULL AND m.app != 'run'
          AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ?3 AND b.blocked_id = m.user_id) OR (b.blocker_id = m.user_id AND b.blocked_id = ?3))
        ORDER BY m.created_at DESC LIMIT 200`,
     )
@@ -140,6 +141,9 @@ connect.post('/:app/:id/messages', async (c) => {
   const user = c.get('user');
   const g = await guarded(c);
   if ('error' in g) return g.error;
+  // A run's conversation is its discussion in Kreators Run (routes/run.ts: only that run's own people). This shared event chat
+  // never takes a line for a run, so no club member can write around those rules.
+  if (g.ev.app === 'run') return c.json({ error: "A run's conversation is in Kreators Run, under Discussions." }, 404);
   if (!chatOpen(g.ev)) return c.json({ error: 'The conversation for this event is closed.' }, 409);
   const muted = await db.prepare('SELECT 1 FROM community_mutes WHERE user_id = ?').bind(user.id).first();
   if (muted) return c.json({ error: 'You are muted from conversations for now.' }, 403);

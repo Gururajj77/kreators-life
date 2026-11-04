@@ -1,5 +1,5 @@
 import { COURAGE, levelByValue, levelProgress, placementFlags, RELATIONSHIP_BY_KEY, RELATIONSHIPS, type Placement, type Relationship, type RelationshipState } from '@kreators/shared';
-import { motion, useReducedMotion } from 'motion/react';
+import { m as motion, useReducedMotion } from 'motion/react';
 import type { CSSProperties } from 'react';
 import { Link } from 'react-router';
 import { Avatar } from '../components/Avatar';
@@ -17,6 +17,7 @@ import { fillVar, ON_FILL } from '../lib/relFill';
 import { useAuthed, useMe } from '../lib/queries';
 import { Icon } from '../components/Icon';
 import { ChevronRight } from 'lucide-react';
+import { EmergenceSlot } from '../components/EmergenceSlot';
 
 /** One pillar card. With a strategy session behind it, the card carries the pillar's map line: floor to core, the Courage mark, and a focus tag. */
 function Floor({ r, state, delay, placement, focus }: { r: Relationship; state: RelationshipState | undefined; delay: number; placement: Placement | null; focus: boolean }) {
@@ -133,6 +134,7 @@ export function Tower() {
       </ol>
       {/* The same not-to-do block as on Daily: what you stay away from protects these pillars too. */}
       <NotToDoBlock />
+      <EmergenceSlot app="tower" max={3} />
       <LifeMapPanel />
       <section className="mt-lg rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="how-heading">
         <div>

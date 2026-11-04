@@ -19,7 +19,7 @@ function DoorIcon({ size = 18 }: { size?: number }) {
  * and a sheet that asks first, so a stray tap never signs anyone out. A device-only account is also told what it
  * would lose, and offered an email first. `compact` is the smaller size for a header.
  */
-export function SignOut({ compact = false, className = '' }: { compact?: boolean; className?: string }) {
+export function SignOut({ compact = false, iconOnly = false, className = '' }: { compact?: boolean; /** Only the door, 44px round, for the folded sidebar; it still asks first. */ iconOnly?: boolean; className?: string }) {
   const me = useMe();
   const nav = useNavigate();
   const setToken = useSession((s) => s.setToken);
@@ -38,11 +38,13 @@ export function SignOut({ compact = false, className = '' }: { compact?: boolean
         type="button"
         onClick={() => setAsking(true)}
         disabled={signout.isPending}
-        className={`toy inline-flex items-center justify-center gap-xs rounded-pill border-2 border-r1/40 bg-transparent font-bold text-r1 hover:bg-r1/10 disabled:opacity-50 ${compact ? 'min-h-[44px] px-sm text-[14px]' : 'min-h-[48px] px-md text-[16px]'} ${className}`}
+        aria-label={iconOnly ? 'Sign out' : undefined}
+        title={iconOnly ? 'Sign out' : undefined}
+        className={`toy inline-flex items-center justify-center gap-xs rounded-pill border-2 border-r1/40 bg-transparent font-bold text-r1 hover:bg-r1/10 disabled:opacity-50 ${iconOnly ? 'size-[44px]' : compact ? 'min-h-[44px] px-sm text-[14px]' : 'min-h-[48px] px-md text-[16px]'} ${className}`}
         style={{ '--toy-color': 'var(--color-r1)' } as CSSProperties}
       >
-        <DoorIcon size={compact ? 16 : 18} />
-        {signout.isPending ? 'Signing out' : 'Sign out'}
+        <DoorIcon size={compact || iconOnly ? 18 : 18} />
+        {!iconOnly && (signout.isPending ? 'Signing out' : 'Sign out')}
       </button>
       <Sheet open={asking} onClose={() => setAsking(false)} title={deviceOnly ? 'Only on this device so far' : 'Sign out?'}>
         <p className="m-0 text-[14px] font-semibold text-ink-soft">

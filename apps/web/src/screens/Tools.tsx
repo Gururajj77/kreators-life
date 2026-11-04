@@ -1,10 +1,10 @@
-import { PUBLIC_BADGES, isFeatured, TOOL_CATEGORIES, unlockAt, type Tool } from '@kreators/shared';
+import { PUBLIC_BADGES, formatCount, isFeatured, TOOL_CATEGORIES, unlockAt, type Tool } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button } from '../components/Button';
 import { LockedButton } from '../components/LockedButton';
-import { MediaSection } from '../components/MediaSection';
-import { BackLink } from '../components/PageHeader';
+import { MediaSection, useMediaMenuItem } from '../components/MediaSection';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
@@ -13,13 +13,18 @@ import { useAuthed } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { FIELD } from '../lib/ui';
 import { ErrorLine } from '../components/ErrorLine';
-
-
+import { MoreMenu } from '../components/MoreMenu';
+import { SkeletonList } from '../components/Skeleton';
 
 function ToolRow({ t, reviewer, onChange }: { t: Tool; reviewer: boolean; onChange: () => void }) {
   const set = useMutation({ mutationFn: (body: { verified?: boolean; affiliate?: boolean; featured?: boolean }) => api.setTool(t.id, body), onSuccess: onChange });
   const remove = useMutation({ mutationFn: () => api.removeTool(t.id), onSuccess: onChange });
   const featured = isFeatured(t.featuredUntil);
+  // Remove asks first in a sheet of its own, red, never window.confirm.
+  const [removing, setRemoving] = useState(false);
+  // Pictures and videos are edited from the More menu, never a button on the card, so the page keeps one solid button.
+  const [editingMedia, setEditingMedia] = useState(false);
+  const mediaItem = useMediaMenuItem('tool', t.id, () => setEditingMedia(true));
   return (
     <li className={`rounded-tile bg-card p-sm ${featured ? 'border-2 border-r3 shadow-toy' : 'border-2 border-transparent shadow-toy-soft'}`}>
       <div className="flex items-start gap-sm">
@@ -33,15 +38,16 @@ function ToolRow({ t, reviewer, onChange }: { t: Tool; reviewer: boolean; onChan
           {t.description && <span className="block text-[14px] font-semibold text-ink-soft">{t.description}</span>}
           <span className="block text-[12px] font-bold text-ink-mute">
             {t.verified ? 'Verified by the team' : `Suggested by ${t.suggestedByName}, waiting for review`}
-            {t.affiliate ? '. Partner link: kreators.app may earn a share.' : ''}
-            {t.clicks > 0 ? ` · ${t.clicks} ${t.clicks === 1 ? 'tap' : 'taps'}` : ''}
+            {t.affiliate ? '. Partner link. Kreators may earn a share.' : ''}
+            {t.clicks > 0 ? ` · ${formatCount(t.clicks)} ${t.clicks === 1 ? 'tap' : 'taps'}` : ''}
             {t.unlock.ok && (t.minPoints > 0 || t.minXp > 0 || t.badge) ? ` · ${unlockAt(t.unlock)}. You have it.` : ''}
           </span>
         </span>
         {!t.unlock.ok ? (
           <LockedButton unlock={t.unlock} full={false} className="w-[200px] shrink-0" />
         ) : t.affiliate && t.verified ? (
-          <a href={`/out/tool/${t.id}`} target="_blank" rel="noreferrer" className="toy inline-flex min-h-[44px] shrink-0 items-center rounded-pill bg-ink px-md text-[14px] font-bold text-on-ink">
+          // The same outline look as Open, so the page keeps one solid button, Suggest a tool.
+          <a href={`/out/tool/${t.id}`} target="_blank" rel="noreferrer" className="toy toy-ink inline-flex min-h-[44px] shrink-0 items-center rounded-pill border-2 border-ink bg-card px-sm text-[14px] font-bold">
             Get it
           </a>
         ) : (
@@ -49,32 +55,46 @@ function ToolRow({ t, reviewer, onChange }: { t: Tool; reviewer: boolean; onChan
             Open
           </a>
         )}
+        {(reviewer || mediaItem) && (
+          <MoreMenu
+            label={`Review actions for ${t.name}`}
+            title={t.name}
+            items={[
+              ...(mediaItem ? [mediaItem] : []),
+              ...(reviewer
+                ? [
+                    ...(!t.verified ? [{ key: 'verify', label: 'Verify', disabled: set.isPending, onSelect: () => set.mutate({ verified: true }) }] : []),
+                    { key: 'affiliate', label: t.affiliate ? 'Not a partner link' : 'Mark as partner link', disabled: set.isPending, onSelect: () => set.mutate({ affiliate: !t.affiliate }) },
+                    { key: 'feature', label: featured ? 'Take off the top' : 'Feature for a week', disabled: set.isPending, onSelect: () => set.mutate({ featured: !featured }) },
+                    { key: 'remove', label: 'Remove', destructive: true, disabled: remove.isPending, onSelect: () => setRemoving(true) },
+                  ]
+                : []),
+            ]}
+          />
+        )}
       </div>
-      <MediaSection type="tool" id={t.id} title="Pictures and videos" />
+      <MediaSection type="tool" id={t.id} title="Pictures and videos" trigger={null} open={editingMedia} onOpenChange={setEditingMedia} />
+      {reviewer && <ErrorLine e={set.isError ? set.error : null} />}
       {reviewer && (
-        <div className="fill-row-all mt-sm flex flex-wrap gap-xs">
-          {!t.verified && (
-            <Button onClick={() => set.mutate({ verified: true })} disabled={set.isPending}>
-              Verify
-            </Button>
-          )}
-          <Button variant="outline" onClick={() => set.mutate({ affiliate: !t.affiliate })} disabled={set.isPending}>
-            {t.affiliate ? 'Not a partner link' : 'Mark as partner link'}
-          </Button>
-          <Button variant="outline" onClick={() => set.mutate({ featured: !featured })} disabled={set.isPending}>
-            {featured ? 'Take off the top' : 'Feature for a week'}
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              if (window.confirm(`Remove ${t.name} from the directory?`)) remove.mutate();
-            }}
-            disabled={remove.isPending}
-          >
-            Remove
-          </Button>
-          <ErrorLine e={set.isError ? set.error : remove.isError ? remove.error : null} />
-        </div>
+        <Sheet open={removing} onClose={() => setRemoving(false)} title="Remove this tool?">
+          <div className="grid gap-md pb-xl">
+            <p className="m-0 text-[16px] font-semibold text-ink-soft">{t.name} leaves the directory for everyone.</p>
+            <ErrorLine e={remove.isError ? remove.error : null} />
+            <div className="flex flex-wrap gap-xs">
+              <button
+                type="button"
+                disabled={remove.isPending}
+                onClick={() => remove.mutate(undefined, { onSuccess: () => setRemoving(false) })}
+                className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-[16px] font-semibold text-on-fill disabled:opacity-50"
+              >
+                Yes, remove it
+              </button>
+              <Button variant="outline" onClick={() => setRemoving(false)}>
+                Keep it
+              </Button>
+            </div>
+          </div>
+        </Sheet>
       )}
     </li>
   );
@@ -91,23 +111,23 @@ export function Tools() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Tools</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Tools for making and selling, checked by the team. Suggest one you swear by.</p>
-        <Button className="mt-md" onClick={() => setSuggesting(true)}>
-          Suggest a tool
-        </Button>
-      </header>
+      <AppCover
+        back={{ to: '/apps', label: 'Apps' }}
+        title="Tools"
+        lede="Tools for making and selling, checked by the team. Suggest one you swear by."
+        actions={<Button onClick={() => setSuggesting(true)}>Suggest a tool</Button>}
+      />
 
       {q.isError && (
-        <div className="mt-md rounded-card bg-card p-md shadow-toy-soft" role="alert">
-          <p className="m-0 font-bold">Could not load the directory.</p>
-          <Button variant="outline" className="mt-sm" onClick={() => q.refetch()}>
+        <div className="mt-md flex flex-wrap-reverse items-center justify-between gap-sm rounded-card bg-card p-md shadow-toy-soft" role="alert">
+          <p className="m-0 min-w-0 flex-1 basis-[60%] font-bold">Could not load the directory.</p>
+          <Button variant="outline" onClick={() => q.refetch()}>
             Try again
           </Button>
         </div>
       )}
+
+      {q.isPending && <SkeletonList className="mt-lg" count={3} lines={2} label="Loading the tools" />}
 
       {d && verified.length === 0 && <p className="mt-lg m-0 text-[14px] font-semibold text-ink-soft">The shelf is empty. Suggest the first tool.</p>}
 

@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Button } from '../components/Button';
 import { useCelebrate } from '../components/Celebration';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { SkeletonList } from '../components/Skeleton';
 import { Sheet } from '../components/Sheet';
@@ -19,9 +19,16 @@ import { ChannelsPanel, ChannelTabs } from '../components/Channels';
 import { AppIcon } from '../components/AppIcon';
 import { MoreMenu } from '../components/MoreMenu';
 import { Icon } from '../components/Icon';
-import { MessageCircle } from 'lucide-react';
+import { MessageCircle, Trash2 } from 'lucide-react';
 import { AnimatedIcon } from '../components/AnimatedIcon';
 import { IconTag } from '../components/FactTag';
+import { FilterBar, FilterSelect } from '../components/FilterSelect';
+import { Fold } from '../components/Fold';
+import { AskSheet, type Ask } from '../components/Channels';
+
+const FILTER_ITEMS = FEED_FILTERS.map((f) => ({ key: f, label: FEED_FILTER_META[f] }));
+const SORT_ITEMS = FEED_SORTS.map((k) => ({ key: k, label: FEED_SORT_META[k] }));
+const CATEGORY_ITEMS = ['', ...POST_CATEGORIES].map((c) => ({ key: c, label: c || 'All topics' }));
 
 /** A reaction's icon. Love is the animated heart: it fills and beats when it is picked. */
 function ReactionGlyph({ kind, size, picked }: { kind: ReactionKind; size: number; picked: boolean }) {
@@ -150,11 +157,7 @@ export function Community() {
 function CommunityChannels() {
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Community</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Chat rooms for one topic each, kept kind by guides.</p>
-      </header>
+      <AppCover back={{ to: '/apps', label: 'Apps' }} title="Community" lede="Chat rooms for one topic each, kept kind by guides." />
       <ChannelTabs />
       <div className="mt-md">
         <ChannelsPanel scope="community" />
@@ -172,16 +175,19 @@ function CommunityFeed() {
   const [filterRaw, setFilterRaw] = useParamState('filter', 'all');
   const sort: FeedSort = (FEED_SORTS as readonly string[]).includes(sortRaw) ? (sortRaw as FeedSort) : 'recent';
   const filter: FeedFilter = (FEED_FILTERS as readonly string[]).includes(filterRaw) ? (filterRaw as FeedFilter) : 'all';
-  const setSort = (s: FeedSort) => setSortRaw(s);
-  const setFilter = (f: FeedFilter) => setFilterRaw(f);
   const [showHidden, setShowHidden] = useState(false);
   const isMod = Boolean(me.data && me.data.user.role !== 'user');
   const pg = usePage();
+  // A new show, sort or topic starts the feed on its first page; both writes go out as one navigation (writeParams).
+  const setSort = (s: FeedSort) => { setSortRaw(s); pg.reset(); };
+  const setFilter = (f: FeedFilter) => { setFilterRaw(f); pg.reset(); };
+  const setTopic = (c: string) => { setCategory(c); pg.reset(); };
   const q = useCommunity(category || undefined, product, isMod && showHidden, sort, filter, pg.query);
   const celebrate = useCelebrate();
   const refresh = useRefreshAll();
   const [writing, setWriting] = useState(false);
   const [open, setOpen] = useState<CommunityPost | null>(null);
+  const [ask, setAsk] = useState<Ask | null>(null);
   const like = useMutation({ mutationFn: (v: { id: string; kind: ReactionKind }) => api.likePost(v.id, v.kind), onSuccess: () => refresh() });
   const followPost = useMutation({ mutationFn: (id: string) => api.followPost(id), onSuccess: () => refresh() });
   const pin = useMutation({ mutationFn: (v: { id: string; pinned: boolean }) => api.pinPost(v.id, v.pinned), onSuccess: () => refresh() });
@@ -200,44 +206,28 @@ function CommunityFeed() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">{product ? 'Members' : 'Community'}</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{product ? 'A members-only feed for this membership.' : 'A place of warmth. Everyone is heard, and guides keep it kind.'}</p>
-        <Button full className="mt-md" onClick={() => setWriting(true)}>
-          Write a post
-        </Button>
-        <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
-          Type @ and a page name to tell someone. Follow a post to hear about new replies. Guides pin up to {MAX_PINNED} posts in each category. A post pays {SOCIAL_REWARDS.post.xp} xp, up to {SOCIAL_REWARDS.post.perDay} a day. A reply pays {SOCIAL_REWARDS.reply.xp}, a like you give pays {SOCIAL_REWARDS.like.xp}. A like on your post pays you a point, a new follower {SOCIAL_REWARDS.follower.points}.
-        </p>
-      </header>
+      <AppCover
+        back={{ to: '/apps', label: 'Apps' }}
+        title={product ? 'Members' : 'Community'}
+        lede={product ? 'A members-only feed for this membership.' : 'A place of warmth. Everyone is heard, and guides keep it kind.'}
+        actions={<Button onClick={() => setWriting(true)}>Write a post</Button>}
+      >
+        <p className="m-0 text-[12px] font-bold text-ink-soft">Type @ and a page name to tell someone.</p>
+        <Fold className="mt-xs" title="How posts pay">
+          <p className="m-0 text-[14px] font-semibold text-ink-soft">
+            A post pays {SOCIAL_REWARDS.post.xp} xp, up to {SOCIAL_REWARDS.post.perDay} a day. A reply pays {SOCIAL_REWARDS.reply.xp}, a like you give pays {SOCIAL_REWARDS.like.xp}. A like on your post pays you a point, a new follower {SOCIAL_REWARDS.follower.points}. Follow a post to hear about new replies. Guides pin up to {MAX_PINNED} posts in each category.
+          </p>
+        </Fold>
+      </AppCover>
       {!product && <ChannelTabs />}
+      {/* Show, Sort and Topic each pick one value, so they are dropdowns in one row (one per line on a phone), as on the Store. */}
       <div className="mt-md">
-      <div className="scroll-row" role="group" aria-label="Show">
-        {FEED_FILTERS.map((f) => (
-          <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)} className={`toy shrink-0 min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${filter === f ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-            {FEED_FILTER_META[f]}
-          </button>
-        ))}
-        <span className="w-[1px] shrink-0 bg-line" aria-hidden="true" />
-        {FEED_SORTS.map((s) => (
-          <button key={s} type="button" aria-pressed={sort === s} onClick={() => setSort(s)} className={`toy shrink-0 min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${sort === s ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-            {FEED_SORT_META[s]}
-          </button>
-        ))}
+        <FilterBar label="Feed filters" count={product ? 2 : 3}>
+          <FilterSelect label="Show" items={FILTER_ITEMS} value={filter} onChange={setFilter} />
+          <FilterSelect label="Sort" items={SORT_ITEMS} value={sort} onChange={setSort} />
+          {!product && <FilterSelect label="Topic" items={CATEGORY_ITEMS} value={category} onChange={setTopic} />}
+        </FilterBar>
       </div>
-      </div>
-      {!product && (
-        <div className="mt-xs">
-        <div className="scroll-row" role="group" aria-label="Browse by">
-          {['', ...POST_CATEGORIES].map((c) => (
-            <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)} className={`toy shrink-0 min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${category === c ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-              {c || 'Everything'}
-            </button>
-          ))}
-        </div>
-        </div>
-      )}
       {isMod && !product && <HeldPosts />}
       {notice && (
         <p role="status" className="mt-sm m-0 rounded-tile bg-r3/30 p-sm text-[14px] font-bold">
@@ -311,9 +301,9 @@ function CommunityFeed() {
                 items={[
                   ...(!p.held ? [{ key: 'followPost', label: p.followingPost ? 'Following the post' : 'Follow the post', onSelect: () => followPost.mutate(p.id) }] : []),
                   ...(isMod && !p.held && !p.hidden ? [{ key: 'pin', label: p.pinned ? 'Unpin' : 'Pin', onSelect: () => pin.mutate({ id: p.id, pinned: !p.pinned }) }] : []),
-                  ...(p.mine ? [{ key: 'delete', label: 'Delete', destructive: true, onSelect: () => window.confirm('Delete your post?') && remove.mutate(p.id) }] : []),
-                  ...(!p.mine ? [{ key: 'block', label: 'Block', destructive: true, onSelect: () => window.confirm(`Block ${p.authorName}? You will not see each other's posts, and any friendship ends. You can undo it under Bond.`) && block.mutate(p.id) }] : []),
-                  ...(me.data && me.data.user.id !== p.authorId && canMute(myRank, p.authorRank) ? [{ key: 'mute', label: 'Mute', destructive: true, onSelect: () => window.confirm(`Mute ${p.authorName} in Community? They can still read but cannot post or reply.`) && mute.mutate(p.authorId) }] : []),
+                  ...(p.mine ? [{ key: 'delete', label: 'Delete', icon: Trash2, destructive: true, onSelect: () => setAsk({ title: 'Delete your post?', body: 'It and its replies go from the feed. This cannot be undone.', action: 'Yes, delete it', run: () => remove.mutate(p.id) }) }] : []),
+                  ...(!p.mine ? [{ key: 'block', label: 'Block', destructive: true, onSelect: () => setAsk({ title: `Block ${p.authorName}?`, body: "You will not see each other's posts, and any friendship ends. You can undo it under Bond.", action: 'Yes, block', run: () => block.mutate(p.id) }) }] : []),
+                  ...(me.data && me.data.user.id !== p.authorId && canMute(myRank, p.authorRank) ? [{ key: 'mute', label: 'Mute', destructive: true, onSelect: () => setAsk({ title: `Mute ${p.authorName} in Community?`, body: 'They can still read but cannot post or reply.', action: 'Yes, mute', run: () => mute.mutate(p.authorId) }) }] : []),
                   ...(isMod && me.data?.user.id !== p.authorId ? [{ key: 'hide', label: p.hidden ? 'Unhide' : 'Hide', onSelect: () => hide.mutate({ id: p.id, hidden: !p.hidden }) }] : []),
                 ]}
               />
@@ -324,7 +314,8 @@ function CommunityFeed() {
       <Pager page={q.data?.page} label="posts" />
       {canMute(myRank, 'member') && <MutedList />}
       <PostSheet open={writing} product={product} onClose={() => setWriting(false)} onSaved={(xp, held) => { refresh(); setNotice(held ? 'Thanks! A guide looks at a first post before it goes up. It pays once they say okay.' : null); if (xp > 0) celebrate({ title: 'Posted', totalXp: xp, color: 'var(--color-r2)' }); }} />
-      <RepliesSheet post={open} onClose={() => setOpen(null)} onSaved={(xp) => { refresh(); if (xp > 0) celebrate({ title: 'Replied', totalXp: xp, color: 'var(--color-r2)' }); }} />
+      <RepliesSheet post={open} onAsk={setAsk} onClose={() => setOpen(null)} onSaved={(xp) => { refresh(); if (xp > 0) celebrate({ title: 'Replied', totalXp: xp, color: 'var(--color-r2)' }); }} />
+      <AskSheet ask={ask} onClose={() => setAsk(null)} />
     </Screen>
   );
 }
@@ -379,7 +370,8 @@ function PostSheet({ open, product, onClose, onSaved }: { open: boolean; product
   );
 }
 
-function RepliesSheet({ post, onClose, onSaved }: { post: CommunityPost | null; onClose: () => void; onSaved: (xp: number) => void }) {
+/** `onAsk` hands a block up to the feed's own ask sheet, which sits beside this one rather than inside it. */
+function RepliesSheet({ post, onClose, onSaved, onAsk }: { post: CommunityPost | null; onClose: () => void; onSaved: (xp: number) => void; onAsk: (a: Ask) => void }) {
   const [rp, setRp] = useState<{ page: number; size: PageSize }>({ page: 1, size: DEFAULT_PAGE_SIZE });
   const q = useAuthed(['replies', post?.id ?? '', rp.page, rp.size], () => api.replies(post!.id, pageQuery(rp.page, rp.size)), Boolean(post));
   const [text, setText] = useState('');
@@ -443,7 +435,7 @@ function RepliesSheet({ post, onClose, onSaved }: { post: CommunityPost | null; 
                       </Button>
                     )}
                     {!r.mine && (
-                      <Button variant="ghost" size="sm" onClick={() => window.confirm(`Block ${r.authorName}? You will not see each other's posts or replies.`) && blockAuthor.mutate(r.id)}>
+                      <Button variant="ghost" size="sm" onClick={() => onAsk({ title: `Block ${r.authorName}?`, body: "You will not see each other's posts or replies.", action: 'Yes, block', run: () => blockAuthor.mutate(r.id) })}>
                         Block
                       </Button>
                     )}

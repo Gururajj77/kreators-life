@@ -13,7 +13,7 @@ import {
   type RetainerStatus,
   type StageEvent,
 } from '@kreators/shared';
-import { newId, nowIso } from './db';
+import { liveUser, newId, nowIso } from './db';
 
 /**
  * The server side of a client's way from enquiry to monthly delivery: the audit line, the guarded stage move, the stages the app moves by
@@ -39,16 +39,21 @@ export interface RetainerRow {
   created_at: string;
 }
 
+/** Who did something on an Agency: the owner, the client at their link, the app, or a team member (named by `actorId`, joined when read). */
+export type LogActor = 'me' | 'client' | 'auto' | 'team' | { actor: 'me' | 'team'; actorId: string | null };
+
 /** One line in the client's log. A statement, so it can ride in a batch with the change it describes. */
-export function logStmt(db: D1Database, userId: string, clientId: string, actor: 'me' | 'client' | 'auto', kind: string, text: string): D1PreparedStatement {
-  return db.prepare('INSERT INTO agency_log (id, user_id, client_id, actor, kind, text, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(newId(), userId, clientId, actor, kind, text.slice(0, 300), nowIso());
+export function logStmt(db: D1Database, userId: string, clientId: string, by: LogActor, kind: string, text: string): D1PreparedStatement {
+  const actor = typeof by === 'string' ? by : by.actor;
+  const actorId = typeof by === 'string' ? null : by.actorId;
+  return db.prepare('INSERT INTO agency_log (id, user_id, client_id, actor, actor_id, kind, text, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(newId(), userId, clientId, actor, actorId, kind, text.slice(0, 300), nowIso());
 }
 
 /**
  * Moves a client from one stage to another only if it is still where the caller saw it (`WHERE stage = from`), so two taps or a tap and the
  * cron move it once. Writes the log line when it moved. True when it did.
  */
-export async function moveStage(db: D1Database, userId: string, clientId: string, from: AgencyStageKey, to: AgencyStageKey, actor: 'me' | 'client' | 'auto', text: string): Promise<boolean> {
+export async function moveStage(db: D1Database, userId: string, clientId: string, from: AgencyStageKey, to: AgencyStageKey, actor: LogActor, text: string): Promise<boolean> {
   const now = nowIso();
   const res = await db.prepare('UPDATE agency_clients SET stage = ?, stage_since = ?, updated_at = ? WHERE id = ? AND user_id = ? AND stage = ?').bind(to, now, now, clientId, userId, from).run();
   if (!res.meta.changes) return false;
@@ -94,8 +99,9 @@ export async function syncStageFromAgreements(db: D1Database, only?: { userId: s
 }
 
 /** Closes a client's open ask for a new password: the owner set one, or dismissed it. A statement, so it rides in the same batch. */
-export function closePasswordRequest(db: D1Database, userId: string, clientId: string): D1PreparedStatement {
-  return db.prepare('UPDATE agency_password_requests SET closed_at = ? WHERE client_id = ? AND user_id = ? AND closed_at IS NULL').bind(nowIso(), clientId, userId);
+export function closePasswordRequest(db: D1Database, userId: string, clientId: string, link: 'client' | 'team' = 'client'): D1PreparedStatement {
+  // Each link has its own ask: a new password on the client link never closes an ask from their team, and the other way round.
+  return db.prepare('UPDATE agency_password_requests SET closed_at = ? WHERE client_id = ? AND user_id = ? AND link = ? AND closed_at IS NULL').bind(nowIso(), clientId, userId, link);
 }
 
 /** The retainer as the owner sees it. `made` is the months it has made so far (`YYYY-MM`). */
@@ -166,10 +172,14 @@ function ticksOf(raw: string): Record<string, boolean> {
 export async function lifecycleFor(db: D1Database, userId: string, row: LifeClient): Promise<ClientLifecycle> {
   const [retainerRow, log, trial, ask] = await Promise.all([
     currentRetainer(db, userId, row.id),
-    db.prepare('SELECT id, actor, kind, text, created_at FROM agency_log WHERE client_id = ? AND user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 30').bind(row.id, userId).all<{ id: string; actor: LifecycleLogLine['actor']; kind: string; text: string; created_at: string }>(),
+    // A team member's line is named when read, so a deleted account leaves no name behind ("A former team member").
+    db
+      .prepare(`SELECT l.id, l.actor, l.kind, l.text, l.created_at, CASE WHEN l.actor = 'team' THEN (SELECT u.display_name FROM users u WHERE u.id = l.actor_id AND ${liveUser('u')}) END AS actor_name FROM agency_log l WHERE l.client_id = ? AND l.user_id = ? ORDER BY l.created_at DESC, l.rowid DESC LIMIT 30`)
+      .bind(row.id, userId)
+      .all<{ id: string; actor: LifecycleLogLine['actor']; kind: string; text: string; created_at: string; actor_name: string | null }>(),
     db.prepare('SELECT id FROM agency_items WHERE client_id = ? AND user_id = ? AND trial = 1 ORDER BY created_at LIMIT 1').bind(row.id, userId).first<{ id: string }>(),
     // The client's open ask for a new password, with its reason: shown only here, on the owner's own client page.
-    db.prepare('SELECT reason, created_at FROM agency_password_requests WHERE client_id = ? AND user_id = ? AND closed_at IS NULL LIMIT 1').bind(row.id, userId).first<{ reason: string; created_at: string }>(),
+    db.prepare("SELECT reason, created_at FROM agency_password_requests WHERE client_id = ? AND user_id = ? AND link = 'client' AND closed_at IS NULL LIMIT 1").bind(row.id, userId).first<{ reason: string; created_at: string }>(),
   ]);
   const made = retainerRow ? await monthsMade(db, retainerRow.id) : [];
   return {
@@ -180,7 +190,7 @@ export async function lifecycleFor(db: D1Database, userId: string, row: LifeClie
     revisionsPerPiece: row.revisions_per_piece,
     password: { set: Boolean(row.portal_pass_hash), setAt: row.portal_pass_set_at, lastOpenedDay: row.portal_last_opened_day, request: ask ? { at: ask.created_at, reason: ask.reason } : null },
     retainer: retainerRow ? toRetainer(retainerRow, made) : null,
-    log: log.results.map((l) => ({ id: l.id, actor: l.actor, kind: l.kind, text: l.text, at: l.created_at })),
+    log: log.results.map((l) => ({ id: l.id, actor: l.actor, ...(l.actor === 'team' ? { actorName: l.actor_name || 'A former team member' } : {}), kind: l.kind, text: l.text, at: l.created_at })),
     trialItemId: trial?.id ?? null,
   };
 }

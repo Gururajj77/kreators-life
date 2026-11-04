@@ -14,6 +14,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { useAgencyCan } from '../lib/agencyWorkspace';
 import { api, ApiError } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { useAuthed } from '../lib/queries';
@@ -25,6 +26,7 @@ import { Field } from './InvoiceView';
 import { Pager, usePage } from './Pager';
 import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
+import { CardHead } from './CardHead';
 import { FIELD } from '../lib/ui';
 
 
@@ -32,10 +34,9 @@ import { FIELD } from '../lib/ui';
 export function PickCard({ on, onPick, name, blurb, house = false }: { on: boolean; onPick: () => void; name: string; blurb: string; house?: boolean }) {
   return (
     <button type="button" role="radio" aria-checked={on} onClick={onPick} className={`toy w-full rounded-tile border-2 p-sm text-left ${on ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
-      <span className="flex flex-wrap items-center gap-xs">
-        <span className="text-[16px] font-extrabold">{tie(name)}</span>
-        {house && <StatusTag tone="info">House template</StatusTag>}
-      </span>
+      <CardHead tag={house && <StatusTag fit tone="info">House template</StatusTag>}>
+        <span className="block text-[16px] font-extrabold">{tie(name)}</span>
+      </CardHead>
       <span className="mt-xs block text-[14px] font-semibold text-ink-soft">{blurb}</span>
     </button>
   );
@@ -172,6 +173,7 @@ export function AgencyDocsList({ clientId, retainer }: { clientId?: string; reta
   const [kind, setKind] = useParamState('adkind', 'all');
   const pg = usePage('ad');
   const [adding, setAdding] = useState(false);
+  const edit = useAgencyCan().can('paperwork', 'edit');
   const [rowNote, setRowNote] = useState('');
   const query = `page=${pg.page}&size=${pg.size}${kind !== 'all' ? `&kind=${kind}` : ''}${clientId ? `&client=${clientId}` : ''}`;
   const list = useAuthed(['agency', 'docs', 'list', clientId ?? '', kind, pg.page, pg.size], () => api.agencyDocs(query));
@@ -208,9 +210,11 @@ export function AgencyDocsList({ clientId, retainer }: { clientId?: string; reta
         ) : (
           <span />
         )}
-        <Button size="sm" plusToX onClick={() => setAdding(true)}>
-          New document
-        </Button>
+        {edit && (
+          <Button size="sm" plusToX onClick={() => setAdding(true)}>
+            New document
+          </Button>
+        )}
       </div>
       {list.isError && (
         <p role="alert" className="mt-sm m-0 text-[14px] font-bold">

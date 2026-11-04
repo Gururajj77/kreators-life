@@ -77,7 +77,7 @@ const listed = (items: string[]) => (items.length <= 1 ? (items[0] ?? '') : `${i
 const said = (labels: string[]) => listed(labels.map((l, i) => (i === 0 || /^I\b|^I'/.test(l) ? l : l.charAt(0).toLowerCase() + l.slice(1))));
 const kindOf = (k: string): IdentityKind | 'own' => IDENTITY_BY_KEY[k]?.kind ?? 'own';
 const uniq = <T,>(xs: T[]) => [...new Set(xs)];
-const makes = (a: SetupAnswers) => a.identities.includes('creator') || a.identities.includes('freelancer') || a.identities.includes('agency_owner');
+const makes = (a: SetupAnswers) => ['creator', 'freelancer', 'agency_owner', 'agency_team'].some((k) => a.identities.includes(k));
 /** "I'm a student" said back: "you're a student". */
 const youSay = (k: string) => (IDENTITY_BY_KEY[k]?.blurb ?? k).replace(/^I'm /, "you're ").replace(/^I /, 'you ');
 
@@ -103,7 +103,7 @@ function Tags({ keys }: { keys: string[] }) {
     return { icon: IDENTITY_BY_KEY[k]?.icon ?? OWN_TAG_ICON, label: identityLabel(k) };
   };
   return (
-    <ul className="m-0 flex list-none flex-wrap gap-xs p-0" aria-label="What I picked up">
+    <ul className="fill-row-all m-0 flex list-none flex-wrap gap-xs p-0" aria-label="What I picked up">
       {keys.map((k) => (
         <li key={k} className="inline-flex items-center gap-xs rounded-pill bg-card px-sm py-xs text-[14px] font-bold shadow-toy-soft">
           <AppIcon name={tag(k).icon} size={16} className="text-ink-soft" />
@@ -268,14 +268,17 @@ export function SetupChat() {
   const askWork = (a: SetupAnswers, asked: Question[], lead: Line[]) => {
     const creator = a.identities.includes('creator');
     const agency = a.identities.includes('agency_owner');
-    const freelance = a.identities.includes('freelancer') || agency;
+    const team = a.identities.includes('agency_team');
+    const freelance = a.identities.includes('freelancer') || agency || team;
     const groups: ChatChoiceGroup[] = [
       ...(creator ? [{ label: 'Your own content', icon: 'Clapperboard' as const, choices: identitiesOf('craft').map((i) => tagChoice(i.key)) }] : []),
       ...(freelance ? [{ label: 'For clients', icon: 'Luggage' as const, choices: identitiesOf('service').map((i) => tagChoice(i.key)) }] : []),
     ];
     const q = creator && freelance ? 'You make things, so tell me more: what do you make, for yourself or for clients? Pick all that fit, then tap Next.' : creator ? 'You make content, so tell me more: what kind? Pick all that fit, then tap Next.' : agency && !a.identities.includes('freelancer')
           ? 'Your agency works for clients, so tell me more: what does it make for them? Pick all that fit, then tap Next.'
-          : 'You work for clients, so tell me more: what do you do for them? Pick all that fit, then tap Next.';
+          : team && !a.identities.includes('freelancer')
+            ? "You work in an agency's team, so tell me more: what do you do there? Pick all that fit, then tap Next."
+            : 'You work for clients, so tell me more: what do you do for them? Pick all that fit, then tap Next.';
     say([...lead, q], {
       part: 'work',
       answers: a,

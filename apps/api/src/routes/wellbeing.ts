@@ -363,7 +363,11 @@ wellbeing.post('/:kind', async (c) => {
   return c.json({ log: row ? toLog(row) : null, summary: await summaryFor(db, user.id, date, user.streak) }, 201);
 });
 
+// The kind in the path is part of the address: a sleep id under /mood/ deletes nothing and says so.
 wellbeing.delete('/:kind/:id', async (c) => {
-  await c.env.DB.prepare('DELETE FROM wellbeing_logs WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  const kind = c.req.param('kind');
+  if (!isKind(kind)) return c.json({ error: 'unknown log' }, 404);
+  const res = await c.env.DB.prepare('DELETE FROM wellbeing_logs WHERE id = ? AND user_id = ? AND kind = ?').bind(c.req.param('id'), c.get('user').id, kind).run();
+  if (res.meta.changes === 0) return c.json({ error: 'not found' }, 404);
   return c.json({ ok: true });
 });

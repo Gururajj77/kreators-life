@@ -1,4 +1,4 @@
-import { BADGE_META, COACH_ABOUT_MAX, COACH_SHARE_META, COACH_SHARE_PARTS, RELATIONSHIP_BY_KEY, type CoachHub, type CoachLink, type CoachRosterRow } from '@kreators/shared';
+import { BADGE_META, COACH_ABOUT_MAX, COACH_SHARE_META, COACH_SHARE_PARTS, RELATIONSHIP_BY_KEY, type CoachHub, type CoachLink, type CoachRosterRow, type RelationshipKey } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Inert } from '../components/Inert';
 import { useState, type ReactNode } from 'react';
@@ -8,6 +8,7 @@ import { StatTile, WeekDots } from '../components/Charts';
 import { CoachFace, MyCoachSection } from '../components/MyCoach';
 import { Nudge } from '../components/Nudge';
 import { BackLink } from '../components/PageHeader';
+import { Hero, HeroNumber } from '../components/Hero';
 import { Pager, usePage } from '../components/Pager';
 import { Screen } from '../components/Screen';
 import { Section } from '../components/Section';
@@ -17,6 +18,7 @@ import { useAuthed, useRefreshAll } from '../lib/queries';
 import { shortDate, dateTime } from '../lib/date';
 import { FIELD_LINE } from '../lib/ui';
 import { StatusTag } from '../components/StatusTag';
+import { CardHead } from '../components/CardHead';
 
 const day = shortDate;
 const when = dateTime;
@@ -53,6 +55,7 @@ export function Coaching() {
             ? 'Each student picks what you see. Every note and task you add is logged for both of you.'
             : 'A coach the team chose sees only what you share, never your journal. End it any time.'}
         </p>
+        <CoachingHero hub={h} />
       </header>
       {h?.coach && <CoachSide hub={h} onChange={() => void hub.refetch()} />}
       <MyCoachSection id="my-coach" title={h?.coach ? 'Your own life coach' : 'Your life coach'} inCoaching />
@@ -64,13 +67,62 @@ export function Coaching() {
   );
 }
 
+/**
+ * The hero (founder, 2026-11-04: an app opens with what it says about the person). A coach sees their students and how many came in
+ * under their contract last week; a student sees their coach and how much of the five parts they share. Sage's mood follows it.
+ */
+function CoachingHero({ hub }: { hub: CoachHub | undefined }) {
+  const mine = useAuthed(['my-coach', 'hero'], () => api.myCoach(''));
+  if (!hub) return null;
+  if (hub.coach) {
+    const red = hub.students.filter((r) => r.redWeek).length;
+    const n = hub.counts.students;
+    return (
+      <Hero color="var(--color-r6)" deep="var(--deep-guru)" className="mt-md" character="guru" mood={n === 0 ? 'sleepy' : red === 0 ? 'excited' : 'happy'}>
+        <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">Your students</p>
+        <HeroNumber value={n} label={n === 0 ? 'No students yet. Ask one, or wait for an ask.' : red === 0 ? 'Nobody had a red week.' : `${red} had a red week. Start with them.`} />
+      </Hero>
+    );
+  }
+  const active = (mine.data?.links ?? []).filter((l) => l.status === 'active');
+  const link = active[0];
+  const on = link ? COACH_SHARE_PARTS.filter((k) => link.share[k]).length : 0;
+  return (
+    <Hero color="var(--color-r6)" deep="var(--deep-guru)" className="mt-md" character="guru" mood={link ? 'happy' : 'sleepy'}>
+      <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">{link ? `Your coach, ${link.coach.name}` : 'Your coach'}</p>
+      {link ? (
+        <HeroNumber value={on} unit={`of ${COACH_SHARE_PARTS.length}`} label="parts of your progress you share. Change it below." />
+      ) : (
+        // No number to show yet: the words are the headline, never a lone dash.
+        <>
+          <p className="mt-xs m-0 font-display text-[32px] leading-tight font-semibold">No coach yet</p>
+          <p className="mt-xs m-0 text-[14px] font-semibold opacity-90">Find one in the directory below.</p>
+        </>
+      )}
+    </Hero>
+  );
+}
+
+function focusPill(k: RelationshipKey) {
+  const rel = RELATIONSHIP_BY_KEY[k];
+  return (
+    <span key={k} title={rel.name} className="max-w-full truncate rounded-pill px-xs text-[12px] font-extrabold leading-[24px]" style={{ background: rel.color, color: rel.text }}>
+      {rel.name}
+    </span>
+  );
+}
+
 function RosterRow({ r }: { r: CoachRosterRow }) {
+  /** The red week takes the corner; without one, the first focus pillar goes up and the rest stay on their row. */
+  const rest = (r.redWeek ? r.focus : r.focus?.slice(1)) ?? [];
   return (
     <li>
       <Link to={`/coaching/students/${r.student.id}`} className="toy toy-soft flex items-start gap-sm rounded-tile bg-card p-sm">
         <CoachFace name={r.student.name} badge={r.student.badge} />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[16px] font-bold">{r.student.name}</span>
+          <CardHead tag={r.redWeek ? <StatusTag tone="bad" fit>Below the plan last week</StatusTag> : r.focus?.[0] && focusPill(r.focus[0])}>
+            <span className="block truncate text-[16px] font-bold">{r.student.name}</span>
+          </CardHead>
           <span className="block text-[14px] font-semibold text-ink-soft">
             {r.streak !== null ? `Streak ${r.streak}, last check-in ${r.lastCheckin ?? 'never'}. ` : ''}
             Since {day(r.since)}.
@@ -81,16 +133,7 @@ function RosterRow({ r }: { r: CoachRosterRow }) {
               {r.contractDays !== null && <span className="text-[12px] font-bold text-ink-soft">The deal: {r.contractDays} days a week</span>}
             </span>
           )}
-          {(r.redWeek || (r.focus && r.focus.length > 0)) && (
-            <span className="mt-xs flex flex-wrap gap-xs">
-              {r.redWeek && <StatusTag tone="bad">Below the plan last week</StatusTag>}
-              {r.focus?.map((k) => (
-                <span key={k} className="rounded-pill px-xs text-[12px] font-extrabold leading-[24px]" style={{ background: RELATIONSHIP_BY_KEY[k].color, color: RELATIONSHIP_BY_KEY[k].text }}>
-                  {RELATIONSHIP_BY_KEY[k].name}
-                </span>
-              ))}
-            </span>
-          )}
+          {rest.length > 0 && <span className="mt-xs flex flex-wrap gap-xs">{rest.map(focusPill)}</span>}
           <span className="mt-xs block text-[12px] font-bold text-ink-mute">Sees: {COACH_SHARE_PARTS.filter((k) => r.share[k]).map((k) => COACH_SHARE_META[k].name).join(', ') || 'nothing for now'}</span>
         </span>
       </Link>

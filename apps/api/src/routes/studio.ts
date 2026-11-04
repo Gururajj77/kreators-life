@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { AFFILIATE_SHARE, PRODUCT_KINDS, type Availability, type AvailabilityOverride, type Booking, type Coupon, type Lead, type Lesson, type Order, type Product, type ProductKind, type QuizQuestion, type StudioAnalytics, type Testimonial, parseFaq } from '@kreators/shared';
 import { isUnlockBadgeKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { nameOf, newId, notify, nowIso, parseList, pageOf, paged, httpUrl } from '../db';
+import { nameOf, newId, notify, nowIso, parseList, pageOf, paged, httpUrl, str } from '../db';
 import { logEvent, sendEmail, track } from '../ops';
 import { parseQuiz } from './buyer';
 
@@ -181,7 +181,6 @@ interface TestimonialRow {
 export const TESTIMONIAL_SELECT = `SELECT t.*, p.title AS product_title, a.display_name AS author_name FROM testimonials t JOIN products p ON p.id = t.product_id JOIN users a ON a.id = t.author_id`;
 export const toTestimonial = (r: TestimonialRow): Testimonial => ({ id: r.id, productId: r.product_id, productTitle: r.product_title, authorName: nameOf({ display_name: r.author_name }), rating: r.rating, body: r.body, approved: r.approved === 1, createdAt: r.created_at });
 
-const str = (v: unknown, max: number, fallback = '') => (typeof v === 'string' ? v.trim().slice(0, max) : fallback);
 const int = (v: unknown, fallback: number | null, lo = 0, hi = 1_000_000): number | null => {
   if (v === null) return null;
   const n = Number(v);

@@ -1,8 +1,8 @@
 import { usePillarAccent } from '../lib/usePillarAccent';
 import gsap from 'gsap';
 import type { CSSProperties } from 'react';
-import { LIFE_AREAS, RELATIONSHIPS, type AppModule, type LifeAreaKey } from '@kreators/shared';
-import { motion, useReducedMotion } from 'motion/react';
+import { BOOK_BY_SLUG, LIFE_AREA_ORDER, LIFE_AREAS, RELATIONSHIPS, type AppModule } from '@kreators/shared';
+import { m as motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
@@ -14,6 +14,9 @@ import { useParamState } from '../lib/useParamState';
 import { featuresForLifeArea, featuresForRelationship } from './content';
 import { SiteLayout, useAppEntry } from './SiteLayout';
 import { AppIcon } from '../components/AppIcon';
+import { TabRow } from '../components/TabRow';
+import { BookCover } from './Books';
+import { SITE_PRIMARY_ON_INK } from './buttons';
 
 /** A gentle lift into place the first time a section scrolls into view. The content is always visible (opacity
  * never hides it); only the small upward delta animates, so a full-page shot taken before the observer fires never
@@ -138,22 +141,25 @@ function Explorer({ picks, value, onPick, label }: { picks: Choice[]; value: str
   const more = current.features.slice(SHOWN);
   return (
     <div className="grid gap-md md:grid-cols-[260px_1fr] md:items-stretch">
-      {/* On a phone: one row of pills that scrolls sideways. From the tablet width up: an inset list. */}
-      <div className="scroll-row md:hidden" role="group" aria-label={label}>
-        {picks.map((p) => (
-          <button
-            key={p.key}
-            data-pillar={p.relationship.key}
-            type="button"
-            aria-pressed={p.key === current.key}
-            onClick={() => onPick(p.key)}
-            className="toy inline-flex min-h-[44px] shrink-0 items-center gap-xs rounded-pill bg-card-strong px-sm text-[14px] font-bold aria-pressed:bg-ink aria-pressed:text-on-ink"
-          >
-            <span className="h-[12px] w-[12px] rounded-full" style={{ background: p.relationship.color }} aria-hidden="true" />
-            {p.name}
-          </button>
-        ))}
-      </div>
+      {/* On a phone: one row of pills, the rest behind More. From the tablet width up: an inset list. */}
+      <TabRow
+        className="md:hidden"
+        label={label}
+        items={picks.map((p) => ({
+          key: p.key,
+          name: p.name,
+          pillar: p.relationship.key,
+          label: (
+            <>
+              <span className="h-[12px] w-[12px] rounded-full" style={{ background: p.relationship.color }} aria-hidden="true" />
+              {p.name}
+            </>
+          ),
+        }))}
+        value={current.key}
+        onChange={onPick}
+        pillClass={() => 'toy inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-card-strong px-sm text-[14px] font-bold aria-pressed:bg-ink aria-pressed:text-on-ink'}
+      />
       <ul className="m-0 hidden list-none flex-col gap-xs rounded-card bg-card p-xs shadow-toy-soft md:flex" role="group" aria-label={label}>
         {picks.map((p) => {
           const on = p.key === current.key;
@@ -255,7 +261,7 @@ export function SevenRP() {
     line: r.question,
     features: featuresForRelationship(r.key),
   }));
-  const fivePicks: Choice[] = (Object.keys(LIFE_AREAS) as LifeAreaKey[]).map((k) => {
+  const fivePicks: Choice[] = LIFE_AREA_ORDER.map((k) => {
     const meta = LIFE_AREAS[k];
     const r = RELATIONSHIPS.find((x) => x.key === meta.relationship)!;
     const features = featuresForLifeArea(k);
@@ -306,6 +312,29 @@ export function SevenRP() {
         <Explorer picks={picks} value={value} onPick={setPick} label={view === 'seven' ? 'The seven pillars' : 'The five areas of life'} />
       </div>
 
+      {/* Where the seven come from: the founder's book, with its cover, and the way to its page. */}
+      {BOOK_BY_SLUG['the-relationship-method'] && (
+        <section className="mt-xl" aria-labelledby="seven-book">
+          <Link
+            to="/features/books#the-relationship-method"
+            className="toy toy-soft flex items-center gap-md rounded-card bg-card p-sm shadow-toy-soft md:p-md"
+          >
+            <span className="block w-[72px] shrink-0 md:w-[96px]">
+              <BookCover book={BOOK_BY_SLUG['the-relationship-method']} />
+            </span>
+            <span className="min-w-0">
+              <span className="block type-eyebrow text-ink-mute">The book</span>
+              <span id="seven-book" className="mt-xs block text-[20px] font-extrabold leading-tight text-balance">
+                {BOOK_BY_SLUG['the-relationship-method'].title}
+              </span>
+              <span className="mt-xs block text-[14px] font-semibold text-ink-soft text-balance">
+                The book behind the seven relationships this app is built on, by {BOOK_BY_SLUG['the-relationship-method'].author}.
+              </span>
+            </span>
+          </Link>
+        </section>
+      )}
+
       <section className="mt-2xl text-center">
         <motion.div {...rise} className="rounded-card bg-ink p-lg text-on-ink">
           <h2 className="type-hook text-[clamp(32px,6vw,56px)] text-on-ink [&_em]:text-on-ink/70!">
@@ -314,9 +343,9 @@ export function SevenRP() {
           <p className="mt-xs m-0 text-balance text-[16px] font-semibold text-on-ink/80">A short chat places all seven, then builds a pillar for the ones that need you most.</p>
           <Link
             to={entry === '/home' ? '/home' : '/start'}
-            className="toy fx-shimmer mt-md inline-flex min-h-[56px] items-center rounded-pill bg-card px-lg text-[18px] font-bold text-ink"
+            className={`${SITE_PRIMARY_ON_INK} mt-md`}
           >
-            Start free
+            {entry === '/home' ? 'Go to app' : 'Start free'}
           </Link>
         </motion.div>
       </section>

@@ -90,7 +90,7 @@ export function DiscountField({ area, itemId, points, value, onChange, check, cl
             {check.offPoints > 0 && check.offCents === 0 && ` New total ${check.payPoints} ${check.payPoints === 1 ? 'point' : 'points'}.`}
           </p>
         )}
-        <button type="button" onClick={() => onChange('', null)} className="toy mt-xs min-h-[44px] text-[14px] font-bold underline">
+        <button type="button" onClick={() => onChange('', null)} className="mt-xs inline-flex min-h-[44px] items-center text-[14px] font-bold underline underline-offset-4 hover:text-ink-soft">
           Take the code off
         </button>
       </div>
@@ -100,7 +100,7 @@ export function DiscountField({ area, itemId, points, value, onChange, check, cl
   if (!open) {
     return (
       <div className={className}>
-        <button type="button" onClick={() => setOpen(true)} aria-expanded="false" className="toy min-h-[44px] text-[14px] font-bold underline">
+        <button type="button" onClick={() => setOpen(true)} aria-expanded="false" className="inline-flex min-h-[44px] items-center text-[14px] font-bold underline underline-offset-4 hover:text-ink-soft">
           Have a discount code?
         </button>
         {problem && (

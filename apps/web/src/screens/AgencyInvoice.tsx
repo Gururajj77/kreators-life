@@ -17,7 +17,7 @@ import {
   LOCALE,
 } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Ban, Building2, Copy, CopyPlus, Download, Eye, EyeOff, KeyRound, LayoutTemplate, Link2, Mail, MessageSquare, Palette, Send, SlidersHorizontal, Trash2, Undo2, Check } from 'lucide-react';
+import { ArchiveRestore, Ban, Building2, Copy, CopyPlus, Download, Eye, EyeOff, KeyRound, LayoutTemplate, Link2, Mail, MessageSquare, Palette, Send, SlidersHorizontal, Trash2, Undo2, Check } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
@@ -32,6 +32,7 @@ import { MoreMenu, type MoreMenuItem } from '../components/MoreMenu';
 import { Busy, Skeleton, SkeletonCard } from '../components/Skeleton';
 import { Inert } from '../components/Inert';
 import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { StatusTag } from '../components/StatusTag';
@@ -171,6 +172,15 @@ export function AgencyInvoice() {
     },
     onError: (e: Error) => setNote(e.message),
   });
+  // Restore: back to the status it had before the void, with the same number and link (the server keeps that status).
+  const restore = useMutation({
+    mutationFn: () => api.agencyInvoiceRestore(id),
+    onSuccess: async (r) => {
+      await refresh();
+      setNote(`Restored as ${INVOICE_STATUS_NAME[r.restoredTo].toLowerCase()}.`);
+    },
+    onError: (e: Error) => setNote(e.message),
+  });
   const remove = useMutation({
     mutationFn: () => api.agencyInvoiceRemove(id),
     onSuccess: async () => {
@@ -223,13 +233,7 @@ export function AgencyInvoice() {
   if (q.isError) {
     return (
       <Screen>
-        <header className="no-print pt-lg">
-          <BackLink to="/agency?tab=invoices">Invoices</BackLink>
-          <h1 className="text-[30px]">No invoice here</h1>
-          <p role="alert" className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">
-            It may have been removed. Go back to the list.
-          </p>
-        </header>
+        <AppCover className="no-print" back={{ to: '/agency?tab=invoices', label: 'Invoices' }} title="No invoice here" lede={<span role="alert">It may have been removed. Go back to the list.</span>} />
       </Screen>
     );
   }
@@ -281,17 +285,41 @@ export function AgencyInvoice() {
     ...(inv.agencyClientId ? [{ key: 'password', label: 'Password', icon: KeyRound, onSelect: () => setPanel('password') }] : []),
     ...(inv.status === 'paid' ? [{ key: 'unpay', label: 'Mark as sent again', icon: Undo2, destructive: true, onSelect: () => setConfirm('unpay') }] : []),
     ...(inv.status === 'sent' ? [{ key: 'void', label: 'Void', icon: Ban, destructive: true, onSelect: () => setConfirm('void') }] : []),
+    ...(inv.status === 'void' ? [{ key: 'restore', label: 'Restore', icon: ArchiveRestore, disabled: restore.isPending, onSelect: () => restore.mutate() }] : []),
     ...(inv.status === 'draft' ? [{ key: 'rm', label: 'Remove draft', icon: Trash2, destructive: true, onSelect: () => setConfirm('remove') }] : []),
   ];
 
   return (
     <Screen howTo={false}>
-      <header className="no-print pt-lg">
-        <BackLink to="/agency?tab=invoices">Invoices</BackLink>
-        <div className="flex flex-wrap items-center gap-sm">
-          <h1 className="m-0 text-[30px]">{inv.number}</h1>
-          <StatusTag tone={INVOICE_STATUS_TONE[inv.status]}>{INVOICE_STATUS_NAME[inv.status]}</StatusTag>
-          <div className="ml-auto flex w-full items-center justify-end gap-xs sm:w-auto">
+      <AppCover
+        className="no-print"
+        back={{ to: '/agency?tab=invoices', label: 'Invoices' }}
+        title={inv.number}
+        lede={
+          <span className="inline-flex flex-wrap items-center justify-end gap-x-sm gap-y-xs">
+            {/* The save line first, so the status ends flush with the title even while the line is empty. */}
+            <span role="status" aria-live="polite" className="inline-flex min-h-[24px] items-center gap-xs">
+              {save.isPending ? 'Saving' : note}
+              {note === 'Saved' && undo && !save.isPending && (
+                <button
+                  type="button"
+                  className="font-bold text-ink underline"
+                  onClick={() => {
+                    const back = undo;
+                    setUndo(null);
+                    setDraft(back);
+                  }}
+                >
+                  Undo
+                </button>
+              )}
+              {clientView && !note && !save.isPending ? 'What your client sees.' : ''}
+            </span>
+            <StatusTag tone={INVOICE_STATUS_TONE[inv.status]}>{INVOICE_STATUS_NAME[inv.status]}</StatusTag>
+          </span>
+        }
+        actions={
+          <>
             {inv.status === 'draft' && (
               <Button onClick={() => status.mutate('sent')} disabled={status.isPending}>
                 <Icon icon={Send} size={18} />
@@ -309,29 +337,9 @@ export function AgencyInvoice() {
               <span className="hidden sm:inline">Download</span>
             </Button>
             <MoreMenu items={more} label="More for this invoice" />
-          </div>
-        </div>
-        <p role="status" aria-live="polite" className="mt-xs m-0 min-h-[24px] text-[14px] font-semibold text-ink-soft">
-          {save.isPending ? 'Saving' : note}
-          {note === 'Saved' && undo && !save.isPending && (
-            <>
-              {' '}
-              <button
-                type="button"
-                className="font-bold text-ink underline"
-                onClick={() => {
-                  const back = undo;
-                  setUndo(null);
-                  setDraft(back);
-                }}
-              >
-                Undo
-              </button>
-            </>
-          )}
-          {clientView && !note && !save.isPending ? 'What your client sees.' : ''}
-        </p>
-      </header>
+          </>
+        }
+      />
 
       <div className="legal-host">
         <div aria-hidden="true" />
@@ -403,7 +411,7 @@ export function AgencyInvoice() {
         }
       />
       <HouseTemplateSheet open={houseOpen} onClose={() => setHouseOpen(false)} kind="invoice" fromId={inv.id} defaultName={inv.doc.title || 'Invoice'} beforeSave={dirty && editable ? flush : undefined} />
-      <ConfirmSheet open={confirm === 'void'} onClose={() => setConfirm(null)} title="Void this invoice?" body="It is kept for the record and your client's link shows it as void. You cannot change it after this; duplicate it to start again." action="Void it" onConfirm={() => status.mutate('void')} busy={status.isPending} />
+      <ConfirmSheet open={confirm === 'void'} onClose={() => setConfirm(null)} title="Void this invoice?" body="It is kept for the record and your client's link shows it as void. Restore, in the same menu, brings it back as it was." action="Void it" onConfirm={() => status.mutate('void')} busy={status.isPending} />
       <ConfirmSheet open={confirm === 'remove'} onClose={() => setConfirm(null)} title="Remove this draft?" body="The draft is deleted. It was never sent, so your client has not seen it." action="Remove the draft" onConfirm={() => remove.mutate()} busy={remove.isPending} />
       <ConfirmSheet open={confirm === 'unpay'} onClose={() => setConfirm(null)} title="Mark as sent again?" body="It stops counting as paid in your books, so you can change it. Mark it as paid again once it is right." action="Mark as sent again" onConfirm={() => status.mutate('sent')} busy={status.isPending} />
       <EmailCopySheet open={emailOpen} onClose={() => setEmailOpen(false)} route="invoices" id={inv.id} defaultTo={inv.clientEmail || inv.doc.to.email} context={emailCtx} noLinkYet={inv.status === 'draft' || inv.status === 'void'} />

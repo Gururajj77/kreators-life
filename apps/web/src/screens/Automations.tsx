@@ -1,4 +1,4 @@
-import type { DmAutomation, Funnel, FunnelStep, FunnelStepKind, Sequence } from '@kreators/shared';
+import { formatCount, type DmAutomation, type Funnel, type FunnelStep, type FunnelStepKind, type Sequence } from '@kreators/shared';
 import { dateTime } from '../lib/date';
 import { useMutation } from '@tanstack/react-query';
 import { ArrowRight } from 'lucide-react';
@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Icon } from '../components/Icon';
 import { Pager, usePage } from '../components/Pager';
 import { Button } from '../components/Button';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { Toggle } from '../components/Toggle';
@@ -41,11 +41,7 @@ export function Automations() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/shop">Shop</BackLink>
-        <h1 className="text-[30px]">Auto-DM</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Someone comments a keyword, they get your link in a DM. Funnels show where people drop off. Sequences follow up after a purchase.</p>
-      </header>
+      <AppCover back={{ to: '/shop', label: 'Shop' }} title="Auto-DM" lede="Someone comments a keyword, they get your link in a DM. Funnels show where people drop off. Sequences follow up after a purchase." />
 
       {autos.data && !autos.data.metaConnected && (
         <p className="mt-md m-0 rounded-tile p-sm text-[14px] font-bold text-ink" style={{ background: 'var(--tint-yellow)' }}>
@@ -87,7 +83,7 @@ export function Automations() {
           <h2 id="funnel-heading" className="text-[24px]">
             Funnels
           </h2>
-          <Button onClick={() => setNewFunnel(true)}>New funnel</Button>
+          <Button variant="outline" onClick={() => setNewFunnel(true)}>New funnel</Button>
         </div>
         {funnels.data && funnels.data.funnels.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Chain a post, an Auto-DM, a link, a lead and a sale to see the drop-off at every step.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -102,7 +98,7 @@ export function Automations() {
           <h2 id="seq-heading" className="text-[24px]">
             Sequences
           </h2>
-          <Button onClick={() => setNewSeq(true)}>New message</Button>
+          <Button variant="outline" onClick={() => setNewSeq(true)}>New message</Button>
         </div>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Messages buyers get in their Inbox some days after a purchase.</p>
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -151,10 +147,34 @@ export function Automations() {
   );
 }
 
+/** The pale red outline a delete wears (the Sign out button's look), never solid until the sheet asks. */
+const DELETE_BTN = 'toy inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-[16px] font-bold text-r1 hover:bg-r1/10 disabled:opacity-50';
+
+/** Asks before a delete, the Mindful session pattern: a red "Yes, delete it" and a quiet "Keep it". */
+function ConfirmDelete({ open, title, body, pending, failed, onYes, onClose }: { open: boolean; title: string; body: string; pending: boolean; failed: boolean; onYes: () => void; onClose: () => void }) {
+  return (
+    <Sheet open={open} onClose={onClose} title={title}>
+      <div className="grid gap-md pb-xl">
+        <p className="m-0 text-[16px] font-semibold text-ink-soft">{body}</p>
+        {failed && <p role="alert" className="m-0 text-[14px] font-bold text-r1">That did not work. Try again.</p>}
+        <div className="flex flex-wrap gap-xs">
+          <button type="button" disabled={pending} onClick={onYes} className={DELETE_BTN}>
+            Yes, delete it
+          </button>
+          <Button variant="outline" onClick={onClose}>
+            Keep it
+          </Button>
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
 function AutomationCard({ a, onChange }: { a: DmAutomation; onChange: () => void }) {
   const [comment, setComment] = useState('');
   const toggle = useMutation({ mutationFn: (active: boolean) => api.setAutomation(a.id, active), onSuccess: onChange });
   const remove = useMutation({ mutationFn: () => api.deleteAutomation(a.id), onSuccess: onChange });
+  const [deleting, setDeleting] = useState(false);
   const test = useMutation({ mutationFn: () => api.simulateComment(a.id, { comment }), onSuccess: onChange });
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
@@ -178,7 +198,7 @@ function AutomationCard({ a, onChange }: { a: DmAutomation; onChange: () => void
         ).map(([k, v]) => (
           <div key={k} className="rounded-tile bg-paper p-xs">
             <dt className="text-[12px] font-bold text-ink-soft">{k}</dt>
-            <dd className="m-0 font-display text-[16px] font-extrabold">{v}</dd>
+            <dd className="m-0 font-display text-[16px] font-extrabold">{formatCount(v)}</dd>
           </div>
         ))}
       </dl>
@@ -206,15 +226,17 @@ function AutomationCard({ a, onChange }: { a: DmAutomation; onChange: () => void
           {errorText(toggle.error ?? remove.error ?? test.error, 'That did not work.')}
         </p>
       )}
-      <Button variant="ghost" className="mt-xs" disabled={remove.isPending} onClick={() => window.confirm('Remove this automation?') && remove.mutate()}>
+      <button type="button" disabled={remove.isPending} onClick={() => setDeleting(true)} className={`mt-xs ${DELETE_BTN}`}>
         Remove
-      </Button>
+      </button>
+      <ConfirmDelete open={deleting} title="Delete this automation?" body="It stops answering comments. Its numbers go with it. This cannot be undone." pending={remove.isPending} failed={remove.isError} onYes={() => remove.mutate()} onClose={() => setDeleting(false)} />
     </li>
   );
 }
 
 function FunnelCard({ f, onChange }: { f: Funnel; onChange: () => void }) {
   const remove = useMutation({ mutationFn: () => api.deleteFunnel(f.id), onSuccess: onChange });
+  const [deleting, setDeleting] = useState(false);
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
       <p className="m-0 text-[16px] font-bold">{f.name}</p>
@@ -239,9 +261,10 @@ function FunnelCard({ f, onChange }: { f: Funnel; onChange: () => void }) {
           );
         })}
       </ol>
-      <Button variant="ghost" className="mt-xs" disabled={remove.isPending} onClick={() => window.confirm('Remove this funnel?') && remove.mutate()}>
+      <button type="button" disabled={remove.isPending} onClick={() => setDeleting(true)} className={`mt-xs ${DELETE_BTN}`}>
         Remove
-      </Button>
+      </button>
+      <ConfirmDelete open={deleting} title="Delete this funnel?" body={`"${f.name}". The posts, links and sales in it stay. This cannot be undone.`} pending={remove.isPending} failed={remove.isError} onYes={() => remove.mutate()} onClose={() => setDeleting(false)} />
     </li>
   );
 }
@@ -249,6 +272,7 @@ function FunnelCard({ f, onChange }: { f: Funnel; onChange: () => void }) {
 function SequenceCard({ s, onChange }: { s: Sequence; onChange: () => void }) {
   const toggle = useMutation({ mutationFn: (active: boolean) => api.setSequence(s.id, active), onSuccess: onChange });
   const remove = useMutation({ mutationFn: () => api.deleteSequence(s.id), onSuccess: onChange });
+  const [deleting, setDeleting] = useState(false);
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
       <p className="m-0 text-[16px] font-bold">{s.title}</p>
@@ -259,9 +283,10 @@ function SequenceCard({ s, onChange }: { s: Sequence; onChange: () => void }) {
       <div className="mt-sm">
         <Toggle on={s.active} onChange={(on) => toggle.mutate(on)} label={s.active ? 'Active' : 'Paused'} />
       </div>
-      <Button variant="ghost" className="mt-xs" disabled={remove.isPending} onClick={() => window.confirm('Remove this message?') && remove.mutate()}>
+      <button type="button" disabled={remove.isPending} onClick={() => setDeleting(true)} className={`mt-xs ${DELETE_BTN}`}>
         Remove
-      </Button>
+      </button>
+      <ConfirmDelete open={deleting} title="Delete this message?" body={`"${s.title}". It stops going out to buyers. This cannot be undone.`} pending={remove.isPending} failed={remove.isError} onYes={() => remove.mutate()} onClose={() => setDeleting(false)} />
     </li>
   );
 }
@@ -348,24 +373,25 @@ function NewAutomationSheet({ open, onClose, products, items, onDone }: { open: 
 
 type Options = Record<FunnelStepKind, { id: string; label: string }[]>;
 
+type StepRow = FunnelStep & { key: string };
+const firstSteps = (): StepRow[] => [
+  { key: crypto.randomUUID(), kind: 'content', ref: '', label: '' },
+  { key: crypto.randomUUID(), kind: 'product', ref: '', label: '' },
+];
+
 function NewFunnelSheet({ open, onClose, options, onDone }: { open: boolean; onClose: () => void; options: Options; onDone: () => void }) {
   const [name, setName] = useState('');
-  const [steps, setSteps] = useState<FunnelStep[]>([
-    { kind: 'content', ref: '', label: '' },
-    { kind: 'product', ref: '', label: '' },
-  ]);
+  // Each step carries a client-only key so removing one from the middle never hands its picks to the next; stripped before saving.
+  const [steps, setSteps] = useState<StepRow[]>(firstSteps);
   const create = useMutation({
-    mutationFn: () => api.createFunnel({ name, steps }),
+    mutationFn: () => api.createFunnel({ name, steps: steps.map(({ key: _key, ...st }) => st) }),
     onSuccess: () => {
       setName('');
-      setSteps([
-        { kind: 'content', ref: '', label: '' },
-        { kind: 'product', ref: '', label: '' },
-      ]);
+      setSteps(firstSteps());
       onDone();
     },
   });
-  const setStep = (i: number, patch: Partial<FunnelStep>) => setSteps((list) => list.map((s, j) => (j === i ? { ...s, ...patch } : s)));
+  const setStep = (i: number, patch: Partial<StepRow>) => setSteps((list) => list.map((s, j) => (j === i ? { ...s, ...patch } : s)));
   const pick = (i: number, kind: FunnelStepKind) => {
     const first = options[kind][0];
     setStep(i, { kind, ref: first?.id ?? '', label: first?.label ?? '' });
@@ -386,7 +412,7 @@ function NewFunnelSheet({ open, onClose, options, onDone }: { open: boolean; onC
         </label>
         <ol className="flex list-none flex-col gap-sm p-0 m-0">
           {steps.map((s, i) => (
-            <li key={i} className="rounded-tile bg-paper p-sm">
+            <li key={s.key} className="rounded-tile bg-paper p-sm">
               <p className="m-0 text-[14px] font-bold">Step {i + 1}</p>
               <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label={`Step ${i + 1} kind`}>
                 {STEP_KINDS.map((k) => (
@@ -410,7 +436,7 @@ function NewFunnelSheet({ open, onClose, options, onDone }: { open: boolean; onC
               </select>
               {options[s.kind].length === 0 && <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Nothing of this kind yet.</p>}
               {steps.length > 2 && (
-                <Button variant="ghost" className="mt-xs" onClick={() => setSteps((list) => list.filter((_, j) => j !== i))}>
+                <Button variant="ghost" className="mt-xs" onClick={() => setSteps((list) => list.filter((x) => x.key !== s.key))}>
                   Remove step
                 </Button>
               )}
@@ -418,7 +444,7 @@ function NewFunnelSheet({ open, onClose, options, onDone }: { open: boolean; onC
           ))}
         </ol>
         {steps.length < 8 && (
-          <Button variant="outline" onClick={() => setSteps((list) => [...list, { kind: 'link', ref: options.link[0]?.id ?? '', label: options.link[0]?.label ?? '' }])}>
+          <Button variant="outline" onClick={() => setSteps((list) => [...list, { key: crypto.randomUUID(), kind: 'link', ref: options.link[0]?.id ?? '', label: options.link[0]?.label ?? '' }])}>
             Add a step
           </Button>
         )}

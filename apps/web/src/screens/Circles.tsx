@@ -6,7 +6,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { MediaSection } from '../components/MediaSection';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { Toggle } from '../components/Toggle';
@@ -58,11 +58,19 @@ export function Circles() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Circles</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Small anonymous groups near you each week, seated by interests that fit.</p>
-        <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-[12px] font-bold text-ink-soft">
+      <AppCover
+        back={{ to: '/apps', label: 'Apps' }}
+        title="Circles"
+        lede="Small anonymous groups near you each week, seated by interests that fit."
+        actions={
+          d?.canCreate ? (
+            <Button variant="outline" onClick={() => setCreating(true)}>
+              Open a circle
+            </Button>
+          ) : undefined
+        }
+      >
+        <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-[12px] font-bold text-ink-soft">
           <li>Everyone has an alias and keeps it.</li>
           <li>Red if you are single, white if you are committed.</li>
           <li>The chat opens a day before you meet.</li>
@@ -83,12 +91,7 @@ export function Circles() {
             {d.hasLocation ? ', within twenty kilometres of you' : ''}.
           </p>
         )}
-        {d?.canCreate && (
-          <Button variant="outline" className="mt-sm" onClick={() => setCreating(true)}>
-            Open a circle
-          </Button>
-        )}
-      </header>
+      </AppCover>
 
       {d && d.hosting.length > 0 && (
         <section className="mt-lg" aria-labelledby="hosting-heading">
@@ -425,16 +428,16 @@ export function CircleGroup() {
 
   return (
     <Screen columns={false}>
-      <header className="pt-lg">
-        <BackLink to="/circles">Circles</BackLink>
-        <p className="m-0 text-[14px] font-bold text-ink-soft">
-          {g.eventTitle}, {when(g.startsAt)}
-        </p>
-        <h1 className="text-[30px]">{g.name}</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          You are <span className="font-extrabold text-ink">{g.myAlias}</span> here. {g.chatOpen ? 'The chat is open.' : `The chat opens in ${countdown(g.chatOpensAt, now)}, a day before you meet.`}
-        </p>
-      </header>
+      <AppCover
+        back={{ to: '/circles', label: 'Circles' }}
+        eyebrow={`${g.eventTitle}, ${when(g.startsAt)}`}
+        title={g.name}
+        lede={
+          <>
+            You are <span className="font-extrabold text-ink">{g.myAlias}</span> here. {g.chatOpen ? 'The chat is open.' : `The chat opens in ${countdown(g.chatOpensAt, now)}, a day before you meet.`}
+          </>
+        }
+      />
 
       <section className="mt-md rounded-card p-md" style={{ background: 'var(--tint-yellow)' }} aria-labelledby="show-heading">
         <h2 id="show-heading" className="text-[18px]">

@@ -1,13 +1,27 @@
 import { youtubeId, type LinkBlock } from '@kreators/shared';
+import type { CSSProperties } from 'react';
 import { EmbedGate } from './EmbedGate';
 import { FadeImage } from './Media';
 import { Icon } from './Icon';
-import { GalleryHorizontal, Play, ChevronRight } from 'lucide-react';
+import { ArrowUpRight, GalleryHorizontal, Play, Star } from 'lucide-react';
+
+/** The site a link goes to, as a short quiet line under its title ("youtube.com"). Blocks are https only (`parseLinkBlocks`). */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+/** A featured link: the glass card with a soft yellow wash over its left side (the family pillar's tint, so dark mode follows). */
+const FEATURED: CSSProperties = { backgroundImage: 'linear-gradient(120deg, var(--tint-yellow), transparent 75%)' };
 
 /**
- * The link blocks on a public page, the way the creator stacked them: buttons, headers, text,
- * images, YouTube videos and carousels. A tap on anything with a link reports back so the owner
- * can see what people open. Every link opens in a new tab and leaves this page where it is.
+ * The link blocks on a public page, the way the creator stacked them: links, headers, text, images, YouTube videos and carousels,
+ * each a calm glass card (wave 19, 2026-11-04). A featured link is the larger card with a star; a header starts a group; a carousel
+ * scrolls sideways in a `.scroll-row`. A tap on anything with a link reports back so the owner can see what people open. Every link
+ * opens in a new tab and leaves this page where it is.
  */
 export function LinkBlocks({ blocks, onOpen }: { blocks: LinkBlock[]; onOpen?: (id: string) => void }) {
   if (blocks.length === 0) return null;
@@ -18,64 +32,91 @@ export function LinkBlocks({ blocks, onOpen }: { blocks: LinkBlock[]; onOpen?: (
         {blocks.map((b) => (
           <li key={b.id}>
             {b.type === 'link' && (
-              <a href={b.url} target="_blank" rel="noreferrer" onClick={open(b.id)} data-pillar={b.featured ? 'parent_child' : undefined} className={`group toy flex min-h-[56px] items-center justify-between gap-sm rounded-pill px-md text-[16px] font-bold ${b.featured ? 'toy-soft bg-r3 text-on-yellow' : 'bg-card text-ink shadow-toy-soft'}`}>
-                <span className="min-w-0 flex-1 truncate text-center">{b.title || b.url}</span>
-                <Icon icon={ChevronRight} size={18} strokeWidth={3} className="transition-transform motion-safe:group-hover:translate-x-xs shrink-0" />
+              <a
+                href={b.url}
+                target="_blank"
+                rel="noreferrer"
+                onClick={open(b.id)}
+                data-pillar={b.featured ? 'parent_child' : undefined}
+                style={b.featured ? FEATURED : undefined}
+                className={`group toy toy-soft flex items-center gap-sm rounded-tile bg-card text-ink ${b.featured ? 'min-h-[80px] p-md' : 'min-h-[64px] px-md py-sm'}`}
+              >
+                {b.featured && (
+                  <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-r3 text-on-yellow" aria-hidden="true">
+                    <Icon icon={Star} size={20} filled />
+                  </span>
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className={`block break-words font-bold leading-snug ${b.featured ? 'text-[18px]' : 'text-[16px]'}`}>{b.title || hostOf(b.url) || b.url}</span>
+                  {b.title && hostOf(b.url) && <span className="block truncate text-[12px] font-semibold text-ink-soft">{hostOf(b.url)}</span>}
+                </span>
+                <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink-soft transition-transform motion-safe:group-hover:translate-x-xs" aria-hidden="true">
+                  <Icon icon={ArrowUpRight} size={16} strokeWidth={2.5} />
+                </span>
+                {b.featured && <span className="sr-only">Featured.</span>}
               </a>
             )}
-            {b.type === 'header' && <h2 className="mt-sm text-center text-[18px]">{b.title}</h2>}
-            {b.type === 'text' && <p className="m-0 text-center text-[14px] font-semibold leading-relaxed">{b.text}</p>}
+            {b.type === 'header' && <h2 className="mt-md text-[20px]">{b.title}</h2>}
+            {b.type === 'text' && <p className="m-0 px-xs text-[14px] font-semibold leading-relaxed text-ink-soft">{b.text}</p>}
             {b.type === 'image' && (
               <figure className="m-0 overflow-hidden rounded-card bg-card shadow-toy-soft">
                 {b.url ? (
                   <a href={b.url} target="_blank" rel="noreferrer" onClick={open(b.id)} className="block">
-                    <FadeImage src={b.image} alt={b.title} loading="lazy" decoding="async" className="block max-h-[320px] w-full object-cover" />
+                    <FadeImage src={b.image} alt={b.title} loading="lazy" decoding="async" className="block max-h-[360px] w-full object-cover" />
                   </a>
                 ) : (
-                  <FadeImage src={b.image} alt={b.title} loading="lazy" decoding="async" className="block max-h-[320px] w-full object-cover" />
+                  <FadeImage src={b.image} alt={b.title} loading="lazy" decoding="async" className="block max-h-[360px] w-full object-cover" />
                 )}
-                {b.title && <figcaption className="p-sm text-center text-[14px] font-semibold">{b.title}</figcaption>}
+                {b.title && <figcaption className="px-md py-sm text-[14px] font-semibold">{b.title}</figcaption>}
               </figure>
             )}
             {b.type === 'video' &&
               (youtubeId(b.url) ? (
-                <div className="overflow-hidden rounded-card bg-ink shadow-toy-soft">
+                <figure className="m-0 overflow-hidden rounded-card bg-card shadow-toy-soft">
                   <EmbedGate url={b.url} title={b.title || 'Video'} className="rounded-none">
-                    <iframe src={`https://www.youtube-nocookie.com/embed/${youtubeId(b.url)}`} title={b.title || 'Video'} className="aspect-video w-full border-0" allow="accelerometer; encrypted-media; picture-in-picture" allowFullScreen loading="lazy" />
+                    <iframe src={`https://www.youtube-nocookie.com/embed/${youtubeId(b.url)}`} title={b.title || 'Video'} className="block aspect-video w-full border-0" allow="accelerometer; encrypted-media; picture-in-picture" allowFullScreen loading="lazy" />
                   </EmbedGate>
-                  {b.title && <p className="m-0 p-sm text-center text-[14px] font-bold text-on-ink">{b.title}</p>}
-                </div>
+                  {b.title && <figcaption className="px-md py-sm text-[14px] font-semibold">{b.title}</figcaption>}
+                </figure>
               ) : (
-                <a href={b.url} target="_blank" rel="noreferrer" onClick={open(b.id)} className="toy flex min-h-[56px] items-center justify-center gap-xs rounded-pill bg-card px-md text-[16px] font-bold text-ink shadow-toy-soft">
-                  <Icon icon={Play} size={16} filled />
-                  {b.title || 'Watch'}
+                <a href={b.url} target="_blank" rel="noreferrer" onClick={open(b.id)} className="group toy toy-soft flex min-h-[64px] items-center gap-sm rounded-tile bg-card px-md py-sm text-ink">
+                  <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper" aria-hidden="true">
+                    <Icon icon={Play} size={18} filled />
+                  </span>
+                  <span className="min-w-0 flex-1 text-[16px] font-bold leading-snug">{b.title || 'Watch'}</span>
                 </a>
               ))}
             {b.type === 'carousel' && (
               <div>
-                {b.title && <h2 className="mt-sm text-center text-[18px]">{b.title}</h2>}
+                {b.title && <h2 className="mt-md text-[20px]">{b.title}</h2>}
                 <div className="mt-xs">
-                <ul className="scroll-row snap-x list-none" aria-label={b.title || 'Carousel'}>
-                  {b.items.map((it) => {
-                    const card = (
-                      <>
-                        {it.image ? <FadeImage src={it.image} alt={it.title} loading="lazy" decoding="async" className="block aspect-[4/5] w-full object-cover" /> : <span className="flex aspect-[4/5] w-full items-center justify-center bg-paper" aria-hidden="true"><Icon icon={GalleryHorizontal} size={32} /></span>}
-                        {it.title && <span className="block p-sm text-[14px] font-bold">{it.title}</span>}
-                      </>
-                    );
-                    return (
-                      <li key={it.id} className="w-[240px] shrink-0 snap-start">
-                        {it.url ? (
-                          <a href={it.url} target="_blank" rel="noreferrer" onClick={open(b.id)} className="toy toy-soft block overflow-hidden rounded-card bg-card text-ink">
-                            {card}
-                          </a>
-                        ) : (
-                          <div className="overflow-hidden rounded-card bg-card shadow-toy-soft">{card}</div>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
+                  <ul className="scroll-row snap-x list-none" aria-label={b.title || 'Carousel'}>
+                    {b.items.map((it) => {
+                      const card = (
+                        <>
+                          {it.image ? (
+                            <FadeImage src={it.image} alt={it.title} loading="lazy" decoding="async" className="block aspect-[4/5] w-full object-cover" />
+                          ) : (
+                            <span className="flex aspect-[4/5] w-full items-center justify-center bg-paper text-ink-soft" aria-hidden="true">
+                              <Icon icon={GalleryHorizontal} size={32} />
+                            </span>
+                          )}
+                          {it.title && <span className="block px-sm py-sm text-[14px] font-bold leading-snug">{it.title}</span>}
+                        </>
+                      );
+                      return (
+                        <li key={it.id} className="w-[200px] shrink-0 snap-start md:w-[220px]">
+                          {it.url ? (
+                            <a href={it.url} target="_blank" rel="noreferrer" onClick={open(b.id)} className="toy toy-soft block h-full overflow-hidden rounded-tile bg-card text-ink">
+                              {card}
+                            </a>
+                          ) : (
+                            <div className="h-full overflow-hidden rounded-tile bg-card shadow-toy-soft">{card}</div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
               </div>
             )}

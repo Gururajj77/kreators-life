@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { MONTH_RE, MONTH_TASKS_MAX, monthShift, repeatLabel, type MonthProject, type MonthTask, type TodayMonthResponse, PLAN_DAY_MINUTES, planWeek, type PlanTask, MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, notToDoStreak, notToDoWeek, POINTS, RELATIONSHIPS, sparkFor, XP, zonedToUtc, type CheckinResponse, type NotToDo, type NotToDoStatus, type RelationshipKey, TODAY_AGENCY_MAX, type TodayAgency, type TodayEvent, type TodayResponse } from '@kreators/shared';
+import { DAY_TYPES, dayTypeOf, type DayTypeResponse, MONTH_RE, MONTH_TASKS_MAX, monthShift, repeatLabel, type MonthProject, type MonthTask, type TodayMonthResponse, PLAN_DAY_MINUTES, planWeek, type PlanTask, MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, notToDoStreak, notToDoWeek, POINTS, RELATIONSHIPS, sparkFor, XP, zonedToUtc, type CheckinResponse, type NotToDo, type NotToDoStatus, type RelationshipKey, TODAY_AGENCY_MAX, type TodayAgency, type TodayEvent, type TodayResponse } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { resolveAccess } from '../access';
 import { DATE_RE, dateNearToday, getUser, newId, notify, nowIso, shiftDate, toNode, type NodeRow, taskGate, withSubtasks } from '../db';
@@ -142,6 +142,14 @@ export async function agencyToday(db: D1Database, userId: string, date: string):
   };
 }
 
+// A day type's lead and second pillar as SQL, from DAY_TYPES (code constants of letters and underscores only, checked here).
+const dayPillarSql = (pick: 'lead' | 'second') => {
+  for (const d of DAY_TYPES) if (!/^[a-z_]+$/.test(d.key) || !/^[a-z_]+$/.test(d[pick])) throw new Error('bad day type key');
+  return `(CASE dt.kind ${DAY_TYPES.map((d) => `WHEN '${d.key}' THEN '${d[pick]}'`).join(' ')} END)`;
+};
+const DAY_LEAD_SQL = dayPillarSql('lead');
+const DAY_SECOND_SQL = dayPillarSql('second');
+
 today.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
@@ -150,10 +158,15 @@ today.get('/', async (c) => {
   // None of these reads waits on another, so they run together: one round trip of waiting instead of a dozen.
   const [dayStart, dayEnd] = dayBounds(date, user.timezone);
   const [due, plan, back, backTotal, doneToday, recent, gate, relationship, sparkDone, notToDo, events, access] = await Promise.all([
+    // Which six are shown: by day, unless a kind of day is picked for this date; then by context, the same order as `sortTasks`
+    // 'context' (priority, then the day's lead pillar, then its second), so a P0 is never left out behind a P2.
     db
       .prepare(
-        `SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) IS NOT NULL AND COALESCE(do_date, due_date) <= ?
-       ORDER BY COALESCE(do_date, due_date) ASC, CASE WHEN due_time IS NULL THEN 1 ELSE 0 END, due_time ASC, created_at ASC LIMIT 6`,
+        `SELECT n.* FROM nodes n LEFT JOIN day_types dt ON dt.user_id = n.user_id AND dt.day = ?2
+       WHERE n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active' AND COALESCE(n.do_date, n.due_date) IS NOT NULL AND COALESCE(n.do_date, n.due_date) <= ?2
+       ORDER BY CASE WHEN dt.kind IS NULL THEN 0 ELSE COALESCE(n.priority, 4) END ASC,
+         CASE WHEN dt.kind IS NULL THEN 0 WHEN n.relationship = ${DAY_LEAD_SQL} THEN 0 WHEN n.relationship = ${DAY_SECOND_SQL} THEN 1 ELSE 2 END ASC,
+         COALESCE(n.do_date, n.due_date) ASC, CASE WHEN n.due_time IS NULL THEN 1 ELSE 0 END, n.due_time ASC, n.created_at ASC LIMIT 6`,
       )
       .bind(user.id, date)
       .all<NodeRow>(),
@@ -428,4 +441,43 @@ today.delete('/not-to-do/:id', async (c) => {
   const r = await db.prepare('DELETE FROM not_to_do WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).run();
   if (!r.meta.changes) return c.json({ error: 'not found' }, 404);
   return c.json({ ok: true });
+});
+
+// What kind of day it is (DAY_TYPES in shared): one row per person per day, owner only. It only changes how Daily sorts tasks.
+// The day comes from the device: `today` is the person's own today (near the server's), and `date` is that day or the next.
+function dayTypeDay(date: unknown, today: unknown): string | null {
+  if (typeof date !== 'string' || !DATE_RE.test(date)) return null;
+  const own = typeof today === 'string' && DATE_RE.test(today) && dateNearToday(today) ? today : null;
+  if (!own) return dateNearToday(date) ? date : null;
+  return date === own || date === shiftDate(own, 1) ? date : null;
+}
+
+today.get('/day-type', async (c) => {
+  const user = c.get('user');
+  const date = dayTypeDay(c.req.query('date'), c.req.query('today'));
+  if (!date) return c.json({ error: 'Pick today or tomorrow.' }, 400);
+  const row = await c.env.DB.prepare('SELECT kind FROM day_types WHERE user_id = ? AND day = ?').bind(user.id, date).first<{ kind: string }>();
+  const body: DayTypeResponse = { date, kind: dayTypeOf(row?.kind)?.key ?? null };
+  return c.json(body);
+});
+
+today.put('/day-type', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const body = await c.req.json<{ date?: unknown; today?: unknown; kind?: unknown }>().catch(() => ({}) as { date?: unknown; today?: unknown; kind?: unknown });
+  const date = dayTypeDay(body.date, body.today);
+  if (!date) return c.json({ error: 'Pick today or tomorrow.' }, 400);
+  if (body.kind === null || body.kind === undefined || body.kind === '') {
+    await db.prepare('DELETE FROM day_types WHERE user_id = ? AND day = ?').bind(user.id, date).run();
+    const cleared: DayTypeResponse = { date, kind: null };
+    return c.json(cleared);
+  }
+  const kind = dayTypeOf(body.kind);
+  if (!kind) return c.json({ error: 'That is not a kind of day we know.' }, 400);
+  await db
+    .prepare('INSERT INTO day_types (user_id, day, kind, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, day) DO UPDATE SET kind = excluded.kind')
+    .bind(user.id, date, kind.key, nowIso())
+    .run();
+  const saved: DayTypeResponse = { date, kind: kind.key };
+  return c.json(saved);
 });

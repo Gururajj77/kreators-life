@@ -4,13 +4,16 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { Button } from '../components/Button';
-import { AreaLine, Bubbles, PillBars } from '../components/Charts';
+import { AnimatedIcon } from '../components/AnimatedIcon';
+import { Sheet } from '../components/Sheet';
+import { AreaLine, Bubbles, Gauge, PillBars } from '../components/Charts';
 import { Hero, HeroNumber } from '../components/Hero';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { lastDays, shortDay, todayLocal } from '../lib/date';
 import { useLogs, useRefreshAll, useWellbeing } from '../lib/queries';
+import { EmergenceSlot } from '../components/EmergenceSlot';
 
 const DAY = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
@@ -24,6 +27,9 @@ export function Stress() {
   const [picked, setPicked] = useState<string[]>((current?.extra.stressors as string[] | undefined) ?? []);
   const save = useMutation({ mutationFn: () => api.log('stress', { date: today, value: level, extra: { stressors: picked } }), onSuccess: () => refresh() });
   const latest = wb.data?.parts.find((p) => p.kind === 'stress')?.latest ?? null;
+  const avg7 = wb.data?.parts.find((p) => p.kind === 'stress')?.avg7 ?? null;
+  const [toDelete, setToDelete] = useState<{ id: string; label: string } | null>(null);
+  const remove = useMutation({ mutationFn: (id: string) => api.deleteLog('stress', id), onSuccess: () => (setToDelete(null), refresh()) });
   const counts = new Map<string, number>();
   for (const l of logs.data?.logs ?? []) for (const s of (Array.isArray(l.extra.stressors) ? (l.extra.stressors as string[]) : [])) counts.set(s, (counts.get(s) ?? 0) + 1);
   const BUBBLE_COLORS = ['var(--color-r2)', 'var(--color-r4)', 'var(--color-r6)', 'var(--color-r5)', 'var(--color-r1)', 'var(--color-r7)', 'var(--color-r3)', 'var(--color-ink)'];
@@ -34,13 +40,23 @@ export function Stress() {
         <BackLink to="/wellbeing">Wellbeing</BackLink>
         <h1 className="text-[30px]">Stress</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Name the level and what is behind it. Naming it is half the work.</p>
+        {wb.data && (
+          // Life's hero: this week's average as a gauge (calm is a full ring), its word, and Pip, whose mood follows it.
+          <Hero color="var(--color-r2)" deep="var(--deep-friendship)" className="mt-md" character="friendship" mood={avg7 === null ? 'happy' : avg7 >= 4 ? 'sleepy' : avg7 <= 2 ? 'excited' : 'happy'}>
+            <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">Stress this week</p>
+            <div className="mt-xs flex items-center gap-md">
+              <Gauge value={avg7 === null ? 0 : (5 - avg7) / 4} size={128} stroke={14} color="var(--color-on-fill)" track="rgba(255,255,255,0.3)" label={avg7 === null ? 'Nothing logged this week' : `Average ${avg7.toFixed(1)} of 5`}>
+                <span className="font-display text-[40px] font-extrabold">{avg7 === null ? '–' : avg7.toFixed(1)}</span>
+              </Gauge>
+              <div className="min-w-0">
+                <p className="m-0 font-display text-[28px] font-extrabold leading-tight">{avg7 === null ? 'Nothing yet' : avg7 <= 2 ? 'Calm' : avg7 < 3.5 ? 'Steady' : 'Strained'}</p>
+                <p className="mt-xs m-0 text-[14px] font-semibold opacity-90">{latest === null ? 'Log today to start the week.' : `Latest: ${STRESS_LEVELS[Math.round(latest) - 1] ?? ''}. Out of 5, lower is calmer.`}</p>
+              </div>
+            </div>
+          </Hero>
+        )}
       </header>
 
-      {wb.data && (
-        <Hero color="var(--color-r2)" deep="var(--deep-friendship)" className="mt-md" character="friendship" mood={latest !== null && latest >= 4 ? "sleepy" : "happy"}>
-          <HeroNumber value={latest === null ? '–' : Math.round(latest)} label={latest === null ? 'Nothing logged this week' : `${STRESS_LEVELS[Math.round(latest) - 1] ?? ''}, your latest`} />
-        </Hero>
-      )}
 
       <section data-pillar="friendship" className="mt-md rounded-card p-md" style={{ background: 'var(--tint-orange)' }} aria-labelledby="level-heading">
         <h2 id="level-heading" className="text-[24px]">
@@ -49,7 +65,7 @@ export function Stress() {
         <p className="mt-md text-center font-display text-[36px] font-extrabold leading-none">{STRESS_LEVELS[level - 1]}</p>
         <input type="range" min={1} max={5} value={level} onChange={(e) => setLevel(Number(e.target.value))} aria-label="Stress level" className="mt-md h-[44px] w-full cursor-pointer accent-ink" />
         <p className="mt-md m-0 text-[14px] font-bold">What is behind it</p>
-        <div className="fill-row mt-xs flex flex-wrap gap-xs" role="group" aria-label="Stressors">
+        <div className="fill-row-all mt-xs flex flex-wrap gap-xs" role="group" aria-label="Stressors">
           {STRESSORS.map((s) => {
             const on = picked.includes(s);
             return (
@@ -93,6 +109,7 @@ export function Stress() {
       </section>
 
       <PeriodPanel id="stress-period" parts={['wellbeing']} />
+      <EmergenceSlot app="stress" max={2} />
       <section className="mt-lg" aria-labelledby="thirty-heading">
         <h2 id="thirty-heading" className="text-[24px]">
           Last 30 days
@@ -123,17 +140,47 @@ export function Stress() {
         </h2>
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {logs.data?.logs.map((l) => (
-            <li key={l.id} className={`rounded-tile bg-card p-sm shadow-toy-soft`}>
-              <p className="m-0 text-[16px] font-bold">
-                {STRESS_LEVELS[Math.round(l.value) - 1]}
-              </p>
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                {new Date(`${l.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', month: 'short', day: 'numeric' })}
-                {Array.isArray(l.extra.stressors) && l.extra.stressors.length > 0 ? `. ${(l.extra.stressors as string[]).join(', ')}` : ''}
-              </p>
+            <li key={l.id} className={`flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft`}>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[16px] font-bold">
+                  {STRESS_LEVELS[Math.round(l.value) - 1]}
+                </span>
+                <span className="block text-[14px] font-semibold text-ink-soft">
+                  {new Date(`${l.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', month: 'short', day: 'numeric' })}
+                  {Array.isArray(l.extra.stressors) && l.extra.stressors.length > 0 ? `. ${(l.extra.stressors as string[]).join(', ')}` : ''}
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setToDelete({ id: l.id, label: `${STRESS_LEVELS[Math.round(l.value) - 1] ?? 'This day'} on ${new Date(`${l.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', month: 'short', day: 'numeric' })}` })}
+                aria-label={`Delete the day of ${new Date(`${l.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', month: 'short', day: 'numeric' })}`}
+                title="Delete"
+                className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1"
+              >
+                <AnimatedIcon name="trash" size={20} />
+              </button>
             </li>
           ))}
         </ul>
+        <Sheet open={toDelete !== null} onClose={() => setToDelete(null)} title="Delete this day?">
+          <div className="grid gap-md pb-xl">
+            <p className="m-0 text-[16px] font-semibold text-ink-soft">{toDelete?.label}. It comes off your charts. This cannot be undone.</p>
+            {remove.isError && <p className="m-0 text-[14px] font-bold text-r1">That did not work. Try again.</p>}
+            <div className="flex flex-wrap gap-xs">
+              <button
+                type="button"
+                disabled={remove.isPending}
+                onClick={() => toDelete && remove.mutate(toDelete.id)}
+                className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-[16px] font-semibold text-on-fill disabled:opacity-50"
+              >
+                Yes, delete it
+              </button>
+              <Button variant="outline" onClick={() => setToDelete(null)}>
+                Keep it
+              </Button>
+            </div>
+          </div>
+        </Sheet>
       </section>
     </Screen>
   );

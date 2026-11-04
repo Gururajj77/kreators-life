@@ -49,7 +49,7 @@ function useTaste() {
 }
 
 /**
- * Every sound and alarm of the Mindful minutes timers, in one place. The first switch turns them all off at once (the options under it grey
+ * Every sound and alarm of the Mindfulness timers, in one place. The first switch turns them all off at once (the options under it grey
  * out and are kept); under it, with `breaks`, a soft beat for a mini break and three for the long one, and a buzz; and a background sound
  * with its volume. Used by the focus sessions and by the breathing timer, which share one set of choices on the person's account.
  */

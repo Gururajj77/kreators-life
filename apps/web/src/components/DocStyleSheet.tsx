@@ -1,21 +1,16 @@
 import { DOC_ACCENTS, DOC_FONTS, DOC_FOOTER_MAX, DOC_HEADINGS,
-  DOC_LAYOUTS, DOC_MARGINS, DOC_PAGES, DOC_SIGN_LAYOUTS, DOC_SIZES, DOC_STYLE_NAMES, docStyleSummary, emptyProfile, parseDocStyle, type DocStyle } from '@kreators/shared';
+  DOC_LAYOUTS, DOC_MARGINS, DOC_PAGES, DOC_SIGN_LAYOUTS, DOC_SIZES, DOC_STYLE_NAMES, emptyProfile, parseDocStyle, type DocStyle } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
 import { shrinkImage } from '../lib/shrink';
 import { Button } from './Button';
-import { Chips, Field, LABEL, SummaryCard } from './InvoiceView';
+import { Chips, Field, LABEL } from './InvoiceView';
 import { Sheet } from './Sheet';
 import { Toggle } from './Toggle';
 
 const opts = <K extends keyof typeof DOC_STYLE_NAMES>(group: K, keys: readonly string[]) => keys.map((k) => ({ value: k, name: (DOC_STYLE_NAMES[group] as Record<string, string>)[k] ?? k }));
-
-/** The summary card every editor shows for the page's look. */
-export function DocStyleCard({ style, disabled, onEdit, row = false }: { style: DocStyle; disabled?: boolean; onEdit: () => void; /** One line of an inset list instead of a card. */ row?: boolean }) {
-  return <SummaryCard row={row} title="Document style" disabled={disabled} onEdit={onEdit} summary={docStyleSummary(parseDocStyle(style))} />;
-}
 
 /**
  * Edit how a document looks on paper: letterhead and logo, numbered or plain headings, font, size, the colour of the thin rules, page

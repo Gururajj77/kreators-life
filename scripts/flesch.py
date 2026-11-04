@@ -2,7 +2,7 @@
 """Flesch reading ease for the words in a file. The app aims at 60 or above.
 
     python3 -I scripts/flesch.py apps/web/src/site/content.ts
-    python3 -I scripts/flesch.py --strings packages/shared/src/index.ts   # only quoted strings
+    python3 -I scripts/flesch.py --strings packages/shared/src/help.ts    # only quoted strings
 
 Without --strings the whole file is scored, which suits markdown and plain text. With it, only
 the text inside single, double or backtick quotes is scored, which suits a TypeScript file."""

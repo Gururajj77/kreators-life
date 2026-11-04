@@ -20,6 +20,7 @@ import {
   RELATIONSHIP_BY_KEY,
   RELATIONSHIPS,
   repeatLabel,
+  taskIsHabit,
   REVIEW_ANSWER_MAX,
   REVIEW_HIGHLIGHT_MAX,
   STRESS_LEVELS,
@@ -307,7 +308,7 @@ export const TOOLS: readonly Tool[] = [
           tasks: t.tasks.map((n) => {
             const wait = n.readyAt ? Math.ceil((Date.parse(n.readyAt) - now) / 60_000) : 0;
             const later = Boolean(n.doDate && n.doDate > io.date);
-            return { id: n.id, title: n.title, pillar: pillarName(n.relationship), doDate: n.doDate, due: n.dueDate, priority: n.priority === null ? null : `P${n.priority}`, remember: n.remind, repeats: n.repeat ? repeatLabel(n.repeat, openDay(n)) : null, time: n.dueTime, minutes: n.estimateMin, canTickNow: !later && wait <= 0, ...(later ? { waitsForDay: n.doDate } : wait > 0 ? { readyInMinutes: wait } : {}) };
+            return { id: n.id, title: n.title, pillar: pillarName(n.relationship), doDate: n.doDate, due: n.dueDate, priority: n.priority === null ? null : `P${n.priority}`, remember: n.remind, repeats: n.repeat ? repeatLabel(n.repeat, openDay(n)) : null, habit: taskIsHabit(n), time: n.dueTime, minutes: n.estimateMin, canTickNow: !later && wait <= 0, ...(later ? { waitsForDay: n.doDate } : wait > 0 ? { readyInMinutes: wait } : {}) };
           }),
           notScheduled: t.backlogTotal,
           notToDo: t.notToDo.map((i) => ({ id: i.id, title: i.title, today: i.today, yesterday: i.week[5] ?? null, streak: i.streak })),
@@ -641,6 +642,7 @@ export const TOOLS: readonly Tool[] = [
         repeat: { type: 'string', enum: ['daily', 'weekdays', 'weekly', 'monthly', 'yearly'], description: 'Tasks only: how it comes back. Needs a do date or a due date.' },
         every: { type: 'integer', minimum: 1, maximum: 52, description: 'With repeat: every this many days, weeks, months or years.' },
         remember: { type: 'boolean', description: 'Tasks only: tag it Remember. With a do date or a due date it also sends an inbox note on that day; with none it waits in the To remember list.' },
+        habit: { type: 'boolean', description: 'Tasks only, with repeat: count it as a habit (the Habit tag). A repeating task is one unless this is false.' },
         dueTime: { type: 'string', description: 'Tasks only: HH:MM, 24-hour.' },
         minutes: { type: 'integer', minimum: 5, maximum: 600, description: 'Tasks only: how long it should take.' },
         note: { type: 'string', maxLength: 500 },
@@ -685,6 +687,7 @@ export const TOOLS: readonly Tool[] = [
                   priority: parsePriority(a.priority),
                   repeat: repeatArg(a.repeat, a.every),
                   remind: a.remember === true,
+                  ...(typeof a.habit === 'boolean' ? { habit: a.habit } : {}),
                   dueTime: dueTime || null,
                   estimateMin: a.minutes ? Number(a.minutes) : null,
                 }
@@ -705,7 +708,7 @@ export const TOOLS: readonly Tool[] = [
     needs: null,
     refresh: R.layers,
     title: 'Change something in a pyramid',
-    description: 'Change a layer or a task: its title, its note, and for a task its do date, due date, priority (P0 to P3, or none), how it repeats (or none), remember, time and minutes. Renaming a task starts its wait again. Use "none" to clear a date, a time, a priority or a repeat.',
+    description: 'Change a layer or a task: its title, its note, and for a task its do date, due date, priority (P0 to P3, or none), how it repeats (or none), whether it counts as a habit, remember, time and minutes. Renaming a task starts its wait again. Use "none" to clear a date, a time, a priority or a repeat.',
     params: {
       type: 'object',
       properties: {
@@ -718,6 +721,7 @@ export const TOOLS: readonly Tool[] = [
         repeat: { type: 'string', enum: ['daily', 'weekdays', 'weekly', 'monthly', 'yearly', 'none'] },
         every: { type: 'integer', minimum: 1, maximum: 52 },
         remember: { type: 'boolean' },
+        habit: { type: 'boolean', description: 'A repeating task: count it as a habit (the Habit tag), or not.' },
         dueTime: { type: 'string', description: 'HH:MM or none.' },
         minutes: { type: 'integer', minimum: 5, maximum: 600 },
       },
@@ -742,6 +746,7 @@ export const TOOLS: readonly Tool[] = [
         if (str(a.repeat).toLowerCase() === 'none') body.repeat = null;
         else if (a.repeat) body.repeat = repeatArg(a.repeat, a.every);
         if (typeof a.remember === 'boolean') body.remind = a.remember;
+        if (typeof a.habit === 'boolean') body.habit = a.habit;
         const time = str(a.dueTime).toLowerCase();
         if (time === 'none') body.dueTime = null;
         else if (time) {
@@ -754,7 +759,7 @@ export const TOOLS: readonly Tool[] = [
       const r = must(await io.call({ method: 'PATCH', path: `/nodes/${prev.id}`, body })) as { node: Node };
       return {
         label: `Changed ${quote(r.node.title)}`,
-        undo: { method: 'PATCH', path: `/nodes/${prev.id}`, body: { title: prev.title, note: prev.note, ...(prev.kind === 'task' ? { doDate: prev.doDate, dueDate: prev.dueDate, repeat: prev.repeat, priority: prev.priority, remind: prev.remind } : { dueDate: prev.dueDate }), dueTime: prev.dueTime, estimateMin: prev.estimateMin } },
+        undo: { method: 'PATCH', path: `/nodes/${prev.id}`, body: { title: prev.title, note: prev.note, ...(prev.kind === 'task' ? { doDate: prev.doDate, dueDate: prev.dueDate, repeat: prev.repeat, priority: prev.priority, remind: prev.remind, habit: prev.habit ?? null } : { dueDate: prev.dueDate }), dueTime: prev.dueTime, estimateMin: prev.estimateMin } },
         data: { title: r.node.title, doDate: r.node.doDate, due: r.node.dueDate, priority: r.node.priority === null ? null : `P${r.node.priority}`, time: r.node.dueTime, minutes: r.node.estimateMin },
       };
     },
@@ -1073,7 +1078,7 @@ export const TOOLS: readonly Tool[] = [
     },
   },
 
-  // ---- focus (Mindful minutes)
+  // ---- focus (Mindfulness)
   {
     name: 'get_focus',
     risk: 'read',

@@ -5,8 +5,8 @@ import { Button } from '../components/Button';
 import { LockedButton } from '../components/LockedButton';
 import { ListingSheet } from '../components/ListingSheet';
 import { FadeImage } from '../components/Media';
-import { MediaSection } from '../components/MediaSection';
-import { BackLink } from '../components/PageHeader';
+import { MediaSection, useMediaMenuItem } from '../components/MediaSection';
+import { AppCover } from '../components/AppCover';
 import { moneyRounded as money } from '../components/PeriodPanel';
 import { Screen } from '../components/Screen';
 import { SkeletonList } from '../components/Skeleton';
@@ -19,6 +19,10 @@ import { chip, FIELD } from '../lib/ui';
 import { ErrorLine } from '../components/ErrorLine';
 import { FactTag, IconTag } from '../components/FactTag';
 import { StatusTag } from '../components/StatusTag';
+import { MoreMenu, type MoreMenuItem } from '../components/MoreMenu';
+import { bento } from '../lib/bento';
+import { TabRow } from '../components/TabRow';
+import { FilterBar, FilterSelect } from '../components/FilterSelect';
 
 const pill = chip;
 const BUDGETS: { label: string; cents: number | null }[] = [
@@ -28,6 +32,10 @@ const BUDGETS: { label: string; cents: number | null }[] = [
   { label: 'Under 50k', cents: 5_000_000 },
   { label: 'Under 1 lakh', cents: 10_000_000 },
 ];
+// The three filter rows: as many pills as fit, the rest behind More, so none is ever cut at the screen's edge.
+const CAT_ITEMS = [{ key: 'all', label: 'Everything' }, ...STORE_CATEGORIES.map((c) => ({ key: c as string, label: c }))];
+const STAGE_ITEMS = [{ key: 'all' as StoreStage | 'all', label: 'Any stage' }, ...STORE_STAGES.filter((s) => s !== 'any').map((s) => ({ key: s as StoreStage | 'all', label: STORE_STAGE_META[s].name }))];
+const BUDGET_ITEMS = BUDGETS.map((b) => ({ key: b.cents === null ? 'any' : String(b.cents), label: b.label }));
 
 /** The yellow tag and the yellow edge: how a featured spot stands out everywhere. */
 export function FeaturedTag() {
@@ -68,68 +76,47 @@ export function Store() {
   const listings = (d?.listings ?? []).filter((l) => fits(l.category, null, l.priceCents));
   const kits = (d?.kits ?? []).filter((k) => (stage === 'all' || k.stage === 'any' || k.stage === stage) && (budget === null || k.totalCents <= budget));
   const admin = d?.admin ?? false;
-  const adminBar = (type: 'item' | 'kit', id: string, featuredUntil: string | null) =>
-    admin ? (
-      <div className="mt-sm flex flex-wrap gap-xs">
-        <Button size="sm" variant="outline" onClick={() => feature.mutate({ type, id })} disabled={feature.isPending || isFeatured(featuredUntil)}>
-          {isFeatured(featuredUntil) ? 'Featured' : 'Feature for a week'}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={() => (type === 'item' ? hideItem.mutate(id) : hideKit.mutate(id))}>
-          Hide
-        </Button>
-      </div>
-    ) : null;
+  // The team's actions on a card sit behind one More button, so a card shows what a shopper needs and nothing else.
+  const teamItems = (type: 'item' | 'kit', id: string, featuredUntil: string | null): MoreMenuItem[] =>
+    admin
+      ? [
+          { key: 'feature', label: isFeatured(featuredUntil) ? 'Featured this week' : 'Feature for a week', disabled: feature.isPending || isFeatured(featuredUntil), onSelect: () => feature.mutate({ type, id }) },
+          { key: 'hide', label: type === 'item' ? 'Hide this product' : 'Hide this kit', destructive: true, confirm: 'Tap again to hide it from everyone', onSelect: () => (type === 'item' ? hideItem.mutate(id) : hideKit.mutate(id)) },
+        ]
+      : [];
+  const adminBar = (type: 'item' | 'kit', id: string, title: string, featuredUntil: string | null) => <TeamMenu title={title} items={teamItems(type, id, featuredUntil)} />;
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Store</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Gear new from partners, or pre-owned from other creators.</p>
-        <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Partner link. Kreators may earn a share.</p>
-        <div className="fill-row mt-md flex flex-wrap gap-xs">
-          <Button onClick={() => setSelling(true)}>Sell something</Button>
-          {admin && (
-            <>
-              <Button variant="outline" onClick={() => setAdding('item')}>
-                Add a product
-              </Button>
-              <Button variant="outline" onClick={() => setAdding('kit')}>
-                Make a kit
-              </Button>
-            </>
-          )}
-        </div>
-      </header>
+      {/* The cover card: the main action and the team's More sit on the helper's line, at its left (founder, 2026-11-04). */}
+      <AppCover
+        back={{ to: '/apps', label: 'Apps' }}
+        title="Store"
+        lede="Gear new from partners, or pre-owned from other creators."
+        actions={
+          <>
+            <Button onClick={() => setSelling(true)}>Sell something</Button>
+            {admin && (
+              <MoreMenu
+                label="Team actions for the store"
+                title="Team actions"
+                items={[
+                  { key: 'item', label: 'Add a product', onSelect: () => setAdding('item') },
+                  { key: 'kit', label: 'Make a kit', onSelect: () => setAdding('kit') },
+                ]}
+              />
+            )}
+          </>
+        }
+      />
 
       <section className="mt-md" aria-label="Filters">
-        <div className="scroll-row" role="group" aria-label="Category">
-          <button type="button" aria-pressed={cat === 'all'} onClick={() => setCat('all')} className={pill(cat === 'all')}>
-            Everything
-          </button>
-          {STORE_CATEGORIES.map((c) => (
-            <button key={c} type="button" aria-pressed={cat === c} onClick={() => setCat(c)} className={pill(cat === c)}>
-              {c}
-            </button>
-          ))}
-        </div>
-        <div className="scroll-row" role="group" aria-label="Stage">
-          <button type="button" aria-pressed={stage === 'all'} onClick={() => setStage('all')} className={pill(stage === 'all')}>
-            Any stage
-          </button>
-          {STORE_STAGES.filter((s) => s !== 'any').map((s) => (
-            <button key={s} type="button" aria-pressed={stage === s} onClick={() => setStage(s)} className={pill(stage === s)}>
-              {STORE_STAGE_META[s].name}
-            </button>
-          ))}
-        </div>
-        <div className="scroll-row" role="group" aria-label="Budget">
-          {BUDGETS.map((b) => (
-            <button key={b.label} type="button" aria-pressed={budget === b.cents} onClick={() => setBudget(b.cents)} className={pill(budget === b.cents)}>
-              {b.label}
-            </button>
-          ))}
-        </div>
+        {/* Three choices of one value each: three dropdowns on one line, one per line on a phone. */}
+        <FilterBar count={3}>
+          <FilterSelect label="Category" items={CAT_ITEMS} value={cat} onChange={setCat} />
+          <FilterSelect label="Stage" items={STAGE_ITEMS} value={stage} onChange={setStage} />
+          <FilterSelect label="Budget" items={BUDGET_ITEMS} value={budget === null ? 'any' : String(budget)} onChange={(k) => setBudget(k === 'any' ? null : Number(k))} />
+        </FilterBar>
       </section>
 
       {q.isError && (
@@ -168,7 +155,7 @@ export function Store() {
           {kits.map((k) => (
             <li key={k.id} className={cardClass(isFeatured(k.featuredUntil))}>
               <KitBody kit={k} />
-              {adminBar('kit', k.id, k.featuredUntil)}
+              {adminBar('kit', k.id, k.title, k.featuredUntil)}
             </li>
           ))}
         </ul>
@@ -181,10 +168,9 @@ export function Store() {
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Picked by the team. Each link opens the seller's site.</p>
         {items.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{d?.items.length ? 'Nothing here for these filters.' : 'Nothing on the shelf yet.'}</p>}
         <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
-          {items.map((i) => (
-            <li key={i.id} className={cardClass(isFeatured(i.featuredUntil))}>
-              <ItemBody item={i} />
-              {adminBar('item', i.id, i.featuredUntil)}
+          {items.map((i, n) => (
+            <li key={i.id} className={`${cardClass(isFeatured(i.featuredUntil))} ${bento(n, items.length, 1, 2)}`}>
+              <ItemBody item={i} team={teamItems('item', i.id, i.featuredUntil)} />
             </li>
           ))}
         </ul>
@@ -198,8 +184,8 @@ export function Store() {
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Tap one to make an offer or ask a question. Sold ones stay two weeks, so you see prices.</p>
         {listings.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{d?.listings.length ? 'Nothing here for these filters.' : 'Nothing listed yet. Yours could be first.'}</p>}
         <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
-          {listings.map((l) => (
-            <li key={l.id}>
+          {listings.map((l, n) => (
+            <li key={l.id} className={bento(n, listings.length, 1, 2)}>
               <ListingButton l={l} onOpen={setOpen} />
             </li>
           ))}
@@ -214,8 +200,8 @@ export function Store() {
           </h2>
           {d.mine.listings.length > 0 && (
             <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
-              {d.mine.listings.map((l) => (
-                <li key={l.id}>
+              {d.mine.listings.map((l, n) => (
+                <li key={l.id} className={bento(n, d.mine.listings.length, 1, 2)}>
                   <ListingButton l={l} onOpen={setOpen} />
                 </li>
               ))}
@@ -256,7 +242,20 @@ function Price({ cents, original, currency }: { cents: number; original?: number
   );
 }
 
-function ItemBody({ item }: { item: StoreItem }) {
+/** One More button at the foot of a card for the team's actions; nothing when there are none. */
+function TeamMenu({ title, items }: { title: string; items: MoreMenuItem[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="mt-sm flex justify-end">
+      <MoreMenu label={`Team actions for ${title}`} title={title} items={items} />
+    </div>
+  );
+}
+
+function ItemBody({ item, team = [] }: { item: StoreItem; team?: MoreMenuItem[] }) {
+  // Pictures and videos are edited from the card's More menu (the team's), never a button of their own.
+  const [editingMedia, setEditingMedia] = useState(false);
+  const mediaItem = useMediaMenuItem('item', item.id, () => setEditingMedia(true));
   return (
     <div className="flex flex-col gap-xs">
       {item.imageUrl && <FadeImage src={item.imageUrl} alt={item.title} loading="lazy" decoding="async" frame="aspect-video w-full rounded-tile bg-paper" className="h-full w-full object-cover" />}
@@ -270,14 +269,16 @@ function ItemBody({ item }: { item: StoreItem }) {
       <div className="flex items-center justify-between gap-sm">
         <Price cents={item.priceCents} currency={item.currency} />
         {item.unlock.ok ? (
-          <a href={`/out/item/${item.id}`} target="_blank" rel="noreferrer" className="toy inline-flex min-h-[44px] shrink-0 items-center rounded-pill bg-ink px-md text-[14px] font-bold text-on-ink">
+          // The outline look Tools uses for Open and Get it, so the screen keeps one solid button, Sell something.
+          <a href={`/out/item/${item.id}`} target="_blank" rel="noreferrer" className="toy toy-ink inline-flex min-h-[44px] shrink-0 items-center rounded-pill border-2 border-ink bg-card px-sm text-[14px] font-bold">
             Get it
           </a>
         ) : null}
       </div>
       {!item.unlock.ok && <LockedButton unlock={item.unlock} />}
-      {item.unlock.ok && <span className="block text-[12px] font-bold text-ink-mute">Partner link. kreators.app may earn a share.{item.minPoints > 0 || item.minXp > 0 || item.badge ? ` ${unlockAt(item.unlock)}. You have it.` : ''}</span>}
-      <MediaSection type="item" id={item.id} title="More pictures, GIFs and video" />
+      {item.unlock.ok && <span className="block text-[12px] font-bold text-ink-mute">Partner link. Kreators may earn a share.{item.minPoints > 0 || item.minXp > 0 || item.badge ? ` ${unlockAt(item.unlock)}. You have it.` : ''}</span>}
+      <MediaSection type="item" id={item.id} title="More pictures, GIFs and video" trigger={null} open={editingMedia} onOpenChange={setEditingMedia} />
+      <TeamMenu title={item.title} items={mediaItem ? [mediaItem, ...team] : team} />
     </div>
   );
 }
@@ -318,7 +319,7 @@ function ListingButton({ l, onOpen }: { l: PreownedListing; onOpen: (id: string)
       <span className="flex gap-sm">
         {l.images[0] && <FadeImage src={l.images[0]} alt={l.title} loading="lazy" decoding="async" frame="size-[80px] shrink-0 rounded-tile bg-paper" className="h-full w-full object-cover" />}
         <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap items-center gap-xs">
+          <span className="fill-row-all flex flex-wrap items-center gap-xs">
             {isFeatured(l.featuredUntil) && l.status === 'live' && <FeaturedTag />}
             <IconTag tone="info" icon="Sparkle">{PREOWNED_CONDITION_META[l.condition].name}</IconTag>
             {l.isKit && <FactTag kind="category">Whole setup</FactTag>}

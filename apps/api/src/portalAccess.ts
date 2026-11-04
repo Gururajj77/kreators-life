@@ -150,7 +150,7 @@ export async function passwordColumns(password: string): Promise<{ hash: string;
 }
 
 /** True when the password is right. A client with no password or no client at all is hashed against a decoy, so the time is the same. */
-async function passwordMatches(row: Pick<LockRow, 'portal_pass_hash' | 'portal_pass_salt'> | null, password: string): Promise<boolean> {
+export async function passwordMatches(row: Pick<LockRow, 'portal_pass_hash' | 'portal_pass_salt'> | null, password: string): Promise<boolean> {
   if (!row || !row.portal_pass_hash || !row.portal_pass_salt) {
     await hashPassword(password, DECOY_SALT);
     return false;

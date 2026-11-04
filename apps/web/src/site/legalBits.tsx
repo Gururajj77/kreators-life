@@ -2,7 +2,8 @@ import { LEGAL_VERSION, LOCALE, type BusinessInfo } from '@kreators/shared';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { tie } from '../lib/text';
-import { SiteLayout } from './SiteLayout';
+import { SiteLayout, useAppEntry } from './SiteLayout';
+import { SiteArrow, SITE_PRIMARY, SITE_SECONDARY } from './buttons';
 
 /** The support address that was already on these pages before the owner sets a business email. */
 export const FALLBACK_EMAIL = 'brandingbum@gmail.com';
@@ -134,11 +135,22 @@ export function LegalPage({
   );
 }
 
-/** The quiet pill a legal page uses for its one action. */
+/** A legal page's one action, in the site's secondary look (site/buttons.ts). */
 export function ActionLink({ to, children }: { to: string; children: ReactNode }) {
   return (
-    <Link to={to} className="toy toy-soft inline-flex min-h-[44px] items-center rounded-pill bg-card px-md text-[14px] font-bold">
+    <Link to={to} className={SITE_SECONDARY}>
       {children}
+      <SiteArrow />
+    </Link>
+  );
+}
+
+/** The site's main action on a page that has one (Pricing): Start free for a visitor, Go to app for someone signed in. */
+export function StartLink() {
+  const signedIn = useAppEntry() === '/home';
+  return (
+    <Link to={signedIn ? '/home' : '/start'} className={SITE_PRIMARY}>
+      {signedIn ? 'Go to app' : 'Start free'}
     </Link>
   );
 }

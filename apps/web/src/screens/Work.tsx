@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { MediaSection } from '../components/MediaSection';
 import { Button } from '../components/Button';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api, errorText } from '../lib/api';
@@ -49,10 +49,10 @@ function Facts({ o }: { o: OpportunityT }) {
   return <span className="block text-[14px] font-semibold text-ink-soft">{facts.join(', ')}</span>;
 }
 
-function Chips({ items }: { items: string[] }) {
+function Chips({ items, end = false }: { items: string[]; end?: boolean }) {
   if (items.length === 0) return null;
   return (
-    <span className="mt-xs flex flex-wrap gap-xs">
+    <span className={`mt-xs flex flex-wrap gap-xs ${end ? 'justify-end' : ''}`}>
       {items.map((s) => (
         <FactTag key={s} kind="category">
           {s}
@@ -76,11 +76,7 @@ export function Work() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Work</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Opportunities from brands and the team. Apply once, then follow it here.</p>
-      </header>
+      <AppCover back={{ to: '/apps', label: 'Apps' }} title="Work" lede="Opportunities from brands and the team. Apply once, then follow it here." />
 
       <section className="mt-lg" aria-labelledby="open-heading">
         <div className="flex items-center justify-between gap-sm">
@@ -349,10 +345,7 @@ export function Opportunity() {
   if (q.isError) {
     return (
       <Screen>
-        <header className="pt-lg">
-          <BackLink to="/work">Work</BackLink>
-        </header>
-        <p className="mt-md font-bold">{errorText(q.error, 'That opportunity is not open or does not exist.')}</p>
+        <AppCover back={{ to: '/work', label: 'Work' }} title="Not open, or gone" lede={errorText(q.error, 'That opportunity is not open or does not exist.')} />
       </Screen>
     );
   }
@@ -364,16 +357,17 @@ export function Opportunity() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/work">Work</BackLink>
-        <p className="m-0 text-[14px] font-bold text-ink-soft">
-          {o.organizationName}, {typeName(o.opportunityType)}
-          {o.clubOnly ? ', Club only' : ''}
-        </p>
-        <h1 className="text-[30px]">{o.title}</h1>
-        <Facts o={o} />
-        <Chips items={o.skillsRequired} />
-      </header>
+      <AppCover
+        back={{ to: '/work', label: 'Work' }}
+        eyebrow={`${o.organizationName}, ${typeName(o.opportunityType)}${o.clubOnly ? ', Club only' : ''}`}
+        title={o.title}
+        lede={
+          <>
+            <Facts o={o} />
+            <Chips items={o.skillsRequired} end />
+          </>
+        }
+      />
 
       <MediaSection type="opportunity" id={o.id} />
 

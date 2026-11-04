@@ -258,7 +258,7 @@ agencyOther.post('/:id/email', async (c) => {
   if (!row) return c.json({ error: 'not found' }, 404);
   if (row.status === 'draft' || !row.token) return c.json({ error: 'send the document first, so the link in the email works' }, 400);
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
-  const who = await recipientFor(db, user.id, row.client_id, body.to);
+  const who = await recipientFor(db, user.id, row.client_id, body.to, '', Boolean(c.get('team')));
   if ('error' in who) return c.json({ error: who.error }, 400);
   const full = toFull(row);
   const settings = await settingsFor(db, user.id);

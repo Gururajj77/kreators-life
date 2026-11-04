@@ -61,8 +61,6 @@ export const eventTime = (iso: string) => toDate(iso).toLocaleString(LOCALE, { w
 export const clockTime = (iso: string) => toDate(iso).toLocaleTimeString(LOCALE, { hour: 'numeric', minute: '2-digit' });
 /** "Sat" (or "Saturday", "S") for an instant or a bare day. */
 export const weekday = (v: string, style: 'long' | 'short' | 'narrow' = 'short') => toDate(v).toLocaleDateString(LOCALE, { weekday: style });
-/** "October 2026" for a YYYY-MM month. */
-export const monthLabel = (month: string) => toDate(`${month}-01`).toLocaleDateString(LOCALE, { month: 'long', year: 'numeric' });
 /** "24/10/2026" for an instant or a bare day. */
 export const numericDate = (v: string) => toDate(v).toLocaleDateString(LOCALE, { day: '2-digit', month: '2-digit', year: 'numeric' });
 /** A Date as the value of an <input type="datetime-local">: "2026-10-24T18:30" in the device's own zone. */

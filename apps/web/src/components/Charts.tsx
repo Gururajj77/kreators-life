@@ -105,6 +105,9 @@ const PAD = { l: 8, r: 12, t: 12, b: 12 };
 /** The plot floor sits this far above the axis, so a run of zeros draws as its own line, not on top of the axis. */
 const FLOOR = 4;
 
+/** A whole-number axis with an odd span would put a rounded label (1.5 shown as "2") on its middle gridline, so its top goes up by one and the middle is a whole value. */
+const evenTop = (min: number, max: number) => (Number.isInteger(min) && Number.isInteger(max) && Math.abs(max - min) % 2 === 1 ? max + 1 : max);
+
 /** The frame every line chart sits in: a y axis with three labels, a baseline, dashed gridlines, and x labels under it. Drawn whether or not there is data. */
 function Frame({ width, height, min, max, yFormat, labels, shown, onFill, axes, children, empty, measureRef }: { width: number; height: number; min: number; max: number; yFormat: (v: number) => string; labels?: string[]; shown: Set<number>; onFill: boolean; axes: boolean; children: ReactNode; empty: string | null; measureRef: React.RefObject<HTMLDivElement | null> }) {
   const axisColor = onFill ? 'rgba(255,255,255,0.75)' : 'var(--color-ink-mute)';
@@ -162,9 +165,10 @@ function Frame({ width, height, min, max, yFormat, labels, shown, onFill, axes, 
  * The kit's area line: a smooth curve over a soft gradient inside a visible frame (y axis with labels,
  * baseline, gridlines). The latest point is marked. The frame shows even when nothing is logged yet.
  */
-export function AreaLine({ values, max, min = 0, color, label, labels, height = 140, thick = 3, onFill = false, axes = true, yFormat = (v) => String(Math.round(v)), empty = 'Nothing logged yet', allLabels = false }: { values: (number | null)[]; max: number; min?: number; color: string; label: string; labels?: string[]; height?: number; thick?: number; onFill?: boolean; axes?: boolean; yFormat?: (v: number) => string; empty?: string; allLabels?: boolean }) {
+export function AreaLine({ values, max: maxIn, min = 0, color, label, labels, height = 140, thick = 3, onFill = false, axes = true, yFormat = (v) => String(Math.round(v)), empty = 'Nothing logged yet', allLabels = false }: { values: (number | null)[]; max: number; min?: number; color: string; label: string; labels?: string[]; height?: number; thick?: number; onFill?: boolean; axes?: boolean; yFormat?: (v: number) => string; empty?: string; allLabels?: boolean }) {
   const id = useId();
   const [ref, w] = useWidth();
+  const max = evenTop(min, maxIn);
   const span = Math.max(1e-6, max - min);
   const x = (i: number) => PAD.l + (i / Math.max(1, values.length - 1)) * (w - PAD.l - PAD.r);
   const y = (v: number) => PAD.t + (1 - (clampN(v, min, max) - min) / span) * (height - PAD.t - PAD.b - FLOOR);
@@ -190,10 +194,11 @@ export function AreaLine({ values, max, min = 0, color, label, labels, height = 
 }
 
 /** Several smooth lines on one frame, each with a soft fill, and a legend above. For money in against money out, or mood, sleep and calm together. */
-export function MultiLine({ series, max, min = 0, labels, height = 160, label, yFormat = (v) => String(Math.round(v)), empty = 'Nothing logged yet', allLabels = false }: { series: { values: (number | null)[]; color: string; label: string }[]; max: number; min?: number; labels?: string[]; height?: number; label: string; yFormat?: (v: number) => string; empty?: string; allLabels?: boolean }) {
+export function MultiLine({ series, max: maxIn, min = 0, labels, height = 160, label, yFormat = (v) => String(Math.round(v)), empty = 'Nothing logged yet', allLabels = false }: { series: { values: (number | null)[]; color: string; label: string }[]; max: number; min?: number; labels?: string[]; height?: number; label: string; yFormat?: (v: number) => string; empty?: string; allLabels?: boolean }) {
   const id = useId();
   const [ref, w] = useWidth();
   const n = Math.max(1, ...series.map((s) => s.values.length));
+  const max = evenTop(min, maxIn);
   const span = Math.max(1e-6, max - min);
   const x = (i: number) => PAD.l + (i / Math.max(1, n - 1)) * (w - PAD.l - PAD.r);
   const y = (v: number) => PAD.t + (1 - (clampN(v, min, max) - min) / span) * (height - PAD.t - PAD.b - FLOOR);
@@ -275,7 +280,23 @@ export function PillBars({ values, max, labels, colors, color, label, height = 1
 }
 
 /** Horizontal bars with a label and a value on each row, for the seven floors or the five areas. */
-export function HBars({ rows, label }: { rows: { key: string; label: ReactNode; value: number; text: string; color: string; lead?: ReactNode }[]; label: string }) {
+export function HBars({ rows, label, stacked = false }: { rows: { key: string; label: ReactNode; value: number; text: string; color: string; lead?: ReactNode }[]; label: string; /** Long labels: each label and its value on a line of their own, the bar under them at the full width. */ stacked?: boolean }) {
+  if (stacked)
+    return (
+      <ul role="img" aria-label={label} className="flex list-none flex-col gap-sm p-0 m-0">
+        {rows.map((r) => (
+          <li key={r.key}>
+            <span className="flex items-baseline justify-between gap-sm">
+              <span className="min-w-0 text-balance text-[14px] font-bold leading-tight">{r.label}</span>
+              <span className="shrink-0 text-[14px] font-extrabold tabular-nums text-ink-soft">{r.text}</span>
+            </span>
+            <span className="mt-xs block h-[12px] overflow-hidden rounded-pill bg-line">
+              <span className="block h-full rounded-pill" style={{ width: `${Math.round(Math.max(0, Math.min(1, r.value)) * 100)}%`, background: r.color }} />
+            </span>
+          </li>
+        ))}
+      </ul>
+    );
   return (
     <ul role="img" aria-label={label} className="flex list-none flex-col gap-xs p-0 m-0">
       {rows.map((r) => (

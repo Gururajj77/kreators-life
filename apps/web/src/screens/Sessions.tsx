@@ -2,7 +2,7 @@ import { PRODUCT_KIND_META, productHasOwnCover, type Page, type Product, LOCALE 
 import { dateTime } from '../lib/date';
 import { Link } from 'react-router';
 import { AppIcon } from '../components/AppIcon';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed, useLibrary } from '../lib/queries';
@@ -43,11 +43,7 @@ export function Sessions() {
   );
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Sessions</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">One-to-one time with guides and creators, and live events with a date.</p>
-      </header>
+      <AppCover back={{ to: '/apps', label: 'Apps' }} title="Sessions" lede="One-to-one time with guides and creators, and live events with a date." />
       {upcoming.length > 0 && (
         <section className="mt-md rounded-card bg-card p-md shadow-toy-soft">
           <h2 className="text-[18px]">Coming up for you</h2>

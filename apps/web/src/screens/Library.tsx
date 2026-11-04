@@ -6,6 +6,7 @@ import { AppIcon } from '../components/AppIcon';
 import { Button } from '../components/Button';
 import { CheckRow } from '../components/CheckRow';
 import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api, errorText } from '../lib/api';
@@ -43,11 +44,7 @@ function Mine() {
   const d = q.data;
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">My purchases</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Courses, downloads, memberships, tickets, sessions, bundles, posts and answers you own.</p>
-      </header>
+      <AppCover back={{ to: '/apps', label: 'Apps' }} title="My purchases" lede="Courses, downloads, memberships, tickets, sessions, bundles, posts and answers you own." />
       {d && d.products.length === 0 && (
         <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">
           Nothing yet. Find creators under{' '}
@@ -230,22 +227,20 @@ function Owned({ id }: { id: string }) {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/library">My purchases</BackLink>
-        {p && (
-          <>
-            <p className="m-0 text-[14px] font-bold text-ink-soft">
-              {PRODUCT_KIND_META[p.kind].name} by {p.ownerName}
-            </p>
-            <h1 className="text-[30px]">{p.title}</h1>
-          </>
-        )}
-      </header>
+      {p ? (
+        <AppCover back={{ to: '/library', label: 'My purchases' }} title={p.title} lede={`${PRODUCT_KIND_META[p.kind].name} by ${p.ownerName}`} />
+      ) : (
+        <header className="pt-lg">
+          <BackLink to="/library">My purchases</BackLink>
+        </header>
+      )}
       {q.isError && lapsed && myOrder && (
-        <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-          <p className="m-0 text-[16px] font-bold">Your membership ended on {day(myOrder.expiresAt ?? myOrder.createdAt)}.</p>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Renew to open the members feed again. Nothing you posted is lost.</p>
-          <Link to={`/p/${id}`} className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+        <div className="mt-md flex flex-wrap-reverse items-center justify-between gap-sm rounded-card bg-card p-md shadow-toy-soft">
+          <div className="min-w-0 flex-1 basis-[60%]">
+            <p className="m-0 text-[16px] font-bold">Your membership ended on {day(myOrder.expiresAt ?? myOrder.createdAt)}.</p>
+            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Renew to open the members feed again. Nothing you posted is lost.</p>
+          </div>
+          <Link to={`/p/${id}`} className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
             Renew
           </Link>
         </div>
@@ -257,6 +252,15 @@ function Owned({ id }: { id: string }) {
             <a href={p.url} target="_blank" rel="noreferrer" className="toy mt-md flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-[18px] font-bold text-on-ink">
               Open your download
             </a>
+          )}
+          {p.kind === 'digital' && !p.url && (
+            <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
+              <p className="m-0 text-[16px] font-bold">{p.ownerName} has not added the file yet.</p>
+              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">You will see it here when they do. Questions about it go through Help.</p>
+              <Link to="/help" className="mt-xs inline-flex min-h-[44px] items-center text-[14px] font-bold underline underline-offset-4">
+                Open Help
+              </Link>
+            </div>
           )}
           {p.kind === 'payment' && (
             <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
@@ -330,9 +334,9 @@ function Owned({ id }: { id: string }) {
           {p.kind === 'membership' && (
             <>
               {lapsed ? (
-                <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-                  <p className="m-0 text-[16px] font-bold">Your membership ended on {day(myOrder?.expiresAt ?? '')}.</p>
-                  <Link to={`/p/${p.id}`} className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+                <div className="mt-md flex flex-wrap-reverse items-center justify-between gap-sm rounded-card bg-card p-md shadow-toy-soft">
+                  <p className="m-0 min-w-0 flex-1 basis-[60%] text-[16px] font-bold">Your membership ended on {day(myOrder?.expiresAt ?? '')}.</p>
+                  <Link to={`/p/${p.id}`} className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
                     Renew
                   </Link>
                 </div>

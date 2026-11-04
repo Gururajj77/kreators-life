@@ -12,11 +12,12 @@ import { useParamState } from '../lib/useParamState';
 import { FIELD_FILTER } from '../lib/ui';
 
 const LEVELS: [string, string][] = [
-  ['', 'All'],
+  ['', 'Every line'],
   ['error', 'Errors'],
   ['warn', 'Refused'],
   ['info', 'Changes'],
 ];
+const LEVEL_ITEMS = LEVELS.map(([key, label]) => ({ key, label }));
 const TONE = { error: RELATIONSHIP_BY_KEY.servant_leader.color, warn: RELATIONSHIP_BY_KEY.friendship.color, info: RELATIONSHIP_BY_KEY.self.color } as const;
 const WORD = { error: 'Error', warn: 'Refused', info: 'Change' } as const;
 const clock = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' });
@@ -81,17 +82,27 @@ export function Logs() {
           </div>
 
           <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">Newest first. Pick a kind or a person. Tap a name to see only that person. Tap Look now for new lines.</p>
-          <div className="scroll-row mt-sm flex gap-xs" role="group" aria-label="Kind of line">
-            {LEVELS.map(([k, label]) => (
-              <button key={k || 'all'} type="button" aria-pressed={level === k} onClick={() => { setLevel(k); pg.reset(); }} className={`toy min-h-[44px] shrink-0 rounded-pill border-2 px-md text-[14px] font-bold ${level === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="mt-sm grid grid-cols-1 gap-xs md:grid-cols-[1fr_220px_220px]">
+          <div className="mt-sm grid grid-cols-1 gap-xs md:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]">
             <label className="block">
               <span className="sr-only">Search the log by path, message or name</span>
-              <input type="search" value={text} onChange={(e) => setText(e.target.value)} placeholder="Search a path, a message or a name" autoComplete="off" className={FIELD_FILTER} />
+              <input type="search" value={text} onChange={(e) => setText(e.target.value)} placeholder="Search a path, message or name" autoComplete="off" className={FIELD_FILTER} />
+            </label>
+            <label className="block">
+              <span className="sr-only">Kind of line</span>
+              <select
+                value={level}
+                onChange={(e) => {
+                  setLevel(e.target.value);
+                  pg.reset();
+                }}
+                className={FIELD_FILTER}
+              >
+                {LEVEL_ITEMS.map((l) => (
+                  <option key={l.key} value={l.key}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="block">
               <span className="sr-only">Person</span>

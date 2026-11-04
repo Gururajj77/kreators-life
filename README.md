@@ -137,7 +137,7 @@ Small anonymous groups near you, every week. Onboarding asks for interests and a
 
 ## Life dashboard
 
-Five areas, physical, financial, emotional, mental and spiritual, each scored from what the person already logs (sleep, movement, mindful minutes, mood, journal, stress, tasks, sparks, finance, learning, the tower floors) with a week-on-week trend. Every part is a link to the screen where you act on it. Movement minutes are logged from the dashboard itself.
+Five areas, physical, financial, mental, emotional and spiritual (in that order, since each one holds up the next), each scored from what the person already logs (sleep, movement, mindful minutes, finance, stress, tasks, learning, mood, journal, the tower floors, sparks) with a week-on-week trend. Every part is a link to the screen where you act on it. Movement minutes are logged from the dashboard itself.
 
 ## The public site
 

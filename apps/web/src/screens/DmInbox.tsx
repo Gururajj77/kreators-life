@@ -3,7 +3,7 @@ import { longDate } from '../lib/date';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button } from '../components/Button';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
@@ -15,11 +15,7 @@ export function DmInbox() {
   const closed = q.data?.requests.filter((r) => r.status !== 'open') ?? [];
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/shop">Shop</BackLink>
-        <h1 className="text-[30px]">Priority DMs</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Paid questions. Each one has a promised answer date; the buyer sees your reply in their purchases.</p>
-      </header>
+      <AppCover back={{ to: '/shop', label: 'Shop' }} title="Priority DMs" lede="Paid questions. Each one has a promised answer date; the buyer sees your reply in their purchases." />
 
       <section className="mt-md" aria-labelledby="open-heading">
         <h2 id="open-heading" className="text-[24px]">

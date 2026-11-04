@@ -14,7 +14,8 @@ export interface PaymentProvider {
   refund(providerPaymentId: string, amountCents: number): Promise<{ refundId: string }>;
 }
 
-async function hmacHex(secret: string, body: string): Promise<string> {
+/** HMAC-SHA256 of a body as hex: how a provider signs what it sends. */
+export async function hmacHex(secret: string, body: string): Promise<string> {
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body));
   return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('');

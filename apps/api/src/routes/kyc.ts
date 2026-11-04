@@ -2,18 +2,13 @@ import { Hono } from 'hono';
 import { INDIAN_STATES, pinCodeProblem, type KycProfile } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { nowIso, str } from '../db';
-import { logEvent, track } from '../ops';
+import { logEvent, sha, track } from '../ops';
 
 /** Payout details for a creator. Only the last digits are stored; the PAN is kept as a hash for matching. */
 export const kyc = new Hono<AppEnv>();
 
 export interface KycRow { user_id: string; status: KycProfile['status']; legal_name: string; pan_last4: string; pan_hash: string; bank_last4: string; ifsc: string; address: string; note: string; submitted_at: string | null; decided_at: string | null }
 export const toKyc = (r: KycRow | null): KycProfile => ({ status: r?.status ?? 'none', legalName: r?.legal_name ?? '', panLast4: r?.pan_last4 ?? '', bankLast4: r?.bank_last4 ?? '', ifsc: r?.ifsc ?? '', address: r?.address ?? '', note: r?.note ?? '', submittedAt: r?.submitted_at ?? null, decidedAt: r?.decided_at ?? null });
-
-async function sha(text: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
 
 kyc.get('/', async (c) => {
   const row = await c.env.DB.prepare('SELECT * FROM kyc_profiles WHERE user_id = ?').bind(c.get('user').id).first<KycRow>();

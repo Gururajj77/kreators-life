@@ -1,28 +1,47 @@
-import { MODULE_GROUP_ACCENT, MODULE_GROUP_BLURB, MODULE_GROUPS, RELATIONSHIP_BY_KEY, type ModuleGroup } from '@kreators/shared';
+import { groupStartsOpen, MODULE_GROUP_ACCENT, MODULE_GROUP_BLURB, MODULE_GROUPS, orderInGroup, RELATIONSHIP_BY_KEY, type AppPrefs, type ModuleGroup } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import gsap from 'gsap';
-import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
 import { api } from '../lib/api';
 import { useKept } from '../lib/kept';
-import { useModules, type ModuleView } from '../lib/modules';
+import { useAppPrefs, useModules, useSaveAppPrefs, type ModuleView } from '../lib/modules';
 import { useMe, useRefreshAll } from '../lib/queries';
 import { tie } from '../lib/text';
 import { AppIcon } from './AppIcon';
 import { Avatar } from './Avatar';
+import { Button } from './Button';
 import { tick } from './fx/haptics';
 import { Icon } from './Icon';
+import { IconButton } from './IconButton';
+import { SortableList } from './SortableList';
+import { Toggle } from './Toggle';
 
 /**
- * The apps, grouped, each group one big accordion in its pillar's colour, closed to start. Opening a group shows every app in it,
- * on or off: the name opens an app that is on, and the switch on the right turns it on or off right there. Used on Apps and under
- * Profile, Features, so switching happens in the same place the apps are listed.
+ * The apps, grouped, each group one big accordion in its pillar's colour. Opening a group shows every app in it, on or off: the name
+ * opens an app that is on, and the switch on the right turns it on or off right there. Used on Apps and under Profile, Features, so
+ * switching happens in the same place the apps are listed.
+ *
+ * How a group starts is the person's own pick, saved on the account (`appPrefs`): on Apps (and in the sidebar and the phone menu)
+ * Contribution and Essentials start open and the rest closed until they pick (`GROUP_OPEN_DEFAULT`); Profile, Features opens every
+ * group unless they picked. Profile, Features is also where they pick: each group carries a "Starts open" switch, and "Arrange apps"
+ * lets them drag the apps of a group into their own order (or use Move up and Move down), never into another group. Every list then
+ * shows the placed apps first, in that order, and the rest in context order (`orderInGroup`).
  */
-export function AppGroups({ groups, unread = 0, fits, open = false, where }: { groups: readonly ModuleGroup[]; unread?: number; fits?: Map<string, string>; /** Every group starts open (Profile, Features); closed on Apps. */ open?: boolean; /** Which list this is, so each remembers its own open groups. */ where: 'apps' | 'profile' }) {
+export function AppGroups({ groups, unread = 0, fits, open, where }: { groups: readonly ModuleGroup[]; unread?: number; fits?: Map<string, string>; /** Where the person has not picked: every group starts open (Profile, Features); otherwise `GROUP_OPEN_DEFAULT`. */ open?: boolean; /** Which list this is, so each remembers its own open groups. */ where: 'apps' | 'profile' }) {
   const me = useMe();
   const scope = `appgroups:${me.data?.user.id ?? 'anon'}:${where}`;
   const { modules } = useModules();
+  const prefs = useAppPrefs();
+  const savePrefs = useSaveAppPrefs();
+  const editing = where === 'profile';
+  const [arrange, setArrange] = useState(false);
+  const [said, setSaid] = useState('');
+  const save = async (next: AppPrefs, done: string) => {
+    const ok = await savePrefs(next);
+    setSaid(ok ? done : 'Could not save that. Try again.');
+  };
   const refresh = useRefreshAll();
   const [busy, setBusy] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -41,16 +60,74 @@ export function AppGroups({ groups, unread = 0, fits, open = false, where }: { g
 
   return (
     <div className="flex flex-col gap-sm">
+      {editing && (
+        <div className="flex items-center justify-between gap-sm">
+          <p className="m-0 min-w-0 text-[14px] font-semibold text-ink-soft">{arrange ? 'Drag a handle or use the arrows. Apps stay in their group.' : 'Pick how each group starts, and the order of its apps.'}</p>
+          <Button variant="outline" size="sm" aria-pressed={arrange} onClick={() => setArrange((a) => !a)} className="shrink-0">
+            {arrange ? 'Done' : 'Arrange apps'}
+          </Button>
+        </div>
+      )}
+      <p role="status" aria-live="polite" className="sr-only">
+        {said}
+      </p>
       {groups.map((g) => {
-        const list = modules.filter((m) => m.group === g && m.available && !m.locked);
+        const list = orderInGroup(
+          modules.filter((m) => m.group === g && m.available && !m.locked),
+          prefs.order[g],
+        );
         if (list.length === 0) return null;
-        return <Group key={g} group={g} list={list} unread={unread} fits={fits} busy={busy} failed={failed} scope={scope} startOpen={open} onToggle={(key, on) => toggle.mutate({ key, on })} />;
+        const startOpen = groupStartsOpen(prefs, g, open);
+        // The switch says how the group starts on Apps, in the sidebar and in the phone menu (the defaults there, not Profile's own).
+        const startsOpenThere = groupStartsOpen(prefs, g);
+        const name = MODULE_GROUPS[g];
+        const setStart = (v: boolean) => void save({ ...prefs, open: { ...prefs.open, [g]: v } }, `${name} starts ${v ? 'open' : 'closed'}.`);
+        const move = (from: number, to: number) => {
+          const keys = list.map((m) => m.key);
+          const [k] = keys.splice(from, 1);
+          if (!k || to < 0 || to >= list.length) return;
+          keys.splice(to, 0, k);
+          void save({ ...prefs, order: { ...prefs.order, [g]: keys } }, `${nameIn(list, k)} is now ${to + 1} of ${keys.length} in ${name}.`);
+        };
+        const resetOrder = () => {
+          const order = { ...prefs.order };
+          delete order[g];
+          void save({ ...prefs, order }, `${name} is back in its own order.`);
+        };
+        return (
+          <Group
+            key={g}
+            group={g}
+            list={list}
+            unread={unread}
+            fits={fits}
+            busy={busy}
+            failed={failed}
+            scope={scope}
+            startOpen={startOpen}
+            onToggle={(key, on) => toggle.mutate({ key, on })}
+            controls={
+              editing ? (
+                <div className="mx-sm mb-sm flex items-center gap-xs">
+                  <div className="min-w-0 flex-1">
+                    <Toggle compact on={startsOpenThere} onChange={setStart} label={startsOpenThere ? 'Starts open on Apps and in the menu' : 'Starts closed on Apps and in the menu'} color={RELATIONSHIP_BY_KEY[MODULE_GROUP_ACCENT[g]].color} />
+                  </div>
+                  {prefs.order[g] && <IconButton icon={RotateCcw} label="Reset order" onClick={resetOrder} />}
+                </div>
+              ) : null
+            }
+            arrange={editing && arrange ? move : null}
+          />
+        );
       })}
     </div>
   );
 }
 
-function Group({ group, list, unread, fits, busy, failed, scope, startOpen, onToggle }: { group: ModuleGroup; list: ModuleView[]; unread: number; fits?: Map<string, string>; busy: string | null; failed: string | null; scope: string; startOpen: boolean; onToggle: (key: string, on: boolean) => void }) {
+/** An app's name in a group's list, for the line a screen reader hears after a move. */
+const nameIn = (list: ModuleView[], key: string) => list.find((m) => m.key === key)?.name ?? key;
+
+function Group({ group, list, unread, fits, busy, failed, scope, startOpen, onToggle, controls, arrange }: { group: ModuleGroup; list: ModuleView[]; unread: number; fits?: Map<string, string>; busy: string | null; failed: string | null; scope: string; startOpen: boolean; onToggle: (key: string, on: boolean) => void; /** Profile, Features: the "Starts open" switch and the group's More menu, under its header. */ controls: ReactNode; /** Arranging (Profile, Features): rows get a drag handle and Move up and Move down, and this moves one. */ arrange: ((from: number, to: number) => void) | null }) {
   // Open or closed is remembered for this tab and this person (lib/kept.ts): it stays as left while moving around the app, and resets on
   // a reload, on sign-out, or on another device.
   const [open, setOpen] = useKept<boolean>(scope, group, startOpen);
@@ -111,14 +188,21 @@ function Group({ group, list, unread, fits, busy, failed, scope, startOpen, onTo
         </span>
         <Icon icon={ChevronDown} size={20} className={`shrink-0 text-ink-soft transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
       </button>
+      {controls}
       <div ref={body} id={`${id}-b`} hidden={!open} className="overflow-hidden">
-        <ul className="fx-inset m-0 mx-sm mb-sm list-none p-0">
-          {list.map((m) => (
-            <li key={m.key}>
-              <Row m={m} color={rel.color} tint={`var(--soft-${rel.key})`} unread={m.key === 'notifications' ? unread : 0} why={fits?.get(m.key)} busy={busy === m.key} failed={failed === m.key} onToggle={(v) => onToggle(m.key, v)} />
-            </li>
-          ))}
-        </ul>
+        {arrange ? (
+          <SortableList items={list} keyOf={(m) => m.key} onMove={arrange} className="fx-inset m-0 mx-sm mb-sm list-none p-0">
+            {(m, i, handle) => <ArrangeRow m={m} index={i} count={list.length} color={rel.color} handle={handle} onMove={arrange} />}
+          </SortableList>
+        ) : (
+          <ul className="fx-inset m-0 mx-sm mb-sm list-none p-0">
+            {list.map((m) => (
+              <li key={m.key}>
+                <Row m={m} color={rel.color} tint={`var(--soft-${rel.key})`} unread={m.key === 'notifications' ? unread : 0} why={fits?.get(m.key)} busy={busy === m.key} failed={failed === m.key} onToggle={(v) => onToggle(m.key, v)} />
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </section>
   );
@@ -169,6 +253,26 @@ function Row({ m, color, tint, unread, why, busy, failed, onToggle }: { m: Modul
         style={{ '--switch-on': color } as CSSProperties}
       >
         <span className="fx-switch-knob" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+/** A row while arranging: the drag handle, the app, and Move up and Move down for the keyboard and anyone who prefers buttons. */
+function ArrangeRow({ m, index, count, color, handle, onMove }: { m: ModuleView; index: number; count: number; color: string; handle: ReactNode; onMove: (from: number, to: number) => void }) {
+  const arrow = 'toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-ink disabled:opacity-40 disabled:pointer-events-none';
+  return (
+    <div className="fx-row items-center gap-xs text-ink" style={{ '--tint': color } as CSSProperties}>
+      {handle}
+      <span className={`flex size-[32px] shrink-0 items-center justify-center ${m.on ? 'text-ink' : 'text-ink-mute'}`}>
+        <AppIcon name={m.icon} size={20} />
+      </span>
+      <span className={`min-w-0 flex-1 text-[16px] font-bold leading-tight ${m.on ? '' : 'text-ink-soft'}`}>{m.name}</span>
+      <button type="button" aria-label={`Move ${m.name} up`} disabled={index === 0} onClick={() => onMove(index, index - 1)} className={arrow}>
+        <Icon icon={ArrowUp} size={18} />
+      </button>
+      <button type="button" aria-label={`Move ${m.name} down`} disabled={index === count - 1} onClick={() => onMove(index, index + 1)} className={arrow}>
+        <Icon icon={ArrowDown} size={18} />
       </button>
     </div>
   );

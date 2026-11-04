@@ -1,4 +1,4 @@
-import { BUMLING, inGroupOrder, MODULE_GROUP_ACCENT, MODULE_GROUPS, type ModuleGroup } from '@kreators/shared';
+import { BOOK_AUTHOR, BOOKS, BUMLING, inGroupOrder, MODULE_GROUP_ACCENT, MODULE_GROUPS, type ModuleGroup } from '@kreators/shared';
 import { Link } from 'react-router';
 import { FEATURES, SITE_FEATURES } from './content';
 import { GradientStripes } from '../components/fx/GradientStripes';
@@ -7,6 +7,8 @@ import '../components/fx/spotlight';
 import { GuideLine } from './GuideLine';
 import { SiteLayout, useAppEntry } from './SiteLayout';
 import { AppIcon } from '../components/AppIcon';
+import { BookShelf } from '../components/BookShelf';
+import { SITE_LINK_INLINE, SITE_PRIMARY } from './buttons';
 
 /** The first card is wide; the last one stretches to close the row, so a group never ends with a hole in its grid. */
 function span(i: number, n: number): string {
@@ -35,8 +37,8 @@ export function Features() {
           <p className="type-context m-0">It adds up to ten logins and no plan.</p>
           <p className="type-context m-0">Here every app is a switch in one place, so you keep only what you use.</p>
         </div>
-        <div className="grid gap-md md:grid-cols-[3fr_2fr] md:items-end">
-          <p className="type-measure mt-sm m-0 text-[16px] font-semibold text-ink-soft">A short chat switches on the ones that fit you. Tap any app to see how it works.</p>
+        <div className="mt-md grid gap-md md:grid-cols-[3fr_2fr] md:items-center">
+          <p className="type-measure m-0 text-[16px] font-semibold text-ink-soft">A short chat switches on the ones that fit you. Tap any app to see how it works.</p>
           {/* Bumling, the app's own guide, keeps the header from sitting all on the left. */}
           <GuideLine host={BUMLING.key} side="right" mood="excited" size={96}>
             Tell me what you want, and I’ll switch on just those apps.
@@ -67,6 +69,20 @@ export function Features() {
           </section>
         );
       })}
+      {/* The founder's books are not an app: they sit after the groups, each opening its place on the Books page. */}
+      <section className="mt-xl" aria-labelledby="group-books" data-pillar="guru">
+        <h2 id="group-books" className="type-hook text-[clamp(28px,5vw,40px)]">
+          Books
+        </h2>
+        <p className="type-measure mt-xs m-0 text-[16px] font-semibold text-ink-soft">
+          Three books by {BOOK_AUTHOR}. Each one is a course in{' '}
+          <Link to="/features/school" className={SITE_LINK_INLINE}>
+            School
+          </Link>
+          .
+        </p>
+        <BookShelf className="mt-md" href={(b) => `/features/books#${b.slug}`} />
+      </section>
       <section className="mt-2xl">
         {/* The card colour in both themes (bg-ink turns cream in dark mode, which made this a glaring white block on the dark page). */}
         {/* Light sliced into stripes rises from the foot of the card (GradientStripes); the words and Start free sit above it. */}
@@ -75,8 +91,8 @@ export function Features() {
           <div className="relative z-10">
             <h2 className="type-hook text-[clamp(32px,6vw,56px)]">Switch on only <em>what you need</em></h2>
             <p className="type-context mt-sm m-0 text-[18px] text-ink-soft">Answer a few questions and we switch on the apps that fit you. Change them any time, free.</p>
-            <Link to={entry === '/home' ? '/home' : '/start'} className="toy fx-shimmer mt-md inline-flex min-h-[56px] items-center rounded-pill bg-ink px-lg text-[18px] font-bold text-on-ink">
-              Start free
+            <Link to={entry === '/home' ? '/home' : '/start'} className={`${SITE_PRIMARY} mt-md`}>
+              {entry === '/home' ? 'Go to app' : 'Start free'}
             </Link>
           </div>
         </div>

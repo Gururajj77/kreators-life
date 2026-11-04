@@ -296,6 +296,7 @@ export const BUILD_SECTIONS: readonly BuildSection[] = [
           ['Win: YouTube reads itself with a key; other platforms are typed then confirmed', 'key'],
           ['Agency: invoice designer and calculator, agreements from templates, PDF by the browser\'s print', 'ok'],
           ['Agency: client link with a switch for each part; typed acceptance on agreements is not a certified e-signature', 'test'],
+          ['Agency: a team link for the client\'s own team, the work without any paper, its own password and sessions', 'ok'],
           ['Business metrics in Reviews, only for people who switch them on', 'ok'],
         ],
       },
@@ -584,8 +585,8 @@ export const BUILD_SECTIONS: readonly BuildSection[] = [
         items: [
           ['Physical', 'ok', 'sleep, movement, breath'],
           ['Financial', 'ok', 'month, budgets, invoices, goals'],
-          ['Emotional', 'ok', 'mood, journal, people floors'],
           ['Mental', 'ok', 'stress, focus, learning'],
+          ['Emotional', 'ok', 'mood, journal, people floors'],
           ['Spiritual', 'ok', 'stillness, sparks, top floors'],
           ['Trend vs last week', 'ok'],
           ['Each part links in', 'ok'],

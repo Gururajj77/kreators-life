@@ -20,7 +20,7 @@ import {
   typedCents,
 } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useState, type FormEvent } from 'react';
 import { api } from '../lib/api';
 import { prettyDate, todayLocal } from '../lib/date';
 import { useAuthed } from '../lib/queries';
@@ -28,6 +28,8 @@ import { Button } from './Button';
 import { Inert } from './Inert';
 import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
+import { CardHead } from './CardHead';
+import { useAgencyCan } from '../lib/agencyWorkspace';
 import { Toggle } from './Toggle';
 import { FIELD } from '../lib/ui';
 import { FieldLabel } from './Field';
@@ -54,7 +56,7 @@ const ARMY_TAG: Record<string, { tone: TagTone; name: string }> = {
   approved: { tone: 'good', name: 'Brand approved' },
   changes: { tone: 'warn', name: 'Brand asked for changes' },
 };
-const AUTHOR_TONE: Record<AgencyNote['author'], TagTone> = { me: 'neutral', client: 'info', brand: 'warn' };
+const AUTHOR_TONE: Record<AgencyNote['author'], TagTone> = { me: 'neutral', client: 'info', brand: 'warn', team: 'calm' };
 
 const toMajor = (cents: number): string => (cents === 0 ? '' : cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2));
 /** A typed amount in cents (`typedCents`: "30,000" and "₹30,000" read as 30000); NaN for junk or a minus, so the form can say so. Blank is 0. */
@@ -85,6 +87,12 @@ export function DeliverableSheet({ open, item, clientId, clients, onClose }: { o
 
 function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | null; clientId?: string; clients: AgencyClient[]; onClose: () => void }) {
   const qc = useQueryClient();
+  // On someone else's Agency (a team member): view only without Pipeline edit, the fee only with Paperwork edit, and never the owner's
+  // private notes, Army, time or removing a piece.
+  const { access, can } = useAgencyCan();
+  const member = Boolean(access);
+  const edit = can('pipeline', 'edit');
+  const showFee = can('paperwork', 'edit');
   const [client, setClient] = useState(item?.clientId ?? clientId ?? (clients.length === 1 ? (clients[0]?.id ?? '') : ''));
   const [title, setTitle] = useState(item?.title ?? '');
   const [kind, setKind] = useState<DeliverableKind>(item?.kind ?? 'video');
@@ -110,7 +118,7 @@ function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | 
 
   const save = useMutation({
     mutationFn: async () => {
-      const body = { title: title.trim(), kind, platform: platform.trim(), stage, dueDate: due || null, publishDate: publish || null, link: link.trim(), notes, feeCents: toCents(fee) };
+      const body = { title: title.trim(), kind, platform: platform.trim(), stage, dueDate: due || null, publishDate: publish || null, link: link.trim(), ...(member ? {} : { notes }), ...(showFee ? { feeCents: toCents(fee) } : {}) };
       if (item) await api.agencyItemUpdate(item.id, body);
       else await api.agencyItemAdd({ ...body, clientId: client });
     },
@@ -132,9 +140,10 @@ function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | 
       <form
         onSubmit={(e: FormEvent) => {
           e.preventDefault();
-          if (title.trim() && client && !badFee) save.mutate();
+          if (edit && title.trim() && client && !badFee) save.mutate();
         }}
       >
+        <fieldset disabled={!edit} className="m-0 min-w-0 border-0 p-0">
         {!item && !clientId && (
           <FieldLabel className="mt-sm" label="Client">
             <select value={client} onChange={(e) => setClient(e.target.value)} required className={FIELD}>
@@ -190,23 +199,29 @@ function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | 
         <FieldLabel className="mt-sm" label="Link" hint={COPY.linkHint}>
           <input type="url" value={link} onChange={(e) => setLink(e.target.value)} maxLength={500} placeholder="https://" className={FIELD} />
         </FieldLabel>
-        <FieldLabel className="mt-sm" label="Fee" hint={COPY.feeHint}>
-          <input inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} aria-invalid={badFee || undefined} className={FIELD} />
-          {badFee && <p role="alert" className="mt-xs m-0 text-[14px] font-bold">Type the amount as a number, like 4000 or 4,000.50.</p>}
-        </FieldLabel>
-        <FieldLabel className="mt-sm" label="Notes, only for you" hint={COPY.notesHint}>
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={AGENCY_NOTES_MAX} className={FIELD} />
-        </FieldLabel>
+        {showFee && (
+          <FieldLabel className="mt-sm" label="Fee" hint={COPY.feeHint}>
+            <input inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} aria-invalid={badFee || undefined} className={FIELD} />
+            {badFee && <p role="alert" className="mt-xs m-0 text-[14px] font-bold">Type the amount as a number, like 4000 or 4,000.50.</p>}
+          </FieldLabel>
+        )}
+        {!member && (
+          <FieldLabel className="mt-sm" label="Notes, only for you" hint={COPY.notesHint}>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={AGENCY_NOTES_MAX} className={FIELD} />
+          </FieldLabel>
+        )}
+        </fieldset>
         {save.isError && (
           <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
             {(save.error as Error).message || 'That did not save.'}
           </p>
         )}
+        {edit && (
         <div className="mt-md flex flex-wrap items-center gap-xs">
           <Button type="submit" disabled={save.isPending || !title.trim() || !client || badFee}>
             {save.isPending ? 'Saving' : item ? 'Save changes' : 'Add it'}
           </Button>
-          {item &&
+          {item && !member &&
             (confirm ? (
               <>
                 <Button variant="outline" onClick={() => remove.mutate()} disabled={remove.isPending}>
@@ -223,12 +238,13 @@ function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | 
               </Button>
             ))}
         </div>
+        )}
       </form>
 
-      {item && <Army item={item} link={link} onDone={invalidate} />}
-      {item && <Changes item={item} onDone={invalidate} />}
+      {item && !member && <Army item={item} link={link} onDone={invalidate} />}
+      {item && <Changes item={item} onDone={invalidate} edit={edit} />}
       {item && <Thread itemId={item.id} onDone={invalidate} />}
-      {item && <TimeLog item={item} onDone={invalidate} />}
+      {item && !member && <TimeLog item={item} onDone={invalidate} />}
     </div>
   );
 }
@@ -255,10 +271,9 @@ function Army({ item, link, onDone }: { item: AgencyDeliverable; link: string; o
   const err = (send.error ?? sync.error) as Error | null;
   return (
     <section className="mt-md rounded-tile bg-paper p-sm" aria-label="Army">
-      <div className="flex flex-wrap items-center gap-xs">
+      <CardHead tag={tag && <StatusTag fit tone={tag.tone}>{tag.name}</StatusTag>}>
         <h3 className="m-0 text-[18px]">Army</h3>
-        {tag && <StatusTag tone={tag.tone}>{tag.name}</StatusTag>}
-      </div>
+      </CardHead>
       <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{COPY.armyLede}</p>
       {item.army?.feedback && (
         <p className="mt-xs m-0 whitespace-pre-wrap rounded-tile bg-card p-sm text-[14px] font-semibold">
@@ -288,7 +303,7 @@ function Army({ item, link, onDone }: { item: AgencyDeliverable; link: string; o
 }
 
 /** Changes included in a piece: how many the client has used, and a way to give one more (or take one back). */
-function Changes({ item, onDone }: { item: AgencyDeliverable; onDone: () => void }) {
+function Changes({ item, onDone, edit = true }: { item: AgencyDeliverable; onDone: () => void; edit?: boolean }) {
   const [said, setSaid] = useState('');
   const change = useMutation({
     mutationFn: (n: number) => api.agencyItemChanges(item.id, n),
@@ -310,14 +325,16 @@ function Changes({ item, onDone }: { item: AgencyDeliverable; onDone: () => void
           <li key={l}>{l}</li>
         ))}
       </ul>
-      <div className="mt-xs flex flex-wrap gap-xs">
-        <Button variant="outline" size="sm" onClick={() => change.mutate(1)} disabled={change.isPending}>
-          Add a change
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => change.mutate(-1)} disabled={change.isPending || item.revisionsAllowed <= item.revisions}>
-          Take one back
-        </Button>
-      </div>
+      {edit && (
+        <div className="mt-xs flex flex-wrap gap-xs">
+          <Button variant="outline" size="sm" onClick={() => change.mutate(1)} disabled={change.isPending}>
+            Add a change
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => change.mutate(-1)} disabled={change.isPending || item.revisionsAllowed <= item.revisions}>
+            Take one back
+          </Button>
+        </div>
+      )}
       {said && (
         <p role="status" className="mt-xs m-0 text-[14px] font-bold">
           {said}
@@ -338,12 +355,18 @@ function Thread({ itemId, onDone }: { itemId: string; onDone: () => void }) {
   const q = useAuthed(['agency', 'notes', itemId], () => api.agencyNotes(itemId));
   const [text, setText] = useState('');
   const [shared, setShared] = useState(false);
+  const [forTeam, setForTeam] = useState(false);
+  const { access, can } = useAgencyCan();
+  const member = Boolean(access);
+  // The owner may share a note with their team when they have one; a member's notes are always team notes.
+  const teamQ = useAuthed(['agency', 'team', 'any'], () => api.agencyTeam('tmsize=10'), !member);
+  const hasTeam = (teamQ.data?.members ?? []).some((m) => m.status === 'active');
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['agency', 'notes', itemId] });
     onDone();
   };
   const add = useMutation({
-    mutationFn: () => api.agencyNoteAdd(itemId, text.trim(), shared),
+    mutationFn: () => api.agencyNoteAdd(itemId, text.trim(), !member && !forTeam && shared, !member && forTeam),
     onSuccess: () => {
       setText('');
       refresh();
@@ -361,11 +384,11 @@ function Thread({ itemId, onDone }: { itemId: string; onDone: () => void }) {
         {notes.map((n) => (
           <li key={n.id} className="rounded-tile bg-paper p-sm">
             <div className="flex flex-wrap items-center gap-xs">
-              <StatusTag tone={AUTHOR_TONE[n.author]}>{AGENCY_AUTHOR_NAME[n.author]}</StatusTag>
+              <StatusTag tone={AUTHOR_TONE[n.author]}>{n.author === 'team' && n.authorName ? (n.mine ? 'You, team note' : n.authorName) : n.author === 'client' && n.clientTeam ? "Client's team" : AGENCY_AUTHOR_NAME[n.author]}</StatusTag>
               {n.kind !== 'note' && <StatusTag tone={n.kind === 'change' ? 'warn' : n.kind === 'paid_change' ? 'bad' : 'neutral'}>{NOTE_KIND_NAME[n.kind]}</StatusTag>}
               {n.author === 'me' && <span className="text-[12px] font-bold text-ink-soft">{n.shared ? 'Shared with the client' : 'Private'}</span>}
               <span className="text-[12px] font-semibold text-ink-mute">{prettyDate(n.createdAt.slice(0, 10))}</span>
-              {n.author === 'me' && (
+              {(member ? n.author === 'team' && n.mine && can('pipeline', 'edit') : n.author === 'me' || n.author === 'team') && (
                 <button type="button" onClick={() => del.mutate(n.id)} className="ml-auto min-h-[44px] px-xs text-[12px] font-bold text-ink-soft underline-offset-4 hover:text-ink hover:underline">
                   Remove
                 </button>
@@ -378,6 +401,7 @@ function Thread({ itemId, onDone }: { itemId: string; onDone: () => void }) {
         ))}
         {notes.length === 0 && !q.isPending && <li className="text-[14px] font-semibold text-ink-mute">No notes yet.</li>}
       </ul>
+      {(!member || can('pipeline', 'edit')) && (
       <form
         className="mt-xs"
         onSubmit={(e: FormEvent) => {
@@ -389,7 +413,9 @@ function Thread({ itemId, onDone }: { itemId: string; onDone: () => void }) {
           Write a note
           <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={AGENCY_NOTE_MAX} className={FIELD} />
         </label>
-        <Toggle compact on={shared} onChange={setShared} label="Share with the client" />
+        {!member && !forTeam && <Toggle compact on={shared} onChange={setShared} label="Share with the client" />}
+        {!member && hasTeam && <Toggle compact on={forTeam} onChange={setForTeam} label="Share with your team" />}
+        {member && <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Your team sees this note. The client never does.</p>}
         {add.isError && (
           <p role="alert" className="m-0 text-[14px] font-bold">
             That did not save. Try again.
@@ -401,6 +427,7 @@ function Thread({ itemId, onDone }: { itemId: string; onDone: () => void }) {
           </Button>
         </div>
       </form>
+      )}
     </section>
   );
 }

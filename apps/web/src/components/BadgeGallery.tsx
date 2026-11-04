@@ -9,6 +9,9 @@ import { useParamState } from '../lib/useParamState';
 import { BadgeArt } from './BadgeArt';
 import { Sheet } from './Sheet';
 import { Busy, Skeleton } from './Skeleton';
+import { TabRow } from './TabRow';
+
+const TIER_ITEMS: { key: BadgeTier | 'all'; label: string }[] = [{ key: 'all', label: 'Every tier' }, ...BADGE_TIERS.map((t) => ({ key: t, label: BADGE_TIER_LABEL[t] }))];
 
 /**
  * The badge gallery under Profile: every badge by family, the ones you hold first, then the ones still to earn with the exact next step and,
@@ -133,19 +136,14 @@ export function BadgeGallery() {
       </div>
       <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Medals the app earns for you by its own count. Tap one for the next step.</p>
 
-      <div className="scroll-row mt-sm flex gap-xs" role="group" aria-label="Filter by tier">
-        {(['all', ...BADGE_TIERS] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            aria-pressed={(t === 'all' && !tier) || t === tier}
-            onClick={() => setTierPick(t)}
-            className={`toy min-h-[44px] shrink-0 rounded-pill border-2 px-md text-[14px] font-bold ${(t === 'all' && !tier) || t === tier ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
-          >
-            {t === 'all' ? 'All' : BADGE_TIER_LABEL[t]}
-          </button>
-        ))}
-      </div>
+      <TabRow
+        className="mt-sm"
+        label="Filter by tier"
+        items={TIER_ITEMS}
+        value={tier ?? 'all'}
+        onChange={setTierPick}
+        pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+      />
 
       {q.isLoading && (
         <Busy label="Loading your badges" className="mt-md">

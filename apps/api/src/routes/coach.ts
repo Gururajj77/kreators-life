@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import { COACH_ABOUT_MAX, COACH_ASK_AGAIN_DAYS, COACH_NOTE_MAX, COACH_SHARE_PARTS, MAX_COACH_ASKS, MAX_COACHES, normalizeCode, parentKind, parseCoachShare, type CoachDirectoryEntry, type CoachHub, type CoachLinkStatus, type CoachProfile, type MyCoachResponse } from '@kreators/shared';
+import { COACH_ABOUT_MAX, COACH_ASK_AGAIN_DAYS, COACH_NOTE_MAX, COACH_SHARE_PARTS, MAX_COACH_ASKS, MAX_COACHES, parentKind, parseCoachShare, type CoachDirectoryEntry, type CoachHub, type CoachLinkStatus, type CoachProfile, type MyCoachResponse } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { DATE_RE, getNode, nameOf, newId, notify, nowIso, pageOf, paged, str, toNode } from '../db';
+import { DATE_RE, getNode, nameOf, newId, notify, nowIso, pageOf, paged, personBy, str, toNode } from '../db';
 import { activeLink, askToCoach, endLink, isCoach, LINK, linkById, logCoach, logPage, notePage, rosterRow, shareChange, studentView, toLink, toPerson, type LinkRow } from '../coaching';
 import { createNode, DATES_PROBLEM, editNode, type NodeBody } from './nodes';
 
@@ -46,17 +46,6 @@ export async function startLink(db: D1Database, a: { coachId: string; studentId:
     .bind(id, a.coachId, a.studentId, a.active ? 'active' : 'pending', a.askedBy, a.createdBy, now, a.active ? now : null)
     .run();
   return linkById(db, id);
-}
-
-/** Someone by their email, their @username or their friend code (the one Bond uses). */
-async function personBy(db: D1Database, who: string): Promise<UserRow | null> {
-  const q = who.trim().toLowerCase();
-  if (!q) return null;
-  if (q.includes('@') && !q.startsWith('@')) return db.prepare('SELECT * FROM users WHERE LOWER(email) = ?').bind(q).first<UserRow>();
-  const byHandle = await db.prepare('SELECT * FROM users WHERE handle = ?').bind(q.replace(/^@/, '')).first<UserRow>();
-  if (byHandle) return byHandle;
-  const code = normalizeCode(q);
-  return code.length >= 8 ? db.prepare('SELECT * FROM users WHERE friend_code = ?').bind(code).first<UserRow>() : null;
 }
 
 // ---- the coach's side

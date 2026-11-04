@@ -1020,7 +1020,7 @@ export function SessionChat() {
       'bumling',
       [
         ...(greet
-          ? [...greet, 'This is your strategy session. By the end you will have a map, one or two pillars to focus on, a daily routine and a plan you sign.', 'A good life rests on health, wealth and your seven relationships. Health sits under “Yourself”, and work and money have a pillar of their own.', { node: <FrameCard /> }]
+          ? [...greet, 'This is your strategy session. By the end you will have a map, one or two pillars to focus on, a daily routine and a plan you sign.', 'A good life rests on health, wealth and your seven relationships. Health sits under “Yourself”, and wealth sits under “Servitude”.', { node: <FrameCard /> }]
           : []),
         'Let’s start with your map. It shows how you show up in each relationship, one at a time.',
         'For each one, tick every feeling you know from it, on good days and on bad ones. I work out where you usually are and where you drop under stress.',

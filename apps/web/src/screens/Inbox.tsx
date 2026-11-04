@@ -4,7 +4,7 @@ import { Inert } from '../components/Inert';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { SkeletonList } from '../components/Skeleton';
 import { Sheet } from '../components/Sheet';
@@ -17,6 +17,7 @@ import { api } from '../lib/api';
 import { useInbox, useMe, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { useParamState } from '../lib/useParamState';
+import { TeamInvites } from '../components/TeamInvites';
 
 /** The icon for each kind of note; a kind this list does not know gets the bell. */
 const ICON: Record<string, LucideIcon> = { reply: MessageCircle, mention: AtSign, thread: MessagesSquare, order: ShoppingBag, lead: Mail, booking: CalendarCheck, follow: UserPlus, broadcast: Megaphone, reminder: AlarmClock, review: Star, affiliate: Handshake, moderation: ShieldAlert, coach: Target, team: Wrench, party: PartyPopper, circle: UsersRound, run: Footprints, season: Medal, agency: BriefcaseBusiness, invoice: ReceiptText };
@@ -60,17 +61,17 @@ export function Inbox() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <div className="flex items-center justify-between gap-sm">
-          <h1 className="text-[30px]">Inbox</h1>
-          {list.some((n) => !n.readAt) && (
+      <AppCover
+        back={{ to: '/apps', label: 'Apps' }}
+        title="Inbox"
+        actions={
+          list.some((n) => !n.readAt) ? (
             <Button variant="ghost" onClick={() => readAll.mutate()} disabled={readAll.isPending}>
               Mark all read
             </Button>
-          )}
-        </div>
-      </header>
+          ) : undefined
+        }
+      />
 
       <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="rem-heading">
         <h2 id="rem-heading" className="text-[18px]">
@@ -146,6 +147,8 @@ export function Inbox() {
                       {inner}
                     </button>
                   )}
+                  {/* An Agency team invite is answered right here, so it works even while Agency is off for them. */}
+                  {/^team-(?!access-)/.test(n.id) && <TeamInvites only={n.id.slice(5)} compact className="mt-xs" />}
                 </span>
                 <button
                   type="button"

@@ -1,12 +1,12 @@
-import { RELATIONSHIP_BY_KEY, timeLabel, type Node } from '@kreators/shared';
-import { motion, useReducedMotion } from 'motion/react';
+import { RELATIONSHIP_BY_KEY, taskIsHabit, timeLabel, type Node } from '@kreators/shared';
+import { m as motion, useReducedMotion } from 'motion/react';
 import type { ReactNode } from 'react';
 import { ListChecks, Pencil } from 'lucide-react';
 import { dueLabel } from '../lib/date';
 import { minutesUntil, useNow } from '../lib/useNow';
 import { CheckRow } from './CheckRow';
 import { Icon } from './Icon';
-import { TaskTags } from './TaskPlan';
+import { PriorityChip, TaskTags } from './TaskPlan';
 import { FactTag, IconTag } from './FactTag';
 import { StatusTag } from './StatusTag';
 
@@ -23,9 +23,11 @@ interface Props {
   panel?: ReactNode;
   /** Text for the edit button, when it opens a panel. */
   editLabel?: string;
+  /** Show the task's pillar as a tag (on a pillar's own page every task is that pillar, so it is left off). */
+  pillarTag?: boolean;
 }
 
-export function TaskRow({ task, today, subtitle, busy = false, hint = null, onToggle, onEdit, panel, editLabel }: Props) {
+export function TaskRow({ task, today, subtitle, busy = false, hint = null, onToggle, onEdit, panel, editLabel, pillarTag = true }: Props) {
   const reduce = useReducedMotion();
   const now = useNow();
   const rel = RELATIONSHIP_BY_KEY[task.relationship];
@@ -43,7 +45,7 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
   const when = [task.dueTime ? timeLabel(task.dueTime) : null, task.estimateMin ? `${task.estimateMin} min` : null].filter(Boolean).join(' · ');
   const timeChip = when && !done ? <FactTag kind="when">{when}</FactTag> : null;
   // A task a life coach added says so; it ticks and pays like any other.
-  const hasMarks = task.priority !== null || task.remind || Boolean(task.repeat) || Boolean(task.fromPillar) || Boolean(task.fromCoach) || Boolean(task.forReview);
+  const hasMarks = task.remind || Boolean(task.repeat && taskIsHabit(task)) || Boolean(task.fromPillar) || Boolean(task.fromCoach) || Boolean(task.forReview);
   const badge =
     wait > 0 ? (
       <IconTag tone="neutral" icon="Hourglass">{`Ready in ${wait} min`}</IconTag>
@@ -71,13 +73,21 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
         strike
         hint={hint}
         lockedMessage={early ? `For ${dueLabel(task.doDate, today)?.text.toLowerCase() ?? task.doDate}. Tick it on the day.` : wait > 0 ? `Ready in ${wait} ${wait === 1 ? 'minute' : 'minutes'}. Do it first, then tick it.` : null}
-        badge={
-          (hasMarks || badge || timeChip || steps) ? (
-            <span className="flex flex-wrap justify-end gap-xs">
-              <TaskTags task={task} />
-              {steps}
-              {timeChip}
+        marks={
+          hasMarks || badge || timeChip || steps ? (
+            <>
               {badge}
+              {timeChip}
+              {steps}
+              <TaskTags task={task} priority={false} />
+            </>
+          ) : null
+        }
+        corner={<PriorityChip priority={task.priority} />}
+        foot={
+          pillarTag ? (
+            <span className="inline-flex min-h-[24px] items-center rounded-pill px-xs text-[12px] font-bold whitespace-nowrap" style={{ background: `var(--soft-${rel.key})`, color: `var(--deep-${rel.key})` }}>
+              {rel.name}
             </span>
           ) : null
         }

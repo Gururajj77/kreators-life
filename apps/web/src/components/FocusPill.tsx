@@ -1,4 +1,4 @@
-// The logo's spot, taken over by a small ticking chip while a focus clock runs or waits paused in Mindful minutes, on every page, not
+// The logo's spot, taken over by a small ticking chip while a focus clock runs or waits paused in Mindfulness, on every page, not
 // only Mindful's own. Tapping it goes back to the clock. It reads the shared snapshot in lib/focusSession.ts, so it is right whether
 // Mindful is open in this tab or was left on another page.
 import { useState } from 'react';
@@ -35,7 +35,7 @@ function stage(s: FocusSnapshot, leftMs: number): { fill: string; urgent: boolea
 }
 
 /** The phone top-left logo and the laptop sidebar logo are the same size and shape; this pill fills the same box so nothing shifts. */
-export function FocusPill({ compact = false }: { compact?: boolean }) {
+export function FocusPill({ compact = false, dot = false }: { compact?: boolean; /** The folded sidebar's round form: the minutes alone in a 44px circle, a ripple each second. */ dot?: boolean }) {
   const snap = useFocusSession((s) => s.snap);
   // Mindful showing: its own Stop sheet asks whether to keep a part. Anywhere else the clock is parked out of sight, so the pill asks itself.
   const onMindful = useFocusPortal((s) => s.target !== null);
@@ -51,7 +51,7 @@ export function FocusPill({ compact = false }: { compact?: boolean }) {
   const shown = mmss(ms, !counting);
   const { fill, urgent } = stage(snap, ms);
   const when = counting ? `${spoken(ms)} so far` : paused ? `paused with ${spoken(ms)} left` : `${spoken(ms)} left`;
-  const aria = `${snap.label}${snap.taskTitle ? `, ${snap.taskTitle}` : ''}, ${when}. Back to Mindful minutes.`;
+  const aria = `${snap.label}${snap.taskTitle ? `, ${snap.taskTitle}` : ''}, ${when}. Back to Mindfulness.`;
   const send = useFocusSession.getState().send;
   const control = 'focus-pill-btn flex size-[44px] shrink-0 items-center justify-center rounded-pill text-on-fill';
   // A Timer or a Pomodoro focus part past a whole minute asks first: keep the minutes so far, or throw them away.
@@ -60,6 +60,18 @@ export function FocusPill({ compact = false }: { compact?: boolean }) {
     if (kept >= 1 && !onMindful) setAsking(true);
     else send('stop');
   };
+  if (dot) {
+    // Minutes only (rounded the way the clock counts), with a soft ring rippling out once a second while it runs; the full time, the
+    // task and the controls are one tap away on Mindfulness.
+    const minutes = counting ? Math.floor(ms / 60_000) : Math.ceil(ms / 60_000);
+    const sec = Math.floor(ms / 1000);
+    return (
+      <Link to="/mindful" aria-label={aria.replace(/\s+/g, ' ').trim()} title={shown} className={`focus-dot toy relative flex size-[44px] items-center justify-center rounded-pill text-on-fill ${fill} ${paused ? 'is-paused' : ''}`} data-urgent={urgent && !paused ? '' : undefined}>
+        {!paused && <span key={sec} className="focus-dot-ripple" aria-hidden="true" />}
+        {paused ? <Icon icon={Pause} size={16} /> : <span className="relative font-display text-[16px] font-extrabold tabular-nums">{minutes}</span>}
+      </Link>
+    );
+  }
   return (
     // With a mouse over it (or the keyboard inside it), the pill opens three controls beside the time: restart this part, stop, and
     // pause or resume, left to right. On a touch screen a tap opens Mindful, where the full controls are.

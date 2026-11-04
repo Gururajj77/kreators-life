@@ -3,7 +3,7 @@ import { longDate } from '../lib/date';
 import { AppIcon } from '../components/AppIcon';
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
@@ -11,6 +11,7 @@ import { useDebounced } from '../lib/useDebounced';
 import { Pager, usePage } from '../components/Pager';
 import { tie } from '../lib/text';
 import { StatusTag } from '../components/StatusTag';
+import { CardHead } from '../components/CardHead';
 
 /** Each permission's queue tile: where it opens and what is waiting. Its icon is the permission's own, from `PERMISSION_META` in shared. */
 const PERMISSION_TILES: Record<Permission, { name: string; blurb: string; to: string; queue?: (q: Queues) => number }> = {
@@ -38,13 +39,15 @@ export function Manage() {
   const role = me.data?.user.role ?? 'user';
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Manage</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          You are {role === 'admin' ? 'an' : 'a'} {ROLE_META[role].name.toLowerCase()}. {ROLE_META[role].blurb}
-        </p>
-      </header>
+      <AppCover
+        back={{ to: '/apps', label: 'Apps' }}
+        title="Manage"
+        lede={
+          <>
+            You are {role === 'admin' ? 'an' : 'a'} {ROLE_META[role].name.toLowerCase()}. {ROLE_META[role].blurb}
+          </>
+        }
+      />
 
       {o && (
         <section className="mt-md" aria-labelledby="queues-heading">
@@ -114,13 +117,12 @@ export function Manage() {
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {members.data?.members.map((m) => (
             <li key={m.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <p className="m-0 flex flex-wrap items-center gap-x-xs text-[16px] font-bold">
-                <span className="min-w-0">
+              <CardHead tag={m.role !== 'user' && <StatusTag tone="calm" fit>{ROLE_META[m.role].name}</StatusTag>}>
+                <p className="m-0 text-[16px] font-bold [overflow-wrap:anywhere]">
                   {m.name}
                   {m.handle ? <span className="font-semibold text-ink-soft"> @{m.handle}</span> : ''}
-                </span>
-                {m.role !== 'user' && <StatusTag tone="calm">{ROLE_META[m.role].name}</StatusTag>}
-              </p>
+                </p>
+              </CardHead>
               <p className="m-0 text-[14px] font-semibold text-ink-soft">
                 {m.xp} xp, streak {m.streak}, joined {longDate(m.createdAt)}
                 {m.lastCheckin ? `, last check-in ${m.lastCheckin}` : ', never checked in'}

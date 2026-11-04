@@ -1,12 +1,12 @@
 import { EVENT_TYPE_META, EVENT_TYPES, type DiscountCheck, type EventRegistration, type EventType, type PartyEvent, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 import { MediaSection } from '../components/MediaSection';
 import { EventPanel } from '../components/EventPanel';
 import { Button } from '../components/Button';
 import { DiscountField } from '../components/DiscountField';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
@@ -23,6 +23,32 @@ import { StatusTag } from '../components/StatusTag';
 const when = eventTime;
 
 
+
+/** A step asked once more before it happens, in a sheet instead of the browser's confirm box: a red button does it, a quiet one does not. */
+function AskSheet({ ask, onClose }: { ask: { title: string; body: string; action: string; run: () => void } | null; onClose: () => void }) {
+  return (
+    <Sheet open={ask !== null} onClose={onClose} title={ask?.title ?? ''}>
+      <div className="grid gap-md pb-xl">
+        <p className="m-0 text-[16px] font-semibold text-ink-soft">{ask?.body}</p>
+        <div className="flex flex-wrap gap-xs">
+          <button
+            type="button"
+            onClick={() => {
+              ask?.run();
+              onClose();
+            }}
+            className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-[16px] font-semibold text-on-fill"
+          >
+            {ask?.action}
+          </button>
+          <Button variant="outline" onClick={onClose}>
+            Keep it
+          </Button>
+        </div>
+      </div>
+    </Sheet>
+  );
+}
 
 function seats(e: PartyEvent): string {
   if (e.capacity === null) return 'Open to all';
@@ -75,15 +101,14 @@ export function Party() {
   const d = q.data;
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Party</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Meetups, workshops, camps and flagship days. RSVP, join a waitlist, check in at the door.</p>
-        <Button className="mt-md" onClick={() => setHosting(true)}>
-          Host a meetup
-        </Button>
-        {d && !d.club && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Some events are for Club members only. Club is in Apps.</p>}
-      </header>
+      <AppCover
+        back={{ to: '/apps', label: 'Apps' }}
+        title="Party"
+        lede="Meetups, workshops, camps and flagship days. RSVP, join a waitlist, check in at the door."
+        actions={<Button onClick={() => setHosting(true)}>Host a meetup</Button>}
+      >
+        {d && !d.club ? <p className="m-0 text-[14px] font-semibold text-ink-soft">Some events are for Club members only. Club is in Apps.</p> : null}
+      </AppCover>
 
       {q.isPending && (
         <p className="mt-md text-[14px] font-bold text-ink-soft" role="status">
@@ -91,9 +116,9 @@ export function Party() {
         </p>
       )}
       {q.isError && (
-        <div className="mt-md rounded-card bg-card p-md shadow-toy-soft" role="alert">
-          <p className="m-0 font-bold">Could not load events.</p>
-          <Button variant="outline" className="mt-sm" onClick={() => q.refetch()}>
+        <div className="mt-md rounded-card bg-card p-md shadow-toy-soft flex flex-wrap-reverse items-center justify-between gap-sm" role="alert">
+          <p className="m-0 font-bold min-w-0 flex-1 basis-[60%]">Could not load events.</p>
+          <Button variant="outline" onClick={() => q.refetch()}>
             Try again
           </Button>
         </div>
@@ -266,7 +291,11 @@ function HostSheet({ open, onClose, canHostAll }: { open: boolean; onClose: () =
 
 export function EventPage() {
   const { id = '' } = useParams();
-  const q = useAuthed(['event', id], () => api.event(id));
+  // The host's guest list is a page at a time (prefix `g`). With no size in the address the server sends 100 a page, so the whole room shows at the door.
+  const gp = usePage('g');
+  const [params] = useSearchParams();
+  const gq = `gpage=${gp.page}${params.get('gsize') ? `&gsize=${gp.size}` : ''}`;
+  const q = useAuthed(['event', id, gq], () => api.event(id, gq));
   const refresh = useRefreshAll();
   const codeError = ((useLocation().state as { codeError?: string } | null)?.codeError ?? null);
   const [networking, setNetworking] = useState(false);
@@ -276,6 +305,7 @@ export function EventPage() {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [thanks, setThanks] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const rsvp = useMutation({
     mutationFn: () => api.rsvp(id, networking, discount && discount.offPoints > 0 ? discount.code : undefined),
     onSuccess: (r) => {
@@ -311,11 +341,7 @@ export function EventPage() {
   if (q.isError) {
     return (
       <Screen>
-        <header className="pt-lg">
-          <BackLink to="/party">Party</BackLink>
-          <h1 className="text-[30px]">Not for you, or gone</h1>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{q.error instanceof Error ? q.error.message : 'This event is private, Club-only, or no longer exists.'}</p>
-        </header>
+        <AppCover back={{ to: '/party', label: 'Party' }} title="Not for you, or gone" lede={q.error instanceof Error ? q.error.message : 'This event is private, Club-only, or no longer exists.'} />
       </Screen>
     );
   }
@@ -329,23 +355,29 @@ export function EventPage() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/party">Party</BackLink>
-        <p className="m-0 flex flex-wrap items-center gap-xs text-[14px] font-bold text-ink-soft">
-          <AppIcon name={meta.icon} size={16} />
-          <span>
-            {meta.name}, hosted by {e.hostName}
-            {e.status !== 'published' ? `, ${e.status}` : ''}
+      <AppCover
+        back={{ to: '/party', label: 'Party' }}
+        eyebrow={
+          <span className="inline-flex flex-wrap items-center justify-end gap-xs">
+            <AppIcon name={meta.icon} size={16} />
+            <span>
+              {meta.name}, hosted by {e.hostName}
+              {e.status !== 'published' ? `, ${e.status}` : ''}
+            </span>
           </span>
-        </p>
-        <h1 className="text-[30px]">{e.title}</h1>
-        <div className="mt-xs flex flex-wrap items-center gap-xs">
-          <MineBadge mine={mine} />
-          {e.visibility !== 'public' && (
-            <IconTag tone="deep" icon="Lock">{e.visibility === 'club' ? 'Club only' : 'Private'}</IconTag>
-          )}
-        </div>
-      </header>
+        }
+        title={e.title}
+        lede={
+          mine || e.visibility !== 'public' ? (
+            <span className="inline-flex flex-wrap items-center justify-end gap-xs">
+              <MineBadge mine={mine} />
+              {e.visibility !== 'public' && (
+                <IconTag tone="deep" icon="Lock">{e.visibility === 'club' ? 'Club only' : 'Private'}</IconTag>
+              )}
+            </span>
+          ) : undefined
+        }
+      />
 
       <MediaSection type="event" id={e.id} />
 
@@ -492,9 +524,7 @@ export function EventPage() {
               </Button>
               <Button
                 variant="outline"
-                onClick={() => {
-                  if (window.confirm('Cancel this event and tell everyone registered?')) setStatus.mutate('cancelled');
-                }}
+                onClick={() => setCancelling(true)}
                 disabled={setStatus.isPending}
               >
                 Cancel event
@@ -503,7 +533,7 @@ export function EventPage() {
           )}
           <ErrorLine e={setStatus.isError ? setStatus.error : checkin.isError ? checkin.error : null} />
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-            {d.registrations.length === 0 && <li className="text-[14px] font-semibold text-ink-soft">Nobody registered yet.</li>}
+            {d.registrations.length === 0 && gp.page === 1 && <li className="text-[14px] font-semibold text-ink-soft">Nobody registered yet.</li>}
             {d.registrations.map((r) => (
               <li key={r.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <span className="min-w-0 flex-1">
@@ -515,16 +545,19 @@ export function EventPage() {
                   </span>
                 </span>
                 {r.status === 'registered' && (
-                  <Button className="shrink-0" onClick={() => checkin.mutate(r.userId)} disabled={checkin.isPending}>
+                  <Button variant="outline" className="shrink-0" onClick={() => checkin.mutate(r.userId)} disabled={checkin.isPending}>
                     Check in
                   </Button>
                 )}
               </li>
             ))}
           </ul>
+          {/* The bar shows only when there is more than one page, or a size was picked: a short guest list needs none. */}
+          <Pager page={d.registrationsPage && (d.registrationsPage.more || d.registrationsPage.page > 1 || params.get('gsize')) ? d.registrationsPage : undefined} prefix="g" label="guests" />
         </section>
       )}
       {(d.host || (mine && (mine.status === 'registered' || mine.status === 'attended'))) && <EventPanel app="party" id={e.id} />}
+      <AskSheet ask={cancelling ? { title: 'Cancel this event?', body: 'Everyone registered is told it is off. This cannot be undone.', action: 'Yes, cancel it', run: () => setStatus.mutate('cancelled') } : null} onClose={() => setCancelling(false)} />
     </Screen>
   );
 }

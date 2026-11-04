@@ -1,4 +1,4 @@
-import { AGENCY_CHANNELS, AGENCY_CLIENT_STATUSES, AGENCY_HEALTH, AGENCY_HEALTH_NAME, AGENCY_NAME_MAX, AGENCY_NOTES_MAX, AGENCY_STATUS_NAME, type AgencyClient, type AgencyClientStatus, type AgencyHealth, type BusinessProfile, type InvoiceParty, INDIAN_STATES, PHONE_HINT, makePortalPassword, pinCodeProblem, portalPasswordProblem, REVISIONS_MAX, typedCents } from '@kreators/shared';
+import { AGENCY_CHANNELS, AGENCY_CLIENT_STATUSES, AGENCY_HEALTH, AGENCY_HEALTH_NAME, AGENCY_NAME_MAX, AGENCY_NOTES_MAX, AGENCY_STATUS_NAME, type AgencyClient, type AgencyClientStatus, type AgencyHealth, type BusinessProfile, type InvoiceParty, INDIAN_STATES, PHONE_HINT, pinCodeProblem, portalPasswordProblem, REVISIONS_MAX, typedCents } from '@kreators/shared';
 import { emptyEmailVars, fillEmail } from '@kreators/shared/agencyEmail';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
@@ -11,7 +11,7 @@ import { Sheet } from './Sheet';
 import { FIELD } from '../lib/ui';
 import { FieldLabel } from './Field';
 import { useCopy } from '../lib/clipboard';
-import { AnimatedIcon } from './AnimatedIcon';
+import { PasswordField, ShownOnce } from './ClientPassword';
 
 
 const COPY = {
@@ -20,7 +20,7 @@ const COPY = {
   addEmail: "Client's email",
   addPassword: 'Password for their page',
   addPasswordHint: 'You set it. They type it to open their page.',
-  separately: 'Send the password separately, by a different channel.',
+  separately: 'Their password, shown once here. Copy it now.',
   editTitle: 'Change this client',
   name: 'Who is the client? Their brand or business name.',
   money: 'Type amounts in whole units, like 50000.',
@@ -50,16 +50,6 @@ const joinAddress = (a: { rest: string; state: string; pin: string }) => [a.rest
 
 /** The label a GST number is kept under, so the short form's field and the invoice's tax numbers are one value. */
 const GST_LABEL = 'GSTIN';
-
-/** A whole number from 0 to n - 1 from the browser's own random source, for a made-up password. */
-function randomBelow(n: number): number {
-  const limit = Math.floor(0x1_0000_0000 / n) * n;
-  const buf = new Uint32Array(1);
-  for (;;) {
-    crypto.getRandomValues(buf);
-    if (buf[0]! < limit) return buf[0]! % n;
-  }
-}
 
 /** A server's short answer as a sentence: "set a password" becomes "Set a password." */
 const sentence = (m: string): string => `${m.charAt(0).toUpperCase()}${m.slice(1)}${/[.!?]$/.test(m) ? '' : '.'}`;
@@ -127,7 +117,6 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
   const [imported, setImported] = useState<number | null>(null);
   // A new client always has a password on its link: the owner types one or taps Make one. It is never put in the email.
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const passwordBad = password ? portalPasswordProblem(password, name) : null;
   const [made, setMade] = useState<{ token: string; password: string } | null>(null);
   const [revisions, setRevisions] = useState('2');
@@ -227,46 +216,7 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
             <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} maxLength={120} required autoComplete="off" className={FIELD} />
           </FieldLabel>
           <div className="mt-sm">
-            <label htmlFor="new-client-pw" className="block text-[14px] font-bold">
-              {COPY.addPassword}
-            </label>
-            <span className="block text-[12px] font-semibold text-ink-soft">{COPY.addPasswordHint}</span>
-            <div className="mt-xs flex gap-xs">
-              <input
-                id="new-client-pw"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                maxLength={200}
-                required
-                autoComplete="new-password"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                aria-invalid={passwordBad ? true : undefined}
-                aria-describedby={passwordBad ? 'new-client-pw-e' : undefined}
-                className="min-h-[48px] min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm font-mono text-[16px]"
-              />
-              <Button type="button" variant="outline" size="sm" onClick={() => setShowPassword((v) => !v)} aria-pressed={showPassword} aria-controls="new-client-pw" aria-label={showPassword ? 'Hide the password' : 'Show the password'}>
-                <AnimatedIcon name="visibility" size={20} active={showPassword} />
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setPassword(makePortalPassword(randomBelow));
-                  setShowPassword(true);
-                }}
-              >
-                Make one
-              </Button>
-            </div>
-            {passwordBad && (
-              <p id="new-client-pw-e" role="alert" className="mt-xs m-0 text-[12px] font-bold">
-                {passwordBad}
-              </p>
-            )}
+            <PasswordField id="new-client-pw" label={COPY.addPassword} hint={COPY.addPasswordHint} value={password} onChange={setPassword} clientName={name} required />
           </div>
         </>
       )}
@@ -517,7 +467,6 @@ function Invite({ name, contactName, token, password, profile, onClose }: { name
   });
   const note = useCopy();
   const linkCopy = useCopy();
-  const pw = useCopy();
   return (
     <div className="pb-xl">
       <p className="m-0 text-[16px] font-bold">{`${name} is added. Their page is ready.`}</p>
@@ -537,12 +486,8 @@ function Invite({ name, contactName, token, password, profile, onClose }: { name
           </span>
         )}
       </div>
-      <p className="mt-md m-0 text-[14px] font-bold">{COPY.separately}</p>
-      <div className="mt-xs flex gap-xs">
-        <input readOnly value={password} aria-label="Their password" onFocus={(e) => e.currentTarget.select()} className="min-h-[44px] min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm font-mono text-[16px]" />
-        <Button size="sm" variant="outline" onClick={() => void pw.copy(password)}>
-          {pw.said ? 'Copied' : 'Copy'}
-        </Button>
+      <div className="mt-md">
+        <ShownOnce password={password} note={COPY.separately} />
       </div>
       <div className="mt-md">
         <Button variant="outline" onClick={onClose}>

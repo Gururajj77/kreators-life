@@ -2,13 +2,14 @@ import { INVOICE_STARTERS, invoiceAsText, invoiceForClient, INVOICE_STATUS_NAME,
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { useAgencyCan } from '../lib/agencyWorkspace';
 import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
 import { Button } from './Button';
-import { Copy, Mail, Printer } from 'lucide-react';
+import { ArchiveRestore, Copy, Mail, Printer } from 'lucide-react';
 import { copyPlain } from '../lib/clipboard';
-import { MoreMenu } from './MoreMenu';
+import { MoreMenu, type MoreMenuItem } from './MoreMenu';
 import { Busy, Skeleton } from './Skeleton';
 import { Inert } from './Inert';
 import { Field } from './InvoiceView';
@@ -37,9 +38,10 @@ export function PaperLoading({ label }: { label: string }) {
 
 /**
  * The quiet actions of one invoice, agreement or document row, behind one More button: download or print (the page opens and asks the
- * browser to print, where Save as PDF lives), copy the text, and email a copy (the page opens on its email sheet).
+ * browser to print, where Save as PDF lives), copy the text, and email a copy (the page opens on its email sheet). A voided one also
+ * offers Restore (`onRestore`), the same action as on its page.
  */
-export function PaperRowMenu({ path, name, getText, onNote }: { path: string; name: string; getText: () => Promise<string>; onNote: (note: string) => void }) {
+export function PaperRowMenu({ path, name, getText, onNote, onRestore }: { path: string; name: string; getText: () => Promise<string>; onNote: (note: string) => void; onRestore?: () => void }) {
   const nav = useNavigate();
   return (
     <MoreMenu
@@ -60,6 +62,7 @@ export function PaperRowMenu({ path, name, getText, onNote }: { path: string; na
           },
         },
         { key: 'email', label: 'Email a copy', icon: Mail, onSelect: () => nav(`${path}?email=1`) },
+        ...(onRestore ? [{ key: 'restore', label: 'Restore', icon: ArchiveRestore, onSelect: onRestore } satisfies MoreMenuItem] : []),
       ]}
     />
   );
@@ -98,6 +101,7 @@ export function AgencyInvoices({ clientId, adding: outside, onAdding }: { client
   const [own, setOwn] = useState(false);
   const adding = onAdding ? Boolean(outside) : own;
   const setAdding = (v: boolean) => (onAdding ? onAdding(v) : setOwn(v));
+  const edit = useAgencyCan().can('paperwork', 'edit');
   const clientQ = clientId ? `client=${clientId}` : '';
   const refresh = () => qc.invalidateQueries({ queryKey: ['agency'] });
 
@@ -113,6 +117,16 @@ export function AgencyInvoices({ clientId, adding: outside, onAdding }: { client
     },
     onError: (e: Error) => setMsg(e.message),
   });
+  // Restore a void invoice to the status it had before the void, from its row (the same action as on its page).
+  const restore = useMutation({
+    mutationFn: (id: string) => api.agencyInvoiceRestore(id),
+    onSuccess: (r) => {
+      setRowNote({ id: r.invoice.id, text: `Restored as ${INVOICE_STATUS_NAME[r.restoredTo].toLowerCase()}.` });
+      window.setTimeout(() => setRowNote(null), 3000);
+      return refresh();
+    },
+    onError: (e: Error) => setMsg(e.message),
+  });
 
   const counts = new Map((list.data?.counts ?? []).map((c) => [c.status, c.n]));
   const total = [...counts.values()].reduce((a, b) => a + b, 0);
@@ -121,7 +135,7 @@ export function AgencyInvoices({ clientId, adding: outside, onAdding }: { client
     <div>
       <div className="flex flex-wrap items-center justify-between gap-sm">
         <ViewToggle view={view} onChange={setView} label="Invoices view" />
-        {!onAdding && <Button onClick={() => setAdding(true)}>New invoice</Button>}
+        {!onAdding && edit && <Button onClick={() => setAdding(true)}>New invoice</Button>}
       </div>
       {msg && (
         <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
@@ -143,9 +157,9 @@ export function AgencyInvoices({ clientId, adding: outside, onAdding }: { client
               card={(inv) => <Card inv={inv} />}
               itemLabel={(inv) => inv.number}
               onMore={() => setPer((n) => n + PER_STEP)}
-              onMove={(inv, from, to) => {
+              onMove={!edit ? undefined : (inv, from, to) => {
                 if (from === 'void') {
-                  setMsg('A void invoice is kept for the record. Duplicate it to start again.');
+                  setMsg('A void invoice is kept for the record. Restore it from its More menu, or duplicate it.');
                   return;
                 }
                 move.mutate({ id: inv.id, to: to as Invoice['status'] });
@@ -209,6 +223,7 @@ export function AgencyInvoices({ clientId, adding: outside, onAdding }: { client
                     path={`/agency/invoices/${inv.id}`}
                     name={inv.number}
                     onNote={(text) => setRowNote(text ? { id: inv.id, text } : null)}
+                    onRestore={inv.status === 'void' ? () => restore.mutate(inv.id) : undefined}
                     getText={async () => {
                       const { invoice } = await api.agencyInvoice(inv.id);
                       return invoiceAsText(invoiceForClient(invoice));

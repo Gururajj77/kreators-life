@@ -2,7 +2,8 @@ import { usePillarAccent } from '../lib/usePillarAccent';
 import type { CSSProperties } from 'react';
 import { LISTING_TYPE_META, MODULE_GROUP_ACCENT, RELATIONSHIP_BY_KEY } from '@kreators/shared';
 import { useQuery } from '@tanstack/react-query';
-import { motion } from 'motion/react';
+import { m as motion } from 'motion/react';
+import { BackLink } from '../components/PageHeader';
 import { Link, Navigate, useParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { publicApi } from '../lib/api';
@@ -12,10 +13,11 @@ import { ListingCard } from './ListingCard';
 import { GuideLine } from './GuideLine';
 import { useRise } from './SevenRP';
 import { SiteLayout } from './SiteLayout';
-import { ChevronLeft } from 'lucide-react';
 import { AppIcon } from '../components/AppIcon';
 import { Icon } from '../components/Icon';
 import { Fold } from '../components/Fold';
+import { Books } from './Books';
+import { SiteArrow, SITE_CHIP, SITE_CHIP_BASE, SITE_LINK, SITE_PRIMARY, SITE_SECONDARY } from './buttons';
 
 /** The rest of a feature's story: one short fact a line, as a list (CopyOS: lists for features, paragraphs only for a story). */
 function MoreList({ items }: { items: string[] }) {
@@ -28,8 +30,16 @@ function MoreList({ items }: { items: string[] }) {
   );
 }
 
-/** One public page per part of the app. Each ends at the door into that part. */
+/**
+ * One public page per part of the app. Each ends at the door into that part. `/features/books` is the founder's books, which are
+ * not an app of their own: a separate component, so moving between it and an app's page never changes the hooks a page calls.
+ */
 export function Feature() {
+  const { key = '' } = useParams();
+  return key === 'books' ? <Books /> : <FeaturePage />;
+}
+
+function FeaturePage() {
   const { key = '' } = useParams();
   const token = useSession((s) => s.token);
   const found = featureFor(key);
@@ -58,10 +68,7 @@ export function Feature() {
         style={{ '--wash': lead.color } as CSSProperties}
       >
         <div>
-          <Link to="/features" className="inline-flex min-h-[44px] items-center gap-xs text-[14px] font-bold text-ink-soft">
-            <Icon icon={ChevronLeft} size={18} />
-            All features
-          </Link>
+          <BackLink to="/features">All features</BackLink>
           <p className="m-0 flex" style={{ color: `var(--deep-${lead.key})` }}>
             <AppIcon name={module.icon} size={40} />
           </p>
@@ -75,14 +82,22 @@ export function Feature() {
               </Fold>
             </>
           )}
-          <div className="mt-md flex flex-wrap gap-sm">
-            <Link to={open} className="toy inline-flex min-h-[56px] items-center rounded-pill bg-ink px-lg text-[18px] font-bold text-on-ink">
-              {token ? `Open ${module.name}` : `Sign in to open ${module.name}`}
-            </Link>
-            {!token && (
-              <Link to="/start" className="toy toy-ink inline-flex min-h-[56px] items-center rounded-pill border-2 border-ink bg-card px-lg text-[18px] font-bold">
-                Start free
+          {/* One main action (the site's button system, site/buttons.ts): Start free for a visitor, with signing in as the second look; Open for someone signed in. */}
+          <div className="mt-md flex flex-wrap items-center gap-sm">
+            {token ? (
+              <Link to={open} className={SITE_PRIMARY}>
+                Open {module.name}
               </Link>
+            ) : (
+              <>
+                <Link to="/start" className={SITE_PRIMARY}>
+                  Start free
+                </Link>
+                <Link to={open} className={SITE_SECONDARY}>
+                  Sign in to open {module.name}
+                  <SiteArrow />
+                </Link>
+              </>
             )}
           </div>
           {/* The action comes before the explanation: on a laptop the rest of the story sits under the buttons. */}
@@ -124,7 +139,7 @@ export function Feature() {
             const r = RELATIONSHIP_BY_KEY[k];
             return (
               <li key={k} data-pillar={k}>
-                <Link to={`/7rp?pillar=${k}`} className="toy toy-soft inline-flex w-full justify-center min-h-[48px] items-center gap-xs rounded-pill bg-card pr-md pl-xs text-[14px] font-bold">
+                <Link to={`/7rp?pillar=${k}`} className={`${SITE_CHIP_BASE} min-h-[48px] w-full pr-md pl-xs`}>
                   <Avatar relationship={k} size={32} decorative />
                   {r.name}
                   <span className="text-ink-soft">pillar {r.floor}</span>
@@ -141,7 +156,7 @@ export function Feature() {
             <h2 id="open-now" className="text-[24px]">
               {LISTING_TYPE_META[listingType].plural} open now
             </h2>
-            <Link to={`/explore?type=${listingType}`} className="inline-flex min-h-[44px] items-center text-[14px] font-bold underline-offset-4 hover:underline">
+            <Link to={`/explore?type=${listingType}`} className={`${SITE_LINK} text-[14px]`}>
               See all in Explore
             </Link>
           </div>
@@ -168,7 +183,7 @@ export function Feature() {
           <ul className="fill-row-all mt-sm flex list-none flex-wrap gap-xs p-0 m-0">
             {others.map((m) => (
               <li key={m.key}>
-                <Link to={`/features/${m.key}`} className="toy toy-soft inline-flex w-full justify-center min-h-[44px] items-center gap-xs rounded-pill bg-card px-sm text-[14px] font-bold">
+                <Link to={`/features/${m.key}`} className={`${SITE_CHIP} w-full`}>
                   <AppIcon name={m.icon} size={16} />
                   {m.name}
                 </Link>

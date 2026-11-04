@@ -1,6 +1,6 @@
-import { CARD_GAME_BY_KEY, POINTS, REWARD_BY_KEY, REWARD_GROUPS } from '@kreators/shared';
+import { CARD_GAME_BY_KEY, RELATIONSHIP_BY_KEY, formatCount, POINTS, REWARD_BY_KEY, REWARD_GROUPS } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
 import { useWide } from '../components/ViewToggle';
@@ -15,9 +15,15 @@ import { LockedButton } from '../components/LockedButton';
 import { ConfirmSpend } from '../components/ConfirmSpend';
 import { AppIcon } from '../components/AppIcon';
 import { RollNumber } from '../components/fx/RollNumber';
+import { SkeletonList } from '../components/Skeleton';
+import { GameTile } from './Cards';
+import { Pager, usePage } from '../components/Pager';
+import { fillVar } from '../lib/relFill';
 
 export function Rewards() {
-  const q = useRewards();
+  // Reservations come a page at a time (prefix `r`), like every other list.
+  const rp = usePage('r');
+  const q = useRewards(rp.query);
   const wide = useWide();
   const gamesQ = useCardGames();
   const refresh = useRefreshAll();
@@ -31,7 +37,7 @@ export function Rewards() {
     onSuccess: (r) => {
       refresh();
       setError(null);
-      celebrate({ title: r.game ? `Unlocked. ${r.points} points left` : `Reserved. ${r.points} points left`, color: '#FACC15' });
+      celebrate({ title: r.game ? `Unlocked. ${formatCount(r.points)} points left` : `Reserved. ${formatCount(r.points)} points left`, color: 'var(--color-r3)' });
     },
     onError: (e) => setError(e instanceof Error ? e.message : 'Could not reserve that.'),
   });
@@ -45,6 +51,7 @@ export function Rewards() {
   });
 
   const data = q.data;
+  const gameByKey = useMemo(() => new Map((gamesQ.data?.games ?? []).map((g) => [g.key, g])), [gamesQ.data]);
 
   return (
     <Screen>
@@ -53,15 +60,11 @@ export function Rewards() {
         <h1 className="text-[30px]">Rewards</h1>
       </header>
 
-      {q.isPending && (
-        <p className="mt-md text-[14px] font-bold text-ink-soft" role="status">
-          Opening the shop
-        </p>
-      )}
+      {q.isPending && <SkeletonList className="mt-md" count={4} lines={2} label="Opening the shop" />}
       {q.isError && (
-        <div className="mt-md rounded-card bg-card p-md shadow-toy-soft" role="alert">
-          <p className="m-0 font-bold">Could not load rewards.</p>
-          <Button variant="outline" className="mt-sm" onClick={() => q.refetch()}>
+        <div className="mt-md rounded-card bg-card p-md shadow-toy-soft flex flex-wrap-reverse items-center justify-between gap-sm" role="alert">
+          <p className="m-0 font-bold min-w-0 flex-1 basis-[60%]">Could not load rewards.</p>
+          <Button variant="outline" onClick={() => q.refetch()}>
             Try again
           </Button>
         </div>
@@ -90,6 +93,38 @@ export function Rewards() {
             </p>
           )}
 
+          {/* What this person already reserved or unlocked comes before the catalogue, so it is not thousands of pixels down on a phone. */}
+          {(data.redemptions.length > 0 || rp.page > 1) && (
+            <section className="mt-lg" aria-labelledby="mine-heading">
+              <h2 id="mine-heading" className="text-[24px]">
+                Your reservations
+              </h2>
+              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+                {data.redemptions.map((x) => {
+                  const r = REWARD_BY_KEY[x.rewardKey];
+                  return (
+                    <li key={x.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-balance text-[16px] font-bold">{tie(r?.name ?? x.rewardKey)}</span>
+                        <span className="block text-[14px] font-semibold text-ink-soft">
+                          {formatCount(x.points)} points, {r?.kind === 'unlock' ? 'unlocked' : x.status}
+                          {/* A game's row already says unlocked; its stored note is the same word, so it is not said twice. */}
+                          {x.note && r?.kind !== 'unlock' ? `. ${x.note}` : ''}
+                        </span>
+                      </span>
+                      {x.status === 'reserved' && (
+                        <Button variant="ghost" onClick={() => cancel.mutate(x.id)} disabled={cancel.isPending}>
+                          Cancel
+                        </Button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              <Pager page={data.redemptionsPage} prefix="r" label="reservations" />
+            </section>
+          )}
+
           <section className="mt-lg" aria-labelledby="catalog-heading">
             <h2 id="catalog-heading" className="text-[24px]">
               Catalog
@@ -106,13 +141,19 @@ export function Rewards() {
                     </span>
                   </h3>
                   <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{g.blurb}</p>
-                  <ul className={g.key === 'games' ? 'mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-3' : 'mt-sm flex list-none flex-col gap-xs p-0 m-0'}>
+                  <ul className={g.key === 'games' ? 'mt-sm grid list-none grid-cols-1 gap-sm p-0 m-0 lg:grid-cols-3' : 'mt-sm flex list-none flex-col gap-xs p-0 m-0'}>
                     {list.map((r) => {
                       const can = data.points >= r.cost;
                       const tile = g.key === 'games';
+                      const card = r.game ? gameByKey.get(r.game) : undefined;
+                      // A game on this shelf is drawn as the Games page draws it: its cover, then Play, Unlock or the lock under it.
+                      if (tile && card) {
+                        // `card.unlocked` is the server's answer (a super admin plays every game), not only what was redeemed.
+                        return <GameTile key={r.key} game={card} busy={redeem.isPending} onUnlock={(x) => setAsking({ key: r.key, name: x.name, cost: x.cost, game: true })} />;
+                      }
                       return (
                         <li key={r.key} data-pillar={r.game ? CARD_GAME_BY_KEY[r.game]?.accent : r.kind === 'event' ? 'divine' : 'parent_child'} className={tile ? 'flex flex-col items-stretch gap-sm rounded-tile bg-card p-sm shadow-toy-soft' : 'flex flex-wrap items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft sm:flex-nowrap'}>
-                          <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill text-[24px]" style={{ background: r.kind === 'event' ? 'var(--tint-purple)' : 'var(--tint-yellow)' }} aria-hidden="true">
+                          <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill text-[24px]" style={{ background: r.game && CARD_GAME_BY_KEY[r.game] ? `color-mix(in oklab, ${fillVar(RELATIONSHIP_BY_KEY[CARD_GAME_BY_KEY[r.game]!.accent])} 22%, transparent)` : r.kind === 'event' ? 'var(--tint-purple)' : 'var(--tint-yellow)' }} aria-hidden="true">
                             {r.emoji}
                           </span>
                           <span className="min-w-0 flex-1">
@@ -120,7 +161,7 @@ export function Rewards() {
                             {/* On a phone the name, the price and what is still to go are enough; the line about the item shows from the `md` width up (`useWide`). */}
                             <span className="block text-[14px] font-semibold text-ink-soft">
                               {wide && `${r.blurb} `}
-                              {can ? '' : `${r.cost - data.points} more points to go.`}
+                              {can ? '' : `${formatCount(r.cost - data.points)} more points to go.`}
                             </span>
                             {r.link && (
                               <a href={r.link} target="_blank" rel="noreferrer" className="text-[14px] font-bold underline underline-offset-4">
@@ -129,20 +170,21 @@ export function Rewards() {
                             )}
                           </span>
                           {r.game && data.games.includes(r.game) ? (
-                            <Link to={`/cards/${r.game}`} className={`toy inline-flex min-h-[48px] shrink-0 items-center justify-center rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink ${tile ? 'w-full' : ''}`}>
+                            <Link to={`/cards/${r.game}`} className={`toy inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-pill bg-card-strong px-md text-[14px] font-semibold text-ink ${tile ? 'w-full' : ''}`}>
                               Play
                             </Link>
                           ) : r.game && gamesQ.data?.games.find((x) => x.key === r.game && !x.unlock.ok) ? (
                             <LockedButton unlock={gamesQ.data.games.find((x) => x.key === r.game)!.unlock} full={false} className="shrink-0" />
                           ) : (
+                            // Outline on every row: the one solid action is the confirm sheet's own button.
                             <Button
-                              variant={can ? 'primary' : 'outline'}
+                              variant="outline"
                               className={tile ? 'w-full shrink-0' : 'w-full shrink-0 sm:w-auto'}
                               disabled={!can || redeem.isPending}
-                              aria-label={r.game ? `Unlock ${r.name} for ${r.cost} points` : `Reserve ${r.name} for ${r.cost} points`}
+                              aria-label={r.game ? `Unlock ${r.name} for ${formatCount(r.cost)} points` : `Reserve ${r.name} for ${formatCount(r.cost)} points`}
                               onClick={() => setAsking({ key: r.key, name: r.name, cost: r.cost, game: Boolean(r.game) })}
                             >
-                              {r.game ? `Unlock ${r.cost} pts` : `Reserve ${r.cost} pts`}
+                              {r.game ? `Unlock ${formatCount(r.cost)} pts` : `Reserve ${formatCount(r.cost)} pts`}
                             </Button>
                           )}
                         </li>
@@ -153,43 +195,14 @@ export function Rewards() {
               );
             })}
           </section>
-
-          {data.redemptions.length > 0 && (
-            <section className="mt-lg" aria-labelledby="mine-heading">
-              <h2 id="mine-heading" className="text-[24px]">
-                Your reservations
-              </h2>
-              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-                {data.redemptions.map((x) => {
-                  const r = REWARD_BY_KEY[x.rewardKey];
-                  return (
-                    <li key={x.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-balance text-[16px] font-bold">{tie(r?.name ?? x.rewardKey)}</span>
-                        <span className="block text-[14px] font-semibold text-ink-soft">
-                          {x.points} points, {r?.kind === 'unlock' ? 'unlocked' : x.status}
-                          {x.note ? `. ${x.note}` : ''}
-                        </span>
-                      </span>
-                      {x.status === 'reserved' && (
-                        <Button variant="ghost" onClick={() => cancel.mutate(x.id)} disabled={cancel.isPending}>
-                          Cancel
-                        </Button>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          )}
         </>
       )}
       <ConfirmSpend
         open={asking !== null}
         onClose={() => setAsking(null)}
         title={asking?.game ? `Unlock ${asking.name}?` : `Reserve ${asking?.name ?? ''}?`}
-        body={asking ? (asking.game ? `It costs ${asking.cost} points and is yours for good. It cannot be cancelled.` : `It costs ${asking.cost} points. It stays a reservation until the next drop ships, and you can cancel it until then.`) : ''}
-        action={asking?.game ? `Unlock ${asking.cost} pts` : `Reserve ${asking?.cost ?? 0} pts`}
+        body={asking ? (asking.game ? `It costs ${formatCount(asking.cost)} points and is yours for good. It cannot be cancelled.` : `It costs ${formatCount(asking.cost)} points. It stays a reservation until the next drop ships, and you can cancel it until then.`) : ''}
+        action={asking?.game ? `Unlock ${formatCount(asking.cost)} pts` : `Reserve ${formatCount(asking?.cost ?? 0)} pts`}
         busy={redeem.isPending}
         onConfirm={() => asking && redeem.mutate(asking.key)}
       />

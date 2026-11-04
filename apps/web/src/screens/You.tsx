@@ -11,6 +11,7 @@ import { Nudge } from '../components/Nudge';
 import { Person } from '../components/Person';
 import { RoleBadge } from '../components/RoleBadge';
 import { SignOut } from '../components/SignOut';
+import { AppCover } from '../components/AppCover';
 import { EvolutionReveal } from '../components/EvolutionReveal';
 import { Toggle } from '../components/Toggle';
 import { AppGroups } from '../components/AppGroups';
@@ -52,6 +53,7 @@ function YouView({ data }: { data: MeResponse }) {
   const setThemeMode = useTheme((s) => s.setMode);
   const toggle = useMutation({ mutationFn: ({ key, on }: { key: string; on: boolean }) => api.setModule(key, on), onSuccess: () => refresh() });
   const [deleting, setDeleting] = useState(false);
+  const [erasing, setErasing] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
   const [pwCurrent, setPwCurrent] = useState('');
   const [pwNew, setPwNew] = useState('');
@@ -121,29 +123,44 @@ function YouView({ data }: { data: MeResponse }) {
 
   return (
     <Screen columns={false}>
-      <header className="pt-lg">
-        <div className="flex items-center justify-between gap-sm">
-          <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-mute">Profile</p>
-          <SignOut compact />
-        </div>
-        <div className="flex items-center gap-sm">
-          {/* The profile picture with the role badge on it: creator, staff or admin. Earned badges live further down. */}
-          <span className="relative shrink-0">
-            <span className="flex size-[64px] items-center justify-center overflow-hidden rounded-pill bg-card shadow-toy-soft">
-              {identity ? <Person stage={identity.stage.stage} size={52} decorative /> : <Avatar relationship="self" size={44} decorative still />}
+      {/* Profile is a main tab, but wears the app cover card too (founder, 2026-11-04): its label and Sign out at the top, the picture,
+          the name and the line at the bottom right, over the profile's own cover. */}
+      <AppCover
+        className="app-cover-start"
+        cover="you"
+        topStart={<p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-mute">Profile</p>}
+        topEnd={<SignOut compact />}
+        title={user.displayName ? user.displayName : 'You'}
+        heading={
+          <div className="flex items-center gap-sm">
+            {/* The profile picture with the role badge on it: creator, staff or admin. Earned badges live further down. */}
+            <span className="relative shrink-0">
+              <span className="flex size-[64px] items-center justify-center overflow-hidden rounded-pill bg-card shadow-toy-soft">
+                {identity ? <Person stage={identity.stage.stage} size={52} decorative /> : <Avatar relationship="self" size={44} decorative still />}
+              </span>
+              <RoleBadge role={badgeRoleOf(user)} className="absolute right-0 bottom-0" />
             </span>
-            <RoleBadge role={badgeRoleOf(user)} className="absolute right-0 bottom-0" />
-          </span>
-          <h1 className="min-w-0 truncate text-[30px]">{user.displayName ? user.displayName : 'You'}</h1>
-          {user.isPro && <span className="shrink-0 rounded-pill bg-r7 px-sm py-xs text-[14px] font-extrabold text-white">Pro</span>}
-          {badgeRoleOf(user) !== 'user' && <span className="shrink-0 rounded-pill bg-r6 px-sm py-xs text-[14px] font-extrabold text-white">{BADGE_META[badgeRoleOf(user)].name}</span>}
-        </div>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          {(FOCUS_OPTIONS as readonly string[]).includes(user.focus) && user.focus !== 'Other' ? `Mostly ${user.focus.toLowerCase()}. ` : ''}Level{' '}
-          {levelFromXp(user.xp)}, climbing since{' '}
-          {new Date(user.createdAt).toLocaleDateString(LOCALE, { month: 'short', year: 'numeric' })}.
-        </p>
-        <div className="mt-sm flex flex-wrap items-center gap-xs">
+            {/* The name in full (it wraps, never cut short); the Pro and role marks follow it and drop under it when there is no room. */}
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-sm gap-y-xs">
+              <h1 className="min-w-0 text-balance text-[30px] leading-tight">{user.displayName ? user.displayName : 'You'}</h1>
+              {(user.isPro || badgeRoleOf(user) !== 'user') && (
+                <span className="flex shrink-0 items-center gap-xs">
+                  {user.isPro && <span className="rounded-pill bg-r7 px-sm py-xs text-[14px] font-extrabold text-white">Pro</span>}
+                  {badgeRoleOf(user) !== 'user' && <span className="rounded-pill bg-r6 px-sm py-xs text-[14px] font-extrabold text-white">{BADGE_META[badgeRoleOf(user)].name}</span>}
+                </span>
+              )}
+            </div>
+          </div>
+        }
+        lede={
+          <>
+            {(FOCUS_OPTIONS as readonly string[]).includes(user.focus) && user.focus !== 'Other' ? `Mostly ${user.focus.toLowerCase()}. ` : ''}Level{' '}
+            {levelFromXp(user.xp)}, climbing since{' '}
+            {new Date(user.createdAt).toLocaleDateString(LOCALE, { month: 'short', year: 'numeric' })}.
+          </>
+        }
+      >
+        <div className="flex flex-wrap items-center gap-xs">
           <Link to={user.handle ? `/u/${user.handle}` : `/people/${user.id}`} className="toy toy-soft inline-flex min-h-[48px] items-center gap-xs rounded-pill bg-card px-md text-[14px] font-bold text-ink">
             <Icon icon={UserRound} size={18} />
             See my public page
@@ -156,27 +173,33 @@ function YouView({ data }: { data: MeResponse }) {
             Plans and credits
           </Link>
         </div>
-      </header>
+      </AppCover>
 
       <section className="mt-lg" aria-labelledby="who-heading">
         <h2 id="who-heading" className="text-[24px]">
           Who you are
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{whoLine || 'No tags yet. A short chat sets them, and switches on the apps that fit.'}</p>
-        {user.identities.length > 0 && (
-          <ul className="mt-sm flex list-none flex-wrap gap-xs p-0 m-0" aria-label="Your tags">
-            {user.identities.map((k) => (
-              <li key={k} className="inline-flex items-center gap-xs rounded-pill bg-card px-sm py-xs text-[14px] font-bold shadow-toy-soft">
-                <AppIcon name={IDENTITY_BY_KEY[k]?.icon ?? OWN_TAG_ICON} size={16} className="text-ink-soft" />
-                {identityLabel(k)}
-              </li>
-            ))}
-          </ul>
-        )}
-        <Link to="/onboarding?fresh=1" className="toy toy-soft mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-card px-md text-[14px] font-bold text-ink">
-          {user.identities.length ? 'Change my tags and apps' : 'Set my tags and apps'}
-        </Link>
-        <Nudge className="mt-xs" text="Tags pick your apps and fill in your skills and interests. They never show on your public page." />
+        {whoLine && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{whoLine}</p>}
+        {/* The tags (or, with none yet, what they are for) on the left, and the way to change them at the right of the same line. */}
+        <div className="mt-sm flex flex-wrap items-center justify-between gap-xs">
+          {user.identities.length === 0 && <p className="m-0 min-w-0 flex-[1_1_220px] text-[14px] font-semibold text-ink-soft">No tags yet. A short chat sets them, and switches on the apps that fit.</p>}
+          {user.identities.length > 0 && (
+            <ul className="flex min-w-0 list-none flex-wrap gap-xs p-0 m-0" aria-label="Your tags">
+              {user.identities.map((k) => (
+                <li key={k} className="inline-flex items-center gap-xs rounded-pill bg-card px-sm py-xs text-[14px] font-bold shadow-toy-soft">
+                  <AppIcon name={IDENTITY_BY_KEY[k]?.icon ?? OWN_TAG_ICON} size={16} className="text-ink-soft" />
+                  {identityLabel(k)}
+                </li>
+              ))}
+            </ul>
+          )}
+          <Link to="/onboarding?fresh=1" className="toy toy-soft ml-auto inline-flex min-h-[48px] shrink-0 items-center rounded-pill bg-card px-md text-[14px] font-bold text-ink">
+            {user.identities.length ? 'Change my tags and apps' : 'Set my tags and apps'}
+          </Link>
+        </div>
+        {/* Two short lines: what tags do, then the privacy promise with the way to read more. */}
+        <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Tags pick your apps and fill in your skills and interests.</p>
+        <Nudge text="They never show on your public page." />
       </section>
 
       <MyCoachSection />
@@ -232,10 +255,12 @@ function YouView({ data }: { data: MeResponse }) {
             </div>
           </div>
         ) : (
-          <div data-pillar="parent_child" className="mt-sm rounded-card p-md" style={{ background: 'var(--tint-yellow)' }}>
-            <p className="m-0 text-[16px] font-bold">Only on this device so far.</p>
-            <p className="mt-xs m-0 text-[14px] font-semibold">Add an email and password and everything here comes with you to a new phone.</p>
-            <Link to="/onboarding" className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+          <div data-pillar="parent_child" className="mt-sm flex flex-wrap-reverse items-center justify-between gap-sm rounded-card p-md" style={{ background: 'var(--tint-yellow)' }}>
+            <div className="min-w-0 flex-1 basis-[60%]">
+              <p className="m-0 text-[16px] font-bold">Only on this device so far.</p>
+              <p className="mt-xs m-0 text-[14px] font-semibold">Add an email and password and everything here comes with you to a new phone.</p>
+            </div>
+            <Link to="/onboarding" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
               Create an account
             </Link>
           </div>
@@ -243,9 +268,12 @@ function YouView({ data }: { data: MeResponse }) {
         <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
           <p className="m-0 text-[16px] font-bold">Your data</p>
           <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Everything we hold about you as one file, or the whole account gone.</p>
-          <div className="mt-sm flex flex-wrap gap-xs">
+          <div className="mt-sm fill-row flex flex-wrap gap-xs">
             <Button variant="outline" onClick={() => exportData.mutate()} disabled={exportData.isPending}>
               {exportData.isPending ? 'Preparing' : 'Export my data'}
+            </Button>
+            <Button variant="ghost" disabled={reset.isPending} onClick={() => setErasing(true)}>
+              Erase everything
             </Button>
             <Button variant="ghost" onClick={() => setDeleting(true)}>
               Delete my account
@@ -306,10 +334,36 @@ function YouView({ data }: { data: MeResponse }) {
               {deleteAccount.error instanceof Error ? deleteAccount.error.message : 'Could not delete the account.'}
             </p>
           )}
-          <Button className="mt-md" full disabled={confirmText !== 'DELETE' || deleteAccount.isPending} onClick={() => deleteAccount.mutate()}>
+          <button
+            type="button"
+            disabled={confirmText !== 'DELETE' || deleteAccount.isPending}
+            onClick={() => deleteAccount.mutate()}
+            className="toy mt-md inline-flex min-h-[56px] w-full items-center justify-center gap-xs rounded-pill bg-r1 px-md text-[18px] font-bold text-on-fill disabled:opacity-50"
+          >
             Delete everything
-          </Button>
+          </button>
         </Sheet>
+      <Sheet open={erasing} onClose={() => setErasing(false)} title="Erase everything?">
+        <p className="m-0 text-[14px] font-semibold text-ink-soft">Your pillars, xp, streak and badges go, and you start over. There is no undo.</p>
+        {reset.isError && (
+          <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+            Could not erase it. Try again.
+          </p>
+        )}
+        <div className="mt-md flex flex-col gap-xs">
+          <button
+            type="button"
+            disabled={reset.isPending}
+            onClick={() => reset.mutate()}
+            className="toy inline-flex min-h-[56px] items-center justify-center gap-xs rounded-pill bg-r1 px-md text-[18px] font-bold text-on-fill disabled:opacity-50"
+          >
+            {reset.isPending ? 'Erasing' : 'Yes, erase everything'}
+          </button>
+          <Button variant="outline" size="lg" onClick={() => setErasing(false)} disabled={reset.isPending}>
+            Keep my progress
+          </Button>
+        </div>
+      </Sheet>
       </section>
 
       <section className="mt-lg" aria-labelledby="evo-heading">
@@ -500,7 +554,7 @@ function YouView({ data }: { data: MeResponse }) {
           <p className="m-0 text-[14px] font-semibold text-ink-soft">
             Your public page, skills, portfolio and introductions live under{' '}
             <Link to="/profile" className="underline underline-offset-4">
-              Profile
+              Public page
             </Link>
             . Daily reminders are set in the{' '}
             <Link to="/inbox" className="underline underline-offset-4">
@@ -524,15 +578,6 @@ function YouView({ data }: { data: MeResponse }) {
             onClick={() => nav('/today#how-heading')}
           >
             Show how Daily works
-          </Button>
-          <Button
-            variant="ghost"
-            disabled={reset.isPending}
-            onClick={() => {
-              if (window.confirm('Erase your pillars, xp, streak and badges on this device and start over? There is no undo.')) reset.mutate();
-            }}
-          >
-            Erase everything
           </Button>
         </div>
       </section>

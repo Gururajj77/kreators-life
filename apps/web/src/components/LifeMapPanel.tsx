@@ -71,7 +71,7 @@ export function LifeMapPanel() {
       <h2 id="life-map-heading" className="text-[24px]">
         Your life map
       </h2>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{`From your strategy session on ${when}. Health lives inside Yourself; work, money and time have a pillar of their own.`}</p>
+      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{`From your strategy session on ${when}. Health lives inside Yourself; work, money and time live inside Servitude.`}</p>
       <div className="mt-sm flex flex-wrap gap-xs">
         <Link to="/session?fresh=1" className="toy inline-flex min-h-[44px] items-center rounded-pill bg-card px-sm text-[14px] font-bold shadow-toy-soft">
           Run the session again

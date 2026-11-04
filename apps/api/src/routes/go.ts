@@ -3,9 +3,9 @@ import { Hono } from 'hono';
 import type { AppEnv } from '../env';
 import { newId, nowIso } from '../db';
 import { handleComment } from './growth';
-import { providerFor } from '../payments';
+import { hmacHex, providerFor } from '../payments';
 import { release } from '../discounts';
-import { logEvent, sendEmail, track } from '../ops';
+import { logEvent, sendEmail, sha as sha256Hex, track } from '../ops';
 import { ORDER_SELECT, type OrderRow } from './studio';
 import { nameOf, notify } from '../db';
 import type { Env } from '../env';
@@ -14,10 +14,8 @@ import { FEATURE_KEYS } from '../sitemap';
 /** Tracked redirects at /go/:code. The click is written after the redirect is sent. */
 export const go = new Hono<AppEnv>();
 
-async function sha(text: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
-}
+/** The salted hash a click keeps instead of an address: SHA-256 as hex, its first 32 characters. */
+const sha = async (text: string): Promise<string> => (await sha256Hex(text)).slice(0, 32);
 
 go.get('/go/:code', async (c) => {
   const db = c.env.DB;
@@ -197,12 +195,6 @@ webhooks.get('/meta', (c) => {
   if (mode === 'subscribe' && c.env.META_VERIFY_TOKEN && token === c.env.META_VERIFY_TOKEN) return c.text(challenge, 200);
   return c.text('forbidden', 403);
 });
-
-async function hmacHex(secret: string, body: string): Promise<string> {
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body));
-  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
 
 webhooks.post('/meta', async (c) => {
   const db = c.env.DB;

@@ -1,4 +1,5 @@
-import { MOODS, PERIOD_KINDS, PERIOD_META, periodFor, periodLabel, RELATIONSHIP_BY_KEY, RELATIONSHIPS, REVIEW_ANSWER_MAX, REVIEW_HIGHLIGHT_MAX, REVIEW_NAME_MAX, type Period, type PeriodKind, type ReviewFlagged, type ReviewTemplate, LOCALE, formatCount } from '@kreators/shared';
+import { BackLink } from '../components/PageHeader';
+import { MOODS, PERIOD_KINDS, PERIOD_META, periodFor, periodLabel, RELATIONSHIP_BY_KEY, RELATIONSHIPS, REVIEW_ANSWER_MAX, REVIEW_HIGHLIGHT_MAX, REVIEW_NAME_MAX, type Period, type PeriodKind, type ReviewFlagged, type ReviewTemplate, type ReviewsResponse, type Page, LOCALE, formatCount } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router';
@@ -8,18 +9,19 @@ import { AreaLine, Donut, Legend } from '../components/Charts';
 import { Hero } from '../components/Hero';
 import { Inert } from '../components/Inert';
 import { MoodFace } from '../components/MoodFace';
-import { BackLink } from '../components/PageHeader';
 import { PeriodFilter } from '../components/PeriodFilter';
 import { ReviewCalendar } from '../components/ReviewCalendar';
 import { StatusTag } from '../components/StatusTag';
 import { SummaryTiles, type SummaryPart } from '../components/PeriodPanel';
 import { Screen } from '../components/Screen';
+import { Pager, usePage } from '../components/Pager';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { prettyDate, todayLocal } from '../lib/date';
 import { useAuthed } from '../lib/queries';
 import { FIELD } from '../lib/ui';
 import { FactTag } from '../components/FactTag';
+import { EmergenceSlot } from '../components/EmergenceSlot';
 
 const PARTS: readonly SummaryPart[] = ['daily', 'notToDo', 'wellbeing', 'journal', 'finance', 'shop', 'school', 'work', 'people'];
 
@@ -34,8 +36,11 @@ export function Reviews() {
     return kind && (PERIOD_KINDS as readonly string[]).includes(kind) && date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? periodFor(kind as PeriodKind, date) : periodFor('week', today);
   });
   const qc = useQueryClient();
-  const q = useAuthed(['reviews', period.kind, period.start], () => api.reviews(period.kind, period.start));
-  const d = q.data;
+  // Past reviews come a page at a time (prefix 'r'). api.reviews only takes a day, so the page rides on its query string
+  // until it takes the page itself (lib/api.ts belongs to another stream).
+  const rp = usePage('r');
+  const q = useAuthed(['reviews', period.kind, period.start, rp.query], () => api.reviews(period.kind, `${period.start}&${rp.query}`));
+  const d = q.data as (ReviewsResponse & { recentPage?: Page }) | undefined;
   const invalidate = () => qc.invalidateQueries({ queryKey: ['reviews'] });
 
   // The form follows the saved review for this period, or starts from the built-in template.
@@ -305,7 +310,7 @@ export function Reviews() {
             </ul>
           </section>
 
-          {d && d.recent.length > 0 && (
+          {d && (d.recent.length > 0 || (d.recentPage?.page ?? 1) > 1) && (
             <section className="mt-lg" aria-labelledby="past-heading">
               <h2 id="past-heading" className="text-[24px]">
                 Past reviews
@@ -327,10 +332,13 @@ export function Reviews() {
                   );
                 })}
               </ul>
+              <Pager page={d.recentPage} prefix="r" label="past reviews" />
             </section>
           )}
         </>
       )}
+
+      <EmergenceSlot app="reviews" max={2} />
 
       <TemplateEditor editing={editing} kind={period.kind} onClose={() => setEditing(null)} onSaved={invalidate} />
     </Screen>

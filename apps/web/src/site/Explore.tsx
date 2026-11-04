@@ -1,6 +1,6 @@
 import { LISTING_TYPE_META, LISTING_TYPES, type ListingType } from '@kreators/shared';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { AppIcon } from '../components/AppIcon';
 import { Pager, usePage } from '../components/Pager';
@@ -8,6 +8,21 @@ import { publicApi } from '../lib/api';
 import { chip } from '../lib/ui';
 import { ListingCard } from './ListingCard';
 import { SiteLayout } from './SiteLayout';
+import { TabRow } from '../components/TabRow';
+
+const TYPE_ITEMS: { key: ListingType | 'all'; label: ReactNode; name: string }[] = [
+  { key: 'all', label: 'Everything', name: 'Everything' },
+  ...LISTING_TYPES.map((t) => ({
+    key: t,
+    name: LISTING_TYPE_META[t].plural,
+    label: (
+      <>
+        <AppIcon name={LISTING_TYPE_META[t].icon} size={16} />
+        {LISTING_TYPE_META[t].plural}
+      </>
+    ),
+  })),
+];
 
 const isType = (v: string | null): v is ListingType => Boolean(v && (LISTING_TYPES as readonly string[]).includes(v));
 
@@ -65,19 +80,15 @@ export function Explore() {
             className="w-full rounded-pill border-2 border-line bg-card px-md py-sm text-[18px] font-semibold shadow-toy-soft"
           />
         </label>
-        {/* One line that scrolls sideways on a narrow screen, so no type is ever left alone on a second line. */}
+        {/* One line: as many types as fit, the rest behind More, so none is cut or left alone on a second line. */}
         <div className="mt-sm">
-          <div className="scroll-row" role="group" aria-label="Type">
-            <button type="button" aria-pressed={!type} onClick={() => setType(undefined)} className={chip(!type)}>
-              Everything
-            </button>
-            {LISTING_TYPES.map((t) => (
-              <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)} className={`${chip(type === t)} gap-xs whitespace-nowrap`}>
-                <AppIcon name={LISTING_TYPE_META[t].icon} size={16} />
-                {LISTING_TYPE_META[t].plural}
-              </button>
-            ))}
-          </div>
+          <TabRow
+            label="Type"
+            items={TYPE_ITEMS}
+            value={type ?? 'all'}
+            onChange={(k) => setType(k === 'all' ? undefined : k)}
+            pillClass={(on) => `${chip(on)} gap-xs`}
+          />
         </div>
       </header>
 

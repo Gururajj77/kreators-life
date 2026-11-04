@@ -1,5 +1,5 @@
 import { RELATIONSHIPS } from '@kreators/shared';
-import { motion, useReducedMotion } from 'motion/react';
+import { m as motion, useReducedMotion } from 'motion/react';
 import { useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { Avatar } from '../components/Avatar';

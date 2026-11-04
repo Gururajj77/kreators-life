@@ -1,4 +1,4 @@
-import { anonAliasFrom, DEFAULT_ZONE, isCurrency, isRealDay, pageSizeOf, parseIdentities, parseRepeat, parsePriority, parseIntake, parseLinkBlocks, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
+import { anonAliasFrom, normalizeCode, DEFAULT_ZONE, isCurrency, parseAppPrefs, isRealDay, pageSizeOf, parseIdentities, parseRepeat, parsePriority, parseIntake, parseLinkBlocks, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
 import { BADGE_STATS, BADGES, badgesFrom, communityRankOf, type CommunityRank, EMPTY_SOCIALS, isPrivateBadge, parsePublicSettings, HONORS, isStaffFor, levelFromXp, PERMISSIONS, RELATIONSHIPS, roleRank, taskReadyAt, timeHonors, type BadgeFacts, type BadgesResponse, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
 import type { Context, Next } from 'hono';
 import type { AppEnv } from './env';
@@ -20,6 +20,7 @@ export interface NodeRow {
   origin?: string | null;
   remind?: number;
   for_review?: number;
+  habit?: number | null;
   do_date?: string | null;
   repeat_json?: string | null;
   spawned_from?: string | null;
@@ -148,6 +149,7 @@ export function toUser(r: UserRow): User {
     hasLocation: r.lat !== null && r.lat !== undefined && r.lng !== null && r.lng !== undefined,
     timezone: r.timezone || DEFAULT_ZONE,
     currency: currencyOf(r),
+    appPrefs: parseAppPrefs(r.app_prefs_json ?? null),
     avatarUrl: r.avatar_url ?? '',
     socials: parseSocials(r.socials_json),
     links: linksOf(r),
@@ -247,6 +249,17 @@ export function requireRole(min: Role) {
   };
 }
 
+/** Someone by their email, their @username or their friend code (the one Bond uses). The one finder: Coaching and the Agency team use it. */
+export async function personBy(db: D1Database, who: string): Promise<UserRow | null> {
+  const q = who.trim().toLowerCase();
+  if (!q) return null;
+  if (q.includes('@') && !q.startsWith('@')) return db.prepare('SELECT * FROM users WHERE LOWER(email) = ?').bind(q).first<UserRow>();
+  const byHandle = await db.prepare('SELECT * FROM users WHERE handle = ?').bind(q.replace(/^@/, '')).first<UserRow>();
+  if (byHandle) return byHandle;
+  const code = normalizeCode(q);
+  return code.length >= 8 ? db.prepare('SELECT * FROM users WHERE friend_code = ?').bind(code).first<UserRow>() : null;
+}
+
 export async function notify(db: D1Database, userId: string, kind: string, title: string, body = '', link: string | null = null): Promise<void> {
   await db
     .prepare('INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)')
@@ -254,17 +267,24 @@ export async function notify(db: D1Database, userId: string, kind: string, title
     .run();
 }
 
+/**
+ * Statements fifty at a time: one round trip per fifty instead of one per statement, the results in the order given (a read's
+ * rows are `results[i].results`, a write's count `results[i].meta.changes`). The cron and the list routes use it in place of a
+ * query inside a loop over rows.
+ */
+export async function inBatches<T = unknown>(db: D1Database, stmts: readonly D1PreparedStatement[], size = 50): Promise<D1Result<T>[]> {
+  const out: D1Result<T>[] = [];
+  for (let i = 0; i < stmts.length; i += size) out.push(...(await db.batch<T>(stmts.slice(i, i + size))));
+  return out;
+}
+
 /** The same note for many people: one round trip per fifty, not one per person. Same rows `notify` would write. */
 export async function notifyMany(db: D1Database, userIds: readonly string[], kind: string, title: string, body = '', link: string | null = null): Promise<void> {
-  const ids = [...new Set(userIds)];
   const now = nowIso();
-  for (let i = 0; i < ids.length; i += 50) {
-    await db.batch(
-      ids
-        .slice(i, i + 50)
-        .map((uid) => db.prepare('INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)').bind(newId(), uid, kind, title, body, link, now)),
-    );
-  }
+  await inBatches(
+    db,
+    [...new Set(userIds)].map((uid) => db.prepare('INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)').bind(newId(), uid, kind, title, body, link, now)),
+  );
 }
 
 /** The made-up name someone writes under in one conversation (`scope`): the same all through it, different in the next, and not reversible without the salt. */
@@ -325,6 +345,7 @@ export function toNode(r: NodeRow, gate?: TaskGate): Node {
     fromPillar: r.origin === 'build',
     remind: (r.remind ?? 0) === 1,
     forReview: (r.for_review ?? 0) === 1,
+    habit: r.habit === null || r.habit === undefined ? null : r.habit === 1,
     dueTime: r.due_time ?? null,
     estimateMin: r.estimate_min ?? null,
     completedAt: r.completed_at,

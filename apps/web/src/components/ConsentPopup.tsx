@@ -1,7 +1,7 @@
 import { CONSENT_PURPOSES, LEGAL_VERSION, NO_CONSENT, type ConsentChoices, type ConsentPurpose } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
-import { Link2, Mail, Video, type LucideIcon } from 'lucide-react';
+import { Link2, Mail, ShieldCheck, Video, type LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import { api } from '../lib/api';
@@ -100,12 +100,14 @@ export function ConsentPopup() {
     if (local.open) local.setOpen(false);
   };
 
-  // Above the phone's tab bar inside the app; at the very bottom on the public site, which has none.
-  const place = token ? 'bottom-[calc(var(--spacing-xl)+var(--spacing-xs)+env(safe-area-inset-bottom))]' : 'bottom-0 pb-[env(safe-area-inset-bottom)]';
-  // Inside the app (a sidebar, no hero under it), a small card docked beside the sidebar. On the public site, a
-  // full-width bar along the very bottom edge instead of a left-docked card, which sat over the hero's own copy
-  // and its "See how it works" link on a laptop.
-  const laptop = token ? 'md:bottom-md md:left-[calc(240px+var(--spacing-md))] md:inset-x-auto md:w-[360px] md:rounded-card md:border-2 md:pb-sm' : 'md:bottom-0';
+  // On a phone: a floating glass card with room around it, above the tab bar inside the app and just above the bottom edge on the
+  // public site. Inside the app on a laptop (a sidebar, no hero under it), a small card docked beside the sidebar. On the public site's
+  // laptop width, a full-width bar along the very bottom edge, which covers less of the hero than a card.
+  // The tab bar is 82px tall (a 72px tab under its padding and edge), so the card sits 96px up: 14px clear of it, level with the assistant.
+  const place = token ? 'bottom-[calc(var(--spacing-xl)+var(--spacing-lg)+env(safe-area-inset-bottom))]' : 'bottom-[calc(var(--spacing-sm)+env(safe-area-inset-bottom))]';
+  const laptop = token
+    ? 'md:bottom-md md:left-[calc(var(--nav-w)+var(--spacing-md))] md:right-auto md:w-[360px]'
+    : 'md:inset-x-0 md:bottom-0 md:rounded-none md:border-x-0 md:border-b-0 md:border-t-2 md:px-md md:py-sm md:pb-[calc(var(--spacing-sm)+env(safe-area-inset-bottom))]';
 
   return (
     <>
@@ -114,7 +116,7 @@ export function ConsentPopup() {
           ref={root}
           role="dialog"
           aria-label={step === 'terms' ? 'Our terms and privacy policy' : 'Your privacy choices'}
-          className={`fixed inset-x-0 z-[45] border-t-2 border-line bg-card-strong px-md pt-sm pb-sm text-ink shadow-toy-soft ${place} ${laptop}`}
+          className={`fixed inset-x-sm z-[45] rounded-card border border-line bg-card-strong p-md text-ink shadow-toy-soft ${place} ${laptop}`}
         >
           {step === 'terms' ? (
             <div className="flex flex-col gap-xs">
@@ -137,9 +139,13 @@ export function ConsentPopup() {
             </div>
           ) : (
             // On the public site's laptop width the words and the three choices share one short line, so the bar covers less of the page.
-            <div className={`flex flex-col gap-xs ${token ? '' : 'md:mx-auto md:max-w-[1080px] md:flex-row md:items-center md:justify-between md:gap-md'}`}>
+            <div className={`flex flex-col gap-sm ${token ? '' : 'md:mx-auto md:max-w-[1080px] md:flex-row md:items-center md:justify-between md:gap-md'}`}>
               <div className="min-w-0">
-                <p className="m-0 text-[14px] font-semibold text-ink-soft">
+                <p className={`m-0 flex items-center gap-xs text-[16px] font-extrabold text-ink ${token ? '' : 'md:hidden'}`}>
+                  <Icon icon={ShieldCheck} size={18} />
+                  Your privacy
+                </p>
+                <p className={`mt-xs m-0 text-[14px] font-semibold text-ink-soft ${token ? '' : 'md:mt-0'}`}>
                   A cookie, outside videos and email news stay off unless you say yes.{' '}
                   <Link to="/privacy" target="_blank" className="whitespace-nowrap underline underline-offset-4">
                     Privacy policy
@@ -147,14 +153,15 @@ export function ConsentPopup() {
                 </p>
                 <GrievanceLine />
               </div>
-              <div className="flex shrink-0 flex-wrap items-center gap-xs">
-                <button type="button" onClick={() => setChoosing(true)} className="mr-auto min-h-[44px] rounded-pill px-xs text-[14px] font-bold text-ink-soft underline underline-offset-4 hover:text-ink">
-                  Choose
+              {/* Two equal choices side by side, neither solid; "Choose" opens the three switches, as a quiet link above them. */}
+              <div className={`grid grid-cols-2 gap-xs ${token ? '' : 'md:flex md:shrink-0 md:items-center'}`}>
+                <button type="button" onClick={() => setChoosing(true)} className="col-span-2 inline-flex min-h-[44px] items-center justify-self-start text-[14px] font-bold text-ink-soft underline underline-offset-4 hover:text-ink md:mr-xs">
+                  Choose for each
                 </button>
-                <Button variant="outline" onClick={() => choose({ ...NO_CONSENT })} disabled={save.isPending}>
+                <Button variant="outline" full onClick={() => choose({ ...NO_CONSENT })} disabled={save.isPending} className="md:w-auto">
                   Reject all
                 </Button>
-                <Button variant="outline" onClick={() => choose({ attribution: true, embeds: true, marketing: true })} disabled={save.isPending}>
+                <Button variant="outline" full onClick={() => choose({ attribution: true, embeds: true, marketing: true })} disabled={save.isPending} className="md:w-auto">
                   Accept all
                 </Button>
               </div>

@@ -1,53 +1,62 @@
 @import 'tailwindcss';
 
 /* The three faces are served from this site (public/fonts, SIL Open Font License 1.1, see LICENSE.txt there), so no third party sees a
-   visitor on page load. Each family is one variable file per subset: latin first for the common case, latin-ext for the rest. */
+   visitor on page load. Each family is one variable file per subset: latin first for the common case, latin-ext for the rest. Inter's
+   currency signs (the rupee among them) sit in their own small file, so a page with a price does not pull the whole latin-ext file. */
 @font-face {
-  font-family: 'Fraunces';
+  font-family: 'Geist';
   font-style: normal;
-  font-weight: 500 800;
+  font-weight: 400 800;
   font-display: swap;
-  src: url('/fonts/fraunces-latin-ext.woff2') format('woff2');
+  src: url('/fonts/geist-latin-ext.woff2') format('woff2');
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: 'Fraunces';
+  font-family: 'Geist';
   font-style: normal;
-  font-weight: 500 800;
+  font-weight: 400 800;
   font-display: swap;
-  src: url('/fonts/fraunces-latin.woff2') format('woff2');
+  src: url('/fonts/geist-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: 'JetBrains Mono';
+  font-family: 'Inter';
   font-style: normal;
-  font-weight: 500 700;
+  font-weight: 400 800;
   font-display: swap;
-  src: url('/fonts/jetbrains-mono-latin-ext.woff2') format('woff2');
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+  src: url('/fonts/inter-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: 'JetBrains Mono';
+  font-family: 'Inter';
   font-style: normal;
-  font-weight: 500 700;
+  font-weight: 400 800;
   font-display: swap;
-  src: url('/fonts/jetbrains-mono-latin.woff2') format('woff2');
+  src: url('/fonts/inter-currency.woff2') format('woff2');
+  unicode-range: U+20A0-20AB, U+20AD-20C4;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/inter-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: 'Urbanist';
+  font-family: 'Geist Mono';
   font-style: normal;
-  font-weight: 500 900;
+  font-weight: 400 700;
   font-display: swap;
-  src: url('/fonts/urbanist-latin-ext.woff2') format('woff2');
+  src: url('/fonts/geist-mono-latin-ext.woff2') format('woff2');
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: 'Urbanist';
+  font-family: 'Geist Mono';
   font-style: normal;
-  font-weight: 500 900;
+  font-weight: 400 700;
   font-display: swap;
-  src: url('/fonts/urbanist-latin.woff2') format('woff2');
+  src: url('/fonts/geist-mono-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
@@ -104,21 +113,23 @@
   --color-scale-green: #24b25c;
   --color-scale-lime: #a8cf3a;
 
-  /* Three faces, each with one job. Urbanist is the sans for reading and every control; Fraunces is the
-     serif hook, only for the big headlines on the public site, read from across the room; JetBrains Mono
-     is for eyebrows and numbers, where every figure takes the same width. */
-  --font-display: 'Urbanist', system-ui, sans-serif;
-  --font-body: 'Urbanist', system-ui, sans-serif;
-  --font-serif: 'Fraunces', Georgia, 'Times New Roman', serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  /* Three faces, each with one job, and no serif (2026-11-04, after focal.inc and umbrel.com): Geist for headlines, the public
+     site's hooks and the wordmark; Inter for reading and every control; Geist Mono for eyebrows and numbers, where every figure
+     takes the same width. */
+  --font-display: 'Geist', 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  /* Inter sets heavier than the old face, so the two heaviest class weights step down here, once, instead of in every screen. */
+  --font-weight-extrabold: 700;
+  --font-weight-bold: 650;
 
   /* Leading (baseline to baseline) and tracking. Big type sits tight, small type breathes. */
-  --leading-hook: 0.98;
+  --leading-hook: 1.02;
   --leading-heading: 1.12;
   --leading-body: 1.55;
-  --tracking-hook: -0.035em;
-  --tracking-heading: -0.02em;
-  --tracking-eyebrow: 0.08em;
+  --tracking-hook: -0.04em;
+  --tracking-heading: -0.025em;
+  --tracking-eyebrow: 0.06em;
 
   --radius-card: 32px;
   /* Concentric curves, the way Apple draws them: a shape inside another has the outer radius minus the gap between them, so the two
@@ -145,6 +156,11 @@
 /* Where a coloured fill's gradient deepens to: a calm indigo, the same in both modes. */
 :root {
   --fill-shade: #2a2f55;
+  /* The matte finish on solid surfaces (wave 15): a tiny tiled grain, the same fractal noise as .fx-morph-grain in a neutral grey, its
+     strength set by the alpha row of the colour matrix (0.06 of the noise, about 3% on average, in sRGB so the grey is a true mid grey and does not lighten the fill) instead of an opacity layer, and a faint
+     light-to-shade sheen. Both are tokens so reduced transparency, more contrast and print drop every layer at once (set to none). */
+  --matte-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='m' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23m)'/%3E%3C/svg%3E");
+  --matte-sheen: linear-gradient(160deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 45%, rgba(0, 0, 0, 0.02));
 }
 
 /* Light: calm. A pale periwinkle, seafoam and blush wash behind frosted glass; the ink is a cool slate, never pure black. */
@@ -212,7 +228,7 @@
     --on-ink: #10131f;
     --paper: rgba(255, 255, 255, 0.05);
     --card: rgba(255, 255, 255, 0.075);
-    --card-strong: rgba(24, 28, 46, 0.985);
+    --card-strong: rgba(15, 18, 30, 0.985);
     --line: rgba(255, 255, 255, 0.12);
     --shadow: #000000;
     --edge: rgba(255, 255, 255, 0.12);
@@ -220,13 +236,13 @@
     --glass-blur: 16px;
     --shade-1: rgba(0, 0, 0, 0.3);
     --shade-2: rgba(0, 0, 0, 0.5);
-    --page-base-a: #0e1220;
-    --page-base-b: #101c26;
+    --page-base-a: #07090f;
+    --page-base-b: #080e14;
     /* Dimmed from .42/.30/.24/.34 (to .26/.20/.16/.22) so the lightest place on the wash stays dark enough for the ink tokens to hold 4.5:1. */
-    --glow-1: rgba(104, 116, 232, 0.26);
-    --glow-2: rgba(58, 170, 170, 0.2);
-    --glow-3: rgba(214, 110, 150, 0.16);
-    --glow-4: rgba(130, 100, 220, 0.22);
+    --glow-1: rgba(104, 116, 232, 0.14);
+    --glow-2: rgba(58, 170, 170, 0.1);
+    --glow-3: rgba(214, 110, 150, 0.08);
+    --glow-4: rgba(130, 100, 220, 0.12);
 --tint-red: #3a1626;
     --tint-orange: #3a2416;
     --tint-yellow: #35301a;
@@ -263,7 +279,7 @@
   --on-ink: #10131f;
   --paper: rgba(255, 255, 255, 0.05);
   --card: rgba(255, 255, 255, 0.075);
-  --card-strong: rgba(24, 28, 46, 0.985);
+  --card-strong: rgba(15, 18, 30, 0.985);
   --line: rgba(255, 255, 255, 0.12);
   --shadow: #000000;
   --edge: rgba(255, 255, 255, 0.12);
@@ -271,12 +287,12 @@
   --glass-blur: 16px;
   --shade-1: rgba(0, 0, 0, 0.3);
   --shade-2: rgba(0, 0, 0, 0.5);
-  --page-base-a: #0e1220;
-  --page-base-b: #101c26;
-  --glow-1: rgba(104, 116, 232, 0.26);
-  --glow-2: rgba(58, 170, 170, 0.2);
-  --glow-3: rgba(214, 110, 150, 0.16);
-  --glow-4: rgba(130, 100, 220, 0.22);
+  --page-base-a: #07090f;
+  --page-base-b: #080e14;
+  --glow-1: rgba(104, 116, 232, 0.14);
+  --glow-2: rgba(58, 170, 170, 0.1);
+  --glow-3: rgba(214, 110, 150, 0.08);
+  --glow-4: rgba(130, 100, 220, 0.12);
 --tint-red: #3a1626;
   --tint-orange: #3a2416;
   --tint-yellow: #35301a;
@@ -390,7 +406,7 @@
     font-family: var(--font-display);
     letter-spacing: var(--tracking-heading);
     line-height: var(--leading-heading);
-    font-weight: 800;
+    font-weight: 600;
   }
   h3 {
     letter-spacing: -0.01em;
@@ -532,6 +548,17 @@
   }
 }
 
+/* games-games-design: the card table's PageHeader (the screen's first child, so phones keep its 64px offset) steps back with the rest. */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .card-table-scope > header {
+    transition: opacity 400ms var(--ease-open);
+  }
+  .card-table-scope:has(.focus-target:hover) > header,
+  .card-table-scope:has(.focus-target:focus-within) > header {
+    opacity: 0.4;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .avatar-bob,
   .avatar-eyes {
@@ -612,12 +639,6 @@
   summary:hover {
     background-color: var(--color-paper);
   }
-  summary:hover .chev {
-    transform: translateY(2px);
-  }
-  details[open] summary:hover .chev {
-    transform: rotate(180deg) translateY(2px);
-  }
   .tab:hover > .tab-icon {
     background-color: var(--color-line);
   }
@@ -633,9 +654,6 @@
   transition:
     opacity 120ms ease,
     transform 120ms ease;
-}
-.chev {
-  transition: transform 160ms ease;
 }
 @keyframes hop {
   0%,
@@ -679,11 +697,6 @@
   .scroll-row::-webkit-scrollbar {
     display: none;
   }
-  /* A row of tags in a card that may run past its edge: the last 24px (the bleed and a little more) fade out, so a cut tag
-     reads as "scrolls sideways" rather than broken. Tags that fit end before the fade starts. */
-  .scroll-fade {
-    mask-image: linear-gradient(to right, black calc(100% - 24px), transparent);
-  }
   /* A wrapping row of pills or buttons that fills each line on a phone, so a pill that wraps onto a line of its own
      spans the row instead of standing alone (the lone-pill rule; scripts/smoke/lone-probe.js). */
   @media (max-width: 639.98px) {
@@ -713,9 +726,6 @@ summary {
 }
 summary::-webkit-details-marker {
   display: none;
-}
-details[open] .chev {
-  transform: rotate(180deg);
 }
 /* A click leaves no box behind; only the keyboard draws the ring. An open row stays tinted. */
 summary:focus {
@@ -792,17 +802,16 @@ details[open] > summary {
    The hook is read from across the room, the context draws you closer, the details are read at arm's length.
    Everything is set left, never justified. */
 .type-hook {
-  font-family: var(--font-serif);
-  font-optical-sizing: auto;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-weight: 500;
   line-height: var(--leading-hook);
   letter-spacing: var(--tracking-hook);
   text-wrap: balance;
 }
-/* A word inside a hook that carries the weight: the same serif, lighter and in italic, so the line has one focal point. */
+/* A word inside a hook that carries the weight: the same face, upright and one step lighter, so the line has one focal point. */
 .type-hook em {
-  font-style: italic;
-  font-weight: 500;
+  font-style: normal;
+  font-weight: 400;
   /* The quiet half of a headline, in large type only: the second half steps back so the first is read first. */
   color: var(--color-ink-mute);
 }
@@ -817,14 +826,14 @@ details[open] > summary {
 }
 .type-context {
   font-family: var(--font-body);
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.35;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.011em;
   text-wrap: pretty;
 }
 .type-eyebrow {
   font-family: var(--font-mono);
-  font-weight: 700;
+  font-weight: 500;
   font-size: 12px;
   line-height: 1.4;
   letter-spacing: var(--tracking-eyebrow);
@@ -832,7 +841,7 @@ details[open] > summary {
 }
 .type-figure {
   font-family: var(--font-mono);
-  font-weight: 700;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
   line-height: 1;
@@ -901,6 +910,14 @@ nav {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
+  /* The matte finish goes: plain solid fills, nothing layered over the words. */
+  :root {
+    --matte-grain: none;
+    --matte-sheen: none;
+  }
+  [style*='--fill-shade']::after {
+    display: none;
+  }
 }
 
 /* Gradients in place of flat fills. The ink button leans a little toward violet; each of the seven colours keeps its hue
@@ -916,6 +933,41 @@ nav {
 .bg-r6,
 .bg-r7 {
   background-image: linear-gradient(140deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 55%, rgba(30, 30, 60, 0.1));
+}
+
+/* Matte finish (wave 15): a solid surface (an ink or coloured card, the night slate, a strong card) takes the fine grain over its own
+   gradient, so it reads as matte paper rather than flat plastic. Controls keep their plain look at rest (buttons, links, pills, fields),
+   and printed paper never takes it. These rules sit after the plain gradients so the controls keep those. The grain is about 4% grey,
+   so text on it keeps its contrast; under reduced transparency, more contrast and print the tokens are none and the layer goes. */
+.bg-ink:not(button, a, label, [role='button'], [role='tab'], [role='switch'], [role='checkbox'], [role='radio'], input, select, textarea, .check-box, .rounded-pill, .legal-doc, .print-doc, .legal-doc *, .print-doc *) {
+  background-image: var(--matte-grain), linear-gradient(135deg, var(--color-ink), color-mix(in oklab, var(--color-ink) 80%, var(--color-r6)));
+}
+:is(.bg-r1, .bg-r2, .bg-r3, .bg-r4, .bg-r5, .bg-r6, .bg-r7):not(button, a, label, [role='button'], [role='tab'], [role='switch'], [role='checkbox'], [role='radio'], input, select, textarea, .check-box, .rounded-pill, .legal-doc, .print-doc, .legal-doc *, .print-doc *) {
+  background-image: var(--matte-grain), linear-gradient(140deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 55%, rgba(30, 30, 60, 0.1));
+}
+.night-card:not(button, a, label, [role='button'], [role='tab'], [role='switch'], [role='checkbox'], [role='radio'], input, select, textarea, .check-box, .rounded-pill, .legal-doc, .print-doc, .legal-doc *, .print-doc *) {
+  background-image: var(--matte-grain), linear-gradient(135deg, #25293a, color-mix(in oklab, #25293a 80%, var(--color-r6)));
+}
+.bg-card-strong:is(.rounded-card, .rounded-tile, .rounded-inner, .rounded-inner-sm):not(button, a, label, [role='button'], [role='tab'], [role='switch'], [role='checkbox'], [role='radio'], input, select, textarea, .check-box, .legal-doc, .print-doc, .legal-doc *, .print-doc *) {
+  background-image: var(--matte-grain), var(--matte-sheen);
+}
+/* Fills set inline (Hero, Home's metric cards, the Pillars cards, a pillar page's header, the game covers, Mood's band, Discover's
+   cards) end in var(--fill-shade); an inline background resets background-image, so the grain is an overlay instead: ::after (the
+   metric card's spotlight already holds ::before), behind the content (z-index -1 inside the box's own stacking context). */
+[style*='--fill-shade']:not(button, .rounded-pill, input, select, textarea, .legal-doc *, .print-doc *) {
+  isolation: isolate;
+}
+[style*='--fill-shade']:not(button, .rounded-pill, input, select, textarea, .legal-doc *, .print-doc *, .absolute, .fixed, .sticky) {
+  position: relative;
+}
+[style*='--fill-shade']:not(button, .rounded-pill, input, select, textarea, .legal-doc *, .print-doc *)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background-image: var(--matte-grain), var(--matte-sheen);
 }
 
 /* White is 2.5:1 on the orange fill, so on orange the foreground is the dark slate (5.8:1), the way yellow already is. Everything on it
@@ -1645,9 +1697,10 @@ input[type='radio'] {
   line-height: 1.6;
   color: var(--label);
 }
+/* Beside the laptop sidebar the bar starts after it; a page with no sidebar (Admin, a public page, a product page) keeps the full width. */
 @media (width >= 48rem) and (height >= 30rem) {
-  .fx-condensed {
-    left: 240px; /* the sidebar's width */
+  body:has(nav[aria-label='Main']) .fx-condensed {
+    left: var(--nav-w, 240px);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1833,6 +1886,8 @@ ol.grid > li > .toy:only-child {
 .legal-sec-h { margin: 0; padding-bottom: 4px; border-bottom: 1px solid var(--doc-accent); font-size: 1.15em; font-weight: 700; font-variant: small-caps; letter-spacing: 0.05em; line-height: 1.3; }
 .legal-root[data-heading='numbered'] .legal-sec-h { counter-increment: legal-sec; }
 .legal-root[data-heading='numbered'] .legal-sec-h::before { content: counter(legal-sec) '. '; }
+/* A heading being edited that carries its own typed number ("1. Parties") shows that number, not a second one ("1. 1. Parties"). */
+.legal-root[data-heading='numbered'] .legal-sec-h.legal-own-num::before { content: none; }
 /* A title shares its words over its lines (balance, above); a clause is a long read, so it keeps full lines but never ends on one word. */
 .legal-clause { margin: var(--spacing-xs) 0 0; text-align: left; hyphens: auto; text-wrap: pretty; }
 .legal-list { margin: var(--spacing-xs) 0 0; padding: 0; list-style: none; }
@@ -1876,7 +1931,6 @@ ol.grid > li > .toy:only-child {
 /* The brief: subheads, tick boxes drawn as the paper draws them (a box character), an "Other:" line, a written answer, links. */
 .legal-brief { margin-top: var(--spacing-xs); }
 .legal-q { position: relative; margin: 0; padding: 0; border: 0; min-width: 0; }
-.legal-legend { display: block; padding: 0; float: none; width: 100%; }
 .legal-ticks { margin: var(--spacing-xs) 0 0; padding: 0 0 0 var(--spacing-md); list-style: none; }
 .legal-ticks li { display: flex; align-items: center; gap: var(--spacing-xs); min-height: 1.6em; }
 .legal-box { flex-shrink: 0; font-family: 'Segoe UI Symbol', 'Apple Symbols', system-ui, sans-serif; font-size: 1.2em; line-height: 1; }
@@ -1892,7 +1946,7 @@ ol.grid > li > .toy:only-child {
 .legal-links { margin: var(--spacing-xs) 0 0; padding-left: var(--spacing-lg); }
 .legal-links li { margin-top: 4px; }
 .legal-links li:has(.legal-line-input) { display: list-item; }
-.legal-hand { font-family: var(--font-display, inherit); font-size: 1.25em; font-style: italic; }
+.legal-hand { font-family: var(--doc-font, inherit); font-size: 1.25em; font-style: italic; }
 
 /* ----- The typed layout (DocStyle.layout 'typed'): the way the founder's own agreement is typed. Plain sans type, the title and the line
    under it left-aligned in bold capitals, headings as typed (no small caps, no counter), a numbered subhead in bold, a grey hairline
@@ -2148,13 +2202,6 @@ select.inv-edit { appearance: none; cursor: pointer; }
     flex: 1 1 100%;
   }
 }
-.mf-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 800;
-  color: #ffffff;
-}
 .mf-tabs {
   display: inline-flex;
   gap: var(--spacing-xs);
@@ -2171,6 +2218,7 @@ select.inv-edit { appearance: none; cursor: pointer; }
 }
 .mf-tabs > button {
   position: relative;
+  min-width: 44px;
   min-height: 44px;
   padding: 0 var(--spacing-xs);
   font-size: 14px;
@@ -2221,7 +2269,7 @@ select.inv-edit { appearance: none; cursor: pointer; }
   min-width: 5.4ch;
   font-family: var(--font-display);
   font-size: 44px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   color: var(--mf-a-text);
@@ -2489,33 +2537,6 @@ select.inv-edit { appearance: none; cursor: pointer; }
 .mf-secs > i[data-on] {
   background: var(--mf-a-text);
 }
-.mf-orb-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 72px;
-}
-.mf-orb {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--mf-a-text);
-  opacity: 0.85;
-}
-.mf-breath-orb {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.1);
-  font-size: 30px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: #ffffff;
-}
 /* The round buttons: one row at the top right, on the heading's line, on every screen. */
 .mf-rounds {
   display: flex;
@@ -2626,6 +2647,14 @@ select.inv-edit { appearance: none; cursor: pointer; }
   html::after,
   body::before,
   body::after {
+    display: none !important;
+  }
+  /* The matte finish is for the screen: no grain or sheen on paper, and no overlay. */
+  :root {
+    --matte-grain: none;
+    --matte-sheen: none;
+  }
+  [style*='--fill-shade']::after {
     display: none !important;
   }
   .print-doc {
@@ -3105,7 +3134,7 @@ select.inv-edit { appearance: none; cursor: pointer; }
 .breath-count {
   font-family: var(--font-display);
   font-size: 24px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
@@ -3537,18 +3566,18 @@ select.inv-edit { appearance: none; cursor: pointer; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     --fx-morph-a: 0.75;
-    --fx-morph-1: rgba(104, 116, 232, 0.6); /* the four glows, stronger than the wash so the shapes read */
-    --fx-morph-2: rgba(58, 170, 170, 0.46);
-    --fx-morph-3: rgba(214, 110, 150, 0.36);
-    --fx-morph-4: rgba(130, 100, 220, 0.5);
+    --fx-morph-1: rgba(104, 116, 232, 0.34); /* the four glows, stronger than the wash so the shapes read */
+    --fx-morph-2: rgba(58, 170, 170, 0.24);
+    --fx-morph-3: rgba(214, 110, 150, 0.18);
+    --fx-morph-4: rgba(130, 100, 220, 0.28);
   }
 }
 :root[data-theme='dark'] {
   --fx-morph-a: 0.75;
-  --fx-morph-1: rgba(104, 116, 232, 0.6); /* the four glows, stronger than the wash so the shapes read */
-  --fx-morph-2: rgba(58, 170, 170, 0.46);
-  --fx-morph-3: rgba(214, 110, 150, 0.36);
-  --fx-morph-4: rgba(130, 100, 220, 0.5);
+  --fx-morph-1: rgba(104, 116, 232, 0.34); /* the four glows, stronger than the wash so the shapes read */
+  --fx-morph-2: rgba(58, 170, 170, 0.24);
+  --fx-morph-3: rgba(214, 110, 150, 0.18);
+  --fx-morph-4: rgba(130, 100, 220, 0.28);
 }
 @media (min-width: 768px) {
   :root {
@@ -3717,6 +3746,14 @@ select.inv-edit { appearance: none; cursor: pointer; }
 }
 .kanban-card.kanban-away {
   display: none;
+}
+/* A board whose Move button sits at the card's foot (KanbanBoard moveAtFoot): the title takes the card's whole width, and the card's
+   last line (the element the card marks data-kfoot) keeps room for the 44px button beside it (52px: the button and an 8px gap). */
+.kanban-foot [data-kfoot] {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding-right: calc(var(--spacing-xl) - var(--spacing-sm));
 }
 .kanban-clone {
   position: fixed;
@@ -3913,5 +3950,650 @@ html.kanban-drag.kanban-no * {
 @media (prefers-reduced-motion: reduce), (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
   .search-goo {
     display: none;
+  }
+}
+
+/* Mood's coloured top (A2-1): it is not a .screen header, so on phones it clears the floating logo and corner buttons the same way. */
+@media (max-width: 767.98px), (max-height: 479.98px) {
+  .mood-top.safe-top {
+    padding-top: calc(64px + env(safe-area-inset-top));
+  }
+}
+
+/* SortableList (components/SortableList.tsx): the drag handle never selects text or opens the long-press callout, and the row being
+   dragged rises over its neighbours on the solid card with the toy shadow. */
+.sort-handle {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+li.sort-lifted {
+  position: relative;
+  z-index: 2;
+  border-radius: var(--radius-inner);
+  background: var(--card-strong);
+  box-shadow: var(--shadow-toy-soft);
+}
+
+/* Breathe and focus in full screen (components/FocusRounds.tsx, `covering`): the section alone covers the page, phone and laptop, on
+   the page's own wash, its panel centred and as wide as reads well; it scrolls inside itself when a short screen needs it. Sheets
+   opened from it still sit above it. */
+.mf-cover {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  justify-content: safe center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: max(var(--spacing-md), env(safe-area-inset-top)) var(--spacing-md) max(var(--spacing-md), env(safe-area-inset-bottom));
+  background: linear-gradient(165deg, var(--page-base-a), var(--page-base-b));
+}
+.mf-cover > * {
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
+}
+
+/* Screen headers (founder, 2026-11-04): a screen's title sits on the same line as its back button, at the right, and the lines
+   under it are right-aligned too, on a phone and a laptop alike. Only a screen's first header that opens with a BackLink (`data-back`);
+   anything else in the header (a progress card, a row of buttons, filters) keeps the full width and its own alignment. */
+.screen > header:first-child:has(> [data-back]) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--spacing-sm);
+  align-items: center;
+}
+.screen > header:first-child:has(> [data-back]) > * {
+  grid-column: 1 / -1;
+}
+.screen > header:first-child:has(> [data-back]) > [data-back] {
+  grid-column: 1;
+  grid-row: 1;
+}
+.screen > header:first-child:has(> [data-back]) > :is(h1, :has(> h1), :has(> * > h1)) {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  justify-content: flex-end;
+  text-align: right;
+  min-width: 0;
+}
+.screen > header:first-child:has(> [data-back]) > p {
+  text-align: right;
+}
+/* A header's actions (PageHeader's `aside`): a line of their own at the right on a phone; the end of the title's line from the tablet up. */
+.screen > header:first-child:has(> [data-back]) > [data-aside] {
+  justify-self: end;
+}
+@media (min-width: 768px) {
+  .screen > header:first-child:has(> [data-back]):has(> [data-aside]) {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .screen > header:first-child:has(> [data-back]) > [data-aside] {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}
+
+/* App covers (founder, 2026-11-04, components/AppCover.tsx): an app screen's header is one rounded glass card. The back button sits at
+   its top left; the title and the helper text under it sit at the bottom, right-aligned; the header's actions sit on the helper's line at
+   its left (main action first, the gear right next to it). On a phone, when the two do not fit on one line, the actions take the bottom
+   left and the helper wraps above them at the right (wrap-reverse). The back button is not a child of the header, so the screen-header
+   grid above never applies inside the card. The cover picture (fx/CoverArt) is anchored right, behind the words, fading toward the left;
+   on a phone it spans the card at low strength so the words keep their contrast. */
+.app-cover {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  min-height: 160px;
+  padding: var(--spacing-sm) var(--spacing-md) var(--spacing-md);
+}
+/* The phone rule that starts a screen's first header 64px down (above) would pad the inside of the card; move it outside instead. */
+@media (max-width: 767.98px), (max-height: 479.98px) {
+  .screen > header.app-cover:first-child {
+    padding-top: var(--spacing-sm);
+    margin-top: 64px;
+  }
+}
+.app-cover-top {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.app-cover-top [data-back] {
+  margin-left: 0;
+}
+.app-cover-foot {
+  position: relative;
+  min-width: 0;
+  text-align: right;
+}
+.app-cover-title h1 {
+  overflow-wrap: anywhere;
+}
+.app-cover-row {
+  margin-top: var(--spacing-xs);
+  display: flex;
+  flex-wrap: wrap-reverse;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacing-xs) var(--spacing-sm);
+}
+.app-cover-actions {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  margin-right: auto;
+  text-align: left;
+}
+.app-cover-lede {
+  flex: 1 1 14rem;
+  min-width: 0;
+  text-align: right;
+}
+.app-cover-lede p {
+  text-align: right;
+}
+.app-cover-art {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.45;
+  -webkit-mask-image: linear-gradient(to left, black 25%, transparent 100%);
+  mask-image: linear-gradient(to left, black 25%, transparent 100%);
+}
+.app-cover-art > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+@media (min-width: 768px) and (min-height: 480px) {
+  .app-cover {
+    min-height: 200px;
+    padding: var(--spacing-md) var(--spacing-lg) var(--spacing-lg);
+  }
+  .app-cover-art {
+    left: auto;
+    width: 55%;
+    /* 0.72, not 0.8: Fund's and TV's helper line measured 4.43:1 at 0.8 (wave 18 roll-out). */
+    opacity: 0.72;
+    -webkit-mask-image: linear-gradient(to left, black 45%, transparent 100%);
+    mask-image: linear-gradient(to left, black 45%, transparent 100%);
+  }
+}
+/* More contrast: the words on the plain card, no picture behind them. Reduced transparency makes the card solid (the bg-card rules). */
+@media (prefers-contrast: more) {
+  .app-cover-art {
+    display: none;
+  }
+}
+
+
+/* Games (screens/Cards.tsx): the Play pill's arrow nudges forward and back when its cover is pointed at or focused, once per hover;
+   a mouse or the keyboard only, nothing under reduced motion. */
+.game-play-icon {
+  transition: transform 220ms var(--ease-open);
+}
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  a:hover > * .game-play-icon,
+  a:hover .game-play-icon {
+    animation: game-play-nudge 700ms var(--ease-open) 1;
+    transform: translateX(2px);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  a:focus-visible .game-play-icon {
+    transform: translateX(2px);
+  }
+}
+@keyframes game-play-nudge {
+  0% { transform: translateX(0) scale(1); }
+  40% { transform: translateX(5px) scale(1.15); }
+  70% { transform: translateX(-1px) scale(1); }
+  100% { transform: translateX(2px) scale(1); }
+}
+
+/* CloseButton (components/CloseButton.tsx): the X turns a quarter on hover or keyboard focus and springs back; still under reduced motion. */
+.close-btn-x {
+  transition: transform 320ms var(--ease-spring);
+}
+@media (prefers-reduced-motion: no-preference) {
+  @media (hover: hover) and (pointer: fine) {
+    .close-btn:hover .close-btn-x {
+      transform: rotate(90deg);
+    }
+  }
+  .close-btn:focus-visible .close-btn-x {
+    transform: rotate(90deg);
+  }
+}
+
+/* The laptop sidebar (components/TabBar.tsx) folds to its icons: --nav-w is its width, and everything beside it (the screen, the
+   condensed title, the reminders bubble, the privacy card) follows. The width glides; still under reduced motion. */
+:root {
+  --nav-w: 240px;
+}
+:root[data-nav='mini'] {
+  --nav-w: 76px;
+}
+.nav-side {
+  transition: width 260ms var(--ease-open);
+}
+.nav-fold-icon {
+  transition: transform 260ms var(--ease-spring);
+}
+/* The fold button sits half over the sidebar's right edge: near the top while open, at the foot while folded. Its 36px circle has a
+   44px hit area. */
+.nav-fold {
+  left: calc(var(--nav-w) - 18px);
+  top: calc(env(safe-area-inset-top) + 16px);
+  transition: left 260ms var(--ease-open), top 260ms var(--ease-open);
+}
+.nav-fold[data-mini] {
+  top: auto;
+  bottom: calc(env(safe-area-inset-bottom) + 96px);
+}
+.nav-fold::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .nav-fold:hover .nav-fold-icon {
+    transform: translateX(-2px);
+  }
+  .nav-side[data-mini] .nav-fold:hover .nav-fold-icon {
+    transform: translateX(2px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-side,
+  .nav-fold-icon {
+    transition: none;
+  }
+}
+
+/* Book3D and BookShelf (components/BookShelf.tsx): a book on a slight turn with its pages showing at the side; a mouse or the
+   keyboard turns it toward you and lifts it, then it settles back. Transform and opacity only; still on touch and under reduced motion. */
+.book3d {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  container-type: size;
+  perspective: 900px;
+  padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-xs) var(--spacing-xs);
+}
+/* Sized to fit the cell both ways: as wide as the cell allows, or as tall, whichever is smaller, always in the cover's own ratio, so a
+   cover is never stretched or cut. */
+.book3d-body {
+  position: relative;
+  display: block;
+  width: min(100cqw, 100cqh * 893 / 1263);
+  aspect-ratio: 893 / 1263;
+  transform-style: preserve-3d;
+  transform: rotateY(-18deg) rotateX(2deg);
+  transform-origin: 30% 50%;
+  transition: transform 520ms var(--ease-open);
+  filter: drop-shadow(10px 14px 14px color-mix(in oklab, var(--color-shadow) 45%, transparent));
+}
+.book3d-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 3px 8px 8px 3px;
+  transform: translateZ(10px);
+  backface-visibility: hidden;
+  background: var(--color-paper);
+}
+/* The block of pages: a strip of paper lines on the right edge, turned to face the side. */
+.book3d-pages {
+  position: absolute;
+  top: 2%;
+  bottom: 2%;
+  right: 0;
+  width: 20px;
+  transform-origin: right center;
+  transform: translateX(10px) rotateY(90deg) translateX(10px);
+  background: repeating-linear-gradient(90deg, #f6f2e8 0 1px, #e3ddd0 1px 2px);
+  border-radius: 0 2px 2px 0;
+}
+/* A soft light that slides over the cover as it turns. */
+.book3d-sheen {
+  position: absolute;
+  inset: 0;
+  transform: translateZ(11px);
+  border-radius: 3px 8px 8px 3px;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.22) 45%, transparent 60%);
+  background-size: 250% 100%;
+  background-position: 100% 0;
+  opacity: 0;
+  transition: opacity 520ms var(--ease-open), background-position 900ms var(--ease-open);
+  pointer-events: none;
+}
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .book3d-link:hover .book3d-body {
+    transform: rotateY(-4deg) rotateX(0deg) translateY(-6px) scale(1.03);
+  }
+  .book3d-link:hover .book3d-sheen {
+    opacity: 1;
+    background-position: 0 0;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .book3d-link:focus-visible .book3d-body {
+    transform: rotateY(-4deg) translateY(-6px) scale(1.03);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .book3d-body,
+  .book3d-sheen {
+    transition: none;
+  }
+}
+.book3d-link {
+  outline-offset: 4px;
+}
+/* A book's card in the shelf: its own colour as a gradient to the shade (like the metric cards), and a pool of light behind the book. */
+.book-card {
+  background:
+    radial-gradient(60% 45% at 50% 48%, color-mix(in oklab, #ffffff 16%, transparent), transparent 70%),
+    linear-gradient(150deg, color-mix(in oklab, var(--book-fill) 92%, #ffffff), color-mix(in oklab, var(--book-fill) 62%, var(--fill-shade)));
+  box-shadow: var(--shadow-toy-soft);
+}
+
+/* The flush book cards: the whole card is the book. A mouse or the keyboard tilts it toward you and lifts it, a light runs over the
+   cover, then it settles; still on touch and under reduced motion. */
+.book-shelf {
+  perspective: 1200px;
+}
+.book-card {
+  transform-style: preserve-3d;
+  transition: transform 520ms var(--ease-open), box-shadow 520ms var(--ease-open);
+}
+.book-card-cover .book3d-sheen {
+  transform: none;
+  border-radius: 0;
+}
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .book-card:hover {
+    transform: rotateY(-6deg) rotateX(3deg) translateY(-4px);
+  }
+  .book-card:hover .book3d-sheen {
+    opacity: 1;
+    background-position: 0 0;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .book-card:focus-visible {
+    transform: rotateY(-6deg) translateY(-4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .book-card {
+    transition: none;
+  }
+}
+
+/* ExpandButton (components/ExpandButton.tsx): the words are folded to nothing and slide out on hover or keyboard focus, laptop only. */
+.expand-btn-words {
+  display: inline-block;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0;
+  transition: max-width 320ms var(--ease-open), opacity 200ms ease, margin 320ms var(--ease-open);
+}
+@media (hover: hover) and (pointer: fine) {
+  .expand-btn:hover:not(:disabled) .expand-btn-words,
+  .expand-btn:focus-visible .expand-btn-words {
+    max-width: 160px;
+    opacity: 1;
+    margin-left: var(--spacing-xs);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .expand-btn-words {
+    transition: none;
+  }
+}
+/* Profile's cover keeps the name, picture and line on the left (founder, 2026-11-04); the other app covers stay right-aligned. */
+.app-cover-start .app-cover-foot,
+.app-cover-start .app-cover-lede,
+.app-cover-start .app-cover-lede p {
+  text-align: left;
+}
+.app-cover-start .app-cover-row {
+  justify-content: flex-start;
+}
+
+/* GuideLine (site/GuideLine.tsx): the guide's line written by hand (Caveat, self-hosted), inside a drawn blob; on a wide screen the guide
+   stands in the page's margin, outside the reading column. */
+@font-face {
+  font-family: 'Caveat';
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: swap;
+  src: url('/fonts/caveat-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+.guide-hand {
+  font-family: 'Caveat', var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+@media (min-width: 1200px) {
+  .guide-left {
+    margin-left: calc(-1 * var(--spacing-2xl));
+  }
+  .guide-right {
+    margin-right: calc(-1 * var(--spacing-2xl));
+  }
+}
+
+/* FocusPill dot (the folded sidebar): a ring ripples out from the circle once a second while the clock runs; still under reduced motion. */
+.focus-dot-ripple {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid currentColor;
+  opacity: 0;
+  animation: focus-dot-ripple 1s var(--ease-open) 1;
+  pointer-events: none;
+}
+@keyframes focus-dot-ripple {
+  from {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.45);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .focus-dot-ripple {
+    display: none;
+  }
+}
+
+/* Breathe before a session (components/FocusRounds.tsx): the per-count button on the left, the slider, the total time button on the right;
+   the picked one wears the panel's accent ring. On a phone the two buttons share a row above the slider. */
+.mf-time-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  min-height: 44px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-inner);
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 200ms ease, background-color 200ms ease;
+}
+.mf-time-btn[aria-pressed='true'] {
+  border-color: var(--mf-a-text);
+  background: rgba(255, 255, 255, 0.06);
+}
+.mf-time-btn[aria-pressed='false'] .mf-time {
+  opacity: 0.6;
+}
+@media (hover: hover) and (pointer: fine) {
+  .mf-time-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+.mf-time-cap {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mf-dim);
+}
+.mf-pace .mf-time {
+  min-width: 0;
+}
+.mf-dial-breathe {
+  grid-template-columns: 1fr 1fr;
+}
+.mf-dial-breathe .mf-ruler {
+  grid-column: 1 / -1;
+  order: 2;
+}
+.mf-dial-breathe .mf-time-wrap {
+  order: 1;
+}
+.mf-dial-breathe .mf-pace {
+  order: 0;
+  justify-self: center;
+}
+@media (width >= 40rem) {
+  .mf-dial-breathe {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .mf-dial-breathe .mf-ruler {
+    grid-column: auto;
+    order: 1;
+  }
+  .mf-dial-breathe .mf-time-wrap {
+    order: 2;
+  }
+}
+
+/* BackLink (components/PageHeader.tsx), every back button in the app: on hover or keyboard focus the round stud lifts a little and takes
+   the page's tint, and the chevron leans back the way it goes, then springs home. Mouse and keyboard only; still under reduced motion. */
+.back-link-dot {
+  transition: transform 260ms var(--ease-spring), background-color 200ms ease, box-shadow 260ms var(--ease-open);
+}
+.back-link-chev {
+  transition: transform 260ms var(--ease-spring);
+}
+@media (prefers-reduced-motion: no-preference) {
+  @media (hover: hover) and (pointer: fine) {
+    .back-link:hover .back-link-dot {
+      transform: translateY(-1px) scale(1.06);
+      background-color: color-mix(in oklab, var(--tint, var(--color-ink)) 16%, var(--card-strong));
+    }
+    .back-link:hover .back-link-chev {
+      transform: translateX(-3px);
+    }
+  }
+  .back-link:focus-visible .back-link-dot {
+    transform: scale(1.06);
+  }
+  .back-link:focus-visible .back-link-chev {
+    transform: translateX(-3px);
+  }
+}
+
+/* Breathe and focus sizes itself by the panel's own width, not the screen's (2026-11-04): beside the laptop sidebar on a tablet the panel
+   is about as narrow as a phone, so under 600px of panel it takes the phone layout whatever the screen: the four tabs across the top and
+   the main button full width under them, Breathe's two time buttons sharing a row above the ruler, the pickers two to a row, and the five
+   quick lengths (1, 3, 5, 10 and 25 minutes) on one even row, never four and a lone fifth; from 600px the four sit beside the pickers and
+   25 is left out. Under 300px (a 320 phone) the tabs, the big times and the pills step down a little so nothing passes the panel's edge. */
+.mf-panel {
+  container: mf / inline-size;
+}
+@container mf (width < 600px) {
+  .mf-top {
+    flex-wrap: wrap;
+  }
+  .mf-top > .mf-tabs {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+  .mf-top > .mf-start {
+    order: 2;
+    flex: 1 1 100%;
+  }
+  .mf-dial,
+  .mf-dial-breathe {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .mf-dial:not(.mf-dial-breathe) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mf-dial .mf-time-wrap {
+    order: -1;
+  }
+  .mf-dial-breathe .mf-ruler {
+    grid-column: 1 / -1;
+    order: 2;
+  }
+  .mf-dial-breathe .mf-time-wrap {
+    order: 1;
+  }
+  .mf-sets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .mf-quick {
+    grid-column: 1 / -1;
+  }
+  .mf-quick-lengths {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .mf-quick-lengths .mf-mini {
+    min-width: 0;
+    padding: 0;
+    white-space: nowrap;
+  }
+}
+@container mf (width >= 600px) {
+  .mf-quick-extra {
+    display: none;
+  }
+}
+.mf-dial-breathe .mf-time-btn {
+  width: 100%;
+  min-width: 0;
+}
+.mf-dial-breathe .mf-time-btn .mf-time {
+  min-width: 0;
+  font-size: clamp(32px, 14cqi, 44px);
+}
+@container mf (width < 300px) {
+  .mf-tabs {
+    gap: 0;
+  }
+  .mf-tabs > button {
+    padding: 0 2px;
+    font-size: 13px;
+  }
+  .mf-quick-lengths .mf-mini {
+    font-size: 12px;
   }
 }

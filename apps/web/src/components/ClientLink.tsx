@@ -3,7 +3,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, Link2Off, RefreshCw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
-import { PortalSecurityCard } from './AgencyLifecycle';
 import { Button } from './Button';
 import { Fold } from './Fold';
 import { MoreMenu } from './MoreMenu';
@@ -15,7 +14,6 @@ const COPY = {
   off: 'Switch the link on to share it. Until then nobody can open this dashboard.',
   on: 'Anyone with this link sees the parts switched on below. They need no account.',
   never: 'These stay private, whatever you switch on.',
-  noPassword: 'Anyone with the link can open this. Set a password.',
   freshTitle: 'Make a fresh link?',
   freshHint: 'A fresh link closes the old one at once. Send the new one to your client.',
   failed: 'That did not save. Try again.',
@@ -24,9 +22,10 @@ const COPY = {
 const ALL_SWITCHES = [...PORTAL_PARTS, ...PORTAL_ACTIONS];
 
 /**
- * The client link, summed up in one row: on or off, the password, how many parts the client sees, and Copy link. What they see and
- * the password each open in their own sheet; a fresh link and the preview sit in More. What is off never leaves the server; the
- * "Never shown" list in the switches sheet says what is never shown at all. The no-password warning always stays in sight.
+ * The client link, summed up in one row: on or off, the password, how many parts the client sees, and Copy link. What they see opens
+ * in its own sheet; a fresh link and the preview sit in More. What is off never leaves the server; the "Never shown" list in the
+ * switches sheet says what is never shown at all. The password itself is the `ClientPassword` card the client page draws beside this.
+ * The sheets sit beside the card, not inside it: a blurred card is the containing block for anything fixed inside it.
  */
 export function ClientLink({ client, life }: { client: AgencyClient; life: ClientLifecycle }) {
   const qc = useQueryClient();
@@ -37,7 +36,7 @@ export function ClientLink({ client, life }: { client: AgencyClient; life: Clien
   const shown = ALL_SWITCHES.filter((p) => client.portal[p.key]).length;
   const [copied, setCopied] = useState(false);
   const [manual, setManual] = useState(false);
-  const [sheet, setSheet] = useState<null | 'see' | 'password' | 'fresh'>(null);
+  const [sheet, setSheet] = useState<null | 'see' | 'fresh'>(null);
   const timers = useRef<number[]>([]);
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
 
@@ -59,6 +58,7 @@ export function ClientLink({ client, life }: { client: AgencyClient; life: Clien
   const summary = [on ? 'on' : 'off', pwSet ? 'Password set' : 'No password', `${shown} of ${ALL_SWITCHES.length} parts shown`].join(' · ');
 
   return (
+    <>
     <div className="rounded-card bg-card p-md shadow-toy-soft">
       <div className="flex flex-wrap items-center gap-sm">
         <div className="min-w-0 flex-1">
@@ -88,11 +88,6 @@ export function ClientLink({ client, life }: { client: AgencyClient; life: Clien
         />
       </div>
 
-      {!pwSet && (
-        <p role="note" className="mt-sm m-0 rounded-tile p-sm text-[14px] font-bold" style={{ background: 'var(--tint-yellow)' }}>
-          {COPY.noPassword}
-        </p>
-      )}
       {!on && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{COPY.off}</p>}
 
       {on && manual && (
@@ -108,15 +103,13 @@ export function ClientLink({ client, life }: { client: AgencyClient; life: Clien
         <Button size="sm" variant="outline" onClick={() => setSheet('see')}>
           Change what they see
         </Button>
-        <Button size="sm" variant="outline" onClick={() => setSheet('password')}>
-          {pwSet ? 'Password' : 'Set a password'}
-        </Button>
       </div>
       {send.isError && (
         <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
           {COPY.failed}
         </p>
       )}
+    </div>
 
       <Sheet open={sheet === 'see'} onClose={() => setSheet(null)} title="What your client sees">
         <Toggle compact on={on} onChange={(v) => send.mutate({ on: v })} disabled={send.isPending} label="Client link" hint={on ? COPY.on : COPY.off} />
@@ -154,13 +147,6 @@ export function ClientLink({ client, life }: { client: AgencyClient; life: Clien
         </div>
       </Sheet>
 
-      <Sheet open={sheet === 'password'} onClose={() => setSheet(null)} title={`Password for ${client.name}`}>
-        <PortalSecurityCard client={client} life={life} />
-        <div className="mt-md pb-xl">
-          <Button onClick={() => setSheet(null)}>Done</Button>
-        </div>
-      </Sheet>
-
       <Sheet open={sheet === 'fresh'} onClose={() => setSheet(null)} title={COPY.freshTitle}>
         <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.freshHint}</p>
         <div className="mt-md flex flex-wrap gap-xs pb-xl">
@@ -178,6 +164,6 @@ export function ClientLink({ client, life }: { client: AgencyClient; life: Clien
           </Button>
         </div>
       </Sheet>
-    </div>
+    </>
   );
 }

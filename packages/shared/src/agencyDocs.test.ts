@@ -7,7 +7,9 @@ import {
   contractAsText,
   contractGapNote,
   contractGaps,
+  contractVarGroups,
   contractVarsFor,
+  contractVarsUsed,
   fillContractText,
   emptyProfile,
   contractParties,
@@ -297,6 +299,35 @@ describe('a document filled from the client and the profile', () => {
     const doc = { ...agencyDocStarter('brief'), vars: { ...contractVarsFor(profile, client), sessionDate: '3 Nov 2026' } };
     expect(contractAsText(doc, { audience: 'client' })).not.toContain('WHAT WE AGREED');
     expect(contractAsText(doc, { audience: 'owner' })).toContain('Not written yet.');
+  });
+});
+
+describe('the variables a document uses, for the Fill in the details form', () => {
+  const sections = (bodies: string[], extra: Partial<ContractDoc['sections'][number]>[] = []) => [...bodies.map((body, i) => ({ id: `s${i}`, heading: '', kind: 'text' as const, body })), ...extra.map((e, i) => ({ id: `x${i}`, heading: '', kind: 'text' as const, body: '', ...e }))];
+  it('lists every variable once, in the order its words name it, the either forms included', () => {
+    const doc = { sections: sections(['{{client}} and {{brandName?$ owns|Our team owns}} it.', 'Again {{client}}, {{formatName|}} and {{pastClients?brands such as $|different}}.', '{{packageExample}} in {{currencyWords}}, {{notAVar}}']) };
+    expect(contractVarsUsed(doc)).toEqual(['client', 'brandName', 'formatName', 'pastClients']);
+  });
+  it('reads questions, the words after a table and a signature block', () => {
+    const doc = { sections: sections(['{{brands}}'], [{ kind: 'brief', questions: [{ id: 'q', label: 'For {{clientContact}}?', options: [], multi: false, other: false, text: true }] }, { tail: '{{deliveryDate}}' }, { kind: 'signatures' }]) };
+    expect(contractVarsUsed(doc)).toEqual(['brands', 'clientContact', 'deliveryDate', 'provider', 'providerDesignation']);
+  });
+  it('groups them as your business, the client and this document only, each in reading order', () => {
+    const doc = { sections: sections(['{{trialFee}} {{client}} {{provider}} {{providerEmail2}} {{clientAddress}}']) };
+    expect(contractVarGroups(doc)).toEqual([
+      { from: 'profile', vars: [{ key: 'provider', label: 'Your name', optional: false }, { key: 'providerEmail2', label: 'Your second email', optional: true }] },
+      { from: 'client', vars: [{ key: 'client', label: 'Client', optional: false }, { key: 'clientAddress', label: 'Client address', optional: false }] },
+      { from: 'typed', vars: [{ key: 'trialFee', label: 'Trial fee, if any', optional: false }] },
+    ]);
+    expect(contractVarGroups({ sections: [] })).toEqual([]);
+  });
+  it('the Trial agreement asks for its parties, its words and the client, never the currency', () => {
+    const trial = CONTRACT_TEMPLATES.find((t) => t.key === 'trial')!.doc;
+    const used = contractVarsUsed(trial);
+    expect(used.slice(0, 7)).toEqual(['provider', 'providerBusiness', 'providerBrand', 'providerAddress', 'providerEmail', 'providerEmail2', 'providerPhones']);
+    for (const k of ['client', 'clientAddress', 'brands', 'clientContact', 'formatNameInline', 'brandName', 'formatName', 'pastClients', 'jurisdiction', 'providerDesignation']) expect(used, k).toContain(k);
+    expect(used).not.toContain('currencyWords');
+    expect(new Set(used).size).toBe(used.length);
   });
 });
 

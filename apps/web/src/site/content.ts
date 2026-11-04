@@ -17,7 +17,7 @@ export const FEATURES: Record<string, FeatureCopy> = {
   home: {
     tagline: 'Your numbers, your day, and a door into everything.',
     pitch: 'Home opens with a short brief: three signals and three next steps, worked out by plain rules, not an AI, so it costs nothing.',
-    more: ['Under it sit your numbers, water and reminders.', 'One line for the day: a thought from a philosopher, then a line written for the app, never repeating for about a year.', 'Every number links to the app it comes from.'],
+    more: ['Under it sit your numbers, water and reminders.', 'One line for the day: a thought from a philosopher, then a line written for the app, never repeating for about a year.', 'Every number links to the app it comes from.', 'A Books section opens the founder’s three books and their courses.'],
     steps: ['Open Home and read the brief.', 'Take the next step it suggests, or open any number.', 'Come back tomorrow for a new line.'],
     relationships: ['servant_leader', 'friendship', 'parent_child', 'lover_partner', 'self', 'guru', 'divine'],
   },
@@ -31,7 +31,7 @@ export const FEATURES: Record<string, FeatureCopy> = {
   today: {
     tagline: 'Three small boxes. One better day.',
     pitch: 'Check in, do one small act, tick one task: that is the whole daily ask. Every tick pays xp, and the check-in pays points you can spend.',
-    more: ['A task has a do date, an optional due date and a priority from P0 (do now) to P3 (whenever).', 'It can have a time and a length, repeat, hold subtasks, remind you and start a focus timer.', 'Plan my week suggests a day for each task that has none, spread so no day is overloaded, and says how strong the week looks. Nothing changes until you keep it.', 'Tasks with a time show as blocks, with the free time between.', 'Flag a task to bring it to your next review.', 'A private link can show your tasks in your own calendar.', 'A not to do list keeps a streak for each thing you stay away from.'],
+    more: ['A task has a do date, an optional due date and a priority from P0 (do now) to P3 (whenever).', 'Say what kind of day it is, like deep work, family or low energy. Sort by context and, inside each priority, that day’s pillar comes first.', 'The kinds of day come from Shubham Aggarwal’s books, and each one says why its pillar leads.', 'It can have a time and a length, repeat, hold subtasks, remind you and start a focus timer.', 'Plan my week suggests a day for each task that has none, spread so no day is overloaded, and says how strong the week looks. Nothing changes until you keep it.', 'Tasks with a time show as blocks, with the free time between.', 'Flag a task to bring it to your next review.', 'A private link can show your tasks in your own calendar.', 'A not to do list keeps a streak for each thing you stay away from.'],
     steps: ['Open the app and check in.', 'Do the small act for your weakest pillar.', 'Plan a task or the whole week, then tick each on its day and watch the pyramid light up.'],
     relationships: ['servant_leader', 'friendship', 'parent_child', 'lover_partner', 'self', 'guru', 'divine'],
   },
@@ -45,6 +45,7 @@ export const FEATURES: Record<string, FeatureCopy> = {
   school: {
     tagline: 'Learn with a cohort, not alone.',
     pitch: 'Programs with lessons, assignments and a mentor who reads your work. Completion is a decision against the criteria, never a timer running out.',
+    more: ['Three courses come from Shubham Aggarwal’s books: The Relationship Method and the two Dictionaries of Mistakes.', 'Each lesson marks what comes from the book and gives you one thing to try.'],
     steps: ['Pick a program and a cohort date.', 'Do the lessons, submit the assignments, join the sessions.', 'Get feedback, finish, and move straight into Work.'],
     relationships: ['guru', 'servant_leader', 'self'],
     listing: 'program',
@@ -123,7 +124,7 @@ export const FEATURES: Record<string, FeatureCopy> = {
   },
   life: {
     tagline: 'Five areas, one picture.',
-    pitch: 'Physical, financial, emotional, mental and spiritual, each scored from what you already log, each part opening the screen where you act on it. Private to you.',
+    pitch: 'Physical, financial, mental, emotional and spiritual, each scored from what you already log, each part opening the screen where you act on it. Private to you.',
     steps: ['Keep logging what you log.', 'See the five scores and the week-on-week trend.', 'Tap the weakest part and go there.'],
     relationships: ['self', 'servant_leader', 'parent_child', 'lover_partner', 'guru', 'divine'],
   },
@@ -299,13 +300,53 @@ export function featuresForRelationship(key: RelationshipKey): AppModule[] {
 export const LIFE_AREA_FEATURES: Record<LifeAreaKey, string[]> = {
   physical: ['run', 'wellbeing', 'sleep', 'mindful', 'life', 'store'],
   financial: ['finance', 'shop', 'work', 'army', 'agency', 'win', 'fund', 'store', 'audience', 'content'],
-  emotional: ['mood', 'journal', 'companion', 'discover', 'coaching', 'bond', 'community', 'party', 'circles', 'cards', 'profile'],
   mental: ['stress', 'school', 'knowledge', 'library', 'tools', 'reviews', 'tv'],
+  emotional: ['mood', 'journal', 'companion', 'discover', 'coaching', 'bond', 'community', 'party', 'circles', 'cards', 'profile'],
   spiritual: ['today', 'tower', 'mindful', 'club', 'leaderboard', 'rewards'],
 };
 export function featuresForLifeArea(key: LifeAreaKey): AppModule[] {
   return LIFE_AREA_FEATURES[key].map((k) => MODULE_BY_KEY[k]).filter((m): m is AppModule => Boolean(m && m.key in FEATURES));
 }
+
+/**
+ * The eight chapter titles of each of the founder's books (`BOOKS` in shared), from each book's own contents, for the public
+ * Books page. The book's own words; nothing here is written for it.
+ */
+export const BOOK_CHAPTERS: Readonly<Record<string, readonly string[]>> = {
+  'the-relationship-method': [
+    'The Invisible Weight',
+    'The Bucket Model',
+    'Energy in Storage',
+    'The 7 Relationships Pyramid',
+    'The Spiritual Infrastructure',
+    'The Internal Core',
+    'The Social Ecosystem',
+    'Living in Perpetual Flow',
+  ],
+  'dictionary-of-mistakes-for-creators': [
+    'The Invisible Mistake Loop',
+    'Identity & Authenticity Mistakes',
+    'Communication & Speaking Mistakes',
+    'Consistency, Procrastination & Compounding',
+    'Imposter Syndrome & Self-Doubt',
+    'Creator Relationships & Social Capital',
+    'Attention, Positioning & Growth Mistakes',
+    'Monetization & Leverage Mistakes',
+  ],
+  'dictionary-of-mistakes-for-20s': [
+    'The Invisible Mistake Loop: Why Awareness Isn’t Enough',
+    'Health: The Slow Decay of the Infinite Resource',
+    'Wealth: Leaks, Leads, and Behavioral Levers',
+    'Connections: Relationships as Pattern Problems',
+    'Career: The Transition from Employee to Leader',
+    'Creation: Mistakes in the Creator Economy',
+    'Identity: The Error of the Static Self',
+    'The Anti-Mistake OS: Living by Design',
+  ],
+};
+
+/** Where "Read the course in the app" goes: the Book page inside the app, through sign-in for a visitor. */
+export const BOOK_PAGE = '/book';
 
 export const BRAND_PITCH = {
   tagline: 'For brands and agencies',
@@ -325,7 +366,7 @@ export const SITE_FAQ: { q: string; a: string }[] = [
   { q: 'I don’t have time for another app.', a: 'That is the point of it. The daily ask is three moves: check in, do one small act, tick one task. It takes a few minutes. The rest is there when you want it, and switched off when you don’t.' },
   { q: 'Who sees my Discover results?', a: 'Only you. Your answers never reach brands, staff, the leaderboard or a life coach. You choose whether your results shape your next steps and whether the assistant may read a short summary. It is not an IQ test or a diagnosis: it is a self-discovery quiz that compares you only with your own scale.' },
   { q: 'Who sees my journal?', a: 'Only you. Your journal and wellbeing numbers never reach brands, staff, the leaderboard or Club selection. The assistant reads the journal only when you ask it to, and only through models that keep nothing. A life coach never sees it.' },
-  { q: 'I’m not a creator. Is it for me?', a: 'Yes, if you are 18 or over. The seven relationships are for everyone: work, friends, family, love, yourself, teachers and faith. The creator apps, like the Shop and Win, stay off until you want them.' },
+  { q: 'I’m not a creator. Is it for me?', a: 'Yes, if you are 18 or over. The seven relationships are for everyone: servitude, friends, family, love, yourself, teachers and faith. The creator apps, like the Shop and Win, stay off until you want them.' },
   { q: 'Apps like this never stick for me.', a: 'That isn’t you. Most apps track one part of life and forget the other six. Here each tick climbs a pillar you chose, toward a foundation you wrote. And a task can only be ticked from its do date, so the plan stays honest.' },
   { q: 'Won’t it be too many apps?', a: 'Only a few are on at the start. A short chat asks what you want and switches on up to five more that fit you. You can switch any of them on or off later, under the Profile tab.' },
   { q: 'Is the pay real?', a: 'It is real, and it is careful. Win pays per verified view, not per follower, and a reviewer checks before anything pays. Everything that pays out has a wait or a person who checks it. Points work today; money checkout turns on when payments go live.' },

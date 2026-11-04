@@ -15,7 +15,7 @@ interface Licences {
   packages: Pkg[];
 }
 
-const FONTS = ['Urbanist', 'Fraunces', 'JetBrains Mono'];
+const FONTS = ['Geist', 'Inter', 'Geist Mono', 'Caveat'];
 /** The licence's name for the row, without a web address some packages put in it (the full text, address and all, is inside the fold). */
 const licenceName = (raw: string): string => raw.replace(/[:\s]*https?:\/\/\S+/g, '').trim() || 'no licence named';
 

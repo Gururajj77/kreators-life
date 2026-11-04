@@ -5,7 +5,7 @@ import { Link } from 'react-router';
 import { Button } from '../components/Button';
 import { InterestPicker } from '../components/InterestPicker';
 import { LinksEditor } from '../components/LinksEditor';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Toggle } from '../components/Toggle';
 import { api } from '../lib/api';
@@ -106,12 +106,13 @@ function ProfileView({ user }: { user: User }) {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Profile</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">What brands, hosts and other people see. Your journal and wellbeing never appear here.</p>
+      <AppCover
+        back={{ to: '/apps', label: 'Apps' }}
+        title="Profile"
+        lede="What brands, hosts and other people see. Your journal and wellbeing never appear here."
+      >
         {link ? (
-          <div className="mt-sm rounded-tile bg-card p-sm shadow-toy-soft">
+          <div className="rounded-tile bg-card p-sm shadow-toy-soft">
             <p className="m-0 text-[14px] font-bold">Your public page</p>
             <p className="m-0 break-all text-[16px] font-semibold">{link}</p>
             <div className="mt-sm flex flex-wrap gap-xs">
@@ -125,9 +126,9 @@ function ProfileView({ user }: { user: User }) {
             </div>
           </div>
         ) : (
-          <p className="mt-sm m-0 rounded-tile bg-r3 p-sm text-[14px] font-bold text-ink-fixed">Pick a page name below so people can find you.</p>
+          <p className="m-0 rounded-tile bg-r3 p-sm text-[14px] font-bold text-ink-fixed">Pick a page name below so people can find you.</p>
         )}
-      </header>
+      </AppCover>
 
       <form
         className="mt-lg grid grid-cols-1 gap-md rounded-card bg-card p-md shadow-toy-soft"

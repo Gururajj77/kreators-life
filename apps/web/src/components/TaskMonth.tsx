@@ -71,9 +71,9 @@ export function TaskMonth({ today }: { today: string }) {
 
       {q.isPending && <Skeleton className="mt-sm h-[320px]" />}
       {q.isError && (
-        <div role="alert" className="mt-sm">
-          <p className="m-0 text-[14px] font-bold">The calendar did not load.</p>
-          <Button variant="outline" size="sm" className="mt-xs" onClick={() => q.refetch()}>
+        <div role="alert" className="mt-sm flex flex-wrap-reverse items-center justify-between gap-sm">
+          <p className="m-0 min-w-0 flex-1 basis-[60%] text-[14px] font-bold">The calendar did not load.</p>
+          <Button variant="outline" size="sm" onClick={() => q.refetch()}>
             Try again
           </Button>
         </div>
@@ -220,8 +220,18 @@ function DaySheet({ day, tasks, projects, today, queue, onClose }: { day: string
   );
 }
 
+/**
+ * "Add a task" under Daily's list: the same form the month's day sheet uses, with the do date set to the person's today. The projects
+ * come from this month's answer (the same read as the calendar), fetched when the fold first opens.
+ */
+export function AddTaskForm({ today, onAdded, autoFocus = false }: { today: string; /** Told the title and do date once a task is saved (Daily closes its fold and says so). */ onAdded?: (title: string, doDate: string | null) => void; autoFocus?: boolean }) {
+  const month = today.slice(0, 7);
+  const q = useAuthed(['today', 'month', month, today], () => api.todayMonth(month, today));
+  return q.data ? <AddOnDay day={today} today={today} projects={q.data.projects} onAdded={onAdded} autoFocus={autoFocus} /> : <Skeleton className="h-[240px]" />;
+}
+
 /** The add form: a title, the project it holds up, and the ordinary task plan with the do date set to the day. It goes through the same route the pillar page uses. */
-function AddOnDay({ day, today, projects }: { day: string; today: string; projects: MonthProject[] }) {
+function AddOnDay({ day, today, projects, onAdded, autoFocus = false }: { day: string; today: string; projects: MonthProject[]; onAdded?: (title: string, doDate: string | null) => void; autoFocus?: boolean }) {
   const refresh = useRefreshAll();
   const [title, setTitle] = useState('');
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '');
@@ -234,6 +244,7 @@ function AddOnDay({ day, today, projects }: { day: string; today: string; projec
     },
     onSuccess: () => {
       refresh();
+      onAdded?.(title.trim(), plan.doDate || null);
       setTitle('');
       setPlan(planOf(null, day));
     },
@@ -241,9 +252,9 @@ function AddOnDay({ day, today, projects }: { day: string; today: string; projec
 
   if (projects.length === 0) {
     return (
-      <div className="rounded-tile bg-paper p-sm">
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.noProject}</p>
-        <Link to="/tower" className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+      <div className="flex flex-wrap-reverse items-center justify-between gap-sm rounded-tile bg-paper p-sm">
+        <p className="m-0 min-w-0 flex-1 basis-[60%] text-[14px] font-semibold text-ink-soft">{COPY.noProject}</p>
+        <Link to="/tower" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
           Set up a pillar
         </Link>
       </div>
@@ -259,7 +270,7 @@ function AddOnDay({ day, today, projects }: { day: string; today: string; projec
     >
       <label className="block">
         <span className="block text-[14px] font-bold">What is the task?</span>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} required placeholder="One clear thing you can finish" className="mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]" />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus={autoFocus} maxLength={140} required placeholder="One clear thing you can finish" className="mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]" />
       </label>
       <label className="block">
         <span className="block text-[14px] font-bold">Which project does it hold up?</span>

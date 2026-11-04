@@ -17,7 +17,7 @@ import {
 } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Settings } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { AgencyContracts, usePaperSegment } from '../components/AgencyContracts';
 import { AnimatedIcon } from '../components/AnimatedIcon';
@@ -29,6 +29,8 @@ import { ClientSheet } from '../components/ClientSheet';
 import { DeliverableSheet } from '../components/DeliverableSheet';
 import { Fold } from '../components/Fold';
 import { Segmented } from '../components/fx/Segmented';
+import { TabRow } from '../components/TabRow';
+import { TeamInvites, useMyTeams, MY_TEAMS_KEY } from '../components/TeamInvites';
 import { Icon } from '../components/Icon';
 import { KanbanBoard } from '../components/KanbanBoard';
 import { Pager, usePage } from '../components/Pager';
@@ -44,13 +46,20 @@ import { bento } from '../lib/bento';
 import { prettyDate } from '../lib/date';
 import { useAuthed } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
+import { lazyNamed } from '../lib/lazy';
+import { AgencyCanContext, agencyCanFor, setAgencyTeam, useAgencyTeam, useAgencyCan } from '../lib/agencyWorkspace';
+import { TEAM_ROLE_META, type MyTeam, type TeamTab } from '@kreators/shared';
 
-/** The four tabs. Settings is not one of them: it opens from the gear in the header and is still `?tab=settings`. */
+const AgencyTeam = lazyNamed(() => import('../components/AgencyTeam'), 'AgencyTeam');
+const ClientMemberView = lazyNamed(() => import('../components/AgencyTeam'), 'ClientMemberView');
+
+/** The five tabs. Settings is not one of them: it opens from the gear in the header and is still `?tab=settings`. Team is the owner's only. */
 const TABS = [
   { value: 'overview', label: 'Overview' },
   { value: 'pipeline', label: 'Pipeline' },
   { value: 'clients', label: 'Clients' },
   { value: 'paperwork', label: 'Paperwork' },
+  { value: 'team', label: 'Team' },
 ] as const;
 type TabKey = (typeof TABS)[number]['value'] | 'settings';
 /** Old links had a tab for invoices and one for agreements; they now land on Paperwork with that segment chosen. */
@@ -74,13 +83,56 @@ const comingDay = (d: AgencyDeliverable) => (d.publishDate ? `Goes live ${pretty
  */
 export function Agency() {
   const [params, setParams] = useSearchParams();
-  const tabRaw = params.get('tab') ?? 'overview';
-  const tab: TabKey = tabRaw === 'settings' ? 'settings' : (TABS.find((t) => t.value === tabRaw)?.value ?? (OLD_TABS[tabRaw] ? 'paperwork' : 'overview'));
+  const qc = useQueryClient();
+  // Whose Agency this is: the person's own, or a team they joined (`?team=<row id>`, kept in the address so a reload or a link keeps it).
+  const teamParam = params.get('team') ?? '';
+  const teamsQ = useMyTeams();
+  const teams = teamsQ.data?.teams ?? [];
+  const { team: workingOn, gone } = useAgencyTeam();
+  const row: MyTeam | null = teamParam ? (teams.find((t) => t.id === teamParam) ?? null) : null;
+  const member = row && row.status === 'active' && row.id !== gone ? row : null;
+  // The header goes on only for a staff role; a client member reads their own view from /me/teams instead.
+  const wanted = member && member.role !== 'client' ? member.id : null;
+  const deciding = Boolean(teamParam) && teamsQ.isPending;
+  const lost = Boolean(teamParam) && teamsQ.isSuccess && !row;
+  useLayoutEffect(() => {
+    if (deciding || workingOn === wanted) return;
+    // Another Agency's answers must never show under this one: drop them all before the switch.
+    qc.removeQueries({ queryKey: ['agency'] });
+    setAgencyTeam(wanted);
+  }, [deciding, wanted, workingOn, qc]);
+  // The server said this team is gone (removed or left): look again, so the switcher and the page follow.
+  useEffect(() => {
+    if (gone) void qc.invalidateQueries({ queryKey: MY_TEAMS_KEY });
+  }, [gone, qc]);
+  const access = member && member.role !== 'client' ? member.access : null;
+  const can = agencyCanFor(access);
+  const tabs = TABS.filter((t) => (access ? t.value !== 'team' && access[t.value as TeamTab] !== 'off' : true));
+  const tabRaw = params.get('tab') ?? (access ? (tabs[0]?.value ?? 'overview') : 'overview');
+  const tab: TabKey =
+    tabRaw === 'settings' && !access ? 'settings' : (tabs.find((t) => t.value === tabRaw)?.value ?? (OLD_TABS[tabRaw] && tabs.some((t) => t.value === 'paperwork') ? 'paperwork' : (tabs[0]?.value ?? 'overview')));
   const [seg] = usePaperSegment();
   const [addClient, setAddClient] = useState(false);
   const [adding, setAdding] = useState(false);
-  const clientsQ = useAuthed(['agency', 'clients-all'], () => api.agency('csize=100'), tab === 'pipeline');
+  const [inviting, setInviting] = useState(false);
+  const ready = !deciding && workingOn === wanted;
+  const clientsQ = useAuthed(['agency', 'clients-all'], () => api.agency('csize=100'), ready && tab === 'pipeline' && !(member?.role === 'client'));
   const noClients = clientsQ.isSuccess && (clientsQ.data?.clients.length ?? 0) === 0;
+  const active = teams.filter((t) => t.status === 'active');
+
+  /** Switch whose Agency this is. The tab goes back to the first one, since another Agency may not open the same tabs. */
+  const pickTeam = (id: string) => {
+    setAdding(false);
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        for (const k of ['team', 'tab', 'agseg']) next.delete(k);
+        if (id) next.set('team', id);
+        return next;
+      },
+      { replace: true, preventScrollReset: true },
+    );
+  };
 
   /** Go to a tab, and on Paperwork to one kind of paper, in one change of the URL (two setters in a row would lose the first). */
   const goTab = (t: TabKey, paper?: 'invoices' | 'agreements' | 'other') => {
@@ -88,7 +140,7 @@ export function Agency() {
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev);
-        if (t === 'overview') next.delete('tab');
+        if (t === 'overview' && !access) next.delete('tab');
         else next.set('tab', t);
         if (paper) next.set('agseg', paper);
         return next;
@@ -103,8 +155,22 @@ export function Agency() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabRaw]);
 
-  const primary =
-    tab === 'overview' || tab === 'clients' ? (
+  const primary = access ? (
+    // A team member gets the one main thing only where they may do it, and never Add client.
+    tab === 'pipeline' && can.can('pipeline', 'edit') ? (
+      <Button size="sm" plusToX disabled={noClients} onClick={() => setAdding(true)}>
+        Add deliverable
+      </Button>
+    ) : tab === 'paperwork' && seg !== 'other' && can.can('paperwork', 'edit') ? (
+      <Button size="sm" plusToX onClick={() => setAdding(true)}>
+        {seg === 'invoices' ? 'New invoice' : 'New agreement'}
+      </Button>
+    ) : null
+  ) : member?.role === 'client' ? null : tab === 'team' ? (
+    <Button size="sm" plusToX expanded={inviting} onClick={() => setInviting(true)}>
+      Invite member
+    </Button>
+  ) : tab === 'overview' || tab === 'clients' ? (
       <Button size="sm" onClick={() => setAddClient(true)}>
         <AnimatedIcon name="userPlus" size={18} />
         Add client
@@ -124,53 +190,98 @@ export function Agency() {
     ) : null;
   // The other documents keep their own New document button inside the list, so the header has none on that segment.
 
+  const clientRow = member?.role === 'client' ? member : null;
+  const title = member ? member.agency.name : 'Agency';
+  const lede = clientRow ? `Your work with ${member!.agency.name}, read only.` : member ? `You work here as ${aWord(TEAM_ROLE_META[member.role].name)}.` : COPY.lede;
+
   return (
     <Screen columns={false}>
       <PageHeader
         back={{ to: '/apps', label: 'Apps' }}
-        title="Agency"
-        lede={COPY.lede}
+        title={title}
+        lede={lede}
         aside={
           <div className="flex items-center gap-xs">
             {primary}
-            <button
-              type="button"
-              onClick={() => goTab('settings')}
-              aria-label="Agency settings"
-              aria-pressed={tab === 'settings'}
-              className={`toy toy-soft flex h-[44px] w-[44px] items-center justify-center rounded-pill ${tab === 'settings' ? 'bg-card-strong text-ink' : 'text-ink-soft hover:text-ink'}`}
-            >
-              <Icon icon={Settings} size={20} />
-            </button>
+            {!member && (
+              <button
+                type="button"
+                onClick={() => goTab('settings')}
+                aria-label="Agency settings"
+                aria-pressed={tab === 'settings'}
+                className={`toy toy-soft flex h-[44px] w-[44px] items-center justify-center rounded-pill ${tab === 'settings' ? 'bg-card-strong text-ink' : 'text-ink-soft hover:text-ink'}`}
+              >
+                <Icon icon={Settings} size={20} />
+              </button>
+            )}
           </div>
         }
       />
-      <div className="mt-md">
-        <Segmented<TabKey> label="Agency" value={tab} onChange={(t) => goTab(t)} options={TABS} />
-      </div>
-      <div id="agency-panel">
-        {tab === 'overview' && <Overview onTab={goTab} onAdd={() => setAddClient(true)} />}
-        {tab === 'pipeline' && (
-          <Section id="pipeline-heading" title="Pipeline">
-            <AgencyPipeline adding={adding} onAdding={setAdding} />
-          </Section>
-        )}
-        {tab === 'clients' && <Clients onAdd={() => setAddClient(true)} />}
-        {tab === 'paperwork' && (
-          <Section id="paperwork-heading" title="Paperwork">
-            <AgencyContracts adding={adding} onAdding={setAdding} />
-          </Section>
-        )}
-        {tab === 'settings' && (
-          <Section id="settings-heading" title="Settings">
-            <AgencySettings />
-          </Section>
-        )}
-      </div>
-      <ClientSheet open={addClient} client={null} onClose={() => setAddClient(false)} />
+      {active.length > 0 && (
+        <div className="mt-md">
+          <label className="flex flex-wrap items-center gap-xs">
+            <span className="text-[14px] font-bold">Agency</span>
+            <select value={member ? member.id : ''} onChange={(e) => pickTeam(e.target.value)} className={`min-w-0 flex-1 sm:flex-none ${FILTER_SELECT}`} aria-label="Whose Agency">
+              <option value="">Mine</option>
+              {active.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {`${t.agency.name}, ${TEAM_ROLE_META[t.role].name.toLowerCase()}`}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+      {(lost || (row && row.id === gone)) && (
+        <p role="status" className="mt-md m-0 rounded-tile bg-card p-sm text-[14px] font-bold">
+          You are no longer on that team. This is your own Agency.
+        </p>
+      )}
+      {!member && <TeamInvites className="mt-md" />}
+      {clientRow ? (
+        <Suspense fallback={<TilesLoading />}>
+          <ClientMemberView teamId={clientRow.id} agencyName={clientRow.agency.name} />
+        </Suspense>
+      ) : !ready ? (
+        <TilesLoading />
+      ) : (
+        <AgencyCanContext.Provider value={can}>
+          <div className="mt-md">
+            <TabRow<TabKey> label="Agency" value={tab} onChange={(t) => goTab(t)} items={tabs.map((t) => ({ key: t.value, label: t.label, name: t.label }))} />
+          </div>
+          <div id="agency-panel">
+            {tab === 'overview' && <Overview onTab={goTab} onAdd={() => setAddClient(true)} />}
+            {tab === 'pipeline' && (
+              <Section id="pipeline-heading" title="Pipeline">
+                <AgencyPipeline adding={adding} onAdding={setAdding} />
+              </Section>
+            )}
+            {tab === 'clients' && <Clients onAdd={() => setAddClient(true)} />}
+            {tab === 'paperwork' && (
+              <Section id="paperwork-heading" title="Paperwork">
+                <AgencyContracts adding={adding} onAdding={setAdding} />
+              </Section>
+            )}
+            {tab === 'team' && !access && (
+              <Suspense fallback={<TilesLoading />}>
+                <AgencyTeam inviting={inviting} onInviting={setInviting} />
+              </Suspense>
+            )}
+            {tab === 'settings' && !access && (
+              <Section id="settings-heading" title="Settings">
+                <AgencySettings />
+              </Section>
+            )}
+          </div>
+          {!access && <ClientSheet open={addClient} client={null} onClose={() => setAddClient(false)} />}
+        </AgencyCanContext.Provider>
+      )}
     </Screen>
   );
 }
+
+/** "an editor", "a videographer". */
+const aWord = (w: string) => `${/^[aeiou]/i.test(w) ? 'an' : 'a'} ${w.toLowerCase()}`;
 
 /** Tile placeholders while the overview loads. */
 function TilesLoading() {
@@ -185,6 +296,7 @@ function TilesLoading() {
 
 function Overview({ onTab, onAdd }: { onTab: (t: TabKey, paper?: 'invoices' | 'agreements') => void; onAdd: () => void }) {
   const q = useAuthed(['agency', 'overview', ''], () => api.agency(''));
+  const { access, can } = useAgencyCan();
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<AgencyDeliverable | null>(null);
   const [allComing, setAllComing] = useState(false);
@@ -199,10 +311,12 @@ function Overview({ onTab, onAdd }: { onTab: (t: TabKey, paper?: 'invoices' | 'a
   if (d.clients.length === 0 && d.page.page === 1)
     return (
       <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-        <p className="m-0 text-[16px] font-semibold">{COPY.empty}</p>
-        <div className="mt-sm">
-          <Button plusToX onClick={onAdd}>Add client</Button>
-        </div>
+        <p className="m-0 text-[16px] font-semibold">{access ? COPY.emptyClients : COPY.empty}</p>
+        {!access && (
+          <div className="mt-sm">
+            <Button variant="outline" plusToX onClick={onAdd}>Add client</Button>
+          </div>
+        )}
       </div>
     );
   const t = d.totals;
@@ -221,6 +335,17 @@ function Overview({ onTab, onAdd }: { onTab: (t: TabKey, paper?: 'invoices' | 'a
     { label: 'Hours this month', value: minutesLabel2(t.minutesMonth), hint: `${minutesLabel2(t.billableMonth)} billable` },
     { label: 'Utilisation this week', value: `${utilisationPct(t.billableWeek, d.settings.weeklyHours, 7)}%`, hint: `of ${d.settings.weeklyHours} hours` },
   ];
+  // A team member sees no money they may not open: the retainers never, unpaid invoices only with paperwork. Tiles for a tab that is
+  // off for them do not lead there.
+  if (access) {
+    for (const list of [first, rest]) {
+      for (let i = list.length - 1; i >= 0; i -= 1) {
+        const x = list[i]!;
+        if (x.label === 'Retainers a month' || (x.label === 'Unpaid invoices' && !can('paperwork', 'view'))) list.splice(i, 1);
+        else if ((x.label === 'Active clients' && !can('clients', 'view')) || ((x.label === 'In review' || x.label === 'Late') && !can('pipeline', 'view'))) list[i] = { ...x, go: undefined };
+      }
+    }
+  }
   const tiles = (list: Tile[]) => (
     <div className="grid grid-cols-2 gap-sm md:grid-cols-4">
       {list.map((x, i) => (
@@ -327,6 +452,7 @@ function ClientFacts({ c, cur, compact = false }: { c: AgencyClient; cur: string
 
 function Clients({ onAdd }: { onAdd: () => void }) {
   const qc = useQueryClient();
+  const { access, can } = useAgencyCan();
   const nav = useNavigate();
   const [view, setView] = useView('c', 'list');
   const [statusRaw, setStatus] = useParamState('cstatus', '');
@@ -408,9 +534,9 @@ function Clients({ onAdd }: { onAdd: () => void }) {
       {d && d.clients.length === 0 && (
         <div className="rounded-card bg-card p-md shadow-toy-soft">
           <p className="m-0 text-[16px] font-semibold">{status ? COPY.emptyClients : COPY.empty}</p>
-          {!status && (
+          {!status && !access && (
             <div className="mt-sm">
-              <Button plusToX onClick={onAdd}>Add client</Button>
+              <Button variant="outline" plusToX onClick={onAdd}>Add client</Button>
             </div>
           )}
         </div>
@@ -420,9 +546,13 @@ function Clients({ onAdd }: { onAdd: () => void }) {
           <KanbanBoard
             columns={columns}
             itemLabel={(c) => c.name}
-            onMove={(c, from, to) => {
-              if (from !== to) move.mutate({ c, to: to as AgencyClientStatus });
-            }}
+            onMove={
+              can('clients', 'edit')
+                ? (c, from, to) => {
+                    if (from !== to) move.mutate({ c, to: to as AgencyClientStatus });
+                  }
+                : undefined
+            }
             card={(c) => (
               <button type="button" onClick={() => nav(`/agency/${c.id}`)} className="block w-full text-left">
                 <ClientFacts c={c} cur={d.settings.currency} compact />

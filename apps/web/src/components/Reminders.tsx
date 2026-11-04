@@ -1,3 +1,4 @@
+import { CloseButton } from './CloseButton';
 import { MAX_CUSTOM_REMINDERS, REMINDER_TIME, REMINDER_TITLE_MAX, WATER_EVERY_CHOICES, WATER_GLASS_MAX, WATER_GLASS_MIN, WATER_GOAL_MAX, WATER_GOAL_MIN, WEEKDAY_NAMES, weekdaysLabel, type CustomReminder, type WaterState } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
@@ -367,7 +368,7 @@ export function RemindersPanel({ bento = false, tasks = true }: { bento?: boolea
  * On a phone: a section inside Daily and Journal, never a floating button. Water comes first, so its tap sits in
  * the collapsed row; the rest opens under it.
  */
-export function RemindersSection({ always = false, tasks = true }: { always?: boolean; tasks?: boolean }) {
+export function RemindersSection({ always = false, tasks = true, quiet = false }: { always?: boolean; tasks?: boolean; /** The screen already has its one solid button (Journal's New entry), so "+ Glass" takes the outline look. */ quiet?: boolean }) {
   const { q, day, refresh } = useReminders();
   const [open, setOpen] = useState(false);
   const w = q.data?.water;
@@ -388,7 +389,7 @@ export function RemindersSection({ always = false, tasks = true }: { always?: bo
           <Icon icon={ChevronDown} size={16} strokeWidth={3} className={`shrink-0 ${open ? 'rotate-180' : ''}`} />
         </button>
         <div className="flex gap-xs sm:shrink-0">
-          <Button size="md" className="flex-1 sm:flex-none" onClick={() => drink.mutate()} disabled={drink.isPending || !w} aria-label="Add a glass of water">
+          <Button size="md" variant={quiet ? 'outline' : undefined} className="flex-1 sm:flex-none" onClick={() => drink.mutate()} disabled={drink.isPending || !w} aria-label="Add a glass of water">
             + Glass
           </Button>
           <Button size="md" variant="outline" onClick={() => undo.mutate()} disabled={undo.isPending || !w || w.ml === 0}>
@@ -422,14 +423,12 @@ export function ReminderBubble() {
   if (!here) return null;
   const w = q.data?.water;
   return (
-    <div className="fixed bottom-md left-[calc(240px+var(--spacing-md))] z-40 hidden md:block" data-pillar="lover_partner">
+    <div className="fixed bottom-md left-[calc(var(--nav-w)+var(--spacing-md))] z-40 hidden md:block" data-pillar="lover_partner">
       {open && (
         <div ref={panel} className="mb-sm max-h-[70vh] w-[340px] overflow-y-auto rounded-card border border-line bg-card p-md shadow-toy-soft" role="dialog" aria-label="Water and reminders">
           <div className="mb-sm flex items-center justify-between">
             <h2 className="m-0 text-[18px]">Water and reminders</h2>
-            <Button variant="ghost" size="sm" onClick={() => setOpen(false)} aria-label="Close water and reminders">
-              Close
-            </Button>
+            <CloseButton onClick={() => setOpen(false)} label="Close water and reminders" />
           </div>
           <RemindersPanel />
         </div>

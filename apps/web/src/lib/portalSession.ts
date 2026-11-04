@@ -69,3 +69,56 @@ function readAll(): Kept[] {
     return [];
   }
 }
+
+// ---- the team link's own unlock (2026-11-04)
+
+/**
+ * The team link (`/t/<token>`, the client page for the client's own team) keeps its unlock apart, under its own key, and sends it only to
+ * the team link's own routes in `X-Team-Link-Session`. It is never sent to a client link or any paper, and the server refuses it there.
+ */
+const TEAM_KEY = 'kreators.teamLink.sessions';
+let teamMemory: Kept[] = [];
+
+function readTeam(): Kept[] {
+  try {
+    const raw = JSON.parse(window.sessionStorage.getItem(TEAM_KEY) ?? '[]') as unknown;
+    if (!Array.isArray(raw)) return [];
+    const now = Date.now();
+    return raw.filter((k): k is Kept => Boolean(k) && typeof (k as Kept).token === 'string' && /^[0-9a-f]{64}$/.test((k as Kept).token) && typeof (k as Kept).until === 'number' && (k as Kept).until > now).slice(-MAX);
+  } catch {
+    return [];
+  }
+}
+
+function writeTeam(list: Kept[]): void {
+  try {
+    window.sessionStorage.setItem(TEAM_KEY, JSON.stringify(list.slice(-MAX)));
+  } catch {
+    teamMemory = list.slice(-MAX);
+  }
+}
+
+export function keepTeamLinkSession(token: string, expiresAt: string | null, link?: string): void {
+  const until = expiresAt ? Date.parse(expiresAt) : Date.now() + 12 * 3_600_000;
+  const list = [...readTeam(), ...teamMemory].filter((k) => k.token !== token);
+  writeTeam([...list, { token, until: Number.isFinite(until) ? until : Date.now() + 12 * 3_600_000, ...(link ? { link } : {}) }]);
+}
+
+export function teamLinkSessionHeader(): string {
+  return [...readTeam(), ...teamMemory.filter((k) => k.until > Date.now())].map((k) => k.token).slice(-MAX).join(',');
+}
+
+export function forgetTeamLinkSessions(link: string): void {
+  teamMemory = teamMemory.filter((k) => k.link !== link);
+  writeTeam(readTeam().filter((k) => k.link !== link));
+}
+
+export function hadTeamLinkSession(link: string): boolean {
+  try {
+    const raw = JSON.parse(window.sessionStorage.getItem(TEAM_KEY) ?? '[]') as unknown;
+    const all = Array.isArray(raw) ? raw.filter((k): k is Kept => Boolean(k) && typeof (k as Kept).token === 'string') : [];
+    return [...all, ...teamMemory].some((k) => k.link === link);
+  } catch {
+    return teamMemory.some((k) => k.link === link);
+  }
+}

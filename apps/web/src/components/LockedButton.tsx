@@ -11,7 +11,7 @@ export function Padlock({ size = 16 }: { size?: number }) {
 }
 
 /**
- * What a locked thing shows in place of its button: "Locked", then what it takes ("Unlocks at 500 xp, 2000 points and the First tick badge"),
+ * What a locked thing shows in place of its button: "Locked", then what it takes ("Unlocks at 500 xp, 2,000 points and the First tick badge"),
  * and below it, what is still missing for this person. It looks like a button but never acts, so nothing here is a dead end: the words say
  * how to open it. A super admin never sees this, because for them nothing is locked.
  */

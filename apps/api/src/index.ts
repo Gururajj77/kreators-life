@@ -6,6 +6,7 @@ import { me } from './routes/me';
 import { onboarding } from './routes/onboarding';
 import { nodes } from './routes/nodes';
 import { today } from './routes/today';
+import insights from './routes/insights';
 import { leaderboard } from './routes/leaderboard';
 import { rewards } from './routes/rewards';
 import { cards } from './routes/cards';
@@ -17,7 +18,7 @@ import { inbox } from './routes/inbox';
 import { manageResources, resources } from './routes/resources';
 import { community, moderate } from './routes/community';
 import { bondChannels, communityChannels } from './routes/channels';
-import { companion } from './routes/companion';
+import { companionRoutes } from './routes/companion';
 import { search } from './routes/search';
 import { studio } from './routes/studio';
 import { publicPage, store } from './routes/store';
@@ -66,13 +67,18 @@ import { media, mediaPublic } from './routes/media';
 import { reminders } from './routes/reminders';
 import { agency, agencyPublic } from './routes/agency';
 import { agencyLife, agencyLifePublic } from './routes/agencyLife';
+import { agencyTeam, myTeams } from './routes/agencyTeam';
+import { agencyTeamGate } from './agencyTeamAccess';
 import { portalDocGate, portalDocs } from './portalAccess';
+import { refuseTeamSession } from './teamLinkAccess';
+import { teamLinkOwner, teamLinkPublic } from './routes/teamLink';
 import { kpis } from './routes/kpis';
 import { calendarMe, calendarPublic } from './routes/calendar';
 import { agencyDocs, contractsPublic } from './routes/agencyDocs';
 import { agencyOther, docsPublic } from './routes/agencyOther';
 import { connect } from './routes/connect';
 import { activity } from './routes/activity';
+import { booksPublic } from './routes/books';
 import { logger, pruneLogs, writeClientError, writeLog } from './logs';
 import { blockedPath, originAllowed, PAGE_HEADERS } from './headers';
 
@@ -139,6 +145,11 @@ app.route('/public', legalPublic);
 app.route('/public', vitalsPublic);
 app.route('/public/explore', explore);
 app.route('/public/media', mediaPublic);
+// A team link session (the client's own team, teamLinkAccess.ts) never reaches the client link or any paper: a request carrying one is a 404.
+for (const prefix of ['/public/agency', '/public/contracts', '/public/invoices']) {
+  app.use(prefix, refuseTeamSession);
+  app.use(`${prefix}/*`, refuseTeamSession);
+}
 // A client with a password on their link needs a live portal session for their agreement and invoice links too (portalAccess.ts).
 for (const kind of ['contract', 'invoice', 'doc'] as const) {
   const prefix = kind === 'contract' ? '/public/contracts' : kind === 'invoice' ? '/public/invoices' : '/public/agency/doc';
@@ -151,8 +162,10 @@ app.route('/public/invoices', publicInvoices);
 app.route('/public/agency/doc', docsPublic);
 app.route('/public/agency', agencyLifePublic);
 app.route('/public/agency', agencyPublic);
+app.route('/public/team-link', teamLinkPublic);
 app.route('/public/contracts', contractsPublic);
 app.route('/public/calendar', calendarPublic);
+app.route('/public/books', booksPublic);
 app.route('/public', publicPage);
 // Webhooks verify their own signatures.
 app.route('/webhooks', webhooks);
@@ -188,8 +201,15 @@ app.use('*', async (c, next) => {
 // The rest of the limits, per person. Same file.
 for (const r of ROUTE_LIMITS) if (!isOpenDoor(r.path)) app.on(r.method, r.path, rateLimit(r.limit, r.by, r.when));
 
+// The Agency team gate: a member working on someone's Agency (the X-Agency-Team header) is checked against their row and the allowlist on
+// every request, then acts as the owner with the answer cut down. No header, no change. After the limits, so a member's work counts as theirs.
+app.use('/agency', agencyTeamGate);
+app.use('/agency/*', agencyTeamGate);
+
 // The student's side of coaching is core, so it is mounted before the rest of /me and never gated.
 app.route('/me/coach', myCoach);
+// An Agency team member's answers, leaving and a client member's view: core like /me/coach, so a person can always say no or leave.
+app.route('/me/teams', myTeams);
 app.route('/me/calendar', calendarMe);
 app.route('/me/legal', meLegal);
 app.route('/me/activity', activity);
@@ -198,6 +218,8 @@ app.route('/onboarding', onboarding);
 app.route('/session', session);
 app.route('/nodes', nodes);
 app.route('/today', today);
+// Emerging: patterns from the person's own rows, core and owner only (no line in MODULE_FOR_PREFIX).
+app.route('/insights', insights);
 app.route('/leaderboard', leaderboard);
 app.route('/rewards', rewards);
 app.route('/cards', cards);
@@ -210,7 +232,8 @@ app.route('/resources', resources);
 app.route('/community/channels', communityChannels);
 app.route('/bond/channels', bondChannels);
 app.route('/community', community);
-app.route('/companion', companion);
+// The Companion reads the person's day through the app's own routes, like the assistant, so it gets the app to call into.
+app.route('/companion', companionRoutes((req, env, ctx) => app.fetch(req, env, ctx)));
 app.route('/search', search);
 app.route('/studio', studio);
 app.route('/studio', growth);
@@ -240,9 +263,11 @@ app.route('/life', life);
 app.route('/home', home);
 app.route('/reviews/kpis', kpis);
 app.route('/reviews', reviews);
+app.route('/agency/team', agencyTeam);
 app.route('/agency/docs', agencyOther);
 app.route('/agency', agency);
 app.route('/agency', agencyLife);
+app.route('/agency', teamLinkOwner);
 app.route('/agency', agencyDocs);
 app.route('/market', market);
 app.route('/run', run);

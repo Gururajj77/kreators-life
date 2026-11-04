@@ -1,6 +1,6 @@
 import { QuoteOfTheDay } from '../components/QuoteOfTheDay';
 import { RemindersSection } from '../components/Reminders';
-import { badgeRoleOf, greetingFor, knowledgeKindIcon, LIFE_AREAS, MODULE_BY_KEY, MODULE_GROUP_ACCENT, MODULE_GROUPS, money, MOODS, RELATIONSHIP_BY_KEY, STRESS_LEVELS, type HomeResponse, type ModuleGroup, type RelationshipKey, formatCount } from '@kreators/shared';
+import { BOOKS, badgeRoleOf, greetingFor, knowledgeKindIcon, LIFE_AREAS, MODULE_BY_KEY, MODULE_GROUP_ACCENT, MODULE_GROUPS, money, MOODS, RELATIONSHIP_BY_KEY, STRESS_LEVELS, type HomeResponse, type ModuleGroup, type RelationshipKey, formatCount } from '@kreators/shared';
 import type { CSSProperties, ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
@@ -21,9 +21,11 @@ import { MoodFace } from '../components/MoodFace';
 import { Person } from '../components/Person';
 import { Ring } from '../components/Ring';
 import { RoleBadge } from '../components/RoleBadge';
+import { BookShelf } from '../components/BookShelf';
 import { Screen } from '../components/Screen';
 import { SearchBox } from '../components/SearchBox';
 import { DailyBrief } from '../components/DailyBrief';
+import { EmergenceSlot } from '../components/EmergenceSlot';
 import { Section, SeeAll } from '../components/Section';
 import { Segmented } from '../components/fx/Segmented';
 import { useParamState } from '../lib/useParamState';
@@ -92,7 +94,22 @@ const WHITE_TRACK = 'rgba(255,255,255,0.3)';
  * own views (xp per day and where it came from, the tower, money, the shop) and a door into every app.
  * On every coloured fill the foreground is white, as in the kit; dark elements sit only on cream.
  */
+/** True from the tablet width up (the same width and height the md layout uses), following the window as it changes. */
+function useWide() {
+  const q = '(min-width: 768px) and (min-height: 480px)';
+  const [on, setOn] = useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches);
+  useEffect(() => {
+    const m = window.matchMedia(q);
+    const f = () => setOn(m.matches);
+    m.addEventListener('change', f);
+    return () => m.removeEventListener('change', f);
+  }, []);
+  return on;
+}
+
 export function Home() {
+  // Home's metrics lay out as a bento (a large Life score beside two cards) from the tablet width up; below it they are a sideways row.
+  const wideMetrics = useWide();
   const me = useMe();
   const date = todayLocal();
   const hour = new Date().getHours();
@@ -197,9 +214,9 @@ export function Home() {
         </div>
       )}
       {q.isError && (
-        <div className="span-all mt-md rounded-card bg-card p-md shadow-toy-soft" role="alert">
-          <p className="m-0 font-bold">Could not load your numbers.</p>
-          <Button variant="outline" className="mt-sm" onClick={() => q.refetch()}>
+        <div className="span-all mt-md rounded-card bg-card p-md shadow-toy-soft flex flex-wrap-reverse items-center justify-between gap-sm" role="alert">
+          <p className="m-0 font-bold min-w-0 flex-1 basis-[60%]">Could not load your numbers.</p>
+          <Button variant="outline" onClick={() => q.refetch()}>
             Try again
           </Button>
         </div>
@@ -212,12 +229,13 @@ export function Home() {
               <li data-pillar="lover_partner" className={`w-[168px] shrink-0 snap-start md:w-auto md:[&>a]:h-full ${BENTO_SIZE.large}`}>
                 <MetricCard to="/life" title="Life score" icon={Compass} tone="var(--color-r4)" deep="var(--deep-lover_partner)" corner={<Avatar relationship="lover_partner" size={36} decorative mood={(d.life?.overall ?? 0) >= 60 ? 'excited' : 'happy'} />}>
                   <span className="flex flex-1 items-center justify-center">
-                    <Gauge value={(d.life?.overall ?? 0) / 100} size={120} stroke={12} color={WHITE} track={WHITE_TRACK} label={`Life ${d.life?.overall ?? 0} of 100`}>
+                    {/* In proportion to its card: 140px in the phone's sideways row, 240px in the large bento cell beside two cards. */}
+                    <Gauge value={(d.life?.overall ?? 0) / 100} size={wideMetrics ? 240 : 140} stroke={wideMetrics ? 20 : 13} color={WHITE} track={WHITE_TRACK} label={`Life ${d.life?.overall ?? 0} of 100`}>
                       <span className="flex flex-col items-center leading-none">
-                        <span className="font-display text-[32px] font-extrabold">
+                        <span className={`font-display font-extrabold ${wideMetrics ? 'text-[56px]' : 'text-[34px]'}`}>
                           <CountUp value={d.life?.overall ?? 0} />
                         </span>
-                        <span className="mt-xs text-[12px] font-bold opacity-90">{d.life?.label ?? ''}</span>
+                        <span className={`mt-xs font-bold opacity-90 ${wideMetrics ? 'text-[16px]' : 'text-[12px]'}`}>{d.life?.label ?? ''}</span>
                       </span>
                     </Gauge>
                   </span>
@@ -263,23 +281,26 @@ export function Home() {
           </Section>
 
           <PeriodPanel id="home-period" parts={['daily', 'wellbeing', 'finance', 'shop']} span />
-          <Section id="home-trends" title="This week" lede="Mood, sleep and calm as scores out of a hundred, day by day. Where the lines dip is where to look." action={<SeeAll to="/wellbeing">Wellbeing</SeeAll>} span>
+          <Section id="home-trends" title="This week" lede="Sleep, calm and mood as scores out of a hundred, day by day. Where the lines dip is where to look." action={<SeeAll to="/wellbeing">Wellbeing</SeeAll>} span>
             <div className="rounded-card bg-card p-md shadow-toy-soft">
+              {/* Physical, mental, emotional: the order of the five areas, the same as Life's chart. */}
               <MultiLine
                 series={[
-                  { values: d.trackers.mood.week.map((m) => (m === null ? null : ((m - 1) / 4) * 100)), color: 'var(--color-r3)', label: 'Mood' },
                   { values: d.trackers.sleep.week.map((h) => (h === null ? null : (Math.max(4, Math.min(8, h)) - 4) * 25)), color: 'var(--color-r6)', label: 'Sleep' },
                   { values: d.trackers.stress.week.map((st) => (st === null ? null : ((5 - st) / 4) * 100)), color: 'var(--color-r2)', label: 'Calm' },
+                  { values: d.trackers.mood.week.map((m) => (m === null ? null : ((m - 1) / 4) * 100)), color: 'var(--color-r3)', label: 'Mood' },
                 ]}
                 max={100}
                 labels={d.days.slice(-7).map((x) => weekday(x.date))}
                 allLabels
                 height={180}
-                label="Mood, sleep and calm as scores out of a hundred for the last seven days"
-                empty="Log a mood, a night or a stress level and the lines appear."
+                label="Sleep, calm and mood as scores out of a hundred for the last seven days"
+                empty="Log a night, a stress level or a mood and the lines appear."
               />
             </div>
           </Section>
+
+          <EmergenceSlot app="home" max={3} />
 
           <Section id="home-today" title="Daily" lede="Tick each box when you have done it." action={<SeeAll to="/today">Open</SeeAll>}>
             <div data-pillar="lover_partner" className="relative flex flex-col overflow-hidden rounded-card bg-r4 p-md text-on-fill">
@@ -335,7 +356,7 @@ export function Home() {
             <ul className="flex list-none flex-col gap-xs p-0 m-0">
               {[
                 {
-                  key: 'mindful', pillar: 'lover_partner', to: '/mindful', name: 'Mindful minutes', icon: MODULE_BY_KEY.mindful?.icon, tone: 'var(--tint-green)',
+                  key: 'mindful', pillar: 'lover_partner', to: '/mindful', name: 'Mindfulness', icon: MODULE_BY_KEY.mindful?.icon, tone: 'var(--tint-green)',
                   value: d.trackers.mindful.minutesWeek > 0 ? `${d.trackers.mindful.minutesWeek} min this week` : 'none this week',
                   visual: <Sparkline values={d.trackers.mindful.week} max={60} color="var(--color-r4)" width={80} height={32} />,
                 },
@@ -496,17 +517,31 @@ export function Home() {
             <div className="rounded-card bg-card p-md shadow-toy-soft">
               <Segmented label="Show xp" value={xpView === 'source' ? 'source' : 'day'} onChange={(v) => setXpView(v)} options={XP_VIEWS} />
               {xpView === 'source' ? (
-                <div className="mt-md flex items-center gap-md">
-                  <Donut segments={d.xpBySource.map((x) => ({ value: x.xp, color: SOURCE_META[x.source].color, label: SOURCE_META[x.source].label }))} size={132} stroke={20} label="Xp by source">
-                    <span className="flex flex-col items-center leading-none">
-                      <span className="font-display text-[24px] font-extrabold">{d.xpBySource.reduce((s, x) => s + x.xp, 0)}</span>
-                      <span className="mt-xs text-[12px] font-bold text-ink-soft">xp</span>
-                    </span>
-                  </Donut>
-                  <div className="min-w-0 flex-1">
-                    {d.xpBySource.length > 0 ? <Legend items={d.xpBySource.map((x) => ({ color: SOURCE_META[x.source].color, label: SOURCE_META[x.source].label, text: `${x.xp}` }))} /> : <p className="m-0 text-[14px] font-semibold text-ink-soft">Tick a box on Today and the ring fills in.</p>}
-                  </div>
-                </div>
+                (() => {
+                  const total = d.xpBySource.reduce((t, x) => t + x.xp, 0);
+                  const top = Math.max(1, ...d.xpBySource.map((x) => x.xp));
+                  const rows = [...d.xpBySource].sort((a, b) => b.xp - a.xp);
+                  return total === 0 ? (
+                    <p className="mt-md m-0 rounded-tile bg-paper p-md text-center text-[14px] font-semibold text-ink-soft">No xp in the last two weeks yet. Tick a box on Daily and it shows here, by what earned it.</p>
+                  ) : (
+                    // The ring says how the two weeks split; the bars beside it compare the sources, biggest first, each with its xp and share.
+                    <div className="mt-md grid items-center gap-md sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-lg">
+                      <div className="flex justify-center">
+                        <Donut segments={rows.map((x) => ({ value: x.xp, color: SOURCE_META[x.source].color, label: SOURCE_META[x.source].label }))} size={168} stroke={22} label="Xp by source">
+                          <span className="flex flex-col items-center leading-none">
+                            <span className="font-display text-[32px] font-extrabold tabular-nums">{formatCount(total)}</span>
+                            <span className="mt-xs text-[12px] font-bold text-ink-soft">xp in 14 days</span>
+                          </span>
+                        </Donut>
+                      </div>
+                      <HBars
+                        stacked
+                        label="Xp by source over the last fourteen days"
+                        rows={rows.map((x) => ({ key: x.source, label: SOURCE_META[x.source].label, value: x.xp / top, text: `${formatCount(x.xp)} · ${Math.round((x.xp / total) * 100)}%`, color: SOURCE_META[x.source].color }))}
+                      />
+                    </div>
+                  );
+                })()
               ) : (
                 <div className="mt-md">
                   <AreaLine values={d.days.map((x) => x.xp)} max={Math.max(60, ...d.days.map((x) => x.xp))} labels={d.days.map((x) => weekday(x.date))} color="var(--color-r4)" height={160} empty="No xp in the last two weeks" label={`Xp per day for the last fourteen days, ${d.xp.week} this week`} />
@@ -557,10 +592,12 @@ export function Home() {
                 {d.resources.map((r, i) => (
                   <li key={r.id} className={`flex ${bento(i, d.resources.length, 2, lastOptional === 'reads' ? 4 : 2)}`}>
                     <Link to={`/knowledge/${r.id}`} data-pillar="lover_partner" className="toy toy-soft flex min-h-[160px] w-full flex-col rounded-card bg-card p-sm text-ink">
-                      <span className="flex size-[48px] items-center justify-center rounded-pill bg-r4 text-on-fill">
-                        <AppIcon name={knowledgeKindIcon(r.kind)} size={22} />
+                      <span className="flex items-start justify-between gap-xs">
+                        <span className="flex size-[48px] shrink-0 items-center justify-center rounded-pill bg-r4 text-on-fill">
+                          <AppIcon name={knowledgeKindIcon(r.kind)} size={22} />
+                        </span>
+                        {r.tag && <StatusTag fit tone="calm">{tagLabel(r.tag)}</StatusTag>}
                       </span>
-                      {r.tag && <StatusTag className="mt-xs w-fit" tone="calm">{tagLabel(r.tag)}</StatusTag>}
                       <span className="mt-xs block text-balance text-[16px] font-bold leading-snug">{tie(r.title)}</span>
                       <span className="mt-xs block text-[12px] font-bold text-ink-soft">{r.kind}</span>
                     </Link>
@@ -598,6 +635,11 @@ export function Home() {
                 })}
               />
             </Link>
+          </Section>
+
+          {/* Book: the founder's three books, the whole row so it never pairs with a half. Covers only; the page has the rest. */}
+          <Section id="home-books" title="Books" span lede="Three books by Shubham Aggarwal, with a course for each." action={<SeeAll to="/book">Open</SeeAll>}>
+            <BookShelf href={(b) => `/book#${b.slug}`} />
           </Section>
 
           {d.shop && (

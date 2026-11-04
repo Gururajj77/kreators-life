@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { ALIAS_WORDS, normalizeCode, type BlockedPerson, RELATIONSHIPS, type BondChat, type BondMessage, type Friend, type Introduction } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { nameOf, newId, notify, nowIso, oneOf, pageOf, paged, parseList, publicOf, str } from '../db';
+import { liveUser, nameOf, newId, notify, nowIso, oneOf, pageOf, paged, parseList, publicOf, str } from '../db';
 import { memberBehindAlias } from './circles';
 
 export const bond = new Hono<AppEnv>();
@@ -127,7 +127,7 @@ const toFriend = (r: FriendRow, userId: string): Friend => ({
   createdAt: r.created_at,
 });
 const FRIEND_SELECT = `SELECT f.id, f.requester_id, f.recipient_id, f.status, f.created_at, u.display_name AS name, u.handle, u.avatar_url
-       FROM friendships f JOIN users u ON u.id = CASE WHEN f.requester_id = ?1 THEN f.recipient_id ELSE f.requester_id END`;
+       FROM friendships f JOIN users u ON u.id = CASE WHEN f.requester_id = ?1 THEN f.recipient_id ELSE f.requester_id END AND ${liveUser('u')}`;
 
 // Open requests (pending and sent) are naturally few, so they come back in full; accepted friends are the list that
 // can grow, so that part alone is paged.
@@ -273,9 +273,10 @@ bond.get('/chats/:id', async (c) => {
   const user = c.get('user');
   const row = await chatFor(db, c.req.param('id'), user.id);
   if (!row) return c.json({ error: 'not your chat' }, 404);
-  const msgs = await db.prepare('SELECT id, user_id, body, created_at FROM bond_messages WHERE chat_id = ? ORDER BY created_at ASC LIMIT 300').bind(row.id).all<{ id: string; user_id: string; body: string; created_at: string }>();
+  // The newest 300 lines, shown oldest first, so a long chat never stops showing what was just said.
+  const msgs = await db.prepare('SELECT id, user_id, body, created_at FROM bond_messages WHERE chat_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 300').bind(row.id).all<{ id: string; user_id: string; body: string; created_at: string }>();
   const chat = toChat(row, user.id);
-  const messages: BondMessage[] = msgs.results.map((m) => ({ id: m.id, alias: m.user_id === user.id ? chat.myAlias : chat.theirAlias, body: m.body, mine: m.user_id === user.id, createdAt: m.created_at }));
+  const messages: BondMessage[] = msgs.results.reverse().map((m) => ({ id: m.id, alias: m.user_id === user.id ? chat.myAlias : chat.theirAlias, body: m.body, mine: m.user_id === user.id, createdAt: m.created_at }));
   return c.json({ chat, messages });
 });
 

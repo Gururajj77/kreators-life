@@ -50,7 +50,9 @@ const DEFAULT_SHOTS = [
 
 const stamp = Date.now().toString(36);
 async function session() {
-  // A fresh account on the server, so the app screens have something to show.
+  // A fresh account on the server, so the app screens have something to show. Never on the founder's dev app (5173 and 8787 run on
+  // their real local database): there, pass SHOOT_TOKEN for a session made elsewhere, or point SHOOT_ORIGIN at the smoke server.
+  if (/:(5173|8787)\b/.test(ORIGIN)) throw new Error(`refusing to make a test account on ${ORIGIN}: set SHOOT_TOKEN, or use the smoke server on 8788`);
   const res = await fetch(`${ORIGIN}/api/auth/signup`, { method: 'POST', headers: { 'content-type': 'application/json', 'CF-Connecting-IP': `10.99.${Date.now() % 255}.${(Date.now() >> 8) % 255}` }, body: JSON.stringify({ email: `shoot-${stamp}@smoke.test`, password: `Camera-${stamp}-pass`, displayName: 'Screenshot', acceptTerms: true, phone: '+91 98765 43210', birthDate: '1990-05-20' }) });
   if (!res.ok) throw new Error(`could not sign up on ${ORIGIN}: ${res.status}`);
   const { token } = await res.json();
@@ -62,7 +64,7 @@ async function session() {
   await fetch(`${ORIGIN}/api/onboarding/build`, { method: 'POST', headers: h, body: JSON.stringify({ relationships: ['self', 'friendship'], date: today }) });
   await fetch(`${ORIGIN}/api/today/checkin`, { method: 'POST', headers: h, body: JSON.stringify({ date: today }) });
   await fetch(`${ORIGIN}/api/today/not-to-do`, { method: 'POST', headers: h, body: JSON.stringify({ title: 'Scrolling before breakfast' }) });
-  for (const key of ['store', 'run', 'reviews', 'community', 'tools', 'wellbeing']) await fetch(`${ORIGIN}/api/me/modules`, { method: 'PATCH', headers: h, body: JSON.stringify({ key, on: true }) });
+  for (const key of ['store', 'run', 'reviews', 'community', 'tools', 'wellbeing', 'mindful']) await fetch(`${ORIGIN}/api/me/modules`, { method: 'PATCH', headers: h, body: JSON.stringify({ key, on: true }) });
   return token;
 }
 

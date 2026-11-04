@@ -56,15 +56,15 @@ export async function securityAlerts(db: D1Database, now = new Date()): Promise<
   if (found.length === 0) return 0;
   const admins = await db.prepare("SELECT id FROM users WHERE role = 'admin'").all<{ id: string }>();
   const hour = now.toISOString().slice(0, 13);
-  let written = 0;
-  for (const a of found) {
-    for (const admin of admins.results) {
-      const done = await db
+  const notes = found.flatMap((a) =>
+    admins.results.map((admin) =>
+      db
         .prepare("INSERT OR IGNORE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'team', ?, ?, '/internal/logs', NULL, ?)")
-        .bind(`alert-${a.kind}-${hour}-${admin.id}`, admin.id, a.title, a.body, now.toISOString())
-        .run();
-      written += done.meta.changes ?? 0;
-    }
-  }
+        .bind(`alert-${a.kind}-${hour}-${admin.id}`, admin.id, a.title, a.body, now.toISOString()),
+    ),
+  );
+  // One round trip a fifty notes, not one each; the id makes each one once an hour. No import of db.ts here: the smoke test loads this file in Node.
+  let written = 0;
+  for (let i = 0; i < notes.length; i += 50) for (const done of await db.batch(notes.slice(i, i + 50))) written += done.meta.changes ?? 0;
   return written;
 }

@@ -17,13 +17,13 @@ import {
   type AssistantTurn,
   learnedForAssistant,
 } from '@kreators/shared';
-import type { AppEnv, Env } from '../env';
-import { resolveAccess } from '../access';
+import type { AppEnv } from '../env';
 import { accountOf, creditAccount, spend, usedToday } from '../credits';
-import { DATE_RE, dateNearToday, newId, nowIso, shiftDate } from '../db';
-import { caller, ToolError, type Req } from '../assistant/dispatch';
+import { newId, nowIso } from '../db';
+import { ToolError, type Req } from '../assistant/dispatch';
+import { closeRun, dateFrom, fit, ioFor as ioWith, markStop, openRun, parseToolArgs, runIdOf, stopAsked as stopMarked, toolsOn, zoneFrom, type AppFetch } from '../assistant/run';
 import { latestExtras, latestProfile, settingsOf } from './discover';
-import { checkArgs, TOOL_BY_NAME, TOOLS, type Args, type Tool, type ToolIO } from '../assistant/tools';
+import { checkArgs, TOOL_BY_NAME, type Args, type Tool } from '../assistant/tools';
 import { chat, MAX_OUT, ModelError, modelOf, tokensOf, tokensOfMessages, type Message, type ToolCall, type ToolSpec } from '../assistant/model';
 
 /**
@@ -32,9 +32,6 @@ import { chat, MAX_OUT, ModelError, modelOf, tokensOf, tokensOfMessages, type Me
  * tools, and says what it did. Writes are logged with how to undo them; removals and settling wait for Confirm.
  * What a message cost in tokens is taken from the person's credits once, at the end.
  */
-
-type ExecCtx = Context<AppEnv>['executionCtx'];
-type AppFetch = (req: Request, env: Env, ctx?: ExecCtx) => Response | Promise<Response>;
 
 interface ActionRow {
   id: string;
@@ -65,8 +62,6 @@ const MAX_TURNS = 40;
 const MAX_RESULT = 12_000;
 /** The most tool calls run from one model turn; the rest are answered with a note so the model can call them again. */
 const MAX_CALLS = 8;
-/** A run id from the browser, for Stop. */
-const RUN_RE = /^[A-Za-z0-9-]{8,64}$/;
 /** What the assistant says back for the model, when it asked leave to do what the person already asked for. */
 const GO_AHEAD = 'Yes, go ahead. Do it now, without asking again.';
 
@@ -108,22 +103,6 @@ How you work:
 - Write short, plain sentences a teenager can read. No emoji, no tables, no headings.${p.learned ? `\n\nWhat you have learned about them, because they allowed it: ${p.learned}` : ''}`;
 }
 
-/** The turns that fit in the plan's context, newest kept first. The last line is always the person's. */
-function fit(turns: AssistantTurn[], budget: number): Message[] {
-  const out: Message[] = [];
-  let used = 0;
-  for (let i = turns.length - 1; i >= 0; i -= 1) {
-    const t = turns[i]!;
-    const content = t.role === 'assistant' && t.note ? `${t.text}\n\n(What I did then: ${t.note})` : t.text;
-    const cost = tokensOf(content) + 4;
-    if (out.length > 0 && used + cost > budget) break;
-    out.unshift({ role: t.role, content: out.length === 0 && cost > budget ? content.slice(-Math.max(400, budget * 3)) : content });
-    used += cost;
-  }
-  while (out.length > 1 && out[0]!.role === 'assistant') out.shift();
-  return out;
-}
-
 function parseTurns(raw: unknown): AssistantTurn[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -132,20 +111,6 @@ function parseTurns(raw: unknown): AssistantTurn[] {
     .map((t) => ({ role: t.role as AssistantTurn['role'], text: t.text.trim().slice(0, MAX_TEXT), ...(typeof t.note === 'string' && t.note ? { note: t.note.slice(0, 1000) } : {}) }))
     .filter((t) => t.text);
 }
-
-const tokenOf = (c: Context<AppEnv>) => {
-  const h = c.req.header('Authorization') ?? '';
-  return h.startsWith('Bearer ') ? h.slice(7).trim() : '';
-};
-const ctxOf = (c: Context<AppEnv>): ExecCtx | undefined => {
-  try {
-    return c.executionCtx;
-  } catch {
-    return undefined;
-  }
-};
-/** The person's date from the device, when it is a real date near today; else the server's. */
-const dateFrom = (v: unknown) => (typeof v === 'string' && DATE_RE.test(v) && dateNearToday(v) ? v : new Date().toISOString().slice(0, 10));
 
 async function record(db: D1Database, userId: string, tool: Tool, r: { status: ActionRow['status']; label: string; args?: Args; undo?: Req | null; error?: string }): Promise<ActionRow> {
   const now = nowIso();
@@ -179,17 +144,7 @@ export function assistantRoutes(appFetch: AppFetch) {
   const assistant = new Hono<AppEnv>();
 
   /** A caller as this person, through the whole app: session, switches, limits and all. */
-  const ioFor = (c: Context<AppEnv>, date: string): ToolIO => ({
-    date,
-    yesterday: shiftDate(date, -1),
-    call: caller((req) => Promise.resolve(appFetch(req, c.env, ctxOf(c))), tokenOf(c)),
-  });
-
-  const toolsOn = async (c: Context<AppEnv>): Promise<Tool[]> => {
-    const { access } = await resolveAccess(c.env.DB, c.get('user'));
-    const on = (keys: readonly string[] | null) => !keys || keys.some((k) => access[k]?.available && access[k]?.on);
-    return TOOLS.filter((t) => on(t.needs));
-  };
+  const ioFor = (c: Context<AppEnv>, date: string) => ioWith(c, date, appFetch);
 
   const refuse = (c: Context<AppEnv>, paywall: AssistantPaywall, error: string, status: 402 | 429) => c.json({ error, paywall }, status);
 
@@ -219,7 +174,7 @@ export function assistantRoutes(appFetch: AppFetch) {
     const turns = parseTurns(body.messages);
     if (!turns.length || turns[turns.length - 1]!.role !== 'user') return c.json({ error: 'Say something first.' }, 400);
     const date = dateFrom(body.context?.date);
-    const timeZone = typeof body.context?.timeZone === 'string' && /^[A-Za-z0-9_+\-/]{1,64}$/.test(body.context.timeZone) ? body.context.timeZone : user.timezone || DEFAULT_ZONE;
+    const timeZone = zoneFrom(body.context?.timeZone, user.timezone || DEFAULT_ZONE);
     const path = typeof body.context?.path === 'string' ? body.context.path.slice(0, 200) : '';
 
     // A model that keeps data is never offered the journal or the trackers to read.
@@ -235,14 +190,9 @@ export function assistantRoutes(appFetch: AppFetch) {
 
     const io = ioFor(c, date);
     // Stop: the browser names this run, and Stop marks it. A mark that came first (a fast tap) is kept, not reset.
-    const runId = typeof body.runId === 'string' && RUN_RE.test(body.runId) ? body.runId : null;
-    if (runId) {
-      await db.batch([
-        db.prepare('DELETE FROM assistant_runs WHERE created_at < ?').bind(new Date(Date.now() - 86_400_000).toISOString()),
-        db.prepare('INSERT OR IGNORE INTO assistant_runs (id, user_id, stopped_at, created_at) VALUES (?, ?, NULL, ?)').bind(runId, user.id, nowIso()),
-      ]);
-    }
-    const stopAsked = async () => Boolean(runId && (await db.prepare('SELECT stopped_at FROM assistant_runs WHERE id = ? AND user_id = ?').bind(runId, user.id).first<{ stopped_at: string | null }>())?.stopped_at);
+    const runId = runIdOf(body.runId);
+    await openRun(db, user.id, runId);
+    const stopAsked = () => stopMarked(db, user.id, runId);
     let nudged = false;
     const calls: AssistantCall[] = [];
     const rows: ActionRow[] = [];
@@ -260,11 +210,8 @@ export function assistantRoutes(appFetch: AppFetch) {
         calls.push({ tool: name, args: {}, ok: false, error });
         return JSON.stringify({ error });
       }
-      let raw: unknown;
-      try {
-        // Some models wrap the arguments in a code fence.
-        raw = JSON.parse((tc.function.arguments || '{}').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '') || '{}');
-      } catch {
+      const raw = parseToolArgs(tc);
+      if (raw === null) {
         calls.push({ tool: name, args: {}, ok: false, error: 'bad arguments' });
         return JSON.stringify({ error: 'The arguments were not valid JSON.' });
       }
@@ -353,7 +300,7 @@ export function assistantRoutes(appFetch: AppFetch) {
       if (step === limit.steps - 1) stopped = 'steps';
     }
 
-    if (runId) await db.prepare('DELETE FROM assistant_runs WHERE id = ?').bind(runId).run();
+    await closeRun(db, runId);
     if (stopped === 'user') text = rows.length ? 'Stopped. Here is what I did before you stopped; each one has an Undo.' : 'Stopped. Nothing was changed.';
     if (!text) {
       text = waiting
@@ -388,13 +335,9 @@ export function assistantRoutes(appFetch: AppFetch) {
   // made before the run starts (a very fast tap) is kept for it. Only the owner's own run can be stopped.
   assistant.post('/stop', async (c) => {
     const body = await c.req.json<{ runId?: unknown }>().catch(() => ({}) as { runId?: unknown });
-    if (typeof body.runId !== 'string' || !RUN_RE.test(body.runId)) return c.json({ error: 'Which run?' }, 400);
-    const now = nowIso();
-    await c.env.DB.prepare(
-      'INSERT INTO assistant_runs (id, user_id, stopped_at, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET stopped_at = excluded.stopped_at WHERE assistant_runs.user_id = excluded.user_id',
-    )
-      .bind(body.runId, c.get('user').id, now, now)
-      .run();
+    const runId = runIdOf(body.runId);
+    if (!runId) return c.json({ error: 'Which run?' }, 400);
+    await markStop(c.env.DB, c.get('user').id, runId);
     return c.json({ ok: true });
   });
 

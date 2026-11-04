@@ -438,10 +438,10 @@ export async function setInvoiceStatus(db: D1Database, userId: string, invoiceId
   const now = nowIso();
   if (status === prev.status) return toInvoice(prev);
   // The status moves first, guarded on the one that was read, and the books change only when this call moved it, so two taps
-  // on Mark paid at once book the income once.
+  // on Mark paid at once book the income once. A void keeps the status it came from (`voided_from`, migration 0075) so Restore can bring it back.
   const moved = await db
-    .prepare("UPDATE invoices SET status = ?, paid_at = CASE WHEN ? = 'paid' THEN COALESCE(paid_at, ?) ELSE paid_at END WHERE id = ? AND user_id = ? AND status = ?")
-    .bind(status, status, now, prev.id, userId, prev.status)
+    .prepare("UPDATE invoices SET status = ?, paid_at = CASE WHEN ? = 'paid' THEN COALESCE(paid_at, ?) ELSE paid_at END, voided_from = CASE WHEN ? = 'void' THEN ? ELSE NULL END WHERE id = ? AND user_id = ? AND status = ?")
+    .bind(status, status, now, status, prev.status, prev.id, userId, prev.status)
     .run();
   if (moved.meta.changes !== 1) {
     const now2 = await db.prepare(`${INV_SELECT} WHERE i.id = ?`).bind(prev.id).first<InvRow>();
@@ -460,6 +460,32 @@ export async function setInvoiceStatus(db: D1Database, userId: string, invoiceId
   if (stmts.length) await db.batch(stmts);
   const row = await db.prepare(`${INV_SELECT} WHERE i.id = ?`).bind(prev.id).first<InvRow>();
   return row ? toInvoice(row) : null;
+}
+
+/**
+ * Brings a void invoice back to the status it had before the void (`voided_from`; a void with no record comes back as a draft).
+ * Guarded on status = 'void', so two taps restore once ('not void' for the second). The number never changes. A paid one books its
+ * income again the way setInvoiceStatus does, on the day it was paid, so finance_transactions stays true.
+ */
+export async function restoreInvoice(db: D1Database, userId: string, invoiceId: string): Promise<{ invoice: Invoice; from: Invoice['status'] } | 'not found' | 'not void'> {
+  const prev = await db.prepare(`${INV_SELECT} WHERE i.id = ? AND i.user_id = ?`).bind(invoiceId, userId).first<InvRow & { voided_from: string | null }>();
+  if (!prev) return 'not found';
+  if (prev.status !== 'void') return 'not void';
+  const back = oneOf(prev.voided_from, ['draft', 'sent', 'paid'] as const, 'draft');
+  const now = nowIso();
+  const moved = await db
+    .prepare("UPDATE invoices SET status = ?, voided_from = NULL, paid_at = CASE WHEN ? = 'paid' THEN COALESCE(paid_at, ?) ELSE paid_at END WHERE id = ? AND user_id = ? AND status = 'void'")
+    .bind(back, back, now, prev.id, userId)
+    .run();
+  if (moved.meta.changes !== 1) return 'not void';
+  if (back === 'paid') {
+    await db
+      .prepare("INSERT OR IGNORE INTO finance_transactions (id, user_id, kind, amount_cents, currency, category, note, date, source, ref, created_at) VALUES (?, ?, 'income', ?, ?, 'Brand deal', ?, ?, 'invoice', ?, ?)")
+      .bind(newId(), userId, prev.total_cents, prev.currency, `Invoice ${prev.number}, ${prev.client_name}`, (prev.paid_at ?? now).slice(0, 10), prev.id, now)
+      .run();
+  }
+  const row = await db.prepare(`${INV_SELECT} WHERE i.id = ?`).bind(prev.id).first<InvRow>();
+  return row ? { invoice: toInvoice(row), from: back } : 'not found';
 }
 
 finance.post('/invoices', async (c) => {

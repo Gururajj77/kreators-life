@@ -8,6 +8,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Section, SeeAll } from '../components/Section';
 import { Sheet } from '../components/Sheet';
@@ -89,11 +90,7 @@ export function Bond() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Bond</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Friends, anonymous chats, and introductions to people you met, only when both of you want them.</p>
-      </header>
+      <AppCover back={{ to: '/apps', label: 'Apps' }} title="Bond" lede="Friends, anonymous chats, and introductions to people you met, only when both of you want them." />
 
       <Section id="bond-chats" title="Chats" lede="Every chat runs under two aliases. Nobody's name moves through it.">
         {chats.length === 0 ? (
@@ -178,7 +175,7 @@ export function Bond() {
               <li key={f.requestId} data-pillar="parent_child" className="rounded-tile p-sm" style={{ background: 'var(--tint-yellow)' }}>
                 <p className="m-0 text-[16px] font-bold">{f.name} would like to be friends</p>
                 <div className="mt-xs flex flex-wrap gap-xs">
-                  <Button onClick={() => answerFriend.mutate({ id: f.requestId, status: 'accepted' })} disabled={answerFriend.isPending}>
+                  <Button variant="outline" onClick={() => answerFriend.mutate({ id: f.requestId, status: 'accepted' })} disabled={answerFriend.isPending}>
                     Yes
                   </Button>
                   <Button variant="outline" onClick={() => answerFriend.mutate({ id: f.requestId, status: 'declined' })} disabled={answerFriend.isPending}>
@@ -203,7 +200,7 @@ export function Bond() {
                   <span className="block text-[14px] font-semibold text-ink-soft">{f.status === 'sent' ? 'Request sent, waiting' : 'Friends'}</span>
                 </Link>
                 {f.status === 'friends' && (
-                  <Button className="shrink-0" onClick={() => openChat.mutate(f.userId)} disabled={openChat.isPending}>
+                  <Button variant="outline" className="shrink-0" onClick={() => openChat.mutate(f.userId)} disabled={openChat.isPending}>
                     Chat
                   </Button>
                 )}
@@ -221,9 +218,9 @@ export function Bond() {
         <Toggle on={optedIn} onChange={(on) => optIn.mutate(on)} disabled={optIn.isPending} label="Open to introductions" hint="Switch this on to see who else from your events is open to meeting." />
         <ErrorLine e={optIn.isError ? optIn.error : null} />
         {q.isError && (
-          <div className="mt-md rounded-card bg-card p-md shadow-toy-soft" role="alert">
-            <p className="m-0 font-bold">Could not load introductions.</p>
-            <Button variant="outline" className="mt-sm" onClick={() => q.refetch()}>
+          <div className="mt-md rounded-card bg-card p-md shadow-toy-soft flex flex-wrap-reverse items-center justify-between gap-sm" role="alert">
+            <p className="m-0 font-bold min-w-0 flex-1 basis-[60%]">Could not load introductions.</p>
+            <Button variant="outline" onClick={() => q.refetch()}>
               Try again
             </Button>
           </div>
@@ -235,7 +232,7 @@ export function Bond() {
                 <p className="m-0 text-[16px] font-bold">{i.requesterName} would like to meet you</p>
                 {i.context && <p className="m-0 text-[14px] font-semibold text-ink-soft">{i.context}</p>}
                 <div className="mt-sm flex flex-wrap gap-xs">
-                  <Button onClick={() => answer.mutate({ id: i.id, status: 'accepted' })} disabled={answer.isPending}>
+                  <Button variant="outline" onClick={() => answer.mutate({ id: i.id, status: 'accepted' })} disabled={answer.isPending}>
                     Yes, introduce us
                   </Button>
                   <Button variant="outline" onClick={() => answer.mutate({ id: i.id, status: 'declined' })} disabled={answer.isPending}>
@@ -267,7 +264,7 @@ export function Bond() {
                 <Button className="shrink-0" variant="outline" onClick={() => openChat.mutate(s.userId)} disabled={openChat.isPending}>
                   Chat
                 </Button>
-                <Button className="shrink-0" onClick={() => setAsking({ userId: s.userId, name: s.name })}>
+                <Button variant="outline" className="shrink-0" onClick={() => setAsking({ userId: s.userId, name: s.name })}>
                   Introduce
                 </Button>
                 <Button variant="ghost" className="shrink-0" aria-label={`Block ${s.name}`} onClick={() => setBlocking({ userId: s.userId, name: s.name })}>
@@ -340,7 +337,10 @@ export function BondChatScreen() {
     },
   });
   useEffect(() => {
-    const t = window.setInterval(() => void q.refetch(), 8000);
+    // Polled, and only while the tab is in view, so a chat left open in the background asks nothing.
+    const t = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void q.refetch();
+    }, 8000);
     return () => window.clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -362,18 +362,16 @@ export function BondChatScreen() {
 
   return (
     <Screen columns={false}>
-      <header className="pt-lg">
-        <BackLink to="/bond">Bond</BackLink>
-        <div className="mt-sm flex items-center gap-sm">
-          <Avatar relationship="friendship" size={44} decorative />
-          <div className="min-w-0">
-            <h1 className="text-[30px]">{d.chat.theirAlias}</h1>
-            <p className="m-0 text-[14px] font-semibold text-ink-soft">
-              You are <span className="font-extrabold text-ink">{d.chat.myAlias}</span> here. Both of you stay an alias, for good.
-            </p>
-          </div>
-        </div>
-      </header>
+      <AppCover
+        back={{ to: '/bond', label: 'Bond' }}
+        title={d.chat.theirAlias}
+        lede={
+          <>
+            You are <span className="font-extrabold text-ink">{d.chat.myAlias}</span> here. Both of you stay an alias, for good.
+          </>
+        }
+        actions={<Avatar relationship="friendship" size={44} decorative />}
+      />
       <div className="mt-md flex max-h-[480px] flex-col gap-xs overflow-y-auto rounded-card bg-paper p-sm">
         {d.messages.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">Nobody has said anything yet. Say hello.</p>}
         {d.messages.map((m) => (

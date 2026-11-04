@@ -17,6 +17,7 @@ import { Button } from '../components/Button';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useRefreshAll } from '../lib/queries';
+import { EmergenceSlot } from '../components/EmergenceSlot';
 
 export function Mindful() {
   const wb = useWellbeing();
@@ -40,7 +41,7 @@ export function Mindful() {
     <Screen>
       <header className="pt-lg">
         <BackLink to="/wellbeing">Wellbeing</BackLink>
-        <h1 className="text-[30px]">Mindful minutes</h1>
+        <h1 className="text-[30px]">Mindfulness</h1>
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Breathe with the circle, or work in focus sessions with breaks.</p>
       </header>
 
@@ -58,6 +59,7 @@ export function Mindful() {
       <FocusDashboard />
 
       <PeriodPanel id="mindful-period" parts={['wellbeing']} />
+      <EmergenceSlot app="mindful" max={2} />
       <section className="mt-lg" aria-labelledby="thirty-heading">
         <h2 id="thirty-heading" className="text-[24px]">
           Last 30 days

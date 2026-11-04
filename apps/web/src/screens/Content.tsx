@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '../components/Button';
 import { Nudge } from '../components/Nudge';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Pager, usePage } from '../components/Pager';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
@@ -40,16 +40,13 @@ export function Content() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/shop">Shop</BackLink>
-        <h1 className="text-[30px]">Content</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">A strategist for every brand you work on. Feed a folder links, let it research, and get plans, calendars, hooks and scripts back.</p>
-        {d && (
-          <div className="mt-sm">
-            <ToolsLine tools={d.tools} />
-          </div>
-        )}
-      </header>
+      <AppCover
+        back={{ to: '/shop', label: 'Shop' }}
+        title="Content"
+        lede="A strategist for every brand you work on. Feed a folder links, let it research, and get plans, calendars, hooks and scripts back."
+      >
+        {d && <ToolsLine tools={d.tools} />}
+      </AppCover>
 
       <section className="mt-lg" aria-labelledby="brands-heading">
         <div className="flex items-center justify-between gap-sm">

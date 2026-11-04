@@ -8,7 +8,8 @@ import { Button } from './Button';
 import { MediaGallery } from './Media';
 import { Sheet } from './Sheet';
 import { Icon } from './Icon';
-import { ArrowDown, ArrowUp, Play } from 'lucide-react';
+import { ArrowDown, ArrowUp, ImagePlus, Play } from 'lucide-react';
+import type { MoreMenuItem } from './MoreMenu';
 import { FIELD } from '../lib/ui';
 
 interface Draft {
@@ -18,16 +19,47 @@ interface Draft {
 
 const kindOf = (url: string) => mediaFromLink(url)?.kind ?? 'image';
 
+/** The saved set for one owner, shared by the section and any screen that puts its editor in a More menu (same query key). */
+export function useMedia(type: MediaOwner, id: string) {
+  const token = useSession((s) => s.token);
+  return useQuery({ queryKey: ['media', type, id], queryFn: () => api.mediaFor(type, id), enabled: Boolean(token && id) });
+}
+
+/** The More menu row that opens the editor, for a screen that draws `MediaSection` with `trigger={null}`; null when this person may not edit. */
+export function useMediaMenuItem(type: MediaOwner, id: string, onSelect: () => void): MoreMenuItem | null {
+  const q = useMedia(type, id);
+  if (!q.data?.canEdit) return null;
+  return { key: 'media', label: q.data.items.length > 0 ? 'Edit pictures and videos' : 'Add pictures and videos', icon: ImagePlus, onSelect };
+}
+
 /**
  * Pictures, GIFs and videos for one listing, lesson or event page. Everyone sees the gallery; the person who made the
  * thing (or staff for it) gets "Edit pictures and videos", where they upload a picture or GIF, paste a link, or link a
  * video from YouTube, Vimeo or a direct .mp4. The server decides who may save.
+ *
+ * Like `MoreMenu`, `trigger={null}` draws no button of its own and `open` with `onOpenChange` makes the editor controlled,
+ * so a screen can put "Add pictures and videos" in its More menu (`useMediaMenuItem`) and keep one solid button.
  */
-export function MediaSection({ type, id, title = 'Pictures and videos' }: { type: MediaOwner; id: string; title?: string }) {
-  const token = useSession((s) => s.token);
+export function MediaSection({
+  type,
+  id,
+  title = 'Pictures and videos',
+  trigger,
+  open: openProp,
+  onOpenChange,
+}: {
+  type: MediaOwner;
+  id: string;
+  title?: string;
+  trigger?: null;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ['media', type, id], queryFn: () => api.mediaFor(type, id), enabled: Boolean(token && id) });
-  const [open, setOpen] = useState(false);
+  const q = useMedia(type, id);
+  const [own, setOwn] = useState(false);
+  const open = openProp ?? own;
+  const setOpen = (v: boolean) => (onOpenChange ? onOpenChange(v) : setOwn(v));
   const [draft, setDraft] = useState<Draft[]>([]);
   const [link, setLink] = useState('');
   const [note, setNote] = useState<string | null>(null);
@@ -74,9 +106,10 @@ export function MediaSection({ type, id, title = 'Pictures and videos' }: { type
 
   if (!q.data || (items.length === 0 && !q.data.canEdit)) return null;
   return (
-    <section className="mt-md" aria-label={title}>
+    // With no pictures and the editor's button in a More menu, only the sheet is drawn, so no empty gap is left.
+    <section className={items.length > 0 || trigger !== null ? 'mt-md' : ''} aria-label={title}>
       {items.length > 0 && <MediaGallery items={items} />}
-      {q.data.canEdit && (
+      {q.data.canEdit && trigger !== null && (
         <div className={items.length > 0 ? 'mt-sm' : ''}>
           <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
             {items.length > 0 ? 'Edit pictures and videos' : 'Add pictures and videos'}

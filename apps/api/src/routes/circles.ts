@@ -77,8 +77,9 @@ async function groupFor(db: D1Database, row: GroupRow, userId: string, withMessa
   }));
   let messages: CircleMessage[] = [];
   if (withMessages && chatOpen) {
-    const rows = await db.prepare('SELECT c.id, c.user_id, c.body, c.created_at, m.alias FROM circle_messages c JOIN circle_members m ON m.group_id = c.group_id AND m.user_id = c.user_id WHERE c.group_id = ? ORDER BY c.created_at LIMIT 300').bind(row.id).all<{ id: string; user_id: string; body: string; created_at: string; alias: string }>();
-    messages = rows.results.map((r) => ({ id: r.id, alias: r.alias, body: r.body, createdAt: r.created_at, mine: r.user_id === userId }));
+    const rows = await db.prepare('SELECT c.id, c.user_id, c.body, c.created_at, m.alias FROM circle_messages c JOIN circle_members m ON m.group_id = c.group_id AND m.user_id = c.user_id WHERE c.group_id = ? ORDER BY c.created_at DESC, c.rowid DESC LIMIT 300').bind(row.id).all<{ id: string; user_id: string; body: string; created_at: string; alias: string }>();
+    // Newest 300, shown oldest first.
+    messages = rows.results.reverse().map((r) => ({ id: r.id, alias: r.alias, body: r.body, createdAt: r.created_at, mine: r.user_id === userId }));
   }
   return {
     id: row.id,

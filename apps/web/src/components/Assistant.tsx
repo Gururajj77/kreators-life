@@ -1,5 +1,4 @@
 import {
-  ASSISTANT_MODEL_BY_ID,
   centsFrom,
   EXPENSE_CATEGORIES,
   INCOME_CATEGORIES,
@@ -7,9 +6,7 @@ import {
   KINDS,
   MAX_NOT_TO_DO,
   formatCount,
-  messagesFor,
   money,
-  PLAN_CURRENCY,
   MOODS,
   NOT_TO_DO_TITLE_MAX,
   PERIOD_KINDS,
@@ -17,7 +14,6 @@ import {
   periodFor,
   periodLabel,
   periodShift,
-  PLANS,
   REVIEW_ANSWER_MAX,
   REVIEW_HIGHLIGHT_MAX,
   parentKind,
@@ -45,7 +41,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
 import { useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowRight, Check, CircleAlert, CircleQuestionMark, Minus, Undo2, WandSparkles, X, type LucideIcon } from 'lucide-react';
+import { ArrowRight, Check, CircleAlert, CircleQuestionMark, Minus, Undo2, X, type LucideIcon } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { ChatActions, ChatComposer, ChatLinks, ChatTurns, ChoiceChips, ChoiceGroups, chip, countTurns, typingTime, useChatMotion } from './Chat';
 import { AppIcon } from './AppIcon';
@@ -59,11 +55,12 @@ import { forgetKept, useKept, useKeptRef } from '../lib/kept';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
 import { useAssistantModel } from '../lib/store';
 import { useDialogFocus } from '../lib/useDialogFocus';
-import { Markdown } from './Markdown';
 import { StartOver } from './StartOver';
 import { MoodFace } from './MoodFace';
 import { FIELD } from '../lib/ui';
 import { WorkingLine } from './fx/WorkingLine';
+import { ModelPicker } from './ModelPicker';
+import { ModelReply, PlanCard } from './ModelReply';
 
 /** What a typed message does while it runs, shown in turn beside the typing dots. */
 const WORKING_PHRASES = ['Reading what you asked', 'Looking things up', 'Making the changes'] as const;
@@ -104,7 +101,7 @@ const FLOWS: Record<Flow, FlowMeta> = {
   mood: { label: 'Log my mood', icon: 'FaceSlightlySmiling', lands: 'the trackers on Home, Mood and your Life score', to: '/home', host: 'bumling', needs: TRACKERS },
   sleep: { label: 'Log my sleep', icon: 'Moon', lands: 'the trackers on Home, Sleep and your Life score', to: '/home', host: 'bumling', needs: TRACKERS },
   stress: { label: 'Log my stress', icon: 'WavesHorizontal', lands: 'the trackers on Home, Stress and your Life score', to: '/home', host: 'bumling', needs: TRACKERS },
-  mindful: { label: 'Log mindful minutes', icon: 'Wind', lands: 'the trackers on Home, Mindful minutes and your Life score', to: '/home', host: 'divine', needs: TRACKERS },
+  mindful: { label: 'Log mindful minutes', icon: 'Wind', lands: 'the trackers on Home, Mindfulness and your Life score', to: '/home', host: 'divine', needs: TRACKERS },
   move: { label: 'Log time moving', icon: 'Footprints', lands: 'the physical part of your Life score', to: '/life', host: 'self', needs: TRACKERS },
   journal: { label: 'Write in my journal', icon: 'NotebookPen', lands: 'your Journal. Only you can see it', to: '/journal', host: 'self', needs: ['journal'] },
   money: { label: 'Add money in or out', icon: 'Wallet', lands: 'Finance, and money this month on Home', to: '/finance', host: 'servant_leader', needs: ['finance'] },
@@ -680,40 +677,6 @@ function Receipts({ scope, ids }: { scope: string; ids: string[] }) {
   );
 }
 
-const PAYWALL: Record<AssistantPaywall, { title: string; line: string }> = {
-  plan: {
-    title: 'Typing is part of a plan',
-    line: `Pro is ${money(PLANS.pro.priceCents, PLAN_CURRENCY)} a month for ${formatCount(PLANS.pro.credits)} credits, about ${formatCount(messagesFor(PLANS.pro.credits))} messages. The flows stay free.`,
-  },
-  credits: { title: 'Out of credits', line: 'Top up, or wait for your plan to start again. The flows stay free.' },
-  day: { title: "Today's limit is used", line: 'It frees up over the next 24 hours, and a bigger plan has more room. The flows stay free.' },
-};
-
-/** A reply from the model: its small markdown, and which model wrote it, so it is never mistaken for a built-in line. */
-function ModelReply({ text, model }: { text: string; model: string }) {
-  const name = ASSISTANT_MODEL_BY_ID[model]?.name ?? model;
-  return (
-    <div>
-      <Markdown text={text} className="text-[16px] font-semibold leading-relaxed" />
-      <p className="m-0 mt-xs text-[12px] font-bold text-ink-mute">Answered by {name}</p>
-    </div>
-  );
-}
-
-function PlanCard({ reason }: { reason: AssistantPaywall }) {
-  const p = PAYWALL[reason];
-  return (
-    <Link to="/plans" className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm text-ink shadow-toy-soft">
-      <Icon icon={WandSparkles} size={22} />
-      <span className="min-w-0 flex-1">
-        <span className="block text-[14px] font-bold">{p.title}</span>
-        <span className="block text-[12px] font-semibold text-ink-soft">{p.line}</span>
-      </span>
-      <Icon icon={ArrowRight} size={18} />
-    </Link>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // The panel.
 // ---------------------------------------------------------------------------
@@ -1156,7 +1119,7 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
             wait(f, 'Logging');
             try {
               await api.log('stress', { date, value: Number(c.value) });
-              done(f, [Number(c.value) >= 4 ? 'Logged. Two minutes of slow breathing helps. Mindful minutes has a timer.' : 'Logged.']);
+              done(f, [Number(c.value) >= 4 ? 'Logged. Two minutes of slow breathing helps. Mindfulness has a timer.' : 'Logged.']);
             } catch (e) {
               failed(f, e);
             }
@@ -1579,24 +1542,7 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
         <CloseButton onClose={onClose} />
       </header>
       {status.data?.connected && models.length > 1 && model && (
-        <div className="border-b-2 border-line px-md py-xs">
-          {/* The picker sits beside "Model" when there is room for its longest name, and on a line of its own when not. */}
-          <label className="flex flex-wrap items-center gap-xs text-[12px] font-bold text-ink-soft">
-            <span className="shrink-0">Model</span>
-            <select value={model.id} onChange={(e) => setPicked(e.target.value)} disabled={thinking} className="min-h-[44px] min-w-0 flex-1 basis-[240px] rounded-pill border-2 border-line bg-card px-xs text-[12px] font-bold text-ink">
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}, {m.by}
-                  {m.private ? ', keeps nothing' : ''}
-                </option>
-              ))}
-            </select>
-          </label>
-          <p className="m-0 mt-xs text-[12px] font-semibold text-ink-soft">
-            {!canType ? 'Needs a plan. ' : ''}
-            {model.private ? 'Keeps nothing you send.' : 'May keep what you type, so your journal stays out.'}
-          </p>
-        </div>
+        <ModelPicker models={models} model={model} onPick={setPicked} disabled={thinking} note={`${!canType ? 'Needs a plan. ' : ''}${model.private ? 'Keeps nothing you send.' : 'May keep what you type, so your journal stays out.'}`} />
       )}
       <div ref={box} className="min-h-0 flex-1 overflow-y-auto px-md" aria-live="polite">
         <ChatTurns log={log} typing={typing} answer={answer} answerKey={`${log.filter((m) => m.from === 'you').length}:${ask?.kind ?? ''}`} room={`${room}px`} lastTurn={lastTurn} typingStatus={thinking ? <WorkingLine key={since} label={stopping ? 'Bumling is stopping' : 'Bumling is working'} phrases={stopping ? ['Stopping after this step'] : WORKING_PHRASES} since={since || undefined} /> : undefined} />

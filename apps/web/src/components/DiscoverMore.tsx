@@ -12,8 +12,15 @@ import {
   personalCycle,
   type NumberValue,
   type NumerologyContext,
+  CHANNEL_MEANINGS,
   DESIGN_BODIES,
   DESIGN_CENTERS,
+  DESIGN_CHANNELS,
+  GATE_NAMES,
+  channelKey,
+  gateSide,
+  hangingGates,
+  type DesignChart,
   DESIGN_DEPTHS,
   DESIGN_TYPES,
   EQ_SCALE,
@@ -68,6 +75,9 @@ import { Toggle } from './Toggle';
 import { AppIcon } from './AppIcon';
 import { FIELD } from '../lib/ui';
 import { StatusTag } from './StatusTag';
+import { CardHead } from './CardHead';
+import { TabRow } from './TabRow';
+import { Sheet } from './Sheet';
 
 const ACCENT: Record<ExtraKind, RelationshipKey> = { type: 'self', love: 'lover_partner', mind: 'guru', design: 'divine' };
 const fillOf = (color: string): CSSProperties => ({ background: `linear-gradient(135deg, ${color}, color-mix(in oklab, ${color} 72%, var(--fill-shade)))` });
@@ -78,6 +88,13 @@ const when = (iso: string) => new Date(iso).toLocaleDateString(LOCALE, { day: 'n
 function ShortBlurb({ text }: { text: string }) {
   const parts = text.match(/[^.!?]+[.!?]+(\s|$)/g)?.map((x) => x.trim()) ?? [text];
   const cls = 'mt-xs m-0 flex-1 text-[14px] font-semibold text-ink-soft';
+  // Two long sentences: the first says what it is on a phone, the second (the detail) joins it from the tablet width up.
+  if (parts.length === 2 && text.split(/\s+/).length > 30)
+    return (
+      <p className={cls}>
+        {parts[0]}<span className="hidden md:inline"> {parts[1]}</span>
+      </p>
+    );
   if (parts.length < 3) return <p className={cls}>{text}</p>;
   return (
     <p className={cls}>
@@ -398,6 +415,7 @@ function QuizScreen({ kind, onBack }: { kind: ExtraKind; onBack: () => void }) {
     },
     onError: (e) => setError(e instanceof Error ? e.message : 'Could not finish.'),
   });
+  const [asking, setAsking] = useState(false);
   const remove = useMutation({
     mutationFn: () => api.deleteExtra(kind),
     onSuccess: () => {
@@ -535,10 +553,11 @@ function QuizScreen({ kind, onBack }: { kind: ExtraKind; onBack: () => void }) {
         >
           Take it again
         </Button>
-        <Button variant="ghost" onClick={() => window.confirm('Delete this result and its answers for good?') && remove.mutate()} disabled={remove.isPending}>
+        <Button variant="ghost" onClick={() => setAsking(true)} disabled={remove.isPending}>
           Delete this result
         </Button>
       </div>
+      <AskDelete open={asking} title="Delete this result?" line="The result and its answers are gone for good. This cannot be undone." pending={remove.isPending} failed={remove.isError} onYes={() => remove.mutate()} onClose={() => setAsking(false)} />
     </>
   );
 }
@@ -555,48 +574,208 @@ const zoneList = (): string[] => {
   }
   return ZONES;
 };
-const CENTER_POS: Record<DesignCenter, { x: number; y: number; shape: 'up' | 'down' | 'square' | 'diamond' | 'right' | 'left'; tone: string }> = {
-  head: { x: 110, y: 28, shape: 'up', tone: 'var(--color-r3)' },
-  ajna: { x: 110, y: 82, shape: 'down', tone: 'var(--color-r4)' },
-  throat: { x: 110, y: 138, shape: 'square', tone: 'var(--color-r5)' },
-  g: { x: 110, y: 198, shape: 'diamond', tone: 'var(--color-r3)' },
-  heart: { x: 160, y: 214, shape: 'up', tone: 'var(--color-r1)' },
-  spleen: { x: 42, y: 252, shape: 'right', tone: 'var(--color-r4)' },
-  solar: { x: 178, y: 262, shape: 'left', tone: 'var(--color-r2)' },
-  sacral: { x: 110, y: 272, shape: 'square', tone: 'var(--color-r1)' },
-  root: { x: 110, y: 330, shape: 'square', tone: 'var(--color-r5)' },
+// The bodygraph, drawn in a 320 by 490 box: the nine centers in their usual shapes and places, and every gate at a point
+// on its center's edge, so a channel runs gate to gate along its own path.
+type Pt = readonly [number, number];
+const CENTER_SHAPE: Record<DesignCenter, { path: string; label: Pt; tone: string }> = {
+  head: { path: 'M160,16 L190,66 L130,66 Z', label: [160, 52], tone: 'var(--color-r3)' },
+  ajna: { path: 'M130,88 L190,88 L160,136 Z', label: [160, 108], tone: 'var(--color-r4)' },
+  throat: { path: 'M132,158 L188,158 L188,222 L132,222 Z', label: [160, 194], tone: 'var(--color-r5)' },
+  g: { path: 'M160,252 L192,284 L160,316 L128,284 Z', label: [160, 288], tone: 'var(--color-r3)' },
+  heart: { path: 'M230,288 L250,322 L210,322 Z', label: [230, 316], tone: 'var(--color-r1)' },
+  spleen: { path: 'M22,330 L78,370 L22,410 Z', label: [40, 374], tone: 'var(--color-r4)' },
+  solar: { path: 'M298,330 L242,370 L298,410 Z', label: [280, 374], tone: 'var(--color-r2)' },
+  sacral: { path: 'M128,344 L192,344 L192,404 L128,404 Z', label: [160, 378], tone: 'var(--color-r1)' },
+  root: { path: 'M130,424 L190,424 L190,484 L130,484 Z', label: [160, 458], tone: 'var(--color-r5)' },
 };
-const shapePath = (k: DesignCenter): string => {
-  const { x, y, shape } = CENTER_POS[k];
-  const r = shape === 'square' ? 22 : 20;
-  if (shape === 'up') return `M${x},${y - r} L${x + r},${y + r * 0.8} L${x - r},${y + r * 0.8} Z`;
-  if (shape === 'down') return `M${x - r},${y - r * 0.8} L${x + r},${y - r * 0.8} L${x},${y + r} Z`;
-  if (shape === 'diamond') return `M${x},${y - r} L${x + r},${y} L${x},${y + r} L${x - r},${y} Z`;
-  if (shape === 'right') return `M${x - r},${y - r} L${x + r},${y} L${x - r},${y + r} Z`;
-  if (shape === 'left') return `M${x + r},${y - r} L${x - r},${y} L${x + r},${y + r} Z`;
-  return `M${x - r},${y - r * 0.8} L${x + r},${y - r * 0.8} L${x + r},${y + r * 0.8} L${x - r},${y + r * 0.8} Z`;
+const GATE_PT: Record<number, Pt> = {
+  64: [144, 66], 61: [160, 66], 63: [176, 66],
+  47: [144, 88], 24: [160, 88], 4: [176, 88], 17: [143.5, 109.6], 43: [160, 134], 11: [176.5, 109.6],
+  62: [144, 158], 23: [160, 158], 56: [176, 158], 16: [132, 172], 20: [132, 204], 35: [188, 170], 12: [188, 188], 45: [188, 206], 31: [144, 222], 8: [160, 222], 33: [176, 222],
+  1: [160, 252], 7: [147.2, 264.8], 13: [172.8, 264.8], 10: [128, 284], 25: [192, 284], 15: [147.2, 303.2], 2: [160, 316], 46: [172.8, 303.2],
+  21: [230, 288], 51: [220, 305], 26: [214, 322], 40: [246, 322],
+  48: [33.2, 338], 57: [47.2, 348], 44: [61.2, 358], 50: [72.4, 366], 32: [64, 380], 28: [50, 390], 18: [36, 400],
+  36: [286.8, 338], 22: [272.8, 348], 37: [258.8, 358], 6: [247.6, 366], 49: [256, 380], 55: [270, 390], 30: [284, 400],
+  5: [144, 344], 14: [160, 344], 29: [176, 344], 34: [128, 356], 27: [128, 388], 59: [192, 384], 42: [144, 404], 3: [160, 404], 9: [176, 404],
+  53: [144, 424], 60: [160, 424], 52: [176, 424], 54: [130, 436], 38: [130, 454], 58: [130, 472], 19: [190, 436], 39: [190, 454], 41: [190, 472],
 };
+type Side = 'personality' | 'design' | 'both';
+const SIDE_INK: Record<'personality' | 'design', string> = { personality: 'var(--color-ink)', design: 'var(--color-r1)' };
+const SIDE_WORD: Record<Side, string> = { personality: 'Conscious', design: 'Unconscious', both: 'Conscious and unconscious' };
+const centerWord = (k: DesignCenter) => DESIGN_CENTERS.find((c) => c.key === k)!.name;
 
-/** The nine centers as a small picture: filled when defined, with a line for every pair a channel joins. */
-function BodyGraph({ defined, links }: { defined: DesignCenter[]; links: [DesignCenter, DesignCenter][] }) {
-  const seen = new Set<string>();
+/** One stretch of a channel, from p to q, in the colour of the side that switched its gate on: two thin lines side by side when both did. */
+function Stretch({ p, q, side }: { p: Pt; q: Pt; side: Side }) {
+  if (side !== 'both') return <line x1={p[0]} y1={p[1]} x2={q[0]} y2={q[1]} stroke={SIDE_INK[side]} strokeWidth="3.4" strokeLinecap="round" />;
+  const len = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
+  const nx = (-(q[1] - p[1]) / len) * 1.7;
+  const ny = ((q[0] - p[0]) / len) * 1.7;
   return (
-    <svg viewBox="0 0 220 360" className="mx-auto block w-full max-w-[260px]" role="img" aria-label={`Bodygraph: ${defined.length} of 9 centers defined`}>
-      {links.filter(([a, b]) => (seen.has(`${a}${b}`) ? false : (seen.add(`${a}${b}`), true))).map(([a, b]) => (
-        <line key={`${a}${b}`} x1={CENTER_POS[a].x} y1={CENTER_POS[a].y} x2={CENTER_POS[b].x} y2={CENTER_POS[b].y} stroke="var(--color-ink)" strokeWidth="5" strokeLinecap="round" opacity="0.55" />
-      ))}
+    <>
+      <line x1={p[0] + nx} y1={p[1] + ny} x2={q[0] + nx} y2={q[1] + ny} stroke={SIDE_INK.personality} strokeWidth="2.2" strokeLinecap="round" />
+      <line x1={p[0] - nx} y1={p[1] - ny} x2={q[0] - nx} y2={q[1] - ny} stroke={SIDE_INK.design} strokeWidth="2.2" strokeLinecap="round" />
+    </>
+  );
+}
+
+/** The gates in a whole channel, and the gates that hang without their partner, as the graph and the cards use them. */
+function chartGates(chart: DesignChart) {
+  const channels = chart.channels.map((c) => ({ ...c, key: channelKey(c), sa: gateSide(chart, c.a)!, sb: gateSide(chart, c.b)! }));
+  return { channels, hanging: hangingGates(chart) };
+}
+
+/**
+ * The nine centers in their shapes, filled when defined. Every channel's path runs faintly gate to gate; a whole channel is drawn
+ * over it, each half in its gate's side (conscious in ink, unconscious in red, both as two thin lines), and a gate whose partner
+ * is off hangs as a half line from its center. Gate numbers sit on the gates that are on. Tapping a channel picks its card.
+ */
+function BodyGraph({ chart, selected, onPick }: { chart: DesignChart; selected: string | null; onPick: (key: string) => void }) {
+  const { channels, hanging } = chartGates(chart);
+  const mid = (p: Pt, q: Pt): Pt => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+  const dim = (key: string) => (selected !== null && selected !== key ? 0.15 : 1);
+  const onGates = new Map<number, string>();
+  for (const c of channels) {
+    onGates.set(c.a, c.key);
+    onGates.set(c.b, c.key);
+  }
+  for (const h of hanging) onGates.set(h.gate, `g${h.gate}`);
+  const label = [
+    `Bodygraph: ${chart.defined.length} of 9 centers defined.`,
+    channels.length ? `Channels: ${channels.map((c) => `${c.a}-${c.b} ${c.name}, ${centerWord(c.centers[0])} to ${centerWord(c.centers[1])}, ${SIDE_WORD[c.from].toLowerCase()}`).join('; ')}.` : 'No channels.',
+    hanging.length ? `Gates without a partner: ${hanging.map((h) => h.gate).join(', ')}.` : '',
+  ].join(' ');
+  return (
+    <svg viewBox="0 0 320 490" className="mx-auto block w-full max-w-[340px]" role="img" aria-label={label}>
+      {DESIGN_CHANNELS.map((c) => {
+        const p = GATE_PT[c.a]!;
+        const q = GATE_PT[c.b]!;
+        return <line key={channelKey(c)} x1={p[0]} y1={p[1]} x2={q[0]} y2={q[1]} stroke="var(--color-line)" strokeWidth="4" strokeLinecap="round" />;
+      })}
+      {hanging.map((h) => {
+        const p = GATE_PT[h.gate]!;
+        const to = GATE_PT[h.partners[0]!]!;
+        // A half line toward its partner, never longer than 30, so a far partner does not draw a stub across the chart.
+        const f = Math.min(0.42, 30 / (Math.hypot(to[0] - p[0], to[1] - p[1]) || 1));
+        const q: Pt = [p[0] + (to[0] - p[0]) * f, p[1] + (to[1] - p[1]) * f];
+        return (
+          <g key={h.gate} opacity={dim(`g${h.gate}`)} style={{ transition: 'opacity 200ms' }}>
+            <Stretch p={p} q={q} side={h.side} />
+          </g>
+        );
+      })}
+      {channels.map((c) => {
+        const p = GATE_PT[c.a]!;
+        const q = GATE_PT[c.b]!;
+        const m = mid(p, q);
+        return (
+          <g key={c.key} opacity={dim(c.key)} style={{ transition: 'opacity 200ms' }}>
+            <Stretch p={p} q={m} side={c.sa} />
+            <Stretch p={m} q={q} side={c.sb} />
+            <line x1={p[0]} y1={p[1]} x2={q[0]} y2={q[1]} stroke="transparent" strokeWidth="16" strokeLinecap="round" className="cursor-pointer" onClick={() => onPick(c.key)} />
+          </g>
+        );
+      })}
       {DESIGN_CENTERS.map((c) => {
-        const on = defined.includes(c.key);
+        const on = chart.defined.includes(c.key);
+        const s = CENTER_SHAPE[c.key];
         return (
           <g key={c.key}>
-            <path d={shapePath(c.key)} fill={on ? CENTER_POS[c.key].tone : 'var(--color-card-strong)'} stroke={on ? 'var(--color-ink)' : 'var(--color-line)'} strokeWidth="2" strokeLinejoin="round" />
-            <text x={CENTER_POS[c.key].x} y={CENTER_POS[c.key].y + 4} textAnchor="middle" fontSize="9" fontWeight="800" fill={on ? 'var(--color-on-fill)' : 'var(--color-ink-soft)'}>
-              {c.name.split(' ')[0]}
+            <path d={s.path} fill={on ? s.tone : 'var(--color-card-strong)'} stroke={on ? 'var(--color-ink)' : 'var(--color-line)'} strokeWidth="2" strokeLinejoin="round" />
+            <text x={s.label[0]} y={s.label[1]} textAnchor="middle" fontSize="9" fontWeight="800" fill={on ? (s.tone === 'var(--color-r3)' || s.tone === 'var(--color-r2)' ? 'var(--color-on-yellow)' : 'var(--color-on-fill)') : 'var(--color-ink-soft)'}>
+              {c.key === 'g' ? 'G' : c.name.split(' ')[0]}
+            </text>
+          </g>
+        );
+      })}
+      {[...onGates].map(([gate, key]) => {
+        const [x, y] = GATE_PT[gate]!;
+        // A hanging gate has a card only when no channel is whole, so only then does tapping it pick something.
+        const pickable = !key.startsWith('g') || channels.length === 0;
+        return (
+          <g key={gate} opacity={dim(key)} style={{ transition: 'opacity 200ms' }} className={pickable ? 'cursor-pointer' : undefined} onClick={pickable ? () => onPick(key) : undefined}>
+            <circle cx={x} cy={y} r="7" fill="var(--color-card-strong)" stroke={SIDE_INK[gateSide(chart, gate) === 'design' ? 'design' : 'personality']} strokeWidth="1.4" />
+            <text x={x} y={y + 3} textAnchor="middle" fontSize="8" fontWeight="800" fill="var(--color-ink)">
+              {gate}
             </text>
           </g>
         );
       })}
     </svg>
+  );
+}
+
+/** A small picture of a side's line, the same as on the graph, for the tag beside the word. */
+function SideMark({ side }: { side: Side }) {
+  return (
+    <svg width="14" height="10" viewBox="0 0 14 10" aria-hidden="true">
+      {side === 'both' ? (
+        <>
+          <line x1="1" y1="3" x2="13" y2="3" stroke={SIDE_INK.personality} strokeWidth="2" strokeLinecap="round" />
+          <line x1="1" y1="7" x2="13" y2="7" stroke={SIDE_INK.design} strokeWidth="2" strokeLinecap="round" />
+        </>
+      ) : (
+        <line x1="1" y1="5" x2="13" y2="5" stroke={SIDE_INK[side]} strokeWidth="3" strokeLinecap="round" />
+      )}
+    </svg>
+  );
+}
+
+/** Your channels, a card each with its meaning; with none, the gates that hang without a partner. A card in focus lights its channel on the graph. */
+function ChannelCards({ chart, selected, onSelect }: { chart: DesignChart; selected: string | null; onSelect: (key: string | null) => void }) {
+  const { channels, hanging } = chartGates(chart);
+  const card = (key: string) =>
+    `rounded-tile border-2 bg-card p-sm shadow-toy-soft outline-none transition-colors focus-visible:border-ink ${selected === key ? 'border-ink' : 'border-transparent'}`;
+  return (
+    <section aria-labelledby="design-channels" className="mt-md">
+      <div className="flex min-h-[44px] items-center justify-between gap-sm">
+        <h3 id="design-channels" className="text-[18px]">{channels.length ? `Your channels (${channels.length})` : 'Gates without a partner'}</h3>
+        {selected !== null && (
+          <button type="button" onClick={() => onSelect(null)} className="min-h-[44px] shrink-0 text-[14px] font-bold underline underline-offset-4 hover:text-ink-soft">
+            Show all
+          </button>
+        )}
+      </div>
+      <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">
+        {channels.length
+          ? 'A channel joins two centers when both its gates are on. Tap one to see it on the graph.'
+          : 'No channel is whole yet. Each of these gates is on, but the gate at its other end is off.'}
+      </p>
+      <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
+        {channels.map((c) => {
+          const m = CHANNEL_MEANINGS[c.key]!;
+          return (
+            <li key={c.key} id={`channel-${c.key}`} tabIndex={0} aria-current={selected === c.key ? 'true' : undefined} onFocus={() => onSelect(c.key)} onClick={() => onSelect(c.key)} className={card(c.key)}>
+              <CardHead tag={<StatusTag tone="neutral" fit mark={<SideMark side={c.from} />}>{SIDE_WORD[c.from]}</StatusTag>}>
+                <p className="m-0 text-[16px] font-extrabold">
+                  {c.name} <span className="font-semibold text-ink-soft">{c.a}-{c.b}</span>
+                </p>
+              </CardHead>
+              <p className="m-0 text-[14px] font-semibold text-ink-soft">{centerWord(c.centers[0])} to {centerWord(c.centers[1])}</p>
+              <Fold title="What it means" className="mt-xs">
+                <p className="m-0 text-[14px] font-semibold">{m.what}</p>
+                <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">At your best: </span>{m.best}</p>
+                <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">Watch for: </span>{m.watch}</p>
+                <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">A small step: </span>{m.step}</p>
+              </Fold>
+            </li>
+          );
+        })}
+        {channels.length === 0 &&
+          hanging.map((h) => (
+            <li key={h.gate} id={`channel-g${h.gate}`} tabIndex={0} aria-current={selected === `g${h.gate}` ? 'true' : undefined} onFocus={() => onSelect(`g${h.gate}`)} onClick={() => onSelect(`g${h.gate}`)} className={card(`g${h.gate}`)}>
+              <CardHead tag={<StatusTag tone="neutral" fit mark={<SideMark side={h.side} />}>{SIDE_WORD[h.side]}</StatusTag>}>
+                <p className="m-0 text-[16px] font-extrabold">
+                  Gate {h.gate} <span className="font-semibold text-ink-soft">{GATE_NAMES[h.gate - 1]}</span>
+                </p>
+              </CardHead>
+              <p className="m-0 text-[14px] font-semibold text-ink-soft">{centerWord(h.center)}, waiting for gate {h.partners.join(' or ')}</p>
+            </li>
+          ))}
+      </ul>
+      {channels.length > 0 && hanging.length > 0 && (
+        <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Also on, without a partner: gates {hanging.map((h) => h.gate).join(', ')}.</p>
+      )}
+    </section>
   );
 }
 
@@ -714,6 +893,17 @@ function DesignView({ result, onEdit }: { result: DesignResult; onEdit: () => vo
   const [depth, setDepth] = useState<'3d' | '5d' | '7d' | 'num'>('3d');
   const chart = designChart(result, zodiac);
   const a = analyseDesign(chart);
+  // The channel (or hanging gate) lit on the graph. A tap on the graph picks its card and brings it into view.
+  const [picked, setPicked] = useState<string | null>(null);
+  useEffect(() => setPicked(null), [zodiac]);
+  const pickFromGraph = (key: string) => {
+    const next = picked === key ? null : key;
+    setPicked(next);
+    if (next) {
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      document.getElementById(`channel-${next}`)?.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+    }
+  };
   const cmp = designCompare(result);
   const t = DESIGN_TYPES[chart.type];
   const rel = RELATIONSHIP_BY_KEY[ACCENT.design];
@@ -739,13 +929,14 @@ function DesignView({ result, onEdit }: { result: DesignResult; onEdit: () => vo
       </div>
       {zodiac === 'fagan' && <p className="mt-xs m-0 rounded-tile bg-paper p-sm text-[12px] font-semibold">Human design is drawn in the tropical zodiac. The sidereal reading is an experiment: every position moves back about {Math.round(result.ayanamsa.personality * 10) / 10}°, which is about four gates, so expect a different chart.</p>}
 
-      <div className="scroll-row mt-sm flex gap-xs" role="group" aria-label="Layer of the reading">
-        {DESIGN_DEPTHS.map((d) => (
-          <button key={d.key} type="button" aria-pressed={depth === d.key} onClick={() => setDepth(d.key)} className={`toy min-h-[44px] shrink-0 rounded-pill border-2 px-md text-[14px] font-bold ${depth === d.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-            {d.name}
-          </button>
-        ))}
-      </div>
+      <TabRow
+        className="mt-sm"
+        label="Layer of the reading"
+        items={DESIGN_DEPTHS.map((d) => ({ key: d.key, label: d.name }))}
+        value={depth}
+        onChange={setDepth}
+        pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+      />
       <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{DESIGN_DEPTHS.find((d) => d.key === depth)!.blurb} {depth === 'num' ? 'Numerology is another way to reflect, and is not science.' : 'The three layers are the app’s own way to group a chart. They are not part of the old system.'}</p>
 
       {depth === 'num' && <NumerologyPanel result={result} onEdit={onEdit} />}
@@ -753,10 +944,15 @@ function DesignView({ result, onEdit }: { result: DesignResult; onEdit: () => vo
       {depth !== 'num' && (
         <>
 
-      <div className="mt-md grid gap-md md:grid-cols-[260px_1fr]">
+      <div className="mt-md grid gap-md md:grid-cols-[340px_1fr]">
         <div>
-          <BodyGraph defined={chart.defined} links={chart.channels.map((c) => c.centers)} />
+          <BodyGraph chart={chart} selected={picked} onPick={pickFromGraph} />
           <p className="mt-xs m-0 text-center text-[12px] font-semibold text-ink-soft">{chart.defined.length} of 9 centers defined, {chart.channels.length} channels</p>
+          <p className="mt-xs m-0 flex flex-wrap items-center justify-center gap-sm text-[12px] font-semibold text-ink-soft">
+            <span className="inline-flex items-center gap-xs"><SideMark side="personality" /> Conscious</span>
+            <span className="inline-flex items-center gap-xs"><SideMark side="design" /> Unconscious</span>
+          </p>
+          <ChannelCards chart={chart} selected={picked} onSelect={setPicked} />
         </div>
         <ul className="m-0 flex list-none flex-col gap-xs p-0">
           {a.depths[depth].map((b) => (
@@ -788,7 +984,7 @@ function DesignView({ result, onEdit }: { result: DesignResult; onEdit: () => vo
               <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">How you will know: </span>{g.proof}</p>
               <div className="mt-xs flex flex-wrap items-center gap-xs">
                 <AddGoal pillar={g.pillar} title={g.title} step={g.step} />
-                <Link to={`/realm/${g.pillar}`} className="text-[14px] font-bold underline underline-offset-4">
+                <Link to={`/realm/${g.pillar}`} className="inline-flex min-h-[44px] items-center text-[14px] font-bold underline underline-offset-4">
                   Open this pillar
                 </Link>
               </div>
@@ -899,9 +1095,9 @@ function NumerologyPanel({ result, onEdit }: { result: DesignResult; onEdit: () 
           ))}
         </ul>
         {!n.expression && (
-          <div className="mt-xs rounded-tile bg-card p-sm shadow-toy-soft">
-            <p className="m-0 text-[14px] font-semibold">Add the full name on your birth record to see your Expression, Soul urge, Personality and Maturity numbers.</p>
-            <Button className="mt-xs" size="sm" variant="outline" onClick={onEdit}>
+          <div className="mt-xs flex flex-wrap-reverse items-center justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+            <p className="m-0 min-w-0 flex-1 basis-[60%] text-[14px] font-semibold">Add the full name on your birth record to see your Expression, Soul urge, Personality and Maturity numbers.</p>
+            <Button size="sm" variant="outline" onClick={onEdit}>
               Add my name
             </Button>
           </div>
@@ -1025,6 +1221,7 @@ function DesignScreen({ onBack }: { onBack: () => void }) {
   const refresh = useRefreshAll();
   const st: ExtraState | undefined = q.data?.extras.design;
   const [mode, setMode] = useState<'form' | 'result' | null>(null);
+  const [asking, setAsking] = useState(false);
   const remove = useMutation({
     mutationFn: () => api.deleteExtra('design'),
     onSuccess: () => {
@@ -1072,10 +1269,11 @@ function DesignScreen({ onBack }: { onBack: () => void }) {
         <Button variant="outline" onClick={() => setMode('form')}>
           Change my birth details
         </Button>
-        <Button variant="ghost" onClick={() => window.confirm('Delete your chart and your birth details for good?') && remove.mutate()} disabled={remove.isPending}>
+        <Button variant="ghost" onClick={() => setAsking(true)} disabled={remove.isPending}>
           Delete this chart
         </Button>
       </div>
+      <AskDelete open={asking} title="Delete this chart?" line="Your chart and your birth details are gone for good. This cannot be undone." pending={remove.isPending} failed={remove.isError} onYes={() => remove.mutate()} onClose={() => setAsking(false)} />
     </>
   );
 }
@@ -1089,5 +1287,30 @@ function CareNote({ lead, children }: { lead: string; children: ReactNode }) {
         <p className="m-0 text-[14px] font-semibold text-ink-soft">{children}</p>
       </Fold>
     </div>
+  );
+}
+
+/** The one "are you sure?" for deleting a Discover result or chart: a sheet with a solid red yes and an outline Keep it. */
+export function AskDelete({ open, title, line, pending, failed, onYes, onClose }: { open: boolean; title: string; line: string; pending: boolean; failed: boolean; onYes: () => void; onClose: () => void }) {
+  return (
+    <Sheet open={open} onClose={onClose} title={title}>
+      <div className="grid gap-md pb-xl">
+        <p className="m-0 text-[16px] font-semibold text-ink-soft">{line}</p>
+        {failed && <p className="m-0 text-[14px] font-bold text-r1">That did not work. Try again.</p>}
+        <div className="flex flex-wrap gap-xs">
+          <button
+            type="button"
+            disabled={pending}
+            onClick={onYes}
+            className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-[16px] font-semibold text-on-fill disabled:opacity-50"
+          >
+            Yes, delete it
+          </button>
+          <Button variant="outline" onClick={onClose}>
+            Keep it
+          </Button>
+        </div>
+      </div>
+    </Sheet>
   );
 }

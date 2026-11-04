@@ -3,8 +3,9 @@ import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '../components/Button';
+import { IconButton } from '../components/IconButton';
 import { Markdown } from '../components/Markdown';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Pager, usePage } from '../components/Pager';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
@@ -14,12 +15,13 @@ import { useParamState } from '../lib/useParamState';
 import { ToolsLine } from './Content';
 import { AppIcon } from '../components/AppIcon';
 import { Icon } from '../components/Icon';
-import { Check } from 'lucide-react';
+import { Check, Trash2 } from 'lucide-react';
 import { FIELD, chip } from '../lib/ui';
 import { copyPlain } from '../lib/clipboard';
 import { dateTime } from '../lib/date';
 import { ErrorLine } from '../components/ErrorLine';
 import { WorkingLine } from '../components/fx/WorkingLine';
+import { TabRow } from '../components/TabRow';
 
 const when = dateTime;
 const n = (v: number | undefined) => (typeof v === 'number' && v > 0 ? formatCount(v) : '');
@@ -35,6 +37,29 @@ type Tab = (typeof TABS)[number]['key'];
 type Preset = { research?: ResearchKind; piece?: PieceKind; query?: string; at: number };
 
 /** The way from "who is this for" to a month of posts: eight steps, done by doing them. The next one is the one to tap. */
+/** The pale red outline a delete wears (the Sign out button's look), never solid until the sheet asks. */
+const DELETE_BTN = 'toy inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-[16px] font-bold text-r1 hover:bg-r1/10 disabled:opacity-50';
+
+/** Asks before a delete, the Mindful session pattern: a red "Yes, delete it" and a quiet "Keep it". */
+function ConfirmDelete({ open, title, body, pending, failed, onYes, onClose }: { open: boolean; title: string; body: string; pending: boolean; failed: boolean; onYes: () => void; onClose: () => void }) {
+  return (
+    <Sheet open={open} onClose={onClose} title={title}>
+      <div className="grid gap-md pb-xl">
+        <p className="m-0 text-[16px] font-semibold text-ink-soft">{body}</p>
+        {failed && <p role="alert" className="m-0 text-[14px] font-bold text-r1">That did not work. Try again.</p>}
+        <div className="flex flex-wrap gap-xs">
+          <button type="button" disabled={pending} onClick={onYes} className={DELETE_BTN}>
+            Yes, delete it
+          </button>
+          <Button variant="outline" onClick={onClose}>
+            Keep it
+          </Button>
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
 function StrategyPath({ brand, counts, onGo }: { brand: { niche: string; voice: string }; counts: Parameters<typeof strategyPath>[1]; onGo: (go: ReturnType<typeof strategyPath>[number]['go']) => void }) {
   const steps = strategyPath(brand, counts);
   const done = steps.filter((s) => s.done).length;
@@ -82,16 +107,13 @@ export function Brand() {
   const [openPiece, setOpenPiece] = useState<BrandPiece | null>(null);
   const [preset, setPreset] = useState<Preset | null>(null);
   const remove = useMutation({ mutationFn: () => api.deleteBrand(id), onSuccess: () => nav('/shop/content', { replace: true }) });
+  const [deleting, setDeleting] = useState(false);
   const d = q.data;
 
   if (q.isError) {
     return (
       <Screen>
-        <header className="pt-lg">
-          <BackLink to="/shop/content">Content</BackLink>
-          <h1 className="text-[30px]">That folder is gone</h1>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{errorText(q.error, 'It may have been removed.')}</p>
-        </header>
+        <AppCover back={{ to: '/shop/content', label: 'Content' }} title="That folder is gone" lede={errorText(q.error, 'It may have been removed.')} />
       </Screen>
     );
   }
@@ -100,30 +122,23 @@ export function Brand() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/shop/content">Content</BackLink>
-        <p className="m-0 text-[14px] font-bold text-ink-soft">{b.niche || 'Brand folder'}</p>
-        <h1 className="text-[30px]">{b.name}</h1>
-        {b.description && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{b.description}</p>}
-        <div className="mt-sm">
-          <ToolsLine tools={d.tools} />
-        </div>
-        <div className="mt-sm flex flex-wrap gap-xs">
-          <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-            Edit the brand
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={remove.isPending}
-            onClick={() => {
-              if (window.confirm(`Remove ${b.name} and everything in its folder?`)) remove.mutate();
-            }}
-          >
-            Remove folder
-          </Button>
-        </div>
-      </header>
+      <AppCover
+        back={{ to: '/shop/content', label: 'Content' }}
+        eyebrow={b.niche || 'Brand folder'}
+        title={b.name}
+        lede={b.description || undefined}
+        actions={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+              Edit the brand
+            </Button>
+            <IconButton icon={Trash2} label="Remove folder" disabled={remove.isPending} onClick={() => setDeleting(true)} opens />
+          </>
+        }
+      >
+        <ToolsLine tools={d.tools} />
+      </AppCover>
+      <ConfirmDelete open={deleting} title="Delete this folder?" body={`${b.name} and everything in its folder: links, research and pieces. This cannot be undone.`} pending={remove.isPending} failed={remove.isError} onYes={() => remove.mutate()} onClose={() => setDeleting(false)} />
 
       <StrategyPath
         brand={b}
@@ -136,13 +151,14 @@ export function Brand() {
       />
 
       <div className="mt-md">
-        <nav className="scroll-row" aria-label="Folder sections">
-          {TABS.map((t) => (
-            <button key={t.key} type="button" aria-pressed={tab === t.key} onClick={() => setTab(t.key)} className={`toy shrink-0 ${chip(tab === t.key)}`}>
-              {t.label}
-              {t.key === 'sources' ? ` · ${d.sources.length}` : t.key === 'research' ? ` · ${d.runs.length}` : t.key === 'pieces' ? ` · ${b.pieces}` : ''}
-            </button>
-          ))}
+        <nav aria-label="Folder sections">
+          <TabRow
+            label="Folder sections"
+            items={TABS.map((t) => ({ key: t.key as Tab, label: `${t.label}${t.key === 'sources' ? ` · ${d.sources.length}` : t.key === 'research' ? ` · ${d.runs.length}` : t.key === 'pieces' ? ` · ${b.pieces}` : ''}` }))}
+            value={tab}
+            onChange={setTab}
+            pillClass={chip}
+          />
         </nav>
       </div>
 

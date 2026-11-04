@@ -9,7 +9,7 @@ export async function deleteAccount(db: D1Database, userId: string): Promise<voi
   await db.batch([
     // First, while the address is still on the account: the outbox keeps no mail for someone who is gone.
     db.prepare('DELETE FROM email_outbox WHERE user_id = ? OR to_email = (SELECT email FROM users WHERE id = ?)').bind(userId, userId),
-    db.prepare("UPDATE users SET display_name = 'Deleted member', email = NULL, phone = '', birth_date = '', password_hash = NULL, password_salt = NULL, handle = NULL, bio = '', avatar_url = '', socials_json = '{}', skills = '[]', categories = '[]', goals = '[]', interests = '[]', identities = '[]', intake_json = '{}', city = '', area = '', lat = NULL, lng = NULL, location = '', reminder_time = NULL, open_to_intros = 0, permissions = '[]', friend_code = NULL, leaderboard_opt_in = 0 WHERE id = ?").bind(userId),
+    db.prepare("UPDATE users SET display_name = 'Deleted member', email = NULL, phone = '', birth_date = '', password_hash = NULL, password_salt = NULL, handle = NULL, bio = '', avatar_url = '', socials_json = '{}', skills = '[]', categories = '[]', goals = '[]', interests = '[]', identities = '[]', intake_json = '{}', city = '', area = '', lat = NULL, lng = NULL, location = '', reminder_time = NULL, open_to_intros = 0, permissions = '[]', friend_code = NULL, leaderboard_opt_in = 0, app_prefs_json = NULL WHERE id = ?").bind(userId),
     db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM session_evictions WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM subtasks WHERE user_id = ?').bind(userId),
@@ -21,7 +21,13 @@ export async function deleteAccount(db: D1Database, userId: string): Promise<voi
     db.prepare('DELETE FROM calendar_feeds WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM custom_reminders WHERE user_id = ?').bind(userId),
     // Agency: the clients, deliverables, time, agreements and metrics go. An invoice stays for the books with the totals, and loses who it was for, the bank and the link.
+    // The Agency team: every row where they own the agency or are on someone's team, then their name off what they did on others' agencies
+    // (the lines and notes stay on the owner's books as "A former team member").
+    db.prepare('DELETE FROM agency_team WHERE owner_id = ? OR member_id = ?').bind(userId, userId),
+    db.prepare('UPDATE agency_log SET actor_id = NULL WHERE actor_id = ?').bind(userId),
+    db.prepare('UPDATE agency_notes SET author_id = NULL WHERE author_id = ?').bind(userId),
     db.prepare('DELETE FROM portal_sessions WHERE client_id IN (SELECT id FROM agency_clients WHERE user_id = ?)').bind(userId),
+    db.prepare('DELETE FROM team_link_sessions WHERE client_id IN (SELECT id FROM agency_clients WHERE user_id = ?)').bind(userId),
     db.prepare('DELETE FROM retired_portal_links WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM agency_password_requests WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM agency_cycles WHERE user_id = ?').bind(userId),
@@ -52,10 +58,13 @@ export async function deleteAccount(db: D1Database, userId: string): Promise<voi
     db.prepare('DELETE FROM channel_messages WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM channel_members WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM event_messages WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM run_messages WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM run_discussion_reads WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM event_networking WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM community_mutes WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM blocks WHERE blocker_id = ?').bind(userId),
     db.prepare('DELETE FROM not_to_do WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM day_types WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM reviews WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM review_templates WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM review_schedules WHERE user_id = ?').bind(userId),
@@ -108,6 +117,11 @@ export async function deleteAccount(db: D1Database, userId: string): Promise<voi
     db.prepare('DELETE FROM community_replies WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM community_posts WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM bond_messages WHERE user_id = ?').bind(userId),
+    // Nobody keeps a "Deleted member" as a friend, an open request or a Club member, and a seat at an event still to come is
+    // given up; a seat at one that is over stays for the host's records (and is left out of every list by `liveUser`).
+    db.prepare('DELETE FROM friendships WHERE requester_id = ?1 OR recipient_id = ?1').bind(userId),
+    db.prepare('DELETE FROM memberships WHERE user_id = ?').bind(userId),
+    db.prepare("UPDATE event_registrations SET status = 'cancelled' WHERE user_id = ? AND status IN ('registered','waitlisted') AND event_id IN (SELECT id FROM events WHERE ends_at >= ?)").bind(userId, nowIso()),
     db.prepare('DELETE FROM circle_messages WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM preowned_messages WHERE sender_id = ?').bind(userId),
     db.prepare('DELETE FROM support_tickets WHERE user_id = ?').bind(userId),

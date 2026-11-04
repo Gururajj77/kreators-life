@@ -3,13 +3,14 @@ import { longDate } from '../lib/date';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button } from '../components/Button';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { FIELD } from '../lib/ui';
 import { ErrorLine } from '../components/ErrorLine';
+import { CardHead } from '../components/CardHead';
 
 
 
@@ -41,19 +42,21 @@ export function Club() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Club</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          A curated membership. People get in on the quality of their work and how they show up, never on follower counts.
-          {d ? ` ${d.members} ${d.members === 1 ? 'member' : 'members'} so far.` : ''}
-        </p>
-      </header>
+      <AppCover
+        back={{ to: '/apps', label: 'Apps' }}
+        title="Club"
+        lede={
+          <>
+            A curated membership. People get in on the quality of their work and how they show up, never on follower counts.
+            {d ? ` ${d.members} ${d.members === 1 ? 'member' : 'members'} so far.` : ''}
+          </>
+        }
+      />
 
       {q.isError && (
-        <div className="mt-md rounded-card bg-card p-md shadow-toy-soft" role="alert">
-          <p className="m-0 font-bold">Could not load the Club.</p>
-          <Button variant="outline" className="mt-sm" onClick={() => q.refetch()}>
+        <div className="mt-md rounded-card bg-card p-md shadow-toy-soft flex flex-wrap-reverse items-center justify-between gap-sm" role="alert">
+          <p className="m-0 font-bold min-w-0 flex-1 basis-[60%]">Could not load the Club.</p>
+          <Button variant="outline" onClick={() => q.refetch()}>
             Try again
           </Button>
         </div>
@@ -128,12 +131,15 @@ function ReviewQueue({ queue, staff, page, onChange }: { queue: Membership[]; st
   const others = queue.filter((m) => m.status !== 'applied');
   const row = (m: Membership) => (
     <li key={m.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <p className="m-0 text-[16px] font-bold">
-        {m.userName}{' '}
-        <span className="rounded-pill px-xs text-[12px] font-extrabold leading-[20px]" style={{ background: STATUS_COPY[m.status].tint }}>
-          {m.status}
-        </span>
-      </p>
+      <CardHead
+        tag={
+          <span title={m.status} className="max-w-full truncate rounded-pill px-xs text-[12px] font-extrabold leading-[20px]" style={{ background: STATUS_COPY[m.status].tint }}>
+            {m.status}
+          </span>
+        }
+      >
+        <p className="m-0 text-[16px] font-bold">{m.userName}</p>
+      </CardHead>
       <p className="m-0 text-[14px] font-semibold text-ink-soft">Applied {longDate(m.createdAt)}</p>
       {m.note && <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold">{m.note}</p>}
       <label className="mt-sm block">

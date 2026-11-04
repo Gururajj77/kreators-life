@@ -1,7 +1,9 @@
-import { inGroupOrder, matchSetup, MODULES, moduleState, setupSwitchable, type AppModule, type ModuleAccess, type ModuleGroup } from '@kreators/shared';
-import { useMemo } from 'react';
+import { inGroupOrder, matchSetup, MODULES, moduleState, setupSwitchable, type AppModule, type AppPrefs, type MeResponse, type ModuleAccess, type ModuleGroup } from '@kreators/shared';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCallback, useMemo } from 'react';
+import { api } from './api';
 import { usageScore } from './context';
-import { useMe } from './queries';
+import { keys, useMe } from './queries';
 
 export interface ModuleView extends AppModule {
   available: boolean;
@@ -54,4 +56,33 @@ export function useGroupOrder(groups: readonly ModuleGroup[]): ModuleGroup[] {
 export function useModule(key: string): ModuleView | null {
   const { modules } = useModules();
   return modules.find((m) => m.key === key) ?? null;
+}
+
+const NO_PREFS: AppPrefs = { open: {}, order: {} };
+
+/** The person's own arrangement of the app groups (saved on the account): which start open, and the order of the apps they placed. */
+export function useAppPrefs(): AppPrefs {
+  return useMe().data?.user.appPrefs ?? NO_PREFS;
+}
+
+/** Saves the whole arrangement (PATCH /me { appPrefs }). The screen shows it at once; a refused save puts the last saved one back. */
+export function useSaveAppPrefs(): (next: AppPrefs) => Promise<boolean> {
+  const qc = useQueryClient();
+  return useCallback(
+    async (next: AppPrefs) => {
+      const was = qc.getQueryData<MeResponse>(keys.me);
+      if (was) qc.setQueryData<MeResponse>(keys.me, { ...was, user: { ...was.user, appPrefs: next } });
+      try {
+        const { user } = await api.updateMe({ appPrefs: next });
+        const now = qc.getQueryData<MeResponse>(keys.me);
+        if (now && user) qc.setQueryData<MeResponse>(keys.me, { ...now, user: { ...now.user, appPrefs: user.appPrefs } });
+        return true;
+      } catch {
+        const now = qc.getQueryData<MeResponse>(keys.me);
+        if (now && was) qc.setQueryData<MeResponse>(keys.me, { ...now, user: { ...now.user, appPrefs: was.user.appPrefs } });
+        return false;
+      }
+    },
+    [qc],
+  );
 }

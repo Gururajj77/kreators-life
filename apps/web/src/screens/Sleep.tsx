@@ -3,6 +3,8 @@ import { LOCALE } from '@kreators/shared';
 import { useState } from 'react';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { Button } from '../components/Button';
+import { AnimatedIcon } from '../components/AnimatedIcon';
+import { Sheet } from '../components/Sheet';
 import { AreaLine, Donut, PillBars } from '../components/Charts';
 import { Hero, HeroNumber } from '../components/Hero';
 import { RulerPicker } from '../components/RulerPicker';
@@ -11,6 +13,7 @@ import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { lastDays, shortDay, todayLocal } from '../lib/date';
 import { useLogs, useRefreshAll, useWellbeing } from '../lib/queries';
+import { EmergenceSlot } from '../components/EmergenceSlot';
 
 const QUALITY = ['Rough', 'Light', 'Okay', 'Good', 'Deep'];
 const DAY = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -25,6 +28,8 @@ export function Sleep() {
   const [quality, setQuality] = useState(Number(current?.extra.quality ?? 3));
   const save = useMutation({ mutationFn: () => api.log('sleep', { date: today, value: hours, extra: { quality } }), onSuccess: () => refresh() });
   const avg = wb.data?.parts.find((p) => p.kind === 'sleep')?.avg7 ?? null;
+  const [toDelete, setToDelete] = useState<{ id: string; label: string } | null>(null);
+  const remove = useMutation({ mutationFn: (id: string) => api.deleteLog('sleep', id), onSuccess: () => (setToDelete(null), refresh()) });
 
   return (
     <Screen>
@@ -83,6 +88,7 @@ export function Sleep() {
       </section>
 
       <PeriodPanel id="sleep-period" parts={['wellbeing']} />
+      <EmergenceSlot app="sleep" max={2} />
       <section className="mt-lg" aria-labelledby="thirty-heading">
         <h2 id="thirty-heading" className="text-[24px]">
           Last 30 nights
@@ -110,9 +116,37 @@ export function Sleep() {
                 </span>
                 <span className="block text-[14px] font-semibold text-ink-soft">{new Date(`${l.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
               </span>
+              <button
+                type="button"
+                onClick={() => setToDelete({ id: l.id, label: `${l.value} hours on ${new Date(`${l.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', month: 'short', day: 'numeric' })}` })}
+                aria-label={`Delete the night of ${new Date(`${l.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', month: 'short', day: 'numeric' })}`}
+                title="Delete"
+                className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1"
+              >
+                <AnimatedIcon name="trash" size={20} />
+              </button>
             </li>
           ))}
         </ul>
+        <Sheet open={toDelete !== null} onClose={() => setToDelete(null)} title="Delete this night?">
+          <div className="grid gap-md pb-xl">
+            <p className="m-0 text-[16px] font-semibold text-ink-soft">{toDelete?.label}. It comes off your average and charts. This cannot be undone.</p>
+            {remove.isError && <p className="m-0 text-[14px] font-bold text-r1">That did not work. Try again.</p>}
+            <div className="flex flex-wrap gap-xs">
+              <button
+                type="button"
+                disabled={remove.isPending}
+                onClick={() => toDelete && remove.mutate(toDelete.id)}
+                className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-[16px] font-semibold text-on-fill disabled:opacity-50"
+              >
+                Yes, delete it
+              </button>
+              <Button variant="outline" onClick={() => setToDelete(null)}>
+                Keep it
+              </Button>
+            </div>
+          </div>
+        </Sheet>
       </section>
     </Screen>
   );

@@ -18,6 +18,7 @@ import { lazyNamed } from '../lib/lazy';
 import { useJournal, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { AppIcon } from '../components/AppIcon';
+import { EmergenceSlot } from '../components/EmergenceSlot';
 
 // The prompt list is a large block of text, so it downloads only when the Journal opens.
 const JournalPrompt = lazyNamed(() => import('../components/JournalPrompt'), 'JournalPrompt');
@@ -50,7 +51,8 @@ export function Journal() {
         <h1 className="text-[30px]">Journal</h1>
       </header>
 
-      <RemindersSection />
+      {/* New entry is this screen's one solid button, so the glass tap is an outline here. */}
+      <RemindersSection quiet />
 
       {stats && (
         <Hero color="var(--color-r5)" deep="var(--deep-self)" className="mt-md">
@@ -95,6 +97,7 @@ export function Journal() {
       </Suspense>
 
       <PeriodPanel id="journal-period" parts={['journal', 'wellbeing']} />
+      <EmergenceSlot app="journal" max={2} />
       <section className="mt-lg" aria-labelledby="entries-heading">
         <h2 id="entries-heading" className="text-[24px]">
           My journals
@@ -203,6 +206,7 @@ function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEn
   const [emotion, setEmotion] = useState<number | null>(null);
   const [stress, setStress] = useState(2);
   const [stressors, setStressors] = useState<string[]>([]);
+  const [asking, setAsking] = useState(false);
   const existing = entry && entry !== 'new' ? entry : null;
   const qc = useQueryClient();
 
@@ -212,6 +216,7 @@ function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEn
     setEmotion(existing?.emotion ?? null);
     setStress(existing?.stress ?? 2);
     setStressors(existing?.stressors ?? []);
+    setAsking(false);
   }, [entry]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = useMutation({
@@ -291,10 +296,30 @@ function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEn
         <Button type="submit" size="lg" full disabled={save.isPending || (!body.trim() && !title.trim())}>
           {existing ? 'Save changes' : 'Save entry'}
         </Button>
-        {existing && (
-          <Button variant="ghost" disabled={remove.isPending} onClick={() => window.confirm('Delete this entry?') && remove.mutate()}>
+        {existing && !asking && (
+          <Button variant="ghost" disabled={remove.isPending} onClick={() => setAsking(true)}>
             Delete entry
           </Button>
+        )}
+        {existing && asking && (
+          <div className="grid gap-sm rounded-tile bg-card p-sm" role="group" aria-label="Delete this entry?">
+            <p className="m-0 text-[16px] font-bold">Delete this entry?</p>
+            <p className="m-0 text-[14px] font-semibold text-ink-soft">Its words are gone for good. This cannot be undone.</p>
+            {remove.isError && <p className="m-0 text-[14px] font-bold text-r1">That did not work. Try again.</p>}
+            <div className="flex flex-wrap gap-xs">
+              <button
+                type="button"
+                disabled={remove.isPending}
+                onClick={() => remove.mutate()}
+                className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-[16px] font-semibold text-on-fill disabled:opacity-50"
+              >
+                Yes, delete it
+              </button>
+              <Button variant="outline" onClick={() => setAsking(false)}>
+                Keep it
+              </Button>
+            </div>
+          </div>
         )}
       </form>
     </Sheet>

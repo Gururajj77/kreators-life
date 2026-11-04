@@ -1,19 +1,26 @@
-import { PROPOSAL_STAGES, type Proposal, type ProposalStage, money } from '@kreators/shared';
+import { PROPOSAL_STAGES, type Proposal, type ProposalStage, money, typedCents } from '@kreators/shared';
 import { longDate } from '../lib/date';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button } from '../components/Button';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
-import { useAuthed } from '../lib/queries';
+import { useAuthed, useMe } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { Icon } from '../components/Icon';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Pencil, Undo2 } from 'lucide-react';
+import { MoreMenu } from '../components/MoreMenu';
+import type { CSSProperties } from 'react';
 import { FIELD } from '../lib/ui';
 import { ErrorLine } from '../components/ErrorLine';
 
+/** A budget as typed ("1,50,000", "₹ 2500.50"), read from its digits with `typedCents` and kept in whole units the way the column stores it; anything unreadable is 0. */
+const budgetUnits = (typed: string): number => {
+  const cents = typedCents(typed);
+  return Number.isFinite(cents) && cents > 0 ? Math.round(cents / 100) : 0;
+};
 
 const COPY = {
   tv: {
@@ -64,7 +71,7 @@ function StagePill({ stage }: { stage: ProposalStage }) {
   );
 }
 
-function ProposalCard({ p, reviewer, onChange }: { p: Proposal; reviewer: boolean; onChange: () => void }) {
+function ProposalCard({ p, reviewer, mine, onChange, onEdit, onWithdraw }: { p: Proposal; reviewer: boolean; mine: boolean; onChange: () => void; onEdit: (p: Proposal) => void; onWithdraw: (p: Proposal) => void }) {
   const [open, setOpen] = useState(false);
   const [stage, setStage] = useState<ProposalStage>(p.stage);
   const [note, setNote] = useState('');
@@ -77,7 +84,8 @@ function ProposalCard({ p, reviewer, onChange }: { p: Proposal; reviewer: boolea
   });
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="toy-flat flex w-full items-center gap-sm text-left">
+      <div className="flex items-center gap-xs">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="toy-flat flex min-w-0 flex-1 items-center gap-sm text-left">
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-xs text-[16px] font-bold">
             {p.title}
@@ -91,6 +99,17 @@ function ProposalCard({ p, reviewer, onChange }: { p: Proposal; reviewer: boolea
         </span>
         <Icon icon={ChevronDown} size={20} strokeWidth={3} className={`shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
+      {mine && p.stage === 'submitted' && (
+        <MoreMenu
+          label={`More for ${p.title}`}
+          title={p.title}
+          items={[
+            { key: 'edit', label: 'Edit', icon: Pencil, onSelect: () => onEdit(p) },
+            { key: 'withdraw', label: 'Withdraw', icon: Undo2, destructive: true, onSelect: () => onWithdraw(p) },
+          ]}
+        />
+      )}
+      </div>
       {open && (
         <div className="mt-sm">
           <p className="m-0 whitespace-pre-wrap text-[16px] font-semibold leading-relaxed">{p.pitch}</p>
@@ -142,25 +161,33 @@ export function Proposals({ kind }: { kind: 'tv' | 'fund' }) {
   const copy = COPY[kind];
   const pg = usePage();
   const q = useAuthed(['proposals', kind, pg.query], () => api.proposals(kind, pg.query));
+  const me = useMe();
+  const myId = me.data?.user.id ?? '';
   const [writing, setWriting] = useState(false);
+  // Item-driven sheets: the pitch being edited or withdrawn, or none.
+  const [editing, setEditing] = useState<Proposal | null>(null);
+  const [withdrawing, setWithdrawing] = useState<Proposal | null>(null);
   const d = q.data;
   const mine = d?.proposals ?? [];
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">{copy.title}</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{copy.blurb}</p>
-        <Button className="mt-md" onClick={() => setWriting(true)}>
-          {copy.action}
-        </Button>
-      </header>
+      <AppCover
+        back={{ to: '/apps', label: 'Apps' }}
+        title={copy.title}
+        lede={copy.blurb}
+        actions={
+          /* A reviewer's one solid button is Record decision on the card they open, so the pitch button is an outline for them. */
+          <Button variant={d?.reviewer ? 'outline' : undefined} onClick={() => setWriting(true)}>
+            {copy.action}
+          </Button>
+        }
+      />
 
       {q.isError && (
-        <div className="mt-md rounded-card bg-card p-md shadow-toy-soft" role="alert">
-          <p className="m-0 font-bold">Could not load proposals.</p>
-          <Button variant="outline" className="mt-sm" onClick={() => q.refetch()}>
+        <div className="mt-md rounded-card bg-card p-md shadow-toy-soft flex flex-wrap-reverse items-center justify-between gap-sm" role="alert">
+          <p className="m-0 font-bold min-w-0 flex-1 basis-[60%]">Could not load proposals.</p>
+          <Button variant="outline" onClick={() => q.refetch()}>
             Try again
           </Button>
         </div>
@@ -174,7 +201,7 @@ export function Proposals({ kind }: { kind: 'tv' | 'fund' }) {
           {mine.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{d.reviewer ? 'Nothing submitted yet.' : `Nothing yet. ${copy.action.toLowerCase()} when you are ready.`}</p>}
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {mine.map((p) => (
-              <ProposalCard key={p.id} p={p} reviewer={d.reviewer} onChange={() => q.refetch()} />
+              <ProposalCard key={p.id} p={p} reviewer={d.reviewer} mine={p.userId === myId} onChange={() => q.refetch()} onEdit={setEditing} onWithdraw={setWithdrawing} />
             ))}
           </ul>
           <Pager page={d.page} label="proposals" />
@@ -182,6 +209,8 @@ export function Proposals({ kind }: { kind: 'tv' | 'fund' }) {
       )}
 
       <ProposeSheet kind={kind} open={writing} onClose={() => setWriting(false)} onDone={() => q.refetch()} />
+      {editing && <EditSheet key={editing.id} p={editing} onClose={() => setEditing(null)} onDone={() => q.refetch()} />}
+      <WithdrawSheet p={withdrawing} onClose={() => setWithdrawing(null)} onDone={() => q.refetch()} />
     </Screen>
   );
 }
@@ -193,7 +222,7 @@ function ProposeSheet({ kind, open, onClose, onDone }: { kind: 'tv' | 'fund'; op
   const [budgetAmount, setBudget] = useState('');
   const [currency, setCurrency] = useState('INR');
   const propose = useMutation({
-    mutationFn: () => api.propose({ kind, title, pitch, budgetAmount: Number(budgetAmount) || 0, currency }),
+    mutationFn: () => api.propose({ kind, title, pitch, budgetAmount: budgetUnits(budgetAmount), currency }),
     onSuccess: () => {
       setTitle('');
       setPitch('');
@@ -222,7 +251,7 @@ function ProposeSheet({ kind, open, onClose, onDone }: { kind: 'tv' | 'fund'; op
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-[14px] font-bold">{copy.budgetLabel}</span>
-            <input type="number" min={0} value={budgetAmount} onChange={(e) => setBudget(e.target.value)} className={FIELD} />
+            <input inputMode="decimal" value={budgetAmount} onChange={(e) => setBudget(e.target.value)} maxLength={20} className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-[14px] font-bold">Currency</span>
@@ -235,6 +264,92 @@ function ProposeSheet({ kind, open, onClose, onDone }: { kind: 'tv' | 'fund'; op
           Submit
         </Button>
       </form>
+    </Sheet>
+  );
+}
+
+/** Changes the author's own pitch while it is still Submitted. Mounted per pitch (keyed), so the fields start from it once. */
+function EditSheet({ p, onClose, onDone }: { p: Proposal; onClose: () => void; onDone: () => void }) {
+  const copy = COPY[p.kind];
+  const [title, setTitle] = useState(p.title);
+  const [pitch, setPitch] = useState(p.pitch);
+  const [budgetAmount, setBudget] = useState(p.budgetAmount > 0 ? String(p.budgetAmount) : '');
+  const save = useMutation({
+    mutationFn: () => api.editProposal(p.id, { title, pitch, budgetAmount: budgetUnits(budgetAmount) }),
+    onSuccess: () => {
+      onDone();
+      onClose();
+    },
+  });
+  return (
+    <Sheet open onClose={onClose} title={`Edit ${copy.sheet.toLowerCase()}`}>
+      <form
+        className="flex flex-col gap-md"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (title.trim() && pitch.trim()) save.mutate();
+        }}
+      >
+        <label className="block">
+          <span className="block text-[14px] font-bold">Title</span>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={FIELD} />
+        </label>
+        <label className="block">
+          <span className="block text-[14px] font-bold">{copy.pitchLabel}</span>
+          <textarea value={pitch} onChange={(e) => setPitch(e.target.value)} maxLength={8000} rows={8} required className={FIELD} />
+        </label>
+        <label className="block">
+          <span className="block text-[14px] font-bold">
+            {copy.budgetLabel} ({p.currency})
+          </span>
+          <input inputMode="decimal" value={budgetAmount} onChange={(e) => setBudget(e.target.value)} maxLength={20} className={FIELD} />
+        </label>
+        <p className="m-0 text-[12px] font-bold text-ink-soft">You can change it until the team starts reading it.</p>
+        <ErrorLine e={save.isError ? save.error : null} />
+        <Button type="submit" size="lg" full disabled={save.isPending || !title.trim() || !pitch.trim()}>
+          {save.isPending ? 'Saving' : 'Save changes'}
+        </Button>
+      </form>
+    </Sheet>
+  );
+}
+
+/** Asks once more before the author takes back a pitch that is still Submitted. */
+function WithdrawSheet({ p, onClose, onDone }: { p: Proposal | null; onClose: () => void; onDone: () => void }) {
+  const withdraw = useMutation({
+    mutationFn: (id: string) => api.withdrawProposal(id),
+    onSuccess: () => {
+      onDone();
+      close();
+    },
+  });
+  // A refusal shown for one pitch must not greet the next one opened.
+  const close = () => {
+    withdraw.reset();
+    onClose();
+  };
+  return (
+    <Sheet open={p !== null} onClose={close} title="Withdraw it?">
+      {p && (
+        <div className="flex flex-col gap-sm">
+          <p className="m-0 text-[16px] font-semibold">
+            &ldquo;{p.title}&rdquo; goes away for good. The team will not see it.
+          </p>
+          <ErrorLine e={withdraw.isError ? withdraw.error : null} />
+          <button
+            type="button"
+            onClick={() => withdraw.mutate(p.id)}
+            disabled={withdraw.isPending}
+            className="toy inline-flex min-h-[56px] items-center justify-center gap-xs rounded-pill bg-r1 px-md text-[18px] font-bold text-on-fill disabled:opacity-50"
+            style={{ '--toy-color': 'var(--deep-servant_leader)' } as CSSProperties}
+          >
+            {withdraw.isPending ? 'Withdrawing' : 'Yes, withdraw it'}
+          </button>
+          <Button variant="outline" size="lg" onClick={close} disabled={withdraw.isPending}>
+            Keep it
+          </Button>
+        </div>
+      )}
     </Sheet>
   );
 }

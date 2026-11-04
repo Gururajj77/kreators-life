@@ -21,18 +21,19 @@ export const TONE: Record<TagTone, { bg: string; dot: string; ink: string }> = {
  * A small tag: a dot and a word on a pale wash. Used for the stage of a deliverable, a client's status, an invoice or
  * an agreement, and (through `FactTag`) for every fact on a card. `mark` replaces the dot with a small icon.
  */
-export function StatusTag({ tone, children, title, mark, className = '' }: { tone: TagTone; children: ReactNode; title?: string; mark?: ReactNode; className?: string }) {
+export function StatusTag({ tone, children, title, mark, fit = false, className = '' }: { tone: TagTone; children: ReactNode; title?: string; mark?: ReactNode; /** Lets a long tag truncate to one line, its full words in `title` (a tag in a card's corner). */ fit?: boolean; className?: string }) {
   const t = TONE[tone];
+  const tip = title ?? (fit && typeof children === 'string' ? children : undefined);
   return (
-    <span title={title} className={`tag inline-flex shrink-0 items-center gap-xs rounded-pill px-sm text-[12px] font-extrabold leading-[24px] text-ink ${className}`} style={{ background: t.bg }}>
+    <span title={tip} className={`tag inline-flex items-center gap-xs rounded-pill px-sm text-[12px] font-extrabold leading-[24px] text-ink ${fit ? 'min-w-0 max-w-full shrink' : 'shrink-0'} ${className}`} style={{ background: t.bg }}>
       {mark ? (
-        <span aria-hidden="true" className="inline-flex" style={{ color: t.ink }}>
+        <span aria-hidden="true" className="inline-flex shrink-0" style={{ color: t.ink }}>
           {mark}
         </span>
       ) : (
-        <span aria-hidden="true" className="inline-block size-[8px] rounded-pill" style={{ background: t.dot }} />
+        <span aria-hidden="true" className="inline-block size-[8px] shrink-0 rounded-pill" style={{ background: t.dot }} />
       )}
-      {children}
+      {fit ? <span className="min-w-0 truncate">{children}</span> : children}
     </span>
   );
 }

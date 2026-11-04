@@ -1,18 +1,21 @@
-import type { ConsentChoices } from '@kreators/shared';
+import type { AppPrefs, ConsentChoices } from '@kreators/shared';
 import type { AdminDiscountCode, DiscountArea, DiscountCheck } from '@kreators/shared';
 import type { ActivityYear, BadgesResponse, Page, Unlock } from '@kreators/shared';
 import type { Channel, ChannelLine, ChannelMember, ChannelScope } from '@kreators/shared';
 import { todayLocal } from './date';
-import { portalSessionHeader } from './portalSession';
+import { portalSessionHeader, teamLinkSessionHeader } from './portalSession';
+import { agencyTeamHeader, markAgencyTeamGone } from './agencyWorkspace';
+import type { MyTeam, TeamAccess, TeamMember, TeamRole } from '@kreators/shared';
 import type { AgencyStageKey, LifecycleDates, RetainerOption } from '@kreators/shared';
 import type { AdminAttendeeCode, AttendeeCodeHost, AttendeeCodeView } from '@kreators/shared';
-import type { AssistantContext, AssistantReceipt, AssistantReply, AssistantStatus, AssistantTurn, CreditEntry, CreditsResponse, FeelingsReadResult, PlanKey } from '@kreators/shared';
+import type { AssistantContext, AssistantReceipt, AssistantReply, AssistantStatus, AssistantTurn, CompanionReply, CompanionStatus, CreditEntry, CreditsResponse, FeelingsReadResult, PlanKey } from '@kreators/shared';
 import type { Brand, BrandDetail, BrandPiece, BrandSource, PieceKind, ResearchKind, ResearchRun } from '@kreators/shared';
 import type { Contract, DayType, Fear, Insecurity, Placement, Practices, RealDay, RoutineBlock, Scores, SessionResponse } from '@kreators/shared';
 import type { FeedFilter, FeedSort, SocialAward, TrustScore } from '@kreators/shared';
 import type { ListingDetail, MarketResponse, PreownedListing, PreownedMessage, PreownedOffer, StoreItem, StoreKit } from '@kreators/shared';
 import type { PeriodKind, Review, ReviewCalendarResponse, ReviewSummary, ReviewTemplate, ReviewsResponse } from '@kreators/shared';
 import type { NotToDo, NotToDoStatus } from '@kreators/shared';
+import type { InsightApp, InsightsResponse } from '@kreators/shared';
 import type { SetupMatch } from '@kreators/shared';
 import type { CardGamePlay, CardGamesResponse, DiscoverAnswers, DiscoverResult, FocusMode, FocusResponse, FocusRoundRow, FocusTask, FocusView, LogsResponse } from '@kreators/shared';
 import type { DailyBrief, GettingStarted, InboxShow, InboxTab, ReactionKind } from '@kreators/shared';
@@ -20,7 +23,7 @@ import type { AdminCoachAsk, AdminCoachLink, CoachDirectoryEntry, CoachHub, Coac
 import type { CustomReminder, RemindersResponse, WaterState, BlockedPerson, EventApp, EventExtras, LinkBlock, MediaItem, MediaOwner } from '@kreators/shared';
 import type { ObservabilityResponse } from '@kreators/shared';
 import type { AgencyDocFull, AgencyDocKind, AgencyDocListItem, DocLogLine, HouseTemplate, PublicAgencyDoc, RetainerInput } from '@kreators/shared';
-import type { WeekPlan, AgencyTemplate, TemplateKind, AgencyClient, AgencyClientPage, AgencyContract, AgencyDeliverable, AgencyNote, AgencyOverview, AgencySettings, BoardColumn, BusinessProfile, ContractAnswer, ContractDoc, ContractListItem, DeliverableStage, DocComment, DocType, InvoiceDoc, InvoiceParty, Kpi, KpisResponse, Page as AgencyPage, PortalShow, PortalView, PublicContract, ClientOnboarding, ContractQuestion } from '@kreators/shared';
+import type { WeekPlan, AgencyTemplate, TemplateKind, AgencyClient, AgencyClientPage, AgencyContract, AgencyDeliverable, AgencyNote, AgencyOverview, AgencySettings, BoardColumn, BusinessProfile, ContractAnswer, ContractDoc, ContractListItem, DeliverableStage, DocComment, DocType, InvoiceDoc, InvoiceParty, Kpi, KpisResponse, Page as AgencyPage, PortalShow, PortalView, TeamLinkShow, TeamLinkView, PublicContract, ClientOnboarding, ContractQuestion } from '@kreators/shared';
 import type {
   HomeResponse,
   PublicSettings,
@@ -98,6 +101,8 @@ import type {
   RunEntry,
   RunPace,
   RunResponse,
+  RunTalk,
+  RunTalkLine,
   Permission,
   PortfolioItem,
   Program,
@@ -106,7 +111,6 @@ import type {
   Submission,
   SupportTicket,
   Tool,
-  ChatMessage,
   CheckinResponse,
   CommunityPost,
   CommunityReply,
@@ -146,6 +150,8 @@ import type {
   Subtask,
   TodayMonthResponse,
   TodayResponse,
+  DayTypeKey,
+  DayTypeResponse,
   User,
   WellbeingLog,
   WellbeingSummary,
@@ -173,9 +179,16 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      // Working on someone else's Agency as a team member: the server's gate reads this (lib/agencyWorkspace.ts).
+      ...agencyTeamHeader(path),
       ...(init.headers ?? {}),
     },
   });
+  if (res.status === 403 && path.startsWith('/agency')) {
+    // Removed from the team, or the team ended: back to their own Agency, and the screen says why.
+    const why = (await res.clone().json().catch(() => ({}))) as { reason?: string };
+    if (why.reason === 'gone') markAgencyTeamGone();
+  }
   if (res.status === 401 && !path.startsWith('/auth/')) {
     // A session pushed out by a fourth device says so, so the sign-in screen can explain it.
     const why = (await res.clone().json().catch(() => ({}))) as { reason?: string };
@@ -246,6 +259,8 @@ export interface TaskPlanBody {
   priority?: Priority | null;
   remind?: boolean;
   forReview?: boolean;
+  /** A repeating task: counted as a habit (the Habit tag) or not; null goes back to the old rule. */
+  habit?: boolean | null;
   dueTime?: string | null;
   estimateMin?: number | null;
 }
@@ -302,6 +317,8 @@ export const api = {
     timezone?: string;
     /** The currency a person keeps their own money in (migration 0070); checked by isCurrency on the server. */
     currency?: string;
+    /** How the app groups start and the order of apps inside each (Profile, Features); the whole set, checked by appPrefsProblem. */
+    appPrefs?: AppPrefs;
     avatarUrl?: string;
     socials?: Socials;
       publicSettings?: Partial<PublicSettings>;
@@ -344,7 +361,7 @@ export const api = {
   acceptQuest: (relationship: RelationshipKey, date: string, picks?: LadderPicks) => post<{ nodes: Node[] }>('/onboarding/accept-quest', { relationship, date, picks }),
   nodes: (relationship?: RelationshipKey) => request<{ nodes: Node[] }>(`/nodes${relationship ? `?relationship=${relationship}` : ''}`),
   createNode: (body: { kind: NodeKind; parentId: string | null; relationship: RelationshipKey; title: string; note?: string } & TaskPlanBody) => post<{ node: Node }>('/nodes', body),
-  updateNode: (id: string, body: { title?: string; note?: string; status?: 'active' | 'archived' } & TaskPlanBody) => patch<{ node: Node }>(`/nodes/${id}`, body),
+  updateNode: (id: string, body: { title?: string; note?: string; status?: 'active' | 'archived'; parentId?: string } & TaskPlanBody) => patch<{ node: Node }>(`/nodes/${id}`, body),
   subtasks: (id: string) => request<{ subtasks: Subtask[] }>(`/nodes/${id}/subtasks`),
   addSubtask: (id: string, title: string) => post<{ subtask: Subtask }>(`/nodes/${id}/subtasks`, { title }),
   editSubtask: (sid: string, body: { title?: string; done?: boolean }) => patch<{ subtask: Subtask }>(`/nodes/subtasks/${sid}`, body),
@@ -355,12 +372,16 @@ export const api = {
 
   // daily
   today: (date: string) => request<TodayResponse>(`/today?date=${date}`),
+  /** Emerging: patterns from the person's own rows. `app` asks for the cards one place shows; `rel` for a pillar page. */
+  insights: (day: string, app?: InsightApp, rel?: RelationshipKey) => request<InsightsResponse>(`/insights?day=${day}${app ? `&app=${app}` : ''}${rel ? `&rel=${rel}` : ''}`),
   todayMonth: (month: string, day: string) => request<TodayMonthResponse>(`/today/month?month=${month}&day=${day}`),
   home: (date: string, hour: number) => request<HomeResponse>(`/home?date=${date}&hour=${hour}`),
   checkin: (date: string) => post<CheckinResponse>('/today/checkin', { date }),
   notToDoAdd: (title: string, relationship: RelationshipKey | null) => post<{ item: NotToDo }>('/today/not-to-do', { title, relationship }),
   notToDoDay: (id: string, date: string, today: string, status: NotToDoStatus | null) => post<{ item: NotToDo; awarded: number }>(`/today/not-to-do/${id}/day`, { date, today, status }),
   notToDoRemove: (id: string) => del<{ ok: true }>(`/today/not-to-do/${id}`),
+  dayType: (date: string, today: string) => request<DayTypeResponse>(`/today/day-type?date=${date}&today=${today}`),
+  setDayType: (date: string, today: string, kind: DayTypeKey | null) => put<DayTypeResponse>('/today/day-type', { date, today, kind }),
   reviews: (kind: PeriodKind, date: string) => request<ReviewsResponse>(`/reviews?kind=${kind}&date=${date}`),
   reviewSummary: (kind: PeriodKind, date: string) => request<ReviewSummary>(`/reviews/summary?kind=${kind}&date=${date}`),
   saveReview: (body: { kind: PeriodKind; date: string; templateId: string | null; answers: string[]; rating: number | null; highlight: string }) => request<{ review: Review }>('/reviews', { method: 'PUT', body: JSON.stringify(body) }),
@@ -388,6 +409,10 @@ export const api = {
   agencyChecklist: (id: string, key: string, done: boolean) => post<{ ticks: Record<string, boolean> }>(`/agency/clients/${id}/checklist`, { key, done }),
   agencyPassword: (id: string, body: { password?: string; generate?: boolean; clear?: boolean }) => put<{ set: boolean; password?: string }>(`/agency/clients/${id}/password`, body),
   agencyPasswordRequestClose: (id: string) => post<{ ok: true; closed: boolean }>(`/agency/clients/${id}/password-request/close`, {}),
+  /** The team link for the client's own team: on, off, fresh, and what it shows. Never the client link's own. */
+  agencyTeamLink: (id: string, body: { on?: boolean; fresh?: boolean; password?: string; show?: Partial<TeamLinkShow> }) => post<{ token: string | null; show: TeamLinkShow }>(`/agency/clients/${id}/team-link`, body),
+  agencyTeamLinkPassword: (id: string, body: { password?: string; generate?: boolean; clear?: boolean }) => put<{ set: boolean; password?: string }>(`/agency/clients/${id}/team-link/password`, body),
+  agencyTeamLinkRequestClose: (id: string) => post<{ ok: true; closed: boolean }>(`/agency/clients/${id}/team-link/password-request/close`, {}),
   agencyTrialVideo: (id: string) => post<{ id: string }>(`/agency/clients/${id}/trial-video`),
   agencyRetainerOffer: (id: string, body: { options: RetainerOption[]; feeCents?: number; piecesPerMonth?: number; revisionsPerPiece?: number; autoSend?: boolean }) => post<{ id: string }>(`/agency/clients/${id}/retainer`, body),
   agencyRetainerConfirm: (retainerId: string, body: { startDay?: string; autoSend?: boolean }) => post<{ ok: true; made: number }>(`/agency/retainers/${retainerId}/confirm?day=${todayLocal()}`, body),
@@ -401,7 +426,8 @@ export const api = {
   agencyItemUpdate: (id: string, body: Partial<AgencyDeliverable>) => patch<{ ok: true }>(`/agency/items/${id}?day=${todayLocal()}`, body),
   agencyItemRemove: (id: string) => del<{ ok: true }>(`/agency/items/${id}`),
   agencyNotes: (id: string) => request<{ notes: AgencyNote[] }>(`/agency/items/${id}/notes`),
-  agencyNoteAdd: (id: string, body: string, shared: boolean) => post<{ id: string }>(`/agency/items/${id}/notes`, { body, shared }),
+  /** `team`: the owner shares the note with their team (never the client). A member's notes are team notes whatever is sent. */
+  agencyNoteAdd: (id: string, body: string, shared: boolean, team = false) => post<{ id: string }>(`/agency/items/${id}/notes`, team ? { body, team: true } : { body, shared }),
   agencyNoteRemove: (id: string) => del<{ ok: true }>(`/agency/notes/${id}`),
   agencyArmySend: (id: string, body: { url?: string; note?: string } = {}) => post<{ ok: true }>(`/agency/items/${id}/army/send?day=${todayLocal()}`, body),
   agencyArmySync: (id: string) => post<{ moved: DeliverableStage | null }>(`/agency/items/${id}/army/sync?day=${todayLocal()}`),
@@ -420,6 +446,7 @@ export const api = {
   agencyInvoiceUpdate: (id: string, body: { items?: InvoiceItem[]; doc?: Partial<InvoiceDoc> & { from?: InvoiceParty; to?: InvoiceParty }; dueDate?: string | null; issueDate?: string | null; note?: string; number?: string; status?: Invoice['status'] }) => patch<{ invoice: Invoice }>(`/agency/invoices/${id}`, body),
   agencyInvoiceDuplicate: (id: string, body: { issueDate?: string; dueDate?: string | null; number?: string; bumpMonths?: boolean } = {}) => post<{ invoice: Invoice }>(`/agency/invoices/${id}/duplicate?day=${todayLocal()}`, body),
   agencyInvoiceRemove: (id: string) => del<{ ok: true }>(`/agency/invoices/${id}`),
+  agencyInvoiceRestore: (id: string) => post<{ invoice: Invoice; restoredTo: Invoice['status'] }>(`/agency/invoices/${id}/restore`),
   agencyContracts: (q = '') => request<{ page: AgencyPage; contracts: ContractListItem[]; counts: { status: string; n: number }[] }>(withQ('/agency/contracts', q)),
   agencyContractBoard: (q = '') => request<{ columns: BoardColumn<ContractListItem>[] }>(withQ('/agency/contracts/board', q)),
   agencyContract: (id: string) => request<{ contract: AgencyContract }>(`/agency/contracts/${id}`),
@@ -427,6 +454,7 @@ export const api = {
   agencyContractUpdate: (id: string, body: { doc?: ContractDoc; clientId?: string | null; status?: 'draft' | 'sent' | 'void'; ifUpdatedAt?: string }) => patch<{ contract: AgencyContract }>(`/agency/contracts/${id}`, body),
   agencyContractDuplicate: (id: string) => post<{ id: string }>(`/agency/contracts/${id}/duplicate`),
   agencyContractRemove: (id: string) => del<{ ok: true }>(`/agency/contracts/${id}`),
+  agencyContractRestore: (id: string) => post<{ contract: AgencyContract; restoredTo: AgencyContract['status'] }>(`/agency/contracts/${id}/restore`),
   agencyComments: (type: DocType, id: string) => request<{ comments: DocComment[] }>(`/agency/comments/${type}/${id}`),
   agencyCommentAdd: (type: DocType, id: string, body: string) => post<{ ok: true }>(`/agency/comments/${type}/${id}`, { body }),
   agencyCommentRemove: (id: string) => del<{ ok: true }>(`/agency/comments/${id}`),
@@ -438,6 +466,16 @@ export const api = {
   agencyDocUpdate: (id: string, body: { doc?: ContractDoc; clientId?: string | null; status?: 'draft' | 'sent'; ifUpdatedAt?: string }) => patch<{ doc: AgencyDocFull }>(`/agency/docs/${id}`, body),
   agencyDocDuplicate: (id: string) => post<{ id: string }>(`/agency/docs/${id}/duplicate`),
   agencyDocRemove: (id: string) => del<{ ok: true }>(`/agency/docs/${id}`),
+  // The Agency team: the owner's side (gated by Agency) and the member's own side under /me/teams (core).
+  agencyTeam: (q = '') => request<{ page: AgencyPage; members: TeamMember[]; max: number; maxInvites: number }>(withQ('/agency/team', q)),
+  agencyTeamInvite: (body: { who: string; role: TeamRole; clientId?: string; access?: TeamAccess }) => post<{ id: string; friendRequest: 'sent' | 'friends' | 'skipped' }>('/agency/team', body),
+  agencyTeamUpdate: (id: string, body: { role?: TeamRole; access?: TeamAccess; clientId?: string }) => patch<{ id: string; role: TeamRole; access: TeamAccess; clientId: string | null }>(`/agency/team/${id}`, body),
+  agencyTeamResend: (id: string) => post<{ ok: true }>(`/agency/team/${id}/resend`),
+  agencyTeamRemove: (id: string) => del<{ ok: true }>(`/agency/team/${id}`),
+  myTeams: () => request<{ teams: MyTeam[] }>('/me/teams'),
+  myTeamAnswer: (id: string, yes: boolean) => post<{ ok: true; status: 'active' | 'removed' }>(`/me/teams/${id}/answer`, { yes }),
+  myTeamLeave: (id: string) => post<{ ok: true }>(`/me/teams/${id}/leave`),
+  myTeamClientView: (id: string) => request<{ view: PortalView; access: TeamAccess }>(`/me/teams/${id}/client-view?day=${todayLocal()}`),
 
   // business metrics in Reviews: only for people who switched them on
   kpis: (kind: PeriodKind, date: string) => request<KpisResponse>(`/reviews/kpis?kind=${kind}&date=${date}&day=${todayLocal()}`),
@@ -452,7 +490,7 @@ export const api = {
   leaderboard: (by: LeaderboardSort, scope: LeaderboardScope = 'all', value = '', paging = '') => request<LeaderboardResponse>(`/leaderboard?by=${by}&scope=${scope}&value=${encodeURIComponent(value)}${paging ? `&${paging}` : ''}`),
   leaderboardOptions: () => request<LeaderboardOptions>('/leaderboard/options'),
   leaderboardBlocks: () => request<{ blocks: LeaderboardBlock[] }>('/leaderboard/blocks'),
-  rewards: () => request<RewardsResponse>('/rewards'),
+  rewards: (pq = '') => request<RewardsResponse & { redemptionsPage?: Page }>(withQ('/rewards', pq)),
   redeem: (key: string) => post<{ redemption: Redemption; points: number; game?: string }>(`/rewards/${key}/redeem`),
   node: (id: string) => request<{ node: Node }>(`/nodes/${id}`),
   focusTasks: (q = '') => request<{ tasks: FocusTask[] }>(`/wellbeing/focus/tasks${q ? `?q=${encodeURIComponent(q)}` : ''}`),
@@ -494,8 +532,9 @@ export const api = {
   createEntry: (body: Partial<JournalEntry> & { date?: string }) => post<{ entry: JournalEntry }>('/journal', body),
   updateEntry: (id: string, body: Partial<JournalEntry>) => patch<{ entry: JournalEntry }>(`/journal/${id}`, body),
   deleteEntry: (id: string) => del<{ ok: true }>(`/journal/${id}`),
-  companion: () => request<{ messages: ChatMessage[]; model: string }>('/companion'),
-  say: (body: string) => post<{ messages: ChatMessage[] }>('/companion', { body }),
+  companion: () => request<CompanionStatus>('/companion'),
+  say: (body: { body: string; model?: string; runId?: string; context: { date: string; timeZone: string } }) => post<CompanionReply>('/companion', body),
+  companionStop: (runId: string) => post<{ ok: true }>('/companion/stop', { runId }),
   clearCompanion: () => del<{ ok: true }>('/companion'),
 
   // inbox, library, community, search
@@ -633,7 +672,7 @@ export const api = {
   // party
   party: (pq = '') => request<{ page: Page; events: PartyEvent[]; hosting: PartyEvent[]; canHostAll: boolean; club: boolean }>(withQ('/party', pq)),
   createEvent: (body: Partial<PartyEvent> & { title: string; startsAt: string; minutes?: number; attendeeXp?: number; attendeeCode?: string }) => post<{ event: PartyEvent; codeError: string | null }>('/party/events', body),
-  event: (id: string) => request<{ event: PartyEvent; registrations: EventRegistration[]; host: boolean; feedback: { average: number | null; count: number }; hostCode: AttendeeCodeHost | null; attendee: AttendeeCodeView | null }>(`/party/events/${id}`),
+  event: (id: string, pq = '') => request<{ event: PartyEvent; registrations: EventRegistration[]; registrationsPage?: Page | null; host: boolean; feedback: { average: number | null; count: number }; hostCode: AttendeeCodeHost | null; attendee: AttendeeCodeView | null }>(withQ(`/party/events/${id}`, pq)),
   setEventCode: (id: string, change: CodeChange) => put<{ hostCode: AttendeeCodeHost }>(`/party/events/${id}/attendee-code`, change),
   claimEventCode: (id: string, code: string) => post<{ xp: number; newBadges: string[] }>(`/party/events/${id}/claim`, { code }),
   rsvp: (id: string, networking: boolean, discountCode?: string) => post<{ status: EventRegistration['status'] }>(`/party/events/${id}/rsvp`, { networking, ...(discountCode ? { discountCode } : {}) }),
@@ -659,6 +698,22 @@ export const api = {
   setRunCollab: (id: string, status: 'open' | 'closed') => patch<{ ok: true }>(`/run/collabs/${id}`, { status }),
   applyRunCollab: (id: string, body: { clubId: string; note?: string }) => post<{ application: { id: string; status: string } }>(`/run/collabs/${id}/apply`, body),
   decideRunCollab: (id: string, appId: string, status: 'accepted' | 'declined') => post<{ ok: true }>(`/run/collabs/${id}/applications/${appId}`, { status }),
+  // a run's discussion: one per run, for its people only, polled like a channel
+  runTalks: (pq = '') => request<{ page: Page; talks: RunTalk[] }>(withQ('/run/talk', pq)),
+  runTalksUnread: () => request<{ unread: number }>('/run/talk/unread'),
+  runTalk: (runId: string) => request<{ talk: RunTalk }>(`/run/talk/${runId}`),
+  runTalkLines: (runId: string, q: { after?: number; before?: number; from?: number; read?: boolean } = {}) => {
+    const p = new URLSearchParams();
+    if (q.after) p.set('after', String(q.after));
+    if (q.before) p.set('before', String(q.before));
+    if (q.after && q.from) p.set('from', String(q.from));
+    if (q.read) p.set('read', '1');
+    return request<{ lines: RunTalkLine[]; more: boolean; gone: number[] }>(withQ(`/run/talk/${runId}/messages`, p.toString()));
+  },
+  runTalkSay: (runId: string, body: string, opts: { anonymous?: boolean; replyTo?: string | null } = {}) => post<{ line: RunTalkLine | null }>(`/run/talk/${runId}/messages`, { body, ...opts }),
+  runTalkUnsay: (runId: string, mid: string) => del<{ ok: true }>(`/run/talk/${runId}/messages/${mid}`),
+  runTalkReport: (runId: string, mid: string, note = '') => post<{ ok: true }>(`/run/talk/${runId}/messages/${mid}/report`, { note }),
+  runTalkBlockAuthor: (runId: string, mid: string) => post<{ ok: true }>(`/run/talk/${runId}/messages/${mid}/block-author`),
 
   // club
   club: (pq = '') => request<{ page: Page; benefits: typeof import('@kreators/shared').CLUB_BENEFITS; mine: Membership | null; queue: Membership[]; members: number; reviewer: boolean; staff: { id: string; name: string }[] }>(withQ('/club', pq)),
@@ -773,9 +828,11 @@ export const api = {
   proposals: (kind: 'tv' | 'fund', pq = '') => request<{ page: Page; proposals: Proposal[]; reviewer: boolean }>(withQ(`/proposals?kind=${kind}`, pq)),
   propose: (body: { kind: 'tv' | 'fund'; title: string; pitch: string; budgetAmount?: number; currency?: string }) => post<{ ok: true; id: string }>('/proposals', body),
   moveProposal: (id: string, body: { stage: Proposal['stage']; note?: string }) => post<{ ok: true }>(`/proposals/${id}/stage`, body),
+  editProposal: (id: string, body: { title: string; pitch: string; budgetAmount: number }) => patch<{ ok: true }>(`/proposals/${id}`, body),
+  withdrawProposal: (id: string) => post<{ ok: true }>(`/proposals/${id}/withdraw`, {}),
 
   // help
-  support: () => request<{ tickets: SupportTicket[]; queue: SupportTicket[]; agent: boolean }>('/support'),
+  support: (pq = '') => request<{ tickets: SupportTicket[]; page?: Page; queue: SupportTicket[]; queuePage?: Page; agent: boolean }>(withQ('/support', pq)),
   openTicket: (body: { subject: string; body: string }) => post<{ ok: true }>('/support', body),
   replyTicket: (id: string, body: { reply: string; status?: SupportTicket['status'] }) => post<{ ok: true }>(`/support/${id}/reply`, body),
 
@@ -1018,6 +1075,29 @@ async function publicSend<T>(method: 'POST' | 'PUT', path: string, body: unknown
   return (await res.json()) as T;
 }
 
+/**
+ * The team link's own calls (the client page for the client's own team). They send only the team link's unlock, in its own header, and
+ * never the client link's: the two are kept apart in the browser as on the server.
+ */
+async function teamLinkCall<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+  const kept = teamLinkSessionHeader();
+  const res = await fetch(`/api/public/team-link${path}`, {
+    method,
+    headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(kept ? { 'X-Team-Link-Session': kept } : {}) },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  if (!res.ok) {
+    const b = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new ApiError(b.error ?? res.statusText, res.status, b);
+  }
+  return (await res.json()) as T;
+}
+export const teamLinkApi = {
+  page: (token: string) => teamLinkCall<TeamLinkView>('GET', `/${encodeURIComponent(token)}`),
+  unlock: (token: string, password: string) => teamLinkCall<{ open: boolean; session: string | null; expiresAt: string | null }>('POST', `/${encodeURIComponent(token)}/unlock`, { password }),
+  decide: (token: string, id: string, body: { decision: 'approve' | 'changes' | 'comment'; note?: string; where?: string }) => teamLinkCall<{ ok: true }>('POST', `/${encodeURIComponent(token)}/items/${id}`, body),
+};
+
 /** The three kinds of client-facing link that can sit behind a client's password, by their public path. */
 export type LockedLink = 'contracts' | 'invoices' | 'agency/doc';
 
@@ -1048,7 +1128,7 @@ export const publicApi = {
   onboardingSave: (token: string, draft: ClientOnboarding) => publicSend<{ ok: true }>('PUT', `/agency/${encodeURIComponent(token)}/onboarding`, { draft }),
   onboardingSubmit: (token: string, draft: ClientOnboarding) => publicSend<{ ok: true; contract: 'sent' | 'draft' | null; contractToken: string | null }>('POST', `/agency/${encodeURIComponent(token)}/onboarding/submit`, { draft }),
   /** The ask for a new password, from the lock screen of a client page, an agreement, an invoice or a document. The same answer whatever the link. */
-  passwordRequest: (kind: 'agency' | 'contract' | 'invoice' | 'doc', token: string, reason: string) => publicSend<{ ok: true }>('POST', '/agency/password-request', { kind, token, reason }),
+  passwordRequest: (kind: 'agency' | 'contract' | 'invoice' | 'doc' | 'team', token: string, reason: string) => publicSend<{ ok: true }>('POST', '/agency/password-request', { kind, token, reason }),
   linkLock: (kind: LockedLink, token: string) => publicRequest<{ locked: boolean; clientName?: string; agencyName?: string; agencyLogo?: string }>(`/${kind}/${encodeURIComponent(token)}/lock`),
   linkUnlock: (kind: LockedLink, token: string, password: string) => publicSend<{ open: boolean; session: string | null; expiresAt: string | null }>('POST', `/${kind}/${encodeURIComponent(token)}/unlock`, { password }),
   contract: (token: string) => publicRequest<PublicContract>(`/contracts/${encodeURIComponent(token)}`),

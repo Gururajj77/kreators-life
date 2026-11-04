@@ -1,5 +1,5 @@
 import { DEFAULT_ZONE, EVENT_REMINDERS, LOCALE, previousSeason, SEASON_TOP, seasonLabel, seasonOf, seasonStart } from '@kreators/shared';
-import { nowIso } from './db';
+import { inBatches, nowIso } from './db';
 
 /**
  * Jobs the cron runs every fifteen minutes to keep people coming back for the right reasons: a reminder before an
@@ -51,19 +51,19 @@ export async function sendEventReminders(db: D1Database): Promise<number> {
     )
     .bind(from, until)
     .all<Due>();
-  let sent = 0;
-  for (const d of rows.results) {
-    const minutesLeft = (Date.parse(d.starts_at) - now) / 60_000;
-    // The nearest reminder that is due: the hour one inside the last hour, the day one before that.
-    const due = minutesLeft <= EVENT_REMINDERS[1].before ? EVENT_REMINDERS[1] : EVENT_REMINDERS[0];
-    const fresh = await db.prepare('INSERT OR IGNORE INTO event_reminders (app, thing_id, user_id, kind, sent_at) VALUES (?, ?, ?, ?, ?)').bind(d.app, d.thing_id, d.user_id, due.kind, nowIso()).run();
-    if ((fresh.meta.changes ?? 0) === 0) continue;
-    const kind = d.app === 'circles' ? 'circle' : d.app;
-    const title = due.kind === 'hour' ? `In under an hour: ${d.title}` : `Coming up: ${d.title}`;
-    await db.prepare('INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)').bind(crypto.randomUUID(), d.user_id, kind, title, `Starts ${clockIn(d.starts_at, d.timezone)}. You signed up.`, d.link, nowIso()).run();
-    sent += 1;
-  }
-  return sent;
+  // The nearest reminder that is due for each: the hour one inside the last hour, the day one before that.
+  const due = rows.results.map((d) => ({ d, due: (Date.parse(d.starts_at) - now) / 60_000 <= EVENT_REMINDERS[1].before ? EVENT_REMINDERS[1] : EVENT_REMINDERS[0] }));
+  // Every claim in one round trip a fifty (a claim already made changes nothing), then a note for each fresh one.
+  const claims = await inBatches(db, due.map(({ d, due }) => db.prepare('INSERT OR IGNORE INTO event_reminders (app, thing_id, user_id, kind, sent_at) VALUES (?, ?, ?, ?, ?)').bind(d.app, d.thing_id, d.user_id, due.kind, nowIso())));
+  const notes = due
+    .filter((_, i) => (claims[i]?.meta.changes ?? 0) !== 0)
+    .map(({ d, due }) => {
+      const kind = d.app === 'circles' ? 'circle' : d.app;
+      const title = due.kind === 'hour' ? `In under an hour: ${d.title}` : `Coming up: ${d.title}`;
+      return db.prepare('INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)').bind(crypto.randomUUID(), d.user_id, kind, title, `Starts ${clockIn(d.starts_at, d.timezone)}. You signed up.`, d.link, nowIso());
+    });
+  await inBatches(db, notes);
+  return notes.length;
 }
 
 /**

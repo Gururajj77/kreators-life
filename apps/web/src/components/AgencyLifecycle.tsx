@@ -1,6 +1,5 @@
 import {
   AGENCY_STAGE_BY_KEY,
-  PORTAL_PASSWORD_MIN,
   RETAINER_DEFAULT_OPTIONS,
   RETAINER_MONTHS_MAX,
   RETAINER_OPTIONS_MAX,
@@ -11,7 +10,6 @@ import {
   money,
   moveProblem,
   nextStage,
-  portalPasswordProblem,
   previousStage,
   retainerMonthlyCents,
   retainerTotalCents,
@@ -27,17 +25,16 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { ApiError, api } from '../lib/api';
 import { prettyDate, todayLocal } from '../lib/date';
-import { tie } from '../lib/text';
-import { AnimatedIcon } from './AnimatedIcon';
 import { Button } from './Button';
 import { Fold } from './Fold';
 import { Sheet } from './Sheet';
 import { StageBar } from './StageBar';
 import { StatusTag } from './StatusTag';
+import { CardHead } from './CardHead';
 import { Toggle } from './Toggle';
 import { FIELD } from '../lib/ui';
 import { FieldLabel } from './Field';
-import { copyPlain } from '../lib/clipboard';
+import { ClientPassword } from './ClientPassword';
 
 
 const failed = (e: unknown): string => (e instanceof ApiError ? e.message : 'That did not go through. Try again.');
@@ -312,19 +309,17 @@ function DaysForm({ client, life, onClose }: { client: AgencyClient; life: Clien
   );
 }
 
-// ---- the password on the client link
+// ---- the password on the client link (drawn by ClientPassword, the one module)
 
 /**
- * The password line on a document's own page (an invoice, an agreement, another document): whether the client's password guards this link, and
- * the same controls as the client's page, one tap away. The password belongs to the client, so one lock covers their page and every document
- * sent to them.
+ * The password on a document's own page (an invoice, an agreement, another document): the client's `ClientPassword` card, since one
+ * password opens the client's page and every document sent to them.
  */
 export function DocPassword({ clientId, clientName, savedClientId }: { clientId: string | null; clientName: string; savedClientId?: string | null }) {
-  const [open, setOpen] = useState(false);
   const q = useAuthed(['agency', 'client', clientId ?? ''], () => api.agencyClient(clientId ?? ''), Boolean(clientId));
   const page = q.data;
   if (!clientId) {
-    return <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Pick a client for this document to protect its link with a password.</p>;
+    return <p className="no-print mt-sm m-0 text-[14px] font-semibold text-ink-soft">Pick a client for this document to protect its link with a password.</p>;
   }
   // The client picked here is not saved yet: the live link still follows the client it was saved with, so its password says nothing yet.
   if (savedClientId !== undefined && savedClientId !== clientId) {
@@ -344,176 +339,16 @@ export function DocPassword({ clientId, clientName, savedClientId }: { clientId:
       </div>
     );
   }
-  const set = page?.lifecycle.password.set;
-  return (
-    <div className="no-print mt-sm flex flex-wrap items-center gap-xs rounded-tile bg-card p-sm shadow-toy-soft">
-      <StatusTag tone={set ? 'good' : 'warn'}>{page ? (set ? 'Password set' : 'No password') : 'Checking'}</StatusTag>
-      <p className="prose-long m-0 min-w-0 flex-1 text-[14px] font-semibold text-ink-soft">
-        {tie(
-          set
-            ? `${clientName || 'The client'} types their password first. One password opens every link.`
-            : 'Anyone with this link can open it. Set a password and the client types it first.',
-        )}
-      </p>
-      <Button size="sm" variant="outline" onClick={() => setOpen(true)} disabled={!page}>
-        {set ? 'Change the password' : 'Set a password'}
-      </Button>
-      <Sheet open={open} onClose={() => setOpen(false)} title={`Password for ${clientName || 'this client'}`}>
-        {page && <PortalSecurityCard client={page.client} life={page.lifecycle} />}
-        <div className="mt-md pb-xl">
-          <Button onClick={() => setOpen(false)}>Done</Button>
-        </div>
-      </Sheet>
-    </div>
-  );
-}
-
-/** The password on this client's link: whether there is one, set or make one (shown once), remove it, and when the link was last opened. */
-export function PortalSecurityCard({ client, life }: { client: AgencyClient; life: ClientLifecycle }) {
-  const refresh = useRefresh();
-  const [shown, setShown] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [setting, setSetting] = useState(false);
-  const [confirmClear, setConfirmClear] = useState(false);
-  const on = Boolean(client.portalToken);
-  const set = life.password.set;
-  const gen = useMutation({
-    mutationFn: () => api.agencyPassword(client.id, { generate: true }),
-    onSuccess: (r) => {
-      setShown(r.password ?? null);
-      setCopied(false);
-      void refresh();
-    },
-  });
-  const clear = useMutation({
-    mutationFn: () => api.agencyPassword(client.id, { clear: true }),
-    onSuccess: () => {
-      setConfirmClear(false);
-      setShown(null);
-      void refresh();
-    },
-  });
-  const copy = async () => {
-    if (!shown) return;
-    if (await copyPlain(shown)) setCopied(true);
-    else document.getElementById(`pw-${client.id}`)?.focus();
-  };
-
-  return (
-    <div className="rounded-card bg-card p-md shadow-toy-soft">
-      <div className="flex flex-wrap items-center gap-xs">
-        <h3 className="m-0 text-[16px] font-extrabold">Password</h3>
-        <StatusTag tone={set ? 'good' : 'warn'}>{set ? 'Password set' : 'No password'}</StatusTag>
+  if (!page) {
+    return (
+      <div className="no-print mt-sm flex flex-wrap items-center gap-xs rounded-tile bg-card p-sm shadow-toy-soft">
+        <StatusTag tone="neutral">Checking</StatusTag>
+        <p className="m-0 text-[14px] font-semibold text-ink-soft">Checking the password on this link.</p>
       </div>
-      {!set && (
-        <p role="note" className="mt-xs m-0 rounded-tile p-sm text-[14px] font-bold" style={{ background: 'var(--tint-yellow)' }}>
-          Anyone with the link can open this. Set a password.
-        </p>
-      )}
-      {set && (
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          {`One password opens every link for twelve hours.${life.password.setAt ? ` Set ${prettyDate(life.password.setAt.slice(0, 10))}.` : ''}`}
-        </p>
-      )}
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{life.password.lastOpenedDay ? `Last opened ${prettyDate(life.password.lastOpenedDay)}.` : on ? 'Not opened yet.' : 'The link is switched off, so nobody can open it.'}</p>
-
-      {shown && (
-        <div role="status" className="mt-sm rounded-tile bg-paper p-sm">
-          <p className="m-0 text-[14px] font-bold">Here is the password. It is shown once. Send it to your client separately from the link.</p>
-          <input id={`pw-${client.id}`} readOnly value={shown} onFocus={(e) => e.currentTarget.select()} aria-label="The new password" className="mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-sm font-mono text-[16px]" />
-          <div className="mt-xs flex flex-wrap gap-xs">
-            <Button size="sm" onClick={copy}>
-              {copied ? 'Copied' : 'Copy'}
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setShown(null)}>
-              I have saved it
-            </Button>
-          </div>
-        </div>
-      )}
-
-      <div className="mt-sm flex flex-wrap gap-xs">
-        <Button size="sm" onClick={() => gen.mutate()} disabled={gen.isPending}>
-          {gen.isPending ? 'Making' : set ? 'Make a new password' : 'Make a password for me'}
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => setSetting(true)}>
-          Type my own
-        </Button>
-        {set &&
-          (confirmClear ? (
-            <>
-              <Button size="sm" variant="outline" onClick={() => clear.mutate()} disabled={clear.isPending}>
-                Yes, remove it
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setConfirmClear(false)}>
-                Keep it
-              </Button>
-            </>
-          ) : (
-            <Button size="sm" variant="outline" onClick={() => setConfirmClear(true)}>
-              Remove password
-            </Button>
-          ))}
-      </div>
-      {(gen.isError || clear.isError) && (
-        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
-          {failed(gen.error ?? clear.error)}
-        </p>
-      )}
-      <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Changing or removing the password signs the client out of every tab at once.</p>
-
-      <Sheet open={setting} onClose={() => setSetting(false)} title="Type a password">
-        {setting && <TypedPassword client={client} onClose={() => setSetting(false)} />}
-      </Sheet>
-    </div>
-  );
-}
-
-function TypedPassword({ client, onClose }: { client: AgencyClient; onClose: () => void }) {
-  const refresh = useRefresh();
-  const [pw, setPw] = useState('');
-  const [show, setShow] = useState(false);
-  const problem = pw ? portalPasswordProblem(pw, client.name) : null;
-  const save = useMutation({
-    mutationFn: () => api.agencyPassword(client.id, { password: pw }),
-    onSuccess: () => {
-      void refresh();
-      onClose();
-    },
-  });
-  return (
-    <form
-      onSubmit={(e: FormEvent) => {
-        e.preventDefault();
-        if (!problem && pw) save.mutate();
-      }}
-    >
-      <FieldLabel className="mt-sm" label={`Password, at least ${PORTAL_PASSWORD_MIN} characters`} hint="Not the client's name, and not one of the passwords everyone tries first.">
-        <div className="flex gap-xs">
-          <input type={show ? 'text' : 'password'} value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="off" spellCheck={false} maxLength={128} className={`${FIELD} mt-xs flex-1`} />
-          <Button type="button" variant="outline" size="sm" onClick={() => setShow((s) => !s)} aria-pressed={show}>
-            <AnimatedIcon name="visibility" size={18} active={show} />
-            {show ? 'Hide' : 'Show'}
-          </Button>
-        </div>
-      </FieldLabel>
-      {problem && (
-        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
-          {problem}
-        </p>
-      )}
-      {save.isError && (
-        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
-          {failed(save.error)}
-        </p>
-      )}
-      <div className="mt-md">
-        <Button type="submit" disabled={save.isPending || !pw || Boolean(problem)}>
-          {save.isPending ? 'Saving' : 'Save the password'}
-        </Button>
-      </div>
-    </form>
-  );
+    );
+  }
+  // Every document page opens this from its More menu, inside a sheet, so the card draws without a surface of its own.
+  return <ClientPassword bare className="no-print" clientId={page.client.id} clientName={clientName || page.client.name} state={page.lifecycle.password} linkOn={Boolean(page.client.portalToken)} />;
 }
 
 // ---- the retainer
@@ -549,10 +384,9 @@ export function RetainerCard({ client, life, currency }: { client: AgencyClient;
       )}
       {r && (
         <>
-          <div className="flex flex-wrap items-center gap-xs">
+          <CardHead tag={<StatusTag fit tone={RETAINER_STATUS_TONE[r.status]}>{RETAINER_STATUS_NAME[r.status]}</StatusTag>}>
             <h3 className="m-0 text-[16px] font-extrabold">{r.status === 'active' ? 'Running retainer' : r.status === 'ended' ? 'Last retainer' : 'Retainer offer'}</h3>
-            <StatusTag tone={RETAINER_STATUS_TONE[r.status]}>{RETAINER_STATUS_NAME[r.status]}</StatusTag>
-          </div>
+          </CardHead>
           <OptionsList r={r} currency={currency} />
           <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
             {`${r.piecesPerMonth} ${r.piecesPerMonth === 1 ? 'piece' : 'pieces'} a month, ${r.revisionsPerPiece} ${r.revisionsPerPiece === 1 ? 'change' : 'changes'} included in each.`}

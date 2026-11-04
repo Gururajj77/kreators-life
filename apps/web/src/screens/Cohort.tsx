@@ -1,15 +1,20 @@
-import { videoEmbed, type CohortSession, type CourseAssignment, type Enrollment, type Submission, LOCALE } from '@kreators/shared';
+import { videoEmbed, type CohortSession, type CourseAssignment, type Enrollment, type LearningItem, type Submission, LOCALE } from '@kreators/shared';
 import type { TagTone } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useParams } from 'react-router';
 import { Button } from '../components/Button';
+import { AppCover } from '../components/AppCover';
 import { BackLink } from '../components/PageHeader';
 import { Markdown } from '../components/Markdown';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
-import { Tip, Term } from '../components/Tip';
-import { MediaSection } from '../components/MediaSection';
+import { Term } from '../components/Tip';
+import { MediaSection, useMediaMenuItem } from '../components/MediaSection';
+import { IconButton } from '../components/IconButton';
+import { IconTag } from '../components/FactTag';
+import { Icon } from '../components/Icon';
+import { ChevronDown, ExternalLink, ImagePlus } from 'lucide-react';
 import { MediaTile } from '../components/Media';
 import { api, errorText } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
@@ -47,6 +52,7 @@ export function Cohort() {
   const q = useAuthed(['cohort', id], () => api.cohort(id));
   const [scheduling, setScheduling] = useState(false);
   const [openLesson, setOpenLesson] = useState<string | null>(null);
+  const [editingMedia, setEditingMedia] = useState(false);
   const attend = useMutation({ mutationFn: ({ sid, userId }: { sid: string; userId?: string }) => api.attend(sid, userId), onSuccess: () => q.refetch() });
   const complete = useMutation({ mutationFn: (eid: string) => api.completeEnrollment(eid), onSuccess: () => q.refetch() });
 
@@ -68,24 +74,29 @@ export function Cohort() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/school">School</BackLink>
-        <p className="m-0 text-[14px] font-bold text-ink-soft">
-          {k.programName}, <Term word="cohort">cohort</Term> run by {k.managerName}
-        </p>
-        <h1 className="text-[30px]">{k.name}</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          {fmtDate(k.startAt)} to {fmtDate(k.endAt)}, {k.status}, {k.enrolled} learner{k.enrolled === 1 ? '' : 's'}
-        </p>
+      {/* The cover card; the gallery's round button sits on the helper's line, at its left (founder, 2026-11-04). */}
+      <AppCover
+        back={{ to: '/school', label: 'School' }}
+        eyebrow={
+          <>
+            {k.programName}, <Term word="cohort">cohort</Term> run by {k.managerName}
+          </>
+        }
+        title={k.name}
+        lede={`${fmtDate(k.startAt)} to ${fmtDate(k.endAt)}, ${k.status}, ${k.enrolled} learner${k.enrolled === 1 ? '' : 's'}`}
+        actions={<ProgramMediaButton programId={k.programId} onOpen={() => setEditingMedia(true)} />}
+      >
         {d.myProgress && (
-          <div className="mt-sm rounded-tile bg-card p-sm shadow-toy-soft">
+          <div className="rounded-tile bg-card p-sm shadow-toy-soft">
             <p className="m-0 text-[16px] font-bold">{d.myStatus === 'completed' ? 'Completed. Well done.' : 'Your progress'}</p>
             <Progress p={d.myProgress} />
           </div>
         )}
-      </header>
+      </AppCover>
 
-      <MediaSection type="program" id={k.programId} />
+      {/* The program's gallery, under the header; its editor opens from the round button beside the title. */}
+      <MediaSection type="program" id={k.programId} trigger={null} open={editingMedia} onOpenChange={setEditingMedia} />
+
 
       <section className="mt-lg" aria-labelledby="lessons-heading">
         <h2 id="lessons-heading" className="text-[24px]">
@@ -93,36 +104,9 @@ export function Cohort() {
         </h2>
         {d.items.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Lessons appear here as the program adds them.</p>}
         <ol className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-          {d.items.map((item, i) => {
-            const open = openLesson === item.id;
-            return (
-              <li key={item.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <button type="button" aria-expanded={open} onClick={() => setOpenLesson(open ? null : item.id)} className="toy toy-flat flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile px-sm py-xs text-left focus-visible:outline-offset-0">
-                  <span className="min-w-0">
-                    <span className="block truncate text-[16px] font-bold">
-                      {i + 1}. {item.moduleTitle}
-                    </span>
-                    <span className="block text-[14px] font-semibold text-ink-soft">
-                      <Tip text={KIND_TIP[item.contentType] ?? 'A step in this program.'}>{item.contentType}</Tip>
-                    </span>
-                  </span>
-                  <span className="text-[14px] font-bold text-ink-soft">{open ? 'Hide' : 'Open'}</span>
-                </button>
-                {open && (
-                  <div className="mt-sm">
-                    {item.contentType === 'video' && item.contentRef && videoEmbed(item.contentRef) && <MediaTile item={{ id: item.id, kind: 'video', url: item.contentRef, caption: item.moduleTitle }} />}
-                    <MediaSection type="lesson" id={item.id} title="Lesson pictures and videos" />
-                    {item.contentRef && !(item.contentType === 'video' && videoEmbed(item.contentRef)) && (
-                      <a href={item.contentRef} target="_blank" rel="noreferrer" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
-                        {item.contentType === 'video' ? 'Watch' : item.contentRef.startsWith('/resources/') ? 'Open the full skill file' : 'Open'}
-                      </a>
-                    )}
-                    {item.body ? <Markdown text={item.body} className="mt-sm rounded-tile bg-paper p-sm" /> : !item.contentRef && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing written here yet.</p>}
-                  </div>
-                )}
-              </li>
-            );
-          })}
+          {d.items.map((item, i) => (
+            <LessonCard key={item.id} item={item} n={i + 1} open={openLesson === item.id} onToggle={() => setOpenLesson(openLesson === item.id ? null : item.id)} />
+          ))}
         </ol>
       </section>
 
@@ -243,6 +227,75 @@ export function Cohort() {
         }}
       />
     </Screen>
+  );
+}
+
+const KIND_TAG: Record<string, { icon: 'NotebookText' | 'Video' | 'BookOpen' | 'FileText'; word: string }> = {
+  lesson: { icon: 'NotebookText', word: 'Lesson' },
+  video: { icon: 'Video', word: 'Video' },
+  reading: { icon: 'BookOpen', word: 'Reading' },
+};
+
+/** The program's own pictures and videos: for whoever may edit them, one round button beside the title opens the editor. */
+function ProgramMediaButton({ onOpen, programId }: { onOpen: () => void; programId: string }) {
+  const media = useMediaMenuItem('program', programId, onOpen);
+  return media ? <IconButton icon={ImagePlus} label={media.label} onClick={media.onSelect} opens /> : null;
+}
+
+/**
+ * One lesson: a number, the title in full and its kind as a tag in the top right corner; tapping opens it. Open, it reads like a page:
+ * the way into the source and a round button for pictures on the first line (the link takes the width on a phone), what this kind of step is under them,
+ * the words straight on the card, no box inside a box, then at the foot the source link with its caption and a round button for pictures.
+ */
+function LessonCard({ item, n, open, onToggle }: { item: LearningItem; n: number; open: boolean; onToggle: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const media = useMediaMenuItem('lesson', item.id, () => setEditing(true));
+  const tag = KIND_TAG[item.contentType] ?? { icon: 'FileText' as const, word: item.contentType };
+  const embedded = item.contentType === 'video' && item.contentRef && videoEmbed(item.contentRef);
+  const source = item.contentRef && !embedded ? item.contentRef : null;
+  return (
+    <li className="rounded-tile bg-card shadow-toy-soft">
+      <button type="button" aria-expanded={open} onClick={onToggle} className="toy toy-flat flex min-h-[56px] w-full items-start gap-sm rounded-tile p-sm text-left focus-visible:outline-offset-0">
+        <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-paper text-[14px] font-extrabold" aria-hidden="true">
+          {n}
+        </span>
+        <span className="min-w-0 flex-1 pt-[4px] text-[16px] leading-snug font-bold text-balance">{item.moduleTitle}</span>
+        <span className="flex shrink-0 items-center gap-xs pt-[2px]">
+          <IconTag tone="calm" icon={tag.icon}>{tag.word}</IconTag>
+          <Icon icon={ChevronDown} size={20} className={`text-ink-soft transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+        </span>
+      </button>
+      {open && (
+        <div className="border-t border-line px-sm pt-sm pb-md">
+          {embedded && (
+            <div className="mt-sm">
+              <MediaTile item={{ id: item.id, kind: 'video', url: item.contentRef!, caption: item.moduleTitle }} />
+            </div>
+          )}
+          <MediaSection type="lesson" id={item.id} title="Lesson pictures and videos" trigger={null} open={editing} onOpenChange={setEditing} />
+          {item.body ? <Markdown text={item.body} className="prose-long" /> : !item.contentRef && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing written here yet.</p>}
+          {/* The ways in, at the foot of the open lesson once it is read (the source link takes the width on every screen and the round button sits at its right). The
+              helper line belongs to the source link (it says what that link opens), so it sits centred under that link as its caption. */}
+          {source ? (
+            <div className="mt-md flex items-start justify-end gap-xs">
+              <div className="flex min-w-0 flex-1 flex-col items-center">
+                <a href={source} target="_blank" rel="noreferrer" className="toy toy-soft inline-flex min-h-[44px] w-full items-center justify-center gap-xs rounded-pill border border-line bg-card-strong px-md text-[14px] font-bold">
+                  {item.contentType === 'video' ? 'Watch' : source.startsWith('/resources/') ? 'Skill file' : 'Open'}
+                  <Icon icon={ExternalLink} size={16} />
+                </a>
+                <p className="mt-xs m-0 text-center text-[12px] font-semibold text-balance text-ink-soft">{KIND_TIP[item.contentType] ?? 'A step in this program.'}</p>
+              </div>
+              {media && <IconButton icon={ImagePlus} label={media.label} onClick={media.onSelect} opens />}
+            </div>
+          ) : (
+            <div className="mt-md flex items-start justify-between gap-sm">
+              <p className="m-0 min-w-0 text-[14px] font-semibold text-ink-soft">{KIND_TIP[item.contentType] ?? 'A step in this program.'}</p>
+              {media && <IconButton icon={ImagePlus} label={media.label} onClick={media.onSelect} opens />}
+            </div>
+          )}
+        </div>
+      )}
+    </li>
   );
 }
 

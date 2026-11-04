@@ -38,6 +38,8 @@ import { dateOrNull, moneyIn } from '../agencyUtil';
 import { clientRow, settingsFor } from './agency';
 import { runAgencyCycles } from '../agencyCycles';
 import { applyStageEvent, closePasswordRequest, logStmt, moveStage, syncStageFromAgreements, type RetainerRow } from '../lifecycle';
+import { actorOf } from '../agencyTeamAccess';
+import { teamLockRowForToken } from '../teamLinkAccess';
 import { agencyFace, clearPortalSessions, clientOfDocument, closedLinkAnswer, lockRowForToken, newPortalPassword, passwordColumns, requirePortalAccess, unlockPortal, type LockRow } from '../portalAccess';
 
 /**
@@ -75,7 +77,7 @@ agencyLife.post('/clients/:id/stage', async (c) => {
     if (problem) return c.json({ error: problem }, 400);
   }
   const text = body.undo === true ? `Stepped back to ${AGENCY_STAGE_BY_KEY[to].name}.` : `Moved to ${AGENCY_STAGE_BY_KEY[to].name}.`;
-  if (!(await moveStage(db, user.id, row.id, from, to, 'me', text))) return c.json({ error: 'They moved while you looked. Reload and try again.' }, 409);
+  if (!(await moveStage(db, user.id, row.id, from, to, actorOf(c), text))) return c.json({ error: 'They moved while you looked. Reload and try again.' }, 409);
   return c.json({ stage: to });
 });
 
@@ -182,7 +184,7 @@ agencyLife.post('/clients/:id/trial-video', async (c) => {
   const now = nowIso();
   await db.batch([
     db.prepare("INSERT INTO agency_items (id, user_id, client_id, title, kind, platform, stage, due_date, trial, created_at, updated_at) VALUES (?, ?, ?, ?, 'video', '', 'idea', ?, 1, ?, ?)").bind(id, user.id, row.id, 'Trial video'.slice(0, AGENCY_TITLE_MAX), due, now, now),
-    logStmt(db, user.id, row.id, 'me', 'trial', 'The trial video was added to the pipeline.'),
+    logStmt(db, user.id, row.id, actorOf(c), 'trial', 'The trial video was added to the pipeline.'),
   ]);
   return c.json({ id }, 201);
 });
@@ -243,7 +245,7 @@ agencyLife.post('/clients/:id/retainer', async (c) => {
     db
       .prepare("INSERT INTO agency_retainers (id, user_id, client_id, status, options_json, fee_cents, pieces_per_month, revisions_per_piece, auto_send, created_at, updated_at) VALUES (?, ?, ?, 'offered', ?, ?, ?, ?, ?, ?, ?)")
       .bind(id, user.id, row.id, JSON.stringify(options), fee, pieces, revisions, body.autoSend === false ? 0 : 1, now, now),
-    logStmt(db, user.id, row.id, 'me', 'retainer', `A retainer offer was sent: ${options.map((o) => `${o.months} months`).join(', ')}.`),
+    logStmt(db, user.id, row.id, actorOf(c), 'retainer', `A retainer offer was sent: ${options.map((o) => `${o.months} months`).join(', ')}.`),
   ]);
   await applyStageEvent(db, user.id, row.id, 'offer_sent', 'The retainer offer was sent.');
   return c.json({ id }, 201);
@@ -268,7 +270,7 @@ agencyLife.post('/retainers/:id/confirm', async (c) => {
     .bind(startDay, body.autoSend === false ? 0 : r.auto_send, now, now, r.id, user.id)
     .run();
   if (!res.meta.changes) return c.json({ error: 'Someone already confirmed it.' }, 409);
-  await logStmt(db, user.id, r.client_id, 'me', 'retainer', `The retainer started on ${startDay} for ${r.months} months.`).run();
+  await logStmt(db, user.id, r.client_id, actorOf(c), 'retainer', `The retainer started on ${startDay} for ${r.months} months.`).run();
   await applyStageEvent(db, user.id, r.client_id, 'retainer_active', 'The retainer started.');
   // The first month now, if its day has come in the owner's zone; the cron makes the rest.
   const made = await runAgencyCycles(db, { retainerId: r.id });
@@ -284,7 +286,7 @@ agencyLife.post('/retainers/:id/end', async (c) => {
   const now = nowIso();
   const res = await db.prepare("UPDATE agency_retainers SET status = 'ended', ended_at = ?, updated_at = ? WHERE id = ? AND user_id = ? AND status = 'active'").bind(now, now, r.id, user.id).run();
   if (!res.meta.changes) return c.json({ error: 'That retainer is not running.' }, 409);
-  await logStmt(db, user.id, r.client_id, 'me', 'retainer', 'The retainer was ended.').run();
+  await logStmt(db, user.id, r.client_id, actorOf(c), 'retainer', 'The retainer was ended.').run();
   return c.json({ ok: true });
 });
 
@@ -307,7 +309,7 @@ agencyLife.post('/retainers/:id/withdraw', async (c) => {
   const now = nowIso();
   const res = await db.prepare("UPDATE agency_retainers SET status = 'withdrawn', updated_at = ? WHERE id = ? AND user_id = ? AND status IN ('offered', 'chosen')").bind(now, r.id, user.id).run();
   if (!res.meta.changes) return c.json({ error: 'There is nothing to take back.' }, 409);
-  await logStmt(db, user.id, r.client_id, 'me', 'retainer', 'The retainer offer was withdrawn.').run();
+  await logStmt(db, user.id, r.client_id, actorOf(c), 'retainer', 'The retainer offer was withdrawn.').run();
   return c.json({ ok: true });
 });
 
@@ -511,19 +513,23 @@ agencyLifePublic.post('/:token/onboarding/submit', async (c) => {
 agencyLifePublic.post('/password-request', async (c) => {
   const db = c.env.DB;
   const body = await bodyOf(c);
-  const kind = body.kind === 'contract' || body.kind === 'invoice' || body.kind === 'doc' ? body.kind : 'agency';
+  const kind = body.kind === 'contract' || body.kind === 'invoice' || body.kind === 'doc' || body.kind === 'team' ? body.kind : 'agency';
   const token = typeof body.token === 'string' ? body.token.slice(0, 40) : '';
   const reason = str(body.reason, PASSWORD_REQUEST_REASON_MAX);
-  const client: LockRow | null = kind === 'agency' ? await lockRowForToken(db, token) : await clientOfDocument(db, kind, token);
+  // 'team' is the team link (the client's own team): its own ask, its own note, never touching the client link's.
+  const team = kind === 'team';
+  const client: LockRow | null = kind === 'agency' ? await lockRowForToken(db, token) : kind === 'team' ? await teamLockRowForToken(db, token) : await clientOfDocument(db, kind, token);
   c.header('Cache-Control', 'no-store');
   if (!client || !client.portal_pass_hash) return c.json({ ok: true });
   const now = nowIso();
-  const res = await db.prepare('INSERT OR IGNORE INTO agency_password_requests (id, client_id, user_id, reason, created_at) VALUES (?, ?, ?, ?, ?)').bind(newId(), client.id, client.user_id, reason, now).run();
+  const res = await db.prepare('INSERT OR IGNORE INTO agency_password_requests (id, client_id, user_id, reason, created_at, link) VALUES (?, ?, ?, ?, ?, ?)').bind(newId(), client.id, client.user_id, reason, now, team ? 'team' : 'client').run();
   if (!res.meta.changes) return c.json({ ok: true });
+  const who = team ? `${client.name}'s team` : client.name;
+  const what = team ? 'the team link' : 'their page';
   await db.batch([
-    logStmt(db, client.user_id, client.id, 'client', 'password', 'The client asked for a new password.'),
-    // One stable note per client, so a second ask after a dismissal brings the same line back to the top instead of adding another.
-    db.prepare('INSERT OR REPLACE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)').bind(`pwreq-${client.id}`, client.user_id, 'agency', `${client.name} asked for a new password`, 'Set a new one on their page, then send it to them yourself.', `/agency/${client.id}`, now),
+    logStmt(db, client.user_id, client.id, 'client', 'password', team ? 'Their team asked for a new password for the team link.' : 'The client asked for a new password.'),
+    // One stable note per client and link, so a second ask after a dismissal brings the same line back to the top instead of adding another.
+    db.prepare('INSERT OR REPLACE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)').bind(team ? `pwreq-team-${client.id}` : `pwreq-${client.id}`, client.user_id, 'agency', `${who} asked for a new password`, team ? 'Set a new one for the team link on their page, then send it to them yourself.' : 'Set a new one on their page, then send it to them yourself.', `/agency/${client.id}${team ? '?cseg=link' : ''}`, now),
   ]);
   const owner = await db.prepare('SELECT email FROM users WHERE id = ?').bind(client.user_id).first<{ email: string | null }>();
   if (owner?.email) {
@@ -532,8 +538,8 @@ agencyLifePublic.post('/password-request', async (c) => {
     await sendEmail(db, c.env, {
       userId: client.user_id,
       to: owner.email,
-      subject: `${client.name} asked for a new password`,
-      body: `${client.name} asked for a new password for their page${face.agencyName ? ` with ${face.agencyName}` : ''}.\n\nSet a new one on their page, then send it to them yourself, by a different channel from the link.${link ? `\n\n${link}` : ''}`,
+      subject: `${who} asked for a new password`,
+      body: `${who} asked for a new password for ${what}${face.agencyName ? ` with ${face.agencyName}` : ''}.\n\nSet a new one on their page, then send it to them yourself, by a different channel from the link.${link ? `\n\n${link}` : ''}`,
       private: true,
     });
   }

@@ -5,6 +5,10 @@ import { useEffect, useRef, useState } from 'react';
 import { fillVar, ON_FILL } from '../lib/relFill';
 import { Button } from './Button';
 import { Fold } from './Fold';
+import { FilterSelect } from './FilterSelect';
+
+/** Every category first, then each category, in one dropdown. */
+const CATEGORY_ITEMS: { key: 'all' | JournalPromptCategoryKey; label: string }[] = [{ key: 'all', label: 'Every category' }, ...JOURNAL_PROMPT_CATEGORIES.map((c) => ({ key: c.key, label: c.name }))];
 
 /**
  * Prompt me: a question to write about, drawn from the journaling ideas in `packages/shared/src/journalPrompts.ts`.
@@ -102,30 +106,20 @@ export function JournalPrompt({ onWrite }: { onWrite: (start: { title: string; b
 
   return (
     <section className="mt-lg" aria-labelledby="prompt-heading">
-      <div className="flex flex-wrap items-center justify-between gap-sm">
-        <div className="min-w-0 flex-1">
-          <h2 id="prompt-heading" className="text-[24px]">
-            Not sure what to write?
-          </h2>
-          <p className="mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">{JOURNAL_PROMPT_COUNT} prompts, each with why it helps and what to expect. Which ones you see stays on this device.</p>
+      <h2 id="prompt-heading" className="text-[24px]">
+        Not sure what to write?
+      </h2>
+      <p className="mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">{JOURNAL_PROMPT_COUNT} prompts, each with why it helps and what to expect. Which ones you see stays on this device.</p>
+
+      {/* The category picks one of many, so it is a dropdown at the left of Prompt me: one line from the tablet width, a line each on a phone. */}
+      <div className="mt-sm flex flex-col gap-xs md:flex-row md:items-center md:justify-between">
+        <div className="md:w-[320px]">
+          <FilterSelect label="Category" items={CATEGORY_ITEMS} value={kept.category} onChange={pick} />
         </div>
-        <Button className="relative overflow-hidden" onClick={() => draw(kept.category)}>
+        <Button variant="outline" className="relative overflow-hidden" onClick={() => draw(kept.category)}>
           <span ref={shineRef} aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-1/3 -skew-x-12 bg-linear-to-r from-transparent via-on-ink/30 to-transparent opacity-0" />
           Prompt me
         </Button>
-      </div>
-
-      <div className="mt-sm">
-        <div className="scroll-row" role="group" aria-label="Prompt category">
-          <button type="button" aria-pressed={kept.category === 'all'} onClick={() => pick('all')} className={`toy toy-flat inline-flex min-h-[44px] shrink-0 items-center rounded-pill border-2 px-md text-[14px] font-bold ${kept.category === 'all' ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
-            All
-          </button>
-          {JOURNAL_PROMPT_CATEGORIES.map((c) => (
-            <button key={c.key} type="button" aria-pressed={kept.category === c.key} onClick={() => pick(c.key)} className={`toy toy-flat inline-flex min-h-[44px] shrink-0 items-center rounded-pill border-2 px-md text-[14px] font-bold ${kept.category === c.key ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
-              {c.name}
-            </button>
-          ))}
-        </div>
       </div>
 
       {prompt && cat ? (
@@ -175,9 +169,8 @@ export function JournalPrompt({ onWrite }: { onWrite: (start: { title: string; b
         <p className="mt-sm m-0 rounded-tile bg-card p-sm text-balance text-[14px] font-semibold text-ink-soft shadow-toy-soft">Tap Prompt me for a question to write about. Pick a category first if you like.</p>
       )}
 
-      <p className="mt-sm m-0 text-balance text-[12px] font-semibold text-ink-soft">
-        {JOURNAL_PROMPT_CREDIT} {JOURNAL_PROMPT_SAFETY}
-      </p>
+      <p className="mt-sm m-0 text-balance text-[12px] font-semibold text-ink-soft">{JOURNAL_PROMPT_CREDIT}</p>
+      <p className="mt-xs m-0 text-balance text-[12px] font-semibold text-ink-soft">{JOURNAL_PROMPT_SAFETY}</p>
     </section>
   );
 }

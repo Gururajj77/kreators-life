@@ -2,6 +2,7 @@ import { contractAsText, docRef, CONTRACT_STATUSES, CONTRACT_STATUS_NAME, CONTRA
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { useAgencyCan } from '../lib/agencyWorkspace';
 import { api, ApiError } from '../lib/api';
 import { useAuthed } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
@@ -14,6 +15,7 @@ import { KanbanBoard } from './KanbanBoard';
 import { Pager, usePage } from './Pager';
 import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
+import { CardHead } from './CardHead';
 import { useView, ViewToggle } from './ViewToggle';
 import { FIELD } from '../lib/ui';
 
@@ -94,6 +96,16 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clie
     },
     onError: (e) => setNote(e instanceof ApiError ? e.message : 'That did not move. Try again.'),
   });
+  // Restore a voided agreement to the status it had before, at the same link (the same action as on its page).
+  const restore = useMutation({
+    mutationFn: (id: string) => api.agencyContractRestore(id),
+    onSuccess: (r) => {
+      setRowNote({ id: r.contract.id, text: `Restored as ${CONTRACT_STATUS_NAME[r.restoredTo].toLowerCase()}.` });
+      window.setTimeout(() => setRowNote(null), 3000);
+      void invalidate();
+    },
+    onError: (e) => setNote(e instanceof ApiError ? e.message : 'That did not restore. Try again.'),
+  });
   const create = useMutation({
     mutationFn: () => {
       const body = template.startsWith('own:') ? { templateId: template.slice(4) } : template.startsWith('house:') ? { houseId: template.slice(6) } : { templateKey: template.slice(4) };
@@ -106,10 +118,11 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clie
     },
   });
 
+  const edit = useAgencyCan().can('paperwork', 'edit');
   const onMove = (item: ContractListItem, from: string, to: string) => {
     if (from === 'signed') return setNote('A signed agreement is a record. Open it and make a revised copy instead.');
     if (to === 'signed') return setNote('Only the client can sign, with the link you send.');
-    if (from === 'void') return setNote('A voided agreement stays put. Make a copy to use it again.');
+    if (from === 'void') return setNote('A voided agreement stays put. Restore it from its More menu, or make a copy.');
     if (!canMove(from, to)) return;
     move.mutate({ id: item.id, to });
   };
@@ -122,7 +135,7 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clie
     <section aria-labelledby="agreements-heading">
       <div className="flex flex-wrap items-center justify-between gap-sm">
         <ViewToggle view={view} onChange={setView} label="How to see agreements" />
-        {!onAdding && (
+        {!onAdding && edit && (
           <Button size="sm" plusToX onClick={() => setAdding(true)}>
             New agreement
           </Button>
@@ -146,12 +159,13 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clie
           {board.data && (
             <KanbanBoard<ContractListItem>
               columns={columns}
-              onMove={onMove}
+              onMove={edit ? onMove : undefined}
               canMoveTo={(_item, from, to) => canMove(from, to)}
               onMore={() => setPer((n) => n + 25)}
               empty="None yet"
               itemLabel={(c) => c.title}
               card={(c) => <Card c={c} />}
+              moveAtFoot
             />
           )}
         </div>
@@ -202,6 +216,7 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clie
                     path={`/agency/contracts/${c.id}`}
                     name={c.title}
                     onNote={(text) => setRowNote(text ? { id: c.id, text } : null)}
+                    onRestore={c.status === 'void' ? () => restore.mutate(c.id) : undefined}
                     getText={async () => {
                       const { contract } = await api.agencyContract(c.id);
                       return contractAsText(contract.doc, { reference: docRef('AGR', contract.id), date: contract.sentAt ?? contract.createdAt, answers: contract.answers, acceptance: contract.acceptance });
@@ -289,10 +304,9 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clie
 function Choice({ on, onPick, name, blurb, house = false }: { on: boolean; onPick: () => void; name: string; blurb: string; house?: boolean }) {
   return (
     <button type="button" role="radio" aria-checked={on} onClick={onPick} className={`toy w-full rounded-tile border-2 p-sm text-left ${on ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
-      <span className="flex flex-wrap items-center gap-xs text-[16px] font-extrabold">
-        {tie(name)}
-        {house && <StatusTag tone="info">House template</StatusTag>}
-      </span>
+      <CardHead tag={house && <StatusTag fit tone="info">House template</StatusTag>}>
+        <span className="block text-[16px] font-extrabold">{tie(name)}</span>
+      </CardHead>
       <span className="block text-[14px] font-semibold text-ink-soft">{blurb}</span>
     </button>
   );
@@ -392,9 +406,11 @@ function Card({ c }: { c: ContractListItem }) {
   return (
     <div>
       <Link to={`/agency/contracts/${c.id}`} className="block text-[16px] font-extrabold underline-offset-4 hover:underline">
-        {tie(c.title)}
+        {/* The Move button sits at the card's foot (moveAtFoot), so the title has the card's whole width and a tail in capitals as long
+            as "ENGAGEMENT AGREEMENT" (20 letters) stays on one line instead of leaving "AGREEMENT" alone. */}
+        {tie(c.title, 20)}
       </Link>
-      <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{tie(`${c.clientName || 'No client yet'}, ${c.signedAt ? `signed ${day(c.signedAt)}` : c.sentAt ? `sent ${day(c.sentAt)}` : `changed ${day(c.updatedAt)}`}`)}</p>
+      <p data-kfoot="" className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{tie(`${c.clientName || 'No client yet'}, ${c.signedAt ? `signed ${day(c.signedAt)}` : c.sentAt ? `sent ${day(c.sentAt)}` : `changed ${day(c.updatedAt)}`}`)}</p>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-// A live snapshot of whatever focus clock is running in Mindful minutes, kept at module scope (like useSession in store.ts) so it
+// A live snapshot of whatever focus clock is running in Mindfulness, kept at module scope (like useSession in store.ts) so it
 // survives leaving the Mindful screen. Mindful itself still owns the clock (the round, the breaks, the chime, the log): this is only a
 // read of where it stands, written once a tick by FocusRounds and read by FocusPill to keep a small chip ticking on every other page and
 // by FocusRounds itself on its next mount, to pick a session back up instead of starting over.

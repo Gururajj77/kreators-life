@@ -1,8 +1,9 @@
-import { Hono } from 'hono';
-import { MAX_RUN_METRES, MAX_RUN_MINUTES, normalizeCode, RUN_CODE_WINDOW, RUN_PACES, RUN_REWARD, runEntryState, weekStreak, type Run, type RunClub, type RunClubDetail, type RunCollab, type RunCollabApplication, type RunCollabsResponse, type RunEntry, type RunResponse, type RunTracking, type Page } from '@kreators/shared';
+import { Hono, type Context } from 'hono';
+import { CHANNEL_LINES, channelCursor, channelMessageProblem, cleanChannelMessage, MAX_RUN_METRES, MAX_RUN_MINUTES, mentionsIn, normalizeCode, RUN_CODE_WINDOW, RUN_PACES, RUN_REWARD, RUN_TALK_DAYS_AFTER, runEntryState, runTalkClosesAt, runTalkOpen, weekStreak, type Run, type RunClub, type RunClubDetail, type RunCollab, type RunCollabApplication, type RunCollabsResponse, type RunEntry, type RunResponse, type RunTalk, type RunTalkLine, type RunTracking, type Page } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
 import { newRunCode, setRunCode } from '../attendee';
-import { audit, badgesNow, can, diffBadges, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, orgIdsOf, orgRole, str, pageOf, paged } from '../db';
+import { anonAlias, audit, badgesNow, can, diffBadges, isStaff, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, orgIdsOf, orgRole, str, pageOf, paged } from '../db';
+import { blockBehind } from './community';
 
 /**
  * Kreators Run: run clubs like meetups, with one difference that makes the points honest. Every run has a start code
@@ -485,4 +486,256 @@ run.post('/collabs/:id/applications/:appId', async (c) => {
   await audit(db, user.id, 'run.collab.decide', 'run_collab_application', app.id, app.status, status);
   await notify(db, app.user_id, 'run', status === 'accepted' ? `Accepted: ${collab.title}` : `Not this time: ${collab.title}`, status === 'accepted' ? `Giveaway for your runners: ${collab.giveaway}. Add a run and pick the collab.` : 'Thanks for applying.', `/run/clubs/${app.club_id}`);
   return c.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// Discussions: one per run, for that run's people only, drawn and polled like a channel and ruled like an event conversation.
+// The run's people are the club's host, the members who were in the club by the time the run ended, and anyone who logged it
+// with its start code. Events staff may open any run's discussion as its host would, to take a line down. It takes new lines
+// until RUN_TALK_DAYS_AFTER days after the run (never for a cancelled one); anyone blocked either way is hidden both ways; a line
+// can be written under a made-up name for this run (anonAlias scoped `run:<id>`), and staff keep the id so a report can be acted on.
+// ---------------------------------------------------------------------------
+
+interface TalkRow { id: string; title: string; club_id: string; club_name: string; host_user_id: string; starts_at: string; ends_at: string; status: string }
+interface TalkListRow extends TalkRow { people: number; unread: number; last_line_at: string | null }
+interface LineRow { seq: number; id: string; user_id: string; body: string; anonymous: number; reply_to: string | null; created_at: string; display_name: string; handle: string | null }
+
+/** ?1 is always the person reading. */
+const TALK_NOT_BLOCKED = (col: string) => `NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ?1 AND b.blocked_id = ${col}) OR (b.blocker_id = ${col} AND b.blocked_id = ?1))`;
+/** Whether ?1 is one of run `r`'s people (joined with its club as `k`). */
+const TALK_PERSON = `(k.host_user_id = ?1
+  OR EXISTS (SELECT 1 FROM run_members m WHERE m.club_id = r.club_id AND m.user_id = ?1 AND m.status = 'member' AND m.joined_at <= r.ends_at)
+  OR EXISTS (SELECT 1 FROM run_entries e WHERE e.run_id = r.id AND e.user_id = ?1 AND e.status = 'logged'))`;
+/** The run's people, as user ids, for run `r` joined with its club as `k`. */
+const TALK_PEOPLE = `SELECT k.host_user_id AS user_id
+  UNION SELECT m.user_id FROM run_members m WHERE m.club_id = r.club_id AND m.status = 'member' AND m.joined_at <= r.ends_at
+  UNION SELECT e.user_id FROM run_entries e WHERE e.run_id = r.id AND e.status = 'logged'`;
+// ?1 viewer. Unread stops at a hundred lines, which is all the dot can show.
+const TALK_LIST = `SELECT r.id, r.title, r.club_id, r.starts_at, r.ends_at, r.status, k.name AS club_name, k.host_user_id,
+  (SELECT COUNT(*) FROM (${TALK_PEOPLE})) AS people,
+  (SELECT MAX(x.created_at) FROM run_messages x WHERE x.run_id = r.id AND x.deleted_at IS NULL) AS last_line_at,
+  (SELECT COUNT(*) FROM (SELECT 1 FROM run_messages x WHERE x.run_id = r.id AND x.deleted_at IS NULL AND x.user_id != ?1
+     AND x.created_at > COALESCE((SELECT d.last_read_at FROM run_discussion_reads d WHERE d.run_id = r.id AND d.user_id = ?1), '')
+     AND ${TALK_NOT_BLOCKED('x.user_id')} LIMIT 100)) AS unread
+  FROM runs r JOIN run_clubs k ON k.id = r.club_id`;
+
+const talkLink = (runId: string) => `/run?tab=talk&run=${runId}`;
+const toTalk = (r: TalkListRow, viewer: UserRow, now: string): RunTalk => ({
+  runId: r.id,
+  clubId: r.club_id,
+  clubName: r.club_name,
+  title: r.title,
+  startsAt: r.starts_at,
+  endsAt: r.ends_at,
+  open: runTalkOpen({ status: r.status, endsAt: r.ends_at }, now),
+  closesAt: runTalkClosesAt(r.ends_at),
+  host: r.host_user_id === viewer.id || can(viewer, 'events'),
+  people: r.people,
+  unread: r.unread,
+  lastLineAt: r.last_line_at,
+});
+
+/** The run's discussion as this person may see it, or null when they are not one of its people (the caller answers 404). */
+async function talkFor(db: D1Database, viewer: UserRow, runId: string): Promise<TalkListRow | null> {
+  const staff = can(viewer, 'events') ? 1 : 0;
+  return db.prepare(`${TALK_LIST} WHERE r.id = ?2 AND (?3 = 1 OR ${TALK_PERSON})`).bind(viewer.id, runId, staff).first<TalkListRow>();
+}
+
+/** Lines as they leave the server. An anonymous line carries the run's made-up name for its writer and no id or handle; staff keep the id, and the writer's own `mine` flag finds their line. */
+async function presentRunLines(c: Context<AppEnv>, t: TalkRow, rows: LineRow[]): Promise<RunTalkLine[]> {
+  const viewer = c.get('user');
+  const staff = isStaff(viewer);
+  const aliasOf = (userId: string) => anonAlias(c.env, userId, `run:${t.id}`);
+  const parentIds = [...new Set(rows.map((r) => r.reply_to).filter((x): x is string => Boolean(x)))];
+  const parents = new Map<string, { name: string; body: string }>();
+  if (parentIds.length > 0) {
+    const ps = await c.env.DB.prepare(`SELECT m.id, m.user_id, m.body, m.anonymous, u.display_name FROM run_messages m JOIN users u ON u.id = m.user_id WHERE m.run_id = ?2 AND m.deleted_at IS NULL AND m.id IN (${parentIds.map((_, i) => `?${i + 3}`).join(',')}) AND ${TALK_NOT_BLOCKED('m.user_id')}`)
+      .bind(viewer.id, t.id, ...parentIds)
+      .all<{ id: string; user_id: string; body: string; anonymous: number; display_name: string }>();
+    for (const p of ps.results) parents.set(p.id, { name: p.anonymous === 1 ? await aliasOf(p.user_id) : nameOf(p), body: p.body.slice(0, 100) });
+  }
+  return Promise.all(
+    rows.map(async (r): Promise<RunTalkLine> => {
+      const mine = r.user_id === viewer.id;
+      const anon = r.anonymous === 1;
+      const reply = r.reply_to ? parents.get(r.reply_to) : undefined;
+      return {
+        seq: r.seq,
+        id: r.id,
+        userId: anon && !staff && !mine ? '' : r.user_id,
+        name: anon ? await aliasOf(r.user_id) : nameOf({ display_name: r.display_name }),
+        handle: anon ? null : r.handle,
+        anonymous: anon,
+        mine,
+        host: !anon && r.user_id === t.host_user_id,
+        body: r.body,
+        createdAt: r.created_at,
+        replyTo: r.reply_to && reply ? { id: r.reply_to, ...reply } : null,
+      };
+    }),
+  );
+}
+
+const LINE_SQL = 'SELECT m.seq, m.id, m.user_id, m.body, m.anonymous, m.reply_to, m.created_at, u.display_name, u.handle FROM run_messages m JOIN users u ON u.id = m.user_id';
+
+// The discussions this person is in: runs not cancelled whose month after has not passed, newest line first, then the soonest run.
+run.get('/talk', async (c) => {
+  const user = c.get('user');
+  const now = nowIso();
+  const ask = pageOf(c);
+  const since = new Date(Date.now() - RUN_TALK_DAYS_AFTER * 86_400_000).toISOString();
+  const rows = await c.env.DB.prepare(`${TALK_LIST} WHERE r.status != 'cancelled' AND r.ends_at >= ?2 AND ${TALK_PERSON} ORDER BY (last_line_at IS NULL), last_line_at DESC, r.starts_at, r.id LIMIT ?3 OFFSET ?4`)
+    .bind(user.id, since, ask.limit, ask.offset)
+    .all<TalkListRow>();
+  const pg = paged(rows.results, ask);
+  return c.json({ page: pg.page, talks: pg.items.map((r) => toTalk(r, user, now)) });
+});
+
+// How many of my discussions have lines I have not read: the dot on the Discussions tab.
+run.get('/talk/unread', async (c) => {
+  const user = c.get('user');
+  const since = new Date(Date.now() - RUN_TALK_DAYS_AFTER * 86_400_000).toISOString();
+  const n = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM runs r JOIN run_clubs k ON k.id = r.club_id
+     WHERE r.status != 'cancelled' AND r.ends_at >= ?2 AND ${TALK_PERSON}
+       AND EXISTS (SELECT 1 FROM run_messages x WHERE x.run_id = r.id AND x.deleted_at IS NULL AND x.user_id != ?1
+         AND x.created_at > COALESCE((SELECT d.last_read_at FROM run_discussion_reads d WHERE d.run_id = r.id AND d.user_id = ?1), '')
+         AND ${TALK_NOT_BLOCKED('x.user_id')})`,
+  )
+    .bind(user.id, since)
+    .first<{ n: number }>();
+  return c.json({ unread: n?.n ?? 0 });
+});
+
+run.get('/talk/:runId', async (c) => {
+  const user = c.get('user');
+  const t = await talkFor(c.env.DB, user, c.req.param('runId'));
+  if (!t) return c.json({ error: 'not found' }, 404);
+  return c.json({ talk: toTalk(t, user, nowIso()) });
+});
+
+// The lines. No `after`/`before`: the latest block. `after=<seq>`: only newer lines (the poll). `before=<seq>`: the block before that line.
+// `from=<seq>` with `after` lists the held lines taken down since, so an open screen drops them. `read=1` marks it read.
+run.get('/talk/:runId/messages', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const t = await talkFor(db, user, c.req.param('runId'));
+  if (!t) return c.json({ error: 'not found' }, 404);
+  const after = channelCursor(c.req.query('after'));
+  const before = after ? null : channelCursor(c.req.query('before'));
+  const forward = after !== null;
+  const cursor = after ?? before ?? 0;
+  const rows = await db
+    .prepare(`${LINE_SQL} WHERE m.run_id = ?2 AND m.deleted_at IS NULL AND m.seq ${before ? '<' : '>'} ?3 AND ${TALK_NOT_BLOCKED('m.user_id')} ORDER BY m.seq ${forward ? 'ASC' : 'DESC'} LIMIT ?4`)
+    .bind(user.id, t.id, cursor, CHANNEL_LINES + 1)
+    .all<LineRow>();
+  const more = rows.results.length > CHANNEL_LINES;
+  const got = rows.results.slice(0, CHANNEL_LINES);
+  if (!forward) got.reverse();
+  let gone: number[] = [];
+  const from = channelCursor(c.req.query('from'));
+  if (forward && from) {
+    const lo = Math.max(from, (after ?? 0) - 400);
+    const g = await db.prepare('SELECT seq FROM run_messages WHERE run_id = ? AND deleted_at IS NOT NULL AND seq >= ? AND seq <= ? LIMIT 200').bind(t.id, lo, after).all<{ seq: number }>();
+    gone = g.results.map((x) => x.seq);
+  }
+  // Someone looking at the discussion has read it up to now. Nothing is written for a poll that found nothing new.
+  if (c.req.query('read') === '1' && (got.length > 0 || !forward)) {
+    await db.prepare('INSERT INTO run_discussion_reads (run_id, user_id, last_read_at) VALUES (?, ?, ?) ON CONFLICT (run_id, user_id) DO UPDATE SET last_read_at = excluded.last_read_at').bind(t.id, user.id, nowIso()).run();
+  }
+  return c.json({ lines: await presentRunLines(c, t, got), more, gone });
+});
+
+run.post('/talk/:runId/messages', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const t = await talkFor(db, user, c.req.param('runId'));
+  if (!t) return c.json({ error: 'not found' }, 404);
+  if (!runTalkOpen({ status: t.status, endsAt: t.ends_at }, nowIso())) return c.json({ error: t.status === 'cancelled' ? 'This run was cancelled, so its discussion is closed.' : 'This discussion closed a month after the run.' }, 409);
+  if (await db.prepare('SELECT 1 FROM community_mutes WHERE user_id = ?').bind(user.id).first()) return c.json({ error: 'You are muted from conversations for now.' }, 403);
+  const body = await c.req.json<{ body?: unknown; anonymous?: unknown; replyTo?: unknown }>().catch(() => ({}) as { body?: unknown; anonymous?: unknown; replyTo?: unknown });
+  const problem = channelMessageProblem(body.body);
+  if (problem) return c.json({ error: problem }, 400);
+  const text = cleanChannelMessage(body.body);
+  const anonymous = body.anonymous === true;
+  let parent: { id: string; user_id: string } | null = null;
+  if (typeof body.replyTo === 'string' && body.replyTo) {
+    parent = await db
+      .prepare(`SELECT m.id, m.user_id FROM run_messages m WHERE m.id = ?2 AND m.run_id = ?3 AND m.deleted_at IS NULL AND ${TALK_NOT_BLOCKED('m.user_id')}`)
+      .bind(user.id, body.replyTo, t.id)
+      .first<{ id: string; user_id: string }>();
+    if (!parent) return c.json({ error: 'That line is gone.' }, 404);
+  }
+  const now = nowIso();
+  const id = newId();
+  const res = await db.prepare('INSERT INTO run_messages (id, run_id, user_id, body, anonymous, reply_to, created_at, deleted_at, deleted_by) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL)').bind(id, t.id, user.id, text, anonymous ? 1 : 0, parent?.id ?? null, now).run();
+  // The writer has read their own line.
+  await db.prepare('INSERT INTO run_discussion_reads (run_id, user_id, last_read_at) VALUES (?, ?, ?) ON CONFLICT (run_id, user_id) DO UPDATE SET last_read_at = excluded.last_read_at').bind(t.id, user.id, now).run();
+  // Whoever is named in a notice is the made-up name when the writer chose one, never the real name. Mentions reach only the
+  // run's own people, once each, never the writer and never across a block.
+  const label = anonymous ? await anonAlias(c.env, user.id, `run:${t.id}`) : nameOf(user);
+  const told = new Set<string>();
+  const handles = mentionsIn(text);
+  if (handles.length > 0) {
+    const named = await db
+      .prepare(
+        `SELECT u.id FROM users u, runs r JOIN run_clubs k ON k.id = r.club_id
+         WHERE r.id = ?2 AND u.handle IN (${handles.map((_, i) => `?${i + 3}`).join(',')}) AND u.id != ?1 AND ${TALK_NOT_BLOCKED('u.id')}
+           AND u.id IN (${TALK_PEOPLE})`,
+      )
+      .bind(user.id, t.id, ...handles)
+      .all<{ id: string }>();
+    for (const r of named.results) told.add(r.id);
+    await notifyMany(db, [...told], 'mention', `${label} mentioned you in ${t.title}`, text.slice(0, 120), talkLink(t.id));
+  }
+  if (parent && parent.user_id !== user.id && !told.has(parent.user_id)) await notify(db, parent.user_id, 'reply', `${label} replied to you in ${t.title}`, text.slice(0, 120), talkLink(t.id));
+  const saved = await db.prepare(`${LINE_SQL} WHERE m.id = ?`).bind(id).first<LineRow>();
+  return c.json({ line: saved ? ((await presentRunLines(c, t, [saved]))[0] ?? null) : null, seq: res.meta.last_row_id }, 201);
+});
+
+// A line comes down when its writer asks, or when the run's host (or events staff) does. The words are wiped; the place stays.
+run.delete('/talk/:runId/messages/:mid', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const t = await talkFor(db, user, c.req.param('runId'));
+  if (!t) return c.json({ error: 'not found' }, 404);
+  const line = await db.prepare('SELECT id, user_id FROM run_messages WHERE id = ? AND run_id = ? AND deleted_at IS NULL').bind(c.req.param('mid'), t.id).first<{ id: string; user_id: string }>();
+  if (!line) return c.json({ error: 'not found' }, 404);
+  const mine = line.user_id === user.id;
+  if (!mine && !(t.host_user_id === user.id || can(user, 'events'))) return c.json({ error: 'Only its writer or the host can take a line down.' }, 403);
+  await db.prepare("UPDATE run_messages SET body = '', deleted_at = ?, deleted_by = ? WHERE id = ? AND deleted_at IS NULL").bind(nowIso(), user.id, line.id).run();
+  if (!mine) {
+    await audit(db, user.id, 'run.line.delete', 'run_message', line.id, '', { run: t.id });
+    await notify(db, line.user_id, 'moderation', 'A line of yours was taken down', `In the discussion for ${t.title}.`, talkLink(t.id));
+  }
+  return c.json({ ok: true });
+});
+
+// Tell the team about a line: a help ticket with the line's words, since they are wiped if it is taken down.
+run.post('/talk/:runId/messages/:mid/report', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const t = await talkFor(db, user, c.req.param('runId'));
+  if (!t) return c.json({ error: 'not found' }, 404);
+  const line = await db
+    .prepare(`SELECT m.id, m.seq, m.user_id, m.body FROM run_messages m WHERE m.id = ?2 AND m.run_id = ?3 AND m.deleted_at IS NULL AND ${TALK_NOT_BLOCKED('m.user_id')}`)
+    .bind(user.id, c.req.param('mid'), t.id)
+    .first<{ id: string; seq: number; user_id: string; body: string }>();
+  if (!line) return c.json({ error: 'not found' }, 404);
+  if (line.user_id === user.id) return c.json({ error: 'That is your own line. You can take it down instead.' }, 400);
+  const note = await c.req.json<{ note?: unknown }>().then((b) => str(b.note, 300)).catch(() => '');
+  const now = nowIso();
+  await db
+    .prepare("INSERT INTO support_tickets (id, user_id, subject, body, status, reply, replied_by, created_at, updated_at) VALUES (?, ?, ?, ?, 'open', '', NULL, ?, ?)")
+    .bind(newId(), user.id, `Report: a line in the run discussion ${t.title}`.slice(0, 120), `Run ${t.id}, line ${line.id} (number ${line.seq}).\nIt says: ${line.body.slice(0, 500)}${note ? `\nWhy: ${note}` : ''}`, now, now)
+    .run();
+  return c.json({ ok: true }, 201);
+});
+
+// Block the person behind a line without learning who it is, which is how an anonymous writer is blocked.
+run.post('/talk/:runId/messages/:mid/block-author', async (c) => {
+  const t = await talkFor(c.env.DB, c.get('user'), c.req.param('runId'));
+  if (!t) return c.json({ error: 'not found' }, 404);
+  const line = await c.env.DB.prepare('SELECT user_id FROM run_messages WHERE id = ? AND run_id = ?').bind(c.req.param('mid'), t.id).first<{ user_id: string }>();
+  return blockBehind(c, line?.user_id);
 });

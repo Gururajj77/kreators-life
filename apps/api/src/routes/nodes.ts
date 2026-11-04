@@ -58,11 +58,16 @@ export interface NodeBody {
   priority?: unknown;
   remind?: unknown;
   forReview?: unknown;
+  /** "Count it as a habit": true or false is the person's pick, null goes back to the old rule (a repeating task is one). */
+  habit?: unknown;
   dueTime?: unknown;
   estimateMin?: unknown;
   status?: unknown;
 }
 type Refused = { error: string; status: 400 | 404 };
+
+/** `habit` from a request: true 1, false 0, anything else null (the old rule). */
+const habitValue = (v: unknown): 0 | 1 | null => (v === true ? 1 : v === false ? 0 : null);
 
 /** The do date is the day it will be done, the due date is the day it has to be done before: the first cannot come after the second. */
 export const DATES_PROBLEM = 'Do it on or before the day it is due.';
@@ -113,7 +118,8 @@ export async function createNode(db: D1Database, ownerId: string, body: NodeBody
   const priority = kind === 'task' ? parsePriority(body.priority) : null;
   const remind = kind === 'task' && body.remind === true ? 1 : 0;
   const forReview = kind === 'task' && body.forReview === true ? 1 : 0;
-  if (doDate || repeat || priority !== null || remind || forReview) await db.prepare('UPDATE nodes SET do_date = ?, repeat_json = ?, priority = ?, remind = ?, for_review = ? WHERE id = ?').bind(doDate, repeat ? JSON.stringify(repeat) : null, priority, remind, forReview, id).run();
+  const habit = kind === 'task' ? habitValue(body.habit) : null;
+  if (doDate || repeat || priority !== null || remind || forReview || habit !== null) await db.prepare('UPDATE nodes SET do_date = ?, repeat_json = ?, priority = ?, remind = ?, for_review = ?, habit = ? WHERE id = ?').bind(doDate, repeat ? JSON.stringify(repeat) : null, priority, remind, forReview, habit, id).run();
   const row = await getNode(db, ownerId, id);
   return row ? { row } : { error: 'not found', status: 404 };
 }
@@ -154,6 +160,8 @@ export async function editNode(db: D1Database, row: NodeRow, body: NodeBody): Pr
   }
   // For review is a flag: the review for the period lists the task, and a tap puts it into an answer.
   if (row.kind === 'task' && 'forReview' in body) await db.prepare('UPDATE nodes SET for_review = ? WHERE id = ?').bind(body.forReview === true ? 1 : 0, row.id).run();
+  // Count it as a habit: the person's own pick, or null to go back to the old rule.
+  if (row.kind === 'task' && 'habit' in body) await db.prepare('UPDATE nodes SET habit = ? WHERE id = ?').bind(habitValue(body.habit), row.id).run();
   return (await getNode(db, row.user_id, row.id)) ?? row;
 }
 
@@ -182,10 +190,10 @@ async function spawnNext(db: D1Database, row: NodeRow, today: string): Promise<N
   const sortRow = await db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM nodes WHERE user_id = ? AND kind = ? AND relationship = ?').bind(row.user_id, 'task', row.relationship).first<{ next: number }>();
   await db
     .prepare(
-      `INSERT INTO nodes (id, user_id, kind, parent_id, relationship, title, note, status, xp, due_date, completed_at, ready_at, sort_order, created_at, updated_at, due_time, estimate_min, added_by, do_date, repeat_json, spawned_from, priority, remind, for_review)
-       VALUES (?, ?, 'task', ?, ?, ?, ?, 'active', 0, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO nodes (id, user_id, kind, parent_id, relationship, title, note, status, xp, due_date, completed_at, ready_at, sort_order, created_at, updated_at, due_time, estimate_min, added_by, do_date, repeat_json, spawned_from, priority, remind, for_review, habit)
+       VALUES (?, ?, 'task', ?, ?, ?, ?, 'active', 0, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(id, row.user_id, row.parent_id, row.relationship, row.title, row.note, dueDate, readyFromNow(), sortRow?.next ?? 0, now, now, row.due_time, row.estimate_min, row.added_by ?? null, doDate, carried, row.id, row.priority ?? null, row.remind ?? 0, row.for_review ?? 0)
+    .bind(id, row.user_id, row.parent_id, row.relationship, row.title, row.note, dueDate, readyFromNow(), sortRow?.next ?? 0, now, now, row.due_time, row.estimate_min, row.added_by ?? null, doDate, carried, row.id, row.priority ?? null, row.remind ?? 0, row.for_review ?? 0, row.habit ?? null)
     .run();
   // The checklist comes back too, all unticked.
   await db
@@ -215,8 +223,17 @@ nodes.patch('/:id', async (c) => {
     if (body.repeat && !parseRepeat(body.repeat)) return c.json({ error: 'That is not a way to repeat.' }, 400);
     if (body.priority !== undefined && body.priority !== null && parsePriority(body.priority) === null) return c.json({ error: 'A priority is P0, P1, P2 or P3.' }, 400);
     if (body.repeat && !doNext && !dueNext) return c.json({ error: 'Pick a do date or a due date for it to repeat from.' }, 400);
+    // Moving a task to another project (and with it, maybe another pillar): only an open task, and only under one of the person's own
+    // active projects. The task takes that project's pillar. A ticked task stays where its xp was earned.
+    if (body.parentId !== undefined && body.parentId !== row.parent_id) {
+      if (row.status !== 'active') return c.json({ error: 'Only an open task can move to another project.' }, 400);
+      const to = typeof body.parentId === 'string' ? await getNode(db, user.id, body.parentId) : null;
+      if (!to || to.kind !== 'project' || to.status !== 'active') return c.json({ error: 'Pick one of your open projects.' }, 400);
+      await db.prepare('UPDATE nodes SET parent_id = ?, relationship = ?, updated_at = ? WHERE id = ? AND user_id = ?').bind(to.id, to.relationship, nowIso(), row.id, user.id).run();
+    }
   }
-  return c.json({ node: toNode(await editNode(db, row, body)) });
+  const moved = (await getNode(db, user.id, row.id)) ?? row;
+  return c.json({ node: toNode(await editNode(db, moved, body)) });
 });
 
 /** A task's checklist. Owner only; it pays nothing and never blocks ticking the task. */

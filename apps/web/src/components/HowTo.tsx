@@ -12,6 +12,11 @@ export function HowTo({ moduleKey, children }: { moduleKey: string; children: Re
   return <Key.Provider value={moduleKey}>{children}</Key.Provider>;
 }
 
+/** The app the screen belongs to (set by `Gate` and `explained` in App.tsx), or null outside one. The app cover reads it too. */
+export function useModuleKey(): string | null {
+  return useContext(Key);
+}
+
 function Chevron({ open, className = '' }: { open: boolean; className?: string }) {
   return (
     <Icon icon={ChevronDown} size={20} className={`transition-transform ${open ? 'rotate-180' : ''} ${className}`} />
@@ -66,14 +71,15 @@ function Fold({ id, title, hint, open, onToggle, children }: { id: string; title
  * tap it again and everything folds away. Detail pages inside an app (one event, one club, one
  * product) leave it to the main screen.
  */
-export function HowItWorks() {
-  const key = useContext(Key);
+export function HowItWorks({ page }: { /** A core page that is not an app (Emerging): its own HOW_TO key and name, shown wherever it is drawn. */ page?: { key: string; name: string } } = {}) {
+  const ctxKey = useContext(Key);
   const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
   const [steps, setSteps] = useState(true);
   const [words, setWords] = useState(true);
+  const key = page?.key ?? ctxKey;
   const how = key ? HOW_TO[key] : undefined;
-  const meta = key ? MODULE_BY_KEY[key] : undefined;
+  const meta = page ? { name: page.name, path: pathname } : key ? MODULE_BY_KEY[key] : undefined;
   if (!how || !meta || pathname !== meta.path) return null;
   const toggleAll = () => {
     if (open) {

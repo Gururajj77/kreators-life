@@ -1,5 +1,5 @@
 import { AFFILIATE_SHARE, CONSENT_PURPOSES, LEGAL_VERSION, MIN_AGE, PAID_PLANS, PAYMENTS_LIVE, PLAN_CURRENCY, PLAN_DAYS, PLANS, RETENTION, money } from '@kreators/shared';
-import { A, ActionLink, Bullets, Fact, Grid, Grievance, H, LegalPage, Mail, NOT_SET, P, Strong, contactEmail, useBusiness, versionDate } from './legalBits';
+import { A, ActionLink, StartLink, Bullets, Fact, Grid, Grievance, H, LegalPage, Mail, NOT_SET, P, Strong, contactEmail, useBusiness, versionDate } from './legalBits';
 
 type Kind = 'terms' | 'privacy' | 'refunds' | 'contact' | 'pricing';
 
@@ -44,7 +44,7 @@ export function Policy({ kind }: { kind: Kind }) {
       title={t.title}
       lede={t.lede}
       note={t.note}
-      action={t.action ? <ActionLink to={t.action[0]}>{t.action[1]}</ActionLink> : undefined}
+      action={t.action ? t.action[0] === '/start' ? <StartLink /> : <ActionLink to={t.action[0]}>{t.action[1]}</ActionLink> : undefined}
       reading={t.reading}
       wide={kind === 'pricing'}
     >

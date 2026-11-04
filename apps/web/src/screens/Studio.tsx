@@ -7,7 +7,7 @@ import { AppIcon } from '../components/AppIcon';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { Button } from '../components/Button';
 import { AreaLine, Donut, Legend, StatTile } from '../components/Charts';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api, downloadCsv as fetchCsv, errorText } from '../lib/api';
@@ -53,14 +53,13 @@ export function Studio({ tab = 'home' }: { tab?: ShopTab }) {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Shop</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-          Sell downloads, courses, memberships, sessions, events, payment links, bundles, locked posts and priority DMs. Points work today; money checkout is in test mode until a payment provider is connected.
-        </p>
-        <TabRow className="mt-md" pillClass={(on) => `inline-flex min-h-[44px] items-center rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`} label="Shop sections" items={SHOP_TABS} value={tab} onChange={(k) => nav(SHOP_TABS.find((t) => t.key === k)!.to)} />
-      </header>
+      <AppCover
+        back={{ to: '/apps', label: 'Apps' }}
+        title="Shop"
+        lede="Sell downloads, courses, memberships, sessions, events, payment links, bundles, locked posts and priority DMs. Points work today; money checkout is in test mode until a payment provider is connected."
+      >
+        <TabRow pillClass={(on) => `inline-flex min-h-[44px] items-center rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`} label="Shop sections" items={SHOP_TABS} value={tab} onChange={(k) => nav(SHOP_TABS.find((t) => t.key === k)!.to)} />
+      </AppCover>
 
       {tab === 'home' && d && (
         <>
@@ -372,7 +371,7 @@ function BookingsTab() {
         <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
           Times in your zone, {zone} (change it under{' '}
           <Link to="/profile" className="underline underline-offset-4">
-            Profile
+            Public page
           </Link>
           ). Session products offer slots inside these windows, shown to buyers in their own zone.
         </p>

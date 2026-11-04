@@ -1,11 +1,10 @@
 import { RELATIONSHIPS, LOCALE } from '@kreators/shared';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useParams } from 'react-router';
+import { useParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
+import { BackLink } from '../components/PageHeader';
 import { publicApi } from '../lib/api';
 import { SiteLayout } from './SiteLayout';
-import { Icon } from '../components/Icon';
-import { ChevronLeft } from 'lucide-react';
 
 /** Anyone with the code can check a certificate is real. */
 export function CertificatePage() {
@@ -15,10 +14,7 @@ export function CertificatePage() {
   return (
     <SiteLayout wide={false}>
       <div className="pt-lg">
-        <Link to="/" className="inline-flex min-h-[44px] items-center gap-xs text-[14px] font-bold text-ink-soft">
-          <Icon icon={ChevronLeft} size={18} strokeWidth={3} />
-          kreators.app
-        </Link>
+        <BackLink to="/">kreators.app</BackLink>
         {q.isPending && <p className="m-0 text-[16px] font-semibold text-ink-soft">Checking…</p>}
         {q.isError && (
           <div role="alert" className="mt-md rounded-card bg-card p-md shadow-toy-soft">

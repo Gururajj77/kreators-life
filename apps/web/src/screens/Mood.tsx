@@ -11,6 +11,7 @@ import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { lastDays, shortDay, todayLocal } from '../lib/date';
 import { useLogs, useRefreshAll, useWellbeing } from '../lib/queries';
+import { EmergenceSlot } from '../components/EmergenceSlot';
 
 const DAY = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
@@ -46,8 +47,8 @@ export function Mood() {
 
   return (
     <>
-      <div className="transition-colors" style={{ background: mood.color, color: mood.text }}>
-        <div className="safe-top mx-auto w-full max-w-[480px] px-md pb-lg pt-md md:ml-[240px] md:max-w-[1040px] md:px-lg lg:mx-auto lg:pl-[240px]">
+      <div style={{ background: `linear-gradient(135deg, ${mood.color}, color-mix(in oklab, ${mood.color} 72%, var(--fill-shade)))`, color: mood.text }}>
+        <div className="mood-top safe-top mx-auto w-full max-w-[480px] px-md pb-lg pt-md md:ml-[240px] md:max-w-[1040px] md:px-lg lg:mx-auto lg:pl-[240px]">
           <BackLink to="/wellbeing" inherit>
             Wellbeing
           </BackLink>
@@ -143,6 +144,7 @@ export function Mood() {
         <MoodDaySheet date={day} existing={(year.data?.logs ?? []).find((l) => l.date === day) ?? null} onClose={() => setDay(null)} onChanged={refresh} />
 
         <PeriodPanel id="mood-period" parts={['wellbeing']} />
+        <EmergenceSlot app="mood" max={2} />
         <section className="mt-lg" aria-labelledby="thirty-heading">
           <h2 id="thirty-heading" className="text-[24px]">
             Last 30 days
@@ -209,9 +211,11 @@ export function Mood() {
 function MoodDaySheet({ date, existing, onClose, onChanged }: { date: string | null; existing: { id: string; value: number; note: string } | null; onClose: () => void; onChanged: () => void }) {
   const [value, setValue] = useState(3);
   const [note, setNote] = useState('');
+  const [asking, setAsking] = useState(false);
   useEffect(() => {
     setValue(existing ? Math.round(existing.value) : 3);
     setNote(existing?.note ?? '');
+    setAsking(false);
   }, [date, existing?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const qc = useQueryClient();
   const done = () => {
@@ -243,10 +247,30 @@ function MoodDaySheet({ date, existing, onClose, onChanged }: { date: string | n
         <Button full size="lg" onClick={() => save.mutate()} disabled={save.isPending}>
           {existing ? 'Save this day' : 'Add this day'}
         </Button>
-        {existing && (
-          <Button full variant="outline" onClick={() => window.confirm('Remove this day’s mood?') && remove.mutate()} disabled={remove.isPending}>
+        {existing && !asking && (
+          <Button full variant="outline" onClick={() => setAsking(true)} disabled={remove.isPending}>
             Remove this day
           </Button>
+        )}
+        {existing && asking && (
+          <div className="grid gap-sm rounded-tile bg-card p-sm" role="group" aria-label="Remove this day’s mood?">
+            <p className="m-0 text-[16px] font-bold">Remove this day’s mood?</p>
+            <p className="m-0 text-[14px] font-semibold text-ink-soft">It comes off your calendar and charts. This cannot be undone.</p>
+            {remove.isError && <p className="m-0 text-[14px] font-bold text-r1">That did not work. Try again.</p>}
+            <div className="flex flex-wrap gap-xs">
+              <button
+                type="button"
+                disabled={remove.isPending}
+                onClick={() => remove.mutate()}
+                className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-[16px] font-semibold text-on-fill disabled:opacity-50"
+              >
+                Yes, delete it
+              </button>
+              <Button variant="outline" onClick={() => setAsking(false)}>
+                Keep it
+              </Button>
+            </div>
+          </div>
         )}
       </div>
     </Sheet>

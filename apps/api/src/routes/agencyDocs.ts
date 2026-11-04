@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import {
   CONTRACT_STATUSES,
+  CONTRACT_STATUS_NAME,
+  INVOICE_STATUS_NAME,
   contractAsText,
   contractTemplateDoc,
   docRef,
@@ -56,7 +58,9 @@ import {
 import type { AppEnv } from '../env';
 import { audit, dayFromDevice, nameOf, newId, notify, nowIso, num, oneOf, pageOf, paged, randomCode, shiftDate, str } from '../db';
 import { dateOrNull } from '../agencyUtil';
-import { createInvoice, INV_SELECT, nextNumberAfter, setInvoiceStatus, toInvoice, updateDraftInvoice, type InvRow } from './finance';
+import { createInvoice, INV_SELECT, nextNumberAfter, restoreInvoice, setInvoiceStatus, toInvoice, updateDraftInvoice, type InvRow } from './finance';
+import { logStmt, type LogActor } from '../lifecycle';
+import { actorOf } from '../agencyTeamAccess';
 import { billingOf, settingsFor } from './agency';
 import { parseEmailNote } from '@kreators/shared/agencyEmail';
 import { coverFrom, emailCopy, emailProblem, logDoc, maskEmail, ownLogo, publicUrl } from '../agencyPaper';
@@ -388,6 +392,8 @@ agencyDocs.post('/invoices', async (c) => {
     starting = starterItems(starter.items, starter.key, client, deviceDay(c).slice(0, 7));
   }
   const parsed = parseInvoiceDoc(body.doc, base);
+  // A team member never sets where the client pays: the bank comes from the owner's profile or template, never from what a member sends.
+  if (c.get('team')) parsed.bank = base.bank;
   const doc = house ? parsed : await ownLogo(db, user.id, parsed, parseDocStyle(base.style).logo);
   const items = Array.isArray(body.items) ? itemsIn(body.items) : starting;
   if (items.length === 0) return c.json({ error: 'at least one line' }, 400);
@@ -455,7 +461,10 @@ agencyDocs.patch('/invoices/:id', async (c) => {
   // Saving as you go: invoices have no updated_at, so the page sends the version it read (`ifVersion`, from GET and every PATCH answer).
   if (typeof body.ifVersion === 'string' && body.ifVersion !== invoiceVersion(row)) return c.json({ error: 'changed' }, 409);
   const prev = toInvoice(row);
-  const doc = await ownLogo(db, user.id, parseInvoiceDoc(body.doc, prev.doc), parseDocStyle(prev.doc.style).logo);
+  const parsed = parseInvoiceDoc(body.doc, prev.doc);
+  // A team member never saw the bank (their answers carry a blank one), so the stored bank stays as it was.
+  if (c.get('team')) parsed.bank = prev.doc.bank;
+  const doc = await ownLogo(db, user.id, parsed, parseDocStyle(prev.doc.style).logo);
   const items = 'items' in body ? itemsIn(body.items) : prev.items;
   if (items.length === 0) return c.json({ error: 'at least one line' }, 400);
   let number: string | undefined;
@@ -477,6 +486,29 @@ agencyDocs.patch('/invoices/:id', async (c) => {
   if (!invoice) return c.json({ error: 'not found' }, 404);
   const after = await db.prepare(`${INV_SELECT} WHERE i.id = ? AND i.user_id = ?`).bind(row.id, user.id).first<InvRow>();
   return c.json({ invoice, totals: invoiceTotals(invoice.items, invoice.doc), version: after ? invoiceVersion(after) : '' });
+});
+
+/** A restore's line in the client's log, only while that client is still on the books (a removed client leaves its paper behind). */
+async function logRestore(db: D1Database, userId: string, clientId: string | null, text: string, by: LogActor = 'me'): Promise<void> {
+  if (!clientId) return;
+  const there = await db.prepare('SELECT 1 AS x FROM agency_clients WHERE id = ? AND user_id = ?').bind(clientId, userId).first();
+  if (there) await logStmt(db, userId, clientId, by, 'restore', text).run();
+}
+
+/**
+ * Restore a void invoice to the status it had before the void (a void with no record comes back as a draft). Same number, same link;
+ * a paid one books its income again. Guarded on status = 'void', so two taps restore once; a line in the client's log, no inbox note.
+ */
+agencyDocs.post('/invoices/:id/restore', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await db.prepare('SELECT id, agency_client_id, number FROM invoices WHERE id = ? AND user_id = ? AND agency_client_id IS NOT NULL').bind(c.req.param('id'), user.id).first<{ id: string; agency_client_id: string; number: string }>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  const out = await restoreInvoice(db, user.id, row.id);
+  if (out === 'not found') return c.json({ error: 'not found' }, 404);
+  if (out === 'not void') return c.json({ error: 'only a void invoice can be restored' }, 400);
+  await logRestore(db, user.id, row.agency_client_id, `Invoice ${row.number} restored as ${INVOICE_STATUS_NAME[out.from].toLowerCase()}`, actorOf(c));
+  return c.json({ invoice: out.invoice, restoredTo: out.from });
 });
 
 /** A short fingerprint of an invoice's editable content: the version the page read, checked before a save lands (`ifVersion`). */
@@ -743,12 +775,34 @@ agencyDocs.patch('/contracts/:id', async (c) => {
     } else if (next === 'draft' && row.status === 'sent') {
       res = await db.prepare("UPDATE agency_contracts SET status = 'draft', token = NULL, updated_at = ? WHERE id = ? AND user_id = ? AND status = 'sent'").bind(now, row.id, user.id).run();
     } else if (next === 'void' && row.status !== 'void') {
-      res = await db.prepare("UPDATE agency_contracts SET status = 'void', token = NULL, updated_at = ? WHERE id = ? AND user_id = ? AND status = ?").bind(now, row.id, user.id, row.status).run();
+      // The link closes, but the status and the link are kept beside it (migration 0075), so Restore can bring it back as it was.
+      res = await db.prepare("UPDATE agency_contracts SET status = 'void', voided_from = status, voided_token = token, token = NULL, updated_at = ? WHERE id = ? AND user_id = ? AND status = ?").bind(now, row.id, user.id, row.status).run();
     }
     if (res && res.meta.changes !== 1) return c.json({ error: changed }, 409);
   }
   const fresh = await db.prepare(`${CONTRACT_SELECT} WHERE k.id = ? AND k.user_id = ?`).bind(row.id, user.id).first<ContractRow>();
   return fresh ? c.json({ contract: toContract(fresh) }) : c.json({ error: 'not found' }, 404);
+});
+
+/**
+ * Restore a voided agreement to the status it had before (`voided_from`; an older void with no record comes back as a draft), with
+ * the same client link it had. Guarded on status = 'void', so two taps restore once; a line in the client's log, no inbox note.
+ */
+agencyDocs.post('/contracts/:id/restore', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await db.prepare(`${CONTRACT_SELECT} WHERE k.id = ? AND k.user_id = ?`).bind(c.req.param('id'), user.id).first<ContractRow & { voided_from: string | null; voided_token: string | null }>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  if (row.status !== 'void') return c.json({ error: 'only a voided agreement can be restored' }, 400);
+  const back = oneOf(row.voided_from, ['draft', 'sent', 'signed'] as const, 'draft');
+  // A sent or signed one opens at its old address; a draft has no link.
+  const token = back === 'draft' ? null : (row.voided_token ?? randomCode(16));
+  const now = nowIso();
+  const moved = await db.prepare("UPDATE agency_contracts SET status = ?, token = ?, voided_from = NULL, voided_token = NULL, updated_at = ? WHERE id = ? AND user_id = ? AND status = 'void'").bind(back, token, now, row.id, user.id).run();
+  if (moved.meta.changes !== 1) return c.json({ error: 'only a voided agreement can be restored' }, 400);
+  await logRestore(db, user.id, row.client_id, `Agreement "${row.title}" restored as ${CONTRACT_STATUS_NAME[back].toLowerCase()}`, actorOf(c));
+  const fresh = await db.prepare(`${CONTRACT_SELECT} WHERE k.id = ? AND k.user_id = ?`).bind(row.id, user.id).first<ContractRow>();
+  return fresh ? c.json({ contract: toContract(fresh), restoredTo: back }) : c.json({ error: 'not found' }, 404);
 });
 
 agencyDocs.delete('/contracts/:id', async (c) => {
@@ -763,8 +817,18 @@ agencyDocs.delete('/contracts/:id', async (c) => {
 
 // ---- email a copy: the text version and the client's link, sent as ordinary mail from the server
 
-/** Who a copy goes to: an address the person typed (checked), else the client's contact address. */
-export async function recipientFor(db: D1Database, userId: string, clientId: string | null, typed: unknown, fallback = ''): Promise<{ to: string } | { error: string }> {
+/**
+ * Who a copy goes to: an address the person typed (checked), else the client's contact address. A team member (`member`) sends only to
+ * the client's contact address on record, which only the owner changes: the copy carries the client's link, which a member never holds.
+ */
+export async function recipientFor(db: D1Database, userId: string, clientId: string | null, typed: unknown, fallback = '', member = false): Promise<{ to: string } | { error: string }> {
+  if (member) {
+    const onRecord = clientId ? await db.prepare('SELECT contact_email FROM agency_clients WHERE id = ? AND user_id = ?').bind(clientId, userId).first<{ contact_email: string }>() : null;
+    const to = (onRecord?.contact_email ?? '').trim();
+    if (!to || emailProblem(to)) return { error: 'the client has no email on record; ask the owner to send this one' };
+    if (typeof typed === 'string' && typed.trim() && typed.trim().toLowerCase() !== to.toLowerCase()) return { error: "a team member sends only to the client's email on record" };
+    return { to };
+  }
   if (typeof typed === 'string' && typed.trim()) {
     const problem = emailProblem(typed);
     return problem ? { error: problem } : { to: typed.trim() };
@@ -782,7 +846,7 @@ agencyDocs.post('/invoices/:id/email', async (c) => {
   if (row.status === 'draft') return c.json({ error: 'mark the invoice as sent first, so the link in the email works' }, 400);
   if (row.status === 'void') return c.json({ error: 'a void invoice is not sent' }, 400);
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
-  const who = await recipientFor(db, user.id, row.agency_client_id ?? null, body.to, row.client_email);
+  const who = await recipientFor(db, user.id, row.agency_client_id ?? null, body.to, row.client_email, Boolean(c.get('team')));
   if ('error' in who) return c.json({ error: who.error }, 400);
   // The client's version: what the person switched off is left out of the words too.
   const inv = invoiceForClient(toInvoice(row));
@@ -809,7 +873,7 @@ agencyDocs.post('/contracts/:id/email', async (c) => {
   if (row.status === 'draft' || !row.token) return c.json({ error: 'send the agreement first, so the link in the email works' }, 400);
   if (row.status === 'void') return c.json({ error: 'a voided agreement is not sent' }, 400);
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
-  const who = await recipientFor(db, user.id, row.client_id, body.to);
+  const who = await recipientFor(db, user.id, row.client_id, body.to, '', Boolean(c.get('team')));
   if ('error' in who) return c.json({ error: who.error }, 400);
   const doc = docOf(row.doc_json);
   const settings = await settingsFor(db, user.id);

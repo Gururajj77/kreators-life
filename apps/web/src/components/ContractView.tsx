@@ -543,6 +543,8 @@ interface Props {
   audience?: DocAudience;
   /** The owner edits the paper in place: every change comes back as the whole document (saved as you go by the page). */
   onDocChange?: (doc: ContractDoc) => void;
+  /** The owner's note of what is missing then ends with "Fill them in", which opens the Fill in the details form. */
+  onFill?: () => void;
 }
 
 /** The sender's name and address for the top of the first page, from the names filled in. */
@@ -585,7 +587,7 @@ function SectionEdit({ s, index, doc, set, onMove, onRemove, onAdd, vars, answer
       {/* A section typed without a heading (the opening paragraph) stays without one; a long press on its words opens the handle. */}
       {s.heading || !s.body ? (
         <div {...press}>
-          <EditableText as="h2" className="legal-sec-h" value={s.heading} placeholder="Heading" label={`Heading of section ${index + 1}`} onChange={(heading) => set({ heading })} />
+          <EditableText as="h2" className={`legal-sec-h${/^\s*\d/.test(s.heading) ? ' legal-own-num' : ''}`} value={s.heading} placeholder="Heading" label={`Heading of section ${index + 1}`} onChange={(heading) => set({ heading })} />
         </div>
       ) : null}
       {/* After the heading in the page's order, so Tab from the heading reaches it; it shows on hover and while the section has focus. */}
@@ -606,7 +608,7 @@ function SectionEdit({ s, index, doc, set, onMove, onRemove, onAdd, vars, answer
  * An agreement (or any sectioned document) as a page: the title block, then every section in order. It prints as a legal document
  * (PrintSheet). With `onDocChange` it is also the editor: the same page, every part of it editable where it stands.
  */
-export function ContractView({ doc, answers = {}, onAnswer, acceptance, signLine, reference, date, stamp, kind = 'agreement', audience = 'client', onDocChange }: Props) {
+export function ContractView({ doc, answers = {}, onAnswer, acceptance, signLine, reference, date, stamp, kind = 'agreement', audience = 'client', onDocChange, onFill }: Props) {
   const style = parseDocStyle(doc.style);
   const typed = style.layout === 'typed';
   const vars = docVars(doc);
@@ -661,6 +663,14 @@ export function ContractView({ doc, answers = {}, onAnswer, acceptance, signLine
       {gapNote && (
         <p className="legal-clause legal-gap no-print" role="note">
           {gapNote}
+          {onFill && (
+            <>
+              {' '}
+              <button type="button" onClick={onFill} className="relative font-bold underline underline-offset-2 before:absolute before:-inset-x-[4px] before:-inset-y-[13px] before:content-['']">
+                Fill them in
+              </button>
+            </>
+          )}
         </p>
       )}
       {editing

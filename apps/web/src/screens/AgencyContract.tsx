@@ -1,12 +1,14 @@
-import { contractAsText, docRef, CONTRACT_STATUS_NAME, CONTRACT_STATUS_TONE, parseDocStyle, type ContractDoc, type DocComment, type TagTone } from '@kreators/shared';
+import { contractAsText, docRef, formatCount, CONTRACT_STATUS_NAME, CONTRACT_STATUS_TONE, parseDocStyle, type ContractDoc, type DocComment, type TagTone } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Ban, Building2, ClipboardCopy, CopyPlus, KeyRound, LayoutTemplate, Link2, Mail, MessageSquare, Palette, Send, ShieldCheck, Trash2, Undo2, UserRound } from 'lucide-react';
+import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
+import { ArchiveRestore, Ban, Building2, ClipboardCopy, CopyPlus, KeyRound, LayoutTemplate, Link2, ListChecks, Mail, MessageSquare, Palette, Send, ShieldCheck, Trash2, Undo2, UserRound } from 'lucide-react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { Button } from '../components/Button';
 import { ContractView, paperDate } from '../components/ContractView';
-import { ConfirmSheet, DocLog, EmailCopySheet, PrintButton, type EmailContext } from '../components/DocActions';
+import { ConfirmSheet, DocLog, EmailCopySheet, type EmailContext } from '../components/DocActions';
+import { AnimatedIcon } from '../components/AnimatedIcon';
 import { DocStyleSheet } from '../components/DocStyleSheet';
+import { blanksIn, FillDetailsSheet } from '../components/FillDetails';
 import { HouseTemplateSheet, useSuperAdmin } from '../components/HouseTemplateButton';
 import { Icon } from '../components/Icon';
 import { DocPassword } from '../components/AgencyLifecycle';
@@ -15,6 +17,7 @@ import { Busy, Skeleton, SkeletonCard } from '../components/Skeleton';
 import type { SheetStamp } from '../components/PrintSheet';
 import { Inert } from '../components/Inert';
 import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { StatusTag } from '../components/StatusTag';
@@ -29,21 +32,6 @@ import { useAutosave } from '../lib/useAutosave';
 export const COPY = {
   law: 'Typed acceptance, not a certified e-signature. A starting point, not legal advice: have a lawyer read it before you rely on it.',
 };
-
-/** A control that asks twice: the first tap says what it will do, the second does it. */
-export function useTwoTap(): [string | null, (key: string, run: () => void) => void] {
-  const [armed, setArmed] = useState<string | null>(null);
-  const tap = (key: string, run: () => void) => {
-    if (armed === key) {
-      setArmed(null);
-      run();
-      return;
-    }
-    setArmed(key);
-    window.setTimeout(() => setArmed((a) => (a === key ? null : a)), 4000);
-  };
-  return [armed, tap];
-}
 
 /** Lines from the client since your own last reply: what is waiting for you. */
 export function waitingFrom(comments: readonly DocComment[]): number {
@@ -113,25 +101,42 @@ export function SaveLine({ words, canUndo, onUndo }: { words: string; canUndo: b
 
 /** The top of a document page: back, the title, one status, the save line, then one main action, Download and More. Nothing else. */
 export function DocHeader({ back, backLabel, title, tone, status, save, primary, onDownload, more, moreLabel, error }: { back: string; backLabel: string; title: string; tone: TagTone; status: string; save: ReactNode; primary: ReactNode; onDownload: () => void; more: MoreMenuItem[]; moreLabel: string; error: unknown }) {
+  const hint = useId();
   return (
-    <header className="no-print pt-lg">
-      <BackLink to={back}>{backLabel}</BackLink>
-      <h1 className="break-words text-[24px] md:text-[30px]">{tie(title)}</h1>
-      <div className="mt-xs flex flex-wrap items-center gap-sm">
-        <StatusTag tone={tone}>{status}</StatusTag>
-        {save}
-      </div>
-      <div className="mt-md flex flex-wrap items-center gap-xs">
-        {primary}
-        <PrintButton onPrint={onDownload} />
-        <MoreMenu items={more} label={moreLabel} />
-      </div>
+    <AppCover
+      // A document's title is long ("TRIAL ENGAGEMENT AGREEMENT"): on a phone it keeps the old header's 24px with its last two words
+      // tied, so no word stands alone and none breaks; from md it is the cover's large title. A string, so the condensed bar keeps it.
+      className="no-print [&_h1]:text-[24px]! md:[&_h1]:text-[length:var(--text-large-title)]!"
+      back={{ to: back, label: backLabel }}
+      title={tie(title)}
+      lede={
+        <span className="inline-flex flex-wrap items-center justify-end gap-x-sm gap-y-xs">
+          {/* The save line first, so the status ends flush with the title even while the line is empty. */}
+          {save}
+          <StatusTag tone={tone}>{status}</StatusTag>
+        </span>
+      }
+      actions={
+        <>
+          {primary}
+          {/* Download as an icon on a phone, so the main action, Download and More share the cover's line without a label breaking. */}
+          <Button variant="outline" onClick={onDownload} aria-label="Download a PDF" aria-describedby={hint}>
+            <AnimatedIcon name="download" size={18} />
+            <span className="hidden sm:inline">Download</span>
+          </Button>
+          <span id={hint} className="sr-only">
+            Opens the print window. Choose Save as PDF there to download it.
+          </span>
+          <MoreMenu items={more} label={moreLabel} />
+        </>
+      }
+    >
       {Boolean(error) && (
-        <p role="alert" className="mt-sm m-0 rounded-tile p-sm text-[14px] font-bold" style={{ background: 'var(--tint-red)' }}>
+        <p role="alert" className="m-0 rounded-tile p-sm text-[14px] font-bold" style={{ background: 'var(--tint-red)' }}>
           {error instanceof ApiError ? error.message : 'That did not work. Try again.'}
         </p>
       )}
-    </header>
+    </AppCover>
   );
 }
 
@@ -261,7 +266,7 @@ export function ThreadSheet({ open, onClose, type, id, comments, reply, setReply
   );
 }
 
-type Open = 'client' | 'can' | 'thread' | 'template' | 'house' | 'style' | 'email' | 'password' | 'draft' | 'void' | 'delete' | null;
+type Open = 'fill' | 'client' | 'can' | 'thread' | 'template' | 'house' | 'style' | 'email' | 'password' | 'draft' | 'void' | 'delete' | null;
 
 /**
  * An agreement: the paper is the page. The header has back, the title, one status with the quiet save line, then one action for where it
@@ -311,6 +316,16 @@ export function AgencyContract() {
       done();
     },
   });
+  // Restore: back to the status it had before the void, at the same link (the server keeps both).
+  const restore = useMutation({
+    mutationFn: () => api.agencyContractRestore(id),
+    onSuccess: (r) => {
+      if (state) auto.reset(state, r.contract.updatedAt);
+      qc.setQueryData(['agency', 'contract', id], { contract: r.contract });
+      setSaid(`Restored as ${CONTRACT_STATUS_NAME[r.restoredTo].toLowerCase()}.`);
+      done();
+    },
+  });
   const duplicate = useMutation({
     mutationFn: async () => {
       await auto.flush();
@@ -354,13 +369,7 @@ export function AgencyContract() {
   if (q.isError || !c || !doc) {
     return (
       <Screen columns={false}>
-        <header className="pt-lg">
-          <BackLink to="/agency?tab=agreements">Agency</BackLink>
-          <h1 className="text-[30px]">Not found</h1>
-          <p role="alert" className="m-0 text-[16px] font-semibold text-ink-soft">
-            That agreement is not here. It may have been removed.
-          </p>
-        </header>
+        <AppCover back={{ to: '/agency?tab=agreements', label: 'Agency' }} title="Not found" lede={<span role="alert">That agreement is not here. It may have been removed.</span>} />
       </Screen>
     );
   }
@@ -378,7 +387,12 @@ export function AgencyContract() {
   const copy = async (text: string, what: string) => setSaid((await copyPlain(text)) ? `${what} copied.` : 'Could not copy. Try again.');
   const close = () => setOpen(null);
   const revised = c.status === 'sent' && c.revisedAt;
+  // While a draft still has blanks, filling them is the main action and sending waits in More.
+  const blanks = blanksIn(doc);
+  const fillFirst = c.status === 'draft' && blanks > 0;
   const more: MoreMenuItem[] = [
+    { key: 'fill', label: 'Fill in the details', icon: ListChecks, hint: blanks ? `${formatCount(blanks)} empty` : undefined, onSelect: () => setOpen('fill') },
+    ...(fillFirst ? [{ key: 'send', label: 'Send to client', icon: Send, disabled: setStatus.isPending, onSelect: () => setStatus.mutate('sent') }] : []),
     ...(link ? [{ key: 'link', label: 'Copy link', icon: Link2, onSelect: () => void copy(link, 'The link') }] : []),
     { key: 'email', label: 'Email a copy', icon: Mail, onSelect: () => setOpen('email') },
     { key: 'text', label: 'Copy text', icon: ClipboardCopy, onSelect: () => void copy(contractAsText(doc, { reference: ref, date: c.sentAt ?? c.createdAt, answers: c.answers, acceptance: c.acceptance }), 'The text') },
@@ -392,21 +406,26 @@ export function AgencyContract() {
     ...(editable ? [{ key: 'style', label: 'Style', icon: Palette, onSelect: () => setOpen('style') }] : []),
     ...(c.status === 'sent' ? [{ key: 'draft', label: 'Take back to draft', icon: Undo2, destructive: true, onSelect: () => setOpen('draft') }] : []),
     ...(c.status !== 'void' ? [{ key: 'void', label: 'Void', icon: Ban, destructive: true, onSelect: () => setOpen('void') }] : []),
+    ...(c.status === 'void' ? [{ key: 'restore', label: 'Restore', icon: ArchiveRestore, disabled: restore.isPending, onSelect: () => restore.mutate() }] : []),
     ...(c.status === 'draft' || c.status === 'void' ? [{ key: 'delete', label: 'Delete', icon: Trash2, destructive: true, onSelect: () => setOpen('delete') }] : []),
   ];
-  const primary =
-    c.status === 'draft' ? (
-      <Button onClick={() => setStatus.mutate('sent')} disabled={setStatus.isPending}>
-        <Icon icon={Send} size={18} />
-        Send to client
-      </Button>
-    ) : c.status === 'signed' ? (
-      <Button onClick={() => duplicate.mutate()} disabled={duplicate.isPending}>
-        <Icon icon={CopyPlus} size={18} />
-        Revise
-      </Button>
-    ) : null;
-  const error = [setStatus, duplicate, remove].map((m) => m.error).find(Boolean);
+  const primary = fillFirst ? (
+    <Button onClick={() => setOpen('fill')}>
+      <Icon icon={ListChecks} size={18} />
+      Fill in the details
+    </Button>
+  ) : c.status === 'draft' ? (
+    <Button onClick={() => setStatus.mutate('sent')} disabled={setStatus.isPending}>
+      <Icon icon={Send} size={18} />
+      Send to client
+    </Button>
+  ) : c.status === 'signed' ? (
+    <Button onClick={() => duplicate.mutate()} disabled={duplicate.isPending}>
+      <Icon icon={CopyPlus} size={18} />
+      Revise
+    </Button>
+  ) : null;
+  const error = [setStatus, restore, duplicate, remove].map((m) => m.error).find(Boolean);
 
   return (
     <Screen columns={false}>
@@ -434,8 +453,33 @@ export function AgencyContract() {
           date={c.sentAt ?? c.createdAt}
           stamp={sheetStamp}
           onDocChange={editable ? (d) => edit(() => d) : undefined}
+          onFill={() => setOpen('fill')}
         />
       </section>
+
+      <FillDetailsSheet
+        open={open === 'fill'}
+        onClose={close}
+        doc={doc}
+        clientId={clientId}
+        record={
+          c.status === 'signed'
+            ? {
+                why: 'This agreement is signed, so it is a record. Revise to change it.',
+                revise: (
+                  <Button variant="outline" onClick={() => duplicate.mutate()} disabled={duplicate.isPending}>
+                    <Icon icon={CopyPlus} size={18} />
+                    Revise
+                  </Button>
+                ),
+              }
+            : c.status === 'void'
+              ? { why: 'This agreement is void, so it cannot change. Restore it first.' }
+              : null
+        }
+        onDocVars={(changes) => edit((d) => ({ ...d, vars: { ...d.vars, ...changes } }))}
+        onSaved={setSaid}
+      />
 
       <ClientSheet open={open === 'client'} onClose={close} value={clientId} onChange={(v) => setState((s) => (s ? { ...s, clientId: v } : s))} clients={pick} />
       <Sheet open={open === 'can'} onClose={close} title="Client permissions">
@@ -457,7 +501,7 @@ export function AgencyContract() {
       <HouseTemplateSheet open={open === 'house'} onClose={close} kind="contract" fromId={id} defaultName={doc.title || 'Agreement'} beforeSave={() => auto.flush()} />
       <TemplateSheet open={open === 'template'} onClose={close} kind="contract" fromId={id} defaultName={doc.title} beforeSave={() => auto.flush()} existing={mine.data?.templates ?? []} />
       <ConfirmSheet open={open === 'draft'} onClose={close} title="Take it back to draft?" body="The client's link closes until you send it again. Their answers so far are kept." action="Take back to draft" onConfirm={() => setStatus.mutate('draft')} busy={setStatus.isPending} />
-      <ConfirmSheet open={open === 'void'} onClose={close} title="Void this agreement?" body="It is kept for the record and its link closes. It cannot be sent or signed after this." action="Void it" onConfirm={() => setStatus.mutate('void')} busy={setStatus.isPending} />
+      <ConfirmSheet open={open === 'void'} onClose={close} title="Void this agreement?" body="It is kept for the record and its link closes. Restore, in the same menu, brings it back as it was." action="Void it" onConfirm={() => setStatus.mutate('void')} busy={setStatus.isPending} />
       <ConfirmSheet open={open === 'delete'} onClose={close} title="Delete this agreement?" body="It is removed for good, with its comments." action="Delete it" onConfirm={() => remove.mutate()} busy={remove.isPending} />
     </Screen>
   );

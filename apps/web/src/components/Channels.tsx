@@ -35,9 +35,47 @@ import { dateTime } from '../lib/date';
 import { ErrorLine } from './ErrorLine';
 import { IconTag } from './FactTag';
 import { StatusTag } from './StatusTag';
+import { TabRow } from './TabRow';
 
 const when = dateTime;
 const RANK_WORD = { member: '', guide: 'Guide', staff: 'Staff', admin: 'Admin' } as const;
+
+/** One step asked again before it happens: what the sheet says and what Yes does. */
+export interface Ask {
+  title: string;
+  body: string;
+  action: string;
+  run: () => void;
+}
+
+/**
+ * The sheet that asks first, instead of the browser's own confirm box: the item it holds is the question, so it opens
+ * when one is set and closes when it is cleared. A red button does it, a quiet one keeps things as they are.
+ */
+export function AskSheet({ ask, onClose }: { ask: Ask | null; onClose: () => void }) {
+  return (
+    <Sheet open={ask !== null} onClose={onClose} title={ask?.title ?? ''}>
+      <div className="grid gap-md pb-xl">
+        <p className="m-0 text-[16px] font-semibold text-ink-soft">{ask?.body}</p>
+        <div className="flex flex-wrap gap-xs">
+          <button
+            type="button"
+            onClick={() => {
+              ask?.run();
+              onClose();
+            }}
+            className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-[16px] font-semibold text-on-fill"
+          >
+            {ask?.action}
+          </button>
+          <Button variant="outline" onClick={onClose}>
+            Keep it
+          </Button>
+        </div>
+      </div>
+    </Sheet>
+  );
+}
 
 
 /** The count of channels with something new, for a tab label. Asked once a minute while the tab is showing. */
@@ -48,7 +86,7 @@ export function useChannelsUnread(scope: ChannelScope): number {
 }
 
 /** The small number on a tab or a row. The words are for screen readers; the dot is for everyone else. */
-function Dot({ n }: { n: number }) {
+export function Dot({ n }: { n: number }) {
   if (n <= 0) return null;
   return (
     <span className="ml-xs inline-flex min-w-[24px] items-center justify-center rounded-pill bg-r1 px-xs text-[12px] font-extrabold leading-[20px] text-on-fill">
@@ -64,19 +102,16 @@ export function ChannelTabs() {
   const unread = useChannelsUnread('community');
   return (
     <div className="mt-md">
-      <div className="scroll-row" role="group" aria-label="Community sections">
-        {(
-          [
-            ['feed', 'Feed'],
-            ['channels', 'Channels'],
-          ] as const
-        ).map(([k, label]) => (
-          <button key={k} type="button" aria-pressed={tab === k} onClick={() => setTab(k)} className={`toy shrink-0 min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-            {label}
-            {k === 'channels' && tab !== k && <Dot n={unread} />}
-          </button>
-        ))}
-      </div>
+      <TabRow
+        label="Community sections"
+        items={[
+          { key: 'feed', label: 'Feed' },
+          { key: 'channels', label: tab === 'channels' ? 'Channels' : <>Channels<Dot n={unread} /></>, name: 'Channels' },
+        ]}
+        value={tab}
+        onChange={setTab}
+        pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+      />
     </div>
   );
 }
@@ -110,7 +145,7 @@ function ChannelList({ scope, onOpen }: { scope: ChannelScope; onOpen: (id: stri
     <div>
       <div className="flex flex-wrap items-center justify-between gap-sm">
         {scope === 'community' ? <p className="m-0 min-w-0 flex-1 text-[14px] font-semibold text-ink-soft">Rooms for one topic each. Join one to write in it. You can write under your name or a made-up one.</p> : <span className="flex-1" aria-hidden="true" />}
-        {q.data?.canCreate && <Button onClick={() => setMaking(true)}>New channel</Button>}
+        {q.data?.canCreate && <Button variant="outline" onClick={() => setMaking(true)}>New channel</Button>}
       </div>
       {isGuide && (
         <label className="mt-sm flex min-h-[44px] cursor-pointer items-center gap-xs text-[14px] font-bold text-ink-soft">
@@ -146,7 +181,7 @@ function ChannelList({ scope, onOpen }: { scope: ChannelScope; onOpen: (id: stri
               </button>
               {c.invited && (
                 <span className="flex shrink-0 flex-col gap-xs">
-                  <Button size="sm" disabled={join.isPending} onClick={() => join.mutate(c.id)}>
+                  <Button size="sm" variant="outline" disabled={join.isPending} onClick={() => join.mutate(c.id)}>
                     Say yes
                   </Button>
                   <Button size="sm" variant="outline" disabled={decline.isPending} onClick={() => decline.mutate(c.id)}>
@@ -213,7 +248,7 @@ function NewChannelSheet({ scope, open, onClose, onMade }: { scope: ChannelScope
  * The lines of one channel. The screen holds what it has fetched and, while its tab is showing, asks every few seconds for lines after the
  * last one (and for the ones in view that were taken down). It scrolls to a new line only when the reader was already at the bottom.
  */
-function useChannelLines(scope: ChannelScope, id: string, read: boolean) {
+function useChannelLines(scope: ChannelScope, id: string, read: boolean, active: boolean) {
   const [lines, setLines] = useState<ChannelLine[]>([]);
   const [earlier, setEarlier] = useState(false);
   const [status, setStatus] = useState<'loading' | 'ready' | 'gone'>('loading');
@@ -227,8 +262,10 @@ function useChannelLines(scope: ChannelScope, id: string, read: boolean) {
     setLines(next);
   }, []);
 
+  // Set once the channel answers 404 or 403: it is gone for this reader, so the timer stops asking.
+  const stopped = useRef(false);
   const pull = useCallback(async () => {
-    if (busy.current) return;
+    if (busy.current || stopped.current) return;
     busy.current = true;
     try {
       for (let i = 0; i < 5; i += 1) {
@@ -247,7 +284,10 @@ function useChannelLines(scope: ChannelScope, id: string, read: boolean) {
         if (!r.more) break;
       }
     } catch (e) {
-      if (e instanceof ApiError && (e.status === 404 || e.status === 403)) setStatus('gone');
+      if (e instanceof ApiError && (e.status === 404 || e.status === 403)) {
+        stopped.current = true;
+        setStatus('gone');
+      }
     } finally {
       busy.current = false;
     }
@@ -255,12 +295,16 @@ function useChannelLines(scope: ChannelScope, id: string, read: boolean) {
 
   useEffect(() => {
     held.current = [];
+    stopped.current = false;
     setLines([]);
     setStatus('loading');
     setEarlier(false);
+    // Someone only asked in cannot read the lines yet: nothing is fetched until they say yes.
+    if (!active) return;
     void pull();
     const timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void pull();
+      if (stopped.current) window.clearInterval(timer);
+      else if (document.visibilityState === 'visible') void pull();
     }, CHANNEL_POLL_MS);
     const onVisible = () => {
       if (document.visibilityState === 'visible') void pull();
@@ -270,7 +314,7 @@ function useChannelLines(scope: ChannelScope, id: string, read: boolean) {
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [pull]);
+  }, [pull, active]);
 
   const loadEarlier = useCallback(async () => {
     const first = held.current[0]?.seq;
@@ -290,7 +334,7 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
   const ch = meta.data?.channel;
   const members = meta.data?.members ?? [];
   const joined = ch?.joined ?? false;
-  const { lines, earlier, status, pull, loadEarlier, fresh } = useChannelLines(scope, id, joined);
+  const { lines, earlier, status, pull, loadEarlier, fresh } = useChannelLines(scope, id, joined, !ch?.invited);
   const reduce = useReducedMotion();
   const box = useRef<HTMLOListElement>(null);
   const stick = useRef(true);
@@ -298,6 +342,7 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
   const lastSeen = useRef(0);
   const [unseen, setUnseen] = useState(0);
   const [reply, setReply] = useState<ChannelLine | null>(null);
+  const [ask, setAsk] = useState<Ask | null>(null);
   const [anonymous, setAnonymous] = useState(false);
   const [editing, setEditing] = useState(false);
   const [inviting, setInviting] = useState(false);
@@ -376,7 +421,7 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
     setUnseen(0);
   };
 
-  if (meta.isError || status === 'gone')
+  if (meta.isError || (status === 'gone' && !ch?.invited))
     return (
       <div>
         <Button variant="outline" size="sm" onClick={onBack}>
@@ -396,7 +441,7 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
         </Button>
         <span className="flex flex-wrap items-center gap-xs">
           {ch?.joined && !(scope === 'bond' && ch.owner) && (
-            <Button variant="outline" size="sm" disabled={leave.isPending} onClick={() => window.confirm(`Leave ${ch.name}?`) && leave.mutate()}>
+            <Button variant="outline" size="sm" disabled={leave.isPending} onClick={() => setAsk({ title: `Leave ${ch.name}?`, body: 'You stop seeing a dot when there is something new. You can join again later.', action: 'Yes, leave', run: () => leave.mutate() })}>
               Leave
             </Button>
           )}
@@ -406,12 +451,12 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
             </Button>
           )}
           {scope === 'bond' && ch?.owner && !ch.archived && (
-            <Button size="sm" onClick={() => setInviting(true)}>
+            <Button size="sm" variant="outline" onClick={() => setInviting(true)}>
               Ask friends
             </Button>
           )}
           {canManage && ch && (
-            <Button variant="ghost" size="sm" disabled={close.isPending} onClick={() => (ch.archived ? close.mutate(false) : window.confirm(`Close ${ch.name}? Nobody can write in it after that.`) && close.mutate(true))}>
+            <Button variant="ghost" size="sm" disabled={close.isPending} onClick={() => (ch.archived ? close.mutate(false) : setAsk({ title: `Close ${ch.name}?`, body: 'Nobody can write in it after that. Everyone can still read it, and you can open it again.', action: 'Yes, close it', run: () => close.mutate(true) }))}>
               {ch.archived ? 'Open again' : 'Close channel'}
             </Button>
           )}
@@ -436,7 +481,7 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
               {m.name}
               {m.owner && <span className="text-[11px] font-extrabold text-ink-soft">owner</span>}
               {ch?.owner && !m.owner && (
-                <button type="button" aria-label={`Take ${m.name} out`} disabled={removeMember.isPending} onClick={() => window.confirm(`Take ${m.name} out of ${ch.name}?`) && removeMember.mutate(m.userId)} className="toy toy-soft flex size-[44px] items-center justify-center rounded-pill bg-paper">
+                <button type="button" aria-label={`Take ${m.name} out`} disabled={removeMember.isPending} onClick={() => setAsk({ title: `Take ${m.name} out?`, body: `${m.name} leaves ${ch.name} and can no longer read or write in it.`, action: 'Yes, take them out', run: () => removeMember.mutate(m.userId) })} className="toy toy-soft flex size-[44px] items-center justify-center rounded-pill bg-paper">
                   <Icon icon={X} size={14} />
                 </button>
               )}
@@ -448,7 +493,7 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
         <div className="mt-sm rounded-tile p-sm" style={{ background: 'var(--tint-yellow)' }}>
           <p className="m-0 text-[16px] font-bold">You were asked into this channel.</p>
           <div className="mt-xs flex gap-xs">
-            <Button disabled={join.isPending} onClick={() => join.mutate()}>
+            <Button variant="outline" disabled={join.isPending} onClick={() => join.mutate()}>
               Say yes
             </Button>
             <Button variant="outline" disabled={leave.isPending} onClick={() => leave.mutate()}>
@@ -525,9 +570,9 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
                     canMuteIt={scope === 'community' && !l.mine && Boolean(l.userId) && l.rank !== null && canMute(myRank, l.rank)}
                     onReply={() => setReply(l)}
                     onTakeDown={() => unsay.mutate(l.id)}
-                    onReport={() => window.confirm('Tell the team about this line?') && report.mutate(l.id)}
-                    onBlock={() => window.confirm(`Block ${l.name}? You will not see each other's lines, and any friendship ends. You can undo it under Bond.`) && block.mutate(l.id)}
-                    onMute={() => window.confirm(`Mute ${l.name} in Community? They can still read but cannot write.`) && mute.mutate(l.userId)}
+                    onReport={() => setAsk({ title: 'Tell the team about this line?', body: 'The team reads the line and decides what to do. The writer is not told who sent it.', action: 'Yes, tell the team', run: () => report.mutate(l.id) })}
+                    onBlock={() => setAsk({ title: `Block ${l.name}?`, body: "You will not see each other's lines, and any friendship ends. You can undo it under Bond.", action: 'Yes, block', run: () => block.mutate(l.id) })}
+                    onMute={() => setAsk({ title: `Mute ${l.name} in Community?`, body: 'They can still read but cannot write.', action: 'Yes, mute', run: () => mute.mutate(l.userId) })}
                   />
                 </li>
               ))}
@@ -549,10 +594,13 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
 
           {showJoin && (
             <div className="mt-sm rounded-tile bg-card p-sm shadow-toy-soft">
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">You can read this channel. Join it to write, and to see a dot when there is something new.</p>
-              <Button className="mt-xs" disabled={join.isPending} onClick={() => join.mutate()}>
-                Join {ch?.name}
-              </Button>
+              {/* Text left, Join right; on a narrow phone Join wraps above the line. The error sits under both. */}
+              <div className="flex flex-wrap-reverse items-center justify-between gap-sm">
+                <p className="m-0 min-w-0 flex-1 basis-[60%] text-[14px] font-semibold text-ink-soft">You can read this channel. Join it to write, and to see a dot when there is something new.</p>
+                <Button disabled={join.isPending} onClick={() => join.mutate()}>
+                  Join {ch?.name}
+                </Button>
+              </div>
               <ErrorLine e={join.isError ? join.error : null} className="mt-xs" />
             </div>
           )}
@@ -587,12 +635,13 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
       <ErrorLine e={join.isError && !showJoin ? join.error : leave.isError ? leave.error : close.isError ? close.error : removeMember.isError ? removeMember.error : null} className="mt-xs" />
       {ch && <EditChannelSheet scope={scope} channel={ch} open={editing} onClose={() => setEditing(false)} onSaved={refreshMeta} />}
       {ch && scope === 'bond' && <InviteSheet channel={ch} open={inviting} onClose={() => setInviting(false)} onAsked={refreshMeta} seats={members.length} />}
+      <AskSheet ask={ask} onClose={() => setAsk(null)} />
     </div>
   );
 }
 
 /** Under a line: Reply, Take down, and a More that holds Report, Block and Mute so the row stays calm. */
-function LineActions({
+export function LineActions({
   line,
   canWrite,
   canTakeDown,
@@ -603,7 +652,7 @@ function LineActions({
   onBlock,
   onMute,
 }: {
-  line: ChannelLine;
+  line: Pick<ChannelLine, 'mine'>;
   canWrite: boolean;
   canTakeDown: boolean;
   canMuteIt: boolean;
@@ -615,7 +664,7 @@ function LineActions({
 }) {
   const [more, setMore] = useState(false);
   const tone = line.mine ? 'text-on-ink/80' : 'text-ink-soft';
-  const btn = `inline-flex min-h-[44px] items-center text-[12px] font-bold underline underline-offset-4 ${tone}`;
+  const btn = `inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-[12px] font-bold underline underline-offset-4 ${tone}`;
   return (
     <span className="mt-xs flex flex-wrap items-center gap-sm">
       {canWrite && (

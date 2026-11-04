@@ -1,10 +1,10 @@
-import { INDIAN_STATES, money, pinCodeProblem, type KycProfile } from '@kreators/shared';
+import { INDIAN_STATES, money, pinCodeProblem, formatCount, type KycProfile } from '@kreators/shared';
 import { longDate } from '../lib/date';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
-import { BackLink } from '../components/PageHeader';
+import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api, downloadCsv as fetchCsv, errorText, publicApi } from '../lib/api';
@@ -17,7 +17,7 @@ import { StatusTag } from '../components/StatusTag';
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <p className="m-0 font-display text-[24px] font-extrabold leading-none">{value}</p>
+      <p className="m-0 font-display text-[24px] font-extrabold leading-none">{typeof value === 'number' ? formatCount(value) : value}</p>
       <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{label}</p>
     </div>
   );
@@ -65,11 +65,7 @@ export function Customers() {
 
   return (
     <Screen>
-      <header className="pt-lg">
-        <BackLink to="/shop">Shop</BackLink>
-        <h1 className="text-[30px]">Customers</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Everyone who bought from you, and what lands in your balance after fees.</p>
-      </header>
+      <AppCover back={{ to: '/shop', label: 'Shop' }} title="Customers" lede="Everyone who bought from you, and what lands in your balance after fees." />
 
       <section className="mt-md" aria-labelledby="cust-heading">
         <div className="flex items-center justify-between gap-sm">
@@ -100,7 +96,7 @@ export function Customers() {
                 {c.email && <span className="font-semibold text-ink-soft"> {c.email}</span>}
               </p>
               <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                {c.orders} {c.orders === 1 ? 'order' : 'orders'}, {c.points} points{c.cents > 0 ? `, ${money(c.cents)}${live ? '' : ' test'}` : ''}. First {longDate(c.firstAt)}, last {longDate(c.lastAt)}. Came from {c.source}.
+                {formatCount(c.orders)} {c.orders === 1 ? 'order' : 'orders'}, {formatCount(c.points)} points{c.cents > 0 ? `, ${money(c.cents)}${live ? '' : ' test'}` : ''}. First {longDate(c.firstAt)}, last {longDate(c.lastAt)}. Came from {c.source}.
               </p>
             </li>
           ))}
@@ -137,7 +133,7 @@ export function Customers() {
                 {r.buyerName}, {r.productTitle}
               </p>
               <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                {r.points} points, fee {r.fee}, affiliate {r.affiliate}, net {r.net}. {r.status}, {longDate(r.createdAt)}.
+                {formatCount(r.points)} points, fee {formatCount(r.fee)}, affiliate {formatCount(r.affiliate)}, net {formatCount(r.net)}. {r.status}, {longDate(r.createdAt)}.
               </p>
               {r.status !== 'refunded' && r.status !== 'pending' && r.status !== 'failed' && r.status !== 'expired' && (
                 <Button variant="ghost" className="mt-xs" onClick={() => setRefunding({ id: r.orderId, title: r.productTitle })}>

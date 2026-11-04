@@ -21,7 +21,7 @@ import { hashPassword, randomHex, safeEqual } from './auth';
 import { sendEmail, track } from '../ops';
 import { deleteAccount } from '../account';
 import { currencyOf, parseSocials } from '../db';
-import { isAutoHandle, isCurrency, MAX_INTERESTS, parseIdentities, parseLinkBlocks, passwordProblem, TRACKED_EVENTS, type TrackedEvent } from '@kreators/shared';
+import { appPrefsProblem, isAutoHandle, isCurrency, MAX_INTERESTS, parseAppPrefs, parseIdentities, parseLinkBlocks, passwordProblem, TRACKED_EVENTS, type TrackedEvent } from '@kreators/shared';
 import type { Organization, PortfolioItem } from '@kreators/shared';
 
 export const me = new Hono<AppEnv>();
@@ -188,14 +188,22 @@ me.patch('/', async (c) => {
   })();
   // The currency their own money is kept in: rupees by default, any of CURRENCIES for someone abroad. Anything else keeps what was there.
   const currency = isCurrency(body.currency) ? body.currency : currencyOf(user);
+  // How the app groups start and the order of apps inside each (Profile, Features): the whole set at once, refused when a group or an
+  // app is unknown or an app is placed in another group's order.
+  let appPrefs = user.app_prefs_json ?? null;
+  if ('appPrefs' in body) {
+    const bad = appPrefsProblem(body.appPrefs);
+    if (bad) return c.json({ error: bad }, 400);
+    appPrefs = JSON.stringify(parseAppPrefs(body.appPrefs));
+  }
   const avatarUrl = 'avatarUrl' in body ? (/^https?:\/\//.test(str(body.avatarUrl, 500)) ? str(body.avatarUrl, 500) : '') : user.avatar_url;
   const socials = body.socials && typeof body.socials === 'object' ? JSON.stringify(parseSocials(JSON.stringify(body.socials))) : user.socials_json;
   const publicJson = body.publicSettings && typeof body.publicSettings === 'object' ? JSON.stringify(parsePublicSettings({ ...publicOf(user), ...(body.publicSettings as Record<string, unknown>) })) : user.public_json;
   // Link blocks: cleaned in shared, every block gets an id here so clicks can be counted.
   const links = Array.isArray(body.links) ? JSON.stringify(parseLinkBlocks(body.links).map((b) => ({ ...b, id: b.id || newId().slice(0, 12) }))) : user.links_json;
   await db
-    .prepare('UPDATE users SET display_name = ?, creator_type = ?, leaderboard_opt_in = ?, bio = ?, reminder_time = ?, handle = ?, skills = ?, categories = ?, goals = ?, experience_level = ?, availability = ?, location = ?, open_to_intros = ?, interests = ?, identities = ?, city = ?, area = ?, lat = ?, lng = ?, timezone = ?, currency = ?, avatar_url = ?, socials_json = ?, public_json = ?, links_json = ?, phone = ? WHERE id = ?')
-    .bind(displayName, focus, optIn, bio, reminderTime, handle, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, identities, city, area, lat, lng, timezone, currency, avatarUrl, socials, publicJson, links, phone, user.id)
+    .prepare('UPDATE users SET display_name = ?, creator_type = ?, leaderboard_opt_in = ?, bio = ?, reminder_time = ?, handle = ?, skills = ?, categories = ?, goals = ?, experience_level = ?, availability = ?, location = ?, open_to_intros = ?, interests = ?, identities = ?, city = ?, area = ?, lat = ?, lng = ?, timezone = ?, currency = ?, app_prefs_json = ?, avatar_url = ?, socials_json = ?, public_json = ?, links_json = ?, phone = ? WHERE id = ?')
+    .bind(displayName, focus, optIn, bio, reminderTime, handle, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, identities, city, area, lat, lng, timezone, currency, appPrefs, avatarUrl, socials, publicJson, links, phone, user.id)
     .run();
   if (handle && isAutoHandle(user.handle) && !isAutoHandle(handle)) await track(db, user.id, 'profile_published', { minutesSinceSignup: Math.round((Date.now() - new Date(user.created_at).getTime()) / 60_000) });
   const fresh = await getUser(db, user.id);
@@ -246,6 +254,7 @@ me.get('/export', async (c) => {
     ['notifications', 'SELECT * FROM notifications WHERE user_id = ?'],
     ['notToDo', 'SELECT * FROM not_to_do WHERE user_id = ?'],
     ['notToDoDays', 'SELECT * FROM not_to_do_days WHERE user_id = ?'],
+    ['dayTypes', 'SELECT * FROM day_types WHERE user_id = ?'],
     ['reviews', 'SELECT * FROM reviews WHERE user_id = ?'],
     ['reviewTemplates', 'SELECT * FROM review_templates WHERE user_id = ?'],
     ['reviewSchedules', 'SELECT * FROM review_schedules WHERE user_id = ?'],
@@ -288,6 +297,8 @@ me.get('/export', async (c) => {
     ['channelLines', 'SELECT seq, id, channel_id, body, anonymous, reply_to, created_at, deleted_at FROM channel_messages WHERE user_id = ?'],
     ['channelSeats', 'SELECT * FROM channel_members WHERE user_id = ?'],
     ['channelsMade', 'SELECT * FROM channels WHERE created_by = ?'],
+    ['runLines', 'SELECT seq, id, run_id, body, anonymous, reply_to, created_at, deleted_at FROM run_messages WHERE user_id = ?'],
+    ['runDiscussionReads', 'SELECT * FROM run_discussion_reads WHERE user_id = ?'],
     ['eventNetworking', 'SELECT * FROM event_networking WHERE user_id = ?'],
     ['blocks', 'SELECT * FROM blocks WHERE blocker_id = ?'],
     ['waterLogs', 'SELECT * FROM water_logs WHERE user_id = ?'],
@@ -296,8 +307,8 @@ me.get('/export', async (c) => {
     ['calendarFeed', 'SELECT user_id, enabled, created_at FROM calendar_feeds WHERE user_id = ?'],
     ['customReminders', 'SELECT * FROM custom_reminders WHERE user_id = ?'],
     ['agencySettings', 'SELECT * FROM agency_settings WHERE user_id = ?'],
-    // The password hash and salt of a client link are never exported, nor are portal sessions.
-    ['agencyClients', 'SELECT id, user_id, name, contact_name, contact_email, status, health, channels_json, retainer_cents, pieces_per_month, hours_per_month, renewal_date, notes, campaign_id, billing_json, portal_token, portal_json, created_at, updated_at, stage, stage_since, lifecycle_json, ticks_json, revisions_per_piece, (portal_pass_hash IS NOT NULL) AS portal_has_password, portal_pass_set_at, portal_last_opened_day, onboarding_json, onboarded_at, onboarding_needed FROM agency_clients WHERE user_id = ?'],
+    // The password hash and salt of a client link or a team link are never exported, nor are their sessions.
+    ['agencyClients', 'SELECT id, user_id, name, contact_name, contact_email, status, health, channels_json, retainer_cents, pieces_per_month, hours_per_month, renewal_date, notes, campaign_id, billing_json, portal_token, portal_json, created_at, updated_at, stage, stage_since, lifecycle_json, ticks_json, revisions_per_piece, (portal_pass_hash IS NOT NULL) AS portal_has_password, portal_pass_set_at, portal_last_opened_day, onboarding_json, onboarded_at, onboarding_needed, team_link_token, team_link_json, (team_link_pass_hash IS NOT NULL) AS team_link_has_password, team_link_pass_set_at, team_link_opened_day FROM agency_clients WHERE user_id = ?'],
     ['agencyPasswordRequests', 'SELECT * FROM agency_password_requests WHERE user_id = ?'],
     ['agencyRetainers', 'SELECT * FROM agency_retainers WHERE user_id = ?'],
     ['agencyCycles', 'SELECT * FROM agency_cycles WHERE user_id = ?'],
@@ -310,6 +321,9 @@ me.get('/export', async (c) => {
     ['agencyDocs', 'SELECT * FROM agency_docs WHERE user_id = ?'],
     ['agencyDocLog', 'SELECT * FROM agency_doc_log WHERE user_id = ?'],
     ['agencyTemplates', 'SELECT * FROM agency_templates WHERE user_id = ?'],
+    // The Agency team: the people on yours, and the teams you joined (without the client it ties you to or the owner's details).
+    ['agencyTeam', 'SELECT * FROM agency_team WHERE owner_id = ?'],
+    ['agencyTeamsJoined', 'SELECT id, owner_id, role, status, access_json, invited_at, joined_at, removed_at FROM agency_team WHERE member_id = ?'],
     ['kpiPrefs', 'SELECT * FROM kpi_prefs WHERE user_id = ?'],
     ['discountRedemptions', 'SELECT r.id, c.code, r.area, r.ref, r.item_id, r.off_cents, r.off_points, r.currency, r.released_at, r.created_at FROM discount_redemptions r JOIN discount_codes c ON c.id = r.code_id WHERE r.user_id = ?'],
     ['kpis', 'SELECT * FROM kpis WHERE user_id = ?'],

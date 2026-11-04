@@ -41,8 +41,11 @@ for (const shot of list) {
       }
       clicked += 1;
       await sleep(900);
-      const after = await page.evaluate(() => ({ y: window.scrollY, url: location.pathname + location.search }));
-      if (info.y - after.y > 120) hits.push({ page: shot.path, button: info.label, from: Math.round(info.y), to: Math.round(after.y) });
+      const after = await page.evaluate(() => ({ y: window.scrollY, url: location.pathname + location.search, max: document.documentElement.scrollHeight - window.innerHeight }));
+      // A view that is shorter than where the person was leaves the browser at the new bottom of the page (the agency client's Link
+      // segment): that is the page ending, not the router sending them up, so it does not count.
+      const clamped = after.max < info.y && after.y >= after.max - 2;
+      if (info.y - after.y > 120 && !clamped) hits.push({ page: shot.path, button: info.label, from: Math.round(info.y), to: Math.round(after.y) });
       if (!after.url.startsWith(shot.path.split('?')[0])) {
         await page.goto(`${ORIGIN}${shot.path}`, { waitUntil: 'networkidle0' });
         await sleep(300);

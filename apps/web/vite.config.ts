@@ -45,15 +45,22 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id: string) {
-          // The shared domain model is one 690 KB source file that every screen draws from, so it is one file of its own,
-          // cached apart from the app's screens (it cannot be split further without splitting the package).
-          // The journal prompts (a large list of text) download only when Prompt me opens, so they are not in the shared file.
+          // The shared domain model (a barrel over one file per domain) is what every screen draws from, so it is one chunk of its own,
+          // cached apart from the app's screens.
+          // The journal prompts (a large list of text) download only when Prompt me opens, so they are not in the shared chunk.
           if (id.includes('/packages/shared/src/journalPrompts')) return 'journal-prompts';
           if (id.includes('/packages/shared/src/agencyEmail')) return 'agency-email';
+          // The line of the day (a long list of text) is a chunk of its own, which keeps the shared chunk under the 400 kB a chunk may
+          // be. It must stay a leaf (lines.ts imports nothing): a split-off file that imports the rest of shared makes a cycle between
+          // the two chunks and the app stops at "Cannot access before initialization" (design.ts did, 2026-11-04).
+          if (id.includes('/packages/shared/src/lines.ts')) return 'shared-lines';
           if (id.includes('/packages/shared/src/')) return 'shared';
           // The icons the shared registries name (every app, setup tag, role...) are one map the shell needs, so it is a
           // chunk of its own: preloaded with the first download, but kept out of the entry's 480 kB budget.
           if (id.endsWith('/src/lib/appIcons.ts')) return 'icons-app';
+          // The API client is the same: every screen calls it, so it is preloaded with the first download in a file of its own,
+          // which keeps the entry under its budget now that motion's core sits there.
+          if (id.endsWith('/src/lib/api.ts')) return 'app-api';
           if (!id.includes('/node_modules/')) return undefined;
           // lucide-react's shared drawing code is one small file; each icon stays beside the screen that imports it,
           // never one big file of every icon.
@@ -65,7 +72,10 @@ export default defineConfig({
           if (/\/node_modules\/(react|react-dom|scheduler|react-router)\//.test(id)) return 'vendor-react';
           if (id.includes('/node_modules/@tanstack/')) return 'vendor-query';
           if (/\/node_modules\/gsap\//.test(id)) return 'vendor-gsap';
-          if (/\/node_modules\/(motion|framer-motion|motion-dom|motion-utils)\//.test(id)) return 'vendor-motion';
+          // Motion is not named: Rollup puts what the first screens need (the `m` component, AnimatePresence, LazyMotion, the hooks)
+          // with the entry, and its animation, drag, layout and gesture code, which lib/motionFeatures.ts loads through import()
+          // inside LazyMotion (main.tsx), in a chunk of its own after the first download. A name here would pull all of motion back
+          // into one file through its index files.
           return undefined;
         },
       },
