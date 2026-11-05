@@ -37,7 +37,7 @@ export function SiteLayout({ children, wide = true, minimal = false }: { childre
   const setThemeMode = useTheme((s) => s.setMode);
   // Two classes, because Tailwind 4 orders `inline-flex` after `hidden`: a link that carries both would always show.
   const navBase =
-    'relative min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill px-sm text-callout font-medium text-ink-soft transition-colors hover:text-ink aria-[current=page]:text-ink';
+    'relative min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill px-sm text-callout text-ink-soft transition-colors hover:text-ink aria-[current=page]:text-ink';
   // Phones keep only the logo, "Go to app" and the theme button; the rest comes back from the laptop breakpoint.
   const navWide = `hidden lg:inline-flex ${navBase}`;
   // The header frosts once the page has moved: a one-pixel marker at the very top tells us when it has left the screen (no scroll listener).
@@ -157,7 +157,7 @@ export function SiteLayout({ children, wide = true, minimal = false }: { childre
                 BrandingBum
               </a>
             </p>
-            <ul className="m-0 flex list-none flex-wrap gap-x-md p-0 font-semibold">
+            <ul className="m-0 flex list-none flex-wrap gap-x-md p-0">
               <li>
                 <Link to="/terms" className="flex min-h-[44px] min-w-[44px] items-center hover:text-ink">
                   Terms

@@ -212,7 +212,7 @@ function CellArt({ kind, cell, tone }: { kind: PuzzleKind; cell: PuzzleCell | nu
     return (
       <svg viewBox="0 0 60 60" className="size-full" aria-label="The missing piece">
         <rect x="4" y="4" width="52" height="52" rx="10" fill="var(--color-paper)" stroke="var(--color-line)" strokeWidth="2" strokeDasharray="5 4" />
-        <text x="30" y="40" textAnchor="middle" fontSize="28" fontWeight="600" fill="var(--color-ink-soft)">?</text>
+        <text x="30" y="40" textAnchor="middle" fontSize="28" fontWeight="500" fill="var(--color-ink-soft)">?</text>
       </svg>
     );
   }
@@ -220,7 +220,7 @@ function CellArt({ kind, cell, tone }: { kind: PuzzleKind; cell: PuzzleCell | nu
     return (
       <svg viewBox="0 0 60 60" className="size-full" role="img" aria-label={`The number ${cell.text}`}>
         <rect x="4" y="4" width="52" height="52" rx="10" fill={tone} />
-        <text x="30" y="39" textAnchor="middle" fontSize={(cell.text ?? '').length > 2 ? 20 : 26} fontWeight="600" fill="var(--color-on-fill)">{cell.text}</text>
+        <text x="30" y="39" textAnchor="middle" fontSize={(cell.text ?? '').length > 2 ? 20 : 26} fontWeight="500" fill="var(--color-on-fill)">{cell.text}</text>
       </svg>
     );
   if (kind === 'dice' || kind === 'odd')

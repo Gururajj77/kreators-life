@@ -219,7 +219,7 @@ Total registered users and follower counts are never a success metric.
 - Minimum age 18, asked at sign-up with a phone number (2026-10-26).
 - Every long list is served a page at a time, 10 to 100 rows (2026-10-26).
 - Design tokens frozen from the freud UI Kit; dark mode keeps hues; ink is a cool slate (2026-10-24, 2026-10-25); a calm glass-on-gradient redesign (2026-10-30); two pillar colours changed (2026-11-01); a motion kit drawn in our own code (2026-11-02); lucide icons instead of emoji (2026-11-03); dark mode made darker (2026-11-04).
-- Type is one family, Google Sans Flex, self-hosted, with Apple's app text styles as the scale and four weights, nothing above 600; only the two wordmarks are rounded, and Caveat stays for the guides' handwritten lines on the public site (2026-11-05).
+- Type is one family, Google Sans Flex, self-hosted, with Apple's app text styles as the scale and two weights, 400 and 500, after umbrel.com; only the two wordmarks are rounded, and Caveat stays for the guides' handwritten lines on the public site (2026-11-05).
 - Analytics in our own table, not a third party (2026-10-24).
 - The no-marketplace line partly reversed for the Store, within limits: no money moves through kreators.app (2026-10-25).
 - Onboarding is a short setup chat; the strategy session moved inside Pillars as the pillars' own onboarding (2026-10-29).
@@ -257,7 +257,7 @@ Total registered users and follower counts are never a success metric.
 
 ### From version 0.4 to 0.6 (1 to 5 November 2026)
 
-- **Type and look.** One font family, Google Sans Flex, with Apple's text styles as the one scale and lighter weights; Geist, Inter and Geist Mono are gone. Only the two wordmarks are rounded. A motion kit of our own, lucide icons instead of emoji, cover cards for app headers, a hero for apps with a number about the person, a matte finish on solid surfaces, a darker dark mode, a sidebar that folds to an icon rail, and the 45-degree arrow on every link.
+- **Type and look.** One font family, Google Sans Flex, with Apple's text styles as the one scale and umbrel's two weights (400 and 500); Geist, Inter and Geist Mono are gone. Only the two wordmarks are rounded. A motion kit of our own, lucide icons instead of emoji, cover cards for app headers, a hero for apps with a number about the person, a matte finish on solid surfaces, a darker dark mode, a sidebar that folds to an icon rail, and the 45-degree arrow on every link.
 - **Public site.** Three button looks, guide lines handwritten in Caveat, the founder's books on a shelf and on `/features/books`, a fluted glass close, a new footer with an emergency line, twenty FAQ answers, and `/7rp` one pillar at a time. Cards follow one rule: tags in the corner, facts and actions at the foot.
 - **Daily and tasks.** A month calendar that prints, Kind of day, tasks moved between pillars, "Count it as a habit", a Habits section, Add a task as a fold, and every mark on a task row at its right.
 - **Emerging (new).** Patterns across a person's own apps by rules, with good and bad habits, on Home, Daily, Pillars and the trackers, and a page of its own.

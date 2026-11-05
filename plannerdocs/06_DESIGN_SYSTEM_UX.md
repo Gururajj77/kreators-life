@@ -51,25 +51,25 @@ Everything is a CSS variable on `:root`, defined in the `@theme` block of `app.c
 
   | Utility | Size (px) | Weight | Use |
   |---|---|---|---|
-  | `text-large-title` | 34/41 | 600 | every tab root, Home's greeting too |
-  | `text-title1` | 28 | 600 | |
-  | `text-title2` | 22 | 600 | every plain section title and sheet title |
-  | `text-title3` | 20 | 550 | a title inside a card |
-  | `text-headline` | 17 | 550 | card and two-line row titles, buttons |
+  | `text-large-title` | 34/41 | 500 | every tab root, Home's greeting too |
+  | `text-title1` | 28 | 500 | |
+  | `text-title2` | 22 | 500 | every plain section title and sheet title |
+  | `text-title3` | 20 | 500 | a title inside a card |
+  | `text-headline` | 17 | 500 | card and two-line row titles, buttons |
   | `text-body` | 17 | 400 | plain list rows, inputs |
   | `text-callout` | 16 | 400 | |
   | `text-prose` | 16/24 | 400 | reading text |
   | `text-subhead` | 15 | 400 | the everyday secondary line |
   | `text-footnote` | 13 | 400 | |
   | `text-caption` | 12 | 400 | |
-  | `text-caption2` | 11 | 480 | the floor |
-  | `text-eyebrow` | 12 | 550 | capitals at +0.06em |
+  | `text-caption2` | 11 | 400 | the floor |
+  | `text-eyebrow` | 12 | 500 | capitals at +0.06em |
   | `text-figure-lg`, `text-figure-hero` | 40, 64 | 500 | numbers, tabular figures |
   | `text-display-1` to `-3` | 40 to 64 and smaller | 500 | the public site's hooks, growing at `md` and `lg` |
   | `text-lede` | 18 to 20 | | the public site, under a display heading |
 
 - **Tracking** is tight on large sizes (−0.024em at 64 to −0.008em at 20), zero at body and open on small text (+0.004em at 15 to +0.02em at 11). Kerning, `liga` and `calt` stay on. `optimizeLegibility` is used only on large type. Dark surfaces take grayscale smoothing, so light text does not bloom.
-- **Four weights:** 400 for reading and every secondary line; 480 (`font-medium`) for tiny chrome such as tags, pills and tab labels; 550 (`font-semibold`) for the one line that names a row or card, labels and buttons; 600 (`font-bold`) for titles and numbers up to 34px. Display sizes and numbers from 40px step down to 500. Nothing is heavier than 600: `font-extrabold` is a 600 alias, and the scan refuses it outside paper. Nothing is under 400.
+- **Two weights, umbrel's** (5 November, the founder: "the same thickness/boldness style as in umbrel.com"; umbrel sets every Google Sans heading at 500 and never bolder): 400 for reading and every secondary line; 500 for everything that stands out: every heading and title at every size, the line that names a row or card, labels, tags, tab labels, buttons and numbers. `font-medium`, `font-semibold`, `font-bold` and `font-extrabold` are all 500, so a class marks emphasis and never adds weight; the scan still refuses `font-extrabold` outside paper. The site's header links and the footer's policy links are 400, as on umbrel. Nothing is under 400. The two rounded wordmarks, the guides' Caveat lines and printed paper keep their own weights (paper's text styles are pinned to the old ones).
 - **Type rules on a screen.** A screen uses a role, never a px font size on text. Emphasis is `font-semibold` on a role, never `font-bold`. Text in `ink-soft` or `ink-mute` is Regular; the colour makes it secondary. A link drawn as a button is semibold like `Button`. The public site's card and section headings sit at 480 under its 500 hooks. A selected state never changes weight. Hierarchy comes from size and ink colour first. On the public site the second half of a headline is the quiet half (`.type-hook em`, upright, 400, in `--color-ink-mute`, large type only). Left as they were: printed paper (its weights pinned on its own roots), the two rounded wordmarks, the guides' Caveat lines, chart SVG text, the card table's scaled text, the Mindfulness timer, ruler and activity grid sizes, and icon glyph sizes.
 - **Radii, concentric the way Apple draws them:** `--radius-card` 32px, `--radius-tile` 24px, `rounded-inner` 16px for a tile inside a card with 16px of padding, `rounded-inner-sm` 20px with 12px of padding, and `pill`. Continuous corners (`corner-shape: squircle`) where the browser draws them.
 - **Shadows:** `--shadow-toy` and `--shadow-toy-soft`, the only two, each a hairline edge, an inner top highlight and a soft drop. No new shadow values.
@@ -168,7 +168,7 @@ The drive scripts check what a still shot cannot: `drive-home.mjs` (Home's halve
 - **The card rule (5 November).** A card in a row that can be stretched ends in one foot (`mt-auto`): its tags or state on the left, its action or arrow on the right, so the feet line up. A tag that would sit on a row of its own goes in the card's top right corner if that corner serves nothing else (`CardHead`). A chart or an empty line takes the leftover room and sits in its middle. A mark one item has, every item has (each badge tile ends in a bar; each tile in a row carries a hint). A hero's word goes under its gauge on a phone, never a sliver beside it. A time stays whole. A list cell that holds one `toy` card stretches it, and kanban lanes stretch to the tallest.
 - **Link arrows.** A link's arrow is lucide's `ArrowUpRight`, the 45-degree arrow, everywhere: `SiteArrow`, the read arrows on cards, the end of link rows, `SeeAll`, the round Open buttons, menu items that open a link. Its hover nudge goes up and right (`.read-arrow`). Toggles keep their chevron or cross. Buttons that open a sheet, steppers, arrows between items in a sequence and the chat's next button keep their own arrows.
 - **Sounds.** `lib/sound.ts` makes every sound in the browser (soft beats, chimes, breath cues, rain, ocean, wind, a soft hum and Lo-fi). The master switch silences all of them, the volume reaches a sound that is already playing, and the preview follows both. Checked in a real browser, since a type check cannot hear.
-- **One style for the link at the top right of a section.** Every link level with a section's title is `SeeAll` (in `components/Section.tsx`): 15px muted text at 480, `ArrowUpRight` after it, a 44px tap area, a router `Link`. "Open", "See all", "Wellbeing" and "Review it" are all that one component. An action that changes something is a `Button size="sm"`, outline for a secondary action and solid for the main one. The action is level with the first line of the title, never down by the line under it. `drive-headings.mjs` measures every heading with an action and fails a link action without its arrow.
+- **One style for the link at the top right of a section.** Every link level with a section's title is `SeeAll` (in `components/Section.tsx`): 15px muted text at 500, `ArrowUpRight` after it, a 44px tap area, a router `Link`. "Open", "See all", "Wellbeing" and "Review it" are all that one component. An action that changes something is a `Button size="sm"`, outline for a secondary action and solid for the main one. The action is level with the first line of the title, never down by the line under it. `drive-headings.mjs` measures every heading with an action and fails a link action without its arrow.
 - **Home's halves match.** On a laptop the two halves of a row are one height (the taller one's), their cards start on one line and fill their half, and cards that share a row inside a half are one height. Every half-width section has one short line under its title that fits on one line. A half whose content is shorter centres it (the Companion card). `drive-home.mjs` checks all of this at 1100, 1280 and 1600px.
 - **Plan my week is a sheet you work in.** Each row is a checkbox, the words and a control. In "Suggested days" the day picker is a fixed 148px at the right, with no label (its `aria-label` names the task). In "Worth a look" each line has a tick for "dealt with" and a Fix. In a Fix row the day picker is a fixed width (`w-[148px] shrink-0`) so the task title keeps the rest of the line. `drive-plan.mjs` measures it.
 - **Water and reminders box.** On a laptop a bubble at the left of Daily and Journal opens a panel; on a phone it is a section inside the screen; Home shows it inline at every width. Water is on the left and "Your reminders" on the right, with the tasks tagged Remember. The days of a new reminder sit on one line: two letters on a phone, three from `sm` up.
@@ -202,7 +202,7 @@ The drive scripts check what a still shot cannot: `drive-home.mjs` (Home's halve
 **2026-11-04:** tags in the card's corner (`CardHead`); the matte finish on solid surfaces; `IconButton`, `ExpandButton`, `CloseButton`, `FilterSelect` and `FilterBar`; cover cards (`AppCover`) and the hero rule; the sidebar's 76px rail; every `Sheet` portalled to the body; `TabRow`'s overflow became All; app groups start as each person picks; the five areas of life in one order; the dark wash made darker; Emerging's cards; the names Servitude and Mindfulness. A short-lived move to Geist and Inter took out the serif and Urbanist.
 
 **2026-11-05 (this version):**
-- **Type.** Google Sans Flex is the one family; Geist, Geist Mono and Inter are gone. Only the two wordmarks are rounded. Caveat stays for a guide's handwritten line. One scale of Apple text styles in rem, four weights (400, 480, 550, 600), nothing above 600, secondary text Regular, section titles at title 2.
+- **Type.** Google Sans Flex is the one family; Geist, Geist Mono and Inter are gone. Only the two wordmarks are rounded. Caveat stays for a guide's handwritten line. One scale of Apple text styles in rem, two weights (400 and 500, as on umbrel.com), secondary text Regular, section titles at title 2.
 - **Fractal glass.** The public home's last call to action and the Features close are `FractalGlass`: deep navy in both themes, one glow of blue, violet and white-lavender seen through narrow ribs (18px, 14px on a phone). GSAP only slides the glow and leans it toward a mouse; it pauses off screen, stays still under reduced motion and turns solid navy under reduced transparency or more contrast. White text on it measured 5.69:1 or better from pixels. It replaced `GradientStripes`.
 - **The footer** after FyndFlow's, with the emergency line (see 11).
 - **Link arrows** are `ArrowUpRight` everywhere (see 11).

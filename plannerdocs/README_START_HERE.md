@@ -106,7 +106,7 @@ Waves 8 to 21 changed names, layout and a few rules; each is in DECISIONS.md and
 ## 2026-11-05
 
 The pack is version 0.6. The figures are now 83 migrations (0001 to 0083), 46 modules, 553 shared test cases and 1,609 smoke checks. What changed in the app, and where it is described:
-- **Type.** One family, Google Sans Flex, self-hosted, with Apple's text styles as one scale and four weights (400, 480, 550, 600). Geist, Geist Mono and Inter are gone. Caveat stays for a guide's handwritten line on the public site. Only the two wordmarks are rounded. See 06.
+- **Type.** One family, Google Sans Flex, self-hosted, with Apple's text styles as one scale and two weights (400 and 500, after umbrel.com). Geist, Geist Mono and Inter are gone. Caveat stays for a guide's handwritten line on the public site. Only the two wordmarks are rounded. See 06.
 - **Public site.** The last call to action and the Features close are fractal glass (`FractalGlass`), which replaced `GradientStripes`. The footer follows the founder's FyndFlow footer and ends with an emergency line. Every link shows the 45-degree arrow. Copy from FyndFlow was taken only where it is true of the app. See 06 and 02.
 - **Terms.** Two new sections ("Wellbeing, not medical care" and "Money tools, not advice") and a line under Acceptable use. `LEGAL_VERSION` is 2026-11-05. See 07 and 08.
 - **Emerging.** One `GET /insights` a day for every screen, a new limit (`insights`, 120 an hour), migration 0083 for the agency-load read, and golden tests that pin the output. See 02, 03, 04 and 05.

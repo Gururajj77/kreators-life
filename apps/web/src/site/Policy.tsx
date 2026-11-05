@@ -176,7 +176,7 @@ export function Policy({ kind }: { kind: Kind }) {
           <P>We set one optional cookie, called kl_click, when you follow a tracked link. It lasts thirty days and tells the creator which link brought you. In India, the EU, the rest of the EEA, the UK and Switzerland we set it only after your yes. Everywhere, it stays off if you say no or if your browser sends Global Privacy Control.</P>
           <P>Your sign-in session, your theme and your privacy choices are kept on your device, because the app cannot work without them. There are no third-party advertising trackers.</P>
           <H>Do Not Track and Global Privacy Control</H>
-          <P>We honour Global Privacy Control as a no to the link cookie. We do not follow you across other sites, so a Do Not Track signal changes nothing about how we treat you.</P>
+          <P>We honour Global Privacy Control as a no to the link cookie, even if you said yes before. We do not follow you across other sites, so a Do Not Track signal changes nothing about how we treat you.</P>
           <H>Selling and sharing</H>
           <P>We do not sell your personal information, and we do not share it for advertising on other sites.</P>
           <H>Automated decisions</H>

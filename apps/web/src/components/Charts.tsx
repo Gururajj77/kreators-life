@@ -421,11 +421,11 @@ export function Bubbles({ items, size = 260, label, onFill = false }: { items: {
         return (
           <g key={p.item.label} transform={`translate(${(ox + p.x * scale).toFixed(1)} ${(oy + p.y * scale).toFixed(1)})`}>
             <circle r={rr} fill={p.item.color} opacity={onFill ? 0.9 : 1} />
-            <text textAnchor="middle" dominantBaseline="central" fontSize={Math.max(11, Math.min(20, rr / 2.2))} fontWeight="600" fill="white" style={{ fontFamily: 'var(--font-display)' }}>
+            <text textAnchor="middle" dominantBaseline="central" fontSize={Math.max(11, Math.min(20, rr / 2.2))} fontWeight="500" fill="white" style={{ fontFamily: 'var(--font-display)' }}>
               {p.item.value}
             </text>
             {rr >= 30 && (
-              <text y={Math.max(14, rr / 2.2) + 2} textAnchor="middle" dominantBaseline="hanging" fontSize="11" fontWeight="550" fill="white" opacity="0.9">
+              <text y={Math.max(14, rr / 2.2) + 2} textAnchor="middle" dominantBaseline="hanging" fontSize="11" fontWeight="500" fill="white" opacity="0.9">
                 {p.item.label}
               </text>
             )}

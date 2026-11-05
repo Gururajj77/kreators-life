@@ -1,4 +1,4 @@
-import { canMute, communityRankOf, FEED_FILTER_META, FEED_FILTERS, FEED_SORT_META, FEED_SORTS, MAX_PINNED, POST_CATEGORIES, REACTION_META, REACTIONS, SOCIAL_REWARDS, type CommunityPost, type CommunityReply, type FeedFilter, type FeedSort, type ReactionCounts, type ReactionKind, DEFAULT_PAGE_SIZE, pageQuery, type PageSize, LOCALE } from '@kreators/shared';
+import { canMute, communityRankOf, isStaffFor, FEED_FILTER_META, FEED_FILTERS, FEED_SORT_META, FEED_SORTS, MAX_PINNED, POST_CATEGORIES, REACTION_META, REACTIONS, SOCIAL_REWARDS, type CommunityPost, type CommunityReply, type FeedFilter, type FeedSort, type ReactionCounts, type ReactionKind, DEFAULT_PAGE_SIZE, pageQuery, type PageSize, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Inert } from '../components/Inert';
 import { useState } from 'react';
@@ -178,7 +178,8 @@ function CommunityFeed() {
   const sort: FeedSort = (FEED_SORTS as readonly string[]).includes(sortRaw) ? (sortRaw as FeedSort) : 'recent';
   const filter: FeedFilter = (FEED_FILTERS as readonly string[]).includes(filterRaw) ? (filterRaw as FeedFilter) : 'all';
   const [showHidden, setShowHidden] = useState(false);
-  const isMod = Boolean(me.data && me.data.user.role !== 'user');
+  // A guide: anyone holding Moderation, a creator included (every admin does); the server's `isGuide` is the same rule.
+  const isMod = Boolean(me.data && isStaffFor(me.data.user, 'moderation'));
   const pg = usePage();
   // A new show, sort or topic starts the feed on its first page; both writes go out as one navigation (writeParams).
   const setSort = (s: FeedSort) => { setSortRaw(s); pg.reset(); };

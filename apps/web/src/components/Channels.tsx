@@ -3,6 +3,7 @@ import {
   CHANNEL_POLL_MS,
   communityRankOf,
   isNearBottom,
+  isStaffFor,
   MAX_CHANNEL_MEMBERS,
   MAX_CHANNEL_MESSAGE,
   MAX_CHANNEL_NAME,
@@ -141,7 +142,7 @@ function ChannelList({ scope, onOpen }: { scope: ChannelScope; onOpen: (id: stri
   const join = useMutation({ mutationFn: (id: string) => api.joinChannel(scope, id), onSuccess: (_r, id) => { refresh(); onOpen(id); } });
   const decline = useMutation({ mutationFn: (id: string) => api.leaveChannel(scope, id), onSuccess: refresh });
   const list = q.data?.channels ?? [];
-  const isGuide = Boolean(me.data && me.data.user.role !== 'user' && scope === 'community');
+  const isGuide = Boolean(me.data && isStaffFor(me.data.user, 'moderation') && scope === 'community');
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-sm">

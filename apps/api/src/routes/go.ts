@@ -32,11 +32,13 @@ go.get('/go/:code', async (c) => {
   })();
   c.executionCtx.waitUntil(write);
   const target = link.product_id ? `/p/${link.product_id}` : link.handle ? `/u/${link.handle}` : '/explore';
-  // The cookie is the one thing here that is not strictly needed, so it follows the person's choice. Where a yes is needed first (the EU, the rest of
-  // the EEA, the UK, Switzerland) it waits for one; elsewhere it is set unless they said no or their browser sends Global Privacy Control.
+  // The cookie is the one thing here that is not strictly needed, so it follows the person's choice. Where a yes is needed first (India, the EU,
+  // the rest of the EEA, the UK, Switzerland) it waits for one; elsewhere it is set unless they said no. Global Privacy Control wins over
+  // everything, an earlier yes included (2026-11-05, the founder): a browser that sends it never gets the cookie.
   const chosen = /(?:^|;\s*)kc_attr=(0|1)/.exec(c.req.header('Cookie') ?? '')?.[1];
   const waitsForYes = CONSENT_FIRST_COUNTRIES.includes((c.req.header('CF-IPCountry') ?? '').toUpperCase());
-  const allowed = chosen === '1' || (chosen === undefined && !waitsForYes && c.req.header('Sec-GPC') !== '1');
+  const gpc = c.req.header('Sec-GPC') === '1';
+  const allowed = !gpc && (chosen === '1' || (chosen === undefined && !waitsForYes));
   if (allowed) c.header('Set-Cookie', `kl_click=${clickId}; Max-Age=${30 * 86400}; Path=/; SameSite=Lax`);
   return c.redirect(`${target}?src=${encodeURIComponent(c.req.param('code'))}&click=${clickId}`, 302);
 });

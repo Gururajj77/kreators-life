@@ -527,7 +527,7 @@ export function Admin() {
                   </div>
 
                   <p className="mt-md m-0 text-subhead font-semibold">Permissions</p>
-                  <p className="m-0 text-caption text-ink-soft">A permission is a job someone is trusted with. Admins hold all of them but Life coach. A creator can hold Mentor and Life coach; the rest need the Staff role.</p>
+                  <p className="m-0 text-caption text-ink-soft">A permission is a job someone is trusted with. Admins hold all of them but Life coach. A creator can hold Mentor, Life coach and Moderation (a guide in Community); the rest need the Staff role.</p>
                   <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label="Permissions">
                     {PERMISSIONS.map((p) => {
                       const on = selected.permissions.includes(p);

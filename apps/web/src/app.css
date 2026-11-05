@@ -80,14 +80,15 @@
   --font-display: 'Google Sans Flex', system-ui, sans-serif;
   --font-body: 'Google Sans Flex', system-ui, sans-serif;
   --font-mono: 'Google Sans Flex', system-ui, sans-serif;
-  /* Weights (2026-11-05, Apple's app typography in Flex): regular for reading and every secondary line, medium for tiny chrome,
-     semibold for the one line that names a row or card, labels and buttons, bold for titles and numbers to 34px. Nothing is
-     heavier than 600; extrabold is kept only as an alias so a missed class can never shout. Flex equivalents of SF measured from
-     the font files: Medium 480, Semibold 555, Bold 640; we sit at or just under them. */
-  --font-weight-medium: 480;
-  --font-weight-semibold: 550;
-  --font-weight-bold: 600;
-  --font-weight-extrabold: 600;
+  /* Weights (2026-11-05, the founder: "the same thickness/boldness style as in umbrel.com", measured there): two weights only.
+     400 for reading and every secondary line; 500 for anything that stands out: every heading and title at every size, the line
+     that names a row or card, labels, tags, tab labels, buttons and numbers. umbrel sets every Google Sans heading at 500 and never
+     bolder, so medium, semibold, bold and extrabold are all 500: a class can mark emphasis, never weight. Hierarchy comes from size
+     and ink colour. Only the two rounded wordmarks, the guides' Caveat lines and printed paper keep their own weights. */
+  --font-weight-medium: 500;
+  --font-weight-semibold: 500;
+  --font-weight-bold: 500;
+  --font-weight-extrabold: 500;
 
   /* The text styles (Apple iOS "Large" Dynamic Type, px = pt, in rem so the browser's font size applies; SwiftUI rule 25).
      Each utility (`text-body`, `text-title2`...) sets size, leading, tracking and weight together; a `leading-*`, `tracking-*` or
@@ -96,27 +97,27 @@
   --text-large-title: 2.125rem;                /* 34 */
   --text-large-title--line-height: 2.5625rem;  /* 41 */
   --text-large-title--letter-spacing: -0.016em;
-  --text-large-title--font-weight: 600;
+  --text-large-title--font-weight: 500;
 
   --text-title1: 1.75rem;                      /* 28 */
   --text-title1--line-height: 2.125rem;        /* 34 */
   --text-title1--letter-spacing: -0.014em;
-  --text-title1--font-weight: 600;
+  --text-title1--font-weight: 500;
 
   --text-title2: 1.375rem;                     /* 22 */
   --text-title2--line-height: 1.75rem;         /* 28 */
   --text-title2--letter-spacing: -0.012em;
-  --text-title2--font-weight: 600;
+  --text-title2--font-weight: 500;
 
   --text-title3: 1.25rem;                      /* 20 */
   --text-title3--line-height: 1.5625rem;       /* 25 */
   --text-title3--letter-spacing: -0.008em;
-  --text-title3--font-weight: 550;
+  --text-title3--font-weight: 500;
 
   --text-headline: 1.0625rem;                  /* 17 */
   --text-headline--line-height: 1.375rem;      /* 22 */
   --text-headline--letter-spacing: -0.004em;
-  --text-headline--font-weight: 550;
+  --text-headline--font-weight: 500;
 
   --text-body: 1.0625rem;                      /* 17 */
   --text-body--line-height: 1.375rem;          /* 22 */
@@ -151,12 +152,12 @@
   --text-caption2: 0.6875rem;                  /* 11, the floor (HIG minimum) */
   --text-caption2--line-height: 0.8125rem;     /* 13 */
   --text-caption2--letter-spacing: 0.02em;
-  --text-caption2--font-weight: 480;
+  --text-caption2--font-weight: 400;
 
   --text-eyebrow: 0.75rem;                     /* 12, used with `uppercase` */
   --text-eyebrow--line-height: 1rem;
   --text-eyebrow--letter-spacing: 0.06em;
-  --text-eyebrow--font-weight: 550;
+  --text-eyebrow--font-weight: 500;
 
   /* Numbers at display size. The stem is thick enough at 40px and up, so they step down to 500 (umbrel, Apple Weather). */
   --text-figure-lg: 2.5rem;                    /* 40 */
@@ -1890,6 +1891,14 @@ ol.grid > li > .toy:only-child {
   --font-weight-semibold: 440;
   --font-weight-bold: 540;
   --font-weight-extrabold: 620;
+  /* and the text styles keep the weights they had before the umbrel pass, so a printed page never changes under it. */
+  --text-large-title--font-weight: 600;
+  --text-title1--font-weight: 600;
+  --text-title2--font-weight: 600;
+  --text-title3--font-weight: 550;
+  --text-headline--font-weight: 550;
+  --text-eyebrow--font-weight: 550;
+  --text-caption2--font-weight: 480;
 }
 .legal-root {
   --doc-font: Georgia, 'Times New Roman', Times, serif;

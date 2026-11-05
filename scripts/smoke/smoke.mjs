@@ -2947,6 +2947,7 @@ section('Legal: terms, privacy choices, notices');
   check('in India a yes lets it be set', (await hit({ 'CF-IPCountry': 'IN', Cookie: 'kc_attr=1' })).includes('kl_click'));
   check('outside those countries it is set unless they said no', (await hit({ 'CF-IPCountry': 'US' })).includes('kl_click') && !(await hit({ 'CF-IPCountry': 'US', Cookie: 'kc_attr=0' })).includes('kl_click'));
   check('a browser that sends Global Privacy Control gets no cookie', !(await hit({ 'CF-IPCountry': 'US', 'Sec-GPC': '1' })).includes('kl_click'));
+  check('Global Privacy Control wins over a yes given before', !(await hit({ 'CF-IPCountry': 'US', 'Sec-GPC': '1', Cookie: 'kc_attr=1' })).includes('kl_click') && !(await hit({ 'CF-IPCountry': 'IN', 'Sec-GPC': '1', Cookie: 'kc_attr=1' })).includes('kl_click'));
 }
 
 section('Security: headers, origin, exposed files, errors, addresses, alerts');

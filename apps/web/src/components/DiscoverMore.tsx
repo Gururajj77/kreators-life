@@ -693,7 +693,7 @@ function BodyGraph({ chart, selected, onPick }: { chart: DesignChart; selected: 
         return (
           <g key={c.key}>
             <path d={s.path} fill={on ? s.tone : 'var(--color-card-strong)'} stroke={on ? 'var(--color-ink)' : 'var(--color-line)'} strokeWidth="2" strokeLinejoin="round" />
-            <text x={s.label[0]} y={s.label[1]} textAnchor="middle" fontSize="9" fontWeight="600" fill={on ? (s.tone === 'var(--color-r3)' || s.tone === 'var(--color-r2)' ? 'var(--color-on-yellow)' : 'var(--color-on-fill)') : 'var(--color-ink-soft)'}>
+            <text x={s.label[0]} y={s.label[1]} textAnchor="middle" fontSize="9" fontWeight="500" fill={on ? (s.tone === 'var(--color-r3)' || s.tone === 'var(--color-r2)' ? 'var(--color-on-yellow)' : 'var(--color-on-fill)') : 'var(--color-ink-soft)'}>
               {c.key === 'g' ? 'G' : c.name.split(' ')[0]}
             </text>
           </g>
@@ -706,7 +706,7 @@ function BodyGraph({ chart, selected, onPick }: { chart: DesignChart; selected: 
         return (
           <g key={gate} opacity={dim(key)} style={{ transition: 'opacity 200ms' }} className={pickable ? 'cursor-pointer' : undefined} onClick={pickable ? () => onPick(key) : undefined}>
             <circle cx={x} cy={y} r="7" fill="var(--color-card-strong)" stroke={SIDE_INK[gateSide(chart, gate) === 'design' ? 'design' : 'personality']} strokeWidth="1.4" />
-            <text x={x} y={y + 3} textAnchor="middle" fontSize="8" fontWeight="600" fill="var(--color-ink)">
+            <text x={x} y={y + 3} textAnchor="middle" fontSize="8" fontWeight="500" fill="var(--color-ink)">
               {gate}
             </text>
           </g>

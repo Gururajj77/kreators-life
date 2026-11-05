@@ -961,6 +961,9 @@ describe('life coaches', () => {
     expect(isStaffFor(creator, 'coach')).toBe(true);
     expect(isStaffFor(creator, 'talent')).toBe(false);
     expect(isStaffFor({ role: 'user', permissions: ['mentor'] }, 'mentor')).toBe(true);
+    // A creator holding Moderation is a guide (2026-11-05).
+    expect(isStaffFor({ role: 'user', permissions: ['moderation'] }, 'moderation')).toBe(true);
+    expect(isStaffFor({ role: 'user', permissions: [] }, 'moderation')).toBe(false);
     const admin = { role: 'admin' as const, permissions: [] };
     expect(isStaffFor(admin, 'talent')).toBe(true);
     expect(isStaffFor(admin, 'coach')).toBe(false);

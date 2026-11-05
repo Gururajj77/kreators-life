@@ -67,8 +67,8 @@ export const ROLE_META: Record<Role, { name: string; blurb: string; icon: IconNa
  */
 export const PERMISSIONS = ['talent', 'cohorts', 'events', 'finance', 'moderation', 'support', 'review', 'mentor', 'coach'] as const;
 export type Permission = (typeof PERMISSIONS)[number];
-/** The permissions a creator can hold. Every other one needs the Staff role. */
-export const CREATOR_PERMISSIONS: readonly Permission[] = ['mentor', 'coach'];
+/** The permissions a creator can hold (2026-11-05, the founder: a creator with Moderation is a guide). Every other one needs the Staff role. */
+export const CREATOR_PERMISSIONS: readonly Permission[] = ['mentor', 'coach', 'moderation'];
 
 export const PERMISSION_META: Record<Permission, { name: string; blurb: string; icon: IconName }> = {
   talent: { name: 'Talent manager', blurb: 'Runs Army campaigns, shortlists and assigns creators.', icon: 'Clapperboard' },
